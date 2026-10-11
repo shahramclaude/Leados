@@ -141,7 +141,30 @@ leaders don't browse tables; they need synthesized truth. v2.1 was too passive.
   it is flagged as Leadership Debt.
 - **Engine v3:** New narrative synthesis and retention-scoring logic.
 
-**Files changed:** `index.html` (~3100 lines), `AI-SESSION-LOG.md`.
+**Files changed:** `index.html` (~3500 lines now), `AI-SESSION-LOG.md`.
+
+---
+
+## Session 009 — Strategic Prioritization & Risk Control
+
+**Critique of v3:** The app had risks but no barriers. It had tasks but no math-based
+backlog prioritization. Communication was still a "hallway" activity not a plan.
+Execution lacked explicit quality gates.
+
+**Decisions:**
+- **Prioritization Backlog:** Added WSJF (Weighted Shortest Job First) and RICE
+  scoring modules. Moves prioritization from "loudest voice" to "highest value."
+- **Controls Ledger:** Added a layer of "Barriers" above risks. Tracks effectiveness
+  and test dates. If you don't test it, it's not a control.
+- **Communications Plan:** Tracks stakeholder cadence. Who needs what, when, and
+  how. Flags silence as a relationship risk.
+- **Quality Plan (Qualification Gates):** Critical tasks now require explicit
+  Acceptance Criteria and a Sign-off step before they can be marked 'Done'.
+- **Engine v4:** Added WSJF/RICE logic and control-effectiveness narrative.
+- **Seed Update:** Populated the backlog, comms plan, and controls for Shahram's
+  Engineering Division.
+
+**Files changed:** `index.html`, `AI-SESSION-LOG.md`.
 
 ---
 

@@ -271,7 +271,7 @@ const money = n => (DB.state.settings.currency || "$") + Number(n || 0).toLocale
 
 /* ============ 2. DB (localStorage, atomic, quota-guarded) ============ */
 const DBKEY = "LEADOS.v1";
-const COLS = ["members","tasks","risks","goals","okrs","oneonones","feedback","delegation","recognition","reviews","conflicts","pulses","decisions","meetings","ideas","habits","reflections","stakeholders","swot","budget","idp","quadrants","absences","incidents","sponsorships","prewires","succession"];
+const COLS = ["members","tasks","risks","goals","okrs","oneonones","feedback","delegation","recognition","reviews","conflicts","pulses","decisions","meetings","ideas","habits","reflections","stakeholders","swot","budget","idp","quadrants","absences","incidents","sponsorships","prewires","succession","controls","backlog","comms"];
 const DB = {
   state: null,
   load() {
@@ -551,23 +551,46 @@ const Engine = {
     
     return { score: risk, impact: impact.toFixed(1) };
   },
-  /* High-Level Division Narrative Synthesis */
+  /* High-Level Division Narrative Synthesis — 8-sentence professional brief */
   divisionNarrative() {
     const h = Engine.health();
     const tasks = DB.col("tasks"), risks = DB.col("risks"), mem = DB.col("members");
-    const openCrit = risks.filter(r => Engine.rpn(r) >= 200 && r.status !== "closed");
-    const overdueN = tasks.filter(t => t.status !== "done" && overdue(t.due)).length;
-    
-    let n = `Division health is ${h.total >= 75 ? "EXCELLENT" : h.total >= 50 ? "WORKABLE" : "FRAGILE"}. `;
-    if (openCrit.length) n += `Critical exposure detected: ${openCrit.length} risk(s) RPN ≥200. `;
-    if (overdueN) n += `Delivery credibility is leaking via ${overdueN} overdue task(s). `;
-    
+    const open = tasks.filter(t => t.status !== "done");
+    const overdueT = tasks.filter(t => t.status !== "done" && overdue(t.due));
+    const critRisks = risks.filter(r => r.status !== "closed" && Engine.rpn(r) >= 200);
+    const highRisks = risks.filter(r => r.status !== "closed" && Engine.rpn(r) >= 100);
     const leads = mem.filter(m => m.isLead);
-    const unsponsored = leads.filter(l => !DB.col("sponsorships").some(s => s.member === l.id)).length;
-    if (unsponsored) n += `Sponsorship gap: ${unsponsored} Team Lead(s) have zero advocacy recorded. `;
-    
-    return n;
-  }
+    const stale11 = mem.filter(m => Engine.oneOnOneDebt(m.id) > 21);
+    const noSucc = leads.filter(l => !DB.state.docs.succession[l.id]);
+    const unsponsored = leads.filter(l => !DB.col("sponsorships").some(s => s.member === l.id));
+    const retentionCrit = mem.filter(m => Engine.retentionRisk(m.id).score >= 50);
+    const openInc = DB.col("incidents").filter(i => i.status === "open" || i.status === "rca");
+    const lp = Engine.latestPulse();
+    const safetyScore = lp ? Engine.psych(lp).toFixed(1) : null;
+    const evm = Engine.evm();
+    const controls = DB.col("controls");
+    const weakControls = controls.filter(c => c.status === "active" && (c.effectiveness === "low" || !c.lastTested));
+
+    const sentences = [];
+    sentences.push("Division health score: " + h.total + "/100 (" + (h.total >= 75 ? "strong" : h.total >= 50 ? "workable but vulnerable" : "fragile — leadership intervention required") + ").");
+    if (critRisks.length) sentences.push(critRisks.length + " critical risk" + (critRisks.length > 1 ? "s" : "") + " (RPN ≥200) are open: " + critRisks.slice(0, 2).map(r => """ + r.title + "" RPN " + Engine.rpn(r)).join(", ") + (critRisks.length > 2 ? " +" + (critRisks.length - 2) + " more" : "") + " — these belong in your next escalation, not just the register.");
+    else if (highRisks.length) sentences.push(highRisks.length + " high-risk item" + (highRisks.length > 1 ? "s" : "") + " are open. None are critical, but " + highRisks.filter(r => !r.mitOwner).length + " have no mitigation owner — the unassigned ones are yours by default.");
+    if (overdueT.length) sentences.push("Delivery credibility: " + overdueT.length + " task" + (overdueT.length > 1 ? "s are" : " is") + " overdue across the division. Each unresolved slip teaches the team that dates are aspirational. Renegotiate them publicly, today.");
+    else sentences.push("Delivery: " + open.length + " open tasks, none overdue. Protect this — it is harder to rebuild than to maintain.");
+    if (stale11.length) sentences.push("1:1 cadence debt: " + stale11.map(m => m.name).join(", ") + (stale11.length === 1 ? " has" : " have") + " not had a logged conversation in 21+ days. Cadence is the job — gaps here compound into resignation letters.");
+    if (retentionCrit.length) sentences.push("Retention: " + retentionCrit.map(m => m.name).join(", ") + " score" + (retentionCrit.length === 1 ? "s" : "") + " critical on the retention radar — high impact plus leadership ritual debt. Act within 48h.");
+    if (noSucc.length) sentences.push("Succession debt: " + noSucc.map(l => l.name).join(", ") + (noSucc.length === 1 ? " has" : " have") + " no successor named. A promotion or resignation here creates a leadership vacuum with no recovery plan.");
+    if (safetyScore) sentences.push("Team psychological safety: " + safetyScore + "/7 " + (+safetyScore >= 5.5 ? "— people are speaking up." : +safetyScore >= 4.5 ? "— in the watch zone; bad news may already be filtered." : "— BELOW THRESHOLD. People are not telling you the real problems. Act on this before the other items."));
+    if (evm.BAC > 0) sentences.push("Financial: EVM CPI " + evm.CPI.toFixed(2) + (evm.CPI < 0.9 ? " — spending faster than delivering. Forecast at completion: " + money(evm.EAC) + " vs budget " + money(evm.BAC) + "." : " — cost-efficient."));
+    if (unsponsored.length) sentences.push("Sponsorship gap: " + unsponsored.map(l => l.name).join(", ") + " lead" + (unsponsored.length === 1 ? "s" : "") + " your teams without any recorded advocacy. Mentors talk to people; sponsors talk about them.");
+    if (openInc.length) sentences.push(openInc.length + " incident" + (openInc.length > 1 ? "s" : "") + " without a closed RCA. Failure that isn't learned from will recur, on a worse day.");
+    if (weakControls.length) sentences.push("Risk management: " + weakControls.length + " active control(s) are low-effectiveness or untested. You are relying on barriers that may not exist.");
+    return sentences.join(" ");
+  },
+  /* Prioritization Math */
+  wsjf: p => ((p.userValue || 0) + (p.timeCriticality || 0) + (p.riskReduction || 0)) / (p.jobSize || 1),
+  rice: p => ((p.reach || 0) * (p.impact || 0) * (p.confidence || 100) / 100) / (p.effort || 1)
+};
 };
 
 /* ============ 5. MENTOR — deterministic rule engine ============ */
@@ -647,6 +670,26 @@ M("members", "alert", () => DB.col("members").filter(m => Engine.retentionRisk(m
 /* prewires */
 M("prewires", "watch", () => DB.col("decisions").filter(d => d.status === "open" && !DB.col("prewires").some(p => p.decision === d.id)), d => "No Pre-wires for “" + d.question.slice(0,30) + "”. You are heading into a decision meeting without testing buy-in. Real decisions are closed before the meeting starts.", ["prewires"]);
 
+/* succession gaps */
+M("succession", "watch", () => DB.col("members").filter(m => m.isLead && !(DB.state.docs.succession || {})[m.id]), m => "Succession gap: " + m.name + " leads a team with no named successor. One resignation here creates a vacuum with no recovery plan.", ["succession"]);
+/* wellbeing decline — two consecutive drops to below 3 */
+M("wellbeing", "alert", () => {
+  const o11 = DB.col("oneonones");
+  return DB.col("members").filter(m => {
+    const logs = o11.filter(o => o.member === m.id && o.mood).sort((a, b) => a.date.localeCompare(b.date));
+    return logs.length >= 2 && +logs[logs.length - 1].mood < 3 && +logs[logs.length - 1].mood <= +logs[logs.length - 2].mood;
+  });
+}, m => m.name + " has two consecutive declining mood scores in 1:1s. Do not wait for the next scheduled session — reach out informally today.", ["wellbeing"]);
+/* weekly review nudge — fires only Friday/Saturday when no review this week */
+M("weeklyreview", "coach", () => {
+  const dow = new Date().getDay();
+  return (dow === 5 || dow === 6) && !DB.col("reflections").some(r => Math.abs(daysUntil(r.date)) <= 7) ? [{}] : [];
+}, () => "Friday or Saturday with no weekly reflection logged. 15 minutes in the Weekly Review closes the week professionally.", ["weeklyreview"]);
+/* controls */
+M("controls", "alert", () => DB.col("controls").filter(c => c.status === "active" && overdue(c.nextTest)), c => "Control test overdue: “" + c.title + "”. A control that isn't tested is just documentation. Verify the barrier today.", ["controls"]);
+/* comms */
+M("comms", "watch", () => DB.col("comms").filter(c => overdue(c.nextDate)), c => "Stakeholder comms due: “" + (c.title || "unnamed brief") + "” for " + (DB.byId("stakeholders", c.stakeholder)?.name || "someone") + ". Relationships rot in silence.", ["comms"]);
+
 /* ============ 6. UI FRAMEWORK ============ */
 const UI = {
   route: { view: "dashboard", filter: null },
@@ -665,7 +708,7 @@ const UI = {
   },
   buildNav() {
     const groups = {};
-    Object.values(this.MODULES).forEach(m => { (groups[m.group] = groups[m.group] || []).push(m); });
+    Object.values(this.MODULES).filter(m => m.id !== "_noop_removed_").forEach(m => { (groups[m.group] = groups[m.group] || []).push(m); });
     const order = ["Command", "People", "Execution", "Self-Leadership", "Strategy", "System"];
     $("#nav").innerHTML = order.filter(g => groups[g]).map(g =>
       '<div class="nav-g">' + esc(g) + "</div>" + groups[g].map(m => {
@@ -1020,10 +1063,29 @@ function seedDemo() {
   DB.add("swot", { kind: "T", text: "Infra team at 50% capacity — one illness = outage", weight: 4 });
 
   /* ---- Stakeholders ---- */
-  DB.add("stakeholders", { name: "CTO (Ingrid Holm)", influence: 10, interest: 6, move: "Monthly pre-brief before any roadmap or architecture decision. Never let her be surprised." });
-  DB.add("stakeholders", { name: "Head of Product (Marco Silva)", influence: 8, interest: 9, move: "Weekly 30-min sync. He shapes what the team builds — keep him an ally, not an override." });
-  DB.add("stakeholders", { name: "Legal / DPO", influence: 7, interest: 4, move: "Loop in on GDPR deletion spec before it's built. One surprise = delay." });
+  const cto = DB.add("stakeholders", { name: "CTO (Ingrid Holm)", influence: 10, interest: 6, move: "Monthly pre-brief before any roadmap or architecture decision. Never let her be surprised." });
+  const hop = DB.add("stakeholders", { name: "Head of Product (Marco Silva)", influence: 8, interest: 9, move: "Weekly 30-min sync. He shapes what the team builds — keep him an ally, not an override." });
+  const legal = DB.add("stakeholders", { name: "Legal / DPO", influence: 7, interest: 4, move: "Loop in on GDPR deletion spec before it's built. One surprise = delay." });
   DB.add("stakeholders", { name: "External API clients (3 companies)", influence: 3, interest: 9, move: "Send migration guide. 60-day notice. One named contact per company." });
+
+  /* ---- Comms Plan ---- */
+  DB.add("comms", { stakeholder: cto.id, title: "Division Health & Risk Brief", channel: "Meeting (1:1)", frequency: "Monthly", nextDate: addDays(todayStr(), 5) });
+  DB.add("comms", { stakeholder: hop.id, title: "Roadmap Alignment & Capacity", channel: "Meeting (1:1)", frequency: "Weekly", nextDate: todayStr() });
+  DB.add("comms", { stakeholder: legal.id, title: "GDPR Compliance Progress", channel: "Email", frequency: "Bi-weekly", nextDate: addDays(todayStr(), 3) });
+
+  /* ---- Controls ---- */
+  const rGdpr = DB.col("risks").find(r => r.title.includes("GDPR"));
+  DB.add("controls", { title: "Automated GDPR PII Scanner", risk: rGdpr?.id, type: "detective", owner: sara.id, frequency: "Weekly", nextTest: todayStr(), effectiveness: "high" });
+  DB.add("controls", { title: "Architecture Review Board Sign-off", type: "preventive", owner: omar.id, frequency: "Monthly", nextTest: addDays(todayStr(), 10), effectiveness: "untested" });
+
+  /* ---- Backlog ---- */
+  DB.add("backlog", { title: "Self-serve database provisioning", method: "wsjf", userValue: 8, timeCriticality: 4, riskReduction: 6, jobSize: 8, effort: 2, status: "backlog" });
+  DB.add("backlog", { title: "Dark mode for customer dashboard", method: "rice", reach: 5000, impact: 0.5, confidence: 90, effort: 0.5, status: "backlog" });
+  DB.add("backlog", { title: "Migrate legacy auth to OAuth2/OIDC", method: "wsjf", userValue: 6, timeCriticality: 9, riskReduction: 10, jobSize: 13, effort: 4, status: "backlog" });
+
+  /* ---- Task Criteria (for Quality Gates) ---- */
+  const tGateway = DB.col("tasks").find(t => t.title.includes("API gateway v3"));
+  if (tGateway) DB.update("tasks", tGateway.id, { criteria: "Load test passes 10k req/s · Security audit closed · Documentation updated" });
 
   /* ---- Budget ---- */
   DB.add("budget", { line: "Engineering headcount (6 FTE)", category: "People", planned: 480000, committed: 480000, actual: 240000 });
@@ -1093,28 +1155,46 @@ const dueCell = d => {
    ===================================================== */
 UI.register("portfolio", {
   title: "Portfolio View", icon: "briefcase", group: "Command",
-  sub: "Health & metrics across several teams", scope: "dashboard",
+  sub: "Team-by-team health · risk · people · cadence — the leader-of-leaders view",
+  lead: "Every team on the same axes. Where the bar is shortest is where your next leadership hour returns most.",
   render(el) {
     const teams = DB.state.settings.teams || ["Core"];
-    const stats = teams.map(t => ({ name: t, h: Engine.health(t) }));
+    const mem = DB.col("members"), allRisks = DB.col("risks"), allTasks = DB.col("tasks");
+    const stats = teams.map(t => {
+      const h = Engine.health(t);
+      const tm = mem.filter(m => m.team === t);
+      const tt = allTasks.filter(t2 => tm.some(m => m.id === t2.owner));
+      const tr = allRisks.filter(r => r.status !== "closed" && tm.some(m => m.id === r.owner));
+      return { name: t, h, tm, tt, tr, crits: tr.filter(r => Engine.rpn(r) >= 200).length, stale11: tm.filter(m => Engine.oneOnOneDebt(m.id) > 21).length, unrecog: tm.filter(m => Engine.recognitionDebt(m.id) >= 30).length, noSucc: tm.filter(m => m.isLead && !DB.state.docs.succession[m.id]).length };
+    });
+    const weakest = [...stats].sort((a, b) => a.h.total - b.h.total)[0];
+    const highRisks = allRisks.filter(r => r.status !== "closed" && Engine.rpn(r) >= 100).sort((a, b) => Engine.rpn(b) - Engine.rpn(a)).slice(0, 6);
+
+    let html = UI.header(this, "") +
+      '<div class="mnote" style="margin-bottom:14px"><i data-lucide="crosshair" class="luc"></i><div><b>Priority this week: ' + esc(weakest.name) + ' team</b> — health ' + weakest.h.total + '/100. Weakest score. Put your coaching hour here, not with your strongest team.</div></div>' +
+      '<div class="grid3" style="margin-bottom:16px">';
     
-    el.innerHTML = UI.header(this, '') + 
-      '<div class="grid3" style="margin-bottom:14px">' +
-        stats.map(s => {
-          const col = s.h.total >= 75 ? "var(--ok)" : s.h.total >= 50 ? "var(--warn)" : "var(--bad)";
-          return '<div class="card fade-s"><div class="card-h" style="justify-content:space-between"><h3>' + esc(s.name) + ' Team</h3>' + UI.badge(s.h.total + "/100", s.h.total >= 75 ? "b-ok" : "b-bad") + '</div>' +
-            '<div style="margin:12px 0"><div class="pbar"><i style="width:' + s.h.total + '%;background:' + col + '"></i></div></div>' +
-            '<div style="font-size:11.5px;color:var(--ink2)">' +
-              '<div class="kv-row"><span>People</span><span>' + s.h.n + ' members</span></div>' +
-              '<div class="kv-row"><span>Delivery</span><span class="mono">' + Math.round(s.h.parts.delivery * 100) + '%</span></div>' +
-              '<div class="kv-row"><span>Risk</span><span class="mono">' + Math.round(s.h.parts.risk * 100) + '%</span></div>' +
-            '</div>' +
-            '<button class="btn btn-xs btn-g" style="width:100%;margin-top:10px" data-team="' + esc(s.name) + '">Drill down</button></div>';
-        }).join("") +
-      '</div>' +
-      UI.mnote("<b>Portfolio strategy:</b> Compare teams honestly. A low score in one team isn't necessarily a failure—it's a signal to move your time/coaching there this week.");
-    
-    $$("[data-team]").forEach(b => b.onclick = () => UI.nav("dashboard", { team: b.dataset.team }));
+    html += stats.map(s => {
+      const col = s.h.total >= 75 ? "var(--ok)" : s.h.total >= 50 ? "var(--warn)" : "var(--bad)";
+      const focus = s.name === weakest.name;
+      return '<div class="card fade-s" style="' + (focus ? "border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)44" : "") + '"><div class="card-h" style="justify-content:space-between"><h3>' + esc(s.name) + (focus ? ' <span class="badge b-acc" style="font-size:9px">FOCUS</span>' : "") + '</h3>' + UI.badge(s.h.total + "/100", s.h.total >= 75 ? "b-ok" : s.h.total >= 50 ? "b-warn" : "b-bad") + '</div>' +
+        '<div style="margin:10px 0"><div class="pbar"><i style="width:' + s.h.total + '%;background:' + col + '"></i></div></div>' +
+        [["People", s.h.n, ""], ["Delivery", Math.round(s.h.parts.delivery * 100) + "%", s.h.parts.delivery < .6 ? "num-bad" : ""], ["Cadence", Math.round(s.h.parts.cadence * 100) + "%", s.h.parts.cadence < .6 ? "num-bad" : ""], ["Climate", Math.round(s.h.parts.climate * 100) + "%", s.h.parts.climate < .5 ? "num-warn" : ""], ["Overdue", s.tt.filter(t => overdue(t.due) && t.status !== "done").length, s.tt.filter(t => overdue(t.due) && t.status !== "done").length ? "num-warn" : ""], ["Crit risks", s.crits, s.crits ? "num-bad" : ""], ["1:1 debt", s.stale11, s.stale11 ? "num-warn" : ""], ["No recognition 30d", s.unrecog, s.unrecog ? "num-warn" : ""], ["Succession gaps", s.noSucc, s.noSucc ? "num-bad" : ""]].map(([l, v, c]) =>
+          '<div class="kv-row"><span style="font-size:11.5px">' + l + '</span><span class="mono ' + c + '" style="font-size:12px">' + v + '</span></div>'
+        ).join("") +
+        '<button class="btn btn-xs btn-g" style="width:100%;margin-top:10px" data-pteam="' + esc(s.name) + '">People detail</button></div>';
+    }).join("") + '</div>';
+
+    if (highRisks.length) html += '<div class="card fade-s"><div class="card-h"><i data-lucide="shield-alert" class="luc" style="color:var(--warn)"></i><h3>Division risk exposure <span class="sub">· top open by RPN</span></h3></div><table class="tbl"><thead><tr><th>Risk</th><th>RPN</th><th>Band</th><th>Owner</th><th>Mitigation</th></tr></thead><tbody>' + highRisks.map(r => { const [band, cls] = Engine.rpnBand(Engine.rpn(r)); return '<tr><td><b>' + esc(r.title) + '</b></td><td class="mono" style="color:' + (Engine.rpn(r) >= 200 ? "var(--bad)" : "var(--warn)") + '">' + Engine.rpn(r) + '</td><td>' + UI.badge(band, cls) + '</td><td>' + personTag(r.mitOwner) + '</td><td style="font-size:12px;color:var(--ink2)">' + esc((r.mitigation || "").slice(0, 50) || "—") + '</td></tr>'; }).join("") + '</tbody></table></div>';
+
+    el.innerHTML = html;
+    $$("[data-pteam]").forEach(b => b.onclick = () => {
+      const t = b.dataset.pteam;
+      const people = mem.filter(m => m.team === t);
+      UI.modal('<h2>' + esc(t) + ' — People</h2><div class="m-sub">' + people.length + ' members</div><table class="tbl"><thead><tr><th>Name</th><th>Role</th><th>1:1</th><th>Recognition</th><th>Tasks</th><th>Retention</th></tr></thead><tbody>' +
+        people.map(m => { const rr = Engine.retentionRisk(m.id); const od = Engine.oneOnOneDebt(m.id); const rd = Engine.recognitionDebt(m.id); return '<tr><td>' + personTag(m.id) + (m.isLead ? ' <span class="badge b-acc" style="font-size:8px">Lead</span>' : "") + '</td><td style="font-size:12px">' + esc(m.role || "—") + '</td><td>' + (od <= 21 ? UI.badge(od + "d", "b-ok") : UI.badge(od === 999 ? "never" : od + "d", "b-bad")) + '</td><td>' + (rd < 30 ? UI.badge(rd + "d", "b-ok") : UI.badge(rd === 999 ? "never" : rd + "d", "b-bad")) + '</td><td class="mono">' + Engine.workload(m.id).length + '</td><td>' + UI.badge(rr.score >= 50 ? "Critical" : rr.score >= 25 ? "Elevated" : "Low", rr.score >= 50 ? "b-bad" : rr.score >= 25 ? "b-warn" : "b-ok") + '</td></tr>'; }).join("") + '</tbody></table>');
+      icons();
+    });
     icons();
   }
 });
@@ -1251,18 +1331,57 @@ UI.register("prewires", makeRegister({
 }));
 
 /* =====================================================
-   COMMAND — Portfolio View (Leader of Leaders)
+   COMMAND — Capacity Planner
+   Replaced the duplicate/crashed portfolio block.
    ===================================================== */
-UI.register("portfolio", {
-    const st = DB.state.settings;
-    const h = Engine.health();
-    const tasks = DB.col("tasks"), mem = DB.col("members");
-    const open = tasks.filter(t => t.status !== "done");
-    const alerts = Mentor.findings.filter(f => f.sev === "alert").length;
-    const hour = new Date().getHours();
-    const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-    const name = st.leader ? ", " + esc(st.leader) : "";
-    const qh = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+UI.register("capacity", {
+  title: "Capacity Planner", icon: "gauge", group: "Command",
+  sub: "FTE × WIP → overload, not guessed",
+  lead: "Capacity is the constraint you never schedule. This view calculates available weekly hours per person against their open task effort. A red bar means they are already past the point where adding work makes things faster.",
+  render(el) {
+    const mem = DB.col("members");
+    if (!mem.length) { el.innerHTML = UI.empty("gauge", "Add people first", "Add your team in the Roster."); icons(); return; }
+    const WEEK_HRS = 35; // professional default — not 40, not 45
+    const rows = mem.map(m => {
+      const fte = +(m.fte || 1);
+      const avail = WEEK_HRS * fte;
+      const tasks = Engine.workload(m.id);
+      const totalEffort = tasks.reduce((s, t) => s + (+t.effort || 8), 0);
+      const weeks = avail ? (totalEffort / avail) : 99;
+      return { m, avail, totalEffort, tasks, weeks };
+    }).sort((a, b) => b.weeks - a.weeks);
+    
+    const overloaded = rows.filter(r => r.weeks > 2);
+    let html = '';
+    if (overloaded.length) html += '<div class="mnote" style="border-color:rgba(255,92,108,.4);background:linear-gradient(90deg,rgba(255,92,108,.1),transparent 55%);margin-bottom:16px"><i data-lucide="alert-triangle" class="luc" style="color:var(--bad)"></i><div><b>' + overloaded.length + ' person(s) have >2 weeks of work queued.</b> Adding any task to their plate now does not accelerate the division — it slows the whole system. Reprioritise or hire before assigning.</div></div>';
+    
+    html += '<div class="card fade-s" style="padding:8px 4px"><table class="tbl"><thead><tr><th>Person</th><th>Team</th><th>FTE</th><th>Avail/wk</th><th>Queued hrs</th><th>Runway</th><th>Capacity</th></tr></thead><tbody>';
+    html += rows.map(r => {
+      const pct = clamp(r.weeks / 4 * 100, 2, 100);
+      const col = r.weeks > 2 ? "var(--bad)" : r.weeks > 1 ? "var(--warn)" : "var(--ok)";
+      return '<tr><td>' + personTag(r.m.id) + '</td><td><span class="chip">' + esc(r.m.team || "—") + '</span></td>' +
+        '<td class="mono">' + +(r.m.fte || 1) + '</td>' +
+        '<td class="mono">' + r.avail + 'h</td>' +
+        '<td class="mono" style="color:' + col + '">' + r.totalEffort.toFixed(0) + 'h</td>' +
+        '<td class="mono" style="color:' + col + '">' + (r.weeks > 8 ? ">8 wks" : r.weeks.toFixed(1) + " wks") + '</td>' +
+        '<td><div class="pbar" style="width:80px"><i style="width:' + pct + '%;background:' + col + '"></i></div></td></tr>';
+    }).join("") + '</tbody></table></div>' +
+    '<div class="card fade-s" style="margin-top:14px"><div class="card-h"><i data-lucide="bar-chart-3" class="luc" style="color:var(--info)"></i><h3>Team capacity totals</h3></div>' +
+    (DB.state.settings.teams || []).map(team => {
+      const tm = rows.filter(r => r.m.team === team);
+      if (!tm.length) return '';
+      const totalAvail = tm.reduce((s, r) => s + r.avail, 0);
+      const totalQ = tm.reduce((s, r) => s + r.totalEffort, 0);
+      const utilPct = totalAvail ? clamp(totalQ / totalAvail * 25, 0, 100) : 0;
+      const col = utilPct > 80 ? "var(--bad)" : utilPct > 50 ? "var(--warn)" : "var(--ok)";
+      return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:9px"><span style="width:90px;font-size:12.5px;font-weight:600">' + esc(team) + '</span><div class="pbar" style="flex:1"><i style="width:' + utilPct + '%;background:' + col + '"></i></div><span class="mono" style="font-size:11.5px;color:' + col + '">' + totalQ.toFixed(0) + 'h / ' + totalAvail + 'h/wk</span></div>';
+    }).join("") + '</div>' +
+    UI.mnote("Rule: 80% utilisation is where delivery throughput peaks. Above that, multitasking overhead compounds and output drops. The remaining 20% is where blockers get removed, risks get mitigated, and people grow.");
+    
+    el.innerHTML = UI.header(this, "") + html;
+    icons();
+  }
+});
 
     /* today list: mentor findings + due-today tasks */
     const rows = [];
@@ -1304,32 +1423,7 @@ UI.register("portfolio", {
         UI.stat("Health score", h.total + "/100", "click to inspect parts", "activity", h.total >= 75 ? "var(--ok)" : h.total >= 50 ? "var(--warn)" : "var(--bad)") +
       "</div>" +
 
-      '<div class="grid2" style="margin-bottom:14px"><div class="card fade-s"><div class="card-h"><i data-lucide="zap" class="luc" style="color:var(--acc)"></i><h3>Today, in order <span class="sub">· state-derived — items vanish when resolved</span></h3></div><div style="display:flex;flex-direction:column;gap:8px">' +
-        (rows.length ? rows.slice(0, 10).map(r =>
-          '<div class="act-row"><span class="act-sev" style="background:' + sevCol[r.sev] + '"></span><div class="act-t"><b>' + esc(r.t) + "</b></div>" + (r.jump ? '<button class="btn btn-xs btn-g" data-jump=\'' + JSON.stringify(r.jump).replace(/'/g, "&#39;") + "'>Open</button>" : "") + "</div>"
-        ).join("") : '<div style="color:var(--ink3);font-size:13px;padding:8px 2px">Clear. Use the space deliberately — one growth conversation, one risk review.</div>') +
-      "</div></div>" +
-
-      '<div class="card fade-s"><div class="card-h"><i data-lucide="heart-pulse" class="luc" style="color:var(--ok)"></i><h3>Leadership health — explainable <span class="sub">· nothing hidden, every point has a formula</span></h3></div>' +
-        Object.entries({ Delivery: [h.parts.delivery, 30, "% of open tasks that are NOT overdue"], "Risk posture": [h.parts.risk, 15, "high risks with a named mitigation owner"], "Cadence": [h.parts.cadence, 25, "1:1s within 21 days + fresh pulse (70/30)"], Climate: [h.parts.climate, 20, "latest pulse: safety 60% / Lencioni 40%"], "Self-leadership": [h.parts.self, 10, "habit completion + weekly reflection"] }).map(([k, [v, w, expl]]) =>
-          '<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="font-weight:600">' + k + ' <span style="color:var(--ink3);font-weight:400">· ' + expl + '</span></span><span class="mono" style="color:var(--ink2)">' + Math.round(v * w) + "/" + w + '</span></div><div class="pbar"><i style="width:' + Math.round(v * 100) + "%;background:" + (v >= .7 ? "var(--ok)" : v >= .4 ? "var(--warn)" : "var(--bad)") + '"></i></div></div>'
-        ).join("") +
-      "</div></div>" +
-
-      '<div class="grid3">' +
-      '<div class="card fade-s"><div class="card-h"><i data-lucide="trending-up" class="luc" style="color:var(--acc)"></i><h3>Tasks closed — 14 days</h3></div>' + SPARK(sparkData, "var(--acc)", 300, 60) + '</div>' +
-      '<div class="card fade-s"><div class="card-h"><i data-lucide="grid-3x3" class="luc" style="color:var(--warn)"></i><h3>Risk heat <span class="sub">· severity × likelihood</span></h3></div><div class="heat">' +
-        '<div></div>' + [1, 2, 3, 4, 5].map(o => '<div class="hl" style="justify-content:center">L' + o + "</div>").join("") +
-        [5, 4, 3, 2, 1].map(s => '<div class="hl">S' + s + "</div>" + [1, 2, 3, 4, 5].map(o => heatCell(s, o)).join("")).join("") +
-      '</div><div class="dot-legend" style="margin-top:9px"><span><i style="background:var(--ok)"></i>low</span><span><i style="background:var(--warn)"></i>medium</span><span><i style="background:var(--bad)"></i>high</span></div></div>' +
-      '<div class="card fade-s"><div class="card-h"><i data-lucide="bar-chart-3" class="luc" style="color:var(--info)"></i><h3>Workload now <span class="sub">· open tasks per person</span></h3></div>' +
-        (wl.length ? wl.map(x => '<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><span style="width:110px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + av(x.m.name, 20) + ' <span style="margin-left:2px">' + esc(x.m.name.split(" ")[0]) + '</span></span><div class="pbar" style="flex:1"><i style="width:' + clamp(x.n / 8 * 100, 4, 100) + "%;background:" + (x.n > 6 ? "var(--bad)" : "var(--info)") + '"></i></div><span class="mono" style="font-size:11px;color:' + (x.n > 6 ? "var(--bad)" : "var(--ink2)") + '">' + x.n + "</span></div>").join("")
-        : '<div style="color:var(--ink3);font-size:12.5px">Add the team in Team Roster to see load.</div>') +
-      "</div></div>" +
-      UI.mnote('<b>The three daily questions:</b> 1) Who needs me today? 2) What is the team avoiding? 3) What one thing, finished today, makes everything else easier? — The Coach view answers the first two with live data.');
-    icons();
-  }
-});
+/* orphaned block removed — dashboard is registered at line ~1125 */
 
 /* =====================================================
    COMMAND — Coach (the mentor role, live-data grounded)
@@ -1865,6 +1959,104 @@ UI.register("onboarding", {
 });
 
 /* =====================================================
+   PEOPLE — Team Wellbeing Tracker
+   ===================================================== */
+UI.register("wellbeing", {
+  title: "Team Wellbeing", icon: "heart-pulse", group: "People",
+  sub: "Energy + mood per person, over time — the early warning system",
+  lead: "You can't see burnout coming if you only look at tasks. This view tracks team-member energy and mood logged at every 1:1, surfacing trends before they become resignations.",
+  render(el) {
+    const mem = DB.col("members");
+    const o11s = DB.col("oneonones");
+    if (!mem.length) { el.innerHTML = UI.empty("heart-pulse", "Add people first", "Wellbeing data comes from your 1:1 mood logs."); icons(); return; }
+    
+    const trend = (mid) => {
+      const logs = o11s.filter(o => o.member === mid && o.mood).sort((a, b) => a.date.localeCompare(b.date));
+      return logs.slice(-6).map(l => +l.mood);
+    };
+    
+    const mem_data = mem.map(m => ({ m, t: trend(m.id), last: [...o11s.filter(o => o.member === m.id)].sort((a, b) => b.date.localeCompare(a.date))[0] }));
+    const atRisk = mem_data.filter(x => x.t.length >= 2 && x.t[x.t.length - 1] < 3 && x.t[x.t.length - 1] <= x.t[x.t.length - 2]);
+
+    let html = UI.header(this, '<button class="btn btn-p" data-act="oneonones">Log a 1:1</button>');
+    if (atRisk.length) html += '<div class="mnote" style="border-color:rgba(255,92,108,.4);background:linear-gradient(90deg,rgba(255,92,108,.1),transparent 55%);margin-bottom:14px"><i data-lucide="trending-down" class="luc" style="color:var(--bad)"></i><div><b>Declining energy signal: ' + atRisk.map(x => x.m.name).join(", ") + '.</b> Two consecutive readings below 3. Do not wait for the next scheduled 1:1 — reach out today.</div></div>';
+    
+    html += '<div class="grid2">' + mem_data.map(x => {
+      const last = x.last ? +x.last.mood || 0 : 0;
+      const col = last >= 4 ? "var(--ok)" : last === 3 ? "var(--warn)" : last ? "var(--bad)" : "var(--ink3)";
+      const direction = x.t.length >= 2 ? (x.t[x.t.length - 1] > x.t[x.t.length - 2] ? "↑" : x.t[x.t.length - 1] < x.t[x.t.length - 2] ? "↓" : "→") : "—";
+      return '<div class="card fade-s"><div class="card-h">' + av(x.m.name, 28) + '<div><h3>' + esc(x.m.name) + '</h3><div style="font-size:11px;color:var(--ink3)">' + esc(x.m.team || "") + " · " + esc(x.m.role || "") + '</div></div>' +
+        '<div style="margin-left:auto;text-align:center"><div class="disp" style="font-size:26px;font-weight:700;color:' + col + '">' + (last || "—") + '</div><div style="font-size:11px;color:' + col + '">' + direction + '</div></div></div>' +
+        (x.t.length ? '<div style="margin-top:8px">' + SPARK(x.t, col, 220, 42) + '</div>' : '<div style="font-size:12px;color:var(--ink3);padding:8px 0">No mood data — log 1:1 mood scores.</div>') +
+        (x.last?.notes ? '<div style="font-size:11.5px;color:var(--ink2);margin-top:8px;border-left:2px solid var(--line);padding-left:9px">' + esc(x.last.notes.slice(0, 80)) + (x.last.notes.length > 80 ? "…" : "") + '</div>' : '') +
+        '</div>';
+    }).join("") + '</div>' +
+    UI.mnote("These scores are YOUR observations at 1:1s — they are not a survey and they are not HR data. They are your leadership radar. A 3 two sessions in a row means the next 1:1 leads with 'How are you REALLY doing?' and nothing else for 20 minutes.");
+
+    el.innerHTML = html;
+    icons();
+  }
+});
+
+/* =====================================================
+   COMMAND — Weekly Review Wizard
+   ===================================================== */
+UI.register("weeklyreview", {
+  title: "Weekly Review", icon: "calendar-check-2", group: "Command",
+  sub: "Forced-path end-of-week discipline · 15 minutes, every Friday",
+  lead: "Leadership without a weekly review is leadership without a feedback loop. This wizard won't let you skip a section. It produces a reflection entry, flags carried-over alerts, and names next week's single most important move.",
+  render(el) {
+    const h = Engine.health();
+    const mem = DB.col("members");
+    const alerts = Mentor.findings.filter(f => f.sev === "alert");
+    const done = DB.col("tasks").filter(t => t.status === "done" && Math.abs(daysUntil(t.doneAt || t.created)) <= 7);
+    const fb = DB.col("feedback").filter(f => f.delivered && Math.abs(daysUntil(f.created)) <= 7);
+    const rec = DB.col("recognition").filter(r => Math.abs(daysUntil(r.date)) <= 7);
+    const o11 = DB.col("oneonones").filter(o => Math.abs(daysUntil(o.date)) <= 7);
+
+    el.innerHTML = UI.header(this, "") +
+      '<div class="card fade-s" style="margin-bottom:14px;border-color:var(--acc)44;background:linear-gradient(120deg,var(--acc-dim),transparent 45%)"><div class="card-h"><i data-lucide="calendar-check-2" class="luc" style="color:var(--acc)"></i><h3>This week at a glance</h3></div>' +
+      '<div class="grid4">' +
+        [["Tasks closed", done.length, done.length ? "var(--ok)" : "var(--ink3)"], ["1:1s held", o11.length + "/" + mem.length, o11.length === mem.length ? "var(--ok)" : "var(--warn)"], ["Feedback given", fb.length, fb.length ? "var(--ok)" : "var(--ink3)"], ["Recognition acts", rec.length, rec.length ? "var(--ok)" : "var(--warn)"]].map(([l, v, c]) =>
+          '<div style="text-align:center;padding:8px"><div class="fl">' + l + '</div><div class="disp" style="font-size:22px;font-weight:700;color:' + c + '">' + v + '</div></div>'
+        ).join("") +
+      '</div></div>' +
+      
+      '<div class="card fade-s" style="margin-bottom:14px"><div class="card-h"><i data-lucide="siren" class="luc" style="color:var(--bad)"></i><h3>Carried alerts into next week</h3><span class="sub">· close these before Monday or explicitly defer</span></h3></div>' +
+      (alerts.length ? alerts.slice(0, 6).map(a => '<div class="act-row" style="margin-bottom:7px"><span class="act-sev" style="background:var(--bad)"></span><div class="act-t"><b>' + esc(a.msg) + '</b></div></div>').join("") : '<div style="color:var(--ok);font-weight:600;padding:8px">No alerts carried over. That is earned. Don\'t waste it — start Monday on growth, not firefighting.</div>') +
+      '</div>' +
+      
+      '<div class="card fade-s" style="margin-bottom:14px"><div class="card-h"><i data-lucide="star" class="luc" style="color:var(--acc)"></i><h3>Recognition debt — who didn\'t hear anything?</h3></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      mem.map(m => { const d = Engine.recognitionDebt(m.id); return '<div style="display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:8px;border:1px solid ' + (d >= 30 ? "var(--bad)" : "var(--line)") + ';background:' + (d >= 30 ? "var(--bad-dim)" : "var(--panel)") + '">' + av(m.name, 20) + '<span style="font-size:12px">' + esc(m.name.split(" ")[0]) + '</span><span class="mono" style="font-size:10.5px;color:' + (d >= 30 ? "var(--bad)" : "var(--ink3)") + '">' + (d === 999 ? "never" : d + "d") + '</span></div>'; }).join("") +
+      '</div></div>' +
+      
+      '<div class="card fade-s"><div class="card-h"><i data-lucide="pen-line" class="luc" style="color:var(--info)"></i><h3>Weekly reflection — required to close the week</h3></div>' +
+      '<form id="wr-form"><div class="fgrid">' +
+        '<div class="full"><label class="fl">What actually got done? (facts, not vibes)</label><textarea id="wr-win" rows="2" placeholder="' + (done.length ? done.slice(0,3).map(t => t.title).join(" · ") : "What moved forward this week?") + '"></textarea></div>' +
+        '<div class="full"><label class="fl">What drained me? (name the real thing)</label><textarea id="wr-drain" rows="2" placeholder="e.g. The decision meeting that decided nothing. The email spiral."></textarea></div>' +
+        '<div class="full"><label class="fl">What will I do differently Monday? (ONE thing, verb first)</label><textarea id="wr-change" rows="2" placeholder="e.g. Send the agenda 24h before the staff meeting, not 10 minutes before."></textarea></div>' +
+        '<div><label class="fl">My energy this week (1–10)</label><input id="wr-e" type="range" min="1" max="10" value="6" style="padding:0"><span id="wr-e-v" class="mono" style="float:right;color:var(--acc)">6</span></div>' +
+        '<div><label class="fl">My mood this week (1–10)</label><input id="wr-m" type="range" min="1" max="10" value="6" style="padding:0"><span id="wr-m-v" class="mono" style="float:right;color:var(--acc)">6</span></div>' +
+      '</div><button class="btn btn-p" style="margin-top:16px;width:100%"><i data-lucide="check-circle-2" class="luc"></i>Close the week — log reflection</button></form></div>';
+
+    el.querySelector("#wr-e").oninput = e => el.querySelector("#wr-e-v").textContent = e.target.value;
+    el.querySelector("#wr-m").oninput = e => el.querySelector("#wr-m-v").textContent = e.target.value;
+    el.querySelector("#wr-form").onsubmit = e => {
+      e.preventDefault();
+      const win = el.querySelector("#wr-win").value.trim();
+      const drain = el.querySelector("#wr-drain").value.trim();
+      const change = el.querySelector("#wr-change").value.trim();
+      if (!win || !change) { UI.toast("Fill in what got done and what you'll do differently — both required.", "bad"); return; }
+      DB.add("reflections", { date: todayStr(), energy: +el.querySelector("#wr-e").value, mood: +el.querySelector("#wr-m").value, win, drain, change });
+      UI.toast("Week closed. That discipline is compounding. Monday: check the Coach first.", "ok");
+      UI.nav("reflect");
+    };
+    icons();
+  }
+});
+
+/* =====================================================
    PEOPLE — Ofman Core Quadrants (Team Clash)
    ===================================================== */
 UI.register("quadrants", makeRegister({
@@ -1985,6 +2177,151 @@ UI.register("skills", {
     icons();
   }
 });
+
+/* =====================================================
+   EXECUTION — Prioritisation Backlog (WSJF / RICE)
+   ===================================================== */
+UI.register("backlog", makeRegister({
+  id: "backlog", col: "backlog", title: "Prioritisation Backlog", icon: "arrow-up-narrow-wide", group: "Execution",
+  sub: "Math-based priority · WSJF & RICE scoring",
+  lead: "The loudest voice shouldn't win. Use WSJF (Weighted Shortest Job First) for cost-of-delay or RICE for product reach. The highest score gets the next slot. Math prevents the 'everything is a priority' failure mode.",
+  consumes: ["tasks", "members"],
+  schema: [
+    { key: "title", label: "Feature / Initiative", type: "text", req: true, full: true },
+    { key: "method", label: "Scoring Method", type: "select", options: [["wsjf", "WSJF — User value + Urgency + Risk / Job size"], ["rice", "RICE — Reach × Impact × Confidence / Effort"]], def: "wsjf" },
+    /* WSJF fields */
+    { key: "userValue", label: "User / Business Value (1–10)", type: "range", min: 1, max: 10, def: 5 },
+    { key: "timeCriticality", label: "Time Criticality (1–10)", type: "range", min: 1, max: 10, def: 3 },
+    { key: "riskReduction", label: "Risk Reduction / Opportunity (1–10)", type: "range", min: 1, max: 10, def: 3 },
+    { key: "jobSize", label: "Job Size / Complexity (Fibonacci 1,2,3,5,8,13,21)", type: "select", options: [1,2,3,5,8,13,21], def: 5 },
+    /* RICE fields */
+    { key: "reach", label: "Reach (number of users)", type: "number", min: 0, def: 100 },
+    { key: "impact", label: "Impact per user (0.25–3.0)", type: "select", options: [[0.25, "Minimal"], [0.5, "Low"], [1, "Medium"], [2, "High"], [3, "Massive"]], def: 1 },
+    { key: "confidence", label: "Confidence %", type: "range", min: 20, max: 100, step: 10, def: 80 },
+    { key: "effort", label: "Effort (person-months)", type: "number", min: 0.1, def: 1 },
+    { key: "status", label: "State", type: "select", options: [["backlog", "In Backlog"], ["planned", "Planned"], ["active", "In Progress"], ["shipped", "Shipped"]], def: "backlog" }
+  ],
+  stats: rows => {
+    const b = rows.filter(r => r.status === "backlog");
+    return [["Backlog items", b.length, "waiting", "layers", "var(--acc)"], ["Highest Score", b.length ? Math.max(...b.map(r => r.method === "wsjf" ? Engine.wsjf(r) : Engine.rice(r))).toFixed(1) : "—", "the next move", "trending-up", "var(--ok)"], ["Total Effort", rows.reduce((s, r) => s + (+r.effort || 0), 0).toFixed(1), "person-months", "users", "var(--info)"]];
+  },
+  cols: [
+    { l: "Item", td: r => "<b>" + esc(r.title) + "</b>" },
+    { l: "Method", td: r => UI.badge(r.method, "b-mut"), nowrap: true },
+    { l: "Score", td: r => { 
+      const s = r.method === "wsjf" ? Engine.wsjf(r) : Engine.rice(r);
+      return '<span class="mono" style="font-weight:700;color:var(--acc)">' + s.toFixed(1) + "</span>"; 
+    }, nowrap: true },
+    { l: "State", td: r => UI.badge(r.status, r.status === "shipped" ? "b-ok" : r.status === "active" ? "b-acc" : "b-mut"), nowrap: true }
+  ],
+  sort: (a, b) => (b.method === "wsjf" ? Engine.wsjf(b) : Engine.rice(b)) - (a.method === "wsjf" ? Engine.wsjf(a) : Engine.rice(a))
+}));
+
+/* =====================================================
+   EXECUTION — Controls Ledger (Risk Barriers)
+   ===================================================== */
+UI.register("controls", makeRegister({
+  id: "controls", col: "controls", title: "Controls Ledger", icon: "shield-check", group: "Execution",
+  sub: "Prevention barriers · testing discipline",
+  lead: "A control is a repeatable process that prevents or detects a risk. If you can't test it, it's not a control. Professional risk management tracks both the DESIGN (is it a good rule?) and the OPERATION (do people follow it?).",
+  consumes: ["risks", "tasks", "members"],
+  schema: [
+    { key: "title", label: "Control Name", type: "text", req: true, full: true, ph: "Manual approval for prod deploys" },
+    { key: "risk", label: "Mitigates Risk", type: "ref", col: "risks" },
+    { key: "type", label: "Type", type: "select", options: [["preventive", "Preventive — stops it happening"], ["detective", "Detective — tells us it happened"]], def: "preventive" },
+    { key: "owner", label: "Control Owner", type: "person" },
+    { key: "frequency", label: "Test Frequency", type: "select", options: ["Daily", "Weekly", "Monthly", "Quarterly"], def: "Monthly" },
+    { key: "nextTest", label: "Next Test Date", type: "date", req: true },
+    { key: "effectiveness", label: "Last Verdict", type: "select", options: [["high", "Effective"], ["med", "Partially Effective"], ["low", "Ineffective"], ["untested", "Untested"]], def: "untested" },
+    { key: "status", label: "Status", type: "select", options: [["active", "Active"], ["retired", "Retired"]], def: "active" }
+  ],
+  stats: rows => {
+    const act = rows.filter(r => r.status === "active");
+    return [["Active Controls", act.length, "barriers in place", "shield-check", "var(--ok)"], ["Overdue Tests", act.filter(r => overdue(r.nextTest)).length, "control theatre risk", "alarm-clock", act.filter(r => overdue(r.nextTest)).length ? "var(--bad)" : "var(--ok)"], ["Weak Barriers", act.filter(r => r.effectiveness === "low" || r.effectiveness === "untested").length, "leaking systems", "shield-off", "var(--warn)"]];
+  },
+  cols: [
+    { l: "Control", td: r => "<b>" + esc(r.title) + "</b>" + (r.risk ? '<div style="font-size:10.5px;color:var(--ink3)">for: ' + esc(DB.byId("risks", r.risk)?.title || "") + "</div>" : "") },
+    { l: "Owner", td: r => personTag(r.owner) },
+    { l: "Freq", td: r => '<span class="chip">' + esc(r.frequency) + "</span>", nowrap: true },
+    { l: "Next Test", td: r => dueCell(r.nextTest), nowrap: true },
+    { l: "Effectiveness", td: r => UI.badge(r.effectiveness, r.effectiveness === "high" ? "b-ok" : r.effectiveness === "low" ? "b-bad" : "b-warn"), nowrap: true }
+  ]
+}));
+
+/* =====================================================
+   EXECUTION — Quality Plan (Qualification Gates)
+   ===================================================== */
+UI.register("quality", makeRegister({
+  id: "quality", col: "tasks", title: "Quality Plan", icon: "check-square", group: "Execution",
+  sub: "Qualification gates · acceptance criteria",
+  lead: "Quality isn't inspected; it's designed. Use this view to assign specific 'Qualification Gates' to tasks. A task isn't 'Done' until the criteria are met and the qualified person signs off.",
+  consumes: ["tasks", "members"],
+  render(el) {
+    const tasks = DB.col("tasks").filter(t => t.status !== "done" && t.prio === "crit" || t.prio === "high");
+    if (!tasks.length) { el.innerHTML = UI.header(this, "") + UI.empty("check-square", "No critical tasks", "Only High and Critical priority tasks appear here for quality gating."); return; }
+    
+    el.innerHTML = UI.header(this, "") + 
+      '<div class="card fade-s" style="padding:8px 4px"><table class="tbl"><thead><tr><th>Task</th><th>Gated By</th><th>Acceptance Criteria</th><th>Status</th></tr></thead><tbody>' +
+        tasks.map(t => '<tr><td><b>' + esc(t.title) + '</b></td>' +
+          '<td>' + personTag(t.owner) + '</td>' +
+          '<td><div style="font-size:12px;color:var(--ink2)">' + (t.criteria || "— No criteria set —") + '</div></td>' +
+          '<td>' + (t.progress >= 90 ? '<button class="btn btn-xs btn-p" data-gate="' + t.id + '">Final Sign-off</button>' : UI.badge(t.progress + "%", "b-mut")) + '</td></tr>').join("") +
+      '</tbody></table></div>' +
+      UI.mnote("<b>Gate Rule:</b> High-priority work requires explicit acceptance criteria. If you don't define what 'Good' looksly like, you'll get 'Finished' instead.");
+    
+    $$("[data-gate]").forEach(b => b.onclick = () => {
+      const t = DB.byId("tasks", b.dataset.gate);
+      UI.formModal("Quality Sign-off", t.title, [
+        { key: "notes", label: "Sign-off Notes", type: "textarea", full: true, req: true, ph: "Verification steps performed..." },
+        { key: "status", label: "Final Verdict", type: "select", options: [["done", "Pass — Mark Task Done"], ["hold", "Fail — Back to In-Progress"]], def: "done" }
+      ], {}, out => {
+        if (out.status === "done") {
+          DB.update("tasks", t.id, { status: "done", progress: 100, doneAt: todayStr(), qualityNotes: out.notes });
+          UI.toast("Quality Gate Passed", "ok");
+        } else {
+          DB.update("tasks", t.id, { status: "prog", progress: 80 });
+          UI.toast("Quality Gate Failed — Task returned to progress", "warn");
+        }
+      });
+    });
+    icons();
+  }
+}));
+
+/* =====================================================
+   STRATEGY — Communications Plan
+   ===================================================== */
+UI.register("comms", makeRegister({
+  id: "comms", col: "comms", title: "Communications Plan", icon: "mail", group: "Strategy",
+  sub: "Stakeholder cadence · channel strategy",
+  lead: "Who needs to hear from you, how often, and through which channel? Trust is built in the spaces between milestones. If it isn't in the plan, it happens only when there is a problem.",
+  consumes: ["stakeholders", "members"],
+  schema: [
+    { key: "stakeholder", label: "Stakeholder", type: "ref", col: "stakeholders", req: true },
+    { key: "title", label: "Comms Title", type: "text", req: true, full: true, ph: "Project Status Update / Roadmap Brief" },
+    { key: "channel", label: "Channel", type: "select", options: ["Email", "Slack", "Meeting (1:1)", "Steering Group", "All Hands", "Report"], def: "Email" },
+    { key: "frequency", label: "Frequency", type: "select", options: ["Weekly", "Bi-weekly", "Monthly", "Quarterly", "Ad-hoc"], def: "Monthly" },
+    { key: "nextDate", label: "Next Delivery Date", type: "date", req: true },
+    { key: "lastDate", label: "Last Delivered", type: "date" }
+  ],
+  stats: rows => [["Active Cadences", rows.length, "planned relationships", "mail", "var(--acc)"], ["Due This Week", rows.filter(r => daysUntil(r.nextDate) <= 7).length, "deliverables", "calendar", "var(--warn)"], ["Overdue", rows.filter(r => overdue(r.nextDate)).length, "silence risk", "alarm-clock", rows.filter(r => overdue(r.nextDate)).length ? "var(--bad)" : "var(--ok)"]],
+  cols: [
+    { l: "Stakeholder", td: r => esc(DB.byId("stakeholders", r.stakeholder)?.name || "?") },
+    { l: "What", td: r => "<b>" + esc(r.title) + "</b>" },
+    { l: "Channel", td: r => '<span class="chip">' + esc(r.channel) + "</span>", nowrap: true },
+    { l: "Frequency", td: r => esc(r.frequency), nowrap: true },
+    { l: "Next Due", td: r => dueCell(r.nextDate), nowrap: true }
+  ],
+  rowExtra: r => '<button class="btn btn-xs btn-g" data-sent="' + r.id + '">Mark Delivered</button>',
+  bind(el) {
+    el.querySelectorAll("[data-sent]").forEach(b => b.onclick = () => {
+      const r = DB.byId("comms", b.dataset.sent);
+      const next = addDays(todayStr(), r.frequency === "Weekly" ? 7 : r.frequency === "Bi-weekly" ? 14 : r.frequency === "Monthly" ? 30 : 90);
+      DB.update("comms", r.id, { lastDate: todayStr(), nextDate: next });
+      UI.toast("Comms logged — next date set", "ok");
+    });
+  }
+}));
 
 /* =====================================================
    EXECUTION — RACI Matrix
@@ -3150,7 +3487,7 @@ UI.MODULES.data.icon = "database";
   const foot = () => {
     const kb = (new Blob([JSON.stringify(DB.state)]).size / 1024).toFixed(0);
     const rec = COLS.reduce((s, c) => s + DB.col(c).length, 0);
-    $("#side-foot").innerHTML = "v2.0 · multi-team engine · no network<br>" + rec + " records · " + kb + " KB · audit trailed";
+    $("#side-foot").innerHTML = "v3.0 · synthesis engine · no network<br>" + rec + " records · " + kb + " KB · audit trailed";
   };
   foot(); Bus.on("change", () => setTimeout(foot, 300));
   /* midnight rollover: self-resolving findings re-derive */
