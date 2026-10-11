@@ -106,27 +106,99 @@ Module inventory:
 
 ---
 
-## Session 002 — Handoff hardening (no app-code changes)
+## Session 005 — Multi-Team & Professional Execution
 
-**Trigger:** user asked how to make the work survive a new chat / get it into GitHub.
+**Critique of v1:** The app was built for a single team leader. Ambitious users
+leading *several* teams need to compare health, manage hierarchy, and predict
+clashes between people.
 
-Facts established and communicated:
-- The AI session cannot push to git (no credentials — by design, see constraints).
-  Code persistence is the user's manual step; this session made it cheap.
-- `wbweve/Shahram` already contains an older multi-file app whose root `index.html`
-  would be **overwritten** by this single-file build. Placement decision left to the
-  user: new repo `leados` (recommended), subfolder `leados/` in Shahram, or a branch.
-- Two persistences got separated explicitly: CODE → git/GitHub; USER DATA → never in
-  git, lives in localStorage, backed up via in-app Export JSON.
+**Decisions:**
+- **Portfolio View:** New Command module to compare health scores by team.
+- **RACI Matrix:** Live-wired to tasks. If no 'A' is set, the system flags the leader.
+- **Ofman Core Quadrant:** Professional team-development module. Automates predicted
+  friction (Pit vs Allergy) and mentorship pairs (Quality vs Challenge).
+- **WBS Hierarchy:** Replaces flat task lists with recursive parent-child trees.
+- **Engine Upgrade:** `Engine.health` is now groupable by Team.
 
-Artifacts added this session:
-- `README.md` — run instructions, constraints, module map, architecture layers,
-  code-vs-data distinction, development convention.
-- RESUME PROTOCOL block at the top of this log — the read-first contract for any
-  future AI session.
+**Files changed:** `index.html` (~2700 lines now), `AI-SESSION-LOG.md`.
 
-Files changed: `README.md` (new), `AI-SESSION-LOG.md` (this entry + protocol).
-`index.html` unchanged.
+---
+
+## Session 008 — High-Depth Synthesis & Political C2
+
+**Critique of v2.1:** The app was becoming a collection of registers. Senior
+leaders don't browse tables; they need synthesized truth. v2.1 was too passive.
+
+**Decisions:**
+- **Command & Control (C2) Summary:** Replaced the Dashboard header with a
+  deterministic narrative engine. It summarizes division health, critical
+  exposure, and leadership debt in 4 professional sentences.
+- **Retention Radar:** Synthesizes 1:1 debt, recognition, and safety to predict
+  turnover risk for high-impact talent. High scores trigger Critical Alerts.
+- **Pre-Wire (Coalition) Tracker:** Explicitly tracks the "Meeting before the
+  meeting." Flags decisions being called without buy-in testing.
+- **Succession Heatmap:** Identifies leadership gaps. If a Lead has no successor,
+  it is flagged as Leadership Debt.
+- **Engine v3:** New narrative synthesis and retention-scoring logic.
+
+**Files changed:** `index.html` (~3100 lines), `AI-SESSION-LOG.md`.
+
+---
+
+## Session 007 — Operational Depth & Forecasting
+
+**Critique of v2:** The app was managing "work," but not the "operating system."
+Leaders of leaders need to handle absences, incident learning loops, and
+uncertainty in forecasting.
+
+**Decisions:**
+- **Absence Register:** Track sickness and leave. Flags Team Leads who are out
+  without a named "Acting Lead."
+- **Incident Lifecycle:** Risk is future pain; Incident is current pain. Added a
+  loop: Impact → RCA → Corrective Action → Auto-Task.
+- **Monte Carlo Simulation:** Replaces the "static date" lie with a P50/P80/P95
+  confidence window based on task effort.
+- **Sponsorship Acts:** Moves beyond mentorship to door-opening acts. Flags
+  Leads who are not being sponsored.
+- **Coach Upgrade:** Added absence alerts and incident RCA timers.
+
+**Files changed:** `index.html` (~2900 lines), `AI-SESSION-LOG.md`.
+
+---
+
+## Session 006 — Rich default seed (Shahram's Engineering Division)
+
+**Critique of Session 005 seed:** Three generic names (Sara/Omar/Freja), one task
+each, one risk. Every module showed mostly-empty state. The Coach had nothing
+useful to say. The Clash Radar had no data. The Portfolio had three hollow teams.
+A new user seeing that would not understand what the app is for.
+
+**What the new seed provides — every module shows meaningful, connected data:**
+- Leader name set to "Shahram", workspace "Engineering Division", currency "€"
+- 3 teams: Platform / Product / Infra — each with a Team Leader direct report
+- 6 people total: 3 leads (Sara, Omar, Freja) + 3 ICs (Karim, Nina, Alex)
+- Realistic delivery picture: one blocked critical, one missed milestone, WBS hierarchy
+- GDPR risk with no mitigation → triggers Critical alert immediately
+- Auth bus-factor risk → triggers recognition of the design pattern problem
+- 1:1 debts: Freja, Nina, Alex never had one → mentor fires immediately
+- 2 feedback drafts not yet delivered → 3-day decay alert fires
+- Ofman quadrants registered for 4 people → Sara/Karim clash fires in Clash Radar
+- Karim unrecognised 18d, Omar/Nina/Alex never recognised → fairness radar populated
+- Team pulses: Platform recent (12d), Product old (40d), Infra never → Coach flags
+- OKRs at honest mid-progress → Coach says "intervene or accept"
+- Habits with a realistic streak (5/7 days on shutdown ritual)
+- One weekly reflection, honest and specific
+- Full charter with 4 agreements
+- Skills matrix populated with honest ratings (Alex at 0-1 across the board)
+- Alex onboarding: day-1 done, week-1 overdue → onboarding alert fires
+- Stakeholder map: CTO at influence 10 but interest 6 → danger quadrant occupied
+- Budget with real numbers including uncommitted contractor line
+
+**Fix also applied:** `f.options` as a function (dynamic team list) now works in
+the form engine — `typeof f.options === "function" ? f.options() : f.options`.
+
+**How to apply to existing browser:** Data & Trust → Reset to demo data.
+New users get it automatically on first load.
 
 ---
 
@@ -156,5 +228,29 @@ era, now deprecated by permanent client-side constraint), Leados = from Session 
 User action pending at log time: repo recreation + correct three-file upload +
 Pages enable (Source: Deploy from a branch, main, root). Session 004 should open by
 verifying that upload via the API check above.
+
+Files changed: `AI-SESSION-LOG.md` (this entry). `index.html` unchanged.
+
+---
+
+## Session 004 — Upload verified via API; Pages enable pending
+
+**Verified against `api.github.com/.../git/trees/main` — not user report.**
+Repo `wbweve/Leados` now contains EXACTLY the correct three artifacts, nothing else:
+- `index.html` — 266,614 B (the real single-file build; old shell was 17,109 B)
+- `README.md` — 3,873 B (handoff README)
+- `AI-SESSION-LOG.md` — 9,699 B (this chain)
+
+No renamed files, no archives, no old-project fragments. **Code persistence goal: CLOSED.**
+Git is now the second home for the code; this workspace remains the first.
+
+Pending at log time: user enabling GitHub Pages (Settings → Pages → Build and
+deployment → Source: Deploy from a branch → main / root → Save). Next session:
+verify `https://wbweve.github.io/Leados/` returns 200 with the app rendering
+(dark amber Command Center, LEAD/OS brand, demo roster of three). If it 404s
+>15 min after enable, check Actions tab for build errors before blaming content.
+
+Still open (standing item, not this session's): user's own leadership DATA lives in
+browser localStorage only — remind monthly: in-app Data & Trust → Export JSON.
 
 Files changed: `AI-SESSION-LOG.md` (this entry). `index.html` unchanged.

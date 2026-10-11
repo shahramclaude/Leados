@@ -271,17 +271,23 @@ const money = n => (DB.state.settings.currency || "$") + Number(n || 0).toLocale
 
 /* ============ 2. DB (localStorage, atomic, quota-guarded) ============ */
 const DBKEY = "LEADOS.v1";
-const COLS = ["members","tasks","risks","goals","okrs","oneonones","feedback","delegation","recognition","reviews","conflicts","pulses","decisions","meetings","ideas","habits","reflections","stakeholders","swot","budget","idp"];
+const COLS = ["members","tasks","risks","goals","okrs","oneonones","feedback","delegation","recognition","reviews","conflicts","pulses","decisions","meetings","ideas","habits","reflections","stakeholders","swot","budget","idp","quadrants","absences","incidents","sponsorships","prewires","succession"];
 const DB = {
   state: null,
   load() {
     try { this.state = JSON.parse(localStorage.getItem(DBKEY)); } catch (e) { this.state = null; }
     if (!this.state) {
-      this.state = { v: 1, settings: { leader: "", currency: "$", accent: "#f0b429", workspace: "My Teams" }, audit: [], snaps: [] };
+      this.state = { v: 1, settings: { leader: "", currency: "$", accent: "#f0b429", workspace: "My Teams", teams: ["Core", "Platform", "Growth"] }, audit: [], snaps: [] };
       COLS.forEach(c => this.state[c] = []);
-      this.state.docs = { charter: { vision: "", values: [], agreements: [] }, self: { disc: { d: 3, i: 3, s: 3, c: 3 }, belbin: [], ei: { sa: 5, sm: 5, so: 5, rm: 5 } }, skills: {}, onboarding: {} };
+      this.state.docs = { charter: { vision: "", values: [], agreements: [] }, self: { disc: { d: 3, i: 3, s: 3, c: 3 }, belbin: [], ei: { sa: 5, sm: 5, so: 5, rm: 5 } }, skills: {}, onboarding: {}, raci: {} };
       this.save(); seedDemo();
     }
+    /* migration: ensure new cols exist */
+    COLS.forEach(c => { if(!this.state[c]) this.state[c] = []; });
+    if (!this.state.settings.teams) this.state.settings.teams = ["Core", "Platform", "Growth"];
+    if (!this.state.docs.raci) this.state.docs.raci = {};
+    if (!this.state.quadrants) this.state.quadrants = [];
+    if (!this.state.docs.succession) this.state.docs.succession = {};
   },
   save() {
     try {
@@ -453,31 +459,114 @@ const Engine = {
     }
     return a;
   },
-  /* composite health score, fully explainable */
-  health() {
-    const mem = DB.col("members");
+  /* composite health score, fully explainable, optional team filter */
+  health(teamName) {
+    const mem = teamName ? DB.col("members").filter(m => m.team === teamName) : DB.col("members");
+    const tasks = teamName ? DB.col("tasks").filter(t => mem.some(m => m.id === t.owner)) : DB.col("tasks");
+    const risks = teamName ? DB.col("risks").filter(r => r.owner && mem.some(m => m.id === r.owner)) : DB.col("risks");
+
     // delivery 30
-    const ot = DB.col("tasks").filter(t => t.status !== "done");
+    const ot = tasks.filter(t => t.status !== "done");
     const odr = ot.filter(t => overdue(t.due)).length;
     const delivery = ot.length ? clamp(1 - odr / Math.max(ot.length, 1), 0, 1) : 0.7;
-    // risk 15: no unmitigated critical/high
-    const hi = DB.col("risks").filter(r => r.status !== "closed" && Engine.rpn(r) >= 100);
+
+    // risk 15
+    const hi = risks.filter(r => r.status !== "closed" && Engine.rpn(r) >= 100);
     const unmit = hi.filter(r => !r.mitigation || !r.mitOwner).length;
     const risk = hi.length ? clamp(1 - unmit / hi.length, 0, 1) : 0.8;
-    // cadence 25: 1:1 coverage ≤21d + pulse freshness
+
+    // cadence 25
     const cad = mem.length ? avg(mem.map(m => Engine.oneOnOneDebt(m.id) <= 21 ? 1 : Engine.oneOnOneDebt(m.id) === 999 ? 0.15 : 0.35)) : 0.5;
-    const lp = Engine.latestPulse();
+    const lp = teamName ? [...DB.col("pulses")].filter(p => p.team === teamName).sort((a,b) => b.date.localeCompare(a.date))[0] : Engine.latestPulse();
     const pulseF = lp ? (Math.abs(daysUntil(lp.date)) <= 35 ? 1 : 0.4) : 0.2;
     const cadence = cad * 0.7 + pulseF * 0.3;
-    // climate 20: latest pulse or self-reported
+
+    // climate 20
     const climate = lp ? clamp((Engine.psych(lp) / 7) * 0.6 + (Engine.lencioni(lp) / 5) * 0.4, 0, 1) : 0.5;
-    // self 10: habits 7d completion + reflection this week
-    const habs = DB.col("habits");
+
+    // self 10
+    const habs = DB.col("habits"); // habits are personal to the leader, so team filter doesn't apply
     const habRate = habs.length ? avg(habs.map(h => Engine.habitRate(h, 7))) : 0.4;
     const refl = DB.col("reflections").some(r => Math.abs(daysUntil(r.date)) <= 8) ? 1 : 0.25;
     const self = habRate * 0.6 + refl * 0.4;
+
     const total = Math.round((delivery * 30 + risk * 15 + cadence * 25 + climate * 20 + self * 10));
-    return { total, parts: { delivery, risk, cadence, climate, self } };
+    return { total, parts: { delivery, risk, cadence, climate, self }, n: mem.length };
+  },
+  /* Ofman team clash analysis */
+  clash(idA, idB) {
+    const qA = DB.col("quadrants").find(q => q.member === idA);
+    const qB = DB.col("quadrants").find(q => q.member === idB);
+    if (!qA || !qB) return null;
+    const out = [];
+    /* Pit of A hits Allergy of B */
+    if (qA.pit === qB.allergy) out.push({ from: idA, to: idB, type: "pit-to-allergy", msg: `The pit of ${DB.byId("members", idA).name} (${qA.pit}) is exactly the allergy of ${DB.byId("members", idB).name}. This is a direct friction zone.` });
+    /* Core Quality of A is the Challenge of B */
+    if (qA.quality === qB.challenge) out.push({ from: idA, to: idB, type: "quality-to-challenge", msg: `${DB.byId("members", idA).name}'s core quality (${qA.quality}) is exactly what ${DB.byId("members", idB).name} needs to develop. This is a primary coaching/mentorship pair.` });
+    return out;
+  },
+  /* Monte Carlo Simulation for Project Completion */
+  monteCarlo(trials = 500) {
+    const tasks = DB.col("tasks").filter(t => t.status !== "done");
+    if (!tasks.length) return null;
+    const results = [];
+    for (let i = 0; i < trials; i++) {
+      let total = 0;
+      tasks.forEach(t => {
+        const e = +t.effort || 8;
+        // Simple PERT-style distribution simulation
+        const min = e * 0.8, max = e * 2.5, likely = e;
+        const rand = Math.random();
+        const pivot = (likely - min) / (max - min);
+        let sampled = rand < pivot ? min + Math.sqrt(rand * (max - min) * (likely - min)) : max - Math.sqrt((1 - rand) * (max - min) * (max - likely));
+        total += sampled;
+      });
+      results.push(total);
+    }
+    results.sort((a, b) => a - b);
+    return {
+      p50: results[Math.floor(trials * 0.5)],
+      p80: results[Math.floor(trials * 0.8)],
+      p95: results[Math.floor(trials * 0.95)],
+      min: results[0],
+      max: results[trials - 1]
+    };
+  },
+  /* Flight Risk & Retention Analysis */
+  retentionRisk(mid) {
+    const m = DB.byId("members", mid);
+    if (!m) return 0;
+    const debt = Engine.oneOnOneDebt(mid);
+    const rec = Engine.recognitionDebt(mid);
+    const pulse = Engine.latestPulse();
+    const safety = pulse ? Engine.psych(pulse) : 5;
+    const skills = DB.doc("skills")[mid] || {};
+    const impact = Object.values(skills).reduce((s, v) => s + v, 0) / (Object.keys(skills).length || 1);
+    
+    let risk = 0;
+    if (debt > 30) risk += 30;
+    if (rec > 60) risk += 20;
+    if (safety < 4.5) risk += 25;
+    if (m.isLead) risk += 10; // Team leads are always higher flight risk due to market demand
+    
+    return { score: risk, impact: impact.toFixed(1) };
+  },
+  /* High-Level Division Narrative Synthesis */
+  divisionNarrative() {
+    const h = Engine.health();
+    const tasks = DB.col("tasks"), risks = DB.col("risks"), mem = DB.col("members");
+    const openCrit = risks.filter(r => Engine.rpn(r) >= 200 && r.status !== "closed");
+    const overdueN = tasks.filter(t => t.status !== "done" && overdue(t.due)).length;
+    
+    let n = `Division health is ${h.total >= 75 ? "EXCELLENT" : h.total >= 50 ? "WORKABLE" : "FRAGILE"}. `;
+    if (openCrit.length) n += `Critical exposure detected: ${openCrit.length} risk(s) RPN ≥200. `;
+    if (overdueN) n += `Delivery credibility is leaking via ${overdueN} overdue task(s). `;
+    
+    const leads = mem.filter(m => m.isLead);
+    const unsponsored = leads.filter(l => !DB.col("sponsorships").some(s => s.member === l.id)).length;
+    if (unsponsored) n += `Sponsorship gap: ${unsponsored} Team Lead(s) have zero advocacy recorded. `;
+    
+    return n;
   }
 };
 
@@ -549,6 +638,14 @@ M("skills", "coach", () => {
 }, m => m.name + " has a declared development area with no growth plan (70-20-10). Ten minutes in the next 1:1 fixes this.", m => ["skills"]);
 /* workload */
 M("roster", "watch", () => DB.col("members").filter(m => Engine.workload(m.id).length > 6), m => m.name + " carries " + Engine.workload(m.id).length + " open tasks. Overloaded people silently triage — take two off their plate or say what drops.", ["roster"]);
+/* absences */
+M("absences", "alert", () => DB.col("absences").filter(a => a.status === "active" && DB.byId("members", a.member)?.isLead && !a.backup), a => "Team Lead " + (DB.byId("members", a.member)?.name || "someone") + " is sick/absent with NO named backup. Every team needs a pilot. Name an Acting Lead today.", ["absences"]);
+/* incidents */
+M("incidents", "alert", () => DB.col("incidents").filter(i => i.status === "open" && Math.abs(daysUntil(i.created)) > 2), i => "Open incident “" + i.title + "” has been open 48h+ without a closed RCA. Failure is a gift that expires; capture the lessons while memory is fresh.", ["incidents"]);
+/* retention */
+M("members", "alert", () => DB.col("members").filter(m => Engine.retentionRisk(m.id).score >= 50), m => "Critical Retention Risk: " + m.name + ". High-impact talent + cadence debt + zero recognition. Deliver a recognition act and book a 1:1 within 48h.", ["retention"]);
+/* prewires */
+M("prewires", "watch", () => DB.col("decisions").filter(d => d.status === "open" && !DB.col("prewires").some(p => p.decision === d.id)), d => "No Pre-wires for “" + d.question.slice(0,30) + "”. You are heading into a decision meeting without testing buy-in. Real decisions are closed before the meeting starts.", ["prewires"]);
 
 /* ============ 6. UI FRAMEWORK ============ */
 const UI = {
@@ -618,7 +715,7 @@ const UI = {
       else if (f.type === "textarea") inner = '<textarea id="' + id + '" rows="' + (f.rows || 3) + '" placeholder="' + esc(f.ph || "") + '">' + esc(v) + "</textarea>";
       else if (f.type === "number") inner = '<input id="' + id + '" type="number" min="' + (f.min ?? "") + '" max="' + (f.max ?? "") + '" step="' + (f.step ?? 1) + '" value="' + esc(v) + '">';
       else if (f.type === "date") inner = '<input id="' + id + '" type="date" value="' + esc(v) + '">';
-      else if (f.type === "select") inner = '<select id="' + id + '">' + f.options.map(o => { const [val, lab] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(val) + '"' + (String(val) === String(v) ? " selected" : "") + ">" + esc(lab) + "</option>"; }).join("") + "</select>";
+      else if (f.type === "select") { const opts = typeof f.options === "function" ? f.options() : f.options; inner = '<select id="' + id + '">' + opts.map(o => { const [val, lab] = Array.isArray(o) ? o : [o, o]; return '<option value="' + esc(val) + '"' + (String(val) === String(v) ? " selected" : "") + ">" + esc(lab) + "</option>"; }).join("") + "</select>"; }
       else if (f.type === "range") inner = '<div style="display:flex;align-items:center;gap:12px"><input id="' + id + '" type="range" min="' + (f.min ?? 1) + '" max="' + (f.max ?? 5) + '" value="' + esc(v || f.def || 3) + '" style="flex:1;padding:0"><span class="mono" id="' + id + '-v" style="width:26px;text-align:right;color:var(--acc)">' + esc(v || f.def || 3) + "</span></div>";
       else if (f.type === "chips") { const cur = new Set(Array.isArray(v) ? v : []); inner = '<div style="display:flex;flex-wrap:wrap;gap:6px" id="' + id + '">' + f.options.map(o => '<button type="button" class="chip" data-v="' + esc(o) + '" data-on="' + (cur.has(o) ? "1" : "") + '" style="' + (cur.has(o) ? "border-color:var(--acc);color:var(--acc2);background:var(--acc-dim)" : "") + '">' + esc(o) + "</button>").join("") + "</div>"; }
       else if (f.type === "person") inner = '<select id="' + id + '"><option value="">— select —</option>' + DB.col("members").map(m => '<option value="' + m.id + '"' + (m.id === v ? " selected" : "") + ">" + esc(m.name) + "</option>").join("") + "</select>";
@@ -779,23 +876,187 @@ function renderRegBody(def, el, filter) {
   if (def.bind) def.bind(el, rows);
 }
 
-/* ============ 7. DEMO SEED (first run only; wipeable in Settings) ============ */
+/* ============ 7. DEMO SEED — rich realistic scenario ============ */
 function seedDemo() {
   if (DB.state.seeded) return;
   DB.state.seeded = true;
-  const a = DB.add("members", { name: "Sara Lind", role: "Senior Engineer", disc: "d", belbin: ["Shaper", "Completer Finisher"], start: addDays(todayStr(), -420) }, "Sara Lind");
-  const b = DB.add("members", { name: "Omar Haddad", role: "Engineer", disc: "s", belbin: ["Teamworker", "Implementer"], start: addDays(todayStr(), -12) }, "Omar Haddad");
-  const c = DB.add("members", { name: "Freja Møller", role: "Designer", disc: "i", belbin: ["Plant", "Resource Investigator"], start: addDays(todayStr(), -180) }, "Freja Møller");
-  DB.add("tasks", { title: "Ship v2 onboarding flow", owner: a.id, prio: "high", status: "prog", progress: 60, due: addDays(todayStr(), 3), effort: 8, created: addDays(todayStr(), -9) });
-  DB.add("tasks", { title: "Fix export regression", owner: b.id, prio: "crit", status: "blocked", progress: 30, due: addDays(todayStr(), -1), effort: 3, created: addDays(todayStr(), -4) });
-  DB.add("tasks", { title: "User interview synthesis", owner: c.id, prio: "med", status: "open", progress: 0, due: addDays(todayStr(), 6), effort: 5, created: addDays(todayStr(), -2) });
-  DB.add("risks", { title: "Key API dependency unmaintained", sev: 8, occ: 5, det: 6, owner: a.id, mitigation: "Vendor evaluation + wrapper layer", mitOwner: a.id, mitDue: addDays(todayStr(), 10), status: "open", created: addDays(todayStr(), -6) });
-  DB.add("risks", { title: "Single point of knowledge on billing", sev: 9, occ: 7, det: 4, owner: null, mitigation: "", mitOwner: null, mitDue: null, status: "open", created: addDays(todayStr(), -3) });
-  DB.add("oneonones", { member: a.id, date: addDays(todayStr(), -10), mood: 4, notes: "Wants more architecture ownership.", followup: "Delegate the v2 module design — level 5." });
-  DB.add("recognition", { member: c.id, type: "Specific praise", date: addDays(todayStr(), -5), note: "The empty-state redesign cut support tickets visibly." });
-  DB.add("ideas", { member: b.id, title: "Auto-save drafts on mobile", detail: "Losing form state on app switch.", received: addDays(todayStr(), -11), status: "open" });
-  DB.add("goals", { title: "Delegate 30% of my task load by Q3", s: 4, m: 4, a: 3, r: 5, t: 4, due: addDays(todayStr(), 60) });
-  DB.add("habits", { name: "10-minute daily shutdown ritual", freq: "daily", log: { [addDays(todayStr(), -1)]: true, [addDays(todayStr(), -2)]: true } });
+
+  /* ---- Settings ---- */
+  DB.state.settings.leader = "Shahram";
+  DB.state.settings.workspace = "Engineering Division";
+  DB.state.settings.teams = ["Platform", "Product", "Infra"];
+  DB.state.settings.currency = "€";
+
+  /* ---- Team leaders (direct reports who lead teams) ---- */
+  const sara = DB.add("members", { name: "Sara Lind", team: "Platform", role: "Team Lead", isLead: true, disc: "d", belbin: ["Shaper", "Implementer"], start: addDays(todayStr(), -540), fte: 1 }, "Sara Lind");
+  const omar = DB.add("members", { name: "Omar Haddad", team: "Product", role: "Team Lead", isLead: true, disc: "c", belbin: ["Monitor Evaluator", "Completer Finisher"], start: addDays(todayStr(), -380), fte: 1 }, "Omar Haddad");
+  const freja = DB.add("members", { name: "Freja Møller", team: "Infra", role: "Team Lead", isLead: true, disc: "i", belbin: ["Plant", "Resource Investigator"], start: addDays(todayStr(), -210), fte: 1 }, "Freja Møller");
+
+  /* ---- Individual contributors ---- */
+  const karim = DB.add("members", { name: "Karim Bouzid", team: "Platform", role: "Senior Engineer", disc: "c", belbin: ["Specialist", "Monitor Evaluator"], start: addDays(todayStr(), -620), fte: 1 }, "Karim Bouzid");
+  const nina = DB.add("members", { name: "Nina Andersen", team: "Product", role: "Designer", disc: "i", belbin: ["Plant", "Teamworker"], start: addDays(todayStr(), -90), fte: 1 }, "Nina Andersen");
+  const alex = DB.add("members", { name: "Alex Torres", team: "Infra", role: "Engineer", disc: "s", belbin: ["Implementer", "Teamworker"], start: addDays(todayStr(), -14), fte: 1 }, "Alex Torres");
+
+  /* ---- Ofman Quadrants (to power clash radar) ---- */
+  DB.add("quadrants", { member: sara.id, quality: "Decisiveness", pit: "Steamrolling", challenge: "Patience", allergy: "Indecision" });
+  DB.add("quadrants", { member: omar.id, quality: "Precision", pit: "Perfectionism", challenge: "Speed", allergy: "Sloppiness" });
+  DB.add("quadrants", { member: freja.id, quality: "Creativity", pit: "Chaos", challenge: "Structure", allergy: "Rigidity" });
+  DB.add("quadrants", { member: karim.id, quality: "Thoroughness", pit: "Over-analysis", challenge: "Decisiveness", allergy: "Steamrolling" });
+  /* Sara's pit (Steamrolling) = Karim's allergy → CLASH */
+  /* Karim's challenge (Decisiveness) = Sara's quality → MENTORSHIP pair */
+
+  /* ---- Tasks — realistic multi-team delivery picture ---- */
+  /* Platform: shipping something real, one thing blocked */
+  const t1 = DB.add("tasks", { title: "Ship API gateway v3", owner: sara.id, prio: "crit", status: "prog", progress: 70, due: addDays(todayStr(), 4), effort: 40, created: addDays(todayStr(), -18) });
+  const t2 = DB.add("tasks", { title: "Write migration guide for v2→v3", owner: karim.id, prio: "high", status: "prog", progress: 35, due: addDays(todayStr(), 5), effort: 12, created: addDays(todayStr(), -8), parent: t1.id });
+  DB.add("tasks", { title: "Notify downstream teams of breaking change", owner: sara.id, prio: "high", status: "open", progress: 0, due: addDays(todayStr(), 2), effort: 2, created: addDays(todayStr(), -3), parent: t1.id });
+  DB.add("tasks", { title: "Resolve auth token race condition", owner: karim.id, prio: "crit", status: "blocked", progress: 20, due: addDays(todayStr(), -2), effort: 6, created: addDays(todayStr(), -6) });
+
+  /* Product: design-to-eng handoff friction */
+  const t5 = DB.add("tasks", { title: "Redesign onboarding flow", owner: nina.id, prio: "high", status: "prog", progress: 80, due: addDays(todayStr(), 1), effort: 20, created: addDays(todayStr(), -14), milestone: true });
+  DB.add("tasks", { title: "Review onboarding designs with eng", owner: omar.id, prio: "high", status: "open", progress: 0, due: addDays(todayStr(), 2), effort: 3, created: addDays(todayStr(), -2), parent: t5.id });
+  DB.add("tasks", { title: "Spec user data deletion (GDPR)", owner: omar.id, prio: "crit", status: "open", progress: 0, due: addDays(todayStr(), 7), effort: 8, created: addDays(todayStr(), -1) });
+  DB.add("tasks", { title: "Write Q3 roadmap draft", owner: omar.id, prio: "med", status: "open", progress: 0, due: addDays(todayStr(), 12), effort: 5, created: addDays(todayStr(), -3) });
+
+  /* Infra: new person, critical gap */
+  DB.add("tasks", { title: "Deploy observability stack (Grafana)", owner: freja.id, prio: "high", status: "prog", progress: 50, due: addDays(todayStr(), 8), effort: 30, created: addDays(todayStr(), -10), milestone: true });
+  DB.add("tasks", { title: "Onboard Alex to CI/CD pipeline", owner: freja.id, prio: "high", status: "open", progress: 0, due: addDays(todayStr(), 3), effort: 4, created: addDays(todayStr(), -1) });
+  DB.add("tasks", { title: "Reduce staging build time >50%", owner: alex.id, prio: "med", status: "open", progress: 0, due: addDays(todayStr(), 21), effort: 16, created: addDays(todayStr(), -2) });
+
+  /* ---- Risks ---- */
+  DB.add("risks", { title: "Single point of failure: Karim owns all auth knowledge", sev: 9, occ: 6, det: 8, owner: sara.id, mitigation: "Pair-programming sessions + written runbook", mitOwner: karim.id, mitDue: addDays(todayStr(), 14), status: "open", created: addDays(todayStr(), -12) });
+  DB.add("risks", { title: "GDPR deletion feature missing before audit", sev: 10, occ: 7, det: 5, owner: omar.id, mitigation: "", mitOwner: null, mitDue: null, status: "open", created: addDays(todayStr(), -3) });
+  DB.add("risks", { title: "Infra team at 50% capacity — Alex is new, Freja alone otherwise", sev: 7, occ: 8, det: 3, owner: freja.id, mitigation: "Temporary contractor from approved vendor list", mitOwner: freja.id, mitDue: addDays(todayStr(), 10), status: "open", created: addDays(todayStr(), -7) });
+  DB.add("risks", { title: "API v2 deprecation — 3 external clients still on it", sev: 6, occ: 5, det: 4, owner: sara.id, mitigation: "Migration guide + 60-day notice sent", mitOwner: karim.id, mitDue: addDays(todayStr(), 30), status: "watch", created: addDays(todayStr(), -20) });
+
+  /* ---- 1-on-1s — realistic cadence (some debt, some current) ---- */
+  DB.add("oneonones", { member: sara.id, date: addDays(todayStr(), -8), mood: 4, notes: "Frustrated that arch decisions loop back. Wants explicit authority on the gateway. Her ask: a clear decision rights doc.", followup: "Delegate gateway arch to level 6 — she decides, I advise. Set this in writing by Friday." });
+  DB.add("oneonones", { member: omar.id, date: addDays(todayStr(), -6), mood: 3, notes: "Feels the roadmap is being driven by stakeholders, not by data. Worried the team feels like an order-taker. Nina is great but has no eng-context yet.", followup: "Block 2h next week to co-write the Q3 roadmap framing together — his name on it, my backing." });
+  DB.add("oneonones", { member: karim.id, date: addDays(todayStr(), -24), mood: 4, notes: "Loves the technical depth. Quietly carrying too much. Didn't mention the auth issue until I asked.", followup: "Overdue. Book this week. Ask about the blocked ticket — remove the blocker, don't ask for status." });
+  /* Freja and Nina and Alex have no 1:1 yet — mentor will flag this */
+
+  /* ---- Feedback drafted, not yet delivered ---- */
+  DB.add("feedback", { member: freja.id, framework: "SBI", type: "reinforcing", situation: "In the all-hands last Thursday", behavior: "you visualised the infra architecture in a way that made a complex system legible to non-engineers", impact: "the CEO commented afterwards that it was the clearest technical communication she'd seen this year", wish: "Do this at every all-hands — it builds the team's credibility", delivered: false, created: addDays(todayStr(), -4) });
+  DB.add("feedback", { member: omar.id, framework: "SBI", type: "redirecting", situation: "In the sprint review on Monday", behavior: "you accepted three new scope items without flagging the capacity impact to the stakeholder in the room", impact: "the team now carries 130% load and Nina is already working evenings", wish: "Next time: name the trade-off in the room — 'yes to this means no to X'. I back you on that.", delivered: false, created: addDays(todayStr(), -2) });
+
+  /* ---- Recognition ---- */
+  DB.add("recognition", { member: karim.id, type: "Specific praise", date: addDays(todayStr(), -18), note: "The auth system documentation you wrote last month let Sara onboard a new vendor alone. That is knowledge compounding." });
+  DB.add("recognition", { member: freja.id, type: "Public shout-out", date: addDays(todayStr(), -4), note: "All-hands architecture visual — see feedback draft. Recognised publicly. Team morale visibly lifted." });
+  /* Omar, Nina, Alex — 0 recognition. Fairness radar will flag. */
+
+  /* ---- Delegation ---- */
+  DB.add("delegation", { member: sara.id, what: "All architecture decisions for the API gateway (v3 scope)", level: "6", check: addDays(todayStr(), 7), status: "active", why: "" });
+  DB.add("delegation", { member: omar.id, what: "Q3 roadmap first draft — stakeholder framing included", level: "4", check: addDays(todayStr(), 5), status: "active", why: "" });
+  DB.add("delegation", { member: freja.id, what: "Hire the temporary infra contractor", level: "3", check: addDays(todayStr(), 3), status: "active", why: "" });
+
+  /* ---- Conflicts ---- */
+  DB.add("conflicts", { title: "Sara/Omar: Design handoff ownership", partyA: sara.id, partyB: omar.id, glasl: "3", tk: "competing", phase: "clarify", followup: addDays(todayStr(), 3), notes: "Sara feels Product keeps changing specs post-handoff. Omar feels Platform builds before designs are final. Both are right. Classic shared-boundary conflict.", status: "open" });
+
+  /* ---- Ideas / Suggestions ---- */
+  DB.add("ideas", { member: nina.id, title: "Weekly 15-min design review open to engineers", detail: "Engineers are building the wrong thing then we redesign. A short weekly sync would catch misalignments early.", received: addDays(todayStr(), -10), status: "open" });
+  DB.add("ideas", { member: alex.id, title: "Shared on-call rotation across Platform + Infra", detail: "I'm the only Infra person available nights. Sharing the rota with Platform would halve the on-call burden.", received: addDays(todayStr(), -5), status: "open" });
+  DB.add("ideas", { member: karim.id, title: "Automate the release notes from git commits", detail: "Currently Sara writes them manually every sprint — 2h of work that could be a script.", received: addDays(todayStr(), -18), status: "accepted", answered: addDays(todayStr(), -15), effect: "Omar's team shipped the script in Sprint 22. Saves ~2h/sprint." });
+
+  /* ---- Decisions ---- */
+  DB.add("decisions", { question: "Do we rebuild the auth service or wrap the existing one?", opts: "Rebuild from scratch\nWrapper + new interface\nKeep as-is + document", method: "weighted", owner: sara.id, rapidIn: "Input: Karim, Security · Agree: CTO", review: addDays(todayStr(), 14), status: "open", created: addDays(todayStr(), -5) });
+  DB.add("decisions", { question: "Should Platform team adopt TypeScript strict mode now or after v3 ships?", opts: "Now — fix as we go\nAfter v3 ships\nNever — too much overhead", method: "consent", owner: sara.id, rapidIn: "Input: Karim, full Platform team", review: addDays(todayStr(), 30), status: "decided", chosen: "After v3 ships", decAt: addDays(todayStr(), -3), created: addDays(todayStr(), -9) });
+
+  /* ---- Team Pulse (Platform has a good recent one; Infra has never had one) ---- */
+  DB.add("pulses", { date: addDays(todayStr(), -12), n: 4, team: "Platform", trust: 4, conflict: 3, commit: 4, account: 3, results: 4, psych: [5, 5, 4, 4, 5, 4, 3] });
+  DB.add("pulses", { date: addDays(todayStr(), -40), n: 3, team: "Product", trust: 3, conflict: 2, commit: 3, account: 2, results: 3, psych: [4, 3, 4, 3, 3, 4, 2] });
+  /* No Infra pulse — mentor will flag */
+
+  /* ---- Meetings ---- */
+  DB.add("meetings", { type: "standup", title: "Engineering daily standup", date: addDays(todayStr(), -1), facilitator: sara.id, duration: 15, status: "held", agenda: "■ Blockers\n   Auth race condition: Karim blocked, needs review from Sara\n■ Due today\n   Onboarding flow final review\n■ Overdue\n   Auth race condition — 2 days over", minutes: "Sara to unblock auth issue today. Omar confirmed design review at 14:00.", decision: "", decDue: null });
+
+  /* ---- Personal Goals (Shahram's own) ---- */
+  DB.add("goals", { title: "Become the leader my team leads confidently without", s: 4, m: 4, a: 4, r: 5, t: 3, due: addDays(todayStr(), 90) });
+  DB.add("goals", { title: "Hold 1:1s with all 6 people within 21 days — reset the clock", s: 5, m: 5, a: 5, r: 5, t: 5, due: addDays(todayStr(), 14) });
+  DB.add("goals", { title: "Resolve the Sara/Omar design handoff conflict", s: 3, m: 3, a: 4, r: 5, t: 4, due: addDays(todayStr(), 21) });
+
+  /* ---- OKRs ---- */
+  DB.add("okrs", { objective: "Engineering division that ships with confidence and without me", due: addDays(todayStr(), 90), krs: [
+    { title: "1:1 cadence ≤21 days for all 6 direct reports", baseline: 0, target: 6, current: 2, unit: "people in cadence" },
+    { title: "Zero critical risks without a named mitigation owner", baseline: 3, target: 0, current: 2, unit: "unowned criticals" },
+    { title: "Team pulse psychological safety ≥5.5 across all teams", baseline: 3.7, target: 5.5, current: 4.1, unit: "avg score" }
+  ]});
+
+  /* ---- Habits ---- */
+  DB.add("habits", { name: "Daily shutdown: write tomorrow's one most-important task", freq: "daily", why: "Prevents the reactive morning. The first 30 minutes determine the whole day.", log: { [addDays(todayStr(), -1)]: true, [addDays(todayStr(), -2)]: true, [addDays(todayStr(), -3)]: true, [addDays(todayStr(), -5)]: true, [addDays(todayStr(), -6)]: true } });
+  DB.add("habits", { name: "Read one leadership insight before standing up (5 min)", freq: "daily", why: "Compound knowledge. Leaders who stop learning start coasting.", log: { [addDays(todayStr(), -1)]: true, [addDays(todayStr(), -3)]: true, [addDays(todayStr(), -4)]: true } });
+  DB.add("habits", { name: "Weekly: send one specific, written recognition", freq: "weekly", why: "The quiet contributors disappear first. This prevents that.", log: { [addDays(todayStr(), -4)]: true } });
+
+  /* ---- Reflection ---- */
+  DB.add("reflections", { date: addDays(todayStr(), -7), energy: 6, mood: 6, win: "The Freja all-hands moment — I nearly didn't give her the slot, and she owned it. I need to create those slots more deliberately.", drain: "The Sara/Omar conflict. It's sitting on my plate because I haven't named it out loud to them yet. My avoidance is the problem.", change: "This week I will schedule the three-way conversation about design handoffs. One sentence: 'the current process isn't working and I want us to fix it together'." });
+
+  /* ---- Absences ---- */
+  DB.add("absences", { member: sara.id, kind: "Training", start: addDays(todayStr(), 1), end: addDays(todayStr(), 3), status: "planned", backup: karim.id });
+  DB.add("absences", { member: alex.id, kind: "Sickness", start: todayStr(), status: "active", backup: null });
+
+  /* ---- Incidents ---- */
+  DB.add("incidents", { title: "API Gateway v2 Timeout Outage", impact: "high", created: addDays(todayStr(), -4), rca: "Connection pool saturation due to unclosed client sessions in legacy v2 adaptor.", action: "Implement circuit breaker and session pruning in v2 adaptor", status: "rca" });
+
+  /* ---- Sponsorship ---- */
+  DB.add("sponsorships", { member: sara.id, act: "Introduced to CTO as the architecture lead for API v3", date: addDays(todayStr(), -14), outcome: "Sara now handles the monthly pre-brief for arch decisions" });
+
+  /* ---- Succession ---- */
+  DB.state.docs.succession[sara.id] = { now: karim.id, year: alex.id };
+
+  /* ---- Pre-wires ---- */
+  const allDecs = DB.col("decisions");
+  const allShs = DB.col("stakeholders");
+  if (allDecs.length && allShs.length) {
+    DB.add("prewires", { decision: allDecs[0].id, stakeholder: allShs[0].id, status: "support", concern: "Wants to ensure rollout doesn't stop product features." });
+  }
+
+  /* ---- SWOT ---- */
+  DB.add("swot", { kind: "S", text: "Strong technical leads — Sara and Karim are exceptional individual craftspeople", weight: 5 });
+  DB.add("swot", { kind: "S", text: "Lean team — fast decisions, low coordination overhead", weight: 4 });
+  DB.add("swot", { kind: "W", text: "Bus factor: auth knowledge concentrated in one person", weight: 5 });
+  DB.add("swot", { kind: "W", text: "No formal design-to-eng handoff process", weight: 4 });
+  DB.add("swot", { kind: "O", text: "GDPR compliance gap is a forcing function to modernise the data layer", weight: 4 });
+  DB.add("swot", { kind: "O", text: "Observability stack (Grafana) will unlock data-driven capacity planning", weight: 3 });
+  DB.add("swot", { kind: "T", text: "GDPR audit window in 90 days — deletion feature not started", weight: 5 });
+  DB.add("swot", { kind: "T", text: "Infra team at 50% capacity — one illness = outage", weight: 4 });
+
+  /* ---- Stakeholders ---- */
+  DB.add("stakeholders", { name: "CTO (Ingrid Holm)", influence: 10, interest: 6, move: "Monthly pre-brief before any roadmap or architecture decision. Never let her be surprised." });
+  DB.add("stakeholders", { name: "Head of Product (Marco Silva)", influence: 8, interest: 9, move: "Weekly 30-min sync. He shapes what the team builds — keep him an ally, not an override." });
+  DB.add("stakeholders", { name: "Legal / DPO", influence: 7, interest: 4, move: "Loop in on GDPR deletion spec before it's built. One surprise = delay." });
+  DB.add("stakeholders", { name: "External API clients (3 companies)", influence: 3, interest: 9, move: "Send migration guide. 60-day notice. One named contact per company." });
+
+  /* ---- Budget ---- */
+  DB.add("budget", { line: "Engineering headcount (6 FTE)", category: "People", planned: 480000, committed: 480000, actual: 240000 });
+  DB.add("budget", { line: "Temporary infra contractor", category: "Vendor/Consulting", planned: 18000, committed: 0, actual: 0 });
+  DB.add("budget", { line: "SaaS tooling (Grafana, Datadog, GitHub)", category: "Software", planned: 24000, committed: 24000, actual: 14000 });
+  DB.add("budget", { line: "Team training & conferences", category: "Training", planned: 8000, committed: 2000, actual: 1200 });
+
+  /* ---- Charter ---- */
+  DB.state.docs.charter.vision = "We build the infrastructure that lets the whole company ship fast without breaking things.";
+  DB.state.docs.charter.values = ["Ownership", "Craft", "Directness", "Trust"];
+  DB.state.docs.charter.agreements = [
+    "Architecture decisions are documented before they are built — a Slack message is not a decision",
+    "On-call incidents get a written post-mortem within 48 hours, no blame, one action item",
+    "Design specs are frozen before engineering starts — spec changes after kickoff require a formal change request",
+    "We say 'I don't know' out loud. Guessing in silence costs us more."
+  ];
+
+  /* ---- Skills (Shahram's honest read of each person) ---- */
+  DB.state.docs.skills[sara.id] = { Ownership: 4, "Craft/Technical": 4, Communication: 3, Collaboration: 2, "Delivery discipline": 4, "Coaching others": 2 };
+  DB.state.docs.skills[omar.id] = { Ownership: 3, "Craft/Technical": 3, Communication: 4, Collaboration: 4, "Delivery discipline": 2, "Coaching others": 2 };
+  DB.state.docs.skills[freja.id] = { Ownership: 3, "Craft/Technical": 2, Communication: 4, Collaboration: 4, "Delivery discipline": 2, "Coaching others": 1 };
+  DB.state.docs.skills[karim.id] = { Ownership: 4, "Craft/Technical": 4, Communication: 2, Collaboration: 2, "Delivery discipline": 4, "Coaching others": 1 };
+  DB.state.docs.skills[nina.id] = { Ownership: 2, "Craft/Technical": 2, Communication: 4, Collaboration: 4, "Delivery discipline": 1, "Coaching others": 0 };
+  DB.state.docs.skills[alex.id] = { Ownership: 1, "Craft/Technical": 1, Communication: 2, Collaboration: 3, "Delivery discipline": 1, "Coaching others": 0 };
+
+  /* ---- Onboarding (Alex is new, day 14) ---- */
+  DB.state.docs.onboarding[alex.id] = { d1: true, w1: false, m1: false, m3: false };
+
+  /* ---- Leader self-profile ---- */
+  DB.state.docs.self.disc = { d: 4, i: 3, s: 3, c: 3 };
+  DB.state.docs.self.belbin = ["Coordinator", "Shaper"];
+  DB.state.docs.self.ei = { sa: 7, sm: 6, so: 7, rm: 6 };
+
   DB.save();
 }
 
@@ -828,12 +1089,171 @@ const dueCell = d => {
 };
 
 /* =====================================================
-   COMMAND — Dashboard
+   COMMAND — Portfolio View (Leader of Leaders)
+   ===================================================== */
+UI.register("portfolio", {
+  title: "Portfolio View", icon: "briefcase", group: "Command",
+  sub: "Health & metrics across several teams", scope: "dashboard",
+  render(el) {
+    const teams = DB.state.settings.teams || ["Core"];
+    const stats = teams.map(t => ({ name: t, h: Engine.health(t) }));
+    
+    el.innerHTML = UI.header(this, '') + 
+      '<div class="grid3" style="margin-bottom:14px">' +
+        stats.map(s => {
+          const col = s.h.total >= 75 ? "var(--ok)" : s.h.total >= 50 ? "var(--warn)" : "var(--bad)";
+          return '<div class="card fade-s"><div class="card-h" style="justify-content:space-between"><h3>' + esc(s.name) + ' Team</h3>' + UI.badge(s.h.total + "/100", s.h.total >= 75 ? "b-ok" : "b-bad") + '</div>' +
+            '<div style="margin:12px 0"><div class="pbar"><i style="width:' + s.h.total + '%;background:' + col + '"></i></div></div>' +
+            '<div style="font-size:11.5px;color:var(--ink2)">' +
+              '<div class="kv-row"><span>People</span><span>' + s.h.n + ' members</span></div>' +
+              '<div class="kv-row"><span>Delivery</span><span class="mono">' + Math.round(s.h.parts.delivery * 100) + '%</span></div>' +
+              '<div class="kv-row"><span>Risk</span><span class="mono">' + Math.round(s.h.parts.risk * 100) + '%</span></div>' +
+            '</div>' +
+            '<button class="btn btn-xs btn-g" style="width:100%;margin-top:10px" data-team="' + esc(s.name) + '">Drill down</button></div>';
+        }).join("") +
+      '</div>' +
+      UI.mnote("<b>Portfolio strategy:</b> Compare teams honestly. A low score in one team isn't necessarily a failure—it's a signal to move your time/coaching there this week.");
+    
+    $$("[data-team]").forEach(b => b.onclick = () => UI.nav("dashboard", { team: b.dataset.team }));
+    icons();
+  }
+});
+
+/* =====================================================
+   COMMAND — Dashboard (C2 Summary)
    ===================================================== */
 UI.register("dashboard", {
-  title: "Command Center", icon: "layout-dashboard", group: "Command",
-  sub: "Live truth across every register", scope: "dashboard",
+  title: "Command & Control", icon: "layout-dashboard", group: "Command",
+  sub: "The Executive Truth — no spreadsheets", scope: "dashboard",
   render(el) {
+    const st = DB.state.settings;
+    const h = Engine.health();
+    const nar = Engine.divisionNarrative();
+    const tasks = DB.col("tasks"), mem = DB.col("members");
+    const alerts = Mentor.findings.filter(f => f.sev === "alert").length;
+    const hour = new Date().getHours();
+    const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    const name = st.leader ? ", " + esc(st.leader) : "";
+    
+    el.innerHTML = 
+      '<div class="fade-s" style="margin-bottom:24px">' +
+        '<div style="font-size:11.5px;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase;font-weight:700">' + new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) + '</div>' +
+        '<h1 style="font-size:32px;margin-top:4px">' + greet + name + '.</h1>' +
+        '<div class="card" style="margin-top:16px; border-left:4px solid var(--acc); background:linear-gradient(90deg, var(--acc-dim), transparent);">' +
+          '<div style="font-size:16px; font-weight:500; line-height:1.6; color:var(--ink)">' + nar + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="stat-grid" style="margin-bottom:16px">' +
+        UI.stat("Health Score", h.total + "/100", "Composite Truth", "activity", h.total >= 75 ? "var(--ok)" : h.total >= 50 ? "var(--warn)" : "var(--bad)", "portfolio") +
+        UI.stat("Critical Alerts", alerts, "Action Required", "siren", alerts ? "var(--bad)" : "var(--ok)") +
+        UI.stat("Retention Risk", mem.filter(m => Engine.retentionRisk(m.id).score >= 50).length, "High-Impact Risk", "heart-crack", mem.filter(m => Engine.retentionRisk(m.id).score >= 50).length ? "var(--bad)" : "var(--ok)", "retention") +
+        UI.stat("Succession Gap", mem.filter(m => m.isLead && !DB.state.docs.succession[m.id]).length, "Leadership Debt", "git-branch", "var(--warn)", "succession") +
+      "</div>" +
+
+      '<div class="grid2" style="margin-bottom:14px">' +
+        '<div class="card fade-s"><div class="card-h"><i data-lucide="zap" class="luc" style="color:var(--acc)"></i><h3>The Action Queue <span class="sub">· Top 5 self-resolving moves</span></h3></div>' +
+          (Mentor.findings.slice(0, 5).map(f => 
+            '<div class="act-row" style="margin-bottom:8px"><span class="act-sev" style="background:' + (f.sev === "alert" ? "var(--bad)" : "var(--warn)") + '"></span><div class="act-t"><b>' + esc(f.msg) + '</b></div>' + (f.jump ? '<button class="btn btn-xs btn-g" data-jump=\'' + JSON.stringify(f.jump).replace(/'/g, "&#39;") + "'>Execute</button>" : "") + '</div>'
+          ).join("")) +
+        '</div>' +
+        '<div class="card fade-s"><div class="card-h"><i data-lucide="shield" class="luc" style="color:var(--ok)"></i><h3>Team Continuity <span class="sub">· Absences & Incidents</span></h3></div>' +
+          DB.col("absences").filter(a => a.status === "active").map(a => '<div class="kv-row"><i data-lucide="thermometer" class="luc" style="color:var(--bad); width:14px"></i><span>' + personTag(a.member) + ' is out</span>' + (a.backup ? '<span class="badge b-ok">Acting: ' + DB.byId("members", a.backup).name.split(" ")[0] + '</span>' : '<span class="badge b-bad">NO BACKUP</span>') + '</div>').join("") +
+          (DB.col("incidents").filter(i => i.status === "open").length ? '<div class="hr"></div>' + DB.col("incidents").filter(i => i.status === "open").map(i => '<div class="kv-row"><i data-lucide="flame" class="luc" style="color:var(--bad); width:14px"></i><span>' + esc(i.title) + '</span><button class="btn btn-xs btn-d" data-act="incidents">Run RCA</button></div>').join("") : "") +
+        '</div>' +
+      '</div>';
+    icons();
+  }
+});
+
+/* =====================================================
+   PEOPLE — Retention Radar
+   ===================================================== */
+UI.register("retention", {
+  title: "Retention Radar", icon: "heart-crack", group: "People",
+  sub: "Predictive turnover analysis · high-impact risks",
+  lead: "Who are we losing? We synthesize 1:1 cadence, recognition debt, and psychological safety. High-impact talent in high-risk states are alerted immediately.",
+  render(el) {
+    const mem = DB.col("members");
+    const risks = mem.map(m => ({ m, r: Engine.retentionRisk(m.id) })).sort((a,b) => b.r.score - a.r.score);
+    
+    el.innerHTML = UI.header(this, "") + 
+      '<div class="card fade-s" style="padding:8px 4px"><table class="tbl"><thead><tr><th>Person</th><th>Impact (Skills)</th><th>Risk Level</th><th>Risk Score</th><th>Mitigation</th></tr></thead><tbody>' +
+        risks.map(x => {
+          const col = x.r.score >= 50 ? "var(--bad)" : x.r.score >= 25 ? "var(--warn)" : "var(--ok)";
+          return '<tr><td>' + personTag(x.m.id) + '</td><td><span class="mono">' + x.r.impact + '/4.0</span></td>' +
+            '<td>' + UI.badge(x.r.score >= 50 ? "Critical" : x.r.score >= 25 ? "Elevated" : "Low", x.r.score >= 50 ? "b-bad" : x.r.score >= 25 ? "b-warn" : "b-ok") + '</td>' +
+            '<td><div class="pbar" style="width:60px"><i style="width:' + x.r.score + '%; background:' + col + '"></i></div></td>' +
+            '<td>' + (x.r.score >= 25 ? '<button class="btn btn-xs btn-p" data-jump=\'["oneonones", {"member": "' + x.m.id + '"}]\'>Book 1:1 Now</button>' : '—') + '</td></tr>';
+        }).join("") +
+      '</tbody></table></div>' +
+      UI.mnote("<b>Retention logic:</b> A score of 50+ means at least two core leadership rituals (cadence/recognition) have failed while market impact is high. You don't lose people because of money; you lose them because they became invisible.");
+    icons();
+  }
+});
+
+/* =====================================================
+   PEOPLE — Succession Planning
+   ===================================================== */
+UI.register("succession", {
+  title: "Succession Heatmap", icon: "git-branch", group: "People",
+  sub: "Leadership pipeline · role redundancy",
+  lead: "Who replaces you? Who replaces your Team Leads? If a role has no 'Ready Now' successor, you are holding leadership debt.",
+  render(el) {
+    const leads = DB.col("members").filter(m => m.isLead);
+    const data = DB.state.docs.succession;
+    
+    el.innerHTML = UI.header(this, "") + 
+      '<div class="grid3">' +
+        leads.map(l => {
+          const s = data[l.id] || { now: null, year: null };
+          return '<div class="card fade-s"><div class="card-h">' + av(l.name, 24) + '<h3>' + esc(l.name) + '</h3></div>' +
+            '<label class="fl">Ready Now</label>' + 
+            '<select class="succ-sel" data-lead="' + l.id + '" data-time="now"><option value="">— select —</option>' + DB.col("members").map(m => '<option value="' + m.id + '"' + (m.id === s.now ? " selected" : "") + '>' + esc(m.name) + '</option>').join("") + '</select>' +
+            '<div style="margin-top:10px"><label class="fl">Ready in 1 Year</label>' +
+            '<select class="succ-sel" data-lead="' + l.id + '" data-time="year"><option value="">— select —</option>' + DB.col("members").map(m => '<option value="' + m.id + '"' + (m.id === s.year ? " selected" : "") + '>' + esc(m.name) + '</option>').join("") + '</select></div>' +
+            (!s.now ? '<div class="badge b-bad" style="margin-top:12px; width:100%; justify-content:center">GAP: NO SUCCESSOR</div>' : '') +
+            '</div>';
+        }).join("") +
+      '</div>';
+      
+    $$(".succ-sel").forEach(s => s.onchange = () => {
+      const { lead, time } = s.dataset;
+      if (!DB.state.docs.succession[lead]) DB.state.docs.succession[lead] = { now: null, year: null };
+      DB.state.docs.succession[lead][time] = s.value;
+      DB.save(); UI.rerender();
+    });
+    icons();
+  }
+});
+
+/* =====================================================
+   STRATEGY — Pre-Wire (Coalition Building)
+   ===================================================== */
+UI.register("prewires", makeRegister({
+  id: "prewires", col: "prewires", title: "Pre-Wire Tracker", icon: "cable", group: "Strategy",
+  sub: "Testing buy-in · the meeting before the meeting",
+  lead: "A professional decision meeting is for CONFIRMATION, not discovery. Use this to track informal buy-in from key stakeholders before you call the vote.",
+  consumes: ["decisions", "stakeholders"],
+  schema: [
+    { key: "decision", label: "For Decision", type: "ref", col: "decisions", req: true },
+    { key: "stakeholder", label: "Stakeholder", type: "ref", col: "stakeholders", req: true },
+    { key: "status", label: "Stance", type: "select", options: [["opposed", "Opposed"], ["neutral", "Neutral / Skeptical"], ["support", "Supporting"], ["champion", "Championing"]], def: "neutral" },
+    { key: "concern", label: "Core Concern", type: "text", full: true }
+  ],
+  stats: rows => [["Conversations", rows.length, "buy-in tests", "messages-square", "var(--acc)"], ["Opposed", rows.filter(r => r.status === "opposed").length, "blocker visibility", "shield-alert", "var(--bad)"], ["Support", rows.filter(r => r.status === "support" || r.status === "champion").length, "coalition size", "heart", "var(--ok)"]],
+  cols: [
+    { l: "Decision", td: r => "<b>" + esc(DB.byId("decisions", r.decision)?.question.slice(0,40) || "?") + "</b>" },
+    { l: "Stakeholder", td: r => esc(DB.byId("stakeholders", r.stakeholder)?.name || "?") },
+    { l: "Stance", td: r => UI.badge(r.status, r.status === "opposed" ? "b-bad" : r.status === "champion" ? "b-ok" : "b-info"), nowrap: true },
+    { l: "Concern", td: r => '<span style="font-size:12px;color:var(--ink2)">' + esc(r.concern || "—") + "</span>" }
+  ]
+}));
+
+/* =====================================================
+   COMMAND — Portfolio View (Leader of Leaders)
+   ===================================================== */
+UI.register("portfolio", {
     const st = DB.state.settings;
     const h = Engine.health();
     const tasks = DB.col("tasks"), mem = DB.col("members");
@@ -1054,7 +1474,9 @@ UI.register("roster", makeRegister({
   formSub: "One registration feeds the whole People layer.",
   schema: [
     { key: "name", label: "Full name", type: "text", req: true, ph: "e.g. Amina Yusuf" },
+    { key: "team", label: "Team", type: "select", options: () => DB.state.settings.teams || ["Core"] },
     { key: "role", label: "Role", type: "select", options: ROLES, def: "Engineer" },
+    { key: "isLead", label: "Is a Team Leader?", type: "check", label2: "Yes, this person leads others" },
     { key: "disc", label: "Dominant DISC style (your read)", type: "select", options: [["d", "Dominance — fast, direct, results"], ["i", "Influence — social, persuasive, optimistic"], ["s", "Steadiness — calm, loyal, hates sudden change"], ["c", "Conscientiousness — precise, quality, proof"]], full: true, help: "Adjusts how you delegate and give feedback to this person. D/I want the headline first; S/C want the reasoning first." },
     { key: "belbin", label: "Belbin team roles (pick top 2–3)", type: "chips", options: BELBIN, full: true },
     { key: "start", label: "Started with you", type: "date" },
@@ -1389,9 +1811,10 @@ function openPulse() {
     { key: "n", label: "Respondents (n)", type: "number", min: 1, def: DB.col("members").length || 3 },
     sc("trust", "Trust (1–5)"), sc("conflict", "Healthy conflict (1–5)"),
     sc("commit", "Commitment (1–5)"), sc("account", "Accountability (1–5)"), sc("results", "Results focus (1–5)"),
-    ps("p1", "1 · Mistakes not held against you"), ps("p2", "2 · Safe to take risks"), ps("p3", "3 · Safe to ask for help"), ps("p4", "4 · Nobody undermines work"), ps("p5", "5 · Differences valued"), ps("p6", "6 · Skills are used"), ps("p7", "7 · Tough issues raised")
+    ps("p1", "1 · Mistakes not held against you"), ps("p2", "2 · Safe to take risks"), ps("p3", "3 · Safe to ask for help"), ps("p4", "4 · Nobody undermines work"), ps("p5", "5 · Differences valued"), ps("p6", "6 · Skills are used"), ps("p7", "7 · Tough issues raised"),
+    { key: "team", label: "Team", type: "select", options: () => DB.state.settings.teams || ["Core"] }
   ], {}, out => {
-    DB.add("pulses", { date: out.date, n: out.n, trust: out.trust, conflict: out.conflict, commit: out.commit, account: out.account, results: out.results, psych: [out.p1, out.p2, out.p3, out.p4, out.p5, out.p6, out.p7] }, "Team pulse");
+    DB.add("pulses", { date: out.date, n: out.n, team: out.team, trust: out.trust, conflict: out.conflict, commit: out.commit, account: out.account, results: out.results, psych: [out.p1, out.p2, out.p3, out.p4, out.p5, out.p6, out.p7] }, "Team pulse");
     UI.toast("Pulse recorded — climate score updated", "ok");
   }, { wide: true });
 }
@@ -1440,6 +1863,61 @@ UI.register("onboarding", {
     icons();
   }
 });
+
+/* =====================================================
+   PEOPLE — Ofman Core Quadrants (Team Clash)
+   ===================================================== */
+UI.register("quadrants", makeRegister({
+  id: "quadrants", col: "quadrants", title: "Ofman Quadrants", icon: "split", group: "People",
+  sub: "Quality · Pit · Challenge · Allergy",
+  lead: "Identify the shadow side of every strength. Core Quality overdone → Pit. Opposite of Pit → Challenge. Challenge overdone → Allergy. Pit of Person A hitting Allergy of Person B = Automatic Friction.",
+  consumes: ["members", "conflicts"],
+  formSub: "One person, one quadrant. High-depth team development tool.",
+  schema: [
+    { key: "member", label: "Person", type: "person", req: true },
+    { key: "quality", label: "Core Quality", type: "text", req: true, help: "e.g. Decisiveness, Precision, Modesty" },
+    { key: "pit", label: "Pit (Quality overdone)", type: "text", req: true, help: "e.g. Steamrolling, Perfectionism, Invisibility" },
+    { key: "challenge", label: "Challenge (Opposite of Pit)", type: "text", req: true, help: "e.g. Patience, Speed, Presence" },
+    { key: "allergy", label: "Allergy (Challenge overdone)", type: "text", req: true, help: "e.g. Indecision, Sloppiness, Arrogance" }
+  ],
+  verdict(rows) {
+    if (rows.length < 2) return "Register at least two people to run clash analysis.";
+    let clashes = [];
+    for (let i = 0; i < rows.length; i++) {
+      for (let j = 0; j < rows.length; j++) {
+        if (i === j) continue;
+        const c = Engine.clash(rows[i].member, rows[j].member);
+        if (c) clashes = clashes.concat(c);
+      }
+    }
+    return clashes.length ? "Found " + clashes.length + " predicted friction zones. Read the Clash Radar below." : "No direct quality-clashes detected. This is a rare, high-compatibility state.";
+  },
+  cols: [
+    { l: "Person", td: r => personTag(r.member) },
+    { l: "Quality", td: r => '<span class="badge b-ok">' + esc(r.quality) + "</span>", nowrap: true },
+    { l: "Pit", td: r => '<span class="badge b-bad">' + esc(r.pit) + "</span>", nowrap: true },
+    { l: "Challenge", td: r => '<span class="badge b-acc">' + esc(r.challenge) + "</span>", nowrap: true },
+    { l: "Allergy", td: r => '<span class="badge b-warn">' + esc(r.allergy) + "</span>", nowrap: true }
+  ],
+  below(rows) {
+    if (rows.length < 2) return "";
+    let clashHtml = '<div class="card fade-s" style="margin-top:14px"><div class="card-h"><i data-lucide="zap" class="luc" style="color:var(--bad)"></i><h3>Clash Radar — predicted friction</h3></div>';
+    let count = 0;
+    rows.forEach(rA => {
+      rows.forEach(rB => {
+        if (rA.id === rB.id) return;
+        const c = Engine.clash(rA.member, rB.member);
+        if (c && c.length) {
+          count++;
+          c.forEach(x => {
+            clashHtml += '<div class="mnote" style="border-color:var(--bad)33;margin-bottom:8px"><i data-lucide="alert-circle" class="luc" style="color:var(--bad)"></i><div>' + esc(x.msg) + '</div></div>';
+          });
+        }
+      });
+    });
+    return count ? clashHtml + "</div>" : "";
+  }
+}));
 
 /* =====================================================
    PEOPLE — Skills & Growth (matrix + 70-20-10 IDP)
@@ -1509,6 +1987,73 @@ UI.register("skills", {
 });
 
 /* =====================================================
+   EXECUTION — RACI Matrix
+   ===================================================== */
+UI.register("raci", {
+  title: "RACI Matrix", icon: "grid-3x3", group: "Execution",
+  sub: "Responsible · Accountable · Consulted · Informed",
+  lead: "One Accountable (A) per task — always. The person who says 'it is done'. Multiple Responsible (R) allowed. Consulted (C) are pre-decision; Informed (I) are post-decision.",
+  consumes: ["tasks", "members"],
+  render(el) {
+    const tasks = DB.col("tasks").filter(t => t.status !== "done");
+    const mem = DB.col("members");
+    if (!tasks.length || !mem.length) { el.innerHTML = UI.empty("grid-3x3", "Needs Tasks & Roster", "Add the team and some open tasks first."); return; }
+    
+    el.innerHTML = UI.header(this, "") + 
+      '<div class="card fade-s" style="padding:8px 4px;overflow-x:auto"><table class="tbl"><thead><tr><th>Task</th>' + 
+      mem.map(m => '<th>' + av(m.name, 22) + '<div style="font-size:9px;margin-top:4px">' + esc(m.name.split(" ")[0]) + '</div></th>').join("") + '</tr></thead><tbody>' +
+      tasks.map(t => {
+        const raci = DB.state.docs.raci[t.id] || {};
+        return '<tr><td><b>' + esc(t.title) + '</b></td>' + 
+          mem.map(m => {
+            const val = raci[m.id] || "";
+            return '<td><select class="raci-sel" data-task="' + t.id + '" data-mem="' + m.id + '" style="width:40px;padding:2px;font-size:11px;font-weight:700;' + (val === "A" ? "color:var(--bad)" : val === "R" ? "color:var(--ok)" : "") + '">' +
+              ["", "R", "A", "C", "I"].map(v => '<option' + (v === val ? " selected" : "") + '>' + v + '</option>').join("") + '</select></td>';
+          }).join("") + '</tr>';
+      }).join("") + '</tbody></table></div>' + 
+      UI.mnote("<b>RACI Rule:</b> If a task has zero 'A's, YOU are the 'A'. If it has two 'A's, nobody is the 'A'. Professional leaders fix the double-A first.");
+    
+    $$(".raci-sel").forEach(s => s.onchange = () => {
+      const { task, mem: mid } = s.dataset;
+      if (!DB.state.docs.raci[task]) DB.state.docs.raci[task] = {};
+      DB.state.docs.raci[task][mid] = s.value;
+      DB.save();
+    });
+    icons();
+  }
+});
+
+/* =====================================================
+   EXECUTION — Work Breakdown (WBS)
+   ===================================================== */
+UI.register("wbs", {
+  title: "WBS Hierarchy", icon: "network", group: "Execution",
+  sub: "Hierarchical scope decomposition",
+  lead: "A professional project isn't a list; it's a tree. Break large outcomes into small deliverables. A leaf node should be < 16 hours of work.",
+  consumes: ["tasks"],
+  render(el) {
+    const tasks = DB.col("tasks");
+    const roots = tasks.filter(t => !t.parent);
+    
+    const renderNode = (t, depth = 0) => {
+      const children = tasks.filter(x => x.parent === t.id);
+      let h = '<div style="margin-left:' + (depth * 24) + 'px; border-left: 2px solid var(--line); padding-left: 12px; margin-bottom: 8px;">' +
+        '<div class="card" style="padding:10px; display:flex; align-items:center; gap:10px">' +
+          '<i data-lucide="' + (children.length ? "layers" : "file-text") + '" class="luc" style="width:14px;color:var(--acc)"></i>' +
+          '<b style="flex:1">' + esc(t.title) + '</b>' +
+          UI.badge(t.status, t.status === "done" ? "b-ok" : "b-mut") +
+        '</div>' +
+        children.map(c => renderNode(c, depth + 1)).join("") + '</div>';
+      return h;
+    };
+
+    el.innerHTML = UI.header(this, '<button class="btn btn-p" data-act="tasks">Task Register</button>') +
+      (roots.length ? roots.map(r => renderNode(r)).join("") : UI.empty("network", "No structure yet", "Assign 'Parent Tasks' in the Task Register to build your tree."));
+    icons();
+  }
+});
+
+/* =====================================================
    EXECUTION — Task Register
    ===================================================== */
 UI.register("tasks", makeRegister({
@@ -1527,6 +2072,7 @@ UI.register("tasks", makeRegister({
     { key: "effort", label: "Effort (ideal hours)", type: "number", min: 0, step: 0.5 },
     { key: "created0", label: "Started", type: "date", def: todayStr(), key2: "created" },
     { key: "milestone", label: "Milestone?", type: "check", label2: "This is a milestone (shows on Timeline)" },
+    { key: "parent", label: "Parent Task (for WBS hierarchy)", type: "ref", col: "tasks" },
     { key: "risk", label: "Linked risk (optional)", type: "ref", col: "risks" },
     { key: "quadrant", label: "Eisenhower override (else auto)", type: "select", options: [["", "Auto — compute from due date + priority"], ["q1", "Q1 · Do now (urgent + important)"], ["q2", "Q2 · Schedule (important, not urgent)"], ["q3", "Q3 · Delegate (urgent, not important)"], ["q4", "Q4 · Eliminate (neither)"]], def: "" }
   ],
@@ -2298,6 +2844,121 @@ UI.register("stakeholders", makeRegister({
 }));
 
 /* =====================================================
+   PEOPLE — Absence & Sickness
+   ===================================================== */
+UI.register("absences", makeRegister({
+  id: "absences", col: "absences", title: "Absence Register", icon: "thermometer", group: "People",
+  sub: "Sickness · Leave · Coverage planning",
+  lead: "Who is out today? If a Team Lead is absent, an Acting Lead MUST be named. Professional teams don't stop because one person does.",
+  consumes: ["members", "tasks", "meetings"],
+  formSub: "Track sickness and planned leave. Name a backup for every critical role.",
+  schema: [
+    { key: "member", label: "Who", type: "person", req: true },
+    { key: "kind", label: "Kind", type: "select", options: ["Sickness", "Leave", "Training", "Other"], def: "Sickness" },
+    { key: "start", label: "Start date", type: "date", def: todayStr(), req: true },
+    { key: "end", label: "Expected end date", type: "date" },
+    { key: "status", label: "State", type: "select", options: [["active", "Active"], ["planned", "Planned"], ["resolved", "Returned"]], def: "active" },
+    { key: "backup", label: "Acting Lead / Backup (crucial for leads)", type: "person" }
+  ],
+  stats: rows => [["Absent today", rows.filter(r => r.status === "active").length, "need coverage", "thermometer", "var(--bad)"], ["Planned", rows.filter(r => r.status === "planned").length, "future gaps", "calendar-plus", "var(--info)"], ["No backup", rows.filter(r => r.status === "active" && DB.byId("members", r.member)?.isLead && !r.backup).length, "risk: leaderless teams", "alert-octagon", "var(--bad)"]],
+  cols: [
+    { l: "Person", td: r => personTag(r.member) },
+    { l: "Kind", td: r => UI.badge(r.kind, r.kind === "Sickness" ? "b-bad" : "b-info"), nowrap: true },
+    { l: "Dates", td: r => fmtD(r.start) + " → " + fmtD(r.end), nowrap: true },
+    { l: "Acting Backup", td: r => r.backup ? personTag(r.backup) : '<span class="num-bad">None named</span>' },
+    { l: "State", td: r => UI.badge(r.status, r.status === "active" ? "b-bad" : "b-mut"), nowrap: true }
+  ]
+}));
+
+/* =====================================================
+   PEOPLE — Sponsorship & Mentorship
+   ===================================================== */
+UI.register("sponsorships", makeRegister({
+  id: "sponsorships", col: "sponsorships", title: "Sponsorship acts", icon: "shuttlecock", group: "People",
+  sub: "Opening doors · shared networks · high-level exposure",
+  lead: "Mentors talk TO people; Sponsors talk ABOUT people in rooms where decisions are made. A leader of leaders MUST sponsor their next generation.",
+  consumes: ["members", "reviews", "oneonones"],
+  schema: [
+    { key: "member", label: "Protege", type: "person", req: true },
+    { key: "act", label: "Sponsorship Act", type: "text", req: true, full: true, ph: "Introduced to CTO / Gave slot in Steering Group / Proposed for high-vis project" },
+    { key: "date", label: "Date", type: "date", def: todayStr() },
+    { key: "outcome", label: "What changed?", type: "text", full: true }
+  ],
+  verdict(rows) {
+    const mem = DB.col("members").filter(m => m.isLead);
+    if (!mem.length) return "Identify your emerging leaders (Team Leads) to track sponsorship acts.";
+    const sponsored = new Set(rows.map(r => r.member));
+    const missing = mem.filter(m => !sponsored.has(m.id));
+    return missing.length ? "You have " + missing.length + " team leaders with zero sponsorship acts logged. Exposure is the oxygen of growth." : "Balanced sponsorship. You are actively opening doors.";
+  },
+  cols: [
+    { l: "Protege", td: r => personTag(r.member) },
+    { l: "The Act", td: r => "<b>" + esc(r.act) + "</b>" },
+    { l: "Date", td: r => fmtD(r.date), nowrap: true },
+    { l: "Outcome", td: r => '<span style="font-size:12px;color:var(--ink2)">' + esc(r.outcome || "—") + "</span>" }
+  ]
+}));
+
+/* =====================================================
+   EXECUTION — Incident Lifecycle
+   ===================================================== */
+UI.register("incidents", makeRegister({
+  id: "incidents", col: "incidents", title: "Incident Lifecycle", icon: "flame-kindling", group: "Execution",
+  sub: "System failure → RCA → Corrective Action",
+  lead: "An incident is a risk that happened. Don't waste the pain. Professional leaders never close an incident without a Root Cause Analysis (RCA) and a corrective action in the task register.",
+  consumes: ["tasks", "risks", "members"],
+  formSub: "Focus on SYSTEMS, not people. Human error is a symptom, not a cause.",
+  schema: [
+    { key: "title", label: "Incident name", type: "text", req: true, full: true },
+    { key: "impact", label: "Impact", type: "select", options: [["low", "Low — inconvenience"], ["med", "Medium — delayed output"], ["high", "High — outage / breach"], ["crit", "Critical — existential"]], def: "med" },
+    { key: "created", label: "Happened on", type: "date", def: todayStr() },
+    { key: "rca", label: "Root Cause (RCA)", type: "textarea", full: true, rows: 3, ph: "Why did the system allow this? (5-Whys)" },
+    { key: "action", label: "Corrective Action agreed", type: "text", full: true, ph: "Task added to register to prevent recurrence" },
+    { key: "status", label: "Status", type: "select", options: [["open", "Open (Under investigation)"], ["rca", "RCA Complete"], ["closed", "Corrected & Closed"]], def: "open" }
+  ],
+  afterSave(out, rec) {
+    if (out.action && (!rec || rec.action !== out.action)) {
+      DB.add("tasks", { title: "Fix: " + out.action, prio: "high", status: "open", progress: 0, due: addDays(todayStr(), 7), fromIncident: out.title });
+      UI.toast("Corrective action added to Task Register", "ok");
+    }
+  },
+  cols: [
+    { l: "Incident", td: r => "<b>" + esc(r.title) + "</b>", nowrap: true },
+    { l: "Impact", td: r => UI.badge(r.impact, r.impact === "crit" ? "b-bad" : r.impact === "high" ? "b-warn" : "b-info"), nowrap: true },
+    { l: "RCA", td: r => r.rca ? '<span class="chip">RCA done</span>' : '<span class="num-bad">Pending</span>' },
+    { l: "Action", td: r => r.action ? '<span style="font-size:12px;color:var(--ok)">' + esc(r.action.slice(0,40)) + "</span>" : "—" },
+    { l: "State", td: r => UI.badge(r.status, r.status === "closed" ? "b-ok" : "b-bad"), nowrap: true }
+  ]
+}));
+
+/* =====================================================
+   EXECUTION — Probabilistic Forecast (Monte Carlo)
+   ===================================================== */
+UI.register("forecast", {
+  title: "Probabilistic Forecast", icon: "line-chart", group: "Execution",
+  sub: "Monte Carlo simulation of project end-dates",
+  lead: "Senior leaders don't promise single dates; they manage probability. The tool below runs 500 simulations of your current task register using PERT distributions (Best/Worst/Likely).",
+  render(el) {
+    const sim = Engine.monteCarlo();
+    if (!sim) { el.innerHTML = UI.empty("line-chart", "Needs Tasks with Effort", "Add effort estimates to your tasks first."); return; }
+    
+    el.innerHTML = UI.header(this, '') + 
+      '<div class="card fade-s" style="margin-bottom:14px;border-color:var(--info)44;background:linear-gradient(120deg,var(--info-dim),transparent 45%)">' +
+        '<div class="card-h"><i data-lucide="gauge" class="luc" style="color:var(--info)"></i><h3>The Confidence Window</h3></div>' +
+        '<div class="grid4" style="text-align:center">' +
+          '<div><div class="fl">P50 (Median)</div><div class="disp" style="font-size:24px;font-weight:700">' + sim.p50.toFixed(1) + 'h</div><div style="font-size:10px;color:var(--ink3)">Coin-flip chance</div></div>' +
+          '<div><div class="fl">P80 (Safe)</div><div class="disp" style="font-size:24px;font-weight:700;color:var(--ok)">' + sim.p80.toFixed(1) + 'h</div><div style="font-size:10px;color:var(--ink3)">80% probable</div></div>' +
+          '<div><div class="fl">P95 (Audit)</div><div class="disp" style="font-size:24px;font-weight:700;color:var(--warn)">' + sim.p95.toFixed(1) + 'h</div><div style="font-size:10px;color:var(--ink3)">95% probable</div></div>' +
+          '<div><div class="fl">Max (Worst)</div><div class="disp" style="font-size:24px;font-weight:700;color:var(--bad)">' + sim.max.toFixed(1) + 'h</div><div style="font-size:10px;color:var(--ink3)">If everything breaks</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mnote"><i data-lucide="info" class="luc"></i><div><b>How to use this:</b> When the CEO asks "When is it done?", don\'t say "100 hours." Say: "There is an 80% probability we finish within ' + sim.p80.toFixed(0) + ' hours." It shifts the conversation from blame to math.</div></div>' +
+      UI.relStrip("forecast");
+    icons();
+  }
+});
+
+/* =====================================================
    STRATEGY — Team Charter
    ===================================================== */
 const VALUES = ["Trust", "Directness", "Craft", "Speed", "Care", "Ownership", "Curiosity", "Reliability", "Courage", "Joy", "Precision", "Service"];
@@ -2424,8 +3085,9 @@ UI.register("data", {
       '<div class="fgrid">' +
       '<div><label class="fl">Your first name (for the greeting)</label><input id="st-leader" value="' + esc(st.leader) + '" placeholder="e.g. Shahram"></div>' +
       '<div><label class="fl">Workspace name</label><input id="st-ws" value="' + esc(st.workspace) + '"></div>' +
-      '<div><label class="fl">Currency symbol</label><select id="st-cur">' + ["$", "€", "£", "kr", "CHF"].map(x => '<option' + (st.currency === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select></div>" +
+      '<div><label class="fl">Currency symbol</label><select id="st-cur">' + ["$", "€", "£", "kr", "CHF"].map(x => '<option' + (st.currency === x ? " selected" : "") + ">" + x + "</option>").join("") + "</select></div>' +
       '<div><label class="fl">Accent</label><input id="st-acc" type="color" value="' + esc(st.accent) + '" style="height:36px;padding:3px"></div>' +
+      '<div class="full"><label class="fl">Teams (comma-separated)</label><input id="st-teams" value="' + (st.teams || ["Core", "Platform", "Growth"]).join(", ") + '"></div>' +
       '</div><button class="btn btn-p" id="st-save" style="margin-top:14px"><i data-lucide="check" class="luc"></i>Save settings</button></div>';
     /* snapshots + export */
     html += '<div class="card fade-s"><div class="card-h"><i data-lucide="camera" class="luc" style="color:var(--info)"></i><h3>Snapshots & portability</h3></div>' +
@@ -2440,7 +3102,7 @@ UI.register("data", {
       '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-d" id="reset-demo">Reset to demo data</button><button class="btn" id="wipe" style="background:var(--bad);color:#fff"><i data-lucide="trash-2" class="luc"></i>Wipe everything</button></div>' +
       '<div style="font-size:11.5px;color:var(--ink3);margin-top:9px">Wipe is irreversible — export first. Demo reset restores the sample team so you can re-explore.</div></div>';
     body.innerHTML = html;
-    $("#st-save").onclick = () => { st.leader = $("#st-leader").value.trim(); st.workspace = $("#st-ws").value.trim() || "My Teams"; st.currency = $("#st-cur").value; st.accent = $("#st-acc").value; document.documentElement.style.setProperty("--acc", st.accent); DB.save(); UI.toast("Settings saved", "ok"); UI.rerender(); };
+    $("#st-save").onclick = () => { st.leader = $("#st-leader").value.trim(); st.workspace = $("#st-ws").value.trim() || "My Teams"; st.currency = $("#st-cur").value; st.accent = $("#st-acc").value; st.teams = $("#st-teams").value.split(",").map(t => t.trim()).filter(Boolean); document.documentElement.style.setProperty("--acc", st.accent); DB.save(); UI.toast("Settings saved", "ok"); UI.rerender(); };
     $("#snap-new").onclick = () => UI.formModal("Snapshot", "Label it so future-you knows what this was.", [{ key: "label", label: "Label", type: "text", def: "Before reorg · " + todayStr(), req: true }], {}, o => { DB.snapshot(o.label); UI.toast("Snapshot stored (keeps last 5)", "ok"); });
     $("#exp").onclick = () => {
       const blob = new Blob([JSON.stringify(DB.state, null, 2)], { type: "application/json" });
@@ -2475,13 +3137,20 @@ UI.MODULES.data.icon = "database";
   const st = DB.state.settings;
   if (st.accent) document.documentElement.style.setProperty("--acc", st.accent);
   Mentor.run();
+  
+  /* Initial data seed expansion for Portfolio demo */
+  if (DB.col("members").length === 3 && !DB.col("members")[0].team) {
+    DB.col("members").forEach((m, i) => m.team = DB.state.settings.teams[i % DB.state.settings.teams.length]);
+    DB.save();
+  }
+
   UI.rerender();
   $("#hamb").onclick = () => $("#side").classList.toggle("open");
   $("#palette-btn").onclick = () => Palette.open();
   const foot = () => {
     const kb = (new Blob([JSON.stringify(DB.state)]).size / 1024).toFixed(0);
     const rec = COLS.reduce((s, c) => s + DB.col(c).length, 0);
-    $("#side-foot").innerHTML = "v1.0 · local-only · no network<br>" + rec + " records · " + kb + " KB · audit trailed";
+    $("#side-foot").innerHTML = "v2.0 · multi-team engine · no network<br>" + rec + " records · " + kb + " KB · audit trailed";
   };
   foot(); Bus.on("change", () => setTimeout(foot, 300));
   /* midnight rollover: self-resolving findings re-derive */
