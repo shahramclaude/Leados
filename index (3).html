@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- Pre-paint theme bootstrap. External on purpose: the server's CSP is
+     script-src 'self', which blocks inline scripts. Must stay in <head> and
+     synchronous so dark-mode users never see a light flash (see js/theme-boot.js). -->
+<script src="js/theme-boot.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Leadership Platform — Project & Personal Leadership</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231E2321'/%3E%3Ctext x='16' y='22' font-size='18' font-weight='bold' fill='white' text-anchor='middle' font-family='sans-serif'%3EL%3C/text%3E%3C/svg%3E" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#1E2321" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/override.css">
+</head>
+<body>
+  <a class="skip-link" href="#content" data-i18n="skipToContent">Skip to guided content</a>
+  <div class="app" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand sidebar__logo">
+        <div class="brand-mark">L</div>
+        <div class="brand-text">
+          <strong id="brandCompany">Leadership Platform</strong>
+          <span data-i18n="appSubtitle">Project & Personal Leadership</span>
+        </div>
+      </div>
+      <div class="projswitch">
+        <select id="projectSwitch" title="Switch workspace"></select>
+      </div>
+      <nav id="nav" aria-label="Primary navigation"></nav>
+      <div class="sidebar-foot">
+        <button class="sidebar-toggle" id="btnSidebar" data-i18n-title="collapseSidebar" title="Collapse sidebar">«</button>
+        <span class="savedhint" data-i18n="autoSaved">Auto-saved locally</span>
+      </div>
+    </aside>
+
+    <main class="main" id="mainContent">
+      <header class="topbar">
+        <button class="hamburger" id="hamburger">&#9776;</button>
+        <h1 id="viewTitle">Dashboard</h1>
+        <div class="topbar-actions">
+          <button class="btn-cmdk" id="btnCmdk" type="button" data-i18n-title="cmdkTitle" title="Find any module (Ctrl+K)">
+            <span>🔎</span><span class="cmdk-btn-label" data-i18n="cmdkFindModule">Find module</span><kbd>Ctrl K</kbd>
+          </button>
+          <div class="lang-switch">
+            <button id="langEn">EN</button>
+            <button id="langDa" class="active">DA</button>
+          </div>
+          <span id="syncStatus" class="sync-status" role="status" aria-live="polite">Local only</span>
+          <button class="btn btn-sm" id="btnSyncRetry" type="button" data-i18n="syncRetryDraft" hidden>Retry local draft</button>
+          <button class="btn btn-sm" id="btnSyncDiscard" type="button" data-i18n="syncDiscardDraft" hidden>Discard draft</button>
+          <button class="btn btn-icon" id="btnTheme" data-theme-toggle data-theme-icon data-i18n-title="theme" title="Toggle dark mode" aria-label="Toggle dark mode">◐</button>
+          <button class="btn btn-icon btn-todos" id="btnTodos" data-i18n-title="todoTitle" title="TODO list">☑<span class="todo-badge" id="todoBadge" aria-live="polite"></span></button>
+          <button class="btn btn-icon" id="btnHelp" data-i18n-title="help" title="Help">?</button>
+          <button class="btn" id="btnPrint" data-i18n="print">Print</button>
+          <button class="btn btn-icon" id="btnLogout" data-i18n-title="logout" title="Logout">&#9211;</button>
+        </div>
+      </header>
+      <section class="content" id="content" tabindex="-1"></section>
+    </main>
+  </div>
+
+  <!-- Modal host -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" id="modal" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <!-- Identity modal (real auth layer) -->
+  <div class="modal-overlay" id="authOverlay" hidden>
+    <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <h2 id="authTitle">Sign in</h2>
+      <p class="muted" id="authSub" data-i18n="authSubtitle">Connect this browser to your workspace account.</p>
+      <form id="authBody">
+        <label>Email
+          <input type="email" id="authEmail" autocomplete="username" placeholder="you@example.com" />
+        </label>
+        <label>Password
+          <input type="password" id="authPassword" autocomplete="current-password" />
+        </label>
+        <label id="authNameWrap" hidden>Name
+          <input type="text" id="authName" autocomplete="name" placeholder="Your name" />
+        </label>
+        <label id="authCodeWrap" hidden>Two-factor code
+          <input type="text" id="authCode" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" />
+        </label>
+        <p class="auth-error" id="authError" hidden></p>
+      </form>
+      <div class="modal-actions">
+        <button class="btn" id="authCancel">Continue locally</button>
+        <button class="btn" id="authToggle">Register</button>
+        <button class="btn btn-primary" id="authSubmit">Sign in</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" hidden></div>
+
+  <!-- Floating action button -->
+  <button class="fab" id="fab" data-i18n-title="newEntry" title="Add new entry">+</button>
+
+  <!-- Scripts (no build step — Chart.js vendored locally for offline charts) -->
+  <script src="vendor/chartjs/chart.umd.min.js"></script>
+  <!-- Edit scripts/browser-scripts.manifest — edit the manifest, not this block. -->
+  <!-- BROWSER-SCRIPTS:BEGIN (generated) -->
+  <script src="js/theme.js"></script>
+  <script src="js/da-plural.js"></script>
+  <script src="js/lang-core.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/project-catalog.js"></script>
+  <script src="js/project-method-profiles.js"></script>
+  <script src="js/calc.js"></script>
+  <script src="js/row-truth.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/offline-conflict-resolver.js"></script>
+  <script src="js/salg-ledelse.js"></script>
+  <script src="js/produktionsledelse.js"></script>
+  <script src="js/lonforhandling.js"></script>
+  <script src="js/commissioning-testing.js"></script>
+  <script src="js/workflows.js"></script>
+  <script src="js/coaching-workflow.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/trust.js"></script>
+  <script src="js/finance.js"></script>
+  <script src="js/finance-leadership.js"></script>
+  <script src="js/predictive.js"></script>
+  <script src="js/personal.js"></script>
+  <script src="js/enterprise.js"></script>
+  <script src="js/strategic.js"></script>
+  <script src="js/scoring.js"></script>
+  <script src="js/advanced.js"></script>
+  <script src="js/intelligence.js"></script>
+  <script src="js/causal.js"></script>
+  <script src="js/conflict.js"></script>
+  <script src="js/konflikt-guide.js"></script>
+  <script src="js/teamhjul.js"></script>
+  <script src="js/vagtplan.js"></script>
+  <script src="js/supervision.js"></script>
+  <script src="js/hybridaftale.js"></script>
+  <script src="js/forbedring.js"></script>
+  <script src="js/raci.js"></script>
+  <script src="js/stay-interview.js"></script>
+  <script src="js/en-til-en.js"></script>
+  <script src="js/loesningsfokus.js"></script>
+  <script src="js/kernekvadrant.js"></script>
+  <script src="js/ibis-runden.js"></script>
+  <script src="js/distancedledelse.js"></script>
+  <script src="js/dagsledelse.js"></script>
+  <script src="js/leder-rytme.js"></script>
+  <script src="js/hverdag-signaler.js"></script>
+  <script src="js/team-samarbejde.js"></script>
+  <script src="js/moedestrategi.js"></script>
+  <script src="js/velkomstplan.js"></script>
+  <script src="js/anerkendelse.js"></script>
+  <script src="js/stresskurve.js"></script>
+  <script src="js/arbejdsglaede.js"></script>
+  <script src="js/jobafklaring.js"></script>
+  <script src="js/skiftoverlevering.js"></script>
+  <script src="js/reservedele.js"></script>
+  <script src="js/vedligehold-metoder.js"></script>
+  <script src="js/personalemoede.js"></script>
+  <script src="js/delegering.js"></script>
+  <script src="js/hojtideligheder.js"></script>
+  <script src="js/daekningsmatrix.js"></script>
+  <script src="js/vikarbank.js"></script>
+  <script src="js/fristvagt.js"></script>
+  <script src="js/ugebriefing.js"></script>
+  <script src="js/danish-hr.js"></script>
+  <script src="js/samarbejdsaftale.js"></script>
+  <script src="js/stress-ledelse.js"></script>
+  <script src="js/vedligeholdsledelse.js"></script>
+  <script src="js/leder-selv.js"></script>
+  <script src="js/seniorpolitik.js"></script>
+  <script src="js/reaktionstraappen.js"></script>
+  <script src="js/jobrotation.js"></script>
+  <script src="js/vold-trusler.js"></script>
+  <script src="js/almindeligt-fravaer.js"></script>
+  <script src="js/da-terminology.js"></script>
+  <script src="js/lederteam.js"></script>
+  <script src="js/medarbejder-side.js"></script>
+  <script src="js/teampulse-alerts.js"></script>
+  <script src="js/samtale-toolkits.js"></script>
+  <script src="js/benchmarking.js"></script>
+  <script src="js/compliance.js"></script>
+  <script src="js/business.js"></script>
+  <script src="js/early-warning.js"></script>
+  <script src="js/integration.js"></script>
+  <script src="js/leadership-depth.js"></script>
+  <script src="js/leadership-fingerprint.js"></script>
+  <script src="js/full-range-leadership.js"></script>
+  <script src="js/adaptive-leadership.js"></script>
+  <script src="js/cognitive-diversity-index.js"></script>
+  <script src="js/lmx.js"></script>
+  <script src="js/servant-leadership.js"></script>
+  <script src="js/authentic-leadership.js"></script>
+  <script src="js/feedback-360.js"></script>
+  <script src="js/scoring-validation.js"></script>
+  <script src="js/method-registry-browser.js"></script>
+  <script src="js/method-registry-da.js"></script>
+  <script src="js/ledelses-akademi.js"></script>
+  <script src="js/samtale-traener.js"></script>
+  <script src="js/akademi-impact.js"></script>
+  <script src="js/decision-use-policy.js"></script>
+  <script src="js/leadership-context.js"></script>
+  <script src="js/method-selection.js"></script>
+  <script src="js/method-views.js"></script>
+  <script src="js/method-evaluation.js"></script>
+  <script src="js/method-governance.js"></script>
+  <script src="js/behavior-practice.js"></script>
+  <script src="js/behavior-outcomes.js"></script>
+  <script src="js/leadership-experiment.js"></script>
+  <script src="js/feedback-workflow.js"></script>
+  <script src="js/conflict-workflow.js"></script>
+  <script src="js/delegation-workflow.js"></script>
+  <script src="js/coach.js"></script>
+  <script src="js/entity-graph.js"></script>
+  <script src="js/work-graph-ui.js"></script>
+  <script src="js/portfolio-capacity-ui.js"></script>
+  <script src="js/workspace-portability.js"></script>
+  <script src="js/shared-api.js"></script>
+  <script src="js/inbox.js"></script>
+  <script src="js/calendar-grid.js"></script>
+  <script src="js/realtime.js"></script>
+  <script src="js/trust-contracts.js"></script>
+  <script src="js/event-log.js"></script>
+  <script src="js/finance-controls.js"></script>
+  <script src="js/risk-controls.js"></script>
+  <script src="js/privacy-conflict.js"></script>
+  <script src="js/integration-contracts.js"></script>
+  <script src="js/automation-controls.js"></script>
+  <script src="js/connector-contracts.js"></script>
+  <script src="js/people-analytics.js"></script>
+  <script src="js/change-management.js"></script>
+  <script src="js/supply-chain-resilience.js"></script>
+  <script src="js/organizational-capability.js"></script>
+  <script src="js/financial-risk-integration.js"></script>
+  <script src="js/market-intelligence.js"></script>
+  <script src="js/sustainability-impact.js"></script>
+  <script src="js/analytics-platform.js"></script>
+  <script src="js/realtime-collaboration.js"></script>
+  <script src="js/autonomous-remediation.js"></script>
+  <script src="js/causal-systems.js"></script>
+  <script src="js/trustworthiness-dashboard.js"></script>
+  <script src="js/succession-planning.js"></script>
+  <script src="js/policy-engine.js"></script>
+  <script src="js/enterprise-hardening.js"></script>
+  <script src="js/causal-integration-layer.js"></script>
+  <script src="js/custom-registers.js"></script>
+  <script src="js/calendar-export.js"></script>
+  <script src="js/time-tracking.js"></script>
+  <script src="js/risikostyring.js"></script>
+  <script src="js/kvalificering.js"></script>
+  <script src="js/kalibrering.js"></script>
+  <script src="js/fta-eta.js"></script>
+  <script src="js/sil-verification.js"></script>
+  <script src="js/bia.js"></script>
+  <script src="js/nis2.js"></script>
+  <script src="js/measure-quality.js"></script>
+  <script src="js/soa-27001.js"></script>
+  <script src="js/hoshin.js"></script>
+  <script src="js/ai-act.js"></script>
+  <script src="js/management-navigator.js"></script>
+  <script src="js/ai-mentor.js"></script>
+  <script src="js/predictive-intelligence.js"></script>
+  <script src="js/cultural-intelligence.js"></script>
+  <script src="js/seamless-ux.js"></script>
+  <script src="js/ai-briefing.js"></script>
+  <script src="js/notification-router.js"></script>
+  <script src="js/risk-simulation.js"></script>
+  <script src="js/risk-monte-carlo.js"></script>
+  <script src="js/crdt-collaboration.js"></script>
+  <script src="js/voice-input-local.js"></script>
+  <script src="js/capacity-planning.js"></script>
+  <script src="js/executive-dashboard.js"></script>
+  <script src="js/document-generation.js"></script>
+  <script src="js/matrix-leadership.js"></script>
+  <script src="js/after-sales-leadership.js"></script>
+  <script src="js/leadership-automation-engine.js"></script>
+  <script src="js/leadership-intelligence.js"></script>
+  <script src="js/model-fuzzy-search.js"></script>
+  <script src="js/cross-module-wiring-engine.js"></script>
+  <script src="js/direct-reports-engine.js"></script>
+  <script src="js/direct-reports-ui.js"></script>
+  <script src="js/team-leader-engine.js"></script>
+  <script src="js/team-leader-ui.js"></script>
+  <script src="js/sop-manager-engine.js"></script>
+  <script src="js/sop-manager-ui.js"></script>
+  <script src="js/capa-manager-engine.js"></script>
+  <script src="js/capa-manager-ui.js"></script>
+  <script src="js/change-tracker-engine.js"></script>
+  <script src="js/change-tracker-ui.js"></script>
+  <script src="js/meeting-intel-engine.js"></script>
+  <script src="js/meeting-intel-ui.js"></script>
+  <script src="js/mentor-flows-engine.js"></script>
+  <script src="js/mentor-navigator-ui.js"></script>
+  <script src="js/production-kpi-ui.js"></script>
+  <script src="js/stakeholder-engine.js"></script>
+  <script src="js/stakeholder-engine-ui.js"></script>
+  <script src="js/audit-readiness-engine.js"></script>
+  <script src="js/audit-readiness-ui.js"></script>
+  <script src="js/production-rhythm-engine.js"></script>
+  <script src="js/production-rhythm-ui.js"></script>
+  <script src="js/project-governance-ui.js"></script>
+  <script src="js/risk-radar-ui.js"></script>
+  <script src="js/opex-tools-ui.js"></script>
+  <script src="js/escalation-engine.js"></script>
+  <script src="js/automation-suite.js"></script>
+  <script src="js/regulatory-calendar-ui.js"></script>
+  <script src="js/evm-governance-engine.js"></script>
+  <script src="js/ninety-day-engine.js"></script>
+  <script src="js/ninety-day-ui.js"></script>
+  <script src="js/decision-log-engine.js"></script>
+  <script src="js/decision-log-ui.js"></script>
+  <script src="js/lessons-learned-engine.js"></script>
+  <script src="js/lessons-learned-ui.js"></script>
+  <script src="js/succession-engine.js"></script>
+  <script src="js/succession-pipeline-ui.js"></script>
+  <script src="js/comm-templates-engine.js"></script>
+  <script src="js/comm-templates-ui.js"></script>
+  <script src="js/master-brief-engine.js"></script>
+  <script src="js/master-brief-ui.js"></script>
+  <script src="js/leadership-suite-core.js"></script>
+  <script src="js/daily-brief-ui.js"></script>
+  <script src="js/team-members-ui.js"></script>
+  <script src="js/one-on-one-manager-ui.js"></script>
+  <script src="js/delegation-tracker-ui.js"></script>
+  <script src="js/leadership-decision-log-ui.js"></script>
+  <script src="js/stakeholder-health-map-ui.js"></script>
+  <script src="js/team-health-radar-ui.js"></script>
+  <script src="js/recognition-log-ui.js"></script>
+  <script src="js/situational-guide-ui.js"></script>
+  <script src="js/leadership-journal-ui.js"></script>
+  <script src="js/case-index-ui.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/init.js"></script>
+  <script src="js/smart-notifications.js"></script>
+<!-- BROWSER-SCRIPTS:END (generated) -->
+</body>
+</html>
