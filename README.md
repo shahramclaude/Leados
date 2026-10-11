@@ -1,81 +1,87 @@
-# VANTA® — Digital Gravity Studio
-An independent design-studio site built to an Awwwards-caliber standard: dark
-editorial design, kinetic typography, smooth scroll physics, a playable
-gravity-field canvas, full case-study deep-dives, ambient generative audio,
-and an editorial project-brief composer.
-**Concept** — Vanta builds "digital gravity": brands, websites and motion with
-enough mass to pull audiences past the event horizon. Every visual and
-interaction decision serves that thesis.
+# LeadCore — Leadership Operating System
+An offline-first operating system for a new manager of managers. Vanilla JavaScript,
+no framework, no backend, no accounts, no external services. All state lives in
+`localStorage` in one browser profile. That constraint is permanent.
 ---
-## Built with
-| Layer        | Tech                                                        |
-| ------------ | ----------------------------------------------------------- |
-| Framework    | React 19 + TypeScript + Vite 7 (single-file build)         |
-| Styling      | Tailwind CSS v4 (`@theme` design tokens, custom keyframes) |
-| Animation    | Framer Motion (scroll-linked, springs, AnimatePresence)    |
-| Smooth scroll| Lenis                                                       |
-| Icons        | Lucide React                                                |
-| Canvas       | Vanilla Canvas 2D (gravity-field particle simulation)      |
-| Audio        | Web Audio API (fully synthesized ambient drone, no files)  |
-| Type         | Syne (display) + Space Grotesk (body)                      |
-## Design tokens
-```css
---color-ink:   #0a0a0b   /* background        */
---color-coal:  #131315   /* raised surfaces   */
---color-bone:  #ece9e1   /* primary text      */
---color-smoke: #8a887f   /* secondary text    */
---color-acid:  #cdff3e   /* signature accent  */
+## What this is, and what it refuses to be
+It is **not** an oracle. A product that hands a new leader answers produces a compliant
+operator who collapses the first time reality deviates from the script, and it creates real
+legal exposure when someone acts on generated advice about a termination without judgement.
+So the division of labour is explicit:
+| The app owns | You own |
+| --- | --- |
+| Detection, scoring, sequencing, drafting, record-keeping, escalation timing, cadence tracking | The judgement call |
+| Forcing the decision to be recorded with a rationale and a review date | Living with the outcome |
+That review loop is the mechanism that turns experience into skill. It is the actual
+substitute for a leadership course — not the lesson text.
+## The case spine (the architectural core)
+Register a case **once**, anywhere — person page, team page, mentor advisory, global `C`
+shortcut. The intake engine then:
+1. Classifies it — Cynefin domain, Eisenhower quadrant, severity-derived SLA, escalation test.
+2. Dispatches the playbook for that case type.
+3. **Writes real, linked records into every routed module**, each traceable back to the case.
+A single `attrition` case produces: six dated playbook tasks, an evidence entry, a 1:1
+scheduled or an agenda item injected into the next one, a pre-filled SBI feedback draft, a
+risk-register entry, a comms draft, a decision record, person-state flags that immediately
+change their flight-risk score, and a mentor advisory. You never file the same thing twice,
+and the case detail view renders the full propagation graph.
+Closing a case requires an outcome and a lesson, cancels its orphaned tasks, clears the flags
+it set, writes to your journal, and schedules a 30-day verification task — closure is checked,
+not assumed.
+## Modules
+| Route | Module | Depth |
+| --- | --- | --- |
+| `#/today` | Daily brief | Top-3 focus, today's 1:1s with auto-agendas, overdue commitments, load, lesson |
+| `#/inbox` | Mentor inbox | 20 detection rules across every collection, ranked, with executable actions |
+| `#/cases` | Case workspace | Intake, playbook, pitfalls, timeline, propagation graph, structured closure |
+| `#/people` | Person workspace | Flight risk with weighted drivers, trust equation, SL2, 9-box, evidence, replacement cost |
+| `#/teams` | Team workspace | Psych safety (7-item Edmondson), five dysfunctions, Tuckman, bus factor |
+| `#/oneonones` | 1:1s | Auto-assembled agendas, carried-forward commitments, question banks, GROW |
+| `#/feedback` | Feedback | SBI composer, draft ageing, delivery writes to evidence, balance per person |
+| `#/delegation` | Delegation | SL2 → authority level calculator, generated handoff script, checkpoint cadence |
+| `#/decisions` | Decision journal | Type 1/2 classification, DACI, premortem gate, outcome review, calibration |
+| `#/performance` | Performance | Skill/will/system/clarity diagnosis, 9-box calibration, evidence log, improvement plans |
+| `#/portfolio` | Goals, risk, meetings, stakeholders, comms | OKR health, P×I register, meeting economics, power/interest grid |
+| `#/scripts` | 18 conversation scripts | Parameterised sections with guardrails, copyable |
+| `#/academy` | Curriculum + simulator | 15 lessons with drills and checks; 6 two-round scored scenarios |
+| `#/self` | Your leadership | Load index, time allocation vs target, candour quadrant, first 90 days, journal |
+| `#/data` | Data & integrity | Usage telemetry, export/import, migrations, pruning, example org |
+## Model library (`src/core/frameworks.js`)
+26 frameworks implemented as pure scoring functions that return a score, a band, the
+reasoning, and prescribed actions — not prose:
+Trust equation · Situational Leadership II (+ mismatch detection) · Delegation levels 1–7 ·
+Weighted flight risk · Psychological safety · Five dysfunctions (sequential) · Tuckman ·
+Cynefin · Type 1/2 reversibility · Eisenhower · Meeting economics · Leader load / span of
+control · Bus factor · Nine-box · OKR health · Feedback balance · Radical candour ·
+Thomas-Kilmann · **Performance diagnosis (skill/will/system/clarity)** · Stakeholder
+power-interest · Escalation test · Cadence recommendation · Decision calibration ·
+Replacement cost · ADKAR · Time allocation targets.
+The performance diagnosis is the most consequential: three of its four possible causes are
+the manager's problem, and it actively blocks you from coaching a system failure.
+## Architecture
 ```
-## Page journey
-1. **Preloader** — eased 0→100% counter, cycling discipline words, curtain exit
-2. **Hero** — kinetic `EVENT HORIZON` type, parallax chrome render, rotating
-   badge, orbital rings, mouse parallax
-3. **Marquee** — infinite capability band
-4. **Work** — 400vh sticky horizontal gallery; velocity-reactive shear; each
-   card opens a full-screen **case study** (`←`/`→` browse, `Esc` closes)
-5. **Manifesto** — scroll-linked word-by-word reveal
-6. **Process** — four sticky-stacking method cards
-7. **Capabilities** — accordion with cursor-chasing image previews
-8. **Stats** — in-view animated counters
-9. **Voices** — auto-rotating testimonial carousel
-10. **Gravity Field** — interactive canvas: 150 bodies orbit your cursor
-11. **Recognition** — awards list
-12. **Journal** — Field Notes rows with acid sweep-fill hover
-13. **Brief** — project-brief composer (mailto, opened from footer CTA or the
-    gallery's "Your Project Here" card)
-14. **Footer** — `SAY HELLO`, live Amsterdam clock, copy-email, giant wordmark
-## Systems
-- **Custom cursor** — acid dot + spring ring; morphs into `VIEW`/`READ`/`OPEN`
-  bubble over tagged elements (`data-cursor`), disabled on touch devices
-- **Ambient sound** — nav toggle plays a synthesized drone (detuned 55 Hz
-  sines + LFO-swept bandpass noise); animated EQ indicator; `aria-pressed`
-- **Scroll progress bar** — spring-smoothed acid hairline
-- **Film grain + vignette** overlays
-- **Event bus** — `window` CustomEvent (`vanta:open-brief`) opens the brief
-  overlay from anywhere
-- **Accessibility** — `prefers-reduced-motion` handling, `:focus-visible`
-  acid outlines, aria labels, keyboard nav in case studies
-- **SEO** — meta description, Open Graph, Twitter card, Organization JSON-LD
-## Project structure
+index.html            shell
+src/styles.css        design system, no framework
+src/main.js           router, nav, delegated actions, global case intake
+src/core/
+  store.js            normalised collections, versioned migrations, quota telemetry, batch writes
+  dom.js              escaping, dates, formatting, modal/toast, action registry
+  frameworks.js       26 pure scoring models
+  content.js          15 case types + playbooks, 18 scripts, 15 lessons, 6 scenarios, question banks
+  engine.js           case intake + propagation, derived metrics for every module
+  mentor.js           20 detection rules, daily brief
+src/views/            14 view modules
 ```
-public/img/            generated art-direction imagery
-src/
-  lib/
-    motion.ts          easing constants
-    scroll.ts          Lenis singleton + scrollTo helper
-  components/
-    App-shell:         Nav, Preloader, Cursor, Noise, ProgressBar, Magnetic,
-                       Reveal, SectionLabel
-    sections:          Hero, Marquee, Work (+CaseStudy), Manifesto, Process,
-                       Services, Stats, Testimonials, GravityField, Awards,
-                       FieldNotes, Footer
-    features:          Brief, SoundToggle, CopyEmail
-```
+No build-time framework. Vite is used only to bundle and inline into a single `dist/index.html`.
+## Storage reality (stated plainly, in the UI too)
+- ~5 MB cap, synchronous, **not encrypted**, single device, single browser profile.
+- Cleared if you clear site data. No sync, no recovery.
+- It contains notes about named individuals that may be disclosable in a grievance process.
+- Quota is monitored; writes that fail are counted and surfaced. **Export weekly.**
 ## Scripts
 ```bash
-npm run dev       # start dev server
-npm run build     # production build → dist/index.html (single file)
-npm run preview   # preview the build
+npm run dev      # dev server
+npm run build    # single-file production build → dist/index.html
+npm run preview  # preview the build
 ```
----
-© 2026 VANTA® Studio — Herengracht 420, Amsterdam · 52.3676° N, 4.9041° E
+Press `C` anywhere to register a case.
