@@ -1,71 +1,81 @@
-# LEAD/OS — Single-File Leadership Operating System
-
-A production-grade, **fully client-side** leadership app for new team leaders and
-managers leading several teams. One `index.html`. No framework, no build step, no
-server, no accounts, no network calls. All state lives in `localStorage`.
-
-## Run it
-
-- **Local:** open `index.html` in any modern browser. That's it.
-- **Hosted:** push this repo, then GitHub → Settings → Pages → Deploy from branch.
-  The app runs at `https://<user>.github.io/<repo>/` and gets a stable storage origin.
-
-## Permanent constraints (non-negotiable)
-
-1. Vanilla JS only. No frameworks. No build tooling. Single HTML file for the app.
-2. No paid APIs. No OAuth. No external credentials of any kind.
-3. 100% client-side persistence (`localStorage`). No server, no database, no backend.
-4. No stubs, no placeholders, no dead features. Every module is whole or absent.
-5. Click-through verified: every register propagates to every dependent module via
-   the internal event bus (`Bus`). "Registered anywhere → appears everywhere" is
-   structural, not manual.
-
-## What it is
-
-31 modules across 6 groups, built as a mentor, not a spreadsheet:
-
-- **Command** — Command Center (explainable health score, today list, risk heat,
-  workload), Coach (morning brief + live-data Q&A + leader-rhythm audit).
-- **People** — Roster (DISC/Belbin), 1-on-1s with auto-built agendas, Feedback
-  Studio (SBI/COIN/Radical Candor, 3-day decay alerts), Recognition ledger with
-  fairness radar, 7-level Delegation board, Performance notes, Conflict Navigator
-  (Glasl + Thomas-Kilmann + phases model), Team Health Pulse (Lencioni 5 +
-  Edmondson 7), Onboarding gates (day 1 / week 1 / month 1 / month 3), Skills
-  matrix + 70-20-10 growth plans.
-- **Execution** — Task register, Kanban (drag & drop, WIP limit), Timeline &
-  milestones with slip detection, Meeting Engine (auto agendas, action items →
-  tasks), Decision Engine (weighted scorer, RAPID, review dates), Risk Register
-  (RPN/FMEA, heat map, mitigation-owner alerts), Suggestion Engine (14-day answer
-  promise, accept → auto-task), Budget & EVM (disclosed formulas).
-- **Self-Leadership** — SMART goals with scoring, OKRs (honest 70% grading),
-  Eisenhower Time Matrix (auto-sorted), Habit engine (streaks), Reflection &
-  energy journal (weekly review wizard), Leader Profile (DISC/EI/Belbin/Johari).
-- **Strategy** — SWOT→TOWS auto-pairing, Stakeholder map (influence × interest),
-  Team Charter (printable poster).
-- **System** — Playbook Library (28 leadership models, each with steps, failure
-  modes, live example, and a jump into the tool that runs it), Data & Trust
-  center (audit trail, snapshots, export/import, settings).
-
-## Architecture (read before editing)
-
-Layers inside `index.html`, top-down:
-
-1. `DB` — localStorage wrapper (`LEADOS.v1`), audit log, snapshots, quota guard.
-2. `Bus` — every mutation emits `change`; persistence, mentor, and render subscribe.
-3. `Engine` — pure calculations + all derived views (agendas, briefs, workload, debt).
-4. `Mentor` — ~30 deterministic rule checks; findings are severity-ranked,
-   scope-tagged (nav badges, per-view insight boxes), and **self-resolving**.
-5. UI framework — schema-driven register factory, modal form engine, ⌘K palette.
-6. Views — 31 `UI.register(...)` modules. Grep `UI.register("` for the full list.
-
-## Your data vs. this code
-
-- **Code** lives here in git.
-- **Your leadership data** lives in your browser's localStorage — it is NOT in the
-  repo. Back it up from inside the app: **Data & Trust → Export JSON** (restore
-  with Import JSON). Snapshots (rolling 5) cover in-app time-travel.
-
-## Development convention
-
-`AI-SESSION-LOG.md` is the continuity layer across AI development sessions.
-Every session reads it first and appends an entry when done. **Start there.**
+# VANTA® — Digital Gravity Studio
+An independent design-studio site built to an Awwwards-caliber standard: dark
+editorial design, kinetic typography, smooth scroll physics, a playable
+gravity-field canvas, full case-study deep-dives, ambient generative audio,
+and an editorial project-brief composer.
+**Concept** — Vanta builds "digital gravity": brands, websites and motion with
+enough mass to pull audiences past the event horizon. Every visual and
+interaction decision serves that thesis.
+---
+## Built with
+| Layer        | Tech                                                        |
+| ------------ | ----------------------------------------------------------- |
+| Framework    | React 19 + TypeScript + Vite 7 (single-file build)         |
+| Styling      | Tailwind CSS v4 (`@theme` design tokens, custom keyframes) |
+| Animation    | Framer Motion (scroll-linked, springs, AnimatePresence)    |
+| Smooth scroll| Lenis                                                       |
+| Icons        | Lucide React                                                |
+| Canvas       | Vanilla Canvas 2D (gravity-field particle simulation)      |
+| Audio        | Web Audio API (fully synthesized ambient drone, no files)  |
+| Type         | Syne (display) + Space Grotesk (body)                      |
+## Design tokens
+```css
+--color-ink:   #0a0a0b   /* background        */
+--color-coal:  #131315   /* raised surfaces   */
+--color-bone:  #ece9e1   /* primary text      */
+--color-smoke: #8a887f   /* secondary text    */
+--color-acid:  #cdff3e   /* signature accent  */
+```
+## Page journey
+1. **Preloader** — eased 0→100% counter, cycling discipline words, curtain exit
+2. **Hero** — kinetic `EVENT HORIZON` type, parallax chrome render, rotating
+   badge, orbital rings, mouse parallax
+3. **Marquee** — infinite capability band
+4. **Work** — 400vh sticky horizontal gallery; velocity-reactive shear; each
+   card opens a full-screen **case study** (`←`/`→` browse, `Esc` closes)
+5. **Manifesto** — scroll-linked word-by-word reveal
+6. **Process** — four sticky-stacking method cards
+7. **Capabilities** — accordion with cursor-chasing image previews
+8. **Stats** — in-view animated counters
+9. **Voices** — auto-rotating testimonial carousel
+10. **Gravity Field** — interactive canvas: 150 bodies orbit your cursor
+11. **Recognition** — awards list
+12. **Journal** — Field Notes rows with acid sweep-fill hover
+13. **Brief** — project-brief composer (mailto, opened from footer CTA or the
+    gallery's "Your Project Here" card)
+14. **Footer** — `SAY HELLO`, live Amsterdam clock, copy-email, giant wordmark
+## Systems
+- **Custom cursor** — acid dot + spring ring; morphs into `VIEW`/`READ`/`OPEN`
+  bubble over tagged elements (`data-cursor`), disabled on touch devices
+- **Ambient sound** — nav toggle plays a synthesized drone (detuned 55 Hz
+  sines + LFO-swept bandpass noise); animated EQ indicator; `aria-pressed`
+- **Scroll progress bar** — spring-smoothed acid hairline
+- **Film grain + vignette** overlays
+- **Event bus** — `window` CustomEvent (`vanta:open-brief`) opens the brief
+  overlay from anywhere
+- **Accessibility** — `prefers-reduced-motion` handling, `:focus-visible`
+  acid outlines, aria labels, keyboard nav in case studies
+- **SEO** — meta description, Open Graph, Twitter card, Organization JSON-LD
+## Project structure
+```
+public/img/            generated art-direction imagery
+src/
+  lib/
+    motion.ts          easing constants
+    scroll.ts          Lenis singleton + scrollTo helper
+  components/
+    App-shell:         Nav, Preloader, Cursor, Noise, ProgressBar, Magnetic,
+                       Reveal, SectionLabel
+    sections:          Hero, Marquee, Work (+CaseStudy), Manifesto, Process,
+                       Services, Stats, Testimonials, GravityField, Awards,
+                       FieldNotes, Footer
+    features:          Brief, SoundToggle, CopyEmail
+```
+## Scripts
+```bash
+npm run dev       # start dev server
+npm run build     # production build → dist/index.html (single file)
+npm run preview   # preview the build
+```
+---
+© 2026 VANTA® Studio — Herengracht 420, Amsterdam · 52.3676° N, 4.9041° E
