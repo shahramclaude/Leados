@@ -11,7 +11,7 @@ Open `index.html` in a browser. That is the whole install.
 It is **not an oracle**. Software that hands a new leader answers produces a compliant operator who collapses the first time reality deviates from the script — and creates real legal exposure when someone acts on generated advice about a termination without judgment. The division of labor is explicit and enforced in the UI:
 
 | The app owns | You own |
-|---|---|
+| --- | --- |
 | Detection, scoring, sequencing, drafting, record-keeping, escalation timing, cadence | The judgment call |
 | Forcing decisions/outcomes to be recorded with rationale and a review date | Living with the outcome |
 | The review loop that turns experience into skill — the actual leadership-course substitute | Reading the loop honestly |
@@ -30,7 +30,7 @@ Register a case **once**, anywhere — person page, team page, advisory action, 
 ## Module map (22 renderers, 19 nav routes + 3 workspaces)
 
 | Route | Module | Depth |
-|---|---|---|
+| --- | --- | --- |
 | #/today | Daily brief | Engine-ranked top-3 focus, week-ahead strip, **welcome-back digest after 4+ days away**, sessions with pre-baked agendas, commitments split **broken-by-you vs owed-to-you**, load index, pressure sparkline, Friday review prompt |
 | #/inbox | Mentor inbox | **52 detection rules** across every collection, weighted/ranked/executable, dated snoozing with Deferred lane, 3 unsnoozable integrity-class rules |
 | #/review | Weekly review | Auto digest, persisted 60d pressure trend (**drops demand causal lessons too**), team-health meters, quarterly rhythm panel, 60-second upward-brief generator, guided 4-field ritual, lesson journal |
@@ -68,7 +68,7 @@ index.html
    1. STORE      blank() · load/save with failed-write surfacing · quota meter
    2. UTIL/DOM   dates/esc · toast · modal · form builder · inline icon set (60+)
    3. FW         27 pure scoring models — no I/O, no mutation
-   4. CONTENT    CASE_TYPES (14) · SCRIPTS (6) · QBANK · LESSONS (12) · SCENARIOS (2)
+   4. CONTENT    CASE_TYPES (14) · SCRIPTS (6) · QBANK · LESSONS (12) · SCENARIOS (3)
    5. ENGINE     createCase + ledger · close/reopen · agendas · delivery · accept cascade · premortemToRisks · catchUp · HR packet
    6. MENTOR     RULES (52) · mentorScan w/ daily pressure snapshot · dailyBrief
    7. VIEWS      22 renderers + delegated Actions registry + command palette
@@ -88,7 +88,7 @@ index.html
 ## Shortcuts
 
 | Key | Action |
-|---|---|
+| --- | --- |
 | / or Ctrl/Cmd-K | Command palette — people, teams, cases, modules, actions |
 | C | Register a case (live classification + propagation preview) |
 | 1–9 | today · inbox · cases · people · teams · 1:1s · feedback · decisions · academy |
@@ -98,9 +98,10 @@ index.html
 ## Files
 
 | File | Role |
-|---|---|
+| --- | --- |
 | index.html | The entire application (shell, design system, store, models, content, engine, mentor, views, integrity, seed, boot) |
 | AI-SESSION-LOG.md | Continuation-engineering session record: critique, positions, changelog, QA, watchlist |
+| SESSION-3.patch.md | Anchored, additive in-place edits (estimated-pulse hygiene · instrument-boundary annotation) pending application to `index.html`; ships with stop-if-mismatch verification |
 | README.md | This file |
 
 First boot builds an **example organization through the production engine** (two teams, six people, three live cases with full propagation incl. a Type-1 decision with premortem-drafted risks, goals with slipping KRs, a live delegation checkpoint overdue, delivered feedback with evidence, a stalled pipeline candidate, a skeptical manage-closely stakeholder) so every module — and a dozen advisories — are alive on first paint. Erase it in Data & integrity when you're ready for your real org.
@@ -108,3 +109,5 @@ First boot builds an **example organization through the production engine** (two
 ## Known deltas vs the predecessor README (honesty ledger)
 
 The original repo's README claimed 49 rules / 22 routes / 28 models / 16 case types / 4 scenarios + features (legacy v1 migration, ADKAR as standalone record, 30/60/90 ramp from v1 shape) that this build implements differently: **52 / 22 / 27 / 14 / 3** here, and ADKAR lives as a first-class field on risk records with a dedicated stalled-gap rule rather than a separate collection. Legacy v1 auto-migration is not recreated (no v1 store exists in the wild for this build); import fails loudly on unmigratable shapes instead. Everything else in the mission spec — spine, ledger, escalation hard-stop, verified closure, unsnoozables, seed-through-engine — is implemented as specified. Every number above matches the code; count them.
+
+Session 3 ledger line: `SCENARIOS (2)` in the architecture block was stale from before scenario 3 shipped — corrected to `(3)`. Everywhere else already said 3. Session-3 patch work (`SESSION-3.patch.md`) adds no rules, models, renderers, case types, or audit classes, so every other number above stands — verified by count, not memory, by this session too.
