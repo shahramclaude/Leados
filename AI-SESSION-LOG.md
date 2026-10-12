@@ -1,5 +1,51 @@
 # AI-SESSION-LOG — LeadCore continuation engineering
 
+## Session: "Part 4 — per-capability succession, intake, drift discipline, scenario five" (schema `leadcore.v2`, additive)
+
+### Critique, first
+
+1. **Upstream is frozen at my Part 1 — second consecutive check.** Continuing to diff against them is now wasted motion; the referee stays the loop-closure criterion, and this part ships only items that pass it. One of them comes straight off my own watchlist (per-capability succession), one off their remaining genuine feature list (30-day team intake), two are discipline hardening on things I already built (confidence-scaled premortem gates, KT runway policing), one is the last unclaimed scenario I said could earn its slot.
+2. **A bus-factor counter without a named backup is an alarm with no fire exit.** "payments (Ana)" tells you the building is on fire; it doesn't tell you who carries the hose. `FW.capBackup` now deriva­tes the best backup per single-point capability (stamps ×120pts, live delegation level) and the card renders it inline. If no backup derives, the chip says so in red — "no backup derivable" is itself the actionable answer, and it quietly doubles the pressure on the talent ritual, which is where the raw material comes from.
+3. **Departure KT tasks that don't name the trainee are scheduling, not knowledge transfer.** The `kt()` wire now derives the trainee per capability and puts them in the task title; when nobody derives, the task itself says NO backup derivable. The case's succession readout (Part 3) plus named KT trainees (this part) means a leaver's entire capability map has a destination before the first handover meeting is booked.
+4. **Confidence ≥5 needed teeth.** Last part I stamped confidence; this part it bites: Type 1 + confidence 5 raises the premortem floor from 10 to 60 characters of real prose. Certainty without imagination is how irreversible calls fail, and gates that don't scale with claims are decorative.
+5. **The intake generator is not a checklist app.** Eight dated ritual tasks police *sequence* (listen → scan → agreement → retro → dysfunctions → goal → exposures → readout); the existing detectors continue to police *artifacts*. Two layers, different jobs, no overlap — that distinction is what keeps it from being checklist theater. Repeat-arming while one runs is refused, hard.
+
+### Shipped (this part)
+
+- **FW.capBackup(team, cap)** — 29th model; per-capability backup derivation; bus-factor card renders derived backup chips (click-through to the person) or a red no-backup state with the training rep prescribed.
+- **Departure KT names trainees** in task titles and the ledger; **kt-behind detector (w62)** — open departure case ≥5d with unstarted KT tasks, citing the case's own succession readout as the fix.
+- **30-day team intake generator** on team pages: 8 dated `auto:'intake'` ritual tasks across the listen→scan→agreement→retro→dysfunctions→goal→exposures→readout sequence; idempotent while running.
+- **Talent ritual → bench delta**: bench names snapshotted at ritual open (`window.__BENCH_PRE`), delta journaled as a `bench-delta` lesson on completion, with both ritual-completion paths unified through `finishRitual(ds2)` — the toast now reports bench movement, not just stamp count.
+- **Confidence-scaled premortem gate** in `dc-commit` (confidence 5 on a one-way door ⇒ 60+ chars of prose or the log refuses).
+- **GROW strip in the session runner** — dates computed live from the session date, so "by Thursday" and "in 30 days" are never abstract.
+- **sc5 "The reversible that was not"** — Type-2-in-costume detection: interrogate reversibility claims, re-label mid-flight without shame, price exits before signing, premortem-by-the-advocate. Scenarios: 5.
+- **Detector count: 50** (kt-behind), inbox copy corrected.
+
+### QA (receipts, this part)
+
+| # | Fault | Disposition |
+| --- | --- | --- |
+| 1 | Two long-anchor context edits on the bus-factor card rejected — my context carried a `';` where the file had the outer `.join('')` inlined | read_file to transcribe the verbatim bytes; landed via a minimal anchor instead of re-throwing the long one. Rule re-affirmed: grep first, long anchors get byte-verified on failure, never retried blind |
+| 2 | Typo "yhat" inside sc5 feedback text — caught on self-review of the insertion | fixed before delivery |
+| 3 | sc5 array closure, rule splice point, bus-factor IIFE scope (`t` in-team) | verified by grep + closure line-read |
+| 4 | Double toast paths in ritual completion (tr-next vs trn2 drifted apart in Part 2) | unified through `finishRitual(ds2)` — one completion behavior, not two |
+
+### Watchlist (updated)
+
+- The two downstream call-sites of `FW.successionBench` (team page + departure note) treat the pool as org-wide — consistent, but the *per-capability* view is only on the bus-factor card. A dedicated succession view is NOT queued; it would be a module for module's sake. Argue me if you disagree, with the loop it closes.
+- `window.__BENCH_PRE` is session-scoped by design — a ritual abandoned mid-run loses its delta baseline (harmless: next ritual re-baselines). Persisting it would buy nothing and cost schema.
+- Intake tasks are manually checked off; auto-resolution on artifact completion (scan saved ⇒ d5 task auto-checks) is the obvious refinement and I deliberately did NOT build it: task state syncing to artifact state is a second source of truth, and this build has been burned by those before. The overdue-tasks detector is the enforcement layer.
+- 50 rules is a round number, not a target. The next detector still has to name which currently-invisible failure mode it catches, or it doesn't ship.
+
+### Next-part candidates (argue before building)
+
+1. Confidence-informed premortem follow-through: at review-gate time, diff the premortem's named failure modes against the lesson (which assumption actually died) — closes premortem accuracy as a skill metric.
+2. Weekly review: bench-movement row in the quarterly rhythm panel (one number: named successors across lead teams).
+3. Corridor coaching: since-last digest in the session runner currently reads 21d; make the window adaptive to derived cadence (tighter for 7d-cadence people).
+4. Scenario six only on the same quality bar; the strongest unclaimed pattern is the praised-into-the-ground case (recognition clustering humanized).
+
+---
+
 ## Session: "Part 3 — succession, calibration, comms; upstream converged" (schema `leadcore.v2`, additive)
 
 ### Critique, first
