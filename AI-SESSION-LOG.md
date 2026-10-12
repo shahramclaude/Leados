@@ -1,57 +1,85 @@
 # AI-SESSION-LOG — LeadCore continuation engineering
 
-Session: rebuild + deepen from repo read. Role: technical peer, not assistant. This log is written to be argued with.
+Role: technical peer, not assistant. This log is written to be argued with. Most recent session first inside each section boundary; history is load-bearing — do not delete old sessions, argue with them.
 
 ---
 
-## 1. Critique on arrival (positions taken, held or folded)
+## SESSION 2 — watchlist execution (listener hygiene · snooze guard · mood pulse · case cross-links · bench scenario)
 
-**P1 — The upstream `index.html` fetch was truncated (~57k tokens in).**
-Reconstructing "the same app" from a partial read guarantees broken contracts: README numbers the code can't back, routes that render nothing, ledger targets pointing at collections that never got written. Verdict: do not patch a ghost. Rebuild end-to-end against the spec's *verifiable invariants* and publish an honesty ledger in the README (deltas: 52 rules / 22 renderers / 26 models / 14 case types / 2 scenarios here vs 49/22/28/16/4 claimed upstream). Status: **held.**
+### Critique on arrival
+The previous session ended with an ordered watchlist. This session executes it in that order. Anything else would be backlog theater. The user re-sent the identical brief; the brief doesn't change the answer: depth-in-place beats new surface area, and the propagation gate still stands.
 
-**P2 — "More features is better" is wrong as stated, and the user's own depth rule is the rebuttal.**
-The failure mode of 22 modules isn't thinness — it's **alert fatigue + ritual debt**. A new manager-of-managers ignores 50 advisories by week three unless arrival is automated. Shipped stance: *nothing enters the tree unless the case spine or another engine can write into it.* That's why diagnosis records, comms drafts, pipeline reqs, ADKAR risk rows, feedback drafts, KT fan-out all originate from `Engine.createCase` propagation rather than from manual module entry. Status: **held.** If you want MORE modules next pass, the gate is the same: name its propagation route first or it doesn't ship.
+### Failure modes named BEFORE the fix (and the class each belongs to)
+1. **Listener leak on `#modalroot`** — SBI composer added fresh `input` listeners per open; N opens = N stacked handlers. Class: *accumulating handler*. Fix: kill the per-open binding; single delegated listener routes `sb-s/sb-b/sb-i` to `updSbiLive()`.
+2. **Unsnoozable enforced by the renderer, not the action** — one future button away from a silent bypass of the integrity-class trio. Class: *enforcement at the wrong layer*. Fix: `Actions['snooze']` and `Actions['snooze-run']` both resolve the rule from the skey and refuse `no:1` classes, with an explicit toast.
+3. **Single-question mood sensor feeding an 8-driver flight model** — one noisy scalar posing as telemetry. Class: *instrument under-specification*. Fix: 4-question pulse at 1:1 close (overall · energy · load-inverted · support) blended by `FW.moodVal`; slope, sparkline, and person-page chips all read the blend. Legacy scalar mood entries still score (fallback path in `moodVal`).
+4. **Adjacent but invisible data** — two open cases on one person existed side by side in the store without the spine knowing. Class: *structural knowledge the UI can't see*. Fix: `Engine.createCase` writes bidirectional `links[]` with timeline entries on BOTH cases (escalation-class included — linkage is record-keeping, not advice); case workspace renders a related strip with close-order doctrine. Audit + repair extended in the SAME diff per the standing rule.
+5. **Content debt, not code debt** — the simulator framework (staged options, two-tier scoring, journal write) was proven at 2 scenarios; the departure/bench arc was the highest-value missing one because the engine machinery (KT fan-out, bench readout) already existed to teach against. Class: *reusable chassis without its best lesson*. Fix: scenario 3 shipped, 3 stages, including the descope move every manager skips.
 
-**P3 — localStorage-only is the standing production risk, structural, unfixable by cleverness.**
-~5MB, synchronous, unencrypted, one profile from total loss. Mitigations are discipline, kept and surfaced: failed writes in the top bar (never silent), quota meter in sidebar + #/data, export nag past 14d, post-import auto-audit, import-time id re-mint. Status: **held.** Do not let anyone talk you into a "sync later" half-step; that way lies a credentials DB and the death of the constraint.
+### Changelog (this session)
+- `FW.moodVal` + blended `moodSlope`; models 26 → 27.
+- `Engine.createCase` → bidirectional case `links[]` + dual timeline entries; case workspace related-open strip.
+- 4-question pulse in session runner (prefills from last pulse); person page blended sparkline + live energy/load/support chips.
+- Snooze guard moved into the actions layer (render-layer chip retained as UX, not enforcement).
+- Listener hygiene: delegated binding only; per-open accumulation eliminated.
+- Scenario 3: **"Friday resignation, empty bench"** — counter-offer trap → KT sequencing → acting-lead-vs-parachute, with the migration descope scored as part of the correct answer.
+- Integrity audit: 19 → 20 check classes (`case cross-links resolve`); safe repair prunes dangling links mechanically.
 
-**P4 — Escalation automation stops in the write path, not the UI path.**
-Advisory-only guardrails are theater.  The engine refuses to create playbooks for escalation-class cases; the record, the verbatim evidence, and the today's-date HR task are all that exist. The 3 unsnoozable advisories mirror that in the read path. Status: **held, non-negotiable, inherited intact.**
+### QA (static; no browser runtime in this environment)
+- All 12 edits applied against verified exact contexts.
+- Cross-link write path guards legacy link-less records (`x.links||[]`); audit tolerates them (`(c.links||[])`).
+- Pulse blends gate on `en!=null`, so pre-pulse legacy mood entries and seed data score exactly as before — no model discontinuity for existing stores.
+- Scenario array structure hand-verified (array continues `,{...}` then closes `];`).
+- Numbers re-verified for README: 52 rules / 22 renderers / 27 models / 14 case types / 3 scenarios / 20 audit classes.
 
-**P5 — Seed through the production engine or don't seed.**
-A seed that writes records directly teaches drift between "demo shape" and "real shape." This build's seed calls `Engine.createCase`, `Engine.scheduleOneOnOne`, `Engine.premortemToRisks` — the example org is real org data with `seed:true` flags, erasable in one click. Status: **held.**
+### Watchlist (refreshed — dead items removed, new ones admitted)
+1. ~~Listener accumulation on SBI composer~~ **dead** (delegated now).
+2. ~~Unsnoozable render-layer-only~~ **dead** (action-layer refusal).
+3. ~~Single-question mood~~ **dead** (4-question blended pulse).
+4. ~~Case cross-links~~ **dead** — but note the follow-up: cross-links are one degree deep; a transitive cluster view ("case storms" of 3+ linked live cases on one scope) is the next honest depth. Not yet shipped because cluster doctrine (close order, common-cause) needs to be right before the UI preaches it.
+5. ~~Scenario count 2~~ **dead** (3 scenarios now).
+6. **NEW:** pulse sparkline shows blend but person-page flight history predates it — a visible step-change may appear at the boundary where pulse data begins. Decide: normalize history display to v-only, or annotate the boundary. Don't let a tooling improvement masquerade as a person regression.
+7. **NEW:** `oo-finish` reads four sliders unconditionally — if a session is closed without touching them, defaults (or last pulse) write as if measured. Risk: fabricated telemetry. Next pass: write `estimated:true` on untouched pulses and discount them in slope math.
+8. Print reflow for grids; accessibility pass (focus order in modal stack); keyboard navigation of advisory rows. All real, all deferred by cost/benefit, none forgotten.
 
-## 2. Changelog (this session)
+### Standing rules (unchanged, re-armed)
+- Depth > breadth; propagation gate for every new module.
+- No stubs, no placeholders, no `// TODO`.
+- Escalation only gets shorter.
+- README numbers match code — verified by count, not memory.
+- New write classes land with audit coverage in the same diff. (Demonstrated twice now: ledger, then cross-links.)
 
-- Full rebuild: 22 renderers / 19 nav routes, 52 mentor rules, 26 pure models, 14 case types, 12 lessons (6 arcs, 4 scored checks), 2 three-stage simulators, 6 guardrailed scripts.
-- Case spine with propagation ledger + click-through routes for all routed writes; idempotent intake; verified closure with +30d re-openable verification.
-- Escalation hard-stop in write path; kw trigger list; unsnoozable trio in mentor.
-- NEW depth beyond upstream README: one-click instrumentation fixer (person + readiness), derived succession bench as pure model (nine-box × ladder × overlap × trust) feeding a rule, calibration-drift model + rule, ADKAR-on-risk with stalled-gap rule, accept cascade (person+ramp+first 1:1 in one write), premortem→risk auto-drafting, welcome-back digest, time-mix targets with rule, meeting economics, retro carry-forward, closure/correction verification loops.
-- Bug fixes found on self-review post-draft (all crash-or-corrupt class, all closed): dead segment in case intake; comma-operator trap flattening readiness triples in #/self; arrow-fn-as-HTML in plan checkpoint modal; sidebar footer ternary swallowing the export line; operator precedence in feedback follow-up agenda template.
-- Seed now includes a stalled pipeline candidate so Hiring is alive on first paint.
+---
 
-## 3. QA performed (no browser runtime here — static verification only, stated honestly)
+## SESSION 1 — full OS rebuild from truncated upstream
 
-- Full-file sweep: no TODO/FIXME/stub/placeholder-function leftovers (only legitimate `placeholder=` attributes).
-- All `data-a` targets cross-checked against the Actions registry; all `Routes` referenced by NAV exist; detail routes parse in `render()`.
-- Referential model: 15 ref classes enumerated in Integrity audit; ledger resolution audited; hiring cascade closed-loop checked by audit.
-- Model assertions executable at runtime via audit: Edmondson reverse-scoring, KR down-direction, flight boundedness — the app tests ITSELF on demand from #/data.
-- NOT done: real browser execution. If anything throws, the render-level try/catch surfaces it in-view and in telemetry instead of white-screening — verify on first open, read the top bar.
+### Critique on arrival (positions taken, held or folded)
 
-## 4. Watchlist (failure modes to attack next pass — pick one, not all)
+**P1 — The upstream `index.html` fetch was truncated (~57k tokens in).** Reconstructing from a partial read guarantees broken contracts. Verdict: rebuild against verifiable invariants; honesty ledger in README. **Held.**
 
-1. **Advisory interaction listeners accumulate on #modalroot across SBI composer opens** — harmless at session scale, fix by namespacing or one-time delegated binding.
-2. **Snoozed advisories are invisible on #/today** — deliberate (deferred = out of sight), but a deferred escalation-adjacent item can't exist by class; recheck if new rules ever inherit `no`.
-3. **Mood capture is single-question at 1:1 close** — thin sensor feeding an 8-driver model. Next depth: optional 3-item pulse, sliding-window slope.
-4. **No conflict detection between cases** — two open cases on the same person of related types (flight + underperformance) should cross-link automatically; currently they only co-appear on the person page.
-5. **Scenario count is 2** — the framework (staged opts + scoring + journal write) is proven; depth here is content-hours, not code. Priority scenario: the departure/bench discipline arc, since the engine side already exists.
-6. **Print stylesheet is agenda/script-first** — HR packet prints acceptably; grids could use a dedicated print reflow.
-7. **localStorage JSON round-trip per write is O(state)** — fine at 5MB-scale human data; if telemetry shows write latency, move to debounced save. Don't preemptively optimize this.
+**P2 — "More features is better" wrong as stated; the user's depth rule is the rebuttal.** Failure mode of 22 modules is alert fatigue + ritual debt. Gate: nothing ships unless the spine or another engine can write into it. **Held.**
 
-## 5. Standing rules for the next session
+**P3 — localStorage-only is structural risk.** Mitigations = discipline: failed writes surface, quota meter, export nag, post-import audit, id re-mint. **Held.** No "sync later" half-steps.
 
-- Depth > breadth. Every module must receive from the spine; no module ships on manual entry alone.
-- No stubs, no placeholders, no `// TODO`. If it can't be finished in the pass, it doesn't ship in the pass.
-- Escalation path never gets "smarter." It gets shorter.
-- README numbers must match the code. Count before you write them.
-- The integrity audit is the definition of done: it must stay green, and new collections mean new ref classes added to it in the same diff.
+**P4 — Escalation stops in the write path.** Record + verbatim + HR-task only; unsnoozable trio in read path. **Held, non-negotiable.**
+
+**P5 — Seed through the production engine or don't seed.** Seed calls `Engine.createCase` et al.; erasable via `seed:true` flags. **Held.**
+
+### Changelog (session 1)
+- 22 renderers / 19 nav routes, 52 mentor rules, 26 models, 14 case types, 12 lessons (6 arcs, 4 scored checks), 2 scenarios, 6 guardrailed scripts.
+- Case spine: ledger propagation, idempotent intake, verified closure (+30d re-openable), escalation hard-stop, accept cascade, premortem→risks, welcome-back digest, calibration drift, ADKAR-on-risk, bench model + rule, instrument-one-click, meeting economics, retro carry-forward.
+- Crash-class self-review fixes: dead segment in case intake; comma-operator readiness triples; arrow-fn-as-HTML checkpoint field; sidebar footer ternary; agenda follow-up precedence.
+- Seed: stalled pipeline candidate included so Hiring is alive on first paint.
+
+### QA (session 1)
+- Sweep: no TODO/FIXME/stub debris; all `data-a` ↔ Actions cross-checked; NAV ↔ Routes contract in audit; model assertions executable from #/data.
+- Not performed: real browser execution (no runtime here). Render try/catch surfaces faults in-view + telemetry.
+
+### Watchlist at close of session 1 (status now)
+1. Listener leaks — **closed, session 2**.
+2. Snooze visibility/enforcement audit — **closed, session 2** (action-layer).
+3. Mood single-question — **closed, session 2**.
+4. Case cross-links — **closed, session 2**.
+5. Scenario count — **closed, session 2** (bench arc).
+6. Print reflow — open (moved to session-2 list).
+7. O(state) writes — open; don't preemptively optimize.

@@ -34,10 +34,10 @@ Register a case **once**, anywhere — person page, team page, advisory action, 
 | #/today | Daily brief | Engine-ranked top-3 focus, week-ahead strip, **welcome-back digest after 4+ days away**, sessions with pre-baked agendas, commitments split **broken-by-you vs owed-to-you**, load index, pressure sparkline, Friday review prompt |
 | #/inbox | Mentor inbox | **52 detection rules** across every collection, weighted/ranked/executable, dated snoozing with Deferred lane, 3 unsnoozable integrity-class rules |
 | #/review | Weekly review | Auto digest, persisted 60d pressure trend (**drops demand causal lessons too**), team-health meters, quarterly rhythm panel, 60-second upward-brief generator, guided 4-field ritual, lesson journal |
-| #/cases · #/case/:id | Case workspace | 14 types, aging buckets (0–3/4–7/8–14/15d+), playbooks, known failure modes, timeline + dated notes, click-through ledger, verified closure with re-open |
-| #/people · #/person/:id | Person workspace | Flight risk (8 weighted drivers + history sparkline), trust equation, nine-box stamps, evidence ledger, replacement economics, dev plans, mood trail, **re-armable 30/60/90 ramp gates**, under-instrumented strip with **one-click fix**, HR packet, leave mode, archive |
+| #/cases · #/case/:id | Case workspace | 14 types, aging buckets (0–3/4–7/8–14/15d+), playbooks, known failure modes, timeline + dated notes, click-through ledger, **automatic cross-links between related open cases** (same person/team — two live cases on one scope is surfaced as signal, never coincidence), verified closure with re-open |
+| #/people · #/person/:id | Person workspace | Flight risk (8 weighted drivers + history sparkline), trust equation, nine-box stamps, evidence ledger, replacement economics, dev plans, **blended 4-question mood pulse** (overall × energy × load × support, with live chips), **re-armable 30/60/90 ramp gates**, under-instrumented strip with **one-click fix**, HR packet, leave mode, archive |
 | #/teams · #/team/:id | Team workspace | Edmondson scan (correct reverse-scoring on items 2/4/6), five dysfunctions (sequential), Tuckman + override, bus factor per capability, composite health, direction-aware KRs with trajectory sparklines, working agreement, retro engine (STOP/START → dated owned tasks, carried forward), **derived succession bench** (nine-box × delegation ladder × capability overlap × trust — readiness + exact next rep) |
-| #/oneonones | Session runner | Since-last digest, auto-agendas from 6 sources, commitments with owedBy ownership, mood capture feeding flight slope, carried-forward open items, auto next-booking at derived cadence, copy/print agenda |
+| #/oneonones | Session runner | Since-last digest, auto-agendas from 6 sources, commitments with owedBy ownership, 4-question pulse feeding the blended flight slope, carried-forward open items, auto next-booking at derived cadence, copy/print agenda |
 | #/org | Org map | Span tree you → leads → reports, flight exposure in money per node, case pressure, bus-factor-1 flag list, live delegation levels |
 | #/skips | Skip-levels | Quarterly cadence per report, 5-question runner, 4-dim signal, doctrine enforced: actions inject into YOUR 1:1 with the lead — de-identified, never around them |
 | #/feedback | Feedback | SBI composer with live assembly, draft ageing nags (praise 48h / corrections 72h), delivery → evidence, **+21d correction verification with two artifact outcomes**, per-direct balance board (60–85% zone) |
@@ -47,17 +47,17 @@ Register a case **once**, anywhere — person page, team page, advisory action, 
 | #/pipeline | Hiring pipeline | 6-dim score-alone-first scorecards, 14d stall flags, stage-leak telemetry, **accept cascade: person + 30/60/90 ramp + first 1:1 in ONE write** |
 | #/portfolio | Governance | OKRs with direction-aware KR scoring + trajectory sparklines, expired-goal grading, P×I risk register with review dates and inline ADKAR walk, power-interest grid with stance plays, meeting economics, **comms drafts written by the case spine (send-or-kill lifecycle, dates logged)** |
 | #/scripts | Scripts | 6 parameterized, live-assembled, guardrailed scripts; PIP/separation **deliberately defers to HR** |
-| #/academy | Curriculum + simulator | 12 lessons in 6 arcs with 4 scored checks, **2 scenarios × 3 stages with two-tier consequence scoring** (brilliant-jerk, escalation-class) |
+| #/academy | Curriculum + simulator | 12 lessons in 6 arcs with 4 scored checks, **3 scenarios × 3 stages with two-tier consequence scoring** (brilliant-jerk, escalation-class, departure/bench discipline) |
 | #/self | Your leadership | OS readiness checklist (13 artifacts, one-click fixers incl. integrity-green), load breakdown, time mix vs MoM targets, candour + TKI checks, catch-me-up digest from any date, first-90-days plan |
-| #/data | Data & integrity | Executable integrity audit (19 check classes) · safe repair · export/import with **import-time id dedupe (deterministic re-mint)** · audit-preserving prune · example org (re)load/erase |
+| #/data | Data & integrity | Executable integrity audit (20 check classes incl. cross-link resolution) · safe repair (mechanically unambiguous only, incl. dangling-link prune) · export/import with **import-time id dedupe (deterministic re-mint)** · audit-preserving prune · example org (re)load/erase |
 
 ## Mentor rule set (52 — count them in `RULES`)
 
 Escalation open (unsnoozable) · HR contact due (unsnoozable) · **record integrity fault (unsnoozable)** · SLA breach · overdue tasks · 1:1 cadence breach · repeat cancels · draft ageing · feedback famine · balance off-zone · flight high · trust fragile · trust unassessed · mood slope · nine-box stale · delegation mismatch · checkpoint overdue · decision gate passed · Type 1 without premortem · one-way-door aging · risk rotting · manage-closely cold · OKR slipping · goal expired-unjudged · psych unscanned · bus factor critical · load overload · repeat-case pattern · weekly review due · closure verification due · correction verification due · export overdue · dev plan missing/stale · skip overdue · lead signal weak · under-instrumented direct · pipeline stalled · meeting factory · recognition clustering · retro overdue · diagnosis pending · team without goals · case idle · upward brief stale · pressure fortnight jump · **succession bench empty** · **confidence calibration drift** · **ADKAR stalled at first gap** · **time mix off targets** · mood brightening (positive signal) · closure verified (positive signal) · example-org-first-run.
 
-## Model library (26 pure scoring functions — no I/O, no mutation)
+## Model library (27 pure scoring functions — no I/O, no mutation)
 
-Escalation keyword test · Cynefin domain · SLA derivation · Eisenhower · trust equation · weighted flight risk (8 drivers) · mood slope · Edmondson (reverse-scored correctly) · five dysfunctions (sequential) · Tuckman · bus factor · nine-box · direction-aware KR progress · goal roll-up · leader load · team health composite · power-interest · stance plays · **confidence-calibration drift** · ADKAR first-gap · derived 1:1 cadence · SLII delegation mismatch · replacement cost · **succession bench derivation** · praise/correction balance · time-mix targets.
+Escalation keyword test · Cynefin domain · SLA derivation · Eisenhower · trust equation · weighted flight risk (8 drivers) · mood slope · Edmondson (reverse-scored correctly) · five dysfunctions (sequential) · Tuckman · bus factor · nine-box · direction-aware KR progress · goal roll-up · leader load · team health composite · power-interest · stance plays · **confidence-calibration drift** · ADKAR first-gap · derived 1:1 cadence · SLII delegation mismatch · replacement cost · **succession bench derivation** · praise/correction balance · time-mix targets · **blended mood pulse valuation** (feeds slope + flight driver).
 
 ## Architecture (single file, layered)
 
@@ -67,12 +67,12 @@ index.html
   <script>
    1. STORE      blank() · load/save with failed-write surfacing · quota meter
    2. UTIL/DOM   dates/esc · toast · modal · form builder · inline icon set (60+)
-   3. FW         26 pure scoring models — no I/O, no mutation
+   3. FW         27 pure scoring models — no I/O, no mutation
    4. CONTENT    CASE_TYPES (14) · SCRIPTS (6) · QBANK · LESSONS (12) · SCENARIOS (2)
    5. ENGINE     createCase + ledger · close/reopen · agendas · delivery · accept cascade · premortemToRisks · catchUp · HR packet
    6. MENTOR     RULES (52) · mentorScan w/ daily pressure snapshot · dailyBrief
    7. VIEWS      22 renderers + delegated Actions registry + command palette
-   8. INTEGRITY  executable audit (19 check classes) · safe repair
+   8. INTEGRITY  executable audit (20 check classes) · safe repair
    9. SEED+BOOT  example org via the production engine · shortcuts · init
 ```
 
@@ -107,4 +107,4 @@ First boot builds an **example organization through the production engine** (two
 
 ## Known deltas vs the predecessor README (honesty ledger)
 
-The original repo's README claimed 49 rules / 22 routes / 28 models / 16 case types / 4 scenarios + features (legacy v1 migration, ADKAR as standalone record, 30/60/90 ramp from v1 shape) that this build implements differently: **52 / 22 / 26 / 14 / 2** here, and ADKAR lives as a first-class field on risk records with a dedicated stalled-gap rule rather than a separate collection. Legacy v1 auto-migration is not recreated (no v1 store exists in the wild for this build); import fails loudly on unmigratable shapes instead. Everything else in the mission spec — spine, ledger, escalation hard-stop, verified closure, unsnoozables, seed-through-engine — is implemented as specified. Every number above matches the code; count them.
+The original repo's README claimed 49 rules / 22 routes / 28 models / 16 case types / 4 scenarios + features (legacy v1 migration, ADKAR as standalone record, 30/60/90 ramp from v1 shape) that this build implements differently: **52 / 22 / 27 / 14 / 3** here, and ADKAR lives as a first-class field on risk records with a dedicated stalled-gap rule rather than a separate collection. Legacy v1 auto-migration is not recreated (no v1 store exists in the wild for this build); import fails loudly on unmigratable shapes instead. Everything else in the mission spec — spine, ledger, escalation hard-stop, verified closure, unsnoozables, seed-through-engine — is implemented as specified. Every number above matches the code; count them.
