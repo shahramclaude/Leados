@@ -1,6 +1,12 @@
 # LeadCore — Leadership Operating System
 
-**An offline-first operating system for a new manager of managers.** Vanilla JavaScript, no framework, no backend, no accounts, no external services, no build step. The entire application is one `index.html` file; all state lives in `localStorage` in one browser profile. That constraint is permanent.
+**An offline-first operating system for a new manager of managers.** Vanilla
+JavaScript, no application framework, no backend, no accounts, no data APIs, no
+credentials, no build step. The entire application is one `index.html` file;
+all state lives in `localStorage` in one browser profile. Tailwind's browser CDN
+and web fonts are presentation-only: custom CSS and system-font fallbacks keep
+the application functional when those requests are unavailable. No leadership
+data leaves the browser. That constraint is permanent.
 
 Open `index.html` in a browser. That is the whole install.
 
@@ -8,99 +14,165 @@ Open `index.html` in a browser. That is the whole install.
 
 ## What this is, and what it refuses to be
 
-It is **not** an oracle. Software that hands a new leader answers produces a compliant operator who collapses the first time reality deviates from the script — and it creates real legal exposure when someone acts on generated advice about a termination without judgement. The division of labour is explicit and enforced in the UI:
+It is **not** an oracle. Software that hands a new leader answers produces a
+compliant operator who collapses the first time reality deviates from the script —
+and it creates real legal exposure when someone acts on generated advice about a
+termination without judgment. The division of labor is explicit and enforced in
+the UI:
 
-| The app owns | You own |
-| --- | --- |
-| Detection, scoring, sequencing, drafting, record-keeping, escalation timing, cadence tracking | The judgement call |
-| Forcing decisions/outcomes to be recorded with a rationale and a review date | Living with the outcome |
-| The review loop that turns experience into skill — the actual substitute for a leadership course | Reading the loop honestly |
+| The app owns                                                                          | You own                   |
+| ------------------------------------------------------------------------------------- | ------------------------- |
+| Detection, scoring, sequencing, drafting, record-keeping, escalation timing, cadence  | The judgment call         |
+| Forcing decisions/outcomes to be recorded with rationale and a review date            | Living with the outcome   |
+| The review loop that turns experience into skill — the actual leadership-course substitute | Reading the loop honestly |
 
-The **escalation test** (`ethics_hr` cases, severity 5, keyword triggers: harassment, discrimination, safety, medical, fraud, legal…) hard-stops the automation and tells the user the app's limits are reached. Playbooks never drive legal-grade situations.
+The **escalation test** (`ethics_hr` cases, severity 5, keyword triggers:
+harassment, discrimination, safety, medical, fraud, legal…) hard-stops automation
+**in the write path**: only the case record, verbatim evidence, and an HR-contact
+task dated today are created. Playbooks never drive legal-grade situations. The
+corresponding advisory **cannot be snoozed** — a class that must be resolved
+or owned openly, never deferred (integrity faults are the same class).
 
 ## The case spine (the architectural core)
 
-Register a case **once**, anywhere — person page, team page, mentor advisory, top bar, or the global `C` shortcut. The intake engine then:
+Register a case **once**, anywhere — person page, team page, advisor action, top
+bar, or the global `C` shortcut. The intake shows a live classification preview
+(Cynefin domain · Eisenhower quadrant · severity-derived SLA · escalation check ·
+the exact list of writes that will occur · **the lesson from the last closed case
+of the same type**) **before you commit**. The engine then:
 
-1. **Classifies** — Cynefin domain (keyword + type default), Eisenhower quadrant, severity-derived SLA, escalation check. All visible live in the intake preview before you commit.
-2. **Dispatches the playbook** for that case type (5–7 dated tasks).
-3. **Writes real, linked records into every routed module**, each traceable in a **propagation ledger** on the case. A single `attrition` case produces: dated playbook tasks, an evidence entry, a 1:1 scheduled **or** an agenda item injected into the next one, a pre-filled SBI feedback draft, a risk-register entry, a comms draft (where routed), a decision record with a review gate, person signal-flags that immediately re-score flight risk, and a ranked mentor advisory. You never file the same thing twice.
-4. **Closure is checked, not assumed**: closing requires an outcome and a lesson, cancels orphaned playbook tasks, restores the signal flags it raised (prior values are stored), writes to your journal, and schedules a 30-day verification task. Verification can re-open the case.
+1. Dispatches the type's dated playbook (5–7 tasks) into the task stream.
+2. Writes real, linked records into every routed module — evidence, a 1:1
+   scheduled **or** an agenda item injected, a pre-filled SBI draft, a risk
+   register entry, a comms draft, a decision with a review gate, a diagnosis
+   record, an ADKAR record, person signal flags with stored priors — each write
+   recorded in the case's **propagation ledger**. Departure cases additionally fan out **one
+   knowledge-transfer task per `criticalFor` capability** of the leaver.
+3. Refuses identical same-day duplicates (idempotent intake).
+4. Closure is checked, not assumed: requires outcome + lesson, cancels orphaned
+   tasks, restores signal priors, journals the lesson, and schedules a 30-day
+   verification task that can re-open the case.
 
 ## Module map
 
 | Route | Module | Depth |
 | --- | --- | --- |
-| `#/today` | Daily brief | Engine-ranked top focus, today's 1:1s with auto-agendas, overdue commitments, load index, rep-of-the-day, Friday review prompt |
-| `#/inbox` | Mentor inbox | 24 detection rules across every collection, weighted and ranked, with executable actions and dated snoozing (deferral, never silent dismissal) |
-| `#/review` | Weekly review | Auto-assembled digest (cases, SLA adherence, 1:1s, feedback balance, journal), **persisted advisory-pressure trend** (daily snapshots, 3 sparklines, 60-day retention), case-type statistics incl. 60d repeat-case pattern detection, verdict narrative, one-click cadence sweep, guided 4-field commitment ritual that writes the journal and dates your top-3 |
-| `#/cases` · `#/case/:id` | Case workspace | 15 case types, playbooks, pitfalls, timeline, propagation ledger, structured closure |
-| `#/people` · `#/person/:id` | Person workspace | Flight risk (8 weighted drivers) with persisted score-history sparkline, trust equation, SL2, 9-box, evidence log, replacement cost, **HR-request packet** (neutral dated document: evidence, delivered feedback, diagnoses, plans, case register — print/PDF from browser), **30/60/90 ramp generator**, leave mode (pauses cadence/feedback/flight nags, never cases) |
-| `#/teams` · `#/team/:id` | Team workspace | Psychological safety (7-item Edmondson), five dysfunctions (sequential), Tuckman, bus factor, composite health |
-| `#/oneonones` | 1:1 session runner | Auto-assembled agendas from 6 signal sources, carried-forward commitments, GROW, mood, question banks, auto-scheduled next session |
-| `#/feedback` | Feedback | SBI composer with live preview, draft ageing, delivery writes to evidence, per-person praise/correction balance |
-| `#/delegation` | Delegation | SL2 → authority level L1–7 wizard with mismatch warnings, generated handoff script, checkpoint cadence with tasks, debrief classification |
-| `#/decisions` | Decision journal | Type 1/2 doors, DACI, premortem gate for one-way decisions, forced review gates, calibration (predicted vs outcome) |
-| `#/performance` | Performance | 4-cause diagnosis wizard (skill/will/system/clarity — **manager-owned causes block the coaching path**), 9-box board, improvement plans with verdicts |
-| `#/portfolio` | Governance | OKR health, P×I risk register, meeting economics ($/decision), power-interest stakeholder grid, comms drafts |
-| `#/scripts` | 12 scripts | Parameterized, live-assembled, guardrailed, copyable — including separation and PIP scripts that defer to HR |
-| `#/academy` | Curriculum + simulator | 15 lessons in 4 arcs with persisted drills and scored checks; 6 scenarios with two-tier **consequence branching**: a poor round-1 drops you into a damaged round-2, and specific mishandlings route to option-scoped branches (the counter-offer auction, the quarantine dodge) with their own option sets |
-| `#/self` | Your leadership | Load index, time allocation vs manager-of-managers targets, candour quadrant, Thomas-Kilmann check, generated first-90-days plan, journal |
-| `#/data` | Data & integrity | Telemetry (writes, failed writes, rule runs), quota meter, export/import JSON, pruning, example org, storage-reality statement |
+| #/today | Daily brief | Engine-ranked focus, **week-ahead strip (1:1s/skips/tasks per day)**, **welcome-back catch-up digest after 4+ days away** (cases, movers, throughput, hires, pressure delta — sequenced), today's 1:1s with auto-agendas, overdue tasks/commitments, load index, rep-of-the-day, Friday prompt |
+| #/inbox | Mentor inbox | **45 detection rules** across every collection, weighted/ranked, executable actions, dated snoozing with visible Deferred lane |
+| #/review | Weekly review | Auto digest (cases/SLA/1:1s/feedback/journal), persisted advisory-pressure trend (60d), **team-health sparklines (26-week snapshots)**, **quarterly rhythm panel (talent · skips · bench · goals · stakeholders · safety, one score, one due count)**, **upward brief generator** (weekly one-pager — copy/print, neutral by construction), case-type stats, repeat-pattern detection, cadence sweep, guided 4-field ritual |
+| #/cases · #/case/:id | Case workspace | 16 types (incl. **departure/notice**), **aging buckets (0–3/4–7/8–14/15d+)**, playbooks, pitfalls, timeline + dated notes, click-through propagation ledger, verified closure with re-open |
+| #/org | **Org map** | **Span structure view (you → leads → reports, built from the reporting tree)** · leader load, cadence coverage, flight exposure in money, open-case pressure; per-team health/stage/bus/safety/bench; per-lead trust, readiness, **lead signal**, skip coverage, delegation mismatches, next 1:1 |
+| #/skips | **Skip-levels** | The manager-of-managers intelligence instrument. Quarterly cadence per report, 5-question runner, theme capture (de-identified), 4 signal dimensions, **lead signal model**, and doctrine enforced in code: actions inject into YOUR 1:1 with the lead, never around them |
+| #/people · #/person/:id | Person workspace | Flight risk (8 drivers + history sparkline), trust equation, SL2, nine-box, evidence, replacement cost, **development plans**, **instrumentation coverage strip with one-click fixers**, HR packet (print/PDF), 30/60/90 ramp, leave mode (pauses nags, never cases), archive, **10-session mood trail** |
+| #/teams · #/team/:id | Team workspace | Edmondson scan, five dysfunctions (sequential), Tuckman (+override), bus factor, composite health, goals, ADKAR, **succession bench (derived)**, **retro engine** — model-informed runner, STOP/START items become dated owned tasks, open items carried forward until closed or killed loudly, **working agreement** (decision rights, channels, urgency routing, conflict shape, sacred hours — stage-aware pressure for forming/storming teams), **30-day team intake for inherited teams (7 dated ritual tasks)** |
+| #/oneonones | Session runner | **Since-last-session digest on open** (evidence, cases, feedback, flight delta, talent stamps), 7-source auto-agendas (commitments, mood, cases, drafts, risk drivers, ramp, dev-plan review), question bank, GROW, mood trend, carried-forward commitments **with owed-by ownership (me/them)** — Today splits broken-by-you from chase-list-owed-to-you, auto next-booking, print/copy agenda, first-session script offer |
+| #/feedback | Feedback | SBI composer with live preview, draft ageing, delivery writes to evidence, **+21d correction verification with two artifact outcomes** (change seen → named evidence; not yet → next 1:1 agenda cites the first, dated), per-person praise/correction balance |
+| #/delegation | Delegation | SL2 → L1–L7 wizard with mismatch warnings + **Re-level**, boundary conditions, checkpoint cadence with tasks, debrief classification, **ladder-depth read per lead (stalled-rung detection in org map + inbox)** |
+| #/decisions | Decision journal | Type 1/2 doors, DACI, premortem gate (enforced), review gates, **explicit re-dating with reason on record**, calibration |
+| #/performance | Performance | 4-cause diagnosis (system/clarity = **manager-owned, blocks coaching**), auto-offer of improvement plans, plans with checkpoints and verdicts, 9-box board, **quarterly talent ritual** — every direct re-stamped in one sitting (nine-box + change-note + optional case flag), 90-day cadence policed by the inbox |
+| #/pipeline | **Hiring pipeline** | Sourced→screen→loop→offer with per-stage leak counters (stalls nagged at 14d) · scoring discipline (6 dims, score-alone-first, composite verdicts) · outcome log · **accept cascades: mint person + 30/60/90 ramp + first 1:1 in one write** |
+| #/portfolio | Governance | OKR health **with confidence trajectory sparklines**, P×I risk register with review dates, meeting economics ($/decision, **one-click debt case, one-click decision capture into the journal**), power-interest grid, comms, ADKAR records |
+| #/scripts | 12 scripts | Parameterized, live-assembled, guardrailed, copyable/printable; PIP & separation defer to HR |
+| #/academy | Curriculum + simulator | 15 lessons in 4 arcs (persisted drills, scored checks) **with per-arc progress readout** (checks/drills/scenarios); 6 scenarios with two-tier consequence branching |
+| #/self | Your leadership | **OS readiness checklist (14-artifact install verification with one-click fixers, including integrity-green)**, load index, time vs manager-of-managers targets, candour quadrant, TKI check, first-90-days plan, journal, **catch-me-up digest from any date** |
+| #/data | Data & integrity | **Executable integrity audit** (schema, JSON round-trip, canonical ids, reporting cycles, references, ledger targets, retro/task sync, hiring cascade, content/route contracts, critical-model assertions, quota/runtime) · safe repair for mechanically unambiguous corruption · copyable diagnostics · telemetry, export/import, audit-preserving prune, example org |
 
-## Model library (26 pure scoring functions)
+## Mentor rule set (50)
 
-Trust equation · Situational Leadership II (+ delegation mismatch) · Delegation levels 1–7 · Weighted flight risk · Psychological safety · Five dysfunctions · Tuckman · Cynefin · Type 1/2 reversibility · Eisenhower · Meeting economics · Leader load / span pressure · Bus factor · Nine-box · OKR health · Feedback balance · Radical candour · Thomas-Kilmann · **Performance diagnosis (skill/will/system/clarity)** · Stakeholder power-interest · Escalation test · 1:1 cadence · Decision calibration · Replacement cost · ADKAR · Time-allocation targets. Every function returns score, band, reasoning, and prescribed actions — never verdicts and never bare prose.
+SLA breach · escalation open · overdue tasks · cadence breach · repeat 1:1
+cancels · draft ageing · feedback famine · balance off-zone · flight high · trust
+fragile · trust unassessed · mood drop · ramp without plan · nine-box stale ·
+delegation mismatch · checkpoint overdue · decision gate overdue · Type-1 without
+premortem · calibration drift · risk rotting · manage-closely gone cold · OKR
+slipping/abandoned · psych unsafe · psych unscanned · bus factor critical · load
+overload · time drift · repeat-case pattern · weekly review overdue ·
+verification due · plan checkpoint overdue · ADKAR blocked · case idle · decision
+hoarding · export overdue · goals missing · dev plan missing/stale · bench empty ·
+skip overdue · lead signal weak · talent ritual due · team health slipping ·
+upward brief overdue · retro overdue · diagnosis pending · ladder stalled ·
+pipeline stalled · record-integrity fault · quarterly rhythm overdue ·
+uninstrumented direct (45d silence across every instrument) · one-way door aging ·
+recognition clustering (favoritism detector) · goal expired-unjudged (zombie verdicts required).
+
+## Model library (31 pure scoring functions)
+
+OS readiness · Trust equation · SLI II (+ delegation mismatch) · Delegation L1–L7 · Weighted
+flight risk (+ persisted history) · Psychological safety (Edmondson) · Five
+dysfunctions (sequential) · Tuckman · Cynefin · Type 1/2 reversibility ·
+Eisenhower · SLA derivation · Escalation test · Meeting economics · Leader load ·
+Bus factor · Nine-box · OKR health · Feedback balance · Radical candour ·
+Thomas-Kilmann · Performance diagnosis · Power-interest · Decision calibration ·
+Replacement cost · ADKAR · Time-allocation targets · 1:1 cadence · Team-health
+composite · **KR progress (direction-aware)** · **Lead signal (skip-level
+aggregate)** · Skip coverage. Every function returns score, band, reasoning, and
+prescribed actions.
+
+### The reporting tree (round 6 — structure over inference)
+
+`managerId` on each person is the org structure; everything derives from it.
+Direct reports (no manager set) get your 1:1 cadence rules, trust assessments,
+and feedback-balance nags. Indirect reports get the skip-level cadence and feed
+the lead signal — coaching below your leads is their job, and the rules now
+respect that boundary. The span structure view in the Org map renders the tree;
+ambiguous structures (teams with several leads) stay user-directs until you set
+"Reports to" on person pages. Loop creation is guarded in the editor, and legacy
+data infers only deterministic shapes (teams with exactly one lead).
+
+### A note on KR direction (correctness fix, round 5)
+
+Earlier builds scored key results as `current / target`, which returns **100% for
+any reduce-type KR** — "lead time 38 min against a 15 min target" read as
+complete while failing. `FW.krProgress` now carries direction and an optional
+baseline: with a baseline it measures true distance travelled, without one it
+uses a monotonic ratio proxy. A failing KR can no longer read as complete.
 
 ## Architecture (single file, layered)
 
 ```
 index.html
-  <style>         design system (ink/amber, Fraunces/Inter/Plex Mono, components)
+  <style>   design system (ink/amber; Fraunces / Inter / IBM Plex Mono)
   <script>
-    1. STORE      blank() state, load/save with failed-write surfacing, quota meter
-    2. UTIL/DOM   uid/dates/esc, toast, modal, generic form builder (powers ~every mutation)
-    3. FRAMEWORKS FW.* — 26 pure scoring models
-    4. CONTENT    CASE_TYPES (15, with playbooks/pitfalls/routing), SCRIPTS (12),
-                  QBANK, LESSONS (15), SCENARIOS (6)
-    5. ENGINE     createCase + propagation ledger, closeCase, 1:1 agenda assembly,
-                  teamHealth composite
-    6. MENTOR     RULES (24), mentorScan, dailyBrief
-    7. VIEWS      Routes.* renderers + Actions.* registry (delegated data-action clicks)
-    8. SEED+BOOT  example org built through the real engine, init, shortcuts
+    1. STORE        blank() state, load/save with failed-write surfacing
+    2. UTIL/DOM     uid/dates/esc, toast, modal, generic form builder
+    3. FRAMEWORKS   FW.* — 31 pure scoring models
+    4. CONTENT      CASE_TYPES (16), SCRIPTS (12), QBANK, LESSONS (15), SCENARIOS (6)
+    5. ENGINE       createCase + ledger, closeCase, agendas, team health, ramp, HR packet
+    6. MENTOR       RULES (45), mentorScan, dailyBrief + persisted trend snapshots
+    7. VIEWS        Routes.* renderers + Actions.* delegated registry
+    8. INTEGRITY    executable audits, safe repair, copyable diagnostics
+    9. SEED+BOOT    example org via the real engine, shortcuts, init
 ```
-
-Design decisions worth knowing:
-
-- **One generic form builder** (`openForm`) drives nearly every mutation in the app — consistent UX, live model previews via `live(values)`, validation, range/select/person/team field types.
-- **Propagation ledger**: every downstream record a case creates is recorded on the case with module, kind, id, label; closure restores prior person-signal values. The ledger is what makes "every related module receives it automatically" auditable instead of aspirational.
-- **Deferred re-render**: state mutations re-render after the call stack settles (modal submit mutates, `closeModal` schedules `render`) so views never paint stale state.
-- **Content→presentation sanitizing**: lesson bodies carry typographic shorthand (`1️⃣`, `🔹`) that the Academy renderer converts to styled markup; no emoji glyphs reach the UI (Lucide icons only).
 
 ## Storage reality (stated plainly, in the UI too)
 
 - ~5 MB cap, synchronous, **not encrypted**, single device, single browser profile.
 - Cleared if you clear site data. No sync, no recovery.
-- Contains notes about named individuals that may be disclosable in a grievance process — write every note as if read aloud in that room.
-- Quota and **failed writes** are monitored in the top bar; failures are surfaced, never silent. **Export weekly** (Data & integrity → Export JSON).
-- Import offers **merge mode** (append-only, local ids win) in addition to replace.
-- Print stylesheet included: 1:1 agendas, person dossiers, and scripts print clean (browser print; buttons on the session and dossier views).
+- Contains notes about named individuals that may be disclosable in a grievance
+  process — write every note as if read aloud in that room.
+- Failed writes surface in the top bar and telemetry, never silently.
+- **Export weekly** (Data & integrity → Export JSON). The `export-overdue`
+  advisory tracks this and nags past 14 days.
+- Print stylesheet included: 1:1 agendas, HR packets, and scripts print clean.
 
 ## Shortcuts
 
 | Key | Action |
 | --- | --- |
-| `C` | Register a case (global intake with live classification + propagation preview) |
-| `1–9` | Jump: today · inbox · cases · people · teams · 1:1s · feedback · decisions · academy |
-| `0` | Jump: weekly review |
-| `Esc` | Close modal |
+| / or Ctrl/Cmd-K | Command palette — jump to any person, team, open case, module, or action |
+| C | Register a case (global intake with live classification + propagation preview) |
+| 1–9 | Jump: today · inbox · cases · people · teams · 1:1s · feedback · decisions · academy |
+| 0 | Jump: weekly review |
+| Esc | Close modal |
 
 ## Files
 
 | File | Role |
 | --- | --- |
-| `index.html` | The entire application (shell, styles, store, models, content, engine, views, boot) |
-| `AI-SESSION-LOG.md` | Continuation-engineering session record: critique, decisions, changelog, QA fixes |
-| `README.md` | This file |
+| index.html | The entire application (shell, styles, store, models, content, engine, views, boot) |
+| AI-SESSION-LOG.md | Continuation-engineering session record: critique, positions, changelog, QA, watchlist |
+| README.md | This file |
 
-First boot loads an example organization **built through the production engine** (two teams, eight people, two live cases with full propagation, goals, risks, stakeholders, 1:1 history) so every module is alive on first paint. Erase it in Data & integrity when you are ready for your real org.
+First boot loads an example organization **built through the production engine**
+(two teams, eight people, two live cases with full propagation, goals, risks,
+stakeholders, 1:1 history, an active delegation) so every module is alive on
+first paint. Erase it in Data & integrity when you are ready for your real org.
