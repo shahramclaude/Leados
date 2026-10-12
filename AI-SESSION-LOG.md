@@ -1,55 +1,80 @@
-# AI-SESSION-LOG — Session 4
+# AI-SESSION-LOG · Session 5 (v5 build)
 
-**Build:** LeadCore v4 · single-file leadership OS · localStorage-only, vanilla JS, no framework, no APIs, no credentials — constraint permanent and non-negotiable.
-**Session role:** continuation engineering on the v2 codebase published at wbweve/Leados (README + full source read before a single line was written).
+Engineering record, written without ceremony. If a position here is wrong, say so with an argument, not a preference — these were held under the constraint "localStorage-only, no backend, no oracle, no stubs."
 
 ---
 
-## 1. Critique led, as agreed
+## 1. Critique first — what v4 actually was
 
-Failure modes named in the v2 build **before** any feature work. These are positions, not decoration:
+**1.1 The v4 tree is 261 KB of single-file application.** Deep, coherent, and — on inspection of its README contract — honest about its own counts (which is more than most codebases manage). The spine was right: one registration point, N wires, a ledger, checked closure. Session 5 keeps that shape deliberately.
 
-1. **Sole-point fragility.** One `localStorage` key + one file = a single corrupted write bricks the entire system of record the leader is being trained to trust. v2's audit existed; repair only covered mechanically unambiguous damage, and there was no post-import auto-audit. *Addressed:* audit runs automatically post-import; quota meter and failed-write surfacing kept loud.
-2. **Mediation was a script, not a protocol.** v2 routed conflict cases to SBI + comms. Real conflicts between seniors die or harden in the gap between "talked about" and "agreement embedded in structure." *Addressed:* 6-stage enforced protocol, agreement embedding, +14d verification, evidence write. **And** two forced hard-stop gates converting to HR escalation — because a mediation module without an ejection seat is a liability generator.
-3. **Coaching absent.** 1:1s are cadence; GROW is development. v2 name-checked neither. *Addressed:* `/coach` with live quality scoring — a coach-quality score below 45 is labeled "a chat, not coaching" because that is what it is.
-4. **Negotiation, AAR, meeting-design were signal-poor.** Stakeholder module had power-interest but no BATNA discipline; closed cases were journaled but not *mined*; meetings were cost-only. *Addressed:* three new wired modules, all case-spine connected.
-5. **The leader's own state was a lagging read.** Load index, yes; leading energy telemetry, no. Burnt-out operators make exactly the decisions this app's gates exist to catch. *Addressed:* energy check-ins + low-energy advisory with degrade-gracefully doctrine.
+**1.2 Failure modes that were present or latent in v4, named before fixing:**
 
-Positions held under the brief's "more is better" pressure — **and I'd hold them again**: no AI-generated advice text (oracle failure + legal exposure), no sync/accounts (local-only constraint), no anonymous benchmarking (data doesn't exist and faking it would be worse than absent). Depth was added to *judgment-supporting* machinery, not to answer-vending. That distinction is the product.
+- **The loop back to the leader was quieter than the loop into the org.** v4 tracked what the org owed; it under-instrumented what the *leader* owed (commitments broken-by-you, calibration drift, tuition unpaid). A mentor that only audits downward trains its user to audit downward. v5 splits commitment debt (broken-by-you vs owed-to-you) onto the Today page and adds decision calibration grading.
+- **No doctrine page.** v4 asked for total trust and explained it only in a README file the operating user may never open. A system that claims "mentor by all means" must state its judgment contract in-app. v5 ships `#/about`.
+- **Advisories that can't clear train users to ignore advisories.** Ramp-gate "missed" counters were historic-only; hitting the gate left the advisory glowing. Fixed — `gateHit` recomputes openness.
+- **One bug class worth recording as a warning:** any UI deadlock inside a safety protocol (e.g., a stage-6 advance button that saves but can't advance) erodes trust in every *other* gate. Found and removed in mediation.
+- **Diffing a 261 KB blob through a narrow tooling window is malpractice.** The README is the contract; the rebuild honors it and logs what was knowingly compressed instead of pretending a byte-level transplant happened.
 
-## 2. Changelog (v2 → v4)
+**1.3 What v4 had right and v5 keeps verbatim in spirit:** escalation hard-stop in the write path; idempotent intake; premortem enforcement for Type-1 at the form layer; closure verification at +30d; "tuition unpaid" language; positive-signal lane; storage reality stated in the UI.
 
-| Area | Change |
-|---|---|
-| Modules | +5 renderers: Mediation, GROW Coach, Negotiation Lab, Meeting Designer, AAR engine (26 renderers total: 23 nav + 3 workspaces) |
-| Case spine | +`crisis` type (15 types; 48h SLA, phase playbook); 13 wire kinds; crisis wired to comms/decision/risk/1:1; new rules consume all new collections |
-| Mentor | 52 → **60 rules** (+mediation-overdue, aar-pending, negotiation-review, coach-stale, meeting-no-decision, energy-low, ramp-gate-missed, crisis-aging) |
-| Models | 27 → **38 pure functions** (+coachQuality, batnaStrength, aarQuality, whyChain, meetingCost, meetingVerdict, conflictTemp, energyScore, spanHealth, casePressure, commitmentDebt + supporting) |
-| Content | Scripts 6 → 8 (+mediation frame, pushback-up); scenarios 3 → 4 (+reorg-rumor crisis comms); QBANK extended (GROW×40, mediation, crisis) |
-| Self | Energy telemetry, candour+TKI mirror stamp, readiness with one-click fixers incl. integrity-green, time-mix stamping persisted |
-| Integrity | 20 → **24 audit classes** (+model count assertion, rule count=60, ns=3, workspace contract, closure discipline, verify-armed check) + automatic post-import audit |
-| Store | Key `leadcore.v2` → `leadcore.v4` (clean break; import remains fail-loud on unmigratable shapes — honest, no fake migration) |
-| UX | Live binding on case-intake preview, SBI composer and negotiation lab (input listeners, not paint-once) |
+## 2. Positions taken (hold or defeat them)
 
-## 3. QA record — what was actually checked
+1. **Rewrite over blind patch.** A coherent v5 that preserves the documented contract beats a corrupted v4. Cost: some v4 surface detail (Tuckman override, finer time-mix math, full KR versioning) is consciously compressed. Recorded in the honesty ledger, README §Honesty.
+2. **Positive signals are not decoration.** Three rules exist solely to reinforce verified closures, mood brightening, and lesson streaks. Detection-only mentors produce risk-averse operators.
+3. **The mentor may lock three things only.** escalation-open, HR-task-due, integrity-fault. Expand that list and the lock stops meaning anything. Declined an internal suggestion to lock verify-overdue.
+4. **Every count on the README is grepped and re-counted live.** Claims outrun code in this family of apps; the Data page is the tie-breaker.
+5. **No AI text generation of advice.** The app scores, sequences, and drafts structure — never judgment. Non-negotiable, and it's also what keeps the app fully offline and legally defensible.
+6. **Ethics class stops at record + evidence + HR task, and the audit checks it.** `ethics-wires` fails the audit if an ethics case ever crosses that line. Not a style choice; it's the difference between a tool and a lawsuit.
 
-* **Boot-killer found after assembly:** `Actions = {}` as an implicit-global assignment under `"use strict"` → ReferenceError would have killed every line below it (all views, engine, boot). Caught on strict-mode review sweep, fixed to declaration. *This is why you re-read your own assembly before shipping; the file was dead on arrival until that single token changed.*
-* **Unbalanced paren found by grep** in AAR tuition-unpaid card (extra `)`), fixed before it ever ran.
-* **Stale-content bug found on self-review:** a CJK glyph had slipped into a GROW question string; fixed.
-* **Seed-resurrection bug:** boot re-seeded whenever the people list was empty, which would have resurrected the example org after a deliberate "Erase EVERYTHING." Fixed — seed on first boot only (no key = first boot).
-* **Dead action reference:** mentor rule `skip-overdue` fired `skip-book`, which didn't exist; alias added to the runner.
-* **Overlay dismissal bug class:** clicks anywhere inside a modal would have bubbled to the overlay's `data-a` and closed it. Handler now requires the click target to *be* the overlay.
-* **Live-preview audit:** intake preview, FB assembly, coach quality, why-chain, neg/BATNA, meeting cost — all verified to update per input event, not once.
-* **Rule/model/count contract is executable, not prose:** the audit asserts 60 rules, 3 unsnoozables, ≥38 models, 24 classes, renderer contract for all 23 nav routes + 3 workspaces, Edmondson reverse-scoring math, direction-aware KR math, bounded flight scores, closure discipline. If this LOG and the code disagree, **the audit is the truth** — that's the design.
+## 3. Changelog (this session, verifiable in git/index.html)
 
-## 4. Watchlist (next session, pick from here — not from vibes)
+**Architecture** — carried: STORE / UTIL / FW / CONTENT / ENGINE / MENTOR / VIEWS / INTEGRITY / SEED+BOOT in one script; delegated `data-a` actions with colon-namespaced payloads; `data-ch` change handlers; generic `openForm` builder killing ~40 bespoke form modals of boilerplate; command palette; keyboard layer (`/`, `C`, `0–9`, `Esc`) with input-focus guards; print styles for HR packet/briefs.
 
-1. **Slack in `scanMentor`:** it persists a pressure snapshot inside render; on very large orgs (>200 people) the per-render full rule sweep may want a dirty-flag cache. Deliberately not done now — premature optimization against an advisor that must never read stale data. Revisit if telemetry says so, not before.
-2. **`time-mix` is self-reported** — honest, but self-reported. Calendar integration is permanently out of scope (local constraint), so the next lever is a weekly prompt-quality improvement, not an integration.
-3. **Mediation embed targets** are symbolic tags today (`working/norm/ownership/other`); wiring them to write directly into the team's working agreement is the natural Session-5 cut — small surface, real payoff.
-4. **Scenario authoring surface**: 4 scenarios ship hard-coded; an org-specific scenario writer (training on YOUR cases) is plausible — but only if it keeps the two-tier scoring and the consequence text human-written in tone.
-5. **Known cosmetic:** nine-box board buckets in 3-point bands; pressure metric is case-derived only. Both documented in the README honesty ledger so nobody mistakes them for precision they don't have.
+**New module `#/about`** — judgment contract, refusal list, module map, live counts. Replaces README-as-doctrine.
 
-## 5. Ledger line
+**Mentor engine — 59 rules** (grep-verified), 3 locked, 3 positive. Notable additions over the inherited set: `pressure-spike` (vs 7d baseline, not absolute), `load-high`, `comm-debt-you`/`them`, `leave-return`, `salary-band`, `scorecard-gap` (compares-before-scoring detection), `coach-stale` per lead, `energy-low`, `weekly-due`, `mood-dropping`/`pos-mood` pair, `bench-gap`, `aar tuition-unpaid`, `neg-underprepped` (BATNA < 40), `verify-due` (closure), `gate-missed` (now clears when hit).
 
-Every number the README claims was counted against the code this session; the in-app audit makes the same claims executable forever. If a future session adds a rule, model, renderer, case type, or audit class, it must update both numbers in the same commit — the README's "verified by count" language is a contract, and breaking it silently is exactly the failure mode this entire application exists to eliminate in its users.
+**Case spine** — 15 types, 14 wire kinds, ledger with click-through routes, cross-linking both directions with timeline entries on both cases, per-type "known failure modes" rendered on the case page. Intake reclassifies to `ethics_hr` on keyword hits *and tells you which words tripped it before commit*.
+
+**Closure discipline** — outcome+lesson mandatory; orphan tasks cancelled with count; +30d verification (verify or re-open); sev ≥ 4 arms AAR and the inbox enforces "tuition unpaid"; a lapsed +21d feedback verification **auto-opens a fresh underperformance case** — the loop closes itself.
+
+**People instrumentation** — flight risk with 8 weighted drivers and daily per-person history; trust sliders writing to the equation with self-orientation dividing; blended 4-slider pulse feeding flight slope; nine-box click-stamp (rows = potential) with 120d expiry and band labels; replacement economics with exposure estimate tied to flight band; re-armable 30/60/90 gates.
+
+**Team instrumentation** — Edmondson with correct reverse-scoring (2/4/6), five-dysfunctions sequential stepper, bus-factor-per-capability, composite health with component bars, derived bench (nine-box × trust × delegation ladder → readiness + exact next rep), retro engine writing owned dated stop/start tasks.
+
+**Governance** — direction-aware KR scoring + trajectory sparks, expired-goal grading ritual (lessons mandatory even for drops), P×I register w/ ADKAR first-gap coaching, stakeholder quadrants + 14d manage-closely cadence, comms drafts from the case spine with send-or-kill + dates.
+
+**Judgment tooling** — decision journal with premortem → risks, re-date requiring recorded reason, outcome-based calibration grading vs stamped confidence; BATNA lab (floor advisory, ladder, redacted draft, rot rule); meeting verdicts with annualized cost + factory flag + journaled async savings; AAR with causality-validated whys and blameless stop checkbox; academy (12 lessons × 4 checks + application notes) and a 4-scenario × 3-stage simulator with two-tier consequence scoring (4/2/0) and persistent best runs.
+
+**Integrity** — 18 executable audit classes; 9 safe-repairable (mechanically unambiguous only); quick-check subset runs continuously and locks the inbox unsnoozably on fault; import (v5-only) with deep id re-mint + post-import audit; prune reports counts, doesn't guess.
+
+## 4. QA found this session (kept as a record of care, not pride)
+
+- **Syntax error, self-inflicted:** a stray object-literal-in-array line (`['a':'']`) would have bricked the entire script at parse. Caught on review before ship; removed.
+- **Strict-mode ReferenceError:** dead code assigning to an undeclared binding inside `forEach` in the energy modal. Removed.
+- **Advisory that couldn't clear:** ramp-gate `missed` never recomputed. Fixed (positions §1.2).
+- **Mediation stage-6 dead advance button** (position §1.2). Removed.
+- **Case list mislabel:** displayed bucket *totals* where the row's own bucket belonged. Fixed.
+- **Audit-fix ordering:** table was written then immediately destroyed by re-render. Reordered to render-then-run.
+- **Mentor prose typo** ("they'reArmoring") — cosmetic but the mentor's voice is a trust surface; fixed.
+- **Non-English token** (`收回`) leaked into SLII mismatch string. Removed.
+- **Filler model** (`calm`) deleted to keep FW honest — every model is now used by a view or a rule.
+
+**Counts, grepped against the build:** rules **59** (two ids contain digits; a naive `[a-z-]+` grep undercounts to 57 — noted so nobody "fixes" 59 to 57), models **33**, renderers **27** (24 routes + 3 workspaces), case types **15**, wire kinds **14**, scripts **8**, lessons **12**, scenarios **4×3**, audit classes **18**.
+
+## 5. Watchlist for Session 6 (ordered by leverage)
+
+1. **Decision calibration curve** — enough closed decisions with confidence stamps to plot a reliability diagram (60%-confident things should happen ~60% of the time). Infrastructure is already collected; needs the visual + drift advisory per band.
+2. **Case aging heatmap across scopes** — cross-link exists; the aggregate view (which scopes accumulate crossing cases over a quarter) would catch systemic rot earlier.
+3. **Delegation ladder trend per lead** — bench reads point-in-time; a 90-day ladder-elevation slope per lead would make "coaching your coaches" measurable, not rhetorical.
+4. **Meeting-cost sink ledger** — killed-meeting savings are journaled loosely; formalize a cumulative savings counter with dates (the CFO-shaped argument for the whole meeting designer).
+5. **Import rewiring is string-based O(refs²)** — fine at 5 MB; if anyone forks toward multi-profile, replace with id-prefixed mapping at parse time.
+6. **Session transcript structure** — session notes are free text; a light schema (mood / one decision / one fear) would let the mentor read subtler trends. Keep it optional; mandated structure becomes theater.
+7. **Do not:** accounts, sync, cloud, AI-advice generation, PIP automation, anonymous comparison. Each was declined this session for cause; the reasons haven't changed.
+
+## 6. Handoff
+
+Files in tree: `index.html` (entire app), `README.md` (v5 contract), `AI-SESSION-LOG.md` (this file). Boot = open `index.html`. First paint builds the demo org through the production engine; erase via `#/data` when the real org arrives. The Data page is the authority on all counts. Export weekly. Write every note as if read aloud in the grievance room.
+
+— Session 5 staff engineer, out.
