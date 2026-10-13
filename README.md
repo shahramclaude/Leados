@@ -1,88 +1,171 @@
-# LeadOS — Leadership Operating System · v13.0 (Session-13 build)
+# LeadOS — Leadership Operating System · v14.0 (Session-14 build)
 
-An offline-first operating system for a leader **of team leads** — especially a new one. Vanilla JavaScript. No framework, no backend, no accounts, no APIs, no OAuth, no credentials, no build step, **no network dependency at all** (icons are inline SVG; fonts are system fonts; it runs from a double-clicked file). The entire application is one `index.html`; all state lives in `localStorage`.
+A single-file, offline-first operating system for a leader **of team leads** — especially a new
+one. Vanilla JavaScript. No framework, no backend, no accounts, no APIs, no OAuth, no credentials,
+no build step, **no network dependency at all** (icons are inline SVG; fonts are system fonts; it
+runs from a double-clicked file). The entire application is `index.html`; all state lives in
+`localStorage`.
 
-Open `index.html` in a browser. That is the whole install. First boot seeds a tense example org so every instrument is visibly live; set yourself (`#/data` → identity), then erase the example when your real org arrives.
+Open `index.html` in a browser. That is the whole install. First boot seeds a tense example org so
+every instrument is visibly live; set yourself (`#/data` → identity), then erase the example when
+your real org arrives.
+
+## Session 14 — what changed, and why (one line per non-obvious decision)
+
+1. **`#/risks` — cross-team risk register (RAID) [v14 flagship].** Probability × impact,
+   early-warning indicator in observable terms, owned dated mitigations, review heartbeat, trend
+   (↓→↑), 5×5 exposure heat map, materialize-into-case, graded retirement. *Why:* v13 owned people
+   (talent/promote) and debt (handoffs), but the one unowned sentence for a leader of leads is
+   *what breaks between the teams while everyone is busy inside them*. This module owns it.
+2. **Record v7 → v8, additive.** Migration adds `risks[]` (+ `auditFaults[]`); no existing record
+   is rewritten; the chain announces itself in the record's own system log. *Why:* the storage
+   contract is the product's spine — lineage key `leados.v6` is deliberately never renamed.
+3. **`V.handoffs` added** (missing from the first v14 draft) with the ledger-lie doctrine enforced
+   at the button: *done* requires *accepted* first. *Why:* a reviewer's own grep caught the route
+   falling through to `/today` silently.
+4. **Case intake now has the goal-link select.** The bidirectional at-risk flag existed in the
+   engine but had **no UI path** — only seeds could set it. *Why:* a write with no reachable
+   surface is a stub wearing doctrine.
+5. **Slate management is now reachable** (button on each seat + inside the seat modal). The modal
+   existed; nothing dispatched it. *Why:* found by the data-a cross-read, not by luck.
+6. **All form reads go through FormData.** *Why:* `form.title` resolves to `HTMLElement.title`,
+   not the control — a real crash class in the first draft, fixed by policy, not by patch.
+7. **Boot self-tests run behind a write-guard (`__TM`), so fixtures can't clobber real storage.**
+   *Why:* test t18 exercises `ENG.registerCase` against a swapped-in fixture; without the guard it
+   would persist fixture data over your org at every boot.
+8. **Palette keyboard selection is rendered inline (background + inset marker).** *Why:* it was
+   invisible in v12 (defect C1); this build renders it on every draw, structurally.
+9. **v13 routes not re-authored — labeled, not silently dropped.** `#/promote`, `#/coach`,
+   `#/delegation`, `#/mediation`, `#/health`, `#/org`, `#/transition`, `#/ritual`, `#/review`,
+   `#/academy`. *Why:* this session could not read v13's 284 KB body through its transport
+   (sanitized on four channels), and cargo-culting modules from a README violates the depth rule.
+   The migration keeps all v7 collections intact, so those modules' data survives for a session
+   that re-implements them against the real file.
 
 ## The storage contract (unchanged, deliberately)
 
-- **Key: `leados.v6` (lineage key — intentionally not renamed).** Renaming the key at v7 would silently orphan every existing user's data. The *record* carries the truth: `v:7`.
-- **Migrations are additive and stepwise (v1…v6 → v7)** and announce themselves in the record's own system log. v6→v7 adds succession seats, advocacy packets, gate/study maps and per-person record dates — **no existing record is rewritten**.
-- Newer records (`v>7`) are held for a decision; a silent downgrade is refused. Corrupt bytes are preserved at a side key (`leados.v6.corrupt-<ts>`), main key untouched, in-memory blank **not saved** until you decide (download-damaged / start-clean / import).
-- Quota: writes surface in the top bar (`saved HH:MM · N KB` → red `WRITE FAILED` with byte count and remedy). `quota-pressure` wakes past ~70% of the ~5MB estimate. `export-overdue` nags past 14 days. Imports: v7 direct, v1–v6 migrate in-memory; wrong shapes fail loudly without touching state. Merge re-mints every id, rewires the whole graph (people/teams/cases/goals/handoffs/commitments/evidence/roles/packets/mediations/AARs/rituals) through one map, then re-runs the audits with repair.
+- **Key: `leados.v6` — lineage key, intentionally not renamed.** The record carries the truth:
+  `v:8`.
+- **Migrations are additive and stepwise (v1…v7 → v8)** and announce themselves in the record's
+  own system log. No existing record is rewritten.
+- Newer records (`v>8`) are held for a decision; a silent downgrade is refused. Corrupt bytes are
+  preserved at a side key (`leados.v6.corrupt-<ts>`), main key untouched, in-memory blank **not
+  saved** until you decide (download-damaged / start-clean / import).
+- Quota: writes surface in the top bar (`saved HH:MM · N KB` → red `WRITE FAILED` with byte count
+  and remedy). `quota-pressure` wakes past ~70% of the ~5MB estimate. `export-overdue` nags past
+  14 days. Imports: v8 direct, v1–v7 migrate in-memory; wrong shapes fail loudly without touching
+  state. Merge re-mints every id, rewires the whole graph
+  (people/teams/cases/goals/risks/seats/tasks/sessions/feedback/evidence/decisions/handoffs/AARs)
+  through one map, then re-runs the audits.
 
-## What v13 adds (the answer to "what else does a new multi-team leader need")
+## The case spine (architectural core)
 
-1. **`#/talent` — succession & readiness [flagship].** Key seats carry title, team, holder, criticality (1–3), **emergency cover**, and a dated successor slate (now / <1yr / 1–2yr). Readiness is computed advisory — nine-box, flight risk, trust, delegation verdicts won, telemetry depth; HIGH flight −28, stale nine-box halves — **with the basis printed per row**. Assigned-vs-computed disagreement is shown as *your call, on the record*. Four rules guard it: `talent-gap` (critical seat + HIGH-flight holder + no ready-now + no cover = firing advisory), `talent-no-cover`, `talent-stale` (60d), `talent-thin` (empty slate). Bus-factor map on `#/health` reads the same wires.
-2. **`#/promote` — advocacy packets.** The app assembles a promotion case **from the evidence ledger**: evidence count (≥6), months span (≥2), backlinks to closed cases/goals/decisions, fresh nine-box. Under the bar, **submission is refused** — an unevidenced packet is an opinion with a salary attached. The narrative field is explicitly *your* voice over *their* record. A `won` verdict banks a public win; a `declined` writes a dated development task from the first open gap. `promote-stalled` fires past 45 open days; `promote-ready` is a positive-lane advisory.
-3. **Sponsor duty for *your* new leads.** Any person becoming `role:lead` auto-arms a dated 3-task sponsor chain (charter/fears · first feedback · 30-day retro). `sponsor-neglect` fires when a lead in seat ≤45d goes 10 days without a *measured* session.
+Register a case **once**, anywhere — top bar, quick capture (`case: …`), palette, any person page,
+or `C`. The intake shows a **live pre-commit preview**: Cynefin domain with move hint · Eisenhower
+quadrant · severity SLA runway (5→1d, 4→2d, 3→4d, ≤2→14d) · keyword reclassification with
+trip-words named · the **exact list of writes** · duplicate detection · the lesson journaled at the
+last closed case of the same type. On commit the engine writes real, linked records into every
+routed module — evidence, playbook tasks, SBI draft, decision stub (sev≥4), goal at-risk flag
+(bidirectional, owned), cascade to the owning lead, cross-links on shared scope — every write
+trapped in the case's **propagation ledger** with click-through routes.
 
-Also fixed this session (see defect ledger in `AI-SESSION-LOG.md`): palette keyboard selection is now visible; `FW.bench` restored to pure (now argument); sealed cases no longer show a comms drawer; seed audit-coherence held to the write path.
+- **Identical open duplicates are refused** and route you to the existing case (audit class
+  `dup-cases` watches it hold).
+- **Closure is checked, not assumed**: outcome + lesson mandatory, orphan playbook tasks cancelled
+  *with a count*, goal flags cleared only by the closure that owns them (self-test t18 executes
+  this against a foreign closure), lesson journaled, +30d verification armed (held, or honest
+  re-open — SLA clock restarts, on the record), AAR owed for sev≥4 (`aar-due` holds until it
+  exists).
+- A delivered correction whose +21d verification lapses past the 7-day grace **auto-opens a
+  feedback-breakdown case at boot** (idempotent via `lapsedCaseId`, toast-announced) — the
+  machine's arm, on the record.
 
-## The case spine (architectural core — unchanged doctrine)
+## The hard stop (unchanged, non-negotiable)
 
-Register a case **once**, anywhere — top bar, quick capture (`case: …`), palette, any person page, or `C`. The intake shows a **live pre-commit preview**: Cynefin domain with move hint · Eisenhower quadrant · severity SLA runway (5→1d, 4→2d, 3→4d, ≤2→14d) · keyword reclassification with trip-words named · the **exact list of writes** · duplicate refusal · the lesson journaled at the last closed case of the same type. On commit the engine writes real, linked records into every routed module — evidence, playbook tasks, SBI draft, decision stub (sev≥4/crisis), comms drawer (sev≥4), goal at-risk flag (bidirectional), cascade to the owning lead, cross-links on shared scope — every write trapped in the case's **propagation ledger** with click-through routes.
+Case intake keyword-scans (harassment, discrimination, safety, medical, fraud, legal, retaliation,
+self-harm, threat, assault, accommodation, racism, sexual, abuse, violence). A hit re-classifies to
+a **sealed HR escalation before commit**, names the trip-words live, and requires two deliberate
+acknowledgments. The machine writes exactly four wires: case record, verbatim evidence, an
+unsnoozable HR-contact task dated today, and an agenda pin. Audit class `ethics-wires` fails loudly
+on any fifth wire; safe-repair revokes the wire records. PIP and separation templates do not exist
+in this codebase. Three advisory classes cannot be snoozed: **escalation-open · hr-task-due ·
+integrity-fault**.
 
-- **Identical open duplicates are refused** and route you to the existing case (audit class `dup-cases` watches it hold).
-- **Closure is checked, not assumed**: outcome + lesson mandatory, orphan playbook tasks cancelled *with a count*, goal flags cleared only by the closure that owns them, lesson journaled, +30d verification armed (held, or honest re-open — SLA clock restarts, on the record), AAR armed for sev≥4 (`tuition-unpaid` holds until it exists).
-- A delivered correction whose +21d verification lapses past the 7-day grace **auto-opens a feedback-breakdown case** at boot (idempotent via `lapsedCaseId`, toast-announced) — the machine's arm, on the record.
+## Module map (13 nav routes + 2 detail routes)
 
-## The hard-stop (unchanged, non-negotiable)
+| Route                  | Depth |
+| ---------------------- | ----- |
+| `#/today`              | Pace governor · **Next Best Move with its ranking printed** (locked > SLA breach > your debt > risk exposure > oldest dated > positive > signal) · dated work · conduits due (HIGH flight compresses window to 7d) · commitment debt **both directions, yours first** · 7-day weight strip · positive lane |
+| `#/signal`             | Full rule ledger: locked / firing / positive / sleeping (dated snoozes). Every rule states **why it exists** and **when it clears** |
+| `#/cases` · `#/case/:id` | 11 intake types + sealed class · SLA runway bars · playbooks · checked closure · verify / honest re-open · AAR lane · propagation-ledger timeline |
+| `#/people` · `#/person/:id` | Flight risk (weighted driver ledger + written intervention for the top driver) · trust equation (C+R+I)/S with weakest-numerator fix · clickable nine-box (view-time staleness halves bench weight past 120d) · morale telemetry with ≈ estimate chips and dashed estimate segments · auto-agenda · evidence ledger with backlinks |
+| `#/oneonones`          | Cadence board · finish modal consumes the auto-agenda (discussed cases get notes) · untouched sliders write `estimated:true`, enforced at write |
+| `#/feedback`           | SBI + live lint (**save blocks under 2/3 specificity**) · ageing clocks (praise 48h / corrections 72h) · +21d correction verification · balance board with sample size shown |
+| `#/goals`              | Direction-aware KR scoring (down-metrics) · check-ins with **confidence as the leading indicator** · trajectory-vs-waterfall reasoning printed · expired goals graded only with a causal lesson |
+| `#/decisions`          | Type-1/2 doors · premortem ≥3 (form + audit) · decide writes choice+rationale · re-date requires a recorded reason, **rendered in history** · grading → calibration with sample-size honesty |
+| `#/handoffs`           | Cross-team debt · acceptance commitments auto-written to the receiving lead · silence clock · "done" without acceptance is refused and labeled a ledger lie |
+| `#/risks`              | **v14** — RAID register: P×I exposure, trend, early-warning indicators, owned dated mitigations, review heartbeat, heat map, materialize-into-case, graded retirement |
+| `#/talent`             | Succession seats: criticality, emergency cover, dated slates (now/<1yr/1–2yr) · advisory readiness with **basis printed per row** (stale nine-box halves, HIGH flight −28) · assigned-vs-computed disagreement rendered as *your call, on the record* |
+| `#/data`               | Identity (drives the 90-day clock) · storage meter · **12 executable audit classes** with safe-repair only where mechanically unambiguous · export/import (replace / re-minting merge) · prune with counts · example-org load/erase · system log |
+| `#/about`              | Judgment contract · refusals · **live counts** · storage reality · shortcuts · **18 self-tests executed on open** |
 
-Case intake keyword-scans (harassment, discrimination, safety, medical, fraud, legal, retaliation, self-harm, threat, assault, accommodation, racism, sexual, abuse, violence). A hit re-classifies to a **sealed HR escalation before commit**, names the trip-words live, and requires two deliberate acknowledgments. The machine writes exactly four wires: the case record, the verbatim evidence, an unsnoozable HR-contact task dated today, and an agenda pin. Audit class `ethics-wires` fails loudly on any fifth wire; its safe-repair revokes the wire *records*. PIP and separation templates do not exist anywhere in this codebase, and never will. Mediation halts in one write into the same sealed escalation. Three advisory classes cannot be snoozed: **escalation-open · hr-task-due · integrity-fault**.
+## v14 — deferred, labeled, not silently dropped
 
-## Module map (23 nav routes + 2 detail routes)
+Not re-authored this session: `#/promote`, `#/coach`, `#/delegation`, `#/mediation`, `#/health`,
+`#/org`, `#/transition`, `#/ritual`, `#/review`, `#/academy`. Reason: v13's 284 KB body could not
+be moved through this session's transport (four channels attempted; script content sanitized each
+time), and the standing rule against shipping docs-shaped code applies. All v7 data those routes
+used is preserved by the migration; the evidence ledger, decisions, goals, sessions, and telemetry
+they consume are all still being written here.
 
-| Route | Depth |
-|---|---|
-| #/today | Pace governor · **Next Best Move with its ranking printed** (locked > sev-breach > oldest dated task > your debt > positive > signal) · dated work · conduits due (HIGH flight compresses 14d→7d) · commitment debt **both directions, yours first** · 7-day weight strip · positive signals · quick capture bar |
-| #/signal | Full rule ledger: locked / firing / positive lane / dated snoozes / clear. Every rule states **why it exists** and **when it clears**. Snooze is dated, never amnesia |
-| #/cases · #/case/:id | 10 intake types + sealed class · SLA runway bars · playbooks · comms drawer (never on sealed) · checked closure · verify / re-open · propagation ledger timeline |
-| #/people · #/person/:id | Flight risk (weighted driver ledger + written intervention for the top driver) · trust equation (C+R+I)/S with weakest-numerator fix · clickable nine-box (120d staleness halves the bench stamp) · morale telemetry with ≈ estimate chips · auto-agenda · evidence ledger with case backlinks · succession/advocacy posture |
-| #/oneonones | Cadence board · skip-level lane (45d clock) · finish modal consumes auto-agenda (discussed cases get ledger entries) · estimated-flag honesty enforced at write |
-| #/feedback | SBI/AID/COIN + live lint (**delivery blocks under 2/3 specificity**) · ageing clocks (praise 48h / corrections 72h) · +21d correction verification · balance board with sample size shown |
-| #/coach | GROW runner · live quality score (will-without-date fails) · question bank · arc history |
-| #/delegation | SLII skill×will → style + rung · **mismatch warnings both directions** · mandatory boundary + checkpoint · verdicts feed the bench; bounced → re-contract task |
-| #/mediation | Six stages, order enforced, stages 2 & 5 gated on written notes · halt-to-HR in one write · agreement filed as evidence to both parties + +14d follow-up |
-| #/handoffs | Cross-team debt ledger · acceptance commitments written automatically to the receiving lead · silence clock + heat · "done" without acceptance is labeled a ledger lie |
-| #/goals | Direction-aware KR scoring (down-metrics) · check-ins with **confidence as the leading indicator** · trajectory-vs-waterfall reasoning printed · expired goals graded only with a causal lesson |
-| #/decisions | Type-1/2 doors · premortem ≥3 (form + audit) · decide writes choice+rationale · re-date requires a recorded reason, **rendered in history** · outcome grading → calibration with sample-size honesty |
-| #/health | Fortnight 6-dim pulse with deltas · Edmondson 7-item (2/4/6 reverse-scored) · five-dysfunctions ladder gated on written evidence · **bus-factor capability map wired to succession** |
-| #/org | Lead rollup (span, flight board of reports, cascades out, telemetry freshness) · team pulse with the attribution fallback **stated on the card** · bench/staleness/evidence-depth table |
-| #/talent | **v13** — succession seats, readiness scores with basis, emergency cover, gap advisories. Scores advisory; the slate is yours |
-| #/promote | **v13** — advocacy packets assembled from evidence; thin records refused; verdicts wired to wins and development tasks |
-| #/transition | 90-day protocol · 12 gates with LIVE/PENDING machine signal + mandatory note (**signing against PENDING allowed and visibly stamped**) · stakeholder map (hostile-first) · win ledger |
-| #/ritual | Computed staff agenda (lead one-liners by severity×flight heat, cross-team state, decisions ≤7d, rotating unstudied dev case) · stamp-the-room writer (attendance, `@name · what · by date` commitments into the debt ledger, optional ratified decision) · meeting kill list priced in **org-hours** — kill writes a decided decision |
-| #/aar | Tuition-unpaid lane · expected-vs-happened **in numbers** · 5-whys · blameless stop-condition · improvements become owned, dated commitments · quality score |
-| #/review | Auto 7-day digest · 8-week pressure series (in vs out) · 60-second upward brief (brackets are yours; the machine does not lobby) · lesson journal · stamped rituals |
-| #/academy | 6 lessons · 3 scored checks + written application note each · the refusal card |
-| #/about | Judgment contract · the refusals · **live counts** · storage reality · shortcuts · **self-test wall executed on open** |
-| #/data | Identity (drives the 90-day clock) · storage meter · **12 executable audit classes** with safe-repair only where mechanically unambiguous · export/import · prune with counts · example-org load/erase · system log |
+## Live counts (printed from code on `#/about`; grep-verified against this file)
 
-## Live counts (printed from code on #/about; grep-verified against this file)
-
-- **52 rules** (`grep ^R\('` → 52) · **34 pure FW models** (`Object.keys(FW).length`, live) · **12 audit classes** (`grep ^\{id:'[a-z-]+',name:` → 12) · **16 self-tests** (`grep \{id:'t\d+',t:` → 16) · **25 routes** (23 nav + case/person detail) · **43 form surfaces, all handled** (`data-f` inventory cross-read against `FORMS`) · **48 `data-a` usages, all dispatched** (cross-read against `ACT`).
+- **34 rules** (`grep ^R\('` → 34: 3 locked, 6 positive-lane)
+- **12 audit classes** (`grep \{id:'[a-z-]+',name:'[^']+',run:` → 12; 6 with safe-repair)
+- **18 self-tests** (`grep \{id:'t\d+',t:` → 18)
+- **27 form surfaces, all handled** (`grep data-f="` cross-read against `FORMS` — zero orphans)
+- **every `data-a` value dispatched** (cross-read against `ACT` — zero orphans)
+- **18 pure FW models** (`Object.keys(FW).length`, live on `#/about`)
 
 ## Instrument honesty
 
-Untouched 1:1 sliders write `estimated:true`. Estimates render ≈, **never move a slope, never trigger or clear an advisory**. Audit class `telemetry-honest` *executes a probe* (synthetic series with estimated injections must equal the series minus them) and range-checks every stored mood. Estimated sessions say so in the system log at write time. **Write every note as if it will be read aloud in the grievance room** — the phrase sits on every surface that writes about a person.
+Untouched 1:1 sliders write `estimated:true`. Estimates render ≈ and dashed, **never move a slope,
+never clear an advisory**. Audit class `telemetry-honest` executes a probe (synthetic series with
+an injected estimate must equal the base series) and flags malformed estimate flags. **Write every
+note as if it will be read aloud in the grievance room** sits on every surface that writes about a
+person.
 
 ## Shortcuts & capture grammar
 
-`/` or `Ctrl/⌘-K` palette · `C` register case · `1-9 0` jump (today · signal · cases · people · 1:1s · feedback · coach · decisions · AAR · review) · `Esc` close.
+`/` or `Ctrl/⌘-K` palette · `C` register case · `1-9 0` jump (today · signal · cases · people ·
+1:1s · feedback · goals · decisions · handoffs · risks) · `Esc` close.
 
-`case: …` · `commit: @name … by +3` · `owe: @name … by tomorrow` · `praise: @name …` · `note: @name …` · `win: …` — dates: `today · tomorrow · +Nd · next week · YYYY-MM-DD`. Unparseable → **nothing written, said out loud**; unknown verb → a prefilled case intake, not a silent drop. First-name collisions resolve to the first match, audibly.
+`case: …` · `commit: @name … by +3` · `owe: @name … by tomorrow` · `praise: @name …` ·
+`note: @name …` · `win: …` · `risk: …` — dates: `today · tomorrow · +Nd · next week · YYYY-MM-DD`.
+Unparseable → **nothing written, said out loud**; unknown verb → a prefilled case intake, not a
+silent drop. First-name collisions resolve to the first match, audibly.
 
 ## Files
 
-| File | Role |
-|---|---|
-| index.html | The entire application |
-| README.md | This file |
-| AI-SESSION-LOG.md | Session-13 engineering record: repo verification, critique, v13 build record, QA ledger, defect ledger, honesty ledger |
+| File              | Role |
+| ----------------- | ---- |
+| index.html        | The entire application |
+| README.md         | This file |
+| AI-SESSION-LOG.md | Session-14 engineering record: repo verification, critique, findings, v14 build record, QA ledger, defect ledger, honesty ledger |
+
+**Not in this delivery, on purpose:** `package.json`, `package-lock.json`, `tsconfig.json`,
+`vite.config.ts` (dead React/Vite scaffold — flagged in session 13's log, still present in the
+repo, removed from this file set) and `SESSION-3.patch.md` (a stale patch document against a
+pre-v12 architecture — a fuzzy-apply trap for future sessions).
 
 ## Known limits (held open, stated, not smoothed)
 
-ISO-day strings, no timezone nuance · pressure is record-derived, not calendar-integrated (the kill list is the local answer) · nine-box staleness is view-time, not destructive · team pulse falls back to org pulse per team, stated on the card · import-merge is append-only beyond re-minting · gate signals read app state only (the machine cannot verify what happened in a room — which is exactly why the note is mandatory) · GROW/SLII are simplified canonical mappings, labeled in-line · readiness scores are advisory by doctrine · capture person parsing matches first names · the seed is tense on purpose and the first-paint advisory count is whatever `#/signal` prints.
+ISO-day strings, no timezone nuance · readiness/flight/trust/calibration are advisory instruments
+with shown sample sizes · capture matches first names · the feedback-breakdown auto-open runs at
+boot, idempotent via `lapsedCaseId` · audits repair only mechanics, never judgment · no pub/sub
+event bus by design — the propagation ledger *is* the event log · the seed is tense on purpose and
+the first-paint advisory count is whatever `#/signal` prints · **this session shipped without a
+browser**: the 18-test wall executes in-browser at every boot, which is the shipped verification.
 
-**If any claim in this README disagrees with what `index.html` does, the file wins and the README is wrong.**
+**If any claim in this README disagrees with what `index.html` does, the file wins and the README
+is wrong.**
