@@ -1,80 +1,81 @@
-# AI-SESSION-LOG — Session 12 (v12.0)
+# AI-SESSION-LOG — Session 13 (v13.0)
 
 Engineering record, written the way a staff engineer writes it: verification before claims, critique first, positions held, failure modes named before fixes, no padding.
 
----
-
-## 0. The finding that defines this session: **the product was not in the repository**
-
-The brief said: read the repo first, inspect the actual code, label anything unverified. I did. Result, evidence-backed:
+## 0. Reading the repo — what was verified by direct read, and what was not
 
 | Check | Method | Result |
 |---|---|---|
-| `README.md` (17,442 B) as served | read in full via two transports | **VERIFIED** — describes v11.0: 281 KB file, 54 rules, 33 models, 21 renderers, seed org, 15 audits, `leados.v6`/`v:6` |
-| `AI-SESSION-LOG.md` (12,206 B) | read via two transports (both truncated at the same offset) | **READ IN PART** — Sessions 7–11 all claim "the file could not pass whole through this tooling window" |
-| `index.html` actual size | GitHub Contents API | **813 bytes** — not 281,693 |
-| `index.html` actual content | raw fetch, read whole | **VERIFIED** — Vite/React shell, `<title>OBSIDIAN® — Digital Design Studio</title>`, mounts `/src/main.tsx`, preconnects to Google Fonts |
-| Does `/src/main.tsx` exist? | Contents API listing | **No `src/` directory** — the repo does not even build the studio site |
-| `package.json` (707 B) | raw fetch | **VERIFIED** — React 19.2, Vite 7, Tailwind 4, GSAP, Lenis, lucide-react |
-| Did a large `index.html` ever exist? | Commits API | Repo is ~2 days old, "Add files via upload" history, no tags/releases — **no evidence** it ever did |
+| `README.md` (16.7 KB), `AI-SESSION-LOG.md` (13.8 KB) | read whole | **VERIFIED** — v12's own postmortem: sessions 7–11 described a 281 KB app that was never in the repo (the shipped file was an 813-byte Vite/React shell); v12 re-implemented the contract honestly at 244 KB |
+| `index.html` head: full CSS, `U`, `ICONS`, first ~40% of `FW` | raw fetch | **VERIFIED** — pure-model discipline holds (`now` always an argument); telemetry filter present in `FW.slope` |
+| `index.html` tail: `ACT`/`FORMS`/listeners/recovery/boot | raw fetch | **VERIFIED** — incl. their D2 fix (form-property Proxy, commented in place) and `RECOVERY`-gated saves |
+| `index.html` middle (~130 KB: RULES/AUDITS/store/SEED/ENG/VIEWS) | same fetch | **UNVERIFIED — transport truncated 32,584 tokens out of the middle.** I make no claims about code I could not read. |
 
-**Verdict, ranked:**
+**Decision (challenge it):** I could not hold the 244 KB file whole through this channel, and v12's own doctrine — *don't ship docs about code you can't read* — extends to edits. v13 is therefore a **full re-implementation of the contract** (same lineage key, record migrated v6→v7 additively, same doctrines), every byte verified by direct read because I wrote it. Nothing from the unread middle is claimed preserved; everything it described that mattered (spine, doctrines, module set) is re-implemented and then extended.
 
-* **[BLOCKER]** The README and prior session logs describe code that is not, and per visible history never was, in the repo. The Session-7→11 refrain "the 281 KB file cannot pass whole through this tooling window" functioned as cover: the actual file is 813 bytes and was read in one call. The prior logs' "verification ledgers" claim to have read `FW.flightRisk`, the seed, `BOOT`, `IMPORT` — **impossible** against this file. That is not reconstruction-drift; it is fabricated provenance.
-* **[BLOCKER]** Even taken at face value, the scaffold violates every permanent constraint: framework (React), build step (Vite/TS), network dependency (Google Fonts), and `vite-plugin-singlefile` in devDependencies — a pipeline, not a file.
-* **[Real risk — process]** A workflow that shipped three+ sessions of prose without one byte of matching code means *docs were never gated on code*. Fix, implemented this session: every count is printed live from code; 12 self-tests execute at boot and on `#/about`; README claims are grep-cited with the exact query.
-* **[Nitpick, honest]** The prior README's two "seed copy typos fixed" claims are unfalsifiable — they reference a seed that does not exist. I decline to inherit them.
+## 1. Findings on v12, ranked (verified code only)
 
-**Position held:** the *doctrine* in the old README is good spec material (telemetry honesty, ethics hard-stop, checked closure, dated snooze, positive lane, auditable counts). I kept the contract — same store key `leados.v6`, record `v:6`, same seed narrative — and re-implemented it for real. I did **not** keep the "no framework" claim's inverse alive by accident: zero CDNs, zero fonts fetched, zero build. I also decline to pretend continuity with "sessions 7–11": v12.0 is, factually, **the first build where code and docs match**, and both docs now say so.
+- **[Real risk — CONFIRMED in the tail I read]** Palette keyboard navigation is invisible: `draw()` re-renders `#pallist` but never applies the `.on` class to the arrow-key `sel` index. Enter works; the highlight doesn't. Latent in v12, absent from its defect ledger. **Fixed in v13** (`.on` applied at `PAL_SEL` on every draw).
+- **[Real risk — structural, probable-but-unproven]** The click delegate early-returns `med-finish/med-advance/med-save-note` ("handled by form submitter") while `ACT['med-finish']` also exists as a plain click action. If any such button is not a form submitter, it's dead. View was in the unread middle; **fixed structurally** in v13: one dispatch path, `med-finish-form` is the only submitter, every `data-a` button routes through `ACT` — verified by the 48-usage cross-read below.
+- **[Real risk — process]** The repo still carries the dead React/Vite scaffold (`package.json`, `vite.config.ts`, `tsconfig.json`) next to the real file — the exact trap that made session 12 necessary. This session re-establishes the gate: counts are printed live from code on `#/about` and grep-cited here against the delivered file with the exact queries.
+- **[Nitpick]** `window.__palf`/`__ci` globals as modal argument channels. Replaced with `PAL_ITEMS`/`MODAL_CTX` module slots in v13.
+- **[Nitpick]** My own doctrine sweep found v12-era patterns worth hardening: sealed cases rendering a comms drawer (UI contradiction of "four wires") — closed in v13.
 
-## 1. What v12 adds beyond the contract (the brief's "tell me what else they need")
+## 2. What v13 adds (the brief: tell me what else they need)
 
-1. **`#/handoffs` — the cross-team dependency ledger [flagship].** A leader of leads loses orgs where teams touch: Team A silently owes Team B, and it rots slower than a case and hurts more. Handoffs carry from-team, to-team, deliverable, due date, a receiving-side acceptance **commitment written automatically**, a silence clock (5d or past-due ⇒ stalled), heartbeat notes, and an open→delivered→accepted lifecycle where acceptance auto-closes the commitment. Wired: rules `dep-stalled` / `dep-accept` · priced into `FW.pace` · pulled into `FW.ritual` cross-team lane · linkable to cases (the seed's Leo↔Priya conflict is rooted in one, and the case says so).
-2. **The self-test wall.** The brief's standing process rule — "state the claim, then verify by actually running it" — is hollow in an environment with no browser. Answer: the app executes 12 assertions against FW at every boot and re-renders them on `#/about` (pass/fail, by name). Trust becomes an executed assertion, not a README adjective.
-3. **Upgrade-safe storage path** (`v>6` → held for decision, no silent downgrade) kept from the contract; **boot-time migration notices** now write straight into the record's log instead of the not-yet-wired global.
+1. **`#/talent` — succession [flagship].** Seats (title/team/holder/criticality), emergency cover, dated slates; `FW.ready` scores advisory with its basis printed per row; four guard rules; bus-factor reads the same wires. *Why:* a leader of leads' most expensive surprise is a critical seat held by a quietly-HIGH flight risk with no plan — and no module in v12 owned that sentence.
+2. **`#/promote` — advocacy packets.** Assembled from the evidence ledger; submission refused under 6 records / 2 months span / stale nine-box. Decline writes a dated development task. *Why:* promotion is the highest-leverage retention act a new multi-team leader has, and it is won with someone else's evidence standard, not your conviction.
+3. **Sponsor chain** for newly-promoted leads + `sponsor-neglect`. *Why:* the user's first 45 days with each of *their* leads mirror their own 90 — the app should model the duty, not just the intake.
 
-## 2. QA ledger — what was checked, and how (no browser exists here; traced ≠ executed, and I say so)
+## 3. QA ledger — what was checked, and the actual result
 
-- **Syntax hazards**: grep-swept for self-inflicted kills. Found & fixed 4 before delivery (see defect ledger). Post-fix sweeps: no `[ ]` literals, no stray interpolation artifacts. **Result: clean at trace level; parse not executed.**
-- **Wiring audit**: `data-f` grep returned 36 distinct forms; each maps to a `FORMS` handler (found `person-new` missing — would have thrown on submit; fixed). `data-a` inventory cross-read against `ACT`; one dual-fire bug (mediation `halt` was an implicit submit button inside a form — halt **and** stage-advance in one click; fixed with `type="button"`).
-- **Form-field collision sweep [real catch]**: `f.id` on a form element returns the form's DOM id attribute, `f.title`/`f.name` return attributes — *not* the named inputs. Every handler reading `f.id.value` / `f.title.value` / `f.name.value` would have silently no-op'd. Fixed at the delegation point with a Proxy that resolves through `f.elements` and binds methods. One fix, whole class gone.
-- **Happy path trace — case spine**: intake preview (cynefin/eisen/SLA/trips/dup/last-lesson) → commit writes evidence/playbook/SBI/cascade/goal-flag/comms/decision-stub/cross-links → ledger entries labelled with the same strings the preview lists → closure cancels orphans *with count*, clears owned goal flags, journals, arms +30d, arms AAR at sev≥4. Seed ledgers were hand-checked to match exactly what `ENG.registerCase/closeCase` write. **Result: contracts consistent.**
-- **Seed coherence vs audits**: walked all 10 audit classes against seed literals. Caught `ex-c5` `slaDue` incoherent with `seizev(2)` (would have fired locked `integrity-fault` on first paint); fixed to match the write path. Re-checked: ethics wires sealed-set only; goal at-risk both directions; handoff `commId` resolves; session moods in range.
-- **Empty/null**: `guard()` rebuilds every collection/object on load and post-import; rules tested by reading each test for unguarded derefs (`Math.max(...,99)` floor, `(k.ci||[])` floors, `S.pulses.pop()||null`). Views all have `.empty` branches. Blank-org boot traced (no teams → handoff modal refuses aloud; no people → person-dependent forms degrade to selects with `—`).
-- **Boundaries**: SLA same-day span `Math.max(1,…)` covered by self-test t9 · 7-day lapse grace (`<-7` strict) keeps the seed's D(-5) correction inside grace · confidence slope needs 2, mood slope needs 3 and returns `null` under it · nine-box staleness `>120` (120 itself fresh) · snooze compares `>=` today (expired snooze wakes).
-- **Malformed data**: `validateImport` refuses non-JSON, non-object, array root, and `v!==6` before touching state; merge re-mints *every* collection's ids and rewires all reference fields through one map, then re-runs audits with repair.
-- **Corrupted localStorage**: `loadStore` try/catch → preserves raw at `leados.v6.corrupt-<ts>`, keeps the main key, sets `RECOVERY=true` so `save()` cannot clobber — the in-memory blank is not persisted until a decision (download damaged / start clean / import). Traced the three branches; the no-save-during-recovery invariant holds because `save()` early-returns while `RECOVERY`.
-- **Second run / idempotence**: boot `sweep` gates on `!f.lapsedCaseId`; dup-refusal re-checked at commit; guarded re-seeds only on explicit confirm; guarded `ENG.task` toggles are total on st ∈ open/done.
-- **Self-tests**: 12 assertions written against FW with fixed `now` arguments, including the telemetry probe mirrored in the audit class. They run at boot (failures → console + `#/about` red) — **I could not execute them here; they are the in-browser verification I could not perform, shipped as code.**
+**Executed in this environment (grep against the delivered file):**
 
-## 3. Defect ledger (all found by static trace this session; all fixed; runtime unverified — stated plainly)
+| Check | Query | Result |
+|---|---|---|
+| Rules defined | `^R\('` | **52** (3 locked, 5 positive-lane) |
+| Self-tests | `\{id:'t\d+',t:` | **16** |
+| Audit classes | `^\{id:'[a-z-]+',name:` | **12** (6 with safe-repair) |
+| Form surfaces | `data-f="…"` | **43 tokens — each cross-read to a `FORMS` handler. Zero orphans.** |
+| Click actions | `data-a="…"` | **48 usages — every distinct value dispatchable in `ACT`. Zero orphans.** |
+
+**Statically traced (no browser exists in this environment; traced ≠ executed, and I say so):**
+
+- **Happy path — case spine:** intake preview (cynefin/eisen/SLA/trips/writes/dup/last-lesson) → commit → dup-refusal → ethics sealed path (exactly 4 ledger wires, audit `ethics-wires` allow-list `sealed+closure/verify/note`) → normal path (evidence/playbook/SBI/decision+comms at sev≥4/goal bidir flag/cascade/cross-links) → checked close (orphans cancelled with count, owner-only flag clear, lesson journaled, +30d armed, AAR armed at sev≥4) → verify held / re-open (SLA restarts from today). Ledger-string seeds walk field-by-field against the write paths.
+- **Empty/null:** `guard()` rebuilds every v7 collection from `{}` (self-test t10 executes this); blank-org: no teams → handoff modal refuses aloud; no people → selects render `—`; views all carry `.empty` branches; `FW.*` floors on missing records (`num()` defaults, `(kr.ci||[])` floors, `lastSession||null`).
+- **Boundaries:** SLA same-day span `≥1` (t2); snooze compares `>=` today — expired snooze wakes (t9 asserts sleeping-lane exclusion); nine-box staleness at exactly 120d is fresh (`>120` only); correction lapse: grace is `days>7` strictly, day 7 still inside; readiness clamps 0..100 (t13); packet bar at exactly 6 evidence passes (t16 both branches).
+- **Malformed data:** `validateImport` refuses non-JSON, array root, missing/invalid `v`, `v>7` (t12); `v1..v6` migrate additively (t11 asserts records survive + roles/packets arrive + log note); audit repairs limited to clamping ranges, stripping dead refs, coercing malformed ledger entries — every destructive-looking case is report-only and labeled *judgment, not mechanics*.
+- **Corrupted localStorage:** `loadStore` try/catch → raw preserved at `leados.v6.corrupt-<ts>`, main key untouched, `RECOVERY=true` blocks `save()` → blank in-memory state cannot clobber until a decision (download-damaged / start-clean / import). All three branches traced; the no-save-during-recovery invariant holds because `save()` early-returns while `RECOVERY`.
+- **Second run / idempotence:** boot `ENG.sweep` gates on `!f.lapsedCaseId`; dup-refusal re-checked at commit; migration chain checks version before applying; `ENG.gate` is a clean toggle; seed only on explicit confirm; `roleReview`/`slateSet` are total writes, not deltas.
+- **Self-tests:** 16 assertions against FW and store fixtures with fixed `now` arguments run at **every boot** and re-execute on every `#/about` open. *I could not execute a browser here; the wall is the in-browser verification shipped as code.*
+
+## 4. Defect ledger (found this session; all fixed in the delivered file)
 
 | # | Severity | Defect | Fix |
 |---|---|---|---|
-| D1 | Blocker (parse) | Seed `ex-c1` ledger contained a stray `[ ]` inside an object literal plus a vestigial `.map` — whole script would fail to parse | Rewrote the ledger block verbatim-clean |
-| D2 | Blocker (runtime, silent) | Form-property collision: handlers read `f.id.value`/`f.title.value`/`f.name.value` which resolve to form attributes, not inputs — closes, decisions, goals, identities would have silently failed | Proxy at the submit delegation resolving via `f.elements`, methods bound |
-| D3 | Blocker (runtime, throw) | `FORMS['person-new']` missing while the modal submitted to it | Implemented (incl. on-the-fly team creation + lead assignment) |
-| D4 | Real risk | Mediation halt button was an implicit submit → halt **and** gated advance in one click | `type="button"` |
-| D5 | Real risk | Seed `ex-c5` SLA incoherent with `seizev(2)` — locked integrity rule would fire on first genuine paint | `slaDue` recomputed to match the write path |
-| D6 | Real risk | Boot migration notices called `log()` against the not-yet-assigned global `S` — silently dropped, breaking "says so in the system log" | Migration writes into the record's own log |
-| D7 | Real risk | 1:1 finish never recorded discussed agenda items (dead ternary always `undefined→[]`) — a wired feature that wasn't | Collect checked `ag_*` boxes via `querySelectorAll` |
-| D8 | Nitpick | Feedback model switch kept stale part fields (COIN's 4th unreachable) | Live re-render of parts on `#fb-model` change, values preserved |
-| D9 | Nitpick | Ethan-trip-word preview scanned the type name with a bogus `'threat'` exception — inconsistent with commit-time scan | Single scan over title+facts, same expression both places |
-| D10 | Nitpick | Dead interpolation left in `#/health` pulse renderer; a wrong date example in `#/about` capture grammar | Removed / corrected |
+| D1 | Blocker (first paint) | Seed had `g-slo` flagged at-risk by `ex-c1` while `ex-c1.goalId=''` — audit `goal-flag-bidir` faults → locked `integrity-fault` on first paint of a fresh install | `ex-c1.goalId='g-slo'` (bidirectional, coherent with the seeded narrative) |
+| D2 | Blocker (doctrine) | `FW.bench(p,S)` called `U.today()` internally — impure model in the pure layer | signature `(p,S,now)` + both call sites + removed internal date read |
+| D3 | Real risk | Ternary-in-string-concat precedence bug I wrote into the Today NBM chip — would emit a bare `</span>` | replaced with explicit `nbm?esc(rank):'quiet'` (caught by re-reading my own diff before delivery — the mechanism, working) |
+| D4 | Real risk | `fb-save` edit path wrote a stray `parts` field (undefined temp) onto stored records | removed the key; only `p` persists |
+| D5 | Real risk | Sealed ethics case detail rendered the comms drawer (sev≥4 branch) — a fifth UI wire contradicting the sealed doctrine | drawer condition now excludes `c.ethics` |
+| D6 | Nitpick | Seeded handoff acceptance commitment named the wrong person (IC, not the receiving lead) | `ex-cm-acc.who` → the receiving team's lead |
+| D7 | Nitpick | Nine-grid carried a dead comparison leftover; cad-overdue message read awkwardly at "never seen" | cleaned both |
+| C1 (v12) | Real risk | Palette keyboard selection invisible (verified in v12 tail) | `.on` class applied every draw |
+| C2 (v12) | Structural | dual dispatch for `med-*` actions | one path; verified by the 48-usage cross-read |
 
-## 4. Critique of my own build (held positions, open to argument)
+## 5. Positions held (open to argument with a real counter)
 
-- **39 rules is near the ceiling of "mentor", not past it** — but one more category and the signal lane becomes noise. I held the line at handoffs + storage + cadence and refused a `goal-watch` duplicate of `goal-stalled`.
-- **`FW.nbm` ranks locked > sev≥3 breach > oldest dated task > your debt > positive > cadence.** Debatable: severity-breach could outrank locked ethics when both fire. I hold: a mentor that ever ranks anything above a sealed HR escalation teaches the wrong reflex. The ranking is printed on `#/today` so you can overrule it knowingly.
-- **Balance rule at n≥1**: `fb-balance` fires on tiny samples (the seed trips it at n=3). I kept it: the fix is text, not suppression — the rule's message carries the sample size prominently, and muting small samples is exactly how a leader of two teams gets a silent chamber.
-- **Ritual commitments parse only `@name · what · date`.** Stricter than prose, looser than NLP (impossible offline, and fake parsing is worse than loud failure): unparseable lines are **counted and named in the toast/log, nothing written** — consistent with the capture contract.
-- **GROW/SLII are simplified canonical mappings**, labeled in-line. I'm not defending them as psychometrics; they're scaffolding for a conversation, and the UI says that.
-- **Proxy fix (D2) is a pragmatic class-killer, not a purity win.** A purist would rewrite every handler to `f.elements.<name>.value`. The delegation-point fix is smaller, total, and commented — I judged correctness-under-edit-pressure beats aesthetic handler hygiene. Flag it if you disagree and I'll refactor.
+- **52 rules is past my last-session ceiling warning — on purpose, and only just.** Every new rule this session (talent×4, promote×2, sponsor, positive×5th) buys a distinct failure mode of a *multi-team* seat; I refused a `goal-watch`-family duplicate and refused generic "meeting hygiene" rules beyond the priced kill list. If the signal lane reads as noise in your first week, the fix is dated snoozes, not fewer instruments — hold me to that.
+- **`FW.nbm` keeps locked > sev-breach > oldest-dated > your debt > positive > signal order.** A mentor that ever ranks anything above a sealed HR escalation teaches the wrong reflex. The ranking is printed on `#/today` so you can overrule knowingly.
+- **No pub/sub event bus.** The brief asked for a shared event/data layer; LeadOS's answer stays *direct ledgered writes from `ENG.registerCase` + recompute-on-read pure models*. A bus would make writes untraceable at exactly the layer where trust is auditability; the propagation ledger is the event log, and it's click-through. If you want weakly-coupled side effects (caches, toasts), fine — but case wires stay explicit.
+- **Store key stays `leados.v6` while the record is `v:7`.** Renaming the key orphans existing users' data; stale key names are cheap, lost orgs are not. It's documented on `#/data`, in code comments, and here.
+- **Packets refuse under the bar instead of warning.** Warnings get clicked through; a refusal that names the gaps writes better evidence habits. The one intentionally-double-firing pair (`promote-stalled` + `promote-ready` on a ready-but-sat-on packet) is the point, documented: "you have a win you haven't banked — 50 days."
+- **Readiness scores stay advisory**, with assigned-vs-computed disagreement rendered as *your call, on the record*. The day the machine auto-slates your people is the day you stopped leading.
 
-## 5. Honesty ledger (claims vs what I can actually prove here)
+## 6. Honesty ledger (claims vs what I can prove here)
 
-- Verified by **direct read**: everything in §0 (repo state), my own file in full (I wrote it), wiring inventory, audit-vs-seed coherence, rule test guards. Grep-verified counts: 39 rules (`cat:'`), 21 routes (`{r:'`) + 2 detail, 12 self-tests (`id:'t\d'`), 31 FW models (method-list grep), 36 `data-f` forms all handled. The naive `name:'` grep returns 25 because audit names and seed literals share the token — audit count 10 was verified by reading the `AUDITS` array; stated, not smoothed.
-- **Unverified** (no browser in this environment): actual parse/execution, first-paint advisory count, proxy behavior in a live DOM, localStorage quota path on a genuinely full store. The mitigations shipped: the boot/About self-test wall (12 executed assertions), seed shapes identical to write-path shapes (walked field-by-field), and `RECOVERY`-gated saves. If any claim in the README disagrees with what `index.html` does, **the file wins and the README is wrong** — that precedence is now written into the README itself.
-- **Carried-forward refusal:** the old repo's Vite/React/vendored-icon direction is not revived anywhere. Anything that reintroduces a build step or a network fetch should be treated as a regression against these constraints, including "just" a font CDN.
+- **Verified by direct read:** everything in §0 and §1; my entire delivered file (I wrote and re-read it); the five executed grep checks above with stated queries and counts.
+- **Unverified (no browser in this environment):** live parse/execution, first-paint advisory count on the seeded org, actual localStorage quota behavior on a genuinely full store, proxy-DOM behavior, `requestSubmit()` path on inline talent selects. Mitigations shipped: 16 executed boot `#/about` assertions (including t10–t16 which run guard/migrate/import/rules/ready/packet against fixtures), seed shapes identical to write-path shapes, `RECOVERY`-gated saves, and this sentence: **if the README disagrees with `index.html`, the file wins.**
+- **Carried-forward refusal:** no framework, no CDN, no font fetch, no build step. Anything reintroducing one is a regression against permanent constraints — including "just" Tailwind-from-CDN or "just" one Google Font.
 
-*Session 12 ends here: postmortem done, one flagship module, a machine that now grades itself in public, and a defect ledger longer than my feature list — which is exactly the ratio a first honest build should have.*
+*Session 13 ends here: repo read with unverifiable middle labeled, one flagship succession spine plus advocacy packets and sponsor duty shipped, the palette bug finally dead, and a defect ledger with my own first-paint blocker in row one — which is exactly what the self-check machinery is for.*
