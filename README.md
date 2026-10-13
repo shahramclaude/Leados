@@ -1,179 +1,102 @@
-# LeadOS — Leadership Operating System · v16.0 (Session-15 build)
+# LeadOS — Leadership Operating System · v18.0 (Session-16 build)
 
-A single-file, offline-first operating system for a leader **of team leads** — especially a new one.
-Vanilla JavaScript. No framework, no backend, no accounts, no APIs, no OAuth, no credentials, no
-build step, **no network dependency at all** (icons are inline SVG; fonts are system fonts; it runs
-from a double-clicked file). The entire application is `index.html`; all state lives in
-`localStorage`.
+A single-file, offline-first operating system for a leader **of team leads** — especially a new one. Vanilla JavaScript. No framework, no backend, no accounts, no APIs, no OAuth, no credentials, no build step, **no network dependency at all** (icons are inline SVG; fonts are system fonts; it runs from a double-clicked file). The entire application is `index.html`; all state lives in `localStorage`.
 
-Open `index.html` in a browser. That is the whole install. First boot seeds a tense example org so
-every instrument is visibly live; set yourself (`#/data` → identity), then erase the example when
-your real org arrives.
+Open `index.html` in a browser. That is the whole install. First boot seeds a tense example org so every instrument is visibly live; set yourself (`#/data` → identity), then erase the example when your real org arrives.
 
-## Session 15 — what changed, and why (one line per non-obvious decision)
+## Session 16 — what changed, and why (one line per non-obvious decision)
 
-1. **The ten routes v14 deferred are re-authored at full depth [v16 flagship]:** `#/promote`,
-   `#/coach`, `#/delegation`, `#/mediation`, `#/health`, `#/org`, `#/transition`, `#/ritual`,
-   `#/review`, `#/academy`. _Why:_ a leader of leads lives or dies on exactly these surfaces; a
-   README that says "deferred" ten times is a product with ten holes, not a product.
-2. **A real shared event layer now exists (`BUS` + propagation ledger).** v14 declared "no pub/sub
-   by design — the ledger IS the event log." Position held against it: a ledger does not *notify*.
-   Every engine op now emits a typed event; a wildcard subscriber persists, re-runs all audits, and
-   re-renders. The ledger stays as the _durable_ record of what was written. _Why:_ the standing
-   product rule is that when a case is registered anywhere, every related module receives it
-   automatically — reception requires a bus, not just a log.
-3. **Version is v16, record v:10 — not v15.** The on-disk file's `<title>` reads "v15.0" while
-   README/log document v14.0: an undocumented WIP edit whose body this transport cannot read.
-   _Why:_ shipping another "v15" would collide with bytes we cannot attribute; v=10 accepts v1–v9
-   additively (unknown keys survive the migration spread) and holds v>10 for decision, so whatever
-   the WIP wrote imports safely.
-4. **`parseRecord(raw)` extracted as a pure function; self-test t11 executes it.** The old load path
-   was untestable without touching real storage. _Why:_ "corrupt bytes → recovery, not silent blank"
-   is now executed at every boot, not asserted in a comment.
-5. **Self-test wall raised to 20, including:** foreign-closure goal-flag protection (executes the
-   v14 t18 doctrine), idempotent feedback-lapse machine arm (fires once via `lapsedCaseId`), merge
-   re-mint + rewiring, nine-box 121d staleness, SBI-lint save-gate, ledger-lie refusal, ethics
-   4-wire count, recovery-gate save refusal.
-6. **Live counts on `#/about` are computed from the app's own stringified source** (functions
-   `.toString()`), including a runtime orphan check: every `data-f` surface must resolve in `FORMS`,
-   every `data-a` in `ACT`. _Why:_ sessions 13–15 each found docs claiming counts their bodies
-   could not be read to verify; the fix is counts that execute.
-7. **Intake preview kept and sharpened:** Cynefin + move, Eisenhower, SLA runway, named trip-words,
-   exact write list, duplicate detection, and the last lesson of this case type from the academy.
-   _Why:_ trust is transparent reasoning shown *before* commit, not explanatory prose after.
-8. **Three modal pseudo-forms rebuilt** (`f-close-modal`, `f-fb-modal`, `f-person-x`) after a trace
-   found `data-f` orphans whose default-submit buttons would both act and trip the strict dispatcher.
-   _Why:_ "the form must be its own evidence" policy is only as strong as its orphan rule — now
-   enforced by the runtime counter, not by vigilance.
-9. **Rule `session-planned` implemented for real** (was a never-firing placeholder in the first
-   v16 draft — found on re-read, not by luck). _Why:_ a rule that cannot fire is theater; quiet
-   rows must be *earned*.
-10. **Snooze governance unchanged, extended:** dated snoozes wake themselves; locked classes
-    (escalation-open · hr-task-due · integrity-fault) cannot be snoozed at all.
+1. **Version is v18.0, record v:12 — not v17.** The on-disk file's `<title>` reads "v17.0" and its static DOM contains a boot-sequence splash, while README/log document v16.0: an undocumented WIP body no document owns — the exact anomaly class Session 15 already routed around once. *Why:* shipping another "v17" would collide with bytes we cannot attribute; v=12 accepts v1–v11 additively (unknown keys survive the migration spread — any WIP keys ride along untouched) and holds v>12 for decision.
+2. **`#/up` — Managing up & sideways — is the v18 flagship.** Power × interest grid, per-stakeholder contact cadences, dated promises both directions, a **pre-meeting brief assembled from live instruments**, and the `stake-promise-hot` / `stake-contact` advisories. *Why:* the v16 module map covered the whole downward and inward game but had no upward surface — and "managing up" is the single biggest curriculum gap for a newly appointed leader-of-leads; bosses notice your absence before your team notices your presence.
+3. **New capture verb: `ask: @stakeholder … by +Nd`** — logs a promise made TO you by a stakeholder, joins the same dated commitment ledger. *Why:* promises flow two ways upward too; an unpaid ledger in either direction teaches people your memory is decorative.
+4. **The boot splash is now load-bearing doctrine, kept and extended.** Session 16's repo read (fourth consecutive session to hit the transport wall) discovered that the ONLY bytes of the on-disk file legible through this transport were the **static HTML of its splash** — everything inside `<script>` is stripped. *Why:* a richer static boot log is the one part of this file future sessions are guaranteed to be able to read; it now names lineage, record version, and engine stages even when nothing else survives the trip.
+5. **Self-test wall raised to 24**, including three tests designed against failure modes this session's own seed exposed: seed-contaminated advisory assertions (t21 isolates `S.commitments`), lapse-count contamination (t15 isolates `S.feedback`), and no-disk-write during wall runs (t09 never re-saves). *Why:* a test that passes because the seed happens to arrange the world is an un-test wearing doctrine — Session 15 said this about their own t11; the same standard applied to mine caught two of mine.
+6. **Wall-suppression flag on the BUS subscriber (`S._testing`).** Tests mutate `S` inside `runTestsIsolated` against a snapshot; the wildcard subscriber (persist → audit → render) must not chase them. *Why:* without it, `#/about` enters an infinite render loop — tests emit → render → tests re-run → emit. Found by trace before first boot, not by luck.
+7. **`pruneExec` re-written as two plain filters.** The first draft chained a `keep`-set with a conditional operator so tangled a human re-read could not state its semantics. *Why:* code a reviewer cannot paraphrase is a defect that has not happened yet.
+8. **No-verb capture routes to a prefilled case intake** (was an error toast in the first draft). *Why:* the doctrine says "no-verb text → a prefilled case intake, not a silent drop"; an error toast alone is the doctrine wearing lipstick.
+9. **Agendas, readiness, team heat, NBM ranking are computed live at render — nothing precomputed is trusted.** The `agenda-fresh` audit survives, honestly scoped: it defends *imported* precomputed-agenda records. *Why:* stale derived state is the highest-frequency lie in apps like this; recomputation is cheap at this scale and never lies about *when* it was computed.
+10. **Snooze governance unchanged:** dated snoozes wake themselves on expiry day (t08 executes the boundary); locked classes (escalation-open · hr-task-due · integrity-fault) cannot be snoozed at all, and a smuggled snooze is itself an audit fault with safe repair.
 
 ## The storage contract (unchanged lineage, extended)
 
-- **Key: `leados.v6` — lineage key, deliberately never renamed.** The record carries the truth: `v:10`.
-- **Migrations are additive and stepwise (v1…v9 → v10)** and announce themselves in the record's own
-  system log. No existing record is rewritten; unknown keys survive.
-- Newer records (`v>10`) are held for a decision; a silent downgrade is refused. Corrupt bytes are
-  preserved at a side key (`leados.v6.corrupt-<ts>`), main key untouched, in-memory blank **not
-  saved** until you decide (download-damaged / start-clean / import).
-- Quota: writes surface in the top bar (`saved HH:MM · N KB` → red `WRITE FAILED` with byte count
-  and remedy). `quota-pressure` wakes past ~70% of the ~5MB estimate. `export-overdue` nags past
-  14 days. Imports: v10 direct, v1–v9 migrate in-memory; wrong shapes fail loudly without touching
-  state. Merge re-mints every id and rewires the graph through one map, then re-runs the audits.
+- **Key: `leados.v6` — lineage key, deliberately never renamed.** The record carries the truth: `v:12`.
+- **Migrations are additive and stepwise (v1…v11 → v12)** and announce themselves in the record's own migration trail and system log. No existing record is rewritten; unknown keys survive — including anything a v11-titled WIP body wrote.
+- Newer records (`v>12`) and corrupt bytes are preserved at side keys (`leados.v6.superseded-<ts>` / `leados.v6.corrupt-<ts>`), main key untouched, in-memory blank **not saved** until you decide (`RECOVERY` mode gates `save()`; t19 executes the refusal).
+- Quota: writes surface in the top bar (`saved HH:MM · N KB` → red `WRITE FAILED` with byte count and remedy). `quota-pressure` wakes past ~70% of the ~5MB estimate. `export-overdue` nags past 14 days. Imports: v12 direct, v1–v11 migrate in-memory; wrong shapes and newer records fail loudly **without touching state** (t12 executes both refusals). Merge re-mints every id and rewires the graph through one map — scalar refs, `linkIds`, `parties`, `slate`, `nine` — then re-runs the audits (t17 executes).
 
 ## The case spine (architectural core)
 
-Register a case **once**, anywhere — top bar, quick capture (`case: …`), palette, any person page,
-or `C`. The intake shows a **live pre-commit preview** (Cynefin + move · Eisenhower · SLA runway ·
-keyword reclassification with trip-words named · exact writes · duplicate detection · lesson recall).
-On commit the engine writes real, linked records into every routed module — evidence, playbook
-tasks, SBI draft (behavioral types), decision stub (sev≥4), goal at-risk flag (bidirectional,
-owner-only), cascade to the owning lead, cross-links on shared scope, mediation frame for two-party
-conflicts — every write trapped in the case's **propagation ledger** with click-through routes.
+Register a case **once**, anywhere — top bar, quick capture (`case: …`), palette, or `C`. The intake shows a **live pre-commit preview** (Cynefin + move · Eisenhower · SLA runway · named trip-words · exact write list · duplicate detection · last lesson of this type from the academy). On commit the engine writes real, linked records into every routed module — evidence, playbook tasks, SBI draft (behavioral types), decision stub (sev≥4), goal at-risk flag (**bidirectional, owner-only**), cascade to the owning lead, cross-links on shared scope, mediation frame (two-party conflicts) — every write trapped in the case's **propagation ledger** with click-through routes.
 
 - **Identical open duplicates are refused** and route you to the existing case.
-- **Closure is checked, not assumed**: outcome + lesson mandatory, orphan playbook tasks cancelled
-  _with a count_, goal flags cleared only by the closure that owns them (t6 executes a foreign
-  closure), lesson journaled to the academy, +30d verification armed, AAR owed for sev≥4.
-- A delivered correction whose +21d verification lapses past the 7-day grace **auto-opens a
-  feedback-gap case at boot** (idempotent via `lapsedCaseId`, executed by t15).
+- **Closure is checked, not assumed**: outcome + lesson mandatory, orphan playbook tasks cancelled _with a count_ (t06 executes that a foreign closure cannot clear a goal flag), lesson journaled to the academy, +30d verification armed, AAR owed for sev≥4.
+- A delivered correction whose +21d verification lapses past the 7-day grace **auto-opens a feedback-gap case at boot** (idempotent via `lapsedCaseId`; t15 runs the sweep twice and requires 1 then 0).
+- A **BUS event layer** carries every engine write; the wildcard subscriber persists → re-audits → re-renders (suppressed during the test wall). The per-case ledger remains the durable record; the bus is how modules *receive*.
 
 ## The hard stop (unchanged, non-negotiable)
 
-Intake keyword-scans (harassment, discrimination, safety, medical, fraud, legal, retaliation,
-self-harm, threat, assault, accommodation, racism, sexual, abuse, violence). A hit re-classifies to
-a **sealed HR escalation before commit**, names the trip-words live, and requires two deliberate
-acknowledgments. The machine writes exactly four wires: case record, verbatim evidence, an
-unsnoozable HR-contact task dated today, and an agenda pin. Audit class `ethics-wires` flags any
-fifth wire. PIP and separation templates do not exist in this codebase. Three advisory classes
-cannot be snoozed: **escalation-open · hr-task-due · integrity-fault**.
+Intake keyword-scans (harassment, discrimination, safety, medical, fraud, legal, retaliation, self-harm, threat, assault, accommodation, racism, sexual, abuse, violence). A hit re-classifies to a **sealed HR escalation before commit**, names the trip-words live, and requires two deliberate acknowledgments. The machine writes exactly four wires: case record, verbatim evidence, an unsnoozable HR-contact task dated today, and an agenda pin (t04 executes the wire count; audit class `ethics-wires` flags any deviation). PIP and separation templates do not exist in this codebase. Three advisory classes cannot be snoozed: **escalation-open · hr-task-due · integrity-fault**.
 
-## Module map (23 nav routes + 2 detail routes)
+## Module map (24 nav routes + 2 detail routes)
 
 | Route | Depth |
 |---|---|
-| #/today | Pace governor · **Next Best Move with its ranking printed** · dated work · conduits due (HIGH flight compresses to 7d) · commitment debt **both directions, yours first** · 7-day weight strip · positive lane |
+| #/today | Pace governor · **Next Best Move with its ranking printed** · dated work · commitment debt **both directions, yours first** · 7-day weight strip · positive lane · RECOVERY banner when bytes are quarantined |
 | #/signal | Full rule ledger: locked / firing / positive / sleeping (dated snoozes). Every rule states **why it exists** and **when it clears**; quiet rows are earned by executable conditions |
 | #/cases · #/case/:id | 11 intake types + sealed class · SLA runway bars · playbooks · checked closure · verify / honest re-open · AAR lane · propagation-ledger timeline · lesson recall from prior cases of the type |
-| #/people · #/person/:id | Flight risk (weighted driver ledger, top-driver intervention) · trust equation (C+R+I)/S with weakest-numerator fix · clickable nine-box (staleness halves bench weight past 120d) · morale telemetry with ≈ estimate chips · auto-agenda (regenerates from live state) · evidence ledger with case backlinks |
-| #/oneonones | Cadence board · finish modal consumes the auto-agenda (discussed cases get notes) · untouched sliders write `estimated:true`, enforced at write |
+| #/people · #/person/:id | Flight risk (weighted driver ledger, top-driver intervention) · trust equation (C+R+I)/S with weakest-numerator fix · clickable nine-box (staleness halves bench weight at 121d — t18 executes 120 vs 121) · morale telemetry with ≈ estimate chips · auto-agenda (regenerates live) · evidence ledger with case backlinks |
+| #/oneonones | Cadence board · finish modal consumes the auto-agenda (discussed items get notes) · untouched sliders write estimated:true, enforced at write |
 | #/feedback | SBI + live lint (**save blocks under 2/3 specificity**) · ageing clocks (praise 48h / corrections 72h) · +21d correction verification · balance board with sample size shown |
 | #/goals | Direction-aware KR scoring (down-metrics) · check-ins with **confidence as the leading indicator** (≤2 auto-writes an unblock task) · trajectory-vs-waterfall printed · expired goals graded only with a causal lesson |
-| #/decisions | Type-1/2 doors · premortem ≥3 (form + audit) · decide writes choice+rationale · re-date requires a recorded reason, **rendered in history** · grading → calibration with sample-size honesty |
-| #/handoffs | Cross-team debt · acceptance writes a dated commitment to the receiving lead · silence clock · "done" without acceptance refused as a **ledger lie** |
+| #/decisions | Type-1/2 doors · premortem ≥3 (form gate + engine refusal) · decide writes choice+rationale · re-date requires a recorded reason, **rendered in history** · grading → calibration with sample-size honesty |
+| #/handoffs | Cross-team debt · acceptance writes a dated commitment to the receiving lead · silence clock · "done" without acceptance refused as a **ledger lie** (t23 executes) |
 | #/risks | RAID register: P×I exposure · trend · early-warning indicators in observable terms · owned dated mitigations · 14d review heartbeat · 5×5 heat map · materialize-into-case · graded retirement |
-| #/talent | Succession seats: criticality, emergency cover, dated slates (now/<1yr/1–2yr) · readiness with **basis printed per row** (stale nine-box halves, HIGH flight −28) · assigned-vs-computed disagreement rendered as _your call, on the record_ |
-| #/promote **[v16]** | Evidence-first cases (≥2 ledger items to open) · sponsorship map declared on the record · bias recitals (recency · like-me · calibration) gate the verdict · +90d regret check armed on every decision |
-| #/coach **[v16]** | GROW as a working document · one active skill per person · reps become tasks **and** 1:1 agenda items automatically |
-| #/delegation **[v16]** | Five-rung authority ladder · checkpoints auto-scheduled · boomerang returns work to _your_ desk with a task · average-rung ≤2.5 (n≥4) fires the micromanager advisory |
-| #/mediation **[v16]** | Positions vs interests · session log · written agreements with owners+dates (become tasks for both parties) · settle requires ≥1 agreement · +14d follow-through check |
-| #/health **[v16]** | Five dims per team (trust/conflict/commitment/accountability/results) · manual pulses with estimate marks · feeding signals printed (sev Σ, flight avg, silent handoffs) · weakest dim gets a concrete intervention |
-| #/org **[v16]** | Spans/layers/vacancies + aggregate heat per team · span >8 named as rumor-territory · reorg sandbox simulates a move (span deltas, succession gaps, flight resets) and commits only on apply |
-| #/transition **[v16]** | 90-day clock off identity · four phases with doctrine · listening-tour coverage · early-win ledger (feeds `win:` capture) · drift advisory |
-| #/ritual **[v16]** | Cadence clocks (lapsed says lapsed) · **agenda generated from live instruments**, not memory (top cases, ≥9 risks, silent handoffs, moved goals, advisories, NBM) |
-| #/review **[v16]** | Weekly brief auto-compiled with week-over-week deltas · "what I am avoiding looking at" scan · snapshots stored for trend · print stylesheet — the page is the brief |
-| #/academy **[v16]** | 12-competency model with **evidence-tied levels** (breakpoints printed, no self-rating) · lesson journal (searchable; fed by closures, AARs, graded goals/decisions, retired risks) · spaced drills resurface at matching case types |
-| #/data | Identity · storage meter · **12 audit classes** with safe-repair only where mechanical · export/import (replace / re-minting merge) · prune with double-confirm counts · example-org load/erase · system log |
-| #/about | Judgment contract · hard refusals · **live counts computed from code** (incl. zero-orphan cross-read of every action/form) · **20 self-tests executed on open** · shortcuts · known limits |
+| #/talent | Succession seats: criticality, emergency cover, dated slates · readiness with **basis printed per row** (stale nine-box halves, HIGH flight −28) · assigned-vs-computed disagreement rendered as *your call, on the record* |
+| #/promote | Evidence-first cases (≥2 ledger items to open) · sponsorship declared on the record · three bias recitals (recency · like-me · calibration) gate the verdict · +90d regret check armed on every decision |
+| #/coach | GROW as a working document · one active skill per person (t22 executes the refusal) · reps become tasks **and** 1:1 agenda items automatically |
+| #/delegation | Five-rung authority ladder · checkpoints auto-scheduled from the rung · boomerangs return work to _your_ desk with a task · average-rung ≤2.5 (n≥4) fires the micromanager advisory |
+| #/mediation | Positions vs interests · session log · written agreements with owners+dates (become tasks for **both** parties at settle — t24 executes) · settle requires ≥1 agreement · +14d follow-through |
+| #/health | Five dims per team · pulses with estimate marks · feeding signals printed (sev Σ, flight avg, silent handoffs) · weakest dim gets ONE concrete intervention |
+| #/org | Spans/layers/vacancies + aggregate heat per team (formula printed) · span >8 named rumor-territory · **reorg sandbox** simulates a move (span deltas, succession gaps, flight resets) and commits only on apply |
+| #/transition | 90-day clock off identity · three phases with doctrine · listening-tour coverage · early-win ledger (feeds `win:` capture) · drift advisory |
+| #/ritual | Cadence clocks (lapsed says lapsed) · **agenda generated live from instruments**: NBM #1, top cases, ≥9 risks, silent handoffs, moved goals, firing advisories |
+| #/review | Weekly brief with week-over-week deltas · "what I am avoiding looking at" scan · snapshots stored for trend · print stylesheet — the page is the brief |
+| #/up **[v18]** | Power × interest grid · contact cadences · dated promises both directions · **pre-meeting brief assembled live** (their expectation, your owed promises, top cases by sev, a no-surprises prompt) · two advisories |
+| #/academy | 12-competency model with **evidence-tied levels** (breakpoints printed, no self-rating) · searchable lesson journal (fed by closures, AARs, graded goals/decisions, retired risks, mediation settlements) · spaced drills resurface at matching case intake |
+| #/data | Identity · storage meter · **12 audit classes** (8 with mechanical safe-repair; 4 flag-for-judgment) · export/import (replace / re-minting merge) · prune with double-confirm counts · example-org load/erase · system log · RECOVERY decisions |
+| #/about | Judgment contract · hard refusals · **live counts computed from code** (incl. runtime zero-orphan cross-read of every data-a/data-f against ACT/FORMS) · **24 self-tests executed on open** · shortcuts · known limits |
 
-## Live counts (grep-verified against this file)
+## Live counts (grep-verified by Session 16 against the delivered file, in-session)
 
-- **41 rules** (`grep -c "^  R\('" index.html` → 41: 3 locked, 32 advisory, 6 positive-lane)
-- **12 audit classes** (`grep -c "AUD\('" index.html` → 12; 6 with safe-repair)
-- **20 self-tests** (`grep -c "T\('t[0-9]*,'" index.html` → 20)
-- **107 dispatched click actions + 10 form surfaces** (`^ '[a-z-]*':function` → 116 = 107 ACT + 9
-  FORMS-literal, plus `f-grow` assigned by reference; runtime zero-orphan cross-read executes on
-  `#/about` and reports any data-f/data-a without a handler)
-- **22 pure FW models · 21 collections · 23 nav routes + 2 detail · 37 playbook entries across 11 case types**
-  (printed live on `#/about` from `Object.keys`/array lengths, not author-claimed)
+- **46 rules** (`grep -c "^R('" index.html` → 46: 3 locked · 37 advisory · 6 positive-lane)
+- **12 audit classes** (`grep -c "^AUD(" index.html` → 12; 8 with safe repair)
+- **24 self-tests** (`grep -c "^T('t" index.html` → 24)
+- **0 forbidden-pattern hits** (`TODO|FIXME|XXX|lorem|coming soon|not implemented` → 0 matches)
+- **44 form surfaces, zero orphans** (every `data-f="f-*"` in markup cross-read against `FORMS['f-*']` definitions by grep in-session; the runtime counter re-executes both form AND action sides against the live DOM on `#/about` and inside t20)
+- **23 collections · 24 nav routes + 2 detail · 25 playbook entries across 11 case types** (computed live on `#/about` from `Object.keys`/array lengths, not author-claimed) · **dispatch surface ≈130 (actions + 44 forms)** — the 44-form side is grep-verified above; the action count is runtime-computed on `#/about` and the zero-orphan cross-read executes there against the live DOM
 
 ## Instrument honesty
 
-Untouched 1:1 sliders write `estimated:true`. Estimates render ≈ and dashed, **never move a slope,
-never clear an advisory**. Audit class `telemetry-honest` executes a probe (synthetic series with an
-injected estimate must equal the base series) and flags malformed estimate flags. Advisory scores
-(flight / trust / readiness / calibration) print their basis and sample sizes; their fixes are
-suggestions, never verdicts. _Write every note as if it will be read aloud in the grievance room_
-sits on every surface that writes about a person.
+Untouched 1:1 sliders and pulses write `estimated:true` (a pulse with NO touched slider auto-downgrades itself). Estimates render ≈ and dashed, **never move a slope, never clear an advisory**. Audit class `telemetry-honest` executes a probe (synthetic series with an injected estimate must equal the base series; t13 re-executes the same property). Advisory scores (flight / trust / readiness / calibration / heat) print their basis and sample sizes; their fixes are suggestions, never verdicts. *Write every note as if it will be read aloud in the grievance room* sits on every surface that writes about a person.
 
 ## Shortcuts & capture grammar
 
-`/` or `Ctrl/⌘-K` palette · `C` register case · `1-9 0` jump (today · signal · cases · people ·
-1:1s · feedback · goals · decisions · handoffs · risks) · `Esc` close.
+`/` or `Ctrl/⌘-K` palette · `C` register case · `1-9 0` jump (today · signal · cases · people · 1:1s · feedback · goals · decisions · handoffs · risks) · `Esc` close.
 
-`case: …` · `commit: @name … by +3` · `owe: @name … by tomorrow` · `praise: @name …` ·
-`note: @name …` · `win: …` · `risk: …` — dates: `today · tomorrow · +Nd · next week · YYYY-MM-DD`.
-Unparseable → **nothing written, said out loud**; unknown verb → said out loud with the verb list;
-no-verb text → a prefilled case intake, not a silent drop. First-name collisions resolve to the
-first match, audibly.
+`case: …` · `commit: @name … by +3` · `owe: @name … by tomorrow` · `praise: @name …` · `note: @name …` · `win: …` · `risk: …` · **`ask: @stakeholder … by +Nd` [v18]** — dates: `today · tomorrow · +Nd · next week · YYYY-MM-DD`. Unparseable → **nothing written, said out loud**; unknown verb → said out loud with the verb list; no-verb text → a prefilled case intake, not a silent drop; first-name collisions resolve to the first match, audibly.
 
 ## Files
 
 | File | Role |
 |---|---|
-| index.html | The entire application |
+| index.html | The entire application (~1,560 lines) |
 | README.md | This file |
-| AI-SESSION-LOG.md | Session-15 engineering record: repo verification, anomaly report, critique, v16 build record, QA ledger, defect ledger, honesty ledger |
+| AI-SESSION-LOG.md | Session-16 engineering record: repo verification, v17-title anomaly, transport-legibility finding, critique, v18 build record, QA ledger, defect ledger (9 items, all fixed), honesty ledger |
 
-**Not in this delivery, on purpose (still live in the repo — flagged, should be deleted
-tree-side):** `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts` (dead
-React/Vite scaffold, doctrine-forbidden) and `SESSION-3.patch.md` (a stale patch against a pre-v12
-architecture — a fuzzy-apply trap).
+**Not in this delivery, on purpose (still live in the repo — flagged yet again, should be deleted tree-side):** `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts` (dead React/Vite scaffold, doctrine-forbidden, flagged four sessions running) and `SESSION-3.patch.md` (a stale patch against a pre-v12 architecture — a fuzzy-apply trap, flagged two sessions running).
 
 ## Known limits (held open, stated, not smoothed)
 
-ISO-day strings, no timezone nuance · readiness/flight/trust/calibration are advisory instruments
-with shown sample sizes · capture matches first names · the feedback-lapse arm runs at boot,
-idempotent via `lapsedCaseId` · audits repair only mechanics, never judgment · `agenda-fresh` audit
-mainly defends imported precomputed-agenda records (agendas in this build are computed live, so
-staleness is an import concern) · the seed is tense on purpose · the on-disk "v15.0"-titled WIP
-body was unreadable through this session's transport and is attributed **nothing** · **this session
-shipped without a browser**: the 20-test wall executes in-browser at every boot and on `#/about`,
-which is the shipped verification; everything claimed here is grep-verified against the delivered
-file, and `«decision stub»` is a domain term (a pre-created decision shell), not a code stub.
+ISO-day strings, no timezone nuance · readiness/flight/trust/calibration/heat are advisory instruments with shown sample sizes, never verdicts · capture matches first names · the feedback-lapse arm runs at boot, idempotent via `lapsedCaseId` · audits repair only mechanics, never judgment · `agenda-fresh` audit mainly defends imported precomputed-agenda records (this build computes agendas live) · the seed is tense on purpose · the on-disk "v17.0"-titled WIP body was unreadable through this session's transport and is attributed **nothing** · **this session shipped without a browser**: the 24-test wall executes in-browser at every boot and on `#/about`, which is the shipped verification; everything claimed here is either grep-verified against the delivered file in-session or labeled a static trace · «decision stub» is a domain term (a pre-created decision shell), not a code stub.
 
-**If any claim in this README disagrees with what `index.html` does, the file wins and the README
-is wrong.**
+**If any claim in this README disagrees with what `index.html` does, the file wins and the README is wrong.**

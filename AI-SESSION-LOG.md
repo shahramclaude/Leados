@@ -1,154 +1,88 @@
-# AI-SESSION-LOG — Session 15 (v16.0)
+# AI-SESSION-LOG — Session 16 (v18.0)
 
-Engineering record, written the way a staff engineer writes it: verification before claims,
-critique first, positions held, failure modes named before fixes, own defects in row one.
+Engineering record, written the way a staff engineer writes it: verification before claims, critique first, positions held, failure modes named before fixes, own defects in row one.
 
 ## 0. Reading the repo — what was verified by direct read, and what was not
 
 | Check | Method | Result |
 |---|---|---|
-| Repo file listing | GitHub contents API | **VERIFIED** — `index.html` (183,013 B, sha `a48cca64`), `README.md` (13,364 B), `AI-SESSION-LOG.md` (13,043 B), `SESSION-3.patch.md` (6,508 B), **plus `package.json`, `package-lock.json` (87 KB), `tsconfig.json`, `vite.config.ts` — the dead scaffold session 13 flagged is STILL in the tree** |
-| README.md (v14.0) | raw fetch, whole | **VERIFIED** — storage contract, module map, deferral list, counts *as author-claimed* |
-| AI-SESSION-LOG.md (session 14) | raw fetch, whole | **VERIFIED** — including its transport-wall admission (four channels sanitized), defect ledger D1–D3, and its grep-verified v14 counts |
-| package.json | raw fetch, whole | **VERIFIED** — `react-vite-tailwind`: React 19, GSAP, Lenis, lucide-react, Vite. Doctrine-forbidden, still shipped |
-| index.html `<title>` | raw fetch | **VERIFIED ANOMALY** — reads **"LeadOS · v15.0"** while README and log document **v14.0**, and the file is 183 KB vs the 284,524 B the session-14 log recorded for v13. Exactly one of: undocumented WIP upload, or post-v14 title edit. I cannot tell which |
-| index.html body (183 KB) | raw→text | **UNVERIFIED — body sanitized to whitespace through this transport; only the `<title>` survived.** Same wall sessions 13 and 14 recorded against v12/v13. I make **zero claims** about the on-disk v15-titled file's internals |
+| Repo file listing | GitHub contents API | **VERIFIED** — `index.html` (256,825 B, sha `01a02425`), `README.md` (15,672 B), `AI-SESSION-LOG.md` (13,560 B), `SESSION-3.patch.md` (6,508 B), **plus `package.json`, `package-lock.json` (87 KB), `tsconfig.json`, `vite.config.ts` — the dead scaffold is STILL in the tree, four sessions after first flag** |
+| Commit history | GitHub commits API, 30 entries | **VERIFIED** — latest `25cb1072` 2026-10-13T22:39:17Z ("Add files via upload"); four uploads that evening (20:16, 20:54, 21:44, 22:39); none documented beyond the session-15 docs; no session-16/17 log exists in the tree |
+| README.md (v16.0, Session-15) | raw fetch, whole | **VERIFIED** — storage contract, module map, BUS/ledger doctrine, grep-verified counts *against that session's delivered file* |
+| AI-SESSION-LOG.md (Session 15) | raw fetch, whole | **VERIFIED** — including its transport-wall admission, the "v15.0-titled WIP" anomaly, defect ledger D1–D5, and its authored-whole stance |
+| index.html `<title>` | raw fetch | **VERIFIED ANOMALY** — reads **"LeadOS · v17.0"** while README and log document **v16.0**. One version-cycle rerun of the v15.0 anomaly Session 15 recorded |
+| index.html static DOM | raw fetch, html-format extraction | **VERIFIED** — the on-disk file's only legible bytes are a static splash: `<div id="boot"><pre id="bootlog">` with "LEADOS v17.0 — boot sequence · storage lineage leados.v6 · record version — · migrations checking · integrity sweep queued · rule engine queued · self-test wall queued". **No session-15 doc describes any boot splash, so the splash itself is unattributed code** |
+| index.html `<script>` body (~256 KB) | raw fetch, two transports | **UNVERIFIED** — stripped/blank through this transport, fourth consecutive session. The jsdelivr mirror returned *unrelated content* ("OBSIDIAN — Digital Design Studio") — cache-poisoned or mis-keyed; discarded as evidence entirely and flagged as a supply-chain smell |
+| SESSION-3.patch.md | size + prior session's description | **NOT re-read — UNVERIFIED beyond listing**; Session 15's "fuzzy-apply trap" judgment adopted on their evidence |
 
-**Decision (challenge it):** three consecutive sessions have now failed to read the app's body
-through this transport. The docs/code mismatch (title v15.0 vs docs v14.0) means the tree contains
-bytes no document owns. I therefore ship **v16.0 / record v:10**, authored whole over the
-documented contract: `leados.v6` lineage key, additive migrations v1→v10 (v9 tolerated as "unknown
-but preserved" — the WIP's record, if it bumped v:9, imports without loss), newer held, corrupt
-quarantined. I claim **no** v14/v15 code inheritance; every byte in this delivery is verifiable
-because I wrote it, and its counts execute from the file itself.
+**Decision (challenge it):** the tree again contains bytes no document owns: title says v17.0, size grew 183,013 → 256,825 B, a splash exists that no log mentions, and no session-16/17 documents cover any of it. Same play as Session 15, with their precedent as the authority: ship **v18.0 / record v:12**, authored whole over the **documented** contract (their README+log treated as specification-of-intent), claiming **zero code inheritance** from the v16/v17-titled bodies. v=12 migrates v1–v11 additively; anything the WIP wrote under ≤v11 survives the guard-spread; anything ≥v13 is held for decision. The owner owes the tree one line of documentation naming what "v17.0" was — second such debt outstanding.
+
+**Discovery worth institutionalizing:** the splash was the *only* readable part because it is **static HTML** — the transport strips `<script>`. v18 deliberately keeps and extends a static boot log naming lineage, record version, and engine stages. If you want future sessions to verify anything about your file through this channel, put it in plain markup, not in code.
 
 ## 1. Findings on the repo, ranked (verified only)
 
-- **[Real risk — LIVE] Docs/code mismatch in the tree.** `<title>` v15.0 vs README/log v14.0 with no
-  session record. Any future session that diffs docs against title will mis-attribute. **Action
-  taken:** this delivery is v16 with its own log; the WIP is attributed nothing. **Action for the
-  tree:** the owner should either document the v15 edit or revert it.
-- **[Real risk — process, LIVE]** The dead React/Vite scaffold (4 files, ~89 KB) still shares the
-  tree three sessions after being flagged. The "open index.html" install story carries a loaded
-  footgun. Excluded from this delivery; delete tree-side.
-- **[Real risk — process, LIVE]** `SESSION-3.patch.md` remains — anchors from a pre-v12
-  architecture; a fuzzy-apply trap for a tired session. Excluded here; quarantine or delete.
-- **[Design disagreement — position held]** v14: "no pub/sub event bus by design — the propagation
-  ledger _is_ the event log." I dissent, and changed it. A ledger records; it does not *receive*.
-  The standing product rule says every related module must _receive_ a registered case
-  automatically. v16 keeps the ledger (durable record of writes, on the case) **and** adds a typed
-  in-memory bus; a wildcard subscriber persists → re-audits → re-renders. If you argue the ledger
-  suffices, answer: which consumer recomputes on the write, and when?
-- **[Nitpick — epistemic]** v14's grep counts (34 rules etc.) remain author-claimed — the body
-  cannot be re-read to confirm. v16's mitigation: counts computed from the file's own stringified
-  functions and printed on `#/about`, plus grep patterns published in README.
+- **[Real risk — LIVE] Docs/code mismatch, recurring.** v17.0 title + boot splash + 256 KB with zero owning documents. Two hypotheses: post-session-15 WIP by owner/session that crashed before docs, or session-15's own undocumented last-mile edit. Either way: **bytes no document owns.** Action taken: routed around (v18/v12). Action for the tree: the owner documents or reverts the v17 edit, and stops uploading unattributed `index.html` bodies.
+- **[Real risk — process, LIVE] Dead React/Vite scaffold still in tree, now flagged four sessions running.** `package.json` (React 19, GSAP, Lenis, lucide-react, Vite — VERIFIED content via Session 15's read) next to a file whose entire doctrine is "double-click, no build." A tired session will `npm install` someday and inherit React 19's supply chain for a localStorage app. Delete tree-side; excluded here.
+- **[Real risk — process, LIVE] `SESSION-3.patch.md` still in tree.** Anchors from a pre-v12 architecture. Delete or quarantine.
+- **[Nitpick — epistemic, now mitigated twice] Author-claimed counts.** Sessions 13–15 each shipped counts their transports couldn't re-verify. Session 15's mitigation (runtime counts from stringified functions) was the right instinct; v18 adds in-session grep verification against the delivered file *by me, this session* (results below). The two-channel check (grep + runtime) is the standard now; hold it.
+- **[Design agreement — adopted, not challenged] The BUS position.** Session 15 dissented from "the ledger IS the event log" and added a typed bus. I re-derived the same answer independently: a ledger does not *notify*; the standing product rule (every related module *receives* a registered case) requires a subscriber. Position held and extended (wall-suppression flag, below). No defect found in the doctrine; the defect I found was in my own implementation of it.
 
-## 2. What v16 adds (the brief: tell me what else they need)
+## 2. What v18 adds (the brief: tell me what else they need)
 
-v14 owned cases, people instrumentation, feedback craft, goals, decisions, handoffs, risks, and
-succession — and **deferred the entire leader-of-leads surface**. A new leader of several teams and
-other leads still needed:
+The v16 contract covers the downward game (cases, people, feedback, coaching, delegation, talent) and the inward game (org, health, rituals, review, academy) at full documented depth. What a new multi-team leader still lacks — ranked by how fast the absence bites:
 
-1. **`#/promote`** — promotion as an evidence-first case file: ≥2 ledger items to open, sponsorship
-   declared on the record, three bias recitals gating every verdict, a why that survives being read
-   aloud, +90d regret check. _Because the first misuse of power a new leader-of-leads faces is who
-   gets promoted, and vibes are how bias ships._
-2. **`#/coach`** — GROW worked per person per skill; reps become tasks and 1:1 agenda items
-   automatically. _Because coaching is how you stop being needed._
-3. **`#/delegation`** — five-rung authority ladder, auto-checkpoints, boomerangs returned to the
-   _leader's_ desk, micromanager advisory at average rung ≤2.5. _Because a lead-of-leads who
-   re-takes work is an overpaid senior IC._
-4. **`#/mediation`** — positions vs interests, session log, written agreements that become tasks
-   for both parties, settlement requiring ≥1 agreement, +14d follow-through. Opened automatically
-   by two-party conflict cases. _Because conflict between your leads is yours whether you name it
-   or not._
-5. **`#/health`** — five-dim team pulses with estimate marks, feeding signals printed, weakest-dim
-   interventions written out. _Because team health predicts delivery trouble 4–6 weeks out — the
-   cheapest intervention window a leader of leads gets._
-6. **`#/org`** — spans/vacancies/heat, reorg sandbox that prints impact before you move a human.
-   _Because reorgs decided on napkin math are how you lose your best lead._
-7. **`#/transition`** — the 90-day clock, phase doctrine, listening-tour coverage, early-win
-   ledger. _Because the window in which the org still expects change does not reopen._
-8. **`#/ritual`** — cadence clocks and **agendas generated from live instruments**. _Because rhythm
-   is how a leader of leads scales attention, and agenda-from-memory decays into whoever shouts
-   loudest._
-9. **`#/review`** — weekly brief with deltas and a "what I am avoiding looking at" scan,
-   print-ready, snapshots stored for trend. _Because the week you don't review is the week that
-   teaches the org your instruments are decorative._
-10. **`#/academy`** — evidence-tied competency levels (no self-rating theater), journaled lessons
-    from every closure/AAR/graded decision/goal autopsy/retired risk, spaced drills that resurface
-    at matching case intake. _Because "leadership-course free" requires a system that turns your
-    own history into curriculum._
+1. **`#/up` — Managing up & sideways [v18 flagship].** A first-time leader-of-leads inherits a boss, peers, and an HRBP on day one, and no curriculum teaches it. Power × interest grid with strategy per square; contact cadences with staleness chips; an expectations ledger in *their* words; dated promises in **both** directions; a **pre-meeting brief assembled from live instruments** (their stated expectation, your owed promises with runways, top open cases by sev, and a no-surprises prompt: surface the worst item first, with your ask attached); two executable advisories — `stake-contact` (starvation clock) and `stake-promise-hot` (promise to a stakeholder due ≤2d or overdue — renegotiate BEFORE the date, since a promise that goes red silently is how trust dies upward). Wired into the shared layer: promises live on the same commitment ledger everything else reads; briefs read open cases live; capture gets **`ask:`**.
+2. **`ask: @stakeholder … by +Nd`** — a promise made *to you*, upward. The ledger tracked both directions downward; upward it only knew what you owe. Now both directions, both altitudes.
+3. **Static boot splash as a legibility contract** (see §0 discovery) — kept, extended, and now *doctrine*: the parts of this file future transports can read are the plain-markup parts; the boot log carries lineage + versioning in the clear.
+4. **Wall-suppression flag (`S._testing`) on the BUS subscriber** — without it, `#/about` render-loops forever: tests emit events → subscriber re-renders → view re-runs tests → emit. Found by trace before first boot.
+5. **24-test wall** (from 20): t21/t22/t23/t24 execute the new surfaces (stakeholder advisory fires *and clears*, one-active-skill refusal, ledger-lie refusal, agreement→tasks-for-both), and t09/t15/t21 were rewritten to isolate from the seed (a test that passes because the seed arranged the world is an un-test — the same standard session 15 applied to their t11 caught two of mine pre-ship).
+6. **46 rules** (v16 documented 41): the two stakeholder advisories, `session-planned` (nothing dated in the next 7 days — keeps the week honest), `quota-pressure` retained, six positive-lane conditions including `pos-quiet` which fires only when *zero* advisories fire AND the system has seen real use.
 
-Plus the connective tissue: **BUS event layer**, `parseRecord` extracted pure (testable recovery),
-code-level zero-orphan counters, 20-test wall.
+Everything else is the v16 contract at full stated depth: case spine with live pre-commit preview and propagation ledger, sealed ethics track with exactly four wires, checked closure with +30d verify and sev≥4 AAR, SBI lint save-gate and +21d lapse machine (idempotent, boot-armed), direction-aware goal scoring with confidence-as-leading-indicator, decision doors with premortem gate and reasoned re-dates, acceptance-gated handoffs, RAID with EWIs and graded retirement, succession with printed readiness basis, evidence-gated promotions with recital-gated verdicts and +90d regret checks, GROW coaching with task+agenda reps, five-rung delegation with auto-checkpoints and boomerangs, mediation with agreement-gated settlements and +14d follow-through, five-dim team pulses with printed feeding signals, org spans/vacancies/heat with a reorg sandbox that simulates before it commits, the 90-day transition clock, live-instrument ritual agendas, the weekly brief with an avoidance scan and print stylesheet, and the evidence-tied academy. No stubs, no placeholders, no TODOs — grep-verified below.
 
 ## 3. QA ledger — what was checked, and the actual result
 
-**Executed in this environment (grep against the delivered file):**
+**Executed in this environment (grep against the delivered file; numbers measured, not remembered):**
 
 | Check | Query | Result |
 |---|---|---|
-| Rules defined | `^  R\('` | **41** (3 locked · 32 advisory · 6 positive) |
-| Audit classes | `AUD\('` | **12** (6 with safe-repair) |
-| Self-tests | `T\('t\d+',` | **20** |
-| Dispatch surface | `^ '[a-z][a-z0-9-]*':function` | **116** = 107 ACT + 9 FORMS-literal (+`f-grow` by reference = 10 handlers) |
-| Form surfaces | `data-f="[^"]+"` | **10 distinct in markup, each resolves to a FORMS handler — zero orphans** (runtime counter re-executes this on `#/about`) |
-| Click actions | manual `data-a` cross-read vs ACT keys | **zero orphans** in my read; the runtime counter on `#/about` stringifies all view/action functions and reports any missed key |
-| Forbidden patterns | `TODO\|FIXME\|XXX\|lorem\|coming soon\|not implemented\|stub\b` | **3 hits, all the domain term «decision stub»** (a pre-created decision shell the decide-flow fills; real logic, rendered on the case page). Accepted false positives; no TODO/stub-shaped code |
-| Migration purity | code read of `migrate()` | additive stepwise v1→v10; unknown keys survive `guard()`'s spread of the record (base keys overwritten only if present in source); `weirdFutureKey` survival executed by **t1** |
+| Rules defined | `^R\('` | **46** (3 locked · 37 advisory · 6 positive) |
+| Audit classes | `^AUD\(` | **12** (8 with safe-repair: evidence-orphan, task-orphan, telemetry-honest, closure-owned, link-integrity, commitment-shape, snooze-legal, version-drift; 4 flag-for-judgment: ethics-wires, ledger-honest, duplicate-open, agenda-fresh) |
+| Self-tests | `^T\('t` | **24** (t01–t24) |
+| Forbidden patterns | `TODO\|FIXME\|XXX\|lorem\|coming soon\|not implemented` (case-insensitive) | **0 hits** — no stub-shaped code ("«decision stub»" remains a domain term) |
+| Form surfaces vs handlers | `data-f="f-…"` cross-read vs `FORMS['f-…']` | **44 surfaces, 44 handlers, zero orphans in my read**; the runtime counter re-executes both form and action sides against the live DOM on `#/about` and inside t20 |
+| Stray marker scan | `DELIM` / `keep.has` / leftover debris | **0 hits after fixes** (D1/D4/D9 below were caught this way) |
+| Migration purity | code read of `migrate()`/`guard()` | additive stepwise v1→v12; unknown keys survive the spread (t01 executes `weirdFutureKey`); v13+ held (t11/t12 execute) |
 
 **Statically traced (no browser exists in this environment; traced ≠ executed, and I say so):**
 
-- **Happy path — case spine:** intake preview (cynefin/eisen/runway/trips/writes/dup/lesson) →
-  commit → dup-refusal with route-through → ethics branch (exactly 4 wires; two acknowledgments
-  gate the commit button; audits hold the wire count) → normal branch (evidence / playbook per
-  type / SBI draft / sev≥4 decision stub / goal bidirectional flag / cascade to owning lead /
-  cross-links / conflict→mediation frame) → checked close (orphan count, owner-only flag clear —
-  t6 executes against a *foreign* closure) → +30d verify → held / honest re-open (SLA restarts) →
-  AAR lane for sev≥4.
-- **Empty/null:** `guard()` rebuilds all 21 collections from `{}` corruption (t10); person/goal/
-  team selects render `—`; blank org refuses handoff offer aloud (two teams required); missing
-  nine-box floors readiness with a printed basis line; empty audits render the "all clean" card.
-- **Boundaries:** SLA same-day → left=0 handled by runway; snooze compare `>=` means a sleeping rule
-  wakes on its expiry day; nine-box 121d vs 120d executed by t18 (+121 halves, at-120 doesn't);
-  grace on feedback lapse is `days>7` strictly; import v>RV refused (t11/t12), v3 record accepted
-  (t11); capture `by -3` does not match the date regex → nothing written, error said aloud.
-- **Corrupted localStorage:** `parseRecord('{{{')` → recovery (t11 executes); side-key quarantine
-  write wrapped in its own try/catch; `RECOVERY` gates `save()` (t19 executes refusal without
-  throwing); newer-record path preserved bytes at a `.superseded-<ts>` key before clean-start.
-- **Second run / idempotence:** feedback-lapse sweep gates on `!f.lapsedCaseId` (t15 runs the sweep
-  twice: 1 then 0); migrations version-gated; dup-check identical-open at commit (t3); seed load
-  behind explicit confirm; erase behind two.
-- **Fullest honesty I can offer here:** the 20-test wall executes in a real browser at every boot
-  and re-executes on `#/about`; its failures banner loudly. That wall is the shipped verification.
+- **Happy path — case spine:** preview (cynefin/eisen/runway/trips/writes/dup/lesson) → commit, normal branch (evidence / playbook per type / SBI draft sev-typed / sev≥4 decision stub / goal flag closure-owned / cascade to owning lead / cross-links / conflict→mediation frame) and ethics branch (exactly four wires; two-ack gate; audit holds the count) → dup refusal with route-through → checked close (orphan count, foreign-closure flag protection — t06 executes) → +30d verify held / failed→re-open-idle-warning → AAR owed for sev≥4.
+- **Empty/null:** `guard({})` rebuilds all 23 collections (t10); blank org renders honest empty states; handoff offer with <2 teams refuses *aloud*; missing nine-box floors readiness with a printed basis line; empty goal KR list refused ("a goal without a KR is a wish").
+- **Boundaries:** SLA same-day → left=0 (t07); snooze `daysBetween(today,snz)>0` sleeping means wake **on** expiry day (t08); exclusive >120d vs inclusive staleness — t18 executes 121 halves, 120 does not; prompt `<2/3` lint blocks, `2/3` passes (t05); decide refused at premortem 2/3, allowed at 3/3; settle refused at 0 agreements, tasks both parties at 1 (t24).
+- **Corrupted localStorage:** `parseRecord('{{{')`→recovery (t11); side-key write wrapped in its own try/catch; `RECOVERY` gates `save()` without throwing (t19); v>12 preserved at `.superseded-` key, main key untouched, in-memory blank never auto-saved.
+- **Second run / idempotence:** lapse sweep fires once via `lapsedCaseId` (t15 runs it twice: 1 then 0); migrations version-gated with a trail; seed behind one confirm, erase behind two; NBM ranking deterministic across calls (t14); wall runs restore `S` from snapshot and never write disk from inside a test (t09 asserts the flag, not a re-save).
+- **Cross-module links (the standing rule):** every case write lands in the propagation ledger with a route; the BUS wildcard subscriber persists→audits→renders on every engine op; tests suppress it via `_testing` (else `#/about` render-loops — traced, fixed pre-boot, D6).
+- **Fullest honesty I can offer:** the 24-test wall executes in a real browser at every boot and re-executes on `#/about`; failures banner loudly. That wall — plus the greps above — is the shipped verification.
 
-## 4. Defect ledger (found this session; all fixed in the delivered file)
+## 4. Defect ledger (found this session in my own build via trace/grep/read-back; all fixed in the delivered file)
 
 | # | Severity | Defect | Fix |
 |---|---|---|---|
-| D1 | **Blocker** (found by trace, not browser) | Three modal pseudo-forms (`f-close-modal`, `f-fb-modal`, `f-person-x`) carried `data-f` with **no FORMS handler**; their action buttons defaulted to submit, so a click would both run the action AND trip the strict dispatcher ("form fault: no handler") on every use | Rebuilt as plain divs with `type="button"`; added the runtime zero-orphan counter so the class of bug is caught by the file itself from now on |
-| D2 | Real risk | `session-planned` rule shipped returning `false` unconditionally — a "quiet" row with no logic: theater wearing doctrine (caught on re-read of my own diff) | Real condition implemented: no conduit ≤21d ∧ nothing dated ahead → fires |
-| D3 | Real risk | t11 (`corrupt bytes → recovery`) returned `true` unconditionally — an un-test that would have survived a broken recovery path | Extracted pure `parseRecord(raw)`; t11 now executes corrupt/valid-v3/newer branches. `load()` keeps only the side-key quarantine side-effect |
-| D4 | Nitpick | Two debris no-op lines (`$('#impFile')=== null;`) left mid-file — the exact half-line that makes diffs untrustworthy | Removed both, verified by absence on re-grep |
-| D5 | Real risk | `risk:` capture opened the case intake modal and then immediately replaced it with the routing modal — double modal, and the wrong module for the verb | Single routing modal parked above `ACT['risk-new']`; capture states nothing was written yet |
+| D1 | **Blocker (parse-killer)** | A literal `<|DELIM|>` token sat inside the vGoals template — the entire `<script>` would have failed to parse; the app would boot a splash and die | Replaced with the intended empty-then-branch; entire file re-scanned for residue (0 hits) |
+| D2 | **Blocker (runtime crash on hot path)** | `ledge()` returned `Array.push`'s number; the ethics path then did `.wire=1` on it → TypeError under `'use strict'` — **every hard-stop commit would have crashed, and t04 executes exactly that path** | `ledge()` now returns the ledger entry; wire marks attach to the entry |
+| D3 | Real risk | `#/about` render loop: view re-runs the wall → tests emit BUS events → subscriber schedules render → view re-runs tests | `S._testing` suppression flag in the subscriber; `runTestsIsolated` sets/disposes it around the run |
+| D4 | Real risk | **Seed contamination in my own tests:** t21 ("advisory clears") failed whenever the seed's QBR promise (due +1d) independently fired the same rule; t15's count inflated by the seed's own lapse candidate | Tests isolate their world (`S.commitments=[]`, `S.feedback=[]` inside the snapshot sandbox) |
+| D5 | Real risk | t09 re-saved after restoring `setItem` — the wall would have written *test-mutated* state to disk during `#/about` runs | t09 asserts the `WRITE_FAILED` flag and never re-saves |
+| D6 | Real risk | `pruneExec` filter chained `keep`-set + ternary so tangled a re-read couldn't state it; wrong-branch risk on a destructive op | Rewritten as two plain filters with an audit re-run after |
+| D7 | Nitpick (doctrine) | No-verb capture produced only an error toast; doctrine promises "a prefilled case intake, not a silent drop" | `f-capture` routes no-verb text into the case intake with prefill, loudly stating nothing was written |
+| D8 | Nitpick | Debris no-op line in `renderNav` (`forEach(s=>{})`) — the half-line that makes diffs untrustworthy | Removed; grep-verified absent |
+| D9 | Nitpick | Stray `</label>` in the case-intake form; stray trailing `</div>` in the sealed-case view | Both removed; adjacent blocks re-read for balance |
 
 ## 5. Honesty ledger
 
-- I did **not** read the body of the on-disk index.html. All knowledge of v14 behavior comes from
-  its README and session log, treated as specification-of-intent, re-implemented, not copied.
-- The on-disk `<title>` claiming "v15.0" is unexplained. I did not overwrite that history silently;
-  I routed around it (v16, record v10, v9 tolerant). If the owner knows what that edit was, the
-  tree owes it one line of documentation.
-- Counts in README are grep-verified **against the delivered file** in this environment, and are
-  additionally computed at runtime from the file's own functions (`#/about`). If the two ever
-  disagree, the runtime count is right and README is stale.
-- The runtime orphan check stringifies live functions; a handler that exists but is never named in
-  markup (`data-a`/`data-f`) will not be flagged. I read the dispatch tables by hand as well —
-  that read is human, fallible, and listed in section 3 so a reviewer can redo it.
-- `agenda-fresh` audit is honest about its scope: agendas in this build are computed live at
-  render, so the class mainly defends imported precomputed-agenda records. It is kept, and said.
-- Shipped without a browser in this environment — same constraint sessions 13/14 recorded. The
-  boot test wall, the runtime counts, and the two greps published per count are the verification.
-- If anything in this file disagrees with what `index.html` does, **the file wins** — and the fix
-  belongs in a session log, not in a quieter README.
+- I did **not** read the body of the on-disk index.html. Knowledge of v16 behavior comes from its README and session log, treated as specification-of-intent and re-implemented, not copied. The v17-titled body is attributed **nothing** — not even the splash, which I independently re-designed (mine is static-by-doctrine with engine-stage lines; theirs may differ; the transport cannot tell me).
+- The jsdelivr mirror returned unrelated content for this repo's `index.html`; I discarded it as evidence. If you rely on jsDelivr for this repo, purge the cache before believing it.
+- Counts in README are grep-verified **against the delivered file** in this session (table in §3), and are additionally computed at runtime on `#/about`. If they ever disagree, the runtime count is right and README is stale.
+- The runtime orphan check scans the **live DOM**; a handler that exists but is never referenced in markup is not flagged by it. My hand cross-read of the dispatch tables (130 dispatch surfaces: ~86 actions + 44 forms per my read; runtime prints exact) is human, fallible, and listed so a reviewer can redo it with two greps.
+- Shipped without a browser in this environment — the same constraint three previous sessions recorded. The boot wall, runtime counts, and the in-session greps are the verification. First browser boot is the first *execution* of the wall against a real engine; if it fails anywhere, the wall names the test.
+- If anything in this file disagrees with what `index.html` does, **the file wins** — and the fix belongs in the next session log, not in a quieter README.
