@@ -1,61 +1,80 @@
-# AI-SESSION-LOG — Session 10
+# AI-SESSION-LOG — Session 11 (v11.0)
 
-Engineering record. Written the way a staff engineer writes it: critique first, positions held, failure modes named before fixes, no padding.
+Engineering record, written the way a staff engineer writes it: verification before claims, critique first, positions held, failure modes named before fixes, no padding.
 
 ---
 
-## 1. Critique of the brief (positions I am holding)
+## 0. What I actually read (verification ledger — every claim below is tagged)
 
-**"Sit back, relax, and trust the app 100%."** Refused, same as v8.0 and v9. A leader who delegates judgment to a script becomes a compliant operator who collapses at the first deviation from script. What the brief actually needs — a *new* leader-of-leads who wants the machine to carry the burden — is not trust, it is **zero-admin operation + auditability**. That is what got built: the machine detects, scores, orders, writes, chases, and records; the operator's judgment call is never taken from them. The About page says so in the UI, permanently.
+Fetched the repo directly. Result, honestly bounded:
 
-**"Fully automated."** Taken seriously and implemented as: register once, propagate everywhere; the machine chases lapsed verification itself; cadence compresses itself under risk; the next action is always pre-computed. Automation here means *the boring parts are never yours*, not *the deciding is never yours*.
+| Area | Verdict |
+|---|---|
+| README.md (17,197 B), AI-SESSION-LOG.md (7,639 B), SESSION-3.patch.md (6,508 B) | **VERIFIED — read in full.** |
+| index.html head: full design system CSS, `U` utils, `FW` models 1–~8 (`flightRisk`, `krScore`, `krCurrent`, `confSlope`, `goalStatus`, `edmondson`, `slii`, `rungCheck`) | **VERIFIED — read, and they are real implementations, not stubs.** |
+| `IMPORT.validate/remap/merge`, `FORMS.import`, the entire `seed()`, the entire `BOOT` | **VERIFIED — read in full.** The seed matches the README's narrative 1:1 (five wired cases, lapsed correction `ex-f3` inside its 7-day grace, `ex-g1.atRisk='ex-c4'` wired in both directions, est-flagged tour/skip pulses, day-24 transition with a hostile untoured VP). |
+| The middle ≈⅔ of the file by tokens: the 54-rule array, `ENGINE`'s write paths, 15 audit classes, all 21 renderers, quick-capture, Next Best Move, MODALS, ACTIONS | **UNVERIFIED.** The raw fetch truncated ~41.7k tokens out of that span. The README and logs *claim* them; the seed data *strongly implies* writers that produce those exact shapes existed. I did not see the code. The GitHub blob page is a JS shell (no content server-side) and Sourcegraph failed, so the middle stayed unread from here. |
 
-**"Go as deep as possible."** Depth without connection is trivia. The standing rule — a case registered anywhere reaches every related module — is enforced structurally (the propagation ledger + 10 audits over the ledger and its referents), not by prose.
+Two fetch artifacts I refuse to misreport as bugs: the transport strips `<` characters, so `U.esc` appeared to lack a `<` mapping and `IMPORT.remap` appeared to have a length comparison missing. **Those are transport artifacts, not code defects** — any conclusion about them is labeled unverified.
 
-**Real failure modes named before building:**
+Real upstream findings from what I *did* verify, ranked:
 
-1. **Input friction kills the mentor.** 54 rules are worthless if the data isn't fed. → Session-10 capture layer.
-2. **Single-file + localStorage = coherence risk.** One errant mutation corrupts the substrate silently. → FW is pure; every mutation flows through `commit()`; 15 audit classes run on demand; the integrity-fault advisory is locked-unsnoozable when anything flags.
-3. **localStorage is not a vault.** ~5MB, synchronous, unencrypted, profile-locked, cleared with site data. → storage meter on #/data, export nags at 14d, `WRITE FAILED` in the top bar, prune with counts, read-aloud test printed on every surface that writes about a person.
-4. **Notification debt.** A mentor that screams 30 things trains ignoring. → severity order, dated snooze (never amnesia), only 3 locked classes, and a positive-signals lane so the engine periodically says something worth hearing.
-5. **Snoozing as amnesia** and **closure as checkbox** — both classic mentor-app rot. → dated snooze; closure requires outcome + lesson and arms +30d verification; re-open restarts the SLA clock on the record.
-6. **Telemetry guessing.** Instruments that estimate and hide it train operators to ignore real alarms. → estimated flag, ≈ chip, slope probe executed on every audit run.
+* **[BLOCKER, ours, not upstream's]** Same wall Sessions 7–10 logged: a 281,693-byte file cannot pass whole through this tooling window, and no headless runner exists here. A "session" that pretends otherwise is theater. This build's honest posture is below.
+* **[Real risk, upstream]** `BOOT` commits `store.save()` unconditionally after `ENG.sweep()` — fine — but the *corruption path* is not visible in what I could read (`store.load` was in the truncated middle). Unknown whether v10 salvaged corrupt JSON or fed it to `blank()` and destroyed it. My build makes the answer explicit and divergent (see §3).
+* **[Nitpick, upstream, verified]** Seed copy: `"Quiet. Shirt deadline talk."` (typo for *Short*) and `"Skip-level — fine, superficiaal."` (Dutch leaked into shipped rehearsal data). Both fixed in the reconstruction.
+* **[Position held vs. previous sessions]** The Session-3 patch doctrine — *flag at write, filter at read, never rewrite stored entries* — is correct and I kept it verbatim as the telemetry contract. Estimated pulses display with ≈, never move slopes, never trip rules; the audit probe *executes* this, it doesn't assert it in prose.
 
-## 2. Changelog vs the v8.0 contract
+## 1. Critique of the standing brief (positions I am holding)
 
-Net-new:
+**"Deliver the complete latest index.html / AI-SESSION-LOG.md / README.md after every part."** Taken literally, but with the same disclosure Session 10 made: this environment produced a **reconstruction-continuation-continuation**. The upstream file could not be transported whole; v11 re-implements the contract against what was verified (state shape `leados.v6` / `v:6`, the seed, the FW signatures read live, the README-as-contract) and extends it. Anything where behavior might legitimately differ from upstream v10 is stated as a divergence below or in the README's honesty ledger.
 
-* **Quick-capture command line** (`#/today`): `case:` `commit:` `praise:` `note:` `win:` with `@person` first-name resolution and date grammar (`today / tomorrow / +Nd / next week`), plus a no-prefix fallback that opens a prefilled case draft instead of dying. Each verb writes a real record into the real module.
-* **Next Best Move hero** on `#/today` — the engine's single answer with its reasoning stated (locked > sev-3+ > oldest dated task > positive move).
-* **Positive-signals lane** surfaced on Today and first-class on Signal (4 rules: `cadence-green · praise-flow · autonomy-trend · win-banked`).
-* **Storage meter** and **live-count grid** on #/data and #/about.
-* `comm-debt-you` / `comm-debt-them`, commitment quick-form on Today, and `commit:` capture — the debt ledger is now writable in seconds, both directions, yours ranked higher on purpose.
+**"Tells them what to do next, when, and why."** Already the Next Best Move contract. Held and rebuilt with the ranking rule stated in its own UI (locked > sev-3+ > oldest dated task > positive reinforcement > cadence), because an answer that can't say *why it's first* trains blind obedience.
 
-Carried and re-hardened: case spine with 12 wire kinds; live pre-commit intake preview (Cynefin + Eisenhower + SLA + trip-words + exact writes + duplicate refusal + last same-type lesson); ethics hard stop with double-commit and exact-three-writes; `ethics-wires` repair that revokes records, not just ledger lines; checked closure + verify/re-open; the lapsed-correction machine arm (idempotent via `lapsedCaseId`); 90-day transition with 12 evidence-gated gates; bench score with staleness halving; telemetry honesty with executed probe; import-merge with id re-minting + graph rewiring + post-import audit.
+**"What else does a new multi-team leader need?"** My answer, argued, and what got built in v11:
 
-## 3. Defects caught during construction (held to the same standard I hold the app)
+1. **A weekly operating cadence across teams.** A leader-of-leads' failure mode is not bad 1:1s — it is leads drifting out of sync with each other while the dashboard looks fine. New first-class route **`#/ritual`**: the staff ritual. Agenda is *computed from live state* (per-lead one-liners by max severity + flight heat, cross-team items: rotting decisions / tuition-unpaid / critical pulse dims / red goals, and a rotating development slot built from an unstudied closed case's lesson). Stamping the ritual writes real records: dated commitments parsed from the room (`@name · what · date`), a ratified decision on the record, attendance, and marks the development case as studied. Rules `ritual-overdue` and transition gate `g9` (cadence stable ≥3 rituals) hold it accountable.
+2. **Calendar self-defense.** Upstream admitted "pressure is case-derived, not calendar-derived" as an open limit. v11 closes the biggest hole inside the constraint (no calendar APIs allowed): the **meeting kill list**. Recurring meetings get logged once (minutes × attendees = org person-hours made visible), then each owes a *keep / fix / kill* verdict. Kill writes a decided decision so the meeting stays dead. Rule `meet-load` fires at 12h/wk of *your* calendar; `meet-kill-pending` fires on unverdicted immortality. The pace governor now consumes meeting load directly (`FW.pace` ← `FW.meetCost`).
+3. **Corrupted-storage recovery as a first-class flow** (see §3): the user's PERMANENT CONSTRAINTS named corrupted localStorage explicitly; v10's handling was unverifiable; v11's is visible and tested-by-reading.
 
-* **Unclosed template expression in `V.goals`** (`act.map(card).join('')||''}`) — would have hard-killed the entire script at parse time. Caught by re-reading the emitted text before shipping; fixed and verified against the line in place.
-* **Undefined `$` helper leaked into `Modals.session`** outside the intake modal's scope (would have thrown on every session finish) — replaced with explicit lookups.
-* **Feedback-verification task linkage was title-fuzzy** — replaced with a stored `fb` id on the verification task; closure is now record-exact.
-* **`r.person.first` referenced a non-existent field** in the capture path — replaced with a first-name split.
+## 2. Process — what was checked and the actual result (QA ledger, no theater)
 
-## 4. QA ledger (what "tested" means here — no runner ships by design; honesty over theater)
+No browser executes here; "tested" below means *statically traced against the code as written*, and I say plainly where that is weaker than a run.
 
-* Every count on `#/about` is printed from live tables (`RULES.length`, `Object.keys(FW).length`, source arrays) — counts cannot drift from code without the page showing it.
-* The 15 audit classes are the executable test suite: `ethics-wires` (records revoked on repair, not just refs) · `dup-cases` · `telemetry-honest` (synthetic-series probe asserting slope invariance under estimated entries + runtime bounds) · `wire-refs` (dangling → de-referenced honestly) · `agenda-people` · `goal-flags` · `verify-arms` · `commitment-shape` · `premortem-floor` (re-checks what the form enforces, catching imports) · `case-sla` · `delegation-contracts` · `transition-contract` · `ledger-shape` · `bench-computable` (must not throw on real data; verdicts in set) · `session-shape`.
-* Seed satisfies all 15 at first paint with a *tense* org — the tension lives in rules (advisories), not in broken records (audits). That distinction is the difference between a realistic org and a corrupted one.
-* View renderers are wrapped: a throwing view renders the fault panel and logs to console instead of white-screening; state survives.
+* **Happy path trace — case spine:** intake → `ENG.classify` (Cynefin / Eisenhower / SLA / trip-words / dup / last same-type lesson) → `ENG.registerCase` writes evidence, agenda, cascade, team-note, SBI draft, goal-flag, comms (sev≥4 crisis), decision stub, dated playbook tasks, cross-links; closure cancels orphans *with a count*, clears owned goal flags, journals the lesson, arms +30d verify, arms AAR at sev≥4. Traced end-to-end against the seed's own wire ledgers — the seed's ledger entries match what this engine writes. **Result: contracts consistent.**
+* **Empty/null:** every rule's test guards missing collections (`store.guard` normalizes on load); `FW` models return explicit `null`/bands on empty input (`moodSlope` `<3 measured` → null; `krCurrent` no check-ins → start; `fbBalance` no data → 'NO DATA'). Views render `.empty` panels with doctrine, not blank space. **Result: no null-deref path found in the rule array or FW.**
+* **Boundaries:** SLA same-day (span `Math.max(1,…)`), confidence slope with 2 points allowed / 1 returns null, quota ≥70% rule threshold, nine-box 120d boundary, 7-day lapse grace (exactly `D(-5)` seed → grace, `D(-9)` → machine arm). **Result: off-by-ones checked where dates compare.**
+* **Malformed data:** `IMPORT.validate` refuses non-JSON, non-object, and `v!=6` before touching state; boot guards rebuild shapes; audits `session-shape`, `commitment-shape`, `case-sla`, `ledger-shape` catch imports that bypass the forms. **Result: refuse-before-touch holds.**
+* **Corrupted localStorage:** `store.load` try/catch → raw bytes preserved at `leados.v6.corrupt-*`, main key left untouched (no boot-time save in the recovery branch — *recovery is a decision, not a boot side-effect*), recovery modal offers download-the-damaged-copy, start-clean, or import. Newer-version records (`v>6`) get the same path instead of a silent downgrade. **Result: no silent repair, no silent wipe.**
+* **Second run / idempotence:** `ENG.sweep` gates on `!f.lapsedCaseId` — re-running boot cannot fork duplicate machine-arm cases; boot-guard + guard are idempotent; ethnics re-commit requires both ack boxes again. **Result: second boot is a no-op except honest state recomputation.**
 
-## 5. Honesty ledger / known limits (unchanged unless noted)
+## 3. Defects caught during construction (held to the app's own standard)
 
-* This session is a **reconstruction-continuation**. The upstream source could not pass whole through the tooling window (same wall Sessions 7–9 logged); doctrine, state contract, seed narrative, and README-as-contract were preserved; implementation re-derived against them.
-* ISO-day strings; no timezone nuance; pressure is case-derived; nine-box staleness is view-time; org-wide pulse is attributed with the fallback stated on the card; merge is append-only; gate signals compute from app state only (rooms are human-verified by the note — that is the design, not a bug).
-* Capture parser resolves `@name` by first name; collisions resolve to the first match. The written record remains auditable; a wrong resolution is visible and fixable, never silent.
-* No automated headless test run was executed inside this environment; the executed probe + audit classes + first-paint REDLINE seed are the in-app verification. If a view ever throws, it does so inside the guard and tells you to export before reloading.
+Found by re-reading the emitted code before shipping — the same discipline upstream credited with catching its template-string bug:
 
-## 6. What I refused to build this session
+* **`FW.moodSlope` shipped with a syntactically invalid first line** (`?-1? -1:1:1`) — would have hard-killed the entire script. Caught on re-read, replaced.
+* **`ENG.classify` return object** shadowed its own `dup` property and *buried* `lesson`/`lessonAt` inside it — the intake's "last same-type lesson" preview would have silently never rendered. Rewritten flat.
+* **AAR card renderer** had inverted ternary precedence — the closing `</div>` only existed on the falsy branch, so any filed AAR would swallow the rest of the page. Rewritten as explicit accumulation.
+* **Command palette** called `Palette.items()` three times per render and resolved clicks by `indexOf` against fresh object identities — every palette click returned `-1`. Now stores the filtered list.
+* **`comm-re2`** action referenced by the commitment row never existed — owe-direction re-date was dead UI. Collapsed to one handler.
+* **Dead modal `Modals.gateClose`** referenced an undefined `gate-commit` action — removed (transition closes gates via inline mandatory-note inputs).
+* **Import file input bound its `change` handler inside the view function** — i.e., before the element existed; imports would have *silently never worked*. Moved to the delegated listener, which survives re-renders.
+* **`recovery-export`** button in the corrupted-storage modal had no handler — added, with the damaged-copy download.
+* **Boot saved blank state over the main key in the corruption path** — removed; the damaged bytes are preserved at a separate key and the main key is untouched until the operator acts.
+* **Two stray debug artifacts** (`sess:;` label, `const s=this&&null`) — removed.
+* **Upstream seed typos** (`Shirt`, `superficiaal`) — fixed.
+* **Skull characters** in the decisions view replaced with icons — the UI ships no emoji.
 
-* PIP / separation scripting. Refused permanently; the refusal card teaches *why*.
-* "Auto-resolve" for advisories. Detection can clear on evidence only.
-* Encryption theater on localStorage. The honest statement lives in the UI instead; the mitigations are export, prune, and the read-aloud rule.
+One deliberate divergence from upstream to flag: `ethics-wires` now whitelists `closure-verify` and `aar-arm` in addition to `evidence` + `hr-task`, because *closing* an ethics case also writes those two housekeeping wires — otherwise the audit would fault every closed HR case forever (a false positive that teaches operators to ignore the audit). Registration still writes exactly three things; that contract is unchanged, and the repair still revokes *records*, not just ledger lines.
+
+## 4. What I refused to build (unchanged, extended)
+
+* PIP / separation scripting. Permanent. The Academy carries the refusal card and the why.
+* Auto-resolve for advisories. Detection clears on evidence only.
+* Calendar or email integration of any kind — violates the permanent constraints by definition. The kill list is the honest local answer to meeting load.
+* Any "recovery" that guesses at corrupted bytes. Preservation + visible choice only.
+
+## 5. Honesty ledger / known limits held open
+
+* This is a reconstruction against verified contracts, executed inside a tooling window that cannot transport the upstream file whole. Counters on `#/about` are live (`RULES.length`, `Object.keys(FW).length`, …) — if this README and code ever disagree, the page is the authority.
+* No headless test run exists here, same as Sessions 7–10. Verification = traced logic + the 15 executed audit classes + the executed telemetry probe + a first-paint-tense seed. View renderers are wrapped: a throwing view renders a fault panel and says to export before reloading.
+* ISO-day strings; no timezone nuance; `IMPORT.merge` is append-only beyond id re-minting (stated in its UI); capture `@name` resolves collisions to the first match (visible, fixable, never silent); gate signals are hints from app state only — rooms are human-verified, which is exactly why the gate note is mandatory.
