@@ -1,139 +1,110 @@
 # AI-SESSION-LOG
 
-## Session 1 (this session) — fresh authorship, old lineage not continued
+## Session 2 — continued development of the rebuilt lineage (this session)
 
 ### 0. Role framing
-Operated as a senior-staff reviewer per the standing brief: critique before
-code, name failure modes before fixing them, rank findings, label unverified
-claims, hold position unless given a real counter-argument. This log follows
-that process: claim → verification performed → actual result, for each part.
+Operated as senior-staff reviewer per the standing brief: critique before code,
+failure modes named before fixes, findings ranked blocker / real risk / nitpick,
+unverified labeled unverified, position held unless argued down. This log is
+claim → verification performed → actual result, for each part.
 
-### 1. Claim: "wbweve/Leados is a mature v24 build I can extend."
+### 1. Claim: “I read the repo and can continue its code.”
 **Verification performed:**
-- `GET https://github.com/wbweve/Leados` (rendered README).
-- `GET https://api.github.com/repos/wbweve/Leados/contents/` — real directory
-  listing with sha + byte sizes for every file.
-- `GET https://api.github.com/repos/wbweve/Leados/contents/index.html` —
-  blob metadata + base64 content (truncated by my fetch tool before full
-  decode was possible).
-- Attempted `raw.githubusercontent.com/.../index.html` in both `text` and
-  `html` output modes — both passed the response through a readability/DOM
-  extraction step that stripped `<script>`/`<style>` content entirely,
-  returning only rendered visible text (a few words from the loading splash).
+- `GET github.com/wbweve/Leados` (rendered README — Session-1 rebuild vocabulary).
+- `GET api.github.com/repos/wbweve/Leados/contents/` — full listing with sizes/shas.
+- `GET raw.githubusercontent.com/.../index.html` — DOM-extracted, `<script>` stripped.
+- `GET cdn.jsdelivr.net/gh/wbweve/Leados@main/index.html` — served a *different*
+  build's splash ("LEADOS v19.0 · storage lineage leados.v6 · contract v:13 ·
+  flagship #/skip").
+- Read `AI-SESSION-LOG.md` (Session 1), `SESSION-3.patch.md` (v19-era anchors),
+  `package.json` (React/Vite scaffold), all quoted in-repo.
 
-**Actual result:**
-- Confirmed real and present: `index.html` (201,051 B, sha `2a882d12…`),
-  `README.md` (13,710 B), `AI-SESSION-LOG.md` (12,454 B), `SESSION-3.patch.md`
-  (6,508 B), `package.json`, `package-lock.json`, `tsconfig.json`.
-- Confirmed via arithmetic, not assertion: the existing README's own size
-  table claims `index.html` = 169,534 B. The Contents API reports 201,051 B.
-  **These do not match.** This is a verified documentation defect in the
-  existing repo, independent of and in addition to the "transport wall"
-  problem the existing README already documents about its own script body.
-- Could not retrieve: the actual JavaScript inside that `index.html` — same
-  failure class the existing README describes for ten prior sessions
-  ("UNVERIFIED — transport wall"). I confirm the wall is real from my side;
-  I cannot confirm or deny any specific claim about what is inside it
-  (rule counts, test counts, migration logic, case-routing logic).
+**Actual result (verified facts):**
+- `index.html` on `main` = **102,031 B**, sha `016ad463…` (Contents API).
+- Three contradictory byte sizes exist across the repo's own documents for the
+  prior build: 169,534 / 201,051 / 251,817. Documented drift, confirmed.
+- jsDelivr ≠ raw for the same ref. Cause (CDN cache) is **inference, labeled**.
+- `package.json`/`tsconfig.json`/`package-lock.json` describe a React/Vite build
+  with **no source files present** — dead tooling contradicting the product's
+  own "no framework, no build step" contract. **Blocker.**
+- v19-era splash advertises `#/skip` as flagship; Session-1 README's module list
+  omits skip-levels entirely. **Real risk #1: silent product regression.**
+- The prior build's **script body was not readable** from this environment (same
+  transport wall Session 1 documented; independently re-confirmed). Therefore
+  every internal claim about it is **UNVERIFIED by this session**.
 
-**Decision and why:** Editing code I cannot read, under a persona that is
-explicitly required to "never fake certainty," is not an option. Continuing
-to append to a version-number lineage (`v25...`) implies continuity and
-verification I do not have. I shipped a complete, independently-authored
-implementation of the same product contract instead, under its own schema
-version and storage key, with the old key surfaced read-only rather than
-silently adopted. This is the same resolution path the existing README says
-prior sessions used ("authored whole over the documented contract") — the
-difference this session claims is narrower and checkable: everything stated
-about *this* build is checkable by the reader in their own browser via
-`#/health`, not asserted from an unread file.
+**Decision and why:** Editing a 102 KB file whose script I cannot read would be
+fuzzy application of patches to unread code — explicitly forbidden by the repo's
+own `SESSION-3.patch.md` rules ("if an anchor's neighborhood doesn't match the
+description, STOP"). Authored Session 2 whole over the *documented* contract:
+same key `leados:data`, validating migrations `0→1→2`, quarantine-on-mismatch,
+legacy keys read-only. Where the v19 doctrine was sound, adopted as doctrine and
+reimplemented (pulse `estimated` flag), never claimed as "patched."
 
-### 2. Claim: "The new build's schema/migration/quota/corruption handling works."
-**Verification performed (manual trace, since I have no JS execution
-sandbox):**
-- Traced `loadState()` against five inputs by hand: (a) key absent → default
-  state, no recovery; (b) key present, invalid JSON → `JSON.parse` throws,
-  caught, raw quarantined under `leados:data.corrupt.<ts>`, default state
-  returned, `RECOVERY` object populated; (c) key present, valid JSON but no
-  `meta.schemaVersion` → quarantined as `malformed`; (d) `meta.schemaVersion`
-  greater than current → quarantined as `superseded`, never downgraded or
-  guessed at; (e) older schema version → `migrate()` loop runs `MIGRATIONS[n]`
-  until current, each step stamped into `meta.migrationLog`.
-- Traced `save()` / `trySetItem()`: wraps `localStorage.setItem` in try/catch,
-  sets `LAST_SAVE_OK`/`LAST_SAVE_ERR` instead of throwing to the caller,
-  surfaces a persistent red pill, state stays in memory either way.
-- Traced quota meter: `bytesUsed()` via `Blob` size (falls back to
-  `.length` if `Blob` unavailable), percentage against a stated, clearly
-  labeled **assumed** 5MB floor (explicitly not claimed as a measured
-  browser limit — real limits are not queryable from JS, said plainly in
-  the README rather than implied as fact).
-- Built an in-app self-test wall (`runSelfTests()`, 10 tests, IDs T1–T10)
-  that runs these exact code paths — not reimplementations of them — against
-  synthetic fixtures at every boot, and renders the literal assertion text
-  plus the literal observed value at `#/health`. This is the actual
-  verification mechanism available to a reader; my own hand-trace is a
-  secondary check, not a substitute, and I say so in the README.
+**Self-introduced defects caught in self-review (stated plainly, same standard
+applied to myself):** (a) a triple-quote string in rule R8 that would have been
+a hard syntax error — caught on re-read before delivery; (b) `tryCloseCase`
+calling `closeCase` twice (would have mutated on preview) — caught, fixed with
+an explicit `dryrun` branch; (c) a junk ternary in case-detail copy emitted as
+`' + risk'` — grep-verified and rewritten; (d) nav routing for the quick-capture
+item pointed at a nonexistent route — rewired to open the modal directly. All
+four are the exact class of bug the brief says to name first.
 
-**Actual result:** All ten traces are internally consistent with the written
-code as of this delivery. I cannot upgrade this to "ran and passed in a
-browser" — that step is yours to perform by opening the file, which is also
-the whole point of making `#/health` visible and literal rather than a
-claimed count.
+### 2. Failure modes named in the brief — checked against, mechanism stated
+- **Stale state:** nothing derived is persisted. SLA breach, focus %, listening
+  coverage, radar rows, overdue counts are all computed in the render path from
+  stored facts + today's date. Radar stores zero rows by design (stated in-view).
+- **Second run / reseed:** `meta.seeded` is permanent (set before any seed row,
+  survives wipe-all; T4 asserts wipe→reload keeps roster empty).
+- **Corrupted storage:** five branches in `loadState` — absent / unparseable /
+  wrong-shape / newer-version / migration-failure — each quarantines bytes and
+  never overwrites the live key (T1/T2 execute four of them against real
+  localStorage, restoring the key in `finally`).
+- **Broken cross-module links:** `integrityAudit` nulls dangling FKs at every
+  boot + after every import, logs each repair, never drops records; case
+  `linkedIds` are resolved live in the detail view and pruned when dangling
+  (T14). Case-spine fan-out is one pure function of (state, payload) — T5/T6/T7
+  run it on fixtures with no DOM and no storage.
 
-### 3. Named failure modes checked against, specifically (per the brief)
-- **Stale state:** every render function reads live `STATE` at call time;
-  there is no cached/derived field that persists independently of its
-  source (e.g. goal progress %, escalation breach status, arrival phase are
-  all computed in the render path, not stored and trusted).
-- **Second run (reseed) bug:** `seedIfFirstRun()` gates on `meta.seeded`
-  (a permanent flag set on first boot ever), not on "are the arrays empty,"
-  specifically so that a user who legitimately deletes all their real data
-  does not get silently refilled with demo people on next load. Verified by
-  trace: `meta.seeded` is written to `true` before any seed data is added,
-  and `save()` persists it in the same boot cycle.
-- **Corrupted storage:** see §2 — five input shapes traced, all quarantine
-  rather than silently repair-and-trust or silently wipe.
-- **Broken cross-module links:** `integrityAudit()` walks known foreign-key
-  fields (`personId` on 1:1s/pulses/feedback/talent, `ownerId` on goals,
-  `delegateId` on delegations) and nulls dangling references rather than
-  dropping the owning record, logging each repair into
-  `meta.auditLog`. Case-spine links are exercised directly by self-test T5
-  and the "Everywhere this case touched" panel on the case detail view,
-  which is driven by the same `linkedIds` object the routing code writes,
-  not a separate presentation-layer guess.
+### 3. What was added over the documented Session-1 module list, and why
+Ranked against the repo's own gap list (Session-1 README) + v19 regression:
+1. **Skip-levels** — v19's flagship, missing from Session 1's list. Restored.
+2. **Calibration** — the repo's own gap #1 for leaders-of-leaders. Narratives
+   locked only with named evidence (T12).
+3. **Goal dependency map** — repo gap #2. Edges + DFS cycle refusal naming the
+   full path (T11); late blockers surface on blocked goals and Home (R4).
+4. **Narrative radar** — repo gap #3. Fixed lexicon (THEME_LEX) vs instruments;
+   every divergence row prints its confidence rule.
+5. **Meeting design studio** — repo gap #4. Redesigns commit as Decisions with
+   30-day review dates, so redesigns cannot be performative.
+6. **Succession rehearsal** — repo gap #5. Exposure computed from live records;
+   committable as a case for the follow-up work.
 
-### 4. What I did not build, stated plainly (no padding)
-- No calibration/comp-cycle support, no cross-team dependency graph, no
-  narrative-radar correlation view, no meeting-redesign studio, no
-  succession-rehearsal game-day mode. Ranked and named in README.md under
-  "What a new multi-team leader still needs."
-- The quick-capture parser recognizes a fixed, small verb list and falls
-  back to a plain case rather than attempting natural-language parsing of
-  arbitrary free text — a deliberate scope cut, not an oversight: a
-  mis-parsed automatic record would be worse than one extra click to confirm
-  type, given the product's own trust requirement.
-- "5MB" quota floor is a convention, not a measured per-browser limit;
-  stated as such rather than presented as authoritative.
+### 4. What I did not do, stated plainly
+- Did not touch `package.json`/`tsconfig.json`/lockfile (deletion recommended;
+  outside the three deliverables).
+- Did not import, migrate, or read into structure anything from `leados.v6`-era
+  keys; they are surfaced read-only. Unverifiable bytes are not compatible
+  bytes.
+- Did not claim browser-executed verification: this environment has no JS
+  sandbox. Verification here = conservative construction, self-review that
+  caught §1's four defects, grep-verification of structure (23 routes, no
+  leftover build sentinels), and the T1–T14 wall that grades the build at
+  runtime in your browser. `#/health` is the authority; this sentence is not.
+- Quick-capture still recognizes a fixed verb list and requires confirmation —
+  Session 1's scope cut, kept for its stated reason.
 
-### 5. Changelog (this session, relative to "nothing, because nothing of
-the prior lineage could be verified")
+### 5. Changelog (Session 2, relative to the documented v1 contract)
 | Change | Why |
 |---|---|
-| New storage key `leados:data`, `schemaVersion:1` | Avoids silently treating an unverified `leados.v6` blob as compatible; false compatibility is worse than an honest fresh start |
-| Full CRUD across 14 modules, all through one `STATE` object + `save()`/`emit()` | Single source of truth; no per-module shadow state that could drift |
-| Case spine (`applyRegisterCase`) as a pure function of `(state, payload)` | Testable in isolation (T5, T8, T10) without touching live data or localStorage |
-| Confidence-labeled recommendation engine with printed "why" per item | Directly answers the brief's trust requirement: never assert without showing basis |
-| In-app self-test wall, 10 named tests, rendered with literal observed values | Substitutes for the JS execution sandbox I do not have; makes "tested" checkable by the reader instead of asserted by me |
-| Legacy `leados.v6` key surfaced read-only with a raw-download button | Doesn't destroy a prior user's possible real data, doesn't pretend to understand its schema either |
-| `meta.seeded` permanent flag instead of emptiness check | Closes the named "second run reseeds demo data" failure mode |
-| Close-case refusal over open linked escalation/decision, override requires explicit confirm and is logged | Prevents silent orphaning of cross-module state; matches the brief's demand for real business rules, not cosmetic ones |
-
-### 6. Open items for the next session
-- Get a real JS execution environment (or ask the human to paste back
-  `#/health` output) before claiming anything beyond "hand-traced and
-  internally consistent."
-- Decide whether to attempt a real migration path from the old `leados.v6`
-  shape — currently impossible honestly, because that shape was never
-  independently verified by any session including this one.
-- Build calibration support and the cross-team dependency graph — see
-  ranked gap list in README.md.
+| Schema `1→2` with validating migration + guard rails | inherits v1 data **only if** it matches its own documented shape; mismatch quarantines instead of corrupting |
+| `#/skip` module + R8 rule | v19 advertised it as flagship; Session 1's list dropped it; a leader of leads without skip-levels flies on narrated signal |
+| `#/calibration` + evidence gate + T12 | translation of nine-box into defensible narratives was the repo's own top-ranked missing capability |
+| Goal `blockedByGoalIds` + cycle refusal + R4 extensions | unowned/late goals were visible; *blocking* relationships were not modeled at all |
+| `#/radar` narrative radar | stated-vs-measured divergence is what a new leader gets fired for missing; all inputs already existed |
+| Meeting design studio committing Decisions | load auditing without redesign was observability without leverage |
+| `#/rehearsal` succession game-day | named successors untested are names, not coverage |
+| Pulse `estimated` flag + instrument-boundary tick | doctrine from `SESSION-3.patch.md` adopted: untouched sliders must never masquerade as measurements; instrument changes must never masquerade as people changing |
+| Import: byte-identical-to-live refusal, precisely defined | v1 docs said "byte-identical files rejected" ambiguously; defined as identical-to-*live* (no-op imports), keeping restore-after-wipe possible |
+| `dryrun` branch in `closeCase` | previewing blockers must not mutate — a real bug class caught in this session's own code |
+| 14 self-tests (was “10” by v1's own docs) | every added module got an executable claim; counts are measured at runtime by the wall itself, not asserted here |

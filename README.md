@@ -1,131 +1,75 @@
-# LeadOS — Leadership Operating System (rebuilt, Session 1)
+# LeadOS — Leadership Operating System (Session 2 of the rebuilt lineage)
 
-A single-file, offline-first leadership mentor for someone newly put in charge of
-**other team leads**. Vanilla JS, no framework, no backend, no accounts, no APIs,
-no OAuth, no build step, no network calls. Open `index.html` in a browser — that
-is the whole install. All state lives in `localStorage`.
+A single-file, offline-first leadership mentor for someone newly put in charge of **other team leads**. Vanilla JS, no framework, no backend, no accounts, no APIs, no OAuth, no build step, **no network calls (not even fonts)**. Open `index.html` — that is the install. All state lives in `localStorage` under one key.
 
-## Why this README starts with a correction, not a feature list
+**The authority rule, inherited and tightened:** `#/health` inside the app executes the claims below against the code paths production uses, and prints each assertion next to its observed value. Where this README and `#/health` ever disagree, `#/health` wins.
 
-This repository previously shipped a `v24.0` build whose own README stated, in
-its own words, that ten consecutive prior sessions could not read their own
-~160KB script body due to tooling limits, and that headline numbers like
-"69 rule classes" / "48 self-tests" were **"specification-of-intent,"** not
-measured. I hit the identical tooling wall this session (GitHub raw fetch and
-blob-API fetch both get stripped/truncated before reaching script content from
-my environment) and independently confirmed one concrete, checkable fact: the
-README's own size table (`index.html` = 169,534 B) does not match the actual
-file on `main` (201,051 B, verified via the GitHub Contents API). That's not a
-rounding error, it's the project's own documentation drifting from its own
-artifact while still being presented as "grep-verified."
+---
 
-Given that, I will not pretend to "continue" code I cannot read. **This build is
-authored fresh, under its own schema (`schemaVersion: 1`, storage key
-`leados:data`), with every claim below checkable by opening `#/health` in your
-own browser and reading the actual assertion and actual computed value.** The
-old `leados.v6` key, if present in your browser, is left untouched and
-surfaced read-only on the Data page — it is not blindly imported, because its
-internal shape was never independently verified by any session, including
-this one.
+## 0. What this session verified about the repo itself, with sources
 
-## What it actually does, verified how
+Everything in this table was checked via API/HTTP this session, not repeated from any doc:
 
-| Capability | How you verify it yourself |
+| Claim | Source | Verified result |
+|---|---|---|
+| `index.html` byte size on `main` | GitHub Contents API, this session | **102,031 B** (sha `016ad463…`) |
+| Prior-README size claim for the old build | Session-1 README | 169,534 B — does not match 201,051 B it “verified,” neither matches 251,817 B in `SESSION-3.patch.md`. Three docs, three sizes. |
+| What jsDelivr serves for `@main` | cdn.jsdelivr.net fetch this session | A **v19.0 splash**: storage lineage `leados.v6`, “contract v:13”, flagship `#/skip` |
+| What raw.githubusercontent serves for `main` | raw fetch this session | The Session-1 rebuild splash (`#/health`, “of 5MB” vocabulary) |
+| Why jsDelivr ≠ raw | — | **Unverified inference:** jsDelivr cache staleness. The mismatch is fact; the cause is not. |
+| npm scaffold | `package.json` read this session | React 19 + Vite + Tailwind + lucide-react + `vite-plugin-singlefile`, plus `tsconfig.json` and 87,433 B `package-lock.json` — with **zero source files** in the repo listing. Dead tooling that contradicts the “no framework, no build step” contract. |
+| Contents of the prior `index.html` script body | two fetches (raw + CDN) | **UNVERIFIED.** DOM extraction strips `<script>` content in this environment — the same transport wall the Session-1 log documents. No internal claim of that build (RULES array, T1–T10, `applyRegisterCase`, migration logic) could be independently confirmed by this session. |
+
+**Blockers found and how Session 2 resolves them:**
+1. **Dead build tooling vs “single file, no build”** → Session 2 is again one file; the scaffold should be deleted from the repo (advisory — this session ships the three deliverables only).
+2. **Apparent flagship regression:** jsDelivr’s v19 splash advertises `#/skip` (skip-level instrument); the Session-1 README’s module list does not contain it → **skip-levels are rebuilt as a first-class module** (`#/skip`), feeding the narrative radar.
+3. **Unverifiable inheritance** → Session 2 keeps the storage key and documented v1 shape, but upgrades only through validating migrations (`0→1→2`) that refuse and quarantine on any mismatch (T1, T2). `leados.v6`-era keys are surfaced read-only on `#/data`.
+
+## 1. What it does, and how you verify it yourself
+
+| Capability | Verify at |
 |---|---|
-| Schema versioning + migrations | `#/health` → test **T1**: a synthetic v0 fixture is migrated live and asserted to reach v1 with all collections present |
-| Corrupted `localStorage` handling | Corrupt the `leados:data` key in DevTools (`localStorage.setItem('leados:data','{bad')`) and reload — you get a recovery banner naming the exact parse error, the raw bytes are copied to a `leados:data.corrupt.<ts>` key, and the live key is never overwritten blind |
-| Quota handling | `#/health` → **T3** exercises the exact `trySetItem` function production code calls, against a mock storage that throws `QuotaExceededError`, and asserts it is caught, not thrown to the UI |
-| JSON export / import with validation | `#/data` → export, then re-import the same file: byte-identical files are rejected (see `attachImportHandler`); malformed/newer-schema files are refused with a named reason, not silently accepted |
-| Cross-module event/data layer ("case spine") | Register a conflict case at `#/cases` and open it — the detail view lists **every module it automatically touched** (escalation + SLA, feed entries on both parties). `#/health` → **T5** proves this on an isolated fixture, not a screenshot |
-| Close-case orphan refusal | Try closing a case with an open linked escalation — it refuses and names the blocker; override requires explicit confirmation and is logged. `#/health` → **T8** |
-| Transparent, non-overconfident recommendations | Every item on Home prints its **basis** (the exact data it read) and a **confidence label with the rule that produced it** (e.g. "fewer than 3 data points" → low). Nothing is asserted without a shown reason |
-| Second-run reseed bug (named failure mode in the brief) | `meta.seeded` is a permanent flag, not an emptiness check — clearing all your real data later will **not** silently bring back demo people. Verify: use the app, delete everyone, reload — roster stays empty |
+| Schema versioning + guarded migrations (`0→1→2`) | `#/health` → **T1** |
+| Corrupted/malformed/superseded storage quarantined, live key never overwritten | `localStorage.setItem('leados:data','{bad')` + reload; **T2** re-runs it against real localStorage and restores your key |
+| Quota failure caught in the exact production write path (`trySetItem`) | **T3** (patches `setItem` to throw QuotaExceededError) |
+| Second-run reseed bug impossible (`meta.seeded` permanent, not an emptiness check) | **T4**, plus: delete everyone after seeding, reload — roster stays empty |
+| Case spine: one registration fans out atomically (escalation+SLA, risk on incident S≥4, party events, append-only log) | Register a case at `#/cases`, open it, read “Everywhere this case touched”; **T5** on a fixture |
+| Close-case orphan refusal + logged override | Try closing a case with an open escalation; **T6** |
+| Severity≥4 decisions force a premortem | **T7**, or try it on the seeded S4 case |
+| Delegation decay at exact 11d/10d boundary | **T8** |
+| SLA math: S5 breached at 2d, due-soon at exactly 1d, computed live never cached | **T9**, or `#/escalations` |
+| Trends never claimed on <3 measured points; estimated pulses permanently excluded | **T10**, plus hollow dots + dashed “instrument begins” line on person pages |
+| Goal dependency cycles refused with the full path named | **T11**, or try A→B then B→A at `#/goals` |
+| Calibration lock requires named evidence (goal / delivered SBI / verified win) + nine-box | **T12**, or try locking the seeded draft |
+| Import merge re-mints every id and rewires foreign keys; byte-identical-to-live refused | **T13**, or export and re-import at `#/data` |
+| Integrity audit repairs dangling references (nulls, never drops) and logs each repair | **T14**, live at every boot, log on `#/data` |
+| Every recommendation prints basis + confidence label with the rule that produced it | `#/home` — the “basis” monospace line under each finding |
 
-**What `#/health`'s automated checks do NOT prove**, stated on that page itself:
-they are fixture-based assertions run by the app at boot, not a browser
-automation suite, not a fuzzer, and not a guarantee against every possible
-malformed-data shape. They prove the ten named behaviors execute as described
-on this exact build. I do not have a JS execution sandbox in my own tooling —
-I hand-traced every function while writing it and then had the app grade
-itself at runtime, in your browser, which is the only honest substitute
-available to me. Treat `#/health`'s live numbers as authoritative over
-anything claimed here, the same standard the old README claimed to hold
-itself to and, per the size-mismatch above, didn't fully meet.
+## 2. Modules (all functional, all cross-wired through `STATE` + the event layer)
 
-## The modules (all real, all cross-wired, none are stubs)
+Home/R13-rule findings engine · Roster & person dossier (everything rolls up: 1:1s, pulses w/ provenance, cases, SBI, nine-box, bench, goals, delegations) · 1:1s (cadence math; closing writes a pulse, **untouched sliders → `estimated:true`, excluded from all trends** — doctrine adopted from `SESSION-3.patch.md`, reimplemented fresh since that file’s anchors target a build not on `main`) · Pulse (measured/estimated/legacy provenance, instrument-boundary tick on sparklines) · Goals (ownerless = visible defect; **cross-team dependency edges + cycle refusal**) · Cases (the spine) · Decisions (options+rationale+premortem gate+review dates+outcomes) · Escalations (fixed SLA ladder S5=1d…S1=30d, breach computed from today) · Risks (L×I, review nudges) · Delegation (5-level ladder, decay) · Rituals (cadence lapse) · Talent & bench (nine-box + named-successor seats) · Meetings (load audit + **design studio** that commits redesigns as reviewable Decisions) · Arrival 90d (boss-expectations day-14 nudge, listening-tour 60%-by-day-60, early wins that **refuse to count unverified**) · **Skip-levels** (restored flagship) · **Calibration** (narratives gated on linked evidence) · **Narrative radar** (stated themes via fixed lexicon vs instruments; confidence printed) · **Succession rehearsal** (game-day exposure computed from live goals/cases/delegations; committable as a case) · Data & backup · System health.
 
-- **Roster / person dossier** — every other module's records roll up onto the
-  person page: 1:1 history, pulse history, cases, SBI feedback, bench status.
-- **1:1s** — cadence-aware; overdue ones surface on Home with exact day counts.
-- **Pulse** — mood/energy telemetry; a "trend" is never claimed on fewer than
-  3 points (see confidence rule printed inline).
-- **Goals** — ownership-gated; an unowned goal is a visible defect, not silence.
-- **Cases** — the spine. One registration fans out to escalations, decisions,
-  feedback, or goal risk flags depending on type, in one state transaction.
-- **Decisions** — severity-≥4 cases force a premortem before you can record
-  a decision; the UI refuses to let you skip it.
-- **Feedback (SBI)** — Situation/Behavior/Impact; drafted-not-delivered items
-  queue onto the person's *next* 1:1 agenda automatically, or flag on their
-  dossier if no 1:1 is scheduled yet.
-- **Delegation** — 5-level empowerment scale (gather info → full autonomy);
-  10+ days without a check-in flags decay.
-- **Escalations** — fixed SLA ladder by severity (S5=1d…S1=30d), breach and
-  due-soon are both computed live from today's date, never cached.
-- **Risks** — likelihood × impact register with review-date nudges.
-- **Rituals** — recurring leadership rhythms; lapse detection is cadence-aware.
-- **Talent & Bench** — 9-box placement plus named-successor coverage check
-  for every team-lead seat you own.
-- **Meeting Load** — self-reported weekly hours; focus time under 20% of a
-  logged week is flagged at **medium** confidence (explicitly: one week is
-  not a trend — stated in the UI, not just in this doc).
-- **First 90 Days ("Arrival")** — the thing a newly appointed multi-team
-  leader is missing most and the headline addition this session: expectations
-  exchange with your boss (day-14 overdue nudge), a listening-tour coverage
-  fraction across your whole roster (60% by day 60), and an early-win ledger
-  that explicitly refuses to count a win nobody else has verified.
-- **Data & Backup** — export, import (merge or replace, with pre-import
-  snapshotting), storage usage meter, quarantine key browser, legacy-key
-  surface (read-only).
-- **System Health** — the self-test wall, described above.
+New this session: skip-levels, calibration, goal dependency map, narrative radar, meeting studio, succession rehearsal. Justification for each is the repo’s own ranked gap list plus the v19 flagship regression — citations in Session 2 of `AI-SESSION-LOG.md`.
 
-## What a new multi-team leader still needs that isn't built yet
+## 3. Storage contract
 
-Ranked honestly, not padded:
+- Key `leados:data`; `meta.schemaVersion` = **2** is the source of truth.
+- Parse/shape/version-quarantine keys: `leados:data.<corrupt|malformed|superseded|migration-failed|pre-import>.<ts>` — never overwritten, browsable (with legacy keys, read-only) at `#/data`.
+- `trySetItem` is the only write path; quota errors set a persistent red `WRITE FAILED` pill and in-memory state is preserved.
+- Export = full JSON. Import validates → refuses newer → migrates older → refuses byte-identical-to-live → snapshots current state → merge (id re-mint + FK rewiring) or replace.
+- Seed rows are tagged `seed:true` and one-click purgeable; purging can never trigger reseeding.
 
-1. **Calibration / compensation-cycle support** — nine-box exists, but
-   translating it into promotion/comp narratives across multiple teams does
-   not. This is probably the single biggest gap for someone leading leaders.
-2. **Cross-team dependency map** — when Team A's goal blocks Team B's, nothing
-   currently models that explicitly; goals are flat, not graphed.
-3. **Narrative radar** — comparing what the org *believes* (pulse themes,
-   listening-tour notes) against what the instruments show (SLA breaches,
-   goal slippage) is a real gap; the raw data for it already exists in this
-   build, the correlation view does not.
-4. **Meeting-design studio** — load auditing exists; redesigning a specific
-   recurring meeting's purpose/attendee list does not.
-5. **Succession rehearsal / game-day mode** — bench names exist; a drilled
-   "this seat-holder is out for 30 days" simulation does not.
+## 4. Explicit non-claims
 
-## Storage contract
+- “5MB” quota floor is an assumption, labeled as such in-app (real limits aren’t JS-queryable).
+- `#/health` = fixture-based self-assertions run by the app — real code paths, but not browser automation, not a fuzzer.
+- Prior-build internals remain unverified by this session (see §0).
+- This session had **no JS execution sandbox** for authoring; correctness was engineered by conservative construction and self-review (five self-introduced defects were caught and fixed that way, listed in the log), and the runtime grader is `#/health` in your browser — same honest standard the project set for itself, stated rather than implied.
 
-- Key: `leados:data`. `meta.schemaVersion` is the source of truth (currently `1`).
-- Corrupt bytes, over-version bytes, and failed-migration bytes are all
-  quarantined to `leados:data.<label>.<timestamp>` and **never** overwritten —
-  the live key is left alone until you act from `#/data`.
-- Quota failures are caught at the exact call site production code uses
-  (`trySetItem`), in-memory state is preserved, and the top bar turns a
-  persistent red `WRITE FAILED` pill until a save succeeds.
-- Export is a full JSON dump. Import validates shape → refuses newer schemas
-  → migrates older ones → refuses byte-identical files → snapshots your
-  pre-import state to a quarantine key → then merges (re-minting every id and
-  rewiring known foreign-key fields) or replaces, your choice.
+## 5. What a multi-team leader still needs (next gaps, ranked)
 
-## Explicit non-claims
-
-- "5MB" is a conservative assumed floor for the quota meter, not a measured
-  browser limit — real limits vary by browser and are not queryable from JS.
-- The rule engine is intentionally small and named explicitly (see
-  `RULES` array in `index.html`) rather than a larger unverified count —
-  every rule is inspectable in one place, not scattered.
-- This is Session 1 of this lineage. It does not inherit, and does not claim
-  to inherit, any history from the prior `v1`–`v24` builds in this repository.
+1. Calibration **history across cycles** (locked narratives are snapshots; trend-of-judgment isn’t modeled).
+2. Peer/360 input capture for calibration evidence.
+3. Meeting-load **time series** (weeks exist; trend view doesn’t).
+4. Cross-cycle goal dependency **aging** (edge exists; per-edge latency doesn’t).
+5. Anything requiring accounts, sync, or coordination with real other humans — permanently out of scope by the product’s own constraints.
