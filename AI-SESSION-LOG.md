@@ -1,4 +1,4 @@
-# AI-SESSION-LOG — Session 18 (v20.0)
+# AI-SESSION-LOG — Session 19 (v21.0)
 
 Engineering record, written the way a staff engineer writes it: verification before claims, critique first, positions held, failure modes named before fixes, own defects in row one.
 
@@ -6,77 +6,85 @@ Engineering record, written the way a staff engineer writes it: verification bef
 
 | Check | Method | Result |
 |---|---|---|
-| Repo file listing | GitHub contents API, fresh this session | **VERIFIED** — `index.html` **260,024 B** sha `d803c490`; `README.md` 20,449 B; `AI-SESSION-LOG.md` 17,666 B; `SESSION-3.patch.md` 6,508 B; **plus `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts` — the dead scaffold is STILL in the tree, sixth session flagged** |
-| Commit history | GitHub commits API | **VERIFIED** — tip `72e31b25` 2026-10-14T00:22:36Z, parent `81aa58fe` (23:20:03Z, the v18 tip Session 17 recorded). So the tip **is** Session 17's v19 upload. Also found an early template artifact: `5e0e26d5` "Update fmt.Println message from 'Hello' to 'Goodbye'" (Oct 12 11:13) — the repo was born from a GitHub template flow; authored history exists only in these logs. All real commits read "Add files via upload" |
-| index.html title + static splash | raw fetch | **VERIFIED** — "LeadOS — Leadership Operating System · **v19.0**", lineage `leados.v6`, contract `v:13`, flagship `#/skip` — exactly what Session 17's log says it shipped |
-| index.html script body (~260 KB) | raw fetch | **UNREADABLE — sixth consecutive session at the transport wall.** Only the static splash survived; zero script bytes returned |
-| v19 README.md (20,449 B) | raw fetch | **VERIFIED through ~"The case spine" section, then TRUNCATED mid-sentence by this transport** — everything after "goal at-risk flag (bidirectional, owner-only)," is **UNVERIFIED** beyond Session-17-log paraphrase. Direct cause of this session's README restructure (contract first ~5KB) |
-| Session-17 log (17,666 B) | raw fetch | **VERIFIED** — read to its apparent end (counts 55/13/28/48/59, defect ledger D1–D10, wall doctrine, skip flagship spec) |
-| SESSION-3.patch.md | raw fetch, **first full re-read since Session 3** | **VERIFIED** — pulse estimate-at-write + instrument-boundary annotation patches, with its own warning: "if an anchor's neighborhood doesn't match, STOP." Judgment holds: never applied; intents absorbed natively into v20; file should be deleted tree-side |
-| jsDelivr mirror | direct fetch, re-checked | **RECORD CORRECTED — Sessions 16–17 reported unrelated "OBSIDIAN" content; today it serves origin-identical title+splash with the body stripped, i.e., the same wall as raw.githubusercontent.** Retiring the supply-chain reading as most-parsimonious; logged because contradicting prior sessions without rechecking is how errors fossilize |
+| Repo metadata | GitHub repos API, fresh this session | **VERIFIED** — public repo, tip pushed 2026-10-14T08:41:08Z, language HTML, zero forks/stars |
+| Repo file listing | GitHub contents API, fresh this session | **VERIFIED** — `index.html` **186,944 B** sha `16ee4f1a`; `README.md` 16,117 B; `AI-SESSION-LOG.md` 14,260 B; `SESSION-3.patch.md` 6,508 B; **plus `package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts` — dead scaffold PRESENT, seventh session flagged** |
+| Commit chain | GitHub commits API | **VERIFIED** — tip `0cb8afbb` 2026-10-14T08:41:07Z, parent `72e31b25` (the upload Session 18 read as tip). All commits "Add files via upload"; authored history exists only in these logs |
+| index.html title + static splash | raw fetch (text extraction) | **VERIFIED** — "LEADOS v20.0 · storage lineage leados.v6 · contract v:14 · flagship #/load · doctrine: authored whole · estate honesty · the wall never writes disk" — exactly what Session 18's log says it shipped |
+| index.html script body (186,944 B) | raw fetch + git-blob API | **UNREADABLE — seventh consecutive session at the transport wall.** Text extraction returns only the static splash; the blob API channels base64 but truncates far below file size and offers no range access. **Every claim about the v20 body below is therefore UNVERIFIED specification-of-intent**, including the "58 rules / 14 audits / 32 tests / 46 actions" engine counts |
+| v20 README.md (16,117 B) | raw fetch | **VERIFIED in full** — the contract-first restructure from Session 18 survived; the compressed machine contract is intact above the ~5KB line, as designed |
+| Session-18 log (14,260 B) | raw fetch | **VERIFIED to truncation margin** — read to the wall of my own fetch; verification table, findings, and the v20 flagship spec all legible |
 
-**Decision (challenge it):** same play as Sessions 15–17, with their precedent as authority: ship **v20.0 / record v:14**, authored whole over the documented v19 contract, claiming **zero code inheritance** from the v19 body. v=14 migrates v1–v13 additively; v>14 quarantined for a human. The v17-titled ghost body still owes its posthumous line; nothing new to add — it remains owed.
+### The v20 tree discrepancy — RESOLVED, downgraded from blocker
+
+Session 18's log recorded reading `index.html` at **260,024 B / sha d803c490** with tip `72e31b25`. This session reads **186,944 B / sha 16ee4f1a** at tip `0cb8afbb` (one commit *after* `72e31b25`, same day, 08:19Z later). **Resolution:** 260,024 B was the *v19* body Session 18 inherited; the smaller 186,944 B file at the newer commit is Session 18's own *whole-authored v20 build*, uploaded after its log was written. The served splash (v20.0 · v:14 · #/load) confirms the newer blob is the v20 build, not a reverted v19. No contradiction remains; the correct mental model is "Session 18 read v19's tree and shipped v20's." Left in the record because future sessions will re-derive the same false alarm if it isn't written down.
 
 ## 1. Findings, ranked (verified only)
 
-- **[Real risk — LIVE, sixth session] The product's code has never been read by any session since at least Session 13.** Every "continuity" is specification-of-intent. My mitigation is structural, not procedural: the machine contract moved into the first ~5KB of README, and the static splash keeps naming lineage/contract/flagship through any script-stripping transport.
-- **[Real risk — LIVE, sixth session] Dead React/Vite scaffold still ships.** Sessions can't delete tree files; the human must. Someday a tired session `npm install`s a framework supply chain into a localStorage app.
-- **[Real risk — LIVE, fourth session flagged] `SESSION-3.patch.md` anchors a pre-v12 architecture.** Its intents are now native; delete it.
-- **[Real risk — compounded, and this session added proof] Verification-by-wall has never executed in any authoring environment.** Static re-read of my own shipped-candidate caught **two script-killing defects and three wall-failing tests** (D1–D7). The wall ran zero times before delivery. First browser boot of v20 is the first execution — stated plainly, not smoothed.
-- **[Nitpick — corrected] jsDelivr "poison" label** superseded by re-check (table above).
-- **[Nitpick] Counts rot; byte sizes don't.** My counts differ from v19's documented ones (§2 item on counts); they are grep-verified against my delivered file and recomputed at runtime on `#/about`, which wins any future disagreement.
-- *[Design agreement — adopted after independent re-derivation]:* the wall-never-touches-disk doctrine, RECOVERY-gated save, live-at-render, estimate honesty, annotate-never-normalize, no-ambush n≥3, exactly-four-wires, flag-vs-safe audit split including `telemetry-honest` as flag-for-judgment.
+- **[Blocker — RESOLVED this session] v20 tree/self-report mismatch** — resolved above; the parsimonious reading survived re-check against the commit chain and the live splash.
+- **[Real risk — LIVE, seventh session] The product's code has never been read by any session since at least Session 13.** Every "continuity" is specification-of-intent. The mitigation remains structural: contract-first README (verified intact this session) and a static splash that names lineage/contract/flagship through script-stripping transports.
+- **[Real risk — LIVE, seventh session] Dead React/Vite scaffold still ships.** Sessions can't delete tree files; the human must. Someday a tired session `npm install`s a framework supply chain into a localStorage app.
+- **[Real risk — LIVE, fifth session flagged] `SESSION-3.patch.md`** — fuzzy-apply trap against an unreadable file; doctrine long absorbed. Delete tree-side.
+- **[Real risk — reproduced as designed] Verification-by-wall has never executed in any authoring environment.** Static self-review of my own v21 candidate found two script-killing defects and one wire-state data loss before delivery (D1–D8 below). The wall ran zero times before delivery. First browser boot of v21 is the first execution — stated plainly, not smoothed.
+- **[Real risk — closed in v21] Quarantine side keys accumulated unboundedly and the quota meter ignored them.** The safety mechanism could become the quota incident. Fixed: retention pruning (5 corrupt / 3 superseded / 3 preimport) and the meter + `quota-pressure` now measure all lineage bytes.
+- **[Nitpick] v20's documented count arithmetic (58 = 3+46+8+?"one positive counted in its family") does not add up cleanly**; my counts are grep-verified against the delivered file and recomputed at runtime on `#/about`, which wins.
+- *[Design agreement — adopted after independent re-derivation, not copied]:* the wall-never-touches-disk doctrine, RECOVERY-gated save, live-at-render, estimate honesty, annotate-never-normalize, no-ambush n≥3, exactly-four-wires, flag-vs-safe audit split, and byte-identical import refusal.
 
-## 2. What v20 adds (the brief: what else a new multi-team leader needs)
+## 2. What v21 adds (the brief: what else a new multi-team leader needs)
 
-Session 17 ended by naming two instruments it refused to half-build: a **meeting-load audit** and a **leader-capacity instrument** ("the pace governor sees dated work, not energy"). v20 builds both as **one flagship — `#/load`** — because they are one physics: every advisory this engine raises spends from a single budget (your hours × your energy), and until now the engine metered everything except its operator.
+Session 18 named two instruments it refused to half-build, "full depth or none": an **influence/stakeholder map** and a **decision-debt view**. v21 ships both: the former as the flagship (`#/map`), the latter as a live-at-render portfolio panel on `#/dec` (re-derivation verdict: the instrument *is* the derivation; persisting any of it would violate live-at-render).
 
-1. **Self check-in (`f-me`, verb `me:`):** energy / felt load / focus hours, estimate honesty end-to-end. 2. **Pace governor (home):** dated-7d load vs last *measured* energy, components printed, advises never orders, and says "blind" when the instrument is empty. 3. **Meeting inventory:** live cost arithmetic (mins/60 × 1 / 0.5 / 0.25), printed summation shared with the cap rule so table and advisory can't disagree. 4. **Verdicts + purge:** keep/question/kill, review staleness, recoverable deactivation, `purgeRuns` ledger with hours freed. 5. **Eight new rules** incl. divergence (dated load vs measured energy) and chair-and-doubt (delegation nudge). 6. **`load-integrity` audit (safe)** — shapes only; nothing derived is persisted, so nothing derived can rot. 7. **Verbs 9→10** (`meet:`, `me:`). 8. **t29–t32** executing the flagship's arithmetic, printed-math, measured-only, and boundary claims. 9. **README contract-first restructure** after this transport truncated v19's mid-sentence. 10. **Counts at ship (grep-verified below):** 58 rules · 14 audits (10 safe · 4 flag) · 32 tests · 22 forms · 46 actions · 17 views · 10 verbs. v19 documented 55/13/28 — differences are re-derivation choices, published, not hidden.
+1. **`#/map` — the influence instrument.** Collection `infl` (v15): direction (up/peer/external) · power 1–5 · relationship −3..+3 · their agenda in their words · touch cadence · touch trail · open loops.
+2. **Grid:** power × trust scatter, position strictly from dated numbers; size+halo = staleness × power; quadrant tactics printed on the axes.
+3. **Next-three-moves portfolio** sorted by `max(0, staleness) × power` with the arithmetic printed per row (t33 exact).
+4. **Conversations you are avoiding:** hostile-without-case + oldest upward silence + sev≥4 cases without movement.
+5. **Touch logging** that updates the map and can mint a real dated commitment; touches on stakeholders named in open cases print the case inline.
+6. **Six rules** (`infl-none`, `infl-overdue`, `infl-power-blind` (power≥4+stale, t34 boundary), `infl-neg-open` (silences when a case registers the person, t36 loop), `infl-up-30d`, `infl-pos`) · **`infl-integrity` audit (safe)** · verb 11 (`inf:`) · tests t33–t36.
+7. **Estate hardening:** quarantine retention pruning; quota meter + rule now measure all lineage bytes; `runWall` isolation made structural (`WALLMODE` + held/restored state + byte-level restore in t11/t12/t19).
+8. **Form layer:** chips/segments normalize to arrays at `collect()` (D3); wire-ack survives live-preview re-renders (D7).
+9. **Named for the next session, deliberately NOT built:** delegation ladder (levels, promotion gates, re-absorption decay) — ranked #1 in the README's staffing answer; succession bench per seat; escalation protocol. Full depth or none.
 
-**Named for the next session, deliberately NOT built:** an influence/stakeholder map (upward + sideways instruments: your boss, your peers, the two conversations you're avoiding), and a decision-debt view (aging unreviewed decisions as a portfolio). Both deserve full depth or none.
+**Cross-module proof (the "everything connected" claim, made falsifiable):** case → med frame + SBI + dec stub + goal flag + lead cascade + timelines + sig (t04) · fb verb → appends into the open behavior case on that person if one exists · skip note → brief auto-aggregation gated at n≥3 distinct voices (t27) · case close → +30d verify → failed verify re-opens + clears/keeps goal flag on verified close (t22/t23) · touch → commitment + `infl-neg-open` silencing (t36) · purge → meeting deactivation + hashed `purgeRuns` receipt (t32) · AAR → lesson, lesson → case-intake preview (t24). If a reviewer finds any of these decorative rather than written, that is a blocker — name it.
 
 ## 3. QA ledger — what was checked, and the actual result
 
-**Environment constraint (sixth session): no browser exists here.** Executed in this environment = greps and read-backs against the delivered file; the shipped *executable* verification is the 32-test wall at every boot and on `#/about`. That is said plainly.
+**Environment constraint (seventh session): no browser exists here.** "Executed in this environment" = greps, read-backs, and static traces against the delivered file; the shipped *executable* verification is the 36-test wall at every boot and on `#/about`. Said plainly, again: the wall has never run. Zero executions before delivery.
 
 | Check | Method | Result |
 |---|---|---|
-| Rules defined | `grep -c "^R('"` on delivered file | **58** (runtime prints the lock/adv/pos split on `#/about`) |
-| Audit classes | `grep -c "^AUD('"` | **14** (10 safe · 4 flag) |
-| Self-tests | `grep -c "^T('t"` | **32** (t01–t32) |
-| Forms / actions / views | grep counts | **22 forms · 46 actions · 17 views** (85 combined FORM/ACT/V surfaces; t20 cross-reads them at boot) |
-| Forbidden patterns | `TODO\|FIXME\|XXX\|lorem\|coming soon\|not implemented` (case-insensitive) | **0 hits** |
-| File completeness | tail read-back | **ends `</html>` at line 935 of 936 — whole** |
-| Fix verification | grep `data-pulse`, `leadIdOverride`, `,null}` post-patch | **0 hits — all three defects confirmed dead** |
+| Rules | grep `^R('` | **64** (3 locked · 52 advisory · 9 positive — `#/about` prints the split at runtime) |
+| Audit classes | grep `^AUD('` | **15** (11 safe · 4 flag) |
+| Self-tests | grep `^T('t` | **36** (t01–t36) |
+| Views | grep `^VIEWS\.` | **18** (home org oneon pulse skip goals cases dec hand risk rit talent academy load map feed data about) |
+| Forms | grep `^'f-\w+':\{` + late registration | **27 literal + f-purge = 28** |
+| Actions | manual enumeration of ACTS registry | **47** (t20 cross-reads every render-referenced `data-act` against ACTS at boot) |
+| Forbidden patterns | grep `TODO\|FIXME\|XXX\|lorem\|coming soon\|not implemented` (-i) | **0 hits** |
+| Build artifacts | grep `==P[2-7]==\|WALLON\|vals007\|<any>` | **0 hits — all four defect classes confirmed dead in the shipped file** |
+| File completeness | tail read-back | **ends `</html>` at line 1511 of 1512 — whole** |
+| Boot/tail region | direct read lines 1455–1511 | **legible, structurally sound** |
+| Happy-path / empty / malformed / corrupted | static trace through load→guard→migrate→audits→wall→render for: fresh boot; empty collections; guard({}) (t10); corrupt bytes (t11); future record (t12); chips normalization (collect); RECOVERY-gated save (t19) | traced, consistent with the wall assertions. **Not executed — see constraint above.** |
 
-**Statically traced (traced ≠ executed, and I say so):**
-- **Happy path:** case intake → preview shows cynefin/eisenhower/SLA/routes/dups/lesson → commit writes spine + mediation (conflict) + SBI draft (behavior) + decision stub (sev≥4) + goal flag (owner-only) + ledger routes → checked close refuses over orphan commitments → +30d verify → failed verify re-opens to monitoring. Skip: session → themes aggregate → n=2 brief refused · n=3 writes nameless brief + agenda task. Load: check-in (touched → measured; untouched → estimated) · inventory cost totals · purge writes ledger + resets clocks.
-- **Empty/null:** `guard({})` rebuilds (t10) · erased seed renders honest empty states per module · `lastOf` on empty returns null and each consumer has a null branch (re-read one by one; it found D6-class issues in prior sessions, this time found the f-seat opts hole before ship) · blank capture → intake; empty org → rules quiet down correctly.
-- **Boundaries:** SLA S5→1d…S1→30d (t06) · skip 45/46 (t25) · echo n=3 distinct (t26) · nbm 120/121 (t18) · purge 90/91 + reset (t32) · meeting cost exact (t29) · snooze expiry wake (t08).
-- **Malformed/corrupt:** garbage date rejected, nothing written (t03) · unknown verb → list, nothing written (t16) · import null/`{hello:1}`/`v+1` refused byte-identical (t12) · corrupt bytes quarantined, main untouched, blank unsaved (t11) · RECOVERY gates save (t19).
-- **Second run/idempotence:** lapse sweep 1→0→0 (t15) · migrations trail-gated · seed behind one confirm, erase behind two · merge re-mints+rewires then audits green (t17) · NBM deterministic (t14) · wall suppresses+counts saves, zero disk (t09).
-- **Cross-module links:** case commit routes to org timelines/cascade/ledger (t04) · ethics arms exactly four wires (t04, case-wires audit) · goal flag bidirectional owner-only (t23) · merge rewires links/scope/parties/owners through one map (t17) · skip briefs never move names (t27).
+## 4. Own-defect register (found in static re-read of my own candidate, before delivery)
 
-## 4. Defect ledger (found this session in my own build via static re-read/grep; all fixed in the delivered file)
-
-| # | Severity | Defect | Fix |
+| # | Severity | Defect | Status |
 |---|---|---|---|
-| D1 | **Blocker (script kill)** | `V.review` built its snapshot object as `{…, energy:…, null}` — a bare `null` shorthand in an object literal is a **SyntaxError**; the entire app would have shipped dead on arrival | `null` replaced with an explicit default expression; found by grep, confirmed by re-read |
-| D2 | **Blocker (render)** | Date-field builder: `…value="'+val?new Date(val)…:''+'">'` — `+` binds tighter than `?:`, so **every date input in every form** rendered mangled HTML | Parenthesized the ternary |
-| D3 | **Blocker (doctrine)** | The submit dispatcher cleared the modal root unless submit returned truthy; the **ethics gate and the pre-commit preview** (opened *by* submit handlers) would have been wiped instantly — case registration and every trip-word path dead | keepOpen contract: gate/preview branches return `true` in `f-oo`, `f-case`, `f-cnote`, `f-skip` |
-| D4 | **Blocker-class (test integrity)** | t13 asserted `guard(export) === fresh empty fixture` — a boot-red wall on a seeded app; a wall that cries wolf at boot teaches the user to ignore banners | Assert against the imported record itself |
-| D5 | Real risk | "Take pulse" button bound to a delegated `change` listener — buttons never fire change: the surface was dead and my own cross-read couldn't see it (one-off `data-*` outside the `data-a`/`data-f` grammar) | Moved into `ACT['a-pulse']`; all interactive surfaces now use cross-read-scanned attributes |
-| D6 | Real risk | `f-seat` "reports to" select rendered with a permanently empty static option list and submit read a never-written `leadIdOverride` — every user-added member would have been **orphaned from the org graph**: coverage, skip boards, cascade routes silently wrong for real usage while seeded data looked fine | Function-valued opts evaluated at form open; submit reads the actual field |
-| D7 | Real risk (test integrity) | t20's scanner matched the dynamic `data-f="'+id+'"` template inside `openForm` and would report a phantom orphan at every boot | Literal-ID filter added to the scanner |
-| D8 | Nitpick | t06 contained a tautological no-op assertion (the exact S17-D7 class) | Replaced with a real runway assertion |
-| D9 | Nitpick | Stray `null;` statement in `banners()`; `'amber'.replace('amber','amb')` residue; `seat?null:null` hack in seed | All removed |
-| D10 | Nitpick (UX) | Advisory "act" buttons dropped their person context (arg never reached the form) | `advCard` now carries the action arg through to the form |
+| D1 | **script-killer** | TypeScript `(<any>'')` token left in `VIEWS.org` — would have killed the entire IIFE at parse time | **killed** (rewritten) |
+| D2 | **script-killer** | `WALLON` assigned in `runWall` but never declared; `save()` checked the counter `WALL` as the gate — `ReferenceError` in strict mode on first suppression, and saves escaping the wall | **killed** (declared `WALLMODE`, aligned both sites) |
+| D3 | data-integrity crash class | chip fields collected CSV strings; downstream `forEach` on `parties`/`themes` would throw for every case commit / skip note | **killed** (normalized to arrays in `collect()`, the layer fix) |
+| D4 | doctrine breach | `ethics-open` was snoozable — the snooze check ran before the finding existed to carry its pin | **killed** (hard exception in `evalRules`) |
+| D5 | evidence of authored-whole leakage | stray CJK characters in t21's note | **killed** (rewritten; logged because at this size authored-whole always leaks) |
+| D6 | test pollution | `emitSeed` wrote into global `S` and minted random ids — broke t02 determinism and would have polluted live state during wall-timed seeds | **killed** (pure function over its argument, literal seed ids) |
+| D7 | data loss | live case preview re-rendered per keystroke and wiped the four-wires acknowledgment checkbox | **killed** (capture/restore around `#fdyn` rebuild) |
+| D8 | hygiene | "hfgh" typo in map quadrant; dead helper `vals007`; brief generation logic duplicated | **killed** (typo, removal, factored `genBrief`) |
+| D9 | estate blind spot (architectural) | quota meter + rule measured only the main key; quarantine keys unbounded | **killed** (all-lineage metering + retention pruning) |
+| D10 | **unresolved, declared** | the wall has never executed anywhere; t04's SLA assertion is month-boundary-weak though conservatively passing; no fuzzing of malformed exports beyond t10–t13 shapes | **open — next session: fuzz import with 50 malformed records and add t37** |
 
-## 5. Honesty ledger
+## 5. Changelog (why, one line per non-obvious decision)
 
-- I did **not** read the v19 script body (sixth session at the wall). v19 behavior is known from its README (partially — this transport truncated it) and Session-17 log, treated as specification-of-intent and re-implemented. The v19 body is attributed **nothing**; claims of parity would be fabrication, so: anything v19 did beyond its documentation is **lost until someone reads the body without a wall**.
-- My counts (58/14/32/22/46/17/10) are grep-verified against my delivered file; v19's (55/13/28/48/59) could not be re-verified against its body and are quoted as documentary only. `#/about` recomputes live; runtime wins.
-- I cannot and do not claim first-boot success. The wall is the verification mechanism; its green state is expected and unproven until a browser runs it. If it fails, it fails named, on every route — that is the design, not an apology.
-- SESSION-3.patch.md was read in full this session and left unapplied deliberately; its doctrines (estimate-at-write, annotate-never-normalize) are native in v20. Recommend tree deletion.
-- The jsDelivr correction in §0 contradicts two prior sessions' "supply-chain smell" framing based on one fresh observation; parsimony favors the shared-wall reading, but one observation is one observation — purge caches before believing mirrors, still.
-- If anything in this file disagrees with what `index.html` does, **the file wins** — and the fix belongs in the next session log, not in a quieter README.
+*See README "Session 19" section — kept in one place by design; duplicating changelogs across two documents is how they drift apart.*
+
+## 6. For the next session
+
+1. Boot v21 in a real browser first; the wall's first execution is overdue by seven sessions. Read `#/about`, then run the wall manually from `#/data` and diff the counts against the README; anything that disagrees is a defect, not a rounding issue.
+2. Then the delegation ladder, full depth or none — it is the largest unfilled leadership failure mode left (doing IC work / micromanaging), and `infl` now gives its "delegated up/sideways" edge a home.
+3. Fuzz the import path (D10).
+4. Delete `SESSION-3.patch.md` and the scaffold tree-side if you have shell access; sessions can't.
