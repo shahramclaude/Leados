@@ -48,6 +48,8 @@
     'review.scheduled':       { require: ['id', 'kind', 'dueAt'], optional: ['domain'], enums: { kind: REVIEW_KINDS, domain: DOMAIN_IDS }, numbers: ['dueAt'] },
     'review.completed':       { require: ['id', 'outcome'], optional: ['notes'], refs: { id: 'reviews' } },
     'playbook.applied':       { require: ['id', 'domain', 'playbookId'], optional: [], enums: { domain: DOMAIN_IDS } },
+    // pt-4 part 5: narrative record attached to an entity the log already holds.
+    'note.added':             { require: ['id', 'domain', 'text'], optional: ['refId', 'context'], enums: { domain: DOMAIN_IDS } },
 
     // ---------- FINANCE & REVENUE ----------
     'fin.budget.set':      { require: ['id', 'period', 'amount', 'currency', 'category'], optional: ['ownerId'], numbers: ['amount'] },

@@ -547,6 +547,83 @@
       const failed = checks.filter(function (c) { return !c[1]; }).map(function (c) { return c[0]; });
       const ok = missing.length === 0 && failed.length === 0;
       return { pass: ok, detail: ok ? required.length + ' named projections present; ' + checks.length + ' structural assertions hold' : (missing.length ? 'missing: ' + missing.join(', ') + ' | ' : '') + 'failed: ' + failed.join('; ') };
+    }],
+    ['T19', 'interactive playbooks: 14 present, prefill pure, fields declared, submit emits registry-valid events', function () {
+      const REQUIRED = ['risk-review', 'deal-review', 'quota-review', 'okr-checkin', 'incident-review', 'attrition-review', 'budget-review', 'vendor-review', 'safety-review', 'compliance-review', 'churn-review', 'tech-debt-sprint', 'board-prep', 'experiment-debrief'];
+      const have = LeadOS.playbooks.INTERACTIVE.map(function (p) { return p.id; });
+      const missingPb = REQUIRED.filter(function (id) { return have.indexOf(id) === -1; });
+      if (missingPb.length) return { pass: false, detail: 'missing playbooks: ' + missingPb.join(', ') };
+
+      // battery: at least one eligible target for every playbook
+      let seq = 0; const A = T0, today = A + 100 * DAY;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at || (A + seq * 1000) })); }
+      add('fin.risk.logged', { id: 'fr1', title: 'Runway', severity: 4, likelihood: 4, reviewDate: A + 10 * DAY });
+      add('legal.contract.logged', { id: 'ct1', counterparty: 'Alpha', type: 'MSA', expiryDate: A + 110 * DAY });
+      add('legal.risk.logged', { title: 'GDPR', severity: 3, area: 'privacy' });
+      add('sales.deal.logged', { id: 'd1', title: 'Acme', value: 50000, currency: 'USD', stage: 'proposal', closeDate: A + 40 * DAY });
+      add('sales.quota.set', { id: 'q1', personId: 'rep-1', period: 'Q3', target: 1000, currency: 'USD' });
+      add('sales.quota.actuals', { quotaId: 'q1', actual: 400, period: 'Q3' });
+      add('strategy.okr.set', { id: 'ok1', objective: 'Land mid-market', quarter: 'Q3', keyResults: [{ kr: 'Logos', target: 30, unit: 'count' }, { kr: 'ACV', target: 50, unit: 'k' }] });
+      add('ops.incident.logged', { id: 'in1', title: 'DB saturation', severity: 4, systems: ['db'], startedAt: A + 90 * DAY });
+      add('hr.attrition.logged', { personId: 'u-1', reason: 'voluntary' }, A + 70 * DAY);
+      add('hr.attrition.logged', { personId: 'u-2', reason: 'involuntary' }, A + 80 * DAY);
+      add('hr.engagement.logged', { score: 6, period: 'H1', respondents: 40 }, A + 60 * DAY);
+      add('fin.budget.set', { id: 'b1', period: 'Q2', amount: 100000, currency: 'USD', category: 'opex' });
+      add('fin.budget.actuals', { budgetId: 'b1', actual: 60000, period: 'Q2' });
+      add('supply.vendor.logged', { id: 'v1', name: 'FabCo', category: 'comp', tier: 1, risk_level: 5, reviewDate: A + 20 * DAY });
+      add('supply.disruption.logged', { vendorId: 'v1', description: 'fire', severity: 4 });
+      add('mfg.safety.incident', { severity: 3, type: 'cut', description: 'blade guard', corrective_actions: [], date: A + 85 * DAY });
+      add('legal.compliance.check', { framework: 'SOC2', period: 'H1', result: 'finding', findings: ['access review'] });
+      add('cs.churn.logged', { period: 'Q3', churned: 8, total: 100 });
+      add('cs.nps.logged', { score: 20, period: 'Q3', promoters: 40, passives: 40, detractors: 20 });
+      add('rd.tech.debt.logged', { id: 'td1', title: 'Legacy auth', severity: 4, effort: 5 });
+      add('rd.tech.debt.logged', { id: 'td2', title: 'Sync layer', severity: 3, effort: 4 });
+      add('rd.experiment.logged', { id: 'ex1', hypothesis: 'Pricing lift', method: 'A/B', startDate: A + 10 * DAY, reviewDate: A + 30 * DAY });
+      add('exec.kpi.reviewed', { period: 'Q2', metrics: [{ name: 'ARR', value: 100, target: 120, trend: 'flat' }] }, A + 50 * DAY);
+      add('exec.board.meeting', { date: A + 5 * DAY, quorum: true, items: ['Q1'], decisions: ['approve'] }, A + 5 * DAY);
+
+      const P = LeadOS.engine.project(evs);
+      const snapshot = JSON.stringify(P);
+      const problems = [];
+
+      function synth(f) {
+        if (f.type === 'checkbox') return true;
+        if (f.type === 'multiselect') return (f.options || []).map(function (o) { return o.value; });
+        if (f.type === 'lines') return ['action one', 'action two'];
+        if (f.type === 'number') return (typeof f.value === 'number') ? f.value : 1;
+        if (f.type === 'date') return (typeof f.value === 'number') ? f.value : today;
+        if (f.type === 'select') return f.value || (f.options && f.options[0]);
+        return (typeof f.value === 'string' && f.value) ? f.value : 'recorded during review';
+      }
+
+      LeadOS.playbooks.INTERACTIVE.forEach(function (pb) {
+        const cands = pb.candidates(P) || [];
+        if (!cands.length) { problems.push(pb.id + ': no candidate in battery'); return; }
+        const ctx = { today: today, targetId: cands[0].id, settings: LeadOS.engine.settings(P) };
+        const pre = pb.prefill(ctx, P);
+        if (!pre || pre.ok !== true) { problems.push(pb.id + ': prefill not ok'); return; }
+        if (!Array.isArray(pre.facts) || !pre.facts.length) problems.push(pb.id + ': prefill returned no facts');
+        if (!Array.isArray(pre.missing)) problems.push(pb.id + ': prefill missing[] absent');
+        const fields = pb.fields(pre);
+        if (!Array.isArray(fields) || !fields.length) { problems.push(pb.id + ': no fields declared'); return; }
+        fields.forEach(function (f) {
+          if (!f.name || !f.label || !f.type) problems.push(pb.id + ': field missing name/label/type');
+          if (f.recommended && !f.source) problems.push(pb.id + '.' + f.name + ': recommended value is not labeled with a source');
+        });
+        const v = {};
+        fields.forEach(function (f) { v[f.name] = synth(f); });
+        let specs;
+        try { specs = pb.submit(v, ctx, pre); }
+        catch (e) { problems.push(pb.id + ': submit threw ' + e.message); return; }
+        if (!Array.isArray(specs) || !specs.length) { problems.push(pb.id + ': submit produced no events'); return; }
+        specs.forEach(function (s) {
+          const verdict = LeadOS.events.validate(s.type, s.payload);
+          if (!verdict.ok) problems.push(pb.id + ' -> ' + s.type + ': ' + verdict.errors[0]);
+        });
+      });
+      if (JSON.stringify(P) !== snapshot) problems.push('prefill/submit mutated the projection');
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : REQUIRED.length + ' playbooks: prefill pure, fields labeled, submit output registry-valid' };
     }]
   ];
 
@@ -665,6 +742,31 @@
       const persisted = Object.keys(raw).concat(Object.keys(raw.meta));
       LeadOS.engine.NAMED_PROJECTIONS.forEach(function (k) { if (persisted.indexOf(k) !== -1) problems.push('projection ' + k + ' leaked into storage'); });
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : LeadOS.engine.NAMED_PROJECTIONS.length + ' projections derived per read; zero leaked into leados:data' };
+    }],
+    ['G11', 'playbooks over the live log: rules all covered, prefill honest, recommendations labeled, no mutation', function () {
+      const P = LeadOS.engine.project(LeadOS.store.load().events);
+      const before = JSON.stringify(P);
+      const problems = [];
+      const ruleIds = LeadOS.rules.RULES.map(function (r) { return r.id; });
+      LeadOS.playbooks.INTERACTIVE.forEach(function (pb) {
+        pb.forRules.forEach(function (r) { if (ruleIds.indexOf(r) === -1) problems.push(pb.id + ': declares unknown rule ' + r); });
+        let cands;
+        try { cands = pb.candidates(P) || []; } catch (e) { problems.push(pb.id + ': candidates threw ' + e.message); return; }
+        if (!cands.length) return;                       // nothing to review is a valid live state
+        try {
+          const pre = pb.prefill({ today: Date.now(), targetId: cands[0].id, settings: LeadOS.engine.settings(P) }, P);
+          if (!pre || typeof pre.ok !== 'boolean') { problems.push(pb.id + ': prefill returned no verdict'); return; }
+          if (pre.ok) {
+            pb.fields(pre).forEach(function (f) {
+              if (f.recommended && !f.source) problems.push(pb.id + '.' + f.name + ': unlabeled recommendation');
+            });
+          }
+        } catch (e) { problems.push(pb.id + ': prefill threw ' + e.message); }
+      });
+      if (JSON.stringify(P) !== before) problems.push('a playbook mutated the live projection');
+      const covered = {};
+      LeadOS.playbooks.INTERACTIVE.forEach(function (pb) { pb.forRules.forEach(function (r) { covered[r] = true; }); });
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : LeadOS.playbooks.INTERACTIVE.length + ' playbooks cover ' + Object.keys(covered).length + ' rules; all recommendations carry a source' };
     }]
   ];
 
@@ -686,7 +788,9 @@
     { id: 'C15', text: 'Trend/severity discipline: >=3 measured points, spec ceilings, skip-not-infer.', by: ['T14', 'T15', 'T16'] },
     { id: 'C16', text: 'Signals are derived per read and never persisted.', by: ['G4', 'G7', 'G9', 'T13'] },
     { id: 'C17', text: 'All 40 named projections exist; open sets exclude closed entities; append-order wins.', by: ['T18', 'G10'] },
-    { id: 'C18', text: 'Stale state impossible: projections alias the folded entities and never persist.', by: ['G10', 'G4', 'G7'] }
+    { id: 'C18', text: 'Stale state impossible: projections alias the folded entities and never persist.', by: ['G10', 'G4', 'G7'] },
+    { id: 'C19', text: 'All 14 interactive playbooks exist; submit() emits only registry-valid events.', by: ['T19', 'G3'] },
+    { id: 'C20', text: 'No playbook fakes certainty: recommendations are labeled with a source, gaps are declared.', by: ['T19', 'G11'] }
   ];
 
   function runSuite(suite) {

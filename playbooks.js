@@ -1,12 +1,24 @@
 /* LeadOS pt-4 - js/playbooks.js
-   Universal-domain playbooks. Applying a playbook emits EVENT SPECS ONLY -
-   the store remains the single writer. Each domain is bound to exactly one of
-   the four v4 review rhythms, which is what gives the new settings teeth. */
+   Two layers:
+   1) DOMAIN playbooks (pt-4 part 1) - installable baselines per domain.
+   2) INTERACTIVE playbooks (pt-4 part 5) - one per finding cluster.
+
+   Interactive contract:
+     candidates(P)            -> [{id, label}]   eligible targets from the log
+     prefill(ctx, P)          -> {ok, kind, title, facts[], suggest{}, missing[]}
+     fields(pre)              -> [{name, label, type, ...}]
+     submit(v, ctx, pre)      -> [{type, payload}]   event specs ONLY
+
+   Doctrine: playbooks never write (the store is the single writer) and never
+   fake certainty. Any value derived from the log is marked `recommended: true`
+   with a `source` string naming where it came from; anything the log does not
+   know is listed in `missing[]` and left blank for a human. prefill() is pure. */
 (function () {
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
+  const DAY = 86400000;
 
-  // Domain -> governing review rhythm (v4 cadence map).
+  /* ================= 1. DOMAIN PLAYBOOKS ================= */
   const DOMAIN_CADENCE = {
     finance: 'revenue', sales: 'revenue', bizdev: 'revenue', customerSuccess: 'revenue', marketing: 'revenue',
     engineering: 'ops', product: 'ops', design: 'ops', rd: 'ops', people: 'ops',
@@ -35,13 +47,10 @@
   ];
 
   function get(domainId) { return PLAYBOOKS.find(function (p) { return p.domain === domainId; }) || null; }
-
   function uid(prefix) {
     uid.n = (uid.n || 0) + 1;
     return prefix + '-' + Date.now().toString(36) + '-' + uid.n.toString(36) + Math.random().toString(36).slice(2, 6);
   }
-
-  // Compose - never write. Callers pass settings so review due dates honor v4 cadences.
   function apply(domainId, opts) {
     const pb = get(domainId);
     if (!pb) throw new Error('LeadOS: no playbook for domain ' + domainId);
@@ -50,18 +59,417 @@
     const kind = DOMAIN_CADENCE[domainId];
     const settingKey = { revenue: 'revenueReviewCadenceDays', ops: 'opsReviewCadenceDays', board: 'boardCadenceDays', compliance: 'complianceAuditCadenceDays' }[kind];
     const objId = uid('obj'), krId = uid('kr');
-
-    const specs = [
+    return [
       { type: 'playbook.applied', payload: { id: uid('pb'), domain: domainId, playbookId: 'playbook:' + domainId } },
       { type: 'objective.created', payload: { id: objId, domain: domainId, title: pb.objective, owner: (opts && opts.owner) || '', horizon: 'quarter' } },
       { type: 'kr.created', payload: { id: krId, objectiveId: objId, title: pb.kr.title, target: pb.kr.target, unit: pb.kr.unit, baseline: 0 } },
-      { type: 'task.created', payload: { id: uid('task'), domain: domainId, title: pb.moves[0], dueAt: now + 7 * LeadOS.engine.DAY } },
-      { type: 'task.created', payload: { id: uid('task'), domain: domainId, title: pb.moves[1], dueAt: now + 14 * LeadOS.engine.DAY } },
+      { type: 'task.created', payload: { id: uid('task'), domain: domainId, title: pb.moves[0], dueAt: now + 7 * DAY } },
+      { type: 'task.created', payload: { id: uid('task'), domain: domainId, title: pb.moves[1], dueAt: now + 14 * DAY } },
       { type: 'risk.raised', payload: { id: uid('risk'), domain: domainId, title: pb.risk.title, likelihood: pb.risk.likelihood, impact: pb.risk.impact, mitigation: pb.risk.mitigation } },
-      { type: 'review.scheduled', payload: { id: uid('rev'), kind: kind, domain: domainId, dueAt: now + settings[settingKey] * LeadOS.engine.DAY } }
+      { type: 'review.scheduled', payload: { id: uid('rev'), kind: kind, domain: domainId, dueAt: now + settings[settingKey] * DAY } }
     ];
-    return specs;
   }
 
-  LeadOS.playbooks = { PLAYBOOKS: PLAYBOOKS, DOMAIN_CADENCE: DOMAIN_CADENCE, RITUAL_LABEL: RITUAL_LABEL, get: get, apply: apply, uid: uid };
+  /* ================= 2. INTERACTIVE PLAYBOOKS ================= */
+  const vals = function (o) { return Object.keys(o).map(function (k) { return o[k]; }); };
+  const iso = function (ts) { return ts === null || ts === undefined ? '—' : new Date(ts).toISOString().slice(0, 10); };
+  const money = function (n) { return Math.round(n).toLocaleString('en-US'); };
+  const pct = function (x) { return (x * 100).toFixed(1) + '%'; };
+  const fact = function (label, value, note) { return { label: label, value: String(value), note: note || '' }; };
+  const SRC = function (s) { return 'recommended — ' + s; };
+  const notFound = function (what) { return { ok: false, kind: null, title: 'Nothing to review', facts: [], suggest: {}, missing: [], reason: 'No ' + what + ' in the log. This playbook has no target — nothing is assumed.' }; };
+  const note = function (domain, text, refId, context) { return { type: 'note.added', payload: { id: uid('note'), domain: domain, text: text, refId: refId || undefined, context: context || undefined } }; };
+
+  const INTERACTIVE = [
+    /* ---------- risk-review : R11 / R31 / R32 ---------- */
+    { id: 'risk-review', title: 'Risk review', domain: 'finance', forRules: ['R11', 'R31', 'R32'],
+      blurb: 'Close the loop on a financial risk, legal risk, or contract the log says is overdue.',
+      candidates: function (P) {
+        return vals(P.riskById).map(function (r) { return { id: r.id, label: 'Financial risk · ' + r.title }; })
+          .concat(vals(P.contractById).map(function (c) { return { id: c.id, label: 'Contract · ' + c.counterparty + ' (' + c.type + ')' }; }))
+          .concat(vals(P.legalRiskById).map(function (r) { return { id: r.id, label: 'Legal risk · ' + r.title }; }));
+      },
+      prefill: function (ctx, P) {
+        const id = ctx.targetId;
+        const fr = P.riskById[id], ct = P.contractById[id], lr = P.legalRiskById[id];
+        if (fr) return { ok: true, kind: 'finRisk', title: 'Financial risk: ' + fr.title, facts: [fact('severity × likelihood', fr.severity + ' × ' + fr.likelihood + ' = ' + (fr.severity * fr.likelihood)), fact('current status', fr.status), fact('review date', iso(fr.reviewDate), fr.reviewDate && fr.reviewDate < ctx.today ? Math.floor((ctx.today - fr.reviewDate) / DAY) + 'd past' : ''), fact('mitigation plan', fr.mitigationPlan || '(none recorded)')], suggest: { status: fr.status, statusSource: SRC('current status in the log, unchanged') }, missing: fr.mitigationPlan ? [] : ['No mitigation plan was ever logged for this risk.'] };
+        if (ct) return { ok: true, kind: 'contract', title: 'Contract: ' + ct.counterparty, facts: [fact('type', ct.type), fact('value', ct.value === null ? '(not logged)' : money(ct.value)), fact('expiry', iso(ct.expiryDate), ct.expiryDate && ct.expiryDate < ctx.today ? 'EXPIRED' : ''), fact('status', ct.status)], suggest: { status: ct.status, statusSource: SRC('current status in the log, unchanged') }, missing: ct.expiryDate ? [] : ['No expiryDate logged — renewal timing cannot be derived.'] };
+        if (lr) return { ok: true, kind: 'legalRisk', title: 'Legal risk: ' + lr.title, facts: [fact('area', lr.area), fact('severity', lr.severity), fact('owner', lr.ownerId || '(unowned — explicit null)'), fact('due', iso(lr.dueDate))], suggest: {}, missing: ['The registry has no legal.risk.updated type, so this review records a note plus a dated follow-up task rather than a status change.'] };
+        return notFound('financial risk, legal risk, or contract');
+      },
+      fields: function (pre) {
+        const f = [];
+        if (pre.kind === 'finRisk') f.push({ name: 'status', label: 'Updated status', type: 'select', options: ['open', 'mitigated', 'accepted', 'closed'], value: pre.suggest.status, recommended: true, source: pre.suggest.statusSource, required: true });
+        if (pre.kind === 'contract') f.push({ name: 'status', label: 'Updated status', type: 'select', options: ['active', 'renewed', 'expired', 'terminated'], value: pre.suggest.status, recommended: true, source: pre.suggest.statusSource, required: true });
+        f.push({ name: 'mitigation', label: 'Mitigation / decision taken', type: 'textarea', required: true, hint: 'What actually changes as a result of this review.' });
+        f.push({ name: 'nextReview', label: 'Next review date', type: 'date', required: true, hint: 'Appends a dated task — the log cannot re-date an existing entity.' });
+        return f;
+      },
+      submit: function (v, ctx, pre) {
+        const out = [], id = ctx.targetId;
+        const domain = pre.kind === 'finRisk' ? 'finance' : 'legal';
+        if (pre.kind === 'finRisk') out.push({ type: 'fin.risk.updated', payload: { riskId: id, status: v.status, note: v.mitigation } });
+        else if (pre.kind === 'contract') out.push({ type: 'legal.contract.updated', payload: { contractId: id, status: v.status, note: v.mitigation } });
+        else out.push(note(domain, v.mitigation, id, 'risk-review'));
+        out.push({ type: 'task.created', payload: { id: uid('task'), domain: domain, title: 'Review: ' + pre.title, dueAt: v.nextReview } });
+        return out;
+      } },
+
+    /* ---------- deal-review : R12 ---------- */
+    { id: 'deal-review', title: 'Deal review', domain: 'sales', forRules: ['R12'],
+      blurb: 'Clean a deal the pipeline is still carrying past its close date.',
+      candidates: function (P) { return P.openDeals.map(function (d) { return { id: d.id, label: d.title + ' · ' + money(d.value) + ' ' + d.currency }; }); },
+      prefill: function (ctx, P) {
+        const d = P.dealById[ctx.targetId];
+        if (!d) return notFound('open deal');
+        const past = d.closeDate ? Math.floor((ctx.today - d.closeDate) / DAY) : null;
+        return { ok: true, kind: 'deal', title: d.title, facts: [fact('account', d.accountName || '(not logged)'), fact('value', money(d.value) + ' ' + d.currency), fact('stage', d.stage), fact('close date', iso(d.closeDate), past !== null && past > 0 ? past + 'd past' : ''), fact('updates logged', d.updates)], suggest: { stage: d.stage, stageSource: SRC('current stage in the log, unchanged') }, missing: d.closeDate ? [] : ['No closeDate logged — staleness cannot be measured for this deal.'] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'stage', label: 'Stage', type: 'text', value: pre.suggest.stage, recommended: true, source: pre.suggest.stageSource, required: true },
+          { name: 'value', label: 'Revised value (blank = unchanged)', type: 'number' },
+          { name: 'closeDate', label: 'Revised close date', type: 'date', required: true },
+          { name: 'result', label: 'Outcome now', type: 'select', options: ['still open', 'won', 'lost'], value: 'still open', required: true },
+          { name: 'actualValue', label: 'Actual value (if won)', type: 'number' },
+          { name: 'lostReason', label: 'Lost reason (if lost)', type: 'text' }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        const out = [], up = { dealId: ctx.targetId, stage: v.stage, closeDate: v.closeDate };
+        if (typeof v.value === 'number') up.value = v.value;
+        if (v.result === 'lost' && v.lostReason) up.lostReason = v.lostReason;
+        out.push({ type: 'sales.deal.updated', payload: up });
+        if (v.result === 'won' || v.result === 'lost') {
+          const close = { dealId: ctx.targetId, result: v.result };
+          if (v.result === 'won' && typeof v.actualValue === 'number') close.actualValue = v.actualValue;
+          if (v.result === 'lost' && v.lostReason) close.note = v.lostReason;
+          out.push({ type: 'sales.deal.closed', payload: close });
+        }
+        return out;
+      } },
+
+    /* ---------- quota-review : R13 ---------- */
+    { id: 'quota-review', title: 'Quota review', domain: 'sales', forRules: ['R13'],
+      blurb: 'Name the root cause behind an attainment gap and record it as a measured KPI.',
+      candidates: function (P) { return vals(P.quotaById).map(function (q) { return { id: q.id, label: q.personId + ' · ' + q.period }; }); },
+      prefill: function (ctx, P) {
+        const q = P.quotaById[ctx.targetId];
+        if (!q) return notFound('quota');
+        if (!q.actuals.length) return { ok: true, kind: 'quota', title: 'Quota: ' + q.personId + ' (' + q.period + ')', facts: [fact('target', money(q.target) + ' ' + q.currency), fact('attainment', 'not computable')], suggest: {}, missing: ['No actuals logged against this quota. Attainment is not computed and not guessed.'] };
+        const last = q.actuals[q.actuals.length - 1];
+        const rate = last.actual / q.target;
+        return { ok: true, kind: 'quota', title: 'Quota: ' + q.personId + ' (' + last.period + ')', facts: [fact('target', money(q.target) + ' ' + q.currency), fact('actual', money(last.actual) + ' ' + q.currency), fact('attainment', pct(rate), 'math: ' + money(last.actual) + ' / ' + money(q.target))], suggest: { value: Math.round(rate * 1000) / 10, period: last.period, source: SRC('computed from the logged actual ÷ target') }, missing: [] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'value', label: 'Attainment to record (%)', type: 'number', value: pre.suggest.value, recommended: pre.suggest.value !== undefined, source: pre.suggest.source, required: true },
+          { name: 'period', label: 'Period', type: 'text', value: pre.suggest.period, recommended: pre.suggest.period !== undefined, source: pre.suggest.source, required: true },
+          { name: 'rootCause', label: 'Root cause', type: 'textarea', required: true, hint: 'One cause, stated plainly. Not a summary of the number.' },
+          { name: 'plan', label: 'Next-period plan', type: 'textarea', required: true }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        return [
+          { type: 'fin.kpi.logged', payload: { metric: 'quota-attainment', value: v.value, unit: '%', period: v.period, target: 100 } },
+          note('sales', 'Root cause: ' + v.rootCause + '\nPlan: ' + v.plan, ctx.targetId, 'quota-review')
+        ];
+      } },
+
+    /* ---------- okr-checkin : R14 / R15 ---------- */
+    { id: 'okr-checkin', title: 'OKR check-in', domain: 'product', forRules: ['R14', 'R15'],
+      blurb: 'Put a signal against each key result, or close the OKR with an honest score.',
+      candidates: function (P) { return vals(P.okrById).map(function (o) { return { id: o.id, label: o.objective + ' · ' + o.quarter + (o.closedAt ? ' (closed)' : '') }; }); },
+      prefill: function (ctx, P) {
+        const o = P.okrById[ctx.targetId];
+        if (!o) return notFound('OKR');
+        const silent = Math.floor((ctx.today - o.setAt) / DAY);
+        return { ok: true, kind: 'okr', title: o.objective, krs: o.keyResults, facts: [fact('quarter', o.quarter), fact('set', iso(o.setAt), silent + 'd ago'), fact('key results', o.keyResults.length), fact('status', o.closedAt ? 'closed, score ' + o.score : 'open')].concat(o.keyResults.map(function (kr, i) { return fact('KR' + (i + 1) + ' ' + kr.kr, (kr.current === null ? 'no progress logged' : kr.current + ' / ' + kr.target + ' ' + kr.unit)); })), suggest: {}, missing: o.keyResults.some(function (kr) { return kr.current === null; }) ? ['One or more key results have never been measured — those start blank.'] : [] };
+      },
+      fields: function (pre) {
+        const f = pre.krs.map(function (kr, i) {
+          return { name: 'kr' + i, label: 'KR' + (i + 1) + ': ' + kr.kr + ' (target ' + kr.target + ' ' + kr.unit + ')', type: 'number', value: kr.current === null ? undefined : kr.current, recommended: kr.current !== null, source: kr.current !== null ? SRC('last logged value — change it or leave as-is') : undefined, hint: kr.current === null ? 'Never measured. Blank stays blank.' : '' };
+        });
+        f.push({ name: 'progressNote', label: 'Check-in note', type: 'text' });
+        f.push({ name: 'close', label: 'Close this OKR now', type: 'checkbox' });
+        f.push({ name: 'score', label: 'Final score 0–1 (only if closing)', type: 'number' });
+        f.push({ name: 'closeNote', label: 'Closing rationale', type: 'textarea' });
+        return f;
+      },
+      submit: function (v, ctx, pre) {
+        const out = [];
+        pre.krs.forEach(function (kr, i) {
+          const val = v['kr' + i];
+          if (typeof val === 'number' && val !== kr.current) out.push({ type: 'strategy.okr.progress', payload: { okrId: ctx.targetId, krIndex: i, current: val, note: v.progressNote || undefined } });
+        });
+        if (v.close && typeof v.score === 'number') out.push({ type: 'strategy.okr.closed', payload: { okrId: ctx.targetId, score: v.score, note: v.closeNote || undefined } });
+        if (!out.length) out.push(note('product', v.progressNote || 'Check-in held; no measured change.', ctx.targetId, 'okr-checkin'));
+        return out;
+      } },
+
+    /* ---------- incident-review : R16 / R17 ---------- */
+    { id: 'incident-review', title: 'Incident review', domain: 'operations', forRules: ['R16', 'R17'],
+      blurb: 'Resolve an open incident with a root cause and corrective actions on the record.',
+      candidates: function (P) { return P.openIncidents.map(function (i) { return { id: i.id, label: 'sev' + i.severity + ' · ' + i.title }; }); },
+      prefill: function (ctx, P) {
+        const i = P.incidentById[ctx.targetId];
+        if (!i) return notFound('open incident');
+        const openH = ((ctx.today - i.startedAt) / 3600000).toFixed(1);
+        return { ok: true, kind: 'incident', title: i.title, facts: [fact('severity', i.severity), fact('systems', i.systems.join(', ')), fact('started', new Date(i.startedAt).toISOString()), fact('detected', i.detectedAt ? new Date(i.detectedAt).toISOString() : '(not logged)'), fact('open for', openH + 'h')], suggest: { resolvedAt: ctx.today, source: SRC('now — change it if resolution happened earlier') }, missing: i.detectedAt ? [] : ['No detectedAt logged — detection lag cannot be computed.'] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'resolvedAt', label: 'Resolved at', type: 'date', value: pre.suggest.resolvedAt, recommended: true, source: pre.suggest.source, required: true },
+          { name: 'rootCause', label: 'Root cause', type: 'textarea', required: true, hint: 'The cause, not the symptom.' },
+          { name: 'actions', label: 'Corrective actions (one per line)', type: 'lines', required: true }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        return [{ type: 'ops.incident.resolved', payload: { incidentId: ctx.targetId, resolvedAt: v.resolvedAt, rootCause: v.rootCause, actions: v.actions } }];
+      } },
+
+    /* ---------- attrition-review : R19 ---------- */
+    { id: 'attrition-review', title: 'Attrition review', domain: 'people', forRules: ['R19'],
+      blurb: 'Turn a departure pattern into stay-interview evidence.',
+      candidates: function (P) { return P.attritionEvents.length ? [{ id: 'all', label: P.attritionEvents.length + ' attrition events on record' }] : []; },
+      prefill: function (ctx, P) {
+        if (!P.attritionEvents.length) return notFound('attrition event');
+        const w = P.attritionEvents.filter(function (a) { return (ctx.today - a.at) / DAY <= 60; });
+        const vol = w.filter(function (a) { return a.reason === 'voluntary'; }).length;
+        const lastEng = P.engagementHistory.length ? P.engagementHistory[P.engagementHistory.length - 1] : null;
+        return { ok: true, kind: 'attrition', title: 'Attrition pattern review', facts: [fact('departures in 60d', w.length), fact('voluntary subset', vol), fact('all departures logged', P.attritionEvents.length), fact('last engagement score', lastEng ? lastEng.score + '/10 (' + lastEng.period + ')' : '(never logged)')].concat(w.map(function (a) { return fact(a.personId, a.reason, iso(a.at)); })), suggest: { respondents: lastEng ? lastEng.respondents : undefined, source: lastEng ? SRC('respondent count from the last survey') : undefined }, missing: lastEng ? [] : ['No engagement survey has ever been logged — score and respondents start blank.'] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'findings', label: 'Stay-interview findings', type: 'textarea', required: true, hint: 'What people actually said, not the conclusion you prefer.' },
+          { name: 'score', label: 'Engagement score 0–10 (blank = none recorded)', type: 'number', hint: 'Left blank, no engagement event is written.' },
+          { name: 'period', label: 'Survey period', type: 'text' },
+          { name: 'respondents', label: 'Respondents', type: 'number', value: pre.suggest.respondents, recommended: pre.suggest.respondents !== undefined, source: pre.suggest.source }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        const out = [note('people', 'Stay-interview findings: ' + v.findings, undefined, 'attrition-review')];
+        if (typeof v.score === 'number' && v.period && typeof v.respondents === 'number') out.push({ type: 'hr.engagement.logged', payload: { score: v.score, period: v.period, respondents: v.respondents, note: 'Logged during attrition review' } });
+        return out;
+      } },
+
+    /* ---------- budget-review : R22 / R23 / R24 ---------- */
+    { id: 'budget-review', title: 'Budget review', domain: 'finance', forRules: ['R22', 'R23', 'R24'],
+      blurb: 'Explain a variance and commit a corrective action, with the math on the record.',
+      candidates: function (P) { return vals(P.budgetById).filter(function (b) { return b.actuals.length; }).map(function (b) { return { id: b.id, label: b.category + ' · ' + b.period }; }); },
+      prefill: function (ctx, P) {
+        const b = P.budgetById[ctx.targetId];
+        if (!b) return notFound('budget with actuals');
+        if (!b.actuals.length) return { ok: true, kind: 'budget', title: b.category + ' ' + b.period, facts: [fact('budget', money(b.amount) + ' ' + b.currency)], suggest: {}, missing: ['No actuals logged — variance is not computed.'] };
+        const a = b.actuals[b.actuals.length - 1];
+        const variance = (a.actual - b.amount) / b.amount;
+        return { ok: true, kind: 'budget', title: b.category + ' ' + a.period, facts: [fact('budget', money(b.amount) + ' ' + b.currency), fact('actual', money(a.actual) + ' ' + b.currency), fact('variance', pct(variance), 'math: (' + money(a.actual) + ' − ' + money(b.amount) + ') / ' + money(b.amount)), fact('direction', a.actual > b.amount ? 'overspend' : 'underspend')], suggest: { value: Math.round(Math.abs(variance) * 1000) / 10, period: a.period, source: SRC('absolute variance computed from the logged actual') }, missing: [] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'value', label: 'Variance to record (%)', type: 'number', value: pre.suggest.value, recommended: pre.suggest.value !== undefined, source: pre.suggest.source, required: true },
+          { name: 'period', label: 'Period', type: 'text', value: pre.suggest.period, recommended: pre.suggest.period !== undefined, source: pre.suggest.source, required: true },
+          { name: 'explanation', label: 'Explanation', type: 'textarea', required: true },
+          { name: 'corrective', label: 'Corrective action', type: 'textarea', required: true }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        return [
+          { type: 'fin.kpi.logged', payload: { metric: 'budget-variance', value: v.value, unit: '%', period: v.period, target: 15 } },
+          note('finance', 'Explanation: ' + v.explanation + '\nCorrective action: ' + v.corrective, ctx.targetId, 'budget-review')
+        ];
+      } },
+
+    /* ---------- vendor-review : R25 / R26 ---------- */
+    { id: 'vendor-review', title: 'Vendor review', domain: 'supplyChain', forRules: ['R25', 'R26'],
+      blurb: 'Score a vendor and set the next review date so exposure cannot age silently.',
+      candidates: function (P) { return vals(P.vendorById).map(function (v) { return { id: v.id, label: v.name + ' · tier ' + v.tier + ' · risk ' + v.risk_level }; }); },
+      prefill: function (ctx, P) {
+        const v = P.vendorById[ctx.targetId];
+        if (!v) return notFound('vendor');
+        const disruptions = P.disruptionEvents.filter(function (d) { return d.vendorId === v.id; });
+        return { ok: true, kind: 'vendor', title: v.name, facts: [fact('category', v.category), fact('tier', v.tier), fact('risk level', v.risk_level), fact('review due', iso(v.reviewDate), v.reviewDate && v.reviewDate < ctx.today ? 'past' : ''), fact('reviews on record', v.reviews.length), fact('last score', v.lastScore === null ? '(never scored)' : v.lastScore), fact('disruptions logged', disruptions.length)], suggest: { score: v.lastScore === null ? undefined : v.lastScore, source: v.lastScore === null ? undefined : SRC('last score — confirm or change it') }, missing: v.lastScore === null ? ['This vendor has never been scored. The score field starts blank.'] : [] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'score', label: 'Vendor score 1–5', type: 'number', value: pre.suggest.score, recommended: pre.suggest.score !== undefined, source: pre.suggest.source, required: true },
+          { name: 'note', label: 'Review note', type: 'textarea', required: true },
+          { name: 'nextReviewDate', label: 'Next review date', type: 'date', required: true }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        return [{ type: 'supply.vendor.reviewed', payload: { vendorId: ctx.targetId, score: v.score, note: v.note, nextReviewDate: v.nextReviewDate } }];
+      } },
+
+    /* ---------- safety-review : R28 (mandated) ---------- */
+    { id: 'safety-review', title: 'Safety review (mandated)', domain: 'manufacturing', forRules: ['R28'],
+      blurb: 'Mandated after any safety incident. Corrective actions are required — the form will not submit without them.',
+      candidates: function (P) { return P.safetyIncidents.map(function (i, idx) { return { id: String(idx), label: 'sev' + i.severity + ' · ' + i.type + ' · ' + iso(i.at) }; }); },
+      prefill: function (ctx, P) {
+        const i = P.safetyIncidents[Number(ctx.targetId)];
+        if (!i) return notFound('safety incident');
+        return { ok: true, kind: 'safety', title: 'Safety incident: ' + i.type, facts: [fact('severity', i.severity), fact('date', iso(i.date)), fact('description', i.description), fact('corrective actions on record', i.corrective_actions.length ? i.corrective_actions.join('; ') : 'NONE — this is why the review is mandated')], suggest: { severity: i.severity, type: i.type, description: i.description, source: SRC('carried from the original incident record') }, missing: i.corrective_actions.length ? [] : ['The original incident carries no corrective actions. They are mandatory here.'] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'severity', label: 'Severity 1–5', type: 'number', value: pre.suggest.severity, recommended: true, source: pre.suggest.source, required: true },
+          { name: 'type', label: 'Type', type: 'text', value: pre.suggest.type, recommended: true, source: pre.suggest.source, required: true },
+          { name: 'description', label: 'Review description', type: 'textarea', value: pre.suggest.description, recommended: true, source: pre.suggest.source, required: true },
+          { name: 'corrective_actions', label: 'Corrective actions (one per line) — REQUIRED', type: 'lines', required: true, hint: 'At least one. A safety review without an action is not a review.' },
+          { name: 'date', label: 'Review date', type: 'date', required: true }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        return [{ type: 'mfg.safety.incident', payload: { severity: v.severity, type: v.type, description: v.description, corrective_actions: v.corrective_actions, date: v.date } }];
+      } },
+
+    /* ---------- compliance-review : R30 ---------- */
+    { id: 'compliance-review', title: 'Compliance review', domain: 'legal', forRules: ['R30'],
+      blurb: 'Record a remediation plan and the resulting check outcome for a framework.',
+      candidates: function (P) { return Object.keys(P.complianceByFramework).map(function (fw) { return { id: fw, label: fw + ' · ' + P.complianceByFramework[fw].length + ' checks' }; }); },
+      prefill: function (ctx, P) {
+        const logs = P.complianceByFramework[ctx.targetId];
+        if (!logs || !logs.length) return notFound('compliance check');
+        const last = logs[logs.length - 1];
+        return { ok: true, kind: 'compliance', title: 'Framework: ' + ctx.targetId, facts: [fact('last result', last.result), fact('last period', last.period), fact('checked', iso(last.at), Math.floor((ctx.today - last.at) / DAY) + 'd ago'), fact('open findings', last.findings.length ? last.findings.join('; ') : '(none itemized)')], suggest: { findings: last.findings.join('\n'), source: SRC('findings carried from the last check — clear the ones actually remediated') }, missing: [] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'result', label: 'Outcome of this check', type: 'select', options: ['pass', 'finding'], required: true, hint: 'Record what the evidence supports, not what you hope.' },
+          { name: 'period', label: 'Period', type: 'text', required: true },
+          { name: 'findings', label: 'Remaining findings (one per line)', type: 'lines', value: pre.suggest.findings, recommended: true, source: pre.suggest.source },
+          { name: 'remediation', label: 'Remediation plan', type: 'textarea', required: true }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        return [
+          { type: 'legal.compliance.check', payload: { framework: ctx.targetId, period: v.period, result: v.result, findings: v.findings || [] } },
+          note('legal', 'Remediation plan: ' + v.remediation, undefined, 'compliance-review')
+        ];
+      } },
+
+    /* ---------- churn-review : R33 / R34 / R35 ---------- */
+    { id: 'churn-review', title: 'Churn review', domain: 'customerSuccess', forRules: ['R33', 'R34', 'R35'],
+      blurb: 'Pair the churn number with the NPS trend and commit retention plays.',
+      candidates: function (P) { return (P.churnHistory.length || P.npsHistory.length) ? [{ id: 'latest', label: 'Latest churn + NPS position' }] : []; },
+      prefill: function (ctx, P) {
+        if (!P.churnHistory.length && !P.npsHistory.length) return notFound('churn or NPS record');
+        const c = P.churnHistory.length ? P.churnHistory[P.churnHistory.length - 1] : null;
+        const n = P.npsHistory.length ? P.npsHistory[P.npsHistory.length - 1] : null;
+        const facts = [];
+        if (c) facts.push(fact('churn', c.churned + ' / ' + c.total + ' = ' + pct(c.churned / c.total), c.period), fact('MRR lost', c.mrr_lost === undefined ? '(not logged)' : money(c.mrr_lost)));
+        if (n) facts.push(fact('NPS', n.score, n.period), fact('promoters / detractors', n.promoters + ' / ' + n.detractors));
+        facts.push(fact('open escalations', P.openEscalations.length));
+        return { ok: true, kind: 'churn', title: 'Churn and retention review', facts: facts, suggest: c ? { period: c.period, churned: c.churned, total: c.total, source: SRC('last churn record — confirm against this period') } : {}, missing: [].concat(c ? [] : ['No churn record logged — churn fields start blank.']).concat(n ? [] : ['No NPS record logged — the trend cannot be shown.']) };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'period', label: 'Period', type: 'text', value: pre.suggest.period, recommended: pre.suggest.period !== undefined, source: pre.suggest.source, required: true },
+          { name: 'churned', label: 'Accounts churned', type: 'number', value: pre.suggest.churned, recommended: pre.suggest.churned !== undefined, source: pre.suggest.source, required: true },
+          { name: 'total', label: 'Total accounts', type: 'number', value: pre.suggest.total, recommended: pre.suggest.total !== undefined, source: pre.suggest.source, required: true },
+          { name: 'mrr_lost', label: 'MRR lost (blank if unknown)', type: 'number' },
+          { name: 'rootCause', label: 'Root cause', type: 'textarea', required: true },
+          { name: 'plays', label: 'Retention plays (one per line)', type: 'lines', required: true }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        const payload = { period: v.period, churned: v.churned, total: v.total };
+        if (typeof v.mrr_lost === 'number') payload.mrr_lost = v.mrr_lost;
+        if (v.rootCause) payload.reason = v.rootCause.slice(0, 120);
+        return [
+          { type: 'cs.churn.logged', payload: payload },
+          note('customerSuccess', 'Root cause: ' + v.rootCause + '\nRetention plays:\n' + (v.plays || []).join('\n'), undefined, 'churn-review')
+        ];
+      } },
+
+    /* ---------- tech-debt-sprint : R38 ---------- */
+    { id: 'tech-debt-sprint', title: 'Tech debt sprint', domain: 'rd', forRules: ['R38'],
+      blurb: 'Backlog sorted by severity × effort. Selecting an item appends rd.tech.debt.resolved — tick only what is actually cleared.',
+      candidates: function (P) { return P.openTechDebt.length ? [{ id: 'backlog', label: P.openTechDebt.length + ' unresolved debt items' }] : []; },
+      prefill: function (ctx, P) {
+        const items = P.openTechDebt.slice().sort(function (a, b) { return (b.severity * b.effort) - (a.severity * a.effort); });
+        if (!items.length) return notFound('unresolved tech debt');
+        const sum = items.reduce(function (acc, d) { return acc + d.severity * d.effort; }, 0);
+        return { ok: true, kind: 'debt', items: items, title: 'Tech debt backlog', facts: [fact('unresolved items', items.length), fact('total mass', sum, 'math: ' + items.map(function (d) { return d.severity + '×' + d.effort; }).join(' + '))].concat(items.map(function (d) { return fact(d.title, 'sev ' + d.severity + ' × effort ' + d.effort + ' = ' + (d.severity * d.effort), iso(d.loggedAt)); })), suggest: {}, missing: [] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'resolved', label: 'Items cleared this sprint', type: 'multiselect', options: pre.items.map(function (d) { return { value: d.id, label: d.title + ' (sev ' + d.severity + ' × effort ' + d.effort + ')' }; }), hint: 'Each tick appends rd.tech.debt.resolved. Nothing is marked done on your behalf.' },
+          { name: 'plan', label: 'Sprint plan / sequencing note', type: 'textarea', required: true }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        const out = (v.resolved || []).map(function (id) { return { type: 'rd.tech.debt.resolved', payload: { debtId: id, note: v.plan } }; });
+        out.push(note('rd', 'Tech debt sprint plan: ' + v.plan, undefined, 'tech-debt-sprint'));
+        return out;
+      } },
+
+    /* ---------- board-prep : R39 / R40 ---------- */
+    { id: 'board-prep', title: 'Board prep', domain: 'executive', forRules: ['R39', 'R40'],
+      blurb: 'Compile the board record and the KPI review in one pass.',
+      candidates: function () { return [{ id: 'next', label: 'Next board meeting' }]; },
+      prefill: function (ctx, P) {
+        const lastKpi = P.execKpiReviews.length ? P.execKpiReviews[P.execKpiReviews.length - 1] : null;
+        const lastBoard = P.boardMeetings.length ? P.boardMeetings[P.boardMeetings.length - 1] : null;
+        const facts = [
+          fact('last board meeting', lastBoard ? iso(lastBoard.at) : '(never logged)', lastBoard ? Math.floor((ctx.today - lastBoard.at) / DAY) + 'd ago' : ''),
+          fact('last KPI review', lastKpi ? lastKpi.period + ' (' + iso(lastKpi.at) + ')' : '(never logged)'),
+          fact('open decisions', Object.keys(P.decisions).filter(function (k) { return P.decisions[k].status === 'open'; }).length),
+          fact('open risks', P.openRisks.length + ' financial, ' + Object.keys(P.risks).filter(function (k) { return P.risks[k].status === 'open'; }).length + ' core')
+        ];
+        if (lastKpi) lastKpi.metrics.forEach(function (m) { facts.push(fact('KPI ' + m.name, m.value + (m.target !== undefined ? ' / target ' + m.target : ''), m.trend || '')); });
+        return { ok: true, kind: 'board', title: 'Board preparation', facts: facts, suggest: lastKpi ? { metricName: lastKpi.metrics[0].name, metricValue: lastKpi.metrics[0].value, source: SRC('headline metric from the last KPI review — update the value') } : {}, missing: lastKpi ? [] : ['No prior KPI review logged — metric fields start blank.'] };
+      },
+      fields: function (pre) {
+        return [
+          { name: 'date', label: 'Meeting date', type: 'date', required: true },
+          { name: 'quorum', label: 'Quorum met', type: 'checkbox' },
+          { name: 'items', label: 'Agenda items (one per line)', type: 'lines', required: true },
+          { name: 'decisions', label: 'Decisions taken (one per line)', type: 'lines', required: true },
+          { name: 'period', label: 'KPI period', type: 'text', required: true },
+          { name: 'metricName', label: 'Headline KPI name', type: 'text', value: pre.suggest.metricName, recommended: pre.suggest.metricName !== undefined, source: pre.suggest.source },
+          { name: 'metricValue', label: 'Headline KPI value', type: 'number', value: pre.suggest.metricValue, recommended: pre.suggest.metricValue !== undefined, source: pre.suggest.source },
+          { name: 'metricTarget', label: 'Headline KPI target', type: 'number' },
+          { name: 'trend', label: 'Trend', type: 'select', options: ['up', 'flat', 'down'], value: 'flat' }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        const out = [{ type: 'exec.board.meeting', payload: { date: v.date, quorum: !!v.quorum, items: v.items || [], decisions: v.decisions || [] } }];
+        if (v.metricName && typeof v.metricValue === 'number') {
+          const m = { name: v.metricName, value: v.metricValue, trend: v.trend };
+          if (typeof v.metricTarget === 'number') m.target = v.metricTarget;
+          out.push({ type: 'exec.kpi.reviewed', payload: { period: v.period, metrics: [m] } });
+        }
+        return out;
+      } },
+
+    /* ---------- experiment-debrief : R37 ---------- */
+    { id: 'experiment-debrief', title: 'Experiment debrief', domain: 'rd', forRules: ['R37'],
+      blurb: 'Call the bet: validated, invalidated, or inconclusive — and say what was learned.',
+      candidates: function (P) { return P.openExperiments.map(function (e) { return { id: e.id, label: e.hypothesis }; }); },
+      prefill: function (ctx, P) {
+        const e = P.experimentById[ctx.targetId];
+        if (!e) return notFound('open experiment');
+        return { ok: true, kind: 'experiment', title: e.hypothesis, facts: [fact('method', e.method), fact('started', iso(e.startDate)), fact('review due', iso(e.reviewDate), e.reviewDate && e.reviewDate < ctx.today ? Math.floor((ctx.today - e.reviewDate) / DAY) + 'd past' : ''), fact('owner', e.ownerId || '(not logged)')], suggest: {}, missing: ['No result is pre-selected. Validated, invalidated, and inconclusive are all equally available.'] };
+      },
+      fields: function () {
+        return [
+          { name: 'result', label: 'Result', type: 'select', options: ['validated', 'invalidated', 'inconclusive'], required: true },
+          { name: 'learnings', label: 'Learnings (one per line)', type: 'lines', required: true },
+          { name: 'next', label: 'Next step', type: 'text' }
+        ];
+      },
+      submit: function (v, ctx, pre) {
+        return [{ type: 'rd.experiment.result', payload: { experimentId: ctx.targetId, result: v.result, learnings: v.learnings, next: v.next || undefined } }];
+      } }
+  ];
+
+  const byId = function (id) { return INTERACTIVE.find(function (p) { return p.id === id; }) || null; };
+  const forRule = function (ruleId) { return INTERACTIVE.filter(function (p) { return p.forRules.indexOf(ruleId) !== -1; }); };
+
+  LeadOS.playbooks = {
+    PLAYBOOKS: PLAYBOOKS, DOMAIN_CADENCE: DOMAIN_CADENCE, RITUAL_LABEL: RITUAL_LABEL,
+    get: get, apply: apply, uid: uid,
+    INTERACTIVE: INTERACTIVE, byId: byId, forRule: forRule
+  };
 })();

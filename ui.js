@@ -57,6 +57,7 @@
   const TABS = [
     ['command', 'Command', 'gauge'],
     ['signals', 'Signals', 'activity'],
+    ['playbooks', 'Playbooks', 'play'],
     ['domains', 'Domains', 'grid'],
     ['cadences', 'Cadences', 'calendar'],
     ['decisions', 'Decisions', 'scale'],
@@ -347,12 +348,90 @@
     return h + '</section>';
   }
 
+  // -------------------------------------------------------------- Playbooks
+  const PB_TARGET = {};   // playbookId -> chosen target id (view state only)
+
+  function fieldInput(f) {
+    const nm = esc(f.name);
+    const val = (f.value === undefined || f.value === null) ? '' : f.value;
+    const req = f.required ? ' required' : '';
+    if (f.type === 'textarea') return '<textarea name="' + nm + '" rows="2"' + req + '>' + esc(val) + '</textarea>';
+    if (f.type === 'lines') return '<textarea name="' + nm + '" rows="3" placeholder="one per line"' + req + '>' + esc(val) + '</textarea>';
+    if (f.type === 'select') return '<select name="' + nm + '"' + req + '>' + (f.required ? '' : '<option value=""></option>') + f.options.map(function (o) { return '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+    if (f.type === 'checkbox') return '<label class="cbx"><input type="checkbox" name="' + nm + '"' + (val ? ' checked' : '') + '> yes</label>';
+    if (f.type === 'multiselect') return '<div class="msel">' + f.options.map(function (o) { return '<label class="cbx"><input type="checkbox" name="' + nm + '" value="' + esc(o.value) + '"> ' + esc(o.label) + '</label>'; }).join('') + '</div>';
+    if (f.type === 'date') return '<input type="date" name="' + nm + '" value="' + (typeof val === 'number' ? fmtD(val) : esc(val)) + '"' + req + '>';
+    if (f.type === 'number') return '<input type="number" step="any" name="' + nm + '" value="' + esc(val) + '"' + req + '>';
+    return '<input type="text" name="' + nm + '" value="' + esc(val) + '"' + req + '>';
+  }
+
+  function viewPlaybooks(ctx) {
+    let h = '<section class="card"><header class="card-h"><h3>' + icon('play') + ' Interactive playbooks</h3><span class="dim">' + LeadOS.playbooks.INTERACTIVE.length + ' playbooks · prefill reads the log · submit appends events</span></header>' +
+      '<p class="dim pad">Every value drawn from the log is marked <span class="pill pill-rec">recommended</span> and names its source. Anything the log does not know is listed as unknown and left blank — no playbook fills a gap with a guess.</p></section>';
+
+    LeadOS.playbooks.INTERACTIVE.forEach(function (pb) {
+      const cands = pb.candidates(ctx.state) || [];
+      const chosen = PB_TARGET[pb.id] && cands.some(function (c) { return c.id === PB_TARGET[pb.id]; }) ? PB_TARGET[pb.id] : (cands.length ? cands[0].id : null);
+      h += '<section class="card pbcard"><header class="card-h"><h3>' + icon('play') + ' ' + esc(pb.title) + '</h3>' +
+        '<span class="dim">' + pb.forRules.map(function (r) { return '<span class="chip">' + r + '</span>'; }).join(' ') + '</span></header>' +
+        '<p class="dim pad">' + esc(pb.blurb) + '</p>';
+
+      if (!cands.length) { h += '<p class="empty">No eligible target in the log. Nothing is assumed, so this playbook stays closed.</p></section>'; return; }
+
+      h += '<form class="inline-form" data-form="pb-target" data-id="' + esc(pb.id) + '"><span class="if-label">target</span>' +
+        '<select name="target">' + cands.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === chosen ? ' selected' : '') + '>' + esc(c.label) + '</option>'; }).join('') + '</select>' +
+        '<button class="btn tiny" type="submit">load</button></form>';
+
+      let pre;
+      try { pre = pb.prefill({ today: ctx.now, targetId: chosen, settings: ctx.set }, ctx.state); }
+      catch (err) { h += '<p class="empty">prefill error: ' + esc(err.message) + '</p></section>'; return; }
+
+      if (!pre.ok) { h += '<p class="empty">' + esc(pre.reason) + '</p></section>'; return; }
+
+      h += '<div class="pbfacts"><h4>' + esc(pre.title) + '</h4><table class="tbl slim"><tbody>' + pre.facts.map(function (f) {
+        return '<tr><td class="dim">' + esc(f.label) + '</td><td><strong>' + esc(f.value) + '</strong></td><td class="dim mono tiny-t">' + esc(f.note || '') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+      if (pre.missing.length) h += '<div class="unknowns"><span class="pill pill-unknown">not in the log</span>' + pre.missing.map(function (m) { return '<div>' + esc(m) + '</div>'; }).join('') + '</div>';
+      h += '</div>';
+
+      const fields = pb.fields(pre);
+      h += '<form class="frm" data-form="pb-run" data-id="' + esc(pb.id) + '" data-target="' + esc(chosen) + '">' + fields.map(function (f) {
+        return '<label class="pbfield"><span class="pbl">' + esc(f.label) + (f.required ? ' <i>*</i>' : '') +
+          (f.recommended ? ' <span class="pill pill-rec">recommended</span>' : '') + '</span>' +
+          fieldInput(f) +
+          (f.source ? '<span class="pbsrc">' + esc(f.source) + '</span>' : '') +
+          (f.hint ? '<span class="pbhint">' + esc(f.hint) + '</span>' : '') + '</label>';
+      }).join('') + '<button class="btn primary" type="submit">' + icon('check') + ' append events</button></form></section>';
+    });
+    return h;
+  }
+
+  function readPlaybookForm(form, fields) {
+    const v = {};
+    fields.forEach(function (f) {
+      if (f.type === 'multiselect') {
+        v[f.name] = Array.prototype.slice.call(form.querySelectorAll('input[name="' + f.name + '"]:checked')).map(function (el) { return el.value; });
+        return;
+      }
+      const el = form.elements[f.name];
+      if (!el) return;
+      if (f.type === 'checkbox') { v[f.name] = !!el.checked; return; }
+      const raw = String(el.value == null ? '' : el.value).trim();
+      if (raw === '') { v[f.name] = undefined; return; }
+      if (f.type === 'number') { const n = Number(raw); v[f.name] = isNaN(n) ? undefined : n; return; }
+      if (f.type === 'date') { v[f.name] = new Date(raw + 'T12:00:00').getTime(); return; }
+      if (f.type === 'lines') { v[f.name] = raw.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); return; }
+      v[f.name] = raw;
+    });
+    return v;
+  }
+
   // ---------------------------------------------------------------- helpers
   function domainOptions() {
     return LeadOS.events.DOMAINS.map(function (d) { return '<option value="' + d.id + '">' + esc(d.label) + '</option>'; }).join('');
   }
 
-  const VIEWS = { command: viewCommand, signals: viewSignals, domains: viewDomains, cadences: viewCadences, decisions: viewDecisions, risks: viewRisks, events: viewEvents, health: viewHealth, settings: viewSettings };
+  const VIEWS = { command: viewCommand, signals: viewSignals, playbooks: viewPlaybooks, domains: viewDomains, cadences: viewCadences, decisions: viewDecisions, risks: viewRisks, events: viewEvents, health: viewHealth, settings: viewSettings };
 
   function render() {
     LAST_HEALTH = LeadOS.health.runAll();
@@ -426,6 +505,22 @@
     },
     'set-setting': function (f) {
       LeadOS.store.append('settings.changed', { key: f.dataset.key, value: Number(f.value.value) });
+      render();
+    },
+    'pb-target': function (f) { PB_TARGET[f.dataset.id] = f.target.value; render(); },
+    'pb-run': function (f) {
+      const pb = LeadOS.playbooks.byId(f.dataset.id);
+      const ctx0 = read();
+      const c = { today: ctx0.now, targetId: f.dataset.target, settings: ctx0.set };
+      const pre = pb.prefill(c, ctx0.state);
+      if (!pre.ok) throw new Error(pre.reason);
+      const fields = pb.fields(pre);
+      const v = readPlaybookForm(f, fields);
+      const missingReq = fields.filter(function (fd) { return fd.required && (v[fd.name] === undefined || (Array.isArray(v[fd.name]) && !v[fd.name].length)); });
+      if (missingReq.length) throw new Error('required field empty: ' + missingReq.map(function (fd) { return fd.label; }).join(', '));
+      const specs = pb.submit(v, c, pre);
+      specs.forEach(function (s) { LeadOS.store.append(s.type, s.payload); });
+      LeadOS.store.append('playbook.applied', { id: LeadOS.playbooks.uid('pb'), domain: pb.domain, playbookId: 'interactive:' + pb.id });
       render();
     }
   };

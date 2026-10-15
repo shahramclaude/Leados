@@ -199,6 +199,53 @@ Health tab now shows 28 checks (T1–T18, G1–G10) and 18 claims.
 
 ---
 
-## Part 5+ (queued)
-- Executive/board pack compiled from the log (feeds R39/R40).
+## Part 5 — Interactive playbooks
+
+### §18. Mini-audit (pre-code inspection for this part)
+| Claim in the brief | Inspection | Result |
+|---|---|---|
+| `note.added` used by 4 playbooks | grep of the 87-type registry | **ABSENT** — the type did not exist. Added to the registry (88 types) with fold + `noteById`/`notesByRef` projections rather than faking it or silently dropping the requirement. |
+| `incident.resolved`, `okr.progress`, `vendor.reviewed`, `experiment.result` (short names) | registry inspection | present under their namespaced ids (`ops.incident.resolved`, `strategy.okr.progress`, …); playbooks emit the registered names |
+| "saves `fin.kpi.logged` for the root" (quota-review) | spec reading | implemented as a measured KPI (`quota-attainment`, value = computed attainment, target 100) **plus** `note.added` carrying the root cause prose — a root cause is not a number |
+| `safety-review` "saves mfg.safety.incident with corrective_actions" | registry inspection | no update type exists for safety incidents, so the review appends a **new** `mfg.safety.incident` record carrying the actions; the form refuses to submit with an empty `corrective_actions[]` |
+| `tech-debt-sprint` "which items to schedule … saves resolved" | spec reading | followed verbatim, but the UI states plainly that ticking an item appends `rd.tech.debt.resolved` — scheduling and clearing are not the same act, so the label removes the ambiguity rather than the code inventing a 'scheduled' state |
+
+### §19. Built
+- `js/playbooks.js` — 14 interactive playbooks beside the 15 domain playbooks;
+  `candidates/prefill/fields/submit`; `byId()`, `forRule()`.
+- `js/events.js` + `js/engine.js` — `note.added` contract, fold, `noteById`,
+  `notesByRef`.
+- `js/health.js` — T19 (24-event battery giving every playbook a target;
+  prefill purity, field declarations, synthetic submit validated against the
+  registry) and G11 (live rule coverage, labeled recommendations, no mutation).
+  Claims C19–C20.
+- `js/ui.js` + `css/app.css` — Playbooks tab: facts table, "not in the log"
+  banner, `recommended` chips with source lines, typed form controls.
+
+### §20. Deviations and judgement calls
+1. `note.added` added to the registry (§18) — required by the spec, absent
+   before. Only new type in this part.
+2. `risk-review` on a **legal** risk emits `note.added` + a dated
+   `task.created` instead of a status change: the registry has no
+   `legal.risk.updated`, and inventing one to make a form feel complete would
+   be the exact fakery this part forbids. The prefill says so on screen.
+3. "Next review date" everywhere appends a dated `task.created`; an append-only
+   log cannot re-date an existing entity, and the UI states this.
+4. Optional emission: `attrition-review` writes `hr.engagement.logged` only if
+   score+period+respondents are all supplied; `board-prep` writes
+   `exec.kpi.reviewed` only if a metric name+value are supplied. A partial
+   survey is not a survey.
+5. Running any interactive playbook also appends `playbook.applied`
+   (`interactive:<id>`), so interventions are auditable alongside findings.
+6. Target selection is view state only (`PB_TARGET`), never persisted.
+
+### §21. Coverage proof for part-5 claims
+- C19 (14 playbooks, registry-valid output): T19 + G3.
+- C20 (no faked certainty): T19 (fails on any unlabeled recommendation) + G11 (live).
+Health tab now shows 30 checks (T1–T19, G1–G11) and 20 claims.
+
+---
+
+## Part 6+ (queued)
+- Executive/board pack document compiled from the log (board-prep already feeds it).
 - Module surfaces for finance and people built on the part-4 projections.

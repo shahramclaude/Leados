@@ -113,6 +113,8 @@
     'cs.escalation.logged':   function (s, p, at) { s.escalations[p.id] = { id: p.id, accountName: p.accountName, severity: p.severity, description: p.description, ownerId: p.ownerId || null, dueDate: p.dueDate || null, resolved: false, resolution: '', resolveNote: '', loggedAt: at, resolvedAt: null }; },
     'cs.escalation.resolved': function (s, p, at) { const e = s.escalations[p.escalationId]; if (e) { e.resolved = true; e.resolution = p.resolution; e.resolveNote = p.note || ''; e.resolvedAt = at; } },
     'cs.health.logged':       function (s, p, at) { push(s.csHealthLogs, p, at); },
+    // NOTES (pt-4 part 5)
+    'note.added':             function (s, p, at) { const rec = { id: p.id, domain: p.domain, text: p.text, refId: p.refId || null, context: p.context || '', at: at }; s.notes[p.id] = rec; s.noteLog.push(rec); if (rec.refId) group(s.notesByRef, rec.refId, rec); },
     // EXECUTIVE & BOARD
     'exec.board.meeting':     function (s, p, at) { push(s.boardMeetings, p, at); },
     'exec.kpi.reviewed':      function (s, p, at) { push(s.execKpiReviews, p, at); },
@@ -135,6 +137,7 @@
     s.complianceChecks = []; s.legalRisks = []; s.contracts = {}; s.legalIncidents = [];
     s.npsLogs = []; s.churnLogs = []; s.escalations = {}; s.csHealthLogs = [];
     s.boardMeetings = []; s.execKpiReviews = []; s.investorUpdates = []; s.crises = {};
+    s.notes = {}; s.noteLog = []; s.notesByRef = {};
     // index projections built during the fold (append-order preserved)
     s.kpiByMetric = {}; s.slaByMetric = {}; s.complianceByFramework = {}; s.legalRiskById = {};
   }
@@ -153,7 +156,7 @@
     vendorById: 'vendors', disruptionEvents: 'disruptions',
     yieldHistory: 'yieldLogs', equipmentById: 'equipment',
     contractById: 'contracts',
-    npsHistory: 'npsLogs', churnHistory: 'churnLogs', escalationById: 'escalations',
+    npsHistory: 'npsLogs', churnHistory: 'churnLogs', escalationById: 'escalations', noteById: 'notes',
     techDebtById: 'techDebt', experimentById: 'experiments', crisisById: 'crises'
   };
 
