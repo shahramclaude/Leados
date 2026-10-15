@@ -202,6 +202,27 @@
     add('exec.board.meeting', { date: A + 5 * DAY, quorum: true, items: ['Q1'], decisions: ['approve plan'] }, A + 5 * DAY);
     // R40
     add('exec.kpi.reviewed', { period: 'Q2', metrics: [{ name: 'ARR', value: 1, target: 1, trend: 'up' }] }, A + 60 * DAY);
+
+    /* ---- pt-4 part 8 additions ----
+       Everything above is unchanged. The seed already covered 14 of the 19
+       requested fixtures (R11, R12, R14, R17, R18, R19, R22>16%, R28, R32 5d,
+       R33, R35, R37, R38, R39, R40 — see AI-SESSION-LOG §30). These five add
+       branches the seed genuinely never reached: the sev-3 quota band, an
+       incident still OPEN past threshold, the compliance 'finding' branch
+       (the seed only had 'fail'), the sev-3 budget band, and churn at 5.1%. */
+    // R13 — quota holder at exactly 60% attainment (sev 3 band; q1 covers sev 4 at 40%)
+    add('sales.quota.set', { id: 'q2', personId: 'rep-2', period: 'Q3', target: 1000, currency: 'USD' }, A + 3 * DAY);
+    add('sales.quota.actuals', { quotaId: 'q2', actual: 600, period: 'Q3' }, A + 62 * DAY);
+    // R16 — unresolved sev 4 incident, open 6h at `today` (threshold 4h); in1 covers the resolved branch
+    add('ops.incident.logged', { id: 'in2', title: 'Payments API degraded', severity: 4, systems: ['payments'], startedAt: today - 6 * H }, today - 6 * H);
+    // R22 — 18% overspend (sev 3 band; b1 covers sev 4 at 40% underspend)
+    add('fin.budget.set', { id: 'b2', period: 'Q3', amount: 200000, currency: 'USD', category: 'marketing' }, A + 5 * DAY);
+    add('fin.budget.actuals', { budgetId: 'b2', actual: 236000, period: 'Q3' }, A + 70 * DAY);
+    // R30 — compliance 'finding' aged 35d with no later pass (sev 4 branch; SOC2 covers 'fail' sev 5)
+    add('legal.compliance.check', { framework: 'ISO27001', period: 'H1', result: 'finding', findings: ['supplier register stale'] }, A + 65 * DAY);
+    // R34 — churn at exactly 5.1% (threshold boundary; the Q3 record covers 8%)
+    add('cs.churn.logged', { period: 'Q4', churned: 51, total: 1000 }, A + 90 * DAY);
+
     return { events: evs, today: today };
   }
   function batteryFindings() { const b = buildSeed(); return LeadOS.rules.run(LeadOS.engine.project(b.events), b.today); }
@@ -393,7 +414,7 @@
       const ok = unregistered.length === 0 && rejected.length === 0 && wrongRejects.length === 0;
       return { pass: ok, detail: ok ? types.length + ' types accepted with canonical payloads; ' + negatives.length + ' malformed payloads rejected' : 'unregistered: ' + unregistered.join(',') + ' | rejected: ' + rejected.join(',') + ' | wrongly accepted: ' + wrongRejects.map(function (n) { return n[0]; }).join(',') };
     }],
-    ['T12', 'finding contract: every finding matches the fin() shape, sev 1–5, play xor playNone', function () {
+    ['T12b', 'finding contract: every finding matches the fin() shape, sev 1–5, play xor playNone', function () {
       const F = batteryFindings();
       const bad = F.filter(function (f) { return !shapeOk(f); });
       return { pass: F.length > 0 && bad.length === 0, detail: bad.length ? 'malformed findings: ' + bad.slice(0, 2).map(function (f) { return JSON.stringify(f).slice(0, 90); }).join(' | ') : F.length + ' findings, all shape-valid; play ids resolve or playNone printed' };
@@ -506,6 +527,36 @@
       const ok = gap === 15 && v1.lastScore === 4 && v2.lastScore === null && v2.reviews.length === 0 &&
         P.openVendors.length === 1 && P.openVendors[0].id === 'v2';
       return { pass: ok, detail: ok ? 'v1 reviewed 15d after its due date; v2 never reviewed (openVendors=1)' : 'gap=' + gap + ' openVendors=' + P.openVendors.length };
+    }],
+
+    ['T20b', 'extended seed fires all 40 rules AND reaches the five branches part 8 added', function () {
+      const b = buildSeed();
+      const P = LeadOS.engine.project(b.events);
+      const F = LeadOS.rules.run(P, b.today);
+      const missing = LeadOS.rules.RULES.map(function (r) { return r.id; }).filter(function (id) { return !F.some(function (f) { return f.rule === id; }); });
+      const of = function (id) { return F.filter(function (f) { return f.rule === id; }); };
+      const sevSet = function (id) { return of(id).map(function (f) { return f.sev; }).sort(); };
+      const has = function (id, sev) { return of(id).some(function (f) { return f.sev === sev; }); };
+      const checks = [
+        ['all 40 rules fire', missing.length === 0],
+        ['R13 reaches both bands (60% sev3 + 40% sev4)', has('R13', 3) && has('R13', 4)],
+        ['R13 60% holder named', of('R13').some(function (f) { return /rep-2/.test(f.title) && /60\.0%/.test(f.title); })],
+        ['R16 open-past-threshold branch reached', of('R16').some(function (f) { return /Incident open/.test(f.title); })],
+        ['R16 resolved-MTTR branch still reached', of('R16').some(function (f) { return /MTTR/.test(f.title); })],
+        ['R22 reaches both bands (18% sev3 + 40% sev4)', has('R22', 3) && has('R22', 4)],
+        ['R22 prints both directions', of('R22').some(function (f) { return /overspend/.test(f.title); }) && of('R22').some(function (f) { return /underspend/.test(f.title); })],
+        ['R30 reaches finding sev4 AND fail sev5', has('R30', 4) && has('R30', 5)],
+        ['R30 finding names its framework', of('R30').some(function (f) { return /ISO27001/.test(f.title) && f.sev === 4; })],
+        ['R34 fires at the 5.1% boundary', of('R34').some(function (f) { return /5\.1%/.test(f.title); })],
+        ['every seed finding is shape-valid', F.every(shapeOk)],
+        ['pre-part-8 fixtures intact (R11/R12/R32/R35 escalations)', has('R11', 5) && has('R12', 4) && has('R32', 5) && has('R35', 5)]
+      ];
+      const failed = checks.filter(function (c) { return !c[1]; }).map(function (c) { return c[0]; });
+      return {
+        pass: failed.length === 0,
+        detail: failed.length ? 'failed: ' + failed.join(' | ') + (missing.length ? ' (silent: ' + missing.join(',') + ')' : '')
+          : b.events.length + ' seed events → ' + F.length + ' findings; all 40 rules fire; R13 ' + sevSet('R13').join('/') + ', R22 ' + sevSet('R22').join('/') + ', R30 ' + sevSet('R30').join('/') + ' bands reached'
+      };
     }],
 
     ['T21', 'trend discipline: below 3 measured points no trend-derived finding fires', function () {
@@ -1266,8 +1317,8 @@
     { id: 'C10', text: 'All 72 part-2 event types are registered and gate-enforced.', by: ['T11', 'G3'] },
     { id: 'C11', text: 'All 11 new families derive state: entities mutate, actuals attach, closures close.', by: ['T10', 'G7'] },
     { id: 'C12', text: 'Referential integrity: every declared *Id reference resolves within the log.', by: ['G8', 'T10'] },
-    { id: 'C13', text: 'Rules engine implements R1–R40 and every rule is exercised.', by: ['T24', 'T12'] },
-    { id: 'C14', text: 'Every finding honors the fin() contract (sev 1–5, conf, play xor playNone).', by: ['T12', 'G9'] },
+    { id: 'C13', text: 'Rules engine implements R1–R40 and every rule is exercised.', by: ['T24', 'T12b'] },
+    { id: 'C14', text: 'Every finding honors the fin() contract (sev 1–5, conf, play xor playNone).', by: ['T12b', 'G9'] },
     { id: 'C15', text: 'Trend/severity discipline: >=3 measured points, spec ceilings, skip-not-infer.', by: ['T21', 'T22', 'T23'] },
     { id: 'C16', text: 'Signals are derived per read and never persisted.', by: ['G4', 'G7', 'G9', 'T13'] },
     { id: 'C17', text: 'All 40 named projections exist; open sets exclude closed entities; append-order wins.', by: ['T25', 'G10'] },
@@ -1278,7 +1329,8 @@
     { id: 'C22', text: 'View state (filter, tab, person) lives in sessionStorage only and never enters the log.', by: ['G12', 'G1', 'G4'] },
     { id: 'C23', text: 'Every part-2 family projects correctly: risk counts, pipeline math, OKR score, MTTR, attrition, vendor gap.', by: ['T15', 'T16', 'T17', 'T18', 'T19', 'T20'] },
     { id: 'C24', text: 'Rule fire/quiet boundaries are pinned by goldens — no rule drifts a threshold silently.', by: ['G14', 'G15', 'G16', 'G17', 'G18', 'G19', 'G20', 'G21', 'G22', 'G23', 'G24', 'G25', 'G26', 'G27', 'G28', 'G29'] },
-    { id: 'C25', text: 'The seed exercises all 40 rules and every finding it produces is shape-valid.', by: ['G30', 'T24', 'T12'] }
+    { id: 'C25', text: 'The seed exercises all 40 rules and every finding it produces is shape-valid.', by: ['G30', 'T24', 'T12b'] },
+    { id: 'C26', text: 'The extended seed reaches both severity bands for R13/R22/R30 and the open-incident branch of R16.', by: ['T20b', 'G30'] }
   ];
 
   function runSuite(suite) {

@@ -336,5 +336,71 @@ Health tab now shows **56 checks** (T1–T27, G1–G12, G14–G30) and 25 claims
 
 ---
 
-## Part 8+ (queued)
+## Part 8 — buildSeed() extension
+
+### §30. Fixture-by-fixture audit (read before editing)
+Read `buildSeed()` first; `today = T0 + 100d`. Of the 19 requested fixtures,
+**14 were already present and already firing**:
+
+| Requested | Status in the existing seed |
+|---|---|
+| R11 financial risk reviewDate past | PRESENT — `fr1`, reviewDate T0+30d |
+| R12 stale deal closeDate past | PRESENT — `dl1`, closeDate T0+40d, never updated |
+| R14 silent OKR | PRESENT — `ok1`, no progress ever |
+| R17 SLA miss | PRESENT — 3 consecutive `uptime` misses |
+| R18 at-risk milestone past due | PRESENT — `ms1` at-risk, due T0+50d |
+| R19 two attrition in 60d | PRESENT — T0+70d, T0+80d |
+| R22 variance > 16% | PRESENT — `b1` at 40% (sev 4 only) |
+| R28 two safety incidents in 30d | PRESENT — T0+85d, T0+90d |
+| R32 contract expiring in 5d | PRESENT — `ct2`, expiry T0+105d |
+| R33 NPS declining 2 periods | PRESENT — 40 → 20 |
+| R35 escalation past dueDate | PRESENT — `e1` |
+| R37 experiment past reviewDate | PRESENT — `ex1` |
+| R38 tech debt > 31 | PRESENT — 20 + 12 = 32 |
+| R39 / R40 cadence gaps | PRESENT — board 95d, KPI 40d |
+
+**Five were genuinely missing a branch**, and only these were added:
+
+| Added | Why it was a real gap |
+|---|---|
+| `q2` quota at **60%** (`rep-2`) | existing quota was 40% → only the sev-4 band was ever reached; the brief asks for 60% (sev 3) |
+| `in2` unresolved sev-4 incident, open **6h** | existing `in1` was *resolved*; R16's open-past-threshold branch was never exercised by the seed |
+| `b2` budget **18% overspend** | existing variance was a 40% *underspend* → sev-4 and one direction only |
+| `ISO27001` compliance **'finding'** aged 35d | existing check was `'fail'` → R30's sev-4 finding branch never fired from the seed |
+| `cs.churn.logged` at exactly **5.1%** | existing churn was 8%; the threshold boundary itself was untested in the seed |
+
+Every pre-existing line is byte-identical; additions are appended in a marked
+block at the end of `buildSeed()`.
+
+### §31. Test numbering (collision, handled literally)
+The brief says "T20b (rename T12 → T12b)". Inspection: `T12` is the
+finding-shape check (part 3) and `T20` is the `supply.vendor` projection test
+(part 7). Both instructions were followed exactly as written — `T12` is now
+**`T12b`** (ID string only; the check body is unchanged) and the new coverage
+check is **`T20b`**, sitting beside the unrelated `T20`. Claim references
+C13, C14 and C25 were re-pointed to `T12b`. No check was removed.
+
+### §32. Built
+- `js/health.js` — five seed fixtures; `T20b` asserting all 40 rules fire **and**
+  that the five new branches are actually reached (not merely appended);
+  `T12` → `T12b`; claim **C26**.
+- Docs updated; README gains a "The seed" section stating what the single
+  fixture log proves.
+
+### §33. Deviations
+1. T20b goes beyond "assert all 40 rules fire": it also asserts the dual
+   severity bands and both R16/R22 directions. A coverage test that only counts
+   rule ids would have passed *before* this part's fixtures existed, which
+   would make it a vanity check.
+2. The 14 already-covered fixtures were not duplicated. Adding a second stale
+   deal to "satisfy" a line item would inflate the seed without adding proof.
+
+### §34. Coverage proof
+- C26: T20b (12 assertions) + G30.
+Health tab now shows **58 checks** (T1–T27 incl. T12b/T20b, G1–G12, G14–G30)
+and 26 claims.
+
+---
+
+## Part 9+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).

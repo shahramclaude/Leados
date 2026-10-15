@@ -177,13 +177,14 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 
 ## Health — the authority wall
 
-**T-suite — fixtures (27)**
+**T-suite — fixtures (29)**
 
 | ID | Proves |
 |---|---|
 | T1–T5 | migration `3>4`: backfill set, exact defaults, idempotence, user values preserved, repair accounting |
 | T6–T9 | cadence boundaries · fold purity · registry rejection · sales-cycle flag |
-| T10–T13 | part-2 family folds · all 72 contracts · finding shape · rules determinism |
+| T10–T11 | part-2 family folds · all 72 contracts |
+| T12b · T13 | finding shape (`fin()` contract) · rules determinism |
 | **T14** | **v3 store climbs to v4, all five settings backfilled** |
 | **T15** | **`fin.risk.*` projection: open vs closed counts across every status** |
 | **T16** | **`sales.deal.*` projection: pipeline math (open value after update, won/lost, actual)** |
@@ -191,6 +192,7 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 | **T18** | **`ops.incident.*` projection: MTTR computed = (2h + 6h) / 2** |
 | **T19** | **`hr.attrition.logged` projection: counts by reason and by 60d window** |
 | **T20** | **`supply.vendor.*` projection: review gap from reviewDate to last review** |
+| **T20b** | **extended seed fires all 40 rules *and* reaches both severity bands of R13/R22/R30 plus the open-incident branch of R16** |
 | T21–T24 | ≥3-point trend discipline · skip-not-infer · severity escalations · all 40 rules fire |
 | T25–T27 | named projections · playbook contract · UI contract |
 
@@ -225,7 +227,17 @@ brief numbers the goldens from G14.)*
 The **boot gate runs G1–G12 only**. Goldens run in the full suite so a rule-logic
 regression is loud in Health without walling a leader off from their own data.
 
-- **Claims C1–C25** in the Health tab: each shows the checks that authorize it;
+### The seed
+
+`health.buildSeed()` is one deterministic fixture log pinned to `T0`, read at
+`today = T0 + 100d`. It drives T12b, T13, T20b, T23, T24 and G30 — coverage and
+shape can therefore never drift apart. It exercises **all 40 rules**, and after
+part 8 it reaches both severity bands of R13 (60% → sev 3, 40% → sev 4), R22
+(18% overspend → sev 3, 40% underspend → sev 4) and R30 (`finding`+35d → sev 4,
+`fail` → sev 5), plus R16's *open-past-threshold* branch alongside its resolved
+MTTR branch, and R34 at the exact 5.1% boundary.
+
+- **Claims C1–C26** in the Health tab: each shows the checks that authorize it;
   a failing check marks the claim *unproven*.
 
 ## Files
@@ -239,7 +251,7 @@ regression is loud in Health without walling a leader off from their own data.
 | `js/engine.js` | `project()` fold, named projections incl. `rosterById`, `eventDomain()`, pure selectors |
 | `js/playbooks.js` | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
 | `js/rules.js` | R1–R40: pure `(P, today) → findings[]` rules engine |
-| `js/health.js` | Authority wall: T1–T27, G1–G12 + goldens G14–G30, claims C1–C25 |
+| `js/health.js` | Authority wall: T1–T27 (+T12b, T20b), G1–G12 + goldens G14–G30, claims C1–C26 |
 | `js/ui.js` | Rail nav, hash routes, 14 views, registry-driven quick capture; every action is an event append |
 | `README.md` | This file |
 | `AI-SESSION-LOG.md` | Session log; §0 is the claim-vs-inspection audit |
