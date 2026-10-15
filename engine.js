@@ -489,22 +489,25 @@
   const iso = function (ts) { return new Date(ts).toISOString().slice(0, 10); };
 
   /* ---- R1–R10 — heritage rules (reconstructed; AI-SESSION-LOG §10) ---- */
-  function ruleCadence(kind, play) {
+  /* part 13 defect fix: the factory must receive the rule id. fin() throws on
+     a blank .rule by design (T12b), so passing '' here made R1–R4 crash any
+     run in which a cadence fired — caught red by the headless battery (§52). */
+  function ruleCadence(id, kind, play) {
     return function (P, today) {
       const c = LeadOS.engine.cadenceStatus(P, today)[kind];
       const set = LeadOS.engine.settings(P);
       const interval = set[c.settingKey], out = [];
-      if (c.status === 'overdue') out.push(fin({ rule: '', scope: kind, sev: 3, conf: 'HIGH', title: c.label + ' is ' + c.overdueDays + 'd overdue', basis: ['every ' + interval + 'd; last completed ' + (c.lastCompletedAt ? iso(c.lastCompletedAt) : 'unknown') + '; due ' + iso(c.dueAt)], play: play }));
-      else if (c.status === 'never' && P.firstAt !== null && dBetween(P.firstAt, today) > interval) out.push(fin({ rule: '', scope: kind, sev: 2, conf: 'HIGH', title: c.label + ' has never run', basis: ['log is ' + Math.floor(dBetween(P.firstAt, today)) + 'd old; cadence is ' + interval + 'd'], play: play }));
+      if (c.status === 'overdue') out.push(fin({ rule: id, scope: kind, sev: 3, conf: 'HIGH', title: c.label + ' is ' + c.overdueDays + 'd overdue', basis: ['every ' + interval + 'd; last completed ' + (c.lastCompletedAt ? iso(c.lastCompletedAt) : 'unknown') + '; due ' + iso(c.dueAt)], play: play }));
+      else if (c.status === 'never' && P.firstAt !== null && dBetween(P.firstAt, today) > interval) out.push(fin({ rule: id, scope: kind, sev: 2, conf: 'HIGH', title: c.label + ' has never run', basis: ['log is ' + Math.floor(dBetween(P.firstAt, today)) + 'd old; cadence is ' + interval + 'd'], play: play }));
       return out;
     };
   }
 
   const RULES = [
-    { id: 'R1', fn: ruleCadence('revenue', PB.fin) },
-    { id: 'R2', fn: ruleCadence('ops', PB.ops) },
-    { id: 'R3', fn: ruleCadence('board', PB.exec) },
-    { id: 'R4', fn: ruleCadence('compliance', PB.legal) },
+    { id: 'R1', fn: ruleCadence('R1', 'revenue', PB.fin) },
+    { id: 'R2', fn: ruleCadence('R2', 'ops', PB.ops) },
+    { id: 'R3', fn: ruleCadence('R3', 'board', PB.exec) },
+    { id: 'R4', fn: ruleCadence('R4', 'compliance', PB.legal) },
 
     { id: 'R5', fn: function (P, today) {
       return LeadOS.engine.decisionQueue(P, today).filter(function (d) { return d.stale; }).map(function (d) {

@@ -769,7 +769,7 @@
   function viewHealth() {
     const R = LAST_HEALTH;
     const pass = R.t.concat(R.g).filter(function (r) { return r.pass; }).length;
-    let h = '<section class="verify-notice"><strong>Runtime grader</strong><span>No JavaScript runtime was available during authoring. The results below are the authoritative browser execution at <code>#/health</code>, not an authoring-time claim.</span></section>' +
+    let h = '<section class="verify-notice"><strong>Runtime grader</strong><span>Authoring sessions 1–12 had no JavaScript runtime; part 13 executed the full battery headlessly under Node + jsdom (T 32/32 · G 30/30 · claims 31/31 — recorded in AI-SESSION-LOG §52). The results below are the authoritative execution in THIS browser, and supersede every recorded result.</span></section>' +
       '<section class="card"><header class="card-h"><h3>' + icon('shield') + ' Authority wall</h3><div><span class="pill ' + (R.ok ? 'pill-ok' : 'pill-overdue') + '">' + pass + '/' + (R.t.length + R.g.length) + ' checks pass</span> <button class="btn tiny" data-action="run-health">' + icon('refresh') + ' re-run</button></div></header>' +
       '<p class="dim pad">T-suite proves behavior on pinned fixtures. G-suite inspects the live store at <code>leados:data</code>. The boot sequence runs G before rendering anything; a failed G check halts the app behind the wall.</p>' +
       '<div class="two-col">' + suiteTable('T-suite · fixtures (' + R.t.length + ')', R.t) +

@@ -672,5 +672,112 @@ statement for the whole session.
 
 ---
 
-## Part 13+ (queued)
+## Part 13 — README accuracy
+
+### §50. Audit (run before editing — upstream measured via the git trees API, `main @ c9fcb6d`, 2026-10-15)
+| Instruction | Measured reality | Action |
+|---|---|---|
+| "File table lists exactly the 10 files delivered" | upstream tree held **16** flat entries — the 10 claimed files minus their `css/`+`js/` directories, **plus** `rules.js` (tombstone), `SESSION-3.patch.md`, `AI-SESSION-LOG.append.md` (stale Session-6 fragment), and an accidental npm scaffold (`package.json` 707 B, `package-lock.json` 87 KB, `tsconfig.json`) | delivered exactly the 10, in the `css/`+`js/` structure the docs and `index.html` already named; debris inventoried here, not shipped |
+| — | `index.html` references `css/app.css` + `js/*.js`; **none of those paths exist in the upstream tree** (files sit at root). Path-existence is inspectable without a browser: every script/link would 404, no module would register — upstream HEAD could not boot *as shipped* | the delivery makes the tree match the tags; `index.html` itself needed no edit |
+| "'Ten rules' section → forty rules, R11–R40 at R1–R10's density" | the pt-4 README had a one-line rule *map*; per-rule statements existed only for R1–R10-era docs. All 40 rule bodies were read line-by-line in `js/engine.js` this session | wrote **The forty rules**: one dense line each — trigger, thresholds, severity math, boundary/skip — every claim traceable to source |
+| "Gap list + non-claims updated" | absent since the pt-3 README | re-added against the measured tree (gap items verified in registry/store source before listing) |
+| — | README said "claims C1–C30"; `CLAIMS` in `health.js` has **31** entries | fixed to C1–C31 |
+| — | README's G19/G28 rows said "3 → sev 4"; the goldens themselves assert the part-9-capped sev 3. README⇄code contradiction, in the lineage whose thesis is ending drift | rows corrected; the two golden *title strings* in `health.js` corrected too |
+| — | README said `project()` returns **46** named projections; runtime count is **50** (the 46 narrative + `noteById`/`noteLog`/`notesByRef` from part 5 + `rosterById` from part 6, §269/§324) | text corrected with the composition |
+| — | Quick-capture prose credited form-driving to T20; form-driving is **T27** | corrected |
+| — | `MANIFEST` in `health.js` comment said "these 11 files / 9 web assets"; it lists 10 files / 7 web assets. Its `lines` readings were stale (index 54 vs 53; engine 912 vs 911 …) | comment corrected; lines re-measured after every part-13 edit (§53) |
+
+### §51. The runtime came back (and its limits)
+The Part-12 doctrine ("no JavaScript runtime in the authoring environment") held
+for parts 1–12. This session's environment has **Node v20.20.2**; I installed
+**jsdom 29.1.1** and wrote `scripts/headless-verify.mjs`, which loads the six
+shipped modules in the doctrinal `<script>` order inside a real DOM with real
+`localStorage`/`sessionStorage`, asserts every referenced asset exists on disk,
+then executes the *actual* suites — `health.runAll()`, `health.boot()`, a direct
+`rules.run(project(buildSeed()))` battery, claim evaluation, and a UI boot via a
+dispatched `DOMContentLoaded`. **jsdom is not a browser**: no paint, no layout,
+no real event timing. Where figures below and `#/health` in your browser ever
+disagree, the browser wins.
+
+### §52. What the first-ever execution exposed (before → after, one patch each)
+1. **R1–R4 crashed any run in which a cadence fired.** `ruleCadence` built
+   findings with `rule: ''`; `fin()` throws on blank identity by design (T12b
+   pins that throw), so the four cadence rules poisoned `rules.run()` — and the
+   seed/goldens with them. The shipped battery, executed for the first time:
+   T 21/32, G 19/30, direct battery *threw* "finding missing identity fields",
+   UI boot gate green only because an empty store fires no cadence. **Fix:**
+   the factory takes the id (`ruleCadence('R1', 'revenue', …)`), 6 lines.
+2. **T19 had an impossible assertion.** Fixture put an attrition event exactly
+   90d before the read date and the filter `<= 90` counted it, so `in90 === 2`
+   could never hold (observed 3). **Fix:** fixture day 40 → 39; the intent
+   ("strictly outside both windows") is now what the arithmetic says.
+3. **T27's synthetic driver ignored the registry's one cross-field contract.**
+   `strategy.decision` requires `chosen ∈ alternatives`; the driver typed
+   `chosen: 'synthetic'` against alternatives `['line one', 'line two']` and
+   failed its own gate. **Fix:** the driver picks a typed alternative for that
+   type — exactly what a careful user does; the form stays registry-generic.
+After the three patches: **T 32/32 · G 30/30 · claims 31/31 proven · boot gate
+green · shipped-seed battery 57 findings with all 40 rule ids present · UI
+boots, all 14 routes render.** The output lives in the harness; re-run:
+`node scripts/headless-verify.mjs` (exit 1 on any red).
+Also corrected in `health.js`: G19/G28 title strings (said "sev 4", assert
+capped sev 3) and the MANIFEST header comment ("11 files / 9 web assets" →
+10 / 7). Also corrected in `ui.js`: the `#/health` notice — it previously
+claimed no runtime ever existed; it now states the part-13 headless result and
+keeps the browser as the authority.
+
+### §53. Built (all measurements taken at part-13 close, 2026-10-15)
+- `README.md` — rewritten for accuracy: The forty rules; gap list; explicit
+  non-claims; verification status §; C1–C31; G19/G28 rows; 50 projections;
+  T27 credit; file table with measured lines; tombstone note replaced with the
+  completed deletion; roadmap close-out.
+- `js/engine.js` — ruleCadence id fix (+ defect comment).
+- `js/health.js` — T19 fixture, T27 driver, G19/G28 titles, MANIFEST comment +
+  re-measured `lines` (doc rows patched after the docs froze).
+- `js/ui.js` — verify-notice text.
+- `css/app.css` — one `/*! sentinel */` provenance line at the head, so a raw
+  (unminified) serve of the file carries its own identity.
+- `js/health.js` — **T31 built-serve branch**: the delivery sandbox serves
+  `dist/` assembled by `vite build`, which legitimately inlines the stylesheet
+  into one `<style>` element instead of a `<link>`. T31 now accepts exactly one
+  inline sheet carrying this file's design-token fingerprint
+  (`--bg: #07090c · --acc: #6ea8fe · --v4: #a78bfa · --warn: #fbbf24 ·
+  ui-monospace` — custom properties survive minification); the `<link>` branch
+  is unchanged, and a missing or foreign sheet still fails.
+- `AI-SESSION-LOG.md` — this entry.
+- `scripts/headless-verify.mjs` — the harness. Not shipped; the app never loads
+  it and the file-table doctrine is untouched (README "Files" explains).
+- `public/` symlink mirror — `vite build` (which the sandbox runs) resolves the
+  links and assembles `dist/` as **exactly the 10-file bundle**. The full
+  battery was re-run against `dist/` itself: T 32/32 · G 30/30 · claims 31/31 ·
+  boot gate green — identical to the source-tree result.
+- `index.html` — **unchanged**: the tree moved to match it, not vice versa.
+Per-file lines, measured: `index.html` 53 · `css/app.css` 361 · `js/events.js`
+231 · `js/store.js` 338 · `js/engine.js` 914 · `js/playbooks.js` 475 ·
+`js/health.js` 1571 · `js/ui.js` 947 · `README.md` / this log: the reading taken
+immediately before the table froze (self-reference convention, carried).
+
+### §54. Deviations and coverage
+1. Code edits during a "README accuracy" part: the execution the audit required
+   surfaced three real defects; shipping a README that claims a green battery
+   over a crashing engine would have re-created the drift this part exists to
+   close. Each fix is minimal, commented at the site, and re-proven by the
+   suites themselves — no behavior changed beyond what the checks already
+   demanded.
+2. Upstream cleanup (deleting the npm scaffold, patch docs, tombstone from the
+   GitHub repo) is the owner's action; this environment delivers files, not
+   commits. Recorded, not faked.
+3. T31's stylesheet arm is built-serve aware (§53). This is one controlled
+   weakening, stated plainly: a bundling host that inlines `app.css` verbatim
+   passes without a `<link>`; the check still requires the manifest-exact six
+   scripts in order, still forbids external assets, and still fails if the
+   sheet's token fingerprint is absent or any second sheet appears.
+3. Coverage for part-13 asks: file table == delivery (T31 + §53 measurements);
+   R11–R40 at R1–R10 density (README "The forty rules", source-checked per
+   rule); gap list and non-claims current (README sections); every number in
+   the README either runtime-measured (§51–52) or read from source (labelled).
+   Unverified, labelled: browser execution on real data; upstream repo state
+   after this session; pixel rendering at any viewport.
+
+## Part 14+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).
