@@ -105,3 +105,37 @@ New this session: skip-levels, calibration, goal dependency map, narrative radar
 *(Session-4 additions, from the standing engine spec, not yet evidenced in any documented test list:)*
 6. **Per-rule golden test cases** — the current wall tests storage/logic paths; the mandated engine rules (cadence overdue, decision review lapse, goal stall/no-owner, feedback imbalance, delegation load, conflict recurrence, burnout) need one labeled fixture each: input events in → expected finding + basis + confidence out.
 7. **Structured playbooks pre-filling from live data** — Situational Leadership (D1–D4 → S1–S4 matching), SBI/DESC scaffolding, delegation-level guidance. SBI exists as an evidence type; the *scaffolded playbook* layer is not documented as existing.
+
+---
+
+## 6. Session 5 — mf-1: re-platform to the mandated multi-file architecture
+
+*(Session 5, February 2026. New lineage `mf` — the standing brief has always required `index.html` + `css/` + `js/` via plain script tags; every prior lineage shipped a monolith, so this is the first build on the specified architecture. Code is byte-authored, self-reviewed, and grepped — **but this environment has no JS runtime**, so the grading authority is `#/health` in your browser, per this repo's own convention.)*
+
+### Files
+
+| File | Role |
+|---|---|
+| `index.html` | shell, splash, nav; loads css/js in order — no build step, no network calls |
+| `css/app.css` | editorial tool surface: ink `#1C1917` on paper `#F7F4EF`, one accent `#C23B2E`, hairlines, single 46rem column, 640px breakpoint |
+| `js/store.js` | storage spine: one key, schema v1 (`lineage:"mf"`), quarantine-on-any-mismatch, `trySetItem` only write path, import pipeline (refuse newer/foreign/identical, merge re-mints ids + rewires FKs), self-audit |
+| `js/events.js` | append-only event store + projections (open decisions/goals/delegations/conflicts recomputed per read — nothing derived is persisted) + seed/purge |
+| `js/engine.js` | 7 mandated rules, pure `(state, today) → findings`; every finding = what + basis lines + confidence (level + why); doctrine constants named; golden fixtures G1–G9 |
+| `js/ui.js` | Today (ranked findings, actions pre-fill the resolving event), Roster, Health (T1–T8 live-path + G1–G9 golden walls), Data (export/import, key browser, audit log, quarantined bytes read-only) |
+
+### Claims added by mf-1 and where to verify
+
+| Claim | Verify |
+|---|---|
+| All 7 mandated rules with basis + confidence; none states certainty it lacks (trends need ≥3 measured points; estimates excluded; missing fields skip, never infer) | `#/health` G1–G9, or seed samples and read `#/today` |
+| Rules fire on exact boundaries only (`>` cadence, `<` review date, `>` 14d stall) | G9 |
+| Malformed events (null FKs, string numbers, bad timestamps) never crash the engine | G8 |
+| Live-path storage claims: cold boot, corrupt quarantine byte-exact, quota caught in production write path, reseed impossible, newer/foreign quarantined, identical-import refused, audit repairs without dropping rows | T1–T8, executed at each `#/health` render, test keys `leados:test*` cleaned after |
+| Every engine-consumed event type is writable from the UI (quick-capture), closing the observe→act→recompute loop | `#/today` → Log event; finding action buttons pre-fill the resolving form |
+
+### mf-1 non-claims (stated, not implied)
+
+- **Monolith `schema v3` stores are quarantined as `foreign`, not migrated.** Nobody has read the 2→3 delta; inventing a migration would fake certainty. Bytes are preserved and browsable at `#/data`.
+- Event types without writer UI in prior builds (decisions, goals, feedback, delegations, conflicts, pulses) **are** writable here via quick-capture; structured playbooks (Situational Leadership matching, SBI/DESC scaffolds, delegation-level guidance) are **not yet built** — Part 3 slice, stated ahead of time.
+- T/G counts are measured at runtime by the wall itself; no count is asserted in this document.
+- Authoring environment had no JS execution: correctness rests on conservative construction, self-review (four defects caught and logged), static grep audits, and your browser's `#/health`.

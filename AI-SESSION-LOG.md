@@ -1,5 +1,92 @@
 # AI-SESSION-LOG
 
+## Session 5 — mf-1: spine + engine on the multi-file architecture (this session)
+
+### 0. Role framing
+Senior-staff reviewer. Critique first, positions held unless argued down — and
+this session contains exactly such an argument, stated in §2.
+
+### 1. Claim: "the repo state is what Session 4 left, and the brief now compels a build."
+**Verification performed (this session):** Contents API listing; raw splash fetch.
+**Actual result:** `index.html` unchanged (337,974 B, sha `963f7dad…`, session-3
+splash v3/T1–T18). `README.md` (12,856 B) and `AI-SESSION-LOG.md` (15,840 B) now
+carry the Session-4 deliverables verbatim — the docs landed, the build did not
+move. Transport wall confirmed a fifth time (script body stripped).
+The requested artifacts (pasted source / `#/health` transcript) did not arrive.
+The identical brief did.
+
+### 2. Position change, argued — why building now is not the disease I named
+Session 4 held: "no fourth blind rewrite." Two facts in the standing brief move
+that position, and I name them as the argument rather than pretending I never
+held it:
+1. **The brief mandates `index.html` + `css/` + `js/` via plain script tags.**
+   Every lineage build to date (v19, S1/S2/S3 monoliths) violates that
+   architecture. A from-contract build is not a fourth monolith rewrite — it is
+   the first delivery of the architecture the brief has always required.
+2. **The brief mandates per-rule golden tests, run and shown.** No documented
+   build has them (T-walls cover storage/logic). Only a build I author can
+   deliver them.
+Unknown monolith v3 stores are handled by the repo's own quarantine doctrine:
+preserved as `foreign`, browsable read-only, never overwritten, no migration
+invented. That is the honest substitute for the unreadable `2→3` delta.
+
+### 3. Slice (stated before starting)
+mf-1 "Spine + Engine": storage spine (versioning, quarantine, quota path,
+import/export, audit) · append-only event store + projections · rules engine
+(7 mandated rules, basis + confidence, doctrine constants) · golden fixtures
+G1–G9 + live-path T1–T8 at `#/health` · Today single ranked column with
+loop-closing actions · Roster · Data. **Not in slice (stated so absence is not
+silence):** Situational Leadership matching, SBI/DESC scaffolds, delegation-level
+playbooks (Part 3); SLA/escalations/risk/cases from the monolith era (later
+slices or the monolith itself, unreadable here).
+
+### 4. Defect ledger — self-introduced, caught pre-delivery (same standard as prior sessions)
+| # | Defect | How caught |
+|---|---|---|
+| 1 | `var GOLDEN_* = null` line executed AFTER the fixture array populated those vars — would have wiped captured ids and silently weakened G2's resolved-link assertion (a test passing for the wrong reason) | re-read of construction order; fixed by moving declarations above the array |
+| 2 | `GOLDEN_G3_G2 =` / `GOLDEN_G6 =` assignments to identifiers never declared — `'use strict'` makes them ReferenceErrors at module load (whole engine dead) | same re-read; assignments removed |
+| 3 | G9 fixture's `goal.progress` event carried `goalId: null` — goal would read 30d silent, boundary test failing for the wrong reason; also R3's owner-resolution line was over-clever garbage logic | hand-trace of G9 intent vs engine semantics; fixture restructured with linked id, owner line rewritten to two plain statements |
+| 4 | leftover `var sed`/`void sed`, `void c2` noise | grep audit; removed |
+
+**Static verification results this session (actual grep outputs):** no
+TODO/FIXME/stub markers (1 false positive — an HTML `placeholder` attribute);
+all 12 `data-act` values emitted are handled in the delegated listener; all 3
+`data-change` values handled; fixture id capture order verified (declaration
+line 336 precedes all assignment sites). Script tag order `store→events→engine
+→ui` matches dependency order. No network references anywhere (offline doctrine).
+
+### 5. Golden fixtures — hand-traced expected outcomes (labeled: traced, not executed)
+Fixed today `2026-03-01`. G1 overdue exactly 3d (10 vs 7) · G2 fires only for
+the unlinked late decision (resolved + future silent) · G3 ownerless fires,
+20d-silent stalls at silence=20, goal.assign clears owner finding, fresh goal
+silent · G4 3/0 corrective fires on fixture Boris, mixed Cyd silent · G5 five
+open fires with meta.open=5, four (the watch line) silent · G6 two unresolved
+fire, two-resolved silent · G7 both-signals=medium + excluded=1, load-only=low,
+two-point series silent (never trend under 3 measured) · G8 malformed input:
+no rule throws, no findings · G9 cadence-met/review-today/14d-exact all silent.
+**Execution authority: `#/health` in your browser — traced expectations are
+claims, the wall is the grader.**
+
+### 6. Non-claims
+- No JS runtime existed in the authoring environment; nothing above is claimed
+  "executed" unless it executed in a browser.
+- Playbooks (SL/SBI-DESC/delegation guidance) are not built and not faked.
+- The monolith remains the only full-module LeadOS; mf-1 is the engine-first
+  spine those modules can port onto slice by slice — with readable code.
+
+### 7. Changelog (Session 5)
+| Change | Why |
+|---|---|
+| `index.html`, `css/app.css`, `js/{store,events,engine,ui}.js` created | first build on the brief-mandated multi-file architecture; plain script tags, no build step |
+| schema v1 + `lineage:"mf"` marker; foreign stores quarantined read-only | no invented `2→3` migration; doctrine is preserve-bytes, never overwrite |
+| 7 rules + doctrine constants + confidence objects | the engine is the product; every claim carries basis and an honesty label |
+| golden fixtures G1–G9 + live T1–T8 at `#/health` | per-rule correctness evidence the brief demands and no prior build documents |
+| Finding action buttons pre-fill the resolving event type | observe → act → recompute in one loop, so the "next best action" column is operational, not decorative |
+| Quick-capture writes all 12 engine-consumed event types | engine reading events nobody can write is the classic event-layer stub — refused |
+| Projections recomputed per read; nothing derived persisted | stale derived state is the named failure mode; this makes it structurally impossible |
+
+---
+
 ## Session 4 — repo forensics & drift audit (this session)
 
 ### 0. Role framing
