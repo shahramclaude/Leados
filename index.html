@@ -10,7 +10,7 @@
 <body>
 
 <header class="top">
-  <div class="wrap top-in">
+  <div class="top-in">
     <div class="brand">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 9 4.9-9 4.9-9-4.9Z"/><path d="m3 11.9 9 4.9 9-4.9"/><path d="m3 16.9 9 4.9 9-4.9"/></svg>
       <div>
@@ -22,18 +22,17 @@
   </div>
 </header>
 
-<nav class="wrap" aria-label="Primary">
-  <div id="nav" class="nav"></div>
-</nav>
-
-<main id="view" class="wrap view" aria-live="polite"></main>
+<div class="shell">
+  <nav id="rail" class="rail" aria-label="Primary"></nav>
+  <main id="view" class="view" aria-live="polite"></main>
+</div>
 
 <div id="wall" class="wall" hidden role="alertdialog" aria-label="Authority wall"></div>
 
-<footer class="wrap foot">
+<footer class="foot">
   <span><b>LeadOS pt-4</b> · lineage pt · schema v4</span>
   <span>append-only event store · nothing derived persisted</span>
-  <span>one localStorage key: leados:data</span>
+  <span>one localStorage key: leados:data · view state in sessionStorage</span>
   <span>no framework · no build · no network</span>
 </footer>
 
@@ -43,7 +42,7 @@
   </div>
 </noscript>
 
-<!-- Load order is the doctrine: contract -> wall -> derivation -> content -> authority -> render -->
+<!-- Load order is the doctrine: contract -> wall -> derivation -> content -> rules -> authority -> render -->
 <script src="js/events.js"></script>
 <script src="js/store.js"></script>
 <script src="js/engine.js"></script>

@@ -178,12 +178,34 @@
     openContracts:   ['contracts',   function (c) { return c.status === 'active'; }]
   };
 
+  // Roster is derived, never declared: a person exists because the log
+  // mentions them. No directory, no invented records.
+  function buildRoster(s) {
+    const r = {};
+    const touch = function (id) { if (!id) return null; if (!r[id]) r[id] = { id: id, quotas: [], performance: [], pips: [], compensation: [], attrition: null, deals: [], sources: {} }; return r[id]; };
+    Object.keys(s.quotas).forEach(function (k) { const q = s.quotas[k]; const p = touch(q.personId); if (p) { p.quotas.push(q); p.sources['sales.quota.set'] = true; } });
+    Object.keys(s.deals).forEach(function (k) { const d = s.deals[k]; const p = touch(d.ownerId); if (p) { p.deals.push(d); p.sources['sales.deal.logged'] = true; } });
+    s.perfLogs.forEach(function (x) { const p = touch(x.personId); if (p) { p.performance.push(x); p.sources['hr.performance.logged'] = true; } });
+    Object.keys(s.pips).forEach(function (k) { const x = s.pips[k]; const p = touch(x.personId); if (p) { p.pips.push(x); p.sources['hr.pip.started'] = true; } });
+    s.compReviews.forEach(function (x) { const p = touch(x.personId); if (p) { p.compensation.push(x); p.sources['hr.compensation.reviewed'] = true; } });
+    s.attrition.forEach(function (x) { const p = touch(x.personId); if (p) { p.attrition = x; p.sources['hr.attrition.logged'] = true; } });
+    Object.keys(r).forEach(function (id) {
+      const p = r[id];
+      p.openPips = p.pips.filter(function (x) { return x.result === null; });
+      p.openDeals = p.deals.filter(function (d) { return d.result === null; });
+      p.isSales = p.quotas.length > 0 || p.deals.length > 0;
+      p.departed = p.attrition !== null;
+    });
+    return r;
+  }
+
   function finalize(s) {
     Object.keys(ALIASES).forEach(function (name) { s[name] = s[ALIASES[name]]; });
     // grouped-by-person projections (append order within each person)
     s.dealsByPerson = {}; s.quotaByPerson = {};
     Object.keys(s.deals).forEach(function (k) { const d = s.deals[k]; group(s.dealsByPerson, d.ownerId || '(unassigned)', d); });
     Object.keys(s.quotas).forEach(function (k) { const q = s.quotas[k]; group(s.quotaByPerson, q.personId, q); });
+    s.rosterById = buildRoster(s);
     // open sets: recomputed every fold, never cached
     Object.keys(OPEN_SETS).forEach(function (name) {
       const src = s[OPEN_SETS[name][0]], pred = OPEN_SETS[name][1];
@@ -251,7 +273,41 @@
   // Full list of named projections pt-4 part 4 guarantees (inspected by T18/G10).
   const NAMED_PROJECTIONS = Object.keys(ALIASES)
     .concat(Object.keys(OPEN_SETS))
-    .concat(['dealsByPerson', 'quotaByPerson', 'kpiByMetric', 'slaByMetric', 'complianceByFramework', 'legalRiskById', 'safetyIncidents', 'boardMeetings', 'execKpiReviews']);
+    .concat(['dealsByPerson', 'quotaByPerson', 'kpiByMetric', 'slaByMetric', 'complianceByFramework', 'legalRiskById', 'safetyIncidents', 'boardMeetings', 'execKpiReviews', 'rosterById', 'noteLog', 'notesByRef']);
+
+  /* Event -> domain resolution. Namespaced types map by prefix; core types
+     carry an explicit `domain`; the remainder resolve through their parent
+     entity when a projection is supplied. Anything genuinely domain-less
+     (store.initialized, settings.changed) returns null and is reported as
+     'system' - never guessed into a domain. */
+  const TYPE_PREFIX_DOMAIN = {
+    'fin.': 'finance', 'sales.': 'sales', 'product.': 'product', 'strategy.': 'product',
+    'ops.': 'operations', 'hr.': 'people', 'mktg.': 'marketing', 'mfg.': 'manufacturing',
+    'supply.': 'supplyChain', 'design.': 'design', 'rd.': 'rd', 'legal.': 'legal',
+    'cs.': 'customerSuccess', 'exec.': 'executive'
+  };
+  const PARENT_LOOKUP = {
+    'kr.created': ['objectiveId', 'objectives'], 'kr.progressLogged': ['id', 'krsToObjective'],
+    'task.completed': ['id', 'tasks'], 'decision.decided': ['id', 'decisions'],
+    'objective.statusChanged': ['id', 'objectives'], 'risk.statusChanged': ['id', 'risks'],
+    'review.completed': ['id', 'reviews']
+  };
+  function eventDomain(ev, P) {
+    const p = ev.payload || {};
+    if (p.domain) return p.domain;
+    const keys = Object.keys(TYPE_PREFIX_DOMAIN);
+    for (let i = 0; i < keys.length; i++) if (ev.type.indexOf(keys[i]) === 0) return TYPE_PREFIX_DOMAIN[keys[i]];
+    if (P && PARENT_LOOKUP[ev.type]) {
+      const spec = PARENT_LOOKUP[ev.type];
+      if (spec[1] === 'krsToObjective') {
+        const kr = P.krs[p.id]; const obj = kr && P.objectives[kr.objectiveId];
+        return obj ? obj.domain : null;
+      }
+      const ent = P[spec[1]] && P[spec[1]][p[spec[0]]];
+      if (ent) return ent.domain || null;
+    }
+    return null;
+  }
 
   function settings(state) { return Object.assign({}, LeadOS.store.ALL_SETTING_DEFAULTS, state.appliedSettings); }
 
@@ -356,6 +412,7 @@
 
   LeadOS.engine = {
     DAY: DAY, CADENCE: CADENCE, ALIASES: ALIASES, OPEN_SETS: OPEN_SETS, NAMED_PROJECTIONS: NAMED_PROJECTIONS,
+    TYPE_PREFIX_DOMAIN: TYPE_PREFIX_DOMAIN, eventDomain: eventDomain,
     project: project, settings: settings, knownIds: knownIds,
     cadenceStatus: cadenceStatus, decisionQueue: decisionQueue, decidedLog: decidedLog,
     riskRegister: riskRegister, krView: krView, taskLists: taskLists,

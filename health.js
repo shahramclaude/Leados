@@ -624,6 +624,90 @@
       });
       if (JSON.stringify(P) !== snapshot) problems.push('prefill/submit mutated the projection');
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : REQUIRED.length + ' playbooks: prefill pure, fields labeled, submit output registry-valid' };
+    }],
+    ['T20', 'UI contract: every route has a view, quick-capture forms produce registry-valid payloads, roster derives from the log', function () {
+      const problems = [];
+      const UI = LeadOS.ui;
+      if (!UI) return { pass: false, detail: 'ui module not loaded' };
+
+      // (a) routes <-> views
+      ['today', 'signals', 'playbooks', 'finance', 'sales', 'ops', 'strategy', 'domains', 'roster', 'cadences', 'decisions', 'risks', 'data', 'health'].forEach(function (id) {
+        if (UI.ROUTE_IDS.indexOf(id) === -1) problems.push('route missing: ' + id);
+        if (typeof UI.VIEWS[id] !== 'function') problems.push('no view for route ' + id);
+      });
+      // (b) filter chips + domain tabs resolve to real domains
+      UI.FILTERS.forEach(function (f) { if (f[1] !== null && LeadOS.events.DOMAIN_IDS.indexOf(f[1]) === -1) problems.push('filter chip ' + f[0] + ' -> unknown domain ' + f[1]); });
+      UI.DOMAIN_TABS.forEach(function (t) {
+        if (LeadOS.events.DOMAIN_IDS.indexOf(t[0]) === -1) problems.push('domain tab -> unknown domain ' + t[0]);
+        if (!Object.keys(LeadOS.events.REGISTRY).some(function (x) { return x.indexOf(t[2]) === 0; })) problems.push('domain tab ' + t[1] + ' prefix matches no event type');
+      });
+
+      // (c) quick capture: drive the REAL form builder with synthetic input
+      const PREFIXES = ['fin.', 'sales.', 'ops.', 'product.', 'strategy.', 'hr.', 'mktg.', 'mfg.', 'supply.', 'design.', 'rd.', 'legal.', 'cs.', 'exec.'];
+      const captured = Object.keys(LeadOS.events.REGISTRY).filter(function (t) { return PREFIXES.some(function (p) { return t.indexOf(p) === 0; }); });
+      const isoDay = new Date(T0 + 50 * DAY).toISOString().slice(0, 10);
+      captured.forEach(function (type) {
+        const fields = UI.captureFields(type);
+        const spec = LeadOS.events.REGISTRY[type];
+        spec.require.forEach(function (r) {
+          if (r === 'id') return;
+          if (!fields.some(function (f) { return f.name === r; })) problems.push(type + ': required field ' + r + ' has no form control');
+        });
+        const form = document.createElement('form');
+        fields.forEach(function (f) {
+          let el;
+          if (f.kind === 'bool') { el = document.createElement('input'); el.type = 'checkbox'; el.checked = true; }
+          else if (f.kind === 'lines') {
+            el = document.createElement('textarea');
+            el.value = (type === 'strategy.okr.set') ? 'New logos | 30 | count'
+              : (type === 'exec.kpi.reviewed') ? 'ARR | 4200000 | 4000000 | up'
+                : 'line one\nline two';
+          } else {
+            el = document.createElement('input');
+            if (f.kind === 'date') el.value = isoDay;
+            else if (f.kind === 'num') el.value = String(f.range ? f.range[0] : 1);
+            else if (f.kind === 'select') el.value = f.options[0];
+            else el.value = 'synthetic';
+          }
+          el.name = f.name;
+          form.appendChild(el);
+        });
+        let payload;
+        try { payload = UI.buildCapturePayload(form, type); }
+        catch (e) { problems.push(type + ': capture builder threw ' + e.message); return; }
+        const verdict = LeadOS.events.validate(type, payload);
+        if (!verdict.ok) problems.push(type + ' capture -> ' + verdict.errors[0]);
+      });
+
+      // (d) roster + event-domain mapping over a fixture log
+      let seq = 0; const A = T0;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(t, p) { evs.push(fev(++seq, t, p, { at: A + seq * 1000 })); }
+      add('sales.quota.set', { id: 'q1', personId: 'rep-1', period: 'Q3', target: 100, currency: 'USD' });
+      add('sales.quota.actuals', { quotaId: 'q1', actual: 40, period: 'Q3' });
+      add('sales.deal.logged', { id: 'd1', title: 'Acme', value: 10, currency: 'USD', stage: 'new', ownerId: 'rep-1' });
+      add('hr.performance.logged', { personId: 'rep-1', rating: 'meets', period: 'H1' });
+      add('hr.pip.started', { id: 'p1', personId: 'u-2', duration_days: 30, goals: ['ship'] });
+      add('hr.compensation.reviewed', { personId: 'rep-1', changeType: 'raise' });
+      add('hr.attrition.logged', { personId: 'u-3', reason: 'voluntary' });
+      add('objective.created', { id: 'o1', domain: 'design', title: 'Systematize' });
+      add('kr.created', { id: 'k1', objectiveId: 'o1', title: 'coverage', target: 80, unit: '%' });
+      add('kr.progressLogged', { id: 'k1', value: 40 });
+      const P = LeadOS.engine.project(evs);
+      const r = P.rosterById;
+      if (!r['rep-1'] || r['rep-1'].quotas.length !== 1 || r['rep-1'].deals.length !== 1 || r['rep-1'].performance.length !== 1 || r['rep-1'].compensation.length !== 1) problems.push('roster: rep-1 dossier incomplete');
+      if (!r['rep-1'] || r['rep-1'].isSales !== true) problems.push('roster: sales role not detected');
+      if (!r['u-2'] || r['u-2'].openPips.length !== 1) problems.push('roster: open PIP not tracked');
+      if (!r['u-3'] || r['u-3'].departed !== true) problems.push('roster: departure not tracked');
+      if (Object.keys(r).length !== 3) problems.push('roster invented or dropped people: ' + Object.keys(r).join(','));
+      evs.forEach(function (ev) {
+        const d = LeadOS.engine.eventDomain(ev, P);
+        if (d !== null && LeadOS.events.DOMAIN_IDS.indexOf(d) === -1) problems.push('eventDomain produced unknown domain ' + d + ' for ' + ev.type);
+      });
+      if (LeadOS.engine.eventDomain(evs[evs.length - 1], P) !== 'design') problems.push('kr.progressLogged did not resolve its domain through the parent objective');
+      if (LeadOS.engine.eventDomain(evs[0], P) !== null) problems.push('store.initialized should be domain-less, not guessed');
+
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : UI.ROUTE_IDS.length + ' routes wired; ' + captured.length + ' capture forms registry-valid; roster + domain mapping exact' };
     }]
   ];
 
@@ -767,6 +851,37 @@
       const covered = {};
       LeadOS.playbooks.INTERACTIVE.forEach(function (pb) { pb.forRules.forEach(function (r) { covered[r] = true; }); });
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : LeadOS.playbooks.INTERACTIVE.length + ' playbooks cover ' + Object.keys(covered).length + ' rules; all recommendations carry a source' };
+    }],
+    ['G12', 'live UI state: view state confined to sessionStorage, every live event maps to a domain or honest system', function () {
+      const problems = [];
+      // view state must never appear in localStorage
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k.indexOf('leados') === 0 && k !== LeadOS.store.KEY) problems.push('view state leaked into localStorage: ' + k);
+      }
+      const raw = LeadOS.store.load();
+      if (JSON.stringify(raw).indexOf('leados:ui') !== -1) problems.push('ui state key found inside the event log');
+      // no UI-only concepts persisted as events
+      raw.events.forEach(function (ev) { if (ev.type.indexOf('ui.') === 0 || ev.type.indexOf('view.') === 0) problems.push('UI event persisted: ' + ev.type); });
+      // domain resolution is total and honest over the live log
+      const P = LeadOS.engine.project(raw.events);
+      let domained = 0, systemic = 0;
+      raw.events.forEach(function (ev) {
+        let d;
+        try { d = LeadOS.engine.eventDomain(ev, P); }
+        catch (e) { problems.push('eventDomain threw on ' + ev.type); return; }
+        if (d === null) { systemic++; return; }
+        if (LeadOS.events.DOMAIN_IDS.indexOf(d) === -1) problems.push(ev.type + ' -> unknown domain ' + d);
+        domained++;
+      });
+      // every finding is filterable by the Today chips
+      LeadOS.rules.run(P, Date.now()).forEach(function (f) {
+        if (f.play) {
+          const d = String(f.play).replace('playbook:', '');
+          if (LeadOS.events.DOMAIN_IDS.indexOf(d) === -1) problems.push('finding ' + f.rule + ' carries unfilterable playbook ' + f.play);
+        }
+      });
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : domained + ' events domain-mapped, ' + systemic + ' honestly system; sessionStorage state never touches leados:data' };
     }]
   ];
 
@@ -790,7 +905,9 @@
     { id: 'C17', text: 'All 40 named projections exist; open sets exclude closed entities; append-order wins.', by: ['T18', 'G10'] },
     { id: 'C18', text: 'Stale state impossible: projections alias the folded entities and never persist.', by: ['G10', 'G4', 'G7'] },
     { id: 'C19', text: 'All 14 interactive playbooks exist; submit() emits only registry-valid events.', by: ['T19', 'G3'] },
-    { id: 'C20', text: 'No playbook fakes certainty: recommendations are labeled with a source, gaps are declared.', by: ['T19', 'G11'] }
+    { id: 'C20', text: 'No playbook fakes certainty: recommendations are labeled with a source, gaps are declared.', by: ['T19', 'G11'] },
+    { id: 'C21', text: 'All rail routes resolve to views; quick-capture forms emit registry-valid events.', by: ['T20', 'G3'] },
+    { id: 'C22', text: 'View state (filter, tab, person) lives in sessionStorage only and never enters the log.', by: ['G12', 'G1', 'G4'] }
   ];
 
   function runSuite(suite) {

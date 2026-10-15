@@ -65,6 +65,48 @@ Lineage note: R1–R10 predated the attached codebase and were not inspectable;
 they are reconstructed and pinned to the settings the pt-1 selectors already
 prove — full disclosure in `AI-SESSION-LOG.md` §10.
 
+## Views (pt-4 part 6)
+
+Left **rail nav** with hash routes — deep-linkable, no router library:
+
+| Route | What it shows |
+|---|---|
+| `#/today` | Signal summary + domain **filter chips** (ALL · PEOPLE · FINANCE · SALES · OPS · STRATEGY · MFG · LEGAL · CS · EXEC) with per-domain counts in the subline, plus the operating rhythm |
+| `#/signals` | All findings from R1–R40 with printed basis |
+| `#/playbooks` | The 14 interactive playbooks |
+| `#/finance` | Budget vs actuals (variance math) · KPI sparklines · forecast vs actuals · financial risk register sorted severity × likelihood |
+| `#/sales` | Pipeline by stage (count + value) · quota attainment per person · cycle time from closed deals · open deal list |
+| `#/ops` | Incident log with MTTR · SLA dashboard by metric · **text Gantt** milestone tracker |
+| `#/strategy` | OKR tree (monospace progress bars) · roadmap by quarter · decision log |
+| `#/domains` | Tabbed index — HR · Marketing · Mfg · Supply · Design · R&D · Legal · CS · Exec — each with that domain's active findings, metric sparklines, and capture |
+| `#/roster` | People derived from the log + dossier: quota attainment history, performance ratings, PIP status, compensation history, open deals (sales roles) |
+| `#/cadences` `#/decisions` `#/risks` | Governance surfaces |
+| `#/data` | All settings incl. the five v4 cadences · **domain-filtered export** · storage inspector · projection inspector · event log with domain column |
+| `#/health` | T/G suites + claim coverage |
+
+**Quick capture is generated from the registry.** Each function view renders a
+collapsible form per event type in its namespace, built directly from
+`REGISTRY[type]` (required/optional, enums → select, booleans → checkbox,
+arrays → one-per-line, numeric date-ish names → date picker, ranges shown
+inline). A form therefore cannot drift from the contract: change the registry
+and the form changes with it. Two object-array payloads (`strategy.okr.set`,
+`exec.kpi.reviewed`) use a documented pipe protocol (`name | value | target |
+trend`). T20 drives every generated form with synthetic input and fails if any
+produced payload is rejected by the append gate.
+
+**View state is sessionStorage only.** Route, domain filter, open domain tab,
+selected person and export filter live under `leados:ui` in **sessionStorage** —
+never in `leados:data`, never as events. G12 fails if a `leados:*` key other
+than the store appears in localStorage, or if any `ui.*` event reaches the log.
+
+**Roster is derived, never declared.** A person exists because events mention
+them (`sales.quota.set`, `sales.deal.logged.ownerId`, `hr.*.personId`).
+`rosterById` lists its own sources per person; nobody is invented.
+
+**Export** filters events by domain (`engine.eventDomain`: explicit `domain`
+field → namespace prefix → parent-entity lookup → honest `system` for
+`store.initialized` / `settings.changed`) and downloads a local Blob. No network.
+
 ## Interactive playbooks (pt-4 part 5)
 
 Fourteen playbooks turn a finding into an append. Each declares:
@@ -139,29 +181,31 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
   T8–T9 core contracts · T10–T11 part-2 families · T12 finding shape ·
   T13 rules determinism · T14 ≥3-point trend discipline · T15 skip-not-infer ·
   T16 severity escalations · T17 all 40 rules fired · T18 named projections
-  (presence, alias identity, open-set exclusion, append-order wins) · **T19**
-  playbook contract (14 present, prefill pure, submit registry-valid).
+  (presence, alias identity, open-set exclusion, append-order wins) · T19
+  playbook contract (14 present, prefill pure, submit registry-valid) · **T20**
+  UI contract (routes↔views, capture forms registry-valid, roster + domain mapping).
 - **G-suite (live store):** G1 single key · G2 schema/lineage · G3 append-only +
   registry-valid · G4 whitelist · G5 v4 settings live · G6 repair accounting ·
   G7 deterministic reads · G8 referential integrity · G9 live rules run ·
   G10 live projections (present, alias-identical, zero leaked to storage) ·
-  **G11** live playbooks (rule coverage, labeled recommendations, no mutation).
-- **Claims C1–C20** in the Health tab: each shows the checks that authorize it;
+  G11 live playbooks (rule coverage, labeled recommendations, no mutation) ·
+  **G12** live UI state (sessionStorage confinement, total domain mapping).
+- **Claims C1–C22** in the Health tab: each shows the checks that authorize it;
   a failing check marks the claim *unproven*.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `index.html` | Shell; seven scripts in doctrinal order; authority-wall overlay |
+| `index.html` | Shell: rail nav + view host; seven scripts in doctrinal order; authority-wall overlay |
 | `css/app.css` | Hand-rolled design system incl. severity/confidence language |
 | `js/events.js` | Event registry (88 types) + append-gate validator with refs/refArrays |
 | `js/store.js` | Persistence wall: single key, schema v4, migrations with repair counting |
-| `js/engine.js` | `project()` fold, 46 named projections, pure selectors, `knownIds()` |
+| `js/engine.js` | `project()` fold, named projections incl. `rosterById`, `eventDomain()`, pure selectors |
 | `js/playbooks.js` | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
 | `js/rules.js` | R1–R40: pure `(P, today) → findings[]` rules engine |
-| `js/health.js` | Authority wall: T1–T19, G1–G11, claim coverage C1–C20 |
-| `js/ui.js` | Vanilla renderer incl. Signals + projection inspector; every action is an event append |
+| `js/health.js` | Authority wall: T1–T20, G1–G12, claim coverage C1–C22 |
+| `js/ui.js` | Rail nav, hash routes, 14 views, registry-driven quick capture; every action is an event append |
 | `README.md` | This file |
 | `AI-SESSION-LOG.md` | Session log; §0 is the claim-vs-inspection audit |
 

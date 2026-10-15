@@ -246,6 +246,55 @@ Health tab now shows 30 checks (T1–T19, G1–G11) and 20 claims.
 
 ---
 
-## Part 6+ (queued)
-- Executive/board pack document compiled from the log (board-prep already feeds it).
-- Module surfaces for finance and people built on the part-4 projections.
+## Part 6 — UI extensions
+
+### §22. Mini-audit (pre-code inspection for this part)
+| Claim in the brief | Inspection | Result |
+|---|---|---|
+| "add to **rail** nav" | read of `index.html` / `js/ui.js` | no rail existed — nav was a horizontal tab strip. Converted to a grouped left rail (Command · Functions · Governance · System) with `#/route` hash routing, which the brief's `#/finance` notation requires. |
+| "**Today** view" (assumed existing) | route inspection | no `today` route existed; the nearest surface was `command`. Renamed `command` → `today` and extended it. Recorded rather than inventing a second dashboard. |
+| "**Data** view" (assumed existing) | route inspection | did not exist; `events` + `settings` were separate tabs. Merged into `#/data` (settings · export · storage inspector · projections · event log) as the brief implies. |
+| "**Roster/dossier** — add per-person…" | grep for roster/person | **no roster existed at all** in any part. Built `rosterById` as a derived projection; "add per-person" is therefore a first build, not an extension. |
+| "Settings: expose all 5 new cadence settings" | `#/data` settings table | already exposed since part 1 (v4 chips + repair provenance); verified, not rebuilt. |
+| "filters … persisted in sessionStorage only" | doctrine check | sessionStorage is a second storage surface. Permitted because the brief mandates it and it is not the event log; G12 added to prove it never leaks into `leados:data` or localStorage. |
+
+### §23. Built
+- `js/engine.js` — `rosterById` (derived people + dossier slices) and
+  `eventDomain(ev, P)` (explicit domain → namespace prefix → parent entity →
+  honest `null`), both exported and added to `NAMED_PROJECTIONS`.
+- `js/ui.js` — rail nav + hash routing; new `finance`, `sales`, `ops`,
+  `strategy`, `domains` (9 tabs), `roster` views; Today filter chips with
+  per-domain counts; `#/data` with domain-filtered Blob export;
+  registry-driven quick capture (`captureFields` / `buildCapturePayload`).
+- `js/health.js` — T20 (routes↔views, chip/tab domain validity, every capture
+  form driven with synthetic input and validated against the gate, roster
+  exactness, domain-mapping honesty) and G12 (sessionStorage confinement, no
+  `ui.*` events, total live domain mapping, findings filterable). C21–C22.
+- `index.html` / `css/app.css` — shell grid + rail; chips, sparklines, text
+  Gantt, OKR tree, roadmap columns, capture accordions.
+
+### §24. Deviations and judgement calls
+1. Rail nav, `today`, and `data` are new/renamed surfaces (§22) — the brief
+   assumed a lineage UI that this reconstruction never had.
+2. Charts are text/monospace by choice: sparklines (`▁▂▃▄▅▆▇█`), progress bars
+   (`█░`), Gantt (`[··███··]`). The brief demanded "Gantt-text, not visual" for
+   milestones; the same discipline is applied throughout rather than importing
+   a chart library (which would break the no-CDN doctrine anyway).
+3. Quick capture is generated from the registry instead of hand-written per
+   type: 70+ hand-built forms would drift from the contract within one part.
+   Object-array payloads use a documented pipe protocol.
+4. `#/domains` replaces the part-1 domain card grid; applying a domain playbook
+   now lives with the per-domain tab content, so one domain concept exists.
+5. Export uses `Blob` + `URL.createObjectURL` — a local object URL, no network.
+6. Export's `system` bucket is explicit: `store.initialized` and
+   `settings.changed` have no domain, and are labeled rather than assigned one.
+
+### §25. Coverage proof for part-6 claims
+- C21 (routes/views, capture validity): T20 + G3.
+- C22 (sessionStorage-only view state): G12 + G1 + G4.
+Health tab now shows 32 checks (T1–T20, G1–G12) and 22 claims.
+
+---
+
+## Part 7+ (queued)
+- Executive/board pack document compiled from the log (board-prep feeds it).
