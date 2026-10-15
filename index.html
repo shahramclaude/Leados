@@ -3,67 +3,52 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LeadOS · pt-3 — Leadership Operating System</title>
-<meta name="description" content="Offline leadership mentor for leads of leads. Vanilla JS, one localStorage key, zero network.">
+<title>LeadOS pt-4 — Universal Leadership OS</title>
+<meta name="description" content="LeadOS: a universal leadership and management operating system. 15 domains, event-sourced, append-only, single localStorage key, zero network.">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-<nav id="rail" aria-label="views">
-  <div class="brand">LEAD<b>OS</b></div>
-  <a href="#/today"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M4.9 19.1l2.2-2.2M16.9 7.1l2.2-2.2"/></svg><span>Today</span></a>
-  <a href="#/roster"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5S13.9 16 14.5 19"/><circle cx="16.5" cy="9" r="2.4"/><path d="M16 14.6c2.4.2 4 1.6 4.5 4"/></svg><span>Roster</span></a>
-  <a href="#/playbooks"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 0 4 21.5Z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5A1.5 1.5 0 0 1 20 21.5Z"/></svg><span>Playbooks</span></a>
-  <a href="#/health"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.3L4.7 18a2 2 0 0 0 1.8 3h11a2 2 0 0 0 1.8-3L14 9.3V3"/><path d="M7.5 14h9"/></svg><span>Health</span></a>
-  <a href="#/data"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5V18.5c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V5.5"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg><span>Data</span></a>
-  <div class="railfoot" id="top-meta">booting…</div>
-</nav>
-<main id="main" aria-live="polite"></main>
 
-<!--
-  Modules load synchronously in dependency order — no build step, no async race.
-  The guard below is the boot registry check: any missing js module → fatal
-  banner naming the path; your data (localStorage "leados:data") is untouched.
--->
-<script src="js/store.js"></script>
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 9 4.9-9 4.9-9-4.9Z"/><path d="m3 11.9 9 4.9 9-4.9"/><path d="m3 16.9 9 4.9 9-4.9"/></svg>
+      <div>
+        <strong>LeadOS</strong>
+        <span>Universal Leadership OS</span>
+      </div>
+    </div>
+    <div id="sysline" class="sysline" aria-live="polite"></div>
+  </div>
+</header>
+
+<nav class="wrap" aria-label="Primary">
+  <div id="nav" class="nav"></div>
+</nav>
+
+<main id="view" class="wrap view" aria-live="polite"></main>
+
+<div id="wall" class="wall" hidden role="alertdialog" aria-label="Authority wall"></div>
+
+<footer class="wrap foot">
+  <span><b>LeadOS pt-4</b> · lineage pt · schema v4</span>
+  <span>append-only event store · nothing derived persisted</span>
+  <span>one localStorage key: leados:data</span>
+  <span>no framework · no build · no network</span>
+</footer>
+
+<noscript>
+  <div style="max-width:640px;margin:60px auto;padding:24px;font-family:sans-serif;color:#e8ecf3">
+    LeadOS is a local, event-sourced application and requires JavaScript. Nothing leaves this browser.
+  </div>
+</noscript>
+
+<!-- Load order is the doctrine: contract -> wall -> derivation -> content -> authority -> render -->
 <script src="js/events.js"></script>
+<script src="js/store.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/playbooks.js"></script>
 <script src="js/health.js"></script>
 <script src="js/ui.js"></script>
-<script>
-(function () {
-  'use strict';
-  var EXPECTED = {
-    store: 'js/store.js', events: 'js/events.js', engine: 'js/engine.js',
-    playbooks: 'js/playbooks.js', health: 'js/health.js', ui: 'js/ui.js'
-  };
-  function fatal(missing) {
-    var d = document.createElement('div');
-    d.id = 'fatal';
-    d.innerHTML = '<div class="box"><h1>LeadOS did not boot</h1><p>Missing module(s): <code>' +
-      missing.join('</code>, <code>') + '</code></p>' +
-      '<p>The boot registry guard halted before any store operation ran. Your data (<code>leados:data</code> in localStorage) is untouched. Restore the file(s) and reload. Rename this file to test the guard — then rename it back.</p></div>';
-    document.body.appendChild(d);
-  }
-  function go() {
-    var missing = [];
-    Object.keys(EXPECTED).forEach(function (k) {
-      if (!window.LEADOS || !LEADOS._mod || !LEADOS._mod[k]) missing.push(EXPECTED[k]);
-    });
-    if (missing.length) { fatal(missing); return; }
-    try { LEADOS.ui.boot(); }
-    catch (e) {
-      var d = document.createElement('div');
-      d.id = 'fatal';
-      d.innerHTML = '<div class="box"><h1>LeadOS crashed during boot</h1><p><code>' +
-        String(e && e.message ? e.message : e).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }) +
-        '</code></p><p>Your data in <code>leados:data</code> has not been written to during this boot. If this persists, check <code>#/data</code> quarantine from a previous session or clear the key after exporting.</p></div>';
-      document.body.appendChild(d);
-    }
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
-  else go();
-})();
-</script>
 </body>
 </html>
