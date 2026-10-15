@@ -1,13 +1,13 @@
-/* LeadOS mf-3 · js/engine.js — rules engine. Pure: (state, todayISO) → findings.
-   Every finding carries what (title + action), why (basis lines + source-event
-   ids), confidence (level + why), and printed score math: sev × conf = score.
+/* LeadOS mf-4 · js/engine.js — rules engine. Pure: (state, todayISO) → findings.
+   Contract verified by mf-3 head read and carried: DOCTRINE, CONF_FACTOR
+   (high 1.0 / medium 0.8 / low 0.6), printed score math sev × conf = score,
+   fin()/keyOf(), buildCtx with lineToMe (broken line → engine silent, never
+   guesses), R1/R2 logic, the snooze/dismiss/unmute-as-events doctrine.
+   mf-4 ADDS: R6 rewritten per-person → PER PAIR (gap #1 from mf-3's own
+   ranked list) · R13 conflict nexus · goldens re-authored G1–G18 (mf-3's
+   tail with G1–G16 was unreadable here — marked unverified, re-authored).
    The engine never states certainty it doesn't have: trends need ≥3 measured
-   points; estimated pulses excluded AND counted; missing fields skip rather
-   than infer; broken reporting lines fall silent rather than guess.
-   Engine memory (snooze/dismiss/unmute) is EVENTS — auditable, exportable,
-   reversible. Golden fixtures G1–G16 are the contract and run live at #/health.
-   v3 adds R9 (day-14 expectations), R10 (tour coverage), R11 (early-win gate),
-   R12 (incident staleness). */
+   points; estimated pulses excluded AND counted; missing fields skip. */
 window.LEADOS = window.LEADOS || {};
 LEADOS.engine = (function () {
   'use strict';
@@ -19,12 +19,13 @@ LEADOS.engine = (function () {
     FB_WINDOW_DAYS: 60, FB_MIN_COUNT: 3, FB_IMBALANCE: 0.8,
     DL_OPEN_MAX: 4,
     CF_WINDOW_DAYS: 90, CF_MIN: 2,
+    CF_NEXUS_MIN: 3, CF_NEXUS_CPS: 2,
     PULSE_WINDOW_DAYS: 21, LOAD_HIGH: 8, MOOD_SLOPE_NEG: -0.4, MIN_POINTS: 3,
     SKIP_CADENCE_DAYS: 28,
     INC_STALE_DAYS: 7,
-    ARR_EXPECT_DAYS: 14,       /* day-N by which boss expectations should be captured */
-    ARR_TOUR_DAYS: 45,         /* day-N by which the listening tour should be complete */
-    ARR_TOUR_GRACE: 7,         /* no tour nagging in the first week — silence is honest */
+    ARR_EXPECT_DAYS: 14,
+    ARR_TOUR_DAYS: 45,
+    ARR_TOUR_GRACE: 7,
     SNOOZE_DAYS: 7
   };
   var CONF_FACTOR = { high: 1.0, medium: 0.8, low: 0.6 };
@@ -32,12 +33,13 @@ LEADOS.engine = (function () {
     R1: '1:1 cadence', R2: 'decision review', R3: 'goal health', R4: 'feedback balance',
     R5: 'delegation load', R6: 'conflict pattern', R7: 'overload signals', R8: 'skip-level',
     R9: 'arrival · expectations', R10: 'arrival · listening tour',
-    R11: 'arrival · early wins', R12: 'incident follow-up'
+    R11: 'arrival · early wins', R12: 'incident follow-up', R13: 'conflict nexus',
+    ENG: 'engine integrity'
   };
   var RULE_PLAYBOOK = {
     R1: 'oneonone', R2: 'decision', R3: 'goal', R4: 'sbi', R5: 'delegation',
     R6: 'desc', R7: 'oneonone', R8: 'oneonone',
-    R9: 'charter', R10: 'tour', R11: 'wincloser', R12: null /* quick-capture instead */
+    R9: 'charter', R10: 'tour', R11: 'wincloser', R12: null, R13: 'oneonone'
   };
 
   function dayUTC(iso) {
@@ -63,8 +65,7 @@ LEADOS.engine = (function () {
   }
   function conf(level, why) { return { level: level, why: why }; }
   function fin(o) {
-    o.basis = o.basis || []; o.meta = o.meta || {}; o.meta.evidenceIds = o.meta.evidenceIds || [];
-    if (!o.meta.evidenceIds.length) delete o.meta.evidenceIds;
+    o.basis = o.basis || []; o.meta = o.meta || {};
     var f = CONF_FACTOR[o.confidence.level] || 0.6;
     o.score = Math.round(o.severity * f);
     o.breakdown = 'sev ' + o.severity + ' × conf ' + f.toFixed(2) + ' = ' + o.score;
@@ -83,7 +84,7 @@ LEADOS.engine = (function () {
     var byPid = {}, names = {};
     people.forEach(function (p) { byPid[p.id] = p; names[p.id] = p.name || 'unnamed'; });
     return {
-      today: todayISO,
+      state: state, today: todayISO,
       people: people.filter(function (p) { return !p.archived; }),
       allPeople: people, events: events, byPid: byPid,
       name: function (pid) { return names[pid] || 'unknown person'; },
@@ -111,6 +112,8 @@ LEADOS.engine = (function () {
     };
   }
 
+  function dt(iso) { return String(iso).slice(0, 10); }
+
   var RULES = [
     { id: 'R1', run: function (ctx) {                 /* 1:1 cadence overdue (direct reports) */
       var out = [];
@@ -134,7 +137,7 @@ LEADOS.engine = (function () {
         out.push(fin({ ruleId: 'R1', personId: p.id, severity: sev,
           title: '1:1 with ' + ctx.name(p.id) + ' is ' + (d - cad) + 'd overdue',
           action: 'Book it inside 48h. Come with their blockers, not your agenda — the 1:1 run sheet has the structure.',
-          basis: ['last logged 1:1: ' + String(last.ts).slice(0, 10) + ' (' + d + 'd ago)',
+          basis: ['last logged 1:1: ' + dt(last.ts) + ' (' + d + 'd ago)',
             'cadence setting: ' + cad + 'd — fires strictly when days > cadence',
             last.data && last.data.note ? 'last session note: ' + last.data.note : 'last session has no note'],
           confidence: conf('high', 'pure date arithmetic on your logged events and your cadence setting.'),
@@ -155,488 +158,470 @@ LEADOS.engine = (function () {
         out.push(fin({ ruleId: 'R2', severity: Math.min(88, 78 + d),
           title: 'Decision "' + ((e.data && e.data.title) || 'untitled') + '" is ' + d + 'd past its review date',
           action: 'Close the loop: was the call right? Log the outcome — decision quality is your only calibration data.',
-          basis: ['decided: ' + String(e.ts).slice(0, 10) + ' · review date: ' + rd,
-            'decision.outcome events referencing this id: 0'],
-          confidence: conf('high', 'id-linked event arithmetic; either the outcome event exists or it does not.'),
-          meta: { key: e.id, pastDays: d, evidenceIds: [e.id] } }));
+          basis: ['logged: ' + dt(e.ts), 'reviewDate: ' + rd + ' — past by ' + d + 'd', 'decision.outcome events referencing it: 0'],
+          confidence: conf('high', 'the loop is open in your own store — unless you track outcomes elsewhere.'),
+          meta: { key: e.id, decisionId: e.id, evidenceIds: [e.id] } }));
       });
       return out;
     } },
 
-    { id: 'R3', run: function (ctx) {                 /* goals ownerless or silent */
+    { id: 'R3', run: function (ctx) {                 /* goals ownerless or silent >14d */
       var out = [];
-      EV().openGoals(ctxState(ctx)).forEach(function (g) {
-        var problems = [], sev = 0;
-        if (!g.ownerPersonId) { problems.push('no owner'); sev = 62; }
-        var silent = days(g.lastProgressTs, ctx.today);
-        if (silent != null && silent > DOCTRINE.GOAL_STALL_DAYS) {
-          problems.push('silent ' + silent + 'd (>' + DOCTRINE.GOAL_STALL_DAYS + 'd)');
-          sev = Math.max(sev, Math.min(84, 55 + (silent - DOCTRINE.GOAL_STALL_DAYS)));
-        }
-        if (!problems.length) return;
-        out.push(fin({ ruleId: 'R3', personId: g.ownerPersonId || undefined, severity: sev,
-          title: 'Goal "' + g.label + '": ' + problems.join(' · '),
-          action: !g.ownerPersonId
-            ? 'Assign one name — not a team, a person. An ownerless goal is a wish.'
-            : 'Ask the owner for one sentence of progress today; if it is dead, kill it out loud.',
-          basis: ['goal.set: ' + String(g.ts).slice(0, 10),
-            'owner: ' + (g.ownerPersonId ? ctx.name(g.ownerPersonId) : 'none'),
-            'last progress anchor: ' + String(g.lastProgressTs).slice(0, 10)],
-          confidence: conf('high', 'goal state is folded from your goal.* events; silence is measured against your own anchors.'),
-          meta: { key: g.id, evidenceIds: [g.id] } }));
+      EV().openGoals(ctx.state).forEach(function (g) {
+        var dSet = days(g.ts, ctx.today), dProg = days(g.lastProgressTs, ctx.today);
+        var ownerless = !g.ownerPersonId;
+        var silent = dProg != null && dProg > DOCTRINE.GOAL_STALL_DAYS;
+        if (!ownerless && !silent) return;
+        var why = [];
+        if (ownerless) why.push('ownerPersonId: null — a goal with no name on it is a wish');
+        if (silent) why.push('last goal.progress: ' + dProg + 'd ago (threshold ' + DOCTRINE.GOAL_STALL_DAYS + 'd)');
+        why.push('set: ' + dt(g.ts) + (dSet != null ? ' (' + dSet + 'd ago)' : ''));
+        out.push(fin({ ruleId: 'R3', severity: ownerless && silent ? 76 : ownerless ? 58 : Math.min(82, 50 + (dProg || 0)),
+          personId: g.ownerPersonId || undefined,
+          title: 'Goal "' + g.label + '" ' + (ownerless && silent ? 'has no owner and no signal' : ownerless ? 'has no owner' : 'has gone silent'),
+          action: ownerless ? 'Put one name on it in the goal review — others can contribute, one person answers.'
+                            : 'Open the goal review: log a progress line or kill the goal honestly. Both are forward motion.',
+          basis: why,
+          confidence: conf('high', 'ownership and progress are facts of the event stream; the 14d stall bar is a doctrine constant, printed.'),
+          meta: { key: g.id, goalId: g.id, evidenceIds: [g.id] } }));
       });
       return out;
     } },
 
-    { id: 'R4', run: function (ctx) {                 /* feedback imbalance per person */
+    { id: 'R4', run: function (ctx) {                 /* feedback imbalance (60d window) */
       var out = [];
       ctx.people.forEach(function (p) {
-        var bal = EV().feedbackBalance(ctxState(ctx), p.id, DOCTRINE.FB_WINDOW_DAYS, ctx.today);
-        if (bal.total < DOCTRINE.FB_MIN_COUNT) return;
-        var shareC = bal.corrective / bal.total, shareP = bal.positive / bal.total;
-        if (shareC < DOCTRINE.FB_IMBALANCE && shareP < DOCTRINE.FB_IMBALANCE) return;
-        var only = shareC >= DOCTRINE.FB_IMBALANCE ? 'corrective' : 'positive';
-        out.push(fin({ ruleId: 'R4', personId: p.id, severity: 58,
-          title: 'Feedback to ' + ctx.name(p.id) + ' is ' + Math.round((only === 'corrective' ? shareC : shareP) * 100) + '% ' + only,
-          action: only === 'corrective'
-            ? 'A diet of pure correction teaches avoidance, not excellence. Find one specific thing worth repeating — SBI it this week.'
-            : 'Pure praise feels kind and rots standards. Find the one thing you are tolerating — SBI it this week.',
-          basis: [DOCTRINE.FB_WINDOW_DAYS + 'd window: ' + bal.corrective + ' corrective / ' + bal.positive + ' positive (n=' + bal.total + ', min ' + DOCTRINE.FB_MIN_COUNT + ')',
-            'imbalance threshold: ≥' + (DOCTRINE.FB_IMBALANCE * 100) + '% either polarity'],
-          confidence: conf('medium', 'the count is exact; that your logged feedback matches what you actually SAY is an assumption only you can check.'),
-          meta: { corrective: bal.corrective, positive: bal.positive } }));
+        var b = EV().feedbackBalance(ctx.state, p.id, DOCTRINE.FB_WINDOW_DAYS, ctx.today);
+        if (b.total < DOCTRINE.FB_MIN_COUNT) return;
+        var cor = b.corrective / b.total, pos = b.positive / b.total;
+        var heavy = cor >= DOCTRINE.FB_IMBALANCE ? 'corrective' : pos >= DOCTRINE.FB_IMBALANCE ? 'positive' : null;
+        if (!heavy) return;
+        out.push(fin({ ruleId: 'R4', personId: p.id, severity: heavy === 'corrective' ? 72 : 52,
+          title: 'Your feedback to ' + ctx.name(p.id) + ' is ' + (heavy === 'corrective' ? 'all corrective' : 'all positive'),
+          action: heavy === 'corrective'
+            ? 'A steady diet of correction reads as hostility even when each point is fair. Find one specific, real thing worth repeating and SBI it this week.'
+            : 'Praise without correction is comfort, not leadership. If nothing is worth correcting, raise the bar — then say what "better" looks like, with SBI.',
+          basis: ['window: ' + DOCTRINE.FB_WINDOW_DAYS + 'd · count: ' + b.total + ' (min ' + DOCTRINE.FB_MIN_COUNT + ')',
+            'polarity: ' + b.corrective + ' corrective / ' + b.positive + ' positive = ' + Math.round((heavy === 'corrective' ? cor : pos) * 100) + '% ' + heavy,
+            'imbalance threshold: ≥' + (DOCTRINE.FB_IMBALANCE * 100) + '%'],
+          confidence: conf(b.total >= 6 ? 'high' : 'medium',
+            b.total >= 6 ? 'six or more logged events is a real trend.'
+                          : 'three-to-five events clears the bar, but small samples swing — the ratio is printed so you can judge.'),
+          meta: { ratio: heavy === 'corrective' ? cor : pos, direction: heavy } }));
       });
       return out;
     } },
 
-    { id: 'R5', run: function (ctx) {                 /* delegation load per person */
-      var out = [], byP = {};
-      EV().openDelegations(ctxState(ctx)).forEach(function (d) {
+    { id: 'R5', run: function (ctx) {                 /* delegation load > 4 open per person */
+      var out = [], per = {};
+      EV().openDelegations(ctx.state).forEach(function (d) {
         if (!d.personId) return;
-        byP[d.personId] = byP[d.personId] || [];
-        byP[d.personId].push(d);
+        (per[d.personId] = per[d.personId] || []).push(d);
       });
-      Object.keys(byP).forEach(function (pid) {
-        var list = byP[pid], p = ctx.byPid[pid];
-        if (!p || p.archived) return;
+      Object.keys(per).forEach(function (pid) {
+        var list = per[pid];
         if (list.length <= DOCTRINE.DL_OPEN_MAX) return;
-        out.push(fin({ ruleId: 'R5', personId: pid, severity: Math.min(86, 52 + 6 * (list.length - DOCTRINE.DL_OPEN_MAX)),
-          title: ctx.name(pid) + ' carries ' + list.length + ' open delegations',
-          action: 'Rebalance, don\'t praise. Drop, trade, or close one item before adding anything — check its delegation level first.',
-          basis: ['open delegations: ' + list.length + ' (threshold >' + DOCTRINE.DL_OPEN_MAX + ')',
-            'items: ' + list.map(function (d) { return d.label; }).slice(0, 4).join(' · ') + (list.length > 4 ? ' …' : '')],
-          confidence: conf('high', 'delegation.closed either references the assignment or it is still open — event arithmetic, no inference.'),
+        out.push(fin({ ruleId: 'R5', personId: pid, severity: Math.min(84, 50 + 4 * (list.length - DOCTRINE.DL_OPEN_MAX)),
+          title: ctx.name(pid) + ' is holding ' + list.length + ' open delegations',
+          action: 'More than ' + DOCTRINE.DL_OPEN_MAX + ' open loops on one person is how "I delegated it" becomes "it died quietly". Close, downgrade, or re-home at least one — the delegation playbook has the ladder.',
+          basis: ['open delegations: ' + list.length + ' (doctrine max ' + DOCTRINE.DL_OPEN_MAX + '):',
+            list.map(function (d) { return '  · "' + d.label + '" · level ' + (d.level || '?') + ' · since ' + dt(d.ts); }).join('\n')],
+          confidence: conf('high', 'a straight count of open delegation.assigned events minus delegation.closed — printed above.'),
           meta: { count: list.length, evidenceIds: list.map(function (d) { return d.id; }) } }));
       });
       return out;
     } },
 
-    { id: 'R6', run: function (ctx) {                 /* repeated unresolved conflict */
-      var out = [], byP = {};
-      EV().openConflicts(ctxState(ctx)).forEach(function (c) {
-        if (!c.personId) return;
-        var d = days(c.ts, ctx.today);
-        if (d == null || d > DOCTRINE.CF_WINDOW_DAYS) return;
-        byP[c.personId] = byP[c.personId] || [];
-        byP[c.personId].push(c);
-      });
-      Object.keys(byP).forEach(function (pid) {
-        var list = byP[pid], p = ctx.byPid[pid];
-        if (!p || p.archived || list.length < DOCTRINE.CF_MIN) return;
-        var cps = list.map(function (c) { return c.counterpart; }).filter(Boolean);
-        out.push(fin({ ruleId: 'R6', personId: pid, severity: 72,
-          title: ctx.name(pid) + ': ' + list.length + ' unresolved conflicts in ' + DOCTRINE.CF_WINDOW_DAYS + 'd',
-          action: 'This is now a pattern, not an incident. Run DESC on the recurring counterpart before it calcifies.',
-          basis: list.map(function (c) { return c.label + ' (unresolved)'; })
-            .concat(['per-person count, ' + DOCTRINE.CF_WINDOW_DAYS + 'd window — resolved conflicts excluded',
-              cps.length ? 'counterparts as logged: ' + cps.join(' · ') : 'no counterparts logged — pair-level analysis impossible until you record them']),
-          confidence: conf('high', 'only your unresolved, in-window conflict events are counted.'),
-          meta: { count: list.length, evidenceIds: list.map(function (c) { return c.id; }) } }));
+    { id: 'R6', run: function (ctx) {                 /* mf-4: repeated unresolved conflict PER PAIR */
+      var out = [];
+      EV().conflictPairs(ctx.state).forEach(function (pair) {
+        var recent = pair.conflicts.filter(function (c) {
+          var d = days(c.ts, ctx.today);
+          return d != null && d <= DOCTRINE.CF_WINDOW_DAYS;
+        });
+        if (recent.length < DOCTRINE.CF_MIN) return;
+        var first = recent[0];
+        var label = EV().pairLabel(ctx.state, first);
+        var textLinked = !!pair.linkKinds.text, idLinked = !!pair.linkKinds.id;
+        out.push(fin({ ruleId: 'R6', severity: Math.min(78, 54 + 8 * recent.length),
+          title: label + ' — ' + recent.length + ' unresolved conflicts in ' + DOCTRINE.CF_WINDOW_DAYS + 'd',
+          action: 'Two open loops between the same two parties is not a coincidence, it is a relationship. Run DESC with both positions named — the playbook is pre-filled from these events.',
+          basis: recent.map(function (c) {
+              return dt(c.ts) + ' · ' + (c.summary || 'no summary logged') +
+                (c.link.kind === 'id' ? ' · linked: ' + ctx.name(c.counterpartPersonId)
+                 : c.link.kind === 'text' ? ' · unlinked text: "' + c.counterpartText + '"'
+                 : ' · party: you');
+            }).concat([
+              'window: ' + DOCTRINE.CF_WINDOW_DAYS + 'd · count ' + recent.length + ' ≥ ' + DOCTRINE.CF_MIN + ' · all unresolved',
+              textLinked ? 'some links are free text — spelling drift ("Dana" vs "dana k.") would read as DIFFERENT pairs' : 'both parties resolved to roster ids — no text matching involved'
+            ]),
+          confidence: conf(textLinked && !idLinked ? 'medium' : 'high',
+            textLinked && !idLinked
+              ? 'pair matched on free-text counterpart labels; a typo would split the pair and hide the pattern. Link counterparts to roster people in the capture bar.'
+              : 'pairs are matched on roster ids — spelling drift cannot split them. Resolution state comes from your own conflict.resolved events.'),
+          meta: { key: EV().pairKeyOf(first), pairKey: EV().pairKeyOf(first),
+            persons: [first.personId, first.counterpartPersonId].filter(Boolean),
+            evidenceIds: recent.map(function (c) { return c.id; }) } }));
       });
       return out;
     } },
 
-    { id: 'R7', run: function (ctx) {                 /* overload: measured pulses only */
+    { id: 'R13', run: function (ctx) {                /* mf-4: conflict nexus — friction follows one person */
+      var out = [];
+      EV().conflictNexus(ctx.state).forEach(function (n) {
+        if (n.open.length < DOCTRINE.CF_NEXUS_MIN || n.distinctCounterparts < DOCTRINE.CF_NEXUS_CPS) return;
+        out.push(fin({ ruleId: 'R13', personId: n.personId, severity: Math.min(84, 60 + 4 * n.open.length),
+          title: ctx.name(n.personId) + ' is the common factor in ' + n.open.length + ' open conflicts',
+          action: 'Different counterparts, same person — the variable that explains the pattern is ' + ctx.name(n.personId) + '. This is a one-on-one conversation about the pattern, not another dispute at a time. The run sheet has a conflict-nexus mode.',
+          basis: ['open conflicts involving them: ' + n.open.length + ' (nexus bar ≥ ' + DOCTRINE.CF_NEXUS_MIN + ')',
+            'distinct resolvable counterparts: ' + n.distinctCounterparts + ' (bar ≥ ' + DOCTRINE.CF_NEXUS_CPS + ')' +
+              (n.textLinked ? ' · +' + n.textLinked + ' text-linked conflict(s) NOT counted (spelling can\'t build a nexus case)' : ''),
+            n.open.map(function (c) { return '  · ' + dt(c.ts) + ' — ' + (c.summary || 'no summary'); }).join('\n')],
+          confidence: conf('medium',
+            'a count of open loops, not a diagnosis. They may be the problem, the lightning rod, or the person honest enough to register friction others hide. Small numbers; judge before you act.'),
+          meta: { count: n.open.length, evidenceIds: n.open.map(function (c) { return c.id; }) } }));
+      });
+      return out;
+    } },
+
+    { id: 'R7', run: function (ctx) {                 /* overload — measured pulses only */
       var out = [];
       ctx.people.forEach(function (p) {
-        var m = EV().pulsesMeasured(ctxState(ctx), p.id, DOCTRINE.PULSE_WINDOW_DAYS, ctx.today);
-        var est = EV().pulsesEstimatedCount(ctxState(ctx), p.id, DOCTRINE.PULSE_WINDOW_DAYS, ctx.today);
-        if (m.length < DOCTRINE.MIN_POINTS) return;   /* never trend on fewer points */
+        var m = EV().pulsesMeasured(ctx.state, p.id, DOCTRINE.PULSE_WINDOW_DAYS, ctx.today);
+        var est = EV().pulsesEstimatedCount(ctx.state, p.id, DOCTRINE.PULSE_WINDOW_DAYS, ctx.today);
+        if (m.length < DOCTRINE.MIN_POINTS) return;   /* <3 measured points → silence is honest */
         var loads = m.map(function (e) { return num(e.data && e.data.load); });
         var moods = m.map(function (e) { return num(e.data && e.data.mood); });
-        var lvals = loads.filter(function (v) { return v != null; });
-        var meanLoad = lvals.length ? lvals.reduce(function (a, b) { return a + b; }, 0) / lvals.length : null;
-        var sl = slope(moods);
-        var high = meanLoad != null && meanLoad >= DOCTRINE.LOAD_HIGH;
-        var neg = sl != null && sl <= DOCTRINE.MOOD_SLOPE_NEG;
-        if (!high && !neg) return;
-        var sig = [high ? 'mean load ' + meanLoad.toFixed(1) + '/10 ≥ ' + DOCTRINE.LOAD_HIGH : null,
-          neg ? 'mood slope ' + sl.toFixed(2) + '/reading ≤ ' + DOCTRINE.MOOD_SLOPE_NEG : null].filter(Boolean).join(' · ');
-        out.push(fin({ ruleId: 'R7', personId: p.id, severity: high && neg ? 88 : 76,
-          title: ctx.name(p.id) + ' shows overload signals',
-          action: 'Cut load before coaching resilience — book a load-cutting 1:1 and arrive with one concrete item to remove.',
-          basis: [sig,
-            'measured pulses in ' + DOCTRINE.PULSE_WINDOW_DAYS + 'd: ' + m.length + ' → ' + m.map(function (e) {
-              return String(e.ts).slice(5, 10) + ' m' + (e.data.mood ?? '?') + '/l' + (e.data.load ?? '?'); }).join(' · '),
-            'estimated readings excluded: ' + est + (est ? ' (doctrine: only spoken numbers count)' : '')],
-          confidence: conf('medium', 'arithmetic on ' + m.length + ' spoken readings is exact; whether three readings a trend make is judgment — that is why this is medium, not high.'),
-          meta: { measured: m.length, estimatedExcluded: est, evidenceIds: m.map(function (e) { return e.id; }) },
-          prefill: { intent: 'load' } }));
+        var lsum = 0, ln = 0;
+        loads.forEach(function (v) { if (v != null) { lsum += v; ln++; } });
+        var meanLoad = ln ? lsum / ln : null;
+        var mslope = slope(moods);
+        var loadHigh = meanLoad != null && meanLoad >= DOCTRINE.LOAD_HIGH;
+        var moodFalling = mslope != null && mslope <= DOCTRINE.MOOD_SLOPE_NEG;
+        if (!loadHigh && !moodFalling) return;
+        out.push(fin({ ruleId: 'R7', personId: p.id, severity: Math.min(85, 62 + (loadHigh ? 8 : 0) + (moodFalling ? 8 : 0)),
+          title: ctx.name(p.id) + ' is running hot' + (loadHigh && moodFalling ? ' and going quiet' : ''),
+          action: 'Arrive at the 1:1 with one concrete item to REMOVE, not questions about resilience. Coach after the load drops, not before.',
+          basis: ['measured pulses in ' + DOCTRINE.PULSE_WINDOW_DAYS + 'd: ' + m.length + ' (min ' + DOCTRINE.MIN_POINTS + ')',
+            'mean load: ' + (meanLoad != null ? meanLoad.toFixed(1) + '/10 (high bar ≥ ' + DOCTRINE.LOAD_HIGH + ')' : 'n/a'),
+            'mood slope: ' + (mslope != null ? mslope.toFixed(2) + ' per reading (falling ≤ ' + DOCTRINE.MOOD_SLOPE_NEG + ')' : 'n/a'),
+            'estimated readings excluded: ' + est + ' — numbers THEY said, not your read of their face'],
+          confidence: conf(ln >= 5 ? 'high' : 'medium', 'built only from ' + m.length + ' spoken readings; ' + (ln >= 5 ? 'five-plus points is a trend.' : 'three points is the floor, not a verdict.')),
+          meta: { meanLoad: meanLoad, moodSlope: mslope, evidenceIds: m.map(function (e) { return e.id; }) } }));
       });
       return out;
     } },
 
-    { id: 'R8', run: function (ctx) {                 /* skip-level 1:1 overdue */
+    { id: 'R8', run: function (ctx) {                 /* skip-level 1:1s, 28d cadence */
       var out = [];
       ctx.people.forEach(function (p) {
         var line = ctx.lineToMe(p.id);
-        if (!(line && line.length === 2)) return;     /* exactly one lead between us */
+        if (!(line && line.length === 2)) return;     /* exactly one lead between them and you */
         var via = line[0];
         var last = ctx.lastEvent('oneonone.logged', p.id);
         var d = last ? days(last.ts, ctx.today) : null;
-        if (!last) {
-          out.push(fin({ ruleId: 'R8', personId: p.id, severity: 55,
-            title: 'No skip-level 1:1 ever logged with ' + ctx.name(p.id),
-            action: 'Their lead (' + ctx.name(via) + ') owns supervision; you own signal. 20 minutes: what slows you down, what should I know, what would you change.',
-            basis: ['reporting line: ' + ctx.name(p.id) + ' → ' + ctx.name(via) + ' → me',
-              'oneonone.logged events for this person: 0', 'skip cadence: ' + DOCTRINE.SKIP_CADENCE_DAYS + 'd'],
-            confidence: conf('high', 'absence of events is a hard fact; the reporting line is read from your roster, not guessed.'),
-            meta: { never: true, via: via }, prefill: { skip: true, via: via } }));
-          return;
-        }
-        if (d == null || d <= DOCTRINE.SKIP_CADENCE_DAYS) return;
-        out.push(fin({ ruleId: 'R8', personId: p.id, severity: Math.min(80, 50 + (d - DOCTRINE.SKIP_CADENCE_DAYS)),
-          title: 'Skip-level 1:1 with ' + ctx.name(p.id) + ' is ' + (d - DOCTRINE.SKIP_CADENCE_DAYS) + 'd overdue',
-          action: 'Book 20 minutes inside a week. Signal, not supervision — never undermine their lead in the room.',
-          basis: ['reporting line: ' + ctx.name(p.id) + ' → ' + ctx.name(via) + ' → me',
-            'last logged: ' + String(last.ts).slice(0, 10) + ' (' + d + 'd ago) · skip cadence: ' + DOCTRINE.SKIP_CADENCE_DAYS + 'd'],
-          confidence: conf('high', 'date arithmetic on your events and your roster.'),
-          meta: { overdue: d - DOCTRINE.SKIP_CADENCE_DAYS, via: via, evidenceIds: [last.id] },
-          prefill: { skip: true, via: via } }));
+        if (last && (d == null || d <= DOCTRINE.SKIP_CADENCE_DAYS)) return;
+        out.push(fin({ ruleId: 'R8', personId: p.id, severity: Math.min(80, 55 + (last ? d - DOCTRINE.SKIP_CADENCE_DAYS : 8)),
+          title: last ? 'Skip-level with ' + ctx.name(p.id) + ' is ' + (d - DOCTRINE.SKIP_CADENCE_DAYS) + 'd overdue'
+                      : 'No skip-level ever logged with ' + ctx.name(p.id),
+          action: 'You lead their lead (' + ctx.name(via) + ') — to ' + ctx.name(p.id) + ' you are a rumor unless you show up. Signal, not supervision: what slows you down · what should I know · what would you change.',
+          basis: ['reporting line: you → ' + ctx.name(via) + ' → ' + ctx.name(p.id),
+            'skip cadence: ' + DOCTRINE.SKIP_CADENCE_DAYS + 'd',
+            last ? 'last logged session: ' + dt(last.ts) + ' (' + d + 'd ago)' : 'oneonone.logged events for this person: 0'],
+          confidence: conf('high', 'date math on your events; a broken reporting line would have gone silent instead of guessing.'),
+          meta: { via: via, evidenceIds: last ? [last.id] : [] } }));
       });
       return out;
     } },
 
-    /* ---------------- the arrival instrument (v3) ---------------- */
-    { id: 'R9', run: function (ctx) {                 /* day-14 boss-expectations nudge */
-      var a = EV().arrival(ctxState(ctx), ctx.today);
-      if (!a.set || a.day == null) return [];
-      if (a.day < DOCTRINE.ARR_EXPECT_DAYS || a.expectationCount > 0) return [];
-      var late = a.day - DOCTRINE.ARR_EXPECT_DAYS;
-      return [fin({ ruleId: 'R9', severity: Math.min(84, 64 + late),
-        title: 'Day ' + a.day + ' — boss expectations still uncaptured',
-        action: 'Book 45 minutes with your boss this week and run the Expectations charter. Every day without it you are optimizing toward a guess.',
-        basis: ['appointment started: ' + a.startDate + ' (day ' + a.day + ')',
-          'expectation.logged events: 0', 'doctrine threshold: captured by day ' + DOCTRINE.ARR_EXPECT_DAYS],
-        confidence: conf('medium', 'zero events is a hard fact; that you have not aligned with your boss OUTSIDE this app is an assumption. If you have, log what you agreed and this goes away honestly.'),
-        meta: { day: a.day } })];
-    } },
+    { id: 'R9', run: function (ctx) {                 /* boss expectations uncaptured by day 14 */
+      var a = EV().arrival(ctx.state, ctx.today);
+      if (!a.set) return [];
+      if (a.dayN < DOCTRINE.ARR_EXPECT_DAYS) return [];
+      if (a.expectations > 0) return [];
+      return [fin({ ruleId: 'R9', severity: 66,
+        title: 'Day ' + a.dayN + ' — your boss\'s expectations are still unwritten',
+        action: 'You are being measured against criteria you have not captured. Book 45 minutes and run the expectations charter: what does "great in 6 months" look like, in their words, and what would they fire you for in 3?',
+        basis: ['appointment start: ' + a.startDate + ' → day ' + a.dayN,
+          'expectation.logged events: 0 (gate: day ' + DOCTRINE.ARR_EXPECT_DAYS + ')'],
+        confidence: conf('high', 'absence of captured expectations is a store fact — the assumption is that you capture them here.'),
+        meta: { key: 'expectations' } })];
+    },
 
-    { id: 'R10', run: function (ctx) {                /* listening-tour coverage */
-      var a = EV().arrival(ctxState(ctx), ctx.today);
-      if (!a.set || a.day == null || a.tour.directCount === 0) return [];
-      if (a.day < DOCTRINE.ARR_TOUR_GRACE || a.tour.missing.length === 0) return [];
-      var overdue = a.day > DOCTRINE.ARR_TOUR_DAYS;
-      var sev = overdue ? Math.min(88, 68 + (a.day - DOCTRINE.ARR_TOUR_DAYS))
-        : 46 + Math.round(26 * (1 - a.tour.coveragePct / 100));
-      return [fin({ ruleId: 'R10', severity: sev,
-        title: overdue
-          ? 'Listening tour is ' + (a.day - DOCTRINE.ARR_TOUR_DAYS) + 'd past the day-' + DOCTRINE.ARR_TOUR_DAYS + ' gate — ' + a.tour.missing.length + ' lead(s) never visited'
-          : 'Listening tour ' + a.tour.coveragePct + '% — ' + a.tour.missing.length + ' lead(s) not yet visited',
-        action: 'Sit with ' + a.tour.missing[0].name + ' next. Four questions: what works, what is slow, what would you change, what should I protect. Log it as a tour visit.',
-        basis: ['coverage: ' + a.tour.visitedCount + '/' + a.tour.directCount + ' direct leads visited (' + a.tour.coveragePct + '%), day ' + a.day,
-          'not yet visited: ' + a.tour.missing.map(function (p) { return p.name; }).slice(0, 5).join(' · '),
-          'skip-level visits also logged: ' + a.tour.skipCount + ' · completion gate: day ' + DOCTRINE.ARR_TOUR_DAYS],
-        confidence: conf('medium', 'coverage is measured against TODAY\'s roster — people added after a visit still count as unvisited until you sit with them. Visits held outside the app are unknown to it.'),
-        meta: { missing: a.tour.missing.map(function (p) { return p.id; }) } })];
-    } },
+    { id: 'R10', run: function (ctx) {                /* listening-tour coverage vs live roster */
+      var a = EV().arrival(ctx.state, ctx.today);
+      if (!a.set) return [];
+      if (a.dayN <= DOCTRINE.ARR_TOUR_GRACE) return [];   /* grace week: silence is honest */
+      if (!a.tourTotal) return [];
+      if (a.tourDone >= a.tourTotal) return [];
+      var late = a.dayN >= DOCTRINE.ARR_TOUR_DAYS;
+      return [fin({ ruleId: 'R10', severity: late ? 68 : 40,
+        title: 'Listening tour: ' + a.tourDone + ' of ' + a.tourTotal + ' visited' + (late ? ' — past the day-' + DOCTRINE.ARR_TOUR_DAYS + ' gate' : ''),
+        action: late ? 'You are changing a system you have not finished hearing. That is the classic new-leader error and your team can name it. Book the remaining visits this week.'
+                     : 'Keep the pace: visits left are listed below. Unvisited people notice who you saw first.',
+        basis: ['day ' + a.dayN + ' (grace: ' + DOCTRINE.ARR_TOUR_GRACE + 'd · gate: day ' + DOCTRINE.ARR_TOUR_DAYS + ')',
+          'unvisited: ' + a.unvisited.map(function (p) { return p.name; }).join(', '),
+          'coverage is measured against TODAY\'S roster — people who joined after your tour still count as owed'],
+        confidence: conf('medium', 'visit coverage is a fact; "tour should be complete by day ' + DOCTRINE.ARR_TOUR_DAYS + '" is doctrine, and the roster moved since you started — both stated, not hidden.'),
+        meta: { key: 'tour' } })];
+    },
 
-    { id: 'R11', run: function (ctx) {                /* early-win verification gate */
-      var a = EV().arrival(ctxState(ctx), ctx.today);
+    { id: 'R11', run: function (ctx) {                /* early win past its verify date */
       var out = [];
-      a.wins.open.forEach(function (w) {
-        var d = w.verifyDate && dayUTC(w.verifyDate) != null ? days(w.verifyDate, ctx.today) : null;
-        if (d == null || d <= 0) return;
-        out.push(fin({ ruleId: 'R11', severity: Math.min(85, 74 + 2 * d),
-          title: 'Early win "' + w.title + '" is ' + d + 'd past its verify date — unverified',
-          action: w.announcedTo
-            ? 'You announced this to ' + w.announcedTo + '. Verify the metric out loud — or walk it back while walking back is cheap.'
-            : 'Verify the metric out loud. An unverified win you believe in is a debt with interest.',
-          basis: ['committed: ' + String(w.ts).slice(0, 10) + ' · verify date: ' + w.verifyDate,
-            'metric as committed: ' + (w.metric || 'none — which is itself the problem'),
-            'earlywin.verified events referencing this id: 0',
-            'same shape as R2 by design: an open loop presented as progress — to your boss this time'],
-          confidence: conf('high', 'id-linked date arithmetic; the verified event either exists or it does not.'),
-          meta: { key: w.id, winId: w.id },
-          prefill: { winId: w.id, title: w.title, metric: w.metric, verifyDate: w.verifyDate, announcedTo: w.announcedTo } }));
+      EV().openWins(ctx.state).forEach(function (w) {
+        if (w.verified) return;
+        var d = dayUTC(w.verifyDate) == null ? null : days(w.verifyDate, ctx.today);
+        if (d == null || d < 0) return;
+        out.push(fin({ ruleId: 'R11', severity: Math.min(86, 70 + d),
+          title: 'Early win "' + w.label + '" is ' + d + 'd past its verify date',
+          action: 'Same shape as an unreviewed decision, but this one was presented as progress — to your boss. Verify it with evidence, or walk it back while the walking is cheap.',
+          basis: ['committed: ' + dt(w.ts), 'verifyDate: ' + w.verifyDate + ' — past by ' + d + 'd', 'earlywin.verified events referencing it: 0'],
+          confidence: conf('high', 'the loop is open in your own store.'),
+          meta: { key: w.id, winId: w.id, evidenceIds: [w.id] } }));
       });
       return out;
     } },
 
-    { id: 'R12', run: function (ctx) {                /* incident staleness */
+    { id: 'R12', run: function (ctx) {                /* incidents silent ≥7d */
       var out = [];
-      EV().openIncidents(ctxState(ctx)).forEach(function (x) {
+      EV().openIncidents(ctx.state).forEach(function (x) {
         var d = days(x.updatedTs, ctx.today);
         if (d == null || d < DOCTRINE.INC_STALE_DAYS) return;
-        var base = x.severity === 'high' ? 72 : x.severity === 'low' ? 50 : 60;
-        out.push(fin({ ruleId: 'R12', personId: x.personId || undefined, severity: Math.min(82, base + Math.min(10, d - DOCTRINE.INC_STALE_DAYS)),
-          title: 'Incident "' + x.label + '" has had no update in ' + d + 'd',
-          action: 'Close it or move it — log an incident update with what changed. Incidents that go quiet teach the team that reporting changes nothing.',
-          basis: ['registered: ' + String(x.ts).slice(0, 10) + ' · last touch: ' + String(x.updatedTs).slice(0, 10),
-            'open incidents either get incident.update / incident.resolved events, or they age — this one is ' + d + 'd old',
-            'severity as registered: ' + (x.severity || 'unset')],
-          confidence: conf('high', 'event arithmetic on the incident\'s own update stream.'),
-          meta: { key: x.id, incidentId: x.id, evidenceIds: [x.id] },
-          capture: 'incident.update' }));
+        var sev = num(x.severity);
+        out.push(fin({ ruleId: 'R12', severity: Math.min(84, 58 + 2 * (d - DOCTRINE.INC_STALE_DAYS) + (sev != null && sev >= 4 ? 8 : 0)),
+          title: 'Incident "' + x.label + '" has been silent for ' + d + 'd',
+          action: 'Close it or move it — quiet incidents teach the team that reporting changes nothing. Log an update with the next step and owner, or resolve it honestly.',
+          basis: ['registered: ' + dt(x.ts), 'last touch: ' + dt(x.updatedTs) + ' (' + d + 'd ago · stale ≥ ' + DOCTRINE.INC_STALE_DAYS + 'd)',
+            'severity: ' + (sev != null ? sev + '/5' : 'unset')],
+          confidence: conf('high', 'staleness is date math on your own update events.'),
+          meta: { key: x.id, incidentId: x.id, evidenceIds: [x.id] } }));
       });
       return out;
     } }
   ];
 
-  function ctxState(ctx) { return ctx._state; }      /* state carried for projections */
-
-  /* ---- engine memory: suppression is data, not a setting ---- */
-  function memoryMap(state, today) {
+  /* engine memory — snooze/dismiss/unmute are EVENTS: auditable, reversible */
+  function memory(events) {
     var mem = {};
-    (state.events || []).forEach(function (e) {
-      if (!e.data || !e.data.key) return;
-      var k = e.data.key, m = mem[k] = mem[k] || {};
-      if (e.type === 'engine.snooze') { if (!m.snooze || String(e.ts) > String(m.snooze.ts)) m.snooze = e; }
-      if (e.type === 'engine.dismiss') { if (!m.dismiss || String(e.ts) > String(m.dismiss.ts)) m.dismiss = e; }
-      if (e.type === 'engine.unmute') { if (!m.unmute || String(e.ts) > String(m.unmute.ts)) m.unmute = e; }
+    EV().sorted(events).forEach(function (e) {
+      var k = e.data && e.data.key;
+      if (!k) return;
+      if (e.type === 'engine.snooze') mem[k] = { dismissed: false, snoozeUntil: e.data.until || null };
+      else if (e.type === 'engine.dismiss') mem[k] = { dismissed: true, snoozeUntil: null };
+      else if (e.type === 'engine.unmute') mem[k] = { dismissed: false, snoozeUntil: null };
     });
-    var out = {};
-    Object.keys(mem).forEach(function (k) {
-      var m = mem[k];
-      var dismissed = m.dismiss && (!m.unmute || String(m.dismiss.ts) > String(m.unmute.ts));
-      var snoozed = m.snooze && m.snooze.data.until && days(today, m.snooze.data.until) != null &&
-        days(today, m.snooze.data.until) > 0 &&
-        (!m.unmute || String(m.snooze.ts) > String(m.unmute.ts));
-      if (dismissed) out[k] = 'dismissed';
-      else if (snoozed) out[k] = 'snoozed until ' + m.snooze.data.until;
-    });
-    return out;
+    return mem;
   }
 
-  function ranked(state, todayISO) {
+  function evaluateWith(state, todayISO, extraRules) {
     var ctx = buildCtx(state, todayISO);
-    ctx._state = state;
-    var all = [];
-    RULES.forEach(function (r) {
+    var rules = RULES.concat(extraRules || []);
+    var findings = [];
+    rules.forEach(function (r) {
       try {
         var got = r.run(ctx) || [];
-        got.forEach(function (f) { f._err || all.push(f); });
+        got.forEach(function (f) { findings.push(f); });
       } catch (err) {
-        all.push(fin({ ruleId: 'RX', severity: 40,
-          title: 'Rule ' + r.id + ' failed to evaluate',
-          action: 'The engine refused to guess. This row exists so a broken rule is loud, not silent.',
-          basis: ['error: ' + (err && err.message), 'no other findings from ' + r.id + ' were emitted'],
-          confidence: conf('high', 'the exception was caught at the rule boundary.'),
-          meta: { key: 'rx-' + r.id } }));
+        findings.push(fin({ ruleId: 'ENG', severity: 95,
+          title: 'Rule ' + r.id + ' threw instead of producing findings',
+          action: 'This is an engine defect, not your data. The error is preserved below; every other rule still ran.',
+          basis: ['exception: ' + (err && err.message ? err.message : String(err)),
+            'the engine fails LOUD on purpose — a silently dead rule would manufacture false calm'],
+          confidence: conf('high', 'an exception was caught at ' + S.nowISO() + ' — that is a hard fact.'),
+          meta: { key: 'rule-' + r.id, error: String(err && err.stack || err) } }));
       }
     });
-    var mem = memoryMap(state, todayISO);
-    var items = [], muted = [];
-    all.forEach(function (f) { (mem[f.key] ? muted : items).push(f); });
-    muted.forEach(function (f) { f.mutedAs = mem[f.key]; });
-    items.sort(function (a, b) {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.severity !== a.severity) return b.severity - a.severity;
-      return a.title < b.title ? -1 : 1;
+    var mem = memory(state.events || []);
+    var visible = [], suppressed = [];
+    findings.forEach(function (f) {
+      var m = mem[f.key];
+      if (m && m.dismissed) { f.suppressed = 'dismissed'; suppressed.push(f); return; }
+      if (m && m.snoozeUntil && dayUTC(m.snoozeUntil) != null && dayUTC(todayISO) <= dayUTC(m.snoozeUntil)) {
+        f.suppressed = 'snoozed until ' + m.snoozeUntil; suppressed.push(f); return;
+      }
+      visible.push(f);
     });
-    return { items: items, muted: muted, today: todayISO };
-  }
-
-  /* ---- golden fixtures: the contract, executed live at #/health ---- */
-  var ANCHOR = '2026-01-15';
-  function ago(n) { return new Date(Date.UTC(2026, 0, 15) - n * 86400000).toISOString(); }
-  function agoD(n) { return ago(n).slice(0, 10); }
-  function plusD(n) { return new Date(Date.UTC(2026, 0, 15) + n * 86400000).toISOString().slice(0, 10); }
-  function mk() { return S.fresh(); }
-  function person(st, name, cad, reportsTo, archived) {
-    var p = { id: S.newId('p'), name: name, role: 'lead', cadenceDays: cad || 7,
-      reportsTo: reportsTo === undefined ? 'me' : reportsTo,
-      createdAt: ago(50), archived: !!archived, seed: false };
-    st.people.push(p); return p;
-  }
-  function ev(st, type, o) {
-    o = o || {};
-    var e = { id: S.newId('e'), ts: o.ts || ago(1), type: type,
-      personId: o.personId || null, data: o.data || {}, seed: false };
-    st.events.push(e); return e;
-  }
-  function find(r, ruleId, personId) {
-    return r.items.filter(function (f) {
-      return f.ruleId === ruleId && (personId === undefined || f.personId === personId);
+    visible.sort(function (a, b) {
+      return b.score - a.score || b.severity - a.severity || (a.title < b.title ? -1 : 1);
     });
+    return { findings: visible, suppressed: suppressed, doctrine: DOCTRINE };
   }
+  function evaluate(state, todayISO) { return evaluateWith(state, todayISO, null); }
 
+  /* ================= golden fixtures G1–G18 (the rule contract) =================
+     Pure: synthetic states computed against a FIXED today; zero storage I/O.
+     Re-authored (mf-3's G1–G16 tail was unreadable from here — unverified). */
+  var G_TODAY = '2026-02-16';
+  function gd(n) { return new Date(Date.parse(G_TODAY + 'T12:00:00Z') - n * 86400000).toISOString(); }
+  function gdate(n) { return gd(n).slice(0, 10); }
+  function gmk(people, events, meta) {
+    var st = S.fresh(); st.meta.appointment = null;
+    if (meta) for (var k in meta) st.meta[k] = meta[k];
+    people.forEach(function (p) {
+      st.people.push({ id: p[0], name: p[1], role: '', cadenceDays: p[2] || 7,
+        reportsTo: p[3] === undefined ? 'me' : p[3], createdAt: gd(90), archived: false, seed: false });
+    });
+    var n = 0;
+    events.forEach(function (e) {
+      st.events.push({ id: 'ge' + (++n), ts: e.ts || gd(1), type: e.type, personId: e.personId || null, data: e.data || {}, seed: false });
+    });
+    return st;
+  }
+  function has(fs, ruleId, pred) {
+    return fs.some(function (f) { return f.ruleId === ruleId && (!pred || pred(f)); });
+  }
   var GOLDENS = [
-    { id: 'G1', name: 'R1 fires when no 1:1 ever logged', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7);
-      var f = find(ranked(st, ANCHOR), 'R1', a.id);
-      return { pass: f.length === 1 && f[0].meta.never === true && f[0].severity === 70,
-        observed: f.length ? f[0].title + ' · sev ' + f[0].severity : 'no finding' };
-    } },
-    { id: 'G2', name: 'R1 strictly past cadence (7d silent, 8d fires)', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7), b = person(st, 'Boris', 7);
-      ev(st, 'oneonone.logged', { personId: a.id, ts: ago(7) });
-      ev(st, 'oneonone.logged', { personId: b.id, ts: ago(8) });
-      var r = ranked(st, ANCHOR);
-      return { pass: find(r, 'R1', a.id).length === 0 && find(r, 'R1', b.id).length === 1,
-        observed: 'Ana@7d: ' + find(r, 'R1', a.id).length + ' findings · Boris@8d: ' + find(r, 'R1', b.id).length };
-    } },
-    { id: 'G3', name: 'R2 past review without outcome; resolved is silent', run: function () {
-      var st = mk();
-      ev(st, 'decision.logged', { ts: ago(10), data: { title: 'open', reviewDate: agoD(3) } });
-      var d2 = ev(st, 'decision.logged', { ts: ago(9), data: { title: 'closed', reviewDate: agoD(4) } });
-      ev(st, 'decision.outcome', { ts: ago(2), data: { decisionId: d2.id, outcome: 'right' } });
-      var r = ranked(st, ANCHOR);
-      var f = r.items.filter(function (x) { return x.ruleId === 'R2'; });
-      return { pass: f.length === 1 && /open/.test(f[0].title) && f[0].meta.pastDays === 3,
-        observed: f.map(function (x) { return x.title; }).join(' | ') || 'none' };
-    } },
-    { id: 'G4', name: 'R3 ownerless fires; stale fires; fresh progress silent', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7);
-      ev(st, 'goal.set', { ts: ago(2), data: { title: 'ownerless' } });
-      ev(st, 'goal.set', { ts: ago(21), data: { title: 'stale', ownerPersonId: a.id } });
-      var g3 = ev(st, 'goal.set', { ts: ago(21), data: { title: 'fresh', ownerPersonId: a.id } });
-      ev(st, 'goal.progress', { ts: ago(1), data: { goalId: g3.id, note: 'moving' } });
-      var f = ranked(st, ANCHOR).items.filter(function (x) { return x.ruleId === 'R3'; });
-      return { pass: f.length === 2 && /ownerless/.test(f.map(function (x) { return x.title; }).join()) &&
-        /stale/.test(f.map(function (x) { return x.title; }).join()) && !/fresh/.test(f.map(function (x) { return x.title; }).join()),
-        observed: f.map(function (x) { return x.title; }).join(' | ') || 'none' };
-    } },
-    { id: 'G5', name: 'R4 ≥80% corrective at n=3; below min-count silent', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7), b = person(st, 'Boris', 7);
-      [10, 7, 4].forEach(function (d) { ev(st, 'feedback.logged', { personId: a.id, ts: ago(d), data: { polarity: 'corrective' } }); });
-      [9, 5].forEach(function (d) { ev(st, 'feedback.logged', { personId: b.id, ts: ago(d), data: { polarity: 'corrective' } }); });
-      var r = ranked(st, ANCHOR);
-      return { pass: find(r, 'R4', a.id).length === 1 && find(r, 'R4', b.id).length === 0,
-        observed: 'Ana(n=3): ' + find(r, 'R4', a.id).length + ' · Boris(n=2): ' + find(r, 'R4', b.id).length };
-    } },
-    { id: 'G6', name: 'R5 fires at 5 open delegations, silent at 4', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7), b = person(st, 'Boris', 7), i;
-      for (i = 0; i < 5; i++) ev(st, 'delegation.assigned', { personId: a.id, ts: ago(i + 1), data: { title: 'A' + i } });
-      for (i = 0; i < 4; i++) ev(st, 'delegation.assigned', { personId: b.id, ts: ago(i + 1), data: { title: 'B' + i } });
-      var r = ranked(st, ANCHOR);
-      return { pass: find(r, 'R5', a.id).length === 1 && find(r, 'R5', b.id).length === 0,
-        observed: 'Ana(5): ' + find(r, 'R5', a.id).length + ' · Boris(4): ' + find(r, 'R5', b.id).length };
-    } },
-    { id: 'G7', name: 'R6 two unresolved in 90d; resolved excluded', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7), b = person(st, 'Boris', 7);
-      ev(st, 'conflict.registered', { personId: a.id, ts: ago(30), data: { counterpart: 'X' } });
-      ev(st, 'conflict.registered', { personId: a.id, ts: ago(10), data: { counterpart: 'X' } });
-      var c1 = ev(st, 'conflict.registered', { personId: b.id, ts: ago(30), data: { counterpart: 'Y' } });
-      ev(st, 'conflict.registered', { personId: b.id, ts: ago(20), data: { counterpart: 'Z' } });
-      ev(st, 'conflict.resolved', { ts: ago(5), data: { conflictId: c1.id, how: 'talked' } });
-      var r = ranked(st, ANCHOR);
-      return { pass: find(r, 'R6', a.id).length === 1 && find(r, 'R6', b.id).length === 0,
-        observed: 'Ana(2 open): ' + find(r, 'R6', a.id).length + ' · Boris(1 open): ' + find(r, 'R6', b.id).length };
-    } },
-    { id: 'G8', name: 'R7 mean load ≥8 on measured; estimated-only silent', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7), b = person(st, 'Boris', 7);
-      [9, 6, 3].forEach(function (d) { ev(st, 'pulse.logged', { personId: a.id, ts: ago(d), data: { mood: 5, load: 9, estimated: false } }); });
-      [9, 6, 3].forEach(function (d) { ev(st, 'pulse.logged', { personId: b.id, ts: ago(d), data: { mood: 5, load: 10, estimated: true } }); });
-      var r = ranked(st, ANCHOR);
-      return { pass: find(r, 'R7', a.id).length === 1 && find(r, 'R7', b.id).length === 0,
-        observed: 'Ana(measured): ' + find(r, 'R7', a.id).length + ' · Boris(estimated): ' + find(r, 'R7', b.id).length };
-    } },
-    { id: 'G9', name: 'R7 negative mood slope 8→5→2 at low load', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7);
-      var moods = [8, 5, 2], dd = [9, 6, 3];
-      dd.forEach(function (d, i) { ev(st, 'pulse.logged', { personId: a.id, ts: ago(d), data: { mood: moods[i], load: 4, estimated: false } }); });
-      var f = find(ranked(st, ANCHOR), 'R7', a.id);
-      return { pass: f.length === 1 && /slope/.test(f[0].basis[0]),
-        observed: f.length ? f[0].basis[0] : 'no finding' };
-    } },
-    { id: 'G10', name: 'R8 skip overdue at 29d; broken line silent', run: function () {
-      var st = mk();
-      var lead = person(st, 'Lead', 7); var skip = person(st, 'Skip', 14, lead.id);
-      var ghost = person(st, 'Ghost', 14, 'p-nonexistent');
-      ev(st, 'oneonone.logged', { personId: skip.id, ts: ago(29) });
-      var r = ranked(st, ANCHOR);
-      return { pass: find(r, 'R8', skip.id).length === 1 && find(r, 'R8', ghost.id).length === 0,
-        observed: 'Skip(29d): ' + find(r, 'R8', skip.id).length + ' · Ghost(broken line): ' + find(r, 'R8', ghost.id).length };
-    } },
-    { id: 'G11', name: 'engine memory: snooze hides, unmute restores', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7);
-      var key = 'R1:' + a.id;
-      ev(st, 'engine.snooze', { ts: ago(1), data: { key: key, until: plusD(5) } });
-      var r1 = ranked(st, ANCHOR);
-      var snoozed = r1.items.length === 0 && r1.muted.length === 1;
-      ev(st, 'engine.unmute', { ts: ago(0), data: { key: key } });
-      var r2 = ranked(st, ANCHOR);
-      return { pass: snoozed && r2.items.length === 1 && r2.muted.length === 0,
-        observed: 'snoozed: items=' + r1.items.length + ' muted=' + r1.muted.length +
-          ' → after unmute: items=' + r2.items.length + ' muted=' + r2.muted.length };
-    } },
-    { id: 'G12', name: 'score math printed and correct (70 × 1.00 = 70)', run: function () {
-      var st = mk(), a = person(st, 'Ana', 7);
-      var f = find(ranked(st, ANCHOR), 'R1', a.id)[0];
-      return { pass: !!f && f.score === 70 && f.breakdown === 'sev 70 × conf 1.00 = 70',
-        observed: f ? f.breakdown : 'no finding' };
-    } },
-    { id: 'G13', name: 'R9 day-14 gate: day 20 fires, captured is silent', run: function () {
-      var st = mk();
-      st.meta.appointment = { startDate: agoD(20), scope: 'step-up', notes: '' };
-      var r1 = ranked(st, ANCHOR);
-      ev(st, 'expectation.logged', { ts: ago(1), data: { source: 'boss', items: ['ship atlas'] } });
-      var r2 = ranked(st, ANCHOR);
-      var f1 = find(r1, 'R9');
-      return { pass: f1.length === 1 && f1[0].meta.day === 20 && find(r2, 'R9').length === 0,
-        observed: 'before: ' + (f1[0] ? f1[0].title : 'none') + ' · after logging: ' + find(r2, 'R9').length + ' findings' };
-    } },
-    { id: 'G14', name: 'R10 coverage 1/3 names the missing 2; full tour silent', run: function () {
-      var st = mk();
-      st.meta.appointment = { startDate: agoD(30), scope: 'step-up', notes: '' };
-      var a = person(st, 'Ana', 7), b = person(st, 'Boris', 7), c = person(st, 'Chen', 14);
-      ev(st, 'expectation.logged', { ts: ago(10), data: { items: ['x'] } });
-      ev(st, 'tour.visit', { personId: a.id, ts: ago(20), data: { mode: 'lead' } });
-      var r1 = ranked(st, ANCHOR); var f1 = find(r1, 'R10');
-      ev(st, 'tour.visit', { personId: b.id, ts: ago(9), data: { mode: 'lead' } });
-      ev(st, 'tour.visit', { personId: c.id, ts: ago(8), data: { mode: 'lead' } });
-      var r2 = ranked(st, ANCHOR);
-      var names = f1.length ? (f1[0].basis[1] || '') : '';
-      return { pass: f1.length === 1 && /67%/.test(f1[0].basis[0]) === false && f1[0].title.indexOf('33%') > -1 &&
-          /Boris/.test(names) && /Chen/.test(names) && find(r2, 'R10').length === 0,
-        observed: f1.length ? f1[0].title + ' → after full tour: ' + find(r2, 'R10').length : 'no finding' };
-    } },
-    { id: 'G15', name: 'R11 verify-date gate: past fires, verified silent', run: function () {
-      var st = mk();
-      st.meta.appointment = { startDate: agoD(30), scope: 'step-up', notes: '' };
-      ev(st, 'expectation.logged', { ts: ago(10), data: { items: ['x'] } });
-      var w = ev(st, 'earlywin.committed', { ts: ago(12), data: { title: 'meeting cull', metric: 'hours≤5', verifyDate: agoD(5) } });
-      ev(st, 'earlywin.committed', { ts: ago(6), data: { title: 'future win', metric: 'x', verifyDate: plusD(5) } });
-      var r1 = ranked(st, ANCHOR); var f1 = r1.items.filter(function (x) { return x.ruleId === 'R11'; });
-      ev(st, 'earlywin.verified', { ts: ago(1), data: { winId: w.id, outcome: 'hit' } });
-      var r2 = ranked(st, ANCHOR);
-      return { pass: f1.length === 1 && /meeting cull/.test(f1[0].title) &&
-          r2.items.filter(function (x) { return x.ruleId === 'R11'; }).length === 0,
-        observed: 'before: ' + f1.length + ' (' + (f1[0] ? f1[0].title : 'none') + ') · after: ' +
-          r2.items.filter(function (x) { return x.ruleId === 'R11'; }).length };
-    } },
-    { id: 'G16', name: 'R12 stale incident at 8d; resolved silent', run: function () {
-      var st = mk();
-      ev(st, 'incident.registered', { ts: ago(8), data: { title: 'stale one', severity: 'high' } });
-      var i2 = ev(st, 'incident.registered', { ts: ago(9), data: { title: 'closed one', severity: 'high' } });
-      ev(st, 'incident.resolved', { ts: ago(2), data: { incidentId: i2.id } });
-      var f = ranked(st, ANCHOR).items.filter(function (x) { return x.ruleId === 'R12'; });
-      return { pass: f.length === 1 && /stale one/.test(f[0].title),
-        observed: f.map(function (x) { return x.title; }).join(' | ') || 'none' };
-    } }
+    { id: 'G1', name: 'R1 fires "never logged" for a direct report with zero 1:1s', run: function () {
+      var r = evaluate(gmk([['p1', 'Ana', 7]], []), G_TODAY);
+      var ok = has(r.findings, 'R1', function (f) { return f.personId === 'p1' && f.meta.never && f.severity === 70 && f.score === 70; });
+      return { pass: ok, note: ok ? 'finding: never=true, sev 70, high → 70' : 'expected one never-R1 for p1' }; } },
+    { id: 'G2', name: 'R1 boundary: last 1:1 at exactly cadence → silent; cadence+1d → fires', run: function () {
+      var at = evaluate(gmk([['p1', 'Ana', 7]], [{ type: 'oneonone.logged', personId: 'p1', ts: gd(7) }]), G_TODAY);
+      var over = evaluate(gmk([['p1', 'Ana', 7]], [{ type: 'oneonone.logged', personId: 'p1', ts: gd(8) }]), G_TODAY);
+      var ok = !has(at.findings, 'R1') && has(over.findings, 'R1', function (f) { return f.meta.overdue === 1; });
+      return { pass: ok, note: 'd=7: ' + (has(at.findings, 'R1') ? 'FIRED (wrong)' : 'silent') + ' · d=8: ' + (has(over.findings, 'R1') ? 'fired, overdue=1' : 'silent (wrong)') }; } },
+    { id: 'G3', name: 'R2 ignores future review dates and resolved decisions; past+open fires', run: function () {
+      var st = gmk([], [
+        { type: 'decision.logged', ts: gd(9), data: { title: 'A', reviewDate: gdate(5) } },
+        { type: 'decision.logged', ts: gd(9), data: { title: 'B', reviewDate: new Date(Date.parse(G_TODAY) + 3 * 86400000).toISOString().slice(0, 10) } }
+      ]);
+      st.events.push({ id: 'gout', ts: gd(1), type: 'decision.outcome', personId: null, data: { decisionId: 'ge1' }, seed: false });
+      var stF = gmk([], [{ type: 'decision.logged', ts: gd(9), data: { title: 'C', reviewDate: gdate(4) } }]);
+      var a = evaluate(st, G_TODAY), b = evaluate(stF, G_TODAY);
+      var ok = !has(a.findings, 'R2') && has(b.findings, 'R2', function (f) { return f.meta.decisionId === 'ge1'; });
+      return { pass: ok, note: 'resolved+future: ' + a.findings.filter(function(f){return f.ruleId==='R2';}).length + ' finding(s) · past+open: ' + b.findings.filter(function(f){return f.ruleId==='R2';}).length }; } },
+    { id: 'G4', name: 'R3 fires for ownerless goal and for 15d silence; quiet goal <14d stays silent', run: function () {
+      var st = gmk([], [{ type: 'goal.set', ts: gd(20), data: { title: 'X', ownerPersonId: null } }]);
+      var st2 = gmk([], [{ type: 'goal.set', ts: gd(15), data: { title: 'Y', ownerPersonId: 'me' } }]);
+      var st3 = gmk([], [{ type: 'goal.set', ts: gd(10), data: { title: 'Z', ownerPersonId: 'me' } }]);
+      var ok = has(evaluate(st, G_TODAY).findings, 'R3') && has(evaluate(st2, G_TODAY).findings, 'R3') && !has(evaluate(st3, G_TODAY).findings, 'R3');
+      return { pass: ok, note: 'ownerless:fires · 15d:fires · 10d:silent' }; } },
+    { id: 'G5', name: 'R4 math: 3 corrective / 0 positive in 60d fires at 100%; 2/1 (67%) stays silent', run: function () {
+      var mk = function (mix) { return gmk([['p1', 'Ana', 7]], mix.map(function (pol, i) {
+        return { type: 'feedback.logged', personId: 'p1', ts: gd(10 + i), data: { polarity: pol } }; })); };
+      var a = evaluate(mk(['corrective', 'corrective', 'corrective']), G_TODAY);
+      var b = evaluate(mk(['corrective', 'corrective', 'positive']), G_TODAY);
+      var ok = has(a.findings, 'R4', function (f) { return f.meta.direction === 'corrective' && f.severity === 72; }) && !has(b.findings, 'R4');
+      return { pass: ok, note: '3c/0p: fires sev 72 · 2c/1p: silent (67% < 80%)' }; } },
+    { id: 'G6', name: 'R5 fires at 5 open delegations; 4th stays inside doctrine max', run: function () {
+      var mk = function (n) { var evs = []; for (var i = 0; i < n; i++) evs.push({ type: 'delegation.assigned', personId: 'p1', ts: gd(5 + i), data: { title: 't' + i, level: 2 } }); return gmk([['p1', 'Ana', 7]], evs); };
+      var ok = has(evaluate(mk(5), G_TODAY).findings, 'R5', function (f) { return f.meta.count === 5; }) && !has(evaluate(mk(4), G_TODAY).findings, 'R5');
+      return { pass: ok, note: '5 open: fires · 4 open: silent' }; } },
+    { id: 'G7', name: 'R6 PAIR: two open conflicts, same id-linked pair, ≤90d → one finding naming both; one resolved → silent', run: function () {
+      var st = gmk([['p1', 'Ana', 7], ['p2', 'Bo', 7]], [
+        { type: 'conflict.registered', personId: 'p1', ts: gd(20), data: { summary: 'on-call', counterpartPersonId: 'p2' } },
+        { type: 'conflict.registered', personId: 'p2', ts: gd(5), data: { summary: 'signoff', counterpartPersonId: 'p1' } }]);
+      var a = evaluate(st, G_TODAY);
+      st.events.push({ id: 'gres', ts: gd(1), type: 'conflict.resolved', personId: null, data: { conflictId: 'ge1' }, seed: false });
+      var b = evaluate(st, G_TODAY);
+      var f6 = a.findings.filter(function (f) { return f.ruleId === 'R6'; });
+      var ok = f6.length === 1 && /Ana × Bo/.test(f6[0].title) && f6[0].confidence.level === 'high' && !has(b.findings, 'R6');
+      return { pass: ok, note: 'open pair: ' + f6.length + ' finding(s) "' + (f6[0] ? f6[0].title : '—') + '" · after resolve: ' + (has(b.findings, 'R6') ? 'STILL FIRING (wrong)' : 'silent') }; } },
+    { id: 'G8', name: 'R7 measured-only: 3 measured readings (load 9,9,9) fire; estimated readings excluded and counted', run: function () {
+      var st = gmk([['p1', 'Ana', 7]], [
+        { type: 'pulse.logged', personId: 'p1', ts: gd(9), data: { mood: 6, load: 9 } },
+        { type: 'pulse.logged', personId: 'p1', ts: gd(5), data: { mood: 5, load: 9 } },
+        { type: 'pulse.logged', personId: 'p1', ts: gd(1), data: { mood: 4, load: 9 } },
+        { type: 'pulse.logged', personId: 'p1', ts: gd(2), data: { mood: 1, load: 10, estimated: true } }]);
+      var r = evaluate(st, G_TODAY);
+      var stE = gmk([['p1', 'Ana', 7]], [1, 2, 3].map(function (i) {
+        return { type: 'pulse.logged', personId: 'p1', ts: gd(i * 3), data: { mood: 2, load: 10, estimated: true } }; }));
+      var ok = has(r.findings, 'R7', function (f) { return f.meta.meanLoad === 9 && /excluded: 1/.test(f.basis.join(' ')); }) &&
+               !has(evaluate(stE, G_TODAY).findings, 'R7');
+      return { pass: ok, note: 'measured≥3 fires · all-estimated silent' }; } },
+    { id: 'G9', name: 'R8 skip-level: 31d past fires; intact line required — broken line stays silent', run: function () {
+      var st = gmk([['lead', 'Lead', 7], ['p1', 'Ana', 7, 'lead']], [{ type: 'oneonone.logged', personId: 'p1', ts: gd(31) }]);
+      var a = evaluate(st, G_TODAY);
+      var stB = gmk([['p1', 'Ana', 7, 'ghost-lead']], []);
+      var b = evaluate(stB, G_TODAY);
+      var ok = has(a.findings, 'R8', function (f) { return f.meta.via === 'lead'; }) && !has(b.findings, 'R8') && !has(b.findings, 'R1');
+      return { pass: ok, note: 'intact line, 31d: fires · broken line: silent everywhere' }; } },
+    { id: 'G10', name: 'R9: day 14 with zero expectations fires; day 13 silent; expectation captured → silent', run: function () {
+      var mk = function (dayN, exp) { var evs = []; for (var i = 0; i < exp; i++) evs.push({ type: 'expectation.logged', ts: gd(1), data: { text: 'e' + i } });
+        return gmk([], evs, { appointment: { startDate: gdate(dayN) } }); };
+      var ok = has(evaluate(mk(14, 0), G_TODAY).findings, 'R9') && !has(evaluate(mk(13, 0), G_TODAY).findings, 'R9') && !has(evaluate(mk(20, 1), G_TODAY).findings, 'R9');
+      return { pass: ok, note: 'd14/0:fires · d13/0:silent · d20/1:silent' }; } },
+    { id: 'G11', name: 'R10: grace week silent; day 30 partial coverage nudges; day 45+ incomplete fires hard', run: function () {
+      var mk = function (dayN, visited) { var evs = []; visited.forEach(function (pid) { evs.push({ type: 'tour.visit', personId: pid, ts: gd(3) }); });
+        return gmk([['p1', 'Ana', 7], ['p2', 'Bo', 7], ['p3', 'Cy', 7]], evs, { appointment: { startDate: gdate(dayN) } }); };
+      var g = evaluate(mk(6, []), G_TODAY), mid = evaluate(mk(30, ['p1']), G_TODAY), late = evaluate(mk(46, ['p1']), G_TODAY);
+      var ok = !has(g.findings, 'R10') && has(mid.findings, 'R10', function (f) { return f.severity === 40; }) &&
+               has(late.findings, 'R10', function (f) { return f.severity === 68; });
+      return { pass: ok, note: 'd6:silent · d30 1/3:sev 40 · d46 1/3:sev 68' }; } },
+    { id: 'G12', name: 'R11: win past verifyDate unverified fires; verified or future-dated stays silent', run: function () {
+      var mk = function (extra) { var st = gmk([], [{ type: 'earlywin.committed', ts: gd(20), data: { title: 'W', verifyDate: gdate(3) } }]);
+        (extra || []).forEach(function (e) { st.events.push(e); }); return st; };
+      var a = evaluate(mk(), G_TODAY);
+      var b = evaluate(mk([{ id: 'gv', ts: gd(1), type: 'earlywin.verified', personId: null, data: { winId: 'ge1' }, seed: false }]), G_TODAY);
+      var ok = has(a.findings, 'R11') && !has(b.findings, 'R11');
+      return { pass: ok, note: 'open past gate: fires · verified: silent' }; } },
+    { id: 'G13', name: 'R12: incident untouched 8d fires; touched 3d ago silent; resolved silent', run: function () {
+      var mk = function (evs) { return gmk([], evs); };
+      var a = evaluate(mk([{ type: 'incident.registered', ts: gd(8), data: { title: 'I', severity: 3 } }]), G_TODAY);
+      var b = evaluate(mk([{ type: 'incident.registered', ts: gd(8), data: { title: 'I', severity: 3 } },
+        { type: 'incident.update', ts: gd(3), data: { incidentId: 'ge1', note: 'mitigation shipped' } }]), G_TODAY);
+      var c = evaluate(mk([{ type: 'incident.registered', ts: gd(30), data: { title: 'I', severity: 3 } },
+        { id: 'gr', ts: gd(20), type: 'incident.resolved', personId: null, data: { incidentId: 'ge1' }, seed: false }]), G_TODAY);
+      var ok = has(a.findings, 'R12') && !has(b.findings, 'R12') && !has(c.findings, 'R12');
+      return { pass: ok, note: '8d untouched: fires · updated 3d: silent · resolved: silent' }; } },
+    { id: 'G14', name: 'engine memory: snooze hides a finding for SNOOZE_DAYS, then it returns on its own', run: function () {
+      var st = gmk([['p1', 'Ana', 7]], []);
+      var key = 'R1:p1';
+      st.events.push({ id: 'gs', ts: gd(1), type: 'engine.snooze', personId: null, data: { key: key, until: gdate(-6) }, seed: false });
+      var snoozed = evaluate(st, G_TODAY);
+      st.events.push({ id: 'gs2', ts: gd(0), type: 'engine.snooze', personId: null, data: { key: key, until: gdate(1) }, seed: false });
+      var back = evaluate(st, G_TODAY);
+      var ok = has(snoozed.suppressed, 'R1') && !has(snoozed.findings, 'R1') && has(back.findings, 'R1');
+      return { pass: ok, note: 'until +6d: suppressed (' + snoozed.suppressed.length + ') · until −1d: visible again' }; } },
+    { id: 'G15', name: 'engine memory: dismiss hides; unmute restores — suppression is an event, hence reversible', run: function () {
+      var st = gmk([['p1', 'Ana', 7]], []);
+      st.events.push({ id: 'gd1', ts: gd(2), type: 'engine.dismiss', personId: null, data: { key: 'R1:p1' }, seed: false });
+      var d = evaluate(st, G_TODAY);
+      st.events.push({ id: 'gd2', ts: gd(1), type: 'engine.unmute', personId: null, data: { key: 'R1:p1' }, seed: false });
+      var u = evaluate(st, G_TODAY);
+      var ok = !has(d.findings, 'R1') && has(d.suppressed, 'R1', function (f) { return f.suppressed === 'dismissed'; }) && has(u.findings, 'R1');
+      return { pass: ok, note: 'dismissed: hidden+listed · unmute: back in the column' }; } },
+    { id: 'G16', name: 'rule exceptions surface as loud ENG findings instead of dying silently', run: function () {
+      var st = gmk([], []);
+      var r = evaluateWith(st, G_TODAY, [{ id: 'RX', run: function () { throw new Error('boom-fixture'); } }]);
+      var ok = has(r.findings, 'ENG', function (f) { return f.severity === 95 && /boom-fixture/.test(f.basis.join(' ')); });
+      return { pass: ok, note: ok ? 'ENG finding, sev 95, error text preserved' : 'no ENG finding' }; } },
+    { id: 'G17', name: 'R6 linkage honesty: free-text pair fires at MEDIUM confidence; counterpart absent = pair with "you"', run: function () {
+      var stT = gmk([['p1', 'Ana', 7]], [
+        { type: 'conflict.registered', personId: 'p1', ts: gd(10), data: { counterpart: 'Dana' } },
+        { type: 'conflict.registered', personId: 'p1', ts: gd(4), data: { counterpart: 'Dana' } }]);
+      var stMe = gmk([['p1', 'Ana', 7]], [
+        { type: 'conflict.registered', personId: 'p1', ts: gd(10), data: {} },
+        { type: 'conflict.registered', personId: 'p1', ts: gd(4), data: {} }]);
+      var t = evaluate(stT, G_TODAY), m = evaluate(stMe, G_TODAY);
+      var ok = has(t.findings, 'R6', function (f) { return f.confidence.level === 'medium' && /unlinked/.test(f.title); }) &&
+               has(m.findings, 'R6', function (f) { return /you × Ana|Ana × you/.test(f.title); });
+      return { pass: ok, note: 'text pair: medium conf · no counterpart: "you × Ana"' }; } },
+    { id: 'G18', name: 'R13 nexus: 3 open conflicts across 2 distinct counterparts fires; 3 against ONE counterpart does not (that is R6)', run: function () {
+      var st = gmk([['p1', 'Ana', 7], ['p2', 'Bo', 7], ['p3', 'Cy', 7]], [
+        { type: 'conflict.registered', personId: 'p1', ts: gd(9), data: { counterpartPersonId: 'p2' } },
+        { type: 'conflict.registered', personId: 'p1', ts: gd(6), data: { counterpartPersonId: 'p3' } },
+        { type: 'conflict.registered', personId: 'p1', ts: gd(2), data: { counterpartPersonId: 'p3' } }]);
+      var stOne = gmk([['p1', 'Ana', 7], ['p2', 'Bo', 7]], [
+        { type: 'conflict.registered', personId: 'p1', ts: gd(9), data: { counterpartPersonId: 'p2' } },
+        { type: 'conflict.registered', personId: 'p1', ts: gd(6), data: { counterpartPersonId: 'p2' } },
+        { type: 'conflict.registered', personId: 'p1', ts: gd(2), data: { counterpartPersonId: 'p2' } }]);
+      var n = evaluate(st, G_TODAY), o = evaluate(stOne, G_TODAY);
+      var ok = has(n.findings, 'R13', function (f) { return f.personId === 'p1' && f.confidence.level === 'medium'; }) && !has(o.findings, 'R13');
+      return { pass: ok, note: '3 open / 2 cps: fires medium · 3 open / 1 cp: nexus silent' }; } }
   ];
 
   function runGoldens() {
     return GOLDENS.map(function (g) {
-      try { var r = g.run(); return { id: g.id, name: g.name, pass: !!r.pass, observed: r.observed }; }
-      catch (e) { return { id: g.id, name: g.name, pass: false, observed: 'THREW: ' + e.message }; }
+      try { var r = g.run(); return { id: g.id, name: g.name, pass: !!r.pass, note: r.note || '' }; }
+      catch (e) { return { id: g.id, name: g.name, pass: false, note: 'threw: ' + (e && e.message || e) }; }
     });
   }
 
   return {
-    DOCTRINE: DOCTRINE, RULE_TAGS: RULE_TAGS,
-    ranked: ranked, keyOf: keyOf, days: days, slope: slope,
-    runGoldens: runGoldens, _buildCtx: buildCtx, _memoryMap: memoryMap
+    DOCTRINE: DOCTRINE, CONF_FACTOR: CONF_FACTOR, RULE_TAGS: RULE_TAGS,
+    evaluate: evaluate, evaluateWith: evaluateWith, memory: memory,
+    runGoldens: runGoldens, days: days, dayUTC: dayUTC,
+    _rulesCount: RULES.length
   };
 })();

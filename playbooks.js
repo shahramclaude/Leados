@@ -1,16 +1,20 @@
-/* LeadOS mf-3 · js/playbooks.js — structured playbooks that pre-fill from live data.
-   The mentor layer: not a wiki, a procedure. Each playbook = guidance content +
-   a form whose defaults come from the finding/person you came from + a submit
-   that writes RESOLVING events through the shared event layer. No capture path
-   writes state any other way.
-   v3 adds: charter (R9), tour (R10), wincloser (R11). Field kinds are typed so
-   ui.js renders them generically — playbooks own content, ui owns chrome. */
+/* LeadOS mf-4 · js/playbooks.js — structured playbooks that pre-fill from live data.
+   The mentor layer: not a wiki, a procedure. Each playbook = guidance blocks +
+   a typed form whose defaults come from the finding/person you came from +
+   a submit that writes RESOLVING events through the shared event layer.
+   No capture path writes state any other way.
+   Verified-carried from mf-3 head read: delegation LEVELS/LEVEL_GUIDE wording,
+   SL_TABLE with slMatch (incl. "commitment crisis → D3", "mixed middle → D2 —
+   a stated assumption"), the 1:1 run sheet structure, measured-only pulse
+   discipline ("only if they said it"). mf-4 ADDS: DESC is now two-party
+   (counterpart pre-fill + conflict.resolved on submit) · nexus mode in the
+   1:1 sheet. Playbooks own content; ui owns chrome. */
 window.LEADOS = window.LEADOS || {};
 LEADOS.playbooks = (function () {
   'use strict';
   function EV() { return LEADOS.events; }
 
-  /* delegation ladder (wording carried from verified mf-2 read) */
+  /* delegation ladder (wording carried from verified mf-3 read) */
   var LEVELS = ['1 — Do exactly what I say', '2 — Research options, I decide',
     '3 — Propose a plan, I approve', '4 — Decide yourself, inform me', '5 — Own it fully'];
   var LEVEL_GUIDE = [
@@ -69,6 +73,7 @@ LEADOS.playbooks = (function () {
         var g = [], p = ctx.person;
         if (prefill.skip) g.push({ h: 'Skip-level mode', warn: 'They report to ' + (prefill.via ? nameOf(ctx.state, prefill.via) : 'their lead') + ', not you. Your job is signal, not supervision: what slows you down · what should I know · what would you change. Never undermine their lead in the room.' });
         if (prefill.intent === 'load') g.push({ h: 'Load-cutting mode', warn: 'Arrive with one concrete item to remove, not questions about resilience. Coach after the load drops, not before.' });
+        if (prefill.intent === 'nexus') g.push({ h: 'Conflict-nexus mode', warn: 'Do NOT relitigate individual disputes. Name the pattern once, plainly: "Three open frictions, different people, one common factor — us two in one of them is not the case; the common factor is you. I want to understand what\'s underneath." Then listen. Your job today is a hypothesis, not a verdict.' });
         if (p) {
           var last = EV().lastOneOnOne(ctx.state, p.id);
           var pulse = EV().pulsesMeasured(ctx.state, p.id, 21, ctx.today);
@@ -86,6 +91,10 @@ LEADOS.playbooks = (function () {
           '4. One feedback moment — SBI if you have one; silence is also data.',
           '5. Growth beat — one question about where they want to be in 6 months.',
           '6. Commitments — who does what by when. That is next session\'s opening.' ] });
+        g.push({ h: 'Failure modes', lines: [
+          'Status-report capture: if you could have read it, don\'t meet it.',
+          'Therapy drift: empathize, then route to action or help — thirty minutes of venting teaches venting.',
+          'Your monologue: if you talked more than half, you supervised, you didn\'t lead.' ] });
         return g;
       },
       fields: function (ctx, prefill) {
@@ -101,410 +110,377 @@ LEADOS.playbooks = (function () {
         ];
       },
       submit: function (v, ctx) {
-        var evs = [{ type: 'oneonone.logged', personId: v.personId,
+        var evs = [{ type: 'oneonone.logged', personId: v.personId, ts: v.date ? v.date + 'T12:00:00' : undefined,
           data: { note: v.note || undefined, duration: Number(v.duration) || undefined,
             followups: v.followups || undefined, skip: !!v.skip, viaPlaybook: true } }];
         var mood = Number(v.mood), load = Number(v.load);
         if (v.mood !== '' && v.load !== '' && isFinite(mood) && isFinite(load)) {
-          evs.push({ type: 'pulse.logged', personId: v.personId,
-            data: { mood: mood, load: load, estimated: false,
-              source: 'spoken in 1:1 — do not mark measured unless they said it' } });
+          evs.push({ type: 'pulse.logged', personId: v.personId, ts: v.date ? v.date + 'T12:00:00' : undefined,
+            data: { mood: mood, load: load, estimated: false, source: 'oneonone' } });
         }
-        return { events: evs, flash: '1:1 logged. R1/R8 recompute from it immediately.' };
+        return evs;
       }
     },
 
     sbi: {
-      id: 'sbi', title: 'SBI feedback', icon: 'chat',
-      blurb: 'Situation · Behavior · Impact — feedback that is hard to argue with because it contains no verdict.',
-      guide: function (ctx) {
-        var g = [{ h: 'The formula', lines: [
-          'S — when and where. "In Tuesday\'s planning call", not "lately".',
-          'B — the observable behavior. A camera would agree with you. No adjectives, no motives.',
-          'I — the impact on work, team, or you. Concrete: "the estimate slipped a day", "Marta went quiet".',
-          'Then stop talking. Ask: "how do you see it?"' ] },
-          { h: 'Do not', lines: ['Sandwich it between praise to soften it — that teaches people to fear your praise.',
-            'Corrective-feedback someone you have never praised. Fix the ratio first (R4 watches it).'] }];
-        if (ctx.person) {
-          var bal = EV().feedbackBalance(ctx.state, ctx.person.id, 60, ctx.today);
-          g.splice(1, 0, { h: 'Ratio check (60d, from your data)', lines: [bal.corrective + ' corrective / ' + bal.positive + ' positive'],
-            warn: bal.total >= 3 && bal.corrective / bal.total >= 0.8 ? 'Imbalanced toward corrective — is this the moment, or is a positive SBI overdue?' : null });
+      id: 'sbi', title: 'SBI feedback', icon: 'msg',
+      blurb: 'Situation–Behavior–Impact: feedback specific enough to act on, clean enough to hear.',
+      guide: function (ctx, prefill) {
+        var p = ctx.person, g = [];
+        if (p) {
+          var bal = EV().feedbackBalance(ctx.state, p.id, 60, ctx.today);
+          g.push({ h: 'Balance check (60d)', lines: ['logged for ' + p.name + ': ' + bal.corrective + ' corrective / ' + bal.positive + ' positive'],
+            warn: bal.total >= 3 && bal.positive === 0 ? 'All corrective lately. Consider making THIS one a reinforcing SBI — specificity is what makes praise land as true.' :
+                  bal.total >= 3 && bal.corrective === 0 ? 'All positive lately. If there is a hard thing unsaid, this is the moment.' : null });
         }
+        g.push({ h: 'The frame', lines: [
+          'Situation — where and when. One sentence, verifiable: "In Tuesday\'s roadmap review…"',
+          'Behavior — what a camera recorded. No adjectives, no motives: "…you interrupted Priya three times…"',
+          'Impact — the effect on people/work, not on your feelings: "…she stopped contributing and we lost the risk she was about to name."',
+          'Then STOP. Ask: "How do you see it?" — the conversation after is the feedback.' ] });
+        g.push({ h: 'Kills the frame', lines: [
+          '"Always / never" — invites one counterexample to end the point.',
+          'Motive guesses ("you don\'t care") — you can\'t verify intent, they know it, the trust cost is real.',
+          'The sandwich — people hear only the bread and file you as vague.' ] });
         return g;
       },
       fields: function (ctx, prefill) {
         return [
           { key: 'personId', label: 'Person', kind: 'person', required: 1, value: prefill.personId },
           { key: 'polarity', label: 'Polarity', kind: 'select', required: 1, value: 'positive',
-            options: [{ v: 'positive', l: 'positive — worth repeating' }, { v: 'corrective', l: 'corrective — must change' }] },
-          { key: 's', label: 'Situation (when / where)', kind: 'text', required: 1, value: prefill.s || '' },
-          { key: 'b', label: 'Behavior (a camera would agree)', kind: 'area', required: 1, value: prefill.b || '' },
-          { key: 'i', label: 'Impact (on work / team / you)', kind: 'area', required: 1, value: '' },
-          { key: 'deliveredOn', label: 'Delivered on', kind: 'date', required: 1, value: ctx.today }
+            options: [{ v: 'positive', l: 'positive / reinforcing' }, { v: 'corrective', l: 'corrective / redirecting' }] },
+          { key: 'situation', label: 'S — Situation', kind: 'text', value: '', hint: 'where/when, one verifiable sentence' },
+          { key: 'behavior', label: 'B — Behavior (camera-visible)', kind: 'area', value: '' },
+          { key: 'impact', label: 'I — Impact', kind: 'area', value: '' },
+          { key: 'ask', label: 'The ask / the repeat', kind: 'text', value: '' }
         ];
       },
       submit: function (v) {
-        return { events: [{ type: 'feedback.logged', personId: v.personId,
-          data: { polarity: v.polarity, sbi: 'S: ' + v.s + ' · B: ' + v.b + ' · I: ' + v.i,
-            deliveredOn: v.deliveredOn } }],
-          flash: 'Feedback logged — it lands in the 60d balance for R4.' };
+        return [{ type: 'feedback.logged', personId: v.personId,
+          data: { polarity: v.polarity, structure: 'sbi', situation: v.situation, behavior: v.behavior,
+            impact: v.impact, ask: v.ask, delivered: true,
+            summary: (v.situation || '').slice(0, 60), viaPlaybook: true } }];
       }
     },
 
     desc: {
-      id: 'desc', title: 'DESC for recurring conflict', icon: 'alert',
-      blurb: 'Describe · Express · Specify · Consequences — the script for the third time the same conflict shows up.',
-      guide: function (ctx) {
-        var open = ctx.person ? EV().openConflicts(ctx.state).filter(function (c) { return c.personId === ctx.person.id; }) : [];
-        var g = [{ h: 'The script', lines: [
-          'D — the recurring situation, factual. "Twice this month the on-call plan changed after sign-off."',
-          'E — the effect, owned. "I end up re-planning at midnight; my team absorbs the churn."',
-          'S — the specific change you want. "Changes after sign-off go through me, or a named deputy, same day."',
-          'C — the consequence, stated without threat. "Otherwise I take the budget decision back to the staff meeting."' ] },
-          { h: 'Ground rules', lines: ['Address the pattern, not the person\'s character.',
-            'If it resolves: log the resolution with the actual agreement — vague peace counts as unresolved.'] }];
-        if (open.length) g.unshift({ h: 'Open conflicts on record (pre-read)', lines: open.map(function (c) { return c.label; }),
-          warn: open.length >= 2 ? 'Two or more open — this is exactly the DESC case. Pick the recurring counterpart.' : null });
+      id: 'desc', title: 'DESC conflict script', icon: 'link',
+      blurb: 'Describe–Express–Specify–Consequences: for conflicts that repeat, structured so both parties can hear it. mf-4: two-party pre-fill from the pair finding.',
+      guide: function (ctx, prefill) {
+        var g = [], other = prefill.counterpartPersonId ? nameOf(ctx.state, prefill.counterpartPersonId) : (prefill.counterpartText || null);
+        var aName = ctx.person ? ctx.person.name : 'Party A';
+        g.push({ h: 'The pair', lines: ['This conversation is framed for: ' + aName + (other ? ' × ' + other : ' × (counterparty — select below)') + '.',
+          'If the pattern involves you, say so in E — owning your half first disarms the other half.'] });
+        if (prefill.conflicts && prefill.conflicts.length) g.push({ h: 'The repeating pattern (from your data)', lines: prefill.conflicts.map(function (c) {
+          return String(c.ts).slice(0, 10) + ' · ' + (c.summary || 'no summary logged'); }) });
+        g.push({ h: 'The frame', lines: [
+          'Describe — the observable situation, both parties would nod: "The last two releases, signoff landed the night before ship."',
+          'Express — your experience, owned: "I end up choosing between shipping blind and slipping the date." Not "you make me".',
+          'Specify — the concrete change, small enough to try for two weeks: "Signoff by Thursday noon, or you flag it red."',
+          'Consequences — what better looks like when it works, and what you\'ll do next if it doesn\'t. Stated calmly, not threatened.' ] });
+        g.push({ h: 'Multi-team addendum', warn: 'You lead leads. When the conflict is between two of YOUR leads: stay structural — the question is rarely "who is right", it is "what in the system puts them at each other twice a quarter". Fix the interface (RACI, signoff SLA, on-call ownership) or the conflict returns with the next two people.' });
+        g.push({ h: 'Failure modes', lines: [
+          'Mediating to compromise every time — teaches them the prize goes to whoever escalates loudest.',
+          'Solving it FOR them when one of them is you — that\'s avoidance wearing a referee shirt.',
+          'Closing the loop in your head only — log the resolution below or the engine keeps (correctly) nagging.' ] });
         return g;
       },
       fields: function (ctx, prefill) {
-        var open = EV().openConflicts(ctx.state);
-        var flds = [
-          { key: 'personId', label: 'Person (owner of the conflict on your roster)', kind: 'person', required: 1, value: prefill.personId },
-          { key: 'counterpart', label: 'Counterpart', kind: 'text', value: prefill.counterpart || '' },
-          { key: 'existing', label: 'Link an open conflict (optional)', kind: 'select', value: '',
-            options: [{ v: '', l: '— register as new —' }].concat(open.map(function (c) { return { v: c.id, l: c.label }; })) },
-          { key: 'd', label: 'D — describe the pattern', kind: 'area', required: 1, value: '' },
-          { key: 's', label: 'S — the specific change you will ask for', kind: 'area', required: 1, value: '' },
-          { key: 'stage', label: 'Outcome of the session', kind: 'select', required: 1, value: 'held',
-            options: [{ v: 'held', l: 'conversation held — still open' },
-              { v: 'resolved', l: 'resolved — agreement logged below' }] },
-          { key: 'agreement', label: 'The agreement (required if resolved)', kind: 'area', value: '' }
+        var f = [
+          { key: 'personId', label: 'Party A', kind: 'person', required: 1, value: prefill.personId },
+          { key: 'counterpartPersonId', label: 'Party B (roster)', kind: 'person', value: prefill.counterpartPersonId, hint: 'leave empty if they\'re not on the roster — use the text field' },
+          { key: 'counterpartText', label: 'Party B (name, if not on roster)', kind: 'text', value: prefill.counterpartText || '' },
+          { key: 'withMe', label: 'This conflict involves me directly', kind: 'check', value: !!prefill.withMe },
+          { key: 'describe', label: 'D — Describe (observable)', kind: 'area', value: '' },
+          { key: 'express', label: 'E — Express (owned experience)', kind: 'area', value: '' },
+          { key: 'specify', label: 'S — Specify (two-week-testable change)', kind: 'area', value: '' },
+          { key: 'consequences', label: 'C — Consequences (better when it works / next step if not)', kind: 'area', value: '' }
         ];
-        return flds;
+        if (prefill.conflictIds && prefill.conflictIds.length)
+          f.push({ key: 'closeIds', label: 'Mark these conflicts resolved (the conversation happened)', kind: 'multicheck',
+            options: prefill.conflicts.map(function (c) { return { v: c.id, l: String(c.ts).slice(0, 10) + ' · ' + (c.summary || 'no summary') }; }), value: prefill.conflictIds });
+        return f;
       },
       submit: function (v) {
-        var evs = [], conflictId = v.existing || null;
-        if (!conflictId) {
-          conflictId = 'pending';
-          evs.push({ type: 'conflict.registered', personId: v.personId,
-            data: { counterpart: v.counterpart || undefined, note: 'DESC session: ' + v.d.slice(0, 140) } });
-        }
-        if (v.stage === 'resolved' && v.existing) {
-          evs.push({ type: 'conflict.resolved', data: { conflictId: v.existing, how: 'DESC: ' + (v.agreement || 'agreement logged'), agreement: v.agreement || undefined } });
-        } else if (v.stage === 'resolved') {
-          evs.push({ type: 'conflict.resolved', data: { conflictId: 'SELF', selfRef: true, how: 'DESC: ' + (v.agreement || '') } });
-        } else {
-          evs.push({ type: 'conflict.addressed', personId: v.personId,
-            data: { conflictId: v.existing || undefined, ask: v.s, note: 'DESC held, still open' } });
-        }
-        return { events: evs, selfRef: true, flash: 'DESC session recorded against the conflict stream.' };
+        var evs = [{ type: 'feedback.logged', personId: v.personId,
+          data: { polarity: 'corrective', structure: 'desc',
+            counterpartPersonId: v.counterpartPersonId || undefined,
+            counterpart: v.counterpartText || undefined, withMe: !!v.withMe,
+            describe: v.describe, express: v.express, specify: v.specify, consequences: v.consequences,
+            summary: 'DESC ' + (v.counterpartPersonId ? 'vs ' + v.counterpartPersonId : v.counterpartText ? 'vs ' + v.counterpartText : v.withMe ? 'with me' : ''),
+            viaPlaybook: true } }];
+        (v.closeIds || []).forEach(function (cid) {
+          evs.push({ type: 'conflict.resolved', personId: v.personId,
+            data: { conflictId: cid, how: 'desc', note: (v.specify || '').slice(0, 120) } });
+        });
+        return evs;
       }
     },
 
     delegation: {
-      id: 'delegation', title: 'Delegation ladder', icon: 'hand',
-      blurb: 'Five levels from "do exactly what I say" to "own it fully" — pick the level out loud, or you delegate by vibe.',
+      id: 'delegation', title: 'Delegation ladder', icon: 'ladder',
+      blurb: 'Five levels of authority. Most delegation failures are level mismatches, not people failures.',
       guide: function (ctx, prefill) {
-        var open = ctx.person ? EV().openDelegations(ctx.state).filter(function (d) { return d.personId === ctx.person.id; }) : [];
-        var g = [{ h: 'The five levels', lines: LEVELS.map(function (l, i) {
-            return l + ' — ' + LEVEL_GUIDE[i].auth + ' (' + LEVEL_GUIDE[i].cadence + ')'; }) },
-          { h: 'Say it in the room', lines: LEVEL_GUIDE.map(function (lg, i) { return (i + 1) + ': ' + lg.say; }) }];
-        if (ctx.person) g.unshift({ h: 'Current load (from your data)', lines: [
-          'open delegations: ' + open.length + (open.length > 4 ? ' — over the R5 threshold, rebalance before adding' : ''),
-          open.length ? 'current: ' + open.map(function (d) { return d.label + ' (L' + (d.level || '?') + ')'; }).join(' · ') : 'nothing open'
-        ], warn: open.length > 4 ? 'Over loaded. The move is closing or down-leveling something, not adding.' : null });
+        var g = [{ h: 'The ladder', lines: LEVELS.slice() }];
+        var lvl = parseInt(prefill.level, 10);
+        if (lvl >= 1 && lvl <= 5) {
+          var L = LEVEL_GUIDE[lvl - 1];
+          g.push({ h: 'Level ' + lvl + ' means', lines: ['Authority: ' + L.auth, 'Check cadence: ' + L.cadence], script: L.say });
+        }
+        var open = prefill.personId ? EV().openDelegations(ctx.state).filter(function (d) { return d.personId === prefill.personId; }) : [];
+        if (open.length) g.push({ h: 'Already on their plate (' + open.length + ' open)', lines: open.map(function (d) { return '"' + d.label + '" · level ' + (d.level || '?') + ' · since ' + String(d.ts).slice(0, 10); }),
+          warn: open.length > 4 ? 'They are past the doctrine max of 4 open delegations. Adding another without closing one is how work dies quietly.' : null });
+        g.push({ h: 'Rules of the ladder', lines: [
+          'Name the level out loud. Unspoken level = they think 2, you think 4, both blame the other.',
+          'Move UP one level at a time, on evidence — skipping feels like trust and behaves like abandonment.',
+          'Level is per TASK, not per person: the same human is a 5 on ops and a 2 on pricing.',
+          'If you\'ll override their call anyway, that\'s level 1 with extra steps — say it or don\'t delegate.' ] });
         return g;
       },
       fields: function (ctx, prefill) {
-        var open = EV().openDelegations(ctx.state);
         return [
-          { key: 'mode', label: 'Mode', kind: 'select', required: 1, value: prefill.personId && prefill.intent !== 'assign' ? 'close' : 'assign',
-            options: [{ v: 'assign', l: 'assign something new' }, { v: 'close', l: 'close / review an open delegation' }] },
           { key: 'personId', label: 'Person', kind: 'person', required: 1, value: prefill.personId },
-          { key: 'title', label: 'What (assign mode)', kind: 'text', value: '' },
-          { key: 'level', label: 'Level (assign mode)', kind: 'select', value: '3',
+          { key: 'title', label: 'What is being delegated', kind: 'text', required: 1, value: '' },
+          { key: 'level', label: 'Level', kind: 'select', required: 1, value: String(prefill.level || '2'),
             options: LEVELS.map(function (l, i) { return { v: String(i + 1), l: l }; }) },
-          { key: 'existing', label: 'Open item (close mode)', kind: 'select', value: '',
-            options: [{ v: '', l: '—' }].concat(open.map(function (d) { return { v: d.id, l: d.label }; })) },
-          { key: 'result', label: 'Outcome note (close mode)', kind: 'area', value: '' }
+          { key: 'successLooks', label: 'Done looks like', kind: 'text', value: '' },
+          { key: 'checkCadence', label: 'Check cadence agreed', kind: 'text', value: '' }
         ];
       },
       submit: function (v) {
-        if (v.mode === 'close' && v.existing) {
-          return { events: [{ type: 'delegation.closed', data: { delegationId: v.existing, result: v.result || undefined } }],
-            flash: 'Delegation closed — R5 load recomputes.' };
-        }
-        if (!v.title) return { error: 'assign mode needs a title' };
-        return { events: [{ type: 'delegation.assigned', personId: v.personId,
-          data: { title: v.title, level: Number(v.level) || 3 } }],
-          flash: 'Delegation assigned at level ' + v.level + ' — say the level out loud to them too.' };
+        return [{ type: 'delegation.assigned', personId: v.personId,
+          data: { title: v.title, level: Number(v.level), successLooks: v.successLooks || undefined,
+            checkCadence: v.checkCadence || undefined, viaPlaybook: true } }];
       }
     },
 
     sl: {
-      id: 'sl', title: 'Situational leadership D1–D4 → S1–S4', icon: 'grid',
-      blurb: 'Same person, different task, different style. Readiness is per-task — never a label on a human.',
+      id: 'sl', title: 'Situational match', icon: 'compass',
+      blurb: 'D1–D4 → S1–S4: diagnose competence and commitment on THIS task, then lead that person, not the average person.',
       guide: function (ctx, prefill) {
-        var prev = ctx.person ? EV().latestSL(ctx.state, ctx.person.id) : null;
-        var g = [{ h: 'How to read a person-task', lines: [
-          'Competence: have they done THIS task well before? 1 = never … 4 = repeatably.',
-          'Commitment: energy and confidence on THIS task. 1 = avoidant … 4 = self-starting.',
-          'The match is a heuristic, not a measurement — the engine states the assumption, you own the judgment.' ] },
-          { h: 'The four styles', lines: ['D1 → S1 Directing · D2 → S2 Coaching · D3 → S3 Supporting · D4 → S4 Delegating'] }];
-        if (prev) g.unshift({ h: 'Last assessment for ' + (ctx.person ? ctx.person.name : 'them'), lines: [
-          String(prev.ts).slice(0, 10) + ' · task: ' + (prev.data.task || '—'),
-          'competence ' + prev.data.competence + ' · commitment ' + prev.data.commitment + ' → ' + prev.data.style + ' ' + (SL_TABLE[prev.data.level] || {}).name ] });
-        if (prefill.comp && prefill.comm) {
-          var lvl = slMatch(Number(prefill.comp), Number(prefill.comm));
-          var t = SL_TABLE[lvl];
-          g.unshift({ h: 'Matched: ' + lvl + ' → ' + t.style + ' ' + t.name, lines:
-            [t.line].concat(t.do.map(function (x) { return 'do: ' + x; })).concat(['say: ' + t.say])
-              .concat(t.avoid.map(function (x) { return 'avoid: ' + x; })),
-            warn: 'Heuristic match — if it feels wrong, your competence/commitment read is wrong, not the table.' });
-        }
+        var g = [{ h: 'The diagnosis grid', lines: ['D1 enthusiast: low competence, high commitment → S1 Directing',
+          'D2 learner: some competence, dipping commitment → S2 Coaching',
+          'D3 cautious: high competence, variable commitment → S3 Supporting',
+          'D4 self-reliant: high both → S4 Delegating'] }];
+        Object.keys(SL_TABLE).forEach(function (d) {
+          var T = SL_TABLE[d];
+          g.push({ h: d + ' → ' + T.style + ' ' + T.name, lines: [T.line].concat(T.do.map(function (x) { return 'do: ' + x; })).concat(T.avoid.map(function (x) { return 'avoid: ' + x; })), script: T.say });
+        });
+        g.push({ h: 'Honesty notes', lines: [
+          'Diagnosis is per task and it decays — re-assess after scope changes, not just quarterly.',
+          'Commitment dip on a capable person is INFORMATION (boredom, conflict, home load) — ask before you prescribe.',
+          'Your default style is the one to suspect. Most leaders over-direct D4s and under-support D3s.',
+          'The mapping comp=1&comm=1 → D2 and similar mixed cases are a stated assumption (structure first), not science.' ] });
         return g;
       },
       fields: function (ctx, prefill) {
         return [
           { key: 'personId', label: 'Person', kind: 'person', required: 1, value: prefill.personId },
-          { key: 'task', label: 'The specific task', kind: 'text', required: 1, value: prefill.task || '' },
-          { key: 'competence', label: 'Competence on this task (1–4)', kind: 'select', required: 1, value: '2',
-            options: [1, 2, 3, 4].map(function (n) { return { v: String(n), l: String(n) }; }) },
-          { key: 'commitment', label: 'Commitment on this task (1–4)', kind: 'select', required: 1, value: '2',
-            options: [1, 2, 3, 4].map(function (n) { return { v: String(n), l: String(n) }; }) },
-          { key: 'oneMove', label: 'The one move you will make', kind: 'text', value: '' }
+          { key: 'task', label: 'The specific task/domain', kind: 'text', required: 1, value: '' },
+          { key: 'competence', label: 'Competence on this task (1–4)', kind: 'num', required: 1, value: '' },
+          { key: 'commitment', label: 'Commitment right now (1–4)', kind: 'num', required: 1, value: '' },
+          { key: 'note', label: 'Why you read it this way (one line)', kind: 'text', value: '' }
         ];
       },
       submit: function (v) {
-        var lvl = slMatch(Number(v.competence), Number(v.commitment)), t = SL_TABLE[lvl];
-        return { events: [{ type: 'sl.assessment', personId: v.personId,
-          data: { task: v.task, competence: Number(v.competence), commitment: Number(v.commitment),
-            level: lvl, style: t.style, styleName: t.name, oneMove: v.oneMove || undefined, heuristic: true } }],
-          flash: 'Assessed ' + lvl + ' → ' + t.style + ' ' + t.name + '. ' + t.say };
+        var comp = Math.max(1, Math.min(4, parseInt(v.competence, 10) || 1));
+        var comm = Math.max(1, Math.min(4, parseInt(v.commitment, 10) || 1));
+        var d = slMatch(comp, comm), T = SL_TABLE[d];
+        return [{ type: 'sl.assessed', personId: v.personId,
+          data: { task: v.task, competence: comp, commitment: comm, development: d,
+            style: T.style, styleName: T.name, note: v.note || undefined, viaPlaybook: true } }];
       }
     },
 
     decision: {
-      id: 'decision', title: 'Decision review', icon: 'diamond',
-      blurb: 'A decision without a review date is a hope. A review without an outcome is a wasted calibration point.',
+      id: 'decision', title: 'Decision review', icon: 'scale',
+      blurb: 'Decisions are only data if you close the loop. Outcome logged, quality scored, lesson extracted.',
       guide: function (ctx, prefill) {
         var open = EV().openDecisions(ctx.state);
-        var g = [{ h: 'Review standard', lines: [
-          'Judge the decision by what was knowable WHEN decided, not by the outcome alone — good calls lose sometimes.',
-          'right / wrong / mixed — "mixed" is usually the honest answer; say what was each.',
-          'Log the lesson as one sentence a stranger could act on.' ] }];
-        if (prefill.decisionId || open.length) g.unshift({ h: 'Open decisions', lines: open.map(function (d) {
-          return d.label + ' · review ' + (d.reviewDate || '—'); }) });
+        var g = [{ h: 'Open loops (' + open.length + ')', lines: open.length ? open.map(function (d) {
+          return '"' + d.label + '" · logged ' + String(d.ts).slice(0, 10) + ' · review ' + (d.reviewDate || 'unset'); }) : ['none — nothing past its gate or waiting'] }];
+        g.push({ h: 'The review questions', lines: [
+          'Given what we knew THEN, was the process sound? (Outcome and decision quality are different axes — judge both.)',
+          'What signal did we discount that turned out to matter?',
+          'Was it reversible? Did we treat it with reversibility-appropriate speed?',
+          'What would make us decide this FASTER next time without being sloppier?' ] });
+        g.push({ h: 'Anti-patterns', lines: [
+          'Resulting: calling a good bet bad because variance lost. That teaches the team to hide bets.',
+          'Retroactive certainty: "we knew all along" — write what you actually believed at log time, or the calibration data is fiction.',
+          'Orphan decisions: >4 severity calls with no review date ever set. The log is only as honest as its review gates.' ] });
         return g;
       },
       fields: function (ctx, prefill) {
         var open = EV().openDecisions(ctx.state);
         return [
-          { key: 'mode', label: 'Mode', kind: 'select', required: 1, value: prefill.decisionId ? 'outcome' : 'new',
-            options: [{ v: 'new', l: 'log a new decision' }, { v: 'outcome', l: 'record an outcome' }] },
-          { key: 'title', label: 'Decision (new mode)', kind: 'text', value: '' },
-          { key: 'context', label: 'What was knowable at the time (new mode)', kind: 'area', value: '' },
-          { key: 'reviewDate', label: 'Review date (new mode)', kind: 'date', value: ctx.today },
-          { key: 'existing', label: 'Decision (outcome mode)', kind: 'select', value: prefill.decisionId || '',
-            options: [{ v: '', l: '—' }].concat(open.map(function (d) { return { v: d.id, l: d.label }; })) },
-          { key: 'outcome', label: 'Verdict (outcome mode)', kind: 'select', value: 'mixed',
-            options: [{ v: 'right', l: 'right call' }, { v: 'wrong', l: 'wrong call' }, { v: 'mixed', l: 'mixed — details below' }] },
-          { key: 'lesson', label: 'The one-sentence lesson', kind: 'area', value: '' }
+          { key: 'decisionId', label: 'Decision', kind: 'select', required: 1, value: prefill.decisionId,
+            options: open.map(function (d) { return { v: d.id, l: d.label + ' · review ' + (d.reviewDate || 'unset') }; }) },
+          { key: 'outcome', label: 'What actually happened', kind: 'area', required: 1, value: '' },
+          { key: 'quality', label: 'Decision quality, given what we knew then (1–5)', kind: 'num', value: '' },
+          { key: 'learn', label: 'Change next time', kind: 'text', value: '' }
         ];
       },
       submit: function (v) {
-        if (v.mode === 'outcome') {
-          if (!v.existing) return { error: 'pick which decision this outcome closes' };
-          return { events: [{ type: 'decision.outcome', data: { decisionId: v.existing, outcome: v.outcome, lesson: v.lesson || undefined } }],
-            flash: 'Outcome logged — R2 goes quiet for this decision.' };
-        }
-        if (!v.title) return { error: 'new decision needs a title' };
-        return { events: [{ type: 'decision.logged', data: { title: v.title, context: v.context || undefined, reviewDate: v.reviewDate || undefined } }],
-          flash: 'Decision logged with a review date — R2 will hold you to it.' };
+        return [{ type: 'decision.outcome', personId: null,
+          data: { decisionId: v.decisionId, outcome: v.outcome, quality: Number(v.quality) || undefined,
+            learn: v.learn || undefined, viaPlaybook: true } }];
       }
     },
 
     goal: {
-      id: 'goal', title: 'Goal review', icon: 'goal',
-      blurb: 'One owner, one next visible step. Goals die of silence, not of ambition.',
+      id: 'goal', title: 'Goal review', icon: 'target',
+      blurb: 'Set goals with one owner, or close the silence on stale ones. Both moves are logged as progress.',
       guide: function (ctx, prefill) {
         var open = EV().openGoals(ctx.state);
-        var g = [{ h: 'Review standard', lines: [
-          'Every goal has exactly one owner — a name, not "the team".',
-          'Progress means a dated fact ("3 finalists in pipeline"), not a feeling.',
-          'If a goal has been silent twice in a row, kill it out loud or re-scope it. Zombie goals tax the living ones.' ] }];
-        if (open.length) g.unshift({ h: 'Open goals (from your data)', lines: open.map(function (gl) {
-          var owner = gl.ownerPersonId ? nameOf(ctx.state, gl.ownerPersonId) : 'NO OWNER';
-          return gl.label + ' · ' + owner + ' · last anchor ' + String(gl.lastProgressTs).slice(0, 10); }) });
+        var g = [{ h: 'Open goals (' + open.length + ')', lines: open.length ? open.map(function (gl) {
+          return '"' + gl.label + '" · owner ' + (gl.ownerPersonId === 'me' ? 'you' : gl.ownerPersonId ? nameOf(ctx.state, gl.ownerPersonId) : '—NONE—') + ' · last signal ' + String(gl.lastProgressTs).slice(0, 10); }) : ['none set yet'] }];
+        g.push({ h: 'Rules that keep goals alive', lines: [
+          'One name owns each goal. Others contribute; one person answers.',
+          'A goal older than 14 days with no signal is either stalled or dead — choose in the open, not in silence.',
+          'Progress notes are one line. If writing the update is heavy, the goal\'s cadence is wrong.',
+          'Killing a goal with a reason logged is GOOD goal hygiene, and the engine treats it as handled.' ] });
         return g;
       },
       fields: function (ctx, prefill) {
         var open = EV().openGoals(ctx.state);
+        if (open.length && prefill.goalId) return [
+          { key: 'mode', label: '', kind: 'hidden', value: 'progress' },
+          { key: 'goalId', label: 'Goal', kind: 'select', required: 1, value: prefill.goalId,
+            options: open.map(function (gl) { return { v: gl.id, l: gl.label }; }) },
+          { key: 'note', label: 'Progress (one line — or "killed: <reason>")', kind: 'area', required: 1, value: '' },
+          { key: 'assignTo', label: 'Assign owner (if missing)', kind: 'select', value: '', options: [{ v: '', l: '— leave as is —' }].concat(optsPerson(ctx.state, true)) }
+        ];
         return [
-          { key: 'mode', label: 'Mode', kind: 'select', required: 1, value: prefill.goalId ? 'progress' : 'new',
-            options: [{ v: 'new', l: 'set a new goal' }, { v: 'progress', l: 'log progress' }, { v: 'assign', l: 'assign an owner' }] },
-          { key: 'title', label: 'Goal (new mode)', kind: 'text', value: '' },
-          { key: 'ownerPersonId', label: 'Owner', kind: 'select', value: prefill.personId || '',
-            options: [{ v: '', l: '— pick one name —' }].concat(optsPerson(ctx.state, true)) },
-          { key: 'reviewBy', label: 'Review by (new mode)', kind: 'date', value: '' },
-          { key: 'existing', label: 'Goal (progress/assign mode)', kind: 'select', value: prefill.goalId || '',
-            options: [{ v: '', l: '—' }].concat(open.map(function (gl) { return { v: gl.id, l: gl.label }; })) },
-          { key: 'note', label: 'Progress note — a dated fact', kind: 'area', value: '' }
+          { key: 'mode', label: '', kind: 'hidden', value: 'set' },
+          { key: 'title', label: 'The goal', kind: 'text', required: 1, value: '' },
+          { key: 'ownerPersonId', label: 'Owner (exactly one)', kind: 'select', required: 1, value: prefill.ownerPersonId || 'me', options: optsPerson(ctx.state, true) },
+          { key: 'metric', label: 'Measured by', kind: 'text', value: '' },
+          { key: 'due', label: 'Target date', kind: 'date', value: '' }
         ];
       },
       submit: function (v) {
-        if (v.mode === 'new') {
-          if (!v.title) return { error: 'goal needs a title' };
-          return { events: [{ type: 'goal.set', data: { title: v.title,
-            ownerPersonId: v.ownerPersonId || undefined, reviewBy: v.reviewBy || undefined } }],
-            flash: v.ownerPersonId ? 'Goal set with an owner.' : 'Goal set WITHOUT an owner — R3 will nag until it has a name.' };
+        if (v.mode === 'progress') {
+          var evs = [{ type: 'goal.progress', personId: v.assignTo || null,
+            data: { goalId: v.goalId, note: v.note, viaPlaybook: true } }];
+          if (v.assignTo) evs.push({ type: 'goal.assign', personId: v.assignTo, data: { goalId: v.goalId, ownerPersonId: v.assignTo } });
+          return evs;
         }
-        if (!v.existing) return { error: 'pick the goal' };
-        if (v.mode === 'assign') {
-          if (!v.ownerPersonId) return { error: 'assign needs an owner name' };
-          return { events: [{ type: 'goal.assign', data: { goalId: v.existing, ownerPersonId: v.ownerPersonId } }],
-            flash: 'Owner assigned.' };
-        }
-        return { events: [{ type: 'goal.progress', data: { goalId: v.existing, note: v.note || undefined } }],
-          flash: 'Progress logged — the stall clock resets from this entry.' };
+        return [{ type: 'goal.set', personId: v.ownerPersonId === 'me' ? null : v.ownerPersonId,
+          data: { title: v.title, ownerPersonId: v.ownerPersonId, metric: v.metric || undefined,
+            due: v.due || undefined, viaPlaybook: true } }];
       }
     },
 
-    /* ---------------- arrival playbooks (v3) ---------------- */
     charter: {
-      id: 'charter', title: 'Expectations charter (with your boss)', icon: 'shield',
-      blurb: 'Five questions that turn "do a great job" into a contract you can actually be measured against.',
-      guide: function (ctx) {
-        var a = EV().arrival(ctx.state, ctx.today);
-        var g = [{ h: 'The five questions (ask them in this order)', lines: [
-          '1. "Ninety days from now, what has to be true for you to say hiring me was the right call?"',
-          '2. "What should I keep, stop, and change — in that order?"',
-          '3. "Which decisions are mine alone, mine-with-notice, and yours?"',
-          '4. "How do we communicate — cadence, format, and what counts as urgent enough to interrupt you?"',
-          '5. "What are the landmines — what did my predecessor do that I should never repeat?"' ] },
-          { h: 'Rules of the room', lines: [
-            'Write THEIR words, not your translation. Disagreement recorded honestly beats fake alignment.',
-            'End by repeating the top one back: "so my 90-day bar is ___." If they flinch, you just saved a quarter.',
-            'Log every answer below — one entry per question. This kills R9 and anchors R10/R11.' ] }];
-        if (a.set) g.unshift({ h: 'Where you stand', lines: [
-          'day ' + (a.day == null ? '?' : a.day) + ' since ' + a.startDate,
-          'expectations captured so far: ' + a.expectationCount ],
-          warn: a.expectationCount === 0 ? 'Zero so far. Every day without this you are optimizing toward a guess.' : null });
+      id: 'charter', title: 'Expectations charter', icon: 'flag',
+      blurb: 'Capture what your boss actually measures — before you optimize toward a guess. (R9 resolver)',
+      guide: function (ctx, prefill) {
+        var g = [];
+        var count = EV().byType(ctx.state, 'expectation.logged').length;
+        if (count) g.push({ h: 'Already captured (' + count + ')', lines: EV().byType(ctx.state, 'expectation.logged').map(function (e) { return '· ' + (e.data && e.data.text || ''); }) });
+        g.push({ h: 'The 45 minutes that de-risk your first year', lines: [
+          '"If I do an outstanding job, what is different in 6 months — in your words?"',
+          '"What would make you intervene in my teams without asking me first?"',
+          '"Which two or three metrics do you actually read, and what do you wish they said by year-end?"',
+          '"What did my predecessor do that you never want to see again?"',
+          '"How do you want to hear bad news — how early, in what shape?"' ] });
+        g.push({ h: 'Why this is urgent', warn: 'Every week without captured expectations, you optimize toward your GUESS of their model. Two months in, the guess has hardened into commitments, and correcting course then costs real trust. Day 14 is not an arbitrary nag.' });
+        g.push({ h: 'Rules', lines: [
+          'Capture their words, not your translation — quote-level fidelity is the point.',
+          'Explicit beats safe: "ship X by Q3" is capturable; "do great work" is a request to ask again.',
+          'One line per expectation below. Each becomes an expectation.logged event and closes R9.' ] });
         return g;
       },
-      fields: function (ctx) {
+      fields: function () {
         return [
-          { key: 'boss', label: 'Who you aligned with', kind: 'text', value: '', hint: 'name / skip-level boss / board — whoever owns your review' },
-          { key: 'q1', label: '1 · The 90-day bar', kind: 'area', required: 1, value: '' },
-          { key: 'q2', label: '2 · Keep / stop / change', kind: 'area', value: '' },
-          { key: 'q3', label: '3 · Decision rights', kind: 'area', value: '' },
-          { key: 'q4', label: '4 · Comms cadence', kind: 'area', value: '' },
-          { key: 'q5', label: '5 · Landmines', kind: 'area', value: '' }
+          { key: 'lines', label: 'Expectations, one per line, their words', kind: 'area', required: 1, value: '' },
+          { key: 'source', label: 'Captured with', kind: 'text', value: 'boss 1:1' }
         ];
       },
       submit: function (v) {
-        var items = [];
-        [['q1', '90-day bar'], ['q2', 'keep/stop/change'], ['q3', 'decision rights'], ['q4', 'comms'], ['q5', 'landmines']]
-          .forEach(function (pair) { if (v[pair[0]] && v[pair[0]].trim()) items.push(pair[1] + ': ' + v[pair[0]].trim()); });
-        if (!items.length) return { error: 'capture at least one answer — an empty charter is worse than none' };
-        return { events: [{ type: 'expectation.logged', data: { source: 'boss', boss: v.boss || undefined, items: items } }],
-          flash: items.length + ' expectation(s) captured. R9 resolves; revisit this monthly and after each re-org rumor.' };
+        return String(v.lines || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean).map(function (line) {
+          return { type: 'expectation.logged', personId: null, data: { text: line, source: v.source || undefined, viaPlaybook: true } };
+        });
       }
     },
 
     tour: {
-      id: 'tour', title: 'Listening-tour visit', icon: 'tour',
-      blurb: 'Twenty structured minutes per lead before you change anything. The tour buys you the right to have opinions.',
-      guide: function (ctx) {
-        var a = EV().arrival(ctx.state, ctx.today);
-        var g = [{ h: 'The four questions', lines: [
-          '1. "What is working that I should never touch?"',
-          '2. "What is slower than it should be — and since when?"',
-          '3. "If you had my job for a day, what would you change first?"',
-          '4. "What are you afraid a new boss will break?"' ] },
-          { h: 'Rules of the road', lines: [
-            'Listen. You are allowed exactly zero commitments and zero rebuttals in this meeting.',
-            'Log the visit with THEIR themes, in their words. The coverage bar counts visits, not vibes.'] }];
-        if (a.set) {
-          g.unshift({ h: 'Coverage (from your roster)', lines: [
-            'visited: ' + a.tour.visitedCount + '/' + a.tour.directCount + ' direct leads · day ' + (a.day == null ? '?' : a.day),
-            a.tour.missing.length ? 'still missing: ' + a.tour.missing.map(function (p) { return p.name; }).join(' · ') : 'tour complete — opinions unlocked',
-            'skip-level visits logged: ' + a.tour.skipCount ] });
-        }
+      id: 'tour', title: 'Listening-tour visit', icon: 'ear',
+      blurb: 'Same five questions for everyone, answers logged verbatim-ish. Coverage is measured against today\'s roster. (R10 resolver)',
+      guide: function (ctx, prefill) {
+        var a = EV().arrival(ctx.state, ctx.today), g = [];
+        if (a.set) g.push({ h: 'Coverage', lines: ['visited ' + a.tourDone + ' of ' + a.tourTotal,
+            a.unvisited.length ? 'still owed: ' + a.unvisited.map(function (p) { return p.name; }).join(', ') : 'tour complete'],
+          warn: a.unvisited.length && a.dayN >= 45 ? 'Past the day-45 gate with visits owed. Every change you announce now lands on people you haven\'t heard.' : null });
+        g.push({ h: 'The five questions (ask all five, everyone, same order)', lines: [
+          '1. What should I definitely NOT change here?',
+          '2. What is slower than it should be, and why do you think that is?',
+          '3. What do people complain about that never reaches a staff meeting?',
+          '4. If you ran this org for a month, what would you do first?',
+          '5. What should I have asked you that I didn\'t?' ] });
+        g.push({ h: 'Discipline', lines: [
+          'Listen. Defending a decision in a tour visit converts the visit into a negotiation.',
+          'Log what they said, not what you think of it — analysis comes after full coverage.',
+          'Order matters politically: the last team visited notices being last.' ] });
         return g;
       },
       fields: function (ctx, prefill) {
+        var a = EV().arrival(ctx.state, ctx.today);
+        var def = prefill.personId || (a.set && a.unvisited.length ? a.unvisited[0].id : undefined);
         return [
-          { key: 'mode', label: 'Who', kind: 'select', required: 1, value: prefill.mode || 'lead',
-            options: [{ v: 'lead', l: 'a direct lead' }, { v: 'skiplevel', l: 'a skip-level (their report)' }, { v: 'peer', l: 'a peer / partner' }] },
-          { key: 'personId', label: 'Person (for leads / skip-levels on roster)', kind: 'person', value: prefill.personId },
-          { key: 'counterpart', label: 'Name (if not on roster)', kind: 'text', value: '' },
-          { key: 'themes', label: 'Themes in their words', kind: 'area', required: 1, value: '' },
-          { key: 'protect', label: 'What they asked you to protect', kind: 'text', value: '' },
-          { key: 'change', label: 'What they would change first', kind: 'text', value: '' }
+          { key: 'personId', label: 'Visited', kind: 'person', required: 1, value: def },
+          { key: 'heard', label: 'What they said (their words, condensed)', kind: 'area', required: 1, value: '' },
+          { key: 'cherish', label: 'What they begged you not to change', kind: 'text', value: '' },
+          { key: 'surprised', label: 'What surprised you', kind: 'text', value: '' }
         ];
       },
       submit: function (v) {
-        if (v.mode === 'lead' && !v.personId) return { error: 'a lead visit needs a roster person — that is what the coverage bar counts' };
-        return { events: [{ type: 'tour.visit', personId: v.personId || null,
-          data: { mode: v.mode, counterpart: v.counterpart || undefined, themes: v.themes,
-            protect: v.protect || undefined, change: v.change || undefined } }],
-          flash: 'Visit logged. R10 coverage recomputes against today\'s roster.' };
+        return [{ type: 'tour.visit', personId: v.personId,
+          data: { heard: v.heard, cherish: v.cherish || undefined, surprised: v.surprised || undefined, viaPlaybook: true } }];
       }
     },
 
     wincloser: {
-      id: 'wincloser', title: 'Early-win verification', icon: 'flag',
-      blurb: 'You announced it. Now prove it — or walk it back while walking back is cheap.',
+      id: 'wincloser', title: 'Early-win closer', icon: 'check2',
+      blurb: 'Committed a win to your boss? Verify it with evidence or walk it back. Unverified wins are loans — they come due. (R11 resolver)',
       guide: function (ctx, prefill) {
-        var g = [{ h: 'The verification standard', lines: [
-          'Would the metric, as committed, convince a skeptic? Not "things feel better".',
-          'Has it survived at least two ordinary weeks — not one heroic one?',
-          'Who besides you has seen the evidence? Name them.',
-          'What result would make you walk it back? If nothing would, you are not verifying, you are campaigning.' ] },
-          { h: 'On walking back', lines: [
-            '"I said X; the data says Y; here is what I am doing about it" — said once, early, buys more trust than five verified wins.',
-            'A partial is not a miss. Log it honestly and recommit a narrower metric.' ] }];
-        if (prefill.title) g.unshift({ h: 'The open loop', lines: [
-          'win: ' + prefill.title,
-          'metric as committed: ' + (prefill.metric || 'NONE — the real problem; you cannot verify a vibe'),
-          'verify date was: ' + (prefill.verifyDate || '—'),
-          prefill.announcedTo ? 'announced to: ' + prefill.announcedTo + ' — they are waiting' : 'not announced — verify quietly' ] });
+        var open = EV().openWins(ctx.state).filter(function (w) { return !w.verified; });
+        var g = [{ h: 'Open win commitments (' + open.length + ')', lines: open.length ? open.map(function (w) {
+          return '"' + w.label + '" · committed ' + String(w.ts).slice(0, 10) + ' · verify by ' + (w.verifyDate || 'unset'); }) : ['none — either verified or never over-committed. Good.'] }];
+        g.push({ h: 'Verification standard', lines: [
+          'Evidence = something a skeptic would accept: a number before/after, a shipped thing, a named person who changed behavior.',
+          '"The team feels better" is not evidence. "Standup went from 7 attendees silent to 5 speaking, per the last three retro notes" is.',
+          'Partial: verify the part that landed, restate the remainder with a NEW date. Do not let the whole claim ride.' ] });
+        g.push({ h: 'Walking back (when it didn\'t land)', script: '"I told you we\'d see X by now. We haven\'t — here\'s what I got wrong about the system, and here\'s the revised gate. I\'d rather correct the claim than defend it." — said early, this BUYS credibility; said late, it spends it.' });
         return g;
       },
       fields: function (ctx, prefill) {
-        var open = EV().arrival(ctx.state, ctx.today).wins.open;
+        var open = EV().openWins(ctx.state).filter(function (w) { return !w.verified; });
+        if (open.length || prefill.winId) return [
+          { key: 'mode', label: '', kind: 'hidden', value: 'verify' },
+          { key: 'winId', label: 'Win commitment', kind: 'select', required: 1, value: prefill.winId,
+            options: open.map(function (w) { return { v: w.id, l: w.label + ' · verify ' + (w.verifyDate || 'unset') }; }) },
+          { key: 'result', label: 'Result', kind: 'select', required: 1, value: 'landed',
+            options: [{ v: 'landed', l: 'landed (verified)' }, { v: 'partial', l: 'partial — restate remainder' }, { v: 'missed', l: 'missed — walking it back' }] },
+          { key: 'evidence', label: 'Evidence a skeptic would accept', kind: 'area', required: 1, value: '' }
+        ];
         return [
-          { key: 'winId', label: 'Which win', kind: 'select', required: 1, value: prefill.winId || '',
-            options: [{ v: '', l: '—' }].concat(open.map(function (w) { return { v: w.id, l: w.title + ' · verify ' + (w.verifyDate || '—') }; })) },
-          { key: 'outcome', label: 'Verdict', kind: 'select', required: 1, value: 'hit',
-            options: [{ v: 'hit', l: 'verified — metric met' }, { v: 'partial', l: 'partial — met in part' }, { v: 'missed', l: 'missed — walking it back' }] },
-          { key: 'evidence', label: 'The evidence (numbers, witnesses)', kind: 'area', required: 1, value: '' },
-          { key: 'publicCorrection', label: 'I announced this and owe a public correction/update', kind: 'check', value: !!prefill.announcedTo },
-          { key: 'nextMetric', label: 'Recommitted metric (if partial/missed)', kind: 'text', value: '' }
+          { key: 'mode', label: '', kind: 'hidden', value: 'commit' },
+          { key: 'title', label: 'The win you are committing to', kind: 'text', required: 1, value: '' },
+          { key: 'verifyDate', label: 'Verify by', kind: 'date', required: 1, value: ctx.today }
         ];
       },
       submit: function (v) {
-        if (!v.winId) return { error: 'pick the win this closes' };
-        var evs = [{ type: 'earlywin.verified', data: { winId: v.winId, outcome: v.outcome,
-          evidence: v.evidence, publicCorrection: !!v.publicCorrection } }];
-        if ((v.outcome === 'partial' || v.outcome === 'missed') && v.nextMetric) {
-          evs.push({ type: 'earlywin.committed', data: { title: 'recommit after ' + v.outcome,
-            metric: v.nextMetric, verifyDate: undefined, followUpTo: v.winId } });
-        }
-        return { events: evs,
-          flash: v.outcome === 'hit' ? 'Verified. One data point of trust, banked.' :
-            v.outcome === 'partial' ? 'Logged as partial — honest fractions compound.' :
-            'Walked back. Expensive today, cheap compared to being found out.' };
+        if (v.mode === 'verify') return [{ type: 'earlywin.verified', personId: null,
+          data: { winId: v.winId, result: v.result, evidence: v.evidence, viaPlaybook: true } }];
+        return [{ type: 'earlywin.committed', personId: null,
+          data: { title: v.title, verifyDate: v.verifyDate, viaPlaybook: true } }];
       }
     }
   };
 
-  function list() {
-    return Object.keys(PBS).map(function (k) {
-      return { id: k, title: PBS[k].title, blurb: PBS[k].blurb, icon: PBS[k].icon };
-    });
-  }
-  return { PBS: PBS, list: list, LEVELS: LEVELS, SL_TABLE: SL_TABLE, slMatch: slMatch };
+  function list() { return Object.keys(PBS).map(function (k) { return PBS[k]; }); }
+  function get(id) { return PBS[id] || null; }
+
+  return { list: list, get: get, LEVELS: LEVELS, LEVEL_GUIDE: LEVEL_GUIDE, SL_TABLE: SL_TABLE, slMatch: slMatch };
 })();

@@ -1,11 +1,14 @@
-/* LeadOS mf-3 · js/store.js — storage spine (schema v3, lineage "mf").
-   Doctrine (verified by Session-7 audit read of mf-2 store.js):
+/* LeadOS mf-4 · js/store.js — storage spine (schema v3, lineage "mf").
+   Doctrine, verified by direct read of mf-3's store.js head (2026 Session 8):
    trySetItem is the ONLY write path; bad bytes are quarantined to timestamped
-   keys and NEVER overwritten; normalization repairs, never drops.
-   v3 ladder: 1→2 (reportsTo backfill) · 2→3 (meta.appointment added — the
-   arrival instrument needs a start date; null = "not set", module stays silent
-   rather than guessing). Pre-migration bytes preserved before any write.
-   Current-version loads also normalize (boot audit): repairs counted, rows kept. */
+   keys and NEVER overwritten (collision-suffixed); normalization repairs,
+   never drops. v3 ladder: 1→2 (reportsTo backfill) · 2→3 (meta.appointment —
+   null = "leader hasn't said"; the arrival rules stay silent rather than guess).
+   Pre-migration bytes preserved BEFORE any write. Boot audit: every load
+   re-normalizes; repairs are counted in the log, rows kept.
+   mf-4 note: mf-3's store.js TAIL (load pipeline, import) was not readable
+   from the authoring environment (fetch truncation, same defect Session 7
+   reported) — it is re-authored below to the same contract, marked REV. */
 window.LEADOS = window.LEADOS || {};
 LEADOS.store = (function () {
   'use strict';
@@ -39,7 +42,7 @@ LEADOS.store = (function () {
   }
 
   var MIGRATIONS = {
-    /* 1→2 (verified byte-exact against mf-1 fixture in Session 6; carried). */
+    /* 1→2 (verified byte-for-byte against mf-3 head read; carried). */
     1: function (db) {
       var i, n = 0;
       for (i = 0; i < db.people.length; i++) {
@@ -53,8 +56,7 @@ LEADOS.store = (function () {
       db.log.push({ ts: nowISO(), kind: 'migration', msg: '1→2 applied; ' + n + ' people backfilled reportsTo="me"' });
       return db;
     },
-    /* 2→3: the arrival instrument. Purely additive: meta.appointment := null.
-       Null is a REAL value ("leader hasn't told us"), not a guess. */
+    /* 2→3 (verified against mf-3 head read; carried). Purely additive. */
     2: function (db) {
       db.meta.migrations = Array.isArray(db.meta.migrations) ? db.meta.migrations : [];
       db.meta.migrations.push({ from: 2, to: 3, at: nowISO(),
@@ -64,11 +66,17 @@ LEADOS.store = (function () {
       db.log.push({ ts: nowISO(), kind: 'migration', msg: '2→3 applied; meta.appointment := null' });
       return db;
     }
+    /* mf-4 did NOT add v4: counterpartPersonId is an additive, nullable event
+       field inside data{} — normalizeEvents already preserves unknown data
+       fields by contract. A schema bump for an additive event field would be
+       ceremony, not safety. Recorded here so the decision is auditable. */
   };
 
   function validTs(ts) { return typeof ts === 'string' && !isNaN(Date.parse(ts)); }
 
-  /* Per-event normalization. Returns {events, repairs}; never drops a row. */
+  /* Per-event normalization (mf-3 head, verified byte-for-byte; carried).
+     Returns {events, repairs}; never drops a row. Unknown data fields —
+     incl. mf-4's counterpartPersonId — pass through untouched. */
   function normalizeEvents(events, logRow) {
     var out = [], seen = {}, repairs = [], i, ev, e2;
     for (i = 0; i < events.length; i++) {
@@ -94,8 +102,8 @@ LEADOS.store = (function () {
     return { events: out, repairs: repairs };
   }
 
-  /* Import-merge re-minting walker (verified in mf-2): rewrites values whose KEY
-     looks like an id reference when the value exists in idMap. */
+  /* Import-merge re-minting walker (verified in mf-3 head; carried). Rewrites
+     values whose KEY looks like an id reference when the value is in idMap. */
   function rewire(obj, idMap) {
     var k, v, out, i;
     if (Array.isArray(obj)) { out = []; for (i = 0; i < obj.length; i++) out.push(rewire(obj[i], idMap)); return out; }
@@ -117,7 +125,23 @@ LEADOS.store = (function () {
     if (k === base) return 'live';
     if (k.indexOf(base + '.') !== 0) return null;
     var rest = k.slice(base.length + 1);
-    return rest.split('.')[0]; /* stamp contains no dots (":." → "-"), kind is the first segment */
+    return rest.split('.')[0]; /* stamp contains no dots (":." → "-"), kind is first segment */
+  }
+
+  /* REV — re-authored to contract (mf-3 tail unreadable): canonical stringify
+     used ONLY for the identical-import refusal. Key order is normalized so a
+     re-keyed export of the same data still reads as identical. */
+  function canon(o) {
+    if (Array.isArray(o)) return '[' + o.map(canon).join(',') + ']';
+    if (o && typeof o === 'object') {
+      return '{' + Object.keys(o).sort().map(function (k) {
+        return JSON.stringify(k) + ':' + canon(o[k]);
+      }).join(',') + '}';
+    }
+    return JSON.stringify(o === undefined ? null : o);
+  }
+  function sameData(a, b) { /* identity = same people + same events; meta/log are volatile */
+    return canon(a.people) === canon(b.people) && canon(a.events) === canon(b.events);
   }
 
   function makeStore(key) {
@@ -163,165 +187,165 @@ LEADOS.store = (function () {
       return { ok: true, state: parsed, repairs: nz.repairs.length, steps: steps };
     }
 
+    /* REV — re-authored to contract (mf-3 tail unreadable). */
     function load() {
-      var raw = localStorage.getItem(key), parsed = null, m;
-      if (raw == null) {
-        state = fresh();
-        logRow('boot', 'no existing data — fresh v' + CURRENT + ' state created');
-        return { branch: 'absent' };
-      }
+      var raw;
+      try { raw = localStorage.getItem(key); }
+      catch (e) { state = fresh(); logRow('boot', 'storage unreadable (' + (e && e.name) + ') — running in-memory only'); return state; }
+      if (raw == null) { state = fresh(); logRow('boot', 'no existing data — fresh v' + CURRENT + ' state'); return state; }
+      var parsed;
       try { parsed = JSON.parse(raw); }
       catch (e) {
-        quarantine('corrupt', raw); localStorage.removeItem(key);
-        state = fresh(); logRow('boot', 'stored bytes were unparseable — quarantined as corrupt, booted clean');
-        return { branch: 'corrupt' };
+        quarantine('corrupt', raw); /* bytes kept, never overwritten */
+        state = fresh();
+        logRow('boot', 'unparseable live bytes quarantined as "corrupt" — booted clean');
+        trySetItem(key, JSON.stringify(state));
+        return state;
       }
-      m = parsed && parsed.meta;
-      if (m && typeof m.schemaVersion === 'number') {
-        if (m.lineage !== LINEAGE) {
-          quarantine('foreign', raw); localStorage.removeItem(key);
-          state = fresh(); logRow('boot', 'foreign lineage "' + m.lineage + '" refused and preserved');
-          return { branch: 'foreign' };
-        }
-        if (m.schemaVersion > CURRENT) {
-          quarantine('newer', raw); localStorage.removeItem(key);
-          state = fresh(); logRow('boot', 'data from a NEWER version (v' + m.schemaVersion + ') refused and preserved — upgrade the app, never guess');
-          return { branch: 'newer' };
-        }
-        if (m.schemaVersion < CURRENT && isBaseShape(parsed)) {
-          var r = runMigrations(parsed, raw);
-          if (!r.ok) {
-            quarantine('migration-failed', raw); localStorage.removeItem(key);
-            state = fresh(); logRow('boot', 'migration from v' + m.schemaVersion + ' FAILED — original preserved, booted clean');
-            return { branch: 'migration-failed' };
-          }
-          state = r.state; state.meta.writeFailed = false;
-          var s = save();
-          logRow('boot', 'migrated v' + m.schemaVersion + '→v' + CURRENT + (s.ok ? '' : ' (SAVE FAILED: quota)'));
-          return { branch: 'migrated', from: m.schemaVersion, repairs: r.repairs, saved: s.ok === true, quota: !!s.quota };
-        }
+      var which = classify(parsed);
+      if (which !== 'ok') {
+        quarantine(which, raw);
+        state = fresh();
+        logRow('boot', 'live bytes classified "' + which + '" — quarantined, booted clean');
+        trySetItem(key, JSON.stringify(state));
+        return state;
       }
-      if (!isShape(parsed)) {
-        quarantine('malformed', raw); localStorage.removeItem(key);
-        state = fresh(); logRow('boot', 'bytes parsed but failed shape check — quarantined as malformed');
-        return { branch: 'malformed' };
+      /* migration ladder */
+      if (parsed.meta.schemaVersion < CURRENT) {
+        var m = runMigrations(parsed, raw);
+        if (!m.ok) {
+          quarantine('migration-failed', raw);
+          state = fresh();
+          logRow('boot', 'migration ladder failed — bytes preserved as "migration-failed", booted clean');
+          trySetItem(key, JSON.stringify(state));
+          return state;
+        }
+        state = m.state;
+        save(); /* persist the migrated state immediately */
+        return state;
       }
-      state = parsed;                                  /* current version: still boot-audit */
-      var nz = normalizeEvents(state.events, logRow);  /* repairs, never drops */
+      if (!isShape(parsed)) { /* same version, missing fields — normalize upward */
+        if (!('appointment' in parsed.meta)) parsed.meta.appointment = null;
+      }
+      state = parsed;
+      /* boot audit: current-version loads normalize too; repairs counted, rows kept */
+      var before = state.events.length;
+      var nz = normalizeEvents(state.events, logRow);
       state.events = nz.events;
-      if (!state.meta.appointment) state.meta.appointment = state.meta.appointment || null;
-      logRow('boot', 'loaded v' + CURRENT + ' state: ' + state.people.length + ' people, ' +
-        state.events.length + ' events' + (nz.repairs.length ? ', ' + nz.repairs.length + ' repair(s)' : ''));
-      return { branch: 'ok', repairs: nz.repairs.length };
+      logRow('boot', 'audit: ' + before + ' event(s), ' + state.people.length + ' people, ' +
+        nz.repairs.length + ' repair(s); schema v' + state.meta.schemaVersion);
+      if (nz.repairs.length) save();
+      return state;
+    }
+    function classify(parsed) { /* order matters: most specific first.
+      Shapeless-but-parseable is MALFORMED; shaped-but-not-ours is FOREIGN — two different incidents. */
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'malformed';
+      if (!parsed.meta || typeof parsed.meta !== 'object') return 'malformed';
+      if (parsed.meta.lineage !== LINEAGE) return 'foreign';
+      if (typeof parsed.meta.schemaVersion === 'number' && parsed.meta.schemaVersion > CURRENT) return 'newer';
+      if (!isBaseShape(parsed)) return 'malformed';
+      return 'ok';
     }
 
     function save() {
-      if (!state) return { ok: false, reason: 'no state' };
-      state.meta.writeFailed = false;            /* a successful write clears the pill */
+      if (!state) return { ok: false, noState: true };
       var r = trySetItem(key, JSON.stringify(state));
-      if (!r.ok && r.quota) logRow('quota', 'WRITE FAILED — storage full or blocked; in-memory state intact, export NOW');
+      if (!r.ok && r.quota) logRow('quota', 'write failed — quota exceeded; in-memory state intact');
       return r;
     }
 
-    function exportJSON() { return JSON.stringify(state, null, 2); }
-
-    /* Import pipeline. Refuses: unparseable / malformed / newer / foreign /
-       identical-to-live. Migrates same-lineage older. Merges: every imported id
-       re-minted, every *Id/*Ids reference rewired; normalization at the gate. */
-    function importJSON(text) {
-      if (typeof text !== 'string' || !text.trim()) return { ok: false, reason: 'empty input' };
+    /* REV — re-authored to contract (mf-3 tail unreadable).
+       Import pipeline. Refuses: unparseable · malformed · foreign · newer ·
+       identical-to-live. Migrates same-lineage older. Two-pass merge: mint
+       ALL ids first, then rewire every *Id/*Ids reference. Live bytes are
+       preserved as .pre-import. before merging. */
+    function importData(text) {
+      if (typeof text !== 'string' || !text.trim())
+        return { ok: false, reason: 'empty input — nothing to import' };
       var parsed;
       try { parsed = JSON.parse(text); }
-      catch (e) { return { ok: false, reason: 'unparseable JSON — refused before touching live state' }; }
-      var m = parsed && parsed.meta;
-      if (!m || typeof m.schemaVersion !== 'number') return { ok: false, reason: 'no meta.schemaVersion — not a LeadOS export' };
-      if (m.lineage !== LINEAGE) return { ok: false, reason: 'foreign lineage "' + m.lineage + '" — refused (no migration invented for code nobody has read)' };
-      if (m.schemaVersion > CURRENT) return { ok: false, reason: 'export is from newer v' + m.schemaVersion + ' — upgrade the app first' };
-      if (!isBaseShape(parsed)) return { ok: false, reason: 'parsed but malformed (people/events/log must be arrays)' };
-      if (JSON.stringify(parsed) === JSON.stringify(state)) return { ok: false, reason: 'identical to live state — nothing to do' };
-      var incoming = parsed;
-      if (m.schemaVersion < CURRENT) {
-        var r = runMigrations(JSON.parse(text), text);
-        if (!r.ok) return { ok: false, reason: 'migration of imported v' + m.schemaVersion + ' data failed — refused, live state untouched' };
-        incoming = r.state;
+      catch (e) { return { ok: false, reason: 'unparseable JSON (' + e.message + ') — refused; nothing was written' }; }
+      var which = classify(parsed);
+      if (which !== 'ok') return { ok: false, reason: 'payload classified "' + which + '" — refused; nothing was written' };
+      if (parsed.meta.schemaVersion < CURRENT) {
+        var m = runMigrations(parsed, JSON.stringify(parsed));
+        if (!m.ok) return { ok: false, reason: 'migration of the import payload failed — refused' };
+        parsed = m.state;
       }
-      quarantine('pre-import', exportJSON());           /* live bytes recoverable before merge */
-      /* two passes: (1) mint ALL new ids — people and events — into one idMap,
-         (2) rewire every reference against the COMPLETE map. A single pass breaks
-         references that point backwards in the array (outcome before decision). */
-      var idMap = {}, i, p, imported = { people: 0, events: 0 };
-      var nz = normalizeEvents(incoming.events, logRow);
-      for (i = 0; i < incoming.people.length; i++) {
-        p = incoming.people[i];
-        if (!p || typeof p !== 'object') continue;
-        if (p.id) idMap[p.id] = newId('p');
+      var nz = normalizeEvents(parsed.events, null); /* gate: normalize BEFORE comparing/merging */
+      parsed.events = nz.events;
+      if (sameData(parsed, state))
+        return { ok: false, reason: 'identical to live data — refused (importing your own export changes nothing)' };
+
+      quarantine('pre-import', JSON.stringify(state)); /* rollback point, timestamped */
+      /* pass 1: mint every id */
+      var idMap = {}, i;
+      for (i = 0; i < parsed.people.length; i++) {
+        var p = parsed.people[i];
+        if (p && typeof p === 'object' && typeof p.id === 'string') idMap[p.id] = newId('p');
       }
-      for (i = 0; i < nz.events.length; i++) idMap[nz.events[i].id] = newId('e');
-      for (i = 0; i < incoming.people.length; i++) {
-        p = incoming.people[i];
-        if (!p || typeof p !== 'object') continue;
-        state.people.push({ id: idMap[p.id] || newId('p'),
-          name: String(p.name || '').trim() || 'unnamed',
-          role: String(p.role || '').trim(), cadenceDays: Math.max(1, parseInt(p.cadenceDays, 10) || 7),
-          reportsTo: p.reportsTo, createdAt: validTs(p.createdAt) ? p.createdAt : nowISO(),
-          archived: !!p.archived, seed: !!p.seed });
-        imported.people++;
-      }
-      for (i = 0; i < nz.events.length; i++) {
-        var ev2 = rewire(nz.events[i], idMap);          /* ids, personId, *Id/*Ids refs */
-        state.events.push(ev2); imported.events++;
-      }
-      for (i = 0; i < state.people.length; i++) {
-        p = state.people[i];
-        if (p.reportsTo && p.reportsTo !== 'me' && idMap[p.reportsTo]) p.reportsTo = idMap[p.reportsTo];
-      }
-      if (incoming.meta.appointment && !state.meta.appointment) {
-        state.meta.appointment = incoming.meta.appointment;
-        logRow('import', 'imported appointment (live had none): ' + JSON.stringify(incoming.meta.appointment));
-      }
-      if (incoming.meta.seeded) state.meta.seeded = true;
-      logRow('import', 'merged ' + imported.people + ' people + ' + imported.events + ' events (ids re-minted, refs rewired, live bytes preserved pre-import)');
-      var s = save();
-      if (!s.ok) return { ok: false, reason: 'merge built but SAVE FAILED (quota) — live bytes preserved under pre-import key' };
-      return { ok: true, mode: 'merged', imported: imported };
+      for (i = 0; i < parsed.events.length; i++)
+        if (parsed.events[i] && typeof parsed.events[i].id === 'string') idMap[parsed.events[i].id] = newId('e');
+      /* pass 2: rewire every *Id / *Ids reference through idMap */
+      var incoming = rewire({ people: parsed.people, events: parsed.events }, idMap);
+      incoming.people.forEach(function (p) { if (p && typeof p === 'object') state.people.push(p); });
+      incoming.events.forEach(function (e) { state.events.push(e); });
+      /* post-merge audit: the union is normalized too — never dropped, repairs logged */
+      var post = normalizeEvents(state.events, logRow);
+      state.events = post.events;
+      logRow('import', 'merged ' + incoming.events.length + ' event(s), ' + incoming.people.length +
+        ' people (' + Object.keys(idMap).length + ' ids re-minted, references rewired); post-merge repairs: ' +
+        post.repairs.length + '; live bytes preserved as .pre-import.');
+      var r = save();
+      return { ok: true, mergedEvents: incoming.events.length, mergedPeople: incoming.people.length,
+        reminted: Object.keys(idMap).length, writeOk: r.ok };
     }
 
-    function listKeys() {
-      var out = [], i, k;
-      for (i = 0; i < localStorage.length; i++) {
-        k = localStorage.key(i);
-        if (k && k.indexOf(key) === 0) {
+    function exportText() { return JSON.stringify(state, null, 2); }
+
+    /* key browser: enumerates this store's keys incl. read-only quarantines */
+    function browse(prefix) {
+      var out = [], base = key;
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k == null) continue;
+          if (prefix ? k.indexOf(prefix) !== 0 : (k !== base && k.indexOf(base + '.') !== 0 && k !== base)) continue;
           var v = localStorage.getItem(k) || '';
-          out.push({ key: k, bytes: v.length, kind: qkindOf(k, key) || 'other' });
+          var kind = qkindOf(k, base);
+          if (prefix && kind == null) kind = 'other';
+          out.push({ key: k, kind: kind || 'other', bytes: v.length, readonly: kind !== 'live', preview: v.slice(0, 280) });
         }
+      } catch (e) { /* storage enumeration blocked — report what we know */
+        out.push({ key: key, kind: 'live', bytes: JSON.stringify(state || {}).length, readonly: false, preview: '' });
       }
-      return out.sort(function (a, b) { return a.key < b.key ? -1 : 1; });
+      out.sort(function (a, b) { return a.key < b.key ? -1 : 1; });
+      return out;
     }
-    function readKey(k) {
-      if (!k || k === key || k.indexOf(key + '.') !== 0) return null; /* read-only: quarantines only */
-      return localStorage.getItem(k);
+    function dropTestKeys(prefix) { /* #/health cleans up after itself */
+      var kill = [], i;
+      try {
+        for (i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf(prefix) === 0) kill.push(k);
+        }
+        kill.forEach(function (k) { localStorage.removeItem(k); });
+      } catch (e) { /* best effort */ }
+      return kill.length;
     }
 
     return {
-      key: function () { return key; },
-      load: load, save: save,
-      get: function () { return state; },
-      set: function (s) { state = s; },
-      exportJSON: exportJSON, importJSON: importJSON,
-      listKeys: listKeys, readKey: readKey,
-      logRow: logRow,
-      _trySetItem: trySetItem, _quarantine: quarantine, _normalize: normalizeEvents
+      CURRENT: CURRENT, LINEAGE: LINEAGE, KEY: key,
+      nowISO: nowISO, todayISO: todayISO, newId: newId, fresh: fresh,
+      isBaseShape: isBaseShape, isShape: isShape, normalizeEvents: normalizeEvents,
+      rewire: rewire, canon: canon, makeStore: makeStore,
+      load: load, save: save, quarantine: quarantine, logRow: logRow,
+      importData: importData, exportText: exportText, browse: browse, dropTestKeys: dropTestKeys,
+      trySetItem: trySetItem, classify: classify, sameData: sameData,
+      state: function () { return state; },
+      setState: function (s) { state = s; }
     };
   }
 
-  var main = makeStore('leados:data');
-  return {
-    CURRENT: CURRENT, LINEAGE: LINEAGE,
-    newId: newId, nowISO: nowISO, todayISO: todayISO, fresh: fresh,
-    boot: function () { return main.load(); },
-    get: main.get, set: main.set, save: main.save,
-    exportJSON: main.exportJSON, importJSON: main.importJSON,
-    listKeys: main.listKeys, readKey: main.readKey, logRow: main.logRow,
-    _makeStore: makeStore           /* health tests run stores on disposable keys */
-  };
+  return makeStore('leados:data');
 })();

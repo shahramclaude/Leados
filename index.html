@@ -3,51 +3,49 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LeadOS — Leadership Operating System</title>
-<meta name="description" content="An offline-first leadership mentor for newly appointed leaders of leaders. One HTML file, plain script tags, no network.">
+<title>LeadOS · mf-4 — Leadership Operating System</title>
+<meta name="description" content="Offline-first leadership mentor for newly appointed multi-team leaders. One localStorage key, an event store, a rules engine, and structured playbooks. No network.">
 <link rel="stylesheet" href="css/app.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%23F7F4EF'/%3E%3Cpath d='M7 4v16M7 5h10l-2.2 3.2L17 11.5H7' stroke='%23C23B2E' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 </head>
 <body>
-<div id="boot"><p><b>LeadOS</b> · mf-3 — storage, engine, playbooks, arrival…</p></div>
-<div class="pill" id="pill" style="display:none" title="A write failed (storage quota or blocked). In-memory state is intact — export at #/data immediately.">WRITE FAILED · EXPORT NOW</div>
 
-<div class="shell">
-  <nav class="rail" aria-label="Primary">
-    <span class="wordmark">LeadOS·mf-3</span>
-    <button class="navbtn" data-nav="today" aria-label="Today">
-      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16"/><path d="M5 5h11l-2.5 3.5L16 12H5"/></svg>
-      <span class="nl">Today</span></button>
-    <button class="navbtn" data-nav="arrival" aria-label="Arrival">
-      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 5-4 1 2-5z"/></svg>
-      <span class="nl">Arrival</span></button>
-    <button class="navbtn" data-nav="roster" aria-label="Roster">
-      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.2.3 3.8 1.9 4.3 4.3"/></svg>
-      <span class="nl">Roster</span></button>
-    <button class="navbtn" data-nav="playbooks" aria-label="Playbooks">
-      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5V5.5"/><path d="M8 7.5h8"/></svg>
-      <span class="nl">Playbooks</span></button>
-    <button class="navbtn" data-nav="health" aria-label="Health">
-      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6h5"/></svg>
-      <span class="nl">Health</span></button>
-    <button class="navbtn" data-nav="data" aria-label="Data">
-      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5V18.5c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8V5.5"/><path d="M4.5 12c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8"/></svg>
-      <span class="nl">Data</span></button>
-    <span class="tag">offline · one key · no network</span>
-  </nav>
-  <main class="main" id="main"></main>
+<div id="splash" aria-hidden="true">
+  <div class="splash-inner">
+    <div class="splash-word">LeadOS</div>
+    <div class="splash-sub mono">mf-4 · storage · engine · playbooks · arrival · conflict pairs</div>
+  </div>
 </div>
 
-<div id="scrim"></div>
-<aside id="drawer" aria-label="Detail panel"></aside>
+<div id="writefail" class="writefail mono" hidden>WRITE FAILED — STORAGE QUOTA · in-memory state intact · export a backup from #/data</div>
 
-<noscript><p style="padding:24px;font-family:Georgia,serif">LeadOS is a client-side application — it needs JavaScript, and nothing else. No account, no network, no tracking.</p></noscript>
+<div class="shell">
+  <nav id="rail" aria-label="Primary">
+    <div class="rail-brand">
+      <span class="rail-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 20V9l8-5 8 5v11" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 20v-6h6v6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>
+      <span class="rail-name">LeadOS<span class="rail-ver mono">mf-4</span></span>
+    </div>
+    <div class="rail-links" id="rail-links"><!-- rendered by ui.js --></div>
+    <div class="rail-foot mono">offline · one key ·<br>no network</div>
+  </nav>
+
+  <main id="view" tabindex="-1"><!-- rendered by ui.js --></main>
+</div>
+
+<div id="drawer" class="drawer" hidden>
+  <div class="drawer-scrim" data-close-drawer></div>
+  <div class="drawer-panel" role="dialog" aria-modal="true" aria-label="Playbook">
+    <div class="drawer-head">
+      <div id="drawer-title" class="drawer-title"></div>
+      <button class="iconbtn" data-close-drawer aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="1.8" fill="none"/></svg></button>
+    </div>
+    <div id="drawer-body" class="drawer-body"></div>
+  </div>
+</div>
 
 <script src="js/store.js"></script>
 <script src="js/events.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/playbooks.js"></script>
 <script src="js/ui.js"></script>
-<script>document.addEventListener('DOMContentLoaded', function () { LEADOS.ui.init(); });</script>
 </body>
 </html>
