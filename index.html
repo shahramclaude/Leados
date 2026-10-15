@@ -2536,3 +2536,1136 @@ if(document.readyState === 'loading') document.addEventListener('DOMContentLoade
 </script>
 </body>
 </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeadOS — Leadership Operating System</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%230b0e12'/%3E%3Cpath d='M12 5v14M5 12h14' stroke='%236ee7b7' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* LeadOS Session 4 — zero-network design system. No fonts fetched, no CDN. System stacks only.
+   Why: the product contract ("no network calls, not even fonts") outranks styling convenience. */
+:root{
+  --bg:#0a0d11; --bg2:#0d1117; --panel:#11161e; --panel2:#151b25; --panel3:#1a2230;
+  --line:rgba(148,163,184,.13); --line2:rgba(148,163,184,.22);
+  --ink:#e8edf4; --ink2:#aab6c6; --ink3:#6b7a8f; --ink4:#4b586a;
+  --mint:#6ee7b7; --mint-d:#0e2b22; --sky:#7dd3fc; --sky-d:#0e2433;
+  --amber:#fbbf24; --amber-d:#2e2208; --red:#fb7185; --red-d:#33121a;
+  --violet:#c4b5fd; --violet-d:#231b3a; --teal:#5eead4;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --r:14px; --r2:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--ink);font:14.5px/1.55 var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
+::selection{background:rgba(110,231,183,.25)}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit;background:none;border:none;outline:none}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--mint);outline-offset:2px;border-radius:6px}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#222c3b;border-radius:5px;border:2px solid var(--bg)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- app chrome ---------- */
+#app{display:flex;min-height:100vh}
+#side{width:250px;flex:0 0 250px;background:var(--bg2);border-right:1px solid var(--line);position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;z-index:40}
+.brand{padding:20px 18px 16px;border-bottom:1px solid var(--line)}
+.brand .mark{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.14em;font-size:15px}
+.brand .mark svg{color:var(--mint)}
+.brand .sub{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:7px;letter-spacing:.06em}
+nav#nav{flex:1;padding:12px 10px;overflow-y:auto}
+.navgrp{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--ink4);padding:14px 10px 6px;text-transform:uppercase}
+.nlink{display:flex;align-items:center;gap:10px;padding:7.5px 10px;border-radius:9px;color:var(--ink2);font-size:13.5px;position:relative;transition:background .12s,color .12s}
+.nlink:hover{background:var(--panel);color:var(--ink)}
+.nlink.on{background:var(--panel2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.nlink.on::before{content:'';position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--mint)}
+.nlink svg{width:15px;height:15px;flex:0 0 15px;color:var(--ink3)}
+.nlink.on svg{color:var(--mint)}
+.nlink .cnt{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink3);background:var(--panel3);padding:1px 7px;border-radius:20px}
+.nlink .cnt.hot{background:var(--red-d);color:var(--red)}
+.sidefoot{padding:14px 12px;border-top:1px solid var(--line);font-family:var(--mono);font-size:9.5px;color:var(--ink4);display:flex;flex-direction:column;gap:4px}
+#shell{flex:1;min-width:0;display:flex;flex-direction:column}
+#topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;padding:12px 26px;background:rgba(10,13,17,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+#crumb{font-size:13px;color:var(--ink3);display:flex;gap:8px;align-items:center;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#crumb b{color:var(--ink2);font-weight:600}
+#topbar .sp{flex:1}
+#wpill{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;padding:4px 10px;border-radius:20px;border:1px solid var(--line);color:var(--ink3);white-space:nowrap}
+#wpill.ok{color:var(--mint);border-color:rgba(110,231,183,.3);background:rgba(110,231,183,.06)}
+#wpill.fail{color:var(--red);border-color:rgba(251,113,133,.4);background:var(--red-d);animation:pulse-f 1.6s infinite}
+@keyframes pulse-f{50%{opacity:.55}}
+#qc-btn{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2);border:1px solid var(--line2);border-radius:9px;padding:6.5px 12px;background:var(--panel);transition:border-color .15s}
+#qc-btn:hover{border-color:var(--mint);color:var(--ink)}
+#qc-btn kbd{font-family:var(--mono);font-size:10px;color:var(--ink3);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+#burger{display:none;width:34px;height:34px;border:1px solid var(--line2);border-radius:8px;align-items:center;justify-content:center;color:var(--ink2)}
+main#view{padding:26px 26px 90px;max-width:1180px;width:100%;margin:0 auto}
+
+/* ---------- view primitives ---------- */
+.vhead{margin-bottom:22px}
+.vhead .kick{font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--mint);margin-bottom:6px}
+.vhead h1{font-size:26px;font-weight:750;letter-spacing:-.02em;line-height:1.15}
+.vhead .lede{color:var(--ink2);font-size:13.5px;margin-top:6px;max-width:640px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
+.card.tight{padding:12px 14px}
+.card.warn{border-color:rgba(251,191,36,.35)}
+.card.bad{border-color:rgba(251,113,133,.4)}
+.card.good{border-color:rgba(110,231,183,.3)}
+.ctitle{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.ctitle svg{width:13px;height:13px;color:var(--mint)}
+.ctitle .r{margin-left:auto;font-weight:400;letter-spacing:0;text-transform:none;font-size:12px;color:var(--ink3)}
+.muted{color:var(--ink3)} .muted2{color:var(--ink4)}
+.small{font-size:12px} .tiny{font-size:11px}
+.mono{font-family:var(--mono)}
+.hr{height:1px;background:var(--line);margin:14px -18px}
+.row{display:flex;align-items:center;gap:10px}
+.row.between{justify-content:space-between}
+.wrap{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.stack{display:flex;flex-direction:column;gap:10px}
+.num{font-family:var(--mono);font-feature-settings:'tnum'}
+.bignum{font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:650;letter-spacing:.05em;padding:2.5px 9px;border-radius:30px;border:1px solid var(--line);color:var(--ink2);white-space:nowrap}
+.pill svg{width:10px;height:10px}
+.pill.mint{color:var(--mint);border-color:rgba(110,231,183,.35);background:rgba(110,231,183,.07)}
+.pill.sky{color:var(--sky);border-color:rgba(125,211,252,.35);background:rgba(125,211,252,.07)}
+.pill.amber{color:var(--amber);border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.07)}
+.pill.red{color:var(--red);border-color:rgba(251,113,133,.4);background:rgba(251,113,133,.08)}
+.pill.violet{color:var(--violet);border-color:rgba(196,181,253,.35);background:rgba(196,181,253,.07)}
+.pill.dim{color:var(--ink3);background:var(--panel2)}
+.chip{display:inline-block;font-size:11.5px;padding:4px 11px;border-radius:30px;border:1px solid var(--line2);color:var(--ink2);background:var(--panel2);transition:all .12s}
+button.chip:hover{border-color:var(--mint);color:var(--ink)}
+.chip.on{border-color:var(--mint);color:var(--mint);background:rgba(110,231,183,.08)}
+
+/* findings */
+.find{display:flex;gap:14px;padding:15px 18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:10px;align-items:flex-start}
+.find .sev{flex:0 0 78px;text-align:center;padding-top:2px}
+.find .body{flex:1;min-width:0}
+.find h3{font-size:14.5px;font-weight:650;letter-spacing:-.01em}
+.find .basis{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:5px;line-height:1.6;word-break:break-word}
+.find .acts{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}
+.find.blocker{border-left:3px solid var(--red)}
+.find.risk{border-left:3px solid var(--amber)}
+.find.nit{border-left:3px solid var(--sky)}
+
+/* tables */
+table.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink4);font-weight:600;text-align:left;padding:7px 10px;border-bottom:1px solid var(--line)}
+.tbl td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr.hoverable{cursor:pointer;transition:background .1s}
+.tbl tr.hoverable:hover{background:var(--panel2)}
+
+/* buttons + forms */
+.btn{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:9px;border:1px solid var(--line2);color:var(--ink2);background:var(--panel2);transition:all .13s;white-space:nowrap}
+.btn:hover{color:var(--ink);border-color:var(--ink3)}
+.btn.pri{background:var(--mint);border-color:var(--mint);color:#08251c}
+.btn.pri:hover{background:#8bf0c8;color:#051a13}
+.btn.dng{border-color:rgba(251,113,133,.4);color:var(--red)}
+.btn.dng:hover{background:var(--red-d)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover{background:var(--panel2)}
+.btn.sm{padding:5px 10px;font-size:11.5px}
+.btn svg{width:13px;height:13px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:650;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
+.field .hint{font-size:11px;color:var(--ink4);margin-top:4px;text-transform:none;letter-spacing:0;font-weight:400}
+input.in,select.in,textarea.in{width:100%;background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:8.5px 12px;font-size:13.5px;color:var(--ink);transition:border-color .12s}
+input.in:focus,select.in:focus,textarea.in:focus{border-color:var(--mint);box-shadow:0 0 0 3px rgba(110,231,183,.1)}
+select.in{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7a8f' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:30px}
+textarea.in{resize:vertical;min-height:74px;line-height:1.5}
+input[type=range].rng{width:100%;accent-color:var(--mint);height:28px;cursor:pointer}
+.seg{display:inline-flex;background:var(--bg2);border:1px solid var(--line2);border-radius:9px;padding:3px;gap:2px}
+.seg button{padding:5px 13px;font-size:12px;font-weight:600;color:var(--ink3);border-radius:7px}
+.seg button.on{background:var(--panel3);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.errline{font-size:12px;color:var(--red);margin-top:6px;display:flex;gap:6px;align-items:flex-start}
+
+/* modal */
+#modalroot{position:fixed;inset:0;z-index:90;display:none}
+#modalroot.open{display:block}
+.mback{position:absolute;inset:0;background:rgba(4,6,9,.72);backdrop-filter:blur(5px);animation:fadein .15s}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(620px,calc(100vw - 36px));max-height:calc(100vh - 60px);overflow-y:auto;background:var(--panel);border:1px solid var(--line2);border-radius:18px;padding:24px 26px;box-shadow:0 30px 80px rgba(0,0,0,.55);animation:modalin .18s cubic-bezier(.2,.9,.3,1.1)}
+.modal.wide{width:min(860px,calc(100vw - 36px))}
+@keyframes fadein{from{opacity:0}}
+@keyframes modalin{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}}
+.mtitle{font-size:18px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px}
+.msub{font-size:12.5px;color:var(--ink3);margin-bottom:18px}
+.mfoot{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+
+/* toast */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:120;display:none;align-items:center;gap:10px;background:var(--panel3);border:1px solid var(--line2);border-radius:12px;padding:11px 18px;font-size:13px;box-shadow:0 12px 40px rgba(0,0,0,.5);animation:toastin .2s}
+@keyframes toastin{from{opacity:0;transform:translateX(-50%) translateY(8px)}}
+#toast.err{border-color:rgba(251,113,133,.5)}
+#toast.err svg{color:var(--red)}
+#toast.ok svg{color:var(--mint)}
+
+/* bars / sparklines */
+.bar{height:6px;border-radius:3px;background:var(--panel3);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:3px;background:var(--mint);transition:width .4s}
+.bar>i.amber{background:var(--amber)} .bar>i.red{background:var(--red)} .bar>i.sky{background:var(--sky)}
+.spark{display:block}
+kbd.k{font-family:var(--mono);font-size:10px;border:1px solid var(--line2);border-radius:4px;padding:1px 6px;color:var(--ink3)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:0 0 7px}
+
+/* nine-box */
+.ninebox{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;max-width:340px}
+.nbc{aspect-ratio:1.5;border:1px solid var(--line);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8.5px;color:var(--ink4);position:relative;background:var(--bg2)}
+.nbc.hit{border-color:var(--mint);color:var(--mint);background:rgba(110,231,183,.08);font-weight:700}
+.nbc .cnt{position:absolute;top:3px;right:6px;font-size:9px;color:var(--ink3)}
+
+/* dep graph */
+.depmap{font-family:var(--mono);font-size:11px;line-height:2;color:var(--ink2)}
+.depmap .edge{display:flex;align-items:center;gap:8px}
+.depmap .age{font-size:9.5px}
+
+/* health wall */
+.trow{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);font-size:13px}
+.trow:last-child{border-bottom:none}
+.trow .tid{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--sky);flex:0 0 44px;padding-top:1px}
+.trow .tres{flex:0 0 58px;text-align:right}
+.trow .obs{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:3px;line-height:1.6;word-break:break-word}
+
+.empty{padding:34px 20px;text-align:center;border:1.5px dashed var(--line2);border-radius:var(--r);color:var(--ink3)}
+.empty .big{font-size:15px;font-weight:600;color:var(--ink2);margin-bottom:5px}
+.empty svg{width:26px;height:26px;margin-bottom:10px;color:var(--ink4)}
+
+.tstamp{font-family:var(--mono);font-size:10px;color:var(--ink4);white-space:nowrap}
+.timeline{position:relative;padding-left:20px}
+.timeline::before{content:'';position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--line2)}
+.tl-item{position:relative;padding-bottom:14px}
+.tl-item::before{content:'';position:absolute;left:-18.5px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--panel3);border:1px solid var(--line2)}
+.tl-item.hot::before{background:var(--mint);border-color:var(--mint)}
+@media (max-width:1080px){.grid4{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:1fr 1fr}}
+@media (max-width:900px){
+  #side{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .22s;box-shadow:20px 0 60px rgba(0,0,0,.5)}
+  #side.open{transform:none}
+  #burger{display:flex}
+  main#view{padding:18px 16px 80px}
+  .grid2,.grid3,.grid4{grid-template-columns:1fr}
+  .find{flex-direction:column;gap:8px}
+  .find .sev{flex:none;text-align:left}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="brand">
+      <div class="mark"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 4v16M4 12h16"/><circle cx="12" cy="12" r="9.5" stroke-width="1.6" opacity=".45"/></svg>LEADOS</div>
+      <div class="sub">LEADERSHIP OPERATING SYSTEM</div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="sidefoot" id="sidefoot"></div>
+  </aside>
+  <div id="shell">
+    <header id="topbar">
+      <button id="burger" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div id="crumb"></div>
+      <div class="sp"></div>
+      <span id="wpill" class="ok">WRITE · OK</span>
+      <button id="qc-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg>Capture <kbd>/</kbd></button>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+<div id="modalroot"></div>
+<div id="toast" role="status"></div>
+<script>
+'use strict';
+/* ============================================================
+   LEADOS — Session 4 build · schema v3 · key `leados:data`
+   Single file. Vanilla JS. No network. No framework.
+   Authority rule (inherited): #/health executes the claims in
+   README.md against production code paths. Where docs and the
+   wall disagree, the wall wins — and both are versioned together
+   now, which fixes B1's documentation drift by construction.
+   ============================================================ */
+
+/* ---------------- 0. tiny utils ---------------- */
+const DAY = 86400000, HOUR = 3600000;
+const now = () => Date.now();
+const days = n => n * DAY;
+function dAgo(n){ return now() - n * DAY; }
+function iso(ms){ return new Date(ms).toISOString(); }
+function dISO(ms){ const d = new Date(ms); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function parseDay(s){ const t = Date.parse(s + (s.length===10 ? 'T12:00:00' : '')); return isNaN(t) ? null : t; }
+function ageDays(t){ return Math.floor((now() - t) / DAY); }
+function fmtAge(t){ if (t==null) return 'never'; const d = ageDays(t); if (d<=0) return 'today'; if (d===1) return 'yesterday'; return d + 'd ago'; }
+function fmtDate(t){ if (t==null) return '—'; return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+function fmtDateTime(t){ if (t==null) return '—'; return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'}) + ' ' + new Date(t).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); }
+function fmtDur(t){ if (t==null) return '—'; const d = Math.ceil((t - now()) / DAY); if (d < 0) return Math.abs(d) + 'd overdue'; if (d===0) return 'today'; return 'in ' + d + 'd'; }
+function weekKey(ms){ const d = new Date(ms==null?now():ms); const day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return dISO(d.getTime()); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function uid(p){ let r = ''; try { const a = new Uint32Array(2); crypto.getRandomValues(a); r = a[0].toString(36) + a[1].toString(36); } catch(e){ r = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2); } return (p||'x') + '_' + now().toString(36) + r.slice(0,6); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function avg(arr){ return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null; }
+function median(arr){ if(!arr.length) return null; const s=[...arr].sort((a,b)=>a-b); const m=Math.floor(s.length/2); return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+function slope3(pts){ /* pts: [{t,v}] measured only; needs >=3, else null. Linear slope per week. */
+  const p=(pts||[]).filter(x=>x&&x.v!=null&&!x.estimated).sort((a,b)=>a.t-b.t);
+  if (p.length<3) return null;
+  const n=p.length, mx=avg(p.map(x=>x.t)), my=avg(p.map(x=>x.v));
+  let num=0,den=0; for(const x of p){ num+=(x.t-mx)*(x.v-my); den+=(x.t-mx)*(x.t-mx); }
+  return den===0?0:(num/den)*7*DAY;
+}
+function sparkSVG(pts, opt){ /* numeric-only interpolation → safe as innerHTML. returns {svg,boundaryIdx} */
+  opt = opt||{}; const w=opt.w||120, h=opt.h||30, pad=3;
+  const p=(pts||[]).filter(x=>x&&x.v!=null);
+  if (!p.length) return {svg:'<span class="muted2 tiny mono">no data</span>', boundaryIdx:-1};
+  const lo=opt.min!=null?opt.min:0, hi=opt.max!=null?opt.max:5;
+  const xs=p.map((x,i)=> pad + (p.length===1? w/2-pad : i*(w-2*pad)/(p.length-1)));
+  const ys=p.map(x=> h-pad-((clamp(x.v,lo,hi)-lo)/((hi-lo)||1))*(h-2*pad));
+  let d=''; p.forEach((x,i)=>{ d += (i?' L':'M')+xs[i].toFixed(1)+' '+ys[i].toFixed(1); });
+  let dots=''; const bIdx=p.findIndex(x=>x.en!=null);
+  p.forEach((x,i)=>{ dots += '<circle cx="'+xs[i].toFixed(1)+'" cy="'+ys[i].toFixed(1)+'" r="'+(x.estimated?1.8:2.2)+'" fill="'+(x.estimated?'none':'var(--mint)')+'" stroke="'+(x.estimated?'var(--ink4)':'none')+'" stroke-width="1.2" stroke-dasharray="'+(x.estimated?'2 1.5':'')+'"/>'; });
+  let tick='';
+  if (bIdx>0){ tick='<line x1="'+xs[bIdx].toFixed(1)+'" y1="2" x2="'+xs[bIdx].toFixed(1)+'" y2="'+(h-2)+'" stroke="var(--sky)" stroke-width="1" stroke-dasharray="2.5 2.5"/>'; }
+  const svg='<svg class="spark" width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+tick+'<path d="'+d+'" fill="none" stroke="var(--mint)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>'+dots+'</svg>';
+  return {svg:svg, boundaryIdx:bIdx};
+}
+
+/* ---------------- 1. icons (vendored Lucide stroke geometry, zero network) ---------------- */
+function ic(name, size){
+  const P = {
+    home:'<path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 22V12h6v10"/>',
+    users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    user:'<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    ooo:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>',
+    pulse:'<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+    target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    case:'<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect x="2" y="6" width="20" height="14" rx="2"/>',
+    decision:'<path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/>',
+    esc:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    risk:'<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1 1 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"/>',
+    deleg:'<path d="M11 12H3"/><path d="M16 6H3"/><path d="M16 18H3"/><path d="m19 10-4 4"/><path d="m15 10 4 4"/>',
+    ritual:'<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+    talent:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+    meet:'<path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/>',
+    arrive:'<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
+    skip:'<path d="m5 12 7-7 7 7"/><path d="m12 19 7-7"/><path d="m5 19 7-7"/><path d="m12 5 7 7"/>',
+    calib:'<path d="M12 3v18"/><path d="M7 8h10"/><path d="m5 8-2.5 5a3 3 0 0 0 5.5 0L5.5 8"/><path d="m19 8-2.5 5a3 3 0 0 0 5.5 0L19.5 8"/><path d="M8 21h8"/>',
+    radar:'<path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/>',
+    rehearse:'<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+    data:'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+    health:'<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+    stake:'<path d="m12 2 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8Z"/>',
+    park:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/><path d="M12 7v6"/><path d="m9 10 3 3 3-3"/>',
+    plus:'<path d="M5 12h14M12 5v14"/>',
+    check:'<path d="M20 6 9 17l-5-5"/>',
+    x:'<path d="M18 6 6 18M6 6l12 12"/>',
+    clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    arrow:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+    link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    down:'<path d="m21 15-9 6-9-6"/><path d="m21 9-9 6-9-6"/><path d="m21 3-9 6-9-6"/>',
+    trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    dl:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+    up:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+    note:'<path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5Z"/><path d="M15 3v6h6"/>'
+  };
+  const p = P[name] || P.note;
+  return '<svg width="'+(size||14)+'" height="'+(size||14)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+p+'</svg>';
+}
+
+/* ---------------- 2. storage: versioning, migrations, quarantine, quota ---------------- */
+const LSKEY = 'leados:data';
+const SCHEMA = 3;
+/* v1 documented shape (Session-1 rebuild): base collections.
+   v2 (Session 2): + skips, calibration, goal dep edges (id list), meeting list, radar inputs.
+   v3 (THIS session, additive over v2 — nothing renamed, nothing dropped):
+     + parkedTopics, peer360, stakeholders, meetingWeeks, calibration history shape,
+       goal.depEdges [{to,since}] replaces depEdges-as-ids (migrated), decisions.keep, meta.docsSha.
+   A payload failing shape validation for its declared version is quarantined
+   (foreign bytes doctrine — includes the undocumented v3 build on main:
+   its v3 is not this v3; mismatch quarantines read-only, never rewrites). */
+const QPREFIX = LSKEY + '.'; // + <corrupt|malformed|superseded|migration-failed|pre-import|foreign>.<ts>
+function qkey(kind){ return QPREFIX + kind + '.' + now(); }
+
+function blankState(){
+  return {
+    meta:{ schemaVersion:SCHEMA, seeded:false, createdAt:now(), origin:'leadOS.session4', writeState:'ok' },
+    people:[], oneOnOnes:[], parkedTopics:[], feedbacks:[], goals:[], cases:[],
+    escalations:[], decisions:[], risks:[], delegations:[], rituals:[], meetings:[], meetingWeeks:[],
+    talent:{ successors:[] }, arrival:{ startDate:null, listeningTour:[], wins:[] },
+    skips:[], calibration:{ cycles:[] }, peer360:[], stakeholders:[],
+    events:[], integrityLog:[], dismissed:{}, settings:{ escalationSla:{5:1,4:3,3:7,2:14,1:30} }
+  };
+}
+function isObj(x){ return x && typeof x==='object' && !Array.isArray(x); }
+function validateCore(s){ /* returns null if OK, else reason. Core = what every version of this lineage must have. */
+  if (!isObj(s)) return 'state is not an object';
+  if (!isObj(s.meta) || typeof s.meta.schemaVersion!=='number') return 'meta.schemaVersion missing';
+  const lists = ['people','goals','cases','decisions','events'];
+  for (const k of lists){ if (!Array.isArray(s[k])) return 'collection '+k+' missing or not an array'; }
+  for (const p of s.people){ if (!isObj(p) || typeof p.id!=='string' || typeof p.name!=='string') return 'people rows malformed'; }
+  return null;
+}
+/* migrations: pure fns, (state)->state. Validated before & after. */
+const MIGRATIONS = {
+  '0>1': s => { // fills any missing base collection
+    const b = blankState();
+    for (const k of Object.keys(b)) if (s[k]===undefined) s[k]=b[k];
+    s.meta.schemaVersion = 1; return s;
+  },
+  '1>2': s => { // Session-2 additions, defaults only
+    if (!Array.isArray(s.skips)) s.skips=[];
+    if (!isObj(s.calibration)) s.calibration={cycles:[]};
+    if (!Array.isArray(s.meetings)) s.meetings=[];
+    if (!isObj(s.talent)) s.talent={successors:[]};
+    if (!isObj(s.arrival)) s.arrival={startDate:null,listeningTour:[],wins:[]};
+    if (!isObj(s.settings)||!isObj(s.settings.escalationSla)) (s.settings=s.settings||{}).escalationSla={5:1,4:3,3:7,2:14,1:30};
+    for (const g of s.goals||[]) if (g.status===undefined) g.status='ontrack';
+    s.meta.schemaVersion = 2; return s;
+  },
+  '2>3': s => { // Session-4 additions; depEdges ids -> {to,since}
+    if (!Array.isArray(s.parkedTopics)) s.parkedTopics=[];
+    if (!Array.isArray(s.peer360)) s.peer360=[];
+    if (!Array.isArray(s.stakeholders)) s.stakeholders=[];
+    if (!Array.isArray(s.meetingWeeks)) s.meetingWeeks=[];
+    if (!Array.isArray(s.feedbacks)) s.feedbacks=[];
+    if (!isObj(s.dismissed)) s.dismissed={};
+    for (const g of s.goals||[]){
+      if (Array.isArray(g.depEdges) && g.depEdges.length && typeof g.depEdges[0]==='string'){
+        g.depEdges = g.depEdges.map(id => ({ to:id, since:g.createdAt||now() }));
+      }
+      if (!Array.isArray(g.depEdges)) g.depEdges=[];
+      if (!Array.isArray(g.checkIns)) g.checkIns=[];
+    }
+    if (isObj(s.calibration)) for (const c of s.calibration.cycles||[]){ if (!Array.isArray(c.entries)) c.entries=[]; }
+    s.meta.schemaVersion = 3; return s;
+  }
+};
+function migrateChain(raw){ /* throws with reason on any mismatch — caller quarantines. */
+  let s = raw, v = s.meta.schemaVersion;
+  if (v > SCHEMA) { const e = new Error('newer-version:'+v); e.code='NEWER'; throw e; }
+  let guard = 0;
+  while (v < SCHEMA){
+    if (++guard > 8) throw new Error('migration loop guard');
+    const key = v + '>' + (v+1), fn = MIGRATIONS[key];
+    if (!fn) throw new Error('no migration for ' + key);
+    try { s = fn(s) || s; } catch(e){ const x = new Error('migration '+key+' failed: '+e.message); x.code='MIGFAIL'; throw x; }
+    const bad = validateCore(s); if (bad) throw new Error('post-migration '+key+' invalid: '+bad);
+    v = s.meta.schemaVersion;
+  }
+  return s;
+}
+
+let state = null;         // single source of truth. Views never cache entity copies.
+let writeFailed = false;  // in-memory only: pill reflects THIS session's write health.
+
+function readRaw(){ try { return localStorage.getItem(LSKEY); } catch(e){ return null; } }
+function quarantine(kind, bytes){ try { localStorage.setItem(qkey(kind), bytes); } catch(e){ /* storage full: preserve in-memory nothing, surface below */ writeFailed = true; } }
+function quorumList(){ const out=[]; try { for (let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if (k && k.indexOf(QPREFIX)===0) out.push({key:k, bytes:(localStorage.getItem(k)||'').length}); } } catch(e){} return out.sort((a,b)=>b.key.localeCompare(a.key)); }
+function legacyKeys(){ const out=[]; try { for (let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if (k && /^leados[.:]/.test(k) && k!==LSKEY && k.indexOf(QPREFIX)!==0) out.push({key:k, bytes:(localStorage.getItem(k)||'').length}); } } catch(e){} return out; }
+
+function trySetItem(k, v){ /* THE ONLY write path. Quota: prune event log once, retry once, then fail loudly. */
+  try { localStorage.setItem(k, v); writeFailed = false; setPill(); return true; }
+  catch(e){
+    if (state && k===LSKEY && Array.isArray(state.events) && state.events.length>200){
+      state.events = state.events.slice(-200);
+      try { localStorage.setItem(k, JSON.stringify(state)); writeFailed=false; setPill(); return true; } catch(e2){ /* fall through */ }
+    }
+    writeFailed = true; setPill(); return false;
+  }
+}
+function save(){ /* serializes live state. never throws. */
+  if (!state) return false;
+  state.meta.writeState = 'ok';
+  const ok = trySetItem(LSKEY, JSON.stringify(state));
+  if (!ok){ state.meta.writeState='failed'; toast('Write failed (storage quota). Last change is held in memory only. Export from #/data now.', 'err'); }
+  return ok;
+}
+function setPill(){ const el = document.getElementById('wpill'); if (!el) return;
+  if (writeFailed){ el.className='fail'; el.textContent='WRITE · FAILED'; el.title='localStorage write failed. Go to Data & backup, export, free space.'; }
+  else { el.className='ok'; el.textContent='WRITE · OK'; el.title='All changes persisted to localStorage.'; }
+}
+
+function loadState(){ /* five guarded branches; live key never silently overwritten. */
+  const raw = readRaw();
+  if (raw == null){ const s = blankState(); return { state:s, note:'fresh' }; }
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch(e){ quarantine('corrupt', raw); const s = blankState(); return { state:s, note:'corrupt-quarantined' }; }
+  const bad = validateCore(parsed);
+  if (bad){ quarantine('malformed', raw); const s = blankState(); return { state:s, note:'malformed-quarantined:'+bad }; }
+  const v = parsed.meta.schemaVersion;
+  try {
+    const migrated = migrateChain(parsed);
+    return { state:migrated, note: v===SCHEMA ? 'ok' : 'migrated:'+v+'>'+SCHEMA };
+  } catch(e){
+    const kind = e.code==='NEWER' ? 'superseded' : (e.code==='MIGFAIL' ? 'migration-failed' : 'foreign');
+    quarantine(kind, raw);
+    const s = blankState(); return { state:s, note:kind+'-quarantined' };
+  }
+}
+
+/* ---------------- 3. append-only event log + integrity audit ---------------- */
+function logEvent(type, label, refId){ if(!state) return;
+  state.events.push({ t:now(), type:type, label:label, refId:refId||null });
+  if (state.events.length > 400) state.events = state.events.slice(-400);
+}
+function integrityAudit(s, sink){ /* nulls dangling FKs, NEVER drops rows. Every repair logged. */
+  const log = sink || (s.integrityLog = s.integrityLog || []);
+  const pids = new Set((s.people||[]).map(p=>p.id));
+  const gids = new Set((s.goals||[]).map(g=>g.id));
+  const cids = new Set((s.cases||[]).map(c=>c.id));
+  const dids = new Set((s.decisions||[]).map(d=>d.id));
+  const fix = (where, msg)=>{ log.push({ t:now(), where:where, fix:msg }); };
+  for (const oo of s.oneOnOnes||[]) if (oo.personId && !pids.has(oo.personId)){ fix('oneOnOnes','nulled dangling personId on '+oo.id); oo.personId=null; }
+  for (const f of s.feedbacks||[]){ if (f.personId && !pids.has(f.personId)){ fix('feedbacks','nulled personId '+f.id); f.personId=null; } if (f.goalId && !gids.has(f.goalId)){ fix('feedbacks','nulled goalId '+f.id); f.goalId=null; } if (f.caseId && !cids.has(f.caseId)){ fix('feedbacks','nulled caseId '+f.id); f.caseId=null; } }
+  for (const pt of s.parkedTopics||[]) if (pt.personId && !pids.has(pt.personId)){ fix('parkedTopics','nulled personId '+pt.id); pt.personId=null; }
+  for (const g of s.goals||[]){ if (g.ownerId && !pids.has(g.ownerId)){ fix('goals','nulled ownerId '+g.id); g.ownerId=null; } g.depEdges=(g.depEdges||[]).filter(e=>{ if (e && gids.has(e.to)) return true; fix('goals','pruned dangling dep edge on '+g.id); return false; }); }
+  for (const c of s.cases||[]){ c.partyIds=(c.partyIds||[]).filter(id=>{ if (pids.has(id)) return true; fix('cases','pruned dangling party '+c.id); return false; }); c.linkedIds=(c.linkedIds||[]).filter(id=>{ if (pids.has(id)||gids.has(id)||dids.has(id)||cids.has(id)) return true; fix('cases','pruned dangling link '+c.id); return false; }); }
+  for (const e2 of s.escalations||[]) if (e2.caseId && !cids.has(e2.caseId)){ fix('escalations','nulled caseId '+e2.id); e2.caseId=null; e2.status='resolved'; e2.resolvedAt=e2.resolvedAt||now(); }
+  for (const r of s.risks||[]){ if (r.ownerId && !pids.has(r.ownerId)){ fix('risks','nulled ownerId '+r.id); r.ownerId=null; } if (r.caseId && !cids.has(r.caseId)){ fix('risks','nulled caseId '+r.id); r.caseId=null; } }
+  for (const d of s.delegations||[]) if (d.delegateId && !pids.has(d.delegateId)){ fix('delegations','nulled delegateId '+d.id); d.delegateId=null; }
+  for (const r2 of s.rituals||[]) r2.attendeeIds=(r2.attendeeIds||[]).filter(id=>{ if (pids.has(id)) return true; fix('rituals','pruned attendee'); return false; });
+  for (const sk of s.skips||[]) if (sk.personId && !pids.has(sk.personId)){ fix('skips','nulled personId '+sk.id); sk.personId=null; }
+  for (const p3 of s.peer360||[]) if (p3.personId && !pids.has(p3.personId)){ fix('peer360','nulled personId '+p3.id); p3.personId=null; }
+  for (const cyc of (s.calibration?s.calibration.cycles||[]:[])) for (const en of cyc.entries||[]) if (en.personId && !pids.has(en.personId)){ fix('calibration','nulled personId '+en.id); en.personId=null; }
+  if (s.talent) s.talent.successors=(s.talent.successors||[]).filter(x=>{ if (pids.has(x.seatId) && pids.has(x.candidateId)) return true; fix('talent','pruned dangling successor row'); return false; });
+  return log;
+}
+
+/* ---------------- 4. shared lookups & domain math (pure; fixtures welcome) ---------------- */
+const byId = (arr, id) => (arr||[]).find(x => x.id === id) || null;
+const person = id => byId(state.people, id);
+const pname = id => { const p = person(id); return p ? p.name : '∅ removed'; };
+const directs = () => state.people.filter(p => p.relation === 'direct');
+const leads  = () => state.people.filter(p => p.kind === 'lead' && p.relation === 'direct');
+const spanOf = pid => state.people.filter(p => p.reportsTo === pid).length;
+
+const SLA = s => (s.settings && s.settings.escalationSla) || {5:1,4:3,3:7,2:14,1:30};
+function slaStatus(esc2, at){ /* live computation, never cached. */
+  const t = at!=null?at:now();
+  if (!esc2 || esc2.status !== 'open') return { status:'closed' };
+  const slaD = SLA(state)[esc2.severity] || 30;
+  const age = t - esc2.openedAt, rem = slaD*DAY - age;
+  if (age > slaD*DAY) return { status:'breached', by:Math.ceil(-rem/DAY), sla:slaD };
+  if (rem <= DAY) return { status:'due-soon', inH:Math.max(0,Math.round(rem/HOUR)), sla:slaD };
+  return { status:'open', inD:Math.floor(rem/DAY), sla:slaD };
+}
+const DELG_HORIZON = {1:2, 2:4, 3:10, 4:20, 5:30}; // days between check-ins per delegation level
+function delegationDecayed(d, at){ const t=at!=null?at:now(); const h=DELG_HORIZON[d.level]||10; return (t - (d.lastCheckAt||d.startAt)) > h*DAY; }
+function goalDepDepth(s2, goal, seen){ /* DFS cycle path builder — pure over passed state. */
+  seen = seen || [];
+  for (const e of (goal.depEdges||[])){
+    const target = byId(s2.goals, e.to);
+    if (!target) continue;
+    if (seen.some(x=>x.id===target.id) || (seen.length===0 && target.id===goal.id)) return [...seen.map(x=>x.id), goal.id, target.id];
+    if (seen.length===0 && target.id===goal.id) return [goal.id, target.id];
+  }
+  return null;
+}
+function wouldCycle(s2, fromId, toId){ /* would adding from->to create a cycle? returns path array or null. DFS from toId following existing edges; if we can reach fromId, cycle. */
+  const walk = (id, path) => {
+    if (id === fromId) return path;
+    const g = byId(s2.goals, id); if (!g) return null;
+    for (const e of (g.depEdges||[])){
+      if (path.includes(e.to)) continue;
+      const r = walk(e.to, [...path, e.to]);
+      if (r) return r;
+    }
+    return null;
+  };
+  const reached = walk(toId, [toId]);
+  return reached ? [...reached, fromId] : null;
+}
+function goalDepAges(s2, g, at){ const t=at!=null?at:now(); return (g.depEdges||[]).map(e=>{ const tg=byId(s2.goals,e.to); return { edge:e, target:tg, days: Math.floor((t-(e.since||t))/DAY), open: tg? tg.status!=='done' : true }; }); }
+function depAgeBucket(d){ return d<=14 ? '0–14d' : d<=30 ? '15–30d' : '31d+'; }
+function measuredPulses(p){ return (p.mood||[]).filter(x=>x && x.v!=null && !x.estimated); }
+function pulseBoundaryIdx(p){ return (p.mood||[]).findIndex(x=>x && x.en!=null); }
+function etiquette(){ return null; }
+
+/* ---------------- 5. findings engine (Home) ---------------- */
+/* Every finding prints: basis (the concrete record + numbers that triggered it),
+   the rule id that produced it, and a confidence label. No finding claims certainty. */
+const SEV = { blocker:0, risk:1, nit:2 };
+function finding(sev, rule, title, basis, conf, acts){ return { sev:sev, rule:rule, title:title, basis:basis, conf:conf||'direct data', acts:acts||[] }; }
+
+const RULES = [
+  { id:'r-esc-breach', sev:'blocker', scan(){ const out=[];
+    for (const e of state.escalations){ const st=slaStatus(e); if (st.status==='breached'){ const c=byId(state.cases,e.caseId);
+      out.push(finding('blocker',this.id,'Escalation breached SLA: '+(c?c.title:'(case '+e.caseId+')'),'severity S'+e.severity+' · SLA '+st.sla+'d · breached by '+st.by+'d · opened '+fmtDate(e.openedAt)+' · computed live from escalations['+e.id+']','direct data',[{label:'Open case',act:'nav',arg:'#/case/'+e.caseId}]); } }
+    return out; } },
+  { id:'r-esc-duesoon', sev:'risk', scan(){ const out=[];
+    for (const e of state.escalations){ const st=slaStatus(e); if (st.status==='due-soon'){ const c=byId(state.cases,e.caseId);
+      out.push(finding('risk',this.id,'SLA due within 24h: '+(c?c.title:'(case)'),'severity S'+e.severity+' · SLA '+st.sla+'d · due in ~'+st.inH+'h · opened '+fmtDate(e.openedAt),'direct data',[{label:'Open case',act:'nav',arg:'#/case/'+e.caseId}]); } }
+    return out; } },
+  { id:'r-oneone', sev:'risk', scan(){ const out=[];
+    for (const p of directs()){ const oos=state.oneOnOnes.filter(o=>o.personId===p.id).sort((a,b)=>b.at-a.at); const last=oos[0];
+      if (!last) out.push(finding('blocker',this.id,'No 1:1 ever recorded with '+p.name,'oneOnOnes[personId='+p.id+'].length = 0 · direct report since '+fmtDate(p.startDate),'direct data',[{label:'Hold 1:1',act:'quick-ooo',arg:p.id}]));
+      else if (ageDays(last.at) > 14) out.push(finding('risk',this.id,'1:1 overdue with '+p.name,'last 1:1 '+fmtDate(last.at)+' ('+ageDays(last.at)+'d ago) · cadence rule >14d · oneOnOnes['+last.id+']','direct data',[{label:'Hold 1:1',act:'quick-ooo',arg:p.id}]));
+    } return out; } },
+  { id:'r-star', sev:'nit', scan(){ const out=[];
+    for (const p of directs()){ const lastPos=state.feedbacks.filter(f=>f.personId===p.id&&f.kind==='positive'&&f.deliveredAt).sort((a,b)=>b.deliveredAt-a.deliveredAt)[0];
+      if (!lastPos || ageDays(lastPos.deliveredAt)>30) out.push(finding('nit',this.id,'No recognition on record for '+p.name+' in 30d+','feedbacks[person='+p.id+', kind=positive, delivered] '+(lastPos?'last '+fmtDate(lastPos.deliveredAt):'= none')+' · retention research rule-of-thumb: monthly','inference from feedbacks',[{label:'Draft SBI',act:'quick-feedback',arg:p.id}]));
+    } return out; } },
+  { id:'r-goal-stale', sev:'risk', scan(){ const out=[];
+    for (const g of state.goals){ if (g.status==='done') continue;
+      if (!g.ownerId) out.push(finding('blocker',this.id,'Goal has no owner: “'+g.title+'”','goals['+g.id+'].ownerId = null · ownerless work is invisible work','direct data',[{label:'Assign owner',act:'nav',arg:'#/goals'}]));
+      const last=(g.checkIns||[]).slice().sort((a,b)=>b.t-a.t)[0];
+      if (!last || ageDays(last.t)>21) out.push(finding('risk',this.id,'Goal check-in stale: “'+g.title+'”','last check-in '+(last?fmtDate(last.t)+' ('+ageDays(last.t)+'d)':'never')+' · rule >21d · status '+g.status,'direct data',[{label:'Check in',act:'goal-checkin',arg:g.id}]));
+      if (g.due && g.due < now() && g.status!=='done') out.push(finding('blocker',this.id,'Goal past due, not closed: “'+g.title+'”','due '+fmtDate(g.due)+' ('+Math.abs(ageDays(g.due))+'d overdue) · status '+g.status,'direct data',[{label:'Open goals',act:'nav',arg:'#/goals'}]));
+    } return out; } },
+  { id:'r-dep-aging', sev:'risk', scan(){ const out=[];
+    for (const g of state.goals){ if (g.status==='done') continue;
+      for (const ea of goalDepAges(state,g)){ if (ea.open && ea.days>30){ const tg=ea.target;
+        out.push(finding('risk',this.id,'Blocking dependency aged '+ea.days+'d: “'+g.title+'”','blocked by “'+(tg?tg.title:'(goal '+ea.edge.to+')')+'” · edge since '+fmtDate(ea.edge.since)+' · open '+ea.days+'d · bucket '+depAgeBucket(ea.days),'direct data',[{label:'Open goals',act:'nav',arg:'#/goals'}])); } }
+    } return out; } },
+  { id:'r-decision-review', sev:'risk', scan(){ const out=[];
+    for (const d of state.decisions){ if (d.outcome && d.outcome.status==='closed') continue;
+      if (d.reviewAt && d.reviewAt < now()) out.push(finding('risk',this.id,'Decision past its review date: “'+d.title+'”','made '+fmtDate(d.madeAt)+' · review '+fmtDate(d.reviewAt)+' ('+Math.abs(ageDays(d.reviewAt))+'d overdue) · outcome not recorded','direct data',[{label:'Review',act:'nav',arg:'#/decisions'}]));
+    } return out; } },
+  { id:'r-case-stall', sev:'risk', scan(){ const out=[];
+    for (const c of state.cases){ if (c.status!=='open') continue;
+      const lastTouch=(c.touches||[]).slice().sort((a,b)=>b.t-a.t)[0]; const ref=lastTouch?lastTouch.t:c.openedAt;
+      if (ageDays(ref)>5) out.push(finding('risk',this.id,'Case idle '+ageDays(ref)+'d: '+c.title,'type '+c.type+' · severity S'+c.severity+' · last touch '+fmtDate(ref)+' · rule >5d idle','direct data',[{label:'Open case',act:'nav',arg:'#/case/'+c.id}]));
+    } return out; } },
+  { id:'r-deleg-decay', sev:'risk', scan(){ const out=[];
+    for (const d of state.delegations){ if (d.status!=='active') continue;
+      if (delegationDecayed(d)) out.push(finding('risk',this.id,'Delegation decaying: “'+d.title+'” ('+pname(d.delegateId)+')','level L'+d.level+' · horizon '+DELG_HORIZON[d.level]+'d · last check-in '+fmtAge(d.lastCheckAt)+' · authority without contact reverts','direct data',[{label:'Check in',act:'deleg-check',arg:d.id}]));
+    } return out; } },
+  { id:'r-ritual-lapse', sev:'nit', scan(){ const out=[];
+    for (const r of state.rituals){ if (ageDays(r.lastHeldAt||0) > r.cadenceDays) out.push(finding('nit',this.id,'Ritual lapsed: '+r.name,'cadence '+r.cadenceDays+'d · last held '+fmtAge(r.lastHeldAt),'direct data',[{label:'Mark held',act:'ritual-held',arg:r.id}]));
+    } return out; } },
+  { id:'r-pulse-slope', sev:'risk', scan(){ const out=[];
+    for (const p of directs()){ const s=slope3(p.mood); if (s==null) continue;
+      if (s < -0.5) out.push(finding('risk',this.id,'Pulse declining for '+p.name,'slope '+s.toFixed(2)+' pts/week over '+measuredPulses(p).length+' measured pulses (estimates excluded) · threshold −0.5','instrument signal · could also reflect events, not intent',[{label:'Open dossier',act:'nav',arg:'#/person/'+p.id}]));
+    } return out; } },
+  { id:'r-deleg-balance', sev:'nit', scan(){ const out=[];
+    for (const l of leads()){ const span=spanOf(l.id); if (span>=5 && !state.delegations.some(d=>d.delegateId===l.id&&d.status==='active'&&d.level>=3))
+      out.push(finding('nit',this.id,l.name+' runs '+span+' directs with nothing delegated at L3+','span computed from people.reportsTo · delegations[delegate='+l.id+', level>=3, active] = 0 · span pressure + zero delegated authority = bottlenecked lead','inference from roster + delegations',[{label:'Delegate',act:'quick-deleg',arg:l.id}]));
+    } return out; } },
+  { id:'r-skip-cadence', sev:'nit', scan(){ const out=[];
+    const icsOfLeads = state.people.filter(p=>p.relation==='ic' && p.reportsTo && pids_directIds().has(p.reportsTo));
+    for (const icp of icsOfLeads){ const sks=state.skips.filter(s=>s.personId===icp.id).sort((a,b)=>b.at-a.at); const last=sks[0];
+      if (!last || ageDays(last.at)>45) out.push(finding('nit',this.id,'Skip-level '+(last?'overdue':'never held')+' with '+icp.name,'reports to '+pname(icp.reportsTo)+' · last skip-level '+(last?fmtDate(last.at)+' ('+ageDays(last.at)+'d)':'never')+' · rule >45d','direct data',[{label:'Hold skip-level',act:'quick-skip',arg:icp.id}]));
+    } return out; } },
+  { id:'r-stake-touch', sev:'risk', scan(){ const out=[];
+    for (const st of state.stakeholders){ const due = st.nextTouchAt; if (due && due < now()) out.push(finding('risk',this.id,'Stakeholder touch overdue: '+st.name+' ('+st.relation+')','last touch '+fmtAge(st.lastTouchAt)+' · promised cadence next '+fmtDate(st.nextTouchAt)+' ('+Math.abs(ageDays(st.nextTouchAt))+'d overdue) · expectation: '+(st.expectation?st.expectation.slice(0,60):'—'),'direct data',[{label:'Touch now',act:'stake-touch',arg:st.id}]));
+    } return out; } },
+  { id:'r-360-stall', sev:'nit', scan(){ const out=[];
+    for (const p3 of state.peer360){ if (p3.status==='requested' && ageDays(p3.requestedAt)>10) out.push(finding('nit',this.id,'360 input unreturned '+ageDays(p3.requestedAt)+'d: for '+pname(p3.personId)+' from '+p3.from,'requested '+fmtDate(p3.requestedAt)+' · rule >10d · only delivered input counts as evidence','direct data',[{label:'Nudge / record',act:'nav',arg:'#/calibration'}]));
+    } return out; } },
+  { id:'r-arrival', sev:'nit', scan(){ const out=[]; const a=state.arrival; if (!a || !a.startDate) return out;
+    const d = ageDays(a.startDate);
+    const boss = state.stakeholders.find(s2=>s2.relation==='boss');
+    if (d>=14 && (!boss || !boss.expectation)) out.push(finding('blocker',this.id,'Day '+d+' — boss expectations still not written down','arrival.startDate '+fmtDate(a.startDate)+' · stakeholders[relation=boss].expectation empty · day-14 gate','direct data',[{label:'Set expectations',act:'nav',arg:'#/stakeholders'}]));
+    if (d>=30){ const req = [...directs(), ...state.stakeholders]; const seen = new Set(a.listeningTour.map(x=>x.personId)); const cover = req.length? req.filter(x=>seen.has(x.id)).length/req.length : 0;
+      if (d<=60 && cover<0.6) out.push(finding('risk',this.id,'Listening tour '+Math.round(cover*100)+'% at day '+d,Math.round(cover*100)+'% coverage of '+req.length+' required people · target 60% by day 60 · tour entries: '+a.listeningTour.length,'direct data',[{label:'Open arrival plan',act:'nav',arg:'#/arrival'}]));
+    } return out; } },
+  { id:'r-parked', sev:'nit', scan(){ const out=[]; const open=state.parkedTopics.filter(t=>t.status==='open');
+    if (open.length>=4) out.push(finding('nit',this.id,open.length+' parked 1:1 topics waiting','parkedTopics[status=open].length = '+open.length+' · queue grows faster than sessions consume it','direct data',[{label:'Open 1:1s',act:'nav',arg:'#/oneonones'}]));
+    return out; } },
+  { id:'r-meeting-bloat', sev:'nit', scan(){ const out=[];
+    const mins = state.meetings.filter(m=>m.status!=='killed').reduce((a,m)=>a + m.minutes * (m.freq==='weekly'?1:m.freq==='biweekly'?0.5:0.25), 0);
+    if (mins > 1200) out.push(finding('nit',this.id,'Recurring meeting load ≈ '+Math.round(mins/60)+' h/week','sum(minutes × freq factor) over meetings[status≠killed] = '+Math.round(mins)+'min · threshold 20h · compute in #/meetings studio','direct data',[{label:'Audit meetings',act:'nav',arg:'#/meetings'}]));
+    return out; } },
+  { id:'r-talent-blank', sev:'nit', scan(){ const out=[];
+    if (leads().length && !(state.talent.successors||[]).length) out.push(finding('nit',this.id,'No successor named for any lead seat','talent.successors.length = 0 · '+leads().length+' lead seats · bus-factor is currently a hope, not a plan','inference from talent store',[{label:'Name successors',act:'nav',arg:'#/talent'}]));
+    return out; } }
+];
+function pids_directIds(){ return new Set(directs().map(p=>p.id)); }
+function runRules(){ const out=[];
+  for (const r of RULES){ try { out.push(...r.scan()); } catch(e){ out.push(finding('nit','engine','Rule '+r.id+' threw: '+e.message,'engine fault isolation — one bad rule never blanks Home','engine')); } }
+  const kept = out.filter(f => !(state.dismissed && state.dismissed[f.rule+':'+f.title]));
+  return kept.sort((a,b)=>SEV[a.sev]-SEV[b.sev]);
+}
+
+/* ---------------- 6. case spine (pure fan-out) ---------------- */
+function applyRegisterCase(s2, payload){ /* pure: (state, payload) -> {created}. No DOM, no storage. */
+  const t = now();
+  const c = { id:uid('case'), type:payload.type||'conflict', title:String(payload.title||'Untitled case'),
+    partyIds:(payload.partyIds||[]).slice(), severity:clamp(+payload.severity||3,1,5),
+    status:'open', openedAt:t, closedAt:null, linkedIds:(payload.linkedIds||[]).slice(),
+    notes:payload.notes||'', touches:[{t:t, kind:'registered', label:'Case registered · severity S'+clamp(+payload.severity||3,1,5)}],
+    closedWithOverride:false, createdBy:'you' };
+  const created = { case:c, escalation:null, risk:null, partyEvents:[], logEntry:null };
+  if (c.severity >= 3){
+    const esc2 = { id:uid('esc'), caseId:c.id, severity:c.severity, openedAt:t, status:'open', resolvedAt:null };
+    created.escalation = esc2;
+    c.touches.push({t:t, kind:'escalation', label:'Escalation opened (auto, S≥3) · SLA '+SLA(s2)[c.severity]+'d'});
+  }
+  if (c.type==='incident' && c.severity>=4){
+    const r = { id:uid('risk'), title:'Follow-on risk from incident: '+c.title, likelihood:3, impact:c.severity, ownerId:c.partyIds[0]||null, reviewAt:t+days(7), status:'open', caseId:c.id, auto:true };
+    created.risk = r;
+    c.touches.push({t:t, kind:'risk', label:'Risk row created (auto, incident S≥4) · review in 7d'});
+  }
+  for (const pid of c.partyIds){ const p=byId(s2.people,pid); created.partyEvents.push({t:t,type:'case.party',label:'Case opened involving '+(p?p.name:pid)+': '+c.title,refId:c.id}); }
+  created.logEntry = { t:t, type:'case.registered', label:'Case registered: '+c.title+' (S'+c.severity+')', refId:c.id };
+  return created;
+}
+function commitRegisterCase(payload){ /* applies pure fn result to live state + persists. */
+  const res = applyRegisterCase(state, payload);
+  state.cases.push(res.case);
+  if (res.escalation) state.escalations.push(res.escalation);
+  if (res.risk) state.risks.push(res.risk);
+  for (const ev of res.partyEvents) state.events.push(ev);
+  state.events.push(res.logEntry);
+  if (state.events.length>400) state.events = state.events.slice(-400);
+  save(); return res;
+}
+function tryCloseCase(s2, caseId, opts){ /* dryrun default. Refuses open-escalation orphans; override is logged on the case itself. */
+  opts = opts||{};
+  const c = byId(s2.cases, caseId); if (!c) return { ok:false, reason:'no-case' };
+  if (c.status==='closed') return { ok:false, reason:'already-closed' };
+  const openEsc = (s2.escalations||[]).find(e=>e.caseId===caseId && e.status==='open');
+  const blockers=[]; if (openEsc) blockers.push('open escalation '+openEsc.id+' (S'+openEsc.severity+', '+slaStatus(openEsc).status+')');
+  if (blockers.length && !opts.overrideReason) return { ok:false, blockers:blockers };
+  if (opts.dryrun) return { ok:true, blockers:blockers, wouldOverride:blockers.length>0 };
+  c.status='closed'; c.closedAt=now();
+  if (blockers.length){ c.closedWithOverride=true; c.overrideReason=opts.overrideReason||'';
+    c.touches.push({t:now(),kind:'override',label:'Closed with override — blockers: '+blockers.join('; ')+' — reason: '+(opts.overrideReason||'(none given)')}); }
+  if (openEsc){ openEsc.status='resolved'; openEsc.resolvedAt=now(); openEsc.resolvedBy='case-close'+(blockers.length?' (override)':''); }
+  c.touches.push({t:now(),kind:'closed',label:'Case closed'});
+  logEvent('case.closed','Case closed: '+c.title, c.id);
+  return { ok:true, blockers:blockers };
+}
+
+/* ---------------- 7. meetings weekly snapshot (pure-ish; idempotent) ---------------- */
+function meetingWeeklyMinutes(s2){ return Math.round(s2.meetings.filter(m=>m.status!=='killed').reduce((a,m)=>a + m.minutes * (m.freq==='weekly'?1:m.freq==='biweekly'?0.5:0.25),0)); }
+function snapshotMeetingWeek(s2, at){ const wk = weekKey(at);
+  if (!s2.meetingWeeks.some(w=>w.week===wk)){ s2.meetingWeeks.push({ week:wk, minutes:meetingWeeklyMinutes(s2), t:at||now() }); s2.meetingWeeks.sort((a,b)=>a.week<b.week?-1:1); return true; }
+  return false;
+}
+
+/* ---------------- 8. modal / forms / toast machinery ---------------- */
+function toast(msg, kind){ const t=document.getElementById('toast'); t.className=kind||'ok';
+  t.innerHTML=''; t.appendChild(el(ic(kind==='err'?'warn':'check',15))); t.appendChild(el('<span>'+esc(msg)+'</span>'));
+  t.style.display='flex'; clearTimeout(t._tm); t._tm=setTimeout(()=>{ t.style.display='none'; }, kind==='err'?6000:2600); }
+function el(html){ /* html must be app-generated only (icons/static chrome via esc) */
+  const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstElementChild; }
+let modalCleanup = null;
+function closeModal(){ const r=document.getElementById('modalroot'); r.classList.remove('open'); r.innerHTML=''; if (modalCleanup){ modalCleanup(); modalCleanup=null; } }
+function openModal(html, opts){ opts=opts||{}; const r=document.getElementById('modalroot');
+  r.innerHTML = '<div class="mback"></div><div class="modal'+(opts.wide?' wide':'')+'" role="dialog" aria-modal="true">'+html+'</div>';
+  r.classList.add('open');
+  const back=r.querySelector('.mback'); back.addEventListener('click', ()=>{ if(!opts.sticky) closeModal(); });
+  modalCleanup = ()=>{};
+  const escFn = e=>{ if(e.key==='Escape'){ closeModal(); } };
+  document.addEventListener('keydown', escFn);
+  modalCleanup = ()=>{ document.removeEventListener('keydown', escFn); };
+  const first = r.querySelector('input.in,textarea.in,select.in'); if (first) setTimeout(()=>first.focus(),30);
+  return r.querySelector('.modal');
+}
+/* formModal: fields = [{k,label,type:text|textarea|select|date|number|range|seg,opts,val,min,max,req,hint}] */
+function formModal(title, sub, fields, cta, onSubmit, opts){
+  let body = '<div class="mtitle">'+esc(title)+'</div>'+(sub?'<div class="msub">'+sub+'</div>':'')+'<form id="mform" novalidate>';
+  for (const f of fields){
+    body += '<div class="field"><label for="f_'+f.k+'">'+esc(f.label)+'</label>';
+    if (f.type==='textarea') body += '<textarea class="in" id="f_'+f.k+'" name="'+f.k+'">'+(f.val!=null?esc(f.val):'')+'</textarea>';
+    else if (f.type==='select'){ body += '<select class="in" id="f_'+f.k+'" name="'+f.k+'">'+f.opts.map(o=>'<option value="'+esc(o.v)+'"'+(String(f.val)===String(o.v)?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select>'; }
+    else if (f.type==='range'){ body += '<div class="row"><input type="range" class="rng" id="f_'+f.k+'" name="'+f.k+'" min="'+(f.min||1)+'" max="'+(f.max||5)+'" step="1" value="'+(f.val||3)+'"><output class="num" id="o_'+f.k+'" style="flex:0 0 22px;text-align:right">'+(f.val||3)+'</output></div>'; }
+    else if (f.type==='seg'){ body += '<div class="seg" id="f_'+f.k+'" data-k="'+f.k+'">'+f.opts.map((o,i)=>'<button type="button" data-v="'+esc(o.v)+'" class="'+(String(f.val)===String(o.v)||(f.val==null&&i===0)?'on':'')+'">'+esc(o.label)+'</button>').join('')+'</div><input type="hidden" name="'+f.k+'" value="'+(f.val!=null?esc(f.val):esc(f.opts[0].v))+'">'; }
+    else body += '<input class="in" type="'+(f.type||'text')+'" id="f_'+f.k+'" name="'+f.k+'" value="'+(f.val!=null?esc(f.val):'')+'" '+(f.type==='number'?'min="'+(f.min!=null?f.min:'')+'" max="'+(f.max!=null?f.max:'')+'"':'')+'>';
+    if (f.hint) body += '<div class="hint">'+f.hint+'</div>';
+    body += '</div>';
+  }
+  body += '<div class="errline" id="merr" style="display:none"></div><div class="mfoot"><button type="button" class="btn ghost" id="mcancel">Cancel</button><button type="submit" class="btn pri">'+esc(cta||'Save')+'</button></div></form>';
+  const m = openModal(body, opts);
+  m.querySelector('#mcancel').addEventListener('click', closeModal);
+  for (const seg of m.querySelectorAll('.seg')) seg.addEventListener('click', e=>{ const b=e.target.closest('button[data-v]'); if(!b) return;
+    seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    m.querySelector('input[name="'+seg.dataset.k+'"]').value=b.dataset.v; });
+  for (const rng of m.querySelectorAll('input[type=range]')) rng.addEventListener('input', ()=>{ const o=m.querySelector('#o_'+rng.name); if (o) o.textContent=rng.value; /* touch tracking for pulse doctrine: */ const mo=rng.closest('.modal'); if (mo) mo.dataset['touched_'+rng.name]='1'; });
+  m.querySelector('#mform').addEventListener('submit', e=>{ e.preventDefault();
+    const fd = new FormData(e.target), vals={};
+    for (const f of fields){ let v = fd.get(f.k); if (f.type==='number') v = v===''?null:+v; if (f.type==='range'){ v=+v; vals['_touched_'+f.k]=!!m.dataset['touched_'+f.k]; } vals[f.k]=v; }
+    const err = onSubmit(vals, m);
+    if (err){ const el2=m.querySelector('#merr'); el2.style.display='flex'; el2.innerHTML=ic('warn',13)+'<span>'+esc(err)+'</span>'; }
+    else closeModal();
+  });
+  return m;
+}
+function confirmModal(title, sub, cta, danger, onYes){
+  const m = openModal('<div class="mtitle">'+esc(title)+'</div>'+(sub?'<div class="msub">'+sub+'</div>':'')
+    +'<div class="mfoot"><button class="btn ghost" id="mno">Cancel</button><button class="btn '+(danger?'dng':'pri')+'" id="myes">'+esc(cta)+'</button></div>');
+  m.querySelector('#mno').addEventListener('click', closeModal);
+  m.querySelector('#myes').addEventListener('click', ()=>{ closeModal(); onYes(); });
+}
+function personOpts(filterFn, includeNone){
+  const arr = state.people.filter(filterFn||(()=>true));
+  const out = arr.map(p=>({ v:p.id, label:p.name + (p.kind==='lead'?' · lead':'') + (p.relation==='ic'?' · IC':'') }));
+  if (includeNone) out.unshift({v:'',label:'— none —'});
+  return out;
+}
+/* ---------------- 9. chrome helpers ---------------- */
+function vhead(kick, title, lede, right){
+  return '<div class="vhead"><div class="row between wrap"><div><div class="kick">'+esc(kick)+'</div><h1>'+esc(title)+'</h1>'
+    +(lede?'<div class="lede">'+lede+'</div>':'')+'</div>'+(right?'<div class="row">'+right+'</div>':'')+'</div></div>';
+}
+function card(title, iconName, inner, cls, right){
+  return '<section class="card'+(cls?' '+cls:'')+'">'+(title?'<div class="ctitle">'+ic(iconName||'note')+esc(title)+(right?'<span class="r">'+right+'</span>':'')+'</div>':'')+inner+'</section>';
+}
+function emptyState(iconName, big, small, cta){
+  return '<div class="empty">'+ic(iconName,26)+'<div class="big">'+esc(big)+'</div><div class="small">'+small+'</div>'+(cta?'<div style="margin-top:14px">'+cta+'</div>':'')+'</div>';
+}
+function sevPill(sev){ const m={blocker:['red','BLOCKER'],risk:['amber','RISK'],nit:['sky','NITPICK']}; const x=m[sev]||m.nit; return '<span class="pill '+x[0]+'">'+x[1]+'</span>'; }
+function statusPill(s){ const m={ontrack:['mint','on track'],atrisk:['amber','at risk'],late:['red','late'],done:['dim','done'],open:['amber','open'],closed:['dim','closed'],active:['mint','active'],requested:['amber','requested'],delivered:['mint','delivered'],paused:['dim','paused']}; const x=m[s]||['dim',s]; return '<span class="pill '+x[0]+'">'+esc(x[1])+'</span>'; }
+function slaPill(e){ const st=slaStatus(e); if (st.status==='breached') return '<span class="pill red">'+ic('warn')+'breached '+st.by+'d</span>'; if (st.status==='due-soon') return '<span class="pill amber">'+ic('clock')+'due ~'+st.inH+'h</span>'; if (st.status==='open') return '<span class="pill sky">'+st.inD+'d left</span>'; return '<span class="pill dim">resolved</span>'; }
+function pulseChip(p){ const m=measuredPulses(p); const s=slope3(p.mood);
+  const dir = s==null?'—': s<=-0.5?'▼ declining': s>=0.5?'▲ rising':'· flat';
+  const col = s==null?'dim': s<=-0.5?'red': s>=0.5?'mint':'dim';
+  return '<span class="pill '+col+'" title="'+(s==null?'Fewer than 3 measured pulses — trend not claimed. Estimates never count.':'Slope '+s.toFixed(2)+' pts/wk over '+m.length+' measured pulses; estimates excluded')+'">'+dir+' · '+m.length+'m</span>'; }
+function sparkBlock(p, w){ const pts=(p.mood||[]).slice(-14); const r=sparkSVG(pts,{w:w||260,h:44});
+  return '<div>'+r.svg+'</div>'+(r.boundaryIdx>0?'<div class="tiny muted2 mono" style="margin-top:4px">dashed = pulse instrument begins; earlier points are single-question · hollow = est.</div>':((pts.some(x=>x.estimated))?'<div class="tiny muted2 mono" style="margin-top:4px">hollow = est. (untouched sliders, excluded from trends)</div>':'')); }
+
+/* ---------------- 10. seed data (guarded, purgeable) ---------------- */
+function seedData(s2){
+  const P=(id,name,role,kind,rel,reportsTo,startAgo)=>({id:id,name:name,role:role,kind:kind,relation:rel,reportsTo:reportsTo||null,startDate:dAgo(startAgo),mood:[],ninebox:null,seed:true});
+  s2.people = [
+    P('p_amara','Amara Osei','Eng Lead — Platform','lead','direct',null,380),
+    P('p_jonas','Jonas Lindqvist','Eng Lead — Product','lead','direct',null,410),
+    P('p_priya','Priya Raman','Eng Lead — Quality & Release','lead','direct',null,300),
+    P('p_tomas','Tomás Herrera','Eng Lead — Data','lead','direct',null,250),
+    P('p_mei','Mei Kobayashi','Staff Engineer','ic','direct',null,500),
+    P('p_ravi','Ravi Iyer','Senior Engineer','ic','ic','p_jonas',600),
+    P('p_sofia','Sofia Marchetti','Engineer','ic','ic','p_priya',320),
+    P('p_henrik','Henrik Dahl','Senior Engineer','ic','ic','p_amara',700),
+    P('p_lucia','Lucía Fernández','Data Engineer','ic','ic','p_tomas',290)
+  ];
+  const M=(t,v,en,ld,sp,est)=>{ const o={t:dAgo(t),v:v}; if(en!=null){o.en=en;o.ld=ld;o.sp=sp;} if(est)o.estimated=true; return o; };
+  byId(s2.people,'p_jonas').mood=[M(28,3),M(21,3.5),M(14,4,4,3,4),M(10,3.6,3,4,3),M(7,2.8,null,null,null,true),M(3,3.1,3,4,3)];
+  byId(s2.people,'p_amara').mood=[M(30,3,3,3,3),M(20,3.4,3,3,4),M(9,3.9,4,3,4),M(2,4.2,4,3,5)];
+  byId(s2.people,'p_priya').mood=[M(24,3.6),M(11,3.8,4,3,4),M(4,3.7,4,3,4)];
+  byId(s2.people,'p_tomas').mood=[M(16,3.5,3,4,3),M(8,3.4,3,4,3),M(1,3.6,4,3,4)];
+  byId(s2.people,'p_mei').mood=[M(5,4.4,5,2,4)];
+  const OO=(id,pid,ago,notes)=>({id:id,personId:pid,at:dAgo(ago),notes:notes,topicsRaised:[],seed:true});
+  s2.oneOnOnes=[ OO('oo_a1','p_amara',20,'SOC2 evidence automation on track; wants a second platform hire.'),
+    OO('oo_a2','p_amara',6,'Discussed Henrik\'s growth plan. She\'s ready to run eng review solo.'),
+    OO('oo_j1','p_jonas',18,'Billing v2 scope fight with Product. He took it personally — watch.'),
+    OO('oo_p1','p_priya',9,'Release confidence up. Sofia asked for more ownership.'),
+    OO('oo_m1','p_mei',4,'Staff-plus path: architecture guild charter almost ready.') ];
+  s2.parkedTopics=[
+    {id:'pt_1',personId:'p_jonas',text:'Release sign-off bottleneck — raised by conflict case',source:{module:'case',refId:'c_conflict',label:'Release sign-off tension'},status:'open',createdAt:dAgo(5),raisedAt:null,ooId:null,seed:true},
+    {id:'pt_2',personId:'p_amara',text:'SOC2 staffing ask — budget cycle timing',source:{module:'goals',refId:'g_soc2',label:'SOC2 Type II controls'},status:'open',createdAt:dAgo(8),raisedAt:null,ooId:null,seed:true},
+    {id:'pt_3',personId:'p_priya',text:'Sofia ownership expansion',source:{module:'oneonone',refId:'oo_p1',label:'1:1 note'},status:'raised',createdAt:dAgo(12),raisedAt:dAgo(9),ooId:'oo_p1',seed:true}
+  ];
+  s2.feedbacks=[
+    {id:'fb_1',personId:'p_priya',kind:'positive',s:'Tuesday release window',b:'You ran the rollback drill without prompting and kept the room calm',i:'Two teams shipped on schedule; support had zero escalations',deliveredAt:dAgo(12),goalId:null,caseId:null,seed:true},
+    {id:'fb_2',personId:'p_amara',kind:'positive',s:'Q3 planning',b:'You pre-wired the capacity model with Finance before the meeting',i:'Planning closed a week earlier than last cycle',deliveredAt:dAgo(35),goalId:null,caseId:null,seed:true},
+    {id:'fb_3',personId:'p_jonas',kind:'redirect',s:'Design review Tuesday',b:'You reopened a settled API decision in front of both teams',i:'Ravi asked me afterwards which decision was final — authority got muddy',deliveredAt:null,goalId:null,caseId:'c_conflict',seed:true},
+    {id:'fb_4',personId:'p_amara',kind:'redirect',s:'Incident bridge last week',b:'You typed commands directly instead of directing the IC on the bridge',i:'The IC stayed passive; the team learns less per incident',deliveredAt:dAgo(30),goalId:null,caseId:null,seed:true}
+  ];
+  s2.goals=[
+    {id:'g_billing',title:'Ship billing v2 to GA',ownerId:'p_jonas',team:'Product Eng',status:'atrisk',due:now()+days(20),createdAt:dAgo(70),checkIns:[{t:dAgo(25),note:'Payment flows done; dispute paths slipped a sprint.',status:'atrisk'}],depEdges:[{to:'g_soc2',since:dAgo(34)}],seed:true},
+    {id:'g_soc2',title:'SOC2 Type II controls complete',ownerId:'p_amara',team:'Platform',status:'ontrack',due:now()+days(40),createdAt:dAgo(80),checkIns:[{t:dAgo(4),note:'Evidence automation live; 80% of controls self-reporting.',status:'ontrack'}],depEdges:[],seed:true},
+    {id:'g_alerts',title:'Cut churn-risk alert noise 40%',ownerId:'p_priya',team:'Quality',status:'ontrack',due:now()+days(30),createdAt:dAgo(50),checkIns:[{t:dAgo(8),note:'New dedupe rules in staging.',status:'ontrack'}],depEdges:[],seed:true},
+    {id:'g_datarel',title:'Data platform 99.9% reliability',ownerId:'p_tomas',team:'Data',status:'ontrack',due:now()+days(60),createdAt:dAgo(40),checkIns:[{t:dAgo(2),note:'Error budget healthy after failover test.',status:'ontrack'}],depEdges:[],seed:true},
+    {id:'g_orphan',title:'Standardize on-call runbooks',ownerId:null,team:'(unassigned)',status:'ontrack',due:now()+days(45),createdAt:dAgo(30),checkIns:[{t:dAgo(5),note:'Template drafted; owner unclear.',status:'ontrack'}],depEdges:[],seed:true}
+  ];
+  s2.cases=[
+    {id:'c_conflict',type:'conflict',title:'Release sign-off tension (Jonas ↔ Priya)',partyIds:['p_jonas','p_priya'],severity:3,status:'open',openedAt:dAgo(6.25),closedAt:null,linkedIds:['dg_release'],notes:'Jonas bypassed the release gate twice; Priya escalated in channel, Jonas read it as public undermining.',closedWithOverride:false,seed:true,
+      touches:[{t:dAgo(6.25),kind:'registered',label:'Case registered · severity S3'},{t:dAgo(6.25),kind:'escalation',label:'Escalation opened (auto, S≥3) · SLA 7d'},{t:dAgo(5),kind:'parked',label:'Topic parked for 1:1 with Jonas'},{t:dAgo(4),kind:'note',label:'Spoke to Priya 1:1 — she\'ll pull data, not people, next time'}]},
+    {id:'c_incident',type:'incident',title:'Payments timeout cascade (44 min)',partyIds:['p_amara','p_tomas'],severity:4,status:'open',openedAt:dAgo(4),closedAt:null,linkedIds:['d_scala'],notes:'Connection-pool exhaustion under retry storm. Customer-facing. Premortem-worthy.',closedWithOverride:false,seed:true,
+      touches:[{t:dAgo(4),kind:'registered',label:'Case registered · severity S4'},{t:dAgo(4),kind:'escalation',label:'Escalation opened (auto, S≥3) · SLA 3d'},{t:dAgo(4),kind:'risk',label:'Risk row created (auto, incident S≥4) · review in 7d'}]},
+    {id:'c_closed',type:'process',title:'Contractor access sprawl',partyIds:[],severity:2,status:'closed',openedAt:dAgo(30),closedAt:dAgo(9),linkedIds:[],notes:'Access review found 6 stale contractor accounts.',closedWithOverride:false,seed:true,
+      touches:[{t:dAgo(30),kind:'registered',label:'Case registered · severity S2'},{t:dAgo(9),kind:'closed',label:'Case closed'}]}
+  ];
+  s2.escalations=[
+    {id:'e_conf',caseId:'c_conflict',severity:3,openedAt:dAgo(6.25),status:'open',resolvedAt:null,seed:true},
+    {id:'e_inc',caseId:'c_incident',severity:4,openedAt:dAgo(4),status:'open',resolvedAt:null,seed:true},
+    {id:'e_old',caseId:'c_closed',severity:2,openedAt:dAgo(30),status:'resolved',resolvedAt:dAgo(9),resolvedBy:'case-close',seed:true}
+  ];
+  s2.decisions=[
+    {id:'d_scala',title:'Freeze new Scala services',options:['Freeze and migrate gradually','Allow with review board','Status quo'],chosen:0,rationale:'Two pools of on-call expertise is one too few. Incident c_incident was the trigger, not the cause.',dtype:'one-way',severity:4,madeAt:dAgo(24),reviewAt:now()+days(5),premortem:{answers:['Migration stalls mid-way: two stacks to run, morale cost in Data team','Hiring signal: Scala candidates decline']},outcome:null,linkedCaseId:'c_incident',seed:true},
+    {id:'d_trunk',title:'Adopt trunk-based development for product teams',options:['Trunk + feature flags','Keep release branches'],chosen:0,rationale:'Branch longevity correlates with integration incidents in our own postmortems.',dtype:'two-way',severity:2,madeAt:dAgo(45),reviewAt:dAgo(3),premortem:null,outcome:null,linkedCaseId:null,seed:true}
+  ];
+  s2.risks=[
+    {id:'r_key',title:'Key-person: release sign-off concentrates in Jonas',likelihood:2,impact:4,ownerId:'p_jonas',reviewAt:now()+days(5),status:'open',caseId:null,auto:false,seed:true},
+    {id:'r_auto',title:'Follow-on risk from incident: Payments timeout cascade',likelihood:3,impact:4,ownerId:'p_amara',reviewAt:dAgo(-  -  +0)||(now()+days(3)),status:'open',caseId:'c_incident',auto:true,seed:true}
+  ];
+  s2.delegations=[
+    {id:'dg_release',title:'Release sign-off authority',delegateId:'p_priya',level:3,startAt:dAgo(30),lastCheckAt:dAgo(12),status:'active',seed:true},
+    {id:'dg_loop',title:'Interview loop ownership',delegateId:'p_jonas',level:2,startAt:dAgo(20),lastCheckAt:dAgo(1),status:'active',seed:true},
+    {id:'dg_oncall',title:'On-call rotation design',delegateId:'p_tomas',level:4,startAt:dAgo(45),lastCheckAt:dAgo(18),status:'active',seed:true}
+  ];
+  s2.rituals=[
+    {id:'rt_staff',name:'Leadership staff meeting',cadenceDays:7,lastHeldAt:dAgo(9),attendeeIds:['p_amara','p_jonas','p_priya','p_tomas','p_mei'],seed:true},
+    {id:'rt_eng',name:'Engineering review',cadenceDays:14,lastHeldAt:dAgo(3),attendeeIds:['p_amara','p_jonas','p_priya','p_tomas'],seed:true},
+    {id:'rt_retro',name:'Org retro',cadenceDays:30,lastHeldAt:dAgo(20),attendeeIds:['p_amara','p_jonas','p_priya','p_tomas'],seed:true}
+  ];
+  s2.meetings=[
+    {id:'m_staff',name:'Leadership staff',freq:'weekly',minutes:60,attendees:6,status:'kept',seed:true},
+    {id:'m_engrev',name:'Engineering review',freq:'biweekly',minutes:90,attendees:12,status:'kept',seed:true},
+    {id:'m_allhands',name:'Org all-hands',freq:'monthly',minutes:60,attendees:45,status:'kept',seed:true},
+    {id:'m_portfolio',name:'Portfolio sync',freq:'weekly',minutes:90,attendees:14,status:'kept',seed:true}
+  ];
+  s2.meetingWeeks=[
+    {week:weekKey(now()-days(21)),minutes:480,t:now()-days(21),seed:true},
+    {week:weekKey(now()-days(14)),minutes:430,t:now()-days(14),seed:true},
+    {week:weekKey(now()-days(7)),minutes:390,t:now()-days(7),seed:true}
+  ];
+  for (const p of s2.people) p.ninebox={perf:2,pot:2};
+  byId(s2.people,'p_priya').ninebox={perf:2,pot:3}; byId(s2.people,'p_mei').ninebox={perf:3,pot:2};
+  byId(s2.people,'p_jonas').ninebox={perf:3,pot:2}; byId(s2.people,'p_amara').ninebox={perf:2,pot:2};
+  s2.talent={successors:[{id:uid('suc'),seatId:'p_jonas',candidateId:'p_mei',readiness:'6m',seed:true},{id:uid('suc'),seatId:'p_amara',candidateId:'p_tomas',readiness:'12m',seed:true}]};
+  s2.arrival={startDate:dAgo(38),
+    listeningTour:[{id:uid('lt'),personId:'p_amara',at:dAgo(30),seed:true},{id:uid('lt'),personId:'p_jonas',at:dAgo(28),seed:true},{id:uid('lt'),personId:'st_kat',at:dAgo(25),seed:true}],
+    wins:[{id:'w_1',title:'Unblocked SOC2 evidence automation',claimedAt:dAgo(20),verifiedAt:dAgo(12),evidenceGoalId:'g_soc2',seed:true},
+          {id:'w_2',title:'Cut release time 30%',claimedAt:dAgo(8),verifiedAt:null,evidenceGoalId:null,seed:true}]};
+  s2.skips=[
+    {id:'sk_1',personId:'p_ravi',at:dAgo(50),notes:'Wants scope clarity on API ownership. Themes: velocity, scope.',themes:['velocity','scope'],seed:true},
+    {id:'sk_2',personId:'p_sofia',at:dAgo(20),notes:'Energized by ownership expansion. Themes: growth.',themes:['growth'],seed:true}
+  ];
+  s2.calibration={cycles:[
+    {id:'cal_h1',label:'2026 H1',lockedAt:dAgo(140),entries:[
+      {id:uid('ce'),personId:'p_jonas',perf:3,pot:2,narrative:'Consistently ships the hardest roadmap items; growth edge is letting decisions stay settled.',evidenceIds:['g_billing'],verdict:'core performer'},
+      {id:uid('ce'),personId:'p_priya',perf:2,pot:3,narrative:'Quality bar transformed release culture; next step is org-level scope.',evidenceIds:['fb_1'],verdict:'growth bet'}]},
+    {id:'cal_h2',label:'2026 H2 (draft)',lockedAt:null,entries:[
+      {id:uid('ce'),personId:'p_jonas',perf:3,pot:2,narrative:'Same delivery strength; watching conflict pattern from release-gate case.',evidenceIds:[],verdict:''},
+      {id:uid('ce'),personId:'p_priya',perf:2,pot:3,narrative:'360 input corroborates cross-team trust.',evidenceIds:['p360_2'],verdict:''}]}
+  ]};
+  s2.peer360=[
+    {id:'p360_1',personId:'p_jonas',from:'Leo Martins (Product Director)',kind:'peer',status:'requested',requestedAt:dAgo(12),deliveredAt:null,text:'',themeTags:[],seed:true},
+    {id:'p360_2',personId:'p_priya',from:'Grace Adeyemi (Head of Support)',kind:'peer',status:'delivered',requestedAt:dAgo(22),deliveredAt:dAgo(15),text:'Priya\'s release notes are the only engineering comms Support quotes verbatim. Trust is earned.',themeTags:['ownership','quality'],seed:true}
+  ];
+  s2.stakeholders=[
+    {id:'st_kat',name:'Katarina Voss',role:'VP Engineering',relation:'boss',expectation:'By Q-end: predictable releases + a successor named for every lead seat. Written down at day 12.',currency:4,lastTouchAt:dAgo(4),nextTouchAt:now()+days(3),seed:true},
+    {id:'st_leo',name:'Leo Martins',role:'Product Director',relation:'peer',expectation:'Fewer surprise scope changes; early flags on billing v2 slip risk.',currency:3,lastTouchAt:dAgo(18),nextTouchAt:dAgo(2),seed:true},
+    {id:'st_grace',name:'Grace Adeyemi',role:'Head of Support',relation:'peer',expectation:'Severity honesty on incidents; no minimised status pages.',currency:4,lastTouchAt:dAgo(5),nextTouchAt:now()+days(9),seed:true}
+  ];
+  const EV=(ago,type,label,ref)=>({t:dAgo(ago),type:type,label:label,refId:ref||null,seed:true});
+  s2.events=[EV(0.2,'oneonone.held','1:1 held with Mei Kobayashi','oo_m1'),EV(1,'pulse.measured','Pulse measured: Tomás Herrera','p_tomas'),
+    EV(2,'goal.checkin','Goal check-in: Data platform 99.9% reliability','g_datarel'),EV(3,'ritual.held','Engineering review held','rt_eng'),
+    EV(4,'case.note','Case note: payments timeout cascade','c_incident'),EV(5,'risk.opened','Risk opened: key-person release sign-off','r_key'),
+    EV(6,'feedback.delivered','SBI delivered to Priya Raman','fb_1'),EV(9,'delegation.checkin','Delegation check-in: release sign-off','dg_release'),
+    EV(12,'case.closed','Case closed: contractor access sprawl','c_closed')];
+  s2.integrityLog=[]; s2.dismissed={}; return s2;
+}
+function ensureSeed(s2){ /* second-run impossible: meta.seeded is permanent, not an emptiness check. */
+  if (s2.meta.seeded) return false;
+  s2.meta.seeded = true;           // set BEFORE rows, survives wipe-all
+  seedData(s2); return true;
+}
+function purgeSeeds(s2){ const keep = row => !row.seed; let removed=0;
+  const cnt=a=>a.length;
+  removed += s2.people.length; s2.people = s2.people.filter(keep);
+  for (const k of ['oneOnOnes','parkedTopics','feedbacks','goals','cases','escalations','decisions','risks','delegations','rituals','meetings','skips','peer360','stakeholders','events']){ s2[k]=(s2[k]||[]).filter(keep); }
+  s2.meetingWeeks=(s2.meetingWeeks||[]).filter(keep);
+  s2.talent.successors=(s2.talent.successors||[]).filter(keep);
+  s2.arrival.listeningTour=(s2.arrival.listeningTour||[]).filter(keep); s2.arrival.wins=(s2.arrival.wins||[]).filter(keep);
+  for (const c of s2.calibration.cycles) c.entries=(c.entries||[]).filter(e3=>{ const p=byId(s2.people,e3.personId); return !!p; });
+  s2.calibration.cycles = s2.calibration.cycles.filter(c=>!c.seed && (c.entries.length||c.lockedAt));
+  removed -= s2.people.length; removed = Math.abs(removed);
+  integrityAudit(s2); logEvent('data.purge','Seed data purged ('+removed+' roster rows removed; references repaired)'); save(); }
+
+/* ---------------- 11. Actions registry (delegated dispatch bound once in boot) ---------------- */
+const Actions = {};
+
+/* ---------------- 12. Home ---------------- */
+function vHome(){
+  const f = runRules();
+  const blk=f.filter(x=>x.sev==='blocker'), rsk=f.filter(x=>x.sev==='risk'), nit=f.filter(x=>x.sev==='nit');
+  const wk = state.events.filter(e=>e.t>now()-days(7));
+  const types={}; for (const e of wk){ const k=e.type.split('.')[0]; types[k]=(types[k]||0)+1; }
+  const tape = Object.keys(types).sort((a,b)=>types[b]-types[a]).map(k=>'<span class="pill dim">'+esc(k)+' × '+types[k]+'</span>').join(' ');
+  const arr = state.arrival, dayN = arr.startDate? ageDays(arr.startDate)+1 : null;
+  let strip = '<div class="grid4">'
+    + '<div class="card tight"><div class="tiny muted mono" style="letter-spacing:.14em">OPEN CASES</div><div class="bignum num">'+state.cases.filter(c=>c.status==='open').length+'</div><div class="tiny muted2">'+state.escalations.filter(e=>e.status==='open').length+' escalations open</div></div>'
+    + '<div class="card tight"><div class="tiny muted mono" style="letter-spacing:.14em">MEETING LOAD</div><div class="bignum num">'+(meetingWeeklyMinutes(state)/60).toFixed(1)+'<span class="small muted">h</span></div><div class="tiny muted2">recurring, this week</div></div>'
+    + '<div class="card tight"><div class="tiny muted mono" style="letter-spacing:.14em">DIRECTS</div><div class="bignum num">'+directs().length+'</div><div class="tiny muted2">'+leads().length+' leads · total roster '+state.people.length+'</div></div>'
+    + '<div class="card tight"><div class="tiny muted mono" style="letter-spacing:.14em">TENURE</div><div class="bignum num">'+(dayN||'—')+'</div><div class="tiny muted2">'+(dayN?'day of first 90':'arrival not set — set it in Arrival')+'</div></div></div>';
+  const fcards = arr2 => arr2.map(x=>'<div class="find '+x.sev+'"><div class="sev">'+sevPill(x.sev)+'<div class="tiny muted2 mono" style="margin-top:5px">'+esc(x.rule)+'</div></div><div class="body"><h3>'+esc(x.title)+'</h3><div class="basis">'+esc(x.basis)+'</div><div class="tiny muted" style="margin-top:4px">confidence: '+esc(x.conf)+'</div>'
+    +(x.acts.length?'<div class="acts">'+x.acts.map(a=>'<button class="btn sm" data-act="'+a.act+'" data-arg="'+esc(a.arg||'')+'">'+ic('arrow')+esc(a.label)+'</button>').join('')+'<button class="btn sm ghost" data-act="dismiss" data-arg="'+esc(x.rule+'|'+x.title)+'">snooze</button></div>':'')+'</div></div>').join('');
+  const grp = (label, arr2, cls) => arr2.length? '<div class="ctitle" style="margin:18px 0 10px"><span class="dot" style="background:var(--'+cls+')"></span>'+label+' · '+arr2.length+'</div>'+fcards(arr2) : '';
+  let list = f.length? grp('BLOCKERS — act today',blk,'red')+grp('RISKS — this week',rsk,'amber')+grp('NITPICKS — when there is air',nit,'sky')
+    : emptyState('check','No findings. That is a claim with a basis too.','Every rule in the engine scanned your live data and found nothing past threshold. The basis of each rule is printed at <a href="#/health">#/health</a>.','<a class="btn" href="#/health">Inspect the rules</a>');
+  return vhead('COMMAND','What to do next, and why','Every card names its basis, its rule, and a confidence label. Nothing here asks for blind trust.',
+    '<button class="btn" data-act="quick-capture">'+ic('plus')+'Quick capture</button>')
+    + strip
+    + card('This week, in fact','clock', tape||'<span class="muted small">No logged activity in 7 days. If that is wrong, the instrument is dark — fix that before trusting anything.</span>', '', '<span class="tiny muted2 mono">computed from append-only event log · last 7d · not editable</span>')
+    + list;
+}
+
+/* ---------------- 13. People ---------------- */
+function vPeople(){
+  const rows = state.people.map(p=>{
+    const span=spanOf(p.id);
+    const oos=state.oneOnOnes.filter(o=>o.personId===p.id).sort((a,b)=>b.at-a.at);
+    const openCases=state.cases.filter(c=>c.status==='open'&&(c.partyIds||[]).includes(p.id)).length;
+    const parked=state.parkedTopics.filter(t=>t.personId===p.id&&t.status==='open').length;
+    return '<tr class="hoverable" data-act="nav" data-arg="#/person/'+p.id+'"><td><b>'+esc(p.name)+'</b><div class="tiny muted">'+esc(p.role)+'</div></td>'
+      +'<td>'+(p.relation==='direct'?'<span class="pill mint">direct</span>':'<span class="pill dim">'+esc(pname(p.reportsTo))+'’s team</span>')+'</td>'
+      +'<td class="num">'+(p.kind==='lead'? span : '—')+'</td>'
+      +'<td>'+(oos[0]?fmtAge(oos[0].at):'<span class="pill amber">never</span>')+'</td>'
+      +'<td>'+pulseChip(p)+'</td>'
+      +'<td class="num">'+(openCases?'<span class="pill amber">'+openCases+'</span>':'·')+'</td>'
+      +'<td class="num">'+(parked?'<span class="pill sky">'+parked+'</span>':'·')+'</td></tr>';
+  }).join('');
+  const tbl = state.people.length? '<table class="tbl"><thead><tr><th>Person</th><th>Line</th><th>Span</th><th>Last 1:1</th><th>Pulse</th><th>Open cases</th><th>Parked</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    : emptyState('users','Nobody here yet.','Add your leads and direct ICs. LeadOS only advises on people you register — it does not invent an org.','<button class="btn pri" data-act="person-add">'+ic('plus')+'Add person</button>');
+  return vhead('ROSTER','People','Span counts are computed from roster lines (reportsTo). They count registered reports only — labeled, not inflated.','<button class="btn pri" data-act="person-add">'+ic('plus')+'Add person</button>')
+    + card('Full roster','users',tbl,'','<span class="tiny muted2">'+state.people.length+' registered</span>');
+}
+function vPerson(id){
+  const p = person(id);
+  if (!p) return vhead('ROSTER','Not found','This person id resolves to nothing — deleted, or quarantined data. The boot integrity sweep would have nulled any dangling references to it.')+'<a class="btn" href="#/people">Back to roster</a>';
+  const span=spanOf(p.id);
+  const oos=state.oneOnOnes.filter(o=>o.personId===p.id).sort((a,b)=>b.at-a.at);
+  const fbs=state.feedbacks.filter(f=>f.personId===p.id).sort((a,b)=>(b.deliveredAt||0)-(a.deliveredAt||0));
+  const goals=state.goals.filter(g=>g.ownerId===p.id);
+  const delgs=state.delegations.filter(d=>d.delegateId===p.id);
+  const cases=state.cases.filter(c=>(c.partyIds||[]).includes(p.id));
+  const topics=state.parkedTopics.filter(t=>t.personId===p.id&&t.status==='open');
+  const p360=state.peer360.filter(x=>x.personId===p.id);
+  const calib=state.calibration.cycles.filter(c=>c.lockedAt).map(c=>({cyc:c, en:(c.entries||[]).find(e=>e.personId===p.id)})).filter(x=>x.en);
+  return vhead('DOSSIER', p.name, esc(p.role)+' · '+(p.relation==='direct'?'direct report':'reports to '+esc(pname(p.reportsTo)))+(p.kind==='lead'?' · span '+span:''),
+    '<button class="btn" data-act="quick-ooo" data-arg="'+p.id+'">'+ic('ooo')+'1:1</button><button class="btn" data-act="park-topic" data-arg="'+p.id+'">'+ic('park')+'Park topic</button><button class="btn" data-act="quick-feedback" data-arg="'+p.id+'">'+ic('note')+'SBI</button>')
+  + '<div class="grid2">'
+  + '<div>'+card('Pulse · provenance enforced','pulse', sparkBlock(p,300)
+      + '<div class="row wrap" style="margin-top:10px">'+pulseChip(p)
+      + '<span class="tiny muted">'+measuredPulses(p).length+' measured · '+((p.mood||[]).filter(x=>x.estimated).length)+' estimated (never trended)</span>'
+      + (pulseBoundaryIdx(p)>0?'<span class="pill sky tiny">instrument boundary at point '+(pulseBoundaryIdx(p)+1)+'</span>':'')+'</div>'
+      + (slope3(p.mood)==null?'<div class="tiny muted2 mono" style="margin-top:8px">not enough measured pulses for a trend claim — estimates excluded, by doctrine</div>':'')
+      + '<div class="hr"></div>'
+      + (p.mood||[]).slice(-6).reverse().map(m=>'<div class="row between small" style="padding:3px 0"><span class="muted">'+fmtDate(m.t)+'</span><span class="num">overall '+(m.v!=null?m.v:'—')+(m.en!=null?' · e'+m.en+' l'+m.ld+' s'+m.sp:'')+'</span>'+(m.estimated?'<span class="pill dim tiny">est.</span>':'<span class="pill mint tiny">measured</span>')+'</div>').join('')||'<span class="muted small">No pulses yet — written at 1:1 close, sliders untouched = estimated.</span>')
+  + card('Nine-box','talent', nineboxHTML(p) + (calib.length?'<div class="hr"></div>'+calib.map(x=>'<div class="tiny"><span class="muted mono">'+esc(x.cyc.label)+'</span> · '+esc(x.en.verdict||'—')+'</div>').join(''):'<div class="tiny muted" style="margin-top:8px">Not yet calibrated in a locked cycle.</div>'))
+  + card('360 input','skip', p360.length? p360.map(x=>'<div class="row between small" style="padding:4px 0"><span>'+esc(x.from)+'</span>'+statusPill(x.status)+'</div>').join('') : '<span class="muted small">None requested. Only delivered input ever counts as evidence.</span>'
+      +'<div style="margin-top:10px"><button class="btn sm" data-act="360-request" data-arg="'+p.id+'">'+ic('plus')+'Request input</button></div>')
+  + '</div><div>'
+  + card('Parked for next 1:1 · '+topics.length,'park', topics.length? topics.map(t=>'<div class="row between small" style="padding:5px 0"><span>'+esc(t.text)+'<div class="tiny muted2">'+(t.source&&t.source.label?'from '+esc(t.source.label)+' · ':'')+'parked '+fmtAge(t.createdAt)+'</div></span><button class="btn sm ghost" data-act="topic-drop" data-arg="'+t.id+'">'+ic('x')+'</button></div>').join('') : '<span class="muted small">Queue is empty. Park topics from anywhere via “park topic”.</span>')
+  + card('Goals owned · '+goals.length,'target', goals.length? goals.map(g=>'<div class="row between small" style="padding:4px 0"><span>'+esc(g.title)+(g.depEdges&&g.depEdges.length?'<div class="tiny muted2 mono">blocked by '+g.depEdges.length+' edge(s)</div>':'')+'</span>'+statusPill(g.status)+'</div>').join(''):'<span class="muted small">No goals owned.</span>')
+  + card('Delegations held','deleg', delgs.length? delgs.map(d=>'<div class="row between small" style="padding:4px 0"><span>L'+d.level+' · '+esc(d.title)+'</span>'+(delegationDecayed(d)?'<span class="pill amber">check-in '+fmtAge(d.lastCheckAt)+'</span>':'<span class="pill mint">current</span>')+'</div>').join(''):'<span class="muted small">Nothing delegated to '+esc(p.name)+' yet.</span>')
+  + '</div></div>'
+  + '<div class="grid2"><div>'+card('1:1 history · '+oos.length,'ooo', oos.length? '<div class="timeline">'+oos.slice(0,6).map(o=>'<div class="tl-item"><div class="row between"><b class="small">'+fmtDateTime(o.at)+'</b><span class="tstamp">'+esc(o.id)+'</span></div><div class="small muted">'+esc(o.notes||'')+'</div>'+((o.topicsRaised||[]).length?'<div class="tiny muted2 mono">raised '+o.topicsRaised.length+' parked topic(s)</div>':'')+'</div>').join('')+'</div>':'<span class="muted small">No 1:1s recorded with '+esc(p.name)+'.</span>')
+  + card('Cases · '+cases.length,'case', cases.length? cases.map(c=>'<div class="row between small hoverable" style="padding:4px 0;cursor:pointer" data-act="nav" data-arg="#/case/'+c.id+'"><span>'+esc(c.title)+'</span>'+statusPill(c.status)+'</div>').join(''):'<span class="muted small">No cases involve '+esc(p.name)+'.</span>')
+  + '</div><div>'+card('SBI feedback · '+fbs.length,'note', fbs.length? fbs.map(f=>'<div class="card tight" style="margin-bottom:8px"><div class="row between"><span class="pill '+(f.kind==='positive'?'mint':'amber')+'">'+f.kind+'</span>'+(f.deliveredAt?'<span class="tstamp">delivered '+fmtDate(f.deliveredAt)+'</span>':'<span class="pill dim">draft — evidence only when delivered</span>')+'</div><div class="small" style="margin-top:7px"><b>S</b> '+esc(f.s)+'<br><b>B</b> '+esc(f.b)+'<br><b>I</b> '+esc(f.i)+'</div>'+(!f.deliveredAt?'<div style="margin-top:8px"><button class="btn sm pri" data-act="feedback-deliver" data-arg="'+f.id+'">'+ic('check')+'Mark delivered</button></div>':'')+'</div>').join(''):'<span class="muted small">No SBI on record. Drafts do not count as evidence anywhere.</span>')+'</div></div>';
+}
+function nineboxHTML(p){
+  if(!p.ninebox) return '<span class="muted small">Not placed. Set at calibration.</span>';
+  let h='<div class="ninebox">';
+  for (let pot=3;pot>=1;pot--) for (let perf=1;perf<=3;perf++){
+    const hit = p.ninebox.perf===perf && p.ninebox.pot===pot;
+    const cnt = state.people.filter(q=>q.ninebox&&q.ninebox.perf===perf&&q.ninebox.pot===pot).length;
+    h+='<div class="nbc'+(hit?' hit':'')+'">P'+perf+'·T'+pot+(cnt>1?'<span class="cnt">'+cnt+'</span>':'')+'</div>';
+  }
+  return h+'</div><div class="tiny muted2 mono" style="margin-top:6px">perf → · potential ↑ · counts include whole roster</div>';
+}
+
+/* ---------------- 14. 1:1s + parking lot ---------------- */
+function vOneOnOnes(){
+  const open=state.parkedTopics.filter(t=>t.status==='open');
+  const recent=state.oneOnOnes.slice().sort((a,b)=>b.at-a.at).slice(0,20);
+  const lot = open.length? open.map(t=>'<div class="row between small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span><b>'+esc(pname(t.personId))+'</b> · '+esc(t.text)+'<div class="tiny muted2">parked '+fmtAge(t.createdAt)+(t.source&&t.source.label?' · from '+esc(t.source.label):'')+'</div></span><span class="row"><button class="btn sm" data-act="quick-ooo" data-arg="'+esc(t.personId)+'">hold 1:1</button><button class="btn sm ghost" data-act="topic-drop" data-arg="'+t.id+'">'+ic('x')+'</button></span></div>').join('')
+    : '<span class="muted small">Parking lot empty. When a 1:1 closes, open topics for that person are marked raised and attached to the session — the queue is consumed by reality, not by tidiness.</span>';
+  const hist = recent.length? recent.map(o=>{ const p=person(o.personId);
+    return '<div class="row between small hoverable" style="padding:7px 0;border-bottom:1px solid var(--line);cursor:pointer" data-act="nav" data-arg="#/person/'+esc(o.personId||'')+'"><span><b>'+esc(p?p.name:'∅ removed')+'</b><span class="muted"> · '+fmtDateTime(o.at)+'</span><div class="tiny muted2">'+esc((o.notes||'').slice(0,90))+((o.notes||'').length>90?'…':'')+'</div></span>'+((o.topicsRaised||[]).length?'<span class="pill sky tiny">'+o.topicsRaised.length+' raised</span>':'')+'</div>'; }).join('')
+    : emptyState('ooo','No 1:1s yet.','The cadence rule on Home starts counting the moment you add a direct report.','<button class="btn pri" data-act="quick-ooo">'+ic('plus')+'Record a 1:1</button>');
+  return vhead('CADENCE','1:1s','Closing a 1:1 asks for the four sliders. <b>Sliders you never touch are written as estimates, never measurements</b> — that is the trust contract with your own data.','<button class="btn pri" data-act="quick-ooo">'+ic('plus')+'Record 1:1</button>')
+    + '<div class="grid2"><div>'+card('Parking lot · '+open.length,'park',lot)+'</div><div>'+card('Recent sessions','ooo',hist)+'</div></div>';
+}
+
+/* ---------------- 15. Pulse ---------------- */
+function vPulse(){
+  const rows = directs().map(p=>{ const r=sparkSVG((p.mood||[]).slice(-10),{w:150,h:34});
+    const m=measuredPulses(p); const last=(p.mood||[]).slice().reverse().find(x=>x.v!=null);
+    return '<tr class="hoverable" data-act="nav" data-arg="#/person/'+p.id+'"><td><b>'+esc(p.name)+'</b></td><td>'+r.svg+'</td>'
+      +'<td>'+pulseChip(p)+'</td><td class="small muted">'+(last?fmtDate(last.t):'—')+'</td>'
+      +'<td class="tiny mono muted">'+(m.length<3?m.length+'/3 measured — insufficient':'trend live')+'</td></tr>'; }).join('');
+  const band = state.people.length? '<table class="tbl"><thead><tr><th>Person</th><th>Last 10 readings</th><th>Trend claim</th><th>Last read</th><th>Instrument status</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    : emptyState('pulse','No instrument without people.','Add directs first; pulses are written at 1:1 close.');
+  return vhead('INSTRUMENT','Pulse','Measured vs estimated is enforced at the write path and filtered at the read path. A trend is never claimed under 3 measured points, and the instrument boundary is drawn where the 4-question pulse begins.')
+    + card('Directs','pulse',band,'','<span class="tiny muted2 mono">hollow dots = estimates · dashed line = instrument begins</span>')
+    + card('What this module refuses to do','risk','<div class="small muted">Refuses to trend under 3 measured points · refuses to count untouched sliders · refuses to smooth pre-instrument history into post-instrument values · refuses to label a decline as intent (events, not minds, move numbers).</div>');
+}
+
+/* ---------------- 16. Goals + dependency map + aging ---------------- */
+function vGoals(){
+  const rows = state.goals.map(g=>{ const ages=goalDepAges(state,g);
+    const deps = ages.map(a=>'<div class="edge">↳ '+(a.target?esc(a.target.title):(a.edge.to+' (missing)'))+' · <span class="age '+(a.open&&a.days>30?'red':'muted')+' mono" style="color:'+(a.open&&a.days>30?'var(--red)':'var(--ink4)')+'">'+(a.open?a.days+'d open · '+depAgeBucket(a.days):'done')+'</span><button class="btn sm ghost" data-act="goal-edge-del" data-arg="'+g.id+'|'+esc(a.edge.to)+'">'+ic('x',11)+'</button></div>').join('');
+    const last=(g.checkIns||[]).slice().sort((a,b)=>b.t-a.t)[0];
+    return '<div class="card"><div class="row between wrap"><div class="grow"><div class="row wrap"><b style="font-size:15px">'+esc(g.title)+'</b>'+statusPill(g.status)+(g.ownerId?'<span class="pill dim">'+ic('user')+esc(pname(g.ownerId))+'</span>':'<span class="pill red">'+ic('warn')+'no owner</span>')+'</div>'
+      +'<div class="tiny muted" style="margin-top:4px">due '+fmtDate(g.due)+' ('+fmtDur(g.due)+') · last check-in '+(last?fmtAge(last.t)+' — “'+esc(last.note.slice(0,70))+'”':'never')+'</div>'
+      +(ages.length?'<div class="depmap" style="margin-top:8px">'+deps+'</div>':'')+'</div>'
+      +'<div class="row wrap"><button class="btn sm" data-act="goal-checkin" data-arg="'+g.id+'">'+ic('check')+'Check in</button><button class="btn sm" data-act="goal-edge-add" data-arg="'+g.id+'">'+ic('link')+'Dependency</button>'+(g.status!=='done'?'<button class="btn sm ghost" data-act="goal-done" data-arg="'+g.id+'">done</button>':'')+'</div></div></div>';
+  }).join('');
+  return vhead('COMMITMENT','Goals','Ownerless goals are rendered as defects, not as shared ownership. Dependency edges refuse cycles and age in the open — 31 days blocked is a fact, not a vibes problem.','<button class="btn pri" data-act="goal-add">'+ic('plus')+'Add goal</button>')
+    + (state.goals.length? rows : emptyState('target','No goals.','A goal needs a named owner and a check-in rhythm or it is a wish.','<button class="btn pri" data-act="goal-add">'+ic('plus')+'Add goal</button>'));
+}
+
+/* ---- Actions for part A ---- */
+Actions['nav'] = arg => { location.hash = arg; };
+Actions['dismiss'] = arg => { const i=arg.indexOf('|'); state.dismissed[arg.slice(0,i)+':'+arg.slice(i+1)] = now()+days(7); save(); route(); };
+Actions['person-add'] = () => { formModal('Add person','Registered people are the only ones the engine reasons about.',[
+    {k:'name',label:'Full name',req:1},{k:'role',label:'Role'},{k:'kind',label:'Kind',type:'seg',opts:[{v:'lead',label:'Team lead'},{v:'ic',label:'IC'}],val:'lead'},
+    {k:'relation',label:'Line',type:'seg',opts:[{v:'direct',label:'Direct report'},{v:'ic',label:'IC of a lead'}],val:'direct'},
+    {k:'reportsTo',label:'Reports to (if IC of a lead)',type:'select',opts:personOpts(p=>p.kind==='lead',true)},
+    {k:'startDate',label:'Start date',type:'date',val:dISO(dAgo(30))}
+  ],'Add person', v=>{ if(!v.name||!v.name.trim()) return 'A name is required — the roster does not carry ghosts.';
+    state.people.push({id:uid('p'),name:v.name.trim(),role:v.role||'',kind:v.kind,relation:v.relation,reportsTo:v.reportsTo||null,startDate:parseDay(v.startDate)||now(),mood:[],ninebox:null});
+    logEvent('person.added','Person added: '+v.name.trim()); save(); route(); }); };
+Actions['quick-ooo'] = arg => { const p = arg? person(arg) : null;
+  formModal('Record 1:1'+(p?' — '+p.name:''),'Held just now. Untouched sliders are stored as estimates — they render hollow and never move a trend.',[
+    {k:'personId',label:'Person',type:'select',opts:personOpts(p2=>p2.relation==='direct'),val:arg||''},
+    {k:'notes',label:'Notes',type:'textarea'},
+    {k:'v',label:'Overall pulse',type:'range',min:1,max:5,val:3},{k:'en',label:'Energy',type:'range',min:1,max:5,val:3},
+    {k:'ld',label:'Load (5 = overloaded)',type:'range',min:1,max:5,val:3},{k:'sp',label:'Support felt',type:'range',min:1,max:5,val:3},
+    {k:'consume',label:'Consume parked topics for this person',type:'seg',opts:[{v:'yes',label:'Mark raised'},{v:'no',label:'Leave parked'}],val:'yes',hint:'Raised topics attach to this session and leave the queue.'}
+  ],'Close 1:1', (v,m)=>{
+    if(!v.personId||!person(v.personId)) return 'Pick a real person.';
+    const touched = v._touched_v||v._touched_en||v._touched_ld||v._touched_sp;
+    const entry={t:now(),v:v.v,en:v.en,ld:v.ld,sp:v.sp}; if(!touched) entry.estimated=true;
+    const pp=person(v.personId); pp.mood=pp.mood||[]; pp.mood.push(entry);
+    const oo={id:uid('oo'),personId:v.personId,at:now(),notes:v.notes||'',topicsRaised:[]};
+    if (v.consume==='yes'){ for (const t of state.parkedTopics.filter(t=>t.personId===v.personId&&t.status==='open')){ t.status='raised'; t.raisedAt=now(); t.ooId=oo.id; oo.topicsRaised.push(t.id); } }
+    state.oneOnOnes.push(oo);
+    logEvent('oneonone.held','1:1 held with '+pp.name+(touched?'':' (pulse estimated)'),oo.id);
+    save(); route(); toast('1:1 recorded'+(touched?'':' — pulse stored as estimate')); }); };
+Actions['park-topic'] = arg => { formModal('Park a 1:1 topic','It waits in the lot and is consumed at the next real session.',[
+    {k:'personId',label:'Person',type:'select',opts:personOpts(),val:arg||''},
+    {k:'text',label:'Topic',type:'textarea',req:1}
+  ],'Park it', v=>{ if(!v.personId) return 'Pick a person.'; if(!v.text||!v.text.trim()) return 'An empty topic parks nothing.';
+    state.parkedTopics.push({id:uid('pt'),personId:v.personId,text:v.text.trim(),source:null,status:'open',createdAt:now(),raisedAt:null,ooId:null});
+    logEvent('topic.parked','Topic parked for '+pname(v.personId)); save(); route(); }); };
+Actions['topic-drop'] = arg => { const t=byId(state.parkedTopics,arg); if(!t) return;
+  t.status='dropped'; save(); route(); toast('Topic dropped (kept in history)'); };
+Actions['quick-feedback'] = arg => { formModal('Draft SBI feedback','S/B/I forces observation over judgment. Evidence systems count only delivered feedback.',[
+    {k:'personId',label:'Person',type:'select',opts:personOpts(),val:arg||''},
+    {k:'kind',label:'Kind',type:'seg',opts:[{v:'positive',label:'Recognize'},{v:'redirect',label:'Redirect'}],val:'positive'},
+    {k:'s',label:'Situation — when/where'},{k:'b',label:'Behavior — what you saw/heard'},{k:'i',label:'Impact — what changed because of it'},
+    {k:'delivered',label:'Status',type:'seg',opts:[{v:'draft',label:'Draft only'},{v:'yes',label:'I delivered it'}],val:'draft'}
+  ],'Save SBI', v=>{ if(!v.personId) return 'Pick a person.'; if(!v.b||!v.b.trim()) return 'Behavior is the load-bearing wall of SBI — required.';
+    state.feedbacks.push({id:uid('fb'),personId:v.personId,kind:v.kind,s:v.s||'',b:v.b.trim(),i:v.i||'',deliveredAt:v.delivered==='yes'?now():null,goalId:null,caseId:null});
+    logEvent('feedback.'+(v.delivered==='yes'?'delivered':'drafted'),'SBI '+(v.delivered==='yes'?'delivered to ':'drafted for ')+pname(v.personId)); save(); route(); }); };
+Actions['feedback-deliver'] = arg => { const f=byId(state.feedbacks,arg); if(!f) return; f.deliveredAt=now();
+  logEvent('feedback.delivered','SBI delivered to '+pname(f.personId),f.id); save(); route(); toast('Marked delivered — now counts as evidence'); };
+Actions['goal-add'] = () => { formModal('Add goal','Owner, due date, status. Everything else grows around it.',[
+    {k:'title',label:'Goal',req:1},{k:'ownerId',label:'Owner',type:'select',opts:personOpts(p=>p.relation==='direct',true)},
+    {k:'team',label:'Team'},{k:'due',label:'Due',type:'date',val:dISO(now()+days(45))},
+    {k:'status',label:'Status',type:'seg',opts:[{v:'ontrack',label:'On track'},{v:'atrisk',label:'At risk'},{v:'late',label:'Late'}],val:'ontrack'}
+  ],'Add goal', v=>{ if(!v.title||!v.title.trim()) return 'Untitled goals are not goals.';
+    state.goals.push({id:uid('g'),title:v.title.trim(),ownerId:v.ownerId||null,team:v.team||'',status:v.status,due:parseDay(v.due)||null,createdAt:now(),checkIns:[{t:now(),note:'Created',status:v.status}],depEdges:[]});
+    logEvent('goal.created','Goal created: '+v.title.trim()); save(); route(); }); };
+Actions['goal-checkin'] = arg => { const g=byId(state.goals,arg); if(!g) return;
+  formModal('Check in — '+g.title,'Status is a claim; the note is its basis.',[
+    {k:'status',label:'Status',type:'seg',opts:[{v:'ontrack',label:'On track'},{v:'atrisk',label:'At risk'},{v:'late',label:'Late'},{v:'done',label:'Done'}],val:g.status},
+    {k:'note',label:'What is true right now?',type:'textarea',req:1}
+  ],'Record check-in', v=>{ if(!v.note||!v.note.trim()) return 'A status without a basis is exactly the fake certainty this app exists to kill.';
+    g.status=v.status; g.checkIns=g.checkIns||[]; g.checkIns.push({t:now(),note:v.note.trim(),status:v.status});
+    logEvent('goal.checkin','Goal check-in: '+g.title+' → '+v.status,g.id); save(); route(); }); };
+Actions['goal-done'] = arg => { const g=byId(state.goals,arg); if(!g) return;
+  g.status='done'; g.checkIns.push({t:now(),note:'Marked done',status:'done'}); logEvent('goal.done','Goal done: '+g.title,g.id); save(); route(); };
+Actions['goal-edge-add'] = arg => { const g=byId(state.goals,arg); if(!g) return;
+  const others=state.goals.filter(x=>x.id!==g.id && !(g.depEdges||[]).some(e=>e.to===x.id));
+  if(!others.length){ toast('No other goals to depend on','err'); return; }
+  formModal('Add dependency','“'+g.title+'” is blocked by the goal you pick. Cycles are refused with the full path named.',[
+    {k:'to',label:'Blocked by',type:'select',opts:others.map(x=>({v:x.id,label:x.title+' ('+x.status+')'}))}
+  ],'Add edge', v=>{ const path=wouldCycle(state,g.id,v.to);
+    if (path){ const names=path.map(id=>{ const x=byId(state.goals,id); return x?x.title:id; });
+      return 'Cycle refused: '+names.join(' → ')+'. Untangle the dependency first.'; }
+    g.depEdges.push({to:v.to,since:now()}); logEvent('goal.dep','Dependency: '+g.title+' ← '+pnameGoal(v.to),g.id); save(); route(); }); };
+function pnameGoal(id){ const g=byId(state.goals,id); return g?g.title:id; }
+Actions['goal-edge-del'] = arg => { const i=arg.indexOf('|'), gid=arg.slice(0,i), to=arg.slice(i+1);
+  const g=byId(state.goals,gid); if(!g) return; g.depEdges=(g.depEdges||[]).filter(e=>e.to!==to); save(); route(); toast('Dependency removed'); };
+/*__MOD2__*/
+</script>
+</script>
+</body>
+</html>
+
