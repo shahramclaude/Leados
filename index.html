@@ -3,28 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LeadOS · pt-1 — Leadership Operating System</title>
-<meta name="description" content="Offline leadership mentor for new multi-team leaders. One key, no network, no account.">
+<title>LeadOS · pt-2 — Leadership Operating System</title>
+<meta name="description" content="Offline leadership mentor for new leaders of team leads. Vanilla JS, localStorage, no network.">
 <link rel="stylesheet" href="css/app.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231C1917'/><rect x='4' y='9' width='8' height='2' fill='%23C23B2E'/><rect x='4' y='5' width='8' height='2' fill='%23F7F4EF'/></svg>">
 </head>
 <body>
-<nav id="rail" aria-label="Primary">
-  <a class="brand" href="#/today">LeadOS<span>pt-1</span></a>
-  <p class="note">offline · one key ·<br>no network</p>
-  <div id="rail-links">
-    <a href="#/today">Today</a>
-    <a href="#/roster">Roster</a>
-    <a href="#/playbooks">Playbooks</a>
-    <a href="#/health">Health</a>
-    <a href="#/data">Data</a>
-  </div>
-  <p class="pillwrap"><span id="pill" class="pill" title="storage write status">…</span></p>
-</nav>
-<main id="view" tabindex="-1">
-  <p class="dim">loading modules…</p>
-</main>
-<noscript><p style="padding:2rem;font-family:serif">LeadOS is a local application — it needs JavaScript to run. It never needs a network.</p></noscript>
+<div id="boot-fatal" hidden></div>
+
+<header id="topbar">
+  <span class="brand">LEAD<span>O</span>S</span>
+  <span class="top-meta" id="top-meta"></span>
+  <span id="write-pill" class="pill pill-bad" hidden>WRITE FAILED</span>
+</header>
+
+<div id="shell">
+  <nav id="rail">
+    <a class="brand-lg" href="#/today">LEAD<span>O</span>S</a>
+    <div id="rail-links">
+      <a href="#/today" data-route="today"><i data-ic="today"></i>Today <b id="n-today"></b></a>
+      <a href="#/roster" data-route="roster"><i data-ic="people"></i>Roster</a>
+      <a href="#/playbooks" data-route="playbooks"><i data-ic="book"></i>Playbooks</a>
+      <a href="#/health" data-route="health"><i data-ic="pulse"></i>Health</a>
+      <a href="#/data" data-route="data"><i data-ic="db"></i>Data</a>
+    </div>
+    <div id="rail-foot">schema v2 · lineage pt<br>offline · one key · zero network</div>
+  </nav>
+  <main id="view" role="main"></main>
+</div>
+
+<div id="modal-root" hidden></div>
+<div id="flash-root"></div>
 
 <script src="js/store.js"></script>
 <script src="js/events.js"></script>
@@ -32,36 +40,24 @@
 <script src="js/playbooks.js"></script>
 <script src="js/ui.js"></script>
 <script>
-/* Boot registry guard (T1's outer face): the app knows its own file list.
-   A missing/mis-pathed module renders a fatal banner naming the path instead
-   of a live-looking dead app. Plain synchronous scripts — no defer, no async,
-   no race: by this line, every module has already had its chance to register. */
+/* Boot registry guard (carried from pt-1 doctrine): every expected module
+   must have registered itself. A missing file → fatal banner naming the
+   path, data untouched, no half-boot. Plain synchronous scripts: no
+   defer/async race by construction. */
 (function () {
-  'use strict';
-  var expected = [
-    ['store', 'js/store.js'],
-    ['events', 'js/events.js'],
-    ['engine', 'js/engine.js'],
-    ['playbooks', 'js/playbooks.js'],
-    ['ui', 'js/ui.js']
-  ];
-  var missing = [], i;
-  for (i = 0; i < expected.length; i++) {
-    if (!window.LEADOS || !LEADOS._mod || LEADOS._mod[expected[i][0]] !== expected[i][1]) missing.push(expected[i][1]);
-  }
-  var view = document.getElementById('view');
-  var pill = document.getElementById('pill');
+  var NEED = { store: 'js/store.js', events: 'js/events.js', engine: 'js/engine.js', playbooks: 'js/playbooks.js', ui: 'js/ui.js' };
+  var fatal = document.getElementById('boot-fatal');
+  var mods = (window.LEADOS && LEADOS._mod) || {};
+  var missing = [];
+  for (var k in NEED) if (!mods[k]) missing.push(NEED[k]);
   if (missing.length) {
-    var lis = missing.map(function (m) { return '<li><code>' + m + '</code></li>'; }).join('');
-    view.innerHTML = '<section class="banner bad fatal"><h1>Boot failed — module registry incomplete</h1>' +
-      '<p>The following file(s) did not register themselves. The app is stopped deliberately: a leadership tool that looks alive while a module is missing is lying to you.</p>' +
-      '<ul>' + lis + '</ul>' +
-      '<p class="mono">Check the files exist at those paths, then reload. Your data in localStorage was NOT touched by this check.</p></section>';
-    if (pill) { pill.textContent = 'BOOT FAILED'; pill.className = 'pill bad'; }
+    fatal.hidden = false;
+    fatal.innerHTML = '<div class="fatal-box"><h1>LeadOS did not boot</h1>' +
+      '<p>Missing module file(s): <code>' + missing.join(', ') + '</code>.</p>' +
+      '<p>Your stored data under key <code>leados:data</code> was not touched. Restore the file(s) and reload.</p></div>';
     return;
   }
-  var summary = LEADOS.store.bootLoad();
-  LEADOS.ui.boot(summary);
+  LEADOS.ui.boot();
 })();
 </script>
 </body>
