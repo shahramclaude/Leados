@@ -4,44 +4,52 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LeadOS — Leadership Operating System</title>
+<meta name="description" content="Offline-first leadership mentor for multi-team leads. Vanilla JS, localStorage, no network calls. Open index.html — that is the install.">
 <link rel="stylesheet" href="css/app.css">
+<!-- mf-2 · multi-file lineage (css/ + js/ per the standing mandate — the tree finally matches the docs).
+     Single network budget: zero. No fonts, no CDNs, no APIs. -->
+<style>
+  /* critical boot paint — no FOUC before app.css parses */
+  #boot{position:fixed;inset:0;display:grid;place-items:center;background:#F7F4EF;z-index:50}
+  .bootbox{font:11px ui-monospace,Menlo,Consolas,monospace;color:#6E6A5E;letter-spacing:.08em;text-transform:uppercase}
+  .bootbox b{display:block;font:600 22px "Iowan Old Style",Palatino,Georgia,serif;color:#1C1917;letter-spacing:0;text-transform:none;margin-bottom:8px}
+</style>
 </head>
 <body>
+<div id="boot"><div class="bootbox"><b>LeadOS</b>mf-2 · storage, engine, playbooks…</div></div>
 
-<div id="boot" class="boot">
-  <p><strong>LEADOS</strong> · mf-1 · multi-file lineage · session 5 build</p>
-  <p><span>storage key</span><span>leados:data</span></p>
-  <p><span>schema</span><span>v1 (mf lineage) · foreign stores quarantined read-only, never overwritten</span></p>
-  <p><span>integrity sweep</span><span>runs at boot · repairs logged · never drops rows</span></p>
-  <p><span>self-tests</span><span>T1–T8 live-path + G1–G9 golden engine fixtures at #/health</span></p>
-  <p><span>authority</span><span>#/health numbers beat any README, including the shipped one</span></p>
-  <noscript><p><span>halt</span><span>LeadOS is vanilla JS and cannot run without it.</span></p></noscript>
+<div id="app" class="shell" hidden>
+  <nav class="rail" aria-label="Primary">
+    <span class="wordmark">LeadOS</span>
+    <a class="navbtn" data-route="today" href="#/today">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      <span class="nl">Today</span></a>
+    <a class="navbtn" data-route="roster" href="#/roster">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span class="nl">Roster</span></a>
+    <a class="navbtn" data-route="playbooks" href="#/playbooks">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <span class="nl">Plays</span></a>
+    <a class="navbtn" data-route="health" href="#/health">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+      <span class="nl">Health</span></a>
+    <a class="navbtn" data-route="data" href="#/data">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+      <span class="nl">Data</span></a>
+    <span class="tag">mf-2 · schema v2</span>
+  </nav>
+  <main class="main" id="view"></main>
 </div>
 
-<div id="app" class="app" hidden>
-  <header class="top">
-    <div class="brand">
-      <span class="brand-name">LEADOS</span>
-      <span class="brand-tag">mf-1</span>
-    </div>
-    <nav class="nav" id="nav">
-      <a href="#/today" data-route="today">Today</a>
-      <a href="#/roster" data-route="roster">Roster</a>
-      <a href="#/health" data-route="health">Health</a>
-      <a href="#/data" data-route="data">Data</a>
-    </nav>
-  </header>
-  <div id="pill" class="pill" hidden>WRITE FAILED — storage quota exhausted. Changes are held in memory only; export from #/data immediately.</div>
-  <main id="view" class="view"></main>
-  <footer class="foot">
-    <span>LeadOS mf-1</span>
-    <span>all state in localStorage · no network calls · #/health is the authority</span>
-  </footer>
-</div>
+<div id="pill" class="pill" hidden>WRITE FAILED</div>
+<div id="scrim"></div>
+<aside id="drawer" aria-label="Detail"></aside>
+<noscript><p style="padding:24px;font-family:monospace">LeadOS is a local application; it needs JavaScript. Your data never leaves this browser either way.</p></noscript>
 
 <script src="js/store.js"></script>
 <script src="js/events.js"></script>
 <script src="js/engine.js"></script>
+<script src="js/playbooks.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

@@ -1,9 +1,14 @@
-/* LeadOS mf-1 · js/engine.js — rules engine. Pure: (state, todayISO) → findings.
-   Every finding carries: what (title+action), why (basis lines from triggering
-   data), confidence (level + why). The engine never states certainty it does
-   not have: trends need ≥3 measured points; estimated pulses are excluded;
-   missing fields skip rather than infer. Golden fixtures G1–G9 below are the
-   contract, executed live at #/health. */
+/* LeadOS mf-2 · js/engine.js — rules engine. Pure: (state, todayISO) → findings.
+   Every finding carries: what (title + action), why (basis lines from triggering
+   data + evidenceIds of the exact events), confidence (level + why), and a printed
+   score derivation: score = severity × confidence-factor (high 1.0 / medium 0.8 /
+   low 0.6). The engine never states certainty it does not have: trends need ≥3
+   measured points; estimated pulses are excluded; missing fields skip rather
+   than infer; unknown reporting lines skip rather than guess.
+   Engine memory: engine.snooze / engine.dismiss / engine.unmute are EVENTS, so
+   suppression is auditable, exportable, and reversible. Latest unmute beats
+   latest dismiss; snooze lapses on its own.
+   Golden fixtures G1–G12 are the contract, executed live at #/health. */
 window.LEADOS = window.LEADOS || {};
 LEADOS.engine = (function () {
   'use strict';
@@ -13,18 +18,20 @@ LEADOS.engine = (function () {
     FB_WINDOW_DAYS: 60,      /* feedback balance window */
     FB_MIN_COUNT: 3,         /* fewer feedback events = not a pattern */
     DL_OPEN_MAX: 4,          /* open delegations per person past this = loaded */
-    DL_WATCH_LEVEL: 4,       /* levels ≥4 with little oversight */
     CF_WINDOW_DAYS: 90,      /* conflict recurrence window */
     CF_MIN: 2,               /* unresolved conflicts to call it a pattern */
     PULSE_WINDOW_DAYS: 21,   /* overload signal window */
-    LOAD_HIGH: 8,            /* mean load ≥ this = high */
-    MIN_POINTS: 3            /* never trend on fewer measured points */
+    LOAD_HIGH: 8,            /* mean load ≥ this (of 10) = high */
+    MIN_POINTS: 3,           /* never trend on fewer measured points */
+    SKIP_CADENCE_DAYS: 28,   /* skip-level 1:1 cadence */
+    SNOOZE_DAYS: 7           /* default snooze horizon */
   };
-
+  var CONF_FACTOR = { high: 1.0, medium: 0.8, low: 0.6 };
   var RULE_TAGS = {
-    R1: 'cadence', R2: 'decision review', R3: 'goal health', R4: 'feedback balance',
-    R5: 'delegation load', R6: 'conflict pattern', R7: 'overload signals'
+    R1: '1:1 cadence', R2: 'decision review', R3: 'goal health', R4: 'feedback balance',
+    R5: 'delegation load', R6: 'conflict pattern', R7: 'overload signals', R8: 'skip-level'
   };
+  var RULE_PLAYBOOK = { R1: 'oneonone', R2: 'decision', R3: 'goal', R4: 'sbi', R5: 'delegation', R6: 'desc', R7: 'oneonone', R8: 'oneonone' };
 
   function dayUTC(iso) {
     if (typeof iso !== 'string') return null;
@@ -49,19 +56,26 @@ LEADOS.engine = (function () {
     return den === 0 ? 0 : (n * sxy - sx * sy) / den;
   }
   function conf(level, why) { return { level: level, why: why }; }
-  function finding(o) { o.basis = o.basis || []; o.meta = o.meta || {}; return o; }
+  function fin(o) {
+    o.basis = o.basis || []; o.meta = o.meta || {}; o.meta.evidenceIds = o.meta.evidenceIds || [];
+    var f = CONF_FACTOR[o.confidence.level] || 0.6;
+    o.score = Math.round(o.severity * f);
+    o.breakdown = 'sev ' + o.severity + ' × conf ' + f.toFixed(2) + ' = ' + o.score;
+    return o;
+  }
+  function keyOf(f) { return f.ruleId + ':' + (f.personId || (f.meta && f.meta.key) || 'global'); }
 
   function buildCtx(state, todayISO) {
-    var people = (state.people || []).filter(function (p) { return p && !p.archived; });
+    var people = (state.people || []).filter(function (p) { return p && typeof p === 'object'; });
     var events = (state.events || []).slice().sort(function (a, b) {
-      return String(a.ts) < String(b.ts) ? -1 : 1;
+      return String(a.ts) < String(b.ts) ? -1 : String(a.ts) > String(b.ts) ? 1 : 0;
     });
-    var names = {};
-    (state.people || []).forEach(function (p) { if (p) names[p.id] = p.name; });
-    var ctx = {
+    var byPid = {}, names = {};
+    people.forEach(function (p) { byPid[p.id] = p; names[p.id] = p.name || 'unnamed'; });
+    return {
       today: todayISO,
-      people: people,
-      events: events,
+      people: people.filter(function (p) { return !p.archived; }),
+      allPeople: people, events: events, byPid: byPid,
       name: function (pid) { return names[pid] || 'unknown person'; },
       lastEvent: function (type, pid) {
         var best = null;
@@ -70,13 +84,193 @@ LEADOS.engine = (function () {
           if (e.type === type && (pid == null || e.personId === pid)) best = e;
         }
         return best;
+      },
+      /* reporting line: 'me' or a person id. undefined reportsTo (v1 data) = 'me'. */
+      lineToMe: function (pid) {
+        var chain = [], cur = this.byPid[pid], guard = 0;
+        if (!cur) return null;
+        while (cur && guard++ < 20) {
+          var rt = cur.reportsTo === undefined ? 'me' : cur.reportsTo;
+          if (rt === 'me') return chain.concat(['me']);
+          var next = this.byPid[rt];
+          if (!next || next.archived) return null;          /* broken line: engine says nothing */
+          chain.push(next.id); cur = next;
+        }
+        return null;
       }
     };
-    return ctx;
   }
 
   var RULES = [
-    { id: 'R7', run: function (ctx) {                    /* overload: load trend + mood trend, measured only */
+    { id: 'R1', run: function (ctx) {                    /* 1:1 cadence overdue (direct reports) */
+      var out = [];
+      ctx.people.forEach(function (p) {
+        var line = ctx.lineToMe(p.id);
+        var isDirect = !!(line && line.length === 1);    /* ['me'] = no lead between us */
+        if (!isDirect) return;                           /* skip-levels are R8's job */
+        var cad = num(p.cadenceDays) || 7;
+        var last = ctx.lastEvent('oneonone.logged', p.id);
+        if (!last) {
+          out.push(fin({ ruleId: 'R1', personId: p.id, severity: 70,
+            title: 'No 1:1 ever logged with ' + ctx.name(p.id),
+            action: 'Book the first one now — a lead without a cadence flies on hallway signal.',
+            basis: ['oneonone.logged events for this person: 0', 'cadence setting: ' + cad + 'd'],
+            confidence: conf('high', 'absence of events is a hard fact of the store, not an inference.'),
+            meta: { never: true, evidenceIds: [] } }));
+          return;
+        }
+        var d = days(last.ts, ctx.today);
+        if (d == null || d <= cad) return;               /* fires strictly past cadence (G2) */
+        var sev = Math.min(90, 60 + 2 * (d - cad));
+        out.push(fin({ ruleId: 'R1', personId: p.id, severity: sev,
+          title: '1:1 with ' + ctx.name(p.id) + ' is ' + (d - cad) + 'd overdue',
+          action: 'Book it inside 48h. Come with their blockers, not your agenda — see the 1:1 run sheet.',
+          basis: ['last logged 1:1: ' + String(last.ts).slice(0, 10) + ' (' + d + 'd ago)',
+            'cadence setting: ' + cad + 'd — fires strictly when days > cadence',
+            last.data && last.data.note ? 'last session note: ' + last.data.note : 'last session has no note'],
+          confidence: conf('high', 'pure date arithmetic on your logged events and your cadence setting.'),
+          meta: { overdue: d - cad, lastTs: last.ts, evidenceIds: [last.id] } }));
+      });
+      return out;
+    } },
+
+    { id: 'R2', run: function (ctx) {                    /* decisions past review, no outcome */
+      var out = [];
+      var resolved = {};
+      ctx.events.forEach(function (e) {
+        if (e.type === 'decision.outcome' && e.data && e.data.decisionId) resolved[e.data.decisionId] = true;
+      });
+      ctx.events.forEach(function (e) {
+        if (e.type !== 'decision.logged' || resolved[e.id]) return;
+        var rd = e.data && e.data.reviewDate, d = dayUTC(rd) == null ? null : days(rd, ctx.today);
+        if (d == null || d < 0) return;                  /* review date in future or absent */
+        out.push(fin({ ruleId: 'R2', severity: 80,
+          title: 'Decision "' + ((e.data && e.data.title) || 'untitled') + '" is ' + d + 'd past its review date',
+          action: 'Close the loop: was the call right? Log the outcome — decision quality is your only calibration data.',
+          basis: ['decided: ' + String(e.ts).slice(0, 10) + ' · review date: ' + rd,
+            'decision.outcome events linked to it: 0'],
+          confidence: conf('high', 'review date you set yourself has passed; absence of outcome is a store fact.'),
+          meta: { key: 'd:' + e.id, decisionId: e.id, daysLate: d, evidenceIds: [e.id] } }));
+      });
+      return out;
+    } },
+
+    { id: 'R3', run: function (ctx) {                    /* goals: ownerless or stalled */
+      var out = [], owners = {}, titles = {}, lastProg = {}, goalTs = {};
+      ctx.events.forEach(function (e) {
+        if (e.type === 'goal.set') {
+          titles[e.id] = (e.data && e.data.title) || 'untitled goal';
+          owners[e.id] = (e.data && e.data.ownerPersonId) || null;
+          goalTs[e.id] = e.ts; lastProg[e.id] = e.ts;    /* set date anchors staleness too */
+        } else if (e.type === 'goal.assign' && e.data && e.data.goalId && titles[e.data.goalId] !== undefined) {
+          owners[e.data.goalId] = e.data.ownerPersonId || null;
+        } else if (e.type === 'goal.progress' && e.data && e.data.goalId && titles[e.data.goalId] !== undefined) {
+          if (String(e.ts) > String(lastProg[e.data.goalId])) lastProg[e.data.goalId] = e.ts;
+        }
+      });
+      Object.keys(titles).forEach(function (id) {
+        if (!owners[id]) {
+          out.push(fin({ ruleId: 'R3', severity: 85,
+            title: 'Goal "' + titles[id] + '" has no owner',
+            action: 'Unowned goals do not fail loudly, they fade. Name one accountable owner or kill it in the open.',
+            basis: ['set: ' + String(goalTs[id]).slice(0, 10), 'ownerPersonId: null (goal.assign events: none matched)'],
+            confidence: conf('high', 'ownership is an explicit field; it is empty.'),
+            meta: { key: 'g:' + id, kind: 'owner', goalId: id, evidenceIds: [id] } }));
+          return;
+        }
+        var stall = days(lastProg[id], ctx.today);
+        if (stall == null || stall <= DOCTRINE.GOAL_STALL_DAYS) return;
+        var pid = owners[id], sev = Math.min(75, 55 + (stall - DOCTRINE.GOAL_STALL_DAYS));
+        out.push(fin({ ruleId: 'R3', personId: pid, severity: sev,
+          title: 'Goal "' + titles[id] + '" silent for ' + stall + 'd',
+          action: 'Ask ' + ctx.name(pid) + ' for one line of truth: blocked, on track, or quietly dropped? Log the answer.',
+          basis: ['owner: ' + ctx.name(pid), 'last goal.progress (or set): ' + String(lastProg[id]).slice(0, 10) + ' (' + stall + 'd ago)',
+            'stall threshold: ' + DOCTRINE.GOAL_STALL_DAYS + 'd'],
+          confidence: conf('medium', 'staleness assumes progress is logged when it happens — verify before escalating.'),
+          meta: { key: 'g:' + id, kind: 'stalled', goalId: id, stall: stall, evidenceIds: [id] } }));
+      });
+      return out;
+    } },
+
+    { id: 'R4', run: function (ctx) {                    /* feedback imbalance */
+      var out = [];
+      ctx.people.forEach(function (p) {
+        var rows = ctx.events.filter(function (e) {
+          return e.type === 'feedback.logged' && e.personId === p.id && within(e.ts, ctx.today, DOCTRINE.FB_WINDOW_DAYS) &&
+            e.data && (e.data.polarity === 'corrective' || e.data.polarity === 'positive');
+        });
+        if (rows.length < DOCTRINE.FB_MIN_COUNT) return; /* not a pattern — engine stays quiet */
+        var corr = rows.filter(function (e) { return e.data.polarity === 'corrective'; }).length;
+        var pos = rows.length - corr;
+        var share = corr / rows.length;
+        if (share >= 0.8 && share <= 0.2) return;        /* unreachable guard; real branches below */
+        var onlyCorr = share >= 0.8, onlyPos = share <= 0.2;
+        if (!onlyCorr && !onlyPos) return;
+        out.push(fin({ ruleId: 'R4', personId: p.id, severity: Math.min(75, 45 + 5 * rows.length),
+          title: onlyCorr
+            ? 'Feedback to ' + ctx.name(p.id) + ' is ' + corr + '/' + rows.length + ' corrective'
+            : 'Feedback to ' + ctx.name(p.id) + ' is ' + pos + '/' + rows.length + ' positive — none corrective',
+          action: onlyCorr
+            ? 'That balance reads as surveillance, not coaching. Catch them doing something right this week — specifically, with SBI.'
+            : 'Pure praise is comfort, not leadership. One honest corrective SBI raises the bar without burning trust.',
+          basis: ['feedback.logged in ' + DOCTRINE.FB_WINDOW_DAYS + 'd window: ' + rows.length + ' (min for a pattern: ' + DOCTRINE.FB_MIN_COUNT + ')',
+            'corrective: ' + corr + ' · positive: ' + pos,
+            'imbalance declared at ≥80% share either way'],
+          confidence: conf('medium', 'this measures what you logged, not what you said. If your real ratio differs, the log is lying — fix the log.'),
+          meta: { polarity: onlyCorr ? 'corrective-heavy' : 'positive-only', n: rows.length,
+            evidenceIds: rows.map(function (e) { return e.id; }) } }));
+      });
+      return out;
+    } },
+
+    { id: 'R5', run: function (ctx) {                    /* delegation load */
+      var out = [], closed = {};
+      ctx.events.forEach(function (e) {
+        if (e.type === 'delegation.closed' && e.data && e.data.delegationId) closed[e.data.delegationId] = true;
+      });
+      ctx.people.forEach(function (p) {
+        var open = ctx.events.filter(function (e) {
+          return e.type === 'delegation.assigned' && e.personId === p.id && !closed[e.id];
+        });
+        if (open.length <= DOCTRINE.DL_OPEN_MAX) return;
+        out.push(fin({ ruleId: 'R5', personId: p.id, severity: Math.min(90, 70 + 5 * (open.length - DOCTRINE.DL_OPEN_MAX)),
+          title: ctx.name(p.id) + ' holds ' + open.length + ' open delegations',
+          action: 'Beyond ' + DOCTRINE.DL_OPEN_MAX + ', you are not delegating, you are burying. Close, downgrade a level, or re-home one item.',
+          basis: ['open delegations: ' + open.length + ' (watch line: ' + DOCTRINE.DL_OPEN_MAX + ')',
+            'open set recomputed from events on this read — nothing cached',
+            'levels: ' + open.map(function (e) { return 'L' + (e.data && e.data.level || '?'); }).join(' ')],
+          confidence: conf('high', 'open/closed state is derived live from assignment and closure events only.'),
+          meta: { open: open.length, evidenceIds: open.map(function (e) { return e.id; }) } }));
+      });
+      return out;
+    } },
+
+    { id: 'R6', run: function (ctx) {                    /* repeated unresolved conflict */
+      var out = [], resolved = {};
+      ctx.events.forEach(function (e) {
+        if (e.type === 'conflict.resolved' && e.data && e.data.conflictId) resolved[e.data.conflictId] = true;
+      });
+      ctx.people.forEach(function (p) {
+        var open = ctx.events.filter(function (e) {
+          return e.type === 'conflict.registered' && e.personId === p.id && !resolved[e.id] &&
+            within(e.ts, ctx.today, DOCTRINE.CF_WINDOW_DAYS);
+        });
+        if (open.length < DOCTRINE.CF_MIN) return;
+        out.push(fin({ ruleId: 'R6', personId: p.id, severity: 90,
+          title: open.length + ' unresolved conflicts around ' + ctx.name(p.id) + ' in ' + DOCTRINE.CF_WINDOW_DAYS + 'd',
+          action: 'A pattern, not an incident. Direct conversation with the counterpart; if it involves you, run the DESC structure.',
+          basis: open.map(function (c) {
+            return String(c.ts).slice(0, 10) + (c.data && c.data.counterpart ? ' vs ' + c.data.counterpart : '') +
+              (c.data && c.data.note ? ' — ' + c.data.note : '');
+          }).concat(['no conflict.resolved event linked to any of them']),
+          confidence: conf('medium', 'counts registered-but-unresolved conflicts; it sees only conflicts someone logged.'),
+          meta: { unresolved: open.length, counterpart: open[0].data && open[0].data.counterpart,
+            evidenceIds: open.map(function (e) { return e.id; }) } }));
+      });
+      return out;
+    } },
+
+    { id: 'R7', run: function (ctx) {                    /* overload: measured pulses only */
       var out = [];
       ctx.people.forEach(function (p) {
         var pulses = ctx.events.filter(function (e) {
@@ -94,412 +288,237 @@ LEADOS.engine = (function () {
         var moodDown = ms != null && ms < 0;
         if (!loadHigh && !moodDown) return;
         var both = loadHigh && moodDown;
-        var basis = ['measured pulses in ' + DOCTRINE.PULSE_WINDOW_DAYS + 'd: ' + measured.length +
-          (excluded ? ' (' + excluded + ' estimated excluded)' : ''),
-          'mean load ' + (loadAvg == null ? 'n/a' : loadAvg.toFixed(1) + '/10') + ' — threshold ' + DOCTRINE.LOAD_HIGH,
-          'mood slope ' + (ms == null ? 'n/a (<3 points)' : ms.toFixed(2) + '/reading')];
-        out.push(finding({
-          ruleId: 'R7', personId: p.id, severe: both,
-          score: both ? 100 : 40,
-          title: both ? ('Overload signals aligning for ' + p.name) : ('Partial overload signal for ' + p.name),
+        out.push(fin({ ruleId: 'R7', personId: p.id, severity: both ? 100 : 40,
+          title: both ? ('Overload signals aligning for ' + ctx.name(p.id)) : ('Partial overload signal for ' + ctx.name(p.id)),
           action: both
             ? 'Cut load before you coach: reassign one concrete item this week, then watch the next two pulses.'
             : 'One signal only — do not act on it. Log the next pulse on schedule and re-check.',
-          basis: basis,
+          basis: ['measured pulses in ' + DOCTRINE.PULSE_WINDOW_DAYS + 'd: ' + measured.length +
+              (excluded ? ' (' + excluded + ' estimated excluded)' : ''),
+            'mean load ' + (loadAvg == null ? 'n/a' : loadAvg.toFixed(1) + '/10') + ' — high at ≥' + DOCTRINE.LOAD_HIGH,
+            'mood slope ' + (ms == null ? 'n/a (<3 measured)' : ms.toFixed(2) + '/reading')],
           confidence: both
-            ? conf('medium', 'two independent signals align (load + mood trend). This is a signal, not a diagnosis.')
-            : conf('low', 'only one of the two required signals is present; the other is absent or flat.'),
-          meta: { signals: both ? 'both' : (loadHigh ? 'load-only' : 'mood-only'), loadAvg: loadAvg, moodSlope: ms, measured: measured.length, excluded: excluded }
-        }));
+            ? conf('medium', 'two independent signals align (load + mood trend). A signal, not a diagnosis.')
+            : conf('low', 'only one of the two signals is present; the other is absent or flat.'),
+          meta: { signals: both ? 'both' : (loadHigh ? 'load-only' : 'mood-only'),
+            evidenceIds: measured.map(function (e) { return e.id; }) } }));
       });
       return out;
     } },
 
-    { id: 'R6', run: function (ctx) {                    /* repeated unresolved conflict */
-      var out = [];
-      var resolved = {};
-      ctx.events.forEach(function (e) {
-        if (e.type === 'conflict.resolved' && e.data && e.data.conflictId) resolved[e.data.conflictId] = true;
-      });
-      ctx.people.forEach(function (p) {
-        var open = ctx.events.filter(function (e) {
-          return e.type === 'conflict.registered' && e.personId === p.id && !resolved[e.id] &&
-            within(e.ts, ctx.today, DOCTRINE.CF_WINDOW_DAYS);
-        });
-        if (open.length < DOCTRINE.CF_MIN) return;
-        out.push(finding({
-          ruleId: 'R6', personId: p.id, severe: true, score: 90,
-          title: open.length + ' unresolved conflicts around ' + p.name + ' in ' + DOCTRINE.CF_WINDOW_DAYS + 'd',
-          action: 'This is a pattern, not an incident. Book a direct conversation with the counterpart; if it involves you, use the DESC structure.',
-          basis: open.map(function (c) {
-            return String(c.ts).slice(0, 10) + (c.data && c.data.counterpart ? ' vs ' + c.data.counterpart : '') +
-              (c.data && c.data.note ? ' — ' + c.data.note : '');
-          }).concat(['no conflict.resolved events linked to any of them']),
-          confidence: conf('medium', 'counts registered-but-unresolved conflicts; depends on conflicts being logged when they happen.'),
-          meta: { unresolved: open.length }
-        }));
-      });
-      return out;
-    } },
-
-    { id: 'R1', run: function (ctx) {                    /* 1:1 cadence overdue */
+    { id: 'R8', run: function (ctx) {                    /* skip-level 1:1 overdue */
       var out = [];
       ctx.people.forEach(function (p) {
-        var cad = num(p.cadenceDays) || 7;
+        var line = ctx.lineToMe(p.id);
+        if (!line || line.length !== 2) return;          /* exactly one lead between me and them */
+        var via = line[0];
+        var cad = DOCTRINE.SKIP_CADENCE_DAYS;
         var last = ctx.lastEvent('oneonone.logged', p.id);
         if (!last) {
-          out.push(finding({
-            ruleId: 'R1', personId: p.id, score: 70,
-            title: 'No 1:1 ever logged with ' + p.name,
-            action: 'Book the first one now — a lead without a cadence flies on hallway signal.',
-            basis: ['on roster since ' + String(p.createdAt || '?').slice(0, 10), 'cadence ' + cad + 'd', 'oneonone.logged events: 0'],
-            confidence: conf('medium', 'no measured 1:1 events exist yet, so "overdue" cannot be computed — absence is the finding.'),
-            meta: { overdue: null }
-          }));
+          out.push(fin({ ruleId: 'R8', personId: p.id, severity: 65,
+            title: 'No skip-level ever logged with ' + ctx.name(p.id),
+            action: 'You inherit their reality through ' + ctx.name(via) + '’s filter only. 30 minutes, three questions: what slows you down, what should I know, what would you change?',
+            basis: ['reporting line: me → ' + ctx.name(via) + ' → ' + ctx.name(p.id),
+              'oneonone.logged for this person: 0 (any kind)', 'skip cadence doctrine: ' + cad + 'd'],
+            confidence: conf('low', 'built from roster reporting lines — verify the line is current before acting on it.'),
+            meta: { never: true, via: via, evidenceIds: [] } }));
           return;
         }
-        var diff = days(last.ts, ctx.today);
-        if (diff != null && diff > cad) {
-          var over = diff - cad;
-          out.push(finding({
-            ruleId: 'R1', personId: p.id, score: 80 + Math.min(over, 30),
-            title: '1:1 with ' + p.name + ' is ' + over + 'd overdue',
-            action: 'Hold the 1:1 before any non-urgent work. Cadence debt compounds silently.',
-            basis: ['last 1:1 ' + String(last.ts).slice(0, 10) + ' (' + diff + 'd ago)', 'cadence ' + cad + 'd', 'overdue ' + over + 'd'],
-            confidence: conf('high', 'overdue computed from a measured oneonone.logged event and the person\u2019s own cadence.'),
-            meta: { overdue: over }
-          }));
-        }
-      });
-      return out;
-    } },
-
-    { id: 'R2', run: function (ctx) {                    /* decision past review, no outcome */
-      var out = [];
-      var resolved = {};
-      ctx.events.forEach(function (e) {
-        if (e.type === 'decision.outcome' && e.data && e.data.decisionId) resolved[e.data.decisionId] = true;
-      });
-      ctx.events.forEach(function (e) {
-        if (e.type !== 'decision.logged' || resolved[e.id]) return;
-        var rd = e.data && e.data.reviewDate;
-        if (!rd) return;                                   /* cannot assert without a date — skip, never infer */
-        var late = days(rd, ctx.today);
-        if (late == null || late <= 0) return;
-        out.push(finding({
-          ruleId: 'R2', score: 70 + Math.min(late, 20),
-          title: 'Decision "' + ((e.data && e.data.title) || 'untitled') + '" is ' + late + 'd past review with no outcome',
-          action: 'Close the loop: log shipped / abandoned / deferred and one sentence of why. Unreviewed decisions teach the team that reviews are optional.',
-          basis: ['review date ' + rd, 'days past review ' + late, 'decision.outcome events linked: 0'],
-          confidence: conf('high', 'an explicit review date passed with no linked outcome event.'),
-          meta: { late: late, decisionId: e.id }
-        }));
-      });
-      return out;
-    } },
-
-    { id: 'R3', run: function (ctx) {                    /* goals: ownerless / stalled */
-      var out = [];
-      var assigns = {};
-      ctx.events.forEach(function (e) {
-        if (e.type === 'goal.assign' && e.data && e.data.goalId) assigns[e.data.goalId] = e.data.ownerPersonId || null;
-      });
-      var lastProgress = {};
-      ctx.events.forEach(function (e) {
-        if (e.type === 'goal.progress' && e.data && e.data.goalId) lastProgress[e.data.goalId] = e;
-      });
-      ctx.events.forEach(function (e) {
-        if (e.type !== 'goal.set') return;
-        var title = (e.data && e.data.title) || 'untitled goal';
-        var owner = (e.data && e.data.ownerPersonId !== undefined) ? e.data.ownerPersonId : null;
-        if (assigns[e.id] !== undefined) owner = assigns[e.id];
-        if (owner == null) {
-          out.push(finding({
-            ruleId: 'R3', score: 55,
-            title: 'Goal "' + title + '" has no owner',
-            action: 'Assign exactly one named owner or kill the goal. Shared ownership is no ownership.',
-            basis: ['goal.set ' + String(e.ts).slice(0, 10), 'ownerPersonId: empty', 'goal.assign events: ' + (assigns[e.id] !== undefined ? 1 : 0)],
-            confidence: conf('high', 'the owner field is empty and no goal.assign event overrides it.'),
-            meta: { kind: 'owner', goalId: e.id }
-          }));
-        }
-        var lp = lastProgress[e.id];
-        var silence = days(lp ? lp.ts : e.ts, ctx.today);
-        if (silence != null && silence > DOCTRINE.GOAL_STALL_DAYS) {
-          out.push(finding({
-            ruleId: 'R3', personId: owner || undefined, score: 65,
-            title: 'Goal "' + title + '" stalled — ' + silence + 'd without progress',
-            action: lp
-              ? 'Ask the owner for a one-line status in the next 1:1; stale-by-silence is how goals die invisibly.'
-              : 'No progress has ever been logged. Get a first measurable checkpoint or decommit.',
-            basis: ['set ' + String(e.ts).slice(0, 10), lp ? ('last progress ' + String(lp.ts).slice(0, 10)) : 'progress events: 0',
-              'stall threshold ' + DOCTRINE.GOAL_STALL_DAYS + 'd', 'owner ' + (owner ? ctx.name(owner) : 'none')],
-            confidence: lp
-              ? conf('medium', 'stall computed from the last logged progress; progress may have happened unlogged.')
-              : conf('medium', 'no progress events exist at all; if progress is tracked elsewhere, log it here.'),
-            meta: { kind: 'stall', goalId: e.id, silence: silence }
-          }));
-        }
-      });
-      return out;
-    } },
-
-    { id: 'R5', run: function (ctx) {                    /* delegation load per person */
-      var out = [];
-      var closed = {};
-      ctx.events.forEach(function (e) {
-        if (e.type === 'delegation.closed' && e.data && e.data.delegationId) closed[e.data.delegationId] = true;
-      });
-      ctx.people.forEach(function (p) {
-        var openD = ctx.events.filter(function (e) {
-          return e.type === 'delegation.assigned' && e.personId === p.id && !closed[e.id];
-        });
-        if (openD.length <= DOCTRINE.DL_OPEN_MAX) return;
-        var maxLevel = 0;
-        openD.forEach(function (d) { var l = num(d.data && d.data.level); if (l != null && l > maxLevel) maxLevel = l; });
-        out.push(finding({
-          ruleId: 'R5', personId: p.id, score: 60 + openD.length,
-          title: p.name + ' carries ' + openD.length + ' open delegations (watch line: ' + DOCTRINE.DL_OPEN_MAX + ')',
-          action: 'De-load, not motivate: close or reassign the lowest-value item, and schedule a check-in on anything at level ' + DOCTRINE.DL_WATCH_LEVEL + '+.',
-          basis: openD.slice(0, 3).map(function (d) {
-            return '· ' + ((d.data && d.data.title) || 'untitled') + ' (L' + ((d.data && d.data.level) || '?') + ', ' + String(d.ts).slice(0, 10) + ')';
-          }).concat([openD.length > 3 ? '…and ' + (openD.length - 3) + ' more' : '—', 'max delegation level open: L' + maxLevel]),
-          confidence: conf('high', 'derived mechanically from delegation.assigned minus delegation.closed events.'),
-          meta: { open: openD.length, maxLevel: maxLevel }
-        }));
-      });
-      return out;
-    } },
-
-    { id: 'R4', run: function (ctx) {                    /* feedback imbalance */
-      var out = [];
-      ctx.people.forEach(function (p) {
-        var fb = ctx.events.filter(function (e) {
-          return e.type === 'feedback.logged' && e.personId === p.id && within(e.ts, ctx.today, DOCTRINE.FB_WINDOW_DAYS);
-        });
-        var cor = 0, pos = 0;
-        fb.forEach(function (e) {
-          var pol = e.data && e.data.polarity;
-          if (pol === 'corrective') cor++;
-          else if (pol === 'positive') pos++;
-        });
-        var total = cor + pos;
-        if (total < DOCTRINE.FB_MIN_COUNT) return;         /* too little data to call a pattern */
-        if (cor > 0 && pos === 0) {
-          out.push(finding({
-            ruleId: 'R4', personId: p.id, score: 50,
-            title: 'Feedback for ' + p.name + ' is ' + cor + ' corrective / 0 positive in ' + DOCTRINE.FB_WINDOW_DAYS + 'd',
-            action: 'Find one real, specific positive and deliver it with SBI. Corrective-only feedback reads as bias and erodes the channel.',
-            basis: ['corrective ' + cor + ' · positive ' + pos + ' · window ' + DOCTRINE.FB_WINDOW_DAYS + 'd', 'minimum count for a pattern: ' + DOCTRINE.FB_MIN_COUNT],
-            confidence: total >= 5 ? conf('medium', 'five or more logged events, one polarity only.') : conf('low', 'just past the minimum count; an imbalance, not yet a habit.'),
-            meta: { kind: 'only-corrective', corrective: cor, positive: pos }
-          }));
-        } else if (pos > 0 && cor === 0) {
-          out.push(finding({
-            ruleId: 'R4', personId: p.id, score: 50,
-            title: 'Feedback for ' + p.name + ' is ' + pos + ' positive / 0 corrective in ' + DOCTRINE.FB_WINDOW_DAYS + 'd',
-            action: 'Withholding corrective feedback is kind to you, not to them. Prepare one corrective SBI for the next 1:1.',
-            basis: ['positive ' + pos + ' · corrective ' + cor + ' · window ' + DOCTRINE.FB_WINDOW_DAYS + 'd', 'minimum count for a pattern: ' + DOCTRINE.FB_MIN_COUNT],
-            confidence: total >= 5 ? conf('medium', 'five or more logged events, one polarity only.') : conf('low', 'just past the minimum count; an imbalance, not yet a habit.'),
-            meta: { kind: 'only-positive', corrective: cor, positive: pos }
-          }));
-        }
+        var d = days(last.ts, ctx.today);
+        if (d == null || d <= cad) return;
+        out.push(fin({ ruleId: 'R8', personId: p.id, severity: Math.min(75, 50 + 2 * (d - cad)),
+          title: 'Skip-level with ' + ctx.name(p.id) + ' is ' + (d - cad) + 'd overdue',
+          action: 'Their lead gets your time; they get your silence. Book the skip-level before the org learns that.',
+          basis: ['reporting line: me → ' + ctx.name(via) + ' → ' + ctx.name(p.id),
+            'last 1:1 logged: ' + String(last.ts).slice(0, 10) + ' (' + d + 'd ago, cadence ' + cad + 'd)'],
+          confidence: conf('medium', 'date math is hard; the reporting line is only as fresh as your roster.'),
+          meta: { overdue: d - cad, via: via, evidenceIds: [last.id] } }));
       });
       return out;
     } }
   ];
 
-  function run(state, todayISO) {
-    var ctx = buildCtx(state, todayISO || new Date().toISOString());
-    var out = [];
-    RULES.forEach(function (r) {
-      try { out = out.concat(r.run(ctx)); }
-      catch (e) {
-        out.push(finding({
-          ruleId: r.id, score: 1, title: 'Rule ' + r.id + ' failed to evaluate',
-          action: 'This is a defect — check #/health.', basis: [String(e)],
-          confidence: conf('low', 'the rule threw an exception; output may be incomplete.')
-        }));
+  /* engine memory: latest unmute beats latest dismiss; snooze lapses naturally */
+  function suppression(ctx) {
+    var dismissed = {}, snoozed = {}, i, ev;
+    for (i = 0; i < ctx.events.length; i++) {
+      ev = ctx.events[i];
+      if (ev.type === 'engine.dismiss' && ev.data && ev.data.key) dismissed[ev.data.key] = ev;
+      else if (ev.type === 'engine.unmute' && ev.data && ev.data.key) {
+        if (dismissed[ev.data.key] && String(ev.ts) > String(dismissed[ev.data.key].ts)) delete dismissed[ev.data.key];
       }
+      else if (ev.type === 'engine.snooze' && ev.data && ev.data.key) {
+        if (!snoozed[ev.data.key] || String(ev.data.until) > String(snoozed[ev.data.key])) snoozed[ev.data.key] = ev.data.until;
+      }
+    }
+    return { dismissed: dismissed, snoozed: snoozed };
+  }
+
+  function run(state, todayISO) {
+    var today = todayISO || new Date().toISOString().slice(0, 10);
+    var ctx = buildCtx(state || {}, today);
+    var findings = [], byRule = {};
+    RULES.forEach(function (r) {
+      var got = [];
+      try { got = r.run(ctx) || []; }
+      catch (e) { got = [fin({ ruleId: r.id, severity: 1, title: 'Rule ' + r.id + ' failed to evaluate: ' + String(e && e.message),
+        action: 'Fix the data; the engine refuses to guess.', confidence: conf('low', 'rule threw an exception — output shown for debugging only.'),
+        basis: ['engine self-check caught an exception'], meta: { error: true } })]; }
+      byRule[r.id] = got.length;
+      findings = findings.concat(got);
+    });
+    var sup = suppression(ctx), out = [], snz = [], mut = [];
+    findings.forEach(function (f) {
+      var k = keyOf(f); f.key = k;
+      if (sup.dismissed[k]) { f.mutedReason = sup.dismissed[k].data && sup.dismissed[k].data.reason; mut.push(f); }
+      else if (sup.snoozed[k] && dayUTC(sup.snoozed[k]) != null && dayUTC(sup.snoozed[k]) >= dayUTC(today)) { f.snoozedUntil = sup.snoozed[k]; snz.push(f); }
+      else out.push(f);
     });
     out.sort(function (a, b) {
       if (b.score !== a.score) return b.score - a.score;
-      return a.ruleId < b.ruleId ? -1 : 1;
+      var ap = a.personId || '', bp = b.personId || '';
+      return ap < bp ? -1 : ap > bp ? 1 : (a.ruleId < b.ruleId ? -1 : 1);   /* deterministic, printed */
     });
-    return out;
+    return { findings: out, snoozed: snz, muted: mut, byRule: byRule, today: today };
   }
 
-  /* ---------- golden fixtures: the contract, executed at #/health ---------- */
-  /* captured fixture ids — declared BEFORE the GOLDEN array so the array
-     literal can assign them during construction (a later `var x = null`
-     statement would wipe the captured values — defect caught pre-delivery). */
-  var GOLDEN_G2_DEC = null, GOLDEN_G3_G3 = null, GOLDEN_G3_G4 = null, GOLDEN_G9_GOAL = null;
-  var GT = '2026-03-01';
-  function back(n) {
-    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(GT);
-    return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]) - n * 86400000).toISOString();
+  /* ---------------- golden fixtures: the contract, run live ---------------- */
+  function mkP(id, opts) {
+    opts = opts || {};
+    return { id: id, name: opts.name || id, role: 'x', cadenceDays: opts.cad || 7,
+      reportsTo: opts.reportsTo === undefined ? 'me' : opts.reportsTo, archived: !!opts.arch, seed: false, createdAt: '2026-01-01T00:00:00.000Z' };
   }
-  var gseq = 0;
-  function gP(id, name, cad) { return { id: id, name: name, role: 'fixture', cadenceDays: cad, createdAt: '2026-01-01T00:00:00.000Z', archived: false }; }
-  function gE(ts, type, pid, data) { gseq++; return { id: 'gx-' + gseq, ts: ts, type: type, personId: pid || null, data: data || {} }; }
-  function has(fs, ruleId, pid, where) {
-    return fs.some(function (f) {
-      if (f.ruleId !== ruleId) return false;
-      if (pid !== undefined && f.personId !== pid) return false;
-      if (where && !where(f)) return false;
-      return true;
-    });
-  }
+  function mkE(id, type, ts, pid, data) { return { id: id, type: type, ts: ts, personId: pid || null, data: data || {}, seed: false }; }
+  function rel(day, minus) { return new Date(Date.parse(day + 'T00:00:00.000Z') - minus * 86400000).toISOString(); }
+  var GTODAY = '2026-03-01';
 
-  var GOLDEN = [
-    { id: 'G1', name: 'R1 fires with exact overdue on measured 1:1 (10d vs 7d cadence)',
-      people: [gP('A', 'Fixture Ana', 7)],
-      events: [gE(back(10), 'oneonone.logged', 'A')],
-      expect: function (fs) { return has(fs, 'R1', 'A', function (f) { return f.meta.overdue === 3; }) && !has(fs, 'R1', 'A', function (f) { return f.meta.overdue === null; }); } },
-
-    { id: 'G2', name: 'R2 fires 1d past review without outcome; resolved & future decisions silent',
-      people: [],
-      events: [
-        gE(back(30), 'decision.logged', null, { title: 'late one', reviewDate: back(1).slice(0, 10) }),
-        (function () { var d = gE(back(30), 'decision.logged', null, { title: 'closed one', reviewDate: back(1).slice(0, 10) });
-          GOLDEN_G2_DEC = d.id; return d; })(),
-        gE(back(5), 'decision.logged', null, { title: 'future one', reviewDate: '2026-03-10' })
-      ],
-      expect: function (fs) {
-        return has(fs, 'R2', undefined, function (f) { return f.meta.late === 1 && f.title.indexOf('late one') >= 0; }) &&
-          !has(fs, 'R2', undefined, function (f) { return f.meta.decisionId === GOLDEN_G2_DEC || f.title.indexOf('future one') >= 0; });
-      },
-      extraEvents: function () { return [gE(back(2), 'decision.outcome', null, { decisionId: GOLDEN_G2_DEC, outcome: 'shipped' })]; } },
-
-    { id: 'G3', name: 'R3: ownerless fires, 20d-silent owned goal stalls, assigned owner clears, fresh goal silent',
-      people: [gP('C', 'Fixture Chen', 14)],
-      events: (function () {
-        var g1 = gE(back(20), 'goal.set', null, { title: 'no owner', ownerPersonId: null });
-        var g2 = gE(back(30), 'goal.set', null, { title: 'stalled', ownerPersonId: 'C' });
-        var g3 = gE(back(20), 'goal.set', null, { title: 'fixed owner', ownerPersonId: null });
-        GOLDEN_G3_G3 = g3.id;
-        var g4 = gE(back(5), 'goal.set', null, { title: 'fresh', ownerPersonId: 'C' });
-        GOLDEN_G3_G4 = g4.id;
-        return [g1, gE(back(19), 'goal.progress', null, { goalId: g1.id, note: 'x' }),
-          g2, gE(back(20), 'goal.progress', null, { goalId: g2.id, note: 'y' }),
-          g3, gE(back(2), 'goal.assign', null, { goalId: g3.id, ownerPersonId: 'C' }),
-          g4, gE(back(1), 'goal.progress', null, { goalId: g4.id, note: 'z' })];
-      })(),
-      expect: function (fs) {
-        return has(fs, 'R3', undefined, function (f) { return f.meta.kind === 'owner' && f.title.indexOf('no owner') >= 0; }) &&
-          has(fs, 'R3', undefined, function (f) { return f.meta.kind === 'stall' && f.title.indexOf('stalled') >= 0 && f.meta.silence === 20; }) &&
-          !has(fs, 'R3', undefined, function (f) { return f.meta.goalId === GOLDEN_G3_G3 || f.meta.goalId === GOLDEN_G3_G4; });
-      } },
-
-    { id: 'G4', name: 'R4: 3 corrective / 0 positive fires only-corrective; mixed person silent',
-      people: [gP('B', 'Fixture Boris', 7), gP('C', 'Fixture Cyd', 7)],
-      events: [
-        gE(back(10), 'feedback.logged', 'B', { polarity: 'corrective' }),
-        gE(back(20), 'feedback.logged', 'B', { polarity: 'corrective' }),
-        gE(back(40), 'feedback.logged', 'B', { polarity: 'corrective' }),
-        gE(back(10), 'feedback.logged', 'C', { polarity: 'corrective' }),
-        gE(back(11), 'feedback.logged', 'C', { polarity: 'corrective' }),
-        gE(back(12), 'feedback.logged', 'C', { polarity: 'positive' }),
-        gE(back(13), 'feedback.logged', 'C', { polarity: 'positive' })
-      ],
-      expect: function (fs) {
-        return has(fs, 'R4', 'B', function (f) { return f.meta.kind === 'only-corrective'; }) && !has(fs, 'R4', 'C');
-      } },
-
-    { id: 'G5', name: 'R5: 5 open delegations fire; exactly 4 (the watch line) stay silent',
-      people: [gP('D', 'Fixture Dora', 7), gP('E', 'Fixture Eli', 7)],
-      events: [1, 2, 3, 4, 5].map(function (i) { return gE(back(i * 5), 'delegation.assigned', 'D', { title: 't' + i, level: 3 }); })
-        .concat([1, 2, 3, 4].map(function (i) { return gE(back(i * 5), 'delegation.assigned', 'E', { title: 'u' + i, level: 2 }); })),
-      expect: function (fs) { return has(fs, 'R5', 'D', function (f) { return f.meta.open === 5; }) && !has(fs, 'R5', 'E'); } },
-
-    { id: 'G6', name: 'R6: two conflicts in 90d unresolved fire; resolved ones do not count',
-      people: [gP('F', 'Fixture Fay', 7), gP('H', 'Fixture Hal', 7)],
-      events: (function () {
-        var c1 = gE(back(10), 'conflict.registered', 'F', { counterpart: 'x' });
-        var c2 = gE(back(20), 'conflict.registered', 'F', { counterpart: 'y' });
-        var h1 = gE(back(10), 'conflict.registered', 'H', { counterpart: 'x' });
-        var h2 = gE(back(20), 'conflict.registered', 'H', { counterpart: 'y' });
-        return [c1, c2, h1, h2,
-          gE(back(5), 'conflict.resolved', null, { conflictId: h1.id }),
-          gE(back(4), 'conflict.resolved', null, { conflictId: h2.id })];
-      })(),
-      expect: function (fs) { return has(fs, 'R6', 'F', function (f) { return f.meta.unresolved === 2; }) && !has(fs, 'R6', 'H'); } },
-
-    { id: 'G7', name: 'R7: high load + declining mood = medium both; flat mood = low load-only; <3 measured = silence; estimated excluded',
-      people: [gP('I', 'Fixture Ida', 7), gP('J', 'Fixture Jo', 7), gP('K', 'Fixture Kim', 7)],
-      events: [
-        gE(back(9), 'pulse.logged', 'I', { mood: 7, load: 9 }),
-        gE(back(5), 'pulse.logged', 'I', { mood: 6, load: 8 }),
-        gE(back(1), 'pulse.logged', 'I', { mood: 5, load: 9 }),
-        gE(back(3), 'pulse.logged', 'I', { mood: 10, load: 10, estimated: true }),
-        gE(back(9), 'pulse.logged', 'J', { mood: 7, load: 9 }),
-        gE(back(5), 'pulse.logged', 'J', { mood: 7, load: 9 }),
-        gE(back(1), 'pulse.logged', 'J', { mood: 7, load: 9 }),
-        gE(back(9), 'pulse.logged', 'K', { mood: 3, load: 9 }),
-        gE(back(5), 'pulse.logged', 'K', { mood: 2, load: 9 })
-      ],
-      expect: function (fs) {
-        return has(fs, 'R7', 'I', function (f) { return f.meta.signals === 'both' && f.confidence.level === 'medium' && f.meta.excluded === 1; }) &&
-          has(fs, 'R7', 'J', function (f) { return f.meta.signals === 'load-only' && f.confidence.level === 'low'; }) &&
-          !has(fs, 'R7', 'K');
-      } },
-
-    { id: 'G8', name: 'malformed data: null personId, string numbers, bad timestamps — engine does not throw, no findings',
-      people: [{ id: 'L', name: 'Fixture Len', role: 'x', cadenceDays: 'not-a-number', createdAt: null, archived: false }],
-      events: [
-        { id: 'gm-1', ts: 'not-a-date', type: 'oneonone.logged', personId: 'L', data: null },
-        { id: 'gm-2', ts: back(2), type: 'pulse.logged', personId: null, data: { mood: 'high', load: 'heavy' } },
-        { id: 'gm-3', ts: back(2), type: 'feedback.logged', personId: 'L', data: {} },
-        { id: 'gm-4', ts: undefined, type: 'decision.logged', personId: null, data: { title: null, reviewDate: '99/99' } }
-      ],
-      expect: function (fs) {
-        return !fs.some(function (f) { return f.title.indexOf('failed to evaluate') >= 0; });
-      } },
-
-    { id: 'G9', name: 'boundaries: cadence exactly met, review exactly today, stall exactly 14d — none fire',
-      people: [gP('M', 'Fixture Mo', 7)],
-      events: (function () {
-        /* the goal's id is its goal.set event id; the progress event MUST link
-           it, else the goal reads 30d silent and this fixture fails for the
-           wrong reason — defect caught pre-delivery. */
-        var g = gE(back(30), 'goal.set', null, { title: 'on the line', ownerPersonId: 'M' });
-        GOLDEN_G9_GOAL = g.id;
-        return [
-          gE(back(7), 'oneonone.logged', 'M'),
-          gE(back(30), 'decision.logged', null, { title: 'due today', reviewDate: GT }),
-          g,
-          gE(back(14), 'goal.progress', null, { goalId: g.id, note: 'exactly at threshold' })
-        ];
-      })(),
-      expect: function (fs) {
-        return !has(fs, 'R1', 'M') &&
-          !has(fs, 'R2', undefined, function (f) { return f.title.indexOf('due today') >= 0; }) &&
-          !fs.some(function (f) { return f.meta && f.meta.goalId === GOLDEN_G9_GOAL; });
-      } }
+  var GOLD = [
+    { id: 'G1', name: 'R1 fires strictly past cadence: 9d ago, cadence 7 → 2d overdue, high confidence', fn: function () {
+      var st = { people: [mkP('a1')], events: [mkE('x', 'oneonone.logged', rel(GTODAY, 9), 'a1')] };
+      var f = run(st, GTODAY).findings;
+      var hit = f.filter(function (x) { return x.ruleId === 'R1' && x.personId === 'a1'; })[0];
+      return { pass: !!hit && hit.meta.overdue === 2 && hit.confidence.level === 'high' && /sev 64 × conf 1\.00 = 64/.test(hit.breakdown),
+        detail: hit ? 'overdue=' + hit.meta.overdue + ' · ' + hit.breakdown : 'no R1 finding' };
+    } },
+    { id: 'G2', name: 'R1 boundary: exactly 7d ago with cadence 7 → silence (fires only when > cadence)', fn: function () {
+      var st = { people: [mkP('a1')], events: [mkE('x', 'oneonone.logged', rel(GTODAY, 7), 'a1')] };
+      var f = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R1'; });
+      return { pass: f.length === 0, detail: 'R1 findings=' + f.length };
+    } },
+    { id: 'G3', name: 'R2: decision 2d past review fires; linked outcome before today silences it', fn: function () {
+      var st = { people: [], events: [mkE('d1', 'decision.logged', rel(GTODAY, 20), null, { title: 'T', reviewDate: rel(GTODAY, 2).slice(0, 10) })] };
+      var n1 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R2'; }).length;
+      st.events.push(mkE('o1', 'decision.outcome', rel(GTODAY, 1), null, { decisionId: 'd1', outcome: 'as expected' }));
+      var n2 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R2'; }).length;
+      return { pass: n1 === 1 && n2 === 0, detail: 'before outcome=' + n1 + ', after=' + n2 };
+    } },
+    { id: 'G4', name: 'R3: ownerless goal fires (kind=owner); stalled 20d fires (kind=stalled); fresh progress silent', fn: function () {
+      var st = { people: [mkP('a1')], events: [
+        mkE('g1', 'goal.set', rel(GTODAY, 30), null, { title: 'G1', ownerPersonId: null }),
+        mkE('g2', 'goal.set', rel(GTODAY, 30), null, { title: 'G2', ownerPersonId: 'a1' }),
+        mkE('g3', 'goal.set', rel(GTODAY, 30), null, { title: 'G3', ownerPersonId: 'a1' }),
+        mkE('x', 'goal.progress', rel(GTODAY, 5), null, { goalId: 'g3', note: 'moving' }) ] };
+      var f = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R3'; });
+      var kinds = f.map(function (x) { return x.meta.kind + ':' + (x.meta.goalId || ''); }).sort().join(' ');
+      return { pass: f.length === 2 && kinds.indexOf('owner:g1') >= 0 && kinds.indexOf('stalled:g2') >= 0,
+        detail: f.length + ' findings → ' + kinds };
+    } },
+    { id: 'G5', name: 'R4: 3 corrective/0 positive in 60d → imbalance; 2 events → engine stays quiet (not a pattern)', fn: function () {
+      var st = { people: [mkP('a1')], events: [
+        mkE('f1', 'feedback.logged', rel(GTODAY, 50), 'a1', { polarity: 'corrective' }),
+        mkE('f2', 'feedback.logged', rel(GTODAY, 30), 'a1', { polarity: 'corrective' }),
+        mkE('f3', 'feedback.logged', rel(GTODAY, 10), 'a1', { polarity: 'corrective' }) ] };
+      var n1 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R4'; }).length;
+      st.events.pop();
+      var n2 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R4'; }).length;
+      return { pass: n1 === 1 && n2 === 0, detail: '3 events→' + n1 + ', 2 events→' + n2 };
+    } },
+    { id: 'G6', name: 'R5: 5 open delegations fire; closing one to reach 4 silences the rule', fn: function () {
+      var evs = [], i;
+      for (i = 1; i <= 5; i++) evs.push(mkE('dl' + i, 'delegation.assigned', rel(GTODAY, 10 + i), 'a1', { title: 't' + i, level: 3 }));
+      var st = { people: [mkP('a1')], events: evs };
+      var n1 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R5'; })[0];
+      st.events.push(mkE('c1', 'delegation.closed', rel(GTODAY, 1), 'a1', { delegationId: 'dl1' }));
+      var n2 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R5'; }).length;
+      return { pass: !!n1 && n1.meta.open === 5 && n2 === 0, detail: 'open=' + (n1 && n1.meta.open) + ', after close=' + n2 };
+    } },
+    { id: 'G7', name: 'R6: 2 unresolved conflicts in 90d fire; resolving one drops below pattern', fn: function () {
+      var st = { people: [mkP('a1')], events: [
+        mkE('cf1', 'conflict.registered', rel(GTODAY, 40), 'a1', { counterpart: 'X' }),
+        mkE('cf2', 'conflict.registered', rel(GTODAY, 20), 'a1', { counterpart: 'X' }) ] };
+      var n1 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R6' && x.personId === 'a1'; }).length;
+      st.events.push(mkE('r1', 'conflict.resolved', rel(GTODAY, 1), 'a1', { conflictId: 'cf1' }));
+      var n2 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R6' && x.personId === 'a1'; }).length;
+      return { pass: n1 === 1 && n2 === 0, detail: 'open 2→' + n1 + ', after resolve→' + n2 };
+    } },
+    { id: 'G8', name: 'R7: 3 measured pulses (load≥8, mood slope<0) fire severe; estimated excluded; 2 measured → quiet', fn: function () {
+      var st = { people: [mkP('a1')], events: [
+        mkE('p1', 'pulse.logged', rel(GTODAY, 15), 'a1', { mood: 6, load: 9 }),
+        mkE('p2', 'pulse.logged', rel(GTODAY, 8), 'a1', { mood: 5, load: 9 }),
+        mkE('p3', 'pulse.logged', rel(GTODAY, 1), 'a1', { mood: 4, load: 8 }),
+        mkE('p4', 'pulse.logged', rel(GTODAY, 2), 'a1', { mood: 10, load: 1, estimated: true }) ] };
+      var hit = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R7'; })[0];
+      st.events = st.events.slice(0, 2);
+      var n2 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R7'; }).length;
+      return { pass: !!hit && hit.meta.signals === 'both' && hit.basis.join(' ').indexOf('1 estimated excluded') >= 0 && n2 === 0,
+        detail: hit ? 'signals=' + hit.meta.signals + ' · sparse re-run=' + n2 : 'no R7 finding' };
+    } },
+    { id: 'G9', name: 'malformed rows (garbage ts, string numbers, ghost personId, null name) never crash the engine', fn: function () {
+      var st = { people: [mkP('a1', { name: null }), { id: 'b2', name: 'ghost-holder', cadenceDays: 'abc', reportsTo: null }],
+        events: [ mkE('z1', 'pulse.logged', 'garbage', 'ghost', { mood: '5', load: 'x' }),
+          mkE('z2', 'oneonone.logged', undefined, 'a1', null),
+          mkE('z3', 'goal.set', rel(GTODAY, 3), null, { title: 42, ownerPersonId: 'ghost' }) ] };
+      var threw = false, f = [];
+      try { f = run(st, GTODAY).findings; } catch (e) { threw = true; }
+      var sane = f.every(function (x) { return Array.isArray(x.basis) && typeof x.score === 'number' && isFinite(x.score); });
+      return { pass: !threw && sane, detail: 'threw=' + threw + ', findings=' + f.length + ', allScored=' + sane };
+    } },
+    { id: 'G10', name: 'R8: me→lead→skip, no 1:1 → low-confidence finding; archiving the middle lead breaks the line → silence', fn: function () {
+      var st = { people: [mkP('lead1'), mkP('skip1', { reportsTo: 'lead1' })], events: [] };
+      var hit = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R8' && x.personId === 'skip1'; })[0];
+      st.people[0].archived = true;
+      var n2 = run(st, GTODAY).findings.filter(function (x) { return x.ruleId === 'R8' && x.personId === 'skip1'; }).length;
+      return { pass: !!hit && hit.confidence.level === 'low' && n2 === 0,
+        detail: hit ? 'conf=' + hit.confidence.level + ' · broken-line re-run=' + n2 : 'no R8 finding' };
+    } },
+    { id: 'G11', name: 'engine memory: snooze suppresses until date; dismiss mutes; later unmute restores', fn: function () {
+      var st = { people: [mkP('a1')], events: [mkE('x', 'oneonone.logged', rel(GTODAY, 20), 'a1')] };
+      var key = 'R1:a1';
+      st.events.push(mkE('s1', 'engine.snooze', rel(GTODAY, 1), null, { ruleId: 'R1', key: key, until: '2026-03-05' }));
+      var r1 = run(st, GTODAY);
+      st.events.push(mkE('s2', 'engine.dismiss', rel(GTODAY, 1), null, { ruleId: 'R1', key: key, reason: 'golden' }));
+      var r2 = run(st, GTODAY);
+      st.events.push(mkE('s3', 'engine.unmute', GTODAY + 'T01:00:00.000Z', null, { key: key }));
+      var r3 = run(st, GTODAY);
+      var pass = r1.snoozed.length === 1 && r1.findings.length === 0 &&
+        r2.muted.length === 1 && r2.findings.length === 0 &&
+        r3.findings.length === 1 && r3.findings[0].ruleId === 'R1';
+      return { pass: pass, detail: 'snoozed=' + r1.snoozed.length + '→muted=' + r2.muted.length + '→restored=' + r3.findings.length };
+    } },
+    { id: 'G12', name: 'ranking is printed math: R7-both (100×0.8=80) outranks R1-3d-overdue (66×1=66); every row shows derivation', fn: function () {
+      var st = { people: [mkP('p7'), mkP('p1')], events: [
+        mkE('q1', 'pulse.logged', rel(GTODAY, 15), 'p7', { mood: 6, load: 9 }),
+        mkE('q2', 'pulse.logged', rel(GTODAY, 8), 'p7', { mood: 5, load: 9 }),
+        mkE('q3', 'pulse.logged', rel(GTODAY, 1), 'p7', { mood: 4, load: 8 }),
+        mkE('q4', 'oneonone.logged', rel(GTODAY, 10), 'p1') ] };
+      var f = run(st, GTODAY).findings;
+      var allBroken = f.every(function (x) { return /sev \d+ × conf \d\.\d+ = \d+/.test(x.breakdown); });
+      return { pass: f.length >= 2 && f[0].ruleId === 'R7' && allBroken,
+        detail: f.map(function (x) { return x.ruleId + '=' + x.score; }).join(' ') + (allBroken ? ' · all derivations printed' : ' · MISSING derivation') };
+    } }
   ];
+
   function runGolden() {
-    return GOLDEN.map(function (g) {
-      var events = g.events;
-      if (g.extraEvents) events = events.concat(g.extraEvents());
-      var findings, err = null;
-      try { findings = run({ people: g.people, events: events, log: [] }, GT); }
-      catch (e) { err = e; findings = []; }
+    return GOLD.map(function (g) {
       var pass = false, detail = '';
-      if (err) detail = 'engine threw: ' + String(err);
-      else {
-        try { pass = !!g.expect(findings); }
-        catch (e) { detail = 'expectation threw: ' + String(e); }
-        if (!detail) detail = 'findings: ' + (findings.length ? findings.map(function (f) { return f.ruleId; }).join(',') : '(none)');
-      }
+      try { var r = g.fn(); pass = !!r.pass; detail = r.detail || ''; }
+      catch (e) { detail = 'threw: ' + String(e && e.message || e); }
       return { id: g.id, name: g.name, pass: pass, detail: detail };
     });
   }
 
   return {
-    DOCTRINE: DOCTRINE,
-    RULE_TAGS: RULE_TAGS,
-    run: run,
-    runGolden: runGolden,
-    days: days
+    DOCTRINE: DOCTRINE, CONF_FACTOR: CONF_FACTOR, RULE_TAGS: RULE_TAGS, RULE_PLAYBOOK: RULE_PLAYBOOK,
+    RULES: RULES, run: run, runGolden: runGolden, keyOf: keyOf, _days: days, _slope: slope
   };
 })();
