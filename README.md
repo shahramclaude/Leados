@@ -1,71 +1,76 @@
-# LeadOS — Leadership Operating System (mf-5 · Session 9)
+# LeadOS — Leadership Operating System (pt-1 · trust spine)
 
-A multi-file, offline-first leadership mentor for someone newly put in charge of **other team leads**. Vanilla JS, no framework, no backend, no accounts, no APIs, no OAuth, no build step, **no network calls (not even fonts)**. Open `index.html` — that is the install. All state lives in `localStorage` under one key.
+Offline leadership mentor for someone newly put in charge of **other team leads**. Vanilla JS, no framework, no backend, no accounts, no APIs, no OAuth, no build step, **no network calls (not even fonts)**. Open `index.html` — that is the install. All state lives in `localStorage` under one key.
 
-**Lineage note (Session 9 audit, verified against the upstream `main` git tree, commit `e70ca24`, API `truncated:false`):** mf-4's README declared its drift structurally fixed — "this tree matches this file… `css/` and `js/` exist because they are real directories here." The verified upstream tree at that commit: **flat root, 14 entries, no `css/` or `js/` directories** — `app.css`, `store.js`, `events.js`, `engine.js` (43,626 B), `playbooks.js` (35,071 B), `ui.js` (52,269 B) at root, plus `package.json` (a **React/Vite/Tailwind manifest**, deps incl. gsap/lenis/lucide-react), `package-lock.json` (87,433 B — the exact size mf-4 cites as evidence of the sin it claims fixed), `tsconfig.json`, and both orphan fragments (`SESSION-3.patch.md`, `AI-SESSION-LOG.append.md`). **Third consecutive session with README⇄tree drift.** mf-5's response is executable, not rhetorical: **this tree matches this file**, and the app now *knows its own file list* — every module registers itself, and a missing file renders a fatal banner naming the path instead of a live-looking dead app (T13).
+**Lineage note (pt-1 audit of upstream `wbweve/Leados`, API tree sha `a2ff16e`, `truncated:false`):** the mf-5 README declares "this tree matches this file" and cites a 9-entry `css/ + js/` tree. The verified upstream tree at HEAD: **flat root, 14 entries, no `css/` or `js/` directories**, with `package.json` (a React/Vite/Tailwind manifest), `package-lock.json`, `tsconfig.json`, and both orphan fragments still present. `engine.js` is **22,676 B, not the claimed 43,626**; `ui.js` is **80,221 B, not 52,269**. That is the **fourth consecutive session of README⇄tree drift**, and it is why pt-1 does not continue upstream bytes: prose about code is not code.
 
-**The authority rule, inherited:** `#/health` executes the claims below against the code paths production uses — storage, migrations, quota, import, every engine rule against fixtures — and prints each assertion next to its observed value. Where this README and `#/health` disagree, **`#/health` wins. This document asserts no test counts; the wall counts itself.**
+**What pt-1 verified byte-level before re-authoring:** `index.html` title + six-view rail (script paths unverified — extraction strips tags); `package.json` full contents (React scaffold debris); `engine.js` head through R5 — R1–R4 match the documented contract (strictly-past cadence, severity-inheritance, polarity-exclusion counted-not-guessed); the file header's own "All code re-authored" contradicting upstream carry claims. **Not byte-readable:** `store.js` tail, `events.js`, `playbooks.js`, `ui.js` bodies, engine R5–R15. Everything downstream of those is re-authored to the verified contract and labeled.
+
+**The authority rule, inherited:** `#/health` executes the claims below against the code paths production uses — storage funnel, quarantine, quota, import, seed/purge, every engine rule against fixtures — and prints each assertion next to its observed value. **Where this README and `#/health` disagree, `#/health` wins.** This document asserts no test counts; the wall counts itself.
 
 ## Files
 
-Nine entries at delivery; anything else is not part of mf-5. To sync upstream: `git rm` the six flat code files, `package.json`, `package-lock.json`, `tsconfig.json`, and both `.patch.md`/`.append.md` fragments.
+Nine entries at delivery; anything else is not part of pt-1.
 
 | File | Role |
-|------|------|
-| index.html | shell: rail nav, quota pill, **boot module-registry guard** (missing js → fatal banner naming the path; no splash — a tool that hesitates looks broken), loads css + 5 js in order |
-| css/app.css | editorial tool surface: ink #1C1917 on paper #F7F4EF, accent #C23B2E, hairlines, single ranked column, 640px breakpoint; meeting load = mono minutes + 1px ink bar |
-| js/store.js | storage spine: one key, **schema v3, migration ladder 1→2→3**, quarantine-on-any-mismatch (7 kinds, timestamped, collision-suffixed, never overwritten), trySetItem-only write path, normalize-repairs-never-drops (events **and** people, mf-5), import pipeline (refuse unparseable/malformed/foreign/newer/identical; migrate same-lineage older; two-pass merge: mint all ids, rewire every reference **incl. reportsTo — mf-5 fix**), read-only boot on newer schema (mf-5), **log capped at 300 (mf-5)**, key browser |
-| js/events.js | append-only event store + projections (recomputed per read — nothing derived is persisted) + conflict pair/nexus projections + **meetings projection (weekly min/person, mf-5)** + premortem projection (mf-5) + `lineToMe` with **cycle guard (mf-5)** + arrival projection + seed/purge (parameterizable — the health wall seeds a disposable store) |
-| js/engine.js | **15 rules (R1–R15)**, pure (P, today) → findings; every finding = what + why (basis + source ids) + confidence (level + why) + printed score math sev × conf; rule exceptions surface as loud ENG findings; engine memory via snooze/dismiss/unmute **events** |
-| js/playbooks.js | the mentor layer: 1:1 run sheet (standard / skip-level / load-cutting / nexus modes) · SBI · DESC · delegation ladder L1–L5 · situational D→S matching · decision review · goal review · **premortem (mf-5)** · **meeting-audit (mf-5)** · incident update · expectations charter · listening tour · early-win verification — all pre-filled from live data, all writing resolving events |
-| js/ui.js | Today (single ranked column + quick capture + premortem nudge on sev≥4 decisions) · Roster + dossier (measured-only sparklines, meeting load, SL panel) · Arrival instrument · Playbooks drawer · Health (T1–T13 + G1–G17 live at render, disposable keys swept) · Data (export/import, key browser, audit log, muted findings w/ unmute, rule registry, seed/purge) |
-| README.md | this file |
-| AI-SESSION-LOG.md | append-only engineering log |
+|---|---|
+| `index.html` | shell: rail nav, quota pill, **boot registry guard** (missing js → fatal banner naming the path, data untouched; plain synchronous scripts — no defer/async race), loads css + 5 js in order |
+| `css/app.css` | editorial tool surface: ink `#1C1917` on paper `#F7F4EF`, accent `#C23B2E`, hairlines, single ranked column, 640px phone breakpoint |
+| `js/store.js` | storage spine: one key, schema v1 lineage `pt` (genesis — ladder infrastructure present, zero steps), 6-status parse funnel, quarantine timestamped/collision-suffixed/never-overwritten, trySetItem-only writes, normalize-repairs-never-drops, import pipeline (refuse unparseable/malformed/foreign/newer/identical; **pure `mergeInto` two-pass**: mint every id, rewire `*Id`/`*Ids`/`reportsTo`, **unresolvable refs nulled+counted — an old id can collide with a live one**), read-only boot on newer schema, audit log capped at 300 with the cap leaving a row, read-only key browser |
+| `js/events.js` | append-only event store + projections recomputed per read (nothing derived persists) + conflict pair fold (resolution clears until a NEWER conflict reopens) + suppression fold + **span-load projection (pt-1 addition)** + post-pass orphan checks (dangling outcome/close targets counted, dropped, never guessed) + seed/purge (flag set before rows; purge keeps the flag) |
+| `js/engine.js` | **7 rules R1–R7** (the spec's required minimum), pure `(P, today) → findings`; every finding = what + why (basis + source ids) + confidence (level + its own why) + printed score math; rule exceptions surface as loud ENG findings; snooze/dismiss/unmute are events; **golden tests G1–G11 built against real code paths** |
+| `js/playbooks.js` | the mentor layer: 1:1 run sheet (R7 load-cutting variant) · SBI · DESC · delegation ladder L1–L5 · situational D→S assessment · decision review · goal review — all pre-filled from live projections, all resolving through `events.append` |
+| `js/ui.js` | Today (single ranked column + quick capture for 8 event types) · Roster + dossier (sparklines from measured pulses only, delegation closes, pulse log, SL panel) · Playbooks · Health (T1–T13 + G1–G11 at render, disposable `leados:t*` keys swept) · Data (export/import with verdict check, key browser, audit, mutes w/ unmute, rule registry, seed/purge, capacity settings) |
+| `README.md` | this file |
+| `AI-SESSION-LOG.md` | append-only engineering log (fresh pt lineage; upstream sessions were not continued and their log is not carried) |
 
-## The fifteen rules
+## The seven rules
 
-R1 1:1 cadence overdue (strictly past per-person cadence; never-logged fires MEDIUM from `createdAt`) · R2 decisions past review with no outcome (severity inherits the decision's) · R3 goals ownerless or silent >14d · R4 feedback imbalance (≥80% either polarity, min 3 in 60d; missing polarity excluded and printed) · R5 delegation load (>4 open/person) · R6 repeated unresolved conflict **per pair** (linked = high, text = medium with drift priced, unnamed = low) · R7 overload — **measured pulses only**: mean load ≥8/10 and/or mood slope ≤ −0.4 over ≥3 points in 45d; estimated readings excluded and counted · R8 skip-level 1:1 overdue (verified line you → lead → skip, 28d; broken/cyclic lines silent) · R9 boss expectations uncaptured at day 14 · R10 listening-tour coverage (grace day 14, gate day 45, vs today's roster — stated assumption) · R11 early win past verify date · R12 incident silent ≥7d · R13 conflict nexus (≥3 open across ≥2 distinct resolvable counterparts — MEDIUM permanently: a count is not a diagnosis) · **R14 meeting load (mf-5): ≥480 declared recurring min/wk per person (8h = 20% of a 40h week — stated assumption); ad-hoc uncaptured, real load ≥ computed** · **R15 premortem gate (mf-5): open decision severity ≥4, age ≥2d (grace), no `premortem.held` linked — missing severity skips, never inferred.**
+**R1** 1:1 cadence overdue — strictly past per-person cadence (default 14d, printed as assumption); never-logged fires MEDIUM from `createdAt`; no `createdAt` → skip · **R2** decisions past own review date, no outcome — severity inherits the decision's (clamped 3–5); no review date → skip · **R3** goals ownerless (HIGH — explicit null is data) or silent >14d (HIGH from last progress / MEDIUM from creation) · **R4** feedback imbalance — 60d window, ≥80% one polarity, min n=3 (HIGH at n≥5); missing polarity excluded + printed · **R5** delegation load — >4 open/person sev 3, >6 sev 4 · **R6** repeated unresolved conflict per pair — ≥2 in 60d; conf HIGH both ids / MEDIUM one / LOW text-only; resolution clears until a newer conflict reopens; flat window is a named gap printed in basis · **R7** burnout — **measured pulses only**, n≥3 in 45d; trigger A mean load ≥8/10, trigger B mood slope ≤−0.5/wk over span ≥7d; estimated readings and out-of-range values excluded + counted; **MEDIUM permanently: a trend is a signal, not a diagnosis**.
 
-Non-negotiables: trends need ≥3 measured points; missing fields skip rather than infer; broken reporting lines go silent rather than guess; snooze/dismiss are events — suppression is auditable and reversible; every finding links the playbook that resolves it.
+Non-negotiables: trends need ≥3 measured points · missing fields skip rather than infer · a count is never stated as certainty · suppression is auditable and reversible · every finding links the playbook that resolves it.
 
-## Storage contract (v3 — unchanged by mf-5)
+## Storage contract (v1 — genesis)
 
-- Key `leados:data`; `meta.schemaVersion = 3`, `meta.lineage = 'mf'`.
-- Migrations: `1→2` reportsTo backfill · `2→3` adds `meta.appointment`.
-- **mf-5 added NO migration.** `meeting.series`, `premortem.held`, `goal.assigned`, `decision.severity`, person `createdAt` are additive fields inside rows/events the normalizer preserves by contract. Ceremony ≠ safety; recorded in `js/store.js`.
-- Quarantine kinds: `corrupt · malformed · foreign · newer · migration-failed · pre-migration · pre-import` — timestamped, collision-suffixed, never overwritten, browsable read-only at `#/data`.
-- Import: refuses unparseable/malformed/foreign/newer/identical-to-live; migrates same-lineage older; two-pass merge re-mints every id and rewires every `*Id`/`*Ids` reference **and `reportsTo`** (mf-5 fix: upstream regexes missed it — imported skip-level chains silently broke). Live bytes preserved `.pre-import.` first. People are appended re-minted; **same-named duplicates are possible — documented non-claim, ranked gap.**
-- Quota: failure caught in the production write path → red `WRITE FAILED` pill, in-memory state intact. The ~5 MB budget is a labeled **assumption**.
-- **Newer schema in storage → read-only boot**: live key untouched forever, banner shown, writes blocked. An old build must never clobber a newer database.
-- Audit log **capped at 300 rows (mf-5)**; the cap itself leaves a row. Unbounded audit growth in a one-key store is how the store dies.
-- Seeds tagged `seed:true`; `meta.seeded` set **before** rows; purge clears rows, keeps the flag.
+- Key `leados:data`; `meta.schemaVersion = 1`, `meta.lineage = 'pt'`.
+- Migration ladder: infrastructure present (`MIGRATIONS`, `pre-migration` snapshot slot, `migration-failed` quarantine), zero steps — v1 is genesis. Additive fields inside rows/events will NOT get a version bump; the normalizer preserves them by contract.
+- Quarantine kinds observed by the funnel: `corrupt · malformed · foreign · migration-failed · pre-import` (+ `pre-migration` reserved). Timestamped, collision-suffixed, never overwritten, browsable read-only at `#/data`.
+- Import: refuses in order — unparseable / malformed / foreign / newer / identical; merges via `mergeInto` (pure, health-gradeable); live bytes snapshotted `pre-import` first. **Cross-lineage (`mf`) imports are refused — named consequence of the clean break.** Same-named duplicate people possible on merge: accepted gap, ranked.
+- Newer schema in storage → **read-only boot**: live key untouched (T6 asserts byte-identical), banner shown, `save()` hard-blocked. An old build must never clobber a newer database.
+- Quota: `setItem` failure caught in the production write path → red `WRITE FAILED` pill, in-memory state intact (T10 injects the fault through the real `save()`). ~5 MB budget is a labeled assumption.
+- Audit log capped at 300; the cap itself leaves a row (T11).
 
 ## Verify it yourself
 
-1. Open `index.html` → `#/health`. T1–T13 and G1–G17 executed at render, observed values printed, disposable `leados:t*` keys swept.
-2. **Registry check:** rename `js/engine.js`, reload → fatal banner names the missing file and your data sits untouched. Rename it back. T13 is this same check, from the inside.
-3. `#/data` → **Load sample set** → `#/today`: every rule fires at least once — R6 (Dana × Priya), R13 (Marcus), **R14 (Anika, 630 min/wk)** and **R15 (CI-vendor decision, sev 4, ungated 4d; the sev-4 re-seating at 1d is the deliberate grace contrast)**. Purge at `#/data`; the no-reseed flag stays.
-4. `localStorage.setItem('leados:data','{bad')` → reload → boots clean; the corrupt bytes sit read-only in the key browser.
-5. Hand `leados:data` a v99 schema blob → **read-only boot**, live bytes byte-identical after (T5 asserts it).
-6. Import your own export → refused as identical. Import into an incognito window → merged, every id re-minted, skip-level chains intact (T9).
+1. Open `index.html` → `#/health`. T1–T13 + G1–G11 execute at render; observed values printed; disposable keys swept.
+2. **Registry check:** rename `js/engine.js`, reload → fatal banner names the path; your data untouched. Rename it back. T1 is this same check from the inside.
+3. `#/data` → **Load sample set** → `#/today`: all seven rules fire at least once (T12 asserts exactly this) — Dana × Priya conflict pair, Anika's 5 open delegations, Marcus's measured pulses. Purge at `#/data`; the no-reseed flag stays.
+4. `localStorage.setItem('leados:data','{bad')` → reload → clean boot; corrupt bytes sit read-only in the key browser.
+5. Hand it a v99 blob → **read-only boot**, live bytes byte-identical after (T6).
+6. Export → import the same file → refused as identical. Import it in an incognito window → merged, ids re-minted, reportsTo chains intact (T9).
 
-## Design direction (Session 6, kept Sessions 7–9)
+## Design direction (pt-1)
 
-Palette: paper `#F7F4EF`, ink `#1C1917`, hairline `#E3DECF`, one accent `#C23B2E`; confidence by weight/texture, not rainbow. Type: old-style serif display (Iowan/Palatino/Georgia), mono for all data/basis/score lines, 12–13px body — zero webfonts (no-network doctrine). Layout: 64px rail, single 760px column; Today is one prioritized column, never a tile grid. Density: 4px grid, hairline rows, mono metadata always visible. Motion: ≤160ms translate-only; custom inline SVG; text sparklines are block-glyph typography. Why kept a fourth session: identity churn mid-flight is how tools lose trust. mf-5 deltas: meeting load renders as mono minutes + 1px ink bar (glyph, not a new color); **the timed splash is deleted** — the fatal banner owns the dead case, so the live case should be instant. Checked at 640px by construction (rail horizontal, forms single column) — no visual sandbox exists here; labeled, not implied.
+Palette: paper `#F7F4EF`, ink `#1C1917`, hairline `#E3DECF`, one accent `#C23B2E`; confidence by weight/texture, never a second hue. Type: old-style serif display, mono for all data/basis/score lines, 12–13px body, zero webfonts. Layout: 176px rail, single 720px column; Today is one ranked column, never tiles. Density: 4px grid, hairline rows, metadata always on; **score math printed inline on every finding** (`R1 · sev 3 × conf 1.0 = 3.0`) — ranking you can audit, not a number from a hole. Motion: ≤160ms opacity/translate only, none on data mutation; custom inline SVG, `prefers-reduced-motion` honored. Kept deliberately from the Session-6 direction: a mentoring tool that rebrands every session reads as unstable. Phone: rail collapses to a top bar at ≤640px; checked by construction, no visual sandbox here — labeled, not implied.
+
+## What a new multi-team leader needs (beyond the spec's list)
+
+Added in pt-1: **span-load** — implied weekly 1:1 minutes from per-person cadences vs stated capacity, printed on Roster with the over-commit line in accent. New leaders of leaders structurally overcommit 1:1s; without this, R1 punishes a promise the arithmetic said they couldn't keep. Next needs, ranked for future slices: (1) coaching/growth plans with follow-through — SL assessments need a spine over time; (2) skip-level cadence (R8) with verified reporting lines; (3) boss-expectations capture at day 14 (R9) + listening-tour coverage (R10); (4) early-win verification; (5) delegation-level progression tracking; (6) meeting-load rule from declared recurring minutes.
 
 ## Explicit non-claims
 
-- No JS execution sandbox exists in this authoring environment (same constraint Sessions 6–8 reported). Correctness is by conservative construction + self-review; the runtime grader is `#/health` in your browser, by project convention. **All Session-9 code is first-run code — no session before you has executed it.**
+- **No JS execution sandbox exists in this authoring environment.** All pt-1 code is first-run code — verified by conservative construction + self-review only. The runtime grader is `#/health` in your browser, by project convention. This README asserts no test results.
+- Upstream `store.js` tail / `events.js` / `playbooks.js` / `ui.js` and engine R5–R15 bodies were **not byte-readable** (fetch truncation). R1–R4 semantics were byte-verified and carried; everything else is re-authored to the documented contract. Upstream's `AI-SESSION-LOG.md` is not carried.
+- T10 monkey-patches `localStorage.setItem`. Engines that make that property non-writable will fail T10 *visibly* — that is a graded limitation of the harness, not of the write path.
 - `#/health` = fixture-based assertions on real code paths — not browser automation, not a fuzzer; UI rendering itself is not graded.
-- Upstream `engine.js`/`playbooks.js`/`ui.js`/`app.css` bodies were **not byte-readable** (fetch truncation, the defect S7/S8 also reported). They are **re-authored to the documented contract** (README rule parameters, storage contract, design tokens), not continued. `store.js` head was verified-carried; its import/load tail is re-authored, marked REV in the file. The mf-4 README's own "verified upstream tree" claim is verified **false** for mf-4 — see the lineage note.
-- Whether upstream `index.html` points at flat or `css|js/` paths is **unverified** (tag extraction fails remotely); if it points at dirs, the upstream app boots to a rail and nothing else.
-- Import merges people by re-minted append; same-named duplicates are possible. Accepted this session (ranked gap), not hidden.
+- Import merges people by re-minted append; same-named duplicates are possible (accepted, ranked).
+- No visual check at 640px beyond construction: labeled, not implied.
 
 ## Next gaps, ranked
 
-1. Coaching/growth plans with follow-through (SL assessments need a spine over time).
-2. Delegation-level progression tracking — are people moving UP the ladder?
-3. R6/R13 temporal weighting (flat 60d window currently; printed in the basis lines).
-4. Premortem tripwire escalation: tripwires are stored text; a rule that asks "tripwire date passed — did you check the metric?" is the natural R16.
-5. People-merge dedupe on import (by normalized name + role, opt-in).
+1. R8 skip-level cadence with cycle-guarded reporting lines (span-load already prices directs only — printed).
+2. Coaching/growth plans over time; delegation-level progression tracking.
+3. R6/R7 temporal weighting (flat windows currently — printed in basis lines).
+4. People-merge dedupe on import (normalized name + role, opt-in).
+5. Cross-lineage import bridge for `mf` exports, opt-in, if ever justified by a real user.
 6. Accounts, sync, other real humans — permanently out of scope.

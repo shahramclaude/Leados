@@ -1,21 +1,20 @@
-/* LeadOS mf-5 · js/engine.js — the rules engine (the product).
-   Doctrine (carried, secondhand-verified from mf-4 README + S8 log):
-   rules are PURE (projection P, today) → findings; every finding =
-   what + why (basis lines + source event ids) + confidence (level + why)
-   + printed score math (sev × conf factor). Rule exceptions surface as
-   loud ENG findings — never swallowed. Engine memory (snooze/dismiss/
-   unmute) is events, so suppression is auditable and reversible.
-   Non-negotiables: trends need ≥3 MEASURED points · missing fields skip
-   rather than infer · broken reporting lines go silent rather than guess ·
-   a count is never stated as certainty.
-   R1–R13 parameters per mf-4 README contract. R14 (meeting load) and
-   R15 (premortem gate) are NEW mf-5 — repo gap #1. All code re-authored. */
+/* LeadOS pt-1 · js/engine.js — the rules engine (the product).
+   Rules are PURE (projection P, today) → findings. Every finding =
+   what + why (basis lines + source event ids) + confidence (level + its own why)
+   + printed score math (sev × conf factor). Rule exceptions surface as loud ENG
+   findings — never swallowed. Suppression (snooze/dismiss/unmute) is events, so
+   engine memory is auditable and reversible.
+   Non-negotiables: trends need ≥3 MEASURED points · missing fields skip rather
+   than infer · a count is never stated as certainty.
+   R1–R4 semantics byte-verified against upstream engine.js head; R5–R7 re-authored
+   to the documented contract (upstream body truncated at fetch — labeled, not hidden). */
 window.LEADOS = window.LEADOS || {};
 LEADOS._mod = LEADOS._mod || {};
 LEADOS._mod.engine = 'js/engine.js';
 
 LEADOS.engine = (function () {
   'use strict';
+
   var CONF_FACTOR = { high: 1, medium: 0.7, low: 0.45 };
 
   function dayUTC(iso) {
@@ -24,366 +23,389 @@ LEADOS.engine = (function () {
     return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / 864e5);
   }
   function days(fromIso, toIso) { var a = dayUTC(fromIso), b = dayUTC(toIso); return (a == null || b == null) ? null : b - a; }
-  function slope(points) { /* [ [x, y] ] least squares; x in days */
-    var n = points.length; if (n < 2) return 0;
-    var mx = 0, my = 0, i;
-    for (i = 0; i < n; i++) { mx += points[i][0]; my += points[i][1]; }
-    mx /= n; my /= n;
-    var num = 0, den = 0;
-    for (i = 0; i < n; i++) { num += (points[i][0] - mx) * (points[i][1] - my); den += (points[i][0] - mx) * (points[i][0] - mx); }
-    return den === 0 ? 0 : num / den;
-  }
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+  function fmtD(iso) { return iso ? String(iso).slice(0, 10) : '—'; }
   function fin(rule, sev, conf, confWhy, title, basis, sources, key) {
-    return { rule: rule, sev: sev, conf: conf, confWhy: confWhy, title: title,
-      basis: basis || [], sources: sources || [], key: key };
+    return { rule: rule, sev: sev, conf: conf, confWhy: confWhy, title: title, basis: basis || [], sources: sources || [], key: key };
   }
   function pName(P, pid) { var p = P.peopleById[pid]; return p ? p.name : '(unknown person)'; }
-  function fmtDate(iso) { return iso ? String(iso).slice(0, 10) : '—'; }
 
   var RULES = [
-    { id: 'R1', tag: 'cadence', play: 'oneonone', fn: function (P, today) {
-      var out = [];
-      P.directs.forEach(function (p) {
-        var cad = p.cadenceDays || 14;
-        var last = P.oneononeLast[p.id];
-        if (last) {
-          var gap = days(last.ts, today);
-          if (gap != null && gap > cad) {
-            out.push(fin('R1', 3, 'high', 'measured against your own logged 1:1s',
-              '1:1 with ' + p.name + ' is ' + (gap - cad) + 'd overdue',
-              ['last 1:1 ' + fmtDate(last.ts) + ' → ' + gap + 'd ago; cadence ' + cad + 'd (person row) — strictly past',
-               'source: oneonone.logged ' + last.id],
-              [last.id], 'R1:' + p.id));
+    { id: 'R1', tag: 'cadence', play: 'oneonone',
+      params: 'strictly past per-person cadence (default 14d, stated); never-logged fires MEDIUM from createdAt; no createdAt → skip',
+      fn: function (P, today) {
+        var out = [];
+        P.directs.forEach(function (p) {
+          var cad = p.cadenceDays || 14;
+          var cadNote = p.cadenceDays ? 'cadence ' + cad + 'd (person row)' : 'cadence 14d (default — not set on person row, labeled assumption)';
+          var last = P.oneononeLast[p.id];
+          if (last) {
+            var gap = days(last.ts, today);
+            if (gap != null && gap > cad) {
+              out.push(fin('R1', 3, 'high', 'measured against your own logged 1:1s',
+                '1:1 with ' + p.name + ' is ' + (gap - cad) + 'd overdue',
+                ['last 1:1 ' + fmtD(last.ts) + ' → ' + gap + 'd ago; ' + cadNote + ' — strictly past',
+                 'source: oneonone.logged ' + last.id],
+                [last.id], 'R1:' + p.id));
+            }
+          } else if (p.createdAt && days(p.createdAt, today) > cad) {
+            out.push(fin('R1', 3, 'medium', 'never logged — cadence measured from the day you added them, not from a real 1:1',
+              'No 1:1 ever logged with ' + p.name,
+              ['added ' + fmtD(p.createdAt) + ' (' + days(p.createdAt, today) + 'd ago); ' + cadNote,
+               'no oneonone.logged events exist for this person'],
+              [], 'R1:' + p.id));
           }
-        } else if (p.createdAt && days(p.createdAt, today) > cad) {
-          out.push(fin('R1', 3, 'medium', 'never logged — cadence measured from the day you added them, not from a real 1:1',
-            'No 1:1 ever logged with ' + p.name,
-            ['added ' + fmtDate(p.createdAt) + ' (' + days(p.createdAt, today) + 'd ago); cadence ' + cad + 'd',
-             'no oneonone.logged events exist for this person'],
-            [], 'R1:' + p.id));
-        }
-        /* no last AND no createdAt → skip. Missing fields skip; we don't infer. */
-      });
-      return out;
-    }},
-    { id: 'R2', tag: 'decisions', play: 'decision-review', fn: function (P, today) {
-      var out = [];
-      P.openDecisions.forEach(function (d) {
-        if (!d.reviewDate) return; /* no review date → skip (do not infer) */
-        var late = days(d.reviewDate, today);
-        if (late != null && late > 0) {
-          out.push(fin('R2', clamp(d.severity || 3, 3, 5), 'high', 'review date is your own; outcome absence is explicit',
-            'Decision past review with no outcome: “' + d.title + '”',
-            ['decided ' + fmtDate(d.ts) + ' · review date ' + fmtDate(d.reviewDate) + ' → ' + late + 'd late',
-             'severity inherits the decision’s own sev ' + (d.severity || '—') + ' → finding sev ' + clamp(d.severity || 3, 3, 5),
-             'no decision.outcome event links to ' + d.id],
-            [d.id], 'R2:' + d.id));
-        }
-      });
-      return out;
-    }},
-    { id: 'R3', tag: 'goals', play: 'goal-review', fn: function (P, today) {
-      var out = [];
-      P.openGoals.forEach(function (g) {
-        if (g.ownerId == null) {
-          out.push(fin('R3', 3, 'high', 'owner field is explicitly null — this is data, not inference',
-            'Goal has no owner: “' + g.title + '”',
-            ['set ' + fmtDate(g.ts) + ' · ownerId null (goal ' + g.id + ')',
-             'an unowned goal is a decision you made by omission'],
-            [g.id], 'R3o:' + g.id));
-        }
-        var ref = g.lastProgressTs || g.ts;
-        var silent = days(ref, today);
-        if (silent != null && silent > 14) {
-          out.push(fin('R3', 3, g.lastProgressTs ? 'high' : 'medium',
-            g.lastProgressTs ? 'measured from your last logged progress' : 'no progress ever logged — measured from creation date',
-            'Goal silent ' + silent + 'd: “' + g.title + '”',
-            ['last progress ' + (g.lastProgressTs ? fmtDate(g.lastProgressTs) : 'never logged') + ' · set ' + fmtDate(g.ts),
-             'silence threshold 14d · progress events logged: ' + g.progressN],
-            g.lastProgressTs ? [g.id] : [g.id], 'R3s:' + g.id));
-        }
-      });
-      return out;
-    }},
-    { id: 'R4', tag: 'feedback', play: 'sbi', fn: function (P, today) {
-      var out = [];
-      Object.keys(P.feedbackByPerson).forEach(function (pid) {
-        if (!P.peopleById[pid] || P.peopleById[pid].archived) return;
-        var win = [], skippedNoPolarity = 0;
-        P.feedbackByPerson[pid].forEach(function (ev) {
-          var age = days(ev.ts, today);
-          if (age == null || age > 60) return;
-          var pol = (ev.data || {}).polarity;
-          if (pol === 'positive' || pol === 'corrective') win.push(pol);
-          else skippedNoPolarity++;
+          /* no last AND no createdAt → skip. Missing fields skip; we don't infer. */
         });
-        if (win.length < 3) return; /* insufficient data → silence, by design */
-        var pos = win.filter(function (x) { return x === 'positive'; }).length;
-        var share = pos / win.length;
-        var kind = share >= 0.8 ? 'positive' : share <= 0.2 ? 'corrective' : null;
-        if (!kind) return;
-        var n = win.filter(function (x) { return x === kind; }).length;
-        out.push(fin('R4', 3, win.length >= 5 ? 'high' : 'medium',
-          'n=' + win.length + ' in-window (min 3; high needs ≥5)',
-          'Feedback to ' + pName(P, pid) + ' is all ' + (kind === 'corrective' ? 'corrective' : 'reinforcing'),
-          [n + '/' + win.length + ' ' + kind + ' in the last 60d (imbalance = ≥80% one polarity; min n=3)',
-           kind === 'corrective'
-             ? 'people under only-corrective feedback stop hearing it — the next one will land as noise'
-             : 'people under only-reinforcing feedback stop growing — they can’t tell praise from comfort',
-           skippedNoPolarity ? skippedNoPolarity + ' event(s) lacked polarity — excluded from the count, not guessed' : 'every in-window event had explicit polarity'],
-          P.feedbackByPerson[pid].slice(-6).map(function (e) { return e.id; }),
-          'R4:' + pid));
-      });
-      return out;
-    }},
-    { id: 'R5', tag: 'delegation', play: 'delegation', fn: function (P, today) {
-      var out = [];
-      Object.keys(P.delegationsOpenByPerson).forEach(function (pid) {
-        if (!P.peopleById[pid] || P.peopleById[pid].archived) return;
-        var list = P.delegationsOpenByPerson[pid];
-        if (list.length <= 4) return;
-        out.push(fin('R5', list.length > 6 ? 4 : 3, 'high', 'open delegations counted from your own assign/close events',
-          pName(P, pid) + ' carries ' + list.length + ' open delegations',
-          ['threshold >4 open per person; ' + list.length + ' is ' + (list.length - 4) + ' over',
-           list.map(function (ev) { return 'L' + ((ev.data || {}).level || '?') + ' ' + ((ev.data || {}).task || '(task)') + ' · since ' + fmtDate(ev.ts); }).join('\n'),
-           'load ≠ fault — but everything past 4 open loops starts deciding your priorities for you'],
-          list.map(function (e) { return e.id; }), 'R5:' + pid));
-      });
-      return out;
-    }},
-    { id: 'R6', tag: 'conflict', play: 'desc', fn: function (P, today) {
-      var out = [];
-      Object.keys(P.conflictPairs).forEach(function (pairKey) {
-        var members = P.conflictPairs[pairKey].filter(function (c) {
-          var age = days(c.ts, today); return age != null && age <= 60;
-        });
-        if (members.length < 2) return;
-        var worst = members.reduce(function (w, c) {
-          var rank = { high: 3, medium: 2, low: 1 };
-          return rank[c.linkConf] < rank[w] ? c.linkConf : w;
-        }, 'high');
-        var textLinked = members.some(function (c) { return c.linkConf !== 'high'; });
-        out.push(fin('R6', members.length >= 3 ? 4 : 3, worst,
-          worst === 'high' ? 'both parties are roster-linked on every conflict in this pair'
-            : worst === 'medium' ? 'at least one party is free text — “Dana” vs “dana k.” would be a different pair; drift risk, priced not hidden'
-            : 'at least one conflict has an unnamed counterpart — link them in the roster to sharpen this',
-          'Repeated unresolved conflict: ' + members[0].pairLabel,
-          [members.length + ' open conflicts in the last 60d on one pair:',
-           members.map(function (c) { return fmtDate(c.ts) + ' · ' + c.topic + ' (' + c.id + ')'; }).join('\n'),
-           'flat 60d window — a pair from 59d ago weighs the same as yesterday; temporal weighting is a ranked gap, stated not hidden'],
-          members.map(function (c) { return c.id; }), 'R6:' + pairKey));
-      });
-      return out;
-    }},
-    { id: 'R7', tag: 'overload', play: 'oneonone', fn: function (P, today) {
-      var out = [];
-      Object.keys(P.pulses).forEach(function (pid) {
-        if (!P.peopleById[pid] || P.peopleById[pid].archived) return;
-        var rec = P.pulses[pid];
-        var pts = rec.measured.filter(function (ev) { var age = days(ev.ts, today); return age != null && age <= 45; });
-        if (pts.length < 3) return; /* trends need ≥3 MEASURED points — estimates are not data */
-        pts.sort(function (a, b) { return a.ts < b.ts ? -1 : 1; });
-        var d0 = dayUTC(pts[0].ts);
-        var loads = pts.map(function (ev) { return (ev.data || {}).load; });
-        var meanLoad = loads.reduce(function (a, b) { return a + b; }, 0) / loads.length;
-        var moodSlope = slope(pts.map(function (ev) { return [dayUTC(ev.ts) - d0, (ev.data || {}).mood]; }));
-        var sigLoad = meanLoad >= 8, sigMood = moodSlope <= -0.4;
-        if (!sigLoad && !sigMood) return;
-        out.push(fin('R7', 4, pts.length >= 5 ? 'high' : 'medium',
-          'n=' + pts.length + ' measured in 45d (min 3; high needs ≥5) · ' + rec.estimatedCount + ' estimated reading(s) EXCLUDED — the engine does not trend your guesses',
-          'Overload signals: ' + pName(P, pid),
-          [(sigLoad ? 'mean self-reported load ' + meanLoad.toFixed(1) + '/10 ≥ 8 over ' + pts.length + ' measured readings' : 'load signal clear (' + meanLoad.toFixed(1) + ' < 8)'),
-           (sigMood ? 'mood slope ' + moodSlope.toFixed(2) + '/day ≤ −0.4 over ' + pts.length + ' measured readings' : 'mood signal clear (' + moodSlope.toFixed(2) + ' > −0.4)'),
-           'window 45d · points ' + pts.map(function (ev) { return fmtDate(ev.ts); }).join(', '),
-           'this is a signal, not a diagnosis — the resolving move is a conversation (load-cutting 1:1), not a conclusion'],
-          pts.map(function (e) { return e.id; }), 'R7:' + pid);
-      });
-      return out;
-    }},
-    { id: 'R8', tag: 'skip-level', play: 'oneonone', fn: function (P, today) {
-      var out = [];
-      P.actives.forEach(function (p) {
-        if (p.reportsTo === 'me') return; /* directs are R1's job */
-        var line = P.lineToMe(p);
-        if (!line.ok || line.depth !== 2) return; /* broken lines go SILENT — the engine declines to guess your org */
-        var last = P.oneononeSkipLast[p.id];
-        if (last) {
-          var gap = days(last.ts, today);
-          if (gap != null && gap > 28) {
-            out.push(fin('R8', 3, 'high', 'measured against your own skip-level 1:1s; line verified: you → ' + line.chain[0].name + ' → ' + p.name,
-              'Skip-level 1:1 with ' + p.name + ' is ' + (gap - 28) + 'd overdue',
-              ['last skip-level 1:1 ' + fmtDate(last.ts) + ' → ' + gap + 'd ago; cadence 28d (fixed)',
-               'line: you → ' + line.chain[0].name + ' → ' + p.name + ' (roster-verified, not guessed)',
-               'source: oneonone.logged (mode skip) ' + last.id],
-              [last.id], 'R8:' + p.id));
+        return out;
+      } },
+
+    { id: 'R2', tag: 'decisions', play: 'decision-review',
+      params: 'past own reviewDate, no decision.outcome linked; severity inherits the decision’s (clamped 3–5); no reviewDate → skip',
+      fn: function (P, today) {
+        var out = [];
+        P.openDecisions.forEach(function (d) {
+          if (!d.reviewDate) return;
+          var late = days(d.reviewDate, today);
+          if (late != null && late > 0) {
+            out.push(fin('R2', clamp(d.severity || 3, 3, 5), 'high', 'review date is your own; outcome absence is explicit',
+              'Decision past review, no outcome: "' + d.title + '"',
+              ['decided ' + fmtD(d.ts) + ' · review ' + fmtD(d.reviewDate) + ' → ' + late + 'd late',
+               'severity inherits decision sev ' + (d.severity || '—') + ' → finding sev ' + clamp(d.severity || 3, 3, 5),
+               'no decision.outcome event links to ' + d.id],
+              [d.id], 'R2:' + d.id));
           }
-        } else if (p.createdAt && days(p.createdAt, today) > 28) {
-          out.push(fin('R8', 3, 'medium', 'never logged — measured from the day they were added to the roster',
-            'No skip-level 1:1 ever logged with ' + p.name,
-            ['you → ' + line.chain[0].name + ' → ' + p.name + ' · added ' + fmtDate(p.createdAt)],
-            [], 'R8:' + p.id));
-        }
-      });
-      return out;
-    }},
-    { id: 'R9', tag: 'arrival', play: 'expectations', fn: function (P, today) {
-      if (!P.appointment) return [];
-      var day = days(P.appointment, today);
-      if (day == null || day < 14 || P.expectations) return [];
-      return [fin('R9', 3, 'high', 'appointment date is yours; capture absence is explicit',
-        'Day ' + day + ' — your boss’s expectations are still uncaptured',
-        ['appointed ' + fmtDate(P.appointment) + ' · day-14 gate passed ' + (day - 14) + 'd ago',
-         'leading leaders without a written expectations charter means grading yourself against a rubric you invented'],
-        [], 'R9:expectations')];
-    }},
-    { id: 'R10', tag: 'arrival', play: 'tour', fn: function (P, today) {
-      if (!P.appointment) return [];
-      var day = days(P.appointment, today);
-      if (day == null || day < 14) return [];
-      var targets = P.actives.filter(function (p) {
-        if (p.reportsTo === 'me') return true;
-        var line = P.lineToMe(p);
-        return line.ok && line.depth === 2;
-      });
-      if (!targets.length) return [];
-      var missing = targets.filter(function (p) { return !P.tourVisits[p.id]; });
-      if (!missing.length) return [];
-      var visited = targets.length - missing.length;
-      return [fin('R10', day >= 45 ? 4 : 2, day >= 45 ? 'high' : 'medium',
-        'coverage ' + visited + '/' + targets.length + ' measured against TODAY’S roster — people who joined after your appointment still count; stated assumption',
-        'Listening tour ' + visited + '/' + targets.length + (day >= 45 ? ' — past the day-45 gate' : ' — still time, pace it'),
-        ['appointed ' + fmtDate(P.appointment) + ' (day ' + day + ') · grace until day 14, gate at day 45',
-         'not yet visited: ' + missing.map(function (p) { return p.name; }).join(', ')],
-        [], 'R10:tour')];
-    }},
-    { id: 'R11', tag: 'arrival', play: 'win', fn: function (P, today) {
-      var out = [];
-      P.openWins.forEach(function (w) {
-        if (!w.verifyDate) return;
-        var late = days(w.verifyDate, today);
-        if (late != null && late > 0) {
-          out.push(fin('R11', late > 14 ? 4 : 3, 'high', 'verify date is your own',
-            'Early win past verify date: “' + w.title + '”',
-            ['planned ' + fmtDate(w.ts) + ' · verify by ' + fmtDate(w.verifyDate) + ' → ' + late + 'd late',
-             'an unverified “win” is a story you’re telling yourself — verify against the original claim or kill it'],
-            [w.id], 'R11:' + w.id));
-        }
-      });
-      return out;
-    }},
-    { id: 'R12', tag: 'incidents', play: 'incident', fn: function (P, today) {
-      var out = [];
-      P.openIncidents.forEach(function (x) {
-        var silent = days(x.lastUpdateTs, today);
-        if (silent != null && silent >= 7) {
-          out.push(fin('R12', silent >= 14 ? 4 : 3, 'high', 'silence measured from your last incident.update (or registration)',
-            'Incident silent ' + silent + 'd: “' + x.title + '”',
-            ['registered ' + fmtDate(x.ts) + ' · last update ' + fmtDate(x.lastUpdateTs) + ' → ' + silent + 'd silent (threshold 7d)',
-             'silent incidents read to the team as forgotten incidents'],
-            [x.id], 'R12:' + x.id));
-        }
-      });
-      return out;
-    }},
-    { id: 'R13', tag: 'conflict', play: 'oneonone', fn: function (P, today) {
-      var out = [];
-      Object.keys(P.conflictNexus).forEach(function (pid) {
-        if (!P.peopleById[pid] || P.peopleById[pid].archived) return;
-        var n = P.conflictNexus[pid];
-        var distinct = Object.keys(n.distinct).length;
-        if (n.open < 3 || distinct < 2) return;
-        var names = Object.keys(n.distinct).map(function (k) { return k === 'me' ? 'You' : pName(P, k.slice(2)); });
-        out.push(fin('R13', 3, 'medium',
-          'MEDIUM PERMANENTLY: a count of open loops is not a diagnosis — this person may be the common problem, or the only one honest enough to register friction',
-          pName(P, pid) + ' is the common factor in ' + n.open + ' open conflicts',
-          ['≥3 open conflicts across ≥2 distinct resolvable counterparts: ' + names.join(', '),
-           n.textCounterparts.length ? n.textCounterparts.length + ' text/unnamed counterpart(s) listed, NOT counted (a name can’t be deduped): ' + n.textCounterparts.join(', ') : 'all counterparts roster-linked',
-           'you don’t DESC a pattern — you have a pattern conversation (1:1, nexus mode)'],
-          P.openConflicts.filter(function (c) { return c.a.personId === pid || c.b.personId === pid; }).map(function (c) { return c.id; }),
-          'R13:' + pid));
-      });
-      return out;
-    }},
-    /* ── NEW mf-5 ─────────────────────────────────────────────────────── */
-    { id: 'R14', tag: 'meetings', play: 'meeting-audit', fn: function (P, today) {
-      var out = [];
-      Object.keys(P.weeklyMeetingLoad).forEach(function (pid) {
-        if (!P.peopleById[pid] || P.peopleById[pid].archived) return;
-        var rec = P.weeklyMeetingLoad[pid];
-        if (rec.minutes < 480) return;
-        out.push(fin('R14', rec.minutes >= 600 ? 4 : 3, 'high',
-          'computed from DECLARED recurring series only — ad-hoc meetings are not captured, so real load is ≥ this',
-          pName(P, pid) + ' is in ' + Math.round(rec.minutes / 60 * 10) / 10 + 'h/wk of recurring meetings',
-          ['threshold 480 min/wk (8h = 20% of a 40h week — stated assumption, not science)',
-           rec.series.map(function (s) { return s.title + ' · ' + s.minutes + ' min/wk'; }).join('\n'),
-           'total ' + rec.minutes + ' min/wk across ' + rec.series.length + ' series',
-           'calendar is where delegation strategy goes to die — audit before adding anything new'],
-          rec.series.map(function (s) { return s.id; }), 'R14:' + pid));
-      });
-      return out;
-    }},
-    { id: 'R15', tag: 'decisions', play: 'premortem', fn: function (P, today) {
-      var out = [];
-      P.openDecisions.forEach(function (d) {
-        if (d.severity == null || d.severity < 4) return; /* no severity → skip, never infer importance */
-        if (d.premortem) return;
-        var age = days(d.ts, today);
-        if (age == null || age < 2) return; /* 2d grace so capture doesn't instantly flag */
-        out.push(fin('R15', 4, 'high', 'severity is your own declaration; premortem absence is explicit',
-          'Severity-' + d.severity + ' decision with no premortem: “' + d.title + '”',
-          ['registered ' + fmtDate(d.ts) + ' · ' + age + 'd old (grace 2d)',
-           'you rated this sev ' + d.severity + ' — the cost of being wrong is high and the cost of asking “how does this fail?” is 45 minutes',
-           'no premortem.held event links to ' + d.id],
-          [d.id], 'R15:' + d.id));
-      });
-      return out;
-    }}
+        });
+        return out;
+      } },
+
+    { id: 'R3', tag: 'goals', play: 'goal-review',
+      params: 'ownerless fires HIGH; silent >14d (strictly) fires HIGH from last progress, MEDIUM from creation if none ever',
+      fn: function (P, today) {
+        var out = [];
+        P.openGoals.forEach(function (g) {
+          if (g.ownerId == null) {
+            out.push(fin('R3', 3, 'high', 'owner field is explicitly null — data, not inference',
+              'Goal has no owner: "' + g.title + '"',
+              ['set ' + fmtD(g.ts) + ' · ownerId null (goal ' + g.id + ')',
+               'an unowned goal is a decision you made by omission'],
+              [g.evId], 'R3o:' + g.id));
+          }
+          var ref = g.lastProgressTs || g.ts;
+          var silent = days(ref, today);
+          if (silent != null && silent > 14) {
+            out.push(fin('R3', 3, g.lastProgressTs ? 'high' : 'medium',
+              g.lastProgressTs ? 'measured from your last logged progress' : 'no progress ever logged — measured from creation date',
+              'Goal silent ' + silent + 'd: "' + g.title + '"',
+              ['last progress ' + (g.lastProgressTs ? fmtD(g.lastProgressTs) : 'never logged') + ' · set ' + fmtD(g.ts),
+               'silence threshold 14d (strictly past) · progress events logged: ' + g.progressN],
+              [g.evId], 'R3s:' + g.id));
+          }
+        });
+        return out;
+      } },
+
+    { id: 'R4', tag: 'feedback', play: 'sbi',
+      params: '60d window · ≥80% one polarity · min n=3 (HIGH at n≥5) · missing polarity excluded + printed',
+      fn: function (P, today) {
+        var out = [];
+        Object.keys(P.feedbackByPerson).forEach(function (pid) {
+          if (!P.peopleById[pid] || P.peopleById[pid].archived) return;
+          var win = [], skippedNoPolarity = 0;
+          P.feedbackByPerson[pid].forEach(function (ev) {
+            var age = days(ev.ts, today);
+            if (age == null || age > 60) return;
+            if (ev.polarity === 'positive' || ev.polarity === 'corrective') win.push(ev.polarity);
+            else skippedNoPolarity++;
+          });
+          if (win.length < 3) return; /* insufficient data → silence, by design */
+          var pos = win.filter(function (x) { return x === 'positive'; }).length;
+          var share = pos / win.length;
+          var kind = share >= 0.8 ? 'positive' : share <= 0.2 ? 'corrective' : null;
+          if (!kind) return;
+          var n = win.filter(function (x) { return x === kind; }).length;
+          out.push(fin('R4', 3, win.length >= 5 ? 'high' : 'medium',
+            'n=' + win.length + ' in-window (min 3; HIGH needs ≥5)',
+            'Feedback to ' + pName(P, pid) + ' is all ' + (kind === 'corrective' ? 'corrective' : 'reinforcing'),
+            [n + '/' + win.length + ' ' + kind + ' in the last 60d (imbalance = ≥80% one polarity; min n=3)',
+             kind === 'corrective'
+               ? 'under only-corrective feedback people stop hearing it — the next one lands as noise'
+               : 'under only-reinforcing feedback people stop growing — they can’t tell praise from comfort',
+             skippedNoPolarity ? skippedNoPolarity + ' event(s) lacked polarity — excluded from the count, not guessed' : 'every in-window event had explicit polarity',
+             'open the SBI playbook pre-filled with the missing polarity'],
+            P.feedbackByPerson[pid].slice(-6).map(function (e) { return e.id; }),
+            'R4:' + pid));
+        });
+        return out;
+      } },
+
+    { id: 'R5', tag: 'delegation', play: 'delegation',
+      params: '>4 open delegations per person fires sev 3; >6 fires sev 4; closes counted from delegation.closed events',
+      fn: function (P, today) {
+        var out = [];
+        Object.keys(P.delegationsOpenByPerson).forEach(function (pid) {
+          if (!P.peopleById[pid] || P.peopleById[pid].archived) return;
+          var list = P.delegationsOpenByPerson[pid];
+          if (list.length <= 4) return;
+          var oldest = list[0].ts, i;
+          for (i = 1; i < list.length; i++) if (list[i].ts < oldest) oldest = list[i].ts;
+          var names = list.slice(0, 4).map(function (x) { return x.task; }).join(' · ');
+          out.push(fin('R5', list.length > 6 ? 4 : 3, 'high', 'open delegations counted from your own assign/close events',
+            pName(P, pid) + ' carries ' + list.length + ' open delegations',
+            ['open: ' + names + (list.length > 4 ? ' · +' + (list.length - 4) + ' more' : ''),
+             'threshold >4 open; oldest open ' + fmtD(oldest) + ' (' + days(oldest, today) + 'd)',
+             'above ~5 concurrent owned items, follow-through — not effort — becomes the failure mode; close or re-level one via the delegation playbook'],
+            list.map(function (x) { return x.id; }), 'R5:' + pid));
+        });
+        return out;
+      } },
+
+    { id: 'R6', tag: 'conflict', play: 'desc',
+      params: 'same pair ≥2 open conflicts in 60d · conf HIGH both ids · MEDIUM one · LOW text-only · flat 60d window (temporal weighting = named gap)',
+      fn: function (P, today) {
+        var out = [];
+        Object.keys(P.conflictCountsByPair).forEach(function (pk) {
+          var n = P.conflictCountsByPair[pk];
+          if (n < 2) return;
+          var evs = P.openConflicts.filter(function (c) { return c.pairKey === pk; });
+          var inWin = evs.filter(function (c) { var a = days(c.ts, today); return a != null && a <= 60; });
+          if (inWin.length < 2) return;
+          var first = inWin[0];
+          var conf = (first.aId && first.bId) ? 'high' : (first.aId || first.bId) ? 'medium' : 'low';
+          var who = (first.aId && first.bId) ? pName(P, first.aId) + ' × ' + pName(P, first.bId)
+            : (first.aId || first.bId) ? pName(P, first.aId || first.bId) + ' × (unnamed)' : '"' + (first.text || 'unnamed').slice(0, 40) + '"';
+          out.push(fin('R6', inWin.length >= 3 ? 4 : 3, conf,
+            conf === 'high' ? 'both parties are roster people — the pair link is data'
+              : conf === 'medium' ? 'one party identified — pairing partly by text, drift priced into confidence'
+              : 'paired by text only — this is a cluster, not a proven pair',
+            'Repeated unresolved conflict: ' + who + ' (' + inWin.length + '× in 60d)',
+            inWin.slice(0, 3).map(function (c, i) { return (i + 1) + '. ' + fmtD(c.ts) + ' — ' + (c.text || '(no text)'); })
+              .concat(['no conflict.resolved event reached this pair after the latest one',
+                'flat 60d window — recency is not weighted (named gap, printed in the basis)',
+                'a repeated pair is a system signal: look at the structure between them before the people']),
+            inWin.map(function (c) { return c.id; }), 'R6:' + pk));
+        });
+        return out;
+      } },
+
+    { id: 'R7', tag: 'burnout', play: 'oneonone',
+      params: 'MEASURED pulses only · n≥3 in 45d · trigger A mean load ≥8/10 · trigger B mood slope ≤−0.5/wk over span ≥7d · always MEDIUM: a trend is a signal, not a diagnosis',
+      fn: function (P, today) {
+        var out = [];
+        Object.keys(P.pulsesByPerson).forEach(function (pid) {
+          if (!P.peopleById[pid] || P.peopleById[pid].archived) return;
+          var measured = [], estimated = 0;
+          var invalid = 0;
+          P.pulsesByPerson[pid].forEach(function (pu) {
+            var age = days(pu.ts, today);
+            if (age == null || age > 45) return;
+            if (pu.measured === false) { estimated++; return; }
+            var lo = pu.load, mo = pu.mood;
+            if (lo != null && (typeof lo !== 'number' || lo < 0 || lo > 10)) lo = (invalid++, null);
+            if (mo != null && (typeof mo !== 'number' || mo < 0 || mo > 10)) mo = (invalid++, null);
+            if (lo == null && mo == null) return;
+            measured.push({ id: pu.id, ts: pu.ts, load: lo, mood: mo, measured: true });
+          });
+          if (measured.length < 3) return; /* silence with reason */
+          var loads = measured.filter(function (x) { return typeof x.load === 'number'; });
+          var moods = measured.filter(function (x) { return typeof x.mood === 'number'; });
+          var meanLoad = loads.length ? loads.reduce(function (s, x) { return s + x.load; }, 0) / loads.length : null;
+          var trigA = meanLoad != null && loads.length >= 3 && meanLoad >= 8;
+          var slopeWk = null, spanD = null, trigB = false;
+          if (moods.length >= 3) {
+            var d0 = dayUTC(moods[0].ts), dn = dayUTC(moods[moods.length - 1].ts);
+            spanD = dn - d0;
+            if (spanD >= 7) {
+              var pts = moods.map(function (m) { return [dayUTC(m.ts) - d0, m.mood]; });
+              var mx = 0, my = 0, i;
+              for (i = 0; i < pts.length; i++) { mx += pts[i][0]; my += pts[i][1]; }
+              mx /= pts.length; my /= pts.length;
+              var num = 0, den = 0;
+              for (i = 0; i < pts.length; i++) { num += (pts[i][0] - mx) * (pts[i][1] - my); den += (pts[i][0] - mx) * (pts[i][0] - mx); }
+              slopeWk = den === 0 ? 0 : (num / den) * 7;
+              trigB = slopeWk <= -0.5;
+            }
+          }
+          if (!trigA && !trigB) return;
+          var basis = ['measured pulses in 45d: ' + measured.length + ' (estimated excluded: ' + estimated + (invalid ? ' · out-of-range values dropped: ' + invalid : '') + ' — not guessed, counted)'];
+          if (trigA) basis.push('trigger A: mean load ' + meanLoad.toFixed(1) + '/10 ≥ 8 over ' + loads.length + ' measured points');
+          if (trigB) basis.push('trigger B: mood slope ' + slopeWk.toFixed(2) + '/wk ≤ −0.5 across ' + spanD + 'd span');
+          if (!trigA && meanLoad == null) basis.push('load never measured in-window — only mood evaluated');
+          if (trigA && slopeWk != null && !trigB) basis.push('mood slope ' + slopeWk.toFixed(2) + '/wk — under threshold, load alone triggered');
+          basis.push('this warrants a load conversation, not a wellness speech — open the 1:1 run sheet, it pre-fills this data');
+          out.push(fin('R7', trigA && trigB ? 5 : 4, 'medium', 'measured data only, but a trend is a signal, not a diagnosis — MEDIUM permanently',
+            'Burnout signals for ' + pName(P, pid),
+            basis, measured.map(function (m) { return m.id; }), 'R7:' + pid));
+        });
+        return out;
+      } }
   ];
 
-  function run(state, today, opts) {
-    var P = LEADOS.events.project(state);
-    var includeMuted = opts && opts.includeMuted;
-    var findings = [], perRule = {};
-    RULES.forEach(function (r) {
-      var got = [];
-      try { got = r.fn(P, today) || []; }
+  function scoreOf(f) { return f.sev * (CONF_FACTOR[f.conf] || 0); }
+  function scoreText(f) { return 'sev ' + f.sev + ' × conf ' + (CONF_FACTOR[f.conf] || 0) + ' = ' + scoreOf(f).toFixed(1); }
+
+  var RULES_META = RULES.map(function (r) { return { id: r.id, tag: r.tag, play: r.play, params: r.params }; });
+
+  function run(P, today) {
+    var findings = [], muted = [], i;
+    var playByRule = {};
+    for (i = 0; i < RULES.length; i++) playByRule[RULES[i].id] = RULES[i].play;
+    for (i = 0; i < RULES.length; i++) {
+      var r = RULES[i], list;
+      try { list = r.fn(P, today) || []; }
       catch (e) {
-        got = [fin('ENG', 5, 'high', 'this is a rule EXCEPTION, surfaced loudly — a silent engine is a lying engine',
-          'Rule ' + r.id + ' threw an exception',
-          ['message: ' + String(e && e.message || e),
-           'the rule was skipped for this run; every other rule still ran',
-           'report this at the repo — include this finding’s basis lines'],
+        list = [fin('ENG', 5, 'high', 'the rule itself threw — this is a defect, surfaced loudly instead of swallowed',
+          'Rule ' + r.id + ' threw: ' + (e && e.message || e),
+          ['engine self-check caught an exception inside ' + r.id,
+           'the finding list below is INCOMPLETE — treat ' + r.id + '’s territory as unmonitored until fixed'],
           [], 'ENG:' + r.id)];
-        perRule[r.id] = { n: 0, threw: String(e && e.message || e) };
-        got.forEach(function (f) { findings.push(f); });
-        return;
       }
-      got.forEach(function (f) { findings.push(f); });
-      perRule[r.id] = { n: got.length };
-    });
-    /* engine memory: snooze/dismiss are events; suppression is reversible */
-    var mutedCount = 0;
-    findings = findings.filter(function (f) {
-      if (f.rule === 'ENG') { f.muted = false; return true; } /* engine errors are never mutable */
-      var snoozed = P.memory.snoozed[f.key], dismissed = P.memory.dismissed[f.key];
-      f.muted = !!(dismissed || (snoozed && today <= snoozed));
-      if (f.muted) { mutedCount++; return includeMuted === true; }
-      return true;
-    });
-    findings.forEach(function (f) {
-      var factor = CONF_FACTOR[f.conf] || 0.4;
-      f.score = f.sev * factor;
-      f.scoreMath = f.sev + ' × ' + factor.toFixed(2) + ' (' + f.conf + ') = ' + f.score.toFixed(2);
-    });
+      for (var j = 0; j < list.length; j++) {
+        var f = list[j];
+        f.play = playByRule[f.rule] || null;
+        var sup = P.suppressed[f.key];
+        if (sup) {
+          if (sup.kind === 'dismissed') { muted.push({ f: f, why: 'dismissed' }); continue; }
+          if (sup.kind === 'snoozed' && sup.until && new Date(sup.until) > new Date(today)) { muted.push({ f: f, why: 'snoozed until ' + fmtD(sup.until) }); continue; }
+          /* expired snooze falls through to active automatically */
+        }
+        findings.push(f);
+      }
+    }
     findings.sort(function (a, b) {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.sev !== a.sev) return b.sev - a.sev;
-      return a.key < b.key ? -1 : 1;
+      var d = scoreOf(b) - scoreOf(a);
+      if (d) return d;
+      if (a.sev !== b.sev) return b.sev - a.sev;
+      return a.title < b.title ? -1 : 1;
     });
-    return { findings: findings, perRule: perRule, P: P, mutedCount: mutedCount, today: today };
+    return { findings: findings, muted: muted };
   }
 
-  return { run: run, RULES: RULES, CONF_FACTOR: CONF_FACTOR,
-    _dayUTC: dayUTC, _days: days, _slope: slope };
+  /* Health-only: temporarily replace a rule body (G11 injects a thrower). Returns restore fn. */
+  function _swapRule(id, fn) {
+    for (var i = 0; i < RULES.length; i++) {
+      if (RULES[i].id === id) { var old = RULES[i].fn; RULES[i].fn = fn; return function () { RULES[i].fn = old; }; }
+    }
+    return function () {};
+  }
+
+  /* ---- Golden tests: input events → expected engine output. One per rule minimum,
+     plus boundaries, plus suppression, plus the ENG path. Built against the REAL
+     store/event/engine code paths on disposable in-memory states — no fixtures
+     file, no mocks. The health wall executes these at render. ---- */
+  function blankP(peopleRows, events) {
+    var st = LEADOS.store.freshState();
+    st.people = peopleRows || [];
+    st.events = events || [];
+    return LEADOS.events.project(st);
+  }
+  function person(id, over) { var p = { id: id, name: id.toUpperCase(), role: 't', cadenceDays: 14, reportsTo: null, archived: false, createdAt: null }; for (var k in over) p[k] = over[k]; return p; }
+  function ev(type, ts, data) { return { id: 'x' + Math.random().toString(36).slice(2, 8), ts: ts, type: type, data: data }; }
+  function day(today, off) { var d = new Date(today); d.setUTCDate(d.getUTCDate() + off); return d.toISOString(); }
+  function onlyRule(P, today, id) {
+    var all = run(P, today);
+    return { active: all.findings.filter(function (f) { return f.rule === id; }), muted: all.muted, all: all.findings };
+  }
+  function g(id, rule, desc, fn) { return { id: id, rule: rule, desc: desc, fn: fn }; }
+
+  var golden = [
+    g('G1', 'R1', 'last 1:1 20d ago, cadence 14 → fires, conf high',
+      function () { var t = LEADOS.events.todayIso();
+        var P = blankP([person('a', { createdAt: day(t, -60) })], [ev('oneonone.logged', day(t, -20), { personId: 'a' })]);
+        var r = onlyRule(P, t, 'R1');
+        return { pass: r.active.length === 1 && r.active[0].conf === 'high' && r.active[0].key === 'R1:a', observed: r.active.length + ' finding(s), conf ' + (r.active[0] ? r.active[0].conf : '—'), expected: '1 finding, conf high' }; }),
+    g('G2', 'R1', 'gap exactly == cadence (14d) → strictly-past does NOT fire',
+      function () { var t = LEADOS.events.todayIso();
+        var P = blankP([person('a', { createdAt: day(t, -60) })], [ev('oneonone.logged', day(t, -14), { personId: 'a' })]);
+        var r = onlyRule(P, t, 'R1');
+        return { pass: r.active.length === 0, observed: r.active.length + ' finding(s)', expected: '0 findings (boundary silent)' }; }),
+    g('G3', 'R1', 'never logged, added 30d ago cad 14 → fires MEDIUM; no createdAt → skips entirely',
+      function () { var t = LEADOS.events.todayIso();
+        var P = blankP([person('a', { createdAt: day(t, -30) }), person('b', { createdAt: null })], []);
+        var r = onlyRule(P, t, 'R1');
+        return { pass: r.active.length === 1 && r.active[0].conf === 'medium' && r.active[0].key === 'R1:a', observed: r.active.length + ' finding(s), keys ' + r.active.map(function (f) { return f.key; }).join(','), expected: '1 finding R1:a medium; R1:b silent (no createdAt)' }; }),
+    g('G4', 'R2', 'decision review yesterday sev 5 → fires sev 5; with outcome linked → silent',
+      function () { var t = LEADOS.events.todayIso();
+        var dec = ev('decision.logged', day(t, -10), { title: 'X', severity: 5, reviewDate: day(t, -1).slice(0, 10) });
+        var r1 = onlyRule(blankP([], [dec]), t, 'R2');
+        var r2 = onlyRule(blankP([], [dec, ev('decision.outcome', day(t, -2), { decisionId: dec.id, result: 'validated' })]), t, 'R2');
+        return { pass: r1.active.length === 1 && r1.active[0].sev === 5 && r2.active.length === 0, observed: 'open: ' + r1.active.length + ' (sev ' + (r1.active[0] ? r1.active[0].sev : '—') + ') · with outcome: ' + r2.active.length, expected: '1 finding sev 5 · 0 with outcome' }; }),
+    g('G5', 'R3', 'ownerless fires; silent exactly 14d does NOT; 15d does (medium from creation)',
+      function () { var t = LEADOS.events.todayIso();
+        var P = blankP([], [
+          ev('goal.set', day(t, -20), { goalId: 'g1', title: 'ownerless' }),
+          ev('goal.set', day(t, -14), { goalId: 'g2', title: 'edge', ownerId: 'x' }),
+          ev('goal.set', day(t, -15), { goalId: 'g3', title: 'silent', ownerId: 'x' })]);
+        var r = onlyRule(P, t, 'R3');
+        var keys = r.active.map(function (f) { return f.key; }).sort();
+        return { pass: keys.join(',') === 'R3o:g1,R3s:g1,R3s:g3', observed: keys.join(','), expected: 'R3o:g1,R3s:g1,R3s:g3 (g2 edge silent)' }; }),
+    g('G6', 'R4', '4/4 corrective → MEDIUM; 5/5 → HIGH; 4-of-5 → silent; missing polarity excluded',
+      function () { var t = LEADOS.events.todayIso();
+        function fb(pid, pol, n, extraNoPol) { var a = []; for (var i = 0; i < n; i++) a.push(ev('feedback.given', day(t, -5 - i), extraNoPol && i === 0 ? { personId: pid } : { personId: pid, polarity: pol })); return a; }
+        var P1 = blankP([person('a', { createdAt: day(t, -90) })], fb('a', 'corrective', 4));
+        var P2 = blankP([person('a', { createdAt: day(t, -90) })], fb('a', 'positive', 5));
+        var P3 = blankP([person('a', { createdAt: day(t, -90) })], fb('a', 'corrective', 3).concat(fb('a', 'positive', 1)).concat(fb('a', 'corrective', 1, true)));
+        var r1 = onlyRule(P1, t, 'R4'), r2 = onlyRule(P2, t, 'R4'), r3 = onlyRule(P3, t, 'R4');
+        return { pass: r1.active.length === 1 && r1.active[0].conf === 'medium' && r2.active.length === 1 && r2.active[0].conf === 'high' && r3.active.length === 0,
+          observed: '4/4 → ' + r1.active.length + ' (' + (r1.active[0] ? r1.active[0].conf : '—') + ') · 5/5 → ' + r2.active.length + ' (' + (r2.active[0] ? r2.active[0].conf : '—') + ') · 3c+1p (+1 nopolarity) → ' + r3.active.length,
+          expected: '1 medium · 1 high · 0 (75% < 80% after no-polarity exclusion)' }; }),
+    g('G7', 'R5', '4 open → silent · 5 open → sev 3 · 7 open → sev 4; closed ones not counted',
+      function () { var t = LEADOS.events.todayIso();
+        function del(pid, n, closeLast) { var a = [], ids = []; for (var i = 0; i < n; i++) { var e = ev('delegation.assigned', day(t, -3 - i), { personId: pid, task: 't' + i, level: 3 }); a.push(e); ids.push(e.id); } if (closeLast) a.push(ev('delegation.closed', day(t, -1), { delegationId: ids[n - 1] })); return a; }
+        var mkP = function (evs) { return blankP([person('a', { createdAt: day(t, -90) })], evs); };
+        var r4 = onlyRule(mkP(del('a', 4)), t, 'R5');
+        var r5 = onlyRule(mkP(del('a', 5)), t, 'R5');
+        var r7 = onlyRule(mkP(del('a', 7)), t, 'R5');
+        var rC = onlyRule(mkP(del('a', 5, true)), t, 'R5');
+        return { pass: r4.active.length === 0 && r5.active.length === 1 && r5.active[0].sev === 3 && r7.active[0] && r7.active[0].sev === 4 && rC.active.length === 0,
+          observed: '4→' + r4.active.length + ' · 5→' + r5.active.length + '(sev' + (r5.active[0] ? r5.active[0].sev : '—') + ') · 7→' + r7.active.length + '(sev' + (r7.active[0] ? r7.active[0].sev : '—') + ') · 5-with-1-closed→' + rC.active.length,
+          expected: 'silent · 1 sev3 · 1 sev4 · silent' }; }),
+    g('G8', 'R6', 'pair a×b twice in 60d → HIGH · once → silent · after resolution → silent · text-only → LOW',
+      function () { var t = LEADOS.events.todayIso();
+        var ppl = [person('a', { createdAt: day(t, -90) }), person('b', { createdAt: day(t, -90) })];
+        var pair = [ev('conflict.logged', day(t, -20), { aId: 'a', bId: 'b', text: 'x' }), ev('conflict.logged', day(t, -5), { aId: 'a', bId: 'b', text: 'y' })];
+        var rA = onlyRule(blankP(ppl, pair), t, 'R6');
+        var rB = onlyRule(blankP(ppl, [pair[0]]), t, 'R6');
+        var res = blankP(ppl, pair.concat([ev('conflict.resolved', day(t, -2), { conflictIds: [pair[0].id, pair[1].id], note: 'talked' })]));
+        var rC = onlyRule(res, t, 'R6');
+        var txt = [ev('conflict.logged', day(t, -10), { text: 'vendor escalation' }), ev('conflict.logged', day(t, -3), { text: 'vendor escalation' })];
+        var rD = onlyRule(blankP(ppl, txt), t, 'R6');
+        return { pass: rA.active.length === 1 && rA.active[0].conf === 'high' && rB.active.length === 0 && rC.active.length === 0 && rD.active.length === 1 && rD.active[0].conf === 'low',
+          observed: 'pair×2 → ' + rA.active.length + '(high?' + (rA.active[0] ? rA.active[0].conf : '—') + ') · ×1 → ' + rB.active.length + ' · resolved → ' + rC.active.length + ' · text×2 → ' + rD.active.length + '(' + (rD.active[0] ? rD.active[0].conf : '—') + ')',
+          expected: '1 high · 0 · 0 · 1 low' }; }),
+    g('G9', 'R7', 'measured loads 9,8,9 → trigger A MEDIUM · estimated-only → silent + excluded · mood 8→6→4 weekly → trigger B',
+      function () { var t = LEADOS.events.todayIso();
+        function pu(pid, off, load, mood, measured) { return ev('pulse.recorded', day(t, off), { personId: pid, load: load, mood: mood, measured: measured }); }
+        var rA = onlyRule(blankP([person('a', { createdAt: day(t, -90) })], [pu('a', -21, 9, 6, true), pu('a', -14, 8, 6, true), pu('a', -7, 9, 6, true)]), t, 'R7');
+        var rB = onlyRule(blankP([person('a', { createdAt: day(t, -90) })], [pu('a', -21, 9, 4, false), pu('a', -14, 9, 4, false), pu('a', -7, 9, 4, false)]), t, 'R7');
+        var rC = onlyRule(blankP([person('a', { createdAt: day(t, -90) })], [pu('a', -21, 5, 8, true), pu('a', -14, 5, 6, true), pu('a', -7, 5, 4, true)]), t, 'R7');
+        var trigBok = rC.active.length === 1 && rC.active[0].basis.join(' ').indexOf('trigger B') >= 0;
+        return { pass: rA.active.length === 1 && rA.active[0].conf === 'medium' && rB.active.length === 0 && rC.active.length === 1 && trigBok,
+          observed: 'loads 9/8/9 → ' + rA.active.length + ' · estimated-only → ' + rB.active.length + ' · mood 8/6/4 → ' + rC.active.length + ' (trigger B line: ' + trigBok + ')',
+          expected: '1 medium (A) · 0 (estimated excluded) · 1 with trigger B' }; }),
+    g('G10', 'SUP', 'snooze hides until expiry · dismiss hides permanently · unmute restores',
+      function () { var t = LEADOS.events.todayIso();
+        function P(evs) { return blankP([person('a', { createdAt: day(t, -60) })], [ev('oneonone.logged', day(t, -20), { personId: 'a' })].concat(evs)); }
+        var r0 = run(P([]), t);
+        var r1 = run(P([ev('engine.snoozed', day(t, -1), { key: 'R1:a', until: day(t, 7) })]), t);
+        var r2 = run(P([ev('engine.snoozed', day(t, -9), { key: 'R1:a', until: day(t, -2) })]), t);
+        var r3 = run(P([ev('engine.dismissed', day(t, -1), { key: 'R1:a' })]), t);
+        var r4 = run(P([ev('engine.dismissed', day(t, -2), { key: 'R1:a' }), ev('engine.unmuted', day(t, -1), { key: 'R1:a' })]), t);
+        return { pass: r0.findings.length === 1 && r1.findings.length === 0 && r1.muted.length === 1 && r2.findings.length === 1 && r3.findings.length === 0 && r4.findings.length === 1,
+          observed: 'plain ' + r0.findings.length + ' · snoozed +7d ' + r1.findings.length + '(muted ' + r1.muted.length + ') · expired-snooze ' + r2.findings.length + ' · dismissed ' + r3.findings.length + ' · unmuted ' + r4.findings.length,
+          expected: '1 · 0 (1 muted) · 1 · 0 · 1' }; }),
+    g('G11', 'ENG', 'a throwing rule surfaces as a loud ENG finding, other rules still run',
+      function () { var t = LEADOS.events.todayIso();
+        var restore = _swapRule('R2', function () { throw new Error('injected test fault'); });
+        var r = run(blankP([person('a', { createdAt: day(t, -60) })], [ev('oneonone.logged', day(t, -20), { personId: 'a' })]), t);
+        restore();
+        var eng = r.findings.filter(function (f) { return f.rule === 'ENG'; });
+        var r1 = r.findings.filter(function (f) { return f.rule === 'R1'; });
+        return { pass: eng.length === 1 && eng[0].sev === 5 && r1.length === 1, observed: 'ENG findings ' + eng.length + ' · R1 still fired ' + r1.length, expected: '1 ENG sev 5 · R1 unaffected' }; })
+  ];
+
+  return {
+    CONF_FACTOR: CONF_FACTOR, RULES_META: RULES_META,
+    run: run, scoreOf: scoreOf, scoreText: scoreText, golden: golden, _swapRule: _swapRule
+  };
 })();

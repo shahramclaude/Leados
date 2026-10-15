@@ -1,441 +1,310 @@
-/* LeadOS mf-5 · js/events.js — the shared event layer.
-   Every module writes events; every module reads the SAME projections.
-   Projections are recomputed per read — nothing derived is persisted,
-   so a case registered anywhere is visible everywhere at next render.
-   ── Provenance ──────────────────────────────────────────────────────────
-   API names (emit/emitMany, addPerson/updatePerson, open* projections,
-   pulsesMeasured discipline, pair projections) secondhand-verified from the
-   mf-4 README + S8 log head-reads; ALL code here is re-authored (upstream
-   bodies were never byte-readable from this environment).
-   mf-5 additions: meetings projection (weekly load), premortem projection,
-   lineToMe with cycle guard, conflict model made EXPLICIT (mf-4's docs
-   contradicted themselves on empty-counterpart semantics — see pairLabel). */
+/* LeadOS pt-1 · js/events.js — append-only event store + projections.
+   One shared data layer: every module writes through LEADOS.events.append;
+   every read comes from LEADOS.events.project(state) — recomputed per read,
+   nothing derived is ever persisted (stale state is impossible by construction).
+   Unknown event types in IMPORTED data are kept and ignored by projections
+   (forward-compat); unknown types via live append are rejected (typo-compat).
+   Dangling refs and bad timestamps are skipped + counted + printed — never guessed. */
 window.LEADOS = window.LEADOS || {};
 LEADOS._mod = LEADOS._mod || {};
 LEADOS._mod.events = 'js/events.js';
 
 LEADOS.events = (function () {
   'use strict';
-  var store = function () { return LEADOS.store; };
 
-  /* ── write path ─────────────────────────────────────────────────────── */
-  function emit(type, data, personId, seed) {
-    var st = store().state();
-    var ev = { id: store().newId('e'), ts: store().nowISO(), type: type,
-      personId: personId || null, data: data || {}, seed: !!seed };
+  var KNOWN = {
+    'oneonone.logged': 1,
+    'pulse.recorded': 1,     /* data: {personId, load 0-10, mood 0-10, measured:bool} — estimated readings exist; R7 excludes them and counts */
+    'feedback.given': 1,     /* data: {personId, polarity:'positive'|'corrective', sbi?{s,b,i,ask}, note?} */
+    'decision.logged': 1,    /* data: {title, severity 1-5, reviewDate?, refs?} */
+    'decision.outcome': 1,   /* data: {decisionId, result, lessons?} */
+    'goal.set': 1,           /* data: {goalId?, title, ownerId?} — goalId minted here if absent */
+    'goal.progress': 1,      /* data: {goalId, note} */
+    'goal.updated': 1,       /* data: {goalId, ownerId?|title?} */
+    'goal.closed': 1,        /* data: {goalId, result?} */
+    'delegation.assigned': 1,/* data: {personId, task, level 1-5, checkInDate?} */
+    'delegation.closed': 1,  /* data: {delegationId, result?} */
+    'conflict.logged': 1,    /* data: {aId?, bId?, text, intensity 1-5?} — ids preferred; text-only is allowed, priced at low confidence */
+    'conflict.followup': 1,  /* data: {conflictIds:[], pairKey?, note} */
+    'conflict.resolved': 1,  /* data: {conflictIds:[], pairKey?, note} — clears the pair until a NEWER conflict reopens it */
+    'sl.assessed': 1,        /* data: {personId, competence, commitment, d:'D1'..'D4', s:'S1'..'S4', note?} */
+    'note.added': 1,
+    'engine.snoozed': 1,     /* data: {key, until, title} — suppression is an event: auditable, reversible */
+    'engine.dismissed': 1,   /* data: {key, title} */
+    'engine.unmuted': 1,     /* data: {key} */
+    'playbook.completed': 1  /* data: {playId, ctx?} */
+  };
+
+  function nowIso() { return new Date().toISOString(); }
+  function todayIso() { var d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString(); }
+
+  function append(type, data, opts) {
+    opts = opts || {};
+    var st = LEADOS.store.state();
+    if (!st) return { error: 'no state' };
+    if (!KNOWN[type]) return { error: 'unknown event type "' + type + '" — live append is strict; imported unknowns are kept but inert' };
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return { error: 'event data must be a plain object' };
+    var ev = { id: LEADOS.store.mint('e'), ts: opts.ts || nowIso(), type: type, data: JSON.parse(JSON.stringify(data)) };
     st.events.push(ev);
-    var r = store().save();
-    store().refreshPill();
-    if (LEADOS._changed) LEADOS._changed(r);
+    LEADOS.store.auditLive('event:' + type, ev.id);
+    LEADOS.store.save();
+    if (!opts.silent && LEADOS.ui && typeof LEADOS.ui.refresh === 'function') LEADOS.ui.refresh();
     return ev;
   }
-  function emitMany(list, seed) {
-    return list.map(function (x) { return emit(x.type, x.data, x.personId, seed); });
-  }
-  function addPerson(fields, seed) {
-    var st = store().state();
-    var p = { id: store().newId('p'),
-      name: String(fields.name || '').trim() || 'unnamed',
-      role: String(fields.role || '').trim(),
-      cadenceDays: (fields.cadenceDays > 0 && fields.cadenceDays <= 365) ? Math.round(fields.cadenceDays) : 14,
-      reportsTo: fields.reportsTo || 'me',
-      archived: false, seed: !!seed,
-      createdAt: store().nowISO(),   /* additive mf-5: R1/R8 "never logged" need a start date */
-      sl: fields.sl || null };
-    st.people.push(p);
-    store().log('person', 'added ' + p.name + ' (' + p.id + (seed ? ', seed' : '') + ')');
-    var r = store().save(); store().refreshPill();
-    if (LEADOS._changed) LEADOS._changed(r);
-    return p;
-  }
-  function updatePerson(id, patch) {
-    var st = store().state();
-    var p = null, i;
-    for (i = 0; i < st.people.length; i++) if (st.people[i].id === id) { p = st.people[i]; break; }
-    if (!p) return null;
-    Object.keys(patch).forEach(function (k) {
-      if (k === 'id') return;
-      if (k === 'cadenceDays') { var n = Math.round(patch[k]); if (n > 0 && n <= 365) p.cadenceDays = n; return; }
-      p[k] = patch[k];
-    });
-    store().log('person', 'updated ' + p.name + ' → ' + Object.keys(patch).join(', '));
-    var r = store().save(); store().refreshPill();
-    if (LEADOS._changed) LEADOS._changed(r);
-    return p;
+
+  function normText(s) { return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+  function pairKeyOf(d) {
+    var ids = [];
+    if (d.aId) ids.push(d.aId);
+    if (d.bId) ids.push(d.bId);
+    if (ids.length === 2) { ids.sort(); return 'ids:' + ids.join('|'); }
+    if (ids.length === 1) return 'one:' + ids[0] + '|' + normText(d.text).slice(0, 24);
+    return 'txt:' + normText(d.text).slice(0, 32);
   }
 
-  /* ── read path: projections ─────────────────────────────────────────── */
-  function dayUTC(iso) {
-    var d = new Date(iso);
-    if (isNaN(d)) return null;
-    return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / 864e5);
-  }
-  function normText(s) {
-    return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  }
-
-  /* Endpoints of a conflict: 'me' (the leader — default party A) or a
-     roster id / free text / 'unnamed'. EXPLICIT mf-5 semantics:
-       partyA absent            → 'me'
-       partyB (counterpart) id  → linked endpoint, link confidence high
-       partyB text only         → text endpoint, medium (spelling drift printed)
-       partyB absent entirely   → 'unnamed', low — basis tells you to name them */
-  function endpointOf(ev, side) {
-    var d = ev.data || {};
-    if (side === 'a') {
-      if (typeof d.partyAPersonId === 'string' && d.partyAPersonId) return { kind: 'person', key: 'p:' + d.partyAPersonId, personId: d.partyAPersonId };
-      if (normText(d.partyAText)) return { kind: 'text', key: 't:' + normText(d.partyAText), text: normText(d.partyAText) };
-      return { kind: 'me', key: 'me' };
-    }
-    if (typeof d.counterpartPersonId === 'string' && d.counterpartPersonId) return { kind: 'person', key: 'p:' + d.counterpartPersonId, personId: d.counterpartPersonId };
-    if (normText(d.counterpartText)) return { kind: 'text', key: 't:' + normText(d.counterpartText), text: normText(d.counterpartText) };
-    return { kind: 'unnamed', key: 'unnamed' };
-  }
-  function pairKeyOf(a, b) { return a.key < b.key ? a.key + '×' + b.key : b.key + '×' + a.key; }
-  function pairLabel(a, b, peopleById) {
-    function name(e) {
-      if (e.kind === 'me') return 'You';
-      if (e.kind === 'person') { var p = peopleById[e.personId]; return p ? p.name : '(archived person)'; }
-      if (e.kind === 'text') return '“' + e.text + '” (text link)';
-      return 'unnamed counterpart';
-    }
-    return name(a) + ' × ' + name(b);
-  }
-
-  function project(state) {
-    var P = {};
-    var people = state.people || [], events = state.events || [];
-    var peopleById = P.peopleById = {};
-    people.forEach(function (p) { peopleById[p.id] = p; });
-    P.people = people;
-    P.actives = people.filter(function (p) { return !p.archived; });
-    P.directs = P.actives.filter(function (p) { return p.reportsTo === 'me'; });
-
-    /* lineToMe with cycle guard — NEW mf-5. A reportsTo cycle (or archived /
-       missing intermediate) is a broken line → arrival/skip rules go SILENT
-       rather than guess. */
-    P.lineToMe = function (person) {
-      var chain = [], seen = {}, cur = person;
-      seen[person.id] = true;
-      var hops = 0;
-      while (cur && cur.reportsTo && cur.reportsTo !== 'me') {
-        var next = peopleById[cur.reportsTo];
-        if (!next) return { ok: false, reason: 'broken', chain: chain, detail: cur.name + ' reports to unknown id "' + cur.reportsTo + '"' };
-        if (seen[next.id]) return { ok: false, reason: 'cycle', chain: chain, detail: 'reportsTo cycle at ' + next.name };
-        if (next.archived) return { ok: false, reason: 'archived', chain: chain, detail: next.name + ' (intermediate) is archived' };
-        chain.push(next); seen[next.id] = true; cur = next;
-        if (++hops > 20) return { ok: false, reason: 'cycle', chain: chain, detail: 'chain longer than 20 — treated as cycle' };
-      }
-      if (!cur || cur.reportsTo !== 'me') return { ok: false, reason: 'broken', chain: chain, detail: 'chain does not reach you' };
-      return { ok: true, chain: chain, depth: chain.length + 1 };
+  /* project(state) → P. Single pass over events, in stored order (ts order is NOT
+     assumed — last-writer-wins is by array order, the append contract). */
+  function project(st) {
+    var P = {
+      people: st.people, peopleById: {}, directs: [],
+      oneononeLast: {}, oneononeCount: {},
+      openDecisions: [], outcomesByDecision: {},
+      openGoals: [], goalById: {},
+      feedbackByPerson: {},
+      delegationsOpenByPerson: {}, delegationById: {},
+      openConflicts: [], conflictCountsByPair: {},
+      pulsesByPerson: {},
+      slByPerson: {},
+      suppressed: {}, /* key → {kind:'snoozed'|'dismissed', until?} */
+      _skipped: { missingTs: 0, danglingPerson: 0, danglingDecision: 0, danglingGoal: 0, danglingDelegation: 0, unknownType: 0 }
     };
+    var i, e, d, pid;
+    for (i = 0; i < st.people.length; i++) {
+      var p = st.people[i];
+      P.peopleById[p.id] = p;
+      if (!p.archived && !p.reportsTo) P.directs.push(p); /* direct-to-me = no reportsTo set; skip-levels hang off a lead */
+    }
+    var goalsClosed = {}, decisionsDone = {}, decisionIds = {}, delegationsClosed = {}, lastResolvedByPair = {};
 
-    /* single-pass event projections */
-    var oneLast = {}, oneSkipLast = {};
-    var decisions = [], decisionsById = {}, outcomes = {}, premortems = {};
-    var goals = [], goalsById = {}, goalLastProgress = {}, goalProgressN = {}, goalOwner = {}, goalClosed = {};
-    var feedbackByPerson = {};
-    var delegationsById = {}, delegClosed = {};
-    var conflicts = [], conflictResolved = {};
-    var pulses = {};
-    var meetingsById = {}, meetingEnded = {}, meetingUpdates = {};
-    var incidentsById = {}, incidentLast = {}, incidentClosed = {};
-    var winsById = {}, winVerified = {};
-    var expectations = null;
-    var tourVisits = {};
-    var snoozed = {}, dismissed = {};
-
-    events.forEach(function (ev) {
-      var d = ev.data || {};
-      switch (ev.type) {
+    for (i = 0; i < st.events.length; i++) {
+      e = st.events[i]; d = e.data || {};
+      if (!KNOWN[e.type]) { P._skipped.unknownType++; continue; }
+      if (!e.ts) { P._skipped.missingTs++; continue; }
+      switch (e.type) {
         case 'oneonone.logged':
-          if (ev.personId) {
-            if (d.mode === 'skip') { if (!oneSkipLast[ev.personId] || ev.ts > oneSkipLast[ev.personId].ts) oneSkipLast[ev.personId] = ev; }
-            else { if (!oneLast[ev.personId] || ev.ts > oneLast[ev.personId].ts) oneLast[ev.personId] = ev; }
-          }
+          pid = d.personId;
+          if (!P.peopleById[pid]) { P._skipped.danglingPerson++; break; }
+          P.oneononeCount[pid] = (P.oneononeCount[pid] || 0) + 1;
+          if (!P.oneononeLast[pid] || P.oneononeLast[pid].ts < e.ts) P.oneononeLast[pid] = { ts: e.ts, id: e.id };
           break;
-        case 'decision.registered': decisions.push(ev); decisionsById[ev.id] = ev; break;
-        case 'decision.outcome': if (d.decisionId) outcomes[d.decisionId] = ev; break;
-        case 'premortem.held': if (d.decisionId) premortems[d.decisionId] = ev; break;
-        case 'goal.set': goals.push(ev); goalsById[ev.id] = ev; if (d.ownerId) goalOwner[ev.id] = d.ownerId; break;
-        case 'goal.assigned': if (d.goalId) goalOwner[d.goalId] = d.ownerId || null; break;
-        case 'goal.progress':
-          if (d.goalId) {
-            goalProgressN[d.goalId] = (goalProgressN[d.goalId] || 0) + 1;
-            if (!goalLastProgress[d.goalId] || ev.ts > goalLastProgress[d.goalId]) goalLastProgress[d.goalId] = ev.ts;
-          }
+        case 'pulse.recorded':
+          pid = d.personId;
+          if (!P.peopleById[pid]) { P._skipped.danglingPerson++; break; }
+          (P.pulsesByPerson[pid] = P.pulsesByPerson[pid] || []).push({ id: e.id, ts: e.ts, load: d.load, mood: d.mood, measured: d.measured !== false });
           break;
-        case 'goal.closed': if (d.goalId) goalClosed[d.goalId] = ev; break;
         case 'feedback.given':
-          if (ev.personId) {
-            (feedbackByPerson[ev.personId] = feedbackByPerson[ev.personId] || []).push(ev);
-          }
+          pid = d.personId;
+          if (!P.peopleById[pid]) { P._skipped.danglingPerson++; break; }
+          (P.feedbackByPerson[pid] = P.feedbackByPerson[pid] || []).push({ id: e.id, ts: e.ts, polarity: d.polarity });
           break;
-        case 'delegation.assigned': delegationsById[ev.id] = ev; break;
-        case 'delegation.closed': if (d.delegationId) delegClosed[d.delegationId] = ev; break;
-        case 'conflict.registered': conflicts.push(ev); break;
-        case 'conflict.resolved': if (d.conflictId) conflictResolved[d.conflictId] = ev; break;
-        case 'pulse.logged':
-          if (ev.personId) {
-            var rec = pulses[ev.personId] = pulses[ev.personId] || { measured: [], estimatedCount: 0 };
-            if (d.measured === true && typeof d.mood === 'number' && typeof d.load === 'number') {
-              rec.measured.push(ev);
-            } else { rec.estimatedCount++; }
-          }
+        case 'decision.logged':
+          decisionIds[e.id] = 1;
+          P.openDecisions.push({ id: e.id, ts: e.ts, title: d.title || '(untitled decision)', severity: d.severity, reviewDate: d.reviewDate || null });
           break;
-        case 'meeting.series': meetingsById[ev.id] = ev; break;
-        case 'meeting.updated': if (d.seriesId) meetingUpdates[d.seriesId] = ev; break;
-        case 'meeting.ended': if (d.seriesId) meetingEnded[d.seriesId] = ev; break;
-        case 'incident.registered': incidentsById[ev.id] = ev; incidentLast[ev.id] = ev.ts; break;
-        case 'incident.update':
-          if (d.incidentId) {
-            if (!incidentLast[d.incidentId] || ev.ts > incidentLast[d.incidentId]) incidentLast[d.incidentId] = ev.ts;
-            if (d.closed === true) incidentClosed[d.incidentId] = ev;
-          }
+        case 'decision.outcome':
+          if (d.decisionId) { decisionsDone[d.decisionId] = e; P.outcomesByDecision[d.decisionId] = e; }
+          else P._skipped.danglingDecision++;
           break;
-        case 'win.planned': winsById[ev.id] = ev; break;
-        case 'win.verified': if (d.winId) winVerified[d.winId] = ev; break;
-        case 'expectations.captured': if (!expectations || ev.ts > expectations.ts) expectations = ev; break;
-        case 'tour.visit': if (ev.personId) tourVisits[ev.personId] = (tourVisits[ev.personId] || 0) + 1; break;
-        case 'engine.snooze': if (d.key && d.until) snoozed[d.key] = d.until; break;
-        case 'engine.dismiss': if (d.key) dismissed[d.key] = true; break;
-        case 'engine.unmute': if (d.key) delete dismissed[d.key]; break;
+        case 'goal.set':
+          if (!d.goalId) { P._skipped.danglingGoal++; break; }
+          P.goalById[d.goalId] = { id: d.goalId, evId: e.id, ts: e.ts, title: d.title || '(untitled goal)', ownerId: d.ownerId || null, lastProgressTs: null, progressN: 0 };
+          break;
+        case 'goal.progress':
+          var g = P.goalById[d.goalId];
+          if (!g) { P._skipped.danglingGoal++; break; }
+          g.progressN++;
+          if (!g.lastProgressTs || g.lastProgressTs < e.ts) g.lastProgressTs = e.ts;
+          break;
+        case 'goal.updated':
+          var g2 = P.goalById[d.goalId];
+          if (!g2) { P._skipped.danglingGoal++; break; }
+          if (d.ownerId !== undefined) g2.ownerId = d.ownerId;
+          if (typeof d.title === 'string' && d.title) g2.title = d.title;
+          break;
+        case 'goal.closed':
+          goalsClosed[d.goalId] = e; break;
+        case 'delegation.assigned':
+          pid = d.personId;
+          if (!P.peopleById[pid]) { P._skipped.danglingPerson++; break; }
+          var row = { id: e.id, ts: e.ts, task: d.task || '(untitled task)', level: d.level || null, checkInDate: d.checkInDate || null, personId: pid };
+          P.delegationById[e.id] = row;
+          (P.delegationsOpenByPerson[pid] = P.delegationsOpenByPerson[pid] || []).push(row);
+          break;
+        case 'delegation.closed':
+          if (d.delegationId && P.delegationById[d.delegationId]) delegationsClosed[d.delegationId] = e;
+          else P._skipped.danglingDelegation++;
+          break;
+        case 'conflict.logged':
+          var pk = pairKeyOf(d);
+          P.openConflicts.push({ id: e.id, ts: e.ts, aId: d.aId || null, bId: d.bId || null, text: d.text || '', pairKey: pk });
+          break;
+        case 'conflict.resolved':
+          var rk = d.pairKey;
+          if (!rk && Array.isArray(d.conflictIds)) {
+            for (var ci = 0; ci < d.conflictIds.length; ci++) {
+              for (var cj = 0; cj < P.openConflicts.length; cj++) if (P.openConflicts[cj].id === d.conflictIds[ci]) { rk = P.openConflicts[cj].pairKey; break; }
+              if (rk) break;
+            }
+          }
+          if (rk) lastResolvedByPair[rk] = e.ts;
+          break;
+        case 'sl.assessed':
+          pid = d.personId;
+          if (!P.peopleById[pid]) { P._skipped.danglingPerson++; break; }
+          if (!P.slByPerson[pid] || P.slByPerson[pid].ts < e.ts) P.slByPerson[pid] = { ts: e.ts, d: d.d, s: d.s, competence: d.competence, commitment: d.commitment };
+          break;
+        case 'engine.snoozed':
+          P.suppressed[d.key] = { kind: 'snoozed', until: d.until || null, title: d.title || '' };
+          break;
+        case 'engine.dismissed':
+          P.suppressed[d.key] = { kind: 'dismissed', until: null, title: d.title || '' };
+          break;
+        case 'engine.unmuted':
+          delete P.suppressed[d.key];
+          break;
       }
-    });
+    }
 
-    P.oneononeLast = oneLast; P.oneononeSkipLast = oneSkipLast;
+    /* post-pass orphan checks: an outcome/close pointing at a target that never
+       existed is dangling — counted, dropped, never guessed. (Append order is the
+       lineage contract; out-of-order refs inside a hand-built blob are dangling
+       from the reader's seat regardless of intent.) */
+    var ok;
+    for (ok in decisionsDone) if (decisionsDone.hasOwnProperty(ok) && !decisionIds[ok]) { P._skipped.danglingDecision++; delete P.outcomesByDecision[ok]; delete decisionsDone[ok]; }
+    for (ok in goalsClosed) if (goalsClosed.hasOwnProperty(ok) && !P.goalById[ok]) { P._skipped.danglingGoal++; delete goalsClosed[ok]; }
+    for (ok in delegationsClosed) if (delegationsClosed.hasOwnProperty(ok) && !P.delegationById[ok]) { P._skipped.danglingDelegation++; delete delegationsClosed[ok]; }
 
-    P.decisions = decisions.map(function (ev) {
-      var d = ev.data || {};
-      return { id: ev.id, ts: ev.ts, title: String(d.title || '(untitled decision)'),
-        severity: (typeof d.severity === 'number' && d.severity >= 1 && d.severity <= 5) ? d.severity : null,
-        reviewDate: (typeof d.reviewDate === 'string' && !isNaN(Date.parse(d.reviewDate))) ? d.reviewDate : null,
-        outcome: outcomes[ev.id] || null, premortem: premortems[ev.id] || null, ev: ev };
-    });
-    P.openDecisions = P.decisions.filter(function (x) { return !x.outcome; });
-    P.premortems = premortems;
+    /* resolution fold: a pair is open only on conflicts newer than its last resolution */
+    var stillOpen = [];
+    for (i = 0; i < P.openConflicts.length; i++) {
+      var c = P.openConflicts[i];
+      var lr = lastResolvedByPair[c.pairKey];
+      if (lr && c.ts <= lr) continue;
+      stillOpen.push(c);
+      P.conflictCountsByPair[c.pairKey] = (P.conflictCountsByPair[c.pairKey] || 0) + 1;
+    }
+    P.openConflicts = stillOpen;
 
-    P.goals = goals.map(function (ev) {
-      var d = ev.data || {};
-      var ownerId = goalOwner[ev.id] || null;
-      return { id: ev.id, ts: ev.ts, title: String(d.title || '(untitled goal)'),
-        ownerId: ownerId, owner: ownerId === 'me' ? { name: 'You' } : (peopleById[ownerId] || null),
-        lastProgressTs: goalLastProgress[ev.id] || null, progressN: goalProgressN[ev.id] || 0,
-        closed: goalClosed[ev.id] || null, ev: ev };
-    });
-    P.openGoals = P.goals.filter(function (g) { return !g.closed; });
-
-    P.feedbackByPerson = feedbackByPerson;
-
-    P.openDelegations = Object.keys(delegationsById).map(function (id) { return delegationsById[id]; })
-      .filter(function (ev) { return !delegClosed[ev.id]; });
-    P.delegationsOpenByPerson = {};
-    P.openDelegations.forEach(function (ev) {
-      if (!ev.personId) return;
-      (P.delegationsOpenByPerson[ev.personId] = P.delegationsOpenByPerson[ev.personId] || []).push(ev);
-    });
-
-    P.conflicts = conflicts.map(function (ev) {
-      var a = endpointOf(ev, 'a'), b = endpointOf(ev, 'b');
-      var conf = (a.kind === 'unnamed' || b.kind === 'unnamed') ? 'low'
-        : (a.kind === 'text' || b.kind === 'text') ? 'medium' : 'high';
-      return { id: ev.id, ts: ev.ts, topic: String((ev.data || {}).topic || '(no topic)'),
-        a: a, b: b, pairKey: pairKeyOf(a, b), pairLabel: pairLabel(a, b, peopleById),
-        linkConf: conf, resolved: conflictResolved[ev.id] || null, ev: ev };
-    });
-    P.openConflicts = P.conflicts.filter(function (c) { return !c.resolved; });
-    P.conflictPairs = {};
-    P.openConflicts.forEach(function (c) {
-      (P.conflictPairs[c.pairKey] = P.conflictPairs[c.pairKey] || []).push(c);
-    });
-    /* nexus: per PERSON endpoint, count open conflicts + distinct RESOLVABLE
-       counterparts (roster-linked or 'me'; text endpoints are listed in basis,
-       never counted — you cannot dedupe a name reliably). */
-    P.conflictNexus = {};
-    P.openConflicts.forEach(function (c) {
-      [c.a, c.b].forEach(function (ep, idx) {
-        if (ep.kind !== 'person') return;
-        var other = idx === 0 ? c.b : c.a;
-        var n = P.conflictNexus[ep.personId] = P.conflictNexus[ep.personId] || { open: 0, distinct: {}, textCounterparts: [] };
-        n.open++;
-        if (other.kind === 'person' || other.kind === 'me') n.distinct[other.key] = true;
-        else n.textCounterparts.push(other.kind === 'text' ? other.text : 'unnamed');
-      });
-    });
-
-    P.pulses = pulses;
-    Object.keys(feedbackByPerson).forEach(function (pid) {
-      feedbackByPerson[pid].sort(function (x, y) { return x.ts < y.ts ? -1 : 1; });
-    });
-
-    /* meetings: active series + weekly load per person — NEW mf-5 */
-    P.meetingSeries = Object.keys(meetingsById).map(function (id) {
-      var ev = meetingsById[id];
-      var d = Object.assign({}, ev.data || {}, (meetingUpdates[id] || {}).data || {});
-      var dur = (typeof d.endMin === 'number' && typeof d.startMin === 'number') ? d.endMin - d.startMin : 0;
-      var dow = Array.isArray(d.dow) ? d.dow.filter(function (x) { return x >= 0 && x <= 6; }) : [];
-      var weekly = dur > 0 && dow.length ? Math.round(dur * dow.length * (d.cadence === 'biweekly' ? 0.5 : 1)) : 0;
-      return { id: id, ts: ev.ts, title: String(d.title || '(untitled meeting)'),
-        startMin: d.startMin, endMin: d.endMin, dow: dow,
-        attendeeIds: Array.isArray(d.attendeeIds) ? d.attendeeIds : [],
-        cadence: d.cadence === 'biweekly' ? 'biweekly' : 'weekly',
-        weeklyMinutes: weekly, ended: meetingEnded[id] || null, ev: ev };
-    }).filter(function (s) { return !s.ended; });
-    P.weeklyMeetingLoad = {};
-    P.meetingSeries.forEach(function (s) {
-      s.attendeeIds.forEach(function (pid) {
-        var rec = P.weeklyMeetingLoad[pid] = P.weeklyMeetingLoad[pid] || { minutes: 0, series: [] };
-        rec.minutes += s.weeklyMinutes;
-        rec.series.push({ title: s.title, minutes: s.weeklyMinutes, id: s.id });
-      });
-    });
-
-    P.incidents = Object.keys(incidentsById).map(function (id) {
-      var ev = incidentsById[id];
-      return { id: id, ts: ev.ts, title: String((ev.data || {}).title || '(untitled incident)'),
-        lastUpdateTs: incidentLast[id] || ev.ts, closed: incidentClosed[id] || null, ev: ev };
-    });
-    P.openIncidents = P.incidents.filter(function (x) { return !x.closed; });
-
-    P.wins = Object.keys(winsById).map(function (id) {
-      var ev = winsById[id];
-      var d = ev.data || {};
-      return { id: id, ts: ev.ts, title: String(d.title || '(untitled win)'),
-        verifyDate: (typeof d.verifyDate === 'string' && !isNaN(Date.parse(d.verifyDate))) ? d.verifyDate : null,
-        verified: winVerified[id] || null, ev: ev };
-    });
-    P.openWins = P.wins.filter(function (w) { return !w.verified; });
-
-    P.expectations = expectations;
-    P.tourVisits = tourVisits;
-    P.memory = { snoozed: snoozed, dismissed: dismissed };
-    P.appointment = state.meta ? state.meta.appointment : null;
-    P.dayUTC = dayUTC;
+    P.openDecisions = P.openDecisions.filter(function (x) { return !decisionsDone[x.id]; });
+    for (var gid in P.goalById) if (P.goalById.hasOwnProperty(gid) && !goalsClosed[gid]) P.openGoals.push(P.goalById[gid]);
+    for (pid in P.delegationsOpenByPerson) {
+      if (!P.delegationsOpenByPerson.hasOwnProperty(pid)) continue;
+      P.delegationsOpenByPerson[pid] = P.delegationsOpenByPerson[pid].filter(function (x) { return !delegationsClosed[x.id]; });
+      if (!P.delegationsOpenByPerson[pid].length) delete P.delegationsOpenByPerson[pid];
+    }
+    for (pid in P.pulsesByPerson) {
+      if (!P.pulsesByPerson.hasOwnProperty(pid)) continue;
+      P.pulsesByPerson[pid].sort(function (a, b) { return a.ts < b.ts ? -1 : 1; });
+    }
     return P;
   }
 
-  /* ── seed / purge (dev tooling; honest about what it is) ────────────── */
-  function dayOffset(n) { /* today minus n days, local */
-    var d = new Date(); d.setDate(d.getDate() - n);
-    function p(x) { return (x < 10 ? '0' : '') + x; }
-    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  /* spanLoad: implied weekly 1:1 minutes from per-person cadences vs stated capacity.
+     pt-1 addition — new multi-team leaders overcommit 1:1s structurally; R1 then
+     punishes a promise the math said they couldn't keep. Shows the promise first.
+     Cadence null → 14d default, printed as an assumption by the UI. */
+  function spanLoad(st) {
+    var per = [], total = 0;
+    var len = (st.meta.settings && st.meta.settings.oneOnOneLengthMin) || 50;
+    for (var i = 0; i < st.people.length; i++) {
+      var p = st.people[i];
+      if (p.archived || p.reportsTo) continue; /* directs only — skip-level 1:1s priced separately when R8 lands */
+      var cad = p.cadenceDays || 14;
+      var min = Math.round((7 / cad) * len);
+      per.push({ id: p.id, name: p.name, cadenceDays: cad, assumed: !p.cadenceDays, minPerWeek: min });
+      total += min;
+    }
+    var cap = (st.meta.settings && st.meta.settings.weeklyOneOnOneCapacityMin) || 240;
+    return { perPerson: per, impliedMin: total, capacityMin: cap, overBy: total - cap, lengthMin: len };
   }
-  function ts(nDaysAgo, h) { return dayOffset(nDaysAgo) + 'T' + (h || '10') + ':00:00'; }
 
-  /* seed(apiArg) — apiArg lets the health wall seed a DISPOSABLE store
-     (T11). Without a param it targets the singleton and fires _changed;
-     with one it writes silently and never re-renders (recursion guard:
-     T11 runs INSIDE a render; an unguarded _changed would loop the wall).
-     People rows are created inline — the public addPerson() saves on
-     every call, which would violate flag-before-rows on a mid-seed crash. */
-  function seed(apiArg) {
-    var api = apiArg || LEADOS.store;
-    var S = api.state();
-    if (S.meta.seeded) return { ok: false, reason: 'already-seeded',
-      detail: 'the no-reseed flag is permanent (set before any row is written) — purge clears the rows, not the flag' };
-    /* doctrine: flag BEFORE rows, so a crash mid-seed never reseeds */
-    S.meta.seeded = true;
-    S.meta.seedPrevAppointment = S.meta.appointment || null;
-
-    function mkPerson(fields) {
-      var p = { id: api._newId('p'), name: fields.name, role: fields.role || '',
-        cadenceDays: fields.cadenceDays || 14, reportsTo: fields.reportsTo || 'me',
-        archived: false, seed: true, createdAt: api.nowISO ? api.nowISO() : new Date().toISOString(), sl: null };
-      S.people.push(p); return p;
+  /* Seed: a sample org that fires every rule at least once, for exploration and
+     for verify-step 3. meta.seeded is set BEFORE rows (a mid-seed crash must not
+     re-seed); purge removes seed rows, keeps the flag (no auto-reseed). */
+  function seed(st, today, opts) {
+    opts = opts || {};
+    if (st.meta.seeded && !opts.force) return { skipped: true, note: 'already seeded — purge first or force' };
+    st.meta.seeded = true;
+    function day(off) { var d = new Date(today); d.setUTCDate(d.getUTCDate() + off); return d.toISOString(); }
+    function mkPerson(name, role, cad, reportsTo, createdOff) {
+      var p = { id: 'p' + Math.random().toString(36).slice(2, 8) + (++st.meta.idSeq).toString(36), name: name, role: role, cadenceDays: cad, reportsTo: reportsTo, archived: false, createdAt: day(createdOff), seed: true };
+      st.people.push(p); return p;
     }
-    var A = mkPerson({ name: 'Anika Rao', role: 'Team lead · Platform', cadenceDays: 7 });
-    var M = mkPerson({ name: 'Marcus Lindqvist', role: 'Team lead · Growth' });
-    var T = mkPerson({ name: 'Theo Baker', role: 'Engineer (direct)' });
-    var D = mkPerson({ name: 'Dana Cole', role: 'Engineer · Platform', reportsTo: A.id });
-    var Pr = mkPerson({ name: 'Priya Nair', role: 'Designer · Platform', reportsTo: A.id });
-    var J = mkPerson({ name: 'Jonas Weber', role: 'Growth marketer', reportsTo: M.id });
+    function ev(type, off, data) { data.seed = true; st.events.push({ id: 'e' + Math.random().toString(36).slice(2, 8) + (++st.meta.idSeq).toString(36), ts: day(off), type: type, data: data }); }
 
-    function seedEmit(type, data, personId, tsStr) {
-      var ev = { id: api._newId('e'), ts: tsStr, type: type, personId: personId || null, data: data || {}, seed: true };
-      S.events.push(ev); return ev;
-    }
+    var priya = mkPerson('Priya Nair', 'Team lead · Platform', 7, null, -40);
+    var dana = mkPerson('Dana Kovac', 'Team lead · Product', 14, null, -60);
+    var marcus = mkPerson('Marcus Hale', 'Team lead · Ops', 14, null, -90);
+    var anika = mkPerson('Anika Rao', 'Team lead · Data', 7, null, -45);
+    var tom = mkPerson('Tom Reyes', 'Engineer (skip-level)', null, priya.id, -30);
 
-    /* R1: Theo 1:1 21d ago on a 14d cadence → overdue. Anika fresh. */
-    seedEmit('oneonone.logged', { mode: 'regular', note: 'career chat' }, T.id, ts(21));
-    seedEmit('oneonone.logged', { mode: 'regular' }, A.id, ts(3));
-    /* R8: Dana skip-level 40d ago (28d cadence). Jonas recent. */
-    seedEmit('oneonone.logged', { mode: 'skip' }, D.id, ts(40));
-    seedEmit('oneonone.logged', { mode: 'skip' }, J.id, ts(9));
-    /* R2: decision past review, no outcome. R15: sev-4 ungated at 4d (fires)
-       and sev-4 at 1d (grace — silent). Contrast is deliberate. */
-    var d1 = seedEmit('decision.registered', { title: 'Move Platform to a weekly release train', severity: 3, reviewDate: dayOffset(5) }, null, ts(30));
-    seedEmit('decision.registered', { title: 'Consolidate CI vendors (contracts, migration risk)', severity: 4, reviewDate: dayOffset(-10) }, null, ts(4));
-    seedEmit('decision.registered', { title: 'Re-seat the Growth pod', severity: 4, reviewDate: dayOffset(-20) }, null, ts(1));
-    /* R3: ownerless goal + silent goal */
-    var g1 = seedEmit('goal.set', { title: 'Cut onboarding drop-off to <20%', ownerId: T.id }, null, ts(30));
-    seedEmit('goal.set', { title: 'SOC2 Type I readiness', ownerId: null }, null, ts(10));
-    /* R4: Dana — 3 corrective in 60d, nothing reinforcing */
-    seedEmit('feedback.given', { polarity: 'corrective', sbi: { s: 'code review', b: 'rejected without rationale', i: 'Priya stopped proposing' } }, D.id, ts(30));
-    seedEmit('feedback.given', { polarity: 'corrective', sbi: { s: 'standup', b: 'interrupted twice', i: 'updates got shorter' } }, D.id, ts(20));
-    seedEmit('feedback.given', { polarity: 'corrective', sbi: { s: 'incident review', b: 'blamed the junior', i: 'team went quiet' } }, D.id, ts(10));
-    /* R5: Theo carries 5 open delegations */
-    ['Own the release checklist', 'Run vendor bake-off', 'Mentor the intern', 'Write the on-call runbook', 'Triage incoming bugs'].forEach(function (task, i) {
-      seedEmit('delegation.assigned', { task: task, level: (i % 3) + 1 }, T.id, ts(28 - i * 4));
+    ev('oneonone.logged', -21, { personId: dana.id, note: 'sample: quarterly priorities' });   /* R1 fires high: 21 > 14 */
+    ev('oneonone.logged', -3, { personId: anika.id, note: 'sample: fresh' });                   /* R1 silent */
+    ev('oneonone.logged', -10, { personId: marcus.id, note: 'sample' });
+    ev('oneonone.logged', -12, { personId: tom.id, note: 'sample skip-level' });
+    /* Priya: never logged → R1 medium from createdAt -40d, cadence 7 */
+
+    ev('decision.logged', -10, { title: 'CI vendor migration', severity: 4, reviewDate: day(-2).slice(0, 10) }); /* R2 sev 4 */
+    ev('decision.logged', -5, { title: 'Retro format change', severity: 2, reviewDate: day(5).slice(0, 10) });   /* silent */
+    ev('decision.logged', -30, { title: 'Freeze deploys Friday', severity: 2, reviewDate: day(-20).slice(0, 10) });
+    ev('decision.outcome', -19, { decisionId: st.events[st.events.length - 1].id, result: 'validated', lessons: 'kept' }); /* out past review → silent */
+
+    ev('goal.set', -20, { goalId: 'g-sample-orphan', title: 'Write the onboarding playbook', ownerId: null });    /* R3 ownerless high */
+    ev('goal.set', -30, { goalId: 'g-sample-silent', title: 'Cut data-pipeline cycle time', ownerId: anika.id });
+    ev('goal.progress', -16, { goalId: 'g-sample-silent', note: 'instrumented stage timings' });                  /* R3 silent 16>14 */
+    ev('goal.set', -5, { goalId: 'g-sample-ok', title: 'Hire pipeline: 3 finalists', ownerId: dana.id });
+    ev('goal.progress', -2, { goalId: 'g-sample-ok', note: 'onsite loops booked' });
+
+    var fbDays = [-10, -20, -30, -40];
+    fbDays.forEach(function (x) { ev('feedback.given', x, { personId: dana.id, polarity: 'corrective', note: 'sample corrective' }); }); /* R4 medium 4/4 */
+    [-6, -16, -26, -36, -46].forEach(function (x) { ev('feedback.given', x, { personId: marcus.id, polarity: 'positive', note: 'sample reinforcing' }); }); /* R4 high 5/5 */
+    ev('feedback.given', -8, { personId: anika.id, polarity: 'positive', note: 'sample' });
+    ev('feedback.given', -18, { personId: anika.id, polarity: 'corrective', note: 'sample' });
+    ev('feedback.given', -9, { personId: priya.id, note: 'sample no polarity → excluded, counted' });
+
+    ['Sprint board ownership', 'Release checklist', 'On-call rota', 'Vendor ticket triage', 'Hiring screen calls'].forEach(function (t, ix) {
+      ev('delegation.assigned', -6 - ix, { personId: anika.id, task: t, level: 3, checkInDate: day(4).slice(0, 10) }); /* R5: 5 open */
     });
-    seedEmit('delegation.assigned', { task: 'Plan Q3 roadmap draft', level: 3 }, A.id, ts(15));
-    /* R6: Dana × Priya pair, twice in 12 days, both open → pair fires, HIGH (both linked) */
-    seedEmit('conflict.registered', { partyAPersonId: D.id, counterpartPersonId: Pr.id, topic: 'code review tone' }, null, ts(12));
-    seedEmit('conflict.registered', { partyAPersonId: D.id, counterpartPersonId: Pr.id, topic: 'design handoff quality' }, null, ts(4));
-    /* R13: Marcus in 3 open conflicts across 2+ distinct linked counterparts */
-    seedEmit('conflict.registered', { partyAPersonId: M.id, counterpartPersonId: J.id, topic: 'campaign budget split' }, null, ts(16));
-    seedEmit('conflict.registered', { partyAPersonId: M.id, counterpartPersonId: A.id, topic: 'shared designer time' }, null, ts(9));
-    seedEmit('conflict.registered', { partyAPersonId: M.id, counterpartPersonId: J.id, topic: 'launch date pressure' }, null, ts(2));
-    /* R7: Theo — measured pulses, load high, mood sliding. Dana: estimated
-       only (excluded & counted — the engine will NOT trend guesses). */
-    seedEmit('pulse.logged', { mood: 5, load: 8, measured: true, note: 'post-launch' }, T.id, ts(12));
-    seedEmit('pulse.logged', { mood: 4, load: 8, measured: true }, T.id, ts(8));
-    seedEmit('pulse.logged', { mood: 2, load: 9, measured: true }, T.id, ts(4));
-    seedEmit('pulse.logged', { mood: 1, load: 9, measured: true, note: 'looks exhausted' }, T.id, ts(2));
-    seedEmit('pulse.logged', { mood: 3, load: 6, measured: false, note: 'guess from standup' }, D.id, ts(5));
-    /* R14: Anika at 630 min/wk of recurring meetings. Marcus: 240. */
-    seedEmit('meeting.series', { title: 'Platform staff meeting', startMin: 540, endMin: 660, dow: [1, 3], attendeeIds: [A.id, M.id], cadence: 'weekly' }, null, ts(60));
-    seedEmit('meeting.series', { title: 'Vendor standup', startMin: 570, endMin: 600, dow: [1, 2, 3, 4, 5], attendeeIds: [A.id], cadence: 'weekly' }, null, ts(55));
-    seedEmit('meeting.series', { title: 'Program reviews', startMin: 780, endMin: 900, dow: [2, 4], attendeeIds: [A.id], cadence: 'weekly' }, null, ts(50));
-    /* R12: one incident silent 10d; one recently updated (contrast) */
-    var inc = seedEmit('incident.registered', { title: 'Prod outage — partial data loss' }, null, ts(10));
-    var inc2 = seedEmit('incident.registered', { title: 'Access review finding' }, null, ts(3));
-    seedEmit('incident.update', { incidentId: inc2.id, note: 'vendor engaged' }, null, ts(1));
-    /* R11: early win past its verify date */
-    seedEmit('win.planned', { title: 'Ship onboarding revamp', verifyDate: dayOffset(3) }, null, ts(21));
-    /* Arrival: appointment 50d ago → R9 fires; tour 2/6 → R10 fires */
-    S.meta.appointment = dayOffset(50);
-    api.log('seed', 'appointment set to ' + S.meta.appointment + ' by seed');
-    seedEmit('tour.visit', { note: 'listening tour' }, D.id, ts(45));
-    seedEmit('tour.visit', { note: 'listening tour' }, Pr.id, ts(44));
+    ev('delegation.assigned', -9, { personId: dana.id, task: 'Roadmap draft', level: 4 });
+    ev('delegation.assigned', -11, { personId: dana.id, task: 'Budget review', level: 2 });
 
-    api.log('seed', 'sample set loaded: 6 people, every rule R1–R15 has at least one live trigger AND one deliberate contrast');
-    var r = api.save();
-    if (!apiArg) { api.refreshPill(); if (LEADOS._changed) LEADOS._changed(r); }
-    return { ok: true };
+    ev('conflict.logged', -25, { aId: dana.id, bId: priya.id, text: 'sample: deploy window dispute' });
+    ev('conflict.logged', -12, { aId: dana.id, bId: priya.id, text: 'sample: shared contractor flared again' });  /* R6 high-linked pair */
+    ev('conflict.logged', -20, { text: 'sample: vendor escalation (unnamed)' });
+    ev('conflict.logged', -7, { text: 'sample: vendor escalation (unnamed)' });                                  /* R6 low-text pair */
+
+    ev('pulse.recorded', -21, { personId: marcus.id, load: 9, mood: 6, measured: true });
+    ev('pulse.recorded', -14, { personId: marcus.id, load: 8, mood: 6, measured: true });
+    ev('pulse.recorded', -7, { personId: marcus.id, load: 9, mood: 5, measured: true });                         /* R7: mean 8.7 ≥ 8 */
+    [-6, -13, -20].forEach(function (x) { ev('pulse.recorded', x, { personId: priya.id, load: 9, mood: 4, measured: false }); }); /* estimated → R7 EXCLUDES + counts */
+
+    ev('sl.assessed', -15, { personId: anika.id, competence: 'some', commitment: 'high', d: 'D2', s: 'S2', note: 'sample' });
+
+    LEADOS.store._auditState(st, 'seeded', '5 people · 43 events · fires R1–R7 (plus silent controls)');
+    return { added: true, note: 'sample org: Priya/Dana/Marcus/Anika/Tom — every rule fires at least once; controls stay silent' };
   }
 
-  function purgeSeed(apiArg) {
-    var api = apiArg || LEADOS.store;
-    var S = api.state();
-    var n = 0;
-    S.events = S.events.filter(function (ev) { if (ev.seed) { n++; return false; } return true; });
-    var before = S.people.length;
-    S.people = S.people.filter(function (p) { return !p.seed; });
-    /* seed appointment is reset to its pre-seed value; flag stays — a purged
-       database never reseeds (T11 doctrine, permanent by design). */
-    S.meta.appointment = S.meta.seedPrevAppointment || null;
-    api.log('purge', 'purged ' + n + ' seed events + ' + (before - S.people.length) +
-      ' seed people; no-reseed flag retained; appointment restored to pre-seed value');
-    var r = api.save();
-    if (!apiArg) { api.refreshPill(); if (LEADOS._changed) LEADOS._changed(r); }
-    return { ok: true, removedEvents: n, removedPeople: before - S.people.length };
+  function purge(st) {
+    var pN = 0, eN = 0, i;
+    for (i = st.people.length - 1; i >= 0; i--) if (st.people[i].seed) { st.people.splice(i, 1); pN++; }
+    for (i = st.events.length - 1; i >= 0; i--) if (st.events[i].data && st.events[i].data.seed) { st.events.splice(i, 1); eN++; }
+    LEADOS.store._auditState(st, 'purged-seeds', 'removed ' + pN + ' people, ' + eN + ' events; meta.seeded kept true (no auto-reseed)');
+    return { people: pN, events: eN };
   }
 
   return {
-    emit: emit, emitMany: emitMany,
-    addPerson: addPerson, updatePerson: updatePerson,
-    project: project, dayOffset: dayOffset,
-    seed: seed, purgeSeed: purgeSeed,
-    _endpointOf: endpointOf, _pairKeyOf: pairKeyOf, _normText: normText
+    KNOWN: KNOWN, append: append, project: project, spanLoad: spanLoad,
+    seed: seed, purge: purge, todayIso: todayIso, pairKeyOf: pairKeyOf
   };
 })();

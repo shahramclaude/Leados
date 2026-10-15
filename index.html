@@ -3,70 +3,66 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LeadOS · mf-5 — Leadership Operating System</title>
-<meta name="description" content="Offline-first leadership mentor. Vanilla JS, one localStorage key, no network.">
+<title>LeadOS · pt-1 — Leadership Operating System</title>
+<meta name="description" content="Offline leadership mentor for new multi-team leaders. One key, no network, no account.">
 <link rel="stylesheet" href="css/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%231C1917'/><rect x='4' y='9' width='8' height='2' fill='%23C23B2E'/><rect x='4' y='5' width='8' height='2' fill='%23F7F4EF'/></svg>">
 </head>
 <body>
-<div class="shell">
-  <nav id="rail" aria-label="Primary">
-    <a class="brand" href="#/today">LeadOS<span class="brand-tag">mf-5</span></a>
-    <p class="rail-note">offline · one key ·<br>no network</p>
-    <div class="rail-links" id="rail-links">
-      <a href="#/today"     data-route="today">Today</a>
-      <a href="#/roster"    data-route="roster">Roster</a>
-      <a href="#/arrival"   data-route="arrival">Arrival</a>
-      <a href="#/playbooks" data-route="playbooks">Playbooks</a>
-      <a href="#/health"    data-route="health">Health</a>
-      <a href="#/data"      data-route="data">Data</a>
-    </div>
-    <div class="rail-foot">
-      <span id="pill" class="pill pill-unknown" title="storage write status">…</span>
-      <span id="clock" class="rail-clock"></span>
-    </div>
-  </nav>
-  <main id="view" tabindex="-1">
-    <p class="boot-hint">loading modules…</p>
-  </main>
-</div>
-<div id="toast" class="toast" hidden></div>
+<nav id="rail" aria-label="Primary">
+  <a class="brand" href="#/today">LeadOS<span>pt-1</span></a>
+  <p class="note">offline · one key ·<br>no network</p>
+  <div id="rail-links">
+    <a href="#/today">Today</a>
+    <a href="#/roster">Roster</a>
+    <a href="#/playbooks">Playbooks</a>
+    <a href="#/health">Health</a>
+    <a href="#/data">Data</a>
+  </div>
+  <p class="pillwrap"><span id="pill" class="pill" title="storage write status">…</span></p>
+</nav>
+<main id="view" tabindex="-1">
+  <p class="dim">loading modules…</p>
+</main>
+<noscript><p style="padding:2rem;font-family:serif">LeadOS is a local application — it needs JavaScript to run. It never needs a network.</p></noscript>
 
-<script>
-/* Boot guard — runs even if a module file 404s (that is its whole job).
-   Every js/*.js registers LEADOS._mod[name]; ui.js sets LEADOS._booted.
-   If either fails, we replace the view with a LOUD fatal banner naming the
-   missing path(s). This makes the README's file-table claim executable:
-   a broken tree can never again render a live-looking dead app (mf-5). */
-window.LEADOS = window.LEADOS || { _mod: {} };
-LEADOS._mod = LEADOS._mod || {};
-LEADOS._expected = ['store', 'events', 'engine', 'playbooks', 'ui'];
-window.addEventListener('load', function () {
-  setTimeout(function () {
-    if (window.LEADOS && LEADOS._booted) return;
-    var missing = LEADOS._expected.filter(function (m) { return !LEADOS._mod[m]; });
-    var view = document.getElementById('view');
-    if (!view) return;
-    view.innerHTML =
-      '<section class="fatal">' +
-      '<h1>LeadOS failed to boot</h1>' +
-      '<p class="mono">' + (missing.length
-        ? 'module(s) did not register: <b>' + missing.join(', ') + '</b>'
-        : 'ui.js loaded but _booted was never set (init threw).') + '</p>' +
-      '<p>Expected files: <span class="mono">css/app.css · ' +
-      LEADOS._expected.map(function (m) { return 'js/' + m + '.js'; }).join(' · ') +
-      '</span></p>' +
-      '<p>The file tree must match the README exactly. Check for renamed, moved or missing ' +
-      'files, then reload. Your data (key <span class="mono">leados:data</span>) was not touched.</p>' +
-      '</section>';
-    var pill = document.getElementById('pill');
-    if (pill) { pill.textContent = 'BOOT FAILED'; pill.className = 'pill pill-bad'; }
-  }, 1200);
-});
-</script>
 <script src="js/store.js"></script>
 <script src="js/events.js"></script>
 <script src="js/engine.js"></script>
 <script src="js/playbooks.js"></script>
 <script src="js/ui.js"></script>
+<script>
+/* Boot registry guard (T1's outer face): the app knows its own file list.
+   A missing/mis-pathed module renders a fatal banner naming the path instead
+   of a live-looking dead app. Plain synchronous scripts — no defer, no async,
+   no race: by this line, every module has already had its chance to register. */
+(function () {
+  'use strict';
+  var expected = [
+    ['store', 'js/store.js'],
+    ['events', 'js/events.js'],
+    ['engine', 'js/engine.js'],
+    ['playbooks', 'js/playbooks.js'],
+    ['ui', 'js/ui.js']
+  ];
+  var missing = [], i;
+  for (i = 0; i < expected.length; i++) {
+    if (!window.LEADOS || !LEADOS._mod || LEADOS._mod[expected[i][0]] !== expected[i][1]) missing.push(expected[i][1]);
+  }
+  var view = document.getElementById('view');
+  var pill = document.getElementById('pill');
+  if (missing.length) {
+    var lis = missing.map(function (m) { return '<li><code>' + m + '</code></li>'; }).join('');
+    view.innerHTML = '<section class="banner bad fatal"><h1>Boot failed — module registry incomplete</h1>' +
+      '<p>The following file(s) did not register themselves. The app is stopped deliberately: a leadership tool that looks alive while a module is missing is lying to you.</p>' +
+      '<ul>' + lis + '</ul>' +
+      '<p class="mono">Check the files exist at those paths, then reload. Your data in localStorage was NOT touched by this check.</p></section>';
+    if (pill) { pill.textContent = 'BOOT FAILED'; pill.className = 'pill bad'; }
+    return;
+  }
+  var summary = LEADOS.store.bootLoad();
+  LEADOS.ui.boot(summary);
+})();
+</script>
 </body>
 </html>
