@@ -4,7 +4,7 @@ A universal leadership and management operating system covering every domain whe
 leadership and management decisions are made: engineering, finance, sales, product
 strategy, operations, people/HR, marketing, manufacturing/production, design, R&D,
 legal/compliance, customer success, supply chain, executive/board, and business
-development — 15 domains, one operating rhythm.
+development — 15 domains, **87 event types under contract**, one operating rhythm.
 
 **Run it:** open `index.html` in any modern browser. No server, no build step, no
 framework, no network, no CDN. Everything runs locally against one localStorage key.
@@ -23,59 +23,67 @@ framework, no network, no CDN. Everything runs locally against one localStorage 
 | `health.js` is the authority wall | boot gate runs G-suite; failure halts rendering; every claim maps to T/G checks (see Health tab) |
 | AI-SESSION-LOG §0 opens with a claim-vs-inspection audit | see `AI-SESSION-LOG.md` |
 
-## Event sourcing in 60 seconds
+## Schema v4 — `MIGRATIONS['3>4']`
 
-- Writes happen only through `store.append(type, payload)` after registry validation.
-- The log is the only persisted state: `{ schemaVersion, meta, events }` under `leados:data`.
-- `engine.project(events)` folds the log into state **on every read**. Selectors
-  (cadences, decision queue, risk register, domain rollups) are pure functions of
-  `state` and an injected `now`.
-- Migrations never rewrite history to look nice — they **append repair events**
-  (`meta.repair: true`) and count every repair in `meta.migrationRepairs`.
+v3 → v4 backfills five universal-domain settings as repair events (leader-set
+values are never overwritten): `salesCycleDays` 90, `revenueReviewCadenceDays` 30,
+`opsReviewCadenceDays` 14, `boardCadenceDays` 90, `complianceAuditCadenceDays` 180.
+A **repair** is any write a migration performs beyond bumping `schemaVersion`;
+repairs accumulate per migration id in `meta.migrationRepairs` and are
+reconstructible from the log (T5/G6). `3>4` is idempotent (T3).
 
-## Schema v4 — `MIGRATIONS['3>4']` (this part)
+## Event registry (pt-4 part 2)
 
-v3 → v4 backfills five universal-domain settings. For each key, the migration
-replays the log; only if the leader never set it does it append a repair event
-with the v4 default. Leader-set values are never overwritten.
+87 types under append-gate contract. The validator enforces: required fields,
+field whitelists, enums, numeric types, numeric **ranges** (1–5 scales, 0–1
+scores, −100…100 NPS), booleans, arrays, non-empty arrays, and per-type custom
+rules (e.g. `chosen ∈ alternatives`, `metrics[]` shape, `keyResults[]` shape).
 
-| Setting | Default | Governs |
-|---|---|---|
-| `salesCycleDays` | 90 | Beyond-cycle flag on open sales decisions |
-| `revenueReviewCadenceDays` | 30 | Revenue review rhythm (finance, sales, marketing, customer success, bizdev) |
-| `opsReviewCadenceDays` | 14 | Ops review rhythm (engineering, product, design, R&D, people, operations, manufacturing, supply chain) |
-| `boardCadenceDays` | 90 | Board meeting rhythm (executive) |
-| `complianceAuditCadenceDays` | 180 | Compliance audit rhythm (legal) |
-
-Repair counting rule: a **repair** is any write a migration performs beyond
-bumping `schemaVersion`. Repairs are accumulated per migration id in
-`meta.migrationRepairs`, and each domain-data repair is also reconstructible from
-the log itself (G6 proves the two agree). `3>4` is idempotent: replaying it
-appends zero repairs (T3).
-
-Earlier migrations (reconstructed lineage): `1>2` relocates a persisted settings
-blob into the log and purges it; `2>3` normalizes legacy type and field names.
-
-## Domain → review rhythm map
-
-| Rhythm (setting) | Domains |
+| Family | Types |
 |---|---|
-| Revenue review (`revenueReviewCadenceDays`) | finance, sales, marketing, customerSuccess, bizdev |
-| Ops review (`opsReviewCadenceDays`) | engineering, product, design, rd, people, operations, manufacturing, supplyChain |
-| Board meeting (`boardCadenceDays`) | executive |
-| Compliance audit (`complianceAuditCadenceDays`) | legal |
+| Core (pt-1 → pt-4) | `store.initialized`, `settings.changed`, `objective.*`, `kr.*`, `task.*`, `decision.*`, `risk.*`, `review.*`, `playbook.applied` (15) |
+| Finance & revenue | `fin.budget.set/actuals`, `fin.forecast.logged`, `fin.kpi.logged`, `fin.risk.logged/updated` (6) |
+| Sales & revenue | `sales.deal.logged/updated/closed`, `sales.pipeline.reviewed`, `sales.quota.set/actuals` (6) |
+| Product & strategy | `product.roadmap.item/updated`, `product.metric.logged`, `product.retro.logged`, `strategy.okr.set/progress/closed`, `strategy.decision` (8) |
+| Operations & delivery | `ops.incident.logged/resolved`, `ops.sla.logged`, `ops.capacity.logged`, `ops.process.logged`, `ops.milestone.set/updated` (7) |
+| People & HR | `hr.headcount.planned`, `hr.offer.logged`, `hr.attrition.logged`, `hr.performance.logged`, `hr.pip.started/closed`, `hr.engagement.logged`, `hr.compensation.reviewed` (8) |
+| Marketing | `mktg.campaign.logged/result`, `mktg.brand.audit`, `mktg.content.published` (4) |
+| Manufacturing | `mfg.production.logged`, `mfg.quality.logged`, `mfg.safety.incident`, `mfg.equipment.logged`, `mfg.yield.logged` (5) |
+| Supply chain | `supply.vendor.logged/reviewed`, `supply.inventory.logged`, `supply.disruption.logged` (4) |
+| Design | `design.review.logged`, `design.system.updated`, `design.research.logged`, `design.ux.metric` (4) |
+| R&D | `rd.experiment.logged/result`, `rd.patent.logged`, `rd.tech.debt.logged/resolved` (5) |
+| Legal & compliance | `legal.compliance.check`, `legal.risk.logged`, `legal.contract.logged/updated`, `legal.incident.logged` (5) |
+| Customer success | `cs.nps.logged`, `cs.churn.logged`, `cs.escalation.logged/resolved`, `cs.health.logged` (5) |
+| Executive & board | `exec.board.meeting`, `exec.kpi.reviewed`, `exec.investor.update`, `exec.crisis.logged/resolved` (5) |
+
+Payload fields are carried exactly as specified, **plus** a system-generated
+`id` on creation events whose entities are referenced later (e.g.
+`fin.budget.actuals.budgetId`). That is the only deliberate payload addition, and
+it is what makes referential integrity inspectable.
+
+References are declared in the registry (`refs`, `refArrays`) and inspected by
+**G8**: every `*Id` field in the log must resolve to an entity the log created.
+
+## Derivation
+
+`engine.project(events)` folds the log per read — nothing derived persists.
+Entity families mutate in place within the projection (deals update then close;
+OKR KRs take progress; incidents/milestones/PIPs/experiments/debt/contracts/
+escalations/crises close). Selectors: cadences, decision queue (with the
+`salesCycleDays` beyond-cycle flag), risk register, KR view, task lists, domain
+rollups, `knownIds()`.
 
 ## Health — the authority wall
 
-- **T-suite (fixtures, deterministic):** T1–T5 prove `3>4` behavior (backfill set,
-  exact defaults, idempotence, user-value preservation, repair accounting); T6
-  cadence boundaries; T7 projection purity; T8 registry rejection; T9 sales-cycle flag.
-- **G-suite (live store):** G1 single key; G2 schema/lineage; G3 append-only
-  integrity + registry validity of every event; G4 whitelist (nothing derived
-  persisted); G5 live projection holds the v4 settings; G6 repair accounting
-  consistent; G7 deterministic non-mutating reads.
-- **Claims:** the Health tab lists every pt-4 claim with the checks that
-  authorize it. A claim with a failing check is visibly *unproven*.
+- **T-suite (fixtures):** T1–T5 migration `3>4`; T6 cadence boundaries; T7 fold
+  purity; T8 core validator; T9 sales-cycle flag; **T10** fold flows across all
+  11 new families (17 assertions); **T11** all 72 new contracts accept canonical
+  payloads + 7 malformed payloads rejected.
+- **G-suite (live store):** G1 single key; G2 schema/lineage; G3 append-only +
+  registry validity; G4 whitelist; G5 v4 settings live; G6 repair accounting;
+  G7 deterministic reads; **G8** referential integrity.
+- **Claims C1–C12** in the Health tab: each claim shows the checks that
+  authorize it; a failing check marks the claim *unproven*.
 
 ## Files
 
@@ -83,18 +91,17 @@ blob into the log and purges it; `2>3` normalizes legacy type and field names.
 |---|---|
 | `index.html` | Shell; loads the six scripts in doctrinal order; hosts the authority-wall overlay |
 | `css/app.css` | Hand-rolled design system; zero external assets |
-| `js/events.js` | Event registry + domain map; the append-gate contract |
-| `js/store.js` | Persistence wall: single key, schema v4, `MIGRATIONS['1>2'/'2>3'/'3>4']`, `meta.migrationRepairs` |
-| `js/engine.js` | `project()` fold + pure selectors (cadences, decisions, risks, rollups) |
-| `js/playbooks.js` | 15-domain playbook library; domain→cadence binding; emits event specs only |
-| `js/health.js` | Authority wall: T-suite + G-suite + claim coverage map |
+| `js/events.js` | Event registry (87 types) + append-gate validator with refs/refArrays |
+| `js/store.js` | Persistence wall: single key, schema v4, migrations with repair counting |
+| `js/engine.js` | `project()` fold over all families + pure selectors + `knownIds()` |
+| `js/playbooks.js` | 15-domain playbook library; emits event specs only |
+| `js/health.js` | Authority wall: T1–T11, G1–G8, claim coverage C1–C12 |
 | `js/ui.js` | Vanilla renderer; project-per-read; every action is an event append |
 | `README.md` | This file |
 | `AI-SESSION-LOG.md` | Session log; §0 is the claim-vs-inspection audit |
 
 ## Roadmap (pt-4 remaining parts)
 
-- **Part 2 — Finance & revenue engine:** deal/invoice event families, pipeline
-  aging on `salesCycleDays`, revenue-review pack generator.
-- **Part 3 — People operations:** org/role events, attrition signals, succession map.
+- **Part 3 — Module surfaces:** finance/revenue cockpit (budget vs actuals,
+  pipeline aging on `salesCycleDays`), people-operations view.
 - **Part 4 — Executive/board pack:** one-click board narrative compiled from the log.

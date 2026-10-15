@@ -244,14 +244,17 @@
     const p = ev.payload || {};
     if (ev.type === 'settings.changed') return p.key + ' = ' + p.value;
     if (ev.type === 'store.initialized') return 'schema v' + p.schemaVersion + ' · ' + (p.lineageTag || '');
-    return p.title || p.question || p.key || p.outcome || p.id || '';
+    return p.title || p.name || p.objective || p.hypothesis || p.question || p.metric || p.counterparty ||
+           p.accountName || p.candidateName || p.role || p.framework || p.key || p.outcome || p.result ||
+           (p.description ? String(p.description).slice(0, 60) : '') || p.id || '';
   }
   function viewEvents(ctx) {
     const raw = ctx.raw;
     let h = '<section class="card"><header class="card-h"><h3>' + icon('database') + ' Storage inspector</h3><span class="pill pill-ok">' + esc(LeadOS.store.KEY) + '</span></header>' +
       '<div class="insp"><div><span class="dim">root keys</span><code>' + Object.keys(raw).map(esc).join(', ') + '</code></div>' +
       '<div><span class="dim">meta</span><code>' + esc(JSON.stringify(raw.meta)) + '</code></div>' +
-      '<div><span class="dim">payload</span><code>' + raw.events.length + ' events · ' + LeadOS.store.rawBytes() + ' bytes · schemaVersion ' + raw.schemaVersion + '</code></div></div></section>';
+      '<div><span class="dim">payload</span><code>' + raw.events.length + ' events · ' + LeadOS.store.rawBytes() + ' bytes · schemaVersion ' + raw.schemaVersion + '</code></div>' +
+      '<div><span class="dim">registry</span><code>' + Object.keys(LeadOS.events.REGISTRY).length + ' event types under contract</code></div></div></section>';
     h += '<section class="card"><header class="card-h"><h3>' + icon('list') + ' Event log</h3><span class="dim">append-only · ' + raw.events.length + ' events</span></header>' +
       '<table class="tbl"><thead><tr><th class="num">seq</th><th>id</th><th>at</th><th>type</th><th>summary</th></tr></thead><tbody>' +
       raw.events.slice().reverse().map(function (ev) {

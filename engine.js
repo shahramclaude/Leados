@@ -1,14 +1,13 @@
 /* LeadOS pt-4 - js/engine.js
    Derivation engine. project() folds the event log into state ON EVERY READ.
    Nothing in this module touches localStorage. Every selector is pure and
-   takes `now` explicitly so the T-suite can pin time. */
+   takes `now` explicitly so the T-suite can pin time.
+   pt-4 part 2: MODULE_FOLD extends the fold to all 72 full-domain families. */
 (function () {
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
-
   const DAY = 86400000;
 
-  // Review rhythms and the v4 setting that governs each.
   const CADENCE = [
     { kind: 'revenue',    label: 'Revenue review',   settingKey: 'revenueReviewCadenceDays' },
     { kind: 'ops',        label: 'Ops review',       settingKey: 'opsReviewCadenceDays' },
@@ -16,16 +15,122 @@
     { kind: 'compliance', label: 'Compliance audit', settingKey: 'complianceAuditCadenceDays' }
   ];
 
+  const push = function (arr, p, at) { arr.push(Object.assign({ at: at }, p)); };
+  const mergeDefined = function (target, p, keys) { keys.forEach(function (k) { if (p[k] !== undefined) target[k] = p[k]; }); };
+
+  // Fold handlers for the part-2 families. Entities are keyed; logs are appended.
+  const MODULE_FOLD = {
+    // FINANCE
+    'fin.budget.set':      function (s, p, at) { s.finBudgets[p.id] = { id: p.id, period: p.period, amount: p.amount, currency: p.currency, category: p.category, ownerId: p.ownerId || null, actuals: [], setAt: at }; },
+    'fin.budget.actuals':  function (s, p, at) { const b = s.finBudgets[p.budgetId]; if (b) b.actuals.push({ actual: p.actual, period: p.period, note: p.note || '', at: at }); },
+    'fin.forecast.logged': function (s, p, at) { push(s.finForecasts, p, at); },
+    'fin.kpi.logged':      function (s, p, at) { push(s.finKpis, p, at); },
+    'fin.risk.logged':     function (s, p, at) { s.finRisks[p.id] = { id: p.id, title: p.title, severity: p.severity, likelihood: p.likelihood, mitigationPlan: p.mitigationPlan || '', ownerId: p.ownerId || null, reviewDate: p.reviewDate || null, status: 'open', notes: [], loggedAt: at, updatedAt: at }; },
+    'fin.risk.updated':    function (s, p, at) { const r = s.finRisks[p.riskId]; if (r) { r.status = p.status; r.updatedAt = at; if (p.note) r.notes.push({ note: p.note, at: at }); } },
+    // SALES
+    'sales.deal.logged':       function (s, p, at) { s.deals[p.id] = { id: p.id, title: p.title, value: p.value, currency: p.currency, stage: p.stage, ownerId: p.ownerId || null, closeDate: p.closeDate || null, accountName: p.accountName || '', result: null, actualValue: null, lostReason: null, closeNote: '', updates: 0, loggedAt: at, updatedAt: at, closedAt: null }; },
+    'sales.deal.updated':      function (s, p, at) { const d = s.deals[p.dealId]; if (d) { mergeDefined(d, p, ['stage', 'value', 'closeDate', 'lostReason']); d.updates++; d.updatedAt = at; } },
+    'sales.deal.closed':       function (s, p, at) { const d = s.deals[p.dealId]; if (d) { d.result = p.result; d.actualValue = (p.actualValue !== undefined) ? p.actualValue : null; d.closeNote = p.note || ''; d.closedAt = at; } },
+    'sales.pipeline.reviewed': function (s, p, at) { push(s.pipelineReviews, p, at); },
+    'sales.quota.set':         function (s, p, at) { s.quotas[p.id] = { id: p.id, personId: p.personId, period: p.period, target: p.target, currency: p.currency, actuals: [], setAt: at }; },
+    'sales.quota.actuals':     function (s, p, at) { const q = s.quotas[p.quotaId]; if (q) q.actuals.push({ actual: p.actual, period: p.period, at: at }); },
+    // PRODUCT & STRATEGY
+    'product.roadmap.item':    function (s, p, at) { s.roadmap[p.id] = { id: p.id, title: p.title, quarter: p.quarter, pillar: p.pillar || '', ownerId: p.ownerId || null, effort: p.effort, impact: p.impact, status: p.status, createdAt: at, statusAt: at }; },
+    'product.roadmap.updated': function (s, p, at) { const r = s.roadmap[p.itemId]; if (r) { mergeDefined(r, p, ['status', 'quarter', 'ownerId']); r.statusAt = at; } },
+    'product.metric.logged':   function (s, p, at) { push(s.productMetrics, p, at); },
+    'product.retro.logged':    function (s, p, at) { push(s.retros, p, at); },
+    'strategy.okr.set':        function (s, p, at) { s.okrs[p.id] = { id: p.id, objective: p.objective, quarter: p.quarter, ownerId: p.ownerId || null, keyResults: p.keyResults.map(function (k) { return { kr: k.kr, target: k.target, unit: k.unit, current: null, logs: [] }; }), score: null, closeNote: '', setAt: at, closedAt: null }; },
+    'strategy.okr.progress':   function (s, p, at) { const o = s.okrs[p.okrId]; const kr = o && o.keyResults[p.krIndex]; if (kr) { kr.current = p.current; kr.logs.push({ current: p.current, note: p.note || '', at: at }); } },
+    'strategy.okr.closed':     function (s, p, at) { const o = s.okrs[p.okrId]; if (o) { o.score = p.score; o.closeNote = p.note || ''; o.closedAt = at; } },
+    'strategy.decision':       function (s, p, at) { push(s.strategyDecisions, p, at); },
+    // OPERATIONS & DELIVERY
+    'ops.incident.logged':   function (s, p, at) { s.incidents[p.id] = { id: p.id, title: p.title, severity: p.severity, systems: p.systems.slice(), startedAt: p.startedAt, detectedAt: p.detectedAt || null, ownerId: p.ownerId || null, resolved: false, resolvedAt: null, rootCause: '', actions: [], loggedAt: at }; },
+    'ops.incident.resolved': function (s, p, at) { const i = s.incidents[p.incidentId]; if (i) { i.resolved = true; i.resolvedAt = p.resolvedAt; i.rootCause = p.rootCause || ''; i.actions = (p.actions || []).slice(); } },
+    'ops.sla.logged':        function (s, p, at) { push(s.slaLogs, p, at); },
+    'ops.capacity.logged':   function (s, p, at) { push(s.capacityLogs, p, at); },
+    'ops.process.logged':    function (s, p, at) { push(s.processLogs, p, at); },
+    'ops.milestone.set':     function (s, p, at) { s.milestones[p.id] = { id: p.id, title: p.title, dueDate: p.dueDate, ownerId: p.ownerId || null, projectId: p.projectId || null, dependsOn: (p.dependsOn || []).slice(), status: 'on-track', history: [], setAt: at, statusAt: at }; },
+    'ops.milestone.updated': function (s, p, at) { const m = s.milestones[p.milestoneId]; if (m) { m.status = p.status; m.statusAt = at; m.history.push({ status: p.status, note: p.note || '', at: at }); } },
+    // PEOPLE & HR
+    'hr.headcount.planned':     function (s, p, at) { push(s.headcountPlans, p, at); },
+    'hr.offer.logged':          function (s, p, at) { push(s.offers, p, at); },
+    'hr.attrition.logged':      function (s, p, at) { push(s.attrition, p, at); },
+    'hr.performance.logged':    function (s, p, at) { push(s.perfLogs, p, at); },
+    'hr.pip.started':           function (s, p, at) { s.pips[p.id] = { id: p.id, personId: p.personId, duration_days: p.duration_days, goals: p.goals.slice(), ownerId: p.ownerId || null, result: null, closeNote: '', startedAt: at, closedAt: null }; },
+    'hr.pip.closed':            function (s, p, at) { const x = s.pips[p.pipId]; if (x) { x.result = p.result; x.closeNote = p.note || ''; x.closedAt = at; } },
+    'hr.engagement.logged':     function (s, p, at) { push(s.engagement, p, at); },
+    'hr.compensation.reviewed': function (s, p, at) { push(s.compReviews, p, at); },
+    // MARKETING
+    'mktg.campaign.logged':    function (s, p, at) { s.campaigns[p.id] = { id: p.id, name: p.name, channel: p.channel, budget: p.budget, period: p.period, ownerId: p.ownerId || null, results: [], loggedAt: at }; },
+    'mktg.campaign.result':    function (s, p, at) { const c = s.campaigns[p.campaignId]; if (c) c.results.push(Object.assign({ at: at }, p)); },
+    'mktg.brand.audit':        function (s, p, at) { push(s.brandAudits, p, at); },
+    'mktg.content.published':  function (s, p, at) { push(s.content, p, at); },
+    // MANUFACTURING
+    'mfg.production.logged':   function (s, p, at) { push(s.productionLogs, p, at); },
+    'mfg.quality.logged':      function (s, p, at) { push(s.qualityLogs, p, at); },
+    'mfg.safety.incident':     function (s, p, at) { push(s.safetyIncidents, p, at); },
+    'mfg.equipment.logged':    function (s, p, at) { s.equipment[p.assetId] = { assetId: p.assetId, status: p.status, note: p.note || '', next_maintenance: p.next_maintenance || null, at: at }; },
+    'mfg.yield.logged':        function (s, p, at) { push(s.yieldLogs, p, at); },
+    // SUPPLY CHAIN
+    'supply.vendor.logged':     function (s, p, at) { s.vendors[p.id] = { id: p.id, name: p.name, category: p.category, tier: p.tier, risk_level: p.risk_level, reviewDate: p.reviewDate || null, reviews: [], lastScore: null, loggedAt: at }; },
+    'supply.vendor.reviewed':   function (s, p, at) { const v = s.vendors[p.vendorId]; if (v) { v.reviews.push({ score: p.score, note: p.note || '', nextReviewDate: p.nextReviewDate || null, at: at }); v.lastScore = p.score; } },
+    'supply.inventory.logged':  function (s, p, at) { push(s.inventoryLogs, p, at); },
+    'supply.disruption.logged': function (s, p, at) { push(s.disruptions, p, at); },
+    // DESIGN
+    'design.review.logged':   function (s, p, at) { push(s.designReviews, p, at); },
+    'design.system.updated':  function (s, p, at) { push(s.designSystemUpdates, p, at); },
+    'design.research.logged': function (s, p, at) { push(s.designResearch, p, at); },
+    'design.ux.metric':       function (s, p, at) { push(s.uxMetrics, p, at); },
+    // R&D
+    'rd.experiment.logged':   function (s, p, at) { s.experiments[p.id] = { id: p.id, hypothesis: p.hypothesis, method: p.method, ownerId: p.ownerId || null, startDate: p.startDate, reviewDate: p.reviewDate || null, result: null, learnings: [], next: '', loggedAt: at, resultAt: null }; },
+    'rd.experiment.result':   function (s, p, at) { const e = s.experiments[p.experimentId]; if (e) { e.result = p.result; e.learnings = (p.learnings || []).slice(); e.next = p.next || ''; e.resultAt = at; } },
+    'rd.patent.logged':       function (s, p, at) { push(s.patents, p, at); },
+    'rd.tech.debt.logged':    function (s, p, at) { s.techDebt[p.id] = { id: p.id, title: p.title, severity: p.severity, effort: p.effort, ownerId: p.ownerId || null, note: p.note || '', resolved: false, resolveNote: '', loggedAt: at, resolvedAt: null }; },
+    'rd.tech.debt.resolved':  function (s, p, at) { const d = s.techDebt[p.debtId]; if (d) { d.resolved = true; d.resolveNote = p.note || ''; d.resolvedAt = at; } },
+    // LEGAL
+    'legal.compliance.check': function (s, p, at) { push(s.complianceChecks, p, at); },
+    'legal.risk.logged':      function (s, p, at) { push(s.legalRisks, p, at); },
+    'legal.contract.logged':  function (s, p, at) { s.contracts[p.id] = { id: p.id, counterparty: p.counterparty, type: p.type, value: p.value || null, expiryDate: p.expiryDate || null, ownerId: p.ownerId || null, status: 'active', loggedAt: at, statusAt: at }; },
+    'legal.contract.updated': function (s, p, at) { const c = s.contracts[p.contractId]; if (c) { c.status = p.status; c.statusAt = at; if (p.note) c.note = p.note; } },
+    'legal.incident.logged':  function (s, p, at) { push(s.legalIncidents, p, at); },
+    // CUSTOMER SUCCESS
+    'cs.nps.logged':          function (s, p, at) { push(s.npsLogs, p, at); },
+    'cs.churn.logged':        function (s, p, at) { push(s.churnLogs, p, at); },
+    'cs.escalation.logged':   function (s, p, at) { s.escalations[p.id] = { id: p.id, accountName: p.accountName, severity: p.severity, description: p.description, ownerId: p.ownerId || null, dueDate: p.dueDate || null, resolved: false, resolution: '', resolveNote: '', loggedAt: at, resolvedAt: null }; },
+    'cs.escalation.resolved': function (s, p, at) { const e = s.escalations[p.escalationId]; if (e) { e.resolved = true; e.resolution = p.resolution; e.resolveNote = p.note || ''; e.resolvedAt = at; } },
+    'cs.health.logged':       function (s, p, at) { push(s.csHealthLogs, p, at); },
+    // EXECUTIVE & BOARD
+    'exec.board.meeting':     function (s, p, at) { push(s.boardMeetings, p, at); },
+    'exec.kpi.reviewed':      function (s, p, at) { push(s.execKpiReviews, p, at); },
+    'exec.investor.update':   function (s, p, at) { push(s.investorUpdates, p, at); },
+    'exec.crisis.logged':     function (s, p, at) { s.crises[p.id] = { id: p.id, title: p.title, severity: p.severity, type: p.type, ownerId: p.ownerId || null, responseTeam: p.responseTeam.slice(), activatedAt: p.activatedAt, resolved: false, postmortem: '', loggedAt: at, resolvedAt: null }; },
+    'exec.crisis.resolved':   function (s, p, at) { const c = s.crises[p.crisisId]; if (c) { c.resolved = true; c.postmortem = p.postmortem || ''; c.resolvedAt = p.resolvedAt; } }
+  };
+
+  function blankBuckets(s) {
+    s.finBudgets = {}; s.finForecasts = []; s.finKpis = []; s.finRisks = {};
+    s.deals = {}; s.quotas = {}; s.pipelineReviews = [];
+    s.roadmap = {}; s.productMetrics = []; s.retros = []; s.okrs = {}; s.strategyDecisions = [];
+    s.incidents = {}; s.slaLogs = []; s.capacityLogs = []; s.processLogs = []; s.milestones = {};
+    s.headcountPlans = []; s.offers = []; s.attrition = []; s.perfLogs = []; s.pips = {}; s.engagement = []; s.compReviews = [];
+    s.campaigns = {}; s.brandAudits = []; s.content = [];
+    s.productionLogs = []; s.qualityLogs = []; s.safetyIncidents = []; s.equipment = {}; s.yieldLogs = [];
+    s.vendors = {}; s.inventoryLogs = []; s.disruptions = [];
+    s.designReviews = []; s.designSystemUpdates = []; s.designResearch = []; s.uxMetrics = [];
+    s.experiments = {}; s.patents = []; s.techDebt = {};
+    s.complianceChecks = []; s.legalRisks = []; s.contracts = {}; s.legalIncidents = [];
+    s.npsLogs = []; s.churnLogs = []; s.escalations = {}; s.csHealthLogs = [];
+    s.boardMeetings = []; s.execKpiReviews = []; s.investorUpdates = []; s.crises = {};
+  }
+
   function project(events) {
     const s = {
       eventCount: events.length,
       appliedSettings: {},
       objectives: {}, krs: {}, tasks: {}, decisions: {}, risks: {}, reviews: {},
-      playbooks: [],
-      counts: {},
-      repairs: [],
-      firstAt: null, lastAt: null
+      playbooks: [], counts: {}, repairs: [], firstAt: null, lastAt: null
     };
+    blankBuckets(s);
 
     events.forEach(function (ev) {
       s.counts[ev.type] = (s.counts[ev.type] || 0) + 1;
@@ -33,6 +138,9 @@
       if (s.lastAt === null || ev.at > s.lastAt) s.lastAt = ev.at;
       if (ev.meta && ev.meta.repair) s.repairs.push(ev);
       const p = ev.payload || {};
+
+      const mf = MODULE_FOLD[ev.type];
+      if (mf) { mf(s, p, ev.at); return; }
 
       switch (ev.type) {
         case 'settings.changed':
@@ -71,30 +179,35 @@
     return s;
   }
 
-  function settings(state) {
-    return Object.assign({}, LeadOS.store.ALL_SETTING_DEFAULTS, state.appliedSettings);
+  function settings(state) { return Object.assign({}, LeadOS.store.ALL_SETTING_DEFAULTS, state.appliedSettings); }
+
+  // Id universes for referential inspection (G8).
+  function knownIds(state) {
+    const k = function (o) { return Object.keys(o); };
+    return {
+      finBudgets: k(state.finBudgets), finRisks: k(state.finRisks), deals: k(state.deals), quotas: k(state.quotas),
+      roadmap: k(state.roadmap), okrs: k(state.okrs), incidents: k(state.incidents), milestones: k(state.milestones),
+      pips: k(state.pips), campaigns: k(state.campaigns), vendors: k(state.vendors), experiments: k(state.experiments),
+      techDebt: k(state.techDebt), contracts: k(state.contracts), escalations: k(state.escalations), crises: k(state.crises),
+      objectives: k(state.objectives), krs: k(state.krs), tasks: k(state.tasks), decisions: k(state.decisions),
+      risks: k(state.risks), reviews: k(state.reviews)
+    };
   }
 
-  // ---- Cadences (v4) -------------------------------------------------------
-  // status: 'never' (no completed review yet - due now), 'ok', 'due' (within
-  // 24h of dueAt), 'overdue' (strictly past dueAt).
+  // ---- Cadences -------------------------------------------------------------
   function cadenceStatus(state, now) {
     now = (typeof now === 'number') ? now : Date.now();
     const set = settings(state);
     const out = {};
     CADENCE.forEach(function (c) {
-      const reviews = Object.keys(state.reviews).map(function (k) { return state.reviews[k]; })
-        .filter(function (r) { return r.kind === c.kind; });
-      const completed = reviews.filter(function (r) { return r.status === 'completed'; })
-        .sort(function (a, b) { return b.completedAt - a.completedAt; });
-      const open = reviews.filter(function (r) { return r.status === 'scheduled'; })
-        .sort(function (a, b) { return a.dueAt - b.dueAt; });
+      const reviews = Object.keys(state.reviews).map(function (k) { return state.reviews[k]; }).filter(function (r) { return r.kind === c.kind; });
+      const completed = reviews.filter(function (r) { return r.status === 'completed'; }).sort(function (a, b) { return b.completedAt - a.completedAt; });
+      const open = reviews.filter(function (r) { return r.status === 'scheduled'; }).sort(function (a, b) { return a.dueAt - b.dueAt; });
       const intervalDays = set[c.settingKey];
       const lastCompletedAt = completed.length ? completed[0].completedAt : null;
       let status, dueAt, overdueDays = 0;
-      if (lastCompletedAt === null) {
-        status = 'never'; dueAt = open.length ? open[0].dueAt : null;
-      } else {
+      if (lastCompletedAt === null) { status = 'never'; dueAt = open.length ? open[0].dueAt : null; }
+      else {
         dueAt = lastCompletedAt + intervalDays * DAY;
         if (now > dueAt) { status = 'overdue'; overdueDays = Math.ceil((now - dueAt) / DAY); }
         else if (dueAt - now <= DAY) { status = 'due'; }
@@ -105,7 +218,7 @@
     return out;
   }
 
-  // ---- Decisions -----------------------------------------------------------
+  // ---- Decisions / risks / KRs / tasks (pt-1 selectors) --------------------
   function decisionQueue(state, now) {
     now = (typeof now === 'number') ? now : Date.now();
     const set = settings(state);
@@ -113,36 +226,22 @@
       .filter(function (d) { return d.status === 'open'; })
       .map(function (d) {
         const ageDays = Math.floor((now - d.createdAt) / DAY);
-        return Object.assign({}, d, {
-          ageDays: ageDays,
-          stale: ageDays > set.decisionMaxOpenDays,
-          // v4: a sales decision older than the sales cycle has missed a full cycle.
-          beyondSalesCycle: d.domain === 'sales' && ageDays > set.salesCycleDays
-        });
+        return Object.assign({}, d, { ageDays: ageDays, stale: ageDays > set.decisionMaxOpenDays, beyondSalesCycle: d.domain === 'sales' && ageDays > set.salesCycleDays });
       })
       .sort(function (a, b) { return b.ageDays - a.ageDays; });
   }
-
   function decidedLog(state) {
     return Object.keys(state.decisions).map(function (k) { return state.decisions[k]; })
-      .filter(function (d) { return d.status === 'decided'; })
-      .sort(function (a, b) { return b.decidedAt - a.decidedAt; });
+      .filter(function (d) { return d.status === 'decided'; }).sort(function (a, b) { return b.decidedAt - a.decidedAt; });
   }
-
-  // ---- Risks ---------------------------------------------------------------
   function riskRegister(state, now) {
     now = (typeof now === 'number') ? now : Date.now();
     const set = settings(state);
     return Object.keys(state.risks).map(function (k) { return state.risks[k]; })
       .filter(function (r) { return r.status === 'open' || r.status === 'mitigating'; })
-      .map(function (r) {
-        const ageDays = Math.floor((now - r.updatedAt) / DAY);
-        return Object.assign({}, r, { score: r.likelihood * r.impact, ageDays: ageDays, stale: ageDays > set.riskReviewCadenceDays });
-      })
+      .map(function (r) { const ageDays = Math.floor((now - r.updatedAt) / DAY); return Object.assign({}, r, { score: r.likelihood * r.impact, ageDays: ageDays, stale: ageDays > set.riskReviewCadenceDays }); })
       .sort(function (a, b) { return (b.score - a.score) || (b.ageDays - a.ageDays); });
   }
-
-  // ---- KRs / tasks ---------------------------------------------------------
   function krView(state) {
     return Object.keys(state.krs).map(function (k) { return state.krs[k]; })
       .map(function (kr) {
@@ -153,29 +252,16 @@
         return Object.assign({}, kr, { current: current, pct: pct, domain: obj ? obj.domain : null, checkIns: kr.logs.length });
       });
   }
-
   function taskLists(state, now) {
     now = (typeof now === 'number') ? now : Date.now();
     const all = Object.keys(state.tasks).map(function (k) { return state.tasks[k]; });
     const open = all.filter(function (t) { return t.status === 'open'; });
-    return {
-      open: open.sort(function (a, b) { return (a.dueAt || Infinity) - (b.dueAt || Infinity); }),
-      overdue: open.filter(function (t) { return t.dueAt !== null && now > t.dueAt; })
-        .sort(function (a, b) { return a.dueAt - b.dueAt; }),
-      doneCount: all.filter(function (t) { return t.status === 'done'; }).length
-    };
+    return { open: open.sort(function (a, b) { return (a.dueAt || Infinity) - (b.dueAt || Infinity); }), overdue: open.filter(function (t) { return t.dueAt !== null && now > t.dueAt; }).sort(function (a, b) { return a.dueAt - b.dueAt; }), doneCount: all.filter(function (t) { return t.status === 'done'; }).length };
   }
-
-  // ---- Domain rollups ------------------------------------------------------
   function domainRollups(state) {
     const out = {};
-    LeadOS.events.DOMAINS.forEach(function (d) {
-      out[d.id] = { id: d.id, label: d.label, hue: d.hue, activeObjectives: 0, openTasks: 0, openRisks: 0, openDecisions: 0, krCount: 0, playbooks: 0, lastActivityAt: null };
-    });
-    function touch(id, at) {
-      const r = out[id]; if (!r) return;
-      if (at !== null && (r.lastActivityAt === null || at > r.lastActivityAt)) r.lastActivityAt = at;
-    }
+    LeadOS.events.DOMAINS.forEach(function (d) { out[d.id] = { id: d.id, label: d.label, hue: d.hue, activeObjectives: 0, openTasks: 0, openRisks: 0, openDecisions: 0, krCount: 0, playbooks: 0, lastActivityAt: null }; });
+    function touch(id, at) { const r = out[id]; if (!r) return; if (at !== null && (r.lastActivityAt === null || at > r.lastActivityAt)) r.lastActivityAt = at; }
     Object.keys(state.objectives).forEach(function (k) { const o = state.objectives[k]; if (out[o.domain] && o.status === 'active') out[o.domain].activeObjectives++; touch(o.domain, o.createdAt); });
     Object.keys(state.tasks).forEach(function (k) { const t = state.tasks[k]; if (out[t.domain] && t.status === 'open') out[t.domain].openTasks++; touch(t.domain, t.completedAt || t.createdAt); });
     Object.keys(state.risks).forEach(function (k) { const r = state.risks[k]; if (out[r.domain] && (r.status === 'open' || r.status === 'mitigating')) out[r.domain].openRisks++; touch(r.domain, r.updatedAt); });
@@ -184,7 +270,6 @@
     state.playbooks.forEach(function (p) { if (out[p.domain]) out[p.domain].playbooks++; touch(p.domain, p.at); });
     return out;
   }
-
   function totals(state) {
     const objectives = Object.keys(state.objectives).map(function (k) { return state.objectives[k]; });
     return {
@@ -198,7 +283,7 @@
 
   LeadOS.engine = {
     DAY: DAY, CADENCE: CADENCE,
-    project: project, settings: settings,
+    project: project, settings: settings, knownIds: knownIds,
     cadenceStatus: cadenceStatus, decisionQueue: decisionQueue, decidedLog: decidedLog,
     riskRegister: riskRegister, krView: krView, taskLists: taskLists,
     domainRollups: domainRollups, totals: totals
