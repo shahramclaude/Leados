@@ -1,655 +1,1143 @@
-/* LeadOS mf-4 · js/ui.js — chrome. Playbooks own content; ui owns rendering.
-   Views: Today (single ranked column + quick capture) · Arrival instrument ·
-   Roster + dossier · Playbooks (drawer) · Health (T1–T12 + G1–G18, executed
-   at render against disposable keys — the wall counts itself) · Data (export /
-   import / key browser with read-only quarantines / audit log / seed·purge).
-   mf-2's and mf-3's ui.js were unreadable from the authoring environment
-   (both sessions reported fetch truncation) — this file is re-authored; the
-   storage/engine/playbook contracts it renders against WERE verified. */
+/* LeadOS mf-5 · js/ui.js — surface + the health wall.
+   Today (single ranked column + quick capture) · Roster + dossier ·
+   Arrival instrument · Playbooks (drawer) · Health (T1–T13 + G1–G17,
+   executed live at render; disposable keys swept) · Data (export/import,
+   key browser, audit log, muted findings, seed/purge, rule registry).
+   Nothing derived is cached in module state — every render recomputes
+   from the store (stale state is a *choice*, and we choose against it).
+   All code re-authored this session; upstream ui.js was never byte-readable. */
+window.LEADOS = window.LEADOS || {};
+LEADOS._mod = LEADOS._mod || {};
+LEADOS._mod.ui = 'js/ui.js';
+
 (function () {
   'use strict';
-  var S = LEADOS.store;
-  function EV() { return LEADOS.events; }
-  function EN() { return LEADOS.engine; }
-  function PB() { return LEADOS.playbooks; }
+  var view, toastTimer = null;
+  var drawer = null; /* { playId, ctx } — drawer survives main-view re-renders */
 
-  /* ---------- helpers ---------- */
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
-    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
-  function today() { return S.todayISO(); }
-  function state() { return S.state(); }
-  function save() { S.save(); pill(); }
-  function pill() {
-    var st = state();
-    document.getElementById('writefail').hidden = !(st && st.meta && st.meta.writeFailed);
+  /* ── tiny utilities ─────────────────────────────────────────────────── */
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
-  function dt(iso) { return iso ? String(iso).slice(0, 10) : '—'; }
-  function agoStr(iso) {
-    if (!iso) return '—';
-    var d = EN().days(iso, today());
+  function S() { return LEADOS.store.state(); }
+  function today() { return LEADOS.store.today(); }
+  function el(id) { return document.getElementById(id); }
+  function toast(msg) {
+    var t = el('toast');
+    if (!t) return;
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.hidden = true; }, 2800);
+  }
+  var ICONS = {
+    play: '<path d="M4 19V5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2zm0 0a2 2 0 0 1 2-2h13"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    x: '<path d="M5 5l14 14M19 5L5 19"/>',
+    check: '<path d="M4 12l5 5L20 7"/>',
+    down: '<path d="M12 3v12m0 0l-4-4m4 4l4-4"/><path d="M4 21h16"/>',
+    up: '<path d="M12 21V9m0 0l-4 4m4-4l4 4"/><path d="M4 3h16"/>',
+    link: '<path d="M9 15l6-6"/><path d="M11 6l1-1a4.2 4.2 0 0 1 6 6l-1 1"/><path d="M13 18l-1 1a4.2 4.2 0 0 1-6-6l1-1"/>',
+    alert: '<path d="M12 3l10 18H2z"/><path d="M12 10v4m0 3v.5"/>',
+    dot: '<circle cx="12" cy="12" r="4"/>'
+  };
+  function ic(name) { return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.dot) + '</svg>'; }
+  function minHM(m) { var h = Math.floor(m / 60), r = m % 60; return h ? h + 'h' + (r ? ' ' + r + 'm' : '') : r + 'm'; }
+  function rel(ts, refIso) {
+    var d = LEADOS.engine._days(ts, refIso || today());
     if (d == null) return '—';
-    return d === 0 ? 'today' : d + 'd ago';
+    if (d === 0) return 'today';
+    if (d === 1) return 'yesterday';
+    if (d < 0) return 'in ' + (-d) + 'd';
+    return d + 'd ago';
   }
-  var GLYPHS = '▁▂▃▄▅▆▇▉';
-  function spark(vals, cap) {
-    return vals.slice(-16).map(function (v) {
-      if (v == null) return '·';
-      var i = Math.max(0, Math.min(GLYPHS.length - 1, Math.round(((v - 1) / (cap || 10)) * (GLYPHS.length - 1))));
-      return GLYPHS[i];
+  function spark(vals, max) {
+    if (!vals.length) return '<span class="muted">no data</span>';
+    var glyphs = '▁▂▃▄▅▆▇';
+    return vals.map(function (v) {
+      var i = Math.max(0, Math.min(glyphs.length - 1, Math.round((v / (max || 10)) * (glyphs.length - 1))));
+      return glyphs[i];
     }).join('');
   }
-
-  var ICONS = {
-    today: '<path d="M4 12a8 8 0 1 0 16 0 8 8 0 0 0-16 0M12 7v5l3 3" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    arrival: '<path d="M5 21V4m0 1h12l-2.5 4L17 13H5" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    roster: '<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 19c.6-3.4 2.8-5 5.5-5s4.9 1.6 5.5 5M16 5.2a3.2 3.2 0 0 1 0 6M17.5 14.5c2 .6 3.2 2.1 3.7 4.5" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    playbooks: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 8h6M9 12h6" stroke="currentColor" stroke-width="1.6"/>',
-    health: '<path d="M3 12h4l2.5-6 4 12 2.5-6H21" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    data: '<ellipse cx="12" cy="5.5" rx="7" ry="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 5.5V18.5c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5V5.5M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    cal: '<rect x="4" y="5" width="16" height="15" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 10h16M8 3v4M16 3v4" stroke="currentColor" stroke-width="1.6"/>',
-    msg: '<path d="M4 5h16v11H8l-4 4V5z" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    link: '<circle cx="7" cy="7" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17" cy="17" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.5 9.5l5 5" stroke="currentColor" stroke-width="1.6"/>',
-    ladder: '<path d="M7 21V3M17 21V3M7 7h10M7 12h10M7 17h10" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    compass: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
-    scale: '<path d="M12 4v16M5 7h14M12 4l-5 3 5-3 5 3M5 7l-2.5 6a3.5 3.5 0 0 0 5 0L5 7zm14 0l-2.5 6a3.5 3.5 0 0 0 5 0L19 7z" fill="none" stroke="currentColor" stroke-width="1.4"/>',
-    target: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
-    flag: '<path d="M6 21V4c4-2.5 8 2.5 12 0v9c-4 2.5-8-2.5-12 0" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    ear: '<path d="M6 10a6 6 0 0 1 12 0c0 4-3.5 4.5-3.5 8a2.5 2.5 0 0 1-5 0" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.5 10a2.5 2.5 0 0 1 5 0c0 2-2 2.3-2 4" fill="none" stroke="currentColor" stroke-width="1.4"/>',
-    check2: '<path d="M4 12.5l4.2 4.5a1.5 1.5 0 0 0 2.2.1L20 7.5M4 6.5l4 4L13 5.5" fill="none" stroke="currentColor" stroke-width="1.6"/>',
-    x: '<path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="1.8" fill="none"/>'
-  };
-  function icon(name, size) {
-    return '<svg viewBox="0 0 24 24" width="' + (size || 18) + '" height="' + (size || 18) + '" aria-hidden="true">' + (ICONS[name] || ICONS.msg) + '</svg>';
+  function personIdOf(f) {
+    if (!f || !f.key) return null;
+    var m = f.key.match(/^R(1|4|5|7|8|13|14):(.*)$/);
+    return m ? m[2] : null;
   }
 
-  /* ---------- routing ---------- */
-  var NAV = [
-    ['#/today', 'today', 'Today'], ['#/arrival', 'arrival', 'Arrival'],
-    ['#/roster', 'roster', 'Roster'], ['#/playbooks', 'playbooks', 'Playbooks'],
-    ['#/health', 'health', 'Health'], ['#/data', 'data', 'Data']
-  ];
+  /* ── routing ────────────────────────────────────────────────────────── */
   function route() {
     var h = location.hash || '#/today';
-    var m, view = document.getElementById('view');
-    pill();
-    renderRail(h);
-    if ((m = h.match(/^#\/person\/(.+)$/))) return renderPerson(view, decodeURIComponent(m[1]));
-    if (h.indexOf('#/arrival') === 0) return renderArrival(view);
-    if (h.indexOf('#/roster') === 0) return renderRoster(view);
-    if (h.indexOf('#/playbooks') === 0) return renderPlaybooks(view);
-    if (h.indexOf('#/health') === 0) return renderHealth(view);
-    if (h.indexOf('#/data') === 0) return renderData(view);
-    return renderToday(view);
-  }
-  function renderRail(hash) {
-    var findingsCount = 0;
-    try { findingsCount = EN().evaluate(state(), today()).findings.length; } catch (e) { /* rail must never break */ }
-    document.getElementById('rail-links').innerHTML = NAV.map(function (n) {
-      var on = (hash || '#/today').indexOf(n[0]) === 0 || (n[0] === '#/roster' && hash.indexOf('#/person') === 0);
-      return '<a class="rail-link' + (on ? ' on' : '') + '" href="' + n[0] + '">' + icon(n[1]) +
-        '<span class="lbl">' + n[2] + '</span>' + (n[0] === '#/today' && findingsCount ? '<span class="badge">' + findingsCount + '</span>' : '') + '</a>';
-    }).join('');
-  }
-
-  /* ---------- capture bar (the shared-layer entry point) ---------- */
-  var CAPTURE = {
-    'oneonone': { label: '1:1 held', fields: [['personId', 'person', 1], ['date', 'date', 1], ['note', 'text', 0, 'What mattered']],
-      make: function (v) { return [{ type: 'oneonone.logged', personId: v.personId, ts: withTime(v.date), data: { note: v.note || undefined } }]; } },
-    'pulse': { label: 'Pulse (they said it)', fields: [['personId', 'person', 1], ['mood', 'num', 1, 'Mood 1–10'], ['load', 'num', 1, 'Load 1–10'], ['estimated', 'check', 0, 'I estimated this (not their words)']],
-      make: function (v) { return [{ type: 'pulse.logged', personId: v.personId, data: { mood: Number(v.mood), load: Number(v.load), estimated: !!v.estimated } }]; } },
-    'feedback': { label: 'Feedback given', fields: [['personId', 'person', 1], ['polarity', 'select:positive|corrective', 1], ['summary', 'text', 1, 'One-line summary']],
-      make: function (v) { return [{ type: 'feedback.logged', personId: v.personId, data: { polarity: v.polarity, summary: v.summary, delivered: true } }]; } },
-    'decision': { label: 'Decision logged', fields: [['title', 'text', 1], ['reviewDate', 'date', 1], ['severity', 'num', 0, 'Blast radius 1–5']],
-      make: function (v) { return [{ type: 'decision.logged', personId: null, data: { title: v.title, reviewDate: v.reviewDate, severity: Number(v.severity) || undefined } }]; } },
-    'goal': { label: 'Goal set', fields: [['title', 'text', 1], ['ownerPersonId', 'person:me', 1]],
-      make: function (v) { return [{ type: 'goal.set', personId: v.ownerPersonId === 'me' ? null : v.ownerPersonId, data: { title: v.title, ownerPersonId: v.ownerPersonId } }]; } },
-    'delegation': { label: 'Delegation assigned', fields: [['personId', 'person', 1], ['title', 'text', 1], ['level', 'select:1|2|3|4|5', 1]],
-      make: function (v) { return [{ type: 'delegation.assigned', personId: v.personId, data: { title: v.title, level: Number(v.level) } }]; } },
-    'conflict': { label: 'Conflict registered', fields: [['personId', 'person', 1], ['counterpartPersonId', 'person:opt', 0, 'Party B · roster'], ['counterpart', 'text', 0, 'Party B · name (if not on roster)'], ['summary', 'text', 1, 'What is it about']],
-      make: function (v) { return [{ type: 'conflict.registered', personId: v.personId,
-        data: { summary: v.summary, counterpartPersonId: v.counterpartPersonId || undefined, counterpart: v.counterpart || undefined } }]; } },
-    'incident': { label: 'Incident registered', fields: [['title', 'text', 1], ['severity', 'select:1|2|3|4|5', 1], ['personId', 'person:opt', 0]],
-      make: function (v) { return [{ type: 'incident.registered', personId: v.personId || null, data: { title: v.title, severity: Number(v.severity) } }]; } }
-  };
-  function withTime(date) { return date ? date + 'T12:00:00' : undefined; }
-  function personOptions(mode, val) {
-    var st = state(), out = '';
-    if (mode === 'me') out += '<option value="me"' + (val === 'me' ? ' selected' : '') + '>me (myself)</option>';
-    if (mode === 'opt') out += '<option value="">— not on roster / skip —</option>';
-    if (!mode || mode === 'me') { /* full list */ }
-    st.people.forEach(function (p) {
-      if (p && !p.archived) out += '<option value="' + esc(p.id) + '"' + (val === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+    var qix = h.indexOf('?');
+    var path = qix >= 0 ? h.slice(0, qix) : h;
+    var qs = {};
+    if (qix >= 0) h.slice(qix + 1).split('&').forEach(function (kv) {
+      var p = kv.split('='); if (p[0]) qs[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
     });
-    if (!out) out = '<option value="">— add people in Roster first —</option>';
-    return out;
-  }
-  function captureField(f, values) {
-    var key = f[0], spec = f[1], req = f[2], label = f[3] || (key.charAt(0).toUpperCase() + key.slice(1));
-    if (spec === 'hidden') return '<input type="hidden" name="' + key + '" value="' + esc(values[key] || f[4] || '') + '">';
-    var v = values[key] !== undefined ? values[key] : '';
-    var h = '<div><label for="cf-' + key + '">' + esc(label) + (req ? ' *' : '') + '</label>';
-    if (spec.indexOf('person') === 0) h += '<select id="cf-' + key + '" name="' + key + '">' + personOptions(spec.split(':')[1], v) + '</select>';
-    else if (spec.indexOf('select') === 0) h += '<select id="cf-' + key + '" name="' + key + '">' + spec.split(':')[1].split('|').map(function (o) {
-      return '<option value="' + o + '"' + (String(v) === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select>';
-    else if (spec === 'check') h = '<div><label style="text-transform:none;letter-spacing:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="cf-' + key + '" name="' + key + '"' + (v ? ' checked' : '') + ' style="width:auto"> ' + esc(label) + '</label>';
-    else if (spec === 'area') h += '<textarea id="cf-' + key + '" name="' + key + '">' + esc(v) + '</textarea>';
-    else h += '<input id="cf-' + key + '" name="' + key + '" type="' + spec + '" value="' + esc(v) + '">';
-    return h + '</div>';
+    return { path: path, qs: qs };
   }
 
-  /* ---------- TODAY ---------- */
-  function renderToday(view) {
-    var st = state(), res = EN().evaluate(st, today());
-    var fs = res.findings, sup = res.suppressed;
-    var kind = view.dataset.capKind || 'oneonone';
-    var h = '<div class="view-head"><span class="kicker">today</span><h1>' +
-      new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) + '</h1>' +
-      '<span class="spacer"></span><span class="sub mono">' + fs.length + ' open loop' + (fs.length === 1 ? '' : 's') + (sup.length ? ' · ' + sup.length + ' suppressed' : '') + '</span></div>';
-    h += '<div class="today-meta mono"><span>ranked by sev × confidence — math printed on every row</span><span>engine: ' + EN()._rulesCount + ' rules over ' + st.events.length + ' events</span></div>';
-
-    /* capture bar */
-    var cap = CAPTURE[kind];
-    h += '<div class="capture' + (view.dataset.capOpen === '1' ? ' open' : '') + '"><div class="capture-bar"><select id="cap-kind">' +
-      Object.keys(CAPTURE).map(function (k) { return '<option value="' + k + '"' + (k === kind ? ' selected' : '') + '>' + CAPTURE[k].label + '</option>'; }).join('') +
-      '</select><button class="btn sm" data-action="cap-toggle">register</button>' +
-      '<span class="legend">every registration is an event — all modules consume the same stream</span></div>';
-    h += '<div class="capture-form"><div class="form-grid">' + cap.fields.map(function (f) { return captureField(f, {}); }).join('') + '</div>' +
-      '<div class="form-actions"><button class="btn acc sm" data-action="cap-submit">write event</button><span class="err" id="cap-err"></span></div></div></div>';
-
-    /* findings column */
-    if (!fs.length) {
-      h += '<div class="empty"><span class="serif">Nothing is calling for you.</span>' +
-        (st.people.length ? 'The engine reads ' + st.events.length + ' events and finds nothing past a threshold. Register a 1:1, a pulse, a decision — the column wakes up.' :
-        'Start at <a href="#/roster">Roster</a> — add your leads — or load the sample set at <a href="#/data">Data</a> to see the instrument in motion.') + '</div>';
-    }
-    fs.forEach(function (f, i) { h += findingRow(f, i); });
-    if (sup.length) {
-      h += '<div class="suppressed"><div class="rule-head">suppressed — audible, reversible, still counted</div>';
-      sup.forEach(function (f) {
-        h += '<div class="row mono"><span class="chip">' + esc(f.ruleId) + '</span><span>' + esc(f.title) + '</span><span>' + esc(f.suppressed) + '</span>' +
-          '<button class="btn sm ghost" data-action="unmute" data-key="' + esc(f.key) + '">unmute</button></div>';
-      });
-      h += '</div>';
-    }
-    h += foot('today is one prioritized column — by design, no widgets');
-    view.innerHTML = h;
-  }
-  function findingRow(f, i) {
-    var h = '<div class="finding' + (f.ruleId === 'ENG' ? ' f-engine' : '') + '"><div class="f-rank' + (i === 0 ? ' top' : '') + '">' + (i + 1) + '</div><div>';
-    h += '<div class="f-head"><span class="f-tag">' + esc(f.tag) + '</span><span class="f-title">' + esc(f.title) + '</span></div>';
-    h += '<div class="f-action">' + esc(f.action) + '</div>';
-    h += '<div class="f-why">' + f.basis.map(function (b) {
-      return String(b).split('\n').map(function (line) { return '<div class="bl">' + esc(line) + '</div>'; }).join('');
-    }).join('') + '</div>';
-    h += '<div class="f-foot"><span class="f-conf" data-c="' + f.confidence.level + '"><b>' + f.confidence.level + '</b> confidence</span>' +
-      '<span class="f-score">' + esc(f.breakdown) + '</span>';
-    if (f.playbook) h += '<button class="btn sm acc" data-action="open-pb" data-pb="' + f.playbook + '" data-key="' + esc(f.key) + '">open ' + esc(PB().get(f.playbook).title) + '</button>';
-    h += '<button class="btn sm ghost" data-action="snooze" data-key="' + esc(f.key) + '">snooze 7d</button>' +
-      '<button class="btn sm ghost" data-action="dismiss" data-key="' + esc(f.key) + '">dismiss</button></div>';
-    h += '<div class="f-confwhy">why this confidence: ' + esc(f.confidence.why) + '</div>';
-    if (f.meta && f.meta.evidenceIds && f.meta.evidenceIds.length)
-      h += '<div class="f-eids" title="source event ids — the audit trail">src: ' + f.meta.evidenceIds.map(esc).join(' · ') + '</div>';
-    return h + '</div></div>';
-  }
-
-  /* ---------- ARRIVAL ---------- */
-  function renderArrival(view) {
-    var st = state(), a = EV().arrival(st, today());
-    var h = '<div class="view-head"><span class="kicker">arrival instrument</span><h1>The first 90 have three cliffs</h1></div>';
-    h += '<div class="note" style="margin:8px 0 4px">New leaders of leads rarely fail at 1:1s. They fail by optimizing toward <em>guessed</em> expectations, changing systems before finishing the listening tour, and trading on announced-but-unverified wins. This instrument watches all three — and stays silent until you tell it when you started.</div>';
-    if (!a.set) {
-      h += '<div class="capture open"><div class="section-h">When did you start leading these teams?</div>' +
-        '<div class="assume">null is a real value: until you say, R9–R11 stay silent rather than guess.</div>' +
-        '<div class="form-grid" style="max-width:320px"><div><label for="appt-date">Start date</label><input type="date" id="appt-date" value="' + today() + '"></div></div>' +
-        '<div class="form-actions"><button class="btn acc sm" data-action="set-appointment">start the clock</button></div></div>' + foot('arrival projection: recomputed per read');
-      view.innerHTML = h; return;
-    }
-    h += '<div class="instr" style="margin-top:16px"><div><div class="day-n">' + a.dayN + '<small> / 90 days in</small></div>' +
-      '<div class="mono" style="color:var(--muted)">started ' + esc(a.startDate) + '</div></div><div>';
-    h += statRow('boss expectations captured', a.expectations ? a.expectations + ' logged' : 'ZERO — day ' + a.dayN + ', gate is 14', !a.expectations && a.dayN >= 14);
-    h += statRow('listening tour', a.tourDone + ' of ' + a.tourTotal + ' visited (gate: day 45)', a.tourDone < a.tourTotal && a.dayN >= 45);
-    var openWins = a.wins.filter(function (w) { return !w.verified; });
-    h += statRow('early wins', a.wins.length + ' committed · ' + (a.wins.length - openWins.length) + ' verified', false);
-    h += '</div></div>';
-    h += '<div class="section-h">Listening tour <span class="mono">' + a.tourDone + '/' + a.tourTotal + '</span></div>';
-    h += '<div class="meter"><i style="width:' + (a.tourTotal ? Math.round(a.tourDone / a.tourTotal * 100) : 0) + '%"></i></div>';
-    if (a.unvisited.length) h += '<div class="note">still owed: ' + a.unvisited.map(function (p) { return esc(p.name); }).join(', ') + ' — <a href="#/playbooks">run a tour visit</a></div>';
-    else h += '<div class="note">coverage complete against today\'s roster. <span class="assume">people who join later re-open this line.</span></div>';
-    h += '<div class="section-h">Win ledger</div><div class="rows">';
-    if (!a.wins.length) h += '<div class="trow"><span class="cell">no wins committed yet — don\'t promise one without a verify date</span></div>';
-    a.wins.forEach(function (w) {
-      h += '<div class="trow" style="grid-template-columns:1fr auto auto"><span class="' + (w.verified ? 'cell' : 'tname') + '">' + esc(w.label) + '</span>' +
-        '<span class="cell mono">verify ' + esc(w.verifyDate || 'unset') + '</span><span class="chip' + (w.verified ? '' : ' acc') + '">' + (w.verified ? 'verified' : 'OPEN') + '</span></div>';
-    });
-    h += '</div>';
-    h += '<div class="rule-head">the three cliffs, watched by the engine</div>' +
-      '<div class="note">R9 expectations by day 14 · R10 tour complete by day 45 · R11 every win verified past its date. All three fire on <a href="#/today">Today</a> with basis + confidence printed.</div>';
-    h += foot('arrival projection: single source of truth');
-    view.innerHTML = h;
-  }
-  function statRow(label, st, warn) {
-    return '<div class="stat-row' + (warn ? ' warn' : '') + '"><span>' + esc(label) + '</span><span class="st">' + esc(st) + '</span></div>';
-  }
-
-  /* ---------- ROSTER + DOSSIER ---------- */
-  function renderRoster(view) {
-    var st = state();
-    var people = st.people.filter(function (p) { return p && !p.archived; });
-    var h = '<div class="view-head"><span class="kicker">roster</span><h1>' + people.length + ' people</h1><span class="sub mono">reporting line: you → your leads → their teams</span></div>';
-    h += '<div class="rows">';
-    people.forEach(function (p) {
-      var last = EV().lastOneOnOne(st, p.id);
-      var open = EV().openDelegations(st).filter(function (d) { return d.personId === p.id; }).length;
-      var conflicts = EV().openConflicts(st).filter(function (c) { return c.personId === p.id || c.counterpartPersonId === p.id; }).length;
-      var rt = p.reportsTo === 'me' || p.reportsTo === undefined ? 'direct' : (function () { var x = st.people.filter(function (q) { return q.id === p.reportsTo; })[0]; return x ? 'via ' + x.name : 'BROKEN LINE'; })();
-      h += '<div class="trow" style="grid-template-columns:1.4fr 1fr .6fr .6fr auto"><a href="#/person/' + encodeURIComponent(p.id) + '"><span class="tname">' + esc(p.name) + '</span></a>' +
-        '<span class="cell">' + esc(p.role || '—') + ' · ' + line + '</span><span class="cell mono">1:1 ' + agoStr(last && last.ts) + '</span>' +
-        '<span class="cell mono">del ' + open + ' · conf ' + conflicts + '</span><span class="chip">every ' + p.cadenceDays + 'd</span></div>';
-    });
-    if (!people.length) h += '<div class="trow"><span class="cell">empty roster — add your first lead below, or load the sample set at <a href="#/data">Data</a></span></div>';
-    h += '</div>';
-    h += '<div class="section-h">Add a person</div><div class="form-grid" style="max-width:560px">' +
-      '<div><label for="np-name">Name</label><input id="np-name"></div><div><label for="np-role">Role</label><input id="np-role" placeholder="lead · platform team"></div>' +
-      '<div><label for="np-cad">1:1 cadence (days)</label><input id="np-cad" type="num" value="7"></div>' +
-      '<div><label for="np-rt">Reports to</label><select id="np-rt"><option value="me">me (direct report)</option>' +
-      people.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div></div>' +
-      '<div class="form-actions"><button class="btn sm acc" data-action="add-person">add to roster</button><span class="err" id="np-err"></span></div>';
-    h += foot('people are rows; everything else is events about them');
-    view.innerHTML = h;
-  }
-
-  function renderPerson(view, id) {
-    var st = state(), p = st.people.filter(function (x) { return x && x.id === id; })[0];
-    if (!p) { view.innerHTML = '<div class="view-head"><h1>Person not found</h1></div><div class="note">The id in the URL resolves to nobody — archived or never existed. <a href="#/roster">Back to roster.</a></div>'; return; }
-    var meas = EV().pulsesMeasured(st, p.id, 90, today());
-    var est = EV().pulsesEstimatedCount(st, p.id, 90, today());
-    var bal = EV().feedbackBalance(st, p.id, 60, today());
-    var dels = EV().openDelegations(st).filter(function (d) { return d.personId === p.id; });
-    var conflicts = EV().openConflicts(st).filter(function (c) { return c.personId === p.id || c.counterpartPersonId === p.id; });
-    var incidents = EV().openIncidents(st).filter(function (x) { return x.personId === p.id; });
-    var goals = EV().openGoals(st).filter(function (g) { return g.ownerPersonId === p.id; });
-    var sl = EV().latestSL(st, p.id);
-    var last = EV().lastOneOnOne(st, p.id);
-    var h = '<div class="dossier-head"><span class="kicker">dossier</span><h1>' + esc(p.name) + '</h1>' +
-      '<div class="facts mono"><span>' + esc(p.role || '—') + '</span><span>cadence ' + p.cadenceDays + 'd</span><span>last 1:1 ' + agoStr(last && last.ts) + '</span>' +
-      '<span>' + (p.reportsTo === 'me' || p.reportsTo === undefined ? 'direct report' : 'skip-level') + '</span>' +
-      '<a href="#/roster" style="margin-left:auto">← roster</a></div></div>';
-
-    h += '<div class="rule-head">load &amp; mood — measured only (' + meas.length + ' readings · ' + est + ' estimated excluded)</div>';
-    h += '<div class="spark">' + (meas.length ? spark(meas.map(function (e) { return e.data.load; })) : 'no data') + ' <span class="legend">load</span></div>';
-    h += '<div class="spark">' + (meas.length ? spark(meas.map(function (e) { return e.data.mood; })) : 'no data') + ' <span class="legend">mood</span></div>';
-    h += '<div class="legend">trend honesty: the engine needs ≥3 measured points before R7 says a word — fewer and it stays silent rather than fake a trend.</div>';
-
-    h += '<div class="rule-head">feedback balance · 60d</div><div class="note">' + bal.corrective + ' corrective / ' + bal.positive + ' positive' +
-      (bal.total >= 3 && (bal.corrective === 0 || bal.positive === 0) ? ' — <b>one-sided</b>, see Today' : ' — within doctrine balance') + '</div>';
-
-    if (sl) h += '<div class="rule-head">situational read (latest)</div><div class="note">"' + esc(sl.data.task) + '" → ' + esc(sl.data.development) + ' · lead with ' + esc(sl.data.style) + ' ' + esc(sl.data.styleName) + ' <span class="mono" style="color:var(--muted)">(' + dt(sl.ts) + ' · comp ' + sl.data.competence + ' / comm ' + sl.data.commitment + ')</span></div>';
-
-    h += '<div class="rule-head">open delegations (' + dels.length + ')</div><div class="rows">';
-    if (!dels.length) h += '<div class="trow"><span class="cell">none open</span></div>';
-    dels.forEach(function (d) {
-      h += '<div class="trow" style="grid-template-columns:1fr auto auto auto"><span>' + esc(d.label) + '</span><span class="cell mono">L' + (d.level || '?') + '</span><span class="cell mono">' + dt(d.ts) + '</span>' +
-        '<button class="btn sm ghost" data-action="close-delegation" data-id="' + esc(d.id) + '">close</button></div>';
-    });
-    h += '</div>';
-
-    h += '<div class="rule-head">open conflicts (' + conflicts.length + ')</div><div class="rows">';
-    if (!conflicts.length) h += '<div class="trow"><span class="cell">none open</span></div>';
-    conflicts.forEach(function (c) {
-      h += '<div class="trow" style="grid-template-columns:1fr auto auto"><span><span class="pair">' + esc(EV().pairLabel(st, c)) + '</span> — ' + esc(c.summary || 'no summary') + '</span>' +
-        '<span class="cell mono">' + dt(c.ts) + '</span><button class="btn sm ghost" data-action="resolve-conflict" data-id="' + esc(c.id) + '">resolve</button></div>';
-    });
-    h += '</div>';
-
-    h += '<div class="rule-head">goals owned (' + goals.length + ') · open incidents (' + incidents.length + ')</div><div class="rows">';
-    goals.forEach(function (g) { h += '<div class="trow" style="grid-template-columns:1fr auto"><span>' + esc(g.label) + '</span><span class="cell mono">signal ' + agoStr(g.lastProgressTs) + '</span></div>'; });
-    incidents.forEach(function (x) {
-      h += '<div class="trow" style="grid-template-columns:1fr auto auto auto"><span>incident: ' + esc(x.label) + '</span><span class="cell mono">sev ' + (x.severity || '?') + '</span><span class="cell mono">quiet ' + agoStr(x.updatedTs) + '</span>' +
-        '<button class="btn sm ghost" data-action="resolve-incident" data-id="' + esc(x.id) + '">resolve</button></div>';
-    });
-    if (!goals.length && !incidents.length) h += '<div class="trow"><span class="cell">no goals owned, no incidents open</span></div>';
-    h += '</div>';
-
-    h += '<div class="form-actions" style="margin-top:18px"><button class="btn sm acc" data-action="open-pb" data-pb="oneonone" data-person="' + esc(p.id) + '">open 1:1 run sheet</button>' +
-      '<button class="btn sm" data-action="open-pb" data-pb="sl" data-person="' + esc(p.id) + '">situational read</button>' +
-      '<button class="btn sm ghost" data-action="archive-person" data-id="' + esc(p.id) + '">archive</button></div>';
-    h += foot('a dossier is a projection — nothing here is stored, everything is recomputed');
-    view.innerHTML = h;
-  }
-
-  /* ---------- PLAYBOOKS (list + drawer) ---------- */
-  function renderPlaybooks(view) {
-    var h = '<div class="view-head"><span class="kicker">playbooks</span><h1>Procedures, not advice</h1></div>' +
-      '<div class="note" style="margin:8px 0">Each one pre-fills from your live data and writes resolving events through the shared layer — Today, dossiers and the engine all see the result instantly. Nothing here is a wiki page.</div><div class="pb-list">';
-    PB().list().forEach(function (pb) {
-      h += '<a class="pb" href="#/playbooks" data-action="open-pb" data-pb="' + pb.id + '"><span class="pb-ic">' + icon(pb.icon) + '</span>' +
-        '<span><h3>' + esc(pb.title) + '</h3><p>' + esc(pb.blurb) + '</p></span></a>';
-    });
-    h += '</div>' + foot('the mentor layer');
-    view.innerHTML = h;
-  }
-  var pbCtx = { id: null, prefill: {} };
-  function prefillFor(pbId, key) {
-    var st = state(), out = {};
-    if (key) {
-      var f = null;
-      try { f = EN().evaluate(st, today()).findings.filter(function (x) { return x.key === key; })[0]; } catch (e) {}
-      if (f) {
-        if (f.personId) out.personId = f.personId;
-        if (f.ruleId === 'R6') {
-          out.counterpartPersonId = f.meta.persons && f.meta.persons[1];
-          out.conflictIds = f.meta.evidenceIds || [];
-          out.conflicts = EV().openConflicts(st).filter(function (c) { return out.conflictIds.indexOf(c.id) >= 0; });
-        }
-        if (f.ruleId === 'R13') out.intent = 'nexus';
-        if (f.ruleId === 'R7') out.intent = 'load';
-        if (f.ruleId === 'R8') { out.skip = true; out.via = f.meta.via; }
-        if (f.meta && f.meta.decisionId) out.decisionId = f.meta.decisionId;
-        if (f.meta && f.meta.goalId) out.goalId = f.meta.goalId;
-        if (f.meta && f.meta.winId) out.winId = f.meta.winId;
-        if (f.meta && f.meta.incidentId) out.incidentId = f.meta.incidentId;
+  /* ── generic field renderer (playbooks + capture share this) ───────── */
+  function fieldHTML(f, ctx) {
+    var val = '';
+    if (typeof f.prefill === 'function') { try { val = f.prefill(ctx); } catch (e) { val = ''; } }
+    else if (f.prefill !== undefined) val = f.prefill;
+    var span = f.span ? ' span' + f.span : '';
+    var id = 'f_' + f.key;
+    var hint = f.hint ? '<span class="hint">' + esc(f.hint) + '</span>' : '';
+    var input = '';
+    if (f.type === 'textarea') {
+      input = '<textarea id="' + id + '">' + esc(val || '') + '</textarea>';
+    } else if (f.type === 'select' || f.type === 'person') {
+      var opts = typeof f.options === 'function' ? f.options(ctx) : (f.options || []);
+      if (f.type === 'person') {
+        opts = (f.allowEmpty ? [{ v: '', l: '— none —' }] : []).concat(
+          (f.allowMe ? [{ v: 'me', l: 'You' }] : []),
+          ctx.P.actives.map(function (p) { return { v: p.id, l: p.name + (p.role ? ' · ' + p.role : '') }; }));
       }
+      input = '<select id="' + id + '"' + (f.live ? ' data-live="' + f.live + '"' : '') + '>' +
+        opts.map(function (o) { return '<option value="' + esc(o.v) + '"' + (String(val) === String(o.v) ? ' selected' : '') + '>' + esc(o.l) + '</option>'; }).join('') + '</select>';
+    } else if (f.type === 'checkbox') {
+      input = '<span class="checks"><label><input type="checkbox" id="' + id + '"' + (val ? ' checked' : '') + '> yes</label></span>';
+    } else if (f.type === 'multi') {
+      opts = typeof f.options === 'function' ? f.options(ctx) : (f.options || []);
+      input = '<span class="checks">' + (opts.length ? opts.map(function (o) {
+        return '<label><input type="checkbox" name="' + id + '" value="' + esc(o.v) + '"> ' + esc(o.l) + '</label>';
+      }).join('') : '<span class="hint">— nothing to select —</span>') + '</span>';
+    } else if (f.type === 'context') {
+      return '<div class="fld' + span + '"><label>' + esc(f.label) + '</label>' +
+        '<div class="mono-block">' + esc(val || '—') + '</div></div>';
+    } else {
+      input = '<input id="' + id + '" type="' + (f.type || 'text') + '" value="' + esc(val == null ? '' : val) + '"' +
+        (f.type === 'number' ? ' min="0" max="100"' : '') + '>';
     }
-    return out;
+    return '<div class="fld' + span + '"><label for="' + id + '">' + esc(f.label) + '</label>' + input + hint + '</div>';
   }
-  function openPlaybook(id, prefill) {
-    var pb = PB().get(id);
-    if (!pb) return;
-    pbCtx = { id: id, prefill: prefill || {} };
-    var st = state();
-    var ctx = { state: st, today: today(), person: pbCtx.prefill.personId ? EV().person(st, pbCtx.prefill.personId) : null };
-    var drawer = document.getElementById('drawer');
-    document.getElementById('drawer-title').textContent = pb.title;
-    var h = '<div id="pb-guide">';
-    pb.guide(ctx, pbCtx.prefill).forEach(function (b) {
-      h += '<div class="g-block"><h4>' + esc(b.h) + '</h4>';
-      if (b.lines) h += '<ul>' + b.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>';
-      if (b.warn) h += '<div class="warn">' + esc(b.warn) + '</div>';
-      if (b.script) h += '<div class="script">' + esc(b.script) + '</div>';
-      h += '</div>';
+  function readForm(fields) {
+    var v = {};
+    fields.forEach(function (f) {
+      var node = el('f_' + f.key);
+      if (f.type === 'checkbox') v[f.key] = !!(node && node.checked);
+      else if (f.type === 'multi') {
+        v[f.key] = Array.prototype.slice.call(document.querySelectorAll('input[name="f_' + f.key + '"]:checked'))
+          .map(function (x) { return x.value; });
+      } else if (f.type === 'context') v[f.key] = null;
+      else v[f.key] = node ? node.value : '';
     });
-    h += '</div><div class="rule-head">log it — writes events through the shared layer</div><form id="pb-form" onsubmit="return false">';
-    var fields = pb.fields(ctx, pbCtx.prefill);
-    h += fields.map(function (f) { return pbField(f); }).join('');
-    h += '<div class="form-actions"><button class="btn acc" data-action="pb-submit">write events</button><span class="err" id="pb-err"></span><span class="mono" style="color:var(--muted)" id="pb-ok"></span></div></form>';
-    document.getElementById('drawer-body').innerHTML = h;
-    drawer.hidden = false;
-  }
-  function pbField(f) {
-    if (f.kind === 'hidden') return '<input type="hidden" name="' + f.key + '" value="' + esc(f.value || '') + '">';
-    var st = state();
-    var v = f.value !== undefined && f.value !== null ? f.value : '';
-    var h = '<div><label>' + esc(f.label) + (f.required ? ' *' : '') + '</label>';
-    if (f.kind === 'person') h += '<select name="' + f.key + '"><option value="">—</option>' +
-      st.people.filter(function (p) { return p && !p.archived; }).map(function (p) {
-        return '<option value="' + esc(p.id) + '"' + (v === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select>';
-    else if (f.kind === 'select') h += '<select name="' + f.key + '">' + (f.options || []).map(function (o) {
-      return '<option value="' + esc(o.v) + '"' + (String(v) === String(o.v) ? ' selected' : '') + '>' + esc(o.l) + '</option>'; }).join('') + '</select>';
-    else if (f.kind === 'multicheck') h += (f.options || []).map(function (o) {
-      var on = Array.isArray(v) && v.indexOf(o.v) >= 0;
-      return '<label style="text-transform:none;letter-spacing:0;display:flex;gap:6px;align-items:center"><input type="checkbox" name="' + f.key + '" value="' + esc(o.v) + '"' + (on ? ' checked' : '') + ' style="width:auto"> ' + esc(o.l) + '</label>'; }).join('');
-    else if (f.kind === 'check') h = '<div><label style="text-transform:none;letter-spacing:0;display:flex;gap:6px;align-items:center"><input type="checkbox" name="' + f.key + '"' + (v ? ' checked' : '') + ' style="width:auto"> ' + esc(f.label) + '</label>';
-    else if (f.kind === 'area') h += '<textarea name="' + f.key + '">' + esc(v) + '</textarea>';
-    else h += '<input name="' + f.key + '" type="' + (f.kind === 'num' ? 'number' : f.kind) + '" value="' + esc(v) + '">';
-    if (f.hint) h += '<div class="legend">' + esc(f.hint) + '</div>';
-    return h + '</div>';
-  }
-  function readForm(form) {
-    var v = {}, els = form.querySelectorAll('[name]'), i;
-    for (i = 0; i < els.length; i++) {
-      var e = els[i], k = e.name;
-      if (e.type === 'checkbox' && e.value && e.value !== 'on') {
-        v[k] = v[k] || []; if (e.checked) v[k].push(e.value);
-      } else if (e.type === 'checkbox') v[k] = e.checked;
-      else v[k] = e.value;
-    }
     return v;
   }
 
-  /* ---------- HEALTH (T1–T12 + G1–G18 — executed at render) ---------- */
-  var TESTS = [
-    { id: 'T1', name: 'fresh boot yields schema v3 with appointment field', run: function (s) {
-      var st = s.load(); return { pass: EN() && s.isShape(st), note: 'schemaVersion=' + st.meta.schemaVersion + ' appointment in meta=' + ('appointment' in st.meta) }; } },
-    { id: 'T2', name: 'unparseable live bytes quarantined "corrupt", boot still clean', run: function (s) {
-      localStorage.setItem(s.KEY, '{bad');
-      var st = s.load();
-      var q = s.browse().filter(function (k) { return k.kind === 'corrupt'; });
-      return { pass: s.isShape(st) && q.length === 1 && q[0].preview === '{bad', note: 'quarantines: ' + q.length + ' · bytes preserved verbatim=' + (q[0] && q[0].preview === '{bad') }; } },
-    { id: 'T3', name: 'parseable but shapeless payload quarantined "malformed"', run: function (s) {
-      localStorage.setItem(s.KEY, '{"a":1}'); var st = s.load();
-      var q = s.browse().filter(function (k) { return k.kind === 'malformed'; });
-      return { pass: s.isShape(st) && q.length === 1, note: 'malformed keys: ' + q.length }; } },
-    { id: 'T4', name: 'right shape, wrong lineage quarantined "foreign"', run: function (s) {
-      var f = S.fresh(); f.meta.lineage = 'someone-else';
-      localStorage.setItem(s.KEY, JSON.stringify(f)); var st = s.load();
-      var q = s.browse().filter(function (k) { return k.kind === 'foreign'; });
-      return { pass: s.isShape(st) && st.meta.lineage === 'mf' && q.length === 1, note: 'foreign keys: ' + q.length + ' · lineage kept=' + (st.meta.lineage === 'mf') }; } },
-    { id: 'T5', name: 'schema from the future (v99) quarantined "newer", never downgraded', run: function (s) {
-      var f = S.fresh(); f.meta.schemaVersion = 99;
-      localStorage.setItem(s.KEY, JSON.stringify(f)); var st = s.load();
-      var q = s.browse().filter(function (k) { return k.kind === 'newer'; });
-      return { pass: st.meta.schemaVersion === 3 && q.length === 1, note: 'running v' + st.meta.schemaVersion + ' · newer keys: ' + q.length }; } },
-    { id: 'T6', name: 'migration 1→3: reportsTo backfilled, appointment nulled, pre-migration bytes kept', run: function (s) {
-      var f = S.fresh(); f.meta.schemaVersion = 1; delete f.meta.appointment;
-      f.people.push({ id: 'p-a', name: 'Ana', role: '', cadenceDays: 7, createdAt: S.nowISO(), archived: false, seed: false });
-      var bytes = JSON.stringify(f);
-      localStorage.setItem(s.KEY, bytes); var st = s.load();
-      var q = s.browse().filter(function (k) { return k.kind === 'pre-migration'; });
-      return { pass: st.meta.schemaVersion === 3 && st.people[0].reportsTo === 'me' && ('appointment' in st.meta) && q.length === 1 && q[0].preview.indexOf('"schemaVersion":1') >= 0,
-        note: 'v' + st.meta.schemaVersion + ' · reportsTo=' + st.people[0].reportsTo + ' · pre-migration key: ' + q.length }; } },
-    { id: 'T7', name: 'write path: quota throw flips writeFailed pill, in-memory state kept', run: function (s) {
-      s.load();
-      var real = localStorage.setItem, r;
-      localStorage.setItem = function () { var e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; };
-      try { r = s.trySetItem(s.KEY, '{}'); } finally { localStorage.setItem = real; }
-      var st = s.state();
-      return { pass: r && r.ok === false && r.quota === true && st.meta.writeFailed === true,
-        note: 'trySetItem → ok=' + (r && r.ok) + ' quota=' + (r && r.quota) + ' writeFailed=' + st.meta.writeFailed }; } },
-    { id: 'T8', name: 'identical import refused', run: function (s) {
-      var st = s.load(); st.people.push({ id: 'p-a', name: 'Ana', role: '', cadenceDays: 7, reportsTo: 'me', createdAt: S.nowISO(), archived: false, seed: false }); s.save();
-      var r = s.importData(s.exportText());
-      return { pass: r.ok === false && /identical/.test(r.reason), note: r.reason || 'imported (wrong)' }; } },
-    { id: 'T9', name: 'same-lineage older export (v2) is migrated at the import gate, then merged', run: function (s) {
-      s.load();
-      var f = S.fresh(); f.meta.schemaVersion = 2; delete f.meta.appointment;
-      f.people.push({ id: 'p-b', name: 'Bo', role: '', cadenceDays: 7, reportsTo: 'me', createdAt: S.nowISO(), archived: false, seed: false });
-      var r = s.importData(JSON.stringify(f));
-      var st = s.state();
-      return { pass: r.ok === true && st.people.length === 1 && st.meta.schemaVersion === 3,
-        note: 'merged people=' + r.mergedPeople + ' · live v' + st.meta.schemaVersion }; } },
-    { id: 'T10', name: 'two-pass merge: every id re-minted, every *Id reference rewired (goal keeps its owner)', run: function (s) {
-      s.load();
-      var f = S.fresh();
-      f.people.push({ id: 'p-c', name: 'Cy', role: '', cadenceDays: 7, reportsTo: 'me', createdAt: S.nowISO(), archived: false, seed: false });
-      f.events.push({ id: 'e-c', ts: S.nowISO(), type: 'goal.set', personId: null, data: { title: 'g', ownerPersonId: 'p-c' }, seed: false });
-      var r = s.importData(JSON.stringify(f));
-      var st = s.state();
-      var goal = st.events.filter(function (e) { return e.type === 'goal.set'; })[0];
-      var owner = st.people.filter(function (p) { return p.id === (goal && goal.data.ownerPersonId); })[0];
-      return { pass: r.ok && goal && owner && owner.name === 'Cy' && owner.id !== 'p-c' && goal.id !== 'e-c',
-        note: 'ids reminted=' + r.reminted + ' · owner rewired=' + (owner ? owner.name + ' @' + owner.id.slice(0, 12) + '…' : 'LOST') }; } },
-    { id: 'T11', name: 'purge kills seed rows; meta.seeded stays true; reseed is a no-op', run: function (s) {
-      var st = s.load();
-      var n1 = EV().seed(st); s.save();
-      var seededEvents = st.events.length;
-      EV().purge(st); s.save();
-      var after = s.load();
-      var n2 = EV().seed(after);
-      return { pass: n1 > 0 && after.events.filter(function (e) { return e.seed; }).length === 0 && after.meta.seeded === true && n2 === 0,
-        note: 'seeded ' + n1 + ' · post-purge seed rows ' + after.events.filter(function (e) { return e.seed; }).length + ' · reseed returned ' + n2 }; } },
-    { id: 'T12', name: 'normalization repairs, never drops: broken import rows all survive, repairs logged', run: function (s) {
-      s.load();
-      var f = S.fresh();
-      f.events.push('garbage-row', { id: 'dup', ts: 'not-a-date', type: '', personId: 42, data: null }, { id: 'dup', ts: S.nowISO(), type: 'note', data: {} });
-      var r = s.importData(JSON.stringify(f));
-      var st = s.state();
-      var repaired = st.log.filter(function (l) { return l.kind === 'normalize' || l.kind === 'repair' || l.kind === 'import'; }).length;
-      return { pass: r.ok === true && st.events.length === 3 && repaired > 0,
-        note: 'rows in=' + 3 + ' rows live=' + st.events.length + ' · repair/import log lines=' + repaired }; } }
-  ];
-  function runHealth() {
-    var out = { tests: [], goldens: [], cleaned: 0 };
-    var pre = 'leados:t-' + Date.now().toString(36) + '-';
-    var seq = 0;
-    TESTS.forEach(function (t) {
-      var key = pre + (++seq), s = S.makeStore(key);
-      try { var r = t.run(s); out.tests.push({ id: t.id, name: t.name, pass: !!r.pass, note: r.note }); }
-      catch (e) { out.tests.push({ id: t.id, name: t.name, pass: false, note: 'threw: ' + (e && e.message || e) }); }
-    });
-    out.goldens = EN().runGoldens();
-    out.cleaned = S.dropTestKeys('leados:t-');
-    return out;
+  /* ── playbook drawer ────────────────────────────────────────────────── */
+  function openPlaybook(id, ctx) {
+    if (!LEADOS.playbooks.byId[id]) return;
+    drawer = { playId: id, ctx: ctx || {} };
+    drawer.ctx.P = LEADOS.events.project(S());
+    renderDrawer();
   }
-  function renderHealth(view) {
-    var res = runHealth();
-    var tp = res.tests.filter(function (t) { return t.pass; }).length;
-    var gp = res.goldens.filter(function (g) { return g.pass; }).length;
-    var h = '<div class="view-head"><span class="kicker">health</span><h1>The wall counts itself</h1></div>';
-    h += '<div class="note" style="margin:8px 0">Every assertion below just executed against the code paths production uses — disposable keys, cleaned after (' + res.cleaned + ' removed). Where any doc disagrees with this wall, this wall wins.</div>';
-    h += '<div class="hw-sum">storage ' + tp + '/' + res.tests.length + ' · engine goldens ' + gp + '/' + res.goldens.length + '</div>';
-    h += '<div class="rule-head">storage spine T1–T12</div>';
-    res.tests.forEach(function (t) {
-      h += '<div class="hw-row ' + (t.pass ? 'pass' : 'fail') + '"><span class="id">' + t.id + '</span><span>' + esc(t.name) + '<div class="obs">observed — ' + esc(t.note) + '</div></span><span class="st">' + (t.pass ? 'pass' : 'FAIL') + '</span></div>';
-    });
-    h += '<div class="rule-head">engine goldens G1–G18 (fixed today 2026-02-16 · pure, zero storage I/O)</div>';
-    res.goldens.forEach(function (g) {
-      h += '<div class="hw-row ' + (g.pass ? 'pass' : 'fail') + '"><span class="id">' + g.id + '</span><span>' + esc(g.name) + '<div class="obs">observed — ' + esc(g.note) + '</div></span><span class="st">' + (g.pass ? 'pass' : 'FAIL') + '</span></div>';
-    });
-    h += foot('fixture-based assertions on real code paths — not a fuzzer, and it does not cover UI rendering itself');
-    view.innerHTML = h;
-  }
-
-  /* ---------- DATA ---------- */
-  function renderData(view) {
-    var st = state();
-    var keys = S.browse();
-    var h = '<div class="view-head"><span class="kicker">data</span><h1>One key, everything in it</h1></div>';
-    h += '<div class="kv"><span class="k">live key</span><span class="mono">leados:data (' + JSON.stringify(st).length + ' bytes)</span>' +
-      '<span class="k">schema</span><span class="mono">v' + st.meta.schemaVersion + ' · lineage "' + st.meta.lineage + '" · seeded=' + st.meta.seeded + '</span>' +
-      '<span class="k">rows</span><span class="mono">' + st.people.length + ' people · ' + st.events.length + ' events · ' + st.log.length + ' log lines</span>' +
-      '<span class="k">quota</span><span class="mono" style="color:' + (st.meta.writeFailed ? 'var(--accent)' : 'var(--muted)') + '">' + (st.meta.writeFailed ? 'WRITE FAILED at least once — export now' : 'writes healthy') + ' · ~5MB budget is an assumption (real limits aren\'t JS-queryable)</span></div>';
-
-    h += '<div class="section-h">Export</div><div class="form-actions"><button class="btn sm" data-action="export">download .json</button>' +
-      '<button class="btn sm ghost" data-action="export-view">show inline</button></div><div id="export-slot"></div>';
-
-    h += '<div class="section-h">Import</div>' +
-      '<div class="assume">refuses unparseable · malformed · foreign · newer · identical-to-live. Migrates same-lineage older. Merges with every id re-minted and every reference rewired. Live bytes preserved as .pre-import. first.</div>' +
-      '<textarea class="import" id="import-text" placeholder=\'paste a LeadOS export here\'></textarea>' +
-      '<div class="form-actions"><button class="btn sm acc" data-action="import">validate &amp; merge</button><span id="import-out" class="mono" style="color:var(--muted)"></span></div>';
-
-    h += '<div class="section-h">Key browser <span class="mono">quarantines are read-only</span></div><div class="rows">';
-    keys.forEach(function (k) {
-      h += '<div class="keyrow"><span class="k">' + esc(k.key) + '</span><span class="chip' + (k.kind === 'live' ? ' me' : k.kind === 'other' ? '' : ' acc') + '">' + esc(k.kind) + '</span><span class="cell mono">' + k.bytes + ' B</span></div>' +
-        (k.readonly ? '<div class="keyrow"><pre>' + esc(k.preview) + (k.preview.length >= 280 ? ' …' : '') + '</pre></div>' : '');
-    });
-    h += '</div>';
-
-    h += '<div class="section-h">Sample set</div><div class="note">A mid-flight arrival (day 26: expectations missing, tour 1/4, a win past its gate) plus material for every rule — including the Dana×Priya pair and Marcus\'s nexus. Seeded rows are tagged <span class="mono">seed:true</span> and one-click purgeable.</div>' +
-      '<div class="form-actions"><button class="btn sm" data-action="seed"' + (st.meta.seeded ? ' disabled style="opacity:.4;pointer-events:none"' : '') + '>load sample set</button>' +
-      '<button class="btn sm ghost" data-action="purge">purge seeded rows</button><span class="mono" style="color:var(--muted)" id="seed-out"></span></div>';
-
-    h += '<div class="section-h">Audit log <span class="mono">newest first · capped at 500</span></div>';
-    st.log.slice().reverse().slice(0, 80).forEach(function (l) {
-      h += '<div class="logrow"><span class="ts">' + esc(String(l.ts).slice(5, 19).replace('T', ' ')) + '</span><span class="kind">' + esc(l.kind) + '</span><span class="msg">' + esc(l.msg) + '</span></div>';
-    });
-    h += foot('backup = export · restore = import · forensics = quarantine keys + this log');
-    view.innerHTML = h;
-  }
-
-  function foot(t) { return '<footer class="foot mono"><span>LeadOS mf-4</span><span>' + esc(t) + '</span><span style="margin-left:auto">offline · no network</span></footer>'; }
-
-  /* ---------- global events ---------- */
-  function onClick(e) {
-    var t = e.target.closest('[data-action],[data-close-drawer]');
-    if (!t) return;
-    if (t.hasAttribute('data-close-drawer')) { document.getElementById('drawer').hidden = true; return; }
-    var a = t.getAttribute('data-action'), st = state();
-    if (a === 'cap-toggle') { var v = document.getElementById('view'); v.dataset.capOpen = v.dataset.capOpen === '1' ? '0' : '1'; route(); }
-    else if (a === 'cap-submit') {
-      var kind = document.getElementById('cap-kind').value, cap = CAPTURE[kind];
-      var form = t.closest('.capture'), vals = readForm(form), err = '';
-      cap.fields.forEach(function (f) { if (f[2] && !String(vals[f[0]] || '').trim()) err = (f[3] || f[0]) + ' is required'; });
-      if (err) { document.getElementById('cap-err').textContent = err; return; }
-      var made = cap.make(vals);
-      EV().emitMany(st, made); save();
-      delete document.getElementById('view').dataset.capOpen;
-      route();
-    }
-    else if (a === 'snooze') { EV().emit(st, 'engine.snooze', { data: { key: t.getAttribute('data-key'), until: addDays(today(), 7) } }); save(); route(); }
-    else if (a === 'dismiss') { EV().emit(st, 'engine.dismiss', { data: { key: t.getAttribute('data-key') } }); save(); route(); }
-    else if (a === 'unmute') { EV().emit(st, 'engine.unmute', { data: { key: t.getAttribute('data-key') } }); save(); route(); }
-    else if (a === 'open-pb') {
+  function closeDrawer() { drawer = null; renderDrawer(); }
+  function renderDrawer() {
+    var old = document.querySelector('.drawer-veil'); if (old) old.remove();
+    var oldD = document.querySelector('.drawer'); if (oldD) oldD.remove();
+    if (!drawer) return;
+    var def = LEADOS.playbooks.byId[drawer.playId];
+    var ctx = drawer.ctx;
+    var veil = document.createElement('div'); veil.className = 'drawer-veil';
+    veil.addEventListener('click', closeDrawer);
+    var d = document.createElement('aside'); d.className = 'drawer';
+    var guide = def.guide.map(function (g) {
+      return '<div class="guide"><h3>' + esc(g.h) + '</h3>' +
+        (g.p ? '<p>' + esc(g.p) + '</p>' : '') +
+        (g.list ? '<ol>' + g.list.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ol>' : '') + '</div>';
+    }).join('');
+    d.innerHTML =
+      '<button class="btn btn-ghost btn-sm close-x">esc / close</button>' +
+      '<h2>' + esc(def.title) + '</h2>' +
+      '<p class="for">' + (def.forRules.length ? 'resolves: ' + def.forRules.join(' · ') : 'diagnostic — resolves no rule; sharpens the ones that do') + '</p>' +
+      guide +
+      (ctx.finding ? '<p class="prefill-note">opened from: ' + esc(ctx.finding.rule) + ' — pre-filled from live data, edit freely</p>' : '') +
+      '<form class="grid" id="pbform">' +
+      def.fields.map(function (f) { return fieldHTML(f, ctx); }).join('') +
+      '<div id="liveness" class="guide-live" hidden></div>' +
+      '<div class="form-foot"><button class="btn btn-acc" type="submit">write the resolving event</button>' +
+      '<span class="hint">events, not vibes: the graph updates at next render</span></div></form>';
+    document.body.appendChild(veil); document.body.appendChild(d);
+    d.querySelector('.close-x').addEventListener('click', closeDrawer);
+    d.addEventListener('change', function (e) { liveRefresh(def, d, ctx); });
+    liveRefresh(def, d, ctx);
+    el('pbform').addEventListener('submit', function (e) {
       e.preventDefault();
-      var pre = t.getAttribute('data-person') ? { personId: t.getAttribute('data-person') } : prefillFor(t.getAttribute('data-pb'), t.getAttribute('data-key'));
-      openPlaybook(t.getAttribute('data-pb'), pre);
-    }
-    else if (a === 'pb-submit') {
-      var pb = PB().get(pbCtx.id), form2 = t.closest('form'), vals2 = readForm(form2);
-      var fields = pb.fields({ state: st, today: today(), person: pbCtx.prefill.personId ? EV().person(st, pbCtx.prefill.personId) : null }, pbCtx.prefill);
-      var miss = '';
-      fields.forEach(function (f) { if (f.required && !String(vals2[f.key] || '').trim()) miss = f.label + ' is required'; });
-      if (miss) { document.getElementById('pb-err').textContent = miss; return; }
-      var evs = pb.submit(vals2, { state: st, today: today() }) || [];
-      if (!evs.length) { document.getElementById('pb-err').textContent = 'nothing to write (e.g. all lines empty)'; return; }
-      EV().emitMany(st, evs); save();
-      document.getElementById('drawer').hidden = true;
-      route();
-    }
-    else if (a === 'add-person') {
-      var name = document.getElementById('np-name').value.trim();
-      if (!name) { document.getElementById('np-err').textContent = 'name is required'; return; }
-      EV().addPerson(st, { name: name, role: document.getElementById('np-role').value,
-        cadenceDays: document.getElementById('np-cad').value, reportsTo: document.getElementById('np-rt').value });
-      save(); route();
-    }
-    else if (a === 'archive-person') { EV().updatePerson(st, t.getAttribute('data-id'), { archived: true }); save(); location.hash = '#/roster'; }
-    else if (a === 'close-delegation') { EV().emit(st, 'delegation.closed', { data: { delegationId: t.getAttribute('data-id'), how: 'closed from dossier' } }); save(); route(); }
-    else if (a === 'resolve-conflict') { EV().emit(st, 'conflict.resolved', { data: { conflictId: t.getAttribute('data-id'), how: 'resolved from dossier' } }); save(); route(); }
-    else if (a === 'resolve-incident') { EV().emit(st, 'incident.resolved', { data: { incidentId: t.getAttribute('data-id'), how: 'resolved from dossier' } }); save(); route(); }
-    else if (a === 'set-appointment') {
-      var d0 = document.getElementById('appt-date').value;
-      if (!d0) return;
-      st.meta.appointment = { startDate: d0 };
-      EV().emit(st, 'appointment.started', { data: { startDate: d0 } });
-      save(); route();
-    }
-    else if (a === 'seed') { var n = EV().seed(st); save(); route(); }
-    else if (a === 'purge') { EV().purge(st); save(); route(); }
-    else if (a === 'export') {
-      var blob = new Blob([S.exportText()], { type: 'application/json' });
-      var atag = document.createElement('a');
-      atag.href = URL.createObjectURL(blob);
-      atag.download = 'leados-export-' + today() + '.json';
-      document.body.appendChild(atag); atag.click(); atag.remove();
-    }
-    else if (a === 'export-view') { document.getElementById('export-slot').innerHTML = '<pre style="margin-top:8px;font-family:var(--mono);font-size:10px;background:#fff;border:1px solid var(--hair);padding:8px;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-all">' + esc(S.exportText().slice(0, 4000)) + '</pre>'; }
-    else if (a === 'import') {
-      var r = S.importData(document.getElementById('import-text').value);
-      var out = document.getElementById('import-out');
-      if (r.ok) { out.textContent = 'merged ' + r.mergedEvents + ' events · ' + r.mergedPeople + ' people · ' + r.reminted + ' ids re-minted' + (r.writeOk ? '' : ' · WRITE FAILED'); setTimeout(route, 600); }
-      else out.textContent = 'refused — ' + r.reason;
-    }
+      var btn = e.target.querySelector('button[type="submit"]');
+      if (btn.disabled) return;
+      btn.disabled = true; /* second-run guard: a double-click writes one event */
+      var v = readForm(def.fields);
+      var res;
+      try { res = def.submit(v, ctx); } catch (err) { res = { error: 'submit threw: ' + (err && err.message || err) }; }
+      if (!res || res.error) {
+        toast('✕ ' + (res && res.error || 'nothing written'));
+        btn.disabled = false;
+        return;
+      }
+      (res.events || []).forEach(function (x) { LEADOS.events.emit(x.type, x.data, x.personId); });
+      (res.personUpdates || []).forEach(function (u) { LEADOS.events.updatePerson(u.id, u.patch); });
+      toast('✓ ' + (res.toast || 'written'));
+      closeDrawer();
+      render();
+    });
   }
-  function onChange(e) {
-    if (e.target && e.target.id === 'cap-kind') {
-      var v = document.getElementById('view');
-      v.dataset.capKind = e.target.value; v.dataset.capOpen = '1';
-      route();
+  function liveRefresh(def, d, ctx) {
+    var live = d.querySelector('[data-live]');
+    var box = d.querySelector('#liveness');
+    if (!live || !box) return;
+    var kind = live.getAttribute('data-live');
+    var v = readForm(def.fields);
+    var html = '';
+    if (kind === 'levelGuide') html = 'L' + (v.level || '?') + ' — ' + LEADOS.playbooks.LEVEL_GUIDE[v.level || 3];
+    if (kind === 'slMatch') {
+      var m = LEADOS.playbooks.slMatch({ competence: v.competence, commitment: v.commitment });
+      if (m) {
+        var row = LEADOS.playbooks.SL_TABLE.filter(function (r) { return r.d === m.d; })[0] ||
+                  LEADOS.playbooks.SL_TABLE.filter(function (r) { return m.d.indexOf(r.d) === 0; })[0];
+        html = '<b>' + m.d + ' → lead at ' + m.s + '</b> · ' + esc(m.why) + (row ? '<br>' + esc(row.guidance) : '');
+      }
     }
+    box.innerHTML = html; box.hidden = !html;
   }
-  function addDays(iso, n) { return new Date(Date.parse(iso + 'T12:00:00') + n * 86400000).toISOString().slice(0, 10); }
 
-  /* ---------- boot ---------- */
-  function boot() {
-    S.load();
-    document.addEventListener('click', onClick);
-    document.addEventListener('change', onChange);
-    window.addEventListener('hashchange', route);
-    route();
-    setTimeout(function () { document.getElementById('splash').classList.add('gone'); }, 120);
-    setTimeout(function () { var s = document.getElementById('splash'); if (s) s.remove(); }, 320);
+  /* ── ranked finding rows (Today) ────────────────────────────────────── */
+  function findingRow(f, rank, P) {
+    var play = f.play && LEADOS.playbooks.byId[f.play];
+    var confCls = f.conf === 'high' ? 'conf-h' : f.conf === 'medium' ? 'conf-m' : 'conf-l';
+    var actions = '';
+    if (f.rule !== 'ENG') {
+      if (play) actions += '<button class="btn btn-acc btn-sm" data-act="play" data-play="' + f.play + '" data-key="' + esc(f.key) + '">' + ic('play') + esc(play.title) + '</button>';
+      actions += '<button class="btn btn-ghost btn-sm" data-act="snooze" data-key="' + esc(f.key) + '">' + ic('clock') + 'snooze 7d</button>';
+      actions += '<button class="btn btn-ghost btn-sm" data-act="dismiss" data-key="' + esc(f.key) + '">' + ic('x') + 'dismiss</button>';
+    } else {
+      actions = '<span class="chip acc">loud by design</span>';
+    }
+    return '<li class="rank-li' + (f.sev >= 5 ? ' sev5' : '') + '" data-fkey="' + esc(f.key) + '">' +
+      '<span class="rank-n">' + rank + '</span>' +
+      '<div class="rank-main">' +
+      '<p class="rank-title"><span class="rule">' + esc(f.rule) + ' · SEV ' + f.sev + '</span>' + esc(f.title) + '</p>' +
+      '<p class="rank-meta"><span class="math">' + esc(f.scoreMath) + '</span> · confidence <span class="' + confCls + '">' + f.conf + '</span> — ' + esc(f.confWhy) + '</p>' +
+      '<details><summary>why (basis + source events)</summary><ul class="basis">' +
+      f.basis.map(function (b) { return '<li>' + esc(b).replace(/\n/g, '<br>') + '</li>'; }).join('') +
+      (f.sources.length ? '<li class="src">sources: ' + f.sources.map(esc).join(' · ') + '</li>' : '<li class="src">sources: rule-level (no single event)</li>') +
+      '</ul></details></div>' +
+      '<div class="rank-actions">' + actions + '</div></li>';
   }
+
+  /* ── capture bar ────────────────────────────────────────────────────── */
+  var CAPTURE = [
+    { type: 'oneonone.logged', label: '1:1', fields: [
+      { key: 'personId', label: 'Person', type: 'person', required: true },
+      { key: 'mode', label: 'Mode', type: 'select', options: [{ v: 'regular', l: 'standard' }, { v: 'skip', l: 'skip-level' }] },
+      { key: 'note', label: 'Note', type: 'text', span: 2 }] },
+    { type: 'pulse.logged', label: 'Pulse', fields: [
+      { key: 'personId', label: 'Person', type: 'person', required: true },
+      { key: 'mood', label: 'Mood 1–10', type: 'number' },
+      { key: 'load', label: 'Load 1–10', type: 'number' },
+      { key: 'measured', label: 'Measured (they said it)', type: 'checkbox', prefill: true },
+      { key: 'note', label: 'Note', type: 'text', span: 4 }] },
+    { type: 'decision.registered', label: 'Decision', fields: [
+      { key: 'title', label: 'Decision', type: 'text', span: 2, required: true },
+      { key: 'severity', label: 'Severity 1–5', type: 'select', options: ['1', '2', '3', '4', '5'].map(function (x) { return { v: x, l: x }; }), prefill: '3' },
+      { key: 'reviewDate', label: 'Review date', type: 'date' },
+      { key: 'context', label: 'Reasoning (for future-you at review)', type: 'text', span: 4 }] },
+    { type: 'goal.set', label: 'Goal', fields: [
+      { key: 'title', label: 'Goal', type: 'text', span: 2, required: true },
+      { key: 'ownerId', label: 'Owner', type: 'person', allowMe: true, allowEmpty: true }] },
+    { type: 'feedback.given', label: 'Feedback', fields: [
+      { key: 'personId', label: 'Person', type: 'person', required: true },
+      { key: 'polarity', label: 'Polarity', type: 'select', options: [{ v: 'positive', l: 'reinforcing' }, { v: 'corrective', l: 'corrective' }] },
+      { key: 'note', label: 'One-line summary (SBI lives in the playbook)', type: 'text', span: 2 }] },
+    { type: 'delegation.assigned', label: 'Delegation', fields: [
+      { key: 'personId', label: 'Person', type: 'person', required: true },
+      { key: 'task', label: 'Task', type: 'text', required: true },
+      { key: 'level', label: 'Level', type: 'select', options: [1, 2, 3, 4, 5].map(function (x) { return { v: String(x), l: 'L' + x }; }), prefill: '3' },
+      { key: 'checkback', label: 'Check-back', type: 'date' }] },
+    { type: 'conflict.registered', label: 'Conflict', fields: [
+      { key: 'partyAPersonId', label: 'Party A', type: 'person', allowMe: true, prefill: 'me' },
+      { key: 'counterpartPersonId', label: 'Party B (roster link)', type: 'person', allowEmpty: true, hint: 'link = high confidence' },
+      { key: 'counterpartText', label: '…or Party B as text', type: 'text', hint: 'text = medium confidence, drift priced' },
+      { key: 'topic', label: 'Topic', type: 'text', required: true }] },
+    { type: 'incident.registered', label: 'Incident', fields: [
+      { key: 'title', label: 'Incident', type: 'text', span: 3, required: true }] },
+    { type: 'meeting.series', label: 'Meeting', fields: [
+      { key: 'title', label: 'Series title', type: 'text', span: 2, required: true },
+      { key: 'dow', label: 'Days', type: 'multi', options: [['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['0', 'Sun'], ['6', 'Sat']].map(function (x) { return { v: x[0], l: x[1] }; }) },
+      { key: 'start', label: 'Start', type: 'time' },
+      { key: 'end', label: 'End', type: 'time' },
+      { key: 'cadence', label: 'Cadence', type: 'select', options: [{ v: 'weekly', l: 'weekly' }, { v: 'biweekly', l: 'biweekly' }] },
+      { key: 'attendeeIds', label: 'Attendees (roster)', type: 'multi', span: 4,
+        options: function (ctx) { return ctx.P.actives.map(function (p) { return { v: p.id, l: p.name }; }); } }] },
+    { type: 'win.planned', label: 'Early win', fields: [
+      { key: 'title', label: 'Win claim', type: 'text', span: 2, required: true },
+      { key: 'verifyDate', label: 'Verify by', type: 'date' }] }
+  ];
+
+  function captureHTML(P, qs) {
+    var active = qs.log && CAPTURE.some(function (c) { return c.type === qs.log; }) ? qs.log : null;
+    var tabs = CAPTURE.map(function (c) {
+      return '<button data-act="captype" data-type="' + c.type + '"' + (active === c.type ? ' class="on"' : '') + '>' + esc(c.label) + '</button>';
+    }).join('');
+    var form = '';
+    if (active) {
+      var def = CAPTURE.filter(function (c) { return c.type === active; })[0];
+      var ctx = { P: P };
+      var fields = def.fields.map(function (f) {
+        var g = Object.assign({}, f);
+        if (qs.person && (f.key === 'personId')) g.prefill = qs.person;
+        return g;
+      });
+      var warn = '';
+      form = '<form class="grid" id="capform">' +
+        fields.map(function (f) { return fieldHTML(f, ctx); }).join('') +
+        (active === 'decision.registered' ? '<div class="warnbox" id="sevwarn" hidden><b>Severity ≥ 4.</b> This decision will arm the premortem gate (R15). After saving, open the Premortem playbook — 45 minutes now beats a postmortem later. <span class="mono">Rule arms at age ≥2d; nothing blocks your write.</span></div>' : '') +
+        warn +
+        '<div class="form-foot"><button class="btn" type="submit">register event</button>' +
+        '<span class="hint">writes one ' + esc(active) + ' event — every module sees it at next render</span></div></form>';
+    }
+    return '<div class="capture"><div class="capture-head"><span class="kicker">Quick capture · register</span>' +
+      '<span class="type-tabs">' + tabs + '</span></div>' + form + '</div>';
+  }
+  function bindCapture(P) {
+    view.querySelectorAll('[data-act="captype"]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var r = route();
+        location.hash = r.path + '?log=' + b.getAttribute('data-type');
+      });
+    });
+    var sevSel = el('f_severity');
+    if (sevSel) sevSel.addEventListener('change', function () {
+      var w = el('sevwarn'); if (w) w.hidden = Number(sevSel.value) < 4;
+    });
+    var form = el('capform');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn.disabled) return; btn.disabled = true;
+      var r = route();
+      var def = CAPTURE.filter(function (c) { return c.type === r.qs.log; })[0];
+      var fields = def.fields.map(function (f) { var g = Object.assign({}, f); return g; });
+      var v = readForm(fields);
+      var missing = def.fields.filter(function (f) { return f.required && !v[f.key]; });
+      if (missing.length) { toast('✕ required: ' + missing.map(function (f) { return f.label; }).join(', ')); btn.disabled = false; return; }
+      var d = {}, personId = null, i;
+      for (i = 0; i < def.fields.length; i++) {
+        var k = def.fields[i].key, val = v[k];
+        if (def.type === 'oneonone.logged' || def.type === 'pulse.logged' || def.type === 'feedback.given' || def.type === 'delegation.assigned') {
+          if (k === 'personId') { personId = val; continue; }
+        }
+        if (def.type === 'goal.set' && k === 'ownerId') { d.ownerId = val || null; continue; }
+        if (def.type === 'conflict.registered' && k === 'partyAPersonId') { if (val && val !== 'me') d.partyAPersonId = val; continue; }
+        if (def.type === 'meeting.series') {
+          if (k === 'dow') { d.dow = (val || []).map(Number); continue; }
+          if (k === 'attendeeIds') { d.attendeeIds = val || []; continue; }
+          if (k === 'start' || k === 'end') {
+            var mm = String(val || '').split(':');
+            d[k === 'start' ? 'startMin' : 'endMin'] = mm.length === 2 ? (Number(mm[0]) * 60 + Number(mm[1])) : null;
+            continue;
+          }
+        }
+        if (k === 'measured') { d.measured = !!val; continue; }
+        if (k === 'mood' || k === 'load' || k === 'level' || k === 'severity') { d[k] = val ? Number(val) : null; continue; }
+        d[k] = val === '' ? (k === 'counterpartText' || k === 'counterpartPersonId' ? null : val) : val;
+      }
+      if (def.type === 'pulse.logged' && (d.mood == null || d.load == null)) { toast('✕ pulse needs mood AND load (1–10)'); btn.disabled = false; return; }
+      if (def.type === 'meeting.series' && (!d.dow.length || d.startMin == null || d.endMin == null || d.endMin <= d.startMin)) { toast('✕ meeting needs days + a valid start/end'); btn.disabled = false; return; }
+      if (def.type === 'conflict.registered' && !d.counterpartPersonId && !d.counterpartText) { d.counterpartText = null; }
+      var ev = LEADOS.events.emit(def.type, d, personId);
+      if (def.type === 'decision.registered' && d.severity >= 4) {
+        toast('✓ decision registered — sev ' + d.severity + ': premortem gate armed; open Playbooks → Premortem');
+        location.hash = '#/playbooks?open=premortem';
+      } else {
+        toast('✓ ' + def.label + ' registered (' + ev.id + ')');
+        location.hash = r.path; /* collapse query → fresh capture bar */
+      }
+    });
+  }
+
+  /* ── views ──────────────────────────────────────────────────────────── */
+  function headHTML(title, sub) {
+    return '<div class="view-head"><h1>' + esc(title) + '</h1>' +
+      (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>';
+  }
+
+  function vToday(qs) {
+    var state = S();
+    var res = LEADOS.engine.run(state, today());
+    var P = res.P;
+    var html = headHTML('Today', '<b>' + esc(today()) + '</b>' +
+      (P.appointment ? ' · day <b>' + (LEADOS.engine._days(P.appointment, today()) + 1) + '</b> in role' : ' · no appointment date set') +
+      ' · ' + res.findings.length + ' finding(s)' + (res.mutedCount ? ' · ' + res.mutedCount + ' muted' : ''));
+    if (state.meta.lastBootRepairs > 0) {
+      html += '<p class="notice">Storage self-repaired <b>' + state.meta.lastBootRepairs + '</b> row(s) at boot — nothing was dropped; the repair rows are in the audit log at <a href="#/data" class="linklike">#/data</a>.</p>';
+    }
+    if (LEADOS.store.isReadOnly()) {
+      html += '<p class="notice"><b>READ-ONLY MODE:</b> storage holds a newer schema version. Writes are blocked so your newer data can never be clobbered by this older build.</p>';
+    }
+    html += captureHTML(P, qs);
+    if (!res.findings.length) {
+      html += '<div class="empty"><p>No findings. The engine only speaks when data speaks — it does not manufacture urgency.</p>' +
+        '<p class="ruleset">watching: ' + LEADOS.engine.RULES.map(function (r) { return r.id; }).join(' · ') + '</p></div>';
+    } else {
+      html += '<ol class="rank">' + res.findings.map(function (f, i) { return findingRow(f, i + 1, P); }).join('') + '</ol>';
+    }
+    view.innerHTML = '<div class="page">' + html + '</div>';
+    bindCapture(P);
+    view.querySelectorAll('[data-act="play"]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = res.findings.filter(function (x) { return x.key === b.getAttribute('data-key'); })[0];
+        openPlaybook(b.getAttribute('data-play'), { finding: f, personId: personIdOf(f) });
+      });
+    });
+    view.querySelectorAll('[data-act="snooze"]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var until = LEADOS.events.dayOffset(-7); /* today+7 */
+        LEADOS.events.emit('engine.snooze', { key: b.getAttribute('data-key'), until: until });
+        toast('snoozed until ' + until + ' — logged as an event (reversible)');
+      });
+    });
+    view.querySelectorAll('[data-act="dismiss"]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        LEADOS.events.emit('engine.dismiss', { key: b.getAttribute('data-key') });
+        toast('dismissed — unmute any time at #/data');
+      });
+    });
+  }
+
+  function vRoster() {
+    var P = LEADOS.events.project(S());
+    var t = today();
+    var rows = P.actives.map(function (p) {
+      var last11 = P.oneononeLast[p.id];
+      var dels = (P.delegationsOpenByPerson[p.id] || []).length;
+      var load = P.weeklyMeetingLoad[p.id];
+      var mins = load ? load.minutes : 0;
+      var pulses = P.pulses[p.id];
+      var loads = pulses ? pulses.measured.slice(-8).map(function (e) { return (e.data || {}).load; }) : [];
+      var rel2 = p.reportsTo === 'me' ? 'you' : (P.peopleById[p.reportsTo] ? P.peopleById[p.reportsTo].name : '⚠ broken line');
+      var sl = p.sl ? LEADOS.playbooks.slMatch(p.sl) : null;
+      var confs = P.openConflicts.filter(function (c) { return c.a.personId === p.id || c.b.personId === p.id; }).length;
+      return '<tr class="clickable" data-pid="' + p.id + '">' +
+        '<td><b>' + esc(p.name) + '</b><br><span class="legend">' + esc(p.role || '—') + '</span></td>' +
+        '<td class="mono">' + esc(rel2) + '</td>' +
+        '<td class="mono">' + (p.cadenceDays || 14) + 'd</td>' +
+        '<td class="mono">' + (last11 ? rel(last11.ts, t) : 'never') + '</td>' +
+        '<td class="mono">' + (dels || '—') + '</td>' +
+        '<td class="mono">' + (mins ? minHM(mins) + '<span class="bar-wrap"><span class="bar" style="width:' + Math.min(64, Math.round(mins / 600 * 64)) + 'px"></span></span>' : '—') + '</td>' +
+        '<td><span class="spark">' + spark(loads, 10) + '</span>' + (pulses && pulses.estimatedCount ? ' <span class="legend">+' + pulses.estimatedCount + ' est. excl.</span>' : '') + '</td>' +
+        '<td class="mono">' + (sl ? sl.d + '→' + sl.s : '—') + '</td>' +
+        '<td>' + (confs ? '<span class="chip acc">' + confs + ' open</span>' : '') + '</td></tr>';
+    }).join('');
+    var html = headHTML('Roster', P.actives.length + ' active · ' + (P.people.length - P.actives.length) + ' archived');
+    html += '<div class="capture"><div class="capture-head"><span class="kicker">Add person</span></div>' +
+      '<form class="grid" id="addperson">' +
+      '<div class="fld"><label>Name</label><input id="ap_name"></div>' +
+      '<div class="fld"><label>Role</label><input id="ap_role"></div>' +
+      '<div class="fld"><label>1:1 cadence (days)</label><input id="ap_cad" type="number" value="14"></div>' +
+      '<div class="fld"><label>Reports to</label><select id="ap_reports"><option value="me">You</option>' +
+      P.actives.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-foot"><button class="btn" type="submit">add to roster</button>' +
+      '<span class="hint">people rows, not events — same store, same audit log</span></div></form></div>';
+    html += '<table class="sheet"><thead><tr><th>person</th><th>reports to</th><th>cad.</th><th>last 1:1</th><th>deleg.</th><th>meet/wk</th><th>load trend (measured)</th><th>D/S</th><th>conflicts</th></tr></thead>' +
+      '<tbody>' + (rows || '<tr><td colspan="9" class="mono">empty roster — add someone above, or load the sample set at #/data</td></tr>') + '</tbody></table>';
+    html += '<p class="legend" style="margin-top:8px">meeting bar scaled to 600 min (10h) · trend = last 8 measured pulses, load 0–10 · estimated readings never trend · click a row for the dossier</p>';
+    view.innerHTML = '<div class="page">' + html + '</div>';
+    el('addperson').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = el('ap_name').value.trim();
+      if (!name) { toast('✕ name required'); return; }
+      var p = LEADOS.events.addPerson({ name: name, role: el('ap_role').value.trim(),
+        cadenceDays: Number(el('ap_cad').value) || 14, reportsTo: el('ap_reports').value });
+      toast('✓ added ' + p.name);
+    });
+    view.querySelectorAll('tr.clickable').forEach(function (tr) {
+      tr.addEventListener('click', function () { location.hash = '#/roster/' + tr.getAttribute('data-pid'); });
+    });
+  }
+
+  function vDossier(pid) {
+    var P = LEADOS.events.project(S());
+    var p = P.peopleById[pid];
+    if (!p) { view.innerHTML = '<div class="page">' + headHTML('Dossier', '') + '<div class="empty">person not found — <a class="linklike" href="#/roster">back to roster</a></div></div>'; return; }
+    var t = today();
+    var pulses = P.pulses[p.id] || { measured: [], estimatedCount: 0 };
+    var ms = pulses.measured.slice().sort(function (a, b) { return a.ts < b.ts ? -1 : 1; });
+    var moods = ms.slice(-10).map(function (e) { return (e.data || {}).mood; });
+    var loads = ms.slice(-10).map(function (e) { return (e.data || {}).load; });
+    var load = P.weeklyMeetingLoad[p.id];
+    var dels = P.delegationsOpenByPerson[p.id] || [];
+    var fbs = (P.feedbackByPerson[p.id] || []).slice(-6).reverse();
+    var confs = P.conflicts.filter(function (c) { return (c.a.personId === p.id || c.b.personId === p.id); });
+    var line = P.lineToMe(p);
+    var sl = p.sl ? LEADOS.playbooks.slMatch(p.sl) : null;
+    var slRow = sl ? LEADOS.playbooks.SL_TABLE.filter(function (r) { return sl.d.indexOf(r.d) === 0; })[0] : null;
+
+    var html = '<div class="dossier-head"><h1>' + esc(p.name) + '</h1>' +
+      '<span class="legend">' + esc(p.role || '—') + ' · added ' + esc((p.createdAt || '').slice(0, 10) || '—') + ' · id <span class="mono">' + esc(p.id) + '</span></span>' +
+      '<span style="margin-left:auto"><a class="btn btn-ghost btn-sm" href="#/today?log=oneonone.logged&person=' + p.id + '">log 1:1</a> ' +
+      '<a class="btn btn-ghost btn-sm" href="#/today?log=pulse.logged&person=' + p.id + '">log pulse</a> ' +
+      '<button class="btn btn-ghost btn-sm" data-play="oneonone">run sheet</button></span></div>';
+
+    html += '<div class="two-col"><div>' +
+      '<p class="kicker">Condition · measured only</p>' +
+      '<dl class="kv">' +
+      '<dt>load trend</dt><dd><span class="spark">' + spark(loads, 10) + '</span> <span class="legend">' + (loads.length ? loads[loads.length - 1] + '/10 last' : 'no measured pulses') + '</span></dd>' +
+      '<dt>mood trend</dt><dd><span class="spark">' + spark(moods, 10) + '</span> <span class="legend">' + (moods.length ? moods[moods.length - 1] + '/10 last' : 'no measured pulses') + '</span></dd>' +
+      '<dt>pulse data</dt><dd class="mono">' + ms.length + ' measured · ' + pulses.estimatedCount + ' estimated (excluded, always)</dd>' +
+      '<dt>1:1</dt><dd class="mono">' + (P.oneononeLast[p.id] ? rel(P.oneononeLast[p.id].ts, t) : 'never') + ' · cadence ' + (p.cadenceDays || 14) + 'd</dd>' +
+      '<dt>skip 1:1</dt><dd class="mono">' + (P.oneononeSkipLast[p.id] ? rel(P.oneononeSkipLast[p.id].ts, t) : 'never / n/a') + '</dd>' +
+      '<dt>meetings</dt><dd class="mono">' + (load ? minHM(load.minutes) + '/wk across ' + load.series.length + ' series' : 'none declared') + '</dd>' +
+      '</dl>' +
+      (load ? '<div class="mono-block">' + load.series.map(function (s) { return s.minutes + ' min/wk · ' + esc(s.title); }).join('\n') + '</div>' : '') +
+      '</div><div>' +
+      '<p class="kicker">Situational (per task type)</p>' +
+      (sl && slRow ? '<div class="guide-live"><b>' + esc(sl.d) + ' → ' + esc(sl.s) + '</b> · ' + esc(sl.why) + '<br>' + esc(slRow.guidance) + '</div>'
+        : '<p class="section-note">not assessed — run the situational playbook before their next big delegation.</p>') +
+      '<p style="margin-top:8px"><button class="btn btn-acc btn-sm" data-play="situational">' + ic('play') + (sl ? 're-assess' : 'assess now') + '</button></p>' +
+      '<p class="kicker">Open delegations (' + dels.length + ')</p>' +
+      (dels.length ? '<ul class="basis" style="border-left-color:#CFC8B8">' + dels.map(function (e) {
+        return '<li>L' + ((e.data || {}).level || '?') + ' · ' + esc((e.data || {}).task || '(task)') + ' <span class="src">since ' + esc(e.ts.slice(0, 10)) + ' · <a class="linklike" data-close-del="' + e.id + '">close</a></span></li>';
+      }).join('') + '</ul>' : '<p class="section-note">none open</p>') +
+      '</div></div>';
+
+    html += '<hr class="hr"><div class="two-col"><div>' +
+      '<p class="kicker">Feedback (last 6)</p>' +
+      (fbs.length ? fbs.map(function (e) {
+        var pol = (e.data || {}).polarity || '?';
+        return '<span class="chip' + (pol === 'corrective' ? ' acc' : ' ink') + '">' + esc(pol) + '</span> <span class="mono" style="font-size:10px">' + esc(e.ts.slice(0, 10)) + '</span>';
+      }).join('<br>') : '<p class="section-note">none logged — silence is also a feedback profile</p>') +
+      '</div><div>' +
+      '<p class="kicker">Conflicts</p>' +
+      (confs.length ? confs.map(function (c) {
+        return '<p><span class="glyph-link">' + ic('link') + '</span> <span class="' + (c.resolved ? 'legend' : '') + '">' + esc(c.pairLabel) + '</span> ' +
+          '<span class="chip' + (c.resolved ? '' : ' acc') + '">' + (c.resolved ? 'resolved' : 'open · ' + c.linkConf) + '</span><br>' +
+          '<span class="legend">' + esc(c.topic) + ' · ' + esc(c.ts.slice(0, 10)) + '</span></p>';
+      }).join('') : '<p class="section-note">none registered</p>') +
+      '</div></div>';
+
+    html += '<hr class="hr"><p class="kicker">Admin</p>' +
+      '<form class="grid" id="editperson">' +
+      '<div class="fld"><label>cadence (days)</label><input id="ep_cad" type="number" value="' + (p.cadenceDays || 14) + '"></div>' +
+      '<div class="fld"><label>reports to</label><select id="ep_reports"><option value="me">You</option>' +
+      P.actives.filter(function (x) { return x.id !== p.id; }).map(function (x) { return '<option value="' + x.id + '"' + (p.reportsTo === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="fld"><label>archived</label><span class="checks"><label><input type="checkbox" id="ep_arch"' + (p.archived ? ' checked' : '') + '> archived (rules go quiet)</label></span></div>' +
+      '<div class="form-foot"><button class="btn btn-ghost" type="submit">save person row</button>' +
+      '<span class="hint">reporting line check: ' + esc(line.ok ? 'you → ' + line.chain.map(function (c) { return c.name; }).concat([p.name]).join(' → ') : 'BROKEN (' + line.detail + ') — engine skip rules are silent, not guessing') + '</span></div></form>';
+
+    view.innerHTML = '<div class="page">' + html + '</div>';
+    view.querySelectorAll('[data-play]').forEach(function (b) {
+      b.addEventListener('click', function () { openPlaybook(b.getAttribute('data-play'), { personId: p.id }); });
+    });
+    view.querySelectorAll('[data-close-del]').forEach(function (a) {
+      a.addEventListener('click', function () {
+        LEADOS.events.emit('delegation.closed', { delegationId: a.getAttribute('data-close-del') });
+        toast('delegation closed');
+      });
+    });
+    el('editperson').addEventListener('submit', function (e) {
+      e.preventDefault();
+      LEADOS.events.updatePerson(p.id, { cadenceDays: Number(el('ep_cad').value),
+        reportsTo: el('ep_reports').value, archived: el('ep_arch').checked });
+      toast('person row saved');
+    });
+  }
+
+  function vArrival() {
+    var P = LEADOS.events.project(S());
+    var state = S();
+    if (!P.appointment) {
+      view.innerHTML = '<div class="page">' + headHTML('Arrival instrument', 'the first 90 days, measured') +
+        '<div class="empty"><p>No appointment date set. The arrival rules (R9 expectations · R10 listening tour · R11 early wins) stay silent rather than guess your timeline.</p>' +
+        '<form id="appt" class="grid" style="margin-top:12px"><div class="fld"><label>first day in role</label><input type="date" id="appt_date"></div>' +
+        '<div class="form-foot"><button class="btn" type="submit">set appointment date</button></div></form></div></div>';
+      el('appt').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!el('appt_date').value) { toast('✕ pick a date'); return; }
+        LEADOS.store.setAppointment(el('appt_date').value);
+        toast('appointment set — arrival rules armed');
+        render();
+      });
+      return;
+    }
+    var t = today();
+    var day = LEADOS.engine._days(P.appointment, t) + 1;
+    var exp = P.expectations;
+    var targets = P.actives.filter(function (p) {
+      if (p.reportsTo === 'me') return true;
+      var l = P.lineToMe(p); return l.ok && l.depth === 2;
+    });
+    var visited = targets.filter(function (p) { return P.tourVisits[p.id]; });
+    var winsOpen = P.openWins, winsDone = P.wins.filter(function (w) { return w.verified; });
+    var html = headHTML('Arrival instrument', 'appointed <b>' + esc(P.appointment) + '</b> · day <b>' + day + '</b>');
+    html += '<p class="kicker">Boss expectations (R9 gate: day 14)</p>' +
+      (exp ? '<div class="mono-block">' + esc(((exp.data || {}).priorities || []).join('\n') || '(captured)') +
+        (exp.data && exp.data.bossName ? '\n———\nwith ' + esc(exp.data.bossName) : '') + '</div>'
+      : '<p class="section-note">uncaptured' + (day >= 14 ? ' — R9 is firing on Today' : ' — you have until day 14') + '. <button class="btn btn-acc btn-sm" data-play="expectations">open the charter</button></p>');
+    html += '<p class="kicker">Listening tour (R10 · grace day 14 · gate day 45)</p>' +
+      '<p class="section-note">coverage ' + visited.length + '/' + targets.length + ' — measured against today’s roster (joiners count; stated assumption).</p>' +
+      '<p style="margin:8px 0">' + targets.map(function (p) {
+        var v = P.tourVisits[p.id];
+        return '<span class="chip' + (v ? ' ink' : ' acc') + '">' + esc(p.name) + (v ? ' ✓' : '') + '</span>';
+      }).join('') + '</p>' +
+      '<button class="btn btn-acc btn-sm" data-play="tour">' + ic('play') + 'log a visit</button>';
+    html += '<p class="kicker">Early-win ledger (R11)</p>' +
+      (winsOpen.length || winsDone.length ?
+        winsOpen.map(function (w) { return '<p><span class="chip acc">open</span> ' + esc(w.title) + ' <span class="legend">verify ' + esc(w.verifyDate || '—') + '</span></p>'; }).join('') +
+        winsDone.map(function (w) { return '<p><span class="chip ink">' + esc((w.verified.data || {}).verdict || 'verified') + '</span> ' + esc(w.title) + '</p>'; }).join('')
+      : '<p class="section-note">no wins claimed yet — claim one, set a verify date, and let R11 hold you to it</p>');
+    view.innerHTML = '<div class="page">' + html + '</div>';
+    view.querySelectorAll('[data-play]').forEach(function (b) {
+      b.addEventListener('click', function () { openPlaybook(b.getAttribute('data-play'), {}); });
+    });
+  }
+
+  function vPlaybooks(qs) {
+    var html = headHTML('Playbooks', 'structured moves · each writes the resolving event, not advice');
+    html += LEADOS.playbooks.LIST.map(function (def) {
+      return '<div class="rank-li"><span class="rank-n">' + ic('play') + '</span>' +
+        '<div class="rank-main"><p class="rank-title">' + esc(def.title) + '</p>' +
+        '<p class="rank-meta">' + (def.forRules.length ? 'resolves ' + def.forRules.join(' · ') : 'diagnostic — sharpens other rules') + '</p></div>' +
+        '<div class="rank-actions"><button class="btn btn-sm" data-open="' + def.id + '">open</button></div></div>';
+    }).join('');
+    html += '<p class="legend" style="margin-top:8px">delegation ladder L1–L5 and situational D1→S matching reference live inside their playbooks</p>';
+    view.innerHTML = '<div class="page">' + html + '</div>';
+    view.querySelectorAll('[data-open]').forEach(function (b) {
+      b.addEventListener('click', function () { openPlaybook(b.getAttribute('data-open'), {}); });
+    });
+    if (qs.open && LEADOS.playbooks.byId[qs.open]) openPlaybook(qs.open, {});
+  }
+
+  function vData() {
+    var state = S();
+    var liveBytes = '';
+    try { liveBytes = (localStorage.getItem(LEADOS.store.KEY) || '').length; } catch (e) { liveBytes = '?'; }
+    var keys = LEADOS.store.browseKeys();
+    var run = LEADOS.engine.run(state, today(), { includeMuted: true });
+    var muted = run.findings.filter(function (f) { return f.muted; });
+    var ruleRows = LEADOS.engine.RULES.map(function (r) {
+      var st = run.perRule[r.id] || { n: 0 };
+      return '<tr><td class="mono"><b>' + r.id + '</b></td><td class="mono">' + r.tag + '</td><td class="mono">' + (r.play || '—') + '</td>' +
+        '<td class="mono">' + (st.threw ? '<span style="color:var(--bad)">THREW — see ENG finding</span>' : st.n + ' finding(s)') + '</td></tr>';
+    }).join('');
+    var html = headHTML('Data plane', 'one key · ~5MB budget <b>(assumption, labeled)</b> · live value ' + Number(liveBytes).toLocaleString() + ' chars');
+    html += '<p class="kicker">Backup · export / import</p>' +
+      '<div class="two-col"><div>' +
+      '<button class="btn" id="dl">' + ic('down') + 'download export (.json)</button>' +
+      '<p class="legend" style="margin:6px 0">full state: meta + people + ' + state.events.length + ' events, pretty-printed</p>' +
+      '</div><div>' +
+      '<div class="fld"><label>import (paste export JSON or choose file)</label><textarea id="importbox" rows="3"></textarea></div>' +
+      '<p style="margin-top:6px"><button class="btn" id="doimport">' + ic('up') + 'import & merge</button> <input type="file" id="importfile" accept=".json,application/json"></p>' +
+      '<p class="legend" style="margin-top:4px">refuses: unparseable · malformed · foreign lineage · newer schema · identical. migrates same-lineage older. merge re-mints every id and rewires every reference (incl. reportsTo — mf-5 fix). live bytes preserved under .pre-import first.</p>' +
+      '</div></div>';
+    html += '<hr class="hr"><p class="kicker">Sample set (demo data, honestly labeled)</p>' +
+      '<p><button class="btn btn-ghost" id="seedbtn">load sample set</button> <button class="btn btn-ghost" id="purgebtn">purge sample set</button></p>' +
+      '<p class="legend">seeded: <b>' + (state.meta.seeded ? 'yes — rows tagged seed:true, purgeable' : 'never') + '</b> · the no-reseed flag is set BEFORE rows are written, and survives purge: a purged database never reseeds. Six people, live triggers for all 15 rules plus deliberate contrasts.</p>';
+    html += '<hr class="hr"><p class="kicker">Key browser (' + keys.length + ')</p>' +
+      '<table class="sheet"><thead><tr><th>key</th><th>kind</th><th>chars</th></tr></thead><tbody>' +
+      (keys.map(function (k) { return '<tr class="clickable" data-key="' + esc(k.key) + '"><td class="mono">' + esc(k.key) + '</td><td class="mono">' + k.kind + '</td><td class="mono">' + k.bytes.toLocaleString() + '</td></tr>'; }).join('') || '<tr><td class="mono" colspan="3">no keys yet</td></tr>') +
+      '</tbody></table><div id="keypeek"></div>' +
+      '<p class="legend">quarantines are read-only here: ' + ['corrupt', 'malformed', 'foreign', 'newer', 'migration-failed', 'pre-migration', 'pre-import'].join(' · ') + '</p>';
+    html += '<hr class="hr"><p class="kicker">Engine</p>' +
+      '<table class="sheet"><thead><tr><th>rule</th><th>tag</th><th>playbook</th><th>status now</th></tr></thead><tbody>' + ruleRows + '</tbody></table>';
+    if (muted.length) {
+      html += '<p class="kicker">Muted findings (' + muted.length + ') — auditable, reversible</p>' +
+        muted.map(function (f) {
+          return '<p><span class="chip">' + esc(f.key) + '</span> ' + esc(f.title) + ' <a class="linklike" data-unmute="' + esc(f.key) + '">unmute</a></p>';
+        }).join('');
+    }
+    html += '<hr class="hr"><p class="kicker">Audit log (latest ' + Math.min(state.log.length, 60) + ' of ' + state.log.length + ', capped at ' + LEADOS.store.LOG_MAX + ')</p>' +
+      '<div class="mono-block" style="max-height:260px;overflow:auto">' +
+      state.log.slice(-60).reverse().map(function (r) { return esc(r.ts.slice(0, 19).replace('T', ' ') + ' · ' + r.kind + ' · ' + r.msg); }).join('\n') + '</div>';
+    view.innerHTML = '<div class="page">' + html + '</div>';
+
+    el('dl').addEventListener('click', function () {
+      var blob = new Blob([LEADOS.store.exportText()], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'leados-export-' + today() + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+      toast('export downloaded');
+    });
+    el('importfile').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () { el('importbox').value = String(rd.result || ''); toast('file loaded into the box — press import & merge'); };
+      rd.readAsText(f);
+    });
+    el('doimport').addEventListener('click', function () {
+      var txt = el('importbox').value;
+      if (!txt.trim()) { toast('✕ paste an export first'); return; }
+      var r = LEADOS.store.importText(txt);
+      if (r.ok) { toast('✓ merged ' + r.mergedPeople + ' people + ' + r.mergedEvents + ' events' + (r.saved ? '' : ' (but save failed: ' + r.saveReason + ')')); render(); }
+      else toast('✕ import refused: ' + r.reason + (r.detail ? ' — ' + r.detail : ''));
+    });
+    el('seedbtn').addEventListener('click', function () {
+      var r = LEADOS.events.seed();
+      toast(r.ok ? '✓ sample set loaded — every rule has something to say' : '✕ seed refused: ' + r.reason + (r.detail ? ' (' + r.detail + ')' : ''));
+      if (r.ok) location.hash = '#/today';
+    });
+    el('purgebtn').addEventListener('click', function () {
+      var r = LEADOS.events.purgeSeed();
+      toast('purged ' + r.removedEvents + ' seed events + ' + r.removedPeople + ' seed people — the no-reseed flag stays');
+    });
+    view.querySelectorAll('tr.clickable[data-key]').forEach(function (tr) {
+      tr.addEventListener('click', function () {
+        var k = tr.getAttribute('data-key');
+        var raw = LEADOS.store.readKey(k);
+        var peek = el('keypeek');
+        peek.innerHTML = raw == null ? '' : '<div class="keyrow"><pre>' + esc(raw.length > 4000 ? raw.slice(0, 4000) + '\n… (' + raw.length + ' chars total)' : raw) + '</pre></div>';
+      });
+    });
+    view.querySelectorAll('[data-unmute]').forEach(function (a) {
+      a.addEventListener('click', function () {
+        LEADOS.events.emit('engine.unmute', { key: a.getAttribute('data-unmute') });
+        toast('unmuted — the engine will speak again if the data still says so');
+      });
+    });
+  }
+
+  /* ── the health wall ────────────────────────────────────────────────── */
+  var FX_DAY = '2026-01-15';
+  function tso(n) { /* n days before FX_DAY, UTC-stable */
+    var d = new Date(Date.UTC(2026, 0, 15, 12, 0, 0));
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString();
+  }
+  function fxState(people, events, metaPatch) {
+    var norm = LEADOS.store._normalizeEvents(events, null);
+    return { meta: Object.assign({ schemaVersion: 3, lineage: 'mf', seeded: false,
+      createdAt: tso(90), writeFailed: false, migrations: [], appointment: null, lastBootRepairs: 0 }, metaPatch || {}),
+      people: people, events: norm.events, log: [] };
+  }
+  function pp(id, name, opts) {
+    return Object.assign({ id: id, name: name, role: '', cadenceDays: 14, reportsTo: 'me',
+      archived: false, createdAt: tso(60), sl: null }, opts || {});
+  }
+  function fev(id, type, data, personId, daysAgo) {
+    return { id: id, ts: tso(daysAgo), type: type, personId: personId || null, data: data || {}, seed: false };
+  }
+  function sweepDisposable() {
+    var kill = [], i, k;
+    try {
+      for (i = 0; i < localStorage.length; i++) {
+        k = localStorage.key(i);
+        if (k && k.indexOf('leados:t') === 0) kill.push(k);
+      }
+      kill.forEach(function (x) { localStorage.removeItem(x); });
+    } catch (e) { /* ignore */ }
+  }
+  function runFindings(state, rulePrefix, day) {
+    var res = LEADOS.engine.run(state, day || FX_DAY, { includeMuted: true });
+    return res.findings.filter(function (f) { return f.key.indexOf(rulePrefix) === 0; });
+  }
+
+  function healthTests() {
+    var T = [], G = [];
+    var store = LEADOS.store;
+    function t(id, name, fn) { T.push({ id: id, name: name, fn: fn }); }
+    function g(id, name, fn) { G.push({ id: id, name: name, fn: fn }); }
+
+    /* ── T: storage / pipeline ── */
+    t('T1', 'fresh boot: missing key → empty v3 state, nothing written yet', function () {
+      var ms = store.makeStore('leados:t:1');
+      var r = ms.load();
+      var s = ms.state();
+      return { pass: r.from === 'empty' && s.meta.schemaVersion === 3 && s.people.length === 0 && localStorage.getItem('leados:t:1') === null,
+        expected: "from=empty · v3 · 0 people · key still absent (we don't write unprompted)",
+        observed: 'from=' + r.from + ' · v' + s.meta.schemaVersion + ' · people=' + s.people.length + ' · key=' + (localStorage.getItem('leados:t:1') === null ? 'absent' : 'present') };
+    });
+    t('T2', 'corrupt bytes → quarantined as corrupt, boots clean, live rows readable', function () {
+      localStorage.setItem('leados:t:2', '{bad');
+      var ms = store.makeStore('leados:t:2');
+      var r = ms.load();
+      var ks = ms.browseKeys().filter(function (k) { return k.kind === 'corrupt'; });
+      return { pass: r.from === 'corrupt' && ks.length === 1 && ms.readKey(ks[0].key) === '{bad' && ms.state().events.length === 0,
+        expected: 'from=corrupt · 1 corrupt key containing the original bytes · clean state',
+        observed: 'from=' + r.from + ' · corruptKeys=' + ks.length + ' · bytes="' + (ks[0] ? ms.readKey(ks[0].key) : '—') + '"' };
+    });
+    t('T3', 'parseable but shapeless JSON → malformed (its own class, not corruption)', function () {
+      localStorage.setItem('leados:t:3', '{"x":1}');
+      var ms = store.makeStore('leados:t:3');
+      var r = ms.load();
+      var ks = ms.browseKeys().filter(function (k) { return k.kind === 'malformed'; });
+      return { pass: r.from === 'malformed' && ks.length === 1,
+        expected: 'from=malformed · 1 malformed key', observed: 'from=' + r.from + ' · keys=' + ks.length };
+    });
+    t('T4', 'wrong lineage → foreign quarantine + fresh boot', function () {
+      localStorage.setItem('leados:t:4', JSON.stringify({ meta: { lineage: 'other-app', schemaVersion: 3 }, people: [], events: [], log: [] }));
+      var ms = store.makeStore('leados:t:4');
+      var r = ms.load();
+      return { pass: r.from === 'foreign',
+        expected: 'from=foreign', observed: 'from=' + r.from };
+    });
+    t('T5', 'newer schema → READ-ONLY, live key bytes untouched forever', function () {
+      var raw = JSON.stringify({ meta: { lineage: 'mf', schemaVersion: 99 }, people: [], events: [], log: [] });
+      localStorage.setItem('leados:t:5', raw);
+      var ms = store.makeStore('leados:t:5');
+      var r = ms.load();
+      var saveTry = ms.save();
+      return { pass: r.from === 'newer' && ms.isReadOnly() && !saveTry.ok && localStorage.getItem('leados:t:5') === raw,
+        expected: 'from=newer · readOnly · save refused · live bytes byte-identical',
+        observed: 'from=' + r.from + ' · readOnly=' + ms.isReadOnly() + ' · save.ok=' + saveTry.ok + ' · bytesIdentical=' + (localStorage.getItem('leados:t:5') === raw) };
+    });
+    t('T6', 'migration ladder 1→2→3 with pre-migration quarantine', function () {
+      localStorage.setItem('leados:t:6', JSON.stringify({ meta: { schemaVersion: 1, lineage: 'mf', seeded: false, createdAt: tso(100), writeFailed: false, migrations: [] }, people: [{ id: 'p1', name: 'Ada' }], events: [], log: [] }));
+      var ms = store.makeStore('leados:t:6');
+      var r = ms.load();
+      var s = ms.state();
+      var pre = ms.browseKeys().filter(function (k) { return k.kind === 'pre-migration'; });
+      return { pass: r.from === 'stored' && s.meta.schemaVersion === 3 && s.people[0].reportsTo === 'me' && ('appointment' in s.meta) && s.meta.appointment === null && pre.length === 1 && s.meta.migrations.length === 2,
+        expected: 'v3 · reportsTo="me" · appointment=null · 1 pre-migration key · 2 migration log entries',
+        observed: 'v' + s.meta.schemaVersion + ' · reportsTo="' + s.people[0].reportsTo + '" · appt=' + JSON.stringify(s.meta.appointment) + ' · preKeys=' + pre.length + ' · migrations=' + s.meta.migrations.length };
+    });
+    t('T7', 'quota: setItem throws QuotaExceededError → caught, state intact, writeFailed set', function () {
+      var ms = store.makeStore('leados:t:7');
+      ms.load();
+      var orig = localStorage.setItem;
+      var res;
+      try {
+        localStorage.setItem = function () { var e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; };
+        res = ms.save();
+      } finally { localStorage.setItem = orig; }
+      return { pass: res && !res.ok && res.reason === 'quota' && ms.state().meta.writeFailed === true && ms.state().meta.schemaVersion === 3,
+        expected: 'save.ok=false (quota) · writeFailed=true · state still coherent',
+        observed: 'ok=' + (res && res.ok) + ' · reason=' + (res && res.reason) + ' · writeFailed=' + ms.state().meta.writeFailed };
+    });
+    t('T8', 'import refusals: unparseable · malformed · foreign · newer · identical', function () {
+      var ms = store.makeStore('leados:t:8');
+      ms.load();
+      var r1 = ms.importText('{bad');
+      var r2 = ms.importText('{"x":1}');
+      var r3 = ms.importText(JSON.stringify({ meta: { lineage: 'zz', schemaVersion: 3 }, people: [], events: [] }));
+      var r4 = ms.importText(JSON.stringify({ meta: { lineage: 'mf', schemaVersion: 99 }, people: [], events: [] }));
+      var r5 = ms.importText(ms.exportText());
+      var reasons = [r1.reason, r2.reason, r3.reason, r4.reason, r5.reason].join(' · ');
+      return { pass: !r1.ok && r1.reason === 'unparseable' && r2.reason === 'malformed' && r3.reason === 'foreign' && r4.reason === 'newer' && r5.reason === 'identical',
+        expected: 'unparseable · malformed · foreign · newer · identical', observed: reasons };
+    });
+    t('T9', 'import merge: every id re-minted, every reference rewired — incl. reportsTo (mf-5 fix)', function () {
+      var ms = store.makeStore('leados:t:9');
+      ms.load();
+      ms.state().people.push(pp('LIVE1', 'Live Person'));
+      ms.state().events.push(fev('LIVEE1', 'goal.set', { title: 'live goal', ownerId: 'LIVE1' }, null, 3));
+      ms.save();
+      var fileText = JSON.stringify({
+        meta: { schemaVersion: 3, lineage: 'mf' },
+        people: [pp('IMP0', 'Import Lead'), pp('IMP1', 'Import Skip', { reportsTo: 'IMP0' })],
+        events: [fev('IMPE1', 'decision.registered', { title: 'imported decision', severity: 4, reviewDate: '2026-01-20' }, null, 5),
+                 fev('IMPE2', 'decision.outcome', { decisionId: 'IMPE1', outcome: 'done' }, null, 1)]
+      });
+      var r = ms.importText(fileText);
+      var s = ms.state();
+      var impLead = s.people.filter(function (p) { return p.name === 'Import Lead'; })[0];
+      var impSkip = s.people.filter(function (p) { return p.name === 'Import Skip'; })[0];
+      var impDec = s.events.filter(function (e) { return e.type === 'decision.registered' && (e.data || {}).title === 'imported decision'; })[0];
+      var impOut = s.events.filter(function (e) { return e.type === 'decision.outcome'; })[0];
+      var pre = ms.browseKeys().filter(function (k) { return k.kind === 'pre-import'; });
+      var ok = r.ok && impLead && impSkip && impDec && impOut &&
+        impLead.id !== 'IMP0' && impSkip.id !== 'IMP1' && impDec.id !== 'IMPE1' &&
+        impOut.data.decisionId === impDec.id &&
+        impSkip.reportsTo === impLead.id && /* THE mf-5 fix — upstream regexes missed reportsTo */
+        s.people.filter(function (p) { return p.name === 'Live Person'; }).length === 1 &&
+        pre.length === 1;
+      return { pass: !!ok,
+        expected: 'ids re-minted · outcome→decision rewired · reportsTo rewired · live rows intact · 1 pre-import key',
+        observed: 'ok=' + r.ok + ' · outcome.decisionId=' + (impOut && impOut.data.decisionId) + ' === decision ' + (impDec && impDec.id) +
+          ' · skip.reportsTo=' + (impSkip && impSkip.reportsTo) + ' === lead ' + (impLead && impLead.id) + ' · preImportKeys=' + pre.length };
+    });
+    t('T10', 'normalize: repairs, never drops; unknown data fields (counterpartPersonId) preserved', function () {
+      var res = store._normalizeEvents([
+        { id: 'a', ts: '2026-01-01T00:00:00.000Z', type: 'conflict.registered', personId: null, data: { counterpartPersonId: 'p1' }, seed: false },
+        'garbage row',
+        { id: 'a', ts: '2026-01-02T00:00:00.000Z', type: 'pulse.logged', personId: 'p1', data: {}, seed: false },
+        null
+      ], null);
+      var first = res.events[0];
+      return { pass: res.events.length === 4 && first.data.counterpartPersonId === 'p1' && res.events[2].id !== 'a' && res.repairs.length >= 3,
+        expected: '4 rows out (none dropped) · unknown field intact · dup id re-minted · ≥3 repairs',
+        observed: 'rows=' + res.events.length + ' · cpId=' + first.data.counterpartPersonId + ' · repairs=' + res.repairs.length };
+    });
+    t('T11', 'seed/purge: flag set before rows; reseed refused; purge clears rows, keeps flag', function () {
+      var ms = store.makeStore('leados:t:11');
+      ms.load();
+      var r1 = LEADOS.events.seed(ms);
+      var seededPeople = ms.state().people.length;
+      var r2 = LEADOS.events.seed(ms);
+      var r3 = LEADOS.events.purgeSeed(ms);
+      return { pass: r1.ok && !r2.ok && r2.reason === 'already-seeded' && r3.ok && ms.state().events.filter(function (e) { return e.seed; }).length === 0 && ms.state().people.length === 0 && ms.state().meta.seeded === true,
+        expected: 'seed ok · second seed refused · purge removes all seed rows · flag stays true',
+        observed: 'seed=' + r1.ok + ' · reseed=' + r2.reason + ' · purgedPeople=' + r3.removedPeople + ' (had ' + seededPeople + ') · flag=' + ms.state().meta.seeded };
+    });
+    t('T12', 'quarantine collision: two quarantines, same forced millisecond — BOTH survive', function () {
+      var ms = store.makeStore('leados:t:12');
+      ms.load();
+      ms._forceStamp('FIXED-STAMP');
+      var k1 = ms._quarantine('corrupt', 'payload-a');
+      var k2 = ms._quarantine('corrupt', 'payload-b');
+      ms._forceStamp(null);
+      var a = ms.readKey(k1), b = ms.readKey(k2);
+      return { pass: k1 !== k2 && a === 'payload-a' && b === 'payload-b',
+        expected: 'distinct keys (collision suffix) · both payloads readable',
+        observed: 'k1=…' + k1.slice(-14) + ' · k2=…' + k2.slice(-14) + ' · a=' + a + ' · b=' + b };
+    });
+    t('T13', 'module registry: every declared js file registered (makes the tree executable)', function () {
+      var have = Object.keys(LEADOS._mod).sort().join(',');
+      var ok = ['store', 'events', 'engine', 'playbooks', 'ui'].every(function (m) { return LEADOS._mod[m] === 'js/' + m + '.js'; }) && LEADOS._booted === true;
+      return { pass: ok,
+        expected: 'store,events,engine,playbooks,ui → js/*.js · _booted=true',
+        observed: 'registered: ' + have + ' · _booted=' + LEADOS._booted };
+    });
+
+    /* ── G: engine goldens (fixed "today" = 2026-01-15) ── */
+    g('G1', 'R1: 1:1 overdue strictly past cadence (15d > 14d → fires, HIGH)', function () {
+      var f = runFindings(fxState([pp('A', 'Ana', { cadenceDays: 14 })], [fev('e1', 'oneonone.logged', {}, 'A', 15)]), 'R1:');
+      return { pass: f.length === 1 && f[0].conf === 'high' && f[0].sev === 3,
+        expected: '1 finding, high, sev 3', observed: f.length + ' · ' + (f[0] ? f[0].conf + ' sev' + f[0].sev + ' · ' + f[0].title : '—') };
+    });
+    g('G2', 'R1 boundary: exactly at cadence (14d) stays silent; never-logged fires MEDIUM', function () {
+      var at = runFindings(fxState([pp('A', 'Ana', { cadenceDays: 14 })], [fev('e1', 'oneonone.logged', {}, 'A', 14)]), 'R1:');
+      var never = runFindings(fxState([pp('B', 'Bob', { cadenceDays: 14 })], []), 'R1:');
+      return { pass: at.length === 0 && never.length === 1 && never[0].conf === 'medium',
+        expected: '0 at-boundary · 1 never-logged (medium)',
+        observed: 'boundary=' + at.length + ' · never=' + never.length + ' ' + (never[0] ? never[0].conf : '') };
+    });
+    g('G3', 'R2: review yesterday fires (sev inherits); today silent; outcome closes', function () {
+      var base = [fev('d1', 'decision.registered', { title: 'X', severity: 4, reviewDate: '2026-01-14' }, null, 10)];
+      var past = runFindings(fxState([], base), 'R2:');
+      var todayF = runFindings(fxState([], [fev('d2', 'decision.registered', { title: 'Y', severity: 3, reviewDate: '2026-01-15' }, null, 10)]), 'R2:');
+      var done = runFindings(fxState([], base.concat([fev('o1', 'decision.outcome', { decisionId: 'd1', outcome: 'ok' }, null, 2)])), 'R2:');
+      return { pass: past.length === 1 && past[0].sev === 4 && todayF.length === 0 && done.length === 0,
+        expected: 'past fires sev4 · due-today silent · outcome silent',
+        observed: past.length + '/' + todayF.length + '/' + done.length };
+    });
+    g('G4', 'R3: ownerless fires; progress silence >14d fires; ≤14d silent', function () {
+      var ownerless = runFindings(fxState([pp('A', 'Ana')], [fev('g1', 'goal.set', { title: 'orphan', ownerId: null }, null, 10)]), 'R3o:');
+      var silent = runFindings(fxState([pp('A', 'Ana')], [fev('g2', 'goal.set', { title: 'drifting', ownerId: 'A' }, null, 40), fev('g2p', 'goal.progress', { goalId: 'g2', note: 'x' }, null, 15)]), 'R3s:');
+      var fresh = runFindings(fxState([pp('A', 'Ana')], [fev('g3', 'goal.set', { title: 'on track', ownerId: 'A' }, null, 40), fev('g3p', 'goal.progress', { goalId: 'g3' }, null, 14)]), 'R3s:');
+      return { pass: ownerless.length === 1 && silent.length === 1 && fresh.length === 0,
+        expected: '1 ownerless · 1 silent · 0 at-boundary',
+        observed: ownerless.length + '/' + silent.length + '/' + fresh.length };
+    });
+    g('G5', 'R4: 3/3 corrective fires; mixed polarity silent; missing polarity excluded, printed', function () {
+      var corr = [fev('f1', 'feedback.given', { polarity: 'corrective' }, 'D', 30), fev('f2', 'feedback.given', { polarity: 'corrective' }, 'D', 20), fev('f3', 'feedback.given', { polarity: 'corrective' }, 'D', 10)];
+      var only = runFindings(fxState([pp('D', 'Dana')], corr), 'R4:');
+      var mixed = runFindings(fxState([pp('D', 'Dana')], corr.concat([fev('f4', 'feedback.given', { polarity: 'positive' }, 'D', 5)])), 'R4:');
+      var wob = runFindings(fxState([pp('D', 'Dana')], corr.concat([fev('f5', 'feedback.given', {}, 'D', 4)])), 'R4:');
+      return { pass: only.length === 1 && mixed.length === 0 && wob.length === 1 && /excluded/.test(wob[0].basis.join(' ')),
+        expected: '1 imbalance · 0 mixed · 1 with "excluded" basis line',
+        observed: only.length + '/' + mixed.length + '/' + wob.length };
+    });
+    g('G6', 'R5: 5 open delegations fire; 4 do not', function () {
+      function dels(n) { var out = []; for (var i = 0; i < n; i++) out.push(fev('dl' + i, 'delegation.assigned', { task: 't' + i, level: 2 }, 'T', 20 - i)); return out; }
+      var over = runFindings(fxState([pp('T', 'Theo')], dels(5)), 'R5:');
+      var atmax = runFindings(fxState([pp('T', 'Theo')], dels(4)), 'R5:');
+      return { pass: over.length === 1 && atmax.length === 0,
+        expected: '1 / 0', observed: over.length + ' / ' + atmax.length };
+    });
+    g('G7', 'R6: pair fires per PAIR; linked=high · text=medium · single conflict silent', function () {
+      var linked = runFindings(fxState([pp('D', 'Dana'), pp('P', 'Priya')], [
+        fev('c1', 'conflict.registered', { partyAPersonId: 'D', counterpartPersonId: 'P', topic: 'tone' }, null, 12),
+        fev('c2', 'conflict.registered', { partyAPersonId: 'D', counterpartPersonId: 'P', topic: 'handoff' }, null, 4)]), 'R6:');
+      var text = runFindings(fxState([], [
+        fev('c3', 'conflict.registered', { counterpartText: 'Dana', topic: 'a' }, null, 9),
+        fev('c4', 'conflict.registered', { counterpartText: 'dana ', topic: 'b' }, null, 3)]), 'R6:');
+      var single = runFindings(fxState([pp('D', 'Dana'), pp('P', 'Priya')], [fev('c5', 'conflict.registered', { partyAPersonId: 'D', counterpartPersonId: 'P', topic: 'x' }, null, 2)]), 'R6:');
+      return { pass: linked.length === 1 && linked[0].conf === 'high' && text.length === 1 && text[0].conf === 'medium' && single.length === 0,
+        expected: 'linked 1/high · text 1/medium (normalized “dana ” = same pair) · single 0',
+        observed: linked.length + ':' + (linked[0] || {}).conf + ' · ' + text.length + ':' + (text[0] || {}).conf + ' · ' + single.length };
+    });
+    g('G8', 'R7: ≥3 measured, load≥8 or slope≤−0.4; estimates & n=2 stay silent; slope −0.40 boundary fires', function () {
+      function pulse(id, mood, load, daysAgo, measured) { return fev(id, 'pulse.logged', { mood: mood, load: load, measured: measured !== false }, 'T', daysAgo); }
+      var both = runFindings(fxState([pp('T', 'Theo')], [pulse('p1', 5, 9, 10), pulse('p2', 3, 9, 6), pulse('p3', 1, 9, 2)]), 'R7:');
+      var two = runFindings(fxState([pp('T', 'Theo')], [pulse('q1', 5, 9, 10), pulse('q2', 1, 9, 2)]), 'R7:');
+      var est = runFindings(fxState([pp('T', 'Theo')], [pulse('r1', 5, 9, 10, false), pulse('r2', 3, 9, 6, false), pulse('r3', 1, 9, 2, false)]), 'R7:');
+      var bound = runFindings(fxState([pp('T', 'Theo')], [pulse('s1', 5, 7, 12), pulse('s2', 3, 7, 7), pulse('s3', 1, 7, 2)]), 'R7:');
+      var slopeLine = bound.length ? /mood slope -0\.40/.test(bound[0].basis.join(' ')) : false;
+      return { pass: both.length === 1 && two.length === 0 && est.length === 0 && bound.length === 1 && slopeLine,
+        expected: 'fires n=3 (both signals) · silent n=2 · silent estimates-only · fires at slope exactly −0.40',
+        observed: both.length + '/' + two.length + '/' + est.length + '/' + bound.length + ' slopeLine=' + slopeLine };
+    });
+    g('G9', 'R8: skip-level per VERIFIED line; 29d fires · 28d silent · broken line & cycle silent, no throw', function () {
+      var lead = pp('L', 'Lead'); var skip = pp('S', 'Skip', { reportsTo: 'L' });
+      var over = runFindings(fxState([lead, skip], [fev('k1', 'oneonone.logged', { mode: 'skip' }, 'S', 29)]), 'R8:');
+      var at = runFindings(fxState([lead, skip], [fev('k2', 'oneonone.logged', { mode: 'skip' }, 'S', 28)]), 'R8:');
+      var broken = fxState([pp('S2', 'Orphan', { reportsTo: 'ghost' })], []);
+      var cyc = fxState([pp('C1', 'Cyc1', { reportsTo: 'C2' }), pp('C2', 'Cyc2', { reportsTo: 'C1' })], []);
+      var rb = runFindings(broken, 'R8:'), rc = runFindings(cyc, 'R8:');
+      return { pass: over.length === 1 && at.length === 0 && rb.length === 0 && rc.length === 0,
+        expected: '1 / 0 / 0 (broken) / 0 (cycle) — silence, never guesses your org',
+        observed: over.length + '/' + at.length + '/' + rb.length + '/' + rc.length };
+    });
+    g('G10', 'R9: day 14 fires; day 13 silent; captured expectations silence it', function () {
+      var meta14 = { appointment: tso(14).slice(0, 10) };
+      var fires = runFindings(fxState([], [], meta14), 'R9:');
+      var silent = runFindings(fxState([], [], { appointment: tso(13).slice(0, 10) }), 'R9:');
+      var captured = runFindings(fxState([], [fev('x1', 'expectations.captured', { priorities: ['a'] }, null, 2)], meta14), 'R9:');
+      return { pass: fires.length === 1 && silent.length === 0 && captured.length === 0 && fires[0].title.indexOf('Day 14') === 0,
+        expected: '1 (Day 14) · 0 · 0', observed: fires.length + '/' + silent.length + '/' + captured.length };
+    });
+    g('G11', 'R10: roster-relative coverage; day≥45 gate sev 4 · day 14–44 sev 2 pace · full coverage silent', function () {
+      var people = [pp('A', 'Ana'), pp('C', 'Cole'), pp('B', 'Skip', { reportsTo: 'A' })];
+      var gate = runFindings(fxState(people, [fev('v1', 'tour.visit', {}, 'A', 20)], { appointment: tso(45).slice(0, 10) }), 'R10:');
+      var pace = runFindings(fxState(people, [fev('v1', 'tour.visit', {}, 'A', 20)], { appointment: tso(44).slice(0, 10) }), 'R10:');
+      var full = runFindings(fxState(people, [fev('v1', 'tour.visit', {}, 'A', 20), fev('v2', 'tour.visit', {}, 'C', 19), fev('v3', 'tour.visit', {}, 'B', 18)], { appointment: tso(45).slice(0, 10) }), 'R10:');
+      return { pass: gate.length === 1 && gate[0].sev === 4 && pace.length === 1 && pace[0].sev === 2 && full.length === 0,
+        expected: 'gate sev4 (1/3 visited) · pace sev2 · full coverage silent',
+        observed: 'gate=' + (gate[0] || {}).sev + ' · pace=' + (pace[0] || {}).sev + ' · full=' + full.length };
+    });
+    g('G12', 'R11: past verify date fires; verified closes; future silent', function () {
+      var past = runFindings(fxState([], [fev('w1', 'win.planned', { title: 'win', verifyDate: '2026-01-14' }, null, 21)]), 'R11:');
+      var late = runFindings(fxState([], [fev('w2', 'win.planned', { title: 'win2', verifyDate: '2025-12-26' }, null, 40)]), 'R11:');
+      var done = runFindings(fxState([], [fev('w3', 'win.planned', { title: 'w3', verifyDate: '2026-01-10' }, null, 20), fev('wv', 'win.verified', { winId: 'w3' }, null, 2)]), 'R11:');
+      return { pass: past.length === 1 && past[0].sev === 3 && late.length === 1 && late[0].sev === 4 && done.length === 0,
+        expected: 'sev3 at 1d late · sev4 at 20d late · 0 verified',
+        observed: (past[0] || {}).sev + '/' + (late[0] || {}).sev + '/' + done.length };
+    });
+    g('G13', 'R12: ≥7d silence fires (boundary); update resets; closed silent', function () {
+      var at = runFindings(fxState([], [fev('i1', 'incident.registered', { title: 'outage' }, null, 7)]), 'R12:');
+      var under = runFindings(fxState([], [fev('i2', 'incident.registered', { title: 'x' }, null, 6)]), 'R12:');
+      var upd = runFindings(fxState([], [fev('i3', 'incident.registered', { title: 'y' }, null, 9), fev('iu', 'incident.update', { incidentId: 'i3', note: 'n' }, null, 2)]), 'R12:');
+      var closed = runFindings(fxState([], [fev('i4', 'incident.registered', { title: 'z' }, null, 20), fev('ic', 'incident.update', { incidentId: 'i4', closed: true }, null, 15)]), 'R12:');
+      return { pass: at.length === 1 && under.length === 0 && upd.length === 0 && closed.length === 0,
+        expected: '1 at 7d · 0 at 6d · 0 updated 2d ago · 0 closed',
+        observed: at.length + '/' + under.length + '/' + upd.length + '/' + closed.length };
+    });
+    g('G14', 'R13: nexus needs ≥3 open across ≥2 DISTINCT resolvable counterparts — MEDIUM permanently', function () {
+      var people = [pp('M', 'Marcus'), pp('J', 'Jonas'), pp('A', 'Ana')];
+      var nexus = runFindings(fxState(people, [
+        fev('n1', 'conflict.registered', { partyAPersonId: 'M', counterpartPersonId: 'J', topic: 'a' }, null, 16),
+        fev('n2', 'conflict.registered', { partyAPersonId: 'M', counterpartPersonId: 'A', topic: 'b' }, null, 9),
+        fev('n3', 'conflict.registered', { partyAPersonId: 'M', counterpartPersonId: 'J', topic: 'c' }, null, 2)]), 'R13:');
+      var same = runFindings(fxState(people, [
+        fev('n4', 'conflict.registered', { partyAPersonId: 'M', counterpartPersonId: 'J', topic: 'a' }, null, 16),
+        fev('n5', 'conflict.registered', { partyAPersonId: 'M', counterpartPersonId: 'J', topic: 'b' }, null, 9),
+        fev('n6', 'conflict.registered', { partyAPersonId: 'M', counterpartPersonId: 'J', topic: 'c' }, null, 2)]), 'R13:');
+      return { pass: nexus.length === 1 && nexus[0].conf === 'medium' && /not a diagnosis/.test(nexus[0].confWhy) && same.length === 0,
+        expected: '1 nexus (medium, “not a diagnosis”) · 0 when one counterpart repeats (that is R6’s pair, not a nexus)',
+        observed: nexus.length + ':' + (nexus[0] || {}).conf + ' · ' + same.length };
+    });
+    g('G15', 'R14: ≥480 min/wk fires · 478 silent · biweekly counts half (960 biweekly = 480 exactly)', function () {
+      function series(id, startMin, endMin, dow, cadence, pid) {
+        return fev(id, 'meeting.series', { title: id, startMin: startMin, endMin: endMin, dow: dow, cadence: cadence, attendeeIds: [pid] }, null, 30);
+      }
+      var fire = runFindings(fxState([pp('A', 'Ana')], [series('m1', 540, 660, [1, 2, 3], 'weekly', 'A'), series('m2', 540, 600, [2, 4], 'weekly', 'A')]), 'R14:A');
+      var under = runFindings(fxState([pp('A', 'Ana')], [series('m3', 540, 660, [1, 2, 3], 'weekly', 'A'), series('m4', 540, 599, [2, 4], 'weekly', 'A')]), 'R14:A');
+      var half = runFindings(fxState([pp('W', 'Wes')], [series('m5', 540, 1500, [1], 'biweekly', 'W')]), 'R14:W');
+      return { pass: fire.length === 1 && under.length === 0 && half.length === 1,
+        expected: '480 fires · 478 silent · 960min biweekly = 480/wk fires (halving proven)',
+        observed: fire.length + '/' + under.length + '/' + half.length };
+    });
+    g('G16', 'R15: sev≥4 ungated ≥2d fires; grace day silent; sev 3 silent; premortem closes; no-severity skips', function () {
+      var old = runFindings(fxState([], [fev('d1', 'decision.registered', { title: 'risky', severity: 4, reviewDate: '2026-02-01' }, null, 2)]), 'R15:');
+      var grace = runFindings(fxState([], [fev('d2', 'decision.registered', { title: 'fresh', severity: 4, reviewDate: '2026-02-01' }, null, 1)]), 'R15:');
+      var low = runFindings(fxState([], [fev('d3', 'decision.registered', { title: 'minor', severity: 3, reviewDate: '2026-02-01' }, null, 30)]), 'R15:');
+      var closed = runFindings(fxState([], [fev('d4', 'decision.registered', { title: 'gated', severity: 5, reviewDate: '2026-02-01' }, null, 9), fev('pm', 'premortem.held', { decisionId: 'd4', failureStory: 'x' }, null, 8)]), 'R15:');
+      var nosev = runFindings(fxState([], [fev('d5', 'decision.registered', { title: 'legacy' }, null, 30)]), 'R15:');
+      return { pass: old.length === 1 && grace.length === 0 && low.length === 0 && closed.length === 0 && nosev.length === 0,
+        expected: '1 / 0 / 0 / 0 / 0 — missing severity SKIPS (never inferred)',
+        observed: old.length + '/' + grace.length + '/' + low.length + '/' + closed.length + '/' + nosev.length };
+    });
+    g('G17', 'ENG guard: a throwing rule becomes a loud SEV-5 finding; every other rule still runs', function () {
+      LEADOS.engine.RULES.push({ id: 'RX', tag: 'test', play: null, fn: function () { throw new Error('boom-fixture'); } });
+      var res;
+      try { res = LEADOS.engine.run(fxState([], []), FX_DAY, {}); }
+      finally { LEADOS.engine.RULES.pop(); }
+      var eng = res.findings.filter(function (f) { return f.rule === 'ENG'; });
+      return { pass: eng.length === 1 && eng[0].sev === 5 && /boom-fixture/.test(eng[0].basis.join(' ')),
+        expected: '1 ENG finding sev 5 containing the exception message; run completed',
+        observed: eng.length + ' · sev' + (eng[0] || {}).sev + ' · ' + (eng[0] ? eng[0].title : '—') };
+    });
+
+    return { T: T, G: G };
+  }
+
+  function vHealth() {
+    var suites = healthTests();
+    var rows = [];
+    function exec(t) {
+      var r;
+      try { r = t.fn(); }
+      catch (e) { r = { pass: false, expected: '(no throw)', observed: 'THREW: ' + (e && e.message || e) }; }
+      r.id = t.id; r.name = t.name; rows.push(r);
+      return r;
+    }
+    sweepDisposable();
+    try {
+      suites.T.forEach(exec);
+      suites.G.forEach(exec);
+    } finally {
+      sweepDisposable();
+    }
+    var pass = rows.filter(function (r) { return r.pass; }).length;
+    var fail = rows.length - pass;
+    var html = headHTML('Health', 'every row executed <b>at this render</b> · fixtures on real code paths · disposable keys swept');
+    html += '<div class="wall-summary"><span class="big ' + (fail ? 'bad' : 'ok') + '">' + pass + ' / ' + rows.length + '</span>' +
+      '<span class="section-note">rows passing. This wall — not the README — is the authority. Any red row means the code, the fixture, or this machine’s storage disagrees with a claim.</span></div>';
+    function table(title, list) {
+      return '<p class="kicker">' + title + '</p><table class="sheet"><thead><tr><th>id</th><th>assertion</th><th>expected / observed</th></tr></thead><tbody>' +
+        list.map(function (r) {
+          return '<tr class="' + (r.pass ? '' : 'fail') + '"><td class="mono"><b>' + r.id + '</b></td><td>' + esc(r.name) + '</td>' +
+            '<td class="mono">' + (r.pass ? '✓' : '✗ FAIL') + '<span class="obs">want: ' + esc(r.expected) + '\ngot:&nbsp;&nbsp;' + esc(r.observed) + '</span></td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+    html += table('storage / pipeline', rows.filter(function (r) { return r.id[0] === 'T'; }));
+    html += table('engine goldens · fixed today 2026-01-15', rows.filter(function (r) { return r.id[0] === 'G'; }));
+    html += '<p class="legend" style="margin-top:8px">fixture-based assertions on the production code paths — not browser automation, not a fuzzer, and the UI above this line is not graded by it. Counts are computed at render; no doc asserts them.</p>';
+    view.innerHTML = '<div class="page">' + html + '</div>';
+  }
+
+  /* ── render + wire-up ───────────────────────────────────────────────── */
+  function render() {
+    var r = route();
+    var name = (r.path.split('/')[1] || 'today');
+    document.querySelectorAll('#rail-links a').forEach(function (a) {
+      a.className = a.getAttribute('data-route') === name ? 'on' : '';
+    });
+    if (r.path.indexOf('#/roster/') === 0) return vDossier(decodeURIComponent(r.path.split('/')[2] || ''));
+    if (name === 'today') return vToday(r.qs);
+    if (name === 'roster') return vRoster();
+    if (name === 'arrival') return vArrival();
+    if (name === 'playbooks') return vPlaybooks(r.qs);
+    if (name === 'health') return vHealth();
+    if (name === 'data') return vData();
+    return vToday(r.qs);
+  }
+
+  function boot() {
+    view = el('view');
+    LEADOS.store.load();
+    LEADOS.store.refreshPill();
+    LEADOS._changed = function (resp) {
+      if (resp && !resp.ok && resp.reason && resp.reason !== 'read-only') {
+        toast('WRITE FAILED (' + resp.reason + ') — state kept in memory; export a backup at #/data');
+      }
+      LEADOS.store.refreshPill();
+      render();
+    };
+    window.addEventListener('hashchange', function () { drawer = null; renderDrawer(); render(); });
+    /* midnight straddle: the engine keys on "today" — re-render when it flips */
+    var lastDay = today();
+    setInterval(function () {
+      var c = el('clock');
+      if (c) {
+        var d = new Date();
+        c.textContent = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+      }
+      if (today() !== lastDay) { lastDay = today(); render(); }
+    }, 20000);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && drawer) closeDrawer(); });
+    if (!location.hash) location.hash = '#/today';
+    LEADOS._booted = true;
+    render();
+  }
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 })();

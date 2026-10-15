@@ -3,45 +3,66 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LeadOS · mf-4 — Leadership Operating System</title>
-<meta name="description" content="Offline-first leadership mentor for newly appointed multi-team leaders. One localStorage key, an event store, a rules engine, and structured playbooks. No network.">
+<title>LeadOS · mf-5 — Leadership Operating System</title>
+<meta name="description" content="Offline-first leadership mentor. Vanilla JS, one localStorage key, no network.">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-
-<div id="splash" aria-hidden="true">
-  <div class="splash-inner">
-    <div class="splash-word">LeadOS</div>
-    <div class="splash-sub mono">mf-4 · storage · engine · playbooks · arrival · conflict pairs</div>
-  </div>
-</div>
-
-<div id="writefail" class="writefail mono" hidden>WRITE FAILED — STORAGE QUOTA · in-memory state intact · export a backup from #/data</div>
-
 <div class="shell">
   <nav id="rail" aria-label="Primary">
-    <div class="rail-brand">
-      <span class="rail-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 20V9l8-5 8 5v11" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 20v-6h6v6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>
-      <span class="rail-name">LeadOS<span class="rail-ver mono">mf-4</span></span>
+    <a class="brand" href="#/today">LeadOS<span class="brand-tag">mf-5</span></a>
+    <p class="rail-note">offline · one key ·<br>no network</p>
+    <div class="rail-links" id="rail-links">
+      <a href="#/today"     data-route="today">Today</a>
+      <a href="#/roster"    data-route="roster">Roster</a>
+      <a href="#/arrival"   data-route="arrival">Arrival</a>
+      <a href="#/playbooks" data-route="playbooks">Playbooks</a>
+      <a href="#/health"    data-route="health">Health</a>
+      <a href="#/data"      data-route="data">Data</a>
     </div>
-    <div class="rail-links" id="rail-links"><!-- rendered by ui.js --></div>
-    <div class="rail-foot mono">offline · one key ·<br>no network</div>
+    <div class="rail-foot">
+      <span id="pill" class="pill pill-unknown" title="storage write status">…</span>
+      <span id="clock" class="rail-clock"></span>
+    </div>
   </nav>
-
-  <main id="view" tabindex="-1"><!-- rendered by ui.js --></main>
+  <main id="view" tabindex="-1">
+    <p class="boot-hint">loading modules…</p>
+  </main>
 </div>
+<div id="toast" class="toast" hidden></div>
 
-<div id="drawer" class="drawer" hidden>
-  <div class="drawer-scrim" data-close-drawer></div>
-  <div class="drawer-panel" role="dialog" aria-modal="true" aria-label="Playbook">
-    <div class="drawer-head">
-      <div id="drawer-title" class="drawer-title"></div>
-      <button class="iconbtn" data-close-drawer aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 5l14 14M19 5L5 19" stroke="currentColor" stroke-width="1.8" fill="none"/></svg></button>
-    </div>
-    <div id="drawer-body" class="drawer-body"></div>
-  </div>
-</div>
-
+<script>
+/* Boot guard — runs even if a module file 404s (that is its whole job).
+   Every js/*.js registers LEADOS._mod[name]; ui.js sets LEADOS._booted.
+   If either fails, we replace the view with a LOUD fatal banner naming the
+   missing path(s). This makes the README's file-table claim executable:
+   a broken tree can never again render a live-looking dead app (mf-5). */
+window.LEADOS = window.LEADOS || { _mod: {} };
+LEADOS._mod = LEADOS._mod || {};
+LEADOS._expected = ['store', 'events', 'engine', 'playbooks', 'ui'];
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    if (window.LEADOS && LEADOS._booted) return;
+    var missing = LEADOS._expected.filter(function (m) { return !LEADOS._mod[m]; });
+    var view = document.getElementById('view');
+    if (!view) return;
+    view.innerHTML =
+      '<section class="fatal">' +
+      '<h1>LeadOS failed to boot</h1>' +
+      '<p class="mono">' + (missing.length
+        ? 'module(s) did not register: <b>' + missing.join(', ') + '</b>'
+        : 'ui.js loaded but _booted was never set (init threw).') + '</p>' +
+      '<p>Expected files: <span class="mono">css/app.css · ' +
+      LEADOS._expected.map(function (m) { return 'js/' + m + '.js'; }).join(' · ') +
+      '</span></p>' +
+      '<p>The file tree must match the README exactly. Check for renamed, moved or missing ' +
+      'files, then reload. Your data (key <span class="mono">leados:data</span>) was not touched.</p>' +
+      '</section>';
+    var pill = document.getElementById('pill');
+    if (pill) { pill.textContent = 'BOOT FAILED'; pill.className = 'pill pill-bad'; }
+  }, 1200);
+});
+</script>
 <script src="js/store.js"></script>
 <script src="js/events.js"></script>
 <script src="js/engine.js"></script>
