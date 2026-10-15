@@ -65,6 +65,23 @@ Lineage note: R1–R10 predated the attached codebase and were not inspectable;
 they are reconstructed and pinned to the settings the pt-1 selectors already
 prove — full disclosure in `AI-SESSION-LOG.md` §10.
 
+## Strict doctrines (pt-4 part 9)
+
+| Doctrine | How it is enforced structurally | Proof |
+|---|---|---|
+| Projections: last-writer-wins by append order; derived values re-computed per read, never persisted | entity maps keyed by id, `open*` rebuilt in `finalize()`, named projections are *aliases* of the folded objects | T25, G10, G4, G7 |
+| Findings: stable keys (`R11:<riskId>`, `R12:<dealId>`) — second-run safe | `fin()` computes `key = <rule>:<scope‖refs[0]>`; ref-less findings declare an explicit `scope` (`R17:uptime:streak`, `R39:board`) so keys never depend on wording or dates | T28, G13 |
+| Import gate rewires `*Id` fields automatically | `store.mergeInto()` plans an id map from `events.CREATES`, then **recursively walks every payload** — any data value matching a known incoming id is rewired, including inside arrays and nested objects the gate has no schema for | T30 |
+| Dangling refs: skip + `_skipped.dangling*` | each event's declared `refs`/`refArrays` must resolve in (this store ∪ already-accepted imports), else the event is dropped and `_skipped.danglingDeals` / `danglingFinBudgets` / `danglingMilestones` … is incremented | T30 |
+| Missing fields skip rather than infer | every rule returns early on an absent key date/value | T22, G16, G25, G29 |
+| A count is never stated as certainty | every computed finding prints its arithmetic **and** names the event type it read | T29/G13 (empty `basis` fails), G18, G20, G24, G26 |
+| Sev 3 ceiling for trend-based findings | `fin()` clamps any finding marked `trend: true` to 3 **and prints that it did**. Marked: R15 pattern, R17 streak, R19 window, R24 streak, R33 slope, R36 CPA. Exceptions named by the doctrine — safety (R28) and legal `fail` (R30) — read direct data and are never marked | T29, G13, G19, G28 |
+
+> **Behaviour change recorded:** this ceiling supersedes part 7's G28 (*3 consecutive
+> OKRs <0.4 → sev 4*) and part 3's R19 (*≥3 departures → sev 4*). Both now cap at
+> sev 3 with the clamp disclosed in the basis line. Single-OKR scores stay sev 3/4
+> because an explicit score is direct data, not a pattern. See `AI-SESSION-LOG.md` §35.
+
 ## Views (pt-4 part 6)
 
 Left **rail nav** with hash routes — deep-linkable, no router library:
@@ -195,14 +212,15 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 | **T20b** | **extended seed fires all 40 rules *and* reaches both severity bands of R13/R22/R30 plus the open-incident branch of R16** |
 | T21–T24 | ≥3-point trend discipline · skip-not-infer · severity escalations · all 40 rules fire |
 | T25–T27 | named projections · playbook contract · UI contract |
+| **T28–T30** | **stable finding keys · sev-3 trend ceiling with named exceptions · import gate (recursive rewire, dangling counters)** |
 
 **G-suite — live store (G1–G12) + goldens (G14–G30)**
 
 G1 single key · G2 schema/lineage · G3 append-only + registry-valid · G4
 whitelist · G5 v4 settings live · G6 repair accounting · G7 deterministic reads ·
 G8 referential integrity · G9 live rules run · G10 live projections · G11 live
-playbooks · G12 live UI state. *(G13 intentionally unallocated — the part-7
-brief numbers the goldens from G14.)*
+playbooks · G12 live UI state · **G13 live doctrines** (finding keys unique +
+stable, trend ceiling held, every finding shows its math).
 
 | Golden | Boundary pinned |
 |---|---|
@@ -224,7 +242,7 @@ brief numbers the goldens from G14.)*
 | **G29** R25 | risk 3 skipped · risk 4 past due sev3 · risk 5 sev4 · reviewed after due quiets |
 | **G30** | `buildSeed()` fires all 40 rules, every finding shape-valid |
 
-The **boot gate runs G1–G12 only**. Goldens run in the full suite so a rule-logic
+The **boot gate runs G1–G13 only**. Goldens run in the full suite so a rule-logic
 regression is loud in Health without walling a leader off from their own data.
 
 ### The seed
@@ -237,7 +255,7 @@ part 8 it reaches both severity bands of R13 (60% → sev 3, 40% → sev 4), R22
 `fail` → sev 5), plus R16's *open-past-threshold* branch alongside its resolved
 MTTR branch, and R34 at the exact 5.1% boundary.
 
-- **Claims C1–C26** in the Health tab: each shows the checks that authorize it;
+- **Claims C1–C29** in the Health tab: each shows the checks that authorize it;
   a failing check marks the claim *unproven*.
 
 ## Files
@@ -247,11 +265,11 @@ MTTR branch, and R34 at the exact 5.1% boundary.
 | `index.html` | Shell: rail nav + view host; seven scripts in doctrinal order; authority-wall overlay |
 | `css/app.css` | Hand-rolled design system incl. severity/confidence language |
 | `js/events.js` | Event registry (88 types) + append-gate validator with refs/refArrays |
-| `js/store.js` | Persistence wall: single key, schema v4, migrations with repair counting |
+| `js/store.js` | Persistence wall: single key, schema v4, migrations with repair counting, `mergeInto()` import gate |
 | `js/engine.js` | `project()` fold, named projections incl. `rosterById`, `eventDomain()`, pure selectors |
 | `js/playbooks.js` | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
 | `js/rules.js` | R1–R40: pure `(P, today) → findings[]` rules engine |
-| `js/health.js` | Authority wall: T1–T27 (+T12b, T20b), G1–G12 + goldens G14–G30, claims C1–C26 |
+| `js/health.js` | Authority wall: T1–T30 (+T12b, T20b), G1–G13 + goldens G14–G30, claims C1–C29 |
 | `js/ui.js` | Rail nav, hash routes, 14 views, registry-driven quick capture; every action is an event append |
 | `README.md` | This file |
 | `AI-SESSION-LOG.md` | Session log; §0 is the claim-vs-inspection audit |

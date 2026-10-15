@@ -129,7 +129,7 @@
   function confBadge(c) { return '<span class="conf conf-' + c + '">' + esc(c) + '</span>'; }
   function findingRows(F) {
     return F.map(function (f) {
-      return '<tr><td class="mono dim">' + f.rule + '</td><td>' + sevBadge(f.sev) + '</td><td>' + confBadge(f.conf) + '</td>' +
+      return '<tr><td class="mono dim" title="stable key">' + esc(f.key) + (f.trend ? ' <span class="pill pill-trend">trend</span>' : '') + '</td><td>' + sevBadge(f.sev) + '</td><td>' + confBadge(f.conf) + '</td>' +
         '<td><strong>' + esc(f.title) + '</strong>' +
         (f.basis.length ? '<div class="basis">' + f.basis.map(esc).join('<br>') + '</div>' : '') + '</td>' +
         '<td>' + (f.play ? '<span class="chip">' + esc(f.play) + '</span>' : '<span class="dim tiny-t">no playbook: ' + esc(f.playNone || '') + '</span>') + '</td></tr>';
@@ -724,6 +724,17 @@
       '<button class="btn tiny primary" data-action="export" type="button">' + icon('download') + ' download ' + filtered.length + ' events</button></form>' +
       '<pre class="exportbox">' + esc(JSON.stringify({ schemaVersion: raw.schemaVersion, meta: raw.meta, filter: expDomain || 'all', events: filtered.slice(0, 6) }, null, 1)) + (filtered.length > 6 ? '\n… ' + (filtered.length - 6) + ' more events in the download' : '') + '</pre></section>';
 
+    const rep = ui().importReport;
+    h += '<section class="card"><header class="card-h"><h3>' + icon('layers') + ' Import</h3><span class="dim">merge a foreign LeadOS export · ids rewired · dangling refs skipped</span></header>' +
+      '<p class="dim pad">Paste an exported payload. Nothing is trusted: every event is re-validated against the registry, colliding ids are rewired (recursively, including inside arrays and nested objects), and any event whose <code>*Id</code> points at an entity this store does not have is skipped and counted. Preview first — it writes nothing.</p>' +
+      '<form class="frm" data-form="import"><textarea name="payload" rows="4" placeholder=\'{"schemaVersion":4,"events":[…]}\'></textarea>' +
+      '<div class="frow"><button class="btn" type="submit" data-mode="dry">' + icon('shield') + ' preview</button>' +
+      '<button class="btn primary" type="submit" data-mode="live">' + icon('check') + ' merge into log</button></div></form>' +
+      (rep ? '<div class="insp"><div><span class="dim">' + (rep.imported ? 'imported' : 'preview') + '</span><code>' + rep.considered + ' considered · ' + (rep.imported || rep.acceptable) + ' ' + (rep.imported ? 'appended' : 'acceptable') + ' · ' + rep.rewired + ' ids rewired · ' + rep.skippedTotal + ' skipped</code></div>' +
+        '<div><span class="dim">_skipped</span><code>' + esc(JSON.stringify(rep._skipped)) + '</code></div>' +
+        (rep.notes && rep.notes.length ? '<div><span class="dim">notes</span><code>' + esc(rep.notes.slice(0, 4).join(' | ')) + '</code></div>' : '') + '</div>' : '') +
+      '</section>';
+
     h += '<section class="card"><header class="card-h"><h3>' + icon('database') + ' Storage inspector</h3><span class="pill pill-ok">' + esc(LeadOS.store.KEY) + '</span></header>' +
       '<div class="insp"><div><span class="dim">root keys</span><code>' + Object.keys(raw).map(esc).join(', ') + '</code></div>' +
       '<div><span class="dim">meta</span><code>' + esc(JSON.stringify(raw.meta)) + '</code></div>' +
@@ -855,6 +866,15 @@
     'complete-review': function (f) { LeadOS.store.append('review.completed', { id: f.dataset.id, outcome: f.outcome.value, notes: f.notes.value.trim() || undefined }); render(); },
     'set-setting': function (f) { LeadOS.store.append('settings.changed', { key: f.dataset.key, value: Number(f.value.value) }); render(); },
     'export-filter': function (f) { setUi({ exportDomain: f.domain.value }); render(); },
+    'import': function (f) {
+      const dry = !f.lastSubmitMode || f.lastSubmitMode === 'dry';
+      let parsed;
+      try { parsed = JSON.parse(f.payload.value); }
+      catch (e) { throw new Error('import payload is not valid JSON: ' + e.message); }
+      const report = LeadOS.store.mergeInto(parsed, { dryRun: dry });
+      setUi({ importReport: report });
+      render();
+    },
     'capture': function (f) {
       const type = f.dataset.type;
       LeadOS.store.append(type, buildCapturePayload(f, type));
@@ -876,6 +896,8 @@
   };
 
   function onClick(ev) {
+    const modeBtn = ev.target.closest('button[data-mode]');
+    if (modeBtn && modeBtn.form) modeBtn.form.lastSubmitMode = modeBtn.dataset.mode;   // which submit was pressed
     const actEl = ev.target.closest('[data-action]');
     if (actEl && ACTIONS[actEl.dataset.action]) { ev.preventDefault(); try { ACTIONS[actEl.dataset.action](actEl); } catch (err) { showWallError(err.message); } }
   }

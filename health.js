@@ -233,6 +233,7 @@
       ['HIGH', 'MEDIUM', 'LOW'].indexOf(f.conf) !== -1 &&
       typeof f.title === 'string' && f.title.length > 0 &&
       Array.isArray(f.basis) && Array.isArray(f.refs) &&
+      typeof f.key === 'string' && f.key.indexOf(f.rule + ':') === 0 &&
       ((f.play && validPlay) || (typeof f.playNone === 'string' && f.playNone.length > 0));
   }
 
@@ -559,6 +560,88 @@
       };
     }],
 
+    ['T28', 'stable finding keys: format <rule>:<id>, unique within a run, identical on a second run', function () {
+      const b = buildSeed();
+      const P = LeadOS.engine.project(b.events);
+      const run1 = LeadOS.rules.run(P, b.today);
+      const run2 = LeadOS.rules.run(LeadOS.engine.project(b.events), b.today);
+      const keys1 = run1.map(function (f) { return f.key; });
+      const dupes = keys1.filter(function (k, i) { return keys1.indexOf(k) !== i; });
+      const stable = JSON.stringify(keys1) === JSON.stringify(run2.map(function (f) { return f.key; }));
+      const wellFormed = run1.every(function (f) { return typeof f.key === 'string' && f.key.indexOf(f.rule + ':') === 0 && f.key.length > f.rule.length + 1; });
+      // spec examples: R11:<riskId>, R12:<dealId>
+      const r11 = run1.find(function (f) { return f.rule === 'R11'; });
+      const r12 = run1.find(function (f) { return f.rule === 'R12'; });
+      const entityKeyed = r11 && r11.key === 'R11:' + r11.refs[0] && r12 && r12.key === 'R12:' + r12.refs[0];
+      const ok = dupes.length === 0 && stable && wellFormed && entityKeyed;
+      return { pass: ok, detail: ok ? keys1.length + ' findings, all keys unique + second-run identical (e.g. ' + r11.key + ', ' + r12.key + ')' : (dupes.length ? 'duplicate keys: ' + dupes.slice(0, 3).join(', ') : 'unstable or malformed keys') };
+    }],
+    ['T29', 'sev-3 ceiling for trend findings, with safety (R28) and legal fail (R30) exempt', function () {
+      const b = buildSeed();
+      const F = LeadOS.rules.run(LeadOS.engine.project(b.events), b.today);
+      const overCap = F.filter(function (f) { return f.trend && f.sev > LeadOS.rules.TREND_SEV_CEILING; });
+      const trendOnes = F.filter(function (f) { return f.trend; });
+      const disclosed = trendOnes.filter(function (f) { return /capped at 3 by doctrine/.test(f.basis.join(' ')); });
+      // the two named exceptions must still be able to exceed 3
+      const safety = F.filter(function (f) { return f.rule === 'R28'; });
+      const legal = F.filter(function (f) { return f.rule === 'R30'; });
+      const safetyHigh = safety.some(function (f) { return f.sev >= 4; }) && safety.every(function (f) { return f.trend === false; });
+      const legalFail = legal.some(function (f) { return f.sev === 5; }) && legal.every(function (f) { return f.trend === false; });
+      // direct-data findings must NOT be capped
+      const directHigh = F.some(function (f) { return !f.trend && f.sev >= 4; });
+      const ok = overCap.length === 0 && trendOnes.length > 0 && safetyHigh && legalFail && directHigh && disclosed.length === trendOnes.filter(function (f) { return f.sev === 3; }).length - trendOnes.filter(function (f) { return f.sev === 3 && !/capped/.test(f.basis.join(' ')); }).length;
+      return {
+        pass: overCap.length === 0 && trendOnes.length > 0 && safetyHigh && legalFail && directHigh,
+        detail: overCap.length ? 'uncapped trend findings: ' + overCap.map(function (f) { return f.key + '=sev' + f.sev; }).join(', ')
+          : trendOnes.length + ' trend findings all <= sev3; R28 reaches sev' + Math.max.apply(null, safety.map(function (f) { return f.sev; })) + ' and R30 sev5 as named exceptions; direct-data findings still reach sev4+'
+      };
+    }],
+    ['T30', 'import gate: ids rewired recursively, dangling refs skipped with counters, nothing invented', function () {
+      const problems = [];
+      const S = LeadOS.store;
+      // a foreign export whose ids collide with a local store, plus dangling refs
+      const foreign = {
+        schemaVersion: 4,
+        events: [
+          { type: 'sales.deal.logged', payload: { id: 'dup1', title: 'Foreign deal', value: 10, currency: 'USD', stage: 'new' } },
+          { type: 'sales.deal.updated', payload: { dealId: 'dup1', stage: 'negotiation' } },
+          { type: 'sales.deal.closed', payload: { dealId: 'ghost-deal', result: 'won' } },
+          { type: 'fin.budget.actuals', payload: { budgetId: 'ghost-budget', actual: 1, period: 'Q1' } },
+          { type: 'ops.milestone.set', payload: { id: 'm-new', title: 'GA', dueDate: T0, dependsOn: ['ghost-ms'] } },
+          { type: 'not.a.real.type', payload: {} },
+          { type: 'cs.nps.logged', payload: { score: 500, period: 'Q1', promoters: 1, passives: 1, detractors: 1 } }
+        ]
+      };
+      // dry run against the live store proves the planning path without writing
+      const rep = S.mergeInto(foreign, { dryRun: true });
+      if (rep.imported !== 0) problems.push('dry run wrote events');
+      if (rep._skipped.unknownType !== 1) problems.push('unknown type not counted: ' + rep._skipped.unknownType);
+      if (rep._skipped.invalid !== 1) problems.push('out-of-range payload not rejected: ' + rep._skipped.invalid);
+      if ((rep._skipped.danglingDeals || 0) !== 1) problems.push('dangling dealId not counted: ' + JSON.stringify(rep._skipped));
+      if ((rep._skipped.danglingFinBudgets || 0) !== 1) problems.push('dangling budgetId not counted');
+      if ((rep._skipped.danglingMilestones || 0) !== 1) problems.push('dangling dependsOn[] not counted');
+      if (rep.acceptable !== 2) problems.push('expected 2 acceptable events, got ' + rep.acceptable);
+
+      // recursive rewiring: any value matching a known incoming id is rewritten,
+      // including inside arrays and nested objects the gate has no schema for
+      const map = { old1: 'new1', old2: 'new2' };
+      const walked = S.rewire({ a: 'old1', b: ['old2', 'keep'], c: { d: { e: 'old1' } }, n: 7 }, map);
+      if (walked.a !== 'new1' || walked.b[0] !== 'new2' || walked.b[1] !== 'keep' || walked.c.d.e !== 'new1' || walked.n !== 7) problems.push('recursive rewire incorrect');
+
+      // family universe is derived from CREATES, not guessed
+      const uni = S.familyUniverse([{ type: 'sales.deal.logged', payload: { id: 'x' } }, { type: 'sales.deal.updated', payload: { dealId: 'x' } }]);
+      if (!uni.deals || !uni.deals.x || Object.keys(uni).length !== 1) problems.push('familyUniverse wrong: ' + JSON.stringify(uni));
+      // every ref family named in the registry has a creator, else imports can never resolve
+      const families = {};
+      Object.keys(LeadOS.events.CREATES).forEach(function (t) { families[LeadOS.events.CREATES[t]] = true; });
+      Object.keys(LeadOS.events.REGISTRY).forEach(function (t) {
+        const sp = LeadOS.events.REGISTRY[t];
+        if (sp.refs) Object.keys(sp.refs).forEach(function (f) { if (!families[sp.refs[f]] && sp.refs[f] !== 'krsToObjective') problems.push(t + '.' + f + ' -> family ' + sp.refs[f] + ' has no creator type'); });
+        if (sp.refArrays) Object.keys(sp.refArrays).forEach(function (f) { if (!families[sp.refArrays[f]]) problems.push(t + '.' + f + ' -> family has no creator type'); });
+      });
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'dry-run gate: 2 acceptable, 3 dangling refs counted by family, 1 unknown type, 1 invalid; recursive rewire verified' };
+    }],
+
     ['T21', 'trend discipline: below 3 measured points no trend-derived finding fires', function () {
       let seq = 0; const A = T0;
       const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
@@ -590,9 +673,9 @@
       const hit = F.filter(function (f) { return ['R13', 'R22', 'R23', 'R32'].indexOf(f.rule) !== -1; });
       return { pass: hit.length === 0, detail: hit.length ? 'inferred something: ' + hit.map(function (f) { return f.rule; }).join(',') : 'R13/R22/R23/R32 all silent with missing inputs — nothing inferred' };
     }],
-    ['T23', 'severity escalations per spec: R11 sev5, R12 sev4, R15 pattern sev4 (G28), R28/R30/R32/R35 sev5', function () {
+    ['T23', 'severity escalations: R11 sev5, R12 sev4, R16 sev4, R28/R30/R32/R35 sev5 (R15 pattern now capped — part 9)', function () {
       const F = batteryFindings();
-      const want = [['R11', 5], ['R12', 4], ['R15', 4], ['R16', 4], ['R28', 5], ['R30', 5], ['R32', 5], ['R35', 5]];
+      const want = [['R11', 5], ['R12', 4], ['R16', 4], ['R28', 5], ['R30', 5], ['R32', 5], ['R35', 5]];
       const missing = want.filter(function (w) { return !F.some(function (f) { return f.rule === w[0] && f.sev === w[1]; }); });
       return { pass: missing.length === 0, detail: missing.length ? 'missing escalations: ' + missing.map(function (w) { return w[0] + ' sev' + w[1]; }).join(', ') : want.length + ' rule/severity escalation pairs confirmed' };
     }],
@@ -1034,6 +1117,21 @@
         }
       });
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : domained + ' events domain-mapped, ' + systemic + ' honestly system; sessionStorage state never touches leados:data' };
+    }],
+    ['G13', 'live doctrines: finding keys unique + stable, trend ceiling held, every finding prints its basis', function () {
+      const P = LeadOS.engine.project(LeadOS.store.load().events);
+      const now = Date.now();
+      const F = LeadOS.rules.run(P, now), F2 = LeadOS.rules.run(P, now);
+      const problems = [];
+      const keys = F.map(function (f) { return f.key; });
+      keys.filter(function (k, i) { return keys.indexOf(k) !== i; }).slice(0, 2).forEach(function (k) { problems.push('duplicate finding key ' + k); });
+      if (JSON.stringify(keys) !== JSON.stringify(F2.map(function (f) { return f.key; }))) problems.push('finding keys unstable across runs');
+      F.forEach(function (f) {
+        if (f.key.indexOf(f.rule + ':') !== 0) problems.push('malformed key ' + f.key);
+        if (f.trend && f.sev > LeadOS.rules.TREND_SEV_CEILING) problems.push('trend finding over ceiling: ' + f.key + ' sev' + f.sev);
+        if (!f.basis.length) problems.push(f.key + ' states a conclusion with no basis');
+      });
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : F.length + ' live findings: keys unique + stable, no trend finding above sev' + LeadOS.rules.TREND_SEV_CEILING + ', every finding shows its math' };
     }]
   ];
 
@@ -1137,7 +1235,8 @@
       return golden([
         ['1 departure quiet', one.length === 0],
         ['2 in 60d sev3 MEDIUM', two.length === 1 && two[0].sev === 3 && two[0].conf === 'MEDIUM'],
-        ['3 in 60d sev4', three.length === 1 && three[0].sev === 4],
+        ['3 in 60d stays sev3 (part-9 trend ceiling, was sev4)', three.length === 1 && three[0].sev === 3 && three[0].trend === true],
+        ['clamp is disclosed in basis', three.length === 1 && /capped at 3 by doctrine/.test(three[0].basis.join(' '))],
         ['breakdown printed', two.length === 1 && /voluntary 1 · involuntary 1/.test(two[0].basis.join(' '))],
         ['outside 60d window quiet', old.length === 0]
       ]);
@@ -1266,12 +1365,14 @@
       };
       const run3 = okr('a', 0.3, 0).concat(okr('b', 0.2, 5)).concat(okr('c', 0.35, 10));
       const f3 = R(run3, 30, 'R15');
+      const pattern = f3.filter(function (x) { return x.scope === 'pattern'; });
       return golden([
         ['0.41 quiet', R(okr('a', 0.41, 0), 10, 'R15').length === 0],
         ['0.39 sev3 single period', (function () { const f = R(okr('a', 0.39, 0), 10, 'R15'); return f.length === 1 && f[0].sev === 3; })()],
-        ['score 0 sev4', (function () { const f = R(okr('a', 0, 0), 10, 'R15'); return f.length === 1 && f[0].sev === 4; })()],
-        ['3 consecutive <0.4 adds sev4 pattern', f3.length === 4 && f3.filter(function (x) { return x.sev === 4; }).length === 1],
-        ['pattern basis names the run', f3.some(function (x) { return x.sev === 4 && /a=0.3, b=0.2, c=0.35/.test(x.basis.join(' ')); })]
+        ['score 0 sev4 (direct data, not capped)', (function () { const f = R(okr('a', 0, 0), 10, 'R15'); return f.length === 1 && f[0].sev === 4; })()],
+        ['3 consecutive <0.4 adds a pattern finding', f3.length === 4 && pattern.length === 1],
+        ['pattern capped at sev3 (part-9 ceiling, was sev4)', pattern.length === 1 && pattern[0].sev === 3 && pattern[0].trend === true],
+        ['pattern basis names the run', pattern.length === 1 && /a=0.3, b=0.2, c=0.35/.test(pattern[0].basis.join(' '))]
       ]);
     }],
     ['G29', 'R25 vendor: risk 3 skipped, risk 4 + past due sev3, risk 5 sev4, reviewed after due quiets', function () {
@@ -1330,7 +1431,10 @@
     { id: 'C23', text: 'Every part-2 family projects correctly: risk counts, pipeline math, OKR score, MTTR, attrition, vendor gap.', by: ['T15', 'T16', 'T17', 'T18', 'T19', 'T20'] },
     { id: 'C24', text: 'Rule fire/quiet boundaries are pinned by goldens — no rule drifts a threshold silently.', by: ['G14', 'G15', 'G16', 'G17', 'G18', 'G19', 'G20', 'G21', 'G22', 'G23', 'G24', 'G25', 'G26', 'G27', 'G28', 'G29'] },
     { id: 'C25', text: 'The seed exercises all 40 rules and every finding it produces is shape-valid.', by: ['G30', 'T24', 'T12b'] },
-    { id: 'C26', text: 'The extended seed reaches both severity bands for R13/R22/R30 and the open-incident branch of R16.', by: ['T20b', 'G30'] }
+    { id: 'C26', text: 'The extended seed reaches both severity bands for R13/R22/R30 and the open-incident branch of R16.', by: ['T20b', 'G30'] },
+    { id: 'C27', text: 'Findings carry stable keys (R11:<riskId>…): unique within a run, identical on a second run.', by: ['T28', 'G13'] },
+    { id: 'C28', text: 'Sev 3 is the ceiling for trend-derived findings; safety (R28) and legal fail (R30) are the only exceptions.', by: ['T29', 'G13', 'G19', 'G28'] },
+    { id: 'C29', text: 'Import gate rewires ids recursively and skips dangling refs into _skipped.dangling* counters.', by: ['T30', 'G3', 'G8'] }
   ];
 
   function runSuite(suite) {

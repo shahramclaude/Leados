@@ -158,6 +158,23 @@
     'exec.crisis.resolved':  { require: ['crisisId', 'resolvedAt'], optional: ['postmortem'], numbers: ['resolvedAt'], refs: { crisisId: 'crises' } }
   };
 
+  /* Creation types -> the id family they populate. This is the inverse of the
+     `refs`/`refArrays` declarations and is what lets the import gate know
+     whether an incoming reference resolves. Keep in step with REGISTRY. */
+  const CREATES = {
+    'objective.created': 'objectives', 'kr.created': 'krs', 'task.created': 'tasks',
+    'decision.proposed': 'decisions', 'risk.raised': 'risks', 'review.scheduled': 'reviews',
+    'fin.budget.set': 'finBudgets', 'fin.risk.logged': 'finRisks',
+    'sales.deal.logged': 'deals', 'sales.quota.set': 'quotas',
+    'product.roadmap.item': 'roadmap', 'strategy.okr.set': 'okrs',
+    'ops.incident.logged': 'incidents', 'ops.milestone.set': 'milestones',
+    'hr.pip.started': 'pips', 'mktg.campaign.logged': 'campaigns',
+    'supply.vendor.logged': 'vendors', 'rd.experiment.logged': 'experiments',
+    'rd.tech.debt.logged': 'techDebt', 'legal.contract.logged': 'contracts',
+    'cs.escalation.logged': 'escalations', 'exec.crisis.logged': 'crises',
+    'note.added': 'notes'
+  };
+
   function isBlank(v) { return v === undefined || v === null || v === ''; }
 
   function validate(type, payload) {
@@ -210,5 +227,5 @@
   function domainLabel(id) { const d = DOMAINS.find(function (x) { return x.id === id; }); return d ? d.label : id; }
   function domainHue(id) { const d = DOMAINS.find(function (x) { return x.id === id; }); return d ? d.hue : 220; }
 
-  LeadOS.events = { REGISTRY: REGISTRY, DOMAINS: DOMAINS, DOMAIN_IDS: DOMAIN_IDS, REVIEW_KINDS: REVIEW_KINDS, validate: validate, domainLabel: domainLabel, domainHue: domainHue };
+  LeadOS.events = { REGISTRY: REGISTRY, CREATES: CREATES, DOMAINS: DOMAINS, DOMAIN_IDS: DOMAIN_IDS, REVIEW_KINDS: REVIEW_KINDS, validate: validate, domainLabel: domainLabel, domainHue: domainHue };
 })();

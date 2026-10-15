@@ -297,6 +297,7 @@ section.card > table.tbl, .card > .tbl { display: block; overflow-x: auto; }
 .conf-HIGH { color: var(--ok); border-color: rgba(52, 211, 153, .4); }
 .conf-MEDIUM { color: var(--warn); border-color: rgba(251, 191, 36, .4); }
 .conf-LOW { color: var(--dim); }
+.pill-trend { color: var(--v4); border-color: rgba(167, 139, 250, .4); background: rgba(167, 139, 250, .08); }
 .basis { margin-top: 6px; font-family: var(--mono); font-size: 11px; color: var(--dim); line-height: 1.75; border-left: 2px solid var(--line2); padding-left: 10px; }
 
 /* ---------- interactive playbooks ---------- */

@@ -198,6 +198,119 @@
     return ev;
   }
 
+  /* ---------------- Import gate (pt-4 part 9) ----------------
+     mergeInto(incoming) folds a foreign LeadOS export into this store.
+
+     Doctrine:
+     - Nothing is trusted. Every incoming event is re-validated against the
+       registry before it may enter.
+     - Id collisions are rewired, not overwritten. A recursive walk rewrites
+       ANY data value matching a known incoming id — so references in fields
+       the gate has never heard of still travel correctly.
+     - Dangling references are skipped, never invented: if a *Id points at an
+       entity that exists in neither this store nor the surviving part of the
+       import, the event is dropped and `_skipped.dangling<Family>` is
+       incremented.
+     - The report is returned, never persisted (nothing derived is stored). */
+  function familyUniverse(events) {
+    const u = {};
+    (events || []).forEach(function (ev) {
+      const fam = LeadOS.events.CREATES[ev.type];
+      if (fam && ev.payload && ev.payload.id) { (u[fam] = u[fam] || {})[ev.payload.id] = true; }
+    });
+    return u;
+  }
+  function hasId(u, fam, id) { return !!(u[fam] && u[fam][id]); }
+  function addId(u, fam, id) { (u[fam] = u[fam] || {})[id] = true; }
+
+  // Recursively rewrite any string value present in `map`.
+  function rewire(value, map) {
+    if (typeof value === 'string') return Object.prototype.hasOwnProperty.call(map, value) ? map[value] : value;
+    if (Array.isArray(value)) return value.map(function (v) { return rewire(v, map); });
+    if (value && typeof value === 'object') {
+      const out = {};
+      Object.keys(value).forEach(function (k) { out[k] = rewire(value[k], map); });
+      return out;
+    }
+    return value;
+  }
+
+  function mergeInto(incoming, opts) {
+    const dry = !!(opts && opts.dryRun);
+    const report = {
+      considered: 0, imported: 0, rewired: 0,
+      _skipped: { unknownType: 0, invalid: 0, duplicateId: 0 },
+      notes: []
+    };
+    if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.events)) {
+      throw new Error('LeadOS import: payload must be an object with an events array');
+    }
+    if (incoming.schemaVersion !== undefined && incoming.schemaVersion > SCHEMA_VERSION) {
+      throw new Error('LeadOS import: payload schemaVersion ' + incoming.schemaVersion + ' is newer than v' + SCHEMA_VERSION);
+    }
+
+    const raw = load();
+    const universe = familyUniverse(raw.events);          // what this store already knows
+    const localIds = {};
+    raw.events.forEach(function (ev) { if (ev.payload && ev.payload.id) localIds[ev.payload.id] = true; });
+
+    // 1. plan id rewiring for every entity the import creates
+    const map = {};
+    incoming.events.forEach(function (ev) {
+      if (!ev || !ev.payload) return;
+      const fam = LeadOS.events.CREATES[ev.type];
+      if (!fam || !ev.payload.id) return;
+      if (localIds[ev.payload.id]) {
+        map[ev.payload.id] = padId(raw.events.length) + '-imp-' + Object.keys(map).length + '-' + ev.payload.id;
+        report.rewired++;
+      }
+    });
+
+    // 2. walk, validate, check references, append survivors
+    const accepted = [];
+    incoming.events.forEach(function (ev) {
+      report.considered++;
+      if (!ev || typeof ev !== 'object' || !ev.type) { report._skipped.invalid++; return; }
+      const spec = LeadOS.events.REGISTRY[ev.type];
+      if (!spec) { report._skipped.unknownType++; report.notes.push('unknown type ' + ev.type); return; }
+
+      const payload = rewire(ev.payload || {}, map);
+      const fam = LeadOS.events.CREATES[ev.type];
+
+      if (fam && payload.id && hasId(universe, fam, payload.id)) { report._skipped.duplicateId++; return; }
+
+      let dangling = null;
+      if (spec.refs) Object.keys(spec.refs).forEach(function (f) {
+        const target = spec.refs[f], v = payload[f];
+        if (v !== undefined && v !== null && !hasId(universe, target, v)) dangling = dangling || target;
+      });
+      if (!dangling && spec.refArrays) Object.keys(spec.refArrays).forEach(function (f) {
+        const target = spec.refArrays[f];
+        (payload[f] || []).forEach(function (v) { if (!hasId(universe, target, v)) dangling = dangling || target; });
+      });
+      if (dangling) {
+        const key = 'dangling' + dangling.charAt(0).toUpperCase() + dangling.slice(1);
+        report._skipped[key] = (report._skipped[key] || 0) + 1;
+        return;
+      }
+
+      const verdict = LeadOS.events.validate(ev.type, payload);
+      if (!verdict.ok) { report._skipped.invalid++; report.notes.push(ev.type + ': ' + verdict.errors[0]); return; }
+
+      accepted.push({ type: ev.type, payload: payload });
+      if (fam && payload.id) addId(universe, fam, payload.id);   // later imports may reference it
+      if (payload.id) localIds[payload.id] = true;
+    });
+
+    if (!dry) {
+      accepted.forEach(function (a) { append(a.type, a.payload, { imported: true }); });
+    }
+    report.imported = dry ? 0 : accepted.length;
+    report.acceptable = accepted.length;
+    report.skippedTotal = Object.keys(report._skipped).reduce(function (n, k) { return n + report._skipped[k]; }, 0);
+    return report;
+  }
+
   function getEvents() { return load().events.slice(); }
   function rawBytes() { const t = localStorage.getItem(KEY); return t ? t.length : 0; }
 
@@ -216,6 +329,9 @@
     genesis: genesis,
     load: load,
     append: append,
+    mergeInto: mergeInto,
+    familyUniverse: familyUniverse,
+    rewire: rewire,
     getEvents: getEvents,
     rawBytes: rawBytes
   };

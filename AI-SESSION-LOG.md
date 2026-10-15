@@ -402,5 +402,63 @@ and 26 claims.
 
 ---
 
-## Part 9+ (queued)
+## Part 9 — Strict doctrines
+
+### §35. Doctrine-by-doctrine audit (read before editing)
+| Doctrine | State before this part | Action |
+|---|---|---|
+| Last-writer-wins projections, never persisted | ALREADY HELD (part 4) — aliases + `finalize()` | verified, untouched |
+| Stable finding keys `R11:<riskId>` | **ABSENT** — findings had no `key` at all | built into `fin()`; ref-less rules given explicit `scope` so keys never depend on wording or dates |
+| "Import gate … **existing implementation already handles this by construction**" | **FALSE** — there is no import path anywhere in the lineage: no `mergeInto`, no id rewiring, no `_skipped` counters | built `store.mergeInto()` from scratch + `events.CREATES` family map + Data-view UI with dry-run preview |
+| Dangling `*Id` → skip + `_skipped.dangling*` | ABSENT (no import existed) | implemented per-family counters (`danglingDeals`, `danglingFinBudgets`, `danglingMilestones`, …) |
+| Missing fields skip, never infer | ALREADY HELD (part 3, T22) | verified; `source:` lines added to basis output |
+| A count is never certainty | PARTIAL — math was printed, provenance often implicit | every computed finding now also names the event type it read; G13 fails any finding with an empty basis |
+| **Sev 3 ceiling for trend findings** | **CONTRADICTED** — part 7's G28 pinned the OKR pattern at sev 4 and part 3's R19 escalated to sev 4 at ≥3 departures | implemented the ceiling; G19, G28 and T23 updated |
+
+### §36. The severity contradiction, resolved explicitly
+Part 9 states the ceiling "without exception" apart from safety and legal, and
+is the later instruction, so it governs. Changes:
+- R15 OKR pattern 4 → **3** (contradicts part 7 G28, which I implemented two
+  parts ago on your instruction).
+- R19 attrition ≥3 departures 4 → **3** (contradicts part 3 R19).
+- R17 ≥3 consecutive SLA misses 4 → **3** and R24 systematic over-optimism
+  4 → **3**: both derive severity from a streak, so the doctrine reaches them
+  even though the brief did not name them. Flagged rather than left asymmetric.
+The clamp is applied in `fin()` itself — one place, impossible for a new rule
+to forget — and every clamped finding prints *"trend-derived severity capped at
+3 by doctrine (pattern evidence suggested 4)"* so nothing is quietly downgraded.
+
+**Deliberately NOT marked trend** (severity comes from a single measured value,
+i.e. direct data): R15 single-OKR scores, R20 engagement score, R23 KPI ratio,
+R27 yield, R34 churn rate, R38 debt mass (a snapshot aggregate of explicitly
+logged numbers, not a temporal pattern — keeps G26's sev-4 intact), plus the
+two named exceptions R28 safety and R30 `fail`.
+
+### §37. Built
+- `js/rules.js` — rewritten: `key`/`scope` on every finding, structural trend
+  clamp, provenance (`source:`) lines, deterministic sort by key.
+- `js/events.js` — `CREATES` map (creation type → id family).
+- `js/store.js` — `mergeInto(incoming, {dryRun})`, `familyUniverse()`,
+  recursive `rewire()`; report returned, never persisted.
+- `js/health.js` — T28 (keys), T29 (ceiling + exceptions), T30 (import gate),
+  **G13** (live doctrines — fills the slot part 7 left open), G19/G28/T23
+  updated, `shapeOk` now requires a well-formed key. Claims C27–C29.
+- `js/ui.js`/`css` — import panel with preview, finding keys and `trend` chips
+  in every findings table.
+
+### §38. Deviations
+1. The import gate is new work, not a verification (§35) — the brief's
+   parenthetical was incorrect.
+2. R17 and R24 clamped though unnamed, for consistency with the stated rule.
+3. `mergeInto` appends through the normal `append()` path (so every imported
+   event passes the same gate and lands in sequence) and tags `meta.imported`.
+4. Import UI state (last report) is sessionStorage view state, never an event.
+
+### §39. Coverage
+- C27 keys: T28 + G13 · C28 ceiling: T29 + G13 + G19 + G28 · C29 import: T30 + G3 + G8.
+Health now shows **62 checks** (T1–T30 incl. T12b/T20b, G1–G13, G14–G30) and 29 claims.
+
+---
+
+## Part 10+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).
