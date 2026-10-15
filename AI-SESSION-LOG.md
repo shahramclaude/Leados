@@ -572,5 +572,61 @@ this" is decoration.
 
 ---
 
-## Part 11+ (queued)
+## Part 11 — Naming and file structure
+
+### §45. Audit (run before editing)
+| Instruction | Measured reality | Action |
+|---|---|---|
+| "Same 10-file flat structure. **No new files**." | tree held **11** files: `js/rules.js` was added in part 3 when the rules engine was requested | **Merged** the rules engine into `js/engine.js` as a second IIFE and removed its `<script>` tag. Back to 10 shipped files. |
+| "All new code goes into the existing modules in **dependency order**" | rules depend on `engine` (selectors, settings) and are consumed by `health` + `ui` | engine.js is the correct home; the rules IIFE sits after the projection code, and load order `events → store → engine(+rules) → playbooks → health → ui` is preserved |
+| "The health.js **FIXED** date **remains** `2026-02-16T12:00:00.000Z`" | **no `FIXED` constant existed.** The pinned epoch was `1720000000000` = `2024-07-03T08:26:40.000Z` | The date is **newly set, not retained**. `FIXED = Date.parse('2026-02-16T12:00:00.000Z')` now heads health.js; `T0` is an alias so every existing relative offset is untouched. |
+| "...for existing goldens **G1–G13**" | G1–G13 are **live-store inspections** — they read real `localStorage` and the real clock by design, and were never date-pinned. The date-pinned goldens are **G14–G30**. | Recorded. G14–G30 now use `const A = FIXED`, labeled plainly in the block comment and in README. |
+| new goldens "MAY use the same FIXED date or a domain-appropriate fixture date, **labeled plainly**" | — | chose the **same** FIXED date for all of G14–G30 (one epoch is easier to reason about than several) and labeled it in three places: the constant's comment, the goldens block comment, and README's "Fixture epoch" section |
+
+### §46. The file I could not delete
+The tooling available in this session exposes `create_file` and `edit_file` but
+**no delete operation**. `js/rules.js` therefore still exists on disk. I did
+the next most honest thing rather than pretend otherwise:
+- overwrote it with a 16-line tombstone that points at `js/engine.js` and
+  states it is not loaded;
+- removed its `<script>` tag from `index.html`;
+- excluded it from README's file table and from `health.MANIFEST`;
+- added it to `health.UNLOADED`, and **T31 now fails** if any script tag or
+  manifest entry references it again;
+- said so in README so the "10 files" claim is not quietly contradicted by
+  what a reader finds in the directory. `rm js/rules.js` completes the job.
+
+### §47. Built
+- `js/engine.js` — rules engine merged in verbatim (R1–R40, `fin()`, trend
+  clamp, stable keys). `LeadOS.rules` unchanged, so health.js and ui.js needed
+  no edits at all; the merge is invisible to every consumer.
+- `js/rules.js` — tombstone.
+- `index.html` — six scripts, rules.js unloaded.
+- `js/health.js` — `FIXED` constant + audit note; goldens re-anchored to
+  `FIXED`; `MANIFEST` down to 10 files with per-file namespace **arrays**
+  (engine.js owns `engine` *and* `rules`); `UNLOADED` list; T31 extended to
+  check the merge survived, the tombstone stays unloaded, and FIXED is exactly
+  the specified instant. Claim **C31**.
+- `README.md` — 10-row file table, tombstone note, "Fixture epoch" section.
+
+### §48. Deviations
+1. Merging rather than keeping 11 files: the instruction is explicit and
+   later than part 3's. Recorded because it reverses an earlier delivery.
+2. The tombstone file (§46) — a tooling limit, disclosed rather than hidden.
+3. `MANIFEST.ns` became an array to express that one file legitimately owns
+   two namespaces after the merge.
+4. Changing the fixture epoch moves every absolute fixture timestamp. Safe by
+   construction: all fixtures and goldens use offsets relative to the epoch
+   and assert on deltas, counts and computed strings — none assert an absolute
+   date. T13 (determinism) and G30 (all 40 rules fire) re-prove this.
+
+### §49. Coverage
+- C30 (10 files, DOM parity) and C31 (FIXED epoch, rules merged): T31, plus
+  T13 and G30 re-proving the engine is intact after the move.
+Health now shows **63 checks** (T1–T31 incl. T12b/T20b, G1–G13, G14–G30) and
+31 claims.
+
+---
+
+## Part 12+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).

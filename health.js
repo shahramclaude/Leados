@@ -7,7 +7,21 @@
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
   const DAY = 86400000, H = 3600000;
-  const T0 = 1720000000000; // pinned epoch - fixtures never call Date.now()
+  /* FIXED fixture epoch (pt-4 part 11), labeled plainly:
+       FIXED = 2026-02-16T12:00:00.000Z  (= 1771243200000 ms)
+     Everything date-pinned in this file uses it — the whole T-suite, the
+     buildSeed() log, and ALL goldens G14–G30 (via `const A = T0`). Fixtures
+     never call Date.now(), so every golden is reproducible forever.
+
+     Audit note (AI-SESSION-LOG §45): the brief says this date "remains" the
+     FIXED value for goldens G1–G13. Two corrections. (1) No FIXED constant
+     existed before this part; the pinned epoch was 1720000000000
+     (2024-07-03T08:26:40.000Z), so the date is newly SET, not retained.
+     (2) G1–G13 are live-store inspections — they read the real localStorage
+     and the real clock by design, and are not date-pinned at all. The
+     date-pinned goldens are G14–G30, and they use FIXED. */
+  const FIXED = Date.parse('2026-02-16T12:00:00.000Z');
+  const T0 = FIXED;         // alias: every existing fixture offset is relative to this
 
   function fev(seq, type, payload, opts) {
     const e = { seq: seq, id: 't-' + seq, at: (opts && opts.at) || (T0 + seq * 1000), type: type, payload: payload };
@@ -28,18 +42,24 @@
      documentation of that reading, not a runtime assertion (the no-network
      doctrine means the app cannot re-read its own source to confirm them). */
   const MANIFEST = [
-    { path: 'index.html',          kind: 'html', ns: null,        lines: 55 },
-    { path: 'css/app.css',         kind: 'css',  ns: null,        lines: 358 },
-    { path: 'js/events.js',        kind: 'js',   ns: 'events',    lines: 232 },
-    { path: 'js/store.js',         kind: 'js',   ns: 'store',     lines: 339 },
-    { path: 'js/engine.js',        kind: 'js',   ns: 'engine',    lines: 422 },
-    { path: 'js/playbooks.js',     kind: 'js',   ns: 'playbooks', lines: 476 },
-    { path: 'js/rules.js',         kind: 'js',   ns: 'rules',     lines: 500 },
-    { path: 'js/health.js',        kind: 'js',   ns: 'health',    lines: 1462 },
-    { path: 'js/ui.js',            kind: 'js',   ns: 'ui',        lines: 947 },
-    { path: 'README.md',           kind: 'doc',  ns: null,        lines: 281 },
-    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,        lines: 465 }
+    // `lines` = measured by reading each file at the close of part 11.
+    // The two doc files are self-referential (recording this measurement
+    // changes them), so their figures are the reading taken before that
+    // final edit — verify with `wc -l`.
+    { path: 'index.html',          kind: 'html', ns: null,                   lines: 54 },
+    { path: 'css/app.css',         kind: 'css',  ns: null,                   lines: 358 },
+    { path: 'js/events.js',        kind: 'js',   ns: ['events'],             lines: 232 },
+    { path: 'js/store.js',         kind: 'js',   ns: ['store'],              lines: 339 },
+    { path: 'js/engine.js',        kind: 'js',   ns: ['engine', 'rules'],    lines: 912 },
+    { path: 'js/playbooks.js',     kind: 'js',   ns: ['playbooks'],          lines: 476 },
+    { path: 'js/health.js',        kind: 'js',   ns: ['health'],             lines: 1545 },
+    { path: 'js/ui.js',            kind: 'js',   ns: ['ui'],                 lines: 947 },
+    { path: 'README.md',           kind: 'doc',  ns: null,                   lines: 309 },
+    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,                   lines: 633 }
   ];
+  // Files that must NOT be loaded. js/rules.js was merged into js/engine.js in
+  // part 11; it survives on disk only as a tombstone (no delete tool available).
+  const UNLOADED = ['js/rules.js'];
 
   // ---------- part-2 fixtures: one canonical payload per registered new type ----------
   const NEW_TYPE_FIXTURES = {
@@ -668,7 +688,7 @@
       const webCss = MANIFEST.filter(function (m) { return m.kind === 'css'; }).map(function (m) { return m.path; });
       const docs = MANIFEST.filter(function (m) { return m.kind === 'doc'; });
 
-      if (MANIFEST.length !== 11) problems.push('manifest should list 11 files, lists ' + MANIFEST.length);
+      if (MANIFEST.length !== 10) problems.push('manifest must list the mandated 10 files, lists ' + MANIFEST.length);
       if (docs.length !== 2) problems.push('expected 2 doc files, found ' + docs.length);
 
       // (a) the DOM is the ground truth for what index.html actually loads
@@ -680,10 +700,21 @@
       // (b) no external asset may be loaded at all (no-network doctrine, checked live)
       loadedJs.concat(loadedCss).forEach(function (u) { if (/^(https?:)?\/\//.test(u)) problems.push('external asset loaded: ' + u); });
 
-      // (c) every js file in the manifest must have registered its namespace
+      // (c) every js file must register every namespace it owns
       MANIFEST.filter(function (m) { return m.kind === 'js'; }).forEach(function (m) {
-        if (m.ns && !LeadOS[m.ns]) problems.push(m.path + ' did not register LeadOS.' + m.ns);
+        (m.ns || []).forEach(function (ns) { if (!LeadOS[ns]) problems.push(m.path + ' did not register LeadOS.' + ns); });
       });
+
+      // (c2) merged/tombstoned files must never be loaded again
+      UNLOADED.forEach(function (p) {
+        if (loadedJs.indexOf(p) !== -1) problems.push(p + ' is loaded but was merged into js/engine.js (part 11)');
+        if (webJs.indexOf(p) !== -1) problems.push(p + ' must not appear in the manifest');
+      });
+      if (LeadOS.rules && LeadOS.engine && !(LeadOS.rules.RULES && LeadOS.rules.RULES.length === 40)) problems.push('rules namespace did not survive the merge into engine.js');
+
+      // (c3) the FIXED fixture epoch is exactly the date the brief specifies
+      if (FIXED !== Date.parse('2026-02-16T12:00:00.000Z')) problems.push('FIXED epoch drifted from 2026-02-16T12:00:00.000Z');
+      if (new Date(FIXED).toISOString() !== '2026-02-16T12:00:00.000Z') problems.push('FIXED does not serialise to the specified instant');
 
       // (d) the audited anchors from AI-SESSION-LOG §0.2 must still exist
       if (!LeadOS.store.MIGRATIONS['3>4']) problems.push("MIGRATIONS['3>4'] missing — §0.2(d) claims it is present");
@@ -691,7 +722,7 @@
         if (!LeadOS.rules.RULES.some(function (r) { return r.id === id; })) problems.push('heritage rule ' + id + ' missing — §0.2(c) claims it is present');
       });
 
-      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : MANIFEST.length + ' files manifested (' + webJs.length + ' js + ' + webCss.length + ' css + ' + docs.length + ' docs); DOM matches exactly; all namespaces registered; R1–R10 + 3>4 anchored' };
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : MANIFEST.length + ' files manifested (' + webJs.length + ' js + ' + webCss.length + ' css + ' + docs.length + ' docs); DOM matches exactly; rules merged into engine.js; FIXED = ' + new Date(FIXED).toISOString() + '; R1–R10 + 3>4 anchored' };
     }],
 
     ['T21', 'trend discipline: below 3 measured points no trend-derived finding fires', function () {
@@ -1188,12 +1219,14 @@
   ];
 
   /* ================= G14-G30: rule-boundary GOLDENS =================
-     Deterministic scenarios pinned to T0. These prove the exact fire/quiet
-     boundaries of the rules engine. They are part of the full suite; the boot
-     gate deliberately runs only the live-store checks G1-G12, so a rule-logic
-     regression surfaces loudly in Health without bricking a leader's data.
-     G13 is intentionally unallocated (the brief numbers from G14). */
-  const A = T0;
+     Deterministic scenarios pinned to the FIXED epoch declared at the top of
+     this file — 2026-02-16T12:00:00.000Z — labeled plainly here as the brief
+     requires. Day offsets below are relative to it. These prove the exact
+     fire/quiet boundaries of the rules engine. They are part of the full
+     suite; the boot gate runs only the live-store checks G1-G13, so a
+     rule-logic regression surfaces loudly in Health without bricking a
+     leader's data. */
+  const A = FIXED;
   function evsOf(rows) {
     let s = 0;
     const out = [fev(++s, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
@@ -1487,7 +1520,8 @@
     { id: 'C27', text: 'Findings carry stable keys (R11:<riskId>…): unique within a run, identical on a second run.', by: ['T28', 'G13'] },
     { id: 'C28', text: 'Sev 3 is the ceiling for trend-derived findings; safety (R28) and legal fail (R30) are the only exceptions.', by: ['T29', 'G13', 'G19', 'G28'] },
     { id: 'C29', text: 'Import gate rewires ids recursively and skips dangling refs into _skipped.dangling* counters.', by: ['T30', 'G3', 'G8'] },
-    { id: 'C30', text: 'README names exactly the 11 files shipped; index.html loads exactly those assets, all local.', by: ['T31', 'G1'] }
+    { id: 'C30', text: 'README names exactly the 10 files shipped; index.html loads exactly those assets, all local.', by: ['T31', 'G1'] },
+    { id: 'C31', text: 'Fixtures are pinned to FIXED = 2026-02-16T12:00:00.000Z; rules live in engine.js, no 11th file is loaded.', by: ['T31', 'T13', 'G30'] }
   ];
 
   function runSuite(suite) {
@@ -1510,5 +1544,5 @@
   // Boot gate: live-store integrity only (G1-G12).
   function boot() { const g = runSuite(LIVE_G); return { ok: g.every(function (r) { return r.pass; }), g: g }; }
 
-  LeadOS.health = { T: T, G: G, LIVE_G: LIVE_G, GOLDENS: GOLDENS, CLAIMS: CLAIMS, MANIFEST: MANIFEST, buildSeed: buildSeed, runAll: runAll, runG: runG, boot: boot };
+  LeadOS.health = { T: T, G: G, LIVE_G: LIVE_G, GOLDENS: GOLDENS, CLAIMS: CLAIMS, MANIFEST: MANIFEST, UNLOADED: UNLOADED, FIXED: FIXED, buildSeed: buildSeed, runAll: runAll, runG: runG, boot: boot };
 })();

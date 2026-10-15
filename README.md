@@ -261,26 +261,50 @@ MTTR branch, and R34 at the exact 5.1% boundary.
 
 ## Files
 
-Exactly these 11 files ship — no more, no fewer. **T31 enforces this table
-against the live DOM**: `index.html` must load exactly the 9 web assets listed
-here, in this order, all local. Line counts were measured by reading each file
-during the part-10 audit (`AI-SESSION-LOG.md` §0.2); byte counts are
+Exactly these **10 files** ship — no more, no fewer, flat structure, no new
+files. **T31 enforces this table against the live DOM**: `index.html` must load
+exactly the 7 web assets listed here, in this order, all local. Line counts
+were measured by reading each file (`AI-SESSION-LOG.md` §0.2); byte counts are
 deliberately **not** stated — see §0.3 for why, and run
 `wc -c index.html css/app.css js/*.js *.md` to verify independently.
 
 | File | Lines | Role |
 |---|---|---|
-| `index.html` | 55 | Shell: rail nav + view host; seven scripts in doctrinal order; authority-wall overlay |
+| `index.html` | 54 | Shell: rail nav + view host; six scripts in doctrinal order; authority-wall overlay |
 | `css/app.css` | 358 | Hand-rolled design system incl. severity/confidence language |
 | `js/events.js` | 232 | Event registry (88 types), `CREATES` map, append-gate validator with refs/refArrays |
 | `js/store.js` | 339 | Persistence wall: single key, schema v4, migrations with repair counting, `mergeInto()` import gate |
-| `js/engine.js` | 422 | `project()` fold, named projections incl. `rosterById`, `eventDomain()`, pure selectors |
+| `js/engine.js` | 912 | `project()` fold, named projections, `eventDomain()`, selectors — **and the R1–R40 rules engine** (second IIFE, `LeadOS.rules`) |
 | `js/playbooks.js` | 476 | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
-| `js/rules.js` | 500 | R1–R40: pure `(P, today) → findings[]`; R1–R10 at lines 85–124 |
-| `js/health.js` | 1462 | Authority wall: T1–T31 (+T12b, T20b), G1–G13 + goldens G14–G30, claims C1–C30, `MANIFEST` |
+| `js/health.js` | 1545 | Authority wall: T1–T31 (+T12b, T20b), G1–G13 + goldens G14–G30, claims C1–C31, `MANIFEST`, `FIXED` |
 | `js/ui.js` | 947 | Rail nav, hash routes, 14 views, registry-driven quick capture; every action is an event append |
-| `README.md` | 281 | This file |
-| `AI-SESSION-LOG.md` | 465+ | Session log; §0 is the opening audit |
+| `README.md` | 309 | This file |
+| `AI-SESSION-LOG.md` | 633 | Session log; §0 is the opening audit |
+
+Totals: **5805 lines** across 10 files. The two doc rows are self-referential —
+recording a measurement changes the file being measured — so those figures are
+the reading taken immediately before this table was written.
+
+> **`js/rules.js` is not in this table and is not loaded.** The rules engine was
+> merged into `js/engine.js` in part 11 to restore the mandated 10-file
+> structure. The old path survives on disk as a 16-line tombstone *only* because
+> the tooling in this session has no delete operation (§45). T31 **fails** if any
+> script tag references it again. Delete it yourself with `rm js/rules.js`.
+
+### Fixture epoch
+
+All date-pinned fixtures — the entire T-suite, `buildSeed()`, and every golden
+G14–G30 — use one constant, declared at the top of `health.js` and labeled
+plainly:
+
+```
+FIXED = 2026-02-16T12:00:00.000Z   (1771243200000 ms)
+```
+
+Goldens express day offsets relative to `FIXED`, so they are reproducible
+forever and never call `Date.now()`. G1–G13 are the exception by design: they
+are live-store inspections and must read the real clock and the real
+`localStorage`.
 
 ## Roadmap (pt-4 remaining parts)
 
