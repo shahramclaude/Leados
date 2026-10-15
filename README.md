@@ -1,5 +1,27 @@
 # LeadOS — Leadership Operating System (Session 2 of the rebuilt lineage)
 
+> ## DRIFT NOTICE — Session 4 audit, measured against `main`, February 2026
+>
+> **Everything below this notice is the Session-2 document, reproduced unchanged.** Its §0 table was accurate *when Session 2 measured it*. It is no longer accurate as a description of the present. Verified this session via GitHub Contents API + raw/CDN fetches:
+>
+> | Claim below (Session 2 era) | Measured this session | Verdict |
+> |---|---|---|
+> | `index.html` = **102,031 B** (sha `016ad463…`) | `index.html` = **337,974 B** (sha `963f7dad…`) | **STALE — build grew 3.3×** |
+> | schema **2**, migrations `0→1→2` | shipped splash: **"session 3 build · schema v3 · migrations 0→1→2→3 armed"** | **STALE — an undocumented migration exists** |
+> | self-test wall **T1–T14** | shipped splash: **T1–T18** | **STALE — four undocumented tests** |
+> | jsDelivr ≠ raw (v19 splash vs Session-1 splash) | jsDelivr now serves the **Session-2** splash ("schema v2 · T1–T14") while raw serves **Session-3** | **DRIFT PERSISTS, advanced one build.** Cause still *inference* (CDN cache), labeled as such |
+> | script body unreadable via this channel | re-confirmed in **two** fetch modes (text, html); only splash DOM survives | 4th confirmation across repo history |
+>
+> **Consequences, ranked:**
+> 1. **Blocker:** the shipped engine (v3, T18) has no session log and no README contract. Nobody — human or AI — can state what migration `2→3` changes. Any live `leados:data` v2 store upgrades through an undocumented code path.
+> 2. **Blocker (standing, unresolved):** `package.json` / `tsconfig.json` / 87,433 B `package-lock.json` describe a React 19 + Vite 7 + TS build with gsap, lenis, lucide-react and **zero source files**. Delete the scaffold; it contradicts the permanent constraint and invites a `npm run build` catastrophe.
+> 3. **Real risk:** whether `SESSION-3.patch.md` (patches A/B) is actually applied to the shipped bytes is **UNVERIFIABLE** from outside a browser — its anchors target code no session has ever read, including this one.
+> 4. **Nitpick:** five distinct byte sizes for "the" index.html now exist across repo docs (169,534 / 201,051 / 251,817 / 102,031 / 337,974). New rule adopted this session: **every measurement carries a measured-at date.**
+>
+> **Unverified by this session (labeled, not assumed):** existence and content of T1–T18; the rules engine; the case-spine fan-out; whether pulses carry `estimated`; SLA ladder values; quarantine behavior; whether the app boots clean. The Session-4 entries in `AI-SESSION-LOG.md` list exactly which two artifacts upgrade each of these from *unverified* to *verified*. The authority rule below stands — but it cannot substitute for docs that match the shipped build.
+>
+> ---
+
 A single-file, offline-first leadership mentor for someone newly put in charge of **other team leads**. Vanilla JS, no framework, no backend, no accounts, no APIs, no OAuth, no build step, **no network calls (not even fonts)**. Open `index.html` — that is the install. All state lives in `localStorage` under one key.
 
 **The authority rule, inherited and tightened:** `#/health` inside the app executes the claims below against the code paths production uses, and prints each assertion next to its observed value. Where this README and `#/health` ever disagree, `#/health` wins.
@@ -7,6 +29,8 @@ A single-file, offline-first leadership mentor for someone newly put in charge o
 ---
 
 ## 0. What this session verified about the repo itself, with sources
+
+*(Session-2-era measurements — see DRIFT NOTICE above for current values. Retained unchanged for provenance.)*
 
 Everything in this table was checked via API/HTTP this session, not repeated from any doc:
 
@@ -45,15 +69,19 @@ Everything in this table was checked via API/HTTP this session, not repeated fro
 | Integrity audit repairs dangling references (nulls, never drops) and logs each repair | **T14**, live at every boot, log on `#/data` |
 | Every recommendation prints basis + confidence label with the rule that produced it | `#/home` — the “basis” monospace line under each finding |
 
+*(Session-4 note: the shipped build advertises T15–T18. Their assertions are undocumented and unverified by any session with readable source.)*
+
 ## 2. Modules (all functional, all cross-wired through `STATE` + the event layer)
 
 Home/R13-rule findings engine · Roster & person dossier (everything rolls up: 1:1s, pulses w/ provenance, cases, SBI, nine-box, bench, goals, delegations) · 1:1s (cadence math; closing writes a pulse, **untouched sliders → `estimated:true`, excluded from all trends** — doctrine adopted from `SESSION-3.patch.md`, reimplemented fresh since that file’s anchors target a build not on `main`) · Pulse (measured/estimated/legacy provenance, instrument-boundary tick on sparklines) · Goals (ownerless = visible defect; **cross-team dependency edges + cycle refusal**) · Cases (the spine) · Decisions (options+rationale+premortem gate+review dates+outcomes) · Escalations (fixed SLA ladder S5=1d…S1=30d, breach computed from today) · Risks (L×I, review nudges) · Delegation (5-level ladder, decay) · Rituals (cadence lapse) · Talent & bench (nine-box + named-successor seats) · Meetings (load audit + **design studio** that commits redesigns as reviewable Decisions) · Arrival 90d (boss-expectations day-14 nudge, listening-tour 60%-by-day-60, early wins that **refuse to count unverified**) · **Skip-levels** (restored flagship) · **Calibration** (narratives gated on linked evidence) · **Narrative radar** (stated themes via fixed lexicon vs instruments; confidence printed) · **Succession rehearsal** (game-day exposure computed from live goals/cases/delegations; committable as a case) · Data & backup · System health.
 
 New this session: skip-levels, calibration, goal dependency map, narrative radar, meeting studio, succession rehearsal. Justification for each is the repo’s own ranked gap list plus the v19 flagship regression — citations in Session 2 of `AI-SESSION-LOG.md`.
 
+*(Session-4 note: this list describes the Session-2 build. Whatever the Session-3 build added beyond it is not documented anywhere in this repo.)*
+
 ## 3. Storage contract
 
-- Key `leados:data`; `meta.schemaVersion` = **2** is the source of truth.
+- Key `leados:data`; `meta.schemaVersion` = **2** is the source of truth. *(Session-4 note: shipped splash says **3** with `2→3` armed. The delta is undocumented — this is Blocker 1 of the drift notice.)*
 - Parse/shape/version-quarantine keys: `leados:data.<corrupt|malformed|superseded|migration-failed|pre-import>.<ts>` — never overwritten, browsable (with legacy keys, read-only) at `#/data`.
 - `trySetItem` is the only write path; quota errors set a persistent red `WRITE FAILED` pill and in-memory state is preserved.
 - Export = full JSON. Import validates → refuses newer → migrates older → refuses byte-identical-to-live → snapshots current state → merge (id re-mint + FK rewiring) or replace.
@@ -73,3 +101,7 @@ New this session: skip-levels, calibration, goal dependency map, narrative radar
 3. Meeting-load **time series** (weeks exist; trend view doesn’t).
 4. Cross-cycle goal dependency **aging** (edge exists; per-edge latency doesn’t).
 5. Anything requiring accounts, sync, or coordination with real other humans — permanently out of scope by the product’s own constraints.
+
+*(Session-4 additions, from the standing engine spec, not yet evidenced in any documented test list:)*
+6. **Per-rule golden test cases** — the current wall tests storage/logic paths; the mandated engine rules (cadence overdue, decision review lapse, goal stall/no-owner, feedback imbalance, delegation load, conflict recurrence, burnout) need one labeled fixture each: input events in → expected finding + basis + confidence out.
+7. **Structured playbooks pre-filling from live data** — Situational Leadership (D1–D4 → S1–S4 matching), SBI/DESC scaffolding, delegation-level guidance. SBI exists as an evidence type; the *scaffolded playbook* layer is not documented as existing.

@@ -1,6 +1,133 @@
 # AI-SESSION-LOG
 
-## Session 2 — continued development of the rebuilt lineage (this session)
+## Session 4 — repo forensics & drift audit (this session)
+
+### 0. Role framing
+Senior-staff reviewer per the standing brief: critique before code, failure modes
+named before fixes, findings ranked blocker / real risk / nitpick, unverified
+labeled unverified. No engine code was authored this session — on purpose, and
+the reason is the first finding.
+
+### 1. Claim: "Session 3 shipped a build (schema v3, T1–T18) that no document in the repo describes."
+**Verification performed (all this session):**
+- `GET api.github.com/repos/wbweve/Leados/contents/` — full listing, sizes/shas.
+- `GET raw.githubusercontent.com/.../index.html` (`format=text`) — splash only,
+  script stripped: **"LEADOS · session 3 build · schema v3 · migrations 0→1→2→3
+  armed · self-test wall T1–T18"**.
+- Same URL, `format=html` — splash DOM only, `<script>` still stripped. Second
+  method, same wall.
+- `GET cdn.jsdelivr.net/gh/wbweve/Leados@main/index.html` — serves the
+  **Session-2** splash ("schema v2 · T1–T14"). CDN is one build behind `main`.
+- Read in full: `README.md` (8,852 B), `AI-SESSION-LOG.md` (7,845 B),
+  `SESSION-3.patch.md` (6,508 B), `package.json` (707 B).
+
+**Actual result (verified facts, with measured-at):**
+
+| Fact | Value | Source |
+|---|---|---|
+| `index.html` on `main` | **337,974 B**, sha `963f7dad…` | Contents API, Feb 2026 |
+| `index.html` self-identification | session 3 build, schema **v3**, T1–**T18** | raw fetch (splash) |
+| README's current-size claim | 102,031 B | README §0 (Session-2 measurement) |
+| Session-3 entry in this log | **absent** | direct read |
+| jsDelivr `@main` | serves Session-2 build | CDN fetch, Feb 2026 |
+| npm scaffold | React 19, Vite 7, TS, gsap, lenis, lucide-react; zero sources | `package.json` |
+| Script bodies of both builds | **UNREADABLE** via this channel (2 formats tried) | 4th confirmation in repo history |
+
+**Verdict: claim CONFIRMED.** The shipped engine outruns its documentation by a
+full schema version and four self-tests.
+
+### 2. Findings, ranked
+- **BLOCKER 1 — Docs/build drift.** README asserts v2/T14/102,031 B as present
+  fact; shipped is v3/T18/337,974 B. The repo's authority rule ("#/health wins
+  over README") presumes a README that describes the same build `#/health` runs.
+  That presumption is broken. Nobody can say what migration `2→3` changes —
+  and any user's live v2 store will be upgraded by exactly that undocumented
+  path. *Fixed this session, docs side: prepend-only drift notice in README.*
+- **BLOCKER 2 — Dead npm scaffold (standing since Session 1).** React/Vite/TS
+  tooling with zero sources and deps (gsap, lenis, lucide-react) that are
+  incoherent with a no-network single-file vanilla build. Three sessions have
+  advised deletion; none could do it via docs. Advisory repeated; deletion
+  requires repo write access. **Not fixed.**
+- **REAL RISK 1 — `#/health` test count grew T14→T18 with no contract.** If any
+  of T15–T18 covers the `2→3` migration, its expected-shape fixture is the only
+  specification of v3 that exists, and it lives in code no session can read.
+- **REAL RISK 2 — `SESSION-3.patch.md` application status unknowable.** Its own
+  rule ("if an anchor's neighborhood doesn't match, STOP, do not fuzzy-apply")
+  is the correct rule, and it is precisely why this session authored **no**
+  engine patch: every anchor (`applyRegisterCase`, `oo-finish`, `FW.moodSlope`)
+  is in the unreadable script body.
+- **REAL RISK 3 — CDN/engine drift persists** (Session-2 build on jsDelivr).
+  Anyone deep-linking the CDN runs an older engine with four fewer tests.
+  Cause remains *inference* (cache staleness/purge), labeled.
+- **NITPICK 1 — Five distinct index.html byte counts across repo docs.** Adopted
+  this session: every measurement carries a measured-at date (see drift notice).
+- **NITPICK 2 — `tsconfig.json` (681 B) not read this session.** Immaterial
+  (nothing exists to compile); labeled, not assumed.
+
+### 3. Position held (argument stated, per protocol)
+**This session did not re-emit `index.html`.** Sessions 2 and 3 each answered
+the transport wall by rewriting the whole file from the documented contract —
+three different builds (102 KB → 338 KB, if the shas/sizes are distinct builds,
+which is itself unverified) have now been authored blind under one product name.
+A fourth blind rewrite is the disease, not the cure: it orphans live v2/v3
+stores behind a migration its author cannot see, and it would violate the
+repo's own patch doctrine quoted above. The single most valuable byte-range in
+this repo right now is the `2→3` migration delta.
+
+**What unblocks in-place engine work (either suffices):**
+1. Paste the shipped `index.html` (or just its script body / the migration +
+   RULES sections) into the session — verified source beats four fetches.
+2. In a browser: open the build, go to `#/health`, paste the full T1–T18
+   transcript **plus** a `#/data` export JSON. That verifies behavior and the
+   v3 data shape even with the code unreadable.
+
+**Fallback, stated plainly:** if neither artifact arrives by the next part, the
+only honest forward motion is a from-contract rebuild with a *guessing* `2→3`
+migration — flagged as a hypothetical migration, quarantining any v3 store it
+cannot validate. That is a worse product than waiting, and this session's
+recommendation is to wait for the artifact.
+
+### 4. What a new multi-team leader still needs (assessed against docs, not code)
+Endorsed from Session-2 README §5 (calibration history, 360 capture, meeting
+time series, dependency aging). Added this session from the standing engine
+spec, because no documented test covers them:
+- **Per-rule golden fixtures.** The wall tests storage and spine mechanics;
+  the mandated rules (1:1 cadence overdue, decision review lapse, goal
+  stall/no-owner, feedback imbalance, delegation load, repeated unresolved
+  conflict, burnout from workload+mood trend) each need one labeled case:
+  input events → expected finding, basis, confidence. This is the difference
+  between "the engine has rules" and "the engine is right."
+- **Playbook layer.** Situational Leadership matching, SBI/DESC scaffolding,
+  delegation-level guidance that pre-fill from existing records. SBI appears in
+  docs only as an evidence type for calibration; the scaffolded, pre-filling
+  playbook is not documented as existing anywhere.
+
+### 5. Next slice (stated before starting, per process)
+**Part 2 = "engine golden-test wall" (vertical slice):** one fixture per
+mandated rule crossing the documented event layer, executed in-browser at
+`#/health` as added T-series entries, each asserting finding + basis +
+confidence-label. **Blocked** on §3's two artifacts — writing engine tests
+against an unreadable engine would be authoring assertions about a function I
+have never seen, which is the exact failure mode this log exists to name.
+
+### 6. Self-introduced defects this session
+None — no code authored. Two files edited (README prepend, this append); both
+were fully readable before editing, which is the precondition the engine work
+cannot currently meet.
+
+### 7. Changelog (Session 4)
+| Change | Why |
+|---|---|
+| README: prepend-only DRIFT NOTICE with measured-at table | Session-2 numbers were reading as present facts; prepending preserves provenance while correcting the present |
+| §0 heading annotated "Session-2-era" | keeps the historical record without rewriting it |
+| Inline Session-4 notes at §1/§2/§3 | marks exactly where the shipped build outruns the documented contract |
+| §5 gaps 6–7 added (golden fixtures, playbook layer) | the engine spec requires per-rule correctness evidence no session has documented |
+| This log: Session-4 entry appended | the missing Session-3 entry is what made this audit necessary; the pattern stops here |
+| **No `index.html` emitted** | fuzzy-editing unread code is the failure mode the repo's own patch doc forbids; a 4th blind rebuild orphans live stores |
+
+---
+
+## Session 2 — continued development of the rebuilt lineage
 
 ### 0. Role framing
 Operated as senior-staff reviewer per the standing brief: critique before code,
