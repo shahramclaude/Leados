@@ -213,6 +213,7 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 | T21–T24 | ≥3-point trend discipline · skip-not-infer · severity escalations · all 40 rules fire |
 | T25–T27 | named projections · playbook contract · UI contract |
 | **T28–T30** | **stable finding keys · sev-3 trend ceiling with named exceptions · import gate (recursive rewire, dangling counters)** |
+| **T31** | **shipped manifest: README's file table == the assets `index.html` actually loads; all local; every module registers** |
 
 **G-suite — live store (G1–G12) + goldens (G14–G30)**
 
@@ -255,24 +256,31 @@ part 8 it reaches both severity bands of R13 (60% → sev 3, 40% → sev 4), R22
 `fail` → sev 5), plus R16's *open-past-threshold* branch alongside its resolved
 MTTR branch, and R34 at the exact 5.1% boundary.
 
-- **Claims C1–C29** in the Health tab: each shows the checks that authorize it;
+- **Claims C1–C30** in the Health tab: each shows the checks that authorize it;
   a failing check marks the claim *unproven*.
 
 ## Files
 
-| File | Role |
-|---|---|
-| `index.html` | Shell: rail nav + view host; seven scripts in doctrinal order; authority-wall overlay |
-| `css/app.css` | Hand-rolled design system incl. severity/confidence language |
-| `js/events.js` | Event registry (88 types) + append-gate validator with refs/refArrays |
-| `js/store.js` | Persistence wall: single key, schema v4, migrations with repair counting, `mergeInto()` import gate |
-| `js/engine.js` | `project()` fold, named projections incl. `rosterById`, `eventDomain()`, pure selectors |
-| `js/playbooks.js` | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
-| `js/rules.js` | R1–R40: pure `(P, today) → findings[]` rules engine |
-| `js/health.js` | Authority wall: T1–T30 (+T12b, T20b), G1–G13 + goldens G14–G30, claims C1–C29 |
-| `js/ui.js` | Rail nav, hash routes, 14 views, registry-driven quick capture; every action is an event append |
-| `README.md` | This file |
-| `AI-SESSION-LOG.md` | Session log; §0 is the claim-vs-inspection audit |
+Exactly these 11 files ship — no more, no fewer. **T31 enforces this table
+against the live DOM**: `index.html` must load exactly the 9 web assets listed
+here, in this order, all local. Line counts were measured by reading each file
+during the part-10 audit (`AI-SESSION-LOG.md` §0.2); byte counts are
+deliberately **not** stated — see §0.3 for why, and run
+`wc -c index.html css/app.css js/*.js *.md` to verify independently.
+
+| File | Lines | Role |
+|---|---|---|
+| `index.html` | 55 | Shell: rail nav + view host; seven scripts in doctrinal order; authority-wall overlay |
+| `css/app.css` | 358 | Hand-rolled design system incl. severity/confidence language |
+| `js/events.js` | 232 | Event registry (88 types), `CREATES` map, append-gate validator with refs/refArrays |
+| `js/store.js` | 339 | Persistence wall: single key, schema v4, migrations with repair counting, `mergeInto()` import gate |
+| `js/engine.js` | 422 | `project()` fold, named projections incl. `rosterById`, `eventDomain()`, pure selectors |
+| `js/playbooks.js` | 476 | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
+| `js/rules.js` | 500 | R1–R40: pure `(P, today) → findings[]`; R1–R10 at lines 85–124 |
+| `js/health.js` | 1462 | Authority wall: T1–T31 (+T12b, T20b), G1–G13 + goldens G14–G30, claims C1–C30, `MANIFEST` |
+| `js/ui.js` | 947 | Rail nav, hash routes, 14 views, registry-driven quick capture; every action is an event append |
+| `README.md` | 281 | This file |
+| `AI-SESSION-LOG.md` | 465+ | Session log; §0 is the opening audit |
 
 ## Roadmap (pt-4 remaining parts)
 

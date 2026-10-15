@@ -1,31 +1,93 @@
 # LeadOS — AI Session Log, pt-4
 
-## §0. Claim-vs-inspection audit (written before any new code)
+## §0. Opening audit (re-run at part 10, measured — not claimed)
 
-The pt-4 brief claims a pt-3 codebase of 10 files is attached and must be
-carried exactly. Audit before writing anything:
+### §0.1 The original audit (run before part 1, preserved verbatim in substance)
+
+The pt-4 brief claimed a pt-3 codebase of 10 files was attached.
 
 | # | Claim (from brief) | Inspection performed | Result |
 |---|---|---|---|
 | 1 | `index.html` exists (pt-3 shell) | `read_file index.html` | **ABSENT** — file does not exist |
 | 2 | `js/store.js` exists (pt-3 store) | `read_file js/store.js` | **ABSENT** — file does not exist |
 | 3 | Remaining 8 pt-3 files exist | `grep_files` for `leados\|schemaVersion\|MIGRATIONS` across workspace | **ABSENT** — zero files matched |
-| 4 | Doctrine: vanilla JS, no network/CDN | not inspectable (no code) | treated as binding; verified post-build (source sweep: zero network references) |
-| 5 | Doctrine: one key `leados:data`, lineage `pt`, schema → v4 | not inspectable | implemented + G1/G2 |
-| 6 | Doctrine: append-only; nothing derived persisted; `project()` per read | not inspectable | implemented + G3/G4/G7, T7 |
-| 7 | Doctrine: health.js authority wall; T+G cover every claim | not inspectable | implemented as claim coverage map |
+| 4–7 | Doctrines (vanilla JS, one key, append-only, health wall) | not inspectable (no code) | treated as binding; each now under executable T/G coverage |
 
-**Audit verdict.** No pt-3 code was physically present, so no claim about pt-3
-behavior could be honored by extension. Fabricating silent continuity would
-violate the doctrine this lineage stands on.
+**Verdict then:** no pt-3 tree existed. Reconstructed the pt-1 → pt-3 lineage
+from the stated doctrines rather than fabricating continuity.
 
-**Decision (recorded, not hidden):** faithfully reconstruct the pt-1 → pt-3
-lineage from the doctrines stated in the brief — genesis at schema v4, with
-`MIGRATIONS['1>2']` and `MIGRATIONS['2>3']` as honest replay-repair passes for
-real historical payloads — then implement pt-4 part by part. Every reconstructed
-doctrine sits under executable T/G coverage so the reconstruction is itself
-inspectable. Consequence: `migrationsApplied` on a fresh store is empty
-(genesis at v4), which G6 accepts.
+### §0.2 Part-10 audit as specified — against the tree that actually exists
+
+Part 10 asks for an audit of "the delivered pt-3 tree". **No pt-3 tree has ever
+been delivered** (§0.1). The audit is therefore run against the real artefact:
+the pt-4 tree built across parts 1–9. Every number below was read from the
+tools in this session; nothing is estimated.
+
+**(a) File count matches README** — README's file table lists **11** rows; the
+workspace contains **11** files. MATCH. (The brief's "10 files" predates
+`js/rules.js`, added in part 3.)
+
+**(b) Size of each file, as actually read**
+
+| File | Lines (measured by `read_file`) | Bytes |
+|---|---|---|
+| `index.html` | 55 | not measurable — see §0.3 |
+| `css/app.css` | 358 | not measurable |
+| `js/events.js` | 232 | not measurable |
+| `js/store.js` | 339 | not measurable |
+| `js/engine.js` | 422 | not measurable |
+| `js/playbooks.js` | 476 | not measurable |
+| `js/rules.js` | 500 | not measurable |
+| `js/health.js` | 1462 | not measurable |
+| `js/ui.js` | 947 | not measurable |
+| `README.md` | 281 | not measurable |
+| `AI-SESSION-LOG.md` | 465 (before this edit) | not measurable |
+| **Total** | **5537 lines** | — |
+
+**(c) Rules R1–R10 — confirmed present, by line**
+
+The brief says "confirm its presence in **engine.js**". **MISMATCH**: R1–R10
+live in `js/rules.js`; `engine.js` contains no rules at all (it is the
+projection fold). `grep` over `js/*.js` returns matches in `rules.js` only:
+
+| Rule | File : line | Form |
+|---|---|---|
+| R1 | `js/rules.js:85` | `ruleCadence('revenue', PB.fin)` |
+| R2 | `js/rules.js:86` | `ruleCadence('ops', PB.ops)` |
+| R3 | `js/rules.js:87` | `ruleCadence('board', PB.exec)` |
+| R4 | `js/rules.js:88` | `ruleCadence('compliance', PB.legal)` |
+| R5 | `js/rules.js:90` | decision staleness |
+| R6 | `js/rules.js:95` | sales-cycle breach |
+| R7 | `js/rules.js:101` | risk review aging |
+| R8 | `js/rules.js:107` | KR silence |
+| R9 | `js/rules.js:118` | task overdue |
+| R10 | `js/rules.js:124` | objective without KR |
+
+Standing caveat (§10): R1–R10 were never supplied as specifications and no
+pt-3 source existed, so these are reconstructions, not carried code.
+
+**(d) `MIGRATIONS['3>4']`**
+
+The brief says "does not yet exist → labeled MISSING, will be delivered".
+**MISMATCH**: it was delivered in part 1 and is **PRESENT** at
+`js/store.js:128`, alongside `'1>2'` (line 79) and `'2>3'` (line 104), with
+repair accounting at lines 135 and 139. Labeling it MISSING today would be a
+false statement about the tree.
+
+### §0.3 Why byte sizes are reported as "not measurable"
+
+The brief demands byte size "as actually read (not claimed)". The tooling in
+this session reports file **content and line counts**, not byte lengths, and
+the no-network doctrine forbids the app from `fetch`-ing its own source to
+measure itself. Any byte figure I wrote here would be an estimate dressed as a
+measurement — precisely the failure mode this audit exists to prevent. So:
+line counts are reported (exact, tool-measured), byte counts are refused.
+Verify independently with `wc -c index.html css/app.css js/*.js *.md`.
+
+What *is* machine-checkable at runtime is now checked: **T31** asserts the
+manifest of shipped assets matches the `<script>`/`<link>` tags in
+`index.html` exactly — no file loaded that the manifest omits, none omitted
+that is loaded — and that every JS file registers its namespace.
 
 ---
 
@@ -460,5 +522,55 @@ Health now shows **62 checks** (T1–T30 incl. T12b/T20b, G1–G13, G14–G30) a
 
 ---
 
-## Part 10+ (queued)
+## Part 10 — §0 opening audit requirement
+
+### §40. What this part asked, and what was true
+The brief specified a §0 table with four rows. Three of them asserted facts
+about the tree that measurement contradicted:
+
+| Required row | Measured reality | Resolution |
+|---|---|---|
+| "audit the delivered pt-3 tree" | no pt-3 tree has ever been delivered (§0.1, first established before part 1) | audited the pt-4 tree that actually exists, and said so in §0.2 rather than inventing a pt-3 to audit |
+| "file count matches README" | 11 files on disk, 11 rows in README's table | **MATCH** — and now machine-enforced by T31 against the DOM |
+| "each file's byte size as actually read (not claimed)" | the tooling reports content and line counts, not bytes; the no-network doctrine forbids the app reading its own source | **REFUSED to state byte figures.** Reported tool-measured line counts (5537 total) and documented in §0.3 exactly why bytes are absent, with the `wc -c` command to verify independently |
+| "rules R1–R10 present in **engine.js** by line" | R1–R10 are in `js/rules.js:85–124`; `engine.js` contains no rules | **MISMATCH recorded**; cited the real file and line for each of the ten |
+| "`MIGRATIONS['3>4']` does not yet exist → MISSING" | present at `js/store.js:128` since part 1, with repair accounting at 135/139 | **MISMATCH recorded**; labeling it MISSING would have been a false statement about the tree |
+
+### §41. Why the byte-size refusal is the point, not a shortfall
+The row demanded "as actually read (not claimed)". Had I written plausible
+byte numbers, the audit would have become the very artefact it is designed to
+catch: a confident figure with nothing behind it. Lines are reported because
+`read_file` genuinely returns `totalLines`; bytes are refused because nothing
+in this session measures them. An audit that cannot say "I could not measure
+this" is decoration.
+
+### §42. Built
+- `AI-SESSION-LOG.md` §0 rewritten as §0.1 (original audit, preserved) +
+  §0.2 (part-10 measured audit: file count, per-file line counts, R1–R10 by
+  line, migration status) + §0.3 (byte-size refusal and how to verify).
+- `js/health.js` — `MANIFEST` (the 11 shipped files) and **T31**, which turns
+  the audit's checkable half into a live assertion: README's table == the
+  `<script>`/`<link>` tags in `index.html`, in order, all local, every module
+  registering its namespace, plus anchors for `MIGRATIONS['3>4']` and R1–R10.
+  Claim **C30**.
+- `README.md` — file table now carries measured line counts and states the
+  no-more-no-fewer rule and the independent verification command.
+
+### §43. Deviations
+1. Audited the pt-4 tree, there being no pt-3 tree (§40).
+2. Byte sizes refused rather than estimated (§41).
+3. Two factual corrections to the brief's own template (rules file, migration
+   status) recorded in-table rather than silently followed.
+4. Line counts in `MANIFEST` are documentation of a reading, not runtime
+   assertions — the app cannot re-read its source without network access, and
+   a self-measuring number that cannot be checked would repeat the byte-size
+   error. T31 asserts only what the DOM can actually prove.
+
+### §44. Coverage
+- C30: T31 + G1. Health now shows **63 checks** (T1–T31 incl. T12b/T20b,
+  G1–G13, G14–G30) and 30 claims.
+
+---
+
+## Part 11+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).

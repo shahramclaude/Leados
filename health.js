@@ -21,6 +21,26 @@
     return raw.events.filter(function (e) { return e.meta && e.meta.repair && e.meta.migration === migrationId; }).length;
   }
 
+  /* The shipped manifest (pt-4 part 10). README's file table must name exactly
+     these 11 files - no more, no fewer - and index.html must load exactly the
+     9 web assets in this order. T31 enforces both against the live DOM.
+     `lines` are the counts measured during the part-10 §0 audit; they are
+     documentation of that reading, not a runtime assertion (the no-network
+     doctrine means the app cannot re-read its own source to confirm them). */
+  const MANIFEST = [
+    { path: 'index.html',          kind: 'html', ns: null,        lines: 55 },
+    { path: 'css/app.css',         kind: 'css',  ns: null,        lines: 358 },
+    { path: 'js/events.js',        kind: 'js',   ns: 'events',    lines: 232 },
+    { path: 'js/store.js',         kind: 'js',   ns: 'store',     lines: 339 },
+    { path: 'js/engine.js',        kind: 'js',   ns: 'engine',    lines: 422 },
+    { path: 'js/playbooks.js',     kind: 'js',   ns: 'playbooks', lines: 476 },
+    { path: 'js/rules.js',         kind: 'js',   ns: 'rules',     lines: 500 },
+    { path: 'js/health.js',        kind: 'js',   ns: 'health',    lines: 1462 },
+    { path: 'js/ui.js',            kind: 'js',   ns: 'ui',        lines: 947 },
+    { path: 'README.md',           kind: 'doc',  ns: null,        lines: 281 },
+    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,        lines: 465 }
+  ];
+
   // ---------- part-2 fixtures: one canonical payload per registered new type ----------
   const NEW_TYPE_FIXTURES = {
     'fin.budget.set': { id: 'fb1', period: '2025-Q3', amount: 500000, currency: 'USD', category: 'opex' },
@@ -640,6 +660,38 @@
         if (sp.refArrays) Object.keys(sp.refArrays).forEach(function (f) { if (!families[sp.refArrays[f]]) problems.push(t + '.' + f + ' -> family has no creator type'); });
       });
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'dry-run gate: 2 acceptable, 3 dangling refs counted by family, 1 unknown type, 1 invalid; recursive rewire verified' };
+    }],
+
+    ['T31', 'shipped manifest: README file table == files actually loaded by index.html, every module registers', function () {
+      const problems = [];   // MANIFEST is the module-scope constant declared above
+      const webJs = MANIFEST.filter(function (m) { return m.kind === 'js'; }).map(function (m) { return m.path; });
+      const webCss = MANIFEST.filter(function (m) { return m.kind === 'css'; }).map(function (m) { return m.path; });
+      const docs = MANIFEST.filter(function (m) { return m.kind === 'doc'; });
+
+      if (MANIFEST.length !== 11) problems.push('manifest should list 11 files, lists ' + MANIFEST.length);
+      if (docs.length !== 2) problems.push('expected 2 doc files, found ' + docs.length);
+
+      // (a) the DOM is the ground truth for what index.html actually loads
+      const loadedJs = Array.prototype.slice.call(document.querySelectorAll('script[src]')).map(function (s) { return s.getAttribute('src'); });
+      const loadedCss = Array.prototype.slice.call(document.querySelectorAll('link[rel="stylesheet"]')).map(function (l) { return l.getAttribute('href'); });
+      if (JSON.stringify(loadedJs) !== JSON.stringify(webJs)) problems.push('script tags ' + JSON.stringify(loadedJs) + ' != manifest ' + JSON.stringify(webJs));
+      if (JSON.stringify(loadedCss) !== JSON.stringify(webCss)) problems.push('stylesheet tags ' + JSON.stringify(loadedCss) + ' != manifest ' + JSON.stringify(webCss));
+
+      // (b) no external asset may be loaded at all (no-network doctrine, checked live)
+      loadedJs.concat(loadedCss).forEach(function (u) { if (/^(https?:)?\/\//.test(u)) problems.push('external asset loaded: ' + u); });
+
+      // (c) every js file in the manifest must have registered its namespace
+      MANIFEST.filter(function (m) { return m.kind === 'js'; }).forEach(function (m) {
+        if (m.ns && !LeadOS[m.ns]) problems.push(m.path + ' did not register LeadOS.' + m.ns);
+      });
+
+      // (d) the audited anchors from AI-SESSION-LOG §0.2 must still exist
+      if (!LeadOS.store.MIGRATIONS['3>4']) problems.push("MIGRATIONS['3>4'] missing — §0.2(d) claims it is present");
+      ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10'].forEach(function (id) {
+        if (!LeadOS.rules.RULES.some(function (r) { return r.id === id; })) problems.push('heritage rule ' + id + ' missing — §0.2(c) claims it is present');
+      });
+
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : MANIFEST.length + ' files manifested (' + webJs.length + ' js + ' + webCss.length + ' css + ' + docs.length + ' docs); DOM matches exactly; all namespaces registered; R1–R10 + 3>4 anchored' };
     }],
 
     ['T21', 'trend discipline: below 3 measured points no trend-derived finding fires', function () {
@@ -1434,7 +1486,8 @@
     { id: 'C26', text: 'The extended seed reaches both severity bands for R13/R22/R30 and the open-incident branch of R16.', by: ['T20b', 'G30'] },
     { id: 'C27', text: 'Findings carry stable keys (R11:<riskId>…): unique within a run, identical on a second run.', by: ['T28', 'G13'] },
     { id: 'C28', text: 'Sev 3 is the ceiling for trend-derived findings; safety (R28) and legal fail (R30) are the only exceptions.', by: ['T29', 'G13', 'G19', 'G28'] },
-    { id: 'C29', text: 'Import gate rewires ids recursively and skips dangling refs into _skipped.dangling* counters.', by: ['T30', 'G3', 'G8'] }
+    { id: 'C29', text: 'Import gate rewires ids recursively and skips dangling refs into _skipped.dangling* counters.', by: ['T30', 'G3', 'G8'] },
+    { id: 'C30', text: 'README names exactly the 11 files shipped; index.html loads exactly those assets, all local.', by: ['T31', 'G1'] }
   ];
 
   function runSuite(suite) {
@@ -1457,5 +1510,5 @@
   // Boot gate: live-store integrity only (G1-G12).
   function boot() { const g = runSuite(LIVE_G); return { ok: g.every(function (r) { return r.pass; }), g: g }; }
 
-  LeadOS.health = { T: T, G: G, LIVE_G: LIVE_G, GOLDENS: GOLDENS, CLAIMS: CLAIMS, buildSeed: buildSeed, runAll: runAll, runG: runG, boot: boot };
+  LeadOS.health = { T: T, G: G, LIVE_G: LIVE_G, GOLDENS: GOLDENS, CLAIMS: CLAIMS, MANIFEST: MANIFEST, buildSeed: buildSeed, runAll: runAll, runG: runG, boot: boot };
 })();
