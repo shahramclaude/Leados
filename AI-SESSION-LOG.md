@@ -1,62 +1,51 @@
 # AI-SESSION-LOG — LeadOS
 
-Append-only. Newest entries at the end. Each entry: claims made → verification method → actual result → decisions with whys → what is NOT claimed. Entries that describe files must describe files that exist. (pt lineage continues; upstream log content not carried — per pt-1 doctrine, each lineage keeps its own log.)
+Append-only. Newest entries at the end. Each entry: claims made → verification method → actual result → decisions with whys → what is NOT claimed. Entries that describe files must describe files that exist. (pt lineage continues; upstream log content not carried — per pt doctrine, each lineage keeps its own log. Upstream pt-2 log content was byte-read and is reflected in §0.)
 
 ---
 
-## pt-2 — org slice: real migration, reporting lines, skip-levels
+## pt-3 — growth slice: coaching follow-through, schema v3, R10
 
 ### §0 Opening audit: claim vs. inspection (all measurements this session)
 
 | Claim (upstream docs) | Method | Observed | Verdict |
 |---|---|---|---|
-| pt-1 README file table: 9 entries, `css/` + `js/` dirs, "anything else is not part of pt-1" | GitHub contents API (alphabetical; absence proven by ordering: `css` would sort between `app.css`/`engine.js`, `js/` between `index.html`/`package-lock.json`) | flat root; `app.css`, `engine.js` 28,853 B, `events.js` 18,518 B, `playbooks.js` 23,493 B, `store.js`, `index.html` 3,128 B + `package.json`, lockfile, `tsconfig.json`, `SESSION-3.patch.md`, `AI-SESSION-LOG.append.md` | **FALSE — 5th consecutive README⇄tree drift; BLOCKER** |
-| pt-1 README: "loads css + 5 js in order", boot registry guard | raw fetch of `index.html` ×2 (markdown + html formats) | rail verified (Today/Roster/Playbooks/Health/Data, 5 views, title "pt-1"); **script srcs strip out of both fetches → whether HEAD's tree boots or dies in its own guard: UNVERIFIED** | unverified, labeled |
-| Session-6 (mf-2) append: prescription `MIGRATIONS[1→2]`, R8, playbooks bridge | read `AI-SESSION-LOG.append.md` in full | all items listed under "§6 required actions of the next session" — **never delivered; the append file itself is the orphan it told pt-1 to fold in** | plan ≠ code |
-| pt-1 storage doctrine | raw fetch `store.js` (readable through mid-`parseLoad`): `KEY leados:data`, `SCHEMA 1`, `MIGRATIONS = {}`, funnel, quarantine, normalize, mint, audit cap | **VERIFIED as far as readable; import pipeline/save/boot tail: UNVERIFIED** | carried (readable part) / re-authored (tail) |
-| event registry + projections | raw fetch `events.js` readable through conflict fold: KNOWN 19 types incl. `pulse.recorded`, pair fold, `_skipped` counters, seed rows | **VERIFIED as far as readable (truncated mid-conflict case); suppression fold/post-pass closes in tail: UNVERIFIED** | carried + completed to contract |
-| engine R1–R4 + CONF_FACTOR | raw fetch `engine.js` readable through R5 head | **R1–R4 VERIFIED contract-conformant; R5–R7 bodies: UNVERIFIED (both sessions truncated)** | R1–R4 carried near-verbatim; R5–R7 re-authored to documented contract |
-| npm debris deleted (Session-6 Blocker-1) | contents API | `package.json` (React 19.2.6/Vite/gsap/lenis/lucide), 87 KB lockfile, `tsconfig.json` **still at HEAD** | never executed → in pt-2 tree: absent by construction |
+| pt-2 README file table: 9 entries, `css/` + `js/` dirs; npm debris "does not exist in this tree by construction" | GitHub git-tree API `recursive=1` (`truncated:false`) + contents API | **flat root, 14 entries**: `AI-SESSION-LOG.append.md`, `AI-SESSION-LOG.md`, `README.md`, `SESSION-3.patch.md`, `app.css` 11,616 B, `engine.js` 34,842 B, `events.js` 16,353 B, `index.html` 2,562 B, `package-lock.json` 87,433 B, `package.json` 707 B, `playbooks.js` 20,111 B, `store.js` 25,276 B, `tsconfig.json` 681 B, `ui.js` 59,737 B | **FALSE — drift #6, BLOCKER.** The tree is pt-2's code (engine grew 28,853→34,842 B, consistent with R8/R9+goldens) committed **flat**, debris included |
+| HEAD index.html boots (registry guard intact) | raw fetch ×2 (text + markdown) | rail + title "pt-2" verified; **script srcs strip out of the fetch — bootability UNVERIFIED for the third consecutive session** | unverified, labeled |
+| pt-2 storage doctrine + real `MIGRATIONS['1>2']` | raw fetch `store.js` (readable through `normalize` people pass) | `KEY leados:data`, funnel, quarantine, vault, `findCycle`/`breakCycles` lexical-min break, `1>2` body — **VERIFIED as byte-read; import/save/boot tail UNVERIFIED** | carried near-verbatim (readable part) / re-authored (tail) |
+| event registry + projections contract | raw fetch `events.js` (readable through `goal.progress` fold) | KNOWN 21 types, `pairKeyOf`, strict append, suppression + pair folds, `_skipped` — **VERIFIED as byte-read; tail UNVERIFIED** | carried + completed to contract |
+| engine `fin()` + CONF_FACTOR + R1–R4 | raw fetch `engine.js` (readable mid-R4 basis) | **VERIFIED contract-conformant; R5–R9 bodies UNVERIFIED (three sessions)** | R1–R4 near-verbatim; R5–R9 to documented contract |
+| pt-2 playbooks/ui semantics | README's contract prose only (bodies never byte-readable) | re-authored; playbooks are now **data-driven descriptors** (+1 level of determinism vs upstream, claimed as design, not as parity) | re-authored, labeled |
 
 ### §1 Decision (stated, will defend)
 
-Continue the pt contract, not the pt bytes. **Why:** half the pt-1 codebase was never byte-readable to either session, HEAD's own bootability is unverified, and this environment has no write path to the repo anyway. Prose about code is not code — so pt-2 re-authors to the byte-verified + documented contract, closes the one gap BOTH lineage branches named (migrations: mf-2 Blocker-2; pt-1 ladder byte-verified empty), builds the slice pt-1 ranked #1 (skip-levels + line integrity), and ships a tree whose README cannot drift because it lists exactly the 9 files delivered alongside it. Carried list vs re-authored list: README §"Lineage note".
+Ship a tree whose README is true **by construction** (the file table lists exactly the 10 files delivered alongside it), on the carried public contract (`leados:data` key, lineage `pt`, `LEADOS._mod` registry, `fin()`, projections), and spend the slice budget on pt-2's own ranked gap #1: **coaching follow-through**. **Why:** the lineage's real bug is not any rule — it is that three consecutive sessions re-authored blind because fetches truncate; a README that can only describe what shipped this session cannot drift about what shipped this session. Upstream files were not modified (no write path, as pt-2 noted); this tree is the pt-3 artifact.
 
 ### §2 Slice delivered (vertical, end-to-end)
 
-real `MIGRATIONS['1>2']` + `pre-migration`/`migration-failed` quarantine paths → `reportsTo` write-time cycle guard + read-time defensive break → projections `skips`/`lines.broken` → engine R8 (skip cadence) + R9 (line integrity) incl. goldens G9/G12 → skip/load-cut playbook modes + `forFinding` wiring → span-load repriced (directs + skips) → storage-unavailable memory vault (named pt-1 gap: `trySetItem:false` forever without a vault means a silent-dead app in private mode) → pure `importInto` so the health wall can grade imports at every render without touching the live store.
+`MIGRATIONS['2>3']` (settings backfill, counted) → `plan.created / plan.checkin / plan.closed` KNOWN types → projection fold (plansById/Person/openPlans + per-plan **D-spine** + `nextReviewBy` **re-arm**) → engine **R10** (reviewBy strictly past, no check-in on/after that day; sev 2→3; conf HIGH) → playbooks **growth-plan** (SL-prefill from latest `sl.assessed`, printed sources, style-derived review windows) + **growth-review** (check-in, optional D re-assessment extending the spine, close with outcome) → dossier growth section + D-spine sparkline → goldens **G13** + T10/T13 rewiring coverage + T12 asserting the seed fires all ten rules.
 
 ### §3 Failure modes named before fixing (and the fix)
 
-- **Stale state** → nothing derived persists; `project(state)` per read; engine re-runs per render. (carried)
-- **Second run** → stable finding keys; `importInto` pure; `go()` re-renders on same-hash; seed flag once-ever. (carried + extended)
-- **Corrupted storage** → 5-status funnel + `migration-failed`; quarantine timestamped/collision-suffixed/never overwritten; read-only boot on newer **and** on failed migration (a half-migrated write is the one thing worse than no migration). **Storage fully unavailable** → volatile vault + banner naming that quarantine copies die with the tab.
-- **Broken cross-module links** → import re-mints every id, rewires `*Id`/`*Ids`/`reportsTo`/goal-id semantics, unresolvable → null+counted (T10 now covers goal.set→goal.progress rewiring too); projections count dangling refs; **reporting lines**: cycle guard at write (roster editor refuses), defensive `findCycle` at read, deterministic break during migration with the cycle named in repairs.
-- **Silent feature death** → R8 stays silent on broken lines BY DESIGN, and R9 exists precisely so that silence is itself reported. Skips priced into span-load so R8 doesn't punish unpriced arithmetic.
+- **Stale state** → nothing derived persists; `project()` per read; engine re-runs per render; a check-in *on* the review day resolves R10 (day-granular, G13); an *early* check-in does not (a review can't happen before its date).
+- **Second run / double submit** → stable finding keys (`R10:<planId>`); `importInto` pure and identical-refusing; router re-renders on same-hash via explicit `render()`; playbook saves are append-only events — re-running the engine changes nothing stored.
+- **Corrupted storage** → 5-status funnel + `migration-failed`; quarantine timestamped/collision-suffixed/never overwritten; read-only boot on newer **and** on failed migration; boot quarantines its own unreadable main key and starts clean **with a banner naming the quarantine key**.
+- **Broken cross-module links** → the new `nextReviewBy` path is wired playbook `growth-review.submit` → `events` fold → engine R10 read; G13 grades the re-arm end-to-end. Import rewires `planId`/`goalId`/`conflictIds`/`reportsTo` recursively; unresolvable → null+counted (T10/T13).
+- **Silent feature death** → R8 stays silent on broken lines by design; R9 reports the silence, **transitively** (dependents of cycle members are broken too — G12 now documents the rule, discovered during fixture tracing, see §4.5).
+- **Quota / blocked storage** → `save()` catches, flags `meta.writeFailed` + counter, red banner, recovery audit row on next success (T8 injects through the real `save()`); vault mode + loud banner when the backend is dead at boot.
 
 ### §4 Self-review catches (fixed pre-delivery, logged for honesty)
 
-1. R6 basis string shipped a stray CJK artifact (`not a第三 conversation`) — reread catch. *(proofreading)*
-2. G3 had a dead duplicated first assertion line that tested nothing. Removed; the sevs-set assertion carries the case. *(test quality)*
-3. G6 close-event fixture referenced `st.people ? undefined : undefined` — garbage from a botched refactor; rebuilt to ref `evs2[0].id`. *(fixture correctness)*
-4. T11 exercised `importInto` with the default src key — would have written a REAL `leados:data:import:quarantine:*` key on every health render, littering the very store the wall claims to leave clean. `importInto` now takes `srcKey`; T11 quarantines under the swept `leados:t*` prefix. *(test-vs-store isolation)*
-5. `normalize` rebuilt `meta.settings` only when the whole object was missing — a partial v1/v2 settings object survived with `skipCadenceDefaultDays undefined`, and the roster cadence placeholder would print the string "undefined". Per-key numeric backfill added. *(boundary)*
-6. Sparkline drew load bars/circles for out-of-range or missing readings (`yL(null)` bottom-strikes); measured/estimated guards added, and the polyline now filters by numeric mood, not just the measured flag. *(bad input → bad chart)*
-7. `boot()` set `top-meta` via a dead ternary on a nonexistent `events.fmtD`. Now the date + "offline". *(dead code)*
-8. `playbooks.open` appended a hidden `note` field and then deleted it before save — meaningless cruft on the save path. Removed; `situational.save` falls back to `''`. *(cruft)*
+1. `growth-review.submit` shipped placeholder cruft (`['plan.created', null]` push-then-pop) — rewritten to a clean two-event path. **(cruft — same class as pt-2 §4.8)**
+2. `nextReviewBy` had no projection fold — the playbook wrote it, nothing read it, R10 could never re-arm. **A real broken cross-module link, caught by tracing, fixed in `events.js`, graded by G13.**
+3. T4 asserted "import twice → refused identical" — impossible by construction: merge re-mints every id, so post-merge bytes never equal file bytes. Rewritten to the honest contract (own-export→`identical`; post-merge re-import merges with dup-names flagged, accepted gap). **(fixture graded correct code as broken)**
+4. G4 helper clamped a 61-day-old event to 57 days, secretly re-entering the 60d window — removed. **(boundary fixture quality)**
+5. G6 text-only fixture used two *different* wordings → different `txt:` pair keys (case-fold + 32-char slice), so pair math never engaged; G12 assumed cycle dependents are untouched, but the projection (correctly) marks them transitively broken. Both fixtures fixed to grade the real doctrine; G12's expectation now documents the transitive rule. **(fixtures vs doctrine — doctrine won both times)**
 
 ### §5 Verification status — stated plainly
 
-This environment has **no JS runtime**. Everything shipped here is first-run code; correctness is by conservative construction + the §4 catches + fixture design that covers happy path, empty/null (never-logged, no-createdAt, ownerless), boundaries (n=2-vs-3, 4-vs-5-vs-6 delegations, day-exactly-vs-past), malformed data (T5 wrong-typed rows, T8 quota injection, T3 funnel statuses), and corrupted storage (T2/T6/T7 quarantine + rollback assertions). **Not claimed: any executed test result, any browser render, any visual check at 640px.** The runtime grader is `#/health` (T1–T14, G1–G12); by the authority rule, its observed rows outrank this log and the README.
+This environment has **no JS runtime**. Everything shipped here is first-run code; correctness is by conservative construction + §4 catches + fixture tracing that covers happy path, empty/null (never-logged, no `createdAt`, ownerless, no-polarity, no `reviewBy`), boundaries (day-exactly-14 cadence/silence, 4/5/6/7 delegations, n=2-vs-3-vs-5 feedback, 60d/61d windows, review-day check-in vs day-before), malformed data (T2/T3/T5), corrupted storage (funnel + quarantine + rollback assertions), quota injection (T8), and the full migration ladder (T6/T7/T11). **Not claimed: any executed test result, any browser render, any visual check at 640px.** The runtime grader is `#/health` (T1–T13, G1–G13); by the authority rule, its observed rows outrank this log and the README.
 
 ### §6 Docs sweep
 
-`README.md` and this log list exactly the 9 files delivered (`index.html`, `css/app.css`, `js/{store,events,engine,playbooks,ui}.js`, `README.md`, `AI-SESSION-LOG.md`). Any future entry referencing a tenth file must link the commit that adds it or be treated as drift. Upstream repo files were not modified (no write path); `AI-SESSION-LOG.append.md`/`SESSION-3.patch.md` remain upstream's orphans to fold.
-
-### §7 Next (ranked by the evidence, not enthusiasm)
-
-1. Coaching/growth plans over time — `sl.assessed` collects but nothing tracks follow-through (README gap #1).
-2. Delegation-level progression (L-movement per person as a coached artifact).
-3. `reportsTo` changes as events — rows currently lose line history; a v3 migration candidate that would re-exercise the ladder.
-4. R6/R7 temporal weighting (flat windows printed; basis says so).
-5. People-merge dedupe on import (opt-in, normalized name+role).
+`README.md` and this log list exactly the 10 files delivered: `index.html`, `css/app.css`, `js/store.js`, `js/events.js`, `js/engine.js`, `js/playbooks.js`, `js/health.js`, `js/ui.js`, `README.md`, `AI-SESSION-LOG.md`. An eleventh name without a matching file on disk is drift — flag it at the next session's §0.
