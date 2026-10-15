@@ -760,7 +760,8 @@
     const pass = R.t.concat(R.g).filter(function (r) { return r.pass; }).length;
     let h = '<section class="card"><header class="card-h"><h3>' + icon('shield') + ' Authority wall</h3><div><span class="pill ' + (R.ok ? 'pill-ok' : 'pill-overdue') + '">' + pass + '/' + (R.t.length + R.g.length) + ' checks pass</span> <button class="btn tiny" data-action="run-health">' + icon('refresh') + ' re-run</button></div></header>' +
       '<p class="dim pad">T-suite proves behavior on pinned fixtures. G-suite inspects the live store at <code>leados:data</code>. The boot sequence runs G before rendering anything; a failed G check halts the app behind the wall.</p>' +
-      '<div class="two-col">' + suiteTable('T-suite · fixtures', R.t) + suiteTable('G-suite · live store', R.g) + '</div></section>';
+      '<div class="two-col">' + suiteTable('T-suite · fixtures (' + R.t.length + ')', R.t) +
+      suiteTable('G-suite · live store G1–G12 + goldens G14–G30 (' + R.g.length + ')', R.g) + '</div></section>';
     h += '<section class="card"><header class="card-h"><h3>' + icon('activity') + ' Claim coverage</h3></header><table class="tbl"><thead><tr><th></th><th>claim</th><th>covered by</th><th>status</th></tr></thead><tbody>' +
       R.claims.map(function (c) {
         return '<tr><td class="mono dim">' + c.id + '</td><td>' + esc(c.text) + '</td><td>' + c.by.map(function (id) { return '<span class="pill ' + (findCheck(R, id).pass ? 'pill-ok' : 'pill-overdue') + '">' + id + '</span>'; }).join(' ') + '</td><td>' + pill(c.pass ? 'ok' : 'overdue', c.pass ? 'proven' : 'unproven') + '</td></tr>';

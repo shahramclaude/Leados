@@ -177,20 +177,55 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 
 ## Health — the authority wall
 
-- **T-suite (fixtures):** T1–T5 migration `3>4` · T6 cadences · T7 fold purity ·
-  T8–T9 core contracts · T10–T11 part-2 families · T12 finding shape ·
-  T13 rules determinism · T14 ≥3-point trend discipline · T15 skip-not-infer ·
-  T16 severity escalations · T17 all 40 rules fired · T18 named projections
-  (presence, alias identity, open-set exclusion, append-order wins) · T19
-  playbook contract (14 present, prefill pure, submit registry-valid) · **T20**
-  UI contract (routes↔views, capture forms registry-valid, roster + domain mapping).
-- **G-suite (live store):** G1 single key · G2 schema/lineage · G3 append-only +
-  registry-valid · G4 whitelist · G5 v4 settings live · G6 repair accounting ·
-  G7 deterministic reads · G8 referential integrity · G9 live rules run ·
-  G10 live projections (present, alias-identical, zero leaked to storage) ·
-  G11 live playbooks (rule coverage, labeled recommendations, no mutation) ·
-  **G12** live UI state (sessionStorage confinement, total domain mapping).
-- **Claims C1–C22** in the Health tab: each shows the checks that authorize it;
+**T-suite — fixtures (27)**
+
+| ID | Proves |
+|---|---|
+| T1–T5 | migration `3>4`: backfill set, exact defaults, idempotence, user values preserved, repair accounting |
+| T6–T9 | cadence boundaries · fold purity · registry rejection · sales-cycle flag |
+| T10–T13 | part-2 family folds · all 72 contracts · finding shape · rules determinism |
+| **T14** | **v3 store climbs to v4, all five settings backfilled** |
+| **T15** | **`fin.risk.*` projection: open vs closed counts across every status** |
+| **T16** | **`sales.deal.*` projection: pipeline math (open value after update, won/lost, actual)** |
+| **T17** | **`strategy.okr.*` projection: KR latest-wins + closing score math** |
+| **T18** | **`ops.incident.*` projection: MTTR computed = (2h + 6h) / 2** |
+| **T19** | **`hr.attrition.logged` projection: counts by reason and by 60d window** |
+| **T20** | **`supply.vendor.*` projection: review gap from reviewDate to last review** |
+| T21–T24 | ≥3-point trend discipline · skip-not-infer · severity escalations · all 40 rules fire |
+| T25–T27 | named projections · playbook contract · UI contract |
+
+**G-suite — live store (G1–G12) + goldens (G14–G30)**
+
+G1 single key · G2 schema/lineage · G3 append-only + registry-valid · G4
+whitelist · G5 v4 settings live · G6 repair accounting · G7 deterministic reads ·
+G8 referential integrity · G9 live rules run · G10 live projections · G11 live
+playbooks · G12 live UI state. *(G13 intentionally unallocated — the part-7
+brief numbers the goldens from G14.)*
+
+| Golden | Boundary pinned |
+|---|---|
+| **G14** R11 | past due fires sev5 HIGH · resolved quiets · **update before reviewDate does not count** |
+| **G15** R12 | closeDate+1 → sev3 · update after close quiets · 31d past → sev4 |
+| **G16** R13 | <70% sev3 · <50% sev4 · exactly 70% and 100% quiet · missing actuals skip |
+| **G17** R14 | exactly 21d quiet · 22d sev2 · 43d sev3 · closed OKR quiet regardless |
+| **G18** R16 | sev4 resolved 3h quiet · 10h sev4 with MTTR math printed · unresolved 5h fires |
+| **G19** R19 | 1 quiet · 2 sev3 · 3 sev4 · voluntary/involuntary breakdown printed |
+| **G20** R22 | 14% quiet · 16% sev3 · 31% sev4 · underspend fires with direction printed |
+| **G21** R28 | single quiet · 2 in 30d sev4 · any sev5 immediate · **sev4 alone not immediate** |
+| **G22** R30 | pass quiet · finding+31d sev4 · fail sev5 immediately · cadence miss sev2 |
+| **G23** R32 | 31d quiet · 29d sev3 · 6d sev4 · expired + still active sev5 |
+| **G24** R34 | 4.9% quiet · 5.1% sev3 · 10.1% sev4 · **MRR >15% sev4 regardless of count** |
+| **G25** R37 | reviewDate+1 fires · result before or exactly on reviewDate quiet |
+| **G26** R38 | 29 quiet · 31 sev3 · 62 sev4 · resolved items leave the total · math printed |
+| **G27** R39 | exactly `boardCadenceDays` quiet · +1d fires · never + aged log sev2 |
+| **G28** R15 | 0.41 quiet · 0.39 sev3 · score 0 sev4 · **3 consecutive <0.4 → sev4** |
+| **G29** R25 | risk 3 skipped · risk 4 past due sev3 · risk 5 sev4 · reviewed after due quiets |
+| **G30** | `buildSeed()` fires all 40 rules, every finding shape-valid |
+
+The **boot gate runs G1–G12 only**. Goldens run in the full suite so a rule-logic
+regression is loud in Health without walling a leader off from their own data.
+
+- **Claims C1–C25** in the Health tab: each shows the checks that authorize it;
   a failing check marks the claim *unproven*.
 
 ## Files
@@ -204,7 +239,7 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 | `js/engine.js` | `project()` fold, named projections incl. `rosterById`, `eventDomain()`, pure selectors |
 | `js/playbooks.js` | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
 | `js/rules.js` | R1–R40: pure `(P, today) → findings[]` rules engine |
-| `js/health.js` | Authority wall: T1–T20, G1–G12, claim coverage C1–C22 |
+| `js/health.js` | Authority wall: T1–T27, G1–G12 + goldens G14–G30, claims C1–C25 |
 | `js/ui.js` | Rail nav, hash routes, 14 views, registry-driven quick capture; every action is an event append |
 | `README.md` | This file |
 | `AI-SESSION-LOG.md` | Session log; §0 is the claim-vs-inspection audit |

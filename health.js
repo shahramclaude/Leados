@@ -99,7 +99,7 @@
 
   /* ---------- rules battery: one deterministic fixture that forces all 40 rules ----------
      today = T0 + 100d. Every rule R1–R40 fires at least once. */
-  function rulesBattery() {
+  function buildSeed() {
     const A = T0, today = A + 100 * DAY;
     let seq = 0; const evs = [];
     function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at })); }
@@ -204,7 +204,7 @@
     add('exec.kpi.reviewed', { period: 'Q2', metrics: [{ name: 'ARR', value: 1, target: 1, trend: 'up' }] }, A + 60 * DAY);
     return { events: evs, today: today };
   }
-  function batteryFindings() { const b = rulesBattery(); return LeadOS.rules.run(LeadOS.engine.project(b.events), b.today); }
+  function batteryFindings() { const b = buildSeed(); return LeadOS.rules.run(LeadOS.engine.project(b.events), b.today); }
   function shapeOk(f) {
     const validPlay = f.play === null || LeadOS.rules.PLAY_IDS.indexOf(f.play) !== -1 || /^playbook:[a-zA-Z]+$/.test(f.play);
     return /^R([1-9]|[1-3][0-9]|40)$/.test(f.rule) &&
@@ -399,7 +399,7 @@
       return { pass: F.length > 0 && bad.length === 0, detail: bad.length ? 'malformed findings: ' + bad.slice(0, 2).map(function (f) { return JSON.stringify(f).slice(0, 90); }).join(' | ') : F.length + ' findings, all shape-valid; play ids resolve or playNone printed' };
     }],
     ['T13', 'rules engine is deterministic: two runs over the same (P, today) are identical', function () {
-      const b = rulesBattery();
+      const b = buildSeed();
       const P = LeadOS.engine.project(b.events);
       const before = JSON.stringify(P);
       const a = JSON.stringify(LeadOS.rules.run(P, b.today));
@@ -407,7 +407,108 @@
       const ok = a === c && JSON.stringify(P) === before;
       return { pass: ok, detail: ok ? 'stable sort order, no time-of-day leakage, P untouched' : 'nondeterminism or mutation detected' };
     }],
-    ['T14', 'trend discipline: below 3 measured points no trend-derived finding fires', function () {
+    /* ---- pt-4 part 7: T14-T20 projection tests ---- */
+    ['T14', 'v3 store climbs to v4 with all five new settings backfilled', function () {
+      const raw = v3raw([fev(1, 'store.initialized', { schemaVersion: 3, lineageTag: 'pt-3' })]);
+      let v = raw.schemaVersion;
+      while (v < 4) { LeadOS.store.MIGRATIONS[v + '>' + (v + 1)](raw); v = raw.schemaVersion; }
+      const set = LeadOS.engine.settings(LeadOS.engine.project(raw.events));
+      const bad = LeadOS.store.V4_NEW_KEYS.filter(function (k) { return set[k] !== LeadOS.store.V4_SETTING_DEFAULTS[k]; });
+      const ok = raw.schemaVersion === 4 && bad.length === 0 && raw.meta.migrationsApplied.indexOf('3>4') !== -1;
+      return { pass: ok, detail: ok ? 'v3 -> v4; ' + LeadOS.store.V4_NEW_KEYS.map(function (k) { return k + '=' + set[k]; }).join(' ') : 'schema=' + raw.schemaVersion + ' bad=' + bad.join(',') };
+    }],
+    ['T15', 'fin.risk projection: open vs closed counts track every status transition', function () {
+      const evs = [fev(1, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' })];
+      let s = 1;
+      ['a', 'b', 'c', 'd'].forEach(function (id) { evs.push(fev(++s, 'fin.risk.logged', { id: id, title: 'risk ' + id, severity: 3, likelihood: 3 })); });
+      evs.push(fev(++s, 'fin.risk.updated', { riskId: 'b', status: 'mitigated' }));
+      evs.push(fev(++s, 'fin.risk.updated', { riskId: 'c', status: 'accepted' }));
+      evs.push(fev(++s, 'fin.risk.updated', { riskId: 'd', status: 'closed' }));
+      const P = LeadOS.engine.project(evs);
+      const byStatus = {};
+      Object.keys(P.riskById).forEach(function (k) { const st = P.riskById[k].status; byStatus[st] = (byStatus[st] || 0) + 1; });
+      const ok = Object.keys(P.riskById).length === 4 && P.openRisks.length === 1 && P.openRisks[0].id === 'a' &&
+        byStatus.open === 1 && byStatus.mitigated === 1 && byStatus.accepted === 1 && byStatus.closed === 1;
+      return { pass: ok, detail: ok ? '4 logged · 1 open (a) · mitigated/accepted/closed 1 each' : 'open=' + P.openRisks.length + ' statuses=' + JSON.stringify(byStatus) };
+    }],
+    ['T16', 'sales.deal projection: pipeline math (open count/value, won/lost, actual value)', function () {
+      const evs = [fev(1, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' })];
+      let s = 1;
+      [['d1', 100], ['d2', 250], ['d3', 400], ['d4', 50]].forEach(function (x) {
+        evs.push(fev(++s, 'sales.deal.logged', { id: x[0], title: x[0], value: x[1], currency: 'USD', stage: 'proposal', ownerId: 'rep-1' }));
+      });
+      evs.push(fev(++s, 'sales.deal.updated', { dealId: 'd2', value: 300, stage: 'negotiation' }));
+      evs.push(fev(++s, 'sales.deal.closed', { dealId: 'd3', result: 'won', actualValue: 380 }));
+      evs.push(fev(++s, 'sales.deal.closed', { dealId: 'd4', result: 'lost' }));
+      const P = LeadOS.engine.project(evs);
+      const openValue = P.openDeals.reduce(function (a, d) { return a + d.value; }, 0);
+      const won = Object.keys(P.dealById).filter(function (k) { return P.dealById[k].result === 'won'; });
+      const lost = Object.keys(P.dealById).filter(function (k) { return P.dealById[k].result === 'lost'; });
+      const ok = P.openDeals.length === 2 && openValue === 400 && won.length === 1 && lost.length === 1 &&
+        P.dealById.d2.value === 300 && P.dealById.d3.actualValue === 380 && P.dealsByPerson['rep-1'].length === 4;
+      return { pass: ok, detail: ok ? 'open 2 = 100+300 = 400 (update applied); won 1 @380 actual; lost 1' : 'open=' + P.openDeals.length + ' value=' + openValue };
+    }],
+    ['T17', 'strategy.okr projection: KR progress and closing score math', function () {
+      const evs = [fev(1, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' })];
+      let s = 1;
+      evs.push(fev(++s, 'strategy.okr.set', { id: 'o1', objective: 'Grow', quarter: 'Q3', keyResults: [{ kr: 'Logos', target: 50, unit: 'n' }, { kr: 'ACV', target: 20, unit: 'k' }] }));
+      evs.push(fev(++s, 'strategy.okr.progress', { okrId: 'o1', krIndex: 0, current: 20 }));
+      evs.push(fev(++s, 'strategy.okr.progress', { okrId: 'o1', krIndex: 0, current: 35 }));
+      evs.push(fev(++s, 'strategy.okr.progress', { okrId: 'o1', krIndex: 1, current: 10 }));
+      evs.push(fev(++s, 'strategy.okr.set', { id: 'o2', objective: 'Retain', quarter: 'Q3', keyResults: [{ kr: 'GRR', target: 95, unit: '%' }] }));
+      evs.push(fev(++s, 'strategy.okr.closed', { okrId: 'o2', score: 0.65 }));
+      const P = LeadOS.engine.project(evs);
+      const o1 = P.okrById.o1, o2 = P.okrById.o2;
+      const attain = (o1.keyResults[0].current / o1.keyResults[0].target + o1.keyResults[1].current / o1.keyResults[1].target) / 2;
+      const ok = o1.keyResults[0].current === 35 && o1.keyResults[0].logs.length === 2 && o1.keyResults[1].current === 10 &&
+        Math.abs(attain - 0.60) < 1e-9 && o2.score === 0.65 && o2.closedAt !== null && P.openOkrs.length === 1 && P.openOkrs[0].id === 'o1';
+      return { pass: ok, detail: ok ? 'latest-wins 35/50 & 10/20 -> mean attainment 0.60; closed o2 score 0.65; 1 open' : 'kr0=' + o1.keyResults[0].current + ' attain=' + attain };
+    }],
+    ['T18', 'ops.incident projection: MTTR computed from logged -> resolved', function () {
+      const A = T0, evs = [fev(1, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      let s = 1;
+      evs.push(fev(++s, 'ops.incident.logged', { id: 'i1', title: 'A', severity: 3, systems: ['api'], startedAt: A }, { at: A }));
+      evs.push(fev(++s, 'ops.incident.resolved', { incidentId: 'i1', resolvedAt: A + 2 * 3600000, actions: ['fix'] }, { at: A + 2 * 3600000 }));
+      evs.push(fev(++s, 'ops.incident.logged', { id: 'i2', title: 'B', severity: 4, systems: ['db'], startedAt: A }, { at: A }));
+      evs.push(fev(++s, 'ops.incident.resolved', { incidentId: 'i2', resolvedAt: A + 6 * 3600000, actions: ['failover'] }, { at: A + 6 * 3600000 }));
+      evs.push(fev(++s, 'ops.incident.logged', { id: 'i3', title: 'C', severity: 2, systems: ['web'], startedAt: A }, { at: A }));
+      const P = LeadOS.engine.project(evs);
+      const resolved = Object.keys(P.incidentById).map(function (k) { return P.incidentById[k]; }).filter(function (i) { return i.resolved; });
+      const mttr = resolved.reduce(function (a, i) { return a + (i.resolvedAt - i.startedAt); }, 0) / resolved.length / 3600000;
+      const ok = resolved.length === 2 && mttr === 4 && P.openIncidents.length === 1 && P.openIncidents[0].id === 'i3' && P.incidentById.i1.actions.length === 1;
+      return { pass: ok, detail: ok ? 'MTTR = (2h + 6h) / 2 = 4h; 1 incident still open' : 'resolved=' + resolved.length + ' mttr=' + mttr };
+    }],
+    ['T19', 'hr.attrition projection: counts by reason and by period window', function () {
+      const A = T0, evs = [fev(1, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      let s = 1;
+      [['u1', 'voluntary', 5], ['u2', 'voluntary', 20], ['u3', 'involuntary', 40], ['u4', 'restructure', 100], ['u5', 'voluntary', 120]].forEach(function (x) {
+        evs.push(fev(++s, 'hr.attrition.logged', { personId: x[0], reason: x[1] }, { at: A + x[2] * DAY }));
+      });
+      const P = LeadOS.engine.project(evs);
+      const byReason = {};
+      P.attritionEvents.forEach(function (a) { byReason[a.reason] = (byReason[a.reason] || 0) + 1; });
+      const today = A + 130 * DAY;
+      const in60 = P.attritionEvents.filter(function (a) { return (today - a.at) / DAY <= 60; });
+      const in90 = P.attritionEvents.filter(function (a) { return (today - a.at) / DAY <= 90; });
+      const ok = P.attritionEvents.length === 5 && byReason.voluntary === 3 && byReason.involuntary === 1 && byReason.restructure === 1 &&
+        in60.length === 2 && in90.length === 2 && P.rosterById.u3.departed === true;
+      return { pass: ok, detail: ok ? '5 events · voluntary 3 / involuntary 1 / restructure 1 · 2 inside 60d window' : 'reasons=' + JSON.stringify(byReason) + ' in60=' + in60.length };
+    }],
+    ['T20', 'supply.vendor projection: review gap measured from reviewDate to last review', function () {
+      const A = T0, evs = [fev(1, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      let s = 1;
+      evs.push(fev(++s, 'supply.vendor.logged', { id: 'v1', name: 'Reviewed late', category: 'c', tier: 1, risk_level: 4, reviewDate: A + 10 * DAY }, { at: A }));
+      evs.push(fev(++s, 'supply.vendor.reviewed', { vendorId: 'v1', score: 4 }, { at: A + 25 * DAY }));
+      evs.push(fev(++s, 'supply.vendor.logged', { id: 'v2', name: 'Never reviewed', category: 'c', tier: 2, risk_level: 5, reviewDate: A + 10 * DAY }, { at: A }));
+      const P = LeadOS.engine.project(evs);
+      const v1 = P.vendorById.v1, v2 = P.vendorById.v2;
+      const gap = (v1.reviews[v1.reviews.length - 1].at - v1.reviewDate) / DAY;
+      const ok = gap === 15 && v1.lastScore === 4 && v2.lastScore === null && v2.reviews.length === 0 &&
+        P.openVendors.length === 1 && P.openVendors[0].id === 'v2';
+      return { pass: ok, detail: ok ? 'v1 reviewed 15d after its due date; v2 never reviewed (openVendors=1)' : 'gap=' + gap + ' openVendors=' + P.openVendors.length };
+    }],
+
+    ['T21', 'trend discipline: below 3 measured points no trend-derived finding fires', function () {
       let seq = 0; const A = T0;
       const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
       function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at })); }
@@ -426,7 +527,7 @@
       const ok = r36.length === 0 && r23.length === 1 && !slopeLeak;
       return { pass: ok, detail: 'R36 with 2 points: ' + r36.length + ' findings (want 0); R23 2-point basis carries no slope line: ' + !slopeLeak };
     }],
-    ['T15', 'skip-not-infer: missing fields and missing actuals produce zero findings', function () {
+    ['T22', 'skip-not-infer: missing fields and missing actuals produce zero findings', function () {
       let seq = 0; const A = T0;
       const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
       function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at })); }
@@ -438,18 +539,18 @@
       const hit = F.filter(function (f) { return ['R13', 'R22', 'R23', 'R32'].indexOf(f.rule) !== -1; });
       return { pass: hit.length === 0, detail: hit.length ? 'inferred something: ' + hit.map(function (f) { return f.rule; }).join(',') : 'R13/R22/R23/R32 all silent with missing inputs — nothing inferred' };
     }],
-    ['T16', 'severity escalations per spec: R11 sev5, R12 sev4, R15 pattern sev5, R28/R30/R32/R35 sev5', function () {
+    ['T23', 'severity escalations per spec: R11 sev5, R12 sev4, R15 pattern sev4 (G28), R28/R30/R32/R35 sev5', function () {
       const F = batteryFindings();
-      const want = [['R11', 5], ['R12', 4], ['R15', 5], ['R16', 4], ['R28', 5], ['R30', 5], ['R32', 5], ['R35', 5]];
+      const want = [['R11', 5], ['R12', 4], ['R15', 4], ['R16', 4], ['R28', 5], ['R30', 5], ['R32', 5], ['R35', 5]];
       const missing = want.filter(function (w) { return !F.some(function (f) { return f.rule === w[0] && f.sev === w[1]; }); });
       return { pass: missing.length === 0, detail: missing.length ? 'missing escalations: ' + missing.map(function (w) { return w[0] + ' sev' + w[1]; }).join(', ') : want.length + ' rule/severity escalation pairs confirmed' };
     }],
-    ['T17', 'coverage: every rule R1–R40 fires at least once in the battery', function () {
+    ['T24', 'coverage: every rule R1–R40 fires at least once in the seed', function () {
       const F = batteryFindings();
       const missing = LeadOS.rules.RULES.map(function (r) { return r.id; }).filter(function (id) { return !F.some(function (f) { return f.rule === id; }); });
       return { pass: missing.length === 0 && LeadOS.rules.RULES.length === 40, detail: missing.length ? 'silent rules: ' + missing.join(', ') : 'all 40 rules exercised; ' + F.length + ' total findings in battery' };
     }],
-    ['T18', 'named projections: all present, aliases are identical references, open sets exclude closed, append-order wins', function () {
+    ['T25', 'named projections: all present, aliases are identical references, open sets exclude closed, append-order wins', function () {
       let seq = 0; const A = T0;
       const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
       function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at || (A + seq * 1000) })); }
@@ -548,7 +649,7 @@
       const ok = missing.length === 0 && failed.length === 0;
       return { pass: ok, detail: ok ? required.length + ' named projections present; ' + checks.length + ' structural assertions hold' : (missing.length ? 'missing: ' + missing.join(', ') + ' | ' : '') + 'failed: ' + failed.join('; ') };
     }],
-    ['T19', 'interactive playbooks: 14 present, prefill pure, fields declared, submit emits registry-valid events', function () {
+    ['T26', 'interactive playbooks: 14 present, prefill pure, fields declared, submit emits registry-valid events', function () {
       const REQUIRED = ['risk-review', 'deal-review', 'quota-review', 'okr-checkin', 'incident-review', 'attrition-review', 'budget-review', 'vendor-review', 'safety-review', 'compliance-review', 'churn-review', 'tech-debt-sprint', 'board-prep', 'experiment-debrief'];
       const have = LeadOS.playbooks.INTERACTIVE.map(function (p) { return p.id; });
       const missingPb = REQUIRED.filter(function (id) { return have.indexOf(id) === -1; });
@@ -625,7 +726,7 @@
       if (JSON.stringify(P) !== snapshot) problems.push('prefill/submit mutated the projection');
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : REQUIRED.length + ' playbooks: prefill pure, fields labeled, submit output registry-valid' };
     }],
-    ['T20', 'UI contract: every route has a view, quick-capture forms produce registry-valid payloads, roster derives from the log', function () {
+    ['T27', 'UI contract: every route has a view, quick-capture forms produce registry-valid payloads, roster derives from the log', function () {
       const problems = [];
       const UI = LeadOS.ui;
       if (!UI) return { pass: false, detail: 'ui module not loaded' };
@@ -885,6 +986,273 @@
     }]
   ];
 
+  /* ================= G14-G30: rule-boundary GOLDENS =================
+     Deterministic scenarios pinned to T0. These prove the exact fire/quiet
+     boundaries of the rules engine. They are part of the full suite; the boot
+     gate deliberately runs only the live-store checks G1-G12, so a rule-logic
+     regression surfaces loudly in Health without bricking a leader's data.
+     G13 is intentionally unallocated (the brief numbers from G14). */
+  const A = T0;
+  function evsOf(rows) {
+    let s = 0;
+    const out = [fev(++s, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+    rows.forEach(function (r) { out.push(fev(++s, r[0], r[1], { at: A + (r[2] || 0) * DAY })); });
+    return out;
+  }
+  // run rule `id` over rows, with `today` expressed in days from T0
+  function R(rows, todayDays, id) {
+    return LeadOS.rules.run(LeadOS.engine.project(evsOf(rows)), A + todayDays * DAY)
+      .filter(function (f) { return f.rule === id; });
+  }
+  const sevs = function (fs) { return fs.map(function (f) { return f.sev; }).sort().join(','); };
+  function golden(cases) {
+    const bad = cases.filter(function (c) { return !c[1]; }).map(function (c) { return c[0]; });
+    return { pass: bad.length === 0, detail: bad.length ? 'failed: ' + bad.join(' | ') : cases.length + ' boundary cases hold: ' + cases.map(function (c) { return c[0]; }).join(' · ') };
+  }
+
+  const GOLDENS = [
+    ['G14', 'R11 financial risk review: past due fires HIGH; resolved quiets; update before reviewDate does not count', function () {
+      const base = [['fin.risk.logged', { id: 'fr1', title: 'Runway', severity: 4, likelihood: 4, reviewDate: A + 10 * DAY }, 0]];
+      const fires = R(base, 20, 'R11');
+      const quiet = R(base.concat([['fin.risk.updated', { riskId: 'fr1', status: 'mitigated' }, 12]]), 20, 'R11');
+      const early = R(base.concat([['fin.risk.updated', { riskId: 'fr1', status: 'mitigated' }, 5]]), 20, 'R11');
+      const notYet = R(base, 9, 'R11');
+      return golden([
+        ['past due fires sev5 HIGH', fires.length === 1 && fires[0].sev === 5 && fires[0].conf === 'HIGH'],
+        ['mitigated on/after reviewDate quiets', quiet.length === 0],
+        ['update before reviewDate does NOT count', early.length === 1],
+        ['before reviewDate quiet', notYet.length === 0]
+      ]);
+    }],
+    ['G15', 'R12 deal stale: closeDate+1 fires sev3; update after closeDate quiets; >30d past escalates to sev4', function () {
+      const base = [['sales.deal.logged', { id: 'd1', title: 'Acme', value: 50000, currency: 'USD', stage: 'proposal', closeDate: A + 10 * DAY }, 0]];
+      return golden([
+        ['closeDate+1 fires sev3', (function () { const f = R(base, 11, 'R12'); return f.length === 1 && f[0].sev === 3; })()],
+        ['on closeDate quiet', R(base, 10, 'R12').length === 0],
+        ['updated after closeDate quiets', R(base.concat([['sales.deal.updated', { dealId: 'd1', stage: 'negotiation' }, 11]]), 15, 'R12').length === 0],
+        ['31d past fires sev4', (function () { const f = R(base, 41, 'R12'); return f.length === 1 && f[0].sev === 4; })()],
+        ['closed deal quiet', R(base.concat([['sales.deal.closed', { dealId: 'd1', result: 'won' }, 11]]), 60, 'R12').length === 0]
+      ]);
+    }],
+    ['G16', 'R13 quota: <70% sev3, <50% sev4, missing actuals skip, 100% quiet', function () {
+      const q = function (actual) {
+        const rows = [['sales.quota.set', { id: 'q1', personId: 'rep', period: 'Q3', target: 1000, currency: 'USD' }, 0]];
+        if (actual !== null) rows.push(['sales.quota.actuals', { quotaId: 'q1', actual: actual, period: 'Q3' }, 5]);
+        return R(rows, 10, 'R13');
+      };
+      return golden([
+        ['65% fires sev3', (function () { const f = q(650); return f.length === 1 && f[0].sev === 3; })()],
+        ['40% fires sev4', (function () { const f = q(400); return f.length === 1 && f[0].sev === 4; })()],
+        ['exactly 70% quiet', q(700).length === 0],
+        ['100% quiet', q(1000).length === 0],
+        ['missing actuals skip', q(null).length === 0]
+      ]);
+    }],
+    ['G17', 'R14 OKR silence: 21d quiet, 22d fires, closed OKR quiet regardless', function () {
+      const base = [['strategy.okr.set', { id: 'o1', objective: 'Grow', quarter: 'Q3', keyResults: [{ kr: 'x', target: 1, unit: 'n' }] }, 0]];
+      const closed = base.concat([['strategy.okr.closed', { okrId: 'o1', score: 0.8 }, 5]]);
+      const progressed = base.concat([['strategy.okr.progress', { okrId: 'o1', krIndex: 0, current: 1 }, 30]]);
+      return golden([
+        ['exactly 21d quiet', R(base, 21, 'R14').length === 0],
+        ['22d fires sev2', (function () { const f = R(base, 22, 'R14'); return f.length === 1 && f[0].sev === 2; })()],
+        ['43d fires sev3', (function () { const f = R(base, 43, 'R14'); return f.length === 1 && f[0].sev === 3; })()],
+        ['closed OKR quiet at 100d', R(closed, 100, 'R14').length === 0],
+        ['progress logged quiets', R(progressed, 100, 'R14').length === 0]
+      ]);
+    }],
+    ['G18', 'R16 MTTR: sev4 resolved in 3h quiet, unresolved 5h fires, math printed in basis', function () {
+      const H = 3600000;
+      const inc = function (sev) { return ['ops.incident.logged', { id: 'i1', title: 'X', severity: sev, systems: ['api'], startedAt: A }, 0]; };
+      const fast = R([inc(4), ['ops.incident.resolved', { incidentId: 'i1', resolvedAt: A + 3 * H, actions: ['fix'] }, 0]], 2, 'R16');
+      const slow = R([inc(4), ['ops.incident.resolved', { incidentId: 'i1', resolvedAt: A + 10 * H, actions: ['fix'] }, 0]], 2, 'R16');
+      const openNow = LeadOS.rules.run(LeadOS.engine.project(evsOf([inc(4)])), A + 5 * H).filter(function (f) { return f.rule === 'R16'; });
+      const openEarly = LeadOS.rules.run(LeadOS.engine.project(evsOf([inc(4)])), A + 3 * H).filter(function (f) { return f.rule === 'R16'; });
+      const lowSev = R([inc(2), ['ops.incident.resolved', { incidentId: 'i1', resolvedAt: A + 50 * H, actions: ['fix'] }, 3]], 5, 'R16');
+      return golden([
+        ['sev4 resolved 3h quiet', fast.length === 0],
+        ['sev4 resolved 10h fires sev4', slow.length === 1 && slow[0].sev === 4],
+        ['MTTR math printed', slow.length === 1 && /10\.0h/.test(slow[0].title) && slow[0].basis.join(' ').indexOf('threshold 4h') !== -1],
+        ['sev4 unresolved 5h fires', openNow.length === 1],
+        ['sev4 unresolved 3h quiet', openEarly.length === 0],
+        ['sev2 resolved 50h quiet (72h threshold)', lowSev.length === 0]
+      ]);
+    }],
+    ['G19', 'R19 attrition: 1 quiet, 2 sev3, 3 sev4, breakdown printed', function () {
+      const a = function (id, reason, d) { return ['hr.attrition.logged', { personId: id, reason: reason }, d]; };
+      const one = R([a('u1', 'voluntary', 10)], 30, 'R19');
+      const two = R([a('u1', 'voluntary', 10), a('u2', 'involuntary', 20)], 30, 'R19');
+      const three = R([a('u1', 'voluntary', 10), a('u2', 'involuntary', 20), a('u3', 'voluntary', 25)], 30, 'R19');
+      const old = R([a('u1', 'voluntary', 10), a('u2', 'voluntary', 20)], 100, 'R19');
+      return golden([
+        ['1 departure quiet', one.length === 0],
+        ['2 in 60d sev3 MEDIUM', two.length === 1 && two[0].sev === 3 && two[0].conf === 'MEDIUM'],
+        ['3 in 60d sev4', three.length === 1 && three[0].sev === 4],
+        ['breakdown printed', two.length === 1 && /voluntary 1 · involuntary 1/.test(two[0].basis.join(' '))],
+        ['outside 60d window quiet', old.length === 0]
+      ]);
+    }],
+    ['G20', 'R22 budget variance: 14% quiet, 16% sev3, 31% sev4, underspend fires with direction printed', function () {
+      const b = function (actual) {
+        return R([['fin.budget.set', { id: 'b1', period: 'Q2', amount: 100000, currency: 'USD', category: 'opex' }, 0],
+          ['fin.budget.actuals', { budgetId: 'b1', actual: actual, period: 'Q2' }, 5]], 10, 'R22');
+      };
+      const under = b(84000);
+      return golden([
+        ['14% over quiet', b(114000).length === 0],
+        ['16% over sev3', (function () { const f = b(116000); return f.length === 1 && f[0].sev === 3; })()],
+        ['31% over sev4', (function () { const f = b(131000); return f.length === 1 && f[0].sev === 4; })()],
+        ['16% under fires sev3', under.length === 1 && under[0].sev === 3],
+        ['direction printed', under.length === 1 && /underspend/.test(under[0].title)],
+        ['variance math printed', under.length === 1 && under[0].basis.join(' ').indexOf('math:') !== -1]
+      ]);
+    }],
+    ['G21', 'R28 safety: single quiet, 2 in 30d sev4, ANY sev5 immediate, sev4 alone not immediate', function () {
+      const inc = function (sev, d) { return ['mfg.safety.incident', { severity: sev, type: 't' + sev, description: 'd', corrective_actions: [], date: A + d * DAY }, d]; };
+      const one = R([inc(2, 10)], 20, 'R28');
+      const two = R([inc(2, 10), inc(3, 20)], 25, 'R28');
+      const five = R([inc(5, 10)], 20, 'R28');
+      const fourOnly = R([inc(4, 10)], 20, 'R28');
+      const oldFive = R([inc(5, 10)], 300, 'R28');
+      return golden([
+        ['single sev2 quiet', one.length === 0],
+        ['2 in 30d sev4', two.length === 1 && two[0].sev === 4],
+        ['single sev5 fires sev5 immediately', five.length === 1 && five[0].sev === 5],
+        ['single sev4 does NOT fire immediately', fourOnly.length === 0],
+        ['sev5 still fires outside the 30d window', oldFive.length === 1 && oldFive[0].sev === 5]
+      ]);
+    }],
+    ['G22', 'R30 compliance: pass quiet, finding+31d sev4, fail sev5 immediately, cadence miss sev2', function () {
+      const chk = function (result, d) { return ['legal.compliance.check', { framework: 'SOC2', period: 'H1', result: result, findings: result === 'pass' ? [] : ['access review'] }, d]; };
+      const pass = R([chk('pass', 0)], 30, 'R30');
+      const finding30 = R([chk('finding', 0)], 30, 'R30');
+      const finding31 = R([chk('finding', 0)], 31, 'R30');
+      const fail = R([chk('fail', 0)], 1, 'R30');
+      const cadence = R([chk('pass', 0)], 181, 'R30');
+      const never = R([['task.created', { id: 't1', domain: 'legal', title: 'x' }, 0]], 181, 'R30');
+      return golden([
+        ['pass quiet', pass.length === 0],
+        ['finding at 30d quiet', finding30.length === 0],
+        ['finding at 31d sev4', finding31.length === 1 && finding31[0].sev === 4],
+        ['fail sev5 immediately', fail.length === 1 && fail[0].sev === 5],
+        ['cadence miss after 180d sev2', cadence.length === 1 && cadence[0].sev === 2],
+        ['no check ever + aged log sev2', never.length === 1 && never[0].sev === 2]
+      ]);
+    }],
+    ['G23', 'R32 contract expiry: 31d quiet, 29d sev3, 6d sev4, expired+active sev5', function () {
+      const c = function (expiryDays, status) {
+        const rows = [['legal.contract.logged', { id: 'c1', counterparty: 'Alpha', type: 'MSA', expiryDate: A + expiryDays * DAY }, 0]];
+        if (status) rows.push(['legal.contract.updated', { contractId: 'c1', status: status }, 1]);
+        return R(rows, 0, 'R32');
+      };
+      return golden([
+        ['31d out quiet', c(31).length === 0],
+        ['29d out sev3', (function () { const f = c(29); return f.length === 1 && f[0].sev === 3; })()],
+        ['6d out sev4', (function () { const f = c(6); return f.length === 1 && f[0].sev === 4; })()],
+        ['expired + still active sev5', (function () { const f = c(-1); return f.length === 1 && f[0].sev === 5; })()],
+        ['renewed quiets', c(5, 'renewed').length === 0],
+        ['terminated quiets', c(-5, 'terminated').length === 0]
+      ]);
+    }],
+    ['G24', 'R34 churn: 4.9% quiet, 5.1% sev3, 10.1% sev4, MRR>15% sev4 regardless of count, math printed', function () {
+      const ch = function (churned, total, lost, mrrTotal) {
+        const p = { period: 'Q3', churned: churned, total: total };
+        if (lost !== undefined) p.mrr_lost = lost;
+        if (mrrTotal !== undefined) p.mrr_total = mrrTotal;
+        return R([['cs.churn.logged', p, 0]], 5, 'R34');
+      };
+      const mrr = ch(1, 1000, 16000, 100000);
+      const noBase = ch(1, 1000, 16000);
+      return golden([
+        ['4.9% quiet', ch(49, 1000).length === 0],
+        ['5.1% sev3', (function () { const f = ch(51, 1000); return f.length === 1 && f[0].sev === 3; })()],
+        ['10.1% sev4', (function () { const f = ch(101, 1000); return f.length === 1 && f[0].sev === 4; })()],
+        ['MRR 16% fires sev4 at 0.1% count', mrr.length === 1 && mrr[0].sev === 4],
+        ['MRR math printed', mrr.length === 1 && mrr[0].basis.join(' ').indexOf('MRR math:') !== -1],
+        ['no mrr_total -> not inferred', noBase.length === 0]
+      ]);
+    }],
+    ['G25', 'R37 experiment: reviewDate+1 fires; result before reviewDate quiet; result exactly on reviewDate quiet', function () {
+      const base = [['rd.experiment.logged', { id: 'e1', hypothesis: 'h', method: 'A/B', startDate: A, reviewDate: A + 10 * DAY }, 0]];
+      const resultBefore = base.concat([['rd.experiment.result', { experimentId: 'e1', result: 'validated', learnings: ['l'] }, 9]]);
+      const resultOn = base.concat([['rd.experiment.result', { experimentId: 'e1', result: 'inconclusive', learnings: ['l'] }, 10]]);
+      const noReviewDate = [['rd.experiment.logged', { id: 'e2', hypothesis: 'h', method: 'A/B', startDate: A }, 0]];
+      return golden([
+        ['reviewDate+1 with no result fires sev3', (function () { const f = R(base, 11, 'R37'); return f.length === 1 && f[0].sev === 3; })()],
+        ['on reviewDate quiet', R(base, 10, 'R37').length === 0],
+        ['result before reviewDate quiet', R(resultBefore, 30, 'R37').length === 0],
+        ['result exactly on reviewDate quiet', R(resultOn, 30, 'R37').length === 0],
+        ['no reviewDate -> skip, not infer', R(noReviewDate, 300, 'R37').length === 0]
+      ]);
+    }],
+    ['G26', 'R38 tech debt: 29 quiet, 31 sev3, 61 sev4, resolved items leave the total, math printed', function () {
+      const d = function (id, sev, eff) { return ['rd.tech.debt.logged', { id: id, title: id, severity: sev, effort: eff }, 1]; };
+      const q29 = R([d('a', 5, 5), d('b', 2, 2)], 10, 'R38');                                   // 25 + 4 = 29
+      const s31 = R([d('a', 5, 5), d('b', 3, 2)], 10, 'R38');                                   // 25 + 6 = 31
+      const s61 = R([d('a', 5, 5), d('b', 5, 5), d('c', 4, 3)], 10, 'R38');                     // 25+25+12 = 62
+      const cleared = R([d('a', 5, 5), d('b', 3, 2), ['rd.tech.debt.resolved', { debtId: 'b' }, 2]], 10, 'R38');
+      return golden([
+        ['mass 29 quiet', q29.length === 0],
+        ['mass 31 sev3', s31.length === 1 && s31[0].sev === 3],
+        ['mass 62 sev4', s61.length === 1 && s61[0].sev === 4],
+        ['resolved item removed from total', cleared.length === 0],
+        ['score math printed', s31.length === 1 && /5x5 \+ 3x2 = 31/.test(s31[0].basis.join(' '))]
+      ]);
+    }],
+    ['G27', 'R39 board cadence: exactly boardCadenceDays quiet, +1d fires, never + aged log sev2', function () {
+      const meet = [['exec.board.meeting', { date: A, quorum: true, items: ['x'], decisions: ['y'] }, 0]];
+      const never = [['task.created', { id: 't1', domain: 'executive', title: 'x' }, 0]];
+      return golden([
+        ['exactly 90d quiet', R(meet, 90, 'R39').length === 0],
+        ['91d fires sev3', (function () { const f = R(meet, 91, 'R39'); return f.length === 1 && f[0].sev === 3; })()],
+        ['never logged + log older than cadence sev2', (function () { const f = R(never, 91, 'R39'); return f.length === 1 && f[0].sev === 2; })()],
+        ['never logged + young log quiet', R(never, 10, 'R39').length === 0]
+      ]);
+    }],
+    ['G28', 'R15 OKR score: 0.41 quiet, 0.39 sev3, score 0 sev4, 3 consecutive <0.4 sev4', function () {
+      const okr = function (id, score, d) {
+        return [['strategy.okr.set', { id: id, objective: 'O' + id, quarter: 'Q', keyResults: [{ kr: 'k', target: 1, unit: 'n' }] }, d],
+          ['strategy.okr.closed', { okrId: id, score: score }, d + 1]];
+      };
+      const run3 = okr('a', 0.3, 0).concat(okr('b', 0.2, 5)).concat(okr('c', 0.35, 10));
+      const f3 = R(run3, 30, 'R15');
+      return golden([
+        ['0.41 quiet', R(okr('a', 0.41, 0), 10, 'R15').length === 0],
+        ['0.39 sev3 single period', (function () { const f = R(okr('a', 0.39, 0), 10, 'R15'); return f.length === 1 && f[0].sev === 3; })()],
+        ['score 0 sev4', (function () { const f = R(okr('a', 0, 0), 10, 'R15'); return f.length === 1 && f[0].sev === 4; })()],
+        ['3 consecutive <0.4 adds sev4 pattern', f3.length === 4 && f3.filter(function (x) { return x.sev === 4; }).length === 1],
+        ['pattern basis names the run', f3.some(function (x) { return x.sev === 4 && /a=0.3, b=0.2, c=0.35/.test(x.basis.join(' ')); })]
+      ]);
+    }],
+    ['G29', 'R25 vendor: risk 3 skipped, risk 4 + past due sev3, risk 5 sev4, reviewed after due quiets', function () {
+      const v = function (risk, reviewedDay) {
+        const rows = [['supply.vendor.logged', { id: 'v1', name: 'FabCo', category: 'c', tier: 1, risk_level: risk, reviewDate: A + 10 * DAY }, 0]];
+        if (reviewedDay !== undefined) rows.push(['supply.vendor.reviewed', { vendorId: 'v1', score: 4 }, reviewedDay]);
+        return R(rows, 20, 'R25');
+      };
+      return golden([
+        ['risk_level 3 skipped', v(3).length === 0],
+        ['risk_level 4 past due sev3', (function () { const f = v(4); return f.length === 1 && f[0].sev === 3; })()],
+        ['risk_level 5 past due sev4', (function () { const f = v(5); return f.length === 1 && f[0].sev === 4; })()],
+        ['reviewed after reviewDate quiets', v(5, 12).length === 0],
+        ['review before reviewDate does not count', v(5, 5).length === 1],
+        ['no reviewDate -> skip', R([['supply.vendor.logged', { id: 'v2', name: 'X', category: 'c', tier: 1, risk_level: 5 }, 0]], 300, 'R25').length === 0]
+      ]);
+    }],
+    ['G30', 'full seed: buildSeed() exercises every rule R1–R40 with shape-valid findings', function () {
+      const b = buildSeed();
+      const F = LeadOS.rules.run(LeadOS.engine.project(b.events), b.today);
+      const missing = LeadOS.rules.RULES.map(function (r) { return r.id; }).filter(function (id) { return !F.some(function (f) { return f.rule === id; }); });
+      const malformed = F.filter(function (f) { return !shapeOk(f); });
+      const ok = LeadOS.rules.RULES.length === 40 && missing.length === 0 && malformed.length === 0;
+      return { pass: ok, detail: ok ? 'seed of ' + b.events.length + ' events fires all 40 rules -> ' + F.length + ' findings, all shape-valid' : (missing.length ? 'silent: ' + missing.join(',') : 'malformed: ' + malformed.length) };
+    }]
+  ];
+  // Boot gate inspects the live store only (G1-G12). Goldens join the full
+  // suite: a rule-logic regression must be loud in Health, not a brick wall
+  // between a leader and their own data.
+  const LIVE_G = G.slice();
+  GOLDENS.forEach(function (row) { G.push(row); });
+
   const CLAIMS = [
     { id: 'C1', text: 'Five v4 settings exist with exact defaults (90 / 30 / 14 / 90 / 180).', by: ['T1', 'T2', 'G5'] },
     { id: 'C2', text: 'Backfill appends repair events and never overwrites leader-set values.', by: ['T4', 'G3'] },
@@ -898,16 +1266,19 @@
     { id: 'C10', text: 'All 72 part-2 event types are registered and gate-enforced.', by: ['T11', 'G3'] },
     { id: 'C11', text: 'All 11 new families derive state: entities mutate, actuals attach, closures close.', by: ['T10', 'G7'] },
     { id: 'C12', text: 'Referential integrity: every declared *Id reference resolves within the log.', by: ['G8', 'T10'] },
-    { id: 'C13', text: 'Rules engine implements R1–R40 and every rule is exercised.', by: ['T17', 'T12'] },
+    { id: 'C13', text: 'Rules engine implements R1–R40 and every rule is exercised.', by: ['T24', 'T12'] },
     { id: 'C14', text: 'Every finding honors the fin() contract (sev 1–5, conf, play xor playNone).', by: ['T12', 'G9'] },
-    { id: 'C15', text: 'Trend/severity discipline: >=3 measured points, spec ceilings, skip-not-infer.', by: ['T14', 'T15', 'T16'] },
+    { id: 'C15', text: 'Trend/severity discipline: >=3 measured points, spec ceilings, skip-not-infer.', by: ['T21', 'T22', 'T23'] },
     { id: 'C16', text: 'Signals are derived per read and never persisted.', by: ['G4', 'G7', 'G9', 'T13'] },
-    { id: 'C17', text: 'All 40 named projections exist; open sets exclude closed entities; append-order wins.', by: ['T18', 'G10'] },
+    { id: 'C17', text: 'All 40 named projections exist; open sets exclude closed entities; append-order wins.', by: ['T25', 'G10'] },
     { id: 'C18', text: 'Stale state impossible: projections alias the folded entities and never persist.', by: ['G10', 'G4', 'G7'] },
-    { id: 'C19', text: 'All 14 interactive playbooks exist; submit() emits only registry-valid events.', by: ['T19', 'G3'] },
-    { id: 'C20', text: 'No playbook fakes certainty: recommendations are labeled with a source, gaps are declared.', by: ['T19', 'G11'] },
-    { id: 'C21', text: 'All rail routes resolve to views; quick-capture forms emit registry-valid events.', by: ['T20', 'G3'] },
-    { id: 'C22', text: 'View state (filter, tab, person) lives in sessionStorage only and never enters the log.', by: ['G12', 'G1', 'G4'] }
+    { id: 'C19', text: 'All 14 interactive playbooks exist; submit() emits only registry-valid events.', by: ['T26', 'G3'] },
+    { id: 'C20', text: 'No playbook fakes certainty: recommendations are labeled with a source, gaps are declared.', by: ['T26', 'G11'] },
+    { id: 'C21', text: 'All rail routes resolve to views; quick-capture forms emit registry-valid events.', by: ['T27', 'G3'] },
+    { id: 'C22', text: 'View state (filter, tab, person) lives in sessionStorage only and never enters the log.', by: ['G12', 'G1', 'G4'] },
+    { id: 'C23', text: 'Every part-2 family projects correctly: risk counts, pipeline math, OKR score, MTTR, attrition, vendor gap.', by: ['T15', 'T16', 'T17', 'T18', 'T19', 'T20'] },
+    { id: 'C24', text: 'Rule fire/quiet boundaries are pinned by goldens — no rule drifts a threshold silently.', by: ['G14', 'G15', 'G16', 'G17', 'G18', 'G19', 'G20', 'G21', 'G22', 'G23', 'G24', 'G25', 'G26', 'G27', 'G28', 'G29'] },
+    { id: 'C25', text: 'The seed exercises all 40 rules and every finding it produces is shape-valid.', by: ['G30', 'T24', 'T12'] }
   ];
 
   function runSuite(suite) {
@@ -927,7 +1298,8 @@
     const t = runSuite(T), g = runSuite(G);
     return { at: Date.now(), t: t, g: g, claims: evaluateClaims(t, g), ok: t.concat(g).every(function (r) { return r.pass; }) };
   }
-  function boot() { const g = runG(); return { ok: g.every(function (r) { return r.pass; }), g: g }; }
+  // Boot gate: live-store integrity only (G1-G12).
+  function boot() { const g = runSuite(LIVE_G); return { ok: g.every(function (r) { return r.pass; }), g: g }; }
 
-  LeadOS.health = { T: T, G: G, CLAIMS: CLAIMS, runAll: runAll, runG: runG, boot: boot };
+  LeadOS.health = { T: T, G: G, LIVE_G: LIVE_G, GOLDENS: GOLDENS, CLAIMS: CLAIMS, buildSeed: buildSeed, runAll: runAll, runG: runG, boot: boot };
 })();

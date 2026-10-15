@@ -140,7 +140,9 @@
 
     // ---------- CUSTOMER SUCCESS ----------
     'cs.nps.logged':           { require: ['score', 'period', 'promoters', 'passives', 'detractors'], optional: ['verbatims', 'ownerId'], numbers: ['score', 'promoters', 'passives', 'detractors'], ranges: { score: RNPS }, arrays: ['verbatims'] },
-    'cs.churn.logged':         { require: ['period', 'churned', 'total'], optional: ['mrr_lost', 'reason'], numbers: ['churned', 'total', 'mrr_lost'] },
+    // mrr_total (pt-4 part 7): the denominator the >15%-of-MRR escalation needs.
+    // Without it the ratio is not computable and R34 stays silent (skip-not-infer).
+    'cs.churn.logged':         { require: ['period', 'churned', 'total'], optional: ['mrr_lost', 'mrr_total', 'reason'], numbers: ['churned', 'total', 'mrr_lost', 'mrr_total'] },
     'cs.escalation.logged':    { require: ['id', 'accountName', 'severity', 'description'], optional: ['ownerId', 'dueDate'], numbers: ['dueDate'], ranges: { severity: R15 } },
     'cs.escalation.resolved':  { require: ['escalationId', 'resolution'], optional: ['note'], refs: { escalationId: 'escalations' } },
     'cs.health.logged':        { require: ['accountName', 'score', 'period'], optional: ['ownerId', 'signals'], ranges: { score: R15 }, arrays: ['signals'] },

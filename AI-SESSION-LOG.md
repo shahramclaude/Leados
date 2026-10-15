@@ -296,5 +296,45 @@ Health tab now shows 32 checks (T1–T20, G1–G12) and 22 claims.
 
 ---
 
-## Part 7+ (queued)
+## Part 7 — Health wall extension
+
+### §26. Mini-audit (pre-code inspection for this part)
+| Claim in the brief | Inspection | Result |
+|---|---|---|
+| "add T14–T20" | read of `js/health.js` | **COLLISION** — T14–T20 were already allocated in parts 3–6 (trend discipline, skip-not-infer, severity escalations, rule coverage, projections, playbooks, UI). Renumbered those to **T21–T27** and gave T14–T20 the brief's semantics. Every claim reference (C13, C15, C17, C19, C20, C21) was re-pointed; no check was deleted. |
+| "add G14–G30" | read of `js/health.js` | G-suite ran G1–G12, so **G13 is left intentionally unallocated** — the brief numbers from G14. Recorded rather than silently shifting the live-store checks. |
+| G28 "3 consecutive <0.4 → **sev 4**" | compared with part-3 spec | **CONTRADICTION** — part 3 said "escalate to **sev 5** with basis". Implemented the newer instruction (sev 4) and updated T23's expectation. Flagged here because it is a behaviour change to a shipped rule, reversible in one line of `rules.js`. |
+| G24 "MRR lost > 15% → sev 4" | registry inspection | Not computable in part 3 (no MRR denominator), so it was declined there (§12.4). Added **optional `mrr_total`** to `cs.churn.logged`; with it the ratio is computed and prints its math, without it the escalation is still not inferred. G24 pins both paths. |
+| G30 "extend buildSeed(), T12 rewritten" | grep | no `buildSeed()` existed — the equivalent was `rulesBattery()`. Renamed to `buildSeed()` and exported. Coverage lives in **T24** (all 40 fire) and **G30**; T12 stays the finding-shape check rather than being overloaded with coverage. |
+| T14 "v3 climbs to v4" | existing T1/T2 | overlaps by design; T14 asserts the whole climb end-to-end (loop through `MIGRATIONS` until v4, then read settings through `project()`), which T1/T2 do not. |
+
+### §27. Built
+- `js/health.js` — T14–T20 (projection tests per family), T21–T27 (renumbered),
+  goldens G14–G30 (85 boundary cases via a compact `R(rows, todayDays, ruleId)`
+  harness), `LIVE_G` split so the boot gate stays live-store-only, claims
+  C23–C25, `buildSeed()` exported.
+- `js/rules.js` — R15 pattern severity 5→4 (G28); R19 basis now prints the
+  voluntary/involuntary/restructure breakdown (G19); R34 computes the MRR
+  ratio when `mrr_total` is present and prints the math (G24).
+- `js/events.js` — `cs.churn.logged.mrr_total` optional number.
+- `js/ui.js` — Health tab labels the two G blocks and their counts.
+
+### §28. Deviations and judgement calls
+1. Renumbering (§26) — no test lost, every claim re-pointed.
+2. G13 deliberately unallocated; stated in README so it does not read as a gap.
+3. Goldens are excluded from the boot gate: data-integrity failures should halt
+   the app, a threshold regression should shout, not lock the leader out.
+4. R15 pattern severity changed per the newer spec; one-line revert.
+5. `mrr_total` is the only registry addition in this part and it is optional —
+   absent, R34 behaves exactly as before.
+
+### §29. Coverage proof for part-7 claims
+- C23 (family projections): T15–T20.
+- C24 (rule boundaries): G14–G29, 85 pinned cases.
+- C25 (seed coverage + shape): G30 + T24 + T12.
+Health tab now shows **56 checks** (T1–T27, G1–G12, G14–G30) and 25 claims.
+
+---
+
+## Part 8+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).

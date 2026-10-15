@@ -168,7 +168,8 @@
       });
       let run = [];
       closed.forEach(function (o) { run = o.score < 0.4 ? run.concat([o]) : []; });
-      if (run.length >= MIN_TREND_POINTS) out.push(fin({ rule: 'R15', sev: 5, conf: 'HIGH', title: 'Pattern: ' + run.length + ' consecutive OKRs scored < 0.4', basis: ['run: ' + run.map(function (o) { return o.id + '=' + o.score; }).join(', '), 'measured points: ' + run.length + ' (>=3 requirement met) — systemic, not a blip'], refs: run.map(function (o) { return o.id; }), play: PB.product }));
+      // sev 4 per pt-4 part 7 G28 (supersedes the part-3 'escalate to sev 5' wording; see AI-SESSION-LOG §26)
+      if (run.length >= MIN_TREND_POINTS) out.push(fin({ rule: 'R15', sev: 4, conf: 'HIGH', title: 'Pattern: ' + run.length + ' consecutive OKRs scored < 0.4', basis: ['run: ' + run.map(function (o) { return o.id + '=' + o.score; }).join(', '), 'measured points: ' + run.length + ' (>=3 requirement met) — systemic, not a blip'], refs: run.map(function (o) { return o.id; }), play: PB.product }));
       return out;
     } },
     { id: 'R16', fn: function (P, today) { // incident MTTR
@@ -215,7 +216,9 @@
       if (w.length < 2) return [];
       const vol = w.filter(function (a) { return a.reason === 'voluntary'; }).length;
       const sev = w.length >= 3 ? 4 : 3;
-      return [fin({ rule: 'R19', sev: sev, conf: 'MEDIUM', title: 'Attrition spike: ' + w.length + ' departures in 60d', basis: ['voluntary subset: ' + vol + ' of ' + w.length, 'a second departure is a pattern, not a coincidence'], refs: w.map(function (a) { return a.personId; }), play: PB.people })];
+      const invol = w.filter(function (a) { return a.reason === 'involuntary'; }).length;
+      const restr = w.filter(function (a) { return a.reason === 'restructure'; }).length;
+      return [fin({ rule: 'R19', sev: sev, conf: 'MEDIUM', title: 'Attrition spike: ' + w.length + ' departures in 60d', basis: ['breakdown: voluntary ' + vol + ' · involuntary ' + invol + ' · restructure ' + restr + ' (of ' + w.length + ')', 'a second departure is a pattern, not a coincidence'], refs: w.map(function (a) { return a.personId; }), play: PB.people })];
     } },
     { id: 'R20', fn: function (P, today) { // engagement low (+R20b silent cadence)
       const logs = P.engagement.slice().sort(function (a, b) { return a.at - b.at; });
@@ -394,11 +397,16 @@
       P.churnLogs.forEach(function (c) {
         if (!c.total) return; // zero base -> skip
         const rate = c.churned / c.total;
-        if (rate > 0.05) {
-          const sev = rate > 0.10 ? 4 : 3;
+        // MRR escalation needs a denominator. mrr_total present -> computable;
+        // absent -> the ratio is NOT inferred and the caveat is printed.
+        const mrrRate = (typeof c.mrr_lost === 'number' && typeof c.mrr_total === 'number' && c.mrr_total > 0) ? (c.mrr_lost / c.mrr_total) : null;
+        const countFires = rate > 0.05, mrrFires = mrrRate !== null && mrrRate > 0.15;
+        if (countFires || mrrFires) {
+          const sev = (rate > 0.10 || mrrFires) ? 4 : 3;
           const basis = ['math: ' + c.churned + ' / ' + c.total + ' = ' + pct(rate) + ' (thresholds 5% / 10%)'];
-          if (typeof c.mrr_lost === 'number') basis.push('mrr_lost ' + money(c.mrr_lost) + ' logged; no MRR base in log -> the >15%-of-MRR escalation is NOT inferred (skip-not-infer)');
-          out.push(fin({ rule: 'R34', sev: sev, conf: 'HIGH', title: 'Churn ' + pct(rate) + ' in ' + c.period, basis: basis, refs: [], play: PB.cs }));
+          if (mrrRate !== null) basis.push('MRR math: ' + money(c.mrr_lost) + ' / ' + money(c.mrr_total) + ' = ' + pct(mrrRate) + (mrrFires ? ' > 15% -> sev 4 regardless of account count' : ' (under the 15% escalation)'));
+          else if (typeof c.mrr_lost === 'number') basis.push('mrr_lost ' + money(c.mrr_lost) + ' logged without mrr_total; the >15%-of-MRR escalation is NOT inferred (skip-not-infer)');
+          out.push(fin({ rule: 'R34', sev: sev, conf: 'HIGH', title: 'Churn ' + pct(rate) + ' in ' + c.period + (mrrFires ? ' · MRR loss ' + pct(mrrRate) : ''), basis: basis, refs: [], play: PB.cs }));
         }
       });
       return out;
