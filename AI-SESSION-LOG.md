@@ -108,6 +108,53 @@ Verified path: Health tab renders all 22 checks (T1–T11, G1–G8) and 12 claim
 
 ---
 
-## Part 3+ (queued)
-- Module surfaces: finance/revenue cockpit, people ops.
-- Executive/board pack compiled from the log.
+## Part 3 — Rules engine R1–R40
+
+### §10. Mini-audit (pre-code inspection for this part)
+| Claim | Inspection | Result |
+|---|---|---|
+| "R1–R10 carried exactly" | workspace inspection: the only files present are the ones written in this session (parts 1–2); no rules engine exists anywhere; the pt-3 lineage is absent (§0) | **R1–R10 NOT inspectable** — no spec bodies were ever supplied either. Decision: reconstruct R1–R10 from the signals the pt-1 selectors already prove, pinned to existing settings (cadence keys, `decisionMaxOpenDays`, `riskReviewCadenceDays`, `krCheckInCadenceDays`, `salesCycleDays`) so they cannot contradict T6/T9. Recorded here, not hidden. |
+| "Same fin() shape" carried from pt-3 | not inspectable | shape defined and locked by T12/G9 contract: `{rule, sev, conf, title, basis[], refs[], play\|playNone}` |
+| Engine/projection supports rule inputs | `js/engine.js` (this session) | PRESENT — all 40 rules evaluate over `engine.project()` state + `settings()` and injected `today` |
+
+### §11. Built
+- `js/rules.js` — 40 pure rules `(P, today) → findings[]`; deterministic sort;
+  fail-fast `fin()` (throws if a finding lacks both `.play` and `.playNone`).
+- `js/health.js` — T12 (finding shape over battery), T13 (determinism, P
+  unmutated), T14 (≥3-point trend discipline with negative fixtures), T15
+  (skip-not-infer), T16 (severity escalation pairs), T17 (all 40 rules fired),
+  G9 (live run). Claims C13–C16.
+- `js/ui.js` — Signals tab (findings sorted sev desc; basis math printed
+  verbatim; playbook chips; empty-state copy).
+- `index.html` — rules.js wired between playbooks and health (health's G9
+  depends on it). `css/app.css` — sev/conf/basis visual language.
+
+### §12. Deviations and judgement calls (recorded)
+1. R1–R10 reconstructed, not carried (§10) — the only material deviation and it
+   is forced by evidence.
+2. R20/R33 slopes at ≥2 periods: explicit rule text overrides the global ≥3
+   doctrine; both marked in code comments; T14 covers the general doctrine.
+3. R11 likelihood factor made concrete: +1 severity band when likelihood ≥ 4,
+   clamped 3–5; the formula is printed in the finding basis so it is checkable.
+4. R34 MRR branch: payloads carry `mrr_lost` but no MRR base; a >15%-of-MRR
+   ratio is not computable → not inferred (doctrine); basis prints the caveat.
+5. R31 "no update": the registry has no `legal.risk.updated` type, so the
+   dueDate-past branch fires at sev 4 and the basis states no update is on
+   record.
+6. R36 compares against the prior 3 qualifying campaigns ordered by loggedAt;
+   R38 windows 90d from `loggedAt`; both per spec wording.
+7. R1–R4/R39 report distinct sources: pt-1 `review.*` cadences vs
+   `exec.board.meeting` log; both retained intentionally.
+
+### §13. Coverage proof for part-3 claims
+- C13 (R1–R40 implemented): T17 fires every id + T12 shape.
+- C14 (finding contract): T12 + G9 (live).
+- C15 (discipline): T14 (2-point silences), T15 (missing inputs), T16 (escalation pairs).
+- C16 (never persisted): G4 + G7 + T13 + G9.
+Health tab now shows 26 checks (T1–T17, G1–G9) and 16 claims.
+
+---
+
+## Part 4+ (queued)
+- Executive/board pack compiled from the log (feeds R39/R40).
+- Module surfaces for finance and people built on part-2 families.

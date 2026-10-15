@@ -56,6 +56,7 @@
 
   const TABS = [
     ['command', 'Command', 'gauge'],
+    ['signals', 'Signals', 'activity'],
     ['domains', 'Domains', 'grid'],
     ['cadences', 'Cadences', 'calendar'],
     ['decisions', 'Decisions', 'scale'],
@@ -314,12 +315,37 @@
     return h + '</tbody></table></section>';
   }
 
+  // ---------------------------------------------------------------- Signals
+  function sevBadge(s) { return '<span class="sev sev-' + s + '">sev ' + s + '</span>'; }
+  function confBadge(c) { return '<span class="conf conf-' + c + '">' + c + '</span>'; }
+  function viewSignals(ctx) {
+    const F = LeadOS.rules.run(ctx.state, ctx.now).slice().sort(function (a, b) { return (b.sev - a.sev) || (a.rule < b.rule ? -1 : 1); });
+    const bySev = [0, 0, 0, 0, 0, 0];
+    F.forEach(function (f) { bySev[f.sev]++; });
+    let h = '<section class="stats">' +
+      stat('activity', F.length, 'open signals', 'from ' + LeadOS.rules.RULES.length + ' pure rules') +
+      stat('alert', bySev[5], 'sev 5', 'immediate') +
+      stat('alert', bySev[4], 'sev 4', 'act this week') +
+      stat('calendar', bySev[3], 'sev 3', 'on the radar') +
+      stat('shield', bySev[1] + bySev[2], 'sev 1–2', 'hygiene') +
+      '</section>';
+    h += '<section class="card"><header class="card-h"><h3>' + icon('activity') + ' Findings — rules engine R1–R40</h3><span class="dim">(P, today) → findings[] · derived per read · nothing persisted</span></header>';
+    h += F.length ? '<table class="tbl"><thead><tr><th>rule</th><th>sev</th><th>conf</th><th>finding</th><th>playbook</th></tr></thead><tbody>' + F.map(function (f) {
+      return '<tr><td class="mono dim">' + f.rule + '</td><td>' + sevBadge(f.sev) + '</td><td>' + confBadge(f.conf) + '</td>' +
+        '<td><strong>' + esc(f.title) + '</strong>' +
+        (f.basis.length ? '<div class="basis">' + f.basis.map(function (b) { return esc(b); }).join('<br>') + '</div>' : '') +
+        (f.refs.length ? '<div class="dim tiny-t mono">' + f.refs.map(function (r) { return esc(r); }).join(' · ') + '</div>' : '') + '</td>' +
+        '<td>' + (f.play ? '<span class="chip">' + esc(f.play) + '</span>' : '<span class="dim tiny-t">no playbook: ' + esc(f.playNone || 'unspecified') + '</span>') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">No findings. The operating picture is clean — or the log is still thin.</p>';
+    return h + '</section>';
+  }
+
   // ---------------------------------------------------------------- helpers
   function domainOptions() {
     return LeadOS.events.DOMAINS.map(function (d) { return '<option value="' + d.id + '">' + esc(d.label) + '</option>'; }).join('');
   }
 
-  const VIEWS = { command: viewCommand, domains: viewDomains, cadences: viewCadences, decisions: viewDecisions, risks: viewRisks, events: viewEvents, health: viewHealth, settings: viewSettings };
+  const VIEWS = { command: viewCommand, signals: viewSignals, domains: viewDomains, cadences: viewCadences, decisions: viewDecisions, risks: viewRisks, events: viewEvents, health: viewHealth, settings: viewSettings };
 
   function render() {
     LAST_HEALTH = LeadOS.health.runAll();

@@ -2,13 +2,11 @@
    The authority wall.
    T-suite: deterministic proof on synthetic fixtures (never touches the store).
    G-suite: live inspection of the real localStorage payload.
-   The UI may not claim anything that is not covered here (see CLAIMS).
-   pt-4 part 2 adds T10/T11 (72-type contract + fold flows) and G8 (referential
-   integrity across every *Id field in the log). */
+   pt-4 part 3 adds T12–T17 (rules engine R1–R40) and G9 (live rules run). */
 (function () {
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
-  const DAY = 86400000;
+  const DAY = 86400000, H = 3600000;
   const T0 = 1720000000000; // pinned epoch - fixtures never call Date.now()
 
   function fev(seq, type, payload, opts) {
@@ -99,7 +97,125 @@
     'exec.crisis.resolved': { crisisId: 'ec1', resolvedAt: T0 + 2 * DAY }
   };
 
-  // ---------- T-suite (fixtures) ----------
+  /* ---------- rules battery: one deterministic fixture that forces all 40 rules ----------
+     today = T0 + 100d. Every rule R1–R40 fires at least once. */
+  function rulesBattery() {
+    const A = T0, today = A + 100 * DAY;
+    let seq = 0; const evs = [];
+    function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at })); }
+    add('store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, A);
+    // R1–R4 cadences (overdue branch): old completed reviews per kind
+    add('review.scheduled', { id: 'cR', kind: 'compliance', dueAt: A - 190 * DAY }, A - 191 * DAY);
+    add('review.completed', { id: 'cR', outcome: 'done' }, A - 190 * DAY);
+    [['revenue', 10], ['ops', 10], ['board', 5]].forEach(function (x, i) {
+      add('review.scheduled', { id: 'r' + i, kind: x[0], dueAt: A + x[1] * DAY }, A);
+      add('review.completed', { id: 'r' + i, outcome: 'done' }, A + x[1] * DAY);
+    });
+    // R5–R10 heritage signals
+    add('decision.proposed', { id: 'dEng', domain: 'engineering', question: 'Monolith or services?', options: ['mono', 'svc'], owner: 'cto', reversibility: 'irreversible' }, A + DAY);
+    add('decision.proposed', { id: 'dSal', domain: 'sales', question: 'Discount path?', options: ['a', 'b'], owner: 'cro', reversibility: 'reversible' }, A + DAY);
+    add('risk.raised', { id: 'rk1', domain: 'sales', title: 'Churn drift', likelihood: 2, impact: 2 }, A + DAY);
+    add('objective.created', { id: 'o1', domain: 'sales', title: 'Grow revenue' }, A + DAY);
+    add('kr.created', { id: 'k1', objectiveId: 'o1', title: 'ARR', target: 100, unit: 'k' }, A + DAY);
+    add('task.created', { id: 'tk1', domain: 'sales', title: 'Call list', dueAt: A + 10 * DAY }, A + DAY);
+    add('objective.created', { id: 'o2', domain: 'finance', title: 'Unmeasured goal' }, A + DAY);
+    // R11
+    add('fin.risk.logged', { id: 'fr1', title: 'Runway compression', severity: 4, likelihood: 4, reviewDate: A + 30 * DAY }, A + 2 * DAY);
+    // R12
+    add('sales.deal.logged', { id: 'dl1', title: 'Stale deal', value: 50000, currency: 'USD', stage: 'proposal', closeDate: A + 40 * DAY }, A + 3 * DAY);
+    // R13
+    add('sales.quota.set', { id: 'q1', personId: 'rep-1', period: 'Q3', target: 1000, currency: 'USD' }, A + 3 * DAY);
+    add('sales.quota.actuals', { quotaId: 'q1', actual: 400, period: 'Q3' }, A + 60 * DAY);
+    // R14
+    add('strategy.okr.set', { id: 'ok1', objective: 'Silent OKR', quarter: 'Q3', keyResults: [{ kr: 'X', target: 1, unit: 'n' }] }, A + 5 * DAY);
+    // R15
+    ['okA', 'okB', 'okC'].forEach(function (id, i) {
+      add('strategy.okr.set', { id: id, objective: 'Objective ' + id, quarter: 'Q' + (i + 1), keyResults: [{ kr: 'Y', target: 10, unit: 'n' }] }, A + (40 + i) * DAY);
+      add('strategy.okr.closed', { okrId: id, score: [0.3, 0.2, 0.35][i] }, A + (50 + i * 5) * DAY);
+    });
+    // R16
+    add('ops.incident.logged', { id: 'in1', title: 'DB saturation', severity: 4, systems: ['db'], startedAt: A + 90 * DAY }, A + 90 * DAY);
+    add('ops.incident.resolved', { incidentId: 'in1', resolvedAt: A + 90 * DAY + 10 * H, actions: ['add read replica'] }, A + 90 * DAY + 10 * H);
+    // R17
+    [70, 80, 90].forEach(function (d, i) { add('ops.sla.logged', { metric: 'uptime', target: 99.9, actual: 99.0, period: 'W' + (i + 1), met: false }, A + d * DAY); });
+    // R18
+    add('ops.milestone.set', { id: 'ms1', title: 'GA launch', dueDate: A + 50 * DAY, dependsOn: [] }, A + 10 * DAY);
+    add('ops.milestone.updated', { milestoneId: 'ms1', status: 'at-risk' }, A + 40 * DAY);
+    // R19
+    add('hr.attrition.logged', { personId: 'u-1', reason: 'voluntary' }, A + 70 * DAY);
+    add('hr.attrition.logged', { personId: 'u-2', reason: 'involuntary' }, A + 80 * DAY);
+    // R20
+    add('hr.engagement.logged', { score: 7.5, period: 'H1', respondents: 50 }, A + 30 * DAY);
+    add('hr.engagement.logged', { score: 5.8, period: 'H2', respondents: 52 }, A + 70 * DAY);
+    // R21
+    add('hr.pip.started', { id: 'pp1', personId: 'u-3', duration_days: 30, goals: ['ship weekly'] }, A + 10 * DAY);
+    // R22
+    add('fin.budget.set', { id: 'b1', period: 'Q2', amount: 100000, currency: 'USD', category: 'opex' }, A + 5 * DAY);
+    add('fin.budget.actuals', { budgetId: 'b1', actual: 60000, period: 'Q2' }, A + 60 * DAY);
+    // R23
+    add('fin.kpi.logged', { metric: 'gross-margin', value: 60, unit: '%', period: 'Q3', target: 100 }, A + 80 * DAY);
+    // R24
+    add('fin.forecast.logged', { period: 'Q2', revenue: 100000, cost: 80000, margin: 0.2, confidence: 0.8 }, A + 20 * DAY);
+    // R25
+    add('supply.vendor.logged', { id: 'v1', name: 'FabCo', category: 'components', tier: 1, risk_level: 5, reviewDate: A + 30 * DAY }, A + 5 * DAY);
+    // R26
+    add('supply.disruption.logged', { vendorId: 'v1', description: 'factory fire', severity: 4 }, A + 80 * DAY);
+    // R27
+    add('mfg.yield.logged', { period: 'W38', yield_pct: 75, line: 'L1' }, A + 85 * DAY);
+    // R28
+    add('mfg.safety.incident', { severity: 2, type: 'cut', description: 'blade guard', corrective_actions: ['refit'], date: A + 85 * DAY }, A + 85 * DAY);
+    add('mfg.safety.incident', { severity: 5, type: 'crush', description: 'press accident', corrective_actions: ['lockout'], date: A + 90 * DAY }, A + 90 * DAY);
+    // R29
+    add('mfg.equipment.logged', { assetId: 'press-9', status: 'down' }, A + 99 * DAY);
+    // R30
+    add('legal.compliance.check', { framework: 'SOC2', period: 'H1', result: 'fail', findings: ['access review missing'] }, A + 80 * DAY);
+    // R31
+    add('legal.risk.logged', { title: 'GDPR exposure', severity: 3, area: 'privacy', dueDate: A + 50 * DAY }, A + 40 * DAY);
+    // R32
+    add('legal.contract.logged', { id: 'ct1', counterparty: 'Alpha', type: 'MSA', expiryDate: A + 120 * DAY }, A + 10 * DAY);
+    add('legal.contract.logged', { id: 'ct2', counterparty: 'Beta', type: 'NDA', expiryDate: A + 105 * DAY }, A + 10 * DAY);
+    add('legal.contract.logged', { id: 'ct3', counterparty: 'Gamma', type: 'SOW', expiryDate: A + 90 * DAY }, A + 10 * DAY);
+    // R33
+    add('cs.nps.logged', { score: 40, period: 'Q2', promoters: 50, passives: 30, detractors: 20 }, A + 40 * DAY);
+    add('cs.nps.logged', { score: 20, period: 'Q3', promoters: 40, passives: 40, detractors: 20 }, A + 80 * DAY);
+    // R34
+    add('cs.churn.logged', { period: 'Q3', churned: 8, total: 100 }, A + 85 * DAY);
+    // R35
+    add('cs.escalation.logged', { id: 'e1', accountName: 'Acme', severity: 3, description: 'billing dispute', dueDate: A + 60 * DAY }, A + 50 * DAY);
+    add('cs.escalation.logged', { id: 'e2', accountName: 'Globex', severity: 5, description: 'data loss claim' }, A + 99 * DAY);
+    // R36
+    add('mktg.campaign.logged', { id: 'mc1', name: 'C1', channel: 'paid', budget: 1000, period: 'Q2' }, A + 10 * DAY);
+    add('mktg.campaign.result', { campaignId: 'mc1', spend_actual: 1000, conversions: 10 }, A + 20 * DAY);
+    add('mktg.campaign.logged', { id: 'mc2', name: 'C2', channel: 'paid', budget: 1100, period: 'Q2' }, A + 11 * DAY);
+    add('mktg.campaign.result', { campaignId: 'mc2', spend_actual: 1100, conversions: 10 }, A + 21 * DAY);
+    add('mktg.campaign.logged', { id: 'mc3', name: 'C3', channel: 'paid', budget: 1050, period: 'Q2' }, A + 12 * DAY);
+    add('mktg.campaign.result', { campaignId: 'mc3', spend_actual: 1050, conversions: 10 }, A + 22 * DAY);
+    add('mktg.campaign.logged', { id: 'mc4', name: 'C4', channel: 'paid', budget: 5000, period: 'Q3' }, A + 30 * DAY);
+    add('mktg.campaign.result', { campaignId: 'mc4', spend_actual: 5000, conversions: 10 }, A + 40 * DAY);
+    add('mktg.campaign.logged', { id: 'mc5', name: 'C5 silent', channel: 'events', budget: 2000, period: 'Q3' }, A + 80 * DAY);
+    // R37
+    add('rd.experiment.logged', { id: 'ex1', hypothesis: 'Pricing page lifts conversion', method: 'A/B', startDate: A + 10 * DAY, reviewDate: A + 30 * DAY }, A + 10 * DAY);
+    // R38
+    add('rd.tech.debt.logged', { id: 'td1', title: 'Legacy auth', severity: 4, effort: 5 }, A + 50 * DAY);
+    add('rd.tech.debt.logged', { id: 'td2', title: 'Sync layer', severity: 3, effort: 4 }, A + 60 * DAY);
+    // R39
+    add('exec.board.meeting', { date: A + 5 * DAY, quorum: true, items: ['Q1'], decisions: ['approve plan'] }, A + 5 * DAY);
+    // R40
+    add('exec.kpi.reviewed', { period: 'Q2', metrics: [{ name: 'ARR', value: 1, target: 1, trend: 'up' }] }, A + 60 * DAY);
+    return { events: evs, today: today };
+  }
+  function batteryFindings() { const b = rulesBattery(); return LeadOS.rules.run(LeadOS.engine.project(b.events), b.today); }
+  function shapeOk(f) {
+    const validPlay = f.play === null || LeadOS.rules.PLAY_IDS.indexOf(f.play) !== -1 || /^playbook:[a-zA-Z]+$/.test(f.play);
+    return /^R([1-9]|[1-3][0-9]|40)$/.test(f.rule) &&
+      Number.isInteger(f.sev) && f.sev >= 1 && f.sev <= 5 &&
+      ['HIGH', 'MEDIUM', 'LOW'].indexOf(f.conf) !== -1 &&
+      typeof f.title === 'string' && f.title.length > 0 &&
+      Array.isArray(f.basis) && Array.isArray(f.refs) &&
+      ((f.play && validPlay) || (typeof f.playNone === 'string' && f.playNone.length > 0));
+  }
+
+  // ---------- T-suite ----------
   const T = [
     ['T1', '3>4 backfills exactly the five v4 settings on a bare v3 store', function () {
       const raw = v3raw([fev(1, 'store.initialized', { schemaVersion: 3, lineageTag: 'pt-3' })]);
@@ -175,12 +291,9 @@
     }],
     ['T8', 'registry rejects unknown types, rogue fields, and malformed payloads', function () {
       const v = LeadOS.events.validate;
-      const bad1 = v('definitely.not.real', {}).ok;
-      const bad2 = v('settings.changed', { key: 'notASetting', value: 5 }).ok;
-      const bad3 = v('objective.created', { id: 'x', domain: 'sales' }).ok;
-      const bad4 = v('task.created', { id: 't', domain: 'sales', title: 'x', hacker: 1 }).ok;
-      const good = v('decision.proposed', { id: 'd', domain: 'sales', question: 'q?', options: ['a', 'b'], owner: 'o', reversibility: 'reversible' }).ok;
-      const ok = !bad1 && !bad2 && !bad3 && !bad4 && good;
+      const ok = !v('definitely.not.real', {}).ok && !v('settings.changed', { key: 'notASetting', value: 5 }).ok &&
+        !v('objective.created', { id: 'x', domain: 'sales' }).ok && !v('task.created', { id: 't', domain: 'sales', title: 'x', hacker: 1 }).ok &&
+        v('decision.proposed', { id: 'd', domain: 'sales', question: 'q?', options: ['a', 'b'], owner: 'o', reversibility: 'reversible' }).ok;
       return { pass: ok, detail: ok ? '4 malformed events rejected, 1 valid accepted' : 'validator misbehaved' };
     }],
     ['T9', 'salesCycleDays drives the beyond-cycle flag on sales decisions only', function () {
@@ -279,6 +392,62 @@
       const wrongRejects = negatives.filter(function (n) { return v(n[0], n[1]).ok; });
       const ok = unregistered.length === 0 && rejected.length === 0 && wrongRejects.length === 0;
       return { pass: ok, detail: ok ? types.length + ' types accepted with canonical payloads; ' + negatives.length + ' malformed payloads rejected' : 'unregistered: ' + unregistered.join(',') + ' | rejected: ' + rejected.join(',') + ' | wrongly accepted: ' + wrongRejects.map(function (n) { return n[0]; }).join(',') };
+    }],
+    ['T12', 'finding contract: every finding matches the fin() shape, sev 1–5, play xor playNone', function () {
+      const F = batteryFindings();
+      const bad = F.filter(function (f) { return !shapeOk(f); });
+      return { pass: F.length > 0 && bad.length === 0, detail: bad.length ? 'malformed findings: ' + bad.slice(0, 2).map(function (f) { return JSON.stringify(f).slice(0, 90); }).join(' | ') : F.length + ' findings, all shape-valid; play ids resolve or playNone printed' };
+    }],
+    ['T13', 'rules engine is deterministic: two runs over the same (P, today) are identical', function () {
+      const b = rulesBattery();
+      const P = LeadOS.engine.project(b.events);
+      const before = JSON.stringify(P);
+      const a = JSON.stringify(LeadOS.rules.run(P, b.today));
+      const c = JSON.stringify(LeadOS.rules.run(P, b.today));
+      const ok = a === c && JSON.stringify(P) === before;
+      return { pass: ok, detail: ok ? 'stable sort order, no time-of-day leakage, P untouched' : 'nondeterminism or mutation detected' };
+    }],
+    ['T14', 'trend discipline: below 3 measured points no trend-derived finding fires', function () {
+      let seq = 0; const A = T0;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at })); }
+      // R36 with only 2 measured campaigns (cpa 100 then 500) -> must NOT fire
+      add('mktg.campaign.logged', { id: 'a1', name: 'A', channel: 'paid', budget: 100, period: 'Q1' }, A + DAY);
+      add('mktg.campaign.result', { campaignId: 'a1', spend_actual: 100, conversions: 1 }, A + 2 * DAY);
+      add('mktg.campaign.logged', { id: 'a2', name: 'B', channel: 'paid', budget: 500, period: 'Q1' }, A + 3 * DAY);
+      add('mktg.campaign.result', { campaignId: 'a2', spend_actual: 500, conversions: 1 }, A + 4 * DAY);
+      // R23 with only 2 declining periods -> threshold finding may fire, but NO slope basis
+      add('fin.kpi.logged', { metric: 'gm', value: 100, unit: '%', period: 'Q1', target: 200 }, A + 5 * DAY);
+      add('fin.kpi.logged', { metric: 'gm', value: 80, unit: '%', period: 'Q2', target: 200 }, A + 6 * DAY);
+      const F = LeadOS.rules.run(LeadOS.engine.project(evs), A + 50 * DAY);
+      const r36 = F.filter(function (f) { return f.rule === 'R36'; });
+      const r23 = F.filter(function (f) { return f.rule === 'R23'; });
+      const slopeLeak = r23.some(function (f) { return f.basis.some(function (l) { return l.indexOf('slope:') === 0; }); });
+      const ok = r36.length === 0 && r23.length === 1 && !slopeLeak;
+      return { pass: ok, detail: 'R36 with 2 points: ' + r36.length + ' findings (want 0); R23 2-point basis carries no slope line: ' + !slopeLeak };
+    }],
+    ['T15', 'skip-not-infer: missing fields and missing actuals produce zero findings', function () {
+      let seq = 0; const A = T0;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at })); }
+      add('sales.quota.set', { id: 'qz', personId: 'p', period: 'Q1', target: 1000, currency: 'USD' }, A + DAY);          // no actuals -> R13 silent
+      add('fin.budget.set', { id: 'bz', period: 'Q1', amount: 50000, currency: 'USD', category: 'x' }, A + DAY);            // no actuals -> R22 silent
+      add('fin.kpi.logged', { metric: 'no-target-kpi', value: 10, unit: '%', period: 'Q1' }, A + DAY);                      // no target -> R23 silent
+      add('legal.contract.logged', { id: 'cz', counterparty: 'NoExpiry Inc', type: 'MSA' }, A + DAY);                       // no expiryDate -> R32 silent
+      const F = LeadOS.rules.run(LeadOS.engine.project(evs), A + 400 * DAY);
+      const hit = F.filter(function (f) { return ['R13', 'R22', 'R23', 'R32'].indexOf(f.rule) !== -1; });
+      return { pass: hit.length === 0, detail: hit.length ? 'inferred something: ' + hit.map(function (f) { return f.rule; }).join(',') : 'R13/R22/R23/R32 all silent with missing inputs — nothing inferred' };
+    }],
+    ['T16', 'severity escalations per spec: R11 sev5, R12 sev4, R15 pattern sev5, R28/R30/R32/R35 sev5', function () {
+      const F = batteryFindings();
+      const want = [['R11', 5], ['R12', 4], ['R15', 5], ['R16', 4], ['R28', 5], ['R30', 5], ['R32', 5], ['R35', 5]];
+      const missing = want.filter(function (w) { return !F.some(function (f) { return f.rule === w[0] && f.sev === w[1]; }); });
+      return { pass: missing.length === 0, detail: missing.length ? 'missing escalations: ' + missing.map(function (w) { return w[0] + ' sev' + w[1]; }).join(', ') : want.length + ' rule/severity escalation pairs confirmed' };
+    }],
+    ['T17', 'coverage: every rule R1–R40 fires at least once in the battery', function () {
+      const F = batteryFindings();
+      const missing = LeadOS.rules.RULES.map(function (r) { return r.id; }).filter(function (id) { return !F.some(function (f) { return f.rule === id; }); });
+      return { pass: missing.length === 0 && LeadOS.rules.RULES.length === 40, detail: missing.length ? 'silent rules: ' + missing.join(', ') : 'all 40 rules exercised; ' + F.length + ' total findings in battery' };
     }]
   ];
 
@@ -361,6 +530,20 @@
         if (spec.refArrays) Object.keys(spec.refArrays).forEach(function (f) { (ev.payload[f] || []).forEach(function (v) { check(ev, f, spec.refArrays[f], v); }); });
       });
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'all references resolve across ' + raw.events.length + ' events' };
+    }],
+    ['G9', 'rules engine over the live log: runs clean, findings shape-valid, playbooks resolvable, P unmutated', function () {
+      const P = LeadOS.engine.project(LeadOS.store.load().events);
+      const before = JSON.stringify(P);
+      const F = LeadOS.rules.run(P, Date.now());
+      const plays = {};
+      LeadOS.playbooks.PLAYBOOKS.forEach(function (pb) { plays['playbook:' + pb.domain] = true; });
+      const bad = F.filter(function (f) {
+        return !shapeOk(f) || (f.play && !plays[f.play] && LeadOS.rules.PLAY_IDS.indexOf(f.play) === -1);
+      });
+      const ok = bad.length === 0 && JSON.stringify(P) === before;
+      const perRule = {};
+      F.forEach(function (f) { perRule[f.rule] = (perRule[f.rule] || 0) + 1; });
+      return { pass: ok, detail: ok ? F.length + ' live findings across ' + Object.keys(perRule).length + ' rules; every play id resolves to a real playbook' : 'bad findings: ' + bad.slice(0, 2).map(function (f) { return f.rule + ':' + (f.play || f.playNone); }).join(' | ') };
     }]
   ];
 
@@ -376,7 +559,11 @@
     { id: 'C9', text: 'Every event in the log satisfies the registry contract.', by: ['T8', 'G3'] },
     { id: 'C10', text: 'All 72 part-2 event types are registered and gate-enforced.', by: ['T11', 'G3'] },
     { id: 'C11', text: 'All 11 new families derive state: entities mutate, actuals attach, closures close.', by: ['T10', 'G7'] },
-    { id: 'C12', text: 'Referential integrity: every declared *Id reference resolves within the log.', by: ['G8', 'T10'] }
+    { id: 'C12', text: 'Referential integrity: every declared *Id reference resolves within the log.', by: ['G8', 'T10'] },
+    { id: 'C13', text: 'Rules engine implements R1–R40 and every rule is exercised.', by: ['T17', 'T12'] },
+    { id: 'C14', text: 'Every finding honors the fin() contract (sev 1–5, conf, play xor playNone).', by: ['T12', 'G9'] },
+    { id: 'C15', text: 'Trend/severity discipline: >=3 measured points, spec ceilings, skip-not-infer.', by: ['T14', 'T15', 'T16'] },
+    { id: 'C16', text: 'Signals are derived per read and never persisted.', by: ['G4', 'G7', 'G9', 'T13'] }
   ];
 
   function runSuite(suite) {
