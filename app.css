@@ -299,6 +299,9 @@ section.card > table.tbl, .card > .tbl { display: block; overflow-x: auto; }
 .conf-LOW { color: var(--dim); }
 .pill-trend { color: var(--v4); border-color: rgba(167, 139, 250, .4); background: rgba(167, 139, 250, .08); }
 .basis { margin-top: 6px; font-family: var(--mono); font-size: 11px; color: var(--dim); line-height: 1.75; border-left: 2px solid var(--line2); padding-left: 10px; }
+.verify-notice { display: flex; align-items: baseline; gap: 12px; color: var(--dim); background: rgba(110, 168, 254, .06); border: 1px solid rgba(110, 168, 254, .28); border-radius: 12px; padding: 11px 14px; font-size: 12px; }
+.verify-notice strong { color: var(--acc); white-space: nowrap; }
+.verify-notice code { color: var(--ink); }
 
 /* ---------- interactive playbooks ---------- */
 .pill-rec { color: var(--acc); border-color: rgba(110, 168, 254, .45); background: rgba(110, 168, 254, .09); }

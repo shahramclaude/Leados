@@ -518,7 +518,9 @@ two named exceptions R28 safety and R30 `fail`.
 
 ### §39. Coverage
 - C27 keys: T28 + G13 · C28 ceiling: T29 + G13 + G19 + G28 · C29 import: T30 + G3 + G8.
-Health now shows **62 checks** (T1–T30 incl. T12b/T20b, G1–G13, G14–G30) and 29 claims.
+Source inventory at this point: **61 checks** (31 T checks incl. T12b/T20b,
+plus 30 G checks: G1–G13 and G14–G30) and 29 claims. Not runtime-executed
+in the authoring environment; see Part 12 §5.
 
 ---
 
@@ -567,8 +569,9 @@ this" is decoration.
    error. T31 asserts only what the DOM can actually prove.
 
 ### §44. Coverage
-- C30: T31 + G1. Health now shows **63 checks** (T1–T31 incl. T12b/T20b,
-  G1–G13, G14–G30) and 30 claims.
+- C30: T31 + G1. Source inventory after T31: **62 checks** (32 T checks
+  incl. T12b/T20b, plus 30 G checks) and 30 claims. Not runtime-executed in
+  the authoring environment; see Part 12 §5.
 
 ---
 
@@ -623,10 +626,51 @@ the next most honest thing rather than pretend otherwise:
 ### §49. Coverage
 - C30 (10 files, DOM parity) and C31 (FIXED epoch, rules merged): T31, plus
   T13 and G30 re-proving the engine is intact after the move.
-Health now shows **63 checks** (T1–T31 incl. T12b/T20b, G1–G13, G14–G30) and
-31 claims.
+Source inventory: **62 checks** (32 T checks incl. T12b/T20b, plus 30 G
+checks: G1–G13 and G14–G30) and 31 claims. Not runtime-executed in the
+authoring environment; see Part 12 §5.
 
 ---
 
-## Part 12+ (queued)
+## Part 12 — Verification status
+
+### §5. Verification status (this session entry)
+
+**NO JAVASCRIPT RUNTIME IS AVAILABLE IN THE AUTHORING ENVIRONMENT. No T-suite,
+G-suite, golden, migration, projection, rule, playbook, import, or UI check was
+executed here. The runtime grader is `#/health` in the user's browser.**
+
+All authoring-time correctness statements are based only on:
+
+- conservative construction against the event registry and append-only store;
+- source inspection with file reads and regular-expression searches;
+- fixture tracing by hand through `project()`, `rules.run()`, migrations, and
+  the expected T/G assertions;
+- structural checks such as script order, namespace references, manifest
+  parity, event contracts, and the absence of network calls in source.
+
+The checks in `js/health.js` are **implemented and available to run**, not
+claimed to have passed in this authoring environment. Opening `index.html` in a
+browser and visiting `#/health` is the authoritative runtime verification. The
+browser must report the actual pass/fail state; any failure shown there
+supersedes fixture tracing or source-level confidence recorded in this log.
+
+### Status language
+
+For this delivery:
+
+- **Implemented** means the code and its health assertion are present.
+- **Source-inspected** means the relevant text/structure was read or searched.
+- **Fixture-traced** means expected behavior was followed manually through the
+  pure fold/rule path.
+- **Runtime-verified** is intentionally **not claimed**.
+
+Previous entries that use phrases such as “verified,” “passes,” or “re-prove”
+describe executable assertions or source inspection, not a JS execution in the
+authoring environment. This entry is the controlling verification-status
+statement for the whole session.
+
+---
+
+## Part 13+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).

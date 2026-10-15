@@ -194,7 +194,16 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 
 ## Health — the authority wall
 
-**T-suite — fixtures (29)**
+### Verification status
+
+**No JavaScript runtime was available in the authoring environment.** The
+T-suite, G-suite and goldens are implemented but were not executed during
+authoring. Correctness here is based on conservative construction, source
+inspection and manual fixture tracing. The authoritative runtime grader is
+**`#/health` in the user's browser**. Its actual pass/fail results supersede
+all source-level confidence stated in the documentation.
+
+**T-suite — fixtures (32 source-declared checks)**
 
 | ID | Proves |
 |---|---|
@@ -215,7 +224,7 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 | **T28–T30** | **stable finding keys · sev-3 trend ceiling with named exceptions · import gate (recursive rewire, dangling counters)** |
 | **T31** | **shipped manifest: README's file table == the assets `index.html` actually loads; all local; every module registers** |
 
-**G-suite — live store (G1–G12) + goldens (G14–G30)**
+**G-suite — live store (G1–G13) + goldens (G14–G30) — 30 source-declared checks**
 
 G1 single key · G2 schema/lineage · G3 append-only + registry-valid · G4
 whitelist · G5 v4 settings live · G6 repair accounting · G7 deterministic reads ·
