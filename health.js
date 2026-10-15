@@ -43,10 +43,10 @@
      are documentation of that reading, not a runtime assertion (the no-network
      doctrine means the app cannot re-read its own source to confirm them). */
   const MANIFEST = [
-    // `lines` = measured by reading each file at the close of part 11.
-    // The two doc files are self-referential (recording this measurement
-    // changes them), so their figures are the reading taken before that
-    // final edit — verify with `wc -l`.
+    // `lines` = measured by reading each file (parts 11/13); the two doc rows
+    // were re-measured at part-14 close and digit-patched in place, so they are
+    // exact post-patch counts, not pre-freeze readings (log §59.4).
+    // Verify any time with `wc -l`.
     { path: 'index.html',          kind: 'html', ns: null,                   lines: 53 },
     { path: 'css/app.css',         kind: 'css',  ns: null,                   lines: 361 },
     { path: 'js/events.js',        kind: 'js',   ns: ['events'],             lines: 231 },
@@ -55,8 +55,8 @@
     { path: 'js/playbooks.js',     kind: 'js',   ns: ['playbooks'],          lines: 475 },
     { path: 'js/health.js',        kind: 'js',   ns: ['health'],             lines: 1571 },
     { path: 'js/ui.js',            kind: 'js',   ns: ['ui'],                 lines: 947 },
-    { path: 'README.md',           kind: 'doc',  ns: null,                   lines: 535 },
-    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,                   lines: 783 }
+    { path: 'README.md',           kind: 'doc',  ns: null,                   lines: 556 },
+    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,                   lines: 902 }
   ];
   // Files that must NOT be loaded. js/rules.js was merged into js/engine.js in
   // part 11 and shipped as a tombstone; part 13 removed it from the delivery

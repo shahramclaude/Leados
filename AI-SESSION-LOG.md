@@ -779,5 +779,124 @@ immediately before the table froze (self-reference convention, carried).
    Unverified, labelled: browser execution on real data; upstream repo state
    after this session; pixel rendering at any viewport.
 
-## Part 14+ (queued)
+## Part 14 — The complete delivery, re-issued against the drifted upstream, executed twice
+
+### §55. Audit (run before editing — upstream re-measured via the git trees API, `main @ 12ad31d`, 2026-10-15)
+
+*Anatomy note.* The brief mandates "a new §0–§6 entry at the bottom following the
+existing format exactly." This log numbers sections **continuously** (established
+at part 1; the only violation is part 12's internal "§5", recorded at §37's end).
+This entry therefore carries the mandated seven-section anatomy — audit, scope,
+built, verification, deviations, debt, next — at the continuous positions
+§55–§61, and says so here rather than breaking the running counter a second time.
+
+| Instruction (§14 of the mandate) | Measured reality (this session) | Action |
+|---|---|---|
+| "Read the repo first. Inspect the actual code before claiming anything about it; label anything unverified." | Upstream HEAD walked with the git trees API: **22 flat entries at `main @ 12ad31d`** ("Add files via upload") — vs the 16 §50 measured at `c9fcb6d`. The scaffold **grew**: `App.tsx` (1,089 B), `cn.ts` (169 B), `index.css` (23 B), `main.tsx` (230 B), `vite.config.ts` (538 B) joined it; `package.json` shrank 707 B → 653 B (jsdom added). The 10 canonical files are **byte-identical to the part-13 readings** (2,056 / 22,636 / 23,237 / 13,608 / 71,935 / 46,861 / 125,264 / 80,430 / 35,106 / 51,315 B — tree API and curl agree), and their line counts match README's table exactly. Flat layout persists, so upstream still cannot boot as shipped. | inspected, not assumed; re-issued the 10 in their documented `css/`+`js/` structure; the scaffold/debris inventoried below is not shipped |
+| "Deliver all 10 files complete and self-contained. No placeholder comments. Every function body ships." | Placeholder sweep across the 10 (`TODO`, `FIXME`, `rest of`, stub markers): only legitimate HTML `placeholder=` attributes. **Read in full, line by line:** `index.html` (53), `css/app.css` (361), `js/events.js` (231), `js/store.js` (338), `js/engine.js` (914), `js/playbooks.js` (475), `js/ui.js` (947), README (535), this log (783 before this entry). `js/health.js` (1571): fixtures, seed, MANIFEST/UNLOADED, T31 body, boot/run plumbing, goldens G19–G30 and all claims read directly; the remaining ≈1,090 lines of T/golden bodies were **executed, not read end-to-end** — every check inside them ran green (§58). That makes pass/fail claims strong and forbids prose claims about unread bodies; none are made. | all 10 re-issued verbatim; **zero edits to the 8 code files** — the first execution in this environment was green (§58), and editing green shipped code is how drift starts |
+| "AI-SESSION-LOG.md gets a new §0–§6 entry" | this log's running-number convention (§0–§54 used) | this entry (§55–§61), anatomy stated above |
+| "Give me the complete latest index.html, AI-SESSION-LOG.md and README.md." | this environment delivers files, not chat paste; the response text may summarize but not dump code | the three complete files sit at the tree root (and inside `dist/`); the response carries the changelog + verification record; recorded so the condensed hand-off is not mistaken for a reduction of scope |
+| `AI-SESSION-LOG.append.md` (8,719 B) sits in the repo | **predecessor lineage** (mf-1/mf-2 era: `oo-finish`, `goal.assign`, an 8-rule G1–G12 engine, a 22,103 B log that is not this log). Its "fold me into AI-SESSION-LOG.md" instruction targets that older log, not this one; folding it here would corrupt the pt-4 record. §50's "stale Session-6 fragment" call is verified accurate | classified debris; not shipped, not folded; repo-side deletion remains the owner's action (carried, §54.2) |
+| `SESSION-3.patch.md` (6,508 B) sits in the repo | **predecessor lineage** — anchored patches against a 251,817-byte monolith era; no anchor exists in the pt-4 tree | same: debris, not shipped |
+| Byte sizes now measurable | this session's tooling (trees API, curl, `wc -c`) **does measure bytes**, unlike the part-10 tooling (§0.3) | audit rows above carry them as inspection evidence; README and `health.MANIFEST` keep the **lines-only table convention by policy** — the refusal doctrine is about not stating what a session cannot measure, and this session states only what it did |
+
+### §56. Scope (the part-14 mandate, unreduced)
+
+All 10 files complete and self-contained · no placeholder bodies · all 40 rules ·
+all event types (88 under contract) · all playbooks (15 domain + 14 interactive) ·
+all views (14 routes) · full health-wall coverage (T1–T31 with T12b/T20b · G1–G13
+live · G14–G30 goldens · C1–C31 claims) · a new log entry in the existing format ·
+the complete `index.html` / `AI-SESSION-LOG.md` / `README.md` delivered · a
+changelog with one "why" per non-obvious decision. Nothing deferred to a future
+slice; the only queued feature remains the board pack, which was never part of
+this delivery brief (§60 carries it).
+
+### §57. Built
+
+- **The canonical 10-file set re-issued** at the tree root: `index.html` (53) ·
+  `css/app.css` (361) · `js/events.js` (231) · `js/store.js` (338) ·
+  `js/engine.js` (914) · `js/playbooks.js` (475) · `js/health.js` (1571) ·
+  `js/ui.js` (947) · `README.md` (556) · `AI-SESSION-LOG.md` (902,
+  closing count — digit-patched in place after measuring, so the figure survives
+  its own statement; verify with `wc -l`). **Totals: 6348 lines.**
+- `css/` and `js/` directories **created** — the two pieces missing upstream; the
+  reason upstream HEAD could not boot was structural, not content.
+- `public/` **symlink mirror** re-established (`index.html`, `css`, `js`,
+  `README.md`, `AI-SESSION-LOG.md`): `vite build` dereferences the links and
+  emits `dist/` as exactly the 10-file bundle (§53's mechanism, re-verified at
+  §58 against a fresh build).
+- `README.md` — verification status records the part-14 twin execution (source
+  tree + `dist/`); the upstream non-claim updated to `12ad31d` / 22 entries;
+  a part-14 re-issue note joins the part-13 one; file-table doc rows and totals
+  re-measured. No other prose touched — the table was verified accurate line by
+  line against source this session, so accuracy edits were limited to what
+  changed since part 13.
+- `js/health.js` — `MANIFEST` doc-row `lines` patched to the closing doc
+  measurements (documentation rows, not runtime assertions — §43.4 carries why).
+  **No check body, golden, fixture, or rule was touched.**
+- `AI-SESSION-LOG.md` — this entry; the queued stub re-grounded at part 15.
+- `scripts/headless-verify.mjs` — carried as the verification aid it is
+  (not shipped; the app never loads it; jsdom 29.1.1 installed as tooling).
+- The npm scaffold at the root (`package.json`, `vite.config.ts`, `src/`,
+  `tsconfig.json`, `package-lock.json`) is **delivery tooling**, classified the
+  same way README's Files section classifies it — present in the checkout,
+  not LeadOS, never loaded by the app.
+
+### §58. Executed verification (this session, not traced — Node v20.20.2, jsdom 29.1.1)
+
+Everything below is a runtime record of `node scripts/headless-verify.mjs <dir>`
+exit 0. Against the **source tree**: 6 classic scripts in doctrinal order · all
+7 namespaces register · `registryTypes: 88` · `rules: R1..R40` (all 40 ids) ·
+`namedProjections: 50` · 14 interactive playbook ids · 14 routes ·
+`MANIFEST: 10 files` · `problems: []` · **T 32/32 · G+goldens 30/30 · claims
+31/31 proven · boot gate green** · UI boot: `#/today`, wall hidden, health view
+28.5 KB rendered, 14/14 routes render · seed battery: **57 findings, all 40
+rules firing**. Against `dist/` (fresh `vite build`; T31's inline-stylesheet
+fingerprint branch engaged, as designed in §53): **identical result — same
+32/30/31/green line, exit 0.** jsdom is not a browser: paint, layout, focus and
+real event timing remain unobserved and are labeled, not claimed (part-13
+doctrine carried; `#/health` in a real browser still supersedes every record).
+
+### §59. Deviations
+
+1. **No code edits this part.** Delivery parts that "improve" green code are how
+   the drift this lineage exists to close gets re-created. The part-13 fixes
+   (§52) held under first execution here; the wall re-proved itself on both the
+   source tree and `dist/`. Changes were confined to the two documents and the
+   MANIFEST documentation rows they govern.
+2. **HEAD moved between part 13 and this part** (`c9fcb6d` → `12ad31d`); §50's
+   "16 files" became 22, and the scaffold grew. Recorded rather than silently
+   reusing §50's inventory — its "could not boot" conclusion is unaffected, and
+   the canonical 10 are byte-identical.
+3. **Bytes are stated in audit rows here** (measured this session) while the
+   README/MANIFEST tables stay lines-only by policy. Two different conventions,
+   each stated where it applies; no figure appears anywhere that was not
+   measured in the session that states it.
+4. **Doc-row counts are exact post-patch figures**, not pre-freeze readings: the
+   digits were patched in place after the documents closed, changing no line
+   counts, so the rows describe the files as they actually stand (a small
+   improvement on the §53 self-reference convention, recorded).
+5. **Entry anatomy**: the brief's "§0–§6" mapped onto continuous §55–§61 (§55
+   note) rather than restarting the counter, which part 12 did once and this
+   lineage treats as a defect, not a precedent.
+
+### §60. Debt, non-claims, and what stays queued
+
+Carried unchanged and still true: R1–R10 are reconstructions (§10); jsdom is not
+a browser (§51); the battery grades logic, not pixels; the seed is a fixture,
+not a diagnosis; no accounts/sync/humans ever; upstream repo cleanup is the
+owner's delete key; the ranked gap list of part 13 stands — **board pack first**
+(queued below), then 1:1/skip-level events, boss-expectations capture,
+entity-level import dedupe, meeting-load pricing, temporal weighting, scheduled
+battery execution. New this part: none — no new debt was taken to complete a
+delivery-only scope, and none of the carried items was quietly closed.
+
+### §61. Next
+
+`## Part 15+ (queued)` — the executive/board pack (one-click board narrative
+compiled from the log; feeds R39/R40 discipline; module surfaces for finance and
+people). pt-4 is feature-complete against its brief once it lands; everything
+else is the ranked list in README.
+
+## Part 15+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).

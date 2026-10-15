@@ -23,6 +23,15 @@ shipped file; the application never loads it).
 > defects the execution exposed. Where this file and `#/health` ever disagree,
 > `#/health` in your browser wins.
 
+> **Part 14 (delivery integrity) re-issue.** The 10 files named below were
+> re-issued from upstream `main @ 12ad31d` — where they sat flat, scattered
+> among a growing npm scaffold, unbootable as shipped — into the `css/`+`js/`
+> structure the docs and `index.html` have always named. Every file was read in
+> full this session; the battery was **runtime-executed again**, against both
+> the source tree and a fresh `dist/` build — identical green lines — recorded
+> in `AI-SESSION-LOG.md` §55–§61. No rule, check, golden or playbook body was
+> touched in this part.
+
 ---
 
 ## Architecture doctrine (non-negotiable)
@@ -336,6 +345,12 @@ firing.** The execution exposed two latent defects (a blank rule id crashing
 R1–R4 through `fin()`, a 90-day boundary fixture in T19) plus one driver gap
 (T27); all three are fixed and their fixes are re-proven by the same suites.
 
+**Part 14 re-executed the same battery twice**: once against the re-issued
+source tree and once against a fresh `dist/` assembled by `vite build` (T31's
+inline-stylesheet fingerprint branch engaged, as designed in part 13). Both
+runs: **T 32/32 · G 30/30 · claims 31/31 proven · boot gate green · exit 0** —
+output recorded in `AI-SESSION-LOG.md` §58.
+
 The authority hierarchy is unchanged: **`#/health` in your browser supersedes
 this record.** jsdom is not a browser — layout, paint, focus and real event
 timing were not observed. Parts 1–12 authored under the *no runtime
@@ -416,9 +431,9 @@ delivery: `index.html` at the root, the stylesheet under `css/`, the six
 modules under `js/`, the two documents at the root. **T31 enforces this table
 against the live DOM**: `index.html` must load exactly the 7 web assets listed
 here, in this order, all local. Line counts were measured by reading each file
-at part-13 close (`AI-SESSION-LOG.md` §50); byte counts are deliberately **not**
-stated — see §0.3 for why, and run `wc -l index.html css/app.css js/*.js *.md`
-to verify independently.
+at part-13 close and the two doc rows re-measured at part-14 close (§59.4);
+byte counts are deliberately **not** stated — see §0.3 for why, and run
+`wc -l index.html css/app.css js/*.js *.md` to verify independently.
 
 | File | Lines | Role |
 |---|---|---|
@@ -430,12 +445,12 @@ to verify independently.
 | `js/playbooks.js` | 475 | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
 | `js/health.js` | 1571 | Authority wall: T1–T31 (+T12b, T20b), G1–G13 + goldens G14–G30, claims C1–C31, `MANIFEST`, `FIXED` |
 | `js/ui.js` | 947 | Rail nav, hash routes, 14 views, registry-driven quick capture; every action is an event append |
-| `README.md` | 535 | This file |
-| `AI-SESSION-LOG.md` | 783 | Session log; §0 is the opening audit |
+| `README.md` | 556 | This file |
+| `AI-SESSION-LOG.md` | 902 | Session log; §0 is the opening audit; §55–§61 the part-14 delivery entry |
 
-Totals: **6208 lines** across 10 files. The two doc rows are self-referential —
-recording a measurement changes the file being measured — so those figures are
-the reading taken immediately before this table was written (§53).
+Totals: **6348 lines** across 10 files. The two doc rows are exact post-patch
+figures, digit-patched in place at part-14 close so the counts survive their own
+statement (§59.4); the eight code rows are unchanged since part 13.
 
 Anything else in a working checkout is **not LeadOS**: `scripts/` (the part-13
 headless verification harness), `package.json` / `vite.config.ts` and friends
@@ -515,6 +530,12 @@ headless way to execute the whole battery outside a browser. Ranked next:
   `index.html` referenced `css/`+`js/` paths that did not exist in the tree,
   which means upstream HEAD could not boot as shipped. This delivery is the
   corrected 10-file set. Repo-side cleanup is the owner's delete key (§50).
+  **Part-14 re-inspection** (`main @ 12ad31d`, same method): now **22 flat
+  entries** — the scaffold grew (`App.tsx`, `cn.ts`, `index.css`, `main.tsx`,
+  `vite.config.ts` appeared; `package.json` now 653 B) — the 10 canonical files
+  are byte-identical to the part-13 readings, and upstream still cannot boot as
+  shipped. The two stale documents are predecessor-lineage debris (mf-era),
+  verified by reading them this session (§55).
 - **The battery grades logic, not pixels.** T27 drives real generated forms in
   a DOM and asserts payloads; visual rendering at any viewport is constructed
   and source-inspected, not graded.
