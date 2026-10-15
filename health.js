@@ -448,6 +448,105 @@
       const F = batteryFindings();
       const missing = LeadOS.rules.RULES.map(function (r) { return r.id; }).filter(function (id) { return !F.some(function (f) { return f.rule === id; }); });
       return { pass: missing.length === 0 && LeadOS.rules.RULES.length === 40, detail: missing.length ? 'silent rules: ' + missing.join(', ') : 'all 40 rules exercised; ' + F.length + ' total findings in battery' };
+    }],
+    ['T18', 'named projections: all present, aliases are identical references, open sets exclude closed, append-order wins', function () {
+      let seq = 0; const A = T0;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(type, payload, at) { evs.push(fev(++seq, type, payload, { at: at || (A + seq * 1000) })); }
+      // one open + one closed entity per closable family
+      add('fin.budget.set', { id: 'bOpen', period: 'Q1', amount: 1000, currency: 'USD', category: 'opex' });
+      add('fin.budget.set', { id: 'bDone', period: 'Q1', amount: 2000, currency: 'USD', category: 'capex' });
+      add('fin.budget.actuals', { budgetId: 'bDone', actual: 1900, period: 'Q1' });
+      add('fin.risk.logged', { id: 'frOpen', title: 'open risk', severity: 3, likelihood: 3 });
+      add('fin.risk.logged', { id: 'frShut', title: 'closed risk', severity: 3, likelihood: 3 });
+      add('fin.risk.updated', { riskId: 'frShut', status: 'closed' });
+      add('sales.deal.logged', { id: 'dOpen', title: 'open deal', value: 10, currency: 'USD', stage: 'new', ownerId: 'rep-1' });
+      add('sales.deal.logged', { id: 'dShut', title: 'won deal', value: 20, currency: 'USD', stage: 'new', ownerId: 'rep-1' });
+      add('sales.deal.closed', { dealId: 'dShut', result: 'won' });
+      add('sales.quota.set', { id: 'qa', personId: 'rep-1', period: 'Q1', target: 100, currency: 'USD' });
+      add('strategy.okr.set', { id: 'oOpen', objective: 'open okr', quarter: 'Q1', keyResults: [{ kr: 'x', target: 1, unit: 'n' }] });
+      add('strategy.okr.set', { id: 'oShut', objective: 'closed okr', quarter: 'Q1', keyResults: [{ kr: 'x', target: 1, unit: 'n' }] });
+      add('strategy.okr.closed', { okrId: 'oShut', score: 0.9 });
+      add('ops.milestone.set', { id: 'mOpen', title: 'open ms', dueDate: A + DAY, dependsOn: [] });
+      add('ops.milestone.set', { id: 'mShut', title: 'done ms', dueDate: A + DAY, dependsOn: [] });
+      add('ops.milestone.updated', { milestoneId: 'mShut', status: 'done' });
+      add('ops.incident.logged', { id: 'iOpen', title: 'open inc', severity: 3, systems: ['api'], startedAt: A });
+      add('ops.incident.logged', { id: 'iShut', title: 'closed inc', severity: 3, systems: ['api'], startedAt: A });
+      add('ops.incident.resolved', { incidentId: 'iShut', resolvedAt: A + 1000, actions: ['fix'] });
+      add('ops.sla.logged', { metric: 'uptime', target: 99, actual: 98, period: 'P1', met: false });
+      add('ops.sla.logged', { metric: 'uptime', target: 99, actual: 99.5, period: 'P2', met: true });
+      add('hr.pip.started', { id: 'pOpen', personId: 'u1', duration_days: 30, goals: ['g'] });
+      add('hr.pip.started', { id: 'pShut', personId: 'u2', duration_days: 30, goals: ['g'] });
+      add('hr.pip.closed', { pipId: 'pShut', result: 'improved' });
+      add('hr.attrition.logged', { personId: 'u9', reason: 'voluntary' });
+      add('hr.engagement.logged', { score: 7, period: 'Q1', respondents: 10 });
+      add('fin.kpi.logged', { metric: 'gm', value: 1, unit: '%', period: 'P1' });
+      add('fin.kpi.logged', { metric: 'gm', value: 2, unit: '%', period: 'P2' });
+      add('fin.forecast.logged', { period: 'Q1', revenue: 1, cost: 1, margin: 0, confidence: 0.5 });
+      add('supply.vendor.logged', { id: 'vOpen', name: 'Unreviewed', category: 'c', tier: 1, risk_level: 2 });
+      add('supply.vendor.logged', { id: 'vSeen', name: 'Reviewed', category: 'c', tier: 1, risk_level: 2 });
+      add('supply.vendor.reviewed', { vendorId: 'vSeen', score: 4 });
+      add('supply.disruption.logged', { description: 'delay', severity: 2 });
+      add('mfg.yield.logged', { period: 'P1', yield_pct: 95 });
+      add('mfg.safety.incident', { severity: 1, type: 'slip', description: 'wet floor', corrective_actions: [], date: A });
+      add('mfg.equipment.logged', { assetId: 'press-1', status: 'down' });
+      add('mfg.equipment.logged', { assetId: 'press-1', status: 'operational' });   // append-order wins
+      add('legal.compliance.check', { framework: 'SOC2', period: 'H1', result: 'pass', findings: [] });
+      add('legal.risk.logged', { title: 'legal risk without id', severity: 2, area: 'privacy' });
+      add('legal.contract.logged', { id: 'ctA', counterparty: 'Alpha', type: 'MSA' });
+      add('legal.contract.logged', { id: 'ctB', counterparty: 'Beta', type: 'MSA' });
+      add('legal.contract.updated', { contractId: 'ctB', status: 'terminated' });
+      add('cs.nps.logged', { score: 10, period: 'Q1', promoters: 1, passives: 1, detractors: 1 });
+      add('cs.churn.logged', { period: 'Q1', churned: 1, total: 100 });
+      add('cs.escalation.logged', { id: 'eOpen', accountName: 'Acme', severity: 3, description: 'x' });
+      add('cs.escalation.logged', { id: 'eShut', accountName: 'Beta', severity: 3, description: 'y' });
+      add('cs.escalation.resolved', { escalationId: 'eShut', resolution: 'fixed' });
+      add('mktg.campaign.logged', { id: 'cmp1', name: 'C', channel: 'paid', budget: 10, period: 'Q1' });
+      add('rd.tech.debt.logged', { id: 'tdOpen', title: 'open debt', severity: 2, effort: 2 });
+      add('rd.tech.debt.logged', { id: 'tdShut', title: 'closed debt', severity: 2, effort: 2 });
+      add('rd.tech.debt.resolved', { debtId: 'tdShut' });
+      add('rd.experiment.logged', { id: 'exOpen', hypothesis: 'h1', method: 'A/B', startDate: A });
+      add('rd.experiment.logged', { id: 'exShut', hypothesis: 'h2', method: 'A/B', startDate: A });
+      add('rd.experiment.result', { experimentId: 'exShut', result: 'validated', learnings: ['l'] });
+      add('exec.board.meeting', { date: A, quorum: true, items: [], decisions: [] });
+      add('exec.kpi.reviewed', { period: 'Q1', metrics: [{ name: 'ARR', value: 1 }] });
+      const P = LeadOS.engine.project(evs);
+
+      const required = ['budgetById', 'openBudgets', 'riskById', 'openRisks', 'dealById', 'openDeals', 'dealsByPerson', 'quotaByPerson',
+        'okrById', 'openOkrs', 'milestoneById', 'openMilestones', 'incidentById', 'openIncidents', 'slaByMetric',
+        'attritionEvents', 'engagementHistory', 'pipById', 'openPips', 'kpiByMetric', 'forecastHistory',
+        'vendorById', 'openVendors', 'disruptionEvents', 'yieldHistory', 'safetyIncidents', 'equipmentById',
+        'complianceByFramework', 'legalRiskById', 'contractById', 'npsHistory', 'churnHistory', 'openEscalations',
+        'campaignById', 'techDebtById', 'openTechDebt', 'experimentById', 'openExperiments', 'boardMeetings', 'execKpiReviews'];
+      const missing = required.filter(function (k) { return P[k] === undefined; });
+
+      const ids = function (arr) { return arr.map(function (x) { return x.id; }).sort().join(','); };
+      const checks = [
+        ['aliases are the same reference, not copies', P.budgetById === P.finBudgets && P.dealById === P.deals && P.okrById === P.okrs && P.equipmentById === P.equipment],
+        ['openBudgets = unreconciled only', ids(P.openBudgets) === 'bOpen'],
+        ['openRisks excludes closed', ids(P.openRisks) === 'frOpen'],
+        ['openDeals excludes won', ids(P.openDeals) === 'dOpen'],
+        ['openOkrs excludes scored', ids(P.openOkrs) === 'oOpen'],
+        ['openMilestones excludes done', ids(P.openMilestones) === 'mOpen'],
+        ['openIncidents excludes resolved', ids(P.openIncidents) === 'iOpen'],
+        ['openPips excludes closed', ids(P.openPips) === 'pOpen'],
+        ['openVendors = never reviewed', ids(P.openVendors) === 'vOpen'],
+        ['openEscalations excludes resolved', ids(P.openEscalations) === 'eOpen'],
+        ['openTechDebt excludes resolved', ids(P.openTechDebt) === 'tdOpen'],
+        ['openExperiments excludes concluded', ids(P.openExperiments) === 'exOpen'],
+        ['openContracts excludes terminated', ids(P.openContracts) === 'ctA'],
+        ['append-order wins on overwrite', P.equipmentById['press-1'].status === 'operational'],
+        ['slaByMetric groups in append order', P.slaByMetric.uptime.length === 2 && P.slaByMetric.uptime[0].period === 'P1'],
+        ['kpiByMetric groups in append order', P.kpiByMetric.gm.length === 2 && P.kpiByMetric.gm[1].value === 2],
+        ['complianceByFramework grouped', P.complianceByFramework.SOC2.length === 1],
+        ['legalRiskById keyed by event id', Object.keys(P.legalRiskById).length === 1],
+        ['dealsByPerson grouped', P.dealsByPerson['rep-1'].length === 2],
+        ['quotaByPerson grouped', P.quotaByPerson['rep-1'].length === 1],
+        ['history projections carry entries', P.engagementHistory.length === 1 && P.npsHistory.length === 1 && P.churnHistory.length === 1 && P.yieldHistory.length === 1 && P.forecastHistory.length === 1 && P.attritionEvents.length === 1 && P.disruptionEvents.length === 1 && P.safetyIncidents.length === 1 && P.boardMeetings.length === 1 && P.execKpiReviews.length === 1]
+      ];
+      const failed = checks.filter(function (c) { return !c[1]; }).map(function (c) { return c[0]; });
+      const ok = missing.length === 0 && failed.length === 0;
+      return { pass: ok, detail: ok ? required.length + ' named projections present; ' + checks.length + ' structural assertions hold' : (missing.length ? 'missing: ' + missing.join(', ') + ' | ' : '') + 'failed: ' + failed.join('; ') };
     }]
   ];
 
@@ -544,6 +643,28 @@
       const perRule = {};
       F.forEach(function (f) { perRule[f.rule] = (perRule[f.rule] || 0) + 1; });
       return { pass: ok, detail: ok ? F.length + ' live findings across ' + Object.keys(perRule).length + ' rules; every play id resolves to a real playbook' : 'bad findings: ' + bad.slice(0, 2).map(function (f) { return f.rule + ':' + (f.play || f.playNone); }).join(' | ') };
+    }],
+    ['G10', 'named projections live: all present, open sets subset their entity map, none of it persisted', function () {
+      const raw = LeadOS.store.load();
+      const P = LeadOS.engine.project(raw.events);
+      const problems = [];
+      LeadOS.engine.NAMED_PROJECTIONS.forEach(function (k) { if (P[k] === undefined) problems.push('missing projection ' + k); });
+      // every open* entry must be the very object held in its entity map
+      Object.keys(LeadOS.engine.OPEN_SETS).forEach(function (name) {
+        const src = P[LeadOS.engine.OPEN_SETS[name][0]];
+        (P[name] || []).forEach(function (item) {
+          const key = item.id || item.assetId;
+          if (src[key] !== item) problems.push(name + ': entry ' + key + ' is a copy, not the live entity');
+        });
+      });
+      // aliases must be reference-identical to their source bucket
+      Object.keys(LeadOS.engine.ALIASES).forEach(function (name) {
+        if (P[name] !== P[LeadOS.engine.ALIASES[name]]) problems.push('alias ' + name + ' diverged from ' + LeadOS.engine.ALIASES[name]);
+      });
+      // and nothing derived may appear in the persisted payload
+      const persisted = Object.keys(raw).concat(Object.keys(raw.meta));
+      LeadOS.engine.NAMED_PROJECTIONS.forEach(function (k) { if (persisted.indexOf(k) !== -1) problems.push('projection ' + k + ' leaked into storage'); });
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : LeadOS.engine.NAMED_PROJECTIONS.length + ' projections derived per read; zero leaked into leados:data' };
     }]
   ];
 
@@ -563,7 +684,9 @@
     { id: 'C13', text: 'Rules engine implements R1–R40 and every rule is exercised.', by: ['T17', 'T12'] },
     { id: 'C14', text: 'Every finding honors the fin() contract (sev 1–5, conf, play xor playNone).', by: ['T12', 'G9'] },
     { id: 'C15', text: 'Trend/severity discipline: >=3 measured points, spec ceilings, skip-not-infer.', by: ['T14', 'T15', 'T16'] },
-    { id: 'C16', text: 'Signals are derived per read and never persisted.', by: ['G4', 'G7', 'G9', 'T13'] }
+    { id: 'C16', text: 'Signals are derived per read and never persisted.', by: ['G4', 'G7', 'G9', 'T13'] },
+    { id: 'C17', text: 'All 40 named projections exist; open sets exclude closed entities; append-order wins.', by: ['T18', 'G10'] },
+    { id: 'C18', text: 'Stale state impossible: projections alias the folded entities and never persist.', by: ['G10', 'G4', 'G7'] }
   ];
 
   function runSuite(suite) {

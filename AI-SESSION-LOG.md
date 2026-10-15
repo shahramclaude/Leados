@@ -155,6 +155,50 @@ Health tab now shows 26 checks (T1–T17, G1–G9) and 16 claims.
 
 ---
 
-## Part 4+ (queued)
+## Part 4 — Named projections
+
+### §14. Mini-audit (pre-code inspection for this part)
+| Claim in the brief | Inspection | Result |
+|---|---|---|
+| "add to `project()` in events.js" | read of `js/events.js` and `js/engine.js` | **MISMATCH** — `project()` lives in `js/engine.js`; `events.js` is the append-gate registry. Implemented in `engine.js`. Moving `project()` into `events.js` would merge the contract layer with the derivation layer and invert the load order (store.js validates against events.js before engine.js exists). Recorded rather than silently "corrected". |
+| 38 projection names listed | counted against spec text | the list resolves to **40** distinct names (the brief's line breaks group them); all 40 implemented, plus 6 siblings = 46 exposed |
+| `P.riskById` / `P.openRisks` ambiguity | registry inspection | two risk registers exist: core `risk.*` (pt-1) and `fin.risk.*` (part 2). The names sit in the finance block, so they alias the **financial** register; the core register remains `P.risks` / `riskRegister()`. Stated here because a silent choice here would be a trap. |
+| `legal.risk.logged` has no `id` | registry inspection | TRUE — `legalRiskById` is keyed by originating event id (unique + append-ordered by G3) instead of inventing a payload field |
+
+### §15. Built
+- `js/engine.js` — declarative `ALIASES` table (named → internal bucket, assigned
+  **by reference**), `OPEN_SETS` table (time-independent predicates), `finalize()`
+  rebuilding `open*`/`dealsByPerson`/`quotaByPerson` at the end of every fold,
+  in-fold index maps (`kpiByMetric`, `slaByMetric`, `complianceByFramework`,
+  `legalRiskById`), and `NAMED_PROJECTIONS` for inspection.
+- `js/health.js` — T18 (40 names present, alias reference identity, 13 open-set
+  exclusions, append-order overwrite, index grouping) and G10 (live presence,
+  open entries are the live entities not copies, alias identity, zero leakage
+  into `leados:data`). Claims C17–C18.
+- `js/ui.js` + `css/app.css` — projection inspector in the Event log tab.
+
+### §16. Deviations and judgement calls
+1. Implemented in `engine.js`, not `events.js` (§14) — the only structural
+   deviation; everything else is verbatim.
+2. `open*` defined as "closing event not yet logged", never "overdue" — aging
+   belongs to rules (R12/R25/R32 already own it). Prevents two sources of truth.
+3. `openBudgets` = no actuals logged (unreconciled); `openVendors` = never
+   reviewed. Neither has a close event in the registry, so these are the only
+   non-time-based readings available.
+4. Internal bucket names (`finBudgets`, `deals`, …) retained as the canonical
+   storage with named projections aliasing them, so parts 2–3 (`rules.js`,
+   earlier T-checks) keep working unchanged and cannot drift from the new names.
+5. Aliases make `JSON.stringify(P)` larger (same objects appear twice). Accepted:
+   determinism (T7/T13/G7) is unaffected and nothing is persisted.
+
+### §17. Coverage proof for part-4 claims
+- C17 (40 names, open semantics, append-order): T18 + G10.
+- C18 (stale impossible, never persisted): G10 (reference identity + leakage
+  scan) + G4 (payload whitelist) + G7 (deterministic reads).
+Health tab now shows 28 checks (T1–T18, G1–G10) and 18 claims.
+
+---
+
+## Part 5+ (queued)
 - Executive/board pack compiled from the log (feeds R39/R40).
-- Module surfaces for finance and people built on part-2 families.
+- Module surfaces for finance and people built on the part-4 projections.

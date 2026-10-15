@@ -2,7 +2,18 @@
    Derivation engine. project() folds the event log into state ON EVERY READ.
    Nothing in this module touches localStorage. Every selector is pure and
    takes `now` explicitly so the T-suite can pin time.
-   pt-4 part 2: MODULE_FOLD extends the fold to all 72 full-domain families. */
+
+   pt-4 part 4 - NAMED PROJECTIONS.
+   Doctrine for every projection in this file:
+     1. append-order wins  - later events overwrite earlier field values; entity
+        maps are keyed, so the last append is always the truth.
+     2. nothing derived persists - every structure below is rebuilt from the log
+        on each call; none of it is ever written back to storage (G4/G7/G10).
+     3. stale state impossible by construction - the `*ById` projections are the
+        SAME OBJECT REFERENCES the fold mutates (aliases, not copies), and the
+        `open*` sets are recomputed in finalize() at the end of every fold.
+        There is no code path that can update an entity without the projection
+        seeing it, because there is only one object. */
 (function () {
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
@@ -17,14 +28,15 @@
 
   const push = function (arr, p, at) { arr.push(Object.assign({ at: at }, p)); };
   const mergeDefined = function (target, p, keys) { keys.forEach(function (k) { if (p[k] !== undefined) target[k] = p[k]; }); };
+  const group = function (map, key, item) { (map[key] = map[key] || []).push(item); };
 
-  // Fold handlers for the part-2 families. Entities are keyed; logs are appended.
+  // Fold handlers: (state, payload, at, ev). Entities are keyed; logs append.
   const MODULE_FOLD = {
     // FINANCE
     'fin.budget.set':      function (s, p, at) { s.finBudgets[p.id] = { id: p.id, period: p.period, amount: p.amount, currency: p.currency, category: p.category, ownerId: p.ownerId || null, actuals: [], setAt: at }; },
     'fin.budget.actuals':  function (s, p, at) { const b = s.finBudgets[p.budgetId]; if (b) b.actuals.push({ actual: p.actual, period: p.period, note: p.note || '', at: at }); },
     'fin.forecast.logged': function (s, p, at) { push(s.finForecasts, p, at); },
-    'fin.kpi.logged':      function (s, p, at) { push(s.finKpis, p, at); },
+    'fin.kpi.logged':      function (s, p, at) { const rec = Object.assign({ at: at }, p); s.finKpis.push(rec); group(s.kpiByMetric, p.metric, rec); },
     'fin.risk.logged':     function (s, p, at) { s.finRisks[p.id] = { id: p.id, title: p.title, severity: p.severity, likelihood: p.likelihood, mitigationPlan: p.mitigationPlan || '', ownerId: p.ownerId || null, reviewDate: p.reviewDate || null, status: 'open', notes: [], loggedAt: at, updatedAt: at }; },
     'fin.risk.updated':    function (s, p, at) { const r = s.finRisks[p.riskId]; if (r) { r.status = p.status; r.updatedAt = at; if (p.note) r.notes.push({ note: p.note, at: at }); } },
     // SALES
@@ -46,7 +58,7 @@
     // OPERATIONS & DELIVERY
     'ops.incident.logged':   function (s, p, at) { s.incidents[p.id] = { id: p.id, title: p.title, severity: p.severity, systems: p.systems.slice(), startedAt: p.startedAt, detectedAt: p.detectedAt || null, ownerId: p.ownerId || null, resolved: false, resolvedAt: null, rootCause: '', actions: [], loggedAt: at }; },
     'ops.incident.resolved': function (s, p, at) { const i = s.incidents[p.incidentId]; if (i) { i.resolved = true; i.resolvedAt = p.resolvedAt; i.rootCause = p.rootCause || ''; i.actions = (p.actions || []).slice(); } },
-    'ops.sla.logged':        function (s, p, at) { push(s.slaLogs, p, at); },
+    'ops.sla.logged':        function (s, p, at) { const rec = Object.assign({ at: at }, p); s.slaLogs.push(rec); group(s.slaByMetric, p.metric, rec); },
     'ops.capacity.logged':   function (s, p, at) { push(s.capacityLogs, p, at); },
     'ops.process.logged':    function (s, p, at) { push(s.processLogs, p, at); },
     'ops.milestone.set':     function (s, p, at) { s.milestones[p.id] = { id: p.id, title: p.title, dueDate: p.dueDate, ownerId: p.ownerId || null, projectId: p.projectId || null, dependsOn: (p.dependsOn || []).slice(), status: 'on-track', history: [], setAt: at, statusAt: at }; },
@@ -88,9 +100,11 @@
     'rd.tech.debt.logged':    function (s, p, at) { s.techDebt[p.id] = { id: p.id, title: p.title, severity: p.severity, effort: p.effort, ownerId: p.ownerId || null, note: p.note || '', resolved: false, resolveNote: '', loggedAt: at, resolvedAt: null }; },
     'rd.tech.debt.resolved':  function (s, p, at) { const d = s.techDebt[p.debtId]; if (d) { d.resolved = true; d.resolveNote = p.note || ''; d.resolvedAt = at; } },
     // LEGAL
-    'legal.compliance.check': function (s, p, at) { push(s.complianceChecks, p, at); },
-    'legal.risk.logged':      function (s, p, at) { push(s.legalRisks, p, at); },
-    'legal.contract.logged':  function (s, p, at) { s.contracts[p.id] = { id: p.id, counterparty: p.counterparty, type: p.type, value: p.value || null, expiryDate: p.expiryDate || null, ownerId: p.ownerId || null, status: 'active', loggedAt: at, statusAt: at }; },
+    'legal.compliance.check': function (s, p, at) { const rec = Object.assign({ at: at }, p); s.complianceChecks.push(rec); group(s.complianceByFramework, p.framework, rec); },
+    // legal.risk.logged carries no id in the spec -> keyed by its originating
+    // event id, which is append-ordered and unique by construction (G3).
+    'legal.risk.logged':      function (s, p, at, ev) { const rec = Object.assign({ id: ev.id, at: at }, p); s.legalRisks.push(rec); s.legalRiskById[ev.id] = rec; },
+    'legal.contract.logged':  function (s, p, at) { s.contracts[p.id] = { id: p.id, counterparty: p.counterparty, type: p.type, value: p.value || null, expiryDate: p.expiryDate || null, ownerId: p.ownerId || null, status: 'active', note: '', loggedAt: at, statusAt: at }; },
     'legal.contract.updated': function (s, p, at) { const c = s.contracts[p.contractId]; if (c) { c.status = p.status; c.statusAt = at; if (p.note) c.note = p.note; } },
     'legal.incident.logged':  function (s, p, at) { push(s.legalIncidents, p, at); },
     // CUSTOMER SUCCESS
@@ -121,6 +135,58 @@
     s.complianceChecks = []; s.legalRisks = []; s.contracts = {}; s.legalIncidents = [];
     s.npsLogs = []; s.churnLogs = []; s.escalations = {}; s.csHealthLogs = [];
     s.boardMeetings = []; s.execKpiReviews = []; s.investorUpdates = []; s.crises = {};
+    // index projections built during the fold (append-order preserved)
+    s.kpiByMetric = {}; s.slaByMetric = {}; s.complianceByFramework = {}; s.legalRiskById = {};
+  }
+
+  /* Declarative alias table: named projection -> internal bucket.
+     Aliases are assigned by reference, so a named projection can never drift
+     from the state the fold mutates. This is the "stale state impossible by
+     construction" guarantee, and T18/G10 inspect the identity directly. */
+  const ALIASES = {
+    budgetById: 'finBudgets', riskById: 'finRisks', forecastHistory: 'finForecasts',
+    dealById: 'deals', quotaById: 'quotas',
+    okrById: 'okrs', roadmapById: 'roadmap',
+    milestoneById: 'milestones', incidentById: 'incidents',
+    attritionEvents: 'attrition', engagementHistory: 'engagement', pipById: 'pips',
+    campaignById: 'campaigns',
+    vendorById: 'vendors', disruptionEvents: 'disruptions',
+    yieldHistory: 'yieldLogs', equipmentById: 'equipment',
+    contractById: 'contracts',
+    npsHistory: 'npsLogs', churnHistory: 'churnLogs', escalationById: 'escalations',
+    techDebtById: 'techDebt', experimentById: 'experiments', crisisById: 'crises'
+  };
+
+  // open* predicates. All are time-independent: "open" means the log has not
+  // yet recorded the closing event, never "overdue" (that is a rule's job).
+  const OPEN_SETS = {
+    openBudgets:     ['finBudgets',  function (b) { return b.actuals.length === 0; }],      // unreconciled: no actuals logged
+    openRisks:       ['finRisks',    function (r) { return r.status === 'open'; }],
+    openDeals:       ['deals',       function (d) { return d.result === null; }],
+    openOkrs:        ['okrs',        function (o) { return o.closedAt === null; }],
+    openMilestones:  ['milestones',  function (m) { return m.status !== 'done'; }],
+    openIncidents:   ['incidents',   function (i) { return !i.resolved; }],
+    openPips:        ['pips',        function (p) { return p.result === null; }],
+    openVendors:     ['vendors',     function (v) { return v.reviews.length === 0; }],      // never reviewed
+    openEscalations: ['escalations', function (e) { return !e.resolved; }],
+    openTechDebt:    ['techDebt',    function (d) { return !d.resolved; }],
+    openExperiments: ['experiments', function (e) { return e.result === null; }],
+    openCrises:      ['crises',      function (c) { return !c.resolved; }],
+    openContracts:   ['contracts',   function (c) { return c.status === 'active'; }]
+  };
+
+  function finalize(s) {
+    Object.keys(ALIASES).forEach(function (name) { s[name] = s[ALIASES[name]]; });
+    // grouped-by-person projections (append order within each person)
+    s.dealsByPerson = {}; s.quotaByPerson = {};
+    Object.keys(s.deals).forEach(function (k) { const d = s.deals[k]; group(s.dealsByPerson, d.ownerId || '(unassigned)', d); });
+    Object.keys(s.quotas).forEach(function (k) { const q = s.quotas[k]; group(s.quotaByPerson, q.personId, q); });
+    // open sets: recomputed every fold, never cached
+    Object.keys(OPEN_SETS).forEach(function (name) {
+      const src = s[OPEN_SETS[name][0]], pred = OPEN_SETS[name][1];
+      s[name] = Object.keys(src).map(function (k) { return src[k]; }).filter(pred);
+    });
+    return s;
   }
 
   function project(events) {
@@ -140,7 +206,7 @@
       const p = ev.payload || {};
 
       const mf = MODULE_FOLD[ev.type];
-      if (mf) { mf(s, p, ev.at); return; }
+      if (mf) { mf(s, p, ev.at, ev); return; }
 
       switch (ev.type) {
         case 'settings.changed':
@@ -176,12 +242,16 @@
           s.playbooks.push({ id: p.id, domain: p.domain, playbookId: p.playbookId, at: ev.at }); break;
       }
     });
-    return s;
+    return finalize(s);
   }
+
+  // Full list of named projections pt-4 part 4 guarantees (inspected by T18/G10).
+  const NAMED_PROJECTIONS = Object.keys(ALIASES)
+    .concat(Object.keys(OPEN_SETS))
+    .concat(['dealsByPerson', 'quotaByPerson', 'kpiByMetric', 'slaByMetric', 'complianceByFramework', 'legalRiskById', 'safetyIncidents', 'boardMeetings', 'execKpiReviews']);
 
   function settings(state) { return Object.assign({}, LeadOS.store.ALL_SETTING_DEFAULTS, state.appliedSettings); }
 
-  // Id universes for referential inspection (G8).
   function knownIds(state) {
     const k = function (o) { return Object.keys(o); };
     return {
@@ -218,7 +288,7 @@
     return out;
   }
 
-  // ---- Decisions / risks / KRs / tasks (pt-1 selectors) --------------------
+  // ---- pt-1 selectors -------------------------------------------------------
   function decisionQueue(state, now) {
     now = (typeof now === 'number') ? now : Date.now();
     const set = settings(state);
@@ -282,7 +352,7 @@
   }
 
   LeadOS.engine = {
-    DAY: DAY, CADENCE: CADENCE,
+    DAY: DAY, CADENCE: CADENCE, ALIASES: ALIASES, OPEN_SETS: OPEN_SETS, NAMED_PROJECTIONS: NAMED_PROJECTIONS,
     project: project, settings: settings, knownIds: knownIds,
     cadenceStatus: cadenceStatus, decisionQueue: decisionQueue, decidedLog: decidedLog,
     riskRegister: riskRegister, krView: krView, taskLists: taskLists,

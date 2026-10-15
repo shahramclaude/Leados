@@ -65,6 +65,28 @@ Lineage note: R1–R10 predated the attached codebase and were not inspectable;
 they are reconstructed and pinned to the settings the pt-1 selectors already
 prove — full disclosure in `AI-SESSION-LOG.md` §10.
 
+## Named projections (pt-4 part 4)
+
+`engine.project(events)` returns **46 named projections** — the 40 required by
+the pt-4 part-4 list plus 6 siblings for symmetry (`quotaById`, `roadmapById`,
+`escalationById`, `crisisById`, `openCrises`, `openContracts`). The **Event log**
+tab renders a live inspector of every one with its current size.
+
+Three guarantees, each mechanically inspected:
+
+| Guarantee | How it is structural (not merely tested) |
+|---|---|
+| **append-order wins** | entity maps are keyed by id and every handler writes last-value-wins; index maps (`kpiByMetric`, `slaByMetric`, `complianceByFramework`, `dealsByPerson`, `quotaByPerson`) append in log order |
+| **nothing derived persists** | projections exist only in the returned object; G10 asserts none of their keys appear in the stored payload, G4 whitelists the payload shape |
+| **stale state impossible by construction** | `*ById` projections are **aliases — the same object references the fold mutates**, not copies, and every `open*` set is recomputed in `finalize()` at the end of each fold. There is no path that updates an entity without the projection seeing it, because there is only one object. T18/G10 assert reference identity directly. |
+
+`open*` means *the log has not recorded the closing event* — never "overdue"
+(aging is a rule's job, not a projection's). Two definitions worth stating:
+`openBudgets` = budgets with no actuals logged (unreconciled); `openVendors` =
+vendors never reviewed. `legal.risk.logged` carries no `id` in the spec, so
+`legalRiskById` is keyed by the originating event id — unique and append-ordered
+by construction (G3).
+
 ## Event registry (pt-4 part 2)
 
 87 types under append-gate contract; the validator enforces required fields,
@@ -75,13 +97,15 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 ## Health — the authority wall
 
 - **T-suite (fixtures):** T1–T5 migration `3>4` · T6 cadences · T7 fold purity ·
-  T8–T9 core contracts · T10–T11 part-2 families · **T12** finding shape ·
-  **T13** rules determinism · **T14** ≥3-point trend discipline · **T15**
-  skip-not-infer · **T16** severity escalations · **T17** all 40 rules fired.
+  T8–T9 core contracts · T10–T11 part-2 families · T12 finding shape ·
+  T13 rules determinism · T14 ≥3-point trend discipline · T15 skip-not-infer ·
+  T16 severity escalations · T17 all 40 rules fired · **T18** named projections
+  (presence, alias identity, open-set exclusion, append-order wins).
 - **G-suite (live store):** G1 single key · G2 schema/lineage · G3 append-only +
   registry-valid · G4 whitelist · G5 v4 settings live · G6 repair accounting ·
-  G7 deterministic reads · G8 referential integrity · **G9** live rules run.
-- **Claims C1–C16** in the Health tab: each shows the checks that authorize it;
+  G7 deterministic reads · G8 referential integrity · G9 live rules run ·
+  **G10** live projections (present, alias-identical, zero leaked to storage).
+- **Claims C1–C18** in the Health tab: each shows the checks that authorize it;
   a failing check marks the claim *unproven*.
 
 ## Files
@@ -92,11 +116,11 @@ the registry source. References (`refs`/`refArrays`) are inspected by **G8**.
 | `css/app.css` | Hand-rolled design system incl. severity/confidence language |
 | `js/events.js` | Event registry (87 types) + append-gate validator with refs/refArrays |
 | `js/store.js` | Persistence wall: single key, schema v4, migrations with repair counting |
-| `js/engine.js` | `project()` fold + pure selectors + `knownIds()` |
+| `js/engine.js` | `project()` fold, 46 named projections, pure selectors, `knownIds()` |
 | `js/playbooks.js` | 15-domain playbook library; emits event specs only |
 | `js/rules.js` | R1–R40: pure `(P, today) → findings[]` rules engine |
-| `js/health.js` | Authority wall: T1–T17, G1–G9, claim coverage C1–C16 |
-| `js/ui.js` | Vanilla renderer incl. Signals view; every action is an event append |
+| `js/health.js` | Authority wall: T1–T18, G1–G10, claim coverage C1–C18 |
+| `js/ui.js` | Vanilla renderer incl. Signals + projection inspector; every action is an event append |
 | `README.md` | This file |
 | `AI-SESSION-LOG.md` | Session log; §0 is the claim-vs-inspection audit |
 

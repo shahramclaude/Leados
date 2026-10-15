@@ -256,6 +256,13 @@
       '<div><span class="dim">meta</span><code>' + esc(JSON.stringify(raw.meta)) + '</code></div>' +
       '<div><span class="dim">payload</span><code>' + raw.events.length + ' events · ' + LeadOS.store.rawBytes() + ' bytes · schemaVersion ' + raw.schemaVersion + '</code></div>' +
       '<div><span class="dim">registry</span><code>' + Object.keys(LeadOS.events.REGISTRY).length + ' event types under contract</code></div></div></section>';
+    const P = ctx.state;
+    const sizeOf = function (v) { return Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : 0); };
+    h += '<section class="card"><header class="card-h"><h3>' + icon('layers') + ' Projections</h3><span class="dim">' + LeadOS.engine.NAMED_PROJECTIONS.length + ' named · rebuilt on every read · never persisted</span></header>' +
+      '<div class="projgrid">' + LeadOS.engine.NAMED_PROJECTIONS.slice().sort().map(function (k) {
+        const n = sizeOf(P[k]);
+        return '<div class="projcell' + (n ? ' on' : '') + '"><span class="mono">' + esc(k) + '</span><b>' + n + '</b></div>';
+      }).join('') + '</div></section>';
     h += '<section class="card"><header class="card-h"><h3>' + icon('list') + ' Event log</h3><span class="dim">append-only · ' + raw.events.length + ' events</span></header>' +
       '<table class="tbl"><thead><tr><th class="num">seq</th><th>id</th><th>at</th><th>type</th><th>summary</th></tr></thead><tbody>' +
       raw.events.slice().reverse().map(function (ev) {
