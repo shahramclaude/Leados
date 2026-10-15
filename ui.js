@@ -1,832 +1,1078 @@
-/* LeadOS mf-2 · js/ui.js — views, drawer, health wall, data & backup.
-   mf-1's ui.js template literals were not readable through the Session-6 audit
-   channel (verified stripped in two fetch modes), so this is a clean re-authoring
-   of the same surface on the mf-2 spine. ONE write path: every capture/playbook
-   submit goes through LEADOS.events.emit* → DB.save() → render() — after every
-   write the engine re-derives from events; there is no cache to go stale. */
-(function () {
+/* LeadOS mf-3 · js/ui.js — views, drawer, router, health wall.
+   Doctrine: ui renders projections and engine output; it never keeps derived
+   state between renders. Every mutation path (capture bar, playbooks, forms)
+   ends in events + store.save() + full re-render — so Today, dossiers, and the
+   engine can never disagree. The health wall (T1–T12, G1–G16) executes at
+   render against the SAME code paths production uses; test keys are cleaned. */
+window.LEADOS = window.LEADOS || {};
+LEADOS.ui = (function () {
   'use strict';
-  var S = LEADOS.store, EV = LEADOS.events, EN = LEADOS.engine, PB = LEADOS.playbooks;
-  var DB = S.makeStore('leados:data');
-  var TEST_PREFIX = 'leados:t:';
-  var ui = { route: 'today', lastRun: null, drawer: null, importResult: null };
-  var flash = null;
+  function S() { return LEADOS.store; }
+  function EV() { return LEADOS.events; }
+  function EN() { return LEADOS.engine; }
+  function PB() { return LEADOS.playbooks; }
 
-  /* ---------- helpers ---------- */
-  function $(id) { return document.getElementById(id); }
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-  function todayISO() { return new Date().toISOString().slice(0, 10); }
-  function pad2(n) { return (n < 10 ? '0' : '') + n; }
-  function saveState() {
-    var r = DB.save();
-    if (r && r.quota) flash = { msg: 'WRITE FAILED — localStorage quota exceeded. In-memory state intact; export a backup at #/data before closing this tab.', err: true };
-    return r;
-  }
-  function fmtDate(d) { return new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); }
-
+  /* ---------- icons: custom inline SVG, stroke 1.6 ---------- */
   var ICONS = {
-    today: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
-    ppl: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-    user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-    book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
-    shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
-    db: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
-    cal: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
-    pulse: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
-    scale: '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
-    layers: '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
-    bolt: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
-    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
-    diamond: '<path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20"/>',
-    check: '<path d="M20 6 9 17l-5-5"/>',
-    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-    plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
-    dl: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
-    ul: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
-    warn: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
-    go: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
-    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
-    ban: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
-    spark: '<path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>'
+    today: '<path d="M5 4v16"/><path d="M5 5h11l-2.5 3.5L16 12H5"/>',
+    arrival: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-2 5-4 1 2-5z"/>',
+    roster: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.2.3 3.8 1.9 4.3 4.3"/>',
+    book: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5V5.5"/><path d="M8 7.5h8"/>',
+    health: '<path d="M3 12h4l2.5-6 4 12 2.5-6h5"/>',
+    data: '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5V18.5c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8V5.5"/><path d="M4.5 12c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8"/>',
+    cal: '<rect x="4" y="5.5" width="16" height="15" rx="1"/><path d="M4 10h16M8 3.5v4M16 3.5v4"/>',
+    chat: '<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H9l-4.2 3.4c-.3.3-.8 0-.8-.4z"/>',
+    alert: '<path d="M12 3.5 21.5 20h-19z"/><path d="M12 9.5V14M12 17.2v.3"/>',
+    hand: '<path d="M7 11.5V6.8a1.4 1.4 0 0 1 2.8 0v4.2"/><path d="M9.8 11V4.9a1.4 1.4 0 0 1 2.8 0V11"/><path d="M12.6 11V6a1.4 1.4 0 0 1 2.8 0v6.6"/><path d="M7 11.5c-1.5 1.2-1.9 3-.9 4.7l2.3 3.6c.7 1.2 2 2.2 4 2.2 2.8 0 5-1.7 5-4.7v-4.8"/>',
+    grid: '<rect x="4" y="4" width="7" height="7" rx=".8"/><rect x="13" y="4" width="7" height="7" rx=".8"/><rect x="4" y="13" width="7" height="7" rx=".8"/><rect x="13" y="13" width="7" height="7" rx=".8"/>',
+    diamond: '<path d="M7 3.5h10l4 5-9 12L3 8.5z"/><path d="M3 8.5h18M12 20.5 8.5 8.5M12 20.5 15.5 8.5M7 3.5l1.5 5M17 3.5l-1.5 5"/>',
+    goal: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.8"/><circle cx="12" cy="12" r="1.2"/>',
+    shield: '<path d="M12 3.2 19.5 6v5.3c0 4.6-3.2 8-7.5 9.7-4.3-1.7-7.5-5.1-7.5-9.7V6z"/><path d="M8.5 11.8l2.4 2.4 4.5-4.6"/>',
+    tour: '<path d="M9 4 4 5.6v14L9 17.8l6 1.8 5-1.6v-14L15 5.8z"/><path d="M9 4v13.8M15 5.8v13.8"/>',
+    flag: '<path d="M6 3.5V21"/><path d="M6 4.5h10.5l-2.3 3.4 2.3 3.6H6"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    arrow: '<path d="M4 12h15M13 6l6 6-6 6"/>',
+    x: '<path d="M6 6l12 12M18 6 6 18"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2.5"/>',
+    belloff: '<path d="M8.2 5.4A5.7 5.7 0 0 1 18 11v3.3l1.7 2.2"/><path d="M6.2 9.7c-.1.4-.2.9-.2 1.3v3.3L3 18.5h12.5"/><path d="M10 21a2.2 2.2 0 0 0 4 0"/><path d="M4 4l16 16"/>',
+    bell: '<path d="M6.2 9.5a5.8 5.8 0 0 1 11.6 0V13l2 3H4.2l2-3z"/><path d="M10 19.5a2.2 2.2 0 0 0 4 0"/>',
+    dl: '<path d="M12 4v11M7.5 11 12 15.5 16.5 11"/><path d="M4.5 19.5h15"/>',
+    eye: '<path d="M2.5 12S6 5.8 12 5.8 21.5 12 21.5 12 18 18.2 12 18.2 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+    pulse: '<path d="M3 12.5h4l2.5-6.5 4 12 2.5-6.5h5"/>'
   };
-  var RULE_ICON = { R1: 'cal', R2: 'diamond', R3: 'flag', R4: 'scale', R5: 'layers', R6: 'bolt', R7: 'pulse', R8: 'user' };
-  function ic(n, size) { return '<svg class="svgl" width="' + (size || 13) + '" height="' + (size || 13) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>'; }
-
-  function flashHtml() {
-    if (!flash) return '';
-    var h = '<div class="flash' + (flash.err ? ' err' : '') + '">' + esc(flash.msg) + '</div>';
-    flash = null;
-    return h;
-  }
-  function chip(c) {
-    var cls = c.level === 'high' ? 'hi' : c.level === 'medium' ? 'med' : 'lo';
-    return '<span class="chip ' + cls + '">' + esc(c.level) + ' confidence</span>';
+  function ic(name, cls) {
+    return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || ICONS.today) + '</svg>';
   }
 
-  /* ---------- capture spec (every engine-consumed type is writable) ---------- */
-  var CAPTURE = {
-    'oneonone.logged':    { label: '1:1 held',          person: 1, fields: [['date', 'Date', 'date', 1], ['note', 'Covered (one line)', 'text', 0]] },
-    'pulse.logged':       { label: 'Pulse reading',     person: 1, fields: [['date', 'Date', 'date', 1], ['mood', 'Mood (1–10)', 'num10', 1], ['load', 'Load (1–10)', 'num10', 1], ['estimated', 'Estimated, not measured', 'check', 0], ['note', 'Note', 'text', 0]] },
-    'feedback.logged':    { label: 'Feedback',          person: 1, fields: [['date', 'Date', 'date', 1], ['polarity', 'Polarity', 'polarity', 1], ['note', 'Note (SBI when ready)', 'text', 0]] },
-    'delegation.assigned':{ label: 'Delegate work',     person: 1, fields: [['title', 'Delegated item', 'text', 1], ['date', 'Date', 'date', 1], ['level', 'Level', 'level', 1]] },
-    'delegation.closed':  { label: 'Close delegation',  link: 'openDelegations', fields: [['date', 'Date', 'date', 1], ['note', 'Note', 'text', 0]] },
-    'conflict.registered':{ label: 'Register conflict', person: 1, fields: [['counterpart', 'Counterpart', 'text', 1], ['severity', 'Severity (1–5)', 'sev', 1], ['date', 'Date', 'date', 1], ['note', 'What is it about', 'text', 0]] },
-    'conflict.resolved':  { label: 'Resolve conflict',  link: 'openConflicts', fields: [['date', 'Date', 'date', 1], ['note', 'How it resolved', 'text', 0]] },
-    'decision.logged':    { label: 'Log decision',      fields: [['title', 'Decision', 'text', 1], ['severity', 'Blast radius (1–5)', 'sev', 1], ['date', 'Decided on', 'date', 1], ['reviewDate', 'Review date', 'date', 1], ['rationale', 'Rationale', 'text', 0]] },
-    'decision.outcome':   { label: 'Decision outcome',  link: 'openDecisions', fields: [['date', 'Date', 'date', 1], ['outcome', 'Outcome', 'outcome', 1], ['note', 'Why', 'text', 0]] },
-    'goal.set':           { label: 'Set goal',          fields: [['title', 'Goal', 'text', 1], ['date', 'Set on', 'date', 1], ['ownerPersonId', 'Owner', 'owner', 0]] },
-    'goal.assign':        { label: 'Assign goal owner', link: 'openGoals', fields: [['ownerPersonId', 'Owner', 'owner', 1], ['date', 'Date', 'date', 1]] },
-    'goal.progress':      { label: 'Goal progress',     link: 'openGoals', fields: [['date', 'Date', 'date', 1], ['note', 'Progress (one line)', 'text', 1]] }
-  };
-  var LINK_ID_FIELD = { 'delegation.closed': 'delegationId', 'conflict.resolved': 'conflictId', 'decision.outcome': 'decisionId', 'goal.assign': 'goalId', 'goal.progress': 'goalId' };
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function st() { return S().get(); }
+  function today() { return S().todayISO(); }
+  function personById(pid) {
+    return (st().people || []).filter(function (p) { return p && p.id === pid; })[0] || null;
+  }
+  function nameOf(pid) { var p = personById(pid); return p ? p.name : 'unknown person'; }
 
-  function activePeople() { return DB.get().people.filter(function (p) { return p && !p.archived; }); }
+  /* ---------- flash + write-failure pill ---------- */
+  var FLASH = null;
+  function setFlash(msg, isErr) { FLASH = { msg: msg, err: !!isErr }; }
+  function pill() {
+    var bad = st() && st().meta && st().meta.writeFailed;
+    var el = document.getElementById('pill');
+    if (el) el.style.display = bad ? 'block' : 'none';
+  }
+  function saveAndNote(okMsg) {
+    var r = S().save(); pill();
+    if (!r.ok && r.quota) setFlash('WRITE FAILED: storage quota. In-memory state intact — export your data at #/data NOW.', true);
+    else if (okMsg) setFlash(okMsg);
+  }
 
-  /* ---------- generic field renderer (capture + playbooks share it) ---------- */
-  function fieldHtml(f, values) {
-    values = values || {};
-    var name = f[0], label = f[1], kind = f[2], req = f[3], pv = values[name];
-    if (pv == null) pv = f[4] != null ? f[4] : '';
-    var h = '<label class="f"><span class="fl">' + esc(label) + (req ? ' <b class="req">*</b>' : '') + '</span>';
-    if (kind === 'date') h += '<input type="date" name="' + name + '" value="' + esc(pv) + '">';
-    else if (kind === 'area') h += '<textarea name="' + name + '">' + esc(pv) + '</textarea>';
-    else if (kind === 'check') h += '<span class="f check"><input type="checkbox" name="' + name + '"' + (pv ? ' checked' : '') + '></span>';
-    else if (kind === 'num' || kind === 'num10' || kind === 'sev') {
-      var max = kind === 'sev' ? 5 : kind === 'num10' ? 10 : 999;
-      h += '<input type="number" name="' + name + '" min="1" max="' + max + '" value="' + esc(pv) + '">';
-    } else if (kind === 'polarity' || kind === 'outcome' || kind === 'select') {
-      var opts = kind === 'polarity' ? [{ v: 'corrective', l: 'corrective' }, { v: 'positive', l: 'positive' }]
-        : kind === 'outcome' ? [{ v: 'as expected', l: 'as expected' }, { v: 'better', l: 'better' }, { v: 'worse', l: 'worse' }, { v: 'reversed', l: 'reversed' }, { v: 'superseded', l: 'superseded' }]
-        : (f[5] || []);
-      h += '<select name="' + name + '"' + (f.pbmark ? ' data-change="pb-field"' : '') + '>' +
-        (String(pv) === '' ? '<option value="">—</option>' : '') + opts.map(function (o) {
-        return '<option value="' + esc(o.v) + '"' + (String(pv) === String(o.v) ? ' selected' : '') + '>' + esc(o.l) + '</option>';
+  /* ---------- shared event-writing ---------- */
+  function emitSpecs(specs) {
+    var lastConflictId = null, out = [];
+    (specs || []).forEach(function (sp) {
+      var data = {};
+      Object.keys(sp.data || {}).forEach(function (k) {
+        var v = sp.data[k];
+        if (v === 'SELF') v = lastConflictId;          /* desc: resolve a conflict made in the same submit */
+        if (v !== undefined) data[k] = v;
+      });
+      var ev = EV().emit(st(), sp.type, { personId: sp.personId || null, data: data, ts: sp.ts });
+      if (sp.type === 'conflict.registered') lastConflictId = ev.id;
+      out.push(ev);
+    });
+    return out;
+  }
+  function dateTs(dateStr) { /* user-picked day at noon local — stable day arithmetic */
+    return dateStr ? dateStr + 'T12:00:00' : undefined;
+  }
+
+  /* ---------- generic drawer form ---------- */
+  function fieldHTML(f) {
+    var req = f.required ? ' <span class="req">*</span>' : '';
+    var val = f.value == null ? '' : f.value;
+    var inner = '';
+    if (f.kind === 'check') {
+      return '<label class="f check"><input type="checkbox" name="' + esc(f.key) + '"' + (val ? ' checked' : '') + '>' +
+        '<span class="fl">' + esc(f.label) + '</span></label>';
+    }
+    if (f.kind === 'select' || f.kind === 'person') {
+      var opts = f.options || personOpts();
+      inner = '<select name="' + esc(f.key) + '">' + opts.map(function (o) {
+        return '<option value="' + esc(o.v) + '"' + (String(o.v) === String(val) ? ' selected' : '') + '>' + esc(o.l) + '</option>';
       }).join('') + '</select>';
-    } else if (kind === 'level') {
-      h += '<select name="' + name + '" data-change="lv">' + PB.LEVELS.map(function (l, i) {
-        return '<option value="' + (i + 1) + '"' + (String(pv) === String(i + 1) ? ' selected' : '') + '>' + esc(l) + '</option>';
-      }).join('') + '</select>';
-    } else if (kind === 'person' || kind === 'owner') {
-      h += '<select name="' + name + '"><option value="">—</option>' + activePeople().map(function (p) {
-        return '<option value="' + esc(p.id) + '"' + (pv === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>';
-      }).join('') + '</select>';
-    } else h += '<input type="text" name="' + name + '" value="' + esc(pv) + '"' + (f[6] ? ' placeholder="' + esc(f[6]) + '"' : '') + '>';
-    if (f.hint) h += '<span class="fh">' + esc(f.hint) + '</span>';
-    h += '</label>';
-    return h;
+    } else if (f.kind === 'area') {
+      inner = '<textarea name="' + esc(f.key) + '">' + esc(val) + '</textarea>';
+    } else if (f.kind === 'num') {
+      inner = '<input type="number" step="any" name="' + esc(f.key) + '" value="' + esc(val) + '">';
+    } else if (f.kind === 'date') {
+      inner = '<input type="date" name="' + esc(f.key) + '" value="' + esc(val) + '">';
+    } else {
+      inner = '<input type="text" name="' + esc(f.key) + '" value="' + esc(val) + '">';
+    }
+    return '<label class="f"><span class="fl">' + esc(f.label) + req + '</span>' + inner +
+      (f.hint ? '<span class="fh">' + esc(f.hint) + '</span>' : '') + '</label>';
   }
-  function pbFieldHtml(f) { /* playbook FieldSpec → tuple form; hint + preview-marker ride along */
-    var t = [f.key, f.label, f.kind, f.required, f.value, f.options];
-    if (f.hint) t.hint = f.hint;
-    if (f.kind === 'select') t.pbmark = 1;
-    return fieldHtml(t, {});
+  function personOpts(includeSelf, placeholder) {
+    var out = [{ v: '', l: placeholder || '— choose —' }];
+    if (includeSelf) out.push({ v: 'me', l: 'me (my own)' });
+    (st().people || []).forEach(function (p) {
+      if (p && !p.archived) out.push({ v: p.id, l: p.name + (p.role ? ' · ' + p.role : '') });
+    });
+    return out;
+  }
+  function collectForm(fields, rootEl) {
+    var v = {};
+    fields.forEach(function (f) {
+      var inp = rootEl.querySelector('[name="' + f.key + '"]');
+      if (!inp) return;
+      v[f.key] = f.kind === 'check' ? inp.checked : inp.value;
+    });
+    return v;
+  }
+  function validate(fields, v) {
+    var errs = [];
+    fields.forEach(function (f) {
+      if (!f.required) return;
+      if (f.kind === 'check') return;
+      if (v[f.key] == null || String(v[f.key]).trim() === '') errs.push(f.label);
+    });
+    return errs;
   }
 
-  /* ---------- drawer ---------- */
-  function openDrawer(html) { $('drawer').innerHTML = html; $('drawer').classList.add('on'); $('scrim').classList.add('on'); ui.drawer = ui.drawer || {}; }
-  function closeDrawer() { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); ui.drawer = null; }
-
-  function guideHtml(blocks) {
-    return '<div class="guide">' + blocks.map(function (b) {
-      var h = '<div class="gh">' + esc(b.h) + '</div>';
-      if (b.warn) h += '<div class="warnline">' + ic('warn') + esc(b.warn) + '</div>';
-      if (b.lines) h += '<ul>' + b.lines.map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('') + '</ul>';
-      return h;
+  var drawer = { open: false };
+  function drawerShow(html) {
+    document.getElementById('drawer').innerHTML = html;
+    document.getElementById('drawer').classList.add('on');
+    document.getElementById('scrim').classList.add('on');
+    drawer.open = true;
+  }
+  function drawerClose() {
+    document.getElementById('drawer').classList.remove('on');
+    document.getElementById('scrim').classList.remove('on');
+    drawer.open = false;
+  }
+  function dhead(title, sub) {
+    return '<div class="dhead"><div><h2>' + esc(title) + '</h2>' + (sub ? '<span class="sub">' + esc(sub) + '</span>' : '') +
+      '</div><button class="xbtn" data-x="1" aria-label="Close">' + ic('x') + '</button></div>';
+  }
+  function guideHTML(blocks) {
+    return '<div class="guide">' + (blocks || []).map(function (b) {
+      return '<span class="gh">' + esc(b.h) + '</span>' +
+        (b.lines || []).map(function (l) { return '<p class="gl">' + esc(l) + '</p>'; }).join('') +
+        (b.warn ? '<div class="gw">' + esc(b.warn) + '</div>' : '');
     }).join('') + '</div>';
   }
 
+  /* ---------- playbooks ---------- */
   function pbCtx(prefill) {
-    var state = DB.get(), ppl = {};
-    state.people.forEach(function (p) { if (p) ppl[p.id] = p; });
-    return { state: state, today: todayISO(), prefill: prefill || {},
-      person: prefill && prefill.personId ? ppl[prefill.personId] : null,
-      nameOf: function (pid) { return ppl[pid] ? ppl[pid].name : null; } };
+    var pid = prefill && prefill.personId;
+    return { state: st(), today: today(), person: pid ? personById(pid) : null,
+      prefill: prefill || {}, nameOf: nameOf };
   }
-  function openPlaybook(pbId, prefill) {
-    var pb = PB.PBS[pbId];
+  function openPlaybook(id, prefill, values) {
+    var pb = PB().PBS[id];
     if (!pb) return;
-    ui.drawer = { kind: 'pb', pbId: pbId, prefill: prefill || {} };
-    var ctx = pbCtx(prefill);
-    var fields = pb.fields(ctx, prefill);
-    var h = '<div class="dhead"><div><h2>' + ic(pb.icon) + ' ' + esc(pb.title) + '</h2><span class="sub">' +
-      (prefill && prefill.ruleKey ? 'opened from finding ' + esc(prefill.ruleKey) : pb.blurb) + '</span></div>' +
-      '<button class="xbtn" data-act="drawer-close" aria-label="Close">' + ic('x') + '</button></div>';
-    h += guideHtml(pb.guide(ctx, prefill));
-    h += '<form id="form-pb" data-pb="' + esc(pbId) + '">';
-    var blockers = [];
-    fields.forEach(function (f) {
-      if (f.kind === 'person' && !activePeople().length) blockers.push('roster is empty — add a person at #/roster first');
-      if (f.kind === 'decision' && !EV.openDecisions(DB.get()).length) blockers.push('no open decisions — log one first (Record → Log decision)');
-      if (f.kind === 'goal' && !EV.openGoals(DB.get()).length) blockers.push('no goals on record — set one first (Record → Set goal)');
-    });
-    fields.forEach(function (f) {
-      if (f.kind === 'decision') {
-        f = { key: f.key, label: f.label, kind: 'select', required: 1, value: f.value,
-          options: EV.openDecisions(DB.get()).map(function (d) { return { v: d.id, l: d.label + ' · ' + String(d.ts).slice(0, 10) }; }) };
-      } else if (f.kind === 'goal') {
-        f = { key: f.key, label: f.label, kind: 'select', required: 1, value: f.value,
-          options: EV.openGoals(DB.get()).map(function (g) { return { v: g.id, l: g.label + (g.ownerPersonId ? '' : ' · NO OWNER') }; }) };
-      }
-      h += pbFieldHtml(f);
-    });
-    if (blockers.length) h += '<div class="flash err">' + ic('warn') + esc(blockers.join(' · ')) + '</div>';
-    h += '<div id="pb-preview"></div>';
-    h += '<div class="actions"><button class="btn" type="submit">' + ic('check') + 'Record</button></div></form>';
-    h += '<p class="muted-note">Submitting writes the resolving event(s) through the shared event layer. Every module — Today, dossiers, the engine — recomputes from it. Nothing is cached.</p>';
-    openDrawer(h);
-    updatePreview();
-    if (blockers.length) { var btn = document.querySelector('#form-pb button[type=submit]'); if (btn) btn.disabled = true; }
-  }
-  function updatePreview() {
-    var box = $('pb-preview'), form = document.getElementById('form-pb');
-    if (!box || !form || !ui.drawer || ui.drawer.kind !== 'pb') return;
-    var pb = PB.PBS[ui.drawer.pbId];
-    if (!pb || !pb.compose) { box.innerHTML = ''; return; }
-    var v = formValues(form);
-    var ctx = pbCtx(ui.drawer.prefill);
-    var txt = '';
-    try { txt = pb.compose(v, ctx); } catch (e) { txt = ''; }
-    box.innerHTML = txt ? '<div class="preview">' + esc(txt) + '</div>' : '';
-  }
-  function formValues(form) {
-    var out = {}, i, el;
-    for (i = 0; i < form.elements.length; i++) {
-      el = form.elements[i];
-      if (!el.name) continue;
-      out[el.name] = el.type === 'checkbox' ? (el.checked ? true : '') : el.value;
-    }
-    return out;
-  }
-
-  /* ---------- person dossier ---------- */
-  function sparkline(pulses) {
-    var p = pulses.slice(-12);
-    if (!p.length) return '<div class="muted-note">no pulse data — readings land here once logged</div>';
-    var w = 240, hh = 46, pad = 6, i, x, y;
-    var pts = [], circles = [];
-    var measured = p.filter(function (e) { return !(e.data && e.data.estimated); });
-    for (i = 0; i < p.length; i++) {
-      var e = p[i], est = e.data && e.data.estimated;
-      var mood = Number(e.data && e.data.mood);
-      if (!isFinite(mood)) continue;
-      x = pad + (w - 2 * pad) * (p.length === 1 ? 0.5 : i / (p.length - 1));
-      y = hh - pad - (hh - 2 * pad) * (Math.max(1, Math.min(10, mood)) - 1) / 9;
-      if (!est) pts.push(x.toFixed(1) + ',' + y.toFixed(1));
-      circles.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3" fill="' + (est ? 'none' : 'var(--ink)') + '" stroke="' + (est ? 'var(--accent)' : 'var(--ink)') + '" stroke-width="1.5" stroke-dasharray="' + (est ? '2 2' : '0') + '"><title>' + esc(String(e.ts).slice(0, 10)) + ' · mood ' + mood + (est ? ' (estimated)' : '') + '</title></circle>');
-    }
-    var line = pts.length >= 2 ? '<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--ink)" stroke-width="1.5"/>' : '';
-    var sl = measured.length >= EN.DOCTRINE.MIN_POINTS ? EN._slope(measured.map(function (e) { return Number(e.data.mood); })) : null;
-    var cap = sl == null ? 'trend withheld — needs ≥3 measured readings (estimated excluded)'
-      : 'measured trend: ' + (sl < -0.2 ? 'declining' : sl > 0.2 ? 'rising' : 'flat') + ' (' + sl.toFixed(2) + '/reading, n=' + measured.length + ')';
-    return '<svg class="spark" width="' + w + '" height="' + hh + '" role="img" aria-label="mood sparkline">' + line + circles.join('') + '</svg><div class="muted-note">' + esc(cap) + ' · hollow = estimated</div>';
-  }
-  function openDossier(pid) {
-    var st = DB.get(), p = null;
-    st.people.forEach(function (x) { if (x && x.id === pid) p = x; });
-    if (!p) return;
-    ui.drawer = { kind: 'person', pid: pid };
-    var ppl = EV.peopleById(st);
-    var last = EV.lastOneOnOne(st, pid);
-    var pulses = EV.sorted(EV.byType(st, 'pulse.logged')).filter(function (e) { return e.personId === pid; });
-    var bal = EV.feedbackBalance(st, pid, 60, todayISO());
-    var dels = EV.openDelegations(st).filter(function (d) { return d.personId === pid; });
-    var goals = EV.openGoals(st).filter(function (g) { return g.ownerPersonId === pid; });
-    var cfs = EV.openConflicts(st).filter(function (c) { return c.personId === pid; });
-    var sl = EV.latestSL(st, pid);
-    var events = EV.sorted(st.events.filter(function (e) { return e.personId === pid; })).slice(-15).reverse();
-    var line = p.reportsTo === 'me' || p.reportsTo === undefined ? 'you'
-      : ppl[p.reportsTo] ? ppl[p.reportsTo].name : 'unknown (broken line)';
-
-    var h = '<div class="dhead"><div><h2>' + esc(p.name) + '</h2><span class="sub">' + esc(p.role || '—') + ' · reports to ' + esc(line) + ' · cadence ' + p.cadenceDays + 'd</span></div>' +
-      '<button class="xbtn" data-act="drawer-close">' + ic('x') + '</button></div>';
-    h += '<section class="blk"><h3>Facts</h3><dl class="kv">' +
-      '<dt>last 1:1</dt><dd>' + (last ? esc(String(last.ts).slice(0, 10)) : 'never logged') + '</dd>' +
-      '<dt>open delegations</dt><dd>' + dels.length + (dels.length ? ' — ' + esc(dels.map(function (d) { return 'L' + (d.level || '?'); }).join(' ')) : '') + '</dd>' +
-      '<dt>goals owned</dt><dd>' + goals.length + '</dd>' +
-      '<dt>open conflicts</dt><dd>' + cfs.length + '</dd></dl></section>';
-    h += '<section class="blk"><h3>Pulse — mood, measured vs estimated</h3>' + sparkline(pulses) + '</section>';
-    var tot = Math.max(1, bal.total);
-    h += '<section class="blk"><h3>Feedback balance · 60d</h3><div class="bal">' +
-      '<span class="bc" style="width:' + Math.round(100 * bal.corrective / tot) + '%"></span>' +
-      '<span class="bp" style="width:' + Math.round(100 * bal.positive / tot) + '%"></span></div>' +
-      '<div class="balcap"><span>' + bal.corrective + ' corrective</span><span>' + bal.positive + ' positive</span></div></section>';
-    if (sl) h += '<section class="blk"><h3>Situational diagnosis · ' + esc(String(sl.ts).slice(0, 10)) + '</h3><dl class="kv">' +
-      '<dt>task</dt><dd>' + esc(sl.data.task) + '</dd><dt>reads</dt><dd>' + esc(sl.data.development) + ' → ' + esc(sl.data.style) + '</dd>' +
-      (sl.data.note ? '<dt>evidence</dt><dd>' + esc(sl.data.note) + '</dd>' : '') + '</dl></section>';
-    h += '<section class="blk"><h3>Open delegations</h3>' + (dels.length ? dels.map(function (d) {
-      return '<div class="logline">L' + esc(d.level || '?') + ' · ' + esc(d.label) + ' · since ' + esc(String(d.ts).slice(0, 10)) + '</div>';
-    }).join('') : '<div class="muted-note">none open</div>') + '</section>';
-    if (goals.length) h += '<section class="blk"><h3>Goals owned</h3>' + goals.map(function (g) {
-      return '<div class="logline">' + esc(g.label) + ' · last signal ' + esc(String(g.lastProgressTs).slice(0, 10)) + '</div>';
-    }).join('') + '</section>';
-    if (cfs.length) h += '<section class="blk"><h3>Open conflicts</h3>' + cfs.map(function (c) {
-      return '<div class="logline">' + esc(c.label) + '</div>';
-    }).join('') + '</section>';
-    h += '<section class="blk"><h3>Recent events · ' + events.length + '</h3>' + (events.length ? events.map(function (e) {
-      return '<div class="logline">' + esc(String(e.ts).slice(0, 10)) + ' · ' + esc(e.type) + (e.data && e.data.note ? ' · ' + esc(e.data.note) : '') + '</div>';
-    }).join('') : '<div class="muted-note">nothing logged for this person yet</div>') + '</section>';
-    h += '<div class="actions">' +
-      '<button class="btn ghost" data-act="pb-direct" data-pb="oneonone" data-pid="' + esc(pid) + '">' + ic('cal') + '1:1</button>' +
-      '<button class="btn ghost" data-act="pb-direct" data-pb="sbi" data-pid="' + esc(pid) + '">' + ic('scale') + 'SBI</button>' +
-      '<button class="btn ghost" data-act="pb-direct" data-pb="delegation" data-pid="' + esc(pid) + '">' + ic('layers') + 'Delegate</button>' +
-      '<button class="btn ghost" data-act="pb-direct" data-pb="situational" data-pid="' + esc(pid) + '">' + ic('diamond') + 'Situational</button>' +
-      '</div>';
-    openDrawer(h);
-  }
-
-  /* ---------- capture sheet ---------- */
-  function captureHtml(prefill) {
     prefill = prefill || {};
-    var type = prefill.type || 'oneonone.logged';
-    var spec = CAPTURE[type];
-    var h = '<form id="form-capture" class="blk"><div class="gh">Record · shared event layer</div>';
-    h += '<label class="f"><span class="fl">Event type</span><select name="_type" data-change="cap-type">';
-    Object.keys(CAPTURE).forEach(function (k) { h += '<option value="' + k + '"' + (k === type ? ' selected' : '') + '>' + CAPTURE[k].label + '</option>'; });
-    h += '</select></label>';
-    var blockers = [];
-    if (spec.person) {
-      if (!activePeople().length) blockers.push('no one on the roster yet — add a person at #/roster');
-      h += '<label class="f"><span class="fl">Person <b class="req">*</b></span><select name="personId"><option value="">—</option>' +
-        activePeople().map(function (p) { return '<option value="' + esc(p.id) + '"' + (prefill.personId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') + '</select></label>';
-    }
-    if (spec.link) {
-      var items = EV[spec.link](DB.get());
-      if (!items.length) blockers.push('nothing open to link — record the base event first');
-      h += '<label class="f"><span class="fl">' + (spec.link === 'openDecisions' ? 'Decision' : spec.link === 'openGoals' ? 'Goal' : spec.link === 'openDelegations' ? 'Delegation' : 'Conflict') + ' <b class="req">*</b></span><select name="_link"><option value="">—</option>' +
-        items.map(function (it) { return '<option value="' + esc(it.id) + '"' + (prefill.link === it.id ? ' selected' : '') + '>' + esc(it.label) + '</option>'; }).join('') + '</select></label>';
-    }
-    spec.fields.forEach(function (f) {
-      var fv = {};
-      if (f[0] === 'date') fv[f[0]] = todayISO();
-      if (f[0] === 'level') fv[f[0]] = '3';
-      h += fieldHtml(f, fv);
+    var ctx = pbCtx(prefill);
+    var fields = pb.fields(ctx, Object.assign({}, prefill, values || {}));
+    var html = dhead(pb.title, 'playbook · writes resolving events') +
+      guideHTML(pb.guide(ctx, prefill)) +
+      '<form id="dform" novalidate>' + fields.map(fieldHTML).join('') +
+      '<div class="errtxt" id="derr"></div>' +
+      '<div class="actions"><button type="submit" class="btn">' + ic('arrow') + 'Record through event layer</button></div>' +
+      '<p class="muted-note" style="margin-top:10px">Submitting writes events to the shared store — Today, dossiers and the engine all recompute from them. Nothing here is a side-channel.</p></form>';
+    drawerShow(html);
+    document.getElementById('dform').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var v = collectForm(fields, this);
+      var errs = validate(fields, v);
+      if (errs.length) { document.getElementById('derr').textContent = 'required: ' + errs.join(', '); return; }
+      var res = pb.submit(v, ctx);
+      if (res && res.error) { document.getElementById('derr').textContent = res.error; return; }
+      emitSpecs(res.events);
+      drawerClose();
+      saveAndNote(res.flash || 'Recorded.');
+      render();
     });
-    if (blockers.length) h += '<div class="flash err">' + ic('warn') + esc(blockers.join(' · ')) + '</div>';
-    h += '<div class="actions"><button class="btn" type="submit">' + ic('check') + 'Record</button>' +
-      '<button class="btn ghost" type="button" data-act="cap-close">' + ic('x') + 'Close</button></div></form>';
-    return h;
   }
 
-  /* ---------- views ---------- */
-  function vToday() {
-    var st = DB.get();
-    var res = EN.run(st);
-    ui.lastRun = res;
-    var fs = res.findings;
-    var h = '<div class="vhead"><h1>Today</h1><span class="sub">' + esc(fmtDate(new Date())) + ' · ' + fs.length + ' open finding' + (fs.length === 1 ? '' : 's') +
-      (res.snoozed.length ? ' · ' + res.snoozed.length + ' snoozed' : '') + (res.muted.length ? ' · ' + res.muted.length + ' muted' : '') + '</span></div>';
-    h += '<div class="vsub">Ranked by transparent math — each row shows its derivation. Every basis line quotes your own logged data; confidence labels mean what they say.</div>';
-    h += flashHtml();
-    h += '<div class="qbar">' +
-      '<button class="btn" data-act="cap-open">' + ic('plus') + 'Record event</button>' +
-      '<button class="btn ghost" data-act="go-roster">' + ic('ppl') + 'Roster</button>' +
-      '<button class="btn ghost" data-act="go-playbooks">' + ic('book') + 'Playbooks</button></div>';
-    if (ui.capOpen) h += captureHtml(ui.capPrefill);
-    if (!fs.length) {
-      h += '<div class="empty"><b>Nothing is currently overdue.</b> Either a genuinely clean week, or too little data — the engine only sees what is logged. ' +
-        (st.events.length === 0 ? 'The store is empty: Record events above, or load the sample set from #/data to watch every rule fire. ' : '') +
-        (res.snoozed.length + res.muted.length ? 'Some findings are parked below. ' : '') + 'The engine never invents work to look useful.</div>';
+  /* ---------- quick capture (the shared event layer's front door) ---------- */
+  var CAPTURES = {
+    'oneonone.logged': { title: 'Log a 1:1', icon: 'cal',
+      fields: function () { return [
+        { key: 'personId', label: 'Person', kind: 'person', required: 1 },
+        { key: 'date', label: 'Date', kind: 'date', required: 1, value: today() },
+        { key: 'mood', label: 'Mood 1–10 (only if they said it)', kind: 'num', value: '' },
+        { key: 'load', label: 'Load 1–10 (only if they said it)', kind: 'num', value: '' },
+        { key: 'estimated', label: 'These numbers are MY estimate, not their words', kind: 'check', value: false,
+          hint: 'estimated pulses are excluded from overload trends by doctrine' },
+        { key: 'note', label: 'Note', kind: 'area', value: '' } ]; },
+      build: function (v) {
+        var evs = [{ type: 'oneonone.logged', personId: v.personId, ts: dateTs(v.date),
+          data: { note: v.note || undefined } }];
+        var m = Number(v.mood), l = Number(v.load);
+        if (v.mood !== '' && v.load !== '' && isFinite(m) && isFinite(l))
+          evs.push({ type: 'pulse.logged', personId: v.personId, ts: dateTs(v.date),
+            data: { mood: m, load: l, estimated: !!v.estimated } });
+        return { events: evs, flash: '1:1 logged' + (evs.length > 1 ? ' with pulse (' + (v.estimated ? 'estimated — excluded from R7' : 'measured') + ')' : '') + '.' };
+      } },
+    'pulse.logged': { title: 'Log a pulse reading', icon: 'pulse',
+      fields: function () { return [
+        { key: 'personId', label: 'Person', kind: 'person', required: 1 },
+        { key: 'date', label: 'Date', kind: 'date', required: 1, value: today() },
+        { key: 'mood', label: 'Mood 1–10', kind: 'num', required: 1, value: '' },
+        { key: 'load', label: 'Load 1–10', kind: 'num', required: 1, value: '' },
+        { key: 'estimated', label: 'Estimated by me, not spoken', kind: 'check', value: false } ]; },
+      build: function (v) { return { events: [{ type: 'pulse.logged', personId: v.personId, ts: dateTs(v.date),
+        data: { mood: Number(v.mood), load: Number(v.load), estimated: !!v.estimated } }],
+        flash: v.estimated ? 'Pulse logged as ESTIMATED — R7 will ignore it by design.' : 'Measured pulse logged.' }; } },
+    'feedback.logged': { title: 'Log feedback', icon: 'chat',
+      fields: function () { return [
+        { key: 'personId', label: 'Person', kind: 'person', required: 1 },
+        { key: 'polarity', label: 'Polarity', kind: 'select', required: 1, value: 'positive',
+          options: [{ v: 'positive', l: 'positive' }, { v: 'corrective', l: 'corrective' }] },
+        { key: 'sbi', label: 'What was said (SBI)', kind: 'area', required: 1, value: '' },
+        { key: 'date', label: 'Date', kind: 'date', required: 1, value: today() } ]; },
+      build: function (v) { return { events: [{ type: 'feedback.logged', personId: v.personId, ts: dateTs(v.date),
+        data: { polarity: v.polarity, sbi: v.sbi } }], flash: 'Feedback logged into the 60d balance.' }; } },
+    'decision.logged': { title: 'Log a decision', icon: 'diamond',
+      fields: function () { return [
+        { key: 'title', label: 'The decision', kind: 'text', required: 1, value: '' },
+        { key: 'context', label: 'What was knowable at the time', kind: 'area', value: '' },
+        { key: 'reviewDate', label: 'Review date (R2 holds you to it)', kind: 'date', required: 1, value: today() } ]; },
+      build: function (v) { return { events: [{ type: 'decision.logged',
+        data: { title: v.title, context: v.context || undefined, reviewDate: v.reviewDate } }],
+        flash: 'Decision logged with a review date.' }; } },
+    'decision.outcome': { title: 'Record a decision outcome', icon: 'diamond',
+      fields: function () { return [
+        { key: 'existing', label: 'Decision', kind: 'select', required: 1, value: '',
+          options: [{ v: '', l: '— choose open decision —' }].concat(EV().openDecisions(st()).map(function (d) { return { v: d.id, l: d.label }; })) },
+        { key: 'outcome', label: 'Verdict', kind: 'select', required: 1, value: 'mixed',
+          options: [{ v: 'right', l: 'right call' }, { v: 'wrong', l: 'wrong call' }, { v: 'mixed', l: 'mixed' }] },
+        { key: 'lesson', label: 'The one-sentence lesson', kind: 'area', value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'decision.outcome',
+        data: { decisionId: v.existing, outcome: v.outcome, lesson: v.lesson || undefined } }],
+        flash: 'Outcome recorded — calibration bank grows.' }; } },
+    'goal.set': { title: 'Set a goal', icon: 'goal',
+      fields: function () { return [
+        { key: 'title', label: 'Goal', kind: 'text', required: 1, value: '' },
+        { key: 'ownerPersonId', label: 'Owner (one name)', kind: 'select', value: '', options: personOpts(true, '— NO OWNER (R3 will nag) —') },
+        { key: 'reviewBy', label: 'Review by', kind: 'date', value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'goal.set',
+        data: { title: v.title, ownerPersonId: v.ownerPersonId || undefined, reviewBy: v.reviewBy || undefined } }],
+        flash: v.ownerPersonId ? 'Goal set with owner.' : 'Goal set WITHOUT owner — R3 will hold you to it.' }; } },
+    'goal.progress': { title: 'Log goal progress', icon: 'goal',
+      fields: function () { return [
+        { key: 'existing', label: 'Goal', kind: 'select', required: 1, value: '',
+          options: [{ v: '', l: '— choose —' }].concat(EV().openGoals(st()).map(function (g) { return { v: g.id, l: g.label }; })) },
+        { key: 'note', label: 'A dated fact', kind: 'area', required: 1, value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'goal.progress', data: { goalId: v.existing, note: v.note } }],
+        flash: 'Progress logged — stall clock reset.' }; } },
+    'delegation.assigned': { title: 'Assign a delegation', icon: 'hand',
+      fields: function () { return [
+        { key: 'personId', label: 'Person', kind: 'person', required: 1 },
+        { key: 'title', label: 'What', kind: 'text', required: 1, value: '' },
+        { key: 'level', label: 'Level on the ladder', kind: 'select', required: 1, value: '3',
+          options: PB().LEVELS.map(function (l, i) { return { v: String(i + 1), l: l }; }) } ]; },
+      build: function (v) { return { events: [{ type: 'delegation.assigned', personId: v.personId,
+        data: { title: v.title, level: Number(v.level) } }], flash: 'Assigned at level ' + v.level + '.' }; } },
+    'delegation.closed': { title: 'Close a delegation', icon: 'hand',
+      fields: function () { return [
+        { key: 'existing', label: 'Open delegation', kind: 'select', required: 1, value: '',
+          options: [{ v: '', l: '— choose —' }].concat(EV().openDelegations(st()).map(function (d) {
+            return { v: d.id, l: (d.personId ? nameOf(d.personId) + ': ' : '') + d.label }; })) },
+        { key: 'result', label: 'Outcome note', kind: 'area', value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'delegation.closed',
+        data: { delegationId: v.existing, result: v.result || undefined } }], flash: 'Delegation closed.' }; } },
+    'conflict.registered': { title: 'Register a conflict', icon: 'alert',
+      fields: function () { return [
+        { key: 'personId', label: 'Person on your roster', kind: 'person', required: 1 },
+        { key: 'counterpart', label: 'Counterpart', kind: 'text', value: '', hint: 'record it — pair-level patterns need this' },
+        { key: 'note', label: 'What it is about', kind: 'area', required: 1, value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'conflict.registered', personId: v.personId,
+        data: { counterpart: v.counterpart || undefined, note: v.note } }], flash: 'Conflict registered unresolved.' }; } },
+    'conflict.resolved': { title: 'Resolve a conflict', icon: 'alert',
+      fields: function () { return [
+        { key: 'existing', label: 'Open conflict', kind: 'select', required: 1, value: '',
+          options: [{ v: '', l: '— choose —' }].concat(EV().openConflicts(st()).map(function (c) { return { v: c.id, l: c.label }; })) },
+        { key: 'how', label: 'The actual agreement', kind: 'area', required: 1, value: '', hint: 'vague peace counts as unresolved — write the agreement' } ]; },
+      build: function (v) { return { events: [{ type: 'conflict.resolved', data: { conflictId: v.existing, how: v.how } }],
+        flash: 'Resolved with an agreement on record.' }; } },
+    'incident.registered': { title: 'Register an incident', icon: 'alert',
+      fields: function () { return [
+        { key: 'title', label: 'What happened', kind: 'text', required: 1, value: '' },
+        { key: 'severity', label: 'Severity', kind: 'select', required: 1, value: 'medium',
+          options: [{ v: 'high', l: 'high' }, { v: 'medium', l: 'medium' }, { v: 'low', l: 'low' }] },
+        { key: 'personId', label: 'Person involved (optional)', kind: 'person', value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'incident.registered', personId: v.personId || null,
+        data: { title: v.title, severity: v.severity } }], flash: 'Incident registered — R12 watches for silence.' }; } },
+    'incident.update': { title: 'Update an incident', icon: 'alert',
+      fields: function (prefill) { return [
+        { key: 'existing', label: 'Open incident', kind: 'select', required: 1,
+          value: (prefill && prefill.incidentId) || '',
+          options: [{ v: '', l: '— choose —' }].concat(EV().openIncidents(st()).map(function (x) { return { v: x.id, l: x.label }; })) },
+        { key: 'note', label: 'What changed', kind: 'area', required: 1, value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'incident.update', data: { incidentId: v.existing, note: v.note } }],
+        flash: 'Incident touched — staleness clock reset.' }; } },
+    'incident.resolved': { title: 'Resolve an incident', icon: 'alert',
+      fields: function () { return [
+        { key: 'existing', label: 'Open incident', kind: 'select', required: 1, value: '',
+          options: [{ v: '', l: '— choose —' }].concat(EV().openIncidents(st()).map(function (x) { return { v: x.id, l: x.label }; })) },
+        { key: 'how', label: 'Resolution', kind: 'area', required: 1, value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'incident.resolved', data: { incidentId: v.existing, how: v.how } }],
+        flash: 'Incident resolved.' }; } },
+    'tour.visit': { title: 'Log a listening-tour visit', icon: 'tour',
+      fields: function () { return [
+        { key: 'mode', label: 'Who', kind: 'select', required: 1, value: 'lead',
+          options: [{ v: 'lead', l: 'a direct lead' }, { v: 'skiplevel', l: 'a skip-level' }, { v: 'peer', l: 'a peer / partner' }] },
+        { key: 'personId', label: 'Person on roster (required for leads)', kind: 'person', value: '' },
+        { key: 'counterpart', label: 'Name (if not on roster)', kind: 'text', value: '' },
+        { key: 'themes', label: 'Themes in their words', kind: 'area', required: 1, value: '' } ]; },
+      build: function (v) {
+        if (v.mode === 'lead' && !v.personId) return { error: 'a lead visit needs a roster person — coverage counts them' };
+        return { events: [{ type: 'tour.visit', personId: v.personId || null,
+          data: { mode: v.mode, counterpart: v.counterpart || undefined, themes: v.themes } }],
+          flash: 'Visit logged — tour coverage recomputed.' };
+      } },
+    'expectation.logged': { title: 'Capture an expectation', icon: 'shield',
+      fields: function () { return [
+        { key: 'source', label: 'Source', kind: 'select', required: 1, value: 'boss',
+          options: [{ v: 'boss', l: 'my boss' }, { v: 'self', l: 'my own commitment' }] },
+        { key: 'items', label: 'Expectations — one per line', kind: 'area', required: 1, value: '' } ]; },
+      build: function (v) {
+        var items = v.items.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+        if (!items.length) return { error: 'at least one expectation line' };
+        return { events: [{ type: 'expectation.logged', data: { source: v.source, items: items } }],
+          flash: items.length + ' expectation(s) captured.' };
+      } },
+    'earlywin.committed': { title: 'Commit an early win', icon: 'flag',
+      fields: function () { return [
+        { key: 'title', label: 'The win', kind: 'text', required: 1, value: '' },
+        { key: 'metric', label: 'The metric a skeptic would accept', kind: 'text', required: 1, value: '' },
+        { key: 'verifyDate', label: 'Verify by', kind: 'date', required: 1, value: today() },
+        { key: 'announcedTo', label: 'Announced to (optional)', kind: 'text', value: '' } ]; },
+      build: function (v) { return { events: [{ type: 'earlywin.committed',
+        data: { title: v.title, metric: v.metric, verifyDate: v.verifyDate, announcedTo: v.announcedTo || undefined } }],
+        flash: 'Committed. R11 will hold the verify date.' }; } }
+  };
+  function openCapture(id, prefill, values) {
+    var cap = CAPTURES[id];
+    if (!cap) return;
+    var fields = cap.fields(prefill || {});
+    if (values) fields.forEach(function (f) { if (values[f.key] !== undefined) f.value = values[f.key]; });
+    var html = dhead(cap.title, 'quick capture → shared event layer') +
+      '<form id="dform" novalidate>' + fields.map(fieldHTML).join('') +
+      '<div class="errtxt" id="derr"></div>' +
+      '<div class="actions"><button type="submit" class="btn">' + ic('arrow') + 'Write event</button></div></form>';
+    drawerShow(html);
+    document.getElementById('dform').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var v = collectForm(fields, this);
+      var errs = validate(fields, v);
+      if (errs.length) { document.getElementById('derr').textContent = 'required: ' + errs.join(', '); return; }
+      var res = cap.build(v);
+      if (res && res.error) { document.getElementById('derr').textContent = res.error; return; }
+      emitSpecs(res.events);
+      drawerClose();
+      saveAndNote(res.flash || 'Event written.');
+      render();
+    });
+  }
+
+  /* ---------- TODAY ---------- */
+  function bandFor(score) { return score >= 64 ? 'p1' : score >= 48 ? 'p2' : 'p3'; }
+  function findingRow(f, i) {
+    var cls = f.confidence.level === 'high' ? 'hi' : f.confidence.level === 'medium' ? 'med' : 'lo';
+    var acts = '<div class="actions">';
+    if (f.playbook) acts += '<button class="btn mini" data-pb="' + esc(f.playbook) + '" data-i="' + i + '">' + ic('arrow') + 'Open playbook</button>';
+    if (f.capture) acts += '<button class="btn mini ghost" data-cap="' + esc(f.capture) + '" data-i="' + i + '">' + ic('arrow') + 'Log update</button>';
+    acts += '<button class="btn mini ghost" data-snooze="' + i + '" title="hide for 7 days — an event, reversible">' + ic('clock') + 'Snooze 7d</button>';
+    acts += '<button class="btn mini ghost" data-dismiss="' + i + '" title="hide until you unmute — an event, reversible">' + ic('belloff') + 'Dismiss</button>';
+    acts += '</div>';
+    return '<li class="row ' + bandFor(f.score) + '"><div class="no">' + (i + 1) + '</div><div class="stripe"></div><div>' +
+      '<span class="rtag">' + esc(f.tag) + (f.personId ? ' · ' + esc(nameOf(f.personId)) : '') + '</span>' +
+      '<p class="rt">' + esc(f.title) + '</p><p class="ra">' + esc(f.action) + '</p>' +
+      '<div class="basis">' + f.basis.map(function (b) { return '<div>' + esc(b) + '</div>'; }).join('') +
+      '<div class="bwhy">confidence: ' + esc(f.confidence.level.toUpperCase()) + ' — ' + esc(f.confidence.why) + '</div></div>' +
+      '<div class="scoreline"><span class="chip ' + cls + '">' + esc(f.confidence.level) + '</span> &nbsp;' + esc(f.breakdown) + '</div>' +
+      acts + '</div></li>';
+  }
+  function renderToday(root, rankedRes) {
+    var s = st(), a = EV().arrival(s, today());
+    var openLoops = EV().openDecisions(s).length + EV().openGoals(s).length +
+      EV().openIncidents(s).length + a.wins.open.length;
+    var html = '<div class="vhead"><h1>Today</h1><span class="sub">' + esc(today()) + ' · ranked next-best actions</span></div>';
+    html += '<div class="stateline">' +
+      (a.set ? '<span>day <b>' + (a.day == null ? '?' : a.day) + '</b> since ' + esc(a.startDate) + '</span>' : '<span>arrival clock: <b>not set</b></span>') +
+      '<span>roster: <b>' + (s.people || []).filter(function (p) { return p && !p.archived; }).length + '</b></span>' +
+      '<span>open loops: <b>' + openLoops + '</b> <span class="muted-note">(decisions + goals + incidents + wins)</span></span>' +
+      '<span>event stream: <b>' + s.events.length + '</b></span></div>';
+    if (FLASH) {
+      html += '<div class="flash' + (FLASH.err ? ' err' : '') + '">' + esc(FLASH.msg) + '</div>'; FLASH = null;
     }
-    h += '<ol class="rank">';
-    fs.forEach(function (f, i) {
-      var tier = f.score >= 80 ? 'p1' : f.score >= 50 ? 'p2' : 'p3';
-      var pbv = PB.forFinding(f);
-      var byid = {};
-      (f.meta.evidenceIds || []).forEach(function (id) { var e = st.events.filter(function (x) { return x.id === id; })[0]; if (e) byid[id] = e; });
-      h += '<li class="row ' + tier + '"><span class="no">' + pad2(i + 1) + '</span><span class="stripe"></span><div>' +
-        '<span class="rtag">' + ic(RULE_ICON[f.ruleId] || 'spark') + esc(f.ruleId) + ' · ' + esc(EN.RULE_TAGS[f.ruleId] || '') + ' ' + chip(f.confidence) + '</span>' +
-        '<p class="rt">' + esc(f.title) + '</p><p class="ra">' + esc(f.action) + '</p>' +
-        '<div class="basis">' + f.basis.map(function (b) { return '<div>' + esc(b) + '</div>'; }).join('') +
-        '<div class="bwhy">why ' + esc(f.confidence.level) + ': ' + esc(f.confidence.why) + '</div></div>' +
-        '<div class="scoreline">rank = ' + esc(f.breakdown) + ' · key ' + esc(f.key) + '</div>';
-      if (Object.keys(byid).length) {
-        h += '<details class="ev"><summary>source events (' + Object.keys(byid).length + ')</summary><div class="evlist">' +
-          Object.keys(byid).map(function (id) {
-            var e = byid[id];
-            return '<div>' + esc(String(e.ts).slice(0, 10)) + ' · ' + esc(e.type) + ' · ' + esc(JSON.stringify(e.data)) + '</div>';
-          }).join('') + '</div></details>';
+    if (!a.set) {
+      html += '<div class="callout"><span class="ct">setup · not an engine finding</span>' +
+        'The arrival instrument is off. Set the date you took over and R9–R11 start watching the things new leaders miss. ' +
+        '<a class="lnk" href="#/arrival">Set your start date →</a></div>';
+    }
+    /* capture bar */
+    var chips = [['oneonone.logged', '1:1'], ['pulse.logged', 'pulse'], ['feedback.logged', 'feedback'],
+      ['decision.logged', 'decision'], ['decision.outcome', 'outcome'], ['goal.set', 'goal'], ['goal.progress', 'progress'],
+      ['delegation.assigned', 'delegate'], ['delegation.closed', 'close del.'], ['conflict.registered', 'conflict'],
+      ['conflict.resolved', 'resolve'], ['incident.registered', 'incident'], ['incident.update', 'inc. update'],
+      ['tour.visit', 'tour visit'], ['expectation.logged', 'expectation'], ['earlywin.committed', 'early win']];
+    html += '<div class="qbar">' + chips.map(function (c) {
+      return '<button class="qchip" data-cap="' + c[0] + '">' + ic(CAPTURES[c[0]].icon) + esc(c[1]) + '</button>';
+    }).join('') + '</div>';
+
+    if (!(s.people || []).length && !s.events.length) {
+      html += '<div class="empty"><b>Nothing here yet — that is a fact, not a failure.</b><br>' +
+        'Load the seeded sample set at <a class="lnk" href="#/data">#/data</a> to see every rule fire with full reasoning, ' +
+        'or add your first lead at <a class="lnk" href="#/roster">#/roster</a> and the engine starts working from your first event.</div>';
+    }
+    var r = rankedRes || EN().ranked(s, today());
+    if (!r.items.length) {
+      html += '<div class="empty"><b>' + (s.events.length ? 'No open recommendations.' : '') + '</b>' +
+        (s.events.length ? ' The engine read ' + s.events.length + ' events and has nothing it would rather you did differently. That is a measured statement, not a compliment — keep logging.' : '') + '</div>';
+    } else {
+      html += '<ol class="rank">' + r.items.map(findingRow).join('') + '</ol>';
+    }
+    if (r.muted.length) {
+      html += '<div class="mutedwrap"><span class="rtag">suppressed by your own events (' + r.muted.length + ') — reversible</span>' +
+        r.muted.map(function (f, i) {
+          return '<div class="mutedrow"><span class="mk">' + esc(f.mutedAs) + '</span><span style="flex:1">' + esc(f.title) + '</span>' +
+            '<button class="btn mini ghost" data-unmute="' + i + '">' + ic('bell') + 'Unmute</button></div>';
+        }).join('') + '</div>';
+    }
+    html += '<p class="footnote">Order = score (severity × confidence factor). Every row shows its triggering data and its confidence reasoning; the engine prints what it knows and what it assumes. Snooze/dismiss are engine.* events — exportable and reversible.</p>';
+    root.innerHTML = html;
+    bindToday(root, r);
+  }
+  function bindToday(root, r) {
+    root.querySelectorAll('[data-cap]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var idx = b.getAttribute('data-i');
+        var pre = {};
+        if (idx != null && r.items[idx] && r.items[idx].ruleId === 'R12') pre.incidentId = r.items[idx].meta.incidentId;
+        openCapture(b.getAttribute('data-cap'), pre);
+      });
+    });
+    root.querySelectorAll('[data-pb]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = r.items[Number(b.getAttribute('data-i'))];
+        var pre = Object.assign({ personId: f.personId }, f.prefill || {});
+        if (f.ruleId === 'R2') pre = { decisionId: f.meta.key };
+        if (f.ruleId === 'R3') pre = { goalId: f.meta.key, personId: f.personId };
+        if (f.ruleId === 'R10' && f.meta.missing && f.meta.missing[0]) pre.personId = f.meta.missing[0];
+        openPlaybook(b.getAttribute('data-pb'), pre);
+      });
+    });
+    root.querySelectorAll('[data-snooze]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = r.items[Number(b.getAttribute('data-snooze'))];
+        var until = new Date(Date.now() + EN().DOCTRINE.SNOOZE_DAYS * 86400000).toISOString().slice(0, 10);
+        emitSpecs([{ type: 'engine.snooze', data: { key: f.key, until: until, title: f.title } }]);
+        saveAndNote('Snoozed until ' + until + ' — recorded as an event, so it is auditable.');
+        render();
+      });
+    });
+    root.querySelectorAll('[data-dismiss]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = r.items[Number(b.getAttribute('data-dismiss'))];
+        if (!window.confirm('Dismiss "' + f.title + '" until you unmute it? This is recorded as an event.')) return;
+        emitSpecs([{ type: 'engine.dismiss', data: { key: f.key, title: f.title } }]);
+        saveAndNote('Dismissed. Find it under "suppressed" below — unmute any time.');
+        render();
+      });
+    });
+    root.querySelectorAll('[data-unmute]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var f = r.muted[Number(b.getAttribute('data-unmute'))];
+        emitSpecs([{ type: 'engine.unmute', data: { key: f.key } }]);
+        saveAndNote('Unmuted — it re-enters the ranking now.');
+        render();
+      });
+    });
+  }
+
+  /* ---------- ARRIVAL ---------- */
+  function renderArrival(root) {
+    var s = st(), a = EV().arrival(s, today());
+    var html = '<div class="vhead"><h1>Arrival</h1><span class="sub">your first-90-days instrument</span></div>';
+    if (FLASH) { html += '<div class="flash' + (FLASH.err ? ' err' : '') + '">' + esc(FLASH.msg) + '</div>'; FLASH = null; }
+    if (!a.set) {
+      html += '<p class="vsub">The three things newly appointed multi-team leaders get fired for missing: no written expectations from their boss, an unfinished listening tour before changes, and early wins that were announced but never verified. This view watches all three — from day one.</p>' +
+        '<form id="appt" style="max-width:420px">' +
+        '<label class="f"><span class="fl">The date you took over <span class="req">*</span></span><input type="date" name="startDate" required></label>' +
+        '<label class="f"><span class="fl">Situation</span><select name="scope">' +
+        '<option value="step-up">stepped up — now leading my former peers / other leads</option>' +
+        '<option value="new-org">new to the organization</option>' +
+        '<option value="first-time">first time leading leaders</option></select></label>' +
+        '<label class="f"><span class="fl">Notes (boss, mandate, anything to remember)</span><textarea name="notes"></textarea></label>' +
+        '<div class="errtxt" id="derr"></div><button class="btn" type="submit">' + ic('flag') + 'Start the clock</button></form>';
+      root.innerHTML = html;
+      document.getElementById('appt').addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        var fd = new FormData(this);
+        var d = String(fd.get('startDate') || '');
+        if (!d || isNaN(Date.parse(d))) { document.getElementById('derr').textContent = 'a real date is required'; return; }
+        s.meta.appointment = { startDate: d, scope: String(fd.get('scope') || ''), notes: String(fd.get('notes') || '') };
+        emitSpecs([{ type: 'appointment.started',
+          data: { startDate: d, scope: s.meta.appointment.scope, notes: s.meta.appointment.notes } }]);
+        saveAndNote('Clock started on ' + d + '. R9–R11 are now watching.');
+        render();
+      });
+      return;
+    }
+    var r9Late = a.day != null && a.day >= EN().DOCTRINE.ARR_EXPECT_DAYS && a.expectationCount === 0;
+    html += '<div style="display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin:14px 0 4px">' +
+      '<div class="daynum">' + (a.day == null ? '—' : a.day) + '<span class="du"> day' + (a.day === 1 ? '' : 's') + ' in role</span></div>' +
+      '<div class="barmeta">since ' + esc(a.startDate) + (a.scope ? ' · ' + esc(a.scope) : '') + '<br>' +
+      '<a class="lnk" data-act="rebase">re-baseline (new role / reset)</a></div></div>';
+
+    /* expectations */
+    html += '<div class="sect"><h2>Boss expectations</h2><span class="ss">gate: captured by day ' + EN().DOCTRINE.ARR_EXPECT_DAYS + ' · rule R9</span>';
+    if (!a.expectationCount) {
+      html += '<div class="callout"' + (r9Late ? ' style="border-left-color:var(--bad)"' : '') + '><span class="ct">' + (r9Late ? 'past the gate' : 'open') + '</span>' +
+        'Zero expectations captured. Book 45 minutes with your boss and run the charter — it asks the five questions for you.</div>';
+    } else {
+      var lastEx = a.expectations[a.expectations.length - 1];
+      html += '<div class="barmeta">' + a.expectationCount + ' captured · last: ' + String(lastEx.ts).slice(0, 10) + '</div>' +
+        '<div class="basis" style="margin:8px 0">' + ((lastEx.data && lastEx.data.items) || []).map(function (it) {
+          return '<div>' + esc(it) + '</div>'; }).join('') + '</div>';
+    }
+    html += '<div class="actions"><button class="btn mini" data-pb="charter">' + ic('shield') + 'Run the expectations charter</button>' +
+      '<button class="btn mini ghost" data-cap="expectation.logged">' + ic('plus') + 'Quick capture</button></div></div>';
+
+    /* listening tour */
+    var t = a.tour;
+    html += '<div class="sect"><h2>Listening tour</h2><span class="ss">gate: all direct leads by day ' + EN().DOCTRINE.ARR_TOUR_DAYS + ' · rule R10</span>';
+    if (!t.directCount) {
+      html += '<div class="barmeta">No direct leads on the roster yet — coverage has no denominator. <a class="lnk" href="#/roster">Add your leads →</a></div>';
+    } else {
+      var pct = t.coveragePct;
+      html += '<div class="bar"><div class="fill" style="width:' + pct + '%"></div><div class="tick" style="left:100%"></div></div>' +
+        '<div class="barmeta">' + t.visitedCount + '/' + t.directCount + ' direct leads (' + pct + '%) · day ' + a.day + ' of ' + EN().DOCTRINE.ARR_TOUR_DAYS +
+        ' · skip-level visits: ' + t.skipCount + '</div>' +
+        t.directs.map(function (p) {
+          var seen = t.visitedIds[p.id];
+          var lastV = seen ? t.visits.filter(function (v) { return v.personId === p.id; }).slice(-1)[0] : null;
+          return '<div class="wire ' + (seen ? 'done' : 'miss') + '"><span class="wst">' + (seen ? 'visited' : 'missing') + '</span>' +
+            '<span><a class="lnk" href="#/person/' + esc(p.id) + '">' + esc(p.name) + '</a></span>' +
+            '<span class="wmeta">' + (lastV ? String(lastV.ts).slice(0, 10) : '—') + '</span></div>';
+        }).join('') +
+        '<div class="actions" style="margin-top:10px"><button class="btn mini" data-pb="tour">' + ic('tour') + 'Run a tour visit</button></div>';
+    }
+    html += '</div>';
+
+    /* early wins */
+    html += '<div class="sect"><h2>Early wins</h2><span class="ss">announced wins must be verified out loud · rule R11</span>';
+    if (!a.wins.open.length && !a.wins.closed.length) html += '<div class="barmeta">No wins committed yet. Small, verifiable, fast — then hold yourself to the metric.</div>';
+    html += a.wins.open.map(function (w) {
+      var d = w.verifyDate ? EN().days(w.verifyDate, today()) : null;
+      var stateTxt = d == null ? 'no verify date' : d > 0 ? d + 'd PAST verify date' : 'verify in ' + (-d) + 'd';
+      return '<div class="wire ' + (d != null && d > 0 ? 'miss' : '') + '"><span class="wst">open</span>' +
+        '<span>' + esc(w.title) + ' <span class="muted-note">· ' + esc(w.metric || 'no metric!') + '</span></span>' +
+        '<span class="wmeta">' + stateTxt + ' <a class="lnk" data-verify="' + esc(w.id) + '">verify</a></span></div>';
+    }).join('');
+    html += a.wins.closed.map(function (w) {
+      return '<div class="wire done"><span class="wst">' + esc(w.outcome || 'done') + '</span><span>' + esc(w.title) + '</span>' +
+        '<span class="wmeta">verified</span></div>';
+    }).join('');
+    html += '<form id="winc" style="max-width:460px;margin-top:12px">' +
+      '<div class="frow"><label class="f"><span class="fl">Commit a win <span class="req">*</span></span><input type="text" name="title"></label>' +
+      '<label class="f"><span class="fl">Verify by <span class="req">*</span></span><input type="date" name="verifyDate"></label></div>' +
+      '<label class="f"><span class="fl">Metric a skeptic would accept <span class="req">*</span></span><input type="text" name="metric"></label>' +
+      '<label class="f"><span class="fl">Announced to (optional)</span><input type="text" name="announcedTo"></label>' +
+      '<div class="errtxt" id="werr"></div><button class="btn mini" type="submit">' + ic('flag') + 'Commit win</button></form></div>';
+    html += '<p class="footnote">This view is a projection: recompute from events on every read. Nothing here is stored state, so it cannot drift.</p>';
+    root.innerHTML = html;
+
+    root.querySelectorAll('[data-pb]').forEach(function (b) {
+      b.addEventListener('click', function () { openPlaybook(b.getAttribute('data-pb'), {}); });
+    });
+    root.querySelectorAll('[data-cap]').forEach(function (b) {
+      b.addEventListener('click', function () { openCapture(b.getAttribute('data-cap'), {}); });
+    });
+    root.querySelectorAll('[data-verify]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var w = a.wins.open.filter(function (x) { return x.id === b.getAttribute('data-verify'); })[0];
+        openPlaybook('wincloser', { winId: w.id, title: w.title, metric: w.metric, verifyDate: w.verifyDate, announcedTo: w.announcedTo });
+      });
+    });
+    var rb = root.querySelector('[data-act="rebase"]');
+    if (rb) rb.addEventListener('click', function () {
+      st().meta.appointment = null;
+      S().save(); render();
+    });
+    var wf = document.getElementById('winc');
+    if (wf) wf.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var fd = new FormData(this);
+      var title = String(fd.get('title') || '').trim(), metric = String(fd.get('metric') || '').trim(),
+        vd = String(fd.get('verifyDate') || '');
+      if (!title || !metric || !vd) { document.getElementById('werr').textContent = 'win, metric and verify date are all required'; return; }
+      emitSpecs([{ type: 'earlywin.committed', data: { title: title, metric: metric, verifyDate: vd,
+        announcedTo: String(fd.get('announcedTo') || '').trim() || undefined } }]);
+      saveAndNote('Win committed. Verify it out loud by ' + vd + '.');
+      render();
+    });
+  }
+
+  /* ---------- ROSTER + DOSSIER ---------- */
+  function renderRoster(root) {
+    var s = st();
+    var html = '<div class="vhead"><h1>Roster</h1><span class="sub">people you lead, and their leads</span></div>';
+    if (FLASH) { html += '<div class="flash' + (FLASH.err ? ' err' : '') + '">' + esc(FLASH.msg) + '</div>'; FLASH = null; }
+    html += '<form id="addp" style="max-width:520px"><div class="frow">' +
+      '<label class="f"><span class="fl">Name <span class="req">*</span></span><input type="text" name="name"></label>' +
+      '<label class="f"><span class="fl">Role</span><input type="text" name="role" placeholder="Team lead — X"></label></div><div class="frow">' +
+      '<label class="f"><span class="fl">1:1 cadence (days)</span><input type="number" name="cadenceDays" value="7" min="1"></label>' +
+      '<label class="f"><span class="fl">Reports to</span><select name="reportsTo"><option value="me">me (direct lead)</option>' +
+      (s.people || []).filter(function (p) { return p && !p.archived; }).map(function (p) {
+        return '<option value="' + esc(p.id) + '">' + esc(p.name) + ' (skip-level)</option>'; }).join('') + '</select></label></div>' +
+      '<div class="errtxt" id="perr"></div><button class="btn mini" type="submit">' + ic('plus') + 'Add person</button></form>';
+    html += '<table class="tbl"><thead><tr><th>Name</th><th class="m">cadence</th><th class="m">reports to</th><th class="m">last 1:1</th><th class="m">open del.</th><th class="m">tour</th><th></th></tr></thead><tbody>';
+    var a = EV().arrival(s, today());
+    (s.people || []).forEach(function (p) {
+      if (!p) return;
+      var last = EV().lastOneOnOne(s, p.id);
+      var od = EV().openDelegations(s).filter(function (d) { return d.personId === p.id; }).length;
+      var rt = p.reportsTo === 'me' || p.reportsTo === undefined ? 'me' : nameOf(p.reportsTo);
+      html += '<tr class="frow' + (p.archived ? ' arch' : '') + '">' +
+        '<td><a class="lnk" href="#/person/' + esc(p.id) + '"><b>' + esc(p.name) + '</b></a><br><span class="muted-note">' + esc(p.role || '—') + '</span></td>' +
+        '<td class="m">' + esc(p.cadenceDays) + 'd</td><td class="m">' + esc(rt) + '</td>' +
+        '<td class="m">' + (last ? String(last.ts).slice(0, 10) : 'never') + '</td>' +
+        '<td class="m">' + od + '</td><td class="m">' + (a.tour.visitedIds[p.id] ? 'visited' : '—') + '</td>' +
+        '<td class="m"><a class="lnk" data-arch="' + esc(p.id) + '">' + (p.archived ? 'unarchive' : 'archive') + '</a></td></tr>';
+    });
+    html += '</tbody></table><p class="footnote">reportsTo drives R8 skip-levels and R10 tour coverage. Archive preserves history; the engine stops watching archived people.</p>';
+    root.innerHTML = html;
+    document.getElementById('addp').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var fd = new FormData(this);
+      var name = String(fd.get('name') || '').trim();
+      if (!name) { document.getElementById('perr').textContent = 'name is required'; return; }
+      EV().addPerson(st(), { name: name, role: String(fd.get('role') || ''),
+        cadenceDays: fd.get('cadenceDays'), reportsTo: String(fd.get('reportsTo') || 'me') });
+      saveAndNote(name + ' added — R1 starts counting from their cadence.');
+      render();
+    });
+    root.querySelectorAll('[data-arch]').forEach(function (b2) {
+      b2.addEventListener('click', function () {
+        var p = personById(b2.getAttribute('data-arch'));
+        EV().updatePerson(st(), p.id, { archived: !p.archived });
+        saveAndNote(p.name + (p.archived ? ' unarchived.' : ' archived — history kept, engine stops watching.'));
+        render();
+      });
+    });
+  }
+
+  function spark(vals) {
+    if (!vals.length) return '<span class="muted-note">none</span>';
+    var blocks = '▁▂▃▄▅▆▇█';
+    return '<span class="spark">' + vals.map(function (v) {
+      if (v == null) return '·';
+      var i = Math.max(0, Math.min(7, Math.round((v - 1) / 9 * 7)));
+      return blocks[i];
+    }).join('') + '</span>';
+  }
+  function renderPerson(root, pid) {
+    var s = st(), p = personById(pid);
+    if (!p) { root.innerHTML = '<div class="empty">Person not found. <a class="lnk" href="#/roster">Back to roster →</a></div>'; return; }
+    var t = today();
+    var bal = EV().feedbackBalance(s, pid, 60, t);
+    var puls = EV().pulsesMeasured(s, pid, 21, t);
+    var est = EV().pulsesEstimatedCount(s, pid, 21, t);
+    var sl = EV().latestSL(s, pid);
+    var last = EV().lastOneOnOne(s, pid);
+    var od = EV().openDelegations(s).filter(function (d) { return d.personId === pid; });
+    var oc = EV().openConflicts(s).filter(function (c) { return c.personId === pid; });
+    var goals = EV().openGoals(s).filter(function (g) { return g.ownerPersonId === pid; });
+    var visits = EV().arrival(s, t).tour.visits.filter(function (v) { return v.personId === pid; });
+    var findings = EN().ranked(s, t).items.filter(function (f) { return f.personId === pid; });
+    var trav = EV().sorted(s.events.filter(function (e) { return e.personId === pid; })).slice(-12).reverse();
+    var moods = puls.map(function (e) { return Number(e.data.mood); });
+    var mSlope = EN().slope(moods);
+
+    var html = '<div class="doshead"><h1>' + esc(p.name) + '</h1><span class="sub">' + esc(p.role || '—') + (p.archived ? ' · ARCHIVED' : '') + '</span>' +
+      '<span class="spacer"></span><a class="btn mini ghost" href="#/roster">all people</a></div>';
+    if (FLASH) { html += '<div class="flash' + (FLASH.err ? ' err' : '') + '">' + esc(FLASH.msg) + '</div>'; FLASH = null; }
+    html += '<dl class="kv">' +
+      '<dt>cadence</dt><dd>' + esc(p.cadenceDays) + 'd · last 1:1 ' + (last ? String(last.ts).slice(0, 10) : 'never') + '</dd>' +
+      '<dt>reports to</dt><dd>' + esc(p.reportsTo === undefined ? 'me' : p.reportsTo === 'me' ? 'me' : nameOf(p.reportsTo)) + '</dd>' +
+      '<dt>feedback 60d</dt><dd>' + bal.corrective + ' corrective / ' + bal.positive + ' positive</dd>' +
+      '<dt>pulse 21d (mood)</dt><dd>' + spark(moods) + ' <span class="muted-note">' + puls.length + ' measured' +
+        (mSlope != null ? ' · slope ' + mSlope.toFixed(2) : ' · no trend (need ≥3)') +
+        (est ? ' · ' + est + ' estimated excluded' : '') + '</span></dd>' +
+      '<dt>situational</dt><dd>' + (sl ? esc(String(sl.ts).slice(0, 10)) + ' · ' + esc(sl.data.task || '—') + ' → ' + esc(sl.data.style) + ' ' + esc(sl.data.styleName || '') : 'no assessment yet') + '</dd>' +
+      '<dt>tour visits</dt><dd>' + (visits.length ? visits.map(function (v) { return String(v.ts).slice(0, 10); }).join(' · ') : 'none logged') + '</dd></dl>';
+
+    if (findings.length) {
+      html += '<div class="minihead">engine findings for ' + esc(p.name) + '</div>' +
+        findings.map(function (f) {
+          return '<div class="mutedrow"><span class="mk">' + esc(f.ruleId) + ' · ' + f.score + '</span><span style="flex:1">' + esc(f.title) + '</span></div>';
+        }).join('');
+    } else {
+      html += '<div class="minihead">engine findings</div><p class="muted-note">None. Measured statement, not a compliment.</p>';
+    }
+    html += '<div class="minihead">open delegations (' + od.length + ')</div>' +
+      (od.length ? od.map(function (d) { return '<div class="logrow">L' + esc(d.level || '?') + ' · ' + esc(d.label) + ' · since ' + String(d.ts).slice(0, 10) + '</div>'; }).join('') : '<p class="muted-note">none</p>');
+    html += '<div class="minihead">open conflicts (' + oc.length + ')</div>' +
+      (oc.length ? oc.map(function (c) { return '<div class="logrow">' + esc(c.label) + '</div>'; }).join('') : '<p class="muted-note">none</p>');
+    html += '<div class="minihead">goals owned (' + goals.length + ')</div>' +
+      (goals.length ? goals.map(function (g) { return '<div class="logrow">' + esc(g.label) + ' · last anchor ' + String(g.lastProgressTs).slice(0, 10) + '</div>'; }).join('') : '<p class="muted-note">none</p>');
+    html += '<div class="minihead">recent stream</div>' +
+      (trav.length ? trav.map(function (e) {
+        return '<div class="logrow"><span class="lk">' + String(e.ts).slice(0, 10) + '</span>' + esc(e.type) +
+          (e.data && e.data.note ? ' — ' + esc(String(e.data.note).slice(0, 80)) : '') + '</div>';
+      }).join('') : '<p class="muted-note">no events yet</p>');
+    html += '<div class="actions" style="margin-top:16px">' +
+      '<button class="btn mini" data-pb="oneonone">' + ic('cal') + '1:1 run sheet</button>' +
+      '<button class="btn mini ghost" data-pb="sbi">' + ic('chat') + 'SBI</button>' +
+      '<button class="btn mini ghost" data-pb="sl">' + ic('grid') + 'Situational read</button>' +
+      '<button class="btn mini ghost" data-pb="delegation">' + ic('hand') + 'Delegate</button>' +
+      '<button class="btn mini ghost" data-pb="tour">' + ic('tour') + 'Tour visit</button></div>';
+    root.innerHTML = html;
+    root.querySelectorAll('[data-pb]').forEach(function (b) {
+      b.addEventListener('click', function () { openPlaybook(b.getAttribute('data-pb'), { personId: pid }); });
+    });
+  }
+
+  /* ---------- PLAYBOOKS INDEX ---------- */
+  function renderPlaybooks(root) {
+    var html = '<div class="vhead"><h1>Playbooks</h1><span class="sub">procedures, not advice</span></div>' +
+      '<p class="vsub">Every playbook pre-fills from your live data and submits resolving events through the same layer as everything else. Guidance without a write path is a wiki; these are tools.</p><table class="tbl"><tbody>';
+    PB().list().forEach(function (pb) {
+      html += '<tr class="frow"><td style="width:36px">' + ic(pb.icon) + '</td><td><b>' + esc(pb.title) + '</b><br>' +
+        '<span class="muted-note" style="font-family:var(--sans);font-size:11.5px">' + esc(pb.blurb) + '</span></td>' +
+        '<td style="text-align:right"><button class="btn mini ghost" data-open="' + esc(pb.id) + '">Open</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    root.innerHTML = html;
+    root.querySelectorAll('[data-open]').forEach(function (b) {
+      b.addEventListener('click', function () { openPlaybook(b.getAttribute('data-open'), {}); });
+    });
+  }
+
+  /* ---------- HEALTH: the wall counts itself ---------- */
+  function cleanup(prefix) {
+    var ks = [], i;
+    for (i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(prefix) === 0) ks.push(k);
+    }
+    ks.forEach(function (k) { localStorage.removeItem(k); });
+  }
+  function storeTests() {
+    var TK = 'leados:htest.' + Date.now().toString(36), T = [];
+    function t(id, name, fn) {
+      var r;
+      try { r = fn(); } catch (e) { r = { pass: false, observed: 'THREW: ' + e.message }; }
+      T.push({ id: id, name: name, pass: !!r.pass, observed: String(r.observed) });
+    }
+    var SM = S();
+    t('T1', 'absent key → fresh v3 state, no writes', function () {
+      var k = TK + '.t1', ms = SM._makeStore(k), r = ms.load();
+      var s = ms.get();
+      var ok = r.branch === 'absent' && s.meta.schemaVersion === 3 && s.meta.appointment === null &&
+        localStorage.getItem(k) == null;
+      cleanup(k); return { pass: ok, observed: 'branch=' + r.branch + ' schemaVersion=' + s.meta.schemaVersion };
+    });
+    t('T2', 'corrupt bytes → quarantined, booted clean, original preserved', function () {
+      var k = TK + '.t2';
+      localStorage.setItem(k, '{bad json');
+      var ms = SM._makeStore(k), r = ms.load();
+      var qk = null;
+      for (var i = 0; i < localStorage.length; i++) {
+        var kk = localStorage.key(i);
+        if (kk && kk.indexOf(k + '.corrupt.') === 0) qk = kk;
       }
-      h += '<div class="actions">' +
-        (pbv ? '<button class="btn mini" data-act="finding-pb" data-fi="' + i + '">' + ic('go') + 'Open playbook</button>' : '') +
-        '<button class="btn mini ghost" data-act="snooze" data-fi="' + i + '" title="Park for ' + EN.DOCTRINE.SNOOZE_DAYS + 'd — logged, lapses on its own">' + ic('clock') + 'Snooze ' + EN.DOCTRINE.SNOOZE_DAYS + 'd</button>' +
-        '<button class="btn mini ghost" data-act="dismiss" data-fi="' + i + '" title="Mute with a logged reason — reversible">' + ic('ban') + 'Dismiss</button>' +
-        '</div></div></li>';
+      var preserved = qk && localStorage.getItem(qk) === '{bad json';
+      var ok = r.branch === 'corrupt' && preserved && localStorage.getItem(k) == null;
+      cleanup(k); return { pass: ok, observed: 'branch=' + r.branch + ' quarantinePreserved=' + !!preserved };
     });
-    fs.length === 0 && (h = h.replace('<ol class="rank">', '<ol class="rank" hidden>'));
-    h += '</ol>';
-    if (res.snoozed.length) h += '<section class="blk"><h3>' + ic('clock') + ' Snoozed — returns on its own date</h3>' + res.snoozed.map(function (f) {
-      return '<div class="logline">until ' + esc(f.snoozedUntil) + ' · ' + esc(f.title) + '</div>'; }).join('') + '</section>';
-    if (res.muted.length) h += '<section class="blk"><h3>' + ic('ban') + ' Dismissed — with your logged reason</h3>' + res.muted.map(function (f) {
-      return '<div class="logline">' + esc(f.title) + (f.mutedReason ? ' · reason: ' + esc(f.mutedReason) : '') +
-        ' <button class="btn mini ghost" data-act="unmute" data-key="' + esc(f.key) + '">Unmute</button></div>'; }).join('') + '</section>';
-    h += '<footer class="status"><span>' + Object.keys(res.byRule).length + ' rules evaluated</span><span>' + st.events.length + ' events read</span><span>recomputed at ' + new Date().toISOString().slice(11, 19) + 'Z</span><span>schema v' + st.meta.schemaVersion + '</span></footer>';
-    return h;
+    t('T3', 'foreign lineage refused AND preserved', function () {
+      var k = TK + '.t3';
+      localStorage.setItem(k, JSON.stringify({ meta: { schemaVersion: 2, lineage: 'other' }, people: [], events: [], log: [] }));
+      var ms = SM._makeStore(k), r = ms.load();
+      var q = false;
+      for (var i = 0; i < localStorage.length; i++) {
+        var kk = localStorage.key(i);
+        if (kk && kk.indexOf(k + '.foreign.') === 0) q = true;
+      }
+      cleanup(k); return { pass: r.branch === 'foreign' && q, observed: 'branch=' + r.branch + ' preserved=' + q };
+    });
+    t('T4', 'newer version refused (never migrates down)', function () {
+      var k = TK + '.t4';
+      localStorage.setItem(k, JSON.stringify({ meta: { schemaVersion: 99, lineage: 'mf' }, people: [], events: [], log: [] }));
+      var ms = SM._makeStore(k), r = ms.load();
+      cleanup(k); return { pass: r.branch === 'newer', observed: 'branch=' + r.branch };
+    });
+    t('T5', 'shape-valid JSON failing structure → malformed', function () {
+      var k = TK + '.t5';
+      localStorage.setItem(k, JSON.stringify({ meta: { schemaVersion: 3, lineage: 'mf' }, people: {}, events: [], log: [] }));
+      var ms = SM._makeStore(k), r = ms.load();
+      cleanup(k); return { pass: r.branch === 'malformed', observed: 'branch=' + r.branch };
+    });
+    t('T6', 'byte-exact v1 fixture climbs the full ladder 1→2→3', function () {
+      var k = TK + '.t6';
+      var v1 = { meta: { schemaVersion: 1, lineage: 'mf', seeded: true, createdAt: '2025-01-01T00:00:00.000Z', writeFailed: false },
+        people: [{ id: 'p-1', name: 'V1 Person', role: 'lead', cadenceDays: 7 }],
+        events: [{ id: 'e-1', ts: '2025-01-02T10:00:00.000Z', type: 'oneonone.logged', personId: 'p-1', data: {} }], log: [] };
+      localStorage.setItem(k, JSON.stringify(v1));
+      var ms = SM._makeStore(k), r = ms.load(), s = ms.get();
+      var preM = false;
+      for (var i = 0; i < localStorage.length; i++) {
+        var kk = localStorage.key(i);
+        if (kk && kk.indexOf(k + '.pre-migration.') === 0) preM = true;
+      }
+      var ok = r.branch === 'migrated' && s.meta.schemaVersion === 3 &&
+        s.people[0].reportsTo === 'me' && s.meta.appointment === null &&
+        s.meta.migrations.length === 2 && preM && s.events[0].id === 'e-1';
+      cleanup(k);
+      return { pass: ok, observed: 'branch=' + r.branch + ' →v' + s.meta.schemaVersion +
+        ' migrations=' + s.meta.migrations.length + ' preMigrationBytes=' + preM };
+    });
+    t('T7', 'v2 fixture takes only the 2→3 step', function () {
+      var k = TK + '.t7';
+      var v2 = { meta: { schemaVersion: 2, lineage: 'mf', seeded: false, createdAt: '2025-06-01T00:00:00.000Z',
+          writeFailed: false, migrations: [{ from: 1, to: 2, at: '2025-06-01T00:00:00.000Z' }] },
+        people: [], events: [], log: [] };
+      localStorage.setItem(k, JSON.stringify(v2));
+      var ms = SM._makeStore(k), r = ms.load(), s = ms.get();
+      var ok = r.branch === 'migrated' && s.meta.schemaVersion === 3 &&
+        s.meta.migrations.length === 2 && s.meta.appointment === null;
+      cleanup(k);
+      return { pass: ok, observed: 'branch=' + r.branch + ' migrations=' + s.meta.migrations.length };
+    });
+    t('T8', 'normalization repairs, never drops (null row, dup id, bad ts)', function () {
+      var k = TK + '.t8';
+      var base = SM.fresh();
+      base.events = [null, { id: 'x', ts: 'not-a-date', type: 'a' }, { id: 'x', ts: '2025-01-01T00:00:00.000Z', type: 'b' },
+        { ts: '2025-01-01T00:00:00.000Z', type: 'pulse.logged', data: { mood: 5, load: 5 } }];
+      localStorage.setItem(k, JSON.stringify(base));
+      var ms = SM._makeStore(k), r = ms.load(), s = ms.get();
+      var ids = {}, dup = false;
+      s.events.forEach(function (e) { if (ids[e.id]) dup = true; ids[e.id] = true; });
+      var allTs = s.events.every(function (e) { return !isNaN(Date.parse(e.ts)); });
+      var allType = s.events.every(function (e) { return typeof e.type === 'string' && e.type; });
+      var ok = r.branch === 'ok' && s.events.length === 4 && !dup && allTs && allType && (r.repairs || 0) >= 3;
+      cleanup(k);
+      return { pass: ok, observed: 'rows=' + s.events.length + ' (4 kept) repairs=' + r.repairs + ' dupIds=' + dup };
+    });
+    t('T9', 'quota failure caught: ok:false, writeFailed flag, no crash', function () {
+      var k = TK + '.t9', ms = SM._makeStore(k);
+      ms.load();
+      var orig = localStorage.setItem.bind(localStorage);
+      localStorage.setItem = function () { var e = new Error('full'); e.name = 'QuotaExceededError'; throw e; };
+      var r = ms.save();
+      localStorage.setItem = orig;
+      var ok = r.ok === false && r.quota === true && ms.get().meta.writeFailed === true;
+      cleanup(k);
+      return { pass: ok, observed: 'ok=' + r.ok + ' quota=' + !!r.quota + ' writeFailed=' + ms.get().meta.writeFailed };
+    });
+    t('T10', 'import: guards + merge re-mints ids and rewires references', function () {
+      var kA = TK + '.t10a', kB = TK + '.t10b';
+      var A = SM._makeStore(kA); A.load();
+      var as = A.get();
+      as.people.push({ id: 'p-A1', name: 'Imported Lead', role: 'x', cadenceDays: 7, reportsTo: 'me', createdAt: '2025-01-01T00:00:00.000Z', archived: false, seed: false });
+      as.events.push({ id: 'e-D1', ts: '2025-01-05T00:00:00.000Z', type: 'decision.logged', personId: 'p-A1', data: { title: 'imported decision', reviewDate: '2025-02-01' }, seed: false });
+      as.events.push({ id: 'e-O1', ts: '2025-02-02T00:00:00.000Z', type: 'decision.outcome', personId: null, data: { decisionId: 'e-D1', outcome: 'right' }, seed: false });
+      A.save();
+      var text = localStorage.getItem(kA);
+      var B = SM._makeStore(kB); B.load();
+      var bad = B.importJSON('{nope');
+      var ident = B.importJSON(B.exportJSON());
+      var foreign = B.importJSON(JSON.stringify({ meta: { schemaVersion: 3, lineage: 'zzz' }, people: [], events: [], log: [] }));
+      var r = B.importJSON(text), bs = B.get();
+      var impDec = bs.events.filter(function (e) { return e.type === 'decision.logged'; })[0];
+      var impOut = bs.events.filter(function (e) { return e.type === 'decision.outcome'; })[0];
+      var rewired = impDec && impOut && impDec.id !== 'e-D1' && impOut.data.decisionId === impDec.id;
+      var personReminted = bs.people[0] && bs.people[0].id !== 'p-A1' && bs.people[0].name === 'Imported Lead';
+      var ok = r.ok === true && rewired && personReminted && bad.ok === false &&
+        ident.ok === false && foreign.ok === false;
+      cleanup(kA); cleanup(kB);
+      return { pass: ok, observed: 'merge=' + r.ok + ' rewiredFk=' + !!rewired + ' remintedPerson=' + !!personReminted +
+        ' guards(bad/identical/foreign)=' + !bad.ok + '/' + !ident.ok + '/' + !foreign.ok };
+    });
+    t('T11', 'seed → purge → never reseeds (flag set before rows)', function () {
+      var k = TK + '.t11', ms = SM._makeStore(k);
+      ms.load();
+      EV().seed(ms.get()); ms.save();
+      var seededPeople = ms.get().people.length;
+      EV().purgeSeeds(ms.get()); ms.save();
+      var ms2 = SM._makeStore(k), r = ms2.load();
+      var s2 = ms2.get();
+      var reseed = EV().seed(s2);
+      var ok = r.branch === 'ok' && seededPeople > 0 && s2.people.length === 0 &&
+        s2.meta.seeded === true && reseed === false && s2.meta.appointment === null;
+      cleanup(k);
+      return { pass: ok, observed: 'seeded=' + seededPeople + ' afterPurge=' + s2.people.length +
+        ' flagKept=' + s2.meta.seeded + ' reseedAttempt=' + reseed };
+    });
+    t('T12', 'two corrupt boots in the same ms → TWO quarantines', function () {
+      var k = TK + '.t12';
+      localStorage.setItem(k, '{bad1');
+      SM._makeStore(k).load();
+      localStorage.setItem(k, '{bad2');
+      SM._makeStore(k).load();
+      var n = 0;
+      for (var i = 0; i < localStorage.length; i++) {
+        var kk = localStorage.key(i);
+        if (kk && kk.indexOf(k + '.corrupt.') === 0) n++;
+      }
+      cleanup(k);
+      return { pass: n === 2, observed: 'quarantine keys=' + n + ' (nothing overwritten)' };
+    });
+    return T;
+  }
+  function renderHealth(root) {
+    var Ts = storeTests();
+    var Gs = EN().runGoldens();
+    var tPass = Ts.filter(function (x) { return x.pass; }).length;
+    var gPass = Gs.filter(function (x) { return x.pass; }).length;
+    var html = '<div class="vhead"><h1>Health</h1><span class="sub">claims executed against production code paths · at render</span></div>';
+    if (FLASH) { html += '<div class="flash' + (FLASH.err ? ' err' : '') + '">' + esc(FLASH.msg) + '</div>'; FLASH = null; }
+    html += '<div class="hsum">store <b>' + tPass + '/' + Ts.length + '</b> · engine goldens <b>' + gPass + '/' + Gs.length + '</b> — executed ' +
+      esc(new Date().toLocaleTimeString()) + ' · disposable keys cleaned' + (tPass === Ts.length && gPass === Gs.length ? '' : ' · <b>FAILURES PRESENT</b>') + '</div>';
+    html += '<div class="minihead">storage spine (T1–T12)</div><table class="tbl"><tbody>';
+    Ts.forEach(function (x) {
+      html += '<tr><td class="rid">' + x.id + '</td><td>' + esc(x.name) + '<br><span class="muted-note">observed: ' + esc(x.observed) + '</span></td>' +
+        '<td style="text-align:right"><span class="chip ' + (x.pass ? 'ok' : 'fail') + '">' + (x.pass ? 'pass' : 'FAIL') + '</span></td></tr>';
+    });
+    html += '</tbody></table><div class="minihead">engine golden fixtures (G1–G16)</div><table class="tbl"><tbody>';
+    Gs.forEach(function (x) {
+      html += '<tr><td class="rid">' + x.id + '</td><td>' + esc(x.name) + '<br><span class="muted-note">observed: ' + esc(x.observed) + '</span></td>' +
+        '<td style="text-align:right"><span class="chip ' + (x.pass ? 'ok' : 'fail') + '">' + (x.pass ? 'ok' : 'FAIL') + '</span></td></tr>';
+    });
+    html += '</tbody></table><p class="footnote">What this proves: fixture-based assertions on the real code paths — storage, migration ladder, quota, import, every rule. What it does NOT prove: browser automation, fuzzing, or that this page itself renders correctly. The authority rule: if the README and this wall disagree, this wall wins.</p>';
+    root.innerHTML = html;
   }
 
-  function vRoster() {
-    var st = DB.get();
-    var act = st.people.filter(function (p) { return p && !p.archived; });
-    var arch = st.people.filter(function (p) { return p && p.archived; });
-    var ppl = EV.peopleById(st);
-    var h = '<div class="vhead"><h1>Roster</h1><span class="sub">' + act.length + ' active · ' + arch.length + ' archived</span></div>';
-    h += '<div class="vsub">People the engine watches. Reports-to builds your org line — that is what powers skip-level (R8). Archiving never deletes history.</div>' + flashHtml();
-    h += '<section class="blk"><h3>Add a person</h3><form id="form-roster-add">' +
-      '<label class="f"><span class="fl">Name <b class="req">*</b></span><input type="text" name="name" required></label>' +
-      '<label class="f"><span class="fl">Role</span><input type="text" name="role" placeholder="Team lead — …"></label>' +
-      '<label class="f"><span class="fl">1:1 cadence (days)</span><input type="number" name="cadenceDays" min="1" max="90" value="7"></label>' +
-      '<label class="f"><span class="fl">Reports to</span><select name="reportsTo"><option value="me">me (direct report)</option>' +
-      act.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join('') + '</select>' +
-      '<span class="fh">Pick a lead here and this person becomes your skip-level report — R8 watches the cadence.</span></label>' +
-      '<button class="btn" type="submit">' + ic('plus') + 'Add</button></form></section>';
-    function row(p, archived) {
-      var last = EV.lastOneOnOne(st, p.id);
-      var openD = EV.openDelegations(st).filter(function (d) { return d.personId === p.id; }).length;
-      var pulses = EV.forPerson(EV.byType(st, 'pulse.logged'), p.id).length;
-      var line = p.reportsTo === 'me' || p.reportsTo === undefined ? 'you' : ppl[p.reportsTo] ? ppl[p.reportsTo].name : 'broken line';
-      return '<tr' + (archived ? '' : ' class="clickable" data-act="dossier" data-pid="' + esc(p.id) + '"') + '><td><b>' + esc(p.name) + '</b>' + (p.seed ? '<span class="tagchip seed">sample</span>' : '') + '<br><span class="muted-note">' + esc(p.role || '') + '</span></td>' +
-        '<td class="num">' + esc(line) + '</td>' +
-        '<td class="num">' + (archived ? esc(String(p.cadenceDays)) : '<input type="number" min="1" max="90" value="' + esc(String(p.cadenceDays)) + '" data-change="cadence" data-pid="' + esc(p.id) + '" style="width:52px">') + '</td>' +
-        '<td class="num">' + (last ? esc(String(last.ts).slice(0, 10)) : 'never') + '</td>' +
-        '<td class="num">' + openD + '</td><td class="num">' + pulses + '</td>' +
-        '<td class="num">' + (archived
-          ? '<button class="btn mini ghost" data-act="restore" data-pid="' + esc(p.id) + '">Restore</button>'
-          : '<button class="btn mini ghost" data-act="archive" data-pid="' + esc(p.id) + '">Archive</button>') + '</td></tr>';
-    }
-    h += '<section class="blk"><h3>Active</h3><table class="t"><tr><th>Name</th><th>Line</th><th>Cad d</th><th>Last 1:1</th><th>Del.</th><th>Pulses</th><th></th></tr>';
-    h += act.length ? act.map(function (p) { return row(p, false); }).join('') : '<tr><td colspan="7" class="muted-note">Roster is empty — add your first lead above, or load the sample set at #/data.</td></tr>';
-    h += '</table></section>';
-    if (arch.length) h += '<section class="blk"><h3>Archived — history preserved, engine ignores</h3><table class="t"><tr><th>Name</th><th>Line</th><th>Cad</th><th>Last 1:1</th><th>Del.</th><th>Pulses</th><th></th></tr>' +
-      arch.map(function (p) { return row(p, true); }).join('') + '</table></section>';
-    return h;
+  /* ---------- DATA ---------- */
+  function renderData(root) {
+    var s = st();
+    var exp = S().exportJSON();
+    var keys = S().listKeys();
+    var html = '<div class="vhead"><h1>Data</h1><span class="sub">one key · export · import · quarantine</span></div>';
+    if (FLASH) { html += '<div class="flash' + (FLASH.err ? ' err' : '') + '">' + esc(FLASH.msg) + '</div>'; FLASH = null; }
+    var hasSeeds = (s.people || []).some(function (p) { return p && p.seed; }) || s.events.some(function (e) { return e.seed; });
+    html += '<div class="qbar">' +
+      '<button class="qchip" data-act="export">' + ic('dl') + 'Download full JSON</button>' +
+      '<button class="qchip" data-act="seed"' + (s.meta.seeded ? ' disabled style="opacity:.4;cursor:default"' : '') + '>' + ic('plus') + 'Load sample set</button>' +
+      (hasSeeds ? '<button class="qchip" data-act="purge">' + ic('x') + 'Purge seeded rows</button>' : '') +
+      '</div><p class="muted-note" style="margin-top:-8px">' +
+      (s.meta.seeded ? 'seeded flag is SET — the sample set will never load twice (purge keeps the flag).' : 'no seed flag — the sample set has never been loaded.') + '</p>';
+
+    html += '<div class="minihead">import (guards: unparseable / malformed / newer / foreign / identical → refused)</div>' +
+      '<textarea id="imp" style="width:100%;min-height:90px;border:1px solid var(--line2);background:#fff;padding:8px 9px;font:11px/1.5 var(--mono)" placeholder="paste a LeadOS export here — merges with re-minted ids, never overwrites"></textarea>' +
+      '<div class="actions" style="margin:8px 0 4px"><button class="btn mini" data-act="import">' + ic('arrow') + 'Run import pipeline</button></div>' +
+      '<div class="errtxt" id="ierr"></div>';
+
+    html += '<div class="minihead">keys under leados:data (' + keys.length + ')</div><table class="tbl"><thead><tr><th>key</th><th class="m">kind</th><th class="m">bytes</th><th></th></tr></thead><tbody>';
+    keys.forEach(function (k) {
+      html += '<tr><td class="m" style="word-break:break-all">' + esc(k.key) + '</td><td class="m">' + esc(k.kind) + '</td><td class="m">' + k.bytes + '</td>' +
+        '<td class="m">' + (k.kind === 'live' ? '<span class="muted-note">live</span>' : '<a class="lnk" data-read="' + esc(k.key) + '">read</a>') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+
+    html += '<div class="minihead">audit log (last 30)</div>' +
+      (s.log || []).slice(-30).reverse().map(function (l) {
+        return '<div class="logrow"><span class="lk">' + esc(String(l.ts).slice(5, 16).replace('T', ' ')) + ' ' + esc(l.kind) + '</span>' + esc(l.msg) + '</div>';
+      }).join('');
+    html += '<p class="footnote">Quota doctrine: the ~5MB localStorage budget is an ASSUMPTION (real limits aren\'t JS-queryable) — labelled, not hidden. Every write goes through one trySetItem; a quota failure sets the red WRITE FAILED pill and leaves in-memory state intact: export immediately. Export size now: ' + exp.length + ' bytes. Quarantines are timestamped, never overwritten, read-only here.</p>';
+    root.innerHTML = html;
+
+    root.querySelector('[data-act="export"]').addEventListener('click', function () {
+      var blob = new Blob([S().exportJSON()], { type: 'application/json' });
+      var aEl = document.createElement('a');
+      aEl.href = URL.createObjectURL(blob);
+      aEl.download = 'leados-export-' + today() + '.json';
+      aEl.click();
+      setTimeout(function () { URL.revokeObjectURL(aEl.href); }, 500);
+    });
+    var seedBtn = root.querySelector('[data-act="seed"]');
+    if (seedBtn && !seedBtn.disabled) seedBtn.addEventListener('click', function () {
+      EV().seed(st());
+      saveAndNote('Sample set loaded — every rule now has something to say. Purge removes the rows; the flag stays forever.');
+      render();
+    });
+    var purgeBtn = root.querySelector('[data-act="purge"]');
+    if (purgeBtn) purgeBtn.addEventListener('click', function () {
+      EV().purgeSeeds(st());
+      saveAndNote('Seeded rows purged. State stays empty forever — no reseed.');
+      render();
+    });
+    root.querySelector('[data-act="import"]').addEventListener('click', function () {
+      var txt = document.getElementById('imp').value;
+      var r = S().importJSON(txt);
+      if (!r.ok) { document.getElementById('ierr').textContent = 'refused: ' + r.reason; return; }
+      saveAndNote('Import merged: +' + r.imported.people + ' people, +' + r.imported.events + ' events (ids re-minted, refs rewired).');
+      render();
+    });
+    root.querySelectorAll('[data-read]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var raw = S().readKey(b.getAttribute('data-read'));
+        var pretty = raw;
+        try { pretty = JSON.stringify(JSON.parse(raw), null, 2); } catch (e) { /* show raw */ }
+        drawerShow(dhead('Quarantine · read-only', b.getAttribute('data-read')) +
+          '<pre class="dump">' + esc(pretty.slice(0, 40000)) + '</pre>' +
+          '<p class="muted-note">Preserved bytes are never modified or deleted by the app. Remove them yourself in DevTools if you want them gone — that is a decision we don\'t make for you.</p>');
+      });
+    });
   }
 
-  function vPlaybooks() {
-    var h = '<div class="vhead"><h1>Playbooks</h1><span class="sub">the mentor layer</span></div>';
-    h += '<div class="vsub">Procedures, not a wiki. Open one with a person in mind, or let a finding pre-fill it from Today. Submitting writes resolving events through the shared layer — everything recomputes.</div>' + flashHtml();
-    Object.keys(PB.PBS).forEach(function (k) {
-      var pb = PB.PBS[k];
-      h += '<div class="pbrow" data-act="pb-open" data-pb="' + esc(k) + '"><span>' + ic(pb.icon, 18) + '</span><div><h4>' + esc(pb.title) + '</h4><p>' + esc(pb.blurb) + '</p></div><span>' + ic('go') + '</span></div>';
-    });
-    return h;
-  }
-
-  /* ---------- health: live-path tests + golden wall ---------- */
-  function keysMatching(sub) {
-    var out = [];
-    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf(sub) === 0) out.push(k); }
-    return out;
-  }
-  function cleanupTest() { keysMatching(TEST_PREFIX).forEach(function (k) { localStorage.removeItem(k); }); }
-
-  function runLiveTests() {
-    var rows = [];
-    function T(id, name, fn) {
-      var pass = false, detail = '';
-      try { var r = fn(); pass = !!r.pass; detail = r.detail || ''; }
-      catch (e) { detail = 'threw: ' + String(e && e.message || e); }
-      finally { cleanupTest(); }
-      rows.push({ id: id, name: name, pass: pass, detail: detail });
-    }
-
-    T('T1', 'cold boot: absent key boots fresh, persists valid mf-2 shape', function () {
-      localStorage.removeItem(TEST_PREFIX);
-      var s = S.makeStore(TEST_PREFIX), b = s.load(); s.save();
-      return { pass: b.branch === 'absent' && S.isShape(JSON.parse(localStorage.getItem(TEST_PREFIX))), detail: 'branch=' + b.branch };
-    });
-    T('T2', 'corrupted storage quarantined byte-exact; live key removed, never overwritten', function () {
-      var a = S.makeStore(TEST_PREFIX); a.load(); a.save();
-      a._rawSet(TEST_PREFIX, '{bad');
-      var b = S.makeStore(TEST_PREFIX), r = b.load();
-      var qk = keysMatching(TEST_PREFIX + '.corrupt.');
-      var exact = qk.length === 1 && localStorage.getItem(qk[0]) === '{bad';
-      return { pass: r.branch === 'corrupt' && exact && localStorage.getItem(TEST_PREFIX) == null,
-        detail: 'branch=' + r.branch + ', quarantine=' + qk.length + ', byteExact=' + exact };
-    });
-    T('T3', 'quota failure caught in the production write path, in-memory state preserved', function () {
-      var orig = Storage.prototype.setItem, r2, s;
-      try {
-        Storage.prototype.setItem = function () { var e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; };
-        s = S.makeStore(TEST_PREFIX); s.load(); r2 = s.save();
-      } finally { Storage.prototype.setItem = orig; }
-      return { pass: r2 && r2.ok === false && r2.quota === true && s.get().meta.writeFailed === true,
-        detail: 'ok=' + (r2 && r2.ok) + ', quota=' + (r2 && r2.quota) };
-    });
-    T('T4', 'second-run reseed impossible: wipe after seed, reload stays empty, flag permanent', function () {
-      var s = S.makeStore(TEST_PREFIX); s.load();
-      EV.seed(s.get()); s.save(); EV.purgeSeeds(s.get()); s.save();
-      var b = S.makeStore(TEST_PREFIX); b.load();
-      var st = b.get();
-      return { pass: st.people.length === 0 && st.events.length === 0 && st.meta.seeded === true,
-        detail: 'people=' + st.people.length + ', events=' + st.events.length + ', seeded=' + st.meta.seeded };
-    });
-    T('T5', 'end-to-end through real storage: backdated 1:1 → engine reads R1 overdue 3d', function () {
-      var a = S.makeStore(TEST_PREFIX); a.load();
-      var p = EV.addPerson(a.get(), { name: 'T5 Person', role: 'x', cadenceDays: 7 });
-      EV.emit(a.get(), 'oneonone.logged', { personId: p.id, ts: new Date(Date.now() - 10 * 86400000).toISOString() });
-      a.save();
-      var b = S.makeStore(TEST_PREFIX); b.load();
-      var hit = EN.run(b.get()).findings.filter(function (f) { return f.ruleId === 'R1' && f.personId === p.id; })[0];
-      return { pass: !!hit && hit.meta.overdue === 3, detail: hit ? 'overdue=' + hit.meta.overdue + 'd · ' + hit.breakdown : 'no R1 finding' };
-    });
-    T('T6', 'newer-version and foreign-lineage stores quarantined with bytes preserved', function () {
-      var s = S.makeStore(TEST_PREFIX); s.load();
-      s._rawSet(TEST_PREFIX, JSON.stringify({ meta: { schemaVersion: 9, lineage: 'mf' }, marker: 't6n', people: [], events: [], log: [] }));
-      var r1 = S.makeStore(TEST_PREFIX).load();
-      var k1 = keysMatching(TEST_PREFIX + '.newer.');
-      var kept1 = k1.length === 1 && localStorage.getItem(k1[0]).indexOf('t6n') >= 0;
-      s._rawSet(TEST_PREFIX, JSON.stringify({ meta: { schemaVersion: 3, lineage: 'mono' }, marker: 't6f', people: [], events: [], log: [] }));
-      var r2 = S.makeStore(TEST_PREFIX).load();
-      var k2 = keysMatching(TEST_PREFIX + '.foreign.');
-      var kept2 = k2.length === 1 && localStorage.getItem(k2[0]).indexOf('t6f') >= 0;
-      return { pass: r1.branch === 'newer' && kept1 && r2.branch === 'foreign' && kept2,
-        detail: 'newer=' + r1.branch + '/' + kept1 + ', foreign=' + r2.branch + '/' + kept2 };
-    });
-    T('T7', 'import refuses byte-identical-to-live and unparseable payloads', function () {
-      var s = S.makeStore(TEST_PREFIX); s.load(); s.save();
-      var raw = localStorage.getItem(TEST_PREFIX);
-      var r1 = s.importText(raw, { mode: 'replace' }), r2 = s.importText('{nope', { mode: 'replace' });
-      return { pass: r1.status === 'refuse-identical' && r2.status === 'unparseable', detail: 'identical→' + r1.status + ', garbage→' + r2.status };
-    });
-    T('T8', 'integrity audit: dup id re-minted, dangling FK nulled, bad ts/data repaired — rows never dropped', function () {
-      var s = S.makeStore(TEST_PREFIX); s.load();
-      s.get().events.push({ id: 'te-1', ts: '2026-01-01T00:00:00.000Z', type: 'x.a', personId: 'ghost', data: {} });
-      s.get().events.push({ id: 'te-1', ts: 'not-a-date', type: 'x.b', personId: null, data: null });
-      var repairs = s.audit(), e1 = s.get().events[0], e2 = s.get().events[1];
-      return { pass: repairs >= 4 && e1.personId === null && e1.id !== e2.id && s.get().events.length === 2 && S.validTs(e2.ts) && typeof e2.data === 'object' && e2.data,
-        detail: 'repairs=' + repairs + ', rows=' + s.get().events.length };
-    });
-    T('T9', 'import merge re-mints ids, rewires FKs, repairs malformed rows without dropping them', function () {
-      var s = S.makeStore(TEST_PREFIX); s.load();
-      EV.addPerson(s.get(), { name: 'Existing', role: 'x' }); s.save();
-      var inc = S.fresh(); inc.meta.seeded = true;
-      inc.people.push({ id: 'imp-p1', name: 'Imported', role: 'x', cadenceDays: 7, reportsTo: 'me', createdAt: S.nowISO(), archived: false, seed: false });
-      inc.events.push({ id: 'imp-g1', ts: S.nowISO(), type: 'goal.set', personId: null, data: { title: 'imp-goal', ownerPersonId: 'imp-p1' }, seed: false });
-      inc.events.push({ id: 'imp-e1', ts: S.nowISO(), type: 'goal.progress', personId: null, data: { goalId: 'imp-g1', note: 'hi' }, seed: false });
-      inc.events.push({ ts: S.nowISO(), type: 'pulse.logged', personId: 'imp-p1', data: { mood: 5, load: 5 }, seed: false }); /* no id → repair */
-      var r = s.importText(JSON.stringify(inc), { mode: 'merge' });
-      var st = s.get();
-      var goal = st.events.filter(function (e) { return e.type === 'goal.set' && e.data.title === 'imp-goal'; })[0];
-      var prog = st.events.filter(function (e) { return e.type === 'goal.progress' && e.data.note === 'hi'; })[0];
-      var noIdFixed = st.events.every(function (e) { return typeof e.id === 'string' && e.id; });
-      var pass = r.status === 'imported' && st.people.length === 2 &&
-        st.people.filter(function (p) { return p.id === 'imp-p1'; }).length === 0 &&
-        goal && prog && prog.data.goalId === goal.id && noIdFixed;
-      return { pass: !!pass, detail: 'status=' + r.status + ', people=' + st.people.length + ', rewired=' + (prog && goal ? prog.data.goalId === goal.id : 'n/a') + ', repairs=' + r.repairs };
-    });
-    T('T10', 'migration 1→2 on the live path: byte-exact v1 store upgrades, reportsTo backfilled, pre-migration bytes kept', function () {
-      var iso = '2026-02-01T00:00:00.000Z';
-      var v1 = { meta: { schemaVersion: 1, lineage: 'mf', seeded: true, createdAt: iso, writeFailed: false },
-        people: [{ id: 'p1v1', name: 'Legacy Lead', role: 'x', cadenceDays: 7, createdAt: iso, archived: false, seed: false }],
-        events: [{ id: 'e1v1', ts: iso, type: 'oneonone.logged', personId: 'p1v1', data: {}, seed: false }], log: [] };
-      localStorage.setItem(TEST_PREFIX, JSON.stringify(v1));
-      var s = S.makeStore(TEST_PREFIX), r = s.load(), st = s.get();
-      var qk = keysMatching(TEST_PREFIX + '.pre-migration.');
-      var pass = r.branch === 'migrated' && st.meta.schemaVersion === 2 && st.people[0].reportsTo === 'me' &&
-        qk.length === 1 && localStorage.getItem(qk[0]).indexOf('p1v1') >= 0;
-      return { pass: pass, detail: 'branch=' + r.branch + ', schema=' + st.meta.schemaVersion + ', reportsTo=' + st.people[0].reportsTo + ', bytesKept=' + (qk.length === 1) };
-    });
-    return rows;
-  }
-
-  function vHealth() {
-    var Tv = runLiveTests(), G = EN.runGolden();
-    var tPass = Tv.filter(function (r) { return r.pass; }).length, gPass = G.filter(function (r) { return r.pass; }).length;
-    var h = '<div class="vhead"><h1>Health</h1><span class="sub">T ' + tPass + '/' + Tv.length + ' · G ' + gPass + '/' + G.length + ' · executed ' + new Date().toISOString().slice(11, 19) + 'Z</span></div>';
-    h += '<div class="vsub">Every row executes now, in this browser, against production code paths. Test keys (' + TEST_PREFIX + '*) are cleaned after each run; live data is never touched. This wall is the authority over any README.</div>' + flashHtml();
-    h += '<section class="blk"><h3>Live-path tests — storage, migration, quota, audit, end-to-end</h3>' +
-      Tv.map(function (r) { return '<div class="trow"><span class="tid">' + r.id + '</span><div><div class="tnm">' + esc(r.name) + '</div><div class="tdt">' + esc(r.detail) + '</div></div><span class="res ' + (r.pass ? 'pass' : 'fail') + '">' + (r.pass ? 'PASS' : 'FAIL') + '</span></div>'; }).join('') + '</section>';
-    h += '<section class="blk"><h3>Golden engine fixtures — events in, expected finding out · fixed today ' + '2026-03-01' + '</h3>' +
-      G.map(function (r) { return '<div class="trow"><span class="tid">' + r.id + '</span><div><div class="tnm">' + esc(r.name) + '</div><div class="tdt">' + esc(r.detail) + '</div></div><span class="res ' + (r.pass ? 'pass' : 'fail') + '">' + (r.pass ? 'PASS' : 'FAIL') + '</span></div>'; }).join('') + '</section>';
-    h += '<section class="blk"><h3>Engine doctrine (the constants the rules obey)</h3><dl class="kv">' +
-      Object.keys(EN.DOCTRINE).map(function (k) { return '<dt>' + esc(k) + '</dt><dd>' + esc(String(EN.DOCTRINE[k])) + '</dd>'; }).join('') +
-      '<dt>confidence factors</dt><dd>high 1.0 · medium 0.8 · low 0.6 — multiplied into every printed score</dd></dl></section>';
-    h += '<p class="muted-note">Non-claims, stated: fixture-based self-assertions on real code paths — not browser automation, not a fuzzer. T/E coverage spans storage, migration, quota, import, and all eight rules incl. boundaries and malformed input; it does not cover UI rendering itself.</p>';
-    return h;
-  }
-
-  /* ---------- data & backup ---------- */
-  function keyKind(k) {
-    if (k === 'leados:data') return 'LIVE';
-    if (k.indexOf(TEST_PREFIX) === 0) return 'test';
-    var m = k.match(/^leados:data\.([a-z-]+)\./);
-    return m ? m[1] : 'other';
-  }
-  function vData() {
-    var st = DB.get(), u = DB.usage();
-    var budget = 5 * 1024 * 1024 / 2; /* UTF-16 units — the ~5MB assumption, labeled as such */
-    var pct = Math.min(100, Math.round(100 * u.bytes / budget));
-    var h = '<div class="vhead"><h1>Data</h1><span class="sub">localStorage only · no network</span></div>' + flashHtml();
-    h += '<div class="vsub">Everything lives under one key. Quarantines and foreign bytes are kept, browsable here, never silently overwritten or deleted by the app.</div>';
-    h += '<section class="blk"><h3>Storage</h3><dl class="kv">' +
-      '<dt>live key</dt><dd>leados:data · ' + u.bytes + ' B (UTF-16 units)</dd>' +
-      '<dt>schema</dt><dd>v' + st.meta.schemaVersion + ' · lineage ' + esc(st.meta.lineage) + (st.meta.migrations && st.meta.migrations.length ? ' · migrated ' + st.meta.migrations.map(function (m) { return m.from + '→' + m.to; }).join(', ') : '') + '</dd>' +
-      '<dt>contents</dt><dd>' + u.people + ' people · ' + u.events + ' events · ' + u.log + ' log rows</dd>' +
-      '<dt>seeded</dt><dd>' + st.meta.seeded + ' (permanent — wiping rows never reseeds)</dd>' +
-      '<dt>write failed</dt><dd>' + st.meta.writeFailed + '</dd></dl>' +
-      '<div class="barline"><span class="muted-note">~' + pct + '%</span><div class="bar"><i style="width:' + pct + '%"></i></div><span class="muted-note">of a ~5MB assumption (real quota is not JS-queryable — labeled assumption)</span></div></section>';
-    h += '<section class="blk"><h3>Export backup</h3><div class="actions">' +
-      '<button class="btn" data-act="export">' + ic('dl') + 'Download JSON</button></div>' +
-      '<label class="f"><span class="fl">Full state (also copyable)</span><textarea id="export-box" readonly rows="6">' + esc(DB.exportText()) + '</textarea></label></section>';
-    h += '<section class="blk"><h3>Import backup</h3>' +
-      '<label class="f"><span class="fl">From file</span><input type="file" accept=".json,application/json" data-change="import-file"></label>' +
-      '<label class="f"><span class="fl">Mode</span><select name="_imode" id="import-mode"><option value="replace">replace (live state quarantined first)</option><option value="merge">merge (ids re-minted, foreign keys rewired)</option></select></label>' +
-      '<label class="f"><span class="fl">Paste JSON</span><textarea id="import-box" rows="5" placeholder="{...}"></textarea></label>' +
-      '<div class="actions"><button class="btn" data-act="import-run">' + ic('ul') + 'Run import</button></div>' +
-      (ui.importResult ? '<div class="flash' + (ui.importResult.ok ? '' : ' err') + '">' + esc(ui.importResult.status) + (ui.importResult.note ? ' — ' + esc(ui.importResult.note) : '') + (ui.importResult.repairs != null ? ' · repairs: ' + ui.importResult.repairs : '') + '</div>' : '') +
-      '<p class="muted-note">Refusals by doctrine: unparseable · malformed shape · newer schema · foreign lineage (bytes preserved read-only; no migration is ever invented) · byte-identical to live. Same-lineage older versions migrate through the documented ladder.</p></section>';
-    h += '<section class="blk"><h3>Sample data</h3><div class="actions">' +
-      '<button class="btn ghost" data-act="seed">Load sample set</button>' +
-      '<button class="btn ghost" data-act="purge">Purge samples</button></div>' +
-      '<p class="muted-note">Four people + events chosen to fire every rule incl. skip-level. Purging removes only seed:true rows and can never trigger a reseed.</p></section>';
-    h += '<section class="blk"><h3>Storage keys</h3><table class="t"><tr><th>Key</th><th>Kind</th><th>Bytes</th><th></th></tr>';
-    var ks = [];
-    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && k.indexOf('leados') === 0) ks.push(k); }
-    ks.sort();
-    if (!ks.length) h += '<tr><td colspan="4" class="muted-note">no LeadOS keys</td></tr>';
-    ks.forEach(function (k) {
-      var kind = keyKind(k), v = localStorage.getItem(k) || '';
-      h += '<tr><td><span class="mono">' + esc(k) + '</span>' + (kind !== 'LIVE' && kind !== 'test' && v ? '<div class="tdt">' + esc(v.slice(0, 160)) + (v.length > 160 ? '…' : '') + '</div>' : '') + '</td>' +
-        '<td><span class="tagchip">' + esc(kind) + '</span></td><td class="num">' + v.length + '</td>' +
-        '<td class="num">' + (kind === 'LIVE' ? '—' : '<button class="btn mini danger" data-act="keydel" data-key="' + esc(k) + '">Delete</button>') + '</td></tr>';
-    });
-    h += '</table><p class="muted-note">Quarantine and foreign keys are preserved bytes, read-only. Only you delete keys; the app never does.</p></section>';
-    h += '<section class="blk"><h3>Integrity & event log · latest 30</h3>' +
-      (st.log.length ? st.log.slice(-30).reverse().map(function (l) {
-        return '<div class="logline">' + esc(String(l.ts).slice(0, 19).replace('T', ' ')) + ' · ' + esc(l.kind) + ' · ' + esc(l.msg) + '</div>'; }).join('')
-        : '<div class="muted-note">log is empty</div>') + '</section>';
-    h += '<section class="blk"><h3>Danger</h3><button class="btn danger" data-act="reset">' + ic('warn') + 'Factory reset</button>' +
-      '<p class="muted-note">Double-confirmed. Live state is quarantined to a pre-import key before a fresh store is written — nothing is destroyed silently.</p></section>';
-    return h;
-  }
-
-  var VIEWS = { today: vToday, roster: vRoster, playbooks: vPlaybooks, health: vHealth, data: vData };
-
-  function render() {
-    Object.keys(VIEWS).forEach(function (r) {
-      document.querySelectorAll('[data-route="' + r + '"]').forEach(function (a) { a.classList.toggle('on', r === ui.route); });
-    });
-    var st = DB.get();
-    $('pill').hidden = !(st && st.meta.writeFailed);
-    $('view').innerHTML = (VIEWS[ui.route] || vToday)();
-  }
+  /* ---------- router ---------- */
+  var VIEWS = {
+    today: renderToday, arrival: renderArrival, roster: renderRoster,
+    playbooks: renderPlaybooks, health: renderHealth, data: renderData
+  };
   function route() {
-    var h = (location.hash || '#/today').replace(/^#\//, '');
-    if (VIEWS[h]) { ui.route = h; ui.capOpen = h === 'today' ? ui.capOpen : false; }
-    else ui.route = 'today';
-    window.scrollTo(0, 0);
-    render();
+    var h = location.hash || '#/today';
+    var m = /^#\/(\w+)(?:\/(.+))?$/.exec(h);
+    return { name: m ? m[1] : 'today', param: m && m[2] ? decodeURIComponent(m[2]) : null };
+  }
+  function render() {
+    var r = route();
+    var root = document.getElementById('main');
+    document.querySelectorAll('.navbtn').forEach(function (b) {
+      b.classList.toggle('on', b.getAttribute('data-nav') === (r.name === 'person' ? 'roster' : r.name));
+    });
+    drawerClose();
+    if (r.name === 'person') return renderPerson(root, r.param);
+    (VIEWS[r.name] || renderToday)(root);
+    pill();
   }
 
-  /* ---------- actions ---------- */
-  function onClick(e) {
-    var t = e.target.closest ? e.target.closest('[data-act]') : null;
-    if (!t) return;
-    var act = t.getAttribute('data-act');
-    if (act === 'dossier' && e.target.closest('input, select, textarea, button')) return; /* cadence editor inside a row must not open the dossier */
-    var pid = t.getAttribute('data-pid'), fi = t.getAttribute('data-fi');
-    var st = DB.get();
-    if (act === 'drawer-close') closeDrawer();
-    else if (act === 'go-roster') location.hash = '#/roster';
-    else if (act === 'go-playbooks') location.hash = '#/playbooks';
-    else if (act === 'cap-open') { ui.capOpen = true; ui.capPrefill = null; render(); }
-    else if (act === 'cap-close') { ui.capOpen = false; render(); }
-    else if (act === 'dossier' && pid) openDossier(pid);
-    else if (act === 'pb-open') openPlaybook(t.getAttribute('data-pb'), { personId: pid || undefined });
-    else if (act === 'pb-direct') openPlaybook(t.getAttribute('data-pb'), { personId: pid || undefined });
-    else if (act === 'finding-pb' && fi != null) {
-      var f = ui.lastRun && ui.lastRun.findings[+fi];
-      if (!f) return;
-      var map = PB.forFinding(f);
-      if (map) openPlaybook(map.pb, map.prefill);
-    }
-    else if (act === 'snooze' && fi != null) {
-      var f2 = ui.lastRun && ui.lastRun.findings[+fi]; if (!f2) return;
-      var until = new Date(Date.now() + EN.DOCTRINE.SNOOZE_DAYS * 86400000).toISOString().slice(0, 10);
-      EV.emit(st, 'engine.snooze', { data: { ruleId: f2.ruleId, key: f2.key, until: until } });
-      saveState(); flash = { msg: 'Snoozed until ' + until + '. It returns on its own — logged as an event, exportable like everything else.' };
-      render();
-    }
-    else if (act === 'dismiss' && fi != null) {
-      var f3 = ui.lastRun && ui.lastRun.findings[+fi]; if (!f3) return;
-      var reason = window.prompt('Dismiss "' + f3.title + '"\n\nYour reason is logged as an event (auditable, reversible via Unmute):');
-      if (reason == null) return;
-      EV.emit(st, 'engine.dismiss', { data: { ruleId: f3.ruleId, key: f3.key, reason: reason || '(no reason given)' } });
-      saveState(); flash = { msg: 'Dismissed and muted. Your reason is in the event log; the item stays listed under Dismissed with an Unmute button.' };
-      render();
-    }
-    else if (act === 'unmute') {
-      var key = t.getAttribute('data-key');
-      EV.emit(st, 'engine.unmute', { data: { key: key } });
-      saveState(); flash = { msg: 'Unmuted. If the underlying data still triggers the rule, it is back in the ranking above.' };
-      render();
-    }
-    else if (act === 'archive' && pid) {
-      st.people.forEach(function (p) { if (p.id === pid) p.archived = true; });
-      EV.emit(st, 'person.archived', { personId: pid });
-      saveState(); render();
-    }
-    else if (act === 'restore' && pid) {
-      st.people.forEach(function (p) { if (p.id === pid) p.archived = false; });
-      EV.emit(st, 'person.restored', { personId: pid });
-      saveState(); render();
-    }
-    else if (act === 'seed') {
-      var did = EV.seed(st);
-      saveState();
-      flash = { msg: did ? 'Sample set written — watch Today recompute: every rule should have something to say.' : 'Already seeded once (the flag is permanent). Purge samples first if you want a clean slate.' };
-      render();
-    }
-    else if (act === 'purge') {
-      EV.purgeSeeds(st); saveState();
-      flash = { msg: 'Seed rows purged; meta.seeded stays true — no reseed will occur.' };
-      render();
-    }
-    else if (act === 'export') {
-      var blob = new Blob([DB.exportText()], { type: 'application/json' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'leados-export-' + todayISO() + '.json';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-      flash = { msg: 'Export downloaded. It also lives in the copyable box above — backups work offline by design.' };
-      render();
-    }
-    else if (act === 'import-run') {
-      var text = $('import-box') ? $('import-box').value : '';
-      var mode = $('import-mode') ? $('import-mode').value : 'replace';
-      ui.importResult = DB.importText(text, { mode: mode });
-      flash = { msg: ui.importResult.ok ? 'Import applied (' + ui.importResult.status + ').' : 'Import refused: ' + ui.importResult.status + (ui.importResult.note ? ' — ' + ui.importResult.note : ''), err: !ui.importResult.ok };
-      render();
-    }
-    else if (act === 'keydel') {
-      var k = t.getAttribute('data-key');
-      if (k && k !== 'leados:data' && window.confirm('Delete ' + k + '? Its preserved bytes are gone for good.')) {
-        localStorage.removeItem(k);
-        flash = { msg: k + ' deleted at your request.' };
-        render();
-      }
-    }
-    else if (act === 'reset') {
-      if (window.confirm('Factory reset? Live state is quarantined to a pre-import key first.') &&
-          window.confirm('Second confirm: roster, events and log are replaced by a fresh store. Proceed?')) {
-        ui.importResult = DB.importText(JSON.stringify(S.fresh()), { mode: 'replace' });
-        flash = { msg: 'Reset complete; prior state is preserved under a leados:data.pre-import.* key — see the key browser above.' };
-        render();
-      }
-    }
-  }
-
-  function onChange(e) {
-    var t = e.target.closest ? e.target.closest('[data-change]') : null;
-    if (!t) return;
-    var kind = t.getAttribute('data-change');
-    if (kind === 'cap-type') { ui.capPrefill = { type: t.value }; render(); }
-    else if (kind === 'cadence') {
-      var pid = t.getAttribute('data-pid');
-      var v = Math.max(1, Math.min(90, parseInt(t.value, 10) || 7));
-      var st = DB.get();
-      st.people.forEach(function (p) {
-        if (p.id === pid && p.cadenceDays !== v) {
-          var from = p.cadenceDays; p.cadenceDays = v;
-          EV.emit(st, 'person.cadence', { personId: pid, data: { from: from, to: v } });
-        }
-      });
-      saveState(); render();
-    }
-    else if (kind === 'import-file') {
-      var file = t.files && t.files[0];
-      if (!file) return;
-      var rd = new FileReader();
-      rd.onload = function () { var box = $('import-box'); if (box) box.value = String(rd.result || ''); };
-      rd.readAsText(file);
-    }
-    else if (ui.drawer && ui.drawer.kind === 'pb' && t.closest && t.closest('#form-pb')) updatePreview();
-  }
-  function onInput(e) { if (ui.drawer && ui.drawer.kind === 'pb' && e.target.closest && e.target.closest('#form-pb')) updatePreview(); }
-
-  function onSubmit(e) {
-    var form = e.target;
-    if (form.id === 'form-roster-add') {
-      e.preventDefault();
-      var name = form.elements.name.value.trim();
-      if (!name) { flash = { msg: 'A name is required.', err: true }; render(); return; }
-      var p = EV.addPerson(DB.get(), {
-        name: name, role: form.elements.role.value,
-        cadenceDays: form.elements.cadenceDays.value, reportsTo: form.elements.reportsTo.value });
-      saveState();
-      flash = { msg: p.name + ' added (' + (p.reportsTo === 'me' ? 'direct report' : 'skip-level line') + '). The engine is watching from this render.' };
-      render();
-    }
-    else if (form.id === 'form-capture') {
-      e.preventDefault();
-      var v = formValues(form), type = form.elements._type.value, spec = CAPTURE[type];
-      var missing = [];
-      if (spec.person && !v.personId) missing.push('Person');
-      if (spec.link && !v._link) missing.push('linked record');
-      spec.fields.forEach(function (f) { if (f[3] && f[2] !== 'check' && !String(v[f[0]] || '').trim()) missing.push(f[1]); });
-      if (missing.length) { flash = { msg: 'missing: ' + missing.join(', '), err: true }; render(); return; }
-      var data = {};
-      spec.fields.forEach(function (f) {
-        var name = f[0], kind = f[2], val = v[name];
-        if (kind === 'check') { if (val === true) data[name] = true; return; }
-        if (val !== '' && val != null) {
-          if (kind === 'num10' || kind === 'sev' || kind === 'level' || kind === 'num') data[name] = parseInt(val, 10);
-          else if (kind === 'owner') data[name] = val || null;
-          else data[name] = val;
-        } else if (kind === 'owner') data[name] = null;
-      });
-      if (spec.link) data[LINK_ID_FIELD[type]] = v._link;
-      var ts = v.date ? v.date + 'T00:00:00.000Z' : undefined;
-      var saved = EV.emit(DB.get(), type, { ts: ts, personId: spec.person ? v.personId : null, data: data });
-      saveState();
-      ui.capOpen = false;
-      flash = { msg: 'Recorded ' + saved.type + ' (' + saved.id + '). All modules recomputed from the event stream — no cache to invalidate.' };
-      render();
-    }
-    else if (form.id === 'form-pb' && ui.drawer && ui.drawer.kind === 'pb') {
-      e.preventDefault();
-      var pb = PB.PBS[form.getAttribute('data-pb')];
-      if (!pb) return;
-      var vals = formValues(form);
-      var fields = pb.fields(pbCtx(ui.drawer.prefill), ui.drawer.prefill), miss = [];
-      fields.forEach(function (f) { if (f.required && f.kind !== 'check' && !String(vals[f.key] || '').trim()) miss.push(f.label); });
-      if (miss.length) { flash = { msg: 'missing: ' + miss.join(', '), err: true }; closeDrawer(); render(); return; }
-      var out;
-      try { out = pb.submit(vals, pbCtx(ui.drawer.prefill)); }
-      catch (err) { flash = { msg: 'playbook submit failed: ' + String(err && err.message), err: true }; closeDrawer(); render(); return; }
-      var em = EV.emitMany(DB.get(), (out.events || []).map(function (d) { d.ts = d.ts || out.ts; return d; }));
-      EV.emit(DB.get(), 'playbook.completed', { personId: vals.personId || null,
-        data: { playbook: pb.id, ruleKey: ui.drawer.prefill.ruleKey || null, emitted: em.map(function (x) { return x.id; }) } });
-      saveState();
-      closeDrawer();
-      flash = { msg: pb.title + ' recorded (' + em.map(function (x) { return x.type; }).join(' + ') + '). ' + (ui.drawer === null ? '' : '') + 'Engine recomputed — check Today.' };
-      render();
-    }
-  }
-
-  /* ---------- boot ---------- */
-  function boot() {
-    var res = DB.load();
-    var repairs = DB.audit();
-    DB.save();
-    var msgs = [];
-    if (res.branch === 'migrated') msgs.push('your store was upgraded schema 1→2 (documented migration; pre-migration bytes preserved under a leados:data.pre-migration.* key — #/data).');
-    if (res.branch === 'corrupt' || res.branch === 'malformed' || res.branch === 'newer') msgs.push('storage branch "' + res.branch + '" — original bytes quarantined (visible read-only at #/data), booted clean on a fresh store.');
-    if (res.branch === 'foreign') msgs.push('a store from another LeadOS lineage was found and preserved read-only. No migration was invented for it — that is policy, not a bug.');
-    if (repairs) msgs.push(repairs + ' integrity repair(s) applied at boot — details in #/data.');
-    if (msgs.length) flash = { msg: msgs.join(' ') };
-    $('boot').hidden = true;
-    $('app').hidden = false;
-    window.addEventListener('hashchange', route);
-    document.addEventListener('click', onClick);
-    document.addEventListener('change', onChange);
-    document.addEventListener('input', onInput);
-    document.addEventListener('submit', onSubmit);
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && ui.drawer) closeDrawer(); });
-    $('scrim').addEventListener('click', closeDrawer);
+  function init() {
+    var boot = S().boot();
+    var msg = {
+      absent: null,
+      ok: null,
+      corrupt: 'Stored data was corrupted — it was quarantined untouched and the app booted clean. Inspect it read-only at #/data.',
+      foreign: 'Data from a different LeadOS lineage was found, refused, and preserved. Yours was not overwritten. See #/data.',
+      newer: 'Data from a NEWER version was found and refused (we never migrate down). Booted clean; original preserved at #/data.',
+      'migration-failed': 'A migration failed — original bytes preserved, booted clean. Details in the audit log at #/data.',
+      malformed: 'Stored data failed shape validation — quarantined and booted clean. See #/data.'
+    }[boot.branch];
+    if (boot.branch === 'migrated') msg = 'Storage migrated v' + boot.from + ' → v3 (' + (boot.repairs || 0) + ' normalization repairs, none dropped). Pre-migration bytes preserved at #/data.';
+    if (boot.branch === 'ok' && boot.repairs) msg = boot.repairs + ' event row(s) repaired at boot (never dropped). Details in the audit log.';
+    if (msg) setFlash(msg, boot.branch !== 'migrated' && boot.branch !== 'ok');
+    pill();
+    document.querySelectorAll('.navbtn').forEach(function (b) {
+      b.addEventListener('click', function () { location.hash = '#/' + b.getAttribute('data-nav'); });
+    });
+    document.getElementById('scrim').addEventListener('click', drawerClose);
+    window.addEventListener('hashchange', render);
     if (!location.hash) location.hash = '#/today';
-    route();
+    render();
+    var bootEl = document.getElementById('boot');
+    if (bootEl) bootEl.style.display = 'none';
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+
+  return { init: init };
 })();

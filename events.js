@@ -1,12 +1,10 @@
-/* LeadOS mf-2 · js/events.js — append-only event layer + projections.
+/* LeadOS mf-3 · js/events.js — append-only event layer + projections.
    Every module writes through emit(); nothing derived is persisted.
-   Projections are recomputed from events on every read — stale derived state
-   is impossible by design. SESSION-6 FIX (named, verified mf-1 defect):
-   openGoals() now folds goal.assign events into owner (latest wins) — v1 had two
-   sources of truth and the projection silently ignored assignment events.
-   New event types in v2: engine.snooze / engine.dismiss / engine.unmute
-   (engine memory), sl.assessment (situational leadership), playbook.completed
-   (playbook audit trail). Additive only — migration 1→2 changes no event rows. */
+   Projections recompute from events on every read — stale derived state is
+   impossible by design. New in v3 (the arrival slice, additive events only):
+     appointment.started · expectation.logged · tour.visit
+     earlywin.committed / earlywin.verified · incident.registered / .resolved
+   The arrival projection is the instrument's single source of truth. */
 window.LEADOS = window.LEADOS || {};
 LEADOS.events = (function () {
   'use strict';
@@ -14,14 +12,8 @@ LEADOS.events = (function () {
 
   function emit(state, type, opts) {
     opts = opts || {};
-    var ev = {
-      id: S.newId('e'),
-      ts: opts.ts || S.nowISO(),
-      type: type,
-      personId: opts.personId || null,
-      data: opts.data || {},
-      seed: !!opts.seed
-    };
+    var ev = { id: S.newId('e'), ts: opts.ts || S.nowISO(), type: type,
+      personId: opts.personId || null, data: opts.data || {}, seed: !!opts.seed };
     state.events.push(ev);
     return ev;
   }
@@ -32,33 +24,34 @@ LEADOS.events = (function () {
   }
 
   function addPerson(state, p) {
-    var person = {
-      id: S.newId('p'),
-      name: String(p.name || '').trim(),
+    var person = { id: S.newId('p'), name: String(p.name || '').trim(),
       role: String(p.role || '').trim(),
       cadenceDays: Math.max(1, parseInt(p.cadenceDays, 10) || 7),
       reportsTo: p.reportsTo === undefined || p.reportsTo === '' ? 'me' : String(p.reportsTo),
-      createdAt: S.nowISO(),
-      archived: false,
-      seed: !!p.seed
-    };
+      createdAt: S.nowISO(), archived: false, seed: !!p.seed };
     state.people.push(person);
     emit(state, 'person.added', { personId: person.id,
       data: { name: person.name, role: person.role, cadenceDays: person.cadenceDays, reportsTo: person.reportsTo },
       seed: person.seed });
     return person;
   }
-
-  function byType(state, type) { return state.events.filter(function (e) { return e.type === type; }); }
-  function forPerson(events, pid) { return events.filter(function (e) { return e.personId === pid; }); }
-  function sorted(events) {
-    return events.slice().sort(function (a, b) { return String(a.ts) < String(b.ts) ? -1 : String(a.ts) > String(b.ts) ? 1 : 0; });
+  function updatePerson(state, id, fields) {
+    var p = (state.people || []).filter(function (x) { return x && x.id === id; })[0];
+    if (!p) return null;
+    var changed = {};
+    ['name', 'role', 'cadenceDays', 'reportsTo', 'archived'].forEach(function (k) {
+      if (fields[k] !== undefined && fields[k] !== p[k]) {
+        changed[k] = { from: p[k], to: fields[k] };
+        p[k] = k === 'cadenceDays' ? Math.max(1, parseInt(fields[k], 10) || 7) : fields[k];
+      }
+    });
+    if (Object.keys(changed).length) emit(state, 'person.updated', { personId: id, data: { changed: changed } });
+    return p;
   }
 
-  function byId(state) {
-    var m = {};
-    state.events.forEach(function (e) { m[e.id] = e; });
-    return m;
+  function byType(state, type) { return state.events.filter(function (e) { return e.type === type; }); }
+  function sorted(events) {
+    return events.slice().sort(function (a, b) { return String(a.ts) < String(b.ts) ? -1 : String(a.ts) > String(b.ts) ? 1 : 0; });
   }
   function peopleById(state) {
     var m = {};
@@ -83,9 +76,9 @@ LEADOS.events = (function () {
       if (e.type === 'goal.set') {
         titles[e.id] = (e.data && e.data.title) || 'untitled goal'; ts[e.id] = e.ts;
         owners[e.id] = (e.data && e.data.ownerPersonId) || null;
-        lastProg[e.id] = e.ts;                         /* set date is the first "progress" anchor */
+        lastProg[e.id] = e.ts;
       } else if (e.type === 'goal.assign' && e.data && e.data.goalId && titles[e.data.goalId] !== undefined) {
-        owners[e.data.goalId] = e.data.ownerPersonId || null;   /* SESSION-6 FIX: folded, latest wins */
+        owners[e.data.goalId] = e.data.ownerPersonId || null;
       } else if (e.type === 'goal.progress' && e.data && e.data.goalId && titles[e.data.goalId] !== undefined) {
         if (String(e.ts) > String(lastProg[e.data.goalId])) lastProg[e.data.goalId] = e.ts;
       }
@@ -100,9 +93,8 @@ LEADOS.events = (function () {
       if (c.data && c.data.delegationId) closed[c.data.delegationId] = true;
     });
     return byType(state, 'delegation.assigned').filter(function (a) { return !closed[a.id]; }).map(function (a) {
-      return { id: a.id, label: (a.data && a.data.title) || 'untitled delegation', ts: d_ts(a), personId: a.personId,
-        level: a.data && a.data.level };
-      function d_ts(x) { return x.ts; }
+      return { id: a.id, label: (a.data && a.data.title) || 'untitled delegation', ts: a.ts,
+        personId: a.personId, level: a.data && a.data.level };
     });
   }
   function openConflicts(state) {
@@ -112,18 +104,42 @@ LEADOS.events = (function () {
     });
     return byType(state, 'conflict.registered').filter(function (c) { return !resolved[c.id]; }).map(function (c) {
       return { id: c.id, label: ((c.data && c.data.counterpart) ? 'vs ' + c.data.counterpart : 'conflict') + ' · ' + String(c.ts).slice(0, 10),
-        ts: c.ts, personId: c.personId, counterpart: c.data && c.data.counterpart };
+        ts: c.ts, personId: c.personId, counterpart: c.data && c.data.counterpart,
+        updatedTs: c.ts };
+    });
+  }
+  function openIncidents(state) {
+    var resolved = {}, lastTouch = {};
+    sorted(state.events).forEach(function (e) {
+      if (e.type === 'incident.resolved' && e.data && e.data.incidentId) resolved[e.data.incidentId] = true;
+      if (e.type === 'incident.update' && e.data && e.data.incidentId &&
+          (!lastTouch[e.data.incidentId] || String(e.ts) > String(lastTouch[e.data.incidentId])))
+        lastTouch[e.data.incidentId] = e.ts;
+    });
+    return byType(state, 'incident.registered').filter(function (x) { return !resolved[x.id]; }).map(function (x) {
+      return { id: x.id, label: (x.data && x.data.title) || 'untitled incident', ts: x.ts,
+        personId: x.personId, severity: x.data && x.data.severity,
+        updatedTs: lastTouch[x.id] || x.ts };
     });
   }
 
   function pulsesMeasured(state, pid, windowDays, today) {
     return sorted(byType(state, 'pulse.logged')).filter(function (e) {
       if (pid && e.personId !== pid) return false;
-      if (e.data && e.data.estimated) return false;
+      if (e.data && e.data.estimated) return false;       /* doctrine: only spoken numbers count */
       if (windowDays == null || !today) return true;
       var d = Math.round((Date.parse(today) - Date.parse(e.ts)) / 86400000);
       return d >= 0 && d <= windowDays;
     });
+  }
+  function pulsesEstimatedCount(state, pid, windowDays, today) {
+    return sorted(byType(state, 'pulse.logged')).filter(function (e) {
+      if (pid && e.personId !== pid) return false;
+      if (!(e.data && e.data.estimated)) return false;
+      if (windowDays == null || !today) return true;
+      var d = Math.round((Date.parse(today) - Date.parse(e.ts)) / 86400000);
+      return d >= 0 && d <= windowDays;
+    }).length;
   }
   function lastOneOnOne(state, pid) {
     var best = null;
@@ -155,11 +171,75 @@ LEADOS.events = (function () {
     return best;
   }
 
-  /* ---- seeds: demonstrate every rule incl. skip-levels; purgeable; never reseed ---- */
+  /* ---- the arrival projection (v3): everything the instrument knows ---- */
+  function arrival(state, today) {
+    var appts = sorted(byType(state, 'appointment.started'));
+    var appt = appts.length ? appts[appts.length - 1] : null;   /* latest wins; history kept */
+    var startDate = (state.meta && state.meta.appointment && state.meta.appointment.startDate) ||
+      (appt && appt.data && appt.data.startDate) || null;
+    var day = null;
+    if (startDate && today) {
+      var a = Date.parse(startDate), b = Date.parse(today);
+      if (!isNaN(a) && !isNaN(b)) day = Math.round((b - a) / 86400000);
+    }
+    var expectations = sorted(byType(state, 'expectation.logged'));
+    var wins = { open: [], closed: [] };
+    var verified = {};
+    byType(state, 'earlywin.verified').forEach(function (v) {
+      if (v.data && v.data.winId) verified[v.data.winId] = v;
+    });
+    byType(state, 'earlywin.committed').forEach(function (c) {
+      var row = { id: c.id, title: (c.data && c.data.title) || 'untitled win',
+        metric: c.data && c.data.metric, verifyDate: c.data && c.data.verifyDate,
+        announcedTo: c.data && c.data.announcedTo, ts: c.ts };
+      if (verified[c.id]) { row.outcome = verified[c.id].data && verified[c.id].data.outcome; wins.closed.push(row); }
+      else wins.open.push(row);
+    });
+    /* listening tour: coverage against the CURRENT roster's direct line */
+    var visits = sorted(byType(state, 'tour.visit'));
+    var visitedIds = {}, skipCount = 0;
+    visits.forEach(function (v) {
+      if (v.personId) visitedIds[v.personId] = true;
+      if (v.data && v.data.mode === 'skiplevel') skipCount++;
+    });
+    var byId = peopleById(state);
+    function lineToMe(p) {
+      var cur = p, guard = 0;
+      while (cur && guard++ < 20) {
+        var rt = cur.reportsTo === undefined ? 'me' : cur.reportsTo;
+        if (rt === 'me') return true;
+        cur = byId[rt];
+        if (!cur || cur.archived) return false;
+      }
+      return false;
+    }
+    var directs = (state.people || []).filter(function (p) { return p && !p.archived && lineToMe(p); });
+    var missing = directs.filter(function (p) { return !visitedIds[p.id]; });
+    return {
+      set: !!startDate, startDate: startDate, day: day,
+      scope: state.meta && state.meta.appointment && state.meta.appointment.scope ||
+        (appt && appt.data && appt.data.scope) || null,
+      expectations: expectations, expectationCount: expectations.length,
+      lastExpectationTs: expectations.length ? expectations[expectations.length - 1].ts : null,
+      wins: wins,
+      tour: { visits: visits, visitedIds: visitedIds, directs: directs,
+        missing: missing, visitedCount: directs.length - missing.length,
+        directCount: directs.length, skipCount: skipCount,
+        coveragePct: directs.length ? Math.round(100 * (directs.length - missing.length) / directs.length) : null }
+    };
+  }
+
+  /* ---- seeds: demonstrate every rule incl. arrival; purgeable; never reseeds ---- */
   function agoISO(days) { return new Date(Date.now() - days * 86400000).toISOString(); }
+  function agoDate(days) { return agoISO(days).slice(0, 10); }
+  function plusDate(days) { return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10); }
   function seed(state) {
     if (state.meta.seeded) return false;
-    state.meta.seeded = true; /* permanent FIRST — reseed impossible even if rows wiped */
+    state.meta.seeded = true;          /* permanent FIRST — reseed impossible even if rows wiped */
+    state.meta.appointment = { startDate: agoDate(26), scope: 'step-up', notes: 'seeded demo appointment' };
+    emit(state, 'appointment.started', { ts: agoISO(26), seed: true,
+      data: { startDate: agoDate(26), scope: 'step-up', notes: 'took over three team leads' } });
+
     var ana = addPerson(state, { name: 'Ana Novak', role: 'Team lead — Platform', cadenceDays: 7, seed: true });
     var boris = addPerson(state, { name: 'Boris Ilic', role: 'Team lead — Growth', cadenceDays: 7, seed: true });
     var chen = addPerson(state, { name: 'Chen Wei', role: 'Team lead — Data', cadenceDays: 14, seed: true });
@@ -167,51 +247,72 @@ LEADOS.events = (function () {
 
     emit(state, 'oneonone.logged', { personId: ana.id, ts: agoISO(12), data: { note: 'seeded baseline' }, seed: true });
     emit(state, 'oneonone.logged', { personId: boris.id, ts: agoISO(3), data: { note: 'seeded recent' }, seed: true });
+    emit(state, 'oneonone.logged', { personId: dieter.id, ts: agoISO(33), data: { note: 'last skip-level', skip: true }, seed: true });
 
-    emit(state, 'decision.logged', { ts: agoISO(20), data: { title: 'Re-platform invoicing service', severity: 3, reviewDate: agoISO(5).slice(0, 10), rationale: 'seeded' }, seed: true });
+    var dec = emit(state, 'decision.logged', { ts: agoISO(20), seed: true,
+      data: { title: 'Freeze scope on Atlas release', reviewDate: agoDate(3), context: 'quality vs date' } });
+    emit(state, 'decision.logged', { ts: agoISO(10), seed: true,
+      data: { title: 'Move standup to async', reviewDate: plusDate(5) } });
+    void dec;
 
-    emit(state, 'goal.set', { ts: agoISO(20), data: { title: 'Cut standup to 15 minutes', ownerPersonId: null }, seed: true });
-    var g2 = emit(state, 'goal.set', { ts: agoISO(30), data: { title: 'Ship Q1 operating plan', ownerPersonId: chen.id }, seed: true });
-    emit(state, 'goal.progress', { ts: agoISO(20), data: { goalId: g2.id, note: 'outline drafted' }, seed: true });
+    emit(state, 'goal.set', { ts: agoISO(30), seed: true, data: { title: 'Cut deploy lead time under 1h' } });
+    var g2 = emit(state, 'goal.set', { ts: agoISO(21), seed: true,
+      data: { title: 'Hire senior data engineer', ownerPersonId: chen.id } });
+    emit(state, 'goal.progress', { ts: agoISO(18), seed: true, data: { goalId: g2.id, note: 'pipeline at 3 finalists' } });
 
-    [40, 20, 10].forEach(function (d) {
-      emit(state, 'feedback.logged', { personId: ana.id, ts: agoISO(d), data: { polarity: 'corrective', note: 'seeded' }, seed: true });
-    });
+    var i;
+    for (i = 0; i < 5; i++)
+      emit(state, 'delegation.assigned', { personId: boris.id, ts: agoISO(9 - i), seed: true,
+        data: { title: 'Growth initiative ' + (i + 1), level: 3 } });
 
-    ['Status report automation', 'Vendor shortlist', 'Hiring loop redesign', 'Quarterly metric pack', 'Launch comms plan'].forEach(function (t, i) {
-      emit(state, 'delegation.assigned', { personId: boris.id, ts: agoISO(25 - i * 4), data: { title: t, level: i < 2 ? 3 : 4 }, seed: true });
-    });
+    emit(state, 'conflict.registered', { personId: ana.id, ts: agoISO(40), seed: true,
+      data: { counterpart: 'Boris Ilic', note: 'shared on-call budget' } });
+    emit(state, 'conflict.registered', { personId: ana.id, ts: agoISO(9), seed: true,
+      data: { counterpart: 'Boris Ilic', note: 'on-call budget again' } });
 
-    emit(state, 'conflict.registered', { personId: chen.id, ts: agoISO(40), data: { counterpart: 'Ana Novak', severity: 3, note: 'roadmap priority' }, seed: true });
-    emit(state, 'conflict.registered', { personId: chen.id, ts: agoISO(15), data: { counterpart: 'Ana Novak', severity: 4, note: 'oncall ownership' }, seed: true });
+    emit(state, 'feedback.logged', { personId: ana.id, ts: agoISO(20), seed: true,
+      data: { polarity: 'corrective', sbi: 'standup: interrupted twice' } });
+    emit(state, 'feedback.logged', { personId: ana.id, ts: agoISO(13), seed: true,
+      data: { polarity: 'corrective', sbi: 'review: rejected design w/o reason' } });
+    emit(state, 'feedback.logged', { personId: ana.id, ts: agoISO(6), seed: true,
+      data: { polarity: 'corrective', sbi: 'planning: scope change unflagged' } });
 
-    [{ d: 9, m: 7, l: 9 }, { d: 5, m: 6, l: 8 }, { d: 1, m: 5, l: 9 }].forEach(function (p) {
-      emit(state, 'pulse.logged', { personId: chen.id, ts: agoISO(p.d), data: { mood: p.m, load: p.l }, seed: true });
-    });
-    emit(state, 'pulse.logged', { personId: chen.id, ts: agoISO(3), data: { mood: 9, load: 1, estimated: true }, seed: true });
-    [{ d: 8, m: 7, l: 4 }, { d: 4, m: 8, l: 5 }].forEach(function (p) {
-      emit(state, 'pulse.logged', { personId: boris.id, ts: agoISO(p.d), data: { mood: p.m, load: p.l }, seed: true });
-    });
+    var pulseDays = [9, 6, 3], moods = [7, 5, 3], loads = [8, 9, 9];
+    for (i = 0; i < 3; i++)
+      emit(state, 'pulse.logged', { personId: chen.id, ts: agoISO(pulseDays[i]), seed: true,
+        data: { mood: moods[i], load: loads[i], estimated: false } });
+    emit(state, 'pulse.logged', { personId: ana.id, ts: agoISO(2), seed: true,
+      data: { mood: 6, load: 6, estimated: true } });     /* excluded from R7 by doctrine */
 
-    emit(state, 'sl.assessment', { personId: chen.id, ts: agoISO(6),
-      data: { task: 'Q1 operating plan', competence: 3, commitment: 4, development: 'D3', style: 'S3', note: 'seeded example' }, seed: true });
-    /* Dieter: no oneonone.logged ever + skip-level (me → Chen → Dieter) → R8 fires. */
+    emit(state, 'incident.registered', { ts: agoISO(9), seed: true,
+      data: { title: 'Prod outage — stale cache rollout', severity: 'high' } });
 
-    state.log.push({ ts: S.nowISO(), kind: 'seed', msg: 'sample roster + events written (seed:true); purgeable at #/data without triggering reseed' });
+    /* arrival: expectations missing (R9 fires), tour 1 of 3 (R10 fires), win past gate (R11 fires) */
+    emit(state, 'tour.visit', { personId: ana.id, ts: agoISO(21), seed: true,
+      data: { mode: 'lead', themes: 'deploy pain, unclear priorities' } });
+    emit(state, 'earlywin.committed', { ts: agoISO(15), seed: true,
+      data: { title: 'Kill 11 recurring meetings', metric: 'meeting hours/lead/week 9 → ≤5', verifyDate: agoDate(4), announcedTo: 'staff meeting' } });
     return true;
   }
   function purgeSeeds(state) {
-    var p0 = state.people.length, e0 = state.events.length;
-    state.people = state.people.filter(function (p) { return !p.seed; });
+    var pBefore = state.people.length, eBefore = state.events.length;
+    state.people = state.people.filter(function (p) { return p && !p.seed; });
     state.events = state.events.filter(function (e) { return !e.seed; });
-    state.log.push({ ts: S.nowISO(), kind: 'seed', msg: 'purged ' + (p0 - state.people.length) + ' seeded people, ' + (e0 - state.events.length) + ' seeded events; meta.seeded stays true (no reseed)' });
+    state.meta.appointment = null;
+    state.log.push({ ts: S.nowISO(), kind: 'purge',
+      msg: 'purged ' + (pBefore - state.people.length) + ' people + ' + (eBefore - state.events.length) + ' seeded events; seeded flag KEPT (never reseeds)' });
+    return true;
   }
 
   return {
-    emit: emit, emitMany: emitMany, addPerson: addPerson,
-    byType: byType, forPerson: forPerson, sorted: sorted, byId: byId, peopleById: peopleById,
-    openDecisions: openDecisions, openGoals: openGoals, openDelegations: openDelegations, openConflicts: openConflicts,
-    pulsesMeasured: pulsesMeasured, lastOneOnOne: lastOneOnOne, feedbackBalance: feedbackBalance, latestSL: latestSL,
-    seed: seed, purgeSeeds: purgeSeeds, agoISO: agoISO
+    emit: emit, emitMany: emitMany,
+    addPerson: addPerson, updatePerson: updatePerson,
+    byType: byType, sorted: sorted, peopleById: peopleById,
+    openDecisions: openDecisions, openGoals: openGoals,
+    openDelegations: openDelegations, openConflicts: openConflicts, openIncidents: openIncidents,
+    pulsesMeasured: pulsesMeasured, pulsesEstimatedCount: pulsesEstimatedCount,
+    lastOneOnOne: lastOneOnOne, feedbackBalance: feedbackBalance, latestSL: latestSL,
+    arrival: arrival,
+    seed: seed, purgeSeeds: purgeSeeds
   };
 })();

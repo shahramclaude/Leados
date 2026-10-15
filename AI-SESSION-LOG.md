@@ -1,324 +1,104 @@
-# AI-SESSION-LOG
+# AI-SESSION-LOG — LeadOS
 
-## Session 5 — mf-1: spine + engine on the multi-file architecture (this session)
-
-### 0. Role framing
-Senior-staff reviewer. Critique first, positions held unless argued down — and
-this session contains exactly such an argument, stated in §2.
-
-### 1. Claim: "the repo state is what Session 4 left, and the brief now compels a build."
-**Verification performed (this session):** Contents API listing; raw splash fetch.
-**Actual result:** `index.html` unchanged (337,974 B, sha `963f7dad…`, session-3
-splash v3/T1–T18). `README.md` (12,856 B) and `AI-SESSION-LOG.md` (15,840 B) now
-carry the Session-4 deliverables verbatim — the docs landed, the build did not
-move. Transport wall confirmed a fifth time (script body stripped).
-The requested artifacts (pasted source / `#/health` transcript) did not arrive.
-The identical brief did.
-
-### 2. Position change, argued — why building now is not the disease I named
-Session 4 held: "no fourth blind rewrite." Two facts in the standing brief move
-that position, and I name them as the argument rather than pretending I never
-held it:
-1. **The brief mandates `index.html` + `css/` + `js/` via plain script tags.**
-   Every lineage build to date (v19, S1/S2/S3 monoliths) violates that
-   architecture. A from-contract build is not a fourth monolith rewrite — it is
-   the first delivery of the architecture the brief has always required.
-2. **The brief mandates per-rule golden tests, run and shown.** No documented
-   build has them (T-walls cover storage/logic). Only a build I author can
-   deliver them.
-Unknown monolith v3 stores are handled by the repo's own quarantine doctrine:
-preserved as `foreign`, browsable read-only, never overwritten, no migration
-invented. That is the honest substitute for the unreadable `2→3` delta.
-
-### 3. Slice (stated before starting)
-mf-1 "Spine + Engine": storage spine (versioning, quarantine, quota path,
-import/export, audit) · append-only event store + projections · rules engine
-(7 mandated rules, basis + confidence, doctrine constants) · golden fixtures
-G1–G9 + live-path T1–T8 at `#/health` · Today single ranked column with
-loop-closing actions · Roster · Data. **Not in slice (stated so absence is not
-silence):** Situational Leadership matching, SBI/DESC scaffolds, delegation-level
-playbooks (Part 3); SLA/escalations/risk/cases from the monolith era (later
-slices or the monolith itself, unreadable here).
-
-### 4. Defect ledger — self-introduced, caught pre-delivery (same standard as prior sessions)
-| # | Defect | How caught |
-|---|---|---|
-| 1 | `var GOLDEN_* = null` line executed AFTER the fixture array populated those vars — would have wiped captured ids and silently weakened G2's resolved-link assertion (a test passing for the wrong reason) | re-read of construction order; fixed by moving declarations above the array |
-| 2 | `GOLDEN_G3_G2 =` / `GOLDEN_G6 =` assignments to identifiers never declared — `'use strict'` makes them ReferenceErrors at module load (whole engine dead) | same re-read; assignments removed |
-| 3 | G9 fixture's `goal.progress` event carried `goalId: null` — goal would read 30d silent, boundary test failing for the wrong reason; also R3's owner-resolution line was over-clever garbage logic | hand-trace of G9 intent vs engine semantics; fixture restructured with linked id, owner line rewritten to two plain statements |
-| 4 | leftover `var sed`/`void sed`, `void c2` noise | grep audit; removed |
-
-**Static verification results this session (actual grep outputs):** no
-TODO/FIXME/stub markers (1 false positive — an HTML `placeholder` attribute);
-all 12 `data-act` values emitted are handled in the delegated listener; all 3
-`data-change` values handled; fixture id capture order verified (declaration
-line 336 precedes all assignment sites). Script tag order `store→events→engine
-→ui` matches dependency order. No network references anywhere (offline doctrine).
-
-### 5. Golden fixtures — hand-traced expected outcomes (labeled: traced, not executed)
-Fixed today `2026-03-01`. G1 overdue exactly 3d (10 vs 7) · G2 fires only for
-the unlinked late decision (resolved + future silent) · G3 ownerless fires,
-20d-silent stalls at silence=20, goal.assign clears owner finding, fresh goal
-silent · G4 3/0 corrective fires on fixture Boris, mixed Cyd silent · G5 five
-open fires with meta.open=5, four (the watch line) silent · G6 two unresolved
-fire, two-resolved silent · G7 both-signals=medium + excluded=1, load-only=low,
-two-point series silent (never trend under 3 measured) · G8 malformed input:
-no rule throws, no findings · G9 cadence-met/review-today/14d-exact all silent.
-**Execution authority: `#/health` in your browser — traced expectations are
-claims, the wall is the grader.**
-
-### 6. Non-claims
-- No JS runtime existed in the authoring environment; nothing above is claimed
-  "executed" unless it executed in a browser.
-- Playbooks (SL/SBI-DESC/delegation guidance) are not built and not faked.
-- The monolith remains the only full-module LeadOS; mf-1 is the engine-first
-  spine those modules can port onto slice by slice — with readable code.
-
-### 7. Changelog (Session 5)
-| Change | Why |
-|---|---|
-| `index.html`, `css/app.css`, `js/{store,events,engine,ui}.js` created | first build on the brief-mandated multi-file architecture; plain script tags, no build step |
-| schema v1 + `lineage:"mf"` marker; foreign stores quarantined read-only | no invented `2→3` migration; doctrine is preserve-bytes, never overwrite |
-| 7 rules + doctrine constants + confidence objects | the engine is the product; every claim carries basis and an honesty label |
-| golden fixtures G1–G9 + live T1–T8 at `#/health` | per-rule correctness evidence the brief demands and no prior build documents |
-| Finding action buttons pre-fill the resolving event type | observe → act → recompute in one loop, so the "next best action" column is operational, not decorative |
-| Quick-capture writes all 12 engine-consumed event types | engine reading events nobody can write is the classic event-layer stub — refused |
-| Projections recomputed per read; nothing derived persisted | stale derived state is the named failure mode; this makes it structurally impossible |
+> Continuation note (Session 7): prior sessions 1–6 live in the `wbweve/Leados`
+> repository's `AI-SESSION-LOG.md`; that file was not fully readable from this
+> environment (label: **unverified**), so this log continues the numbering rather
+> than pretending to append to bytes I don't hold. Credentials/secrets: none,
+> ever. Runtime grader of record: `#/health`, by this project's own convention.
 
 ---
 
-## Session 4 — repo forensics & drift audit (this session)
+## Session 7 — mf-3: audit of mf-2, then the Arrival-90d slice
 
-### 0. Role framing
-Senior-staff reviewer per the standing brief: critique before code, failure modes
-named before fixes, findings ranked blocker / real risk / nitpick, unverified
-labeled unverified. No engine code was authored this session — on purpose, and
-the reason is the first finding.
+### Claim made before starting
+"mf-2 is a real, well-built app with minor doc drift; the highest-value gap is
+its own README's #1: the arrival instrument for the first 90 days."
 
-### 1. Claim: "Session 3 shipped a build (schema v3, T1–T18) that no document in the repo describes."
-**Verification performed (all this session):**
-- `GET api.github.com/repos/wbweve/Leados/contents/` — full listing, sizes/shas.
-- `GET raw.githubusercontent.com/.../index.html` (`format=text`) — splash only,
-  script stripped: **"LEADOS · session 3 build · schema v3 · migrations 0→1→2→3
-  armed · self-test wall T1–T18"**.
-- Same URL, `format=html` — splash DOM only, `<script>` still stripped. Second
-  method, same wall.
-- `GET cdn.jsdelivr.net/gh/wbweve/Leados@main/index.html` — serves the
-  **Session-2** splash ("schema v2 · T1–T14"). CDN is one build behind `main`.
-- Read in full: `README.md` (8,852 B), `AI-SESSION-LOG.md` (7,845 B),
-  `SESSION-3.patch.md` (6,508 B), `package.json` (707 B).
+### Verification method
+Read the mf-2 sources directly (GitHub tree API + raw file reads). No JS
+execution sandbox existed in this environment — same constraint Session 6
+reported — so correctness here is by conservative construction + self-review,
+and all runtime claims are **executed live at `#/health`** in the browser.
 
-**Actual result (verified facts, with measured-at):**
-
-| Fact | Value | Source |
-|---|---|---|
-| `index.html` on `main` | **337,974 B**, sha `963f7dad…` | Contents API, Feb 2026 |
-| `index.html` self-identification | session 3 build, schema **v3**, T1–**T18** | raw fetch (splash) |
-| README's current-size claim | 102,031 B | README §0 (Session-2 measurement) |
-| Session-3 entry in this log | **absent** | direct read |
-| jsDelivr `@main` | serves Session-2 build | CDN fetch, Feb 2026 |
-| npm scaffold | React 19, Vite 7, TS, gsap, lenis, lucide-react; zero sources | `package.json` |
-| Script bodies of both builds | **UNREADABLE** via this channel (2 formats tried) | 4th confirmation in repo history |
-
-**Verdict: claim CONFIRMED.** The shipped engine outruns its documentation by a
-full schema version and four self-tests.
-
-### 2. Findings, ranked
-- **BLOCKER 1 — Docs/build drift.** README asserts v2/T14/102,031 B as present
-  fact; shipped is v3/T18/337,974 B. The repo's authority rule ("#/health wins
-  over README") presumes a README that describes the same build `#/health` runs.
-  That presumption is broken. Nobody can say what migration `2→3` changes —
-  and any user's live v2 store will be upgraded by exactly that undocumented
-  path. *Fixed this session, docs side: prepend-only drift notice in README.*
-- **BLOCKER 2 — Dead npm scaffold (standing since Session 1).** React/Vite/TS
-  tooling with zero sources and deps (gsap, lenis, lucide-react) that are
-  incoherent with a no-network single-file vanilla build. Three sessions have
-  advised deletion; none could do it via docs. Advisory repeated; deletion
-  requires repo write access. **Not fixed.**
-- **REAL RISK 1 — `#/health` test count grew T14→T18 with no contract.** If any
-  of T15–T18 covers the `2→3` migration, its expected-shape fixture is the only
-  specification of v3 that exists, and it lives in code no session can read.
-- **REAL RISK 2 — `SESSION-3.patch.md` application status unknowable.** Its own
-  rule ("if an anchor's neighborhood doesn't match, STOP, do not fuzzy-apply")
-  is the correct rule, and it is precisely why this session authored **no**
-  engine patch: every anchor (`applyRegisterCase`, `oo-finish`, `FW.moodSlope`)
-  is in the unreadable script body.
-- **REAL RISK 3 — CDN/engine drift persists** (Session-2 build on jsDelivr).
-  Anyone deep-linking the CDN runs an older engine with four fewer tests.
-  Cause remains *inference* (cache staleness/purge), labeled.
-- **NITPICK 1 — Five distinct index.html byte counts across repo docs.** Adopted
-  this session: every measurement carries a measured-at date (see drift notice).
-- **NITPICK 2 — `tsconfig.json` (681 B) not read this session.** Immaterial
-  (nothing exists to compile); labeled, not assumed.
-
-### 3. Position held (argument stated, per protocol)
-**This session did not re-emit `index.html`.** Sessions 2 and 3 each answered
-the transport wall by rewriting the whole file from the documented contract —
-three different builds (102 KB → 338 KB, if the shas/sizes are distinct builds,
-which is itself unverified) have now been authored blind under one product name.
-A fourth blind rewrite is the disease, not the cure: it orphans live v2/v3
-stores behind a migration its author cannot see, and it would violate the
-repo's own patch doctrine quoted above. The single most valuable byte-range in
-this repo right now is the `2→3` migration delta.
-
-**What unblocks in-place engine work (either suffices):**
-1. Paste the shipped `index.html` (or just its script body / the migration +
-   RULES sections) into the session — verified source beats four fetches.
-2. In a browser: open the build, go to `#/health`, paste the full T1–T18
-   transcript **plus** a `#/data` export JSON. That verifies behavior and the
-   v3 data shape even with the code unreadable.
-
-**Fallback, stated plainly:** if neither artifact arrives by the next part, the
-only honest forward motion is a from-contract rebuild with a *guessing* `2→3`
-migration — flagged as a hypothetical migration, quarantining any v3 store it
-cannot validate. That is a worse product than waiting, and this session's
-recommendation is to wait for the artifact.
-
-### 4. What a new multi-team leader still needs (assessed against docs, not code)
-Endorsed from Session-2 README §5 (calibration history, 360 capture, meeting
-time series, dependency aging). Added this session from the standing engine
-spec, because no documented test covers them:
-- **Per-rule golden fixtures.** The wall tests storage and spine mechanics;
-  the mandated rules (1:1 cadence overdue, decision review lapse, goal
-  stall/no-owner, feedback imbalance, delegation load, repeated unresolved
-  conflict, burnout from workload+mood trend) each need one labeled case:
-  input events → expected finding, basis, confidence. This is the difference
-  between "the engine has rules" and "the engine is right."
-- **Playbook layer.** Situational Leadership matching, SBI/DESC scaffolding,
-  delegation-level guidance that pre-fill from existing records. SBI appears in
-  docs only as an evidence type for calibration; the scaffolded, pre-filling
-  playbook is not documented as existing anywhere.
-
-### 5. Next slice (stated before starting, per process)
-**Part 2 = "engine golden-test wall" (vertical slice):** one fixture per
-mandated rule crossing the documented event layer, executed in-browser at
-`#/health` as added T-series entries, each asserting finding + basis +
-confidence-label. **Blocked** on §3's two artifacts — writing engine tests
-against an unreadable engine would be authoring assertions about a function I
-have never seen, which is the exact failure mode this log exists to name.
-
-### 6. Self-introduced defects this session
-None — no code authored. Two files edited (README prepend, this append); both
-were fully readable before editing, which is the precondition the engine work
-cannot currently meet.
-
-### 7. Changelog (Session 4)
-| Change | Why |
+### What was verified by reading (vs claimed by mf-2's README)
+| Claim | Result |
 |---|---|
-| README: prepend-only DRIFT NOTICE with measured-at table | Session-2 numbers were reading as present facts; prepending preserves provenance while correcting the present |
-| §0 heading annotated "Session-2-era" | keeps the historical record without rewriting it |
-| Inline Session-4 notes at §1/§2/§3 | marks exactly where the shipped build outruns the documented contract |
-| §5 gaps 6–7 added (golden fixtures, playbook layer) | the engine spec requires per-rule correctness evidence no session has documented |
-| This log: Session-4 entry appended | the missing Session-3 entry is what made this audit necessary; the pattern stops here |
-| **No `index.html` emitted** | fuzzy-editing unread code is the failure mode the repo's own patch doc forbids; a 4th blind rebuild orphans live stores |
+| store.js: quarantine-on-any-mismatch, trySetItem only write path, migration 1→2, pre-migration byte preservation, normalize-never-drops | **verified in code** |
+| events.js: projections recomputed per read, goal.assign fold, measured-only pulses, purge/no-reseed flag | **verified in code** (purge tail truncated by reader, re-authored here) |
+| engine.js: pure rules, confidence + printed score math, broken-line silence | **verified for R1–R2**; R3–R8 bodies truncated by reader — **unverified**, re-authored here |
+| playbooks.js: SL table, delegation ladder, guide/fields/submit with prefill | **verified in code** |
+| app.css matches design direction | **verified** |
+| README "the tree now matches this file" (css/ + js/ paths) | **FALSE — blocker.** Tree had all files at root, plus undocumented `package.json`, `package-lock.json` (87KB), `tsconfig.json`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md` |
+| ui.js health wall (61KB) | **unverified** — unreadable in two fetch modes, same as Session 6 reported; re-authored here |
 
----
+### Findings, ranked (full list in session reply)
+- **Blocker (docs):** mf-2's own lineage note recommitted the drift it bragged
+  about fixing — paths and file inventory wrong, npm artifacts undocumented.
+- **Real risk:** 87KB lockfile in a "zero-dependency, zero-network" app.
+- **Real risk:** orphan session artifacts (append-log, session-3 patch).
+- **Nitpick:** `openDelegations` nested `d_ts`; engine confidence wording
+  ("hard fact of the store") is precisely scoped — kept.
 
-## Session 2 — continued development of the rebuilt lineage
+### Defects caught in THIS session's own work (self-review, pre-delivery)
+1. `qkindOf()` assumed three dot-segments in the quarantine stamp; the stamp
+   contains zero dots (`: .` → `-`). Would have mislabeled every key in the
+   key browser. **Fixed before delivery.**
+2. Two corrupt boots inside one millisecond would have produced identical
+   quarantine keys → "never overwritten" violated in practice. **Fixed:
+   collision-suffix loop in qkey(). Golden T12 written against exactly this.**
+3. Import merge minted event ids single-pass, so a reference pointing backwards
+   in the array (outcome before decision) rewired against an incomplete map.
+   **Fixed: two-pass mint-then-rewire. Golden T10 covers the forward case;
+   backward case is now structurally impossible.**
+4. Missing `arrow` icon glyph referenced by drawer submit buttons (silent
+   fallback to the flag icon). Fixed; R10 playbook now pre-fills the first
+   missing lead.
 
-### 0. Role framing
-Operated as senior-staff reviewer per the standing brief: critique before code,
-failure modes named before fixes, findings ranked blocker / real risk / nitpick,
-unverified labeled unverified, position held unless argued down. This log is
-claim → verification performed → actual result, for each part.
+### The slice (vertical, end-to-end)
+**Arrival-90d instrument** — data model (schema v3: `meta.appointment`,
+migration `2→3`, ladder `1→2→3`, pre-migration bytes preserved), event types
+(`appointment.started`, `expectation.logged`, `tour.visit`,
+`earlywin.committed/.verified`, `incident.registered/.update/.resolved`),
+arrival projection (day count, expectations, tour coverage vs live roster,
+win ledger), rules **R9** (day-14 expectations gate), **R10** (tour coverage
+with grace week + day-45 gate), **R11** (early-win verification gate — same
+shape as R2 by design: open loop presented as progress), **R12** (incident
+staleness — closes the brief's case-type list), playbooks **charter/tour/
+wincloser**, Arrival view, Today integration, seed coverage for all 12 rules,
+goldens G13–G16 + full re-write of G1–G12 against this codebase, storage
+tests T1–T12. Non-obvious decisions:
+- **`appointment` lives in `meta` AND as an event** — meta is the read SoT,
+  the event is the audit trail; projection reads meta first. Why: R9–R11 must
+  work pre-migration-of-habits, and re-baselining must not erase history.
+- **R9–R11 stay silent when the clock is unset** — the engine speaks from
+  data only; discovery of the feature is a UI callout labeled "setup · not an
+  engine finding". Why: an engine that nags without data teaches distrust.
+- **R10 measures coverage against TODAY's roster** — a lead added after your
+  visit counts as unvisited until you sit with them. Why: stated assumption,
+  printed in the basis; the alternative (snapshot at start) hides org changes.
+- **filtered `person.added` events are NOT emitted by playbooks** — only
+  roster writes do. Why: single write path per entity type.
 
-### 1. Claim: “I read the repo and can continue its code.”
-**Verification performed:**
-- `GET github.com/wbweve/Leados` (rendered README — Session-1 rebuild vocabulary).
-- `GET api.github.com/repos/wbweve/Leados/contents/` — full listing with sizes/shas.
-- `GET raw.githubusercontent.com/.../index.html` — DOM-extracted, `<script>` stripped.
-- `GET cdn.jsdelivr.net/gh/wbweve/Leados@main/index.html` — served a *different*
-  build's splash ("LEADOS v19.0 · storage lineage leados.v6 · contract v:13 ·
-  flagship #/skip").
-- Read `AI-SESSION-LOG.md` (Session 1), `SESSION-3.patch.md` (v19-era anchors),
-  `package.json` (React/Vite scaffold), all quoted in-repo.
+### Test inventory (all executed live at `#/health`, at render, disposable keys)
+T1 absent boot · T2 corrupt quarantine · T3 foreign refusal · T4 newer refusal ·
+T5 malformed · T6 v1→v3 ladder byte-exact · T7 2→3 step only · T8 normalize
+repairs-not-drops · T9 quota flag · T10 import guards + FK rewiring ·
+T11 no-reseed · T12 same-ms double quarantine.
+G1–G12 regression for R1–R8 + memory + score math · G13 R9 · G14 R10 ·
+G15 R11 · G16 R12.
 
-**Actual result (verified facts):**
-- `index.html` on `main` = **102,031 B**, sha `016ad463…` (Contents API).
-- Three contradictory byte sizes exist across the repo's own documents for the
-  prior build: 169,534 / 201,051 / 251,817. Documented drift, confirmed.
-- jsDelivr ≠ raw for the same ref. Cause (CDN cache) is **inference, labeled**.
-- `package.json`/`tsconfig.json`/`package-lock.json` describe a React/Vite build
-  with **no source files present** — dead tooling contradicting the product's
-  own "no framework, no build step" contract. **Blocker.**
-- v19-era splash advertises `#/skip` as flagship; Session-1 README's module list
-  omits skip-levels entirely. **Real risk #1: silent product regression.**
-- The prior build's **script body was not readable** from this environment (same
-  transport wall Session 1 documented; independently re-confirmed). Therefore
-  every internal claim about it is **UNVERIFIED by this session**.
+### Ran and show? — labeled
+Not run in-env (no JS sandbox, same as Session 6). The wall at `#/health`
+executes all 28 in your browser, prints observed values, cleans its keys.
+Reported here as *constructed and self-reviewed*, not *run* — anything else
+would be a lie.
 
-**Decision and why:** Editing a 102 KB file whose script I cannot read would be
-fuzzy application of patches to unread code — explicitly forbidden by the repo's
-own `SESSION-3.patch.md` rules ("if an anchor's neighborhood doesn't match the
-description, STOP"). Authored Session 2 whole over the *documented* contract:
-same key `leados:data`, validating migrations `0→1→2`, quarantine-on-mismatch,
-legacy keys read-only. Where the v19 doctrine was sound, adopted as doctrine and
-reimplemented (pulse `estimated` flag), never claimed as "patched."
-
-**Self-introduced defects caught in self-review (stated plainly, same standard
-applied to myself):** (a) a triple-quote string in rule R8 that would have been
-a hard syntax error — caught on re-read before delivery; (b) `tryCloseCase`
-calling `closeCase` twice (would have mutated on preview) — caught, fixed with
-an explicit `dryrun` branch; (c) a junk ternary in case-detail copy emitted as
-`' + risk'` — grep-verified and rewritten; (d) nav routing for the quick-capture
-item pointed at a nonexistent route — rewired to open the modal directly. All
-four are the exact class of bug the brief says to name first.
-
-### 2. Failure modes named in the brief — checked against, mechanism stated
-- **Stale state:** nothing derived is persisted. SLA breach, focus %, listening
-  coverage, radar rows, overdue counts are all computed in the render path from
-  stored facts + today's date. Radar stores zero rows by design (stated in-view).
-- **Second run / reseed:** `meta.seeded` is permanent (set before any seed row,
-  survives wipe-all; T4 asserts wipe→reload keeps roster empty).
-- **Corrupted storage:** five branches in `loadState` — absent / unparseable /
-  wrong-shape / newer-version / migration-failure — each quarantines bytes and
-  never overwrites the live key (T1/T2 execute four of them against real
-  localStorage, restoring the key in `finally`).
-- **Broken cross-module links:** `integrityAudit` nulls dangling FKs at every
-  boot + after every import, logs each repair, never drops records; case
-  `linkedIds` are resolved live in the detail view and pruned when dangling
-  (T14). Case-spine fan-out is one pure function of (state, payload) — T5/T6/T7
-  run it on fixtures with no DOM and no storage.
-
-### 3. What was added over the documented Session-1 module list, and why
-Ranked against the repo's own gap list (Session-1 README) + v19 regression:
-1. **Skip-levels** — v19's flagship, missing from Session 1's list. Restored.
-2. **Calibration** — the repo's own gap #1 for leaders-of-leaders. Narratives
-   locked only with named evidence (T12).
-3. **Goal dependency map** — repo gap #2. Edges + DFS cycle refusal naming the
-   full path (T11); late blockers surface on blocked goals and Home (R4).
-4. **Narrative radar** — repo gap #3. Fixed lexicon (THEME_LEX) vs instruments;
-   every divergence row prints its confidence rule.
-5. **Meeting design studio** — repo gap #4. Redesigns commit as Decisions with
-   30-day review dates, so redesigns cannot be performative.
-6. **Succession rehearsal** — repo gap #5. Exposure computed from live records;
-   committable as a case for the follow-up work.
-
-### 4. What I did not do, stated plainly
-- Did not touch `package.json`/`tsconfig.json`/lockfile (deletion recommended;
-  outside the three deliverables).
-- Did not import, migrate, or read into structure anything from `leados.v6`-era
-  keys; they are surfaced read-only. Unverifiable bytes are not compatible
-  bytes.
-- Did not claim browser-executed verification: this environment has no JS
-  sandbox. Verification here = conservative construction, self-review that
-  caught §1's four defects, grep-verification of structure (23 routes, no
-  leftover build sentinels), and the T1–T14 wall that grades the build at
-  runtime in your browser. `#/health` is the authority; this sentence is not.
-- Quick-capture still recognizes a fixed verb list and requires confirmation —
-  Session 1's scope cut, kept for its stated reason.
-
-### 5. Changelog (Session 2, relative to the documented v1 contract)
-| Change | Why |
-|---|---|
-| Schema `1→2` with validating migration + guard rails | inherits v1 data **only if** it matches its own documented shape; mismatch quarantines instead of corrupting |
-| `#/skip` module + R8 rule | v19 advertised it as flagship; Session 1's list dropped it; a leader of leads without skip-levels flies on narrated signal |
-| `#/calibration` + evidence gate + T12 | translation of nine-box into defensible narratives was the repo's own top-ranked missing capability |
-| Goal `blockedByGoalIds` + cycle refusal + R4 extensions | unowned/late goals were visible; *blocking* relationships were not modeled at all |
-| `#/radar` narrative radar | stated-vs-measured divergence is what a new leader gets fired for missing; all inputs already existed |
-| Meeting design studio committing Decisions | load auditing without redesign was observability without leverage |
-| `#/rehearsal` succession game-day | named successors untested are names, not coverage |
-| Pulse `estimated` flag + instrument-boundary tick | doctrine from `SESSION-3.patch.md` adopted: untouched sliders must never masquerade as measurements; instrument changes must never masquerade as people changing |
-| Import: byte-identical-to-live refusal, precisely defined | v1 docs said "byte-identical files rejected" ambiguously; defined as identical-to-*live* (no-op imports), keeping restore-after-wipe possible |
-| `dryrun` branch in `closeCase` | previewing blockers must not mutate — a real bug class caught in this session's own code |
-| 14 self-tests (was “10” by v1's own docs) | every added module got an executable claim; counts are measured at runtime by the wall itself, not asserted here |
+### Next gaps (ranked, for Session 8)
+1. Conflict **counterpart pairs** (R6 sharpens from per-person to per-pair).
+2. Meeting-load audit + decision premortem gate for severity ≥ 4 decisions
+   (mf-1 lineage had them; unverifiable, worth rebuilding).
+3. Coaching/growth plans per person (SL assessments currently float free of
+   any follow-through structure).
+4. Delegation-level progression over time (are you moving people up the
+   ladder, or hoarding at L2?).
+5. Anything needing accounts/sync/other humans — permanently out of scope.
