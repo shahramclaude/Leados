@@ -225,7 +225,7 @@ const LeadOS = window.LeadOS = window.LeadOS || {};
 /* Module registry — the single-file analog of the brief's script list.
    Each logical "file" registers exactly one namespace, in this load order.
    The boot guard halts rendering if any entry is missing (data untouched). */
-LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','calibration','health','playbooks','ui'];
+LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','calibration','finIntel','health','playbooks','ui'];
 
 /* ==================== 1 · UTIL ==================== */
 (function(){
@@ -502,7 +502,22 @@ const REGISTRY = {
   'feedback.received':      D({content:'s',valence:'s',topic:'s',acted:'b'},{fromId:'s',note:'s'},
                               {valence:['positive','corrective','developmental']}),
   'style.shift':            D({from_style:'s',to_style:'s'},{reason:'any',trigger_event_id:'any',note:'s'}),
-  'plan.created':           D({id:'s',personId:'s',goal:'s'},{dimension:'s',checkpointDate:'ms',note:'s'},null,'plans')
+  'plan.created':           D({id:'s',personId:'s',goal:'s'},{dimension:'s',checkpointDate:'ms',note:'s'},null,'plans'),
+  /* pt-17 (brief "pt-12") — financial intelligence. 10 contracts. */
+  'fin.pl.logged':          D({period:'s',revenue:'n',cogs:'n',gross_profit:'n',opex_total:'n',ebitda:'n',net_income:'n'},{ownerId:'any',note:'s'}),
+  'fin.unit.logged':        D({period:'s',product_or_segment:'s',arpu:'n',cac:'n',ltv:'n',ltv_cac_ratio:'n',gross_margin_pct:'n'},{payback_months:'n',note:'s'}),
+  'fin.runway.logged':      D({date:'ms',cash_balance:'n',burn_rate_monthly:'n',runway_months:'n'},{note:'s'}),
+  'fin.headcount.cost':     D({period:'s',total_headcount_cost:'n',cost_per_head:'n'},{productivity_ratio:'n',ownerId:'s',note:'s'}),
+  'fin.capex.logged':       D({id:'s',title:'s',amount:'n',category:'s'},{expected_roi_pct:'n',payback_months:'n',ownerId:'s',approved_by:'s'},
+                              {category:['infrastructure','tooling','acquisition','R&D','other']},'capex'),
+  'fin.capex.reviewed':     D({capexId:'s',status:'s'},{actual_roi_pct:'n',note:'s'},
+                              {status:['on-track','underperforming','written-off']},null,{capexId:'capex'}),
+  'fin.cohort.logged':      D({id:'s',cohort_date:'ms',cohort_size:'n'},
+                              {retained_pct_m1:'n',retained_pct_m3:'n',retained_pct_m6:'n',retained_pct_m12:'n',arpu_m1:'n',arpu_m12:'n',note:'s'},null,'cohorts'),
+  'fin.scenario.modeled':   D({name:'s',assumptions:'o',revenue_base:'n',revenue_bull:'n',revenue_bear:'n',cost_base:'n',cost_bull:'n',cost_bear:'n',period:'s'},{decisionId:'s'}),
+  'fin.allocation.decision':D({period:'s',allocations:'a',total_budget:'n',board_approved:'b'},{ownerId:'s'}),
+  'fin.metric.alert':       D({metric:'s',value:'n',threshold:'n',direction:'s',severity:'n'},{note:'s'},
+                              {direction:['above','below']})
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -529,7 +544,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=11, LINEAGE='pt', LINEAGE_TAG='pt-16';
+const KEY='leados:data', SCHEMA_VERSION=12, LINEAGE='pt', LINEAGE_TAG='pt-17';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -566,7 +581,12 @@ const V10_NEW_KEYS=Object.keys(V10_SETTING_DEFAULTS);
    may fire below it, and the n is printed on every calibration output. */
 const V11_SETTING_DEFAULTS={calibrationWindowDays:180,biasSampleMin:5,overconfidenceThreshold:0.2};
 const V11_NEW_KEYS=Object.keys(V11_SETTING_DEFAULTS);
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS,V11_SETTING_DEFAULTS);
+/* v12 — financial intelligence. Every one of these is a CONVENTION a leader
+   can change, not a law; the rules that read them print the source. */
+const V12_SETTING_DEFAULTS={unitEconomicsRefreshDays:30,burnRateAlertMultiple:18,
+  grossMarginFloorPct:60,cacPaybackMonthsCeiling:18,fundraiseLeadTimeDays:90};
+const V12_NEW_KEYS=Object.keys(V12_SETTING_DEFAULTS);
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS,V11_SETTING_DEFAULTS,V12_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -654,7 +674,14 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V11_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V11_SETTING_DEFAULTS[k]},{repair:true,migration:'10>11',reason:'backfill v11 setting default'}); repairs++; }});
-    recordMigration(raw,'10>11',repairs); raw.schemaVersion=11; return repairs; }
+    recordMigration(raw,'10>11',repairs); raw.schemaVersion=11; return repairs; },
+  /* v11 -> v12: financial-intelligence thresholds. The ladder's twelfth rung,
+     identical contract to the third: backfill only, count everything. */
+  '11>12':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V12_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V12_SETTING_DEFAULTS[k]},{repair:true,migration:'11>12',reason:'backfill v12 setting default'}); repairs++; }});
+    recordMigration(raw,'11>12',repairs); raw.schemaVersion=12; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -745,7 +772,7 @@ LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SET
   V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,
   V7_SETTING_DEFAULTS,V7_NEW_KEYS,V8_SETTING_DEFAULTS,V8_NEW_KEYS,
   V9_SETTING_DEFAULTS,V9_NEW_KEYS,V10_SETTING_DEFAULTS,V10_NEW_KEYS,
-  V11_SETTING_DEFAULTS,V11_NEW_KEYS,SETTING_ENUMS,
+  V11_SETTING_DEFAULTS,V11_NEW_KEYS,V12_SETTING_DEFAULTS,V12_NEW_KEYS,SETTING_ENUMS,
   RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
@@ -1065,7 +1092,29 @@ const MODULE_FOLD={
   'feedback.received':(s,p,at,ev)=>{ push(s.feedbackReceived,p,at,ev); },
   'style.shift':(s,p,at,ev)=>{ push(s.styleShifts,p,at,ev); },
   'plan.created':(s,p,at)=>{ s.plans[p.id]={id:p.id,personId:p.personId,goal:p.goal,
-    dimension:p.dimension||null,checkpointDate:p.checkpointDate||null,note:p.note||'',createdAt:at}; }
+    dimension:p.dimension||null,checkpointDate:p.checkpointDate||null,note:p.note||'',createdAt:at}; },
+  /* pt-17 — financial intelligence */
+  'fin.pl.logged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.plStatements.push(rec); s.plByPeriod[p.period]=rec; /* latest wins per period */ },
+  'fin.unit.logged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.unitEcon.push(rec); s.unitBySegment[p.product_or_segment]=rec;
+    group(s.unitHistoryBySegment,p.product_or_segment,rec); },
+  'fin.runway.logged':(s,p,at,ev)=>{ push(s.runwayLogs,p,at,ev); },
+  'fin.headcount.cost':(s,p,at,ev)=>{ push(s.headcountCosts,p,at,ev); },
+  'fin.capex.logged':(s,p,at)=>{ s.capex[p.id]={id:p.id,title:p.title,amount:p.amount,category:p.category,
+    expected_roi_pct:(p.expected_roi_pct===undefined?null:p.expected_roi_pct),
+    payback_months:(p.payback_months===undefined?null:p.payback_months),
+    ownerId:p.ownerId||null,approved_by:p.approved_by||null,
+    loggedAt:at,reviews:[],status:null,statusAt:null}; },
+  'fin.capex.reviewed':(s,p,at)=>{ const c=s.capex[p.capexId];
+    if(c){ c.reviews.push({status:p.status,actual_roi_pct:(p.actual_roi_pct===undefined?null:p.actual_roi_pct),note:p.note||'',at:at});
+      c.status=p.status; c.statusAt=at; } },
+  'fin.cohort.logged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.cohorts[p.id]=rec; s.cohortLog.push(rec); },
+  'fin.scenario.modeled':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.finScenarios.push(rec); if(p.decisionId) group(s.finScenariosByDecision,p.decisionId,rec); },
+  'fin.allocation.decision':(s,p,at,ev)=>{ push(s.allocations,p,at,ev); },
+  'fin.metric.alert':(s,p,at,ev)=>{ push(s.metricAlerts,p,at,ev); }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -1113,6 +1162,10 @@ function blankBuckets(s){
   s.calibrations=[];s.calibrationByDecision={};s.biases={};
   s.three60=[];s.three60BySubject={};s.selfAssessments=[];
   s.energyLogs=[];s.reflections=[];s.feedbackReceived=[];s.styleShifts=[];s.plans={};
+  /* pt-17 financial buckets */
+  s.plStatements=[];s.plByPeriod={};s.unitEcon=[];s.unitBySegment={};s.unitHistoryBySegment={};
+  s.runwayLogs=[];s.headcountCosts=[];s.capex={};s.cohorts={};s.cohortLog=[];
+  s.finScenarios=[];s.finScenariosByDecision={};s.allocations=[];s.metricAlerts=[];
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -1151,7 +1204,8 @@ const OPEN_SETS={
   openPains:['pains',p=>!p.resolved],
   openRegChanges:['regChanges',c=>c.status!=='compliant'],
   activePartnerships:['partnerships',p=>p.status==='active'],
-  openBiases:['biases',b=>!b.acknowledged]
+  openBiases:['biases',b=>!b.acknowledged],
+  unreviewedCapex:['capex',c=>c.status===null]
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -2593,6 +2647,200 @@ function R102(P,today){ const f=F('R102'),out=[];
         'source: style.shift'],
       refs:[],scope:'calibration:style:'+(s._ev||U.iso(s.at)),evidenceAt:s.at})); });
   return out; }
+/* ---- pt-17 financial-intelligence rules R103–R114. Every threshold these
+   read is a CONVENTION the leader owns; each basis prints its source and the
+   business model it assumes. Figures are the leader's own books. ---- */
+Object.assign(META,{
+  R103:{domain:'finance',play:'pl-review'},R104:{domain:'finance',play:'unit-economics-review'},
+  R105:{domain:'finance',play:'unit-economics-review'},R106:{domain:'finance',play:'runway-review'},
+  R107:{domain:'finance',play:'runway-review'},R108:{domain:'finance',play:'capital-allocation'},
+  R109:{domain:'customerSuccess',play:'cohort-analysis'},R110:{domain:'finance',play:'unit-economics-review'},
+  R111:{domain:'finance',play:'capital-allocation'},R112:{domain:'finance',play:'pl-review'},
+  R113:{domain:'finance',play:'pl-review'},R114:{domain:'strategy',play:'decision-scenario'}
+});
+function R103(P,today){ const f=F('R103'),out=[];
+  const set=LeadOS.engine.settings(P), floor=set.grossMarginFloorPct;
+  const h=LeadOS.finIntel.plHealth(P,today);
+  if(!h.claimed) return out;
+  const gm=h.grossMarginLatest, slope=h.grossMarginSlope;
+  if(gm===null||slope===null) return out;
+  const declining=slope<0, below=gm<floor;
+  if(!declining&&!below) return out;
+  const sev=(declining&&below)?4:(below?3:2);
+  out.push(f({sev:sev,conf:'HIGH',
+    title:'Gross margin '+gm+'%'+(declining?' and declining '+slope+'pp/period':'')+(below?' — below the '+floor+'% floor':''),
+    basis:[h.grossMarginMath,
+      'latest '+gm+'% vs grossMarginFloorPct '+floor+'% (a SETTING you own, not a regulatory or accounting threshold)',
+      'sev '+sev+' = '+(declining&&below?'declining AND below floor':below?'below floor only':'declining only, still above floor'),
+      h.alternative,h.label],
+    refs:[],scope:'fin:grossmargin',evidenceAt:U.maxAt(P.plStatements)}));
+  return out; }
+function R104(P,today){ const f=F('R104'),out=[];
+  LeadOS.finIntel.unitHealth(P,today).segments.forEach(s=>{
+    if(s.ratio===null) return; /* no CAC → no ratio, skip, never infer */
+    if(s.ratio>=3) return; /* exactly 3 is quiet — strictly below fires */
+    out.push(f({sev:s.ratio<1?5:3,conf:'HIGH',
+      title:'LTV:CAC '+s.ratio+' on '+s.segment+(s.ratio<1?' — you pay more to acquire than they ever return':''),
+      basis:[s.ratioMath,
+        s.ratio<1?'ratio < 1 → sev 5: every acquisition destroys value by your own figures'
+          :'ratio between 1 and 3 → sev 3',
+        'LABEL: <3 is a CONVENTION, not a law. Different business models have different viable ratios — a capital-light business can thrive at 2; a land-and-expand enterprise motion may look poor at year one and excellent at year three.',
+        LeadOS.finIntel.unitHealth(P,today).label],
+      refs:[],scope:'fin:ltvcac:'+s.segment,evidenceAt:s.at})); });
+  return out; }
+function R105(P,today){ const f=F('R105'),out=[];
+  const set=LeadOS.engine.settings(P), ceil=set.cacPaybackMonthsCeiling;
+  LeadOS.finIntel.unitHealth(P,today).segments.forEach(s=>{
+    if(s.paybackMonths===null) return; /* not logged → skip */
+    if(s.paybackMonths<=ceil) return;
+    out.push(f({sev:s.paybackMonths>2*ceil?4:3,conf:'HIGH',
+      title:'CAC payback '+s.paybackMonths+' months on '+s.segment,
+      basis:['payback '+s.paybackMonths+'mo > cacPaybackMonthsCeiling '+ceil+'mo'+(s.paybackMonths>2*ceil?' and > 2× the ceiling ('+(2*ceil)+'mo) → sev 4':' → sev 3'),
+        'THE CEILING IS YOUR SETTING — it comes from your own configuration, not from a regulator, an auditor, or an accounting standard',
+        s.cacTrendWhy,
+        LeadOS.finIntel.OWN_BOOKS],
+      refs:[],scope:'fin:payback:'+s.segment,evidenceAt:s.at})); });
+  return out; }
+function R106(P,today){ const f=F('R106'),out=[];
+  const r=LeadOS.finIntel.runwayStatus(P,today);
+  if(!r.claimed||!r.fires) return out;
+  out.push(f({sev:r.critical?5:4,conf:'HIGH',
+    title:'Runway '+r.runwayMonths+' months'+(r.critical?' — under six':''),
+    basis:['cash '+r.cash+' ÷ burn '+r.burn+'/month = '+r.runwayMonths+' months (as you logged it '+U.iso(r.at)+') · alert threshold burnRateAlertMultiple '+r.alertBelow+' months'+(r.critical?' · under 6 → sev 5':' → sev 4'),
+      r.daysToActionMath,
+      r.leadTimeLabel,
+      'CASH IS A FACT — this is the one finance finding where the number is not a convention. The threshold and the lead time are still yours.',
+      r.label],
+    refs:[],scope:'fin:runway',evidenceAt:r.at}));
+  return out; }
+function R107(P,today){ const f=F('R107'),out=[];
+  const r=LeadOS.finIntel.runwayStatus(P,today);
+  if(!r.claimed) return out;
+  if(r.burnMultiple===null) return out; /* no ARR denominator → SKIP, never a sev-0 "unknown" */
+  if(r.burnMultiple<=2) return out;
+  out.push(f({sev:r.burnMultiple>5?4:3,conf:'MEDIUM',
+    title:'Burn multiple '+r.burnMultiple+(r.burnMultiple>5?' — above 5':''),
+    basis:[r.burnMath+' · conventionally concerning above 2'+(r.burnMultiple>5?', above 5 → sev 4':' → sev 3'),
+      r.burnLabel,
+      'conf MEDIUM: the benchmark is VC-context and the denominator is a revenue delta, which is noisy at small scale',
+      r.label],
+    refs:[],scope:'fin:burnmultiple',evidenceAt:r.at}));
+  return out; }
+function R108(P,today){ const f=F('R108'),out=[];
+  vals(P.capex||{}).forEach(c=>{
+    if(c.status===null){
+      if(c.expected_roi_pct===null) return; /* no stated ROI → nothing to confirm */
+      const age=days(today,c.loggedAt);
+      if(age<=90) return;
+      out.push(f({sev:3,conf:'HIGH',title:'Capex unreviewed '+age+'d: '+c.title,
+        basis:['fin.capex.logged '+U.iso(c.loggedAt)+' · amount '+c.amount+' · expected ROI '+c.expected_roi_pct+'% · '+age+'d > 90d with no fin.capex.reviewed',
+          'An investment you cannot confirm is returning its expected value is an investment you are not managing.',
+          LeadOS.finIntel.OWN_BOOKS],
+        refs:[c.id],evidenceAt:c.loggedAt}));
+      return; }
+    if(c.status==='underperforming'){
+      const age=days(today,c.statusAt);
+      if(age<=30) return;
+      const laterDecision=(P.strategyDecisions||[]).some(d=>d.at>c.statusAt)||
+        vals(P.decisions||{}).some(d=>d.at>c.statusAt);
+      if(laterDecision) return;
+      out.push(f({sev:4,conf:'HIGH',title:'Underperforming capex, no follow-up decision ('+age+'d): '+c.title,
+        basis:['fin.capex.reviewed status "underperforming" on '+U.iso(c.statusAt)+' · '+age+'d > 30d · no strategy.decision or decision.logged since',
+          'amount '+c.amount+' · expected ROI '+(c.expected_roi_pct===null?'not stated':c.expected_roi_pct+'%')+
+            ' · actual '+((c.reviews.slice(-1)[0]||{}).actual_roi_pct===null||(c.reviews.slice(-1)[0]||{}).actual_roi_pct===undefined?'not stated':(c.reviews.slice(-1)[0].actual_roi_pct)+'%'),
+          'Knowing an investment underperforms and deciding nothing is itself a decision — an unlogged one.'],
+        refs:[c.id],scope:c.id+':underperforming',evidenceAt:c.statusAt})); } });
+  return out; }
+function R109(P,today){ const f=F('R109'),out=[];
+  const c=LeadOS.finIntel.cohortCurves(P,today);
+  if(!c.claimed) return out;
+  if(c.latestM6!==null&&c.latestM6<50)
+    out.push(f({sev:4,conf:'HIGH',title:'Latest cohort M6 retention '+c.latestM6+'%',
+      basis:['latest cohort retains '+c.latestM6+'% at month 6 — below 50% (strictly; exactly 50% is quiet)',
+        c.rows.map(r=>r.line).join(' | '),c.note,c.label],
+      refs:[],scope:'fin:cohort:m6low',evidenceAt:U.maxAt(vals(P.cohorts),x=>x.cohort_date)}));
+  if(c.m6Slope!==null&&c.m6Slope<0)
+    out.push(f({sev:3,conf:'MEDIUM',trend:true,title:'Cohort M6 retention degrading '+c.m6Slope+'pp per cohort',
+      basis:[c.m6SlopeMath+' · requires ≥3 cohorts with M6 data (trend discipline)',
+        c.rows.map(r=>r.line).join(' | '),
+        'best: '+(c.best?U.iso(c.best.date)+' at '+c.best.m6+'%':'n/a')+' · worst: '+(c.worst?U.iso(c.worst.date)+' at '+c.worst.m6+'%':'n/a'),
+        c.note,c.label],
+      refs:[],scope:'fin:cohort:trend',evidenceAt:U.maxAt(vals(P.cohorts),x=>x.cohort_date)}));
+  return out; }
+function R110(P,today){ const f=F('R110'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.unitEconomicsRefreshDays;
+  const last=U.maxAt(P.unitEcon||[]);
+  if(last===null){
+    if(P.firstAt!==null&&days(today,P.firstAt)>cad)
+      out.push(f({sev:2,conf:'MEDIUM',title:'No unit economics ever logged',
+        basis:['zero fin.unit.logged events · log spans '+days(today,P.firstAt)+'d > unitEconomicsRefreshDays '+cad+'d',
+          'A business with no unit economics data is operating on revenue intuition. That works until it does not.'],
+        refs:[],scope:'fin:unit:never',evidenceAt:P.firstAt}));
+    return out; }
+  const age=days(today,last);
+  if(age<=cad) return out;
+  out.push(f({sev:age>2*cad?3:2,conf:'HIGH',title:'Unit economics stale: '+age+'d',
+    basis:['latest fin.unit.logged '+U.iso(last)+' is '+age+'d old > unitEconomicsRefreshDays '+cad+'d'+(age>2*cad?' and > 2× the refresh period → sev 3':' → sev 2'),
+      'A business with no current unit economics is operating on revenue intuition.'],
+    refs:[],scope:'fin:unit:cadence',evidenceAt:last}));
+  return out; }
+function R111(P,today){ const f=F('R111'),out=[];
+  const a=LeadOS.finIntel.allocationReview(P,today);
+  if(!a.claimed||!a.top||!a.totalBudget) return out;
+  const pct=a.top.pct;
+  if(pct===null||pct<=60) return out;
+  out.push(f({sev:pct>80?3:2,conf:'HIGH',
+    title:'Allocation concentration: "'+a.top.bucket+'" is '+pct+'% of the '+a.period+' budget',
+    basis:[a.concentrationWhy+(pct>80?' · above 80% → sev 3':' · above 60% → sev 2 ADVISORY'),
+      'concentration is measured PER SINGLE BUCKET, not across combined buckets — two buckets at 40% each do not fire this rule',
+      'full allocation: '+a.buckets.map(b=>b.bucket+' '+b.pct+'%').join(' · '),
+      a.stabilityMath,a.label],
+    refs:[],scope:'fin:concentration:'+a.period,evidenceAt:U.maxAt(P.allocations)}));
+  return out; }
+function R112(P,today){ const f=F('R112'),out=[];
+  const h=LeadOS.finIntel.plHealth(P,today);
+  if(!h.claimed) return out; /* <3 periods → silent (trend discipline) */
+  if(h.ruleOf40===null||h.ruleOf40>=0) return out;
+  out.push(f({sev:h.ruleOf40<-20?4:3,conf:'MEDIUM',
+    title:'Rule of 40 score '+h.ruleOf40,
+    basis:[h.ruleOf40Math+(h.ruleOf40<-20?' · below −20 → sev 4':' · below 0 → sev 3'),
+      h.ruleOf40Label,
+      'computed over '+h.n+' logged P&L periods (minimum '+h.minPeriods+')',
+      'conf MEDIUM: the inputs are your own books, but the benchmark is an investor convention imported from outside your business',
+      h.label],
+    refs:[],scope:'fin:ruleof40',evidenceAt:U.maxAt(P.plStatements)}));
+  return out; }
+function R113(P,today){ const f=F('R113'),out=[];
+  const seen={};
+  (P.plStatements||[]).forEach(p=>{
+    const owner=(p.ownerId===undefined||p.ownerId===null||String(p.ownerId).trim()==='');
+    if(!owner) { seen[p.period]='owned'; return; }
+    if(seen[p.period]==='owned') return;
+    seen[p.period]=seen[p.period]||'unowned';
+  });
+  Object.keys(seen).sort().forEach(period=>{
+    if(seen[period]!=='unowned') return;
+    const rec=(P.plByPeriod||{})[period];
+    out.push(f({sev:2,conf:'HIGH',title:'P&L for '+period+' has no named owner',
+      basis:['fin.pl.logged for period '+period+' with no ownerId (or an explicitly empty one)',
+        'A P&L without a named owner is a number that belongs to nobody.',
+        'this finding is keyed PER PERIOD (R113:'+period+'), so logging the same period twice does not double it'],
+      refs:[],scope:period,evidenceAt:rec?rec.at:null})); });
+  return out; }
+function R114(P,today){ const f=F('R114'),out=[];
+  const WIN=14*DAY;
+  const highStakes=vals(P.decisions||{}).filter(d=>((P.scenariosByDecision||{})[d.id]||[]).length>0);
+  highStakes.forEach(d=>{
+    const modeled=(P.finScenarios||[]).some(s=>Math.abs(s.at-d.at)<=WIN||
+      ((P.finScenariosByDecision||{})[d.id]||[]).length>0);
+    if(modeled) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Major decision with no financial scenario: '+d.title,
+      basis:['decision logged '+U.iso(d.at)+' with '+((P.scenariosByDecision||{})[d.id]||[]).length+' outcome scenario(s) — the shipped high-stakes proxy (strategy.decision carries no severity field in this registry, printed, not inferred)',
+        'no fin.scenario.modeled within 14d before or after '+U.iso(d.at)+', and none linked to this decisionId',
+        'A major decision without a financial scenario model is a bet without stated odds.',
+        'COMPLEMENTS R67 (premortem), it does not duplicate it: R67 asks how this fails, R114 asks what it costs when it does. Different keys, different playbooks, resolving one leaves the other firing.'],
+      refs:[d.id],scope:d.id+':no-fin-scenario',evidenceAt:d.at})); });
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
              R46,R47,R48,R49,R50,R51,R52,
@@ -2600,7 +2848,8 @@ const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,
              R63,R64,R65,R66,R67,R68,R69,R70,R71,R72,
              R73,R74,R75,R76,R77,R78,R79,R80,R81,R82,
              R83,R84,R85,R86,R87,R88,R89,R90,R91,R92,
-             R93,R94,R95,R96,R97,R98,R99,R100,R101,R102];
+             R93,R94,R95,R96,R97,R98,R99,R100,R101,R102,
+             R103,R104,R105,R106,R107,R108,R109,R110,R111,R112,R113,R114];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -4235,6 +4484,171 @@ LeadOS.calibration={NOT_A_DIAGNOSIS:NOT_A_DIAGNOSIS,DIMS:DIMS,BUCKETS:BUCKETS,
   gapAnalysis360:gapAnalysis360,energyPattern:energyPattern,reflectionQuality:reflectionQuality};
 })();
 
+/* ============ 6g · FIN-INTEL — finance as a decision language (pt-17) =====
+   Finance here is not a reporting layer; it is a way of reasoning. Every
+   benchmark below (Rule of 40, LTV:CAC ≥ 3, burn multiple < 2, CAC payback)
+   is a CONVENTION WITH A CONTEXT, never a law — each prints its source and
+   the business model it assumes. All figures come from your own logged
+   statements and are not verified by LeadOS. */
+(function(){
+const LeadOS = window.LeadOS, U = LeadOS.util, DAY = U.DAY;
+const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+const OWN_BOOKS='figures are from YOUR OWN logged statements — LeadOS performs no accounting, reconciles nothing, and verifies no number';
+const MIN_PERIODS=3;
+function plHealth(P,today){
+  const list=(P.plStatements||[]).slice().sort((a,b)=>a.at-b.at);
+  const n=list.length;
+  const base={n:n,label:OWN_BOOKS,minPeriods:MIN_PERIODS};
+  if(n<MIN_PERIODS) return Object.assign(base,{claimed:false,grossMarginSlope:null,ruleOf40:null,
+    why:'insufficient data (n='+n+', need ≥'+MIN_PERIODS+') — no P&L trend claimed, by the same ≥3-point discipline every other trend in this system obeys'});
+  const gm=list.map(p=>p.revenue?(p.gross_profit/p.revenue*100):null).filter(x=>x!==null);
+  const eb=list.map(p=>p.revenue?(p.ebitda/p.revenue*100):null).filter(x=>x!==null);
+  const ox=list.map(p=>p.revenue?(p.opex_total/p.revenue*100):null).filter(x=>x!==null);
+  const gmSlope=gm.length>=MIN_PERIODS?U.slope(gm):null;
+  const ebSlope=eb.length>=MIN_PERIODS?U.slope(eb):null;
+  const oxSlope=ox.length>=MIN_PERIODS?U.slope(ox):null;
+  const latest=list[n-1], prev=list[n-2];
+  const growth=prev&&prev.revenue?((latest.revenue-prev.revenue)/Math.abs(prev.revenue)*100):null;
+  const ebMargin=latest.revenue?(latest.ebitda/latest.revenue*100):null;
+  const r40=(growth!==null&&ebMargin!==null)?U.rd(growth+ebMargin,1):null;
+  return Object.assign(base,{claimed:true,
+    periods:list.map(p=>({period:p.period,revenue:p.revenue,
+      grossMarginPct:p.revenue?U.rd(p.gross_profit/p.revenue*100,1):null,
+      ebitdaMarginPct:p.revenue?U.rd(p.ebitda/p.revenue*100,1):null,
+      opexPctRevenue:p.revenue?U.rd(p.opex_total/p.revenue*100,1):null,
+      ownerId:(p.ownerId===undefined?null:p.ownerId),
+      line:p.period+': revenue '+p.revenue+' · GM '+(p.revenue?U.rd(p.gross_profit/p.revenue*100,1):'n/a')+
+        '% · EBITDA '+(p.revenue?U.rd(p.ebitda/p.revenue*100,1):'n/a')+'% · opex '+(p.revenue?U.rd(p.opex_total/p.revenue*100,1):'n/a')+'% of revenue'})),
+    grossMarginLatest:gm.length?U.rd(gm[gm.length-1],1):null,
+    grossMarginSlope:gmSlope===null?null:U.rd(gmSlope,2),
+    grossMarginMath:gmSlope===null?'fewer than 3 margin points':('gross margin by period ['+gm.map(x=>U.rd(x,1)).join(', ')+'] → least-squares slope '+U.rd(gmSlope,2)+' pp per period'),
+    ebitdaSlope:ebSlope===null?null:U.rd(ebSlope,2),
+    opexSlope:oxSlope===null?null:U.rd(oxSlope,2),
+    revenueGrowthPct:growth===null?null:U.rd(growth,1),
+    ebitdaMarginPct:ebMargin===null?null:U.rd(ebMargin,1),
+    ruleOf40:r40,
+    ruleOf40Math:r40===null?'needs two consecutive periods with revenue'
+      :('Revenue growth '+U.rd(growth,1)+'% + EBITDA margin '+U.rd(ebMargin,1)+'% = Rule of 40 score '+r40),
+    ruleOf40Label:'Rule of 40 is a SaaS VALUATION HEURISTIC popularised by growth-stage investors — it is not a universal performance law, and it is meaningless for a bootstrapped, services, or pre-revenue business',
+    alternative:'ALTERNATIVE READING: a margin decline can be a deliberate investment in growth or mix. The per-period table is printed so you can say which it is.'});
+}
+function unitHealth(P,today){
+  const set=LeadOS.engine.settings(P);
+  const segments=Object.keys(P.unitBySegment||{}).sort().map(seg=>{
+    const u=P.unitBySegment[seg];
+    const hist=(P.unitHistoryBySegment[seg]||[]).slice().sort((a,b)=>a.at-b.at);
+    const ratio=u.cac?(u.ltv/u.cac):null;
+    const cacs=hist.map(h=>h.cac);
+    const cacSlope=cacs.length>=MIN_PERIODS?U.rd(U.slope(cacs),2):null;
+    return {segment:seg,arpu:u.arpu,cac:u.cac,ltv:u.ltv,
+      ratio:ratio===null?null:U.rd(ratio,2),
+      ratioLogged:u.ltv_cac_ratio,
+      ratioMath:'LTV '+u.ltv+' / CAC '+u.cac+' = ratio '+(ratio===null?'n/a':U.rd(ratio,2))+' (threshold ≥3, SaaS convention)',
+      grossMarginPct:u.gross_margin_pct,
+      paybackMonths:(u.payback_months===undefined?null:u.payback_months),
+      paybackCeiling:set.cacPaybackMonthsCeiling,
+      cacTrend:cacSlope,
+      cacTrendWhy:cacSlope===null?('only '+cacs.length+' measured period(s) for '+seg+' — no CAC trend claimed (needs ≥'+MIN_PERIODS+')')
+        :('CAC by period ['+cacs.join(', ')+'] → slope '+cacSlope+' per period ('+(cacSlope>0?'rising':cacSlope<0?'falling':'flat')+')'),
+      at:u.at};
+  });
+  return {segments:segments,label:OWN_BOOKS,
+    conventionLabel:'LTV:CAC ≥ 3 and CAC payback ≤ '+set.cacPaybackMonthsCeiling+'mo are COMMON SAAS CONVENTIONS, not universal laws — a capital-light business can thrive at 2, and an enterprise business with 10-year contracts can rationally run a longer payback. The threshold is yours, in settings.',
+    refreshDays:set.unitEconomicsRefreshDays,
+    latestAt:U.maxAt(P.unitEcon||[])};
+}
+function runwayStatus(P,today){
+  const set=LeadOS.engine.settings(P);
+  const logs=(P.runwayLogs||[]).slice().sort((a,b)=>(a.date||a.at)-(b.date||b.at));
+  if(!logs.length) return {claimed:false,label:OWN_BOOKS,
+    why:'no fin.runway.logged events — runway unknown, and unknown is not the same as fine'};
+  const r=logs[logs.length-1];
+  const lead=set.fundraiseLeadTimeDays;
+  const daysToAction=Math.round(r.runway_months*30-lead);
+  /* burn multiple = net burn / net new ARR, only when ARR data exists */
+  const pl=(P.plStatements||[]).slice().sort((a,b)=>a.at-b.at);
+  let burnMultiple=null,burnMath='skip: no ARR data to compute burn multiple — the rule stays silent rather than inventing a denominator';
+  if(pl.length>=2){
+    const a=pl[pl.length-2], b=pl[pl.length-1];
+    const netNewARR=b.revenue-a.revenue;
+    if(netNewARR>0){ burnMultiple=U.rd(r.burn_rate_monthly/ (netNewARR/12||netNewARR),2);
+      burnMultiple=U.rd((r.burn_rate_monthly*12)/netNewARR,2);
+      burnMath='annualised net burn ('+r.burn_rate_monthly+' × 12 = '+(r.burn_rate_monthly*12)+') ÷ net new revenue ('+b.revenue+' − '+a.revenue+' = '+netNewARR+') = '+burnMultiple; }
+    else burnMath='skip: net new revenue is '+netNewARR+' (not positive) — a burn multiple with a zero or negative denominator is meaningless, so none is computed';
+  }
+  return {claimed:true,label:OWN_BOOKS,
+    cash:r.cash_balance,burn:r.burn_rate_monthly,runwayMonths:r.runway_months,at:r.date||r.at,
+    alertBelow:set.burnRateAlertMultiple,
+    fires:r.runway_months<set.burnRateAlertMultiple,
+    critical:r.runway_months<6,
+    daysToAction:daysToAction,
+    daysToActionMath:'(runway '+r.runway_months+' months × 30) − fundraise lead time '+lead+'d = '+daysToAction+' days before you must be IN the process',
+    leadTimeLabel:'LABELED ASSUMPTION: '+lead+'d lead time (the shipped default assumes Series A/B; Series C+ commonly runs 180d). It is a setting — change it to match your reality.',
+    burnMultiple:burnMultiple,burnMath:burnMath,
+    burnLabel:'burn multiple > 2 is conventionally concerning in VC-backed contexts; a bootstrapped or profitable business has no meaningful denominator and the rule skips rather than fires'};
+}
+function allocationReview(P,today){
+  const list=(P.allocations||[]).slice().sort((a,b)=>a.at-b.at);
+  if(!list.length) return {claimed:false,label:OWN_BOOKS,why:'no fin.allocation.decision events'};
+  const latest=list[list.length-1], prev=list[list.length-2]||null;
+  const buckets=(latest.allocations||[]).map(a=>({bucket:a.bucket,amount:a.amount,
+    pct:latest.total_budget?U.rd(a.amount/latest.total_budget*100,1):(a.pct_of_total||null),
+    rationale:a.rationale||''}));
+  const top=buckets.slice().sort((a,b)=>(b.pct||0)-(a.pct||0))[0]||null;
+  let stability=null,stabilityMath='no prior allocation to compare against';
+  if(prev){
+    const prevMap={}; (prev.allocations||[]).forEach(a=>{ prevMap[a.bucket]=latest.total_budget?a.amount/(prev.total_budget||1)*100:0; });
+    const shifts=buckets.map(b=>Math.abs((b.pct||0)-(prevMap[b.bucket]||0)));
+    stability=U.rd(U.sum(shifts)/(shifts.length||1),1);
+    stabilityMath='mean absolute shift per bucket vs '+prev.period+' = '+stability+'pp';
+  }
+  const unreviewed=(P.unreviewedCapex||[]).filter(c=>U.days(today,c.loggedAt)>90);
+  return {claimed:true,label:OWN_BOOKS,
+    period:latest.period,totalBudget:latest.total_budget,boardApproved:latest.board_approved,
+    buckets:buckets,top:top,
+    concentrationWhy:top?('top bucket "'+top.bucket+'" is '+top.pct+'% of a '+latest.total_budget+' budget — concentration is sometimes exactly right; it is always a risk worth naming'):'no buckets logged',
+    stability:stability,stabilityMath:stabilityMath,
+    capexUnreviewedOver90d:unreviewed.length,
+    outcomeNote:'allocation-vs-outcome cross-reference is CORRELATION ONLY — money and results moving together does not establish that one caused the other'};
+}
+function cohortCurves(P,today){
+  const list=vals(P.cohorts).slice().sort((a,b)=>a.cohort_date-b.cohort_date);
+  if(!list.length) return {claimed:false,label:OWN_BOOKS,why:'no fin.cohort.logged events'};
+  const rows=list.map(c=>({id:c.id,date:c.cohort_date,size:c.cohort_size,
+    m1:(c.retained_pct_m1===undefined?null:c.retained_pct_m1),
+    m3:(c.retained_pct_m3===undefined?null:c.retained_pct_m3),
+    m6:(c.retained_pct_m6===undefined?null:c.retained_pct_m6),
+    m12:(c.retained_pct_m12===undefined?null:c.retained_pct_m12),
+    arpu1:(c.arpu_m1===undefined?null:c.arpu_m1),
+    line:U.iso(c.cohort_date)+' (n='+c.cohort_size+'): M1 '+(c.retained_pct_m1===undefined?'—':c.retained_pct_m1+'%')+
+      ' · M3 '+(c.retained_pct_m3===undefined?'—':c.retained_pct_m3+'%')+
+      ' · M6 '+(c.retained_pct_m6===undefined?'—':c.retained_pct_m6+'%')+
+      ' · M12 '+(c.retained_pct_m12===undefined?'—':c.retained_pct_m12+'%')}));
+  const m6=rows.filter(r=>r.m6!==null);
+  const m6Slope=m6.length>=MIN_PERIODS?U.rd(U.slope(m6.map(r=>r.m6)),2):null;
+  const sorted=m6.slice().sort((a,b)=>b.m6-a.m6);
+  /* LTV projection — simple geometric series, formula printed verbatim */
+  const latest=rows[rows.length-1];
+  let ltv=null,ltvMath='no M6 retention or ARPU on the latest cohort — no projection';
+  if(latest&&latest.m6!==null&&latest.arpu1!==null&&latest.m6>0&&latest.m6<100){
+    const monthly=Math.pow(latest.m6/100,1/6);
+    if(monthly<1){ ltv=U.rd(latest.arpu1*(1/(1-monthly)),2);
+      ltvMath='LTV ≈ ARPU_M1 × (1 / (1 − retention_M6^(1/6))) — geometric series approximation, labeled; actual LTV depends on discount rate and churn distribution. '+
+        latest.arpu1+' × (1 / (1 − '+U.rd(latest.m6/100,3)+'^(1/6))) = '+latest.arpu1+' × (1 / (1 − '+U.rd(monthly,4)+')) = '+ltv; }
+  }
+  return {claimed:true,label:OWN_BOOKS,rows:rows,
+    m6Slope:m6Slope,
+    m6SlopeMath:m6Slope===null?('only '+m6.length+' cohort(s) with M6 data — no retention trend claimed (needs ≥'+MIN_PERIODS+')')
+      :('M6 retention across cohorts ['+m6.map(r=>r.m6).join(', ')+'] → slope '+m6Slope+'pp per cohort'),
+    latestM6:m6.length?m6[m6.length-1].m6:null,
+    best:sorted[0]||null,worst:sorted[sorted.length-1]||null,
+    ltvProjection:ltv,ltvMath:ltvMath,
+    note:'Retention curves are the DNA of recurring revenue — when they degrade, everything downstream degrades with them.'};
+}
+LeadOS.finIntel={OWN_BOOKS:OWN_BOOKS,MIN_PERIODS:MIN_PERIODS,plHealth:plHealth,unitHealth:unitHealth,
+  runwayStatus:runwayStatus,allocationReview:allocationReview,cohortCurves:cohortCurves};
+})();
+
 /* ==================== 7 · HEALTH — authority wall + fixture seed ==========
    T-suite runs against pinned in-memory fixtures (FIXED epoch, never the
    clock, never localStorage). G-suite inspects the LIVE store. The boot gate
@@ -4518,7 +4932,35 @@ function buildSeed(base){
     E('assumption.logged',{id:'as-13',decisionId:'dec-7',assumption:'Sales can explain the tiers',testable:true},65),
     E('assumption.tested',{assumptionId:'as-13',result:'confirmed',evidence:'ride-alongs went fine'},57),
     E('assumption.logged',{id:'as-14',decisionId:'dec-7',assumption:'Billing supports tiering',testable:true},64),
-    E('assumption.tested',{assumptionId:'as-14',result:'confirmed',evidence:'spike passed'},56)
+    E('assumption.tested',{assumptionId:'as-14',result:'confirmed',evidence:'spike passed'},56),
+    /* ---- pt-17 financial layer: seeds R103–R114 (G114) ---- */
+    /* 3 P&L periods: GM 80% → 70% → 55% (slope −12.5pp, crosses the 60% floor);
+       growth (900−1000)/1000 = −10%, EBITDA margin 0% → Rule of 40 = −10 */
+    E('fin.pl.logged',{period:'2025-Q3',revenue:1000,cogs:200,gross_profit:800,opex_total:700,ebitda:100,net_income:60,ownerId:'cfo'},120),
+    E('fin.pl.logged',{period:'2025-Q4',revenue:1000,cogs:300,gross_profit:700,opex_total:700,ebitda:0,net_income:-30,ownerId:'cfo'},60),
+    E('fin.pl.logged',{period:'2026-Q1',revenue:900,cogs:405,gross_profit:495,opex_total:495,ebitda:0,net_income:-50},5),      /* R103 sev4 · R112 sev3 · R113 (no ownerId) */
+    /* unit economics: LTV 300 / CAC 200 = 1.5 (<3) and payback 24mo (>18) */
+    E('fin.unit.logged',{period:'2026-Q1',product_or_segment:'self-serve',arpu:25,cac:200,ltv:300,
+      ltv_cac_ratio:1.5,gross_margin_pct:55,payback_months:24},40),                                                            /* R104 sev3 · R105 sev3 · R110 (40d > 30d) */
+    /* runway 8 months (<18), with ARR growth for the burn multiple */
+    E('fin.runway.logged',{date:base-4*DAY,cash_balance:400000,burn_rate_monthly:50000,runway_months:8},4),                    /* R106 sev4 · R107 */
+    /* capex logged 100d ago with a stated ROI and no review */
+    E('fin.capex.logged',{id:'cx-1',title:'Warehouse cluster upgrade',amount:180000,category:'infrastructure',
+      expected_roi_pct:25,payback_months:20,ownerId:'ann',approved_by:'cfo'},100),                                             /* R108 sev3 */
+    /* cohorts: M6 70% → 60% → 45% (declining slope AND latest below 50%) */
+    E('fin.cohort.logged',{id:'ch-1',cohort_date:base-300*DAY,cohort_size:120,retained_pct_m1:92,
+      retained_pct_m3:80,retained_pct_m6:70,retained_pct_m12:58,arpu_m1:25,arpu_m12:30},200),
+    E('fin.cohort.logged',{id:'ch-2',cohort_date:base-200*DAY,cohort_size:140,retained_pct_m1:90,
+      retained_pct_m3:74,retained_pct_m6:60,arpu_m1:25},150),
+    E('fin.cohort.logged',{id:'ch-3',cohort_date:base-120*DAY,cohort_size:160,retained_pct_m1:88,
+      retained_pct_m3:66,retained_pct_m6:45,arpu_m1:26},80),                                                                   /* R109 sev4 + sev3 */
+    /* allocation with a 65% bucket */
+    E('fin.allocation.decision',{period:'2026-Q1',total_budget:1000000,board_approved:false,ownerId:'cfo',
+      allocations:[{bucket:'platform',amount:650000,pct_of_total:65,rationale:'re-platform is the year thesis'},
+        {bucket:'go-to-market',amount:250000,pct_of_total:25,rationale:'hold the line'},
+        {bucket:'support',amount:100000,pct_of_total:10,rationale:'escalation load'}]},30),                                    /* R111 sev2 */
+    E('fin.headcount.cost',{period:'2026-Q1',total_headcount_cost:620000,cost_per_head:62000,productivity_ratio:1.45,ownerId:'cfo'},25)
+    /* R114 fires on dec-1 — scenario-planned in pt-13, no fin.scenario.modeled anywhere near it */
   ];
   return out;
 }
@@ -4812,7 +5254,7 @@ function runT(){
   T.push(check('T18','[T12b] extended seed fires all 62 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=102;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=114;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -5506,6 +5948,91 @@ function runT(){
     if(r98(few).length) return {why:'n=4 is below biasSampleMin 5 — must be quiet'};
     return {ok:true,why:'mean 3.8 fires sev3 with the self-reported label · 4.2 quiet · n=4 quiet'};
   }));
+  /* ---- pt-17: brief T56–T60 ship as T58–T62 (T56/T57 taken in pt-16).
+     ID MAP: brief T56→T58 · T57→T59 · T58→T60 · T59→T61 · T60→T62 ---- */
+  const PL=(period,rev,gp,ebitda,ago,owner)=>({type:'fin.pl.logged',
+    payload:Object.assign({period:period,revenue:rev,cogs:rev-gp,gross_profit:gp,
+      opex_total:gp-ebitda,ebitda:ebitda,net_income:ebitda},owner?{ownerId:owner}:{}),at:FIXED-ago*DAY});
+  T.push(check('T58','[brief T56] plHealth: GM 80/75/70 → slope −5pp · Rule of 40 printed',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      PL('p1',1000,800,150,60,'cfo'),PL('p2',1000,750,150,40,'cfo'),PL('p3',1200,840,180,20,'cfo')]));
+    const h=LeadOS.finIntel.plHealth(Px,FIXED);
+    if(!h.claimed) return {why:'3 periods should produce a claim'};
+    if(h.grossMarginSlope!==-5) return {why:'GM [80,75,70] slope should be −5, got '+h.grossMarginSlope};
+    /* growth (1200−1000)/1000 = 20% · EBITDA margin 180/1200 = 15% → 35 */
+    if(h.revenueGrowthPct!==20) return {why:'growth should be 20%, got '+h.revenueGrowthPct};
+    if(h.ebitdaMarginPct!==15) return {why:'EBITDA margin should be 15%, got '+h.ebitdaMarginPct};
+    if(h.ruleOf40!==35) return {why:'Rule of 40 should be 35, got '+h.ruleOf40};
+    if(h.ruleOf40Math.indexOf('Rule of 40 score 35')===-1) return {why:'the Rule of 40 sentence is not printed: '+h.ruleOf40Math};
+    if(h.ruleOf40Label.indexOf('not a universal performance law')===-1) return {why:'the heuristic label is missing'};
+    return {ok:true,why:'slope −5pp · '+h.ruleOf40Math+' · heuristic labeled'};
+  }));
+  T.push(check('T59','[brief T57] R104: LTV 300/CAC 200 = 1.5 fires · 600/200 = 3.0 quiet',()=>{
+    const mk=(ltv,cac)=>LeadOS.engine.project(wrap([{type:'fin.unit.logged',
+      payload:{period:'p',product_or_segment:'seg',arpu:25,cac:cac,ltv:ltv,
+        ltv_cac_ratio:ltv/cac,gross_margin_pct:70},at:FIXED-5*DAY}]));
+    const r104=Px=>LeadOS.rules.RULES[98](Px,FIXED); /* index 98 = R104 */
+    const a=r104(mk(300,200));
+    if(a.length!==1||a[0].sev!==3) return {why:'ratio 1.5 should fire sev 3'};
+    if(r104(mk(600,200)).length) return {why:'ratio exactly 3.0 must be quiet (strictly below fires)'};
+    const deep=r104(mk(150,200));
+    if(deep.length!==1||deep[0].sev!==5) return {why:'ratio 0.75 (<1) should fire sev 5'};
+    if(a[0].basis.join(' ').indexOf('LTV 300 / CAC 200 = ratio 1.5')===-1) return {why:'the ratio math is not printed verbatim'};
+    return {ok:true,why:'1.5 → sev3 · 3.0 quiet · 0.75 → sev5 · math printed'};
+  }));
+  T.push(check('T60','[brief T58] runwayStatus: 500k/50k = 10mo · days to action 210 · R106 fires',()=>{
+    const Px=LeadOS.engine.project(wrap([{type:'fin.runway.logged',
+      payload:{date:FIXED-DAY,cash_balance:500000,burn_rate_monthly:50000,runway_months:10},at:FIXED-DAY}]));
+    const r=LeadOS.finIntel.runwayStatus(Px,FIXED);
+    if(r.runwayMonths!==10) return {why:'runway should be 10 months'};
+    if(r.daysToAction!==210) return {why:'(10 × 30) − 90 = 210 days, got '+r.daysToAction};
+    if(r.leadTimeLabel.indexOf('LABELED ASSUMPTION')===-1) return {why:'the lead-time assumption is not labeled'};
+    const r106=LeadOS.rules.RULES[100](Px,FIXED); /* index 100 = R106 */
+    if(r106.length!==1||r106[0].sev!==4) return {why:'10 < 18 should fire sev 4, got '+JSON.stringify(r106.map(f=>f.sev))};
+    const crit=LeadOS.engine.project(wrap([{type:'fin.runway.logged',
+      payload:{date:FIXED-DAY,cash_balance:200000,burn_rate_monthly:50000,runway_months:4},at:FIXED-DAY}]));
+    const rc=LeadOS.rules.RULES[100](crit,FIXED);
+    if(rc.length!==1||rc[0].sev!==5) return {why:'under 6 months should be sev 5'};
+    const safe=LeadOS.engine.project(wrap([{type:'fin.runway.logged',
+      payload:{date:FIXED-DAY,cash_balance:2000000,burn_rate_monthly:50000,runway_months:40},at:FIXED-DAY}]));
+    if(LeadOS.rules.RULES[100](safe,FIXED).length) return {why:'40 months must be quiet'};
+    return {ok:true,why:'10mo · 210 days to action with the assumption labeled · sev4 · <6mo sev5 · 40mo quiet'};
+  }));
+  T.push(check('T61','[brief T59] cohorts: M6 70/60/50 → slope −10 fires sev3; exactly 50% quiet for sev4',()=>{
+    const CO=(id,m6,ago)=>({type:'fin.cohort.logged',
+      payload:{id:id,cohort_date:FIXED-ago*DAY,cohort_size:100,retained_pct_m6:m6,arpu_m1:20},at:FIXED-ago*DAY});
+    const Px=LeadOS.engine.project(wrap([CO('c1',70,200),CO('c2',60,150),CO('c3',50,100)]));
+    const c=LeadOS.finIntel.cohortCurves(Px,FIXED);
+    if(c.m6Slope!==-10) return {why:'slope over [70,60,50] should be −10, got '+c.m6Slope};
+    const r109=LeadOS.rules.RULES[103](Px,FIXED); /* index 103 = R109 */
+    const trend=r109.filter(f=>f.scope==='fin:cohort:trend')[0];
+    if(!trend||trend.sev!==3) return {why:'declining slope should fire sev 3'};
+    if(r109.some(f=>f.scope==='fin:cohort:m6low')) return {why:'exactly 50% must be quiet (threshold is strictly < 50)'};
+    const below=LeadOS.engine.project(wrap([CO('c1',70,200),CO('c2',60,150),CO('c3',49.9,100)]));
+    const low=LeadOS.rules.RULES[103](below,FIXED).filter(f=>f.scope==='fin:cohort:m6low')[0];
+    if(!low||low.sev!==4) return {why:'49.9% should fire sev 4'};
+    const two=LeadOS.engine.project(wrap([CO('c1',70,200),CO('c2',60,150)]));
+    if(LeadOS.rules.RULES[103](two,FIXED).some(f=>f.scope==='fin:cohort:trend')) return {why:'2 cohorts must not produce a trend claim'};
+    return {ok:true,why:'slope −10 → sev3 · 50% quiet · 49.9% → sev4 · 2 cohorts no trend'};
+  }));
+  T.push(check('T62','[brief T60] R112: −25 → sev4 · −10 → sev3 · 0 quiet · <3 periods quiet',()=>{
+    /* growth and margin engineered: p3 revenue vs p2 gives growth; ebitda/revenue gives margin */
+    const mk=(rev3,eb3)=>LeadOS.engine.project(wrap([
+      PL('p1',1000,800,100,120,'cfo'),PL('p2',1000,800,100,60,'cfo'),
+      PL('p3',rev3,Math.round(rev3*0.8),eb3,5,'cfo')]));
+    const r112=Px=>LeadOS.rules.RULES[106](Px,FIXED); /* index 106 = R112 */
+    /* growth 5% (1050 vs 1000) + margin −30% (−315/1050) = −25 */
+    const a=r112(mk(1050,-315));
+    if(a.length!==1||a[0].sev!==4) return {why:'score −25 should fire sev 4, got '+JSON.stringify(a.map(f=>f.sev))};
+    /* growth 0% + margin −10% = −10 */
+    const b=r112(mk(1000,-100));
+    if(b.length!==1||b[0].sev!==3) return {why:'score −10 should fire sev 3'};
+    /* growth 0% + margin 0% = 0 → quiet (fires only below 0) */
+    if(r112(mk(1000,0)).length) return {why:'score exactly 0 must be quiet'};
+    const two=LeadOS.engine.project(wrap([PL('p1',1000,800,100,60,'cfo'),PL('p2',1000,800,-100,5,'cfo')]));
+    if(r112(two).length) return {why:'2 P&L periods must be quiet (trend discipline)'};
+    return {ok:true,why:'−25 sev4 · −10 sev3 · 0 quiet · 2 periods quiet'};
+  }));
   return T;
 }
 
@@ -5709,14 +6236,14 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','[G60/G70/G80/G92/G102] extended buildSeed fires ALL 102 rules',()=>{
+  G.push(check('G40','[G60/G70/G80/G92/G102/G114] extended buildSeed fires ALL 114 rules',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=102;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=114;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'102/102 — every rule in the system fires from ONE deterministic fixture: cadences, correlation patterns, conversations, org dynamics, decisions, execution, external intelligence, and the pt-16 calibration layer (6 calibrations at mean conf 0.8 / hit rate 0.5, 70d sunk-cost initiative, 3-period anchoring run, 360 blind spot on decisions, energy mean 3.5 over 15d, 36d reflection gap, 100% assumption-confirm rate, 3 unacted feedback items, unexplained style shift)'};
+    return {ok:true,why:'114/114 — every rule in the system fires from ONE deterministic fixture: cadences, correlation patterns, conversations, org dynamics, decisions, execution, external intelligence, calibration, and the pt-17 financial layer (GM 80→70→55% crossing the floor, LTV:CAC 1.5, payback 24mo, runway 8mo, burn multiple, 100d unreviewed capex, cohort M6 70→60→45%, 65% allocation bucket, Rule of 40 −10, unowned P&L period, scenario-planned decision with no financial model)'};
   }));
   /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
      the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
@@ -6513,6 +7040,169 @@ function runG(){
     if(all.length) return {why:'no rule may raise a finding titled around hidden strengths'};
     return {ok:true,why:'8 hidden strengths surfaced in the analysis · zero findings raised'};
   }));
+  /* ---- G103–G113 — financial-intelligence goldens (pt-17) ---- */
+  const PLG=(period,rev,gp,ebitda,ago,owner)=>({type:'fin.pl.logged',
+    payload:Object.assign({period:period,revenue:rev,cogs:rev-gp,gross_profit:gp,
+      opex_total:gp-ebitda,ebitda:ebitda,net_income:ebitda},owner?{ownerId:owner}:{}),at:FIXED-ago*DAY});
+  G.push(check('G103','R103: declining + below floor sev4 · declining only sev2 · below only sev3',()=>{
+    const r103=Px=>LeadOS.rules.RULES[97](Px,FIXED); /* index 97 = R103 */
+    const both=LeadOS.engine.project(wrap([PLG('p1',1000,800,100,120,'c'),PLG('p2',1000,700,100,60,'c'),PLG('p3',1000,550,100,5,'c')]));
+    const a=r103(both);
+    if(a.length!==1||a[0].sev!==4) return {why:'GM 80→70→55 (declining, below 60 floor) should be sev 4'};
+    if(a[0].basis.join(' ').indexOf('slope')===-1) return {why:'the slope must be printed'};
+    /* declining but still above the floor: 90 → 85 → 80 */
+    const decl=LeadOS.engine.project(wrap([PLG('p1',1000,900,100,120,'c'),PLG('p2',1000,850,100,60,'c'),PLG('p3',1000,800,100,5,'c')]));
+    const b=r103(decl);
+    if(b.length!==1||b[0].sev!==2) return {why:'declining above the floor should be sev 2, got '+JSON.stringify(b.map(f=>f.sev))};
+    /* below the floor but flat/rising: 50 → 52 → 55 */
+    const flat=LeadOS.engine.project(wrap([PLG('p1',1000,500,100,120,'c'),PLG('p2',1000,520,100,60,'c'),PLG('p3',1000,550,100,5,'c')]));
+    const c=r103(flat);
+    if(c.length!==1||c[0].sev!==3) return {why:'below floor without decline should be sev 3'};
+    return {ok:true,why:'declining+below sev4 · declining-only sev2 · below-only sev3 · slope printed'};
+  }));
+  G.push(check('G104','R104 prints "LTV 300 / CAC 200 = ratio 1.5 (threshold ≥3, SaaS convention)"',()=>{
+    const Px=LeadOS.engine.project(wrap([{type:'fin.unit.logged',
+      payload:{period:'p',product_or_segment:'seg',arpu:25,cac:200,ltv:300,ltv_cac_ratio:1.5,gross_margin_pct:70},at:FIXED-5*DAY}]));
+    const f=LeadOS.rules.RULES[98](Px,FIXED)[0];
+    if(!f) return {why:'ratio 1.5 should fire'};
+    const joined=f.basis.join(' ');
+    if(joined.indexOf('LTV 300 / CAC 200 = ratio 1.5 (threshold ≥3, SaaS convention)')===-1)
+      return {why:'exact structure missing: '+joined.slice(0,140)};
+    if(joined.indexOf('CONVENTION, not a law')===-1) return {why:'the convention caveat is missing'};
+    return {ok:true,why:'exact ratio structure + convention caveat printed'};
+  }));
+  G.push(check('G105','R107 skips silently with no ARR data — no sev-0 "unknown" finding',()=>{
+    const noPL=LeadOS.engine.project(wrap([{type:'fin.runway.logged',
+      payload:{date:FIXED-DAY,cash_balance:100000,burn_rate_monthly:50000,runway_months:2},at:FIXED-DAY}]));
+    const r107=Px=>LeadOS.rules.RULES[101](Px,FIXED); /* index 101 = R107 */
+    if(r107(noPL).length) return {why:'with no P&L revenue data R107 must stay silent'};
+    const r=LeadOS.finIntel.runwayStatus(noPL,FIXED);
+    if(r.burnMultiple!==null) return {why:'burn multiple must be null without ARR data'};
+    if(r.burnMath.indexOf('skip: no ARR data')===-1) return {why:'the skip reason must be stated in the analytics output: '+r.burnMath};
+    /* flat revenue → non-positive denominator → still skip, never divide */
+    const flat=LeadOS.engine.project(wrap([PLG('p1',1000,800,100,60,'c'),PLG('p2',1000,800,100,30,'c'),
+      {type:'fin.runway.logged',payload:{date:FIXED-DAY,cash_balance:100000,burn_rate_monthly:50000,runway_months:2},at:FIXED-DAY}]));
+    if(r107(flat).length) return {why:'a zero revenue delta must skip, not divide by zero'};
+    if(LeadOS.finIntel.runwayStatus(flat,FIXED).burnMath.indexOf('not positive')===-1) return {why:'the zero-denominator reason must be printed'};
+    return {ok:true,why:'no ARR → silent with the skip printed · flat revenue → silent, no division'};
+  }));
+  G.push(check('G106','R109 boundary: 50% quiet · 49.9% sev4 · 3-cohort decline sev3 · 2 quiet',()=>{
+    const CO=(id,m6,ago)=>({type:'fin.cohort.logged',
+      payload:{id:id,cohort_date:FIXED-ago*DAY,cohort_size:100,retained_pct_m6:m6,arpu_m1:20},at:FIXED-ago*DAY});
+    const r109=Px=>LeadOS.rules.RULES[103](Px,FIXED);
+    const at50=LeadOS.engine.project(wrap([CO('a',50,20)]));
+    if(r109(at50).some(f=>f.scope==='fin:cohort:m6low')) return {why:'exactly 50% must be quiet'};
+    const below=LeadOS.engine.project(wrap([CO('a',49.9,20)]));
+    const b=r109(below).filter(f=>f.scope==='fin:cohort:m6low')[0];
+    if(!b||b.sev!==4) return {why:'49.9% should fire sev 4'};
+    /* three cohorts declining but all high in absolute terms → trend only, sev 3 */
+    const high=LeadOS.engine.project(wrap([CO('a',95,200),CO('b',90,150),CO('c',85,100)]));
+    const t=r109(high).filter(f=>f.scope==='fin:cohort:trend')[0];
+    if(!t||t.sev!==3) return {why:'a declining trend fires sev 3 regardless of absolute level'};
+    if(r109(high).some(f=>f.scope==='fin:cohort:m6low')) return {why:'85% must not fire the absolute branch'};
+    const two=LeadOS.engine.project(wrap([CO('a',90,150),CO('b',80,100)]));
+    if(r109(two).some(f=>f.scope==='fin:cohort:trend')) return {why:'2 cohorts must not fire the trend branch'};
+    return {ok:true,why:'50% quiet · 49.9% sev4 · 3-cohort decline sev3 at any level · 2 cohorts quiet'};
+  }));
+  G.push(check('G107','R114 and R67 coexist on one decision: different keys, different playbooks',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'decision.logged',payload:{id:'dz',title:'Acquire the analytics vendor'},at:FIXED-30*DAY},
+      {type:'decision.scenario',payload:{id:'sz',decisionId:'dz',name:'buy',probability:0.6,
+        outcome_if_true:500,cost_if_true:300},at:FIXED-30*DAY}]));
+    const r67=LeadOS.rules.RULES[61](Px,FIXED)[0];
+    const r114=LeadOS.rules.RULES[108](Px,FIXED)[0]; /* index 108 = R114 */
+    if(!r67) return {why:'R67 should fire (no premortem)'};
+    if(!r114) return {why:'R114 should fire (no financial scenario)'};
+    if(r67.key===r114.key) return {why:'the two findings must have different keys'};
+    if(r67.key!=='R67:dz:premortem') return {why:'unexpected R67 key: '+r67.key};
+    if(r114.key!=='R114:dz:no-fin-scenario') return {why:'unexpected R114 key: '+r114.key};
+    if(r67.play===r114.play) return {why:'the two findings must route to different playbooks'};
+    /* adding only a premortem resolves R67 and leaves R114 firing */
+    const withPm=LeadOS.engine.project(wrap([
+      {type:'decision.logged',payload:{id:'dz',title:'Acquire the analytics vendor'},at:FIXED-30*DAY},
+      {type:'decision.scenario',payload:{id:'sz',decisionId:'dz',name:'buy',probability:0.6,
+        outcome_if_true:500,cost_if_true:300},at:FIXED-30*DAY},
+      {type:'decision.premortem',payload:{decisionId:'dz',failure_modes:['integration stalls'],
+        mitigation_per_mode:['escrow milestone']},at:FIXED-29*DAY}]));
+    if(LeadOS.rules.RULES[61](withPm,FIXED).length) return {why:'the premortem should resolve R67'};
+    if(!LeadOS.rules.RULES[108](withPm,FIXED).length) return {why:'resolving R67 must NOT resolve R114 — they address different gaps'};
+    return {ok:true,why:'both fire · distinct keys and playbooks · premortem clears R67 and leaves R114'};
+  }));
+  G.push(check('G108','R108 capex: 91d unreviewed fires · 89d quiet · underperforming+31d sev4 · on-track quiet',()=>{
+    const CX=(ago,status,statusAgo)=>{ const list=[{type:'fin.capex.logged',
+      payload:{id:'cx',title:'cluster',amount:100000,category:'infrastructure',expected_roi_pct:20},at:FIXED-ago*DAY}];
+      if(status) list.push({type:'fin.capex.reviewed',payload:{capexId:'cx',status:status},at:FIXED-statusAgo*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r108=Px=>LeadOS.rules.RULES[102](Px,FIXED); /* index 102 = R108 */
+    const a=r108(CX(91));
+    if(a.length!==1||a[0].sev!==3) return {why:'91d unreviewed should fire sev 3'};
+    if(r108(CX(89)).length) return {why:'89d must be quiet'};
+    if(r108(CX(100,'on-track',5)).length) return {why:'an on-track review must quiet it'};
+    const u=r108(CX(100,'underperforming',31));
+    if(u.length!==1||u[0].sev!==4) return {why:'underperforming for 31d with no decision should be sev 4'};
+    if(r108(CX(100,'underperforming',29)).length) return {why:'underperforming for 29d is inside the grace window'};
+    const noRoi=LeadOS.engine.project(wrap([{type:'fin.capex.logged',
+      payload:{id:'cx2',title:'t',amount:1000,category:'other'},at:FIXED-200*DAY}]));
+    if(r108(noRoi).length) return {why:'capex with no expected_roi_pct has nothing to confirm — must be quiet'};
+    return {ok:true,why:'91d sev3 · 89d quiet · on-track quiet · underperforming 31d sev4 · 29d quiet · no-ROI quiet'};
+  }));
+  G.push(check('G109','R111 concentration is PER BUCKET: one at 61% fires · two at 40% quiet',()=>{
+    const AL=buckets=>LeadOS.engine.project(wrap([{type:'fin.allocation.decision',
+      payload:{period:'p',total_budget:100,board_approved:false,
+        allocations:buckets.map((b,i)=>({bucket:'b'+i,amount:b,pct_of_total:b,rationale:'r'}))},at:FIXED-5*DAY}]));
+    const r111=Px=>LeadOS.rules.RULES[105](Px,FIXED); /* index 105 = R111 */
+    const one=r111(AL([61,39]));
+    if(one.length!==1||one[0].sev!==2) return {why:'a single 61% bucket should fire sev 2'};
+    if(r111(AL([40,40,20])).length) return {why:'two buckets at 40% must be quiet — concentration is per single bucket'};
+    if(r111(AL([60,40])).length) return {why:'exactly 60% must be quiet'};
+    const big=r111(AL([85,15]));
+    if(big.length!==1||big[0].sev!==3) return {why:'85% should fire sev 3'};
+    return {ok:true,why:'61% sev2 · 40+40 quiet · exactly 60% quiet · 85% sev3'};
+  }));
+  G.push(check('G110','R113 is keyed per PERIOD: two unowned entries for one period fire once',()=>{
+    const r113=Px=>LeadOS.rules.RULES[107](Px,FIXED); /* index 107 = R113 */
+    const twice=LeadOS.engine.project(wrap([PLG('Q3-2026',1000,800,100,20),PLG('Q3-2026',1100,880,110,10)]));
+    const f=r113(twice);
+    if(f.length!==1) return {why:'two unowned entries for one period must produce ONE finding, got '+f.length};
+    if(f[0].key!=='R113:Q3-2026') return {why:'key should be R113:Q3-2026, got '+f[0].key};
+    const owned=LeadOS.engine.project(wrap([PLG('Q3-2026',1000,800,100,20,'cfo')]));
+    if(r113(owned).length) return {why:'an owned P&L must be quiet'};
+    const mixed=LeadOS.engine.project(wrap([PLG('Q3-2026',1000,800,100,20),PLG('Q3-2026',1100,880,110,10,'cfo')]));
+    if(r113(mixed).length) return {why:'a later owned entry for the same period resolves it'};
+    const twoPeriods=LeadOS.engine.project(wrap([PLG('Q3-2026',1000,800,100,20),PLG('Q4-2026',1000,800,100,10)]));
+    if(r113(twoPeriods).length!==2) return {why:'two unowned PERIODS should produce two findings'};
+    return {ok:true,why:'one finding per period · owned quiet · later owner resolves · distinct periods distinct findings'};
+  }));
+  G.push(check('G111','plHealth needs ≥3 periods: 2 → slope null, R103 silent, reason printed',()=>{
+    const two=LeadOS.engine.project(wrap([PLG('p1',1000,800,100,60,'c'),PLG('p2',1000,500,100,5,'c')]));
+    const h=LeadOS.finIntel.plHealth(two,FIXED);
+    if(h.claimed) return {why:'2 periods must not produce a claim'};
+    if(h.grossMarginSlope!==null) return {why:'slope must be null with 2 periods'};
+    if(h.why.indexOf('insufficient data (n=2, need ≥3)')===-1) return {why:'exact insufficiency message missing: '+h.why};
+    if(LeadOS.rules.RULES[97](two,FIXED).length) return {why:'R103 must not fire on 2 periods even though the margin collapsed'};
+    return {ok:true,why:'n=2 → claimed false, slope null, R103 silent, "insufficient data (n=2, need ≥3)" printed'};
+  }));
+  G.push(check('G112','cohort LTV projection prints the geometric-series formula verbatim',()=>{
+    const Px=LeadOS.engine.project(wrap([{type:'fin.cohort.logged',
+      payload:{id:'c1',cohort_date:FIXED-100*DAY,cohort_size:100,retained_pct_m6:64,arpu_m1:20},at:FIXED-100*DAY}]));
+    const c=LeadOS.finIntel.cohortCurves(Px,FIXED);
+    if(c.ltvProjection===null) return {why:'a cohort with M6 and ARPU should produce a projection'};
+    if(c.ltvMath.indexOf('LTV ≈ ARPU_M1 × (1 / (1 − retention_M6^(1/6)))')===-1)
+      return {why:'the formula must be printed verbatim: '+c.ltvMath.slice(0,120)};
+    if(c.ltvMath.indexOf('geometric series approximation')===-1) return {why:'the approximation label is missing'};
+    if(c.ltvMath.indexOf('discount rate and churn distribution')===-1) return {why:'the caveat about what the formula ignores is missing'};
+    return {ok:true,why:'formula, approximation label and caveat all printed verbatim'};
+  }));
+  G.push(check('G113','R112 requires ≥3 P&L periods: 2 at −5 quiet · 3 negative → sev 3',()=>{
+    const r112=Px=>LeadOS.rules.RULES[106](Px,FIXED);
+    const two=LeadOS.engine.project(wrap([PLG('p1',1000,800,100,60,'c'),PLG('p2',1000,800,-50,5,'c')]));
+    if(r112(two).length) return {why:'2 periods must be quiet regardless of the score'};
+    const three=LeadOS.engine.project(wrap([PLG('p1',1000,800,100,120,'c'),PLG('p2',1000,800,0,60,'c'),PLG('p3',1000,800,-100,5,'c')]));
+    const f=r112(three);
+    if(f.length!==1||f[0].sev!==3) return {why:'3 periods with growth 0% + margin −10% = −10 should fire sev 3'};
+    if(f[0].basis.join(' ').indexOf('Rule of 40 score')===-1) return {why:'the score sentence must be printed'};
+    return {ok:true,why:'2 periods quiet · 3 periods → sev 3 with the score sentence printed'};
+  }));
   return {checks:G,P:P,raw:raw};
 }
 
@@ -6536,7 +7226,8 @@ const CLAIMS=[
   {id:'C17',text:'Execution layer: schema v9, velocity trends respect the ≥3-point discipline and label extrapolation as extrapolation, blocker MTTR and chronic windows are exact, dependency graph infers no transitive edges, accountability prints its data source, R73–R82 boundaries hold',by:['T43','T44','T45','T46','T47','G71','G72','G73','G74','G75','G76','G77','G78','G79']},
   {id:'C18',text:'External intelligence: schema v10, ZERO network calls (every external datum is manually logged and its source printed, never verified), text-match correlations labeled heuristic, R83–R92 boundaries hold, and R88 non-compliance is the single unsuppressible rule in the model',by:['T48','T49','T50','T51','T52','G81','G82','G83','G84','G85','G86','G87','G88','G89','G90','G91']},
   {id:'C19',text:'Calibration engine: schema v11, every bias output carries its n, its window and an alternative explanation; biasSampleMin is enforced before any bias claim; R100 is permanently conf LOW; hidden strengths never raise a finding; R93–R102 boundaries hold',by:['T53','T54','T55','T56','T57','G93','G94','G95','G96','G97','G98','G99','G100','G101']},
-  {id:'C20',text:'ALL 102 RULES fire from one deterministic seed; every rule has a golden, every golden a boundary, every finding its printed math',by:['T18','G40','G7','G13']}
+  {id:'C20',text:'Financial intelligence: schema v12, every benchmark (Rule of 40, LTV:CAC ≥3, burn multiple, CAC payback, margin floor) prints its source and the business model it assumes; ≥3-period discipline holds for P&L and cohort trends; R107 skips rather than inventing a denominator; R114 complements R67 without duplicating it; R103–R114 boundaries hold',by:['T58','T59','T60','T61','T62','G103','G104','G105','G106','G107','G108','G109','G110','G111','G112','G113']},
+  {id:'C21',text:'ALL 114 RULES fire from one deterministic seed; every rule has a golden, every golden a boundary, every finding its printed math',by:['T18','G40','G7','G13']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -8283,6 +8974,247 @@ SPECS['weekly-reflection']={
     return {events:[{type:'reflection.logged',payload:{period:v.period,
       wins:split(v.wins),misses:split(v.misses),patterns:split(v.pattern),commitments:split(v.commitment)}}]};
   }};
+/* ---------- pt-17 financial playbooks ---------- */
+const FI=()=>LeadOS.finIntel;
+SPECS['pl-review']={
+  pattern:null,title:'P&L review',free:true,
+  blurb:'Finance is not a reporting layer. It is a way of reasoning.',
+  prefill(R,P,now){
+    const h=FI().plHealth(P,now);
+    const lines=[h.label];
+    if(!h.claimed){ lines.push(h.why); }
+    else { lines.push('period-over-period:');
+      h.periods.forEach(p=>lines.push('  '+p.line+(p.ownerId?' · owner '+p.ownerId:' · NO OWNER')));
+      lines.push(h.grossMarginMath);
+      lines.push(h.ruleOf40Math); lines.push('  '+h.ruleOf40Label);
+      lines.push('EBITDA margin slope '+h.ebitdaSlope+'pp/period · opex-as-%-revenue slope '+h.opexSlope+'pp/period');
+      lines.push(h.alternative); }
+    Object.keys(P.kpiByMetric||{}).sort().slice(0,5).forEach(m=>{
+      const k=P.kpiByMetric[m].slice(-1)[0];
+      lines.push('cross-reference KPI '+m+': '+k.value+(k.target?' vs target '+k.target:'')); });
+    return lines;
+  },
+  live(draft){
+    const rev=Number(draft.revenue), gp=Number(draft.grossProfit), eb=Number(draft.ebitda);
+    if(!isFinite(rev)||rev===0) return null;
+    const gm=isFinite(gp)?U.rd(gp/rev*100,1):null;
+    const em=isFinite(eb)?U.rd(eb/rev*100,1):null;
+    const g=Number(draft.growth);
+    const r40=(isFinite(g)&&em!==null)?U.rd(g+em,1):null;
+    return {line:'gross margin '+(gm===null?'—':gm+'%')+' · EBITDA margin '+(em===null?'—':em+'%')+
+      (r40===null?' · Rule of 40 needs a growth figure':' · Rule of 40 = '+g+' + '+em+' = '+r40),
+      zopa:null,
+      caveat:'Rule of 40 is a SaaS valuation heuristic, not a performance law — meaningless for bootstrapped, services or pre-revenue businesses'};
+  },
+  fields(){ return [
+    {key:'period',label:'period',kind:'text',req:true},
+    {key:'revenue',label:'revenue',kind:'number',req:true},
+    {key:'cogs',label:'COGS',kind:'number',req:true},
+    {key:'grossProfit',label:'gross profit',kind:'number',req:true},
+    {key:'opex',label:'OPEX total',kind:'number',req:true},
+    {key:'ebitda',label:'EBITDA',kind:'number',req:true},
+    {key:'netIncome',label:'net income',kind:'number',req:true},
+    {key:'growth',label:'revenue growth % vs prior period',kind:'number',req:false},
+    {key:'owner',label:'P&L owner (named person)',kind:'text',req:true},
+    {key:'variance',label:'key driver of variance vs prior period',kind:'textarea',req:true},
+    {key:'action',label:'one action on the largest unfavorable line item',kind:'textarea',req:true}]; },
+  submit(v){
+    if(Math.abs((v.revenue-v.cogs)-v.grossProfit)>0.5)
+      throw new Error('revenue − COGS ('+(v.revenue-v.cogs)+') does not equal gross profit ('+v.grossProfit+') — fix the figures rather than logging a statement that does not add up');
+    return {events:[
+      {type:'fin.pl.logged',payload:{period:v.period,revenue:v.revenue,cogs:v.cogs,gross_profit:v.grossProfit,
+        opex_total:v.opex,ebitda:v.ebitda,net_income:v.netIncome,ownerId:v.owner,note:v.variance.slice(0,160)}},
+      {type:'exec.kpi.reviewed',payload:{note:'P&L review '+v.period+': '+v.action.slice(0,140)}}]};
+  }};
+SPECS['unit-economics-review']={
+  pattern:null,title:'Unit economics review',free:true,
+  blurb:'A business with no unit economics runs on revenue intuition.',
+  prefill(R,P,now){
+    const u=FI().unitHealth(P,now);
+    const lines=[u.label,u.conventionLabel];
+    u.segments.forEach(s=>{
+      lines.push(s.segment+': '+s.ratioMath+' · payback '+(s.paybackMonths===null?'not logged':s.paybackMonths+'mo (ceiling '+s.paybackCeiling+')')+
+        ' · GM '+s.grossMarginPct+'% · ARPU '+s.arpu);
+      lines.push('  '+s.cacTrendWhy); });
+    if(!u.segments.length) lines.push('no fin.unit.logged events yet');
+    const c=FI().cohortCurves(P,now);
+    if(c.claimed){ lines.push('cohort curves:'); c.rows.forEach(r=>lines.push('  '+r.line));
+      lines.push('  '+c.ltvMath); }
+    Object.keys(P.quotas||{}).slice(0,3).forEach(k=>{ const q=P.quotas[k];
+      if(q.actuals.length) lines.push('sales efficiency — quota '+q.personId+': '+q.actuals.slice(-1)[0].actual+' of '+q.target); });
+    return lines;
+  },
+  live(draft,R,P){
+    const ltv=Number(draft.ltv), cac=Number(draft.cac), pb=Number(draft.payback);
+    if(!isFinite(ltv)||!isFinite(cac)||cac===0) return null;
+    const ratio=U.rd(ltv/cac,2);
+    const set=LeadOS.engine.settings(P);
+    return {line:'LTV '+ltv+' / CAC '+cac+' = ratio '+ratio+' — '+(ratio<1?'BELOW 1: each acquisition destroys value'
+        :ratio<3?'below the ≥3 convention':'at or above the ≥3 convention')+
+      (isFinite(pb)?' · payback '+pb+'mo vs ceiling '+set.cacPaybackMonthsCeiling+'mo — '+(pb>set.cacPaybackMonthsCeiling?'OVER':'within'):''),
+      zopa:null,
+      caveat:'≥3 and the payback ceiling are conventions you own in settings, not laws — a capital-light business can thrive at 2'};
+  },
+  fields(){ return [
+    {key:'period',label:'period',kind:'text',req:true},
+    {key:'segment',label:'product or segment',kind:'text',req:true},
+    {key:'arpu',label:'ARPU',kind:'number',req:true},
+    {key:'cac',label:'CAC',kind:'number',req:true},
+    {key:'ltv',label:'LTV',kind:'number',req:true},
+    {key:'margin',label:'gross margin %',kind:'number',req:true},
+    {key:'payback',label:'payback months',kind:'number',req:false},
+    {key:'driver',label:'top driver of CAC change',kind:'textarea',req:true},
+    {key:'lever',label:'one lever to pull to improve payback',kind:'textarea',req:true}]; },
+  submit(v){
+    if(v.cac<=0) throw new Error('CAC must be greater than zero — a ratio with a zero denominator is not a number');
+    const p={period:v.period,product_or_segment:v.segment,arpu:v.arpu,cac:v.cac,ltv:v.ltv,
+      ltv_cac_ratio:U.rd(v.ltv/v.cac,2),gross_margin_pct:v.margin,
+      note:'driver: '+v.driver.slice(0,80)+' | lever: '+v.lever.slice(0,80)};
+    if(typeof v.payback==='number') p.payback_months=v.payback;
+    return {events:[{type:'fin.unit.logged',payload:p}]};
+  }};
+SPECS['runway-review']={
+  pattern:null,title:'Runway review',free:true,
+  blurb:'Cash is the one number in finance that is not a convention.',
+  prefill(R,P,now){
+    const r=FI().runwayStatus(P,now);
+    const lines=[r.label];
+    if(!r.claimed){ lines.push(r.why); }
+    else { lines.push('cash '+r.cash+' · burn '+r.burn+'/mo · runway '+r.runwayMonths+' months (logged '+U.iso(r.at)+')');
+      lines.push(r.daysToActionMath); lines.push('  '+r.leadTimeLabel);
+      lines.push('burn multiple: '+(r.burnMultiple===null?r.burnMath:r.burnMultiple+' — '+r.burnMath));
+      lines.push('  '+r.burnLabel); }
+    const fc=(P.finForecasts||[]).slice(-3);
+    if(fc.length){ lines.push('recent forecasts:');
+      fc.forEach(x=>lines.push('  '+x.period+': forecast '+x.forecast+(typeof x.actual==='number'?' vs actual '+x.actual:' (unreconciled)'))); }
+    return lines;
+  },
+  live(draft,R,P){
+    const cash=Number(draft.cash), burn=Number(draft.burn);
+    if(!isFinite(cash)||!isFinite(burn)||burn<=0) return null;
+    const months=U.rd(cash/burn,1);
+    const set=LeadOS.engine.settings(P);
+    const days=Math.round(months*30-set.fundraiseLeadTimeDays);
+    return {line:'runway = '+cash+' ÷ '+burn+' = '+months+' months · days to action = ('+months+' × 30) − '+set.fundraiseLeadTimeDays+' = '+days+' days'+
+      (months<set.burnRateAlertMultiple?'  ← below the '+set.burnRateAlertMultiple+'-month alert':''),
+      zopa:null,
+      caveat:'the '+set.fundraiseLeadTimeDays+'d lead time is a labeled assumption in settings — Series C+ commonly runs 180d'};
+  },
+  fields(){ return [
+    {key:'cash',label:'cash balance',kind:'number',req:true},
+    {key:'burn',label:'monthly burn rate',kind:'number',req:true},
+    {key:'event',label:'expected next capital event and timeline',kind:'text',req:true},
+    {key:'extend',label:'actions to extend runway',kind:'textarea',req:true},
+    {key:'hardest',label:'hardest cost to cut if it comes to that',kind:'textarea',req:true},
+    {key:'period',label:'forecast period label',kind:'text',req:true},
+    {key:'forecast',label:'forecast revenue for that period',kind:'number',req:true}]; },
+  submit(v){
+    if(v.burn<=0) throw new Error('monthly burn must be positive to compute runway — a non-burning business does not need this playbook');
+    return {events:[
+      {type:'fin.runway.logged',payload:{date:Date.now(),cash_balance:v.cash,burn_rate_monthly:v.burn,
+        runway_months:U.rd(v.cash/v.burn,1),note:'next capital event: '+v.event+' | extend: '+v.extend.slice(0,100)}},
+      {type:'fin.forecast.logged',payload:{period:v.period,metric:'revenue',forecast:v.forecast}}]};
+  }};
+SPECS['capital-allocation']={
+  pattern:null,title:'Capital allocation',free:true,
+  blurb:'Concentration is sometimes right. It is always worth naming.',
+  prefill(R,P,now){
+    const a=FI().allocationReview(P,now);
+    const lines=[a.claimed?a.label:'no prior allocation logged'];
+    if(a.claimed){
+      lines.push('latest ('+a.period+', budget '+a.totalBudget+', board approved: '+a.boardApproved+'):');
+      a.buckets.forEach(b=>lines.push('  '+b.bucket+': '+b.amount+' ('+b.pct+'%) — '+b.rationale));
+      lines.push(a.concentrationWhy);
+      lines.push(a.stabilityMath);
+      lines.push('capex unreviewed >90d: '+a.capexUnreviewedOver90d);
+      lines.push(a.outcomeNote); }
+    const act=(P.activeInitiatives||[]);
+    lines.push('active initiatives competing for this budget ('+act.length+'):');
+    act.slice(0,8).forEach(i=>lines.push('  '+i.title+' · '+i.effort_days+'d effort'+(i.ownerId?' · '+i.ownerId:'')));
+    return lines;
+  },
+  live(draft){
+    const total=Number(draft.total);
+    const parse=s=>String(s||'').split('\n').map(l=>{ const bits=l.split(':');
+      return {bucket:String(bits[0]||'').trim(),amount:Number(bits[1])}; }).filter(x=>x.bucket&&isFinite(x.amount));
+    const rows=parse(draft.buckets);
+    if(!isFinite(total)||total<=0||!rows.length) return null;
+    const sum=U.sum(rows.map(r=>r.amount));
+    const top=rows.slice().sort((a,b)=>b.amount-a.amount)[0];
+    const pct=U.rd(top.amount/total*100,1);
+    return {line:'allocated '+sum+' of '+total+' ('+U.rd(sum/total*100,1)+'%) · top bucket "'+top.bucket+'" = '+pct+'%'+
+      (pct>80?'  ← above 80%: sev 3':pct>60?'  ← above 60%: sev 2 advisory':''),
+      zopa:null,
+      caveat:'concentration is measured per single bucket; two buckets at 40% each do not trigger the rule'};
+  },
+  fields(){ return [
+    {key:'period',label:'period',kind:'text',req:true},
+    {key:'total',label:'total budget',kind:'number',req:true},
+    {key:'buckets',label:'allocations, one per line as "bucket: amount: rationale"',kind:'textarea',req:true},
+    {key:'increase',label:'items to increase',kind:'text',req:false},
+    {key:'cut',label:'items to cut',kind:'text',req:false},
+    {key:'board',label:'board approval needed Y/N',kind:'yn',req:true}]; },
+  submit(v){
+    const rows=String(v.buckets).split('\n').map(l=>{ const bits=l.split(':');
+      return {bucket:String(bits[0]||'').trim(),amount:Number(bits[1]),
+        rationale:String(bits.slice(2).join(':')||'').trim()}; }).filter(x=>x.bucket&&isFinite(x.amount));
+    if(!rows.length) throw new Error('no parsable allocations — use "bucket: amount: rationale", one per line');
+    const sum=U.sum(rows.map(r=>r.amount));
+    if(sum>v.total) throw new Error('allocations total '+sum+' exceeds the budget '+v.total+' — the arithmetic has to survive contact with the bank');
+    const withoutRationale=rows.filter(r=>!r.rationale);
+    if(withoutRationale.length) throw new Error('every bucket needs a rationale — unexplained money is how portfolios drift: '+withoutRationale.map(r=>r.bucket).join(', '));
+    return {events:[{type:'fin.allocation.decision',payload:{period:v.period,total_budget:v.total,
+      board_approved:v.board==='Y',
+      allocations:rows.map(r=>({bucket:r.bucket,amount:r.amount,
+        pct_of_total:U.rd(r.amount/v.total*100,1),rationale:r.rationale}))}}]};
+  }};
+SPECS['cohort-analysis']={
+  pattern:null,title:'Cohort analysis',free:true,
+  blurb:'Retention curves are the DNA of recurring revenue.',
+  prefill(R,P,now){
+    const c=FI().cohortCurves(P,now);
+    const lines=[c.claimed?c.label:'no fin.cohort.logged events yet'];
+    if(c.claimed){
+      c.rows.forEach(r=>lines.push('  '+r.line));
+      lines.push(c.m6SlopeMath);
+      lines.push('best M6: '+(c.best?U.iso(c.best.date)+' at '+c.best.m6+'%':'n/a')+
+        ' · worst M6: '+(c.worst?U.iso(c.worst.date)+' at '+c.worst.m6+'%':'n/a'));
+      lines.push('LTV projection: '+c.ltvMath);
+      lines.push(c.note); }
+    const churn=(P.churnLogs||[]).slice(-3);
+    if(churn.length){ lines.push('cross-reference cs.churn.logged:');
+      churn.forEach(x=>lines.push('  '+x.period+': '+x.churned+' of '+x.total+' = '+U.rd(x.churned/x.total*100,2)+'%')); }
+    return lines;
+  },
+  live(draft,R,P){
+    const m6=Number(draft.m6), arpu=Number(draft.arpu1);
+    if(!isFinite(m6)||!isFinite(arpu)||m6<=0||m6>=100) return null;
+    const monthly=Math.pow(m6/100,1/6);
+    const ltv=U.rd(arpu*(1/(1-monthly)),2);
+    const seg=Object.keys(P.unitBySegment||{})[0];
+    const cac=seg?P.unitBySegment[seg].cac:null;
+    return {line:'LTV ≈ '+arpu+' × (1 / (1 − '+U.rd(m6/100,3)+'^(1/6))) = '+ltv+
+      (cac?' · vs current CAC '+cac+' → ratio '+U.rd(ltv/cac,2):' · no CAC on file to compare'),
+      zopa:null,
+      caveat:'geometric series approximation — actual LTV depends on discount rate and churn distribution'};
+  },
+  fields(){ return [
+    {key:'cohortDate',label:'cohort date',kind:'date',req:true},
+    {key:'size',label:'cohort size',kind:'number',req:true},
+    {key:'m1',label:'M1 retention %',kind:'number',req:false},
+    {key:'m3',label:'M3 retention %',kind:'number',req:false},
+    {key:'m6',label:'M6 retention %',kind:'number',req:false},
+    {key:'m12',label:'M12 retention %',kind:'number',req:false},
+    {key:'arpu1',label:'ARPU M1',kind:'number',req:false},
+    {key:'arpu12',label:'ARPU M12',kind:'number',req:false},
+    {key:'character',label:'what was different about this acquisition cohort?',kind:'textarea',req:true}]; },
+  submit(v){
+    const p={id:U.uid('coh'),cohort_date:v.cohortDate,cohort_size:v.size,note:v.character.slice(0,200)};
+    ['m1','m3','m6','m12'].forEach(k=>{ if(typeof v[k]==='number') p['retained_pct_'+k]=v[k]; });
+    if(typeof v.arpu1==='number') p.arpu_m1=v.arpu1;
+    if(typeof v.arpu12==='number') p.arpu_m12=v.arpu12;
+    return {events:[{type:'fin.cohort.logged',payload:p}]};
+  }};
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -8792,6 +9724,88 @@ const SPARK=arr=>{ if(!arr.length) return '<span class="muted small">no data</sp
   const mx=Math.max.apply(null,arr), mn=Math.min.apply(null,arr);
   const rng=(mx-mn)||1;
   return '<span class="spark">'+arr.map(v=>ch[U.clamp(Math.round((v-mn)/rng*7),0,7)]).join('')+'</span>'; };
+V['#/finance']={kicker:'finance as a decision language',title:'Finance',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now, F=LeadOS.finIntel;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const set=LeadOS.engine.settings(P);
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
+  const h=F.plHealth(P,now), u=F.unitHealth(P,now), r=F.runwayStatus(P,now),
+        a=F.allocationReview(P,now), c=F.cohortCurves(P,now);
+  const plRows=h.claimed?h.periods.slice(-4).map(p=>'<tr><td class="mono">'+esc(p.period)+'</td>'+
+    '<td class="mono">'+fmtN(p.revenue)+'</td>'+
+    '<td class="mono">'+(p.grossMarginPct===null?'—':(p.grossMarginPct<set.grossMarginFloorPct
+      ?'<span class="sev s3">'+p.grossMarginPct+'%</span>':p.grossMarginPct+'%'))+'</td>'+
+    '<td class="mono">'+(p.ebitdaMarginPct===null?'—':p.ebitdaMarginPct+'%')+'</td>'+
+    '<td class="mono">'+(p.opexPctRevenue===null?'—':p.opexPctRevenue+'%')+'</td>'+
+    '<td class="mono">'+(p.ownerId?esc(p.ownerId):'<span class="sev s2">no owner</span>')+'</td></tr>').join(''):'';
+  const r40=h.ruleOf40;
+  const r40bar=(()=>{ if(r40===null) return '<span class="muted small">needs two consecutive periods</span>';
+    const filled=U.clamp(Math.round((r40/40)*10),0,10);
+    return '<span class="spark">'+(r40<0?'░'.repeat(10):'█'.repeat(filled)+'░'.repeat(10-filled))+'</span> <b class="mono">'+r40+'</b>'; })();
+  const unitRows=u.segments.map(s=>'<tr><td class="mono">'+esc(s.segment)+'</td>'+
+    '<td class="mono">'+s.arpu+'</td><td class="mono">'+s.cac+'</td><td class="mono">'+s.ltv+'</td>'+
+    '<td class="mono">'+(s.ratio===null?'—':(s.ratio<1?'<span class="sev s5">'+s.ratio+'</span>'
+      :s.ratio<3?'<span class="sev s3">'+s.ratio+'</span>':'<span class="pill">'+s.ratio+'</span>'))+'</td>'+
+    '<td class="mono">'+(s.paybackMonths===null?'—':(s.paybackMonths>2*s.paybackCeiling?'<span class="sev s4">'+s.paybackMonths+'mo</span>'
+      :s.paybackMonths>s.paybackCeiling?'<span class="sev s3">'+s.paybackMonths+'mo</span>':s.paybackMonths+'mo'))+'</td>'+
+    '<td class="mono">'+s.grossMarginPct+'%</td></tr>').join('');
+  const cohortRows=c.claimed?c.rows.map(x=>'<tr><td class="mono">'+U.iso(x.date)+'</td><td class="mono">'+x.size+'</td>'+
+    ['m1','m3','m6','m12'].map(k=>'<td class="mono">'+(x[k]===null?'—':
+      (k==='m6'&&x[k]<50?'<span class="sev s4">'+x[k]+'%</span>':x[k]+'%'))+'</td>').join('')+'</tr>').join(''):'';
+  const allocBars=a.claimed?a.buckets.map(b=>{
+    const filled=U.clamp(Math.round((b.pct||0)/10),0,10);
+    return '<div class="heatrow"><b>'+esc(b.bucket)+'</b>'+
+      '<span class="spark">'+'█'.repeat(filled)+'░'.repeat(10-filled)+' '+(b.pct===null?'—':b.pct+'%')+'</span>'+
+      '<span class="w mono">'+fmtN(b.amount)+'</span></div>'; }).join(''):'';
+  return '<div class="vhead"><div class="kicker">finance as a decision language</div><h1>Finance</h1>'+
+    '<div class="sub">A VP who cannot read their own P&amp;L is not facing a finance problem — it is a leadership problem. <b>'+esc(F.OWN_BOOKS)+'.</b> Every threshold on this page is a convention you own in settings, not a law.</div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['pl-review','unit-economics-review','runway-review','capital-allocation','cohort-analysis']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    runner+
+    '<div class="grid3">'+
+      '<div class="card" style="border-left:3px solid '+(r.claimed&&r.fires?'var(--accent)':'var(--hair2)')+'"><h3>Runway</h3>'+
+        (r.claimed?'<div style="font-family:var(--serif);font-size:38px;font-weight:700;letter-spacing:-.02em;line-height:1.1;margin-top:4px">'+
+          r.runwayMonths+'<span style="font-size:16px"> months</span></div>'+
+          '<div class="basis" style="margin-top:8px"><div><b>days to action: '+r.daysToAction+'</b></div>'+
+          '<div>'+esc(r.daysToActionMath)+'</div><div class="lbl">'+esc(r.leadTimeLabel)+'</div></div>'
+          :'<div class="small muted" style="margin-top:8px">'+esc(r.why)+'</div>')+'</div>'+
+      '<div class="card"><h3>Rule of 40</h3><div style="margin-top:10px;font-size:16px">'+r40bar+'</div>'+
+        '<div class="basis" style="margin-top:8px"><div>'+esc(h.claimed?h.ruleOf40Math:h.why)+'</div>'+
+        (h.claimed?'<div class="lbl">'+esc(h.ruleOf40Label)+'</div>':'')+'</div></div>'+
+      '<div class="card"><h3>Burn multiple</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+(r.claimed&&r.burnMultiple!==null?'<b class="mono">'+r.burnMultiple+'</b>':'<span class="muted">not computable</span>')+'</div>'+
+        '<div>'+esc(r.claimed?r.burnMath:'no runway data')+'</div>'+
+        (r.claimed?'<div class="lbl">'+esc(r.burnLabel)+'</div>':'')+'</div></div>'+
+    '</div>'+
+    '<div class="sect"><h2>P&amp;L</h2><span class="meta">last '+(h.claimed?Math.min(4,h.periods.length):0)+' periods · gross-margin floor '+set.grossMarginFloorPct+'%</span></div>'+
+    (plRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>period</th><th>revenue</th><th>gross margin</th><th>EBITDA margin</th><th>opex % rev</th><th>owner</th></tr>'+plRows+'</table>'+
+      '<div class="formnote">'+esc(h.grossMarginMath)+' · '+esc(h.alternative)+'</div></div>'
+      :'<div class="empty">'+esc(h.claimed?'no periods':h.why)+'</div>')+
+    '<div class="sect"><h2>Unit economics</h2><span class="meta">'+u.segments.length+' segment(s) · LTV:CAC ≥3 and payback ≤'+set.cacPaybackMonthsCeiling+'mo are conventions</span></div>'+
+    (unitRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>segment</th><th>ARPU</th><th>CAC</th><th>LTV</th><th>LTV:CAC</th><th>payback</th><th>GM</th></tr>'+unitRows+'</table>'+
+      '<div class="formnote">'+esc(u.conventionLabel)+'</div></div>'
+      :'<div class="empty">No fin.unit.logged events. R110 reads that silence.</div>')+
+    '<div class="sect"><h2>Cohort retention</h2><span class="meta">'+(c.claimed?c.rows.length+' cohorts':'none logged')+'</span></div>'+
+    (cohortRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>cohort</th><th>size</th><th>M1</th><th>M3</th><th>M6</th><th>M12</th></tr>'+cohortRows+'</table>'+
+      '<div class="formnote">'+esc(c.m6SlopeMath)+'<br>'+esc(c.ltvMath)+'</div></div>'
+      :'<div class="empty">No cohort data.</div>')+
+    '<div class="sect"><h2>Capital allocation</h2><span class="meta">'+(a.claimed?a.period+' · budget '+fmtN(a.totalBudget):'none logged')+'</span></div>'+
+    (allocBars?'<div class="card">'+allocBars+
+      '<div class="formnote">'+esc(a.concentrationWhy)+'<br>'+esc(a.stabilityMath)+' · '+esc(a.outcomeNote)+'</div></div>'
+      :'<div class="empty">No allocation decisions logged.</div>')+
+    '<div class="sect"><h2>Capex</h2><span class="meta">'+(P.unreviewedCapex||[]).length+' unreviewed</span></div>'+
+    (Object.keys(P.capex||{}).length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>item</th><th>amount</th><th>category</th><th>expected ROI</th><th>status</th><th>age</th></tr>'+
+      vals(P.capex).sort((x,y)=>y.loggedAt-x.loggedAt).map(x=>'<tr><td>'+esc(x.title)+'</td>'+
+        '<td class="mono">'+fmtN(x.amount)+'</td><td class="mono">'+esc(x.category)+'</td>'+
+        '<td class="mono">'+(x.expected_roi_pct===null?'—':x.expected_roi_pct+'%')+'</td>'+
+        '<td>'+(x.status===null?'<span class="sev s3">unreviewed</span>'
+          :x.status==='underperforming'?'<span class="sev s4">underperforming</span>':'<span class="pill">'+esc(x.status)+'</span>')+'</td>'+
+        '<td class="mono">'+U.days(now,x.loggedAt)+'d</td></tr>').join('')+'</table></div>'
+      :'<div class="empty">No capex logged.</div>')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">fin.pl.logged · fin.unit.logged · fin.runway.logged · fin.cohort.logged · fin.capex.logged</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
 V['#/self']={kicker:'the instrument is you',title:'Self',render(ctx){
   const P=ctx.P, R=ctx.R, now=ctx.now, C=LeadOS.calibration;
   const vals=o=>Object.keys(o||{}).map(k=>o[k]);
@@ -9314,6 +10328,7 @@ function shell(ctx){
     ['#/decisions','check','Decisions',(ctx.P.openCommitments||[]).length||null],
     ['#/execution','activity','Execution',(ctx.P.openBlockers||[]).length||null],
     ['#/external','layers','External',(ctx.P.openPains||[]).length||null],
+    ['#/finance','bars','Finance',(ctx.P.unreviewedCapex||[]).length||null],
     ['#/self','gauge','Self',(ctx.P.openBiases||[]).length||null],
     ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],

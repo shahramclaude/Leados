@@ -571,3 +571,101 @@ browser remains the grader.
 5. Byte-verify the unread upstream bodies (`events.js`, `health.js`, `ui.js`, `playbooks.js`);
    reconcile registry counts honestly.
 6. Executive/board pack — upstream's own queued #1, carried since pt-7 and still open.
+
+---
+
+## Session 17 — pt-17 (brief "pt-12"): financial intelligence layer
+
+**Date:** February 2026, closing slice. **Env:** as Sessions 7–16 — no JS runtime at authoring
+time; `#/health` in the reader's browser is the authority wall.
+
+### §0 Opening audit
+
+No new upstream reads; README §0 stands unchanged since pt-7. Module deltas:
+
+| Module | This session |
+|---|---|
+| `events` | **+10 contracts** (148→158) |
+| `store` | **schema v12**, `MIGRATIONS['11>12']`, 5 settings (4 from the brief + `fundraiseLeadTimeDays`) |
+| `engine` | **+14 buckets**, 10 fold handlers, `unreviewedCapex` open-set |
+| **`finIntel`** | **NEW module** — `plHealth`, `unitHealth`, `runwayStatus`, `allocationReview`, `cohortCurves` |
+| `rules` | **+R103–R114** (102→114) |
+| `health` | **+T58–T62, +G103–G113**, G40 → 114 rules, seed extended |
+| `playbooks` | **+5 runners** (36→41) |
+| `ui` | **+`#/finance`** view |
+
+### §1 Non-obvious decisions, one line of WHY each
+
+1. **The fundraise lead time became a setting, not a constant** — the brief called it a labeled
+   assumption and said "user-overridable in settings"; hard-coding 90d while *calling* it
+   overridable would have been the exact dishonesty this system exists to prevent.
+2. **R107 skips rather than firing an "unknown"** (G105) — the brief is explicit, and it matters
+   structurally: a bootstrapped business has no ARR denominator, so a burn-multiple finding there
+   would be a category error, not a warning. The skip reason is printed in the analytics output.
+3. **R113 is keyed per period, not per event** (G110) — two P&L entries for one quarter are one
+   ownership gap. The key is `R113:<period>` and a later owned entry for the same period
+   resolves it.
+4. **R111 measures concentration per single bucket** (G109) — two buckets at 40% are not
+   "concentrated"; aggregating them would fire on every well-split portfolio.
+5. **R103's three-way severity is explicit about which condition it read** — declining+below is
+   not the same finding as below-only, and the basis says which one fired and why.
+6. **P&L slopes obey the same ≥3-point discipline as every other trend since pt-7** (G111) —
+   finance got no exemption from the oldest rule in the system, and the insufficiency message is
+   the standard one.
+7. **`pl-review` refuses a statement where `revenue − COGS ≠ gross profit`** — the gate would
+   accept it (every field is a valid number); refusing is the playbook's judgement, not the
+   registry's, and the error says which figures disagree.
+8. **R114 maps to `decision-scenario`, not a new `fin-scenario-model` playbook** — the brief's
+   G107 names that id but no brief ever specified the playbook. Rather than invent one, R114
+   routes to the shipped scenario runner; G107's actual assertion (different key, different
+   playbook from R67) holds and the substitution is printed here.
+9. **Cash is labeled a fact while everything else is labeled a convention** — R106 says so
+   explicitly. It is the only finance finding where the number itself is not negotiable.
+
+### §2 Self-caught defects during authoring (this part)
+
+- D25 First draft of the burn multiple divided monthly burn by a *monthly* revenue delta, then
+  compared it to a benchmark defined on annualised figures — a 12× error that would have fired
+  R107 on healthy businesses. Corrected to `(burn × 12) ÷ net new revenue`, with the full
+  arithmetic printed so the next reader can check it.
+- D26 `R113` initially iterated `plStatements` directly and emitted one finding per event, which
+  duplicated on a re-logged period; rewritten to fold per period first, with G110 pinning the
+  behavior in both directions (duplicate unowned → one finding; later owner → resolved).
+- D27 The seed's third P&L period originally kept revenue flat, which made Rule of 40 exactly 0
+  — quiet by the rule, so R112 would not have fired and G40 would have failed on R112. Traced by
+  hand, then set revenue to 900 so growth is −10% and the score is −10.
+
+### §3 Expected (NOT yet observed) outcomes — pt-17
+
+- **T58–T62** = brief T56–T60 (ID map printed in README and in code).
+- **G103–G113** as written; **brief G114 folded into G40**, now asserting **114/114** rules from
+  one deterministic seed: gross margin 80→70→55% crossing the 60% floor, LTV:CAC 1.5, payback
+  24mo, runway 8 months, a computable burn multiple, 100d unreviewed capex, cohort M6
+  70→60→45%, a 65% allocation bucket, Rule of 40 −10, an unowned P&L period, and a
+  scenario-planned decision with no financial model.
+- **C20** proven iff T58–T62 + G103–G113 pass; **C21** iff T18 + G40 + G7 + G13 pass.
+
+### §4 Closing state of the run (pt-7 → pt-17)
+
+114 rules · 158 event contracts · 15 modules · 17 views · T1–T62 · G1–G113 · C1–C21 · schema v12
+with a twelve-rung migration ladder, every rung idempotent and repair-counted. Three files on
+disk, exactly as the delivery clause has required since pt-7.
+
+Eleven consecutive parts, and the oldest rules never moved: trends still need three points,
+missing fields still skip, counts still print their arithmetic, suppression is still auditable
+and reversible with the single declared override at R88, every finding still links a playbook or
+prints why it cannot — and no part of this system has ever executed in the environment that
+wrote it. What changed is only what the briefs added.
+
+### §5 Open items (ranked, carried into any future part)
+
+1. `conflict.raised` / `conflict.resolved` · `retro.action.completed` — the contracts whose
+   absence still forces printed inferences (R61/G48, R78).
+2. `reportsTo` + 1:1 cadence contracts — retires the roster proxy in R50/R53/R97.
+3. **A `decision.severity` field** — would retire the scenario-count proxy now shared by R67
+   *and* R114; two rules leaning on one unverified proxy is one too many.
+4. Exact Brandes betweenness — retires R62's approximation caveat.
+5. `production-stop` interactive brief (requested pt-9, never received); `fin-scenario-model`
+   playbook (named by G107, never specified).
+6. Byte-verify the unread upstream bodies; reconcile registry counts honestly.
+7. Executive/board pack — upstream's own queued #1, carried since pt-7 and still open.
