@@ -1,141 +1,94 @@
-// LEADOS.viz — shared data contract.
-// UNVERIFIED NOTE: no js/viz.js, js/engine.js (internals), or js/ui.js source
-// was read in this session beyond what AI-SESSION-LOG.md documents as
-// inspected (see README.md "What was inspected"). Nothing here is a port of
-// real LeadOS code — it is a fresh implementation of the pt-C brief's
-// specification text, built as React components instead of the brief's
-// literal "(data, options) -> SVG string | Canvas element" functions,
-// because this tool environment is a React/Vite project, not a static
-// multi-file <script> site. See AI-SESSION-LOG.md §1 for the full list of
-// disclosed adaptations.
+// LEADOS pt-D — shared types for the automation demo.
+//
+// UNVERIFIED-BY-CONSTRUCTION NOTE (read this before trusting any shape below):
+// This file is a fresh implementation of the pt-D brief's data shapes, not a
+// port of real LeadOS internals. The *only* pieces of this module that are
+// backed by a verified read of github.com/wbweve/Leados (main, inspected this
+// session) are:
+//   - `prefill(ctx, P) -> {ok, kind, title, facts[], suggest{}, missing[]}` —
+//     verified verbatim in the real playbooks.js header comment.
+//   - append-only event shape `{ id, at, type, payload }` with a running
+//     sequence — verified in the real store.js (`appendRaw`, `padId`).
+//   - finding `key = rule + ':' + scope` — verified in the real engine.js.
+//   - `insight.acknowledged` as the real suppression event (the brief's
+//     "snoozed/dismissed" vocabulary does not appear in the real source —
+//     see AI-SESSION-LOG.md §2 for the full diff).
+// Everything else here (Person fields, the specific event-type vocabulary
+// used by the bundles, Settings keys) is demo scaffolding, built to exercise
+// every capability the pt-D brief describes. See README.md "What this is /
+// isn't" and AI-SESSION-LOG.md for the full disclosure.
 
-export type Confidence = "high" | "medium" | "low";
+export type ISODate = string;
 
-/** Every chart's non-optional provenance block. */
-export interface VizMeta {
-  /** e.g. "from fin.pl.logged, n=8 periods" */
-  source: string;
-  confidence: Confidence;
-  /** what this chart actually shows, one sentence */
-  label: string;
-  /** known limitation, if any */
-  caveat?: string;
+export interface LeadEvent {
+  id: string; // e-00001 style, verified format from the real store.js padId()
+  seq: number;
+  at: number; // epoch ms
+  type: string;
+  payload: Record<string, unknown>;
 }
 
-export interface SeriesPoint {
-  x: string; // ISO date
-  y: number | null; // null = data gap
-}
-
-export interface LineSeries {
-  label: string;
-  points: SeriesPoint[];
-  color: string;
-  conf?: Confidence;
-}
-
-export interface Annotation {
-  x: string;
-  label: string;
-}
-
-export interface BulletRange {
-  lo: number;
-  hi: number;
-  label: string;
-  color: string;
-}
-
-export interface BulletMetric {
-  label: string;
-  actual: number;
-  target: number;
-  prior?: number;
-  unit?: string;
-  ranges: BulletRange[];
-}
-
-export interface HeatCell {
-  label: string;
-  value: number;
-  maxValue: number;
-  color: string;
-  sublabel?: string;
-}
-
-export interface CalendarEvent {
-  date: string; // ISO date
-  count: number;
-}
-
-export interface HistogramBucket {
-  label: string;
-  count: number;
-}
-
-export interface WaterfallItem {
-  label: string;
-  value: number;
-  type: "base" | "add" | "subtract" | "total";
-}
-
-export interface RadarSeries {
-  label: string;
-  values: number[];
-  color: string;
-  opacity?: number;
-}
-
-export interface NetworkNode {
+export interface Person {
   id: string;
-  label: string;
-  type: "direct" | "skip" | "bridge" | "isolate";
-  domain: string;
-  indegree: number;
-  outdegree: number;
+  name: string;
+  role: string;
+  reportsTo?: string | null; // verified concept name (engine.js rosterById), demo values
+  archived?: boolean;
+  cadenceDays?: number; // demo-only per-person 1:1 cadence setting
 }
 
-export interface NetworkEdge {
-  from: string;
-  to: string;
-  type: "collaboration" | "information" | "decision" | "blocker";
-  strength: number; // 1-5
+export interface AuditEntry {
+  id: string;
+  at: number;
+  action: string; // e.g. 'auto-maintenance', 'event.undone', 'export', 'suppression.cleared'
+  message: string;
+  system?: boolean; // true = "⚙ SYSTEM REMINDER — not a leadership finding" class
 }
 
-export interface GanttItem {
-  label: string;
-  startFrac: number; // 0-1 across the displayed window
-  endFrac: number;
-  state: "planned" | "atRisk" | "done" | "blocked";
-  trend: "up" | "down" | "flat" | "blocked";
+export interface SuppressedFinding {
+  key: string; // AUTO:R1:cadence-drift:[personId] style, or R-rule keys
+  reason: "snoozed" | "dismissed";
+  at: number;
+  /** demo bookkeeping: does the entity this key references still exist? */
+  entityAlive: boolean;
 }
 
-export interface CohortRow {
-  cohort: string;
-  m1: number | null;
-  m3: number | null;
-  m6: number | null;
-  m12: number | null;
-}
-
-export interface CalibrationBucket {
-  bucketLabel: string;
-  statedMid: number; // midpoint of stated-confidence bucket, 0-100
-  accuracy: number; // 0-100
-  n: number;
-}
-
-export interface ScoreMathFinding {
-  severity: number;
-  confidence: Confidence;
-  confidenceFactor: number;
-  smartFactors: { label: string; mult: number }[];
-  rank: number;
-  totalActive: number;
-  rule: string;
-  domain: string;
+export interface Finding {
   key: string;
-  source: string;
-  eventId: string;
-  date: string;
+  rule: string;
+  sev: number; // 1 (nudge) .. 4
+  conf: "low" | "medium" | "high";
+  title: string;
+  basis: string;
+  personId?: string | null;
+  play?: string | null; // playbook id, or null for direct-link system findings
+  system?: boolean;
+}
+
+export interface Settings {
+  [key: string]: number;
+}
+
+export interface Store {
+  schemaVersion: number;
+  lineage: string;
+  createdAt: number;
+  idSeq: number;
+  people: Person[];
+  events: LeadEvent[];
+  settings: Settings;
+  audit: AuditEntry[];
+  suppressed: SuppressedFinding[];
+  /** session guard so runMaintenance() only runs once per session, per the brief */
+  maintenanceRanAt: number | null;
+}
+
+export interface SmartPrefillResult {
+  ok: boolean;
+  kind: string;
+  title: string;
+  facts: string[];
+  suggest: Record<string, { value: unknown; recommended: true; source: string }>;
+  missing: string[];
+  warnings: string[];
 }
