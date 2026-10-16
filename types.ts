@@ -1,94 +1,168 @@
-// LEADOS pt-D — shared types for the automation demo.
-//
-// UNVERIFIED-BY-CONSTRUCTION NOTE (read this before trusting any shape below):
-// This file is a fresh implementation of the pt-D brief's data shapes, not a
-// port of real LeadOS internals. The *only* pieces of this module that are
-// backed by a verified read of github.com/wbweve/Leados (main, inspected this
-// session) are:
-//   - `prefill(ctx, P) -> {ok, kind, title, facts[], suggest{}, missing[]}` —
-//     verified verbatim in the real playbooks.js header comment.
-//   - append-only event shape `{ id, at, type, payload }` with a running
-//     sequence — verified in the real store.js (`appendRaw`, `padId`).
-//   - finding `key = rule + ':' + scope` — verified in the real engine.js.
-//   - `insight.acknowledged` as the real suppression event (the brief's
-//     "snoozed/dismissed" vocabulary does not appear in the real source —
-//     see AI-SESSION-LOG.md §2 for the full diff).
-// Everything else here (Person fields, the specific event-type vocabulary
-// used by the bundles, Settings keys) is demo scaffolding, built to exercise
-// every capability the pt-D brief describes. See README.md "What this is /
-// isn't" and AI-SESSION-LOG.md for the full disclosure.
+/* LeadOS pt-E demo — shared types.
+   FABRICATED for this delivery. The real wbweve/Leados repo (verified this
+   session, see AI-SESSION-LOG.md) has no `LEADOS` global, no command palette,
+   no search, no snooze/dismiss/mute, and no meta.audit array — so none of
+   these shapes are "ported", they are fresh TypeScript written to satisfy the
+   pt-E brief's own vocabulary. The one shape reused verbatim from the real
+   repo is the finding key format `rule + ':' + scope` (verified in
+   js/engine.js's `fin()` helper). */
 
-export type ISODate = string;
-
-export interface LeadEvent {
-  id: string; // e-00001 style, verified format from the real store.js padId()
-  seq: number;
-  at: number; // epoch ms
-  type: string;
-  payload: Record<string, unknown>;
-}
+export type Severity = 1 | 2 | 3 | 4 | 5;
+export type Confidence = "HIGH" | "MEDIUM" | "LOW";
 
 export interface Person {
   id: string;
   name: string;
   role: string;
-  reportsTo?: string | null; // verified concept name (engine.js rosterById), demo values
-  archived?: boolean;
-  cadenceDays?: number; // demo-only per-person 1:1 cadence setting
+  team: string;
 }
 
-export interface AuditEntry {
+export interface LeadEvent {
   id: string;
-  at: number;
-  action: string; // e.g. 'auto-maintenance', 'event.undone', 'export', 'suppression.cleared'
-  message: string;
-  system?: boolean; // true = "⚙ SYSTEM REMINDER — not a leadership finding" class
+  seq: number;
+  type: string;
+  ts: string; // ISO
+  domain: string;
+  personId?: string;
+  data: Record<string, unknown>;
+  imported?: boolean;
 }
 
-export interface SuppressedFinding {
-  key: string; // AUTO:R1:cadence-drift:[personId] style, or R-rule keys
-  reason: "snoozed" | "dismissed";
-  at: number;
-  /** demo bookkeeping: does the entity this key references still exist? */
-  entityAlive: boolean;
+export interface RuleDef {
+  id: string; // "R103"
+  tag: string; // short title
+  domain: string;
+  firesWhen: string;
+  severityRule: string;
+  confidence: Confidence;
+  playbook: string | null;
+  resolvesWhen: string;
+  dismissible: boolean;
+  settingsKeys: string[];
+  wired: boolean; // has live detection logic in this demo
 }
 
 export interface Finding {
-  key: string;
+  key: string; // rule:scope
   rule: string;
-  sev: number; // 1 (nudge) .. 4
-  conf: "low" | "medium" | "high";
+  scope: string;
   title: string;
-  basis: string;
-  personId?: string | null;
-  play?: string | null; // playbook id, or null for direct-link system findings
-  system?: boolean;
+  basis: string[];
+  domain: string;
+  sev: Severity;
+  conf: Confidence;
+  play: string | null;
+  refs: string[]; // personIds or entity ids referenced
+  eventIds: string[];
+  smartRank?: number;
+}
+
+export interface PlaybookDef {
+  id: string;
+  title: string;
+  domain: string;
+  forRules: string[];
+  forWhat: string;
+}
+
+export interface AuditEntry {
+  seq: number;
+  ts: string;
+  action: string;
+  detail: Record<string, unknown>;
+}
+
+export interface FindingHistoryEvent {
+  ts: string;
+  action: "appeared" | "snoozed" | "dismissed" | "played" | "resolved" | "re-appeared";
+  note?: string;
 }
 
 export interface Settings {
-  [key: string]: number;
+  grossMarginFloorPct: number;
+  cadenceDays: number;
+  oneOnOneCadenceDays: number;
+  complianceAuditCadenceDays: number;
+  okrCheckInCadenceDays: number;
+  decisionMaxOpenDays: number;
+  [k: string]: number;
+}
+
+export interface Meta {
+  createdAt: string;
+  mutedRules: { rule: string; reason: string; ts: string }[];
+  snoozed: Record<string, { until: string }>;
+  dismissed: Record<string, { ts: string }>;
+  settings: Settings;
+  audit: AuditEntry[];
+  auditSeq: number;
+  lastEventSeq: number;
+  theme: "light" | "dark";
 }
 
 export interface Store {
   schemaVersion: number;
   lineage: string;
-  createdAt: number;
-  idSeq: number;
+  meta: Meta;
   people: Person[];
   events: LeadEvent[];
-  settings: Settings;
-  audit: AuditEntry[];
-  suppressed: SuppressedFinding[];
-  /** session guard so runMaintenance() only runs once per session, per the brief */
-  maintenanceRanAt: number | null;
 }
 
-export interface SmartPrefillResult {
-  ok: boolean;
-  kind: string;
-  title: string;
-  facts: string[];
-  suggest: Record<string, { value: unknown; recommended: true; source: string }>;
-  missing: string[];
-  warnings: string[];
+export interface SearchItemBase {
+  score: number;
+  _text: string;
 }
+
+export interface FindingItem extends SearchItemBase {
+  type: "finding";
+  key: string;
+  rule: string;
+  title: string;
+  basis: string[];
+  domain: string;
+  sev: Severity;
+  people: string[];
+}
+
+export interface PersonItem extends SearchItemBase {
+  type: "person";
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface EventItem extends SearchItemBase {
+  type: "event";
+  id: string;
+  eventType: string;
+  ts: string;
+}
+
+export interface PlaybookItem extends SearchItemBase {
+  type: "playbook";
+  id: string;
+  title: string;
+  forWhat: string;
+}
+
+export interface RuleItem extends SearchItemBase {
+  type: "rule";
+  id: string;
+  tag: string;
+  params: string;
+}
+
+export interface DomainItem extends SearchItemBase {
+  type: "domain";
+  name: string;
+  findingCount: number;
+  topSev: number;
+}
+
+export type SearchItem =
+  | FindingItem
+  | PersonItem
+  | EventItem
+  | PlaybookItem
+  | RuleItem
+  | DomainItem;

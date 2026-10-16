@@ -1,187 +1,109 @@
-import { useMemo, useState } from "react";
-import type { Store } from "../automation/types";
-import { collectCadenceFindings, dayDate, suggestSchedule, weekLabel } from "../automation/schedule";
-import { backupStatus } from "../automation/backup";
-import { smartPrefill } from "../automation/prefill";
-import { Button, Card, ConfBadge, Pill, SectionTitle, SevBadge } from "../components/shared";
-import { BundleModal } from "../components/BundleModal";
-import { TEMPLATES } from "../automation/templates";
-import type { EventSpec } from "../automation/templates";
+import { useEffect, useMemo, useRef } from "react";
+import type { Finding, Store } from "../types";
+import type { Projected } from "../lib/engine";
+import { visibleFindings } from "../lib/engine";
+import { Badge, Button, Card, SectionTitle, SevBadge } from "../components/primitives";
+import { navigate, buildExplainLink, buildPlaybookLink } from "../lib/router";
+import * as store from "../lib/store";
+import { DOMAINS } from "../data/catalog";
 
-export function TodayView({
-  store,
-  onLogBundle,
-}: {
-  store: Store;
-  onLogBundle: (specs: EventSpec[], source: string, summary: string) => void;
-}) {
-  const today = Date.now();
-  const findings = useMemo(() => collectCadenceFindings(store, today), [store]);
-  const schedule = useMemo(() => suggestSchedule(store, today), [store]);
-  const backupFinding = useMemo(() => backupStatus(store, today), [store]);
+export function TodayView({ P, storeState, query, onChange }: { P: Projected; storeState: Store; query: URLSearchParams; onChange: () => void }) {
+  const domainFilter = query.get("domain") || "";
+  const findingScroll = query.get("finding") || "";
+  const focus = query.get("focus") === "true";
+  const refs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const [prefillPersonId, setPrefillPersonId] = useState(store.people.find((p) => !p.archived)?.id ?? "");
-  const [prefillPlay, setPrefillPlay] = useState("oneonone");
-  const result = useMemo(() => smartPrefill(prefillPlay, { playId: prefillPlay, personId: prefillPersonId }, store, today), [prefillPlay, prefillPersonId, store]);
+  const visible = useMemo(
+    () => visibleFindings(P, storeState.meta.mutedRules, storeState.meta.dismissed),
+    [P, storeState.meta.mutedRules, storeState.meta.dismissed]
+  );
+  const filtered = domainFilter ? visible.filter((f) => f.domain === domainFilter) : visible;
+  const ranked = focus ? filtered.slice(0, 5) : filtered;
 
-  const [bundleOpen, setBundleOpen] = useState<{ templateId: string; defaults?: Record<string, string> } | null>(null);
-  const template = bundleOpen ? TEMPLATES.find((t) => t.id === bundleOpen.templateId) : undefined;
-
-  const handleLogThis = (item: (typeof schedule)[number]) => {
-    if (item.playId === "SPRINT_CLOSE_BUNDLE") {
-      setBundleOpen({ templateId: "SPRINT_CLOSE_BUNDLE" });
-      return;
+  useEffect(() => {
+    if (findingScroll && refs.current[findingScroll]) {
+      refs.current[findingScroll]?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    if (item.personId) {
-      setBundleOpen({ templateId: "WEEKLY_1ON1_BUNDLE", defaults: { personId: item.personId } });
-      return;
-    }
-    // generic ritual with no direct bundle — fall back to the 1:1 bundle as a quick-capture placeholder.
-    setBundleOpen({ templateId: "WEEKLY_1ON1_BUNDLE" });
-  };
+  }, [findingScroll, ranked.length]);
+
+  const grouped = new Map<string, Finding[]>();
+  ranked.forEach((f) => grouped.set(f.domain, [...(grouped.get(f.domain) || []), f]));
 
   return (
-    <div className="space-y-6">
-      {backupFinding && (
-        <Card className="border-slate-300 bg-slate-50">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">{backupFinding.title}</p>
-              <p className="mt-1 text-xs text-slate-500">{backupFinding.basis}</p>
-            </div>
-            <Pill tone="slate">not a leadership finding</Pill>
-          </div>
-        </Card>
-      )}
+    <div>
+      <SectionTitle sub={`${visible.length} active findings across ${DOMAINS.length} domains · smart-ranked by severity`}>
+        Today {focus && <Badge tone="violet">focus mode</Badge>}
+      </SectionTitle>
 
-      <Card>
-        <SectionTitle sub={`Suggested, not scheduled — approve items to log them. (${weekLabel(today)})`}>
-          Suggested this week — from overdue cadences
-        </SectionTitle>
-        <div className="overflow-hidden rounded-lg border border-slate-200">
-          <table className="w-full text-sm">
-            <tbody>
-              {schedule.map((item, i) => (
-                <tr key={item.findingKey + i} className="border-b border-slate-100 last:border-0">
-                  <td className="w-20 bg-slate-50 px-3 py-2 font-medium text-slate-500">
-                    {item.day}
-                    <div className="text-[11px] font-normal text-slate-400">{new Date(dayDate(today, item.day)).toISOString().slice(5, 10)}</div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="font-medium text-slate-800">{item.label}</div>
-                    <div className="text-xs text-slate-500">{item.detail}</div>
-                  </td>
-                  <td className="w-32 px-3 py-2 text-right">
-                    <Button variant="secondary" onClick={() => handleLogThis(item)}>
-                      Log this
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button onClick={() => navigate("#/today")} className={chip(!domainFilter)}>All domains</button>
+        {DOMAINS.map((d) => (
+          <button key={d} onClick={() => navigate(`#/today?domain=${d}`)} className={chip(domainFilter === d)}>
+            #{d}
+          </button>
+        ))}
+        <button onClick={() => navigate(domainFilter ? `#/today?domain=${domainFilter}&focus=true` : "#/today?focus=true")} className={chip(focus)}>
+          Focus mode
+        </button>
+      </div>
 
-      <Card>
-        <SectionTitle sub="Cadence + skip-level findings derived from your own event log (no external signals).">Open findings</SectionTitle>
-        {findings.length === 0 ? (
-          <p className="text-sm text-slate-500">No overdue cadence findings right now.</p>
-        ) : (
-          <ul className="space-y-2">
-            {findings.map((f) => (
-              <li key={f.key} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 p-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <SevBadge sev={f.sev} />
-                    <ConfBadge conf={f.conf} />
-                    <span className="font-mono text-[11px] text-slate-400">{f.key}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-slate-800">{f.title}</p>
-                  <p className="text-xs text-slate-500">{f.basis}</p>
+      {ranked.length === 0 ? (
+        <Card className="p-6 text-sm text-slate-500">Nothing active here — try clearing filters, or check #/health to confirm rules are still running underneath any mutes/dismissals.</Card>
+      ) : (
+        [...grouped.entries()].map(([domain, findings]) => (
+          <div key={domain} className="mb-6">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">#{domain}</h3>
+            <div className="space-y-2">
+              {findings.map((f) => (
+                <div key={f.key} ref={(el) => { refs.current[f.rule] = el; refs.current[f.key] = el; }}>
+                  <FindingCard finding={f} highlighted={findingScroll === f.rule || findingScroll === f.key} onChange={onChange} />
                 </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-
-      <Card>
-        <SectionTitle sub="smartPrefill(playId, ctx, P, today) — extends the base prefill(ctx, P) contract (verified shape) with people/temporal/financial/pattern enrichment.">
-          Smart Prefill demo
-        </SectionTitle>
-        <div className="mb-4 flex flex-wrap gap-3">
-          <select className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" value={prefillPlay} onChange={(e) => setPrefillPlay(e.target.value)}>
-            <option value="oneonone">oneonone</option>
-            <option value="fin-forecast">fin-forecast</option>
-            <option value="board-prep">board-prep</option>
-          </select>
-          <select className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" value={prefillPersonId} onChange={(e) => setPrefillPersonId(e.target.value)}>
-            {store.people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Facts pulled from the log</h4>
-            <ul className="space-y-1 text-sm text-slate-700">
-              {result.facts.length === 0 && <li className="text-slate-400">No facts available for this combination.</li>}
-              {result.facts.map((f, i) => (
-                <li key={i} className="rounded-md bg-slate-50 px-2 py-1">
-                  {f}
-                </li>
               ))}
-            </ul>
-            {result.warnings.length > 0 && (
-              <div className="mt-3 space-y-1">
-                {result.warnings.map((w, i) => (
-                  <p key={i} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                    ⚠ {w}
-                  </p>
-                ))}
-              </div>
-            )}
+            </div>
           </div>
-          <div>
-            <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested field values</h4>
-            <ul className="space-y-1 text-sm">
-              {Object.entries(result.suggest).map(([k, v]) => (
-                <li key={k} className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1">
-                  <span className="font-mono text-xs text-violet-700">{k}</span> = <span className="font-medium">{String(v.value)}</span>
-                  <div className="text-[11px] text-violet-500">recommended · {v.source}</div>
-                </li>
-              ))}
-            </ul>
-            {result.missing.length > 0 && (
-              <>
-                <h4 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Left blank for you (missing)</h4>
-                <ul className="space-y-1 text-xs text-slate-500">
-                  {result.missing.map((m, i) => (
-                    <li key={i}>• {m}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {template && (
-        <BundleModal
-          template={template}
-          people={store.people}
-          defaultValues={bundleOpen?.defaults}
-          onClose={() => setBundleOpen(null)}
-          onSubmit={(values) => {
-            const specs = template.build(values);
-            onLogBundle(specs, `Today → ${template.label}`, specs[specs.length - 1]?.type ?? "");
-            setBundleOpen(null);
-          }}
-        />
+        ))
       )}
     </div>
+  );
+}
+
+function chip(active: boolean) {
+  return `rounded-full border px-3 py-1 text-xs font-medium ${active ? "border-violet-300 bg-violet-100 text-violet-800" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`;
+}
+
+export function FindingCard({ finding, highlighted, onChange }: { finding: Finding; highlighted?: boolean; onChange: () => void }) {
+  return (
+    <Card className={`p-4 ${highlighted ? "ring-2 ring-violet-400" : ""}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-2">
+            <SevBadge sev={finding.sev} />
+            <button className="font-mono text-xs text-violet-700 hover:underline" onClick={() => navigate(buildExplainLink(finding.rule))}>
+              {finding.rule}
+            </button>
+            <Badge tone="slate">#{finding.smartRank}</Badge>
+            <Badge tone={finding.conf === "HIGH" ? "green" : finding.conf === "MEDIUM" ? "amber" : "slate"}>{finding.conf}</Badge>
+          </div>
+          <h4 className="mt-1 font-medium text-slate-900">{finding.title}</h4>
+          <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
+            {finding.basis.map((b, i) => (
+              <li key={i}>· {b}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-1.5">
+          {finding.play && (
+            <Button variant="primary" onClick={() => navigate(buildPlaybookLink(finding.play!, finding.refs[0]))}>
+              Play
+            </Button>
+          )}
+          <Button variant="ghost" onClick={() => { store.snoozeFinding(finding.key, 7); onChange(); }}>Snooze 7d</Button>
+          <Button variant="ghost" onClick={() => { store.dismissFinding(finding.key); onChange(); }}>Dismiss</Button>
+          <Button variant="ghost" title="Global mute — hides this rule everywhere on Today, not just this finding" onClick={() => { store.muteRule(finding.rule, "muted from Today finding card"); onChange(); }}>
+            Mute {finding.rule}
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }

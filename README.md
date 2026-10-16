@@ -1,24 +1,26 @@
-# LeadOS pt-D — Universal Automation Engine
+# LeadOS pt-E — Universal Search, Deep Linking & Audit Intelligence
 
-A React/TypeScript implementation of the **pt-D** brief: an autonomous
-maintenance layer (`LEADOS.automation` in the brief's vocabulary) — smart
-prefill enrichment, six auto-maintenance tasks, six one-form event-bundle
-templates, intelligent weekly scheduling suggestions, read-only data
-hygiene, import-delta suggestions, a backup reminder, and a 60-second
-last-event undo — all operating on an in-browser, append-only event log.
+A fresh React/TypeScript implementation of the **pt-E** brief: an in-memory
+universal search engine (`buildIndex` / `runSearch`), a command palette with
+command-mode (`> export`, `> mute R50`, …), a full hash-based deep-linking
+router, an event tracer and rule explainer, an audit-intelligence dashboard
+(calendar heatmap + event browser + trail analysis), a global rule-mute
+system, and export/import intelligence — all running against a self-contained
+demo store in `localStorage`.
 
-> **This is not a port of a real `js/automation.js` from
-> `github.com/wbweve/Leados`.** That file — and the `js/` directory it
-> would live in, and the `ambient.js` it's said to load after — do not
-> exist in the repository, verified this session via GitHub's Git Trees
-> API (42 entries at `main`, all at repo root, no subdirectories at all).
-> The repository **does** contain a real vanilla-JS LeadOS app
-> (`store.js`, `events.js`, `engine.js`, `playbooks.js`, `health.js`,
-> `ui.js`), and this delivery reuses the two pieces of that app's contract
-> that were directly verified by reading its source this session — the
-> `prefill(ctx, P)` shape and the `rule:scope` finding-key format — while
-> declining to invent the rest of that app's internals from scratch. Full,
-> line-by-line evidence for every claim above is in `AI-SESSION-LOG.md`.
+> **This is not a patch to a real `js/search.js` in `github.com/wbweve/Leados`.**
+> That repository was fetched and read this session (full tree + every
+> vanilla-JS source file). It has no `js/` directory, no `LEADOS` global (its
+> real global is `window.LeadOS`), no command palette, no search, no
+> snooze/dismiss/mute state, and no `meta.audit` array to extend — and its
+> own committed `index.html` currently points at a `src/main.tsx` that does
+> not exist in the tree, so the repo does not build as committed. Full,
+> command-by-command evidence for every claim in this paragraph is in
+> `AI-SESSION-LOG.md`. This delivery reuses only two things confirmed real by
+> reading the source: the finding key format `rule + ':' + scope`
+> (`engine.js`'s `fin()`), and the single-`localStorage`-key, append-only
+> persistence doctrine (`store.js`) — under a distinct key so it can never
+> collide with a real install.
 
 ## Run it
 
@@ -29,150 +31,166 @@ npm run build    # outputs dist/index.html — a single, dependency-free file
 npm run preview  # serve the production build locally
 ```
 
-Open the app and use the top nav to move between **Today** (suggested
-weekly schedule, open findings, the smart-prefill demo), **Bundles** (the
-six event-template bundles), **Maintenance & Data** (the auto-maintenance
-run, audit tail, data hygiene panel, suppressed-findings cleanup, simulated
-import, backup reminder), the **Automation Contract**, and **Provenance**
-(the live verified/unverified claim table for this session's repo research).
+Press **⌘K** / **Ctrl+K** (or **/**) anywhere to open the universal search +
+command palette. Try `R103`, `@ana`, `#finance`, `sev:4`, `play:`, `event:`,
+`conf:low`, or `> export` / `> mute R50` / `> trace <eventId>` /
+`> explain R103`.
 
 ## What this is / isn't
 
-- **Is:** a fresh, labeled TypeScript implementation of every capability
-  the pt-D brief describes, built to run as a self-contained React demo
-  with a fabricated-but-realistic event log (seeded in
-  `src/automation/seed.ts`, clearly commented).
-- **Is not:** a drop-in `js/automation.js` for the real repository. That
-  repository's current main branch has no `js/` directory, no `ambient.js`,
-  and no loader `index.html` capable of hosting a sixth vanilla script in
-  sequence (its root `index.html` is 328 bytes and points at a `/src/`
-  directory that does not exist in the tree — see `AI-SESSION-LOG.md` §1.2).
-- **Reuses, verified:** the `prefill(ctx, P) -> {ok, kind, title, facts[],
-  suggest{}, missing[]}` contract (quoted verbatim from `playbooks.js`'s
-  header) and the `rule + ':' + scope` finding-key pattern (quoted from
-  `engine.js`).
-- **Does not reuse:** the brief's event-type vocabulary
-  (`oneonone.logged`, `pulse.recorded`, `crisis.detected`, etc.) is
-  verified **absent** from the real, 92-type `events.js` registry. It is
-  used here anyway, exactly as named in the brief, but explicitly as
-  demo-only vocabulary — see the comparison table in `AI-SESSION-LOG.md` §2.
+- **Is:** a labeled, fresh implementation of every capability the pt-E brief
+  describes — universal search with the brief's own scoring/syntax rules,
+  deep linking via `location.hash`, an event tracer, a rule explainer, an
+  audit-intelligence dashboard, a global mute system, and export/import
+  intelligence — built to run as a self-contained demo with a deterministic,
+  clearly-labeled fabricated event log (`src/data/seed.ts`).
+- **Is not:** a drop-in `js/search.js` for the real repository, which has no
+  `js/` directory, no pre-existing command palette/search/snooze/dismiss/mute
+  infrastructure, and a verified 40-rule / 92-event-type surface — not the
+  "144 rules, 22 modules, 100+ event types" the brief's preamble claims. See
+  `AI-SESSION-LOG.md` for the full verification trail.
+- **Depth note:** 12 of the 40 cataloged rules have live detection logic
+  wired in `src/lib/engine.ts` (enough to exercise every brief-described
+  capability end-to-end: search, mute, explain, trace, finding history). The
+  remaining 28 rule ids exist only as a searchable/explainable catalog stub,
+  marked `wired: false` and shown as "catalog-only" wherever surfaced in the
+  UI — this keeps the demo honest about its own scale rather than silently
+  implying 40 (let alone 144) live rules.
 
 ## Files in this delivery
 
 | File | Role |
 |---|---|
-| `index.html` | The Vite entry template (`#root` + one script tag). **Not** the single-file artifact — see below. |
-| `dist/index.html` | Generated by `npm run build`. The actual single-file, zero-CDN deliverable (294 KB / 92 KB gzip, confirmed by this session's build — no `<script src>`/`<link>` network calls). Regenerate with `npm run build`; not hand-maintained. |
-| `src/automation/types.ts` | Shared `Store`/`Person`/`LeadEvent`/`Finding`/`AuditEntry` shapes. |
-| `src/automation/seed.ts` | Fabricated demo event log + roster, clearly labeled, with a provenance comment on every non-real event type used. |
-| `src/automation/prefill.ts` | `prefill(ctx, P)` (verified shape) + `smartPrefill()` (people/temporal/financial/pattern-completion enrichment). |
-| `src/automation/maintenance.ts` | `runMaintenance()` — Tasks 1–6 (stale events, cadence drift, duplicates, orphaned suppressions, calibration nudge, schema health). |
-| `src/automation/templates.ts` | `TEMPLATES` — the six event-bundle definitions (`WEEKLY_1ON1_BUNDLE`, `SPRINT_CLOSE_BUNDLE`, `INCIDENT_BUNDLE`, `OKR_QUARTERLY_BUNDLE`, `OFFBOARDING_BUNDLE`, `BOARD_PREP_BUNDLE`). |
-| `src/automation/schedule.ts` | `suggestSchedule()` + `collectCadenceFindings()` — the weekly "Suggested this week" block. |
-| `src/automation/hygiene.ts` | `dataHygiene()` — orphaned events, cold data, coverage gaps, setting drift; read-only, with real JSON export. |
-| `src/automation/importAutomation.ts` | `importSuggestions()` — before/after finding delta, new people, new event types (simulated merge — see `AI-SESSION-LOG.md` §3.6). |
-| `src/automation/backup.ts` | `backupStatus()` — the one system-generated (not log-derived) nudge finding. |
-| `src/automation/undo.ts` + `src/automation/store.ts` | 60-second last-event undo; the single writer for all events; `localStorage` persistence. |
-| `src/views/*.tsx` | The five tabs: Today, Bundles, Maintenance & Data, Automation Contract, Provenance. |
-| `src/components/*.tsx` | Shared UI: bundle form modal, undo toast, card/badge/button primitives. |
-| `src/App.tsx` | Nav shell + tab switcher (entry point). |
+| `index.html` | Vite entry template (`#root` + one script tag). |
+| `dist/index.html` | Generated by `npm run build`. The single-file, zero-CDN deliverable. Regenerate with `npm run build`; not hand-maintained. |
+| `src/types.ts` | Shared Store/Person/LeadEvent/Finding/RuleDef/AuditEntry/SearchItem shapes. |
+| `src/data/catalog.ts` | Rule catalog (12 wired + 28 catalog-only), playbook catalog, domains, default settings. |
+| `src/data/seed.ts` | Deterministic fabricated event log + roster (mulberry32 PRNG, clearly labeled). |
+| `src/lib/store.ts` | localStorage persistence, append-only events, mute/snooze/dismiss, audit log, undo (60s), export/import. |
+| `src/lib/engine.ts` | `project(store, today)` — the 12 wired rules' live detection logic; finding key format verified against the real repo. |
+| `src/lib/search.ts` | `buildIndex` / `parseQuery` / `runSearch` — the universal search engine: syntax parsing, Levenshtein fuzzy matching, scoring + boosts, grouped/ranked results. |
+| `src/lib/commands.ts` | `> ` command-mode dispatcher (`export`, `seed`, `purge`, `health`, `theme`, `focus`, `review`, `digest`, `bundle`, `undo`, `backup`, `settings`, `mute`/`unmute`, `trace`, `explain`). |
+| `src/lib/router.ts` | Hash deep-link router (`useRoute` hook) + link builders for every route family. |
+| `src/lib/audit.ts` | `analyzeAuditTrail()`, `findingHistory()`, `eventsPerDayForHeatmap()` — the Audit Intelligence math. |
+| `src/lib/utils.ts` | Levenshtein distance, date helpers, debounce, `withViewTransition()` (View Transitions API with graceful fallback). |
+| `src/components/CommandPalette.tsx` | The ⌘K universal search UI + command mode, debounced 80ms. |
+| `src/components/OverlayPanels.tsx` | Event Tracer (`#/trace/[id]`) and Rule Explainer (`#/explain/[id]`) overlay panels. |
+| `src/components/DataWidgets.tsx` | Calendar heatmap (IntersectionObserver-lazy), event browser table, audit-intelligence summary, global mute manager, ResizeObserver sparkline. |
+| `src/components/Shell.tsx` | Nav rail, muted-rules status badge, search trigger, and the required "URLs are local navigation only" footer label. |
+| `src/views/*.tsx` | Today, Roster/Dossier, Playbooks, Finance, Intelligence, Self, Health, Data (tabs: events/audit/quarantine/mutes/export), Digest, Review, Search results. |
+| `src/App.tsx` | Route switch + overlay-over-current-view logic + palette/toast/focus-mode state (entry point). |
 | `README.md` | This file. |
-| `AI-SESSION-LOG.md` | Full audit trail: exactly what was fetched from `github.com/wbweve/Leados` this session, what it proved/disproved about the brief, and every disclosed deviation. |
+| `AI-SESSION-LOG.md` | Full audit trail: exactly what was fetched from `github.com/wbweve/Leados` this session, what it proved/disproved, and every disclosed deviation. |
 
 ## Feature → brief section map
 
 | Brief section | Implementation |
 |---|---|
-| Smart Prefill Engine | `src/automation/prefill.ts` → `smartPrefill()`, demoed live on the Today tab |
-| Auto-Maintenance Tasks 1–6 | `src/automation/maintenance.ts` → `runMaintenance()`, demoed on Maintenance & Data |
-| Event Templates | `src/automation/templates.ts` → `TEMPLATES`, demoed on Bundles (and launchable from Today's "Log this" buttons) |
-| Intelligent Scheduling Suggestions | `src/automation/schedule.ts` → `suggestSchedule()`, the Today tab's weekly block |
-| Auto-Archive and Data Hygiene | `src/automation/hygiene.ts` → `dataHygiene()`, Maintenance & Data tab |
-| Event Import Automation | `src/automation/importAutomation.ts` → `importSuggestions()`, "Simulate an import" on Maintenance & Data |
-| Backup Automation Reminder | `src/automation/backup.ts` → `backupStatus()`, surfaced as a banner on Today when triggered |
-| Undo System | `src/automation/undo.ts` + `store.ts`, the bottom-of-screen toast after any logged event |
-| The Automation Contract | Reproduced and explained on the Automation Contract tab |
+| Universal Search Engine + Search Index + Relevance Scoring | `src/lib/search.ts` → `buildIndex()`, `runSearch()`, demoed live in `CommandPalette.tsx` and `#/search/[query]` |
+| Search Syntax (`R103`, `@ana`, `#finance`, `sev:4`, `play:`, `event:`, `conf:low`, combinations) | `parseQuery()` in `src/lib/search.ts` |
+| Command Mode (`> ...`) | `src/lib/commands.ts` → `runCommand()` |
+| Event Tracer | `src/components/OverlayPanels.tsx` → `EventTracerPanel`, route `#/trace/[eventId]` |
+| Rule Explainer | `src/components/OverlayPanels.tsx` → `RuleExplainerPanel`, route `#/explain/[ruleId]` |
+| Deep Linking System | `src/lib/router.ts` (`useRoute`, link builders), wired through every view |
+| Audit Intelligence Dashboard (timeline, browser, trail intelligence, finding history) | `src/components/DataWidgets.tsx` + `src/lib/audit.ts`, surfaced on `#/data?tab=audit` / `?tab=events` |
+| Global Mute System | `src/lib/store.ts` (`muteRule`/`unmuteRule`), `src/components/DataWidgets.tsx` → `MuteManager`, `#/data?tab=mutes`, status-strip badge in `Shell.tsx` |
+| Progressive Enhancement | `backdrop-blur` on palette/overlays, `@container`/`@layer` in `src/index.css`, `withViewTransition()` in `utils.ts`, `IntersectionObserver` in the calendar heatmap, `ResizeObserver` in `Sparkline` |
+| Export Intelligence (full + filtered) | `src/lib/store.ts` → `exportStore()`, `exportFiltered()`, UI on `#/data?tab=export` |
 
 ## Verified vs. fabricated, at a glance
 
 | Claim | Status |
 |---|---|
-| `github.com/wbweve/Leados` exists, 42 files, all at root, no subdirectories | ✅ verified this session (Git Trees API) |
-| `js/automation.js`, `js/` directory, `ambient.js` | ✅ verified **absent** |
-| Real `events.js` has 92 event types, none matching the brief's core vocabulary (oneonone/pulse/commitment/sprint/crisis/etc.) | ✅ verified (full registry diffed, table in `AI-SESSION-LOG.md` §2) |
-| `prefill(ctx, P) -> {ok, kind, title, facts[], suggest{}, missing[]}` | ✅ verified verbatim in `playbooks.js` |
-| Finding key format `rule + ':' + scope` | ✅ verified in `engine.js` |
-| Real rule IDs run R1–R40 (brief references R86/R117/R118) | ✅ verified — R86/R117/R118 not found |
-| `LEADOS._mod` registry, `snoozed`/`dismissed` state, command palette | ✅ verified **absent** (real suppression = `insight.acknowledged`) |
-| This delivery's seed event log, people, and bundle outcomes | ⚠️ fabricated for this demo, labeled throughout `src/automation/seed.ts` |
-| `importSuggestions()` before/after | ⚠️ simulated (no real merge pipeline exists in this demo) |
+| `github.com/wbweve/Leados` exists, 63 files at `main`, all at root, no subdirectories | ✅ verified this session (Git Trees API) |
+| Real global is `window.LeadOS`; `LEADOS`/`LEADOS._mod` do not exist | ✅ verified (grepped all 6 real source files) |
+| Command palette / search / snooze / dismiss / mute / `meta.audit` | ✅ verified **absent** from the real app |
+| Real rule set is exactly R1–R40; real event registry is 92 types | ✅ verified (counted in `engine.js` / stated in `events.js` header) |
+| Brief's "144 rules, 22 modules, 100+ event types" | ❌ does not match anything found in the repo |
+| `key = rule + ':' + scope` | ✅ verified verbatim in `engine.js` |
+| `localStorage` key `'leados:data'`, append-only doctrine | ✅ verified in `store.js` |
+| Real hash routes: `#/today`, `#/roster`, `#/data`, `#/playbooks`, `#/insights`, `#/patterns`, `#/cadences` | ✅ verified in `ui.js` |
+| Brief's routes `#/finance`, `#/intelligence`, `#/self`, `#/health`, `#/trace`, `#/explain`, `#/search`, `#/digest`, `#/review`, and all `?query=` forms | ❌ verified **absent** from the real app — new demo surface |
+| This delivery's seed event log, 28 catalog-only rule stubs, people, audit log | ⚠️ fabricated for this demo, labeled throughout `src/data/*` and in-app badges |
 
 ## Changelog
 
-### pt-D (this delivery)
+### pt-E (this delivery)
 
-- **Added** `src/automation/*` (8 modules) implementing every capability
-  named in the pt-D brief as fresh TypeScript, instead of a vanilla
-  `js/automation.js` IIFE — *why: the verified target repo has no `js/`
-  directory and no working loader `index.html` to append a script tag to
-  (see `AI-SESSION-LOG.md` §1.2); this sandbox is a React/Vite project like
-  the rest of this delivery series, so re-expressing the brief's functions
-  as typed modules with an equivalent call contract (`smartPrefill(playId,
-  ctx, P, today)`, `runMaintenance(P, today)`, etc.) preserves every
-  semantic requirement without pretending a framework-free loader exists
-  where none can be hosted.*
-- **Reused verbatim** the real `prefill(ctx, P)` return shape and the real
-  `rule:scope` finding-key format, both confirmed by direct source read —
-  *why: these are the only two pieces of the brief's premise that survive
-  contact with the actual repository; reusing them anchors the rest of the
-  (otherwise fabricated) demo to something real instead of inventing a
-  contract wholesale.*
-- **Kept the brief's own event-type vocabulary** (`oneonone.logged`,
-  `pulse.recorded`, etc.) for the demo despite it being verified absent
-  from the real registry, rather than silently substituting the nearest
-  real event names — *why: substituting names would quietly imply this
-  demo reflects the real app's domain model, when it verifiably doesn't;
-  using the brief's own names and labeling them is more honest than a
-  plausible-looking but unverified remap. Every substitution opportunity
-  is still documented in `AI-SESSION-LOG.md` §2 for anyone who wants to
-  build the mapping themselves.*
-- **Used the five event types that do exist for real**
-  (`note.added`, `exec.kpi.reviewed`, `exec.board.meeting`,
-  `strategy.okr.set`, `hr.attrition.logged`) wherever a bundle or the seed
-  log naturally called for one — *why: there's no reason to fabricate a
-  name when a verified one fits; it also demonstrates the two vocabularies
-  can coexist in one event log, since the real app's append-only doctrine
-  treats unknown types as inert, not invalid.*
-- **Simulated `importSuggestions()`'s before/after** via a synthetic
-  `simulateImport()` call rather than a real merge pipeline — *why: the
-  real `store.js` import/merge internals were fetched this session but not
-  reviewed line-by-line (out of budget); building a convincing fake import
-  path was judged lower-risk than guessing at merge semantics that weren't
-  verified.*
-- **Scoped `undo.last()` to the single most-recently-appended event, even
-  for multi-event bundles** — *why: the brief is explicit that undo is
-  "not arbitrary... that would require a full undo stack and is out of
-  scope"; a bundle that writes four events still only offers to undo the
-  fourth, exactly as the brief's contract implies, rather than quietly
-  extending undo's power beyond what was specified.*
-- **Used a distinct `localStorage` key** (`leados-ptd-demo:data`) instead
-  of the real app's verified key (`leados:data`) — *why: avoids any risk of
-  this demo silently colliding with a real LeadOS install if ever served
-  from the same origin, while still following the real app's single-key,
-  append-only persistence doctrine.*
-- **Added a fifth tab, Provenance**, carrying forward the pattern from the
-  prior pt-C delivery in this same series — *why: the brief's premise
-  required active fact-checking against a real repository; surfacing that
-  checking as a live, inspectable table (rather than only in a markdown
-  log) makes the verification auditable from inside the app itself, which
-  is also the standard this brief's own "Automation Contract" section sets
-  for every automation action it describes.*
-- **Declined** to port any `engine.js`/`health.js`/`ui.js` scoring/rule
-  internals beyond the two contracts named above — *why: not reviewed
-  line-by-line this session (budget); inventing "real" scoring logic for
-  rules R2–R39 would overclaim fidelity to source that wasn't read.*
-- **Labeled every seed/demo value as fabricated**, both in
-  `src/automation/seed.ts` comments and in the app's footer — *why: no real
-  LeadOS event log exists to draw from; the demo still needs a plausible,
-  internally consistent log to exercise every automation, but must not
-  imply the numbers came from a real deployment.*
+- **Added** `src/lib/search.ts`, `src/lib/commands.ts`, `src/lib/router.ts`,
+  `src/lib/audit.ts`, `src/components/CommandPalette.tsx`,
+  `src/components/OverlayPanels.tsx`, `src/components/DataWidgets.tsx` and ten
+  view files implementing the entire pt-E brief as fresh TypeScript —
+  *why: the verified target repo has no search/palette/mute/audit
+  infrastructure to extend (see `AI-SESSION-LOG.md` §2), so "extending the
+  command palette" has no real target; re-expressing the brief's functions as
+  typed modules with an equivalent call contract (`buildIndex(P, today)`,
+  `runSearch(query, items, ctx)`, `analyzeAuditTrail(P, today)`) preserves the
+  brief's semantics without pretending a real integration point exists.*
+- **Reused verbatim** the real `rule + ':' + scope` finding-key format and the
+  real single-`localStorage`-key append-only doctrine, both confirmed by
+  direct source reads this session — *why: these are the only two pieces of
+  the brief's premise that survive contact with the real repository; anchoring
+  the demo to them is more honest than inventing a contract from nothing.*
+- **Implemented 12 of 40 cataloged rules with live detection logic**, and
+  marked the other 28 `wired: false` / "catalog-only" everywhere they're
+  surfaced (search results, the explainer panel, `#/data?tab=mutes`) — *why:
+  implementing all 40 (let alone the brief's fictional 144) with faithful,
+  independent detection logic was out of this session's scope; rather than
+  silently stub 28 rules as if they fired, every catalog-only rule says so
+  in the UI.*
+- **Used the brief's own rule numbers (R103, R112, R50, …) and event-type
+  vocabulary** (`fin.pl.logged`, `oneonone.logged`, …) despite both being
+  verified absent from the real `engine.js`/`events.js` — *why: these numbers
+  do not collide with the real R1–R40, which makes it visually obvious this
+  is demo vocabulary; substituting real-looking names in their place would
+  imply a fidelity to the real domain model that was not verified.*
+- **Built the deep-linking router against the brief's full route list**,
+  even though only `#/today`, `#/roster`, `#/data`, `#/playbooks` have real
+  verified counterparts — *why: the brief's deliverable is the deep-linking
+  system itself; building only the four verified routes would under-deliver
+  the actual ask, so the full route list is implemented as new, labeled
+  surface, with the four real paths called out as such in the log.*
+- **Event Tracer and Rule Explainer render as overlay panels on top of the
+  last non-overlay route** rather than as full-page navigations — *why: the
+  brief explicitly describes both as something that "opens over current
+  view"; the router keeps a `lastBase` ref so `#/trace/[id]` and
+  `#/explain/[id]` never blank out whatever the user was looking at.*
+- **Global mute is enforced only in the Today view's `visibleFindings()`
+  filter; `#/health` always runs and shows every finding regardless of
+  mutes** — *why: the brief is explicit that "Health wall still runs and
+  shows results (you can verify)" — a single shared mute filter applied
+  everywhere would silently remove that verification path.*
+- **Pre-seeded R50 ("No influence mapping") as globally muted** on first
+  load — *why: the brief gives this exact rule as its own worked example of
+  when global mute is "the right tool"; seeding it muted gives the mute UI,
+  the status-strip badge, and the audit trail real content to show on first
+  run instead of an empty state.*
+- **Search index caps at the last 200 events** and **results cap at 5 per
+  group / 20 total**, matching the brief's numbers exactly — *why: called out
+  explicitly in the spec as a performance/relevance bound, not an
+  implementation detail to relax.*
+- **Calendar heatmap renders as a GitHub-style 7-row × ~53-column rolling
+  year grid**, not a literal 12-column-by-month layout — *why: this is the
+  most common concrete rendering of "12 months × 7 days" and keeps the
+  per-day cell addressable/clickable at a readable size; it's wrapped in an
+  `IntersectionObserver` so the grid isn't built until the Audit tab is
+  actually visible, per the brief's progressive-enhancement section.*
+- **Used a distinct `localStorage` key** (`leados-pte-demo:data`) instead of
+  the real app's verified key (`leados:data`) — *why: avoids any risk of this
+  demo colliding with a real LeadOS install served from the same origin,
+  while still following the real app's single-key doctrine.*
+- **Quarantine tab (`#/data?tab=quarantine`) is explicitly labeled as
+  fabricated inside the UI itself**, not just in this README — *why: the real
+  app has no such concept at all (verified absent); a demo-only panel that
+  looks identical to a real feature with no in-app disclosure would be the
+  single most misleading thing in this delivery if left unlabeled.*
+- **Declined** to port any of the real `engine.js`'s actual 40 rule bodies,
+  `health.js`'s T/G-suite internals, or `ui.js`'s rendering internals beyond
+  the two contracts named above — *why: not reviewed line-by-line this
+  session; inventing "real" logic for R1–R40 or the health wall would
+  overclaim fidelity to source that wasn't read in full.*
+- **Labeled every seed/demo value as fabricated**, both in `src/data/seed.ts`
+  comments and in the app's footer — *why: no real LeadOS event log exists to
+  draw from; the demo still needs a plausible, internally consistent log to
+  exercise search/trace/explain/audit end-to-end, but must not imply the
+  numbers came from a real deployment.*

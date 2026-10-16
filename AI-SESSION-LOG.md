@@ -1,279 +1,163 @@
-# LEADOS · AI SESSION LOG — pt-D (Universal Automation Engine)
+# AI Session Log — LeadOS pt-E delivery
 
-This log follows the convention set by the repo's own prior sessions (see
-`README.md`'s own disclosure, and the `AI-SESSION-LOG.append.md` /
-`SESSION-3.patch.md` artifacts visible in `github.com/wbweve/Leados`):
-state exactly what was inspected, how, and what was NOT inspected, before
-describing anything that was built.
+This log records exactly what was fetched from `github.com/wbweve/Leados`
+this session, what it proved or disproved about the pt-E brief, and every
+deviation this delivery takes as a result. Every claim below is marked
+**✅ verified** (read the actual bytes this session) or **⚠️ fabricated**
+(written fresh for this demo, not sourced from the real repo).
 
-**Env constraint (standing, same as the prior pt-C session):** this
-authoring environment is a React 19 + Vite 7 + Tailwind 4 sandbox
-(`src/App.tsx` is the mandated entry point). It has no ability to push
-commits to `github.com/wbweve/Leados`, run that repo's own build, or
-execute its `#/health` T-suite/G-suite. Everything below is this session's
-own, freshly-performed verification — nothing is relayed from an earlier
-session's unverified claims.
+## 1. What was fetched this session
 
----
+1. `GET https://github.com/wbweve/Leados` (rendered README) — see §4.
+2. `GET https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1`
+   — full repo tree, **63 entries, all at repo root, zero subdirectories**
+   (confirmed `truncated: false`, `count: 63`).
+3. Raw file fetches (via `raw.githubusercontent.com`, downloaded and grepped
+   locally this session) of every vanilla-JS file in the tree:
+   `store.js`, `events.js`, `engine.js`, `playbooks.js`, `health.js`, `ui.js`,
+   `rules.js`, plus `index.html` and `package.json`.
 
-## §0 — What this session actually fetched, and how
+## 2. The repo's actual, present-day state (✅ verified)
 
-| Step | Method | Result |
-|---|---|---|
-| Full repo tree | `GET api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | **42 entries, all at repo root. No subdirectories exist at all** (no `src/`, no `js/`, no `css/`). `truncated: false`. |
-| Small/medium files | `curl raw.githubusercontent.com/wbweve/Leados/main/<file>` | Downloaded and read **in full**: `index.html`, `package.json`, `rules.js`, `types.ts`, `index.ts`, `main.tsx`, `README.md`, `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`, `store.js`, `events.js`. |
-| Large files | Same method | Downloaded **in full as bytes**; read via targeted `grep`/`head`/`wc -l` rather than end-to-end line review (budget): `engine.js` (105,072 B / 1,410 lines), `health.js` (175,053 B / 2,100 lines), `ui.js` (97,565 B / 1,117 lines), `playbooks.js` (59,592 B / 596 lines). Headers, doctrine comments, and all `grep` hits quoted in this log were read directly; anything not quoted here was **not** reviewed line-by-line this session. |
-| Event-type registry | `grep -oE "'[a-zA-Z.]+':\s*\{"` against `events.js` | Extracted all 92 top-level keys into a plain list (reproduced in §2). |
+- **Global namespace is `window.LeadOS`** (mixed case), not `LEADOS` as the
+  pt-E brief writes it throughout (`LEADOS.search`, `LEADOS._mod`). Verified
+  via `const LeadOS = (window.LeadOS = window.LeadOS || {});` at the top of
+  every one of `store.js`, `events.js`, `engine.js`, `playbooks.js`,
+  `health.js`, `ui.js`.
+- **No `LEADOS._mod` registry exists anywhere** in any of the six files
+  (`grep -n "_mod"` → zero matches).
+- **No command palette, no search feature, no snooze/dismiss/mute concept**
+  exist in the real `ui.js`/`engine.js` (`grep -ni "palette|search|snooze|
+  dismiss|mute"` → zero relevant matches; the few "search" hits were the
+  unrelated word "research").
+- **No `meta.audit` array exists.** `store.js`'s own `META_WHITELIST` is
+  `['lineage', 'createdAt', 'migrationsApplied', 'migrationRepairs']` — audit
+  is not a field the store's own health wall even allows. All "audit" string
+  matches in the codebase are domain vocabulary (a "compliance audit" rule, a
+  "production-stop + audit" playbook name), not a system audit trail.
+- **Real `schemaVersion` is 5**, not 15 as the brief's export-block example
+  implies (`SCHEMA_VERSION = 5` in `store.js`; five migration steps v1→v5 are
+  present in the file).
+- **Real rule set is exactly R1–R40** (verified by extracting every
+  `id: 'R\d+'` literal from `engine.js` — 40 unique ids, max `R40`). The
+  brief's own example rule numbers (R103, R112, R50) do not exist in the real
+  file. The brief's claim of **"144 rules, 22 modules"** does not match
+  anything found in the repository.
+- **Finding key format `rule + ':' + scope` is real**, verified verbatim in
+  `engine.js`'s `fin()` helper:
+  `key: o.rule + ':' + scope` where
+  `scope = o.scope !== undefined ? String(o.scope) : (refs.length ? String(refs[0]) : '*')`.
+- **`localStorage` key is `'leados:data'`**, single key, append-only — stated
+  in `store.js`'s header comment and confirmed by every `localStorage.get/setItem`
+  call in the file.
+- **Real event registry has 92 types** (per `events.js`'s own header comment:
+  "72 full-domain... + 1 note type... = 88... pt-5: 4 intelligence-layer
+  types (92)"), not "100+" exactly, and not the vocabulary the brief uses
+  (`oneonone.logged`, `fin.pl.logged`, etc. were not found in `events.js`).
+- **Real hash routes that do exist**, verified in `ui.js`:
+  `#/today`, `#/roster`, `#/insights`, `#/patterns`, `#/cadences`, `#/data`,
+  `#/playbooks`. The router is a bare `location.hash` strip +
+  `window.addEventListener('hashchange', ...)`, with **no query-string
+  parsing anywhere** (`?domain=`, `?finding=`, `?focus=`, `?tab=` were not
+  found).
+- **Routes the brief lists that do NOT exist in the real app**: `#/finance`,
+  `#/intelligence`, `#/self`, `#/health`, `#/trace/[id]`, `#/explain/[id]`,
+  `#/search/[q]`, `#/digest`, `#/review`. None of these strings appear in
+  `ui.js`.
+- **No "quarantine" concept anywhere** in `store.js`, `ui.js`, or `health.js`
+  (`grep -n "quarantine"` → zero matches across all six files).
+- **`rules.js` is a tombstone file**, not loaded by the browser — its own
+  header states the real rules engine was merged into `engine.js`, and that
+  the file "remains on disk only because the tooling used in this session has
+  no delete operation." This independently corroborates the prior session's
+  finding (see §4) that this repository has been edited by tooling that
+  cannot create/delete files freely, which explains why every file — six
+  real vanilla-JS modules *and* ~30 unrelated React/TypeScript files from an
+  apparent earlier `pt-D` delivery — all sit flattened at repo root with no
+  subdirectories.
+- **The repo's own committed `index.html` cannot run the real app or the
+  React delivery as committed**: it is a Vite entry pointing at
+  `<script type="module" src="/src/main.tsx">`, but `main.tsx` (like every
+  other file) sits at repo **root**, not inside `src/`. As committed, this
+  repository does not build. This is a verified, inspectable fact about the
+  current state of `github.com/wbweve/Leados`, not a guess.
 
-Nothing in this section is inherited from a prior session's summary — every
-row above is this session's own tool call.
+## 3. Claim-by-claim table: pt-E brief vs. verified repo state
 
----
+| Brief claim | Status |
+|---|---|
+| "144 rules, 22 modules, 100+ event types" | ❌ **false** — real repo has 40 rules (R1–R40) across 6 files, and a 92-type event registry |
+| Global object `LEADOS` | ❌ **false** — real global is `window.LeadOS` |
+| `LEADOS._mod` registry, "extends command palette" | ❌ **verified absent** — no `_mod`, no palette anywhere |
+| snooze/dismiss/mute already exist to be "extended" | ❌ **verified absent** |
+| `meta.audit` array | ❌ **verified absent** from `store.js`'s whitelist and the rest of the app |
+| `schemaVersion: 15` (export example) | ❌ **false** — real is 5 |
+| finding key `rule + ':' + scope` | ✅ **verified verbatim** in `engine.js` |
+| `localStorage` key `'leados:data'`, single-key append-only doctrine | ✅ **verified** |
+| `#/today`, `#/roster`, `#/data`, `#/playbooks` routes | ✅ **verified real routes** |
+| `#/finance`, `#/intelligence`, `#/self`, `#/health`, `#/trace`, `#/explain`, `#/search`, `#/digest`, `#/review`, and all `?query=` deep-link forms | ❌ **verified absent** — new demo surface |
+| `#/data?tab=quarantine` / "quarantine" concept | ❌ **verified absent** |
+| `prefill(ctx, P) -> {ok, kind, title, facts[], suggest{}, missing[]}` | ✅ **verified verbatim** in `playbooks.js` (confirmed again this session; same finding as the prior pt-D session's log) |
+| Repo's own `index.html` boots a working app today | ❌ **false** — points at `/src/main.tsx`, which does not exist at that path in the tree |
 
-## §1 — The brief vs. the repository: reconciling the two
+## 4. Relationship to the prior pt-D delivery already in this repo
 
-The pt-D brief is written as if it is an incremental patch to an existing
-vanilla-JS, multi-`<script>` LeadOS app: `js/automation.js`, loaded "after
-`ambient.js`, before `playbooks.js`", registered via `LEADOS._mod`, with an
-"EXPECTED guard in index.html" to update. Before writing a line of code,
-this session checked each of those specific, falsifiable claims against the
-real repository.
+The repo's root also contains ~30 React/TypeScript files (`App.tsx`,
+`TodayView.tsx`, `automation`-style modules named differently, `ProvenanceView.tsx`,
+etc.) and two markdown logs (`AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`)
+that read as the output of an **earlier** delivery in this same series
+(its own README, fetched this session, self-identifies as "LeadOS pt-D —
+Universal Automation Engine" and makes the identical core finding: no `js/`
+directory, no `ambient.js`, no `LEADOS` global, no command palette, no
+snooze/dismiss in the real app). This session's independent re-verification
+(§2–3) reaches the same conclusions via fresh reads of the raw files, which
+is why this delivery continues that series' practice of labeling fabricated
+vs. verified content rather than assuming the brief's premises.
 
-### 1.1 Claims verified TRUE
+## 5. What this delivery does as a result
 
-- The repo **is real** and **is** the same kind of sandboxed project as this
-  one in one sense (`package.json` is close to byte-identical to this
-  sandbox's own: React 19.2.6, Vite 7.3.2, Tailwind 4.1.17,
-  `vite-plugin-singlefile` 2.3.0 — confirmed by diffing both files).
-- The repo **also contains** a genuine vanilla-JS, IIFE-per-file app:
-  `store.js`, `events.js`, `engine.js`, `playbooks.js`, `health.js`, `ui.js`,
-  each opening with `(function(){ 'use strict'; const LeadOS = (window.LeadOS
-  = window.LeadOS || {}); ... })()` — a real module pattern, just not the
-  one the brief names.
-- `playbooks.js`'s header **verbatim** documents the exact base contract the
-  brief's `smartPrefill` is said to extend:
-  ```
-  prefill(ctx, P)          -> {ok, kind, title, facts[], suggest{}, missing[]}
-  ```
-  This is the single strongest point of contact between the brief and the
-  real source, and it is the one piece of real-repo API this delivery
-  reproduces verbatim (see `src/automation/prefill.ts`).
-- Finding keys in the real `engine.js` are built as `rule + ':' + scope`
-  (`key: o.rule + ':' + scope`, line ~475) — a real, verifiable pattern,
-  reused (adapted) in this delivery's `Finding.key` shape.
-- `ui.js`'s own header documents real suppression semantics: insights are
-  **acknowledged** (`insight.acknowledged` is a real, registered event
-  type), not "snoozed" or "dismissed" — and acknowledgment is explicitly
-  "suppress[ed]... with the audit trail kept," which is the real precedent
-  for this delivery's Task 4 (orphaned suppression cleanup).
-- `rosterById`, `reportsTo`-style line-of-report modeling, and
-  `cadence`-keyed settings (`revenueReviewCadenceDays`,
-  `opsReviewCadenceDays`, `boardCadenceDays`, `complianceAuditCadenceDays`)
-  are real, verified concepts in `engine.js`/`store.js`.
+Because the pt-E brief assumes a universe of pre-existing infrastructure
+(144 rules, a command palette, snooze/dismiss/mute state, `meta.audit`, a
+`LEADOS` global, non-existent routes) that **does not exist** in the real
+repository, this delivery is built as a **fresh, self-contained React/TS
+application** inside this sandbox (`src/App.tsx` is the entry point required
+by this tooling) that implements the pt-E brief's own feature surface —
+universal search, deep linking, audit intelligence, global mute — against a
+labeled, fabricated demo dataset. It is explicitly **not** a patch to
+`github.com/wbweve/Leados`; there is no `js/` directory to add a
+`js/search.js` to, and the brief's own "extends the command palette" premise
+has no real target.
 
-### 1.2 Claims verified FALSE / ABSENT
+**Reused, verified:**
+- the finding key format `rule + ':' + scope` (engine.ts's `fin()` helper is
+  a line-for-line match of the real shape, not the real rule bodies);
+- the "exactly one `localStorage` key, append-only, nothing derived
+  persisted" doctrine (own key `leados-pte-demo:data`, distinct from the real
+  `leados:data` to avoid any collision risk);
+- the bare `location.hash` + `hashchange` routing pattern (real, but the
+  specific route list and all query-string parsing is new demo surface).
 
-- **No `js/` directory exists.** All six `.js` modules sit at the repo
-  root. `rules.js` (a tombstone file, see below) says it was "merged into
-  **js/engine.js**" — so the *intended* structure clearly used a `js/`
-  prefix at some point in this project's history, but the *currently
-  hosted* tree does not have it. This is the same discrepancy the prior
-  pt-C session's addendum (`AI-SESSION-LOG.append.md`) already flagged
-  independently ("Prior README §6 file table... WRONG as written — files
-  are at root"). Verified again, fresh, this session.
-- **`ambient.js` does not exist anywhere in the repo**, under any path.
-  Checked with a case-insensitive full-text grep across every `.js` and
-  `.md` file fetched this session, and against `health.js`'s own hard-coded
-  `MANIFEST` of "the mandated 10 files" (which lists exactly: `index.html`,
-  `css/app.css`, `js/events.js`, `js/store.js`, `js/engine.js`,
-  `js/playbooks.js`, `js/health.js`, `js/ui.js`, `README.md`,
-  `AI-SESSION-LOG.md` — ten files, no `ambient.js`, and that manifest is
-  itself a verified-true description because its `lines:` counts match
-  this session's own `wc -l` exactly: 247/368/1410/596/2100/1117).
-- **No `LEADOS._mod` registry pattern exists.** Grepped for `_mod` across
-  every `.js` file; zero hits. Modules register themselves directly as
-  `LeadOS.<name> = {...}` at the bottom of each IIFE (verified in
-  `health.js`: `LeadOS.health = { T, G, ... }`).
-  Module order in the real repo is therefore a literal `<script>` tag order
-  in `index.html`'s loader — but **that loader does not currently exist**
-  (next point).
-- **The real vanilla app's loader `index.html` has been overwritten.** The
-  root `index.html` currently hosted is 328 bytes, is the Vite template
-  (`<div id="root"></div>` + `<script type="module" src="/src/main.tsx">`),
-  and its own `<title>` reads "LeadOS pt-C — Data Visualization Engine." It
-  references `/src/main.tsx`, but **no `src/` directory exists in the
-  tree** — so this `index.html`, as hosted, cannot serve the app it
-  references, and it has no `<script>` tags for `store.js`/`events.js`/
-  `engine.js`/etc. at all. There is therefore no "EXPECTED guard in
-  index.html" to update — that guard's host file is not present in a
-  working state.
-- **`events.js`'s registry (92 real, verified event types — full list in
-  §2) contains none of the brief's core vocabulary.** Not one of
-  `oneonone.logged`, `pulse.recorded`, `goal.progress`, `commitment.made`,
-  `sprint.review`, `sprint.retro.action`, `sprint.started`,
-  `crisis.detected`, `war.room.opened`, `incident.comms.sent`,
-  `succession.candidate`, `plan.created`, `narrative.drafted`,
-  `message.tested`, or `fin.unit.logged` exists in the registry. (A few
-  *adjacent* real types exist under different names — `exec.crisis.logged`
-  instead of `crisis.detected`, `fin.kpi.logged` instead of
-  `fin.unit.logged` — see §2 table.)
-- **Rule IDs in the real repo run R1–R40.** The brief references R86, R117,
-  R118. Regex-searched `engine.js` and `health.js` for every `R[0-9]+`
-  token; the highest id found in either file is R40.
-- **No `snoozed`/`dismissed`/command-palette/undo system exists in the real
-  repo.** Grepped all four terms across every `.js` file. The only "palette"
-  hit is an unrelated design-token comment in `health.js`.
+**Fabricated, labeled throughout the app and in README.md:**
+- the entire rule catalog (12 rules wired to live detection logic; 28 more
+  exist only as a searchable/explainable catalog stub, clearly marked
+  `wired: false` / "catalog-only" in the UI) — not a claim of 144 rules;
+- the event-type vocabulary, seed people, and seed event log
+  (`src/data/seed.ts`), deterministic but entirely synthetic;
+- `meta.audit`, global mute, snooze/dismiss, universal search, the command
+  palette, the event tracer, the rule explainer, the audit-intelligence
+  dashboard, the calendar heatmap, and every route beyond the four verified
+  real ones — all new, labeled demo code written to satisfy the pt-E brief's
+  own spec, not ported from anything real.
 
-### 1.3 A third thing, found but not asked about
-
-`SESSION-3.patch.md` (present in the repo tree) is a set of anchored patches
-against "`oo-finish`" (a one-on-one close flow) and "pulse sliders" — i.e.
-**an earlier iteration of this same fictional project's history did have a
-1:1/pulse concept close to the brief's vocabulary.** It is explicitly a
-patch doc for a lineage that predates the current `events.js` (that file's
-own header states the current registry is "pt-5," while the patch doc
-describes raw DOM listener wiring with no relationship to the current
-event-sourced architecture). This explains *why* the pt-D brief's
-vocabulary feels native to "LeadOS" in spirit while being verifiably absent
-from the *current* main branch: it is drawing on a different branch of this
-project's own prior history, not inventing from nothing, and not matching
-today's `main`.
-
----
-
-## §2 — Event-type vocabulary: brief vs. verified registry
-
-Real registry (verified, 92 keys, `events.js` lines ~9–92 and the rest of
-the file, fully extracted this session):
+## 6. Verification commands run this session (for reproducibility)
 
 ```
-benchmark.set, cadence.review, cs.churn.logged, cs.escalation.logged,
-cs.escalation.resolved, cs.health.logged, cs.nps.logged, decision.decided,
-decision.proposed, design.research.logged, design.review.logged,
-design.system.updated, design.ux.metric, exec.board.meeting,
-exec.crisis.logged, exec.crisis.resolved, exec.investor.update,
-exec.kpi.reviewed, fin.budget.actuals, fin.budget.set, fin.forecast.logged,
-fin.kpi.logged, fin.risk.logged, fin.risk.updated, hr.attrition.logged,
-hr.compensation.reviewed, hr.engagement.logged, hr.headcount.planned,
-hr.offer.logged, hr.performance.logged, hr.pip.closed, hr.pip.started,
-insight.acknowledged, kr.created, kr.progressLogged,
-legal.compliance.check, legal.contract.logged, legal.contract.updated,
-legal.incident.logged, legal.risk.logged, mfg.equipment.logged,
-mfg.production.logged, mfg.quality.logged, mfg.safety.incident,
-mfg.yield.logged, mktg.brand.audit, mktg.campaign.logged,
-mktg.campaign.result, mktg.content.published, note.added,
-objective.created, objective.statusChanged, ops.capacity.logged,
-ops.incident.logged, ops.incident.resolved, ops.milestone.set,
-ops.milestone.updated, ops.process.logged, ops.sla.logged,
-playbook.applied, product.metric.logged, product.retro.logged,
-product.roadmap.item, product.roadmap.updated, rd.experiment.logged,
-rd.experiment.result, rd.patent.logged, rd.tech.debt.logged,
-rd.tech.debt.resolved, review.completed, review.scheduled, risk.raised,
-risk.statusChanged, sales.deal.closed, sales.deal.logged,
-sales.deal.updated, sales.pipeline.reviewed, sales.quota.actuals,
-sales.quota.set, settings.changed, signal.tagged, store.initialized,
-strategy.decision, strategy.okr.closed, strategy.okr.progress,
-strategy.okr.set, supply.disruption.logged, supply.inventory.logged,
-supply.vendor.logged, supply.vendor.reviewed, task.completed,
-task.created
+curl -s https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1
+grep -n "window\.\w* *=" store.js events.js engine.js playbooks.js health.js ui.js
+grep -o "id: 'R[0-9]*'" engine.js | sort -u -V
+grep -n "function fin(" engine.js
+grep -noi "audit" store.js events.js engine.js playbooks.js health.js ui.js
+grep -n "_mod" store.js events.js engine.js playbooks.js health.js ui.js
+grep -n "'#/[a-z/]*'" ui.js
+grep -n "quarantine" store.js ui.js health.js
 ```
-
-| Brief term | In real registry? | Closest real equivalent |
-|---|---|---|
-| `oneonone.logged` | ❌ absent | none (no 1:1 concept in current registry) |
-| `pulse.recorded` | ❌ absent | `hr.engagement.logged` (different shape, unverified fit) |
-| `commitment.made` | ❌ absent | none |
-| `sprint.review` / `.retro.action` / `.started` | ❌ absent | `product.retro.logged` (adjacent, not equivalent) |
-| `crisis.detected` | ❌ absent | `exec.crisis.logged` (real, different name) |
-| `war.room.opened` | ❌ absent | none |
-| `incident.comms.sent` | ❌ absent | `ops.incident.logged` / `legal.incident.logged` (adjacent) |
-| `succession.candidate` | ❌ absent | none |
-| `plan.created` | ❌ absent | none |
-| `narrative.drafted` | ❌ absent | none |
-| `message.tested` | ❌ absent | none |
-| `fin.unit.logged` | ❌ absent | `fin.kpi.logged` (real, different name) |
-| `note.added` | ✅ present | exact match |
-| `exec.kpi.reviewed` | ✅ present | exact match |
-| `exec.board.meeting` | ✅ present | exact match |
-| `strategy.okr.set` | ✅ present | exact match |
-| `hr.attrition.logged` | ✅ present | exact match |
-
-**Decision:** given this split, this delivery does **not** pretend to port
-`engine.js`/`health.js`/`ui.js`/`playbooks.js` internals (consistent with
-the prior pt-C session's documented scope decision for the same reason —
-see `README.md`'s own "Declined" line). It implements the pt-D brief's
-*capabilities* fresh, in TypeScript, reusing the real, verified
-`prefill(ctx, P)` contract and `rule:scope` key format where they exist, and
-uses the brief's own event-name vocabulary for the demo (clearly labeled
-fabricated, exactly as the prior session labeled its own sample charts
-data). The five event types that do exist for real
-(`note.added`, `exec.kpi.reviewed`, `exec.board.meeting`,
-`strategy.okr.set`, `hr.attrition.logged`) are used by name, unmodified, in
-the seed log and in two of the six bundles (`OKR_QUARTERLY_BUNDLE`,
-`OFFBOARDING_BUNDLE`, `BOARD_PREP_BUNDLE`).
-
----
-
-## §3 — What was built this session (summary; full detail in README.md)
-
-`src/automation/` — eight modules implementing every capability named in
-the brief, each file's header comment stating what (if anything) about it
-is backed by a verified read vs. freshly authored:
-
-1. `prefill.ts` — `prefill(ctx, P)` (verified shape) + `smartPrefill()`
-   (this session's own addition — no "smart" variant exists in the real
-   repo) with all four enrichment categories (people/temporal/
-   financial/pattern).
-2. `maintenance.ts` — `runMaintenance()`, Tasks 1–6, verbatim-structured to
-   the brief (stale events, cadence drift, duplicates, orphaned
-   suppressions, calibration nudge, schema health).
-3. `templates.ts` — the six `TEMPLATES` bundles, each `build()`-ing an
-   ordered `EventSpec[]`, never writing directly (mirrors the real
-   `playbooks.js` doctrine: "playbooks never write... event specs ONLY").
-4. `schedule.ts` — `suggestSchedule()` + `collectCadenceFindings()`
-   (priority-weighted, same-day conflict avoidance for sev ≥ 3 items).
-5. `hygiene.ts` — `dataHygiene()`, strictly read-only, plus a genuine
-   client-side JSON export (`Blob` + `URL.createObjectURL`), no delete path
-   anywhere in the module.
-6. `importAutomation.ts` — `importSuggestions()`. **Simulated**: this demo
-   has no real multi-store merge pipeline (the real `store.js` import/merge
-   internals were fetched but not reviewed line-by-line this session —
-   out of scope budget), so "before/after" is produced by a synthetic
-   `simulateImport()` call in `store.ts`, clearly labeled in the UI.
-7. `backup.ts` — `backupStatus()`, the one system-generated (not
-   log-derived) finding, labeled "⚙ SYSTEM REMINDER" per the brief.
-8. `undo.ts` + `store.ts` — 60-second last-event-only undo, single writer,
-   `localStorage` persistence under its own demo key
-   (`leados-ptd-demo:data` — deliberately **not** the real app's
-   `leados:data` key, to avoid any collision if ever run on the same
-   origin as the real app).
-
-UI: `src/views/{Today,Bundles,Maintenance,Contract,Provenance}View.tsx` +
-`src/components/{BundleModal,UndoToast,shared}.tsx`, wired from
-`src/App.tsx` (mandated entry point).
-
-## §4 — Explicitly out of scope / not done
-
-- No attempt to write to, or open a PR against, `github.com/wbweve/Leados`.
-  This tool has no git-push capability; the deliverable lives in this
-  sandbox project only, exactly as the pt-C session's own deliverable did.
-- No line-by-line review of `engine.js` R2–R39, `health.js`'s T/G suites, or
-  `ui.js`'s view-rendering bodies. Everything quoted from those files above
-  is a direct, cited grep/read; nothing beyond that is claimed.
-- No reconciliation of the real repo's broken `index.html`/`src/` mismatch —
-  fixing the real repo is outside this sandbox's reach and outside the pt-D
-  brief's ask.
-- `importSuggestions()` is exercised against a simulated merge, not a real
-  one — see §3.6.
-
-## §5 — Self-caught issues during this session's authoring
-
-1. First draft of `cadenceFindingFor()` divided by zero when a person had
-   no `oneonone.logged` events at all; guarded with an early return.
-2. `smartPrefill`'s weekend-nudge logic initially suggested the *same*
-   Saturday it was warning about (off-by-zero in the day-shift). Fixed to
-   shift +1 for Friday-adjacent Saturdays and +2 for Sundays landing from a
-   Saturday review date.
-3. `runMaintenance` originally mutated `store.audit` in place; changed to
-   return a report and let `store.ts` be the single place that appends to
-   state, keeping one writer as the contract requires.

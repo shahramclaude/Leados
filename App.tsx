@@ -1,93 +1,140 @@
-import { useState } from "react";
-import { useLeadosStore } from "./automation/store";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as store from "./lib/store";
+import { project } from "./lib/engine";
+import { useRoute } from "./lib/router";
+import { Shell } from "./components/Shell";
+import { CommandPalette } from "./components/CommandPalette";
+import { EventTracerPanel, RuleExplainerPanel } from "./components/OverlayPanels";
 import { TodayView } from "./views/TodayView";
-import { BundlesView } from "./views/BundlesView";
-import { MaintenanceView } from "./views/MaintenanceView";
-import { ProvenanceView } from "./views/ProvenanceView";
-import { ContractView } from "./views/ContractView";
-import { UndoToast } from "./components/UndoToast";
-import { cn } from "./utils/cn";
-import { Button } from "./components/shared";
+import { RosterView } from "./views/RosterView";
+import { PlaybooksView } from "./views/PlaybooksView";
+import { FinanceView, IntelligenceView, SelfView } from "./views/DomainViews";
+import { HealthView } from "./views/HealthView";
+import { DataView } from "./views/DataView";
+import { DigestView, ReviewView, SearchResultsView } from "./views/MiscViews";
 
-const TABS = [
-  { id: "today", label: "Today" },
-  { id: "bundles", label: "Bundles" },
-  { id: "maintenance", label: "Maintenance & Data" },
-  { id: "contract", label: "Automation Contract" },
-  { id: "provenance", label: "Provenance" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
+function useStore() {
+  const [, setTick] = useState(0);
+  useEffect(() => store.subscribe(() => setTick((t) => t + 1)), []);
+  return store.getStore();
+}
 
 export default function App() {
-  const [tab, setTab] = useState<TabId>("today");
-  const api = useLeadosStore();
+  const storeState = useStore();
+  const route = useRoute();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const sessionAccessed = useRef<Set<string>>(new Set()).current;
+  const today = useMemo(() => new Date(), [storeState]);
+  const P = useMemo(() => project(storeState, today), [storeState, today]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", storeState.meta.theme === "dark");
+  }, [storeState.meta.theme]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const isK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
+      const isSlash = e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA";
+      if (isK || isSlash) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+      if (e.key === "Escape") setPaletteOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const refresh = () => {}; // store subscription already drives re-render
+
+  const basePath = route.path[0] || "today";
+  const isOverlay = basePath === "trace" || basePath === "explain";
+
+  function renderBase(path: string) {
+    switch (path) {
+      case "today":
+        return <TodayView P={P} storeState={storeState} query={route.query} onChange={refresh} />;
+      case "roster":
+        return <RosterView P={P} storeState={storeState} personId={route.path[1]} />;
+      case "playbooks":
+        return <PlaybooksView P={P} storeState={storeState} playId={route.path[1]} personId={route.path[2]} />;
+      case "finance":
+        return <FinanceView P={P} storeState={storeState} />;
+      case "intelligence":
+        return <IntelligenceView P={P} storeState={storeState} />;
+      case "self":
+        return <SelfView P={P} storeState={storeState} />;
+      case "health":
+        return <HealthView P={P} storeState={storeState} query={route.query} />;
+      case "data":
+        return <DataView P={P} storeState={storeState} query={route.query} refresh={refresh} />;
+      case "digest":
+        return <DigestView P={P} storeState={storeState} refresh={refresh} />;
+      case "review":
+        return <ReviewView P={P} storeState={storeState} refresh={refresh} />;
+      case "search":
+        return <SearchResultsView P={P} storeState={storeState} rawQuery={route.path.slice(1).join("/") || ""} />;
+      default:
+        return <TodayView P={P} storeState={storeState} query={route.query} onChange={refresh} />;
+    }
+  }
+
+  // For overlay routes (trace/explain) we keep rendering the last "real" base
+  // route underneath, exactly like the brief's "opens over current view".
+  const lastBase = useRef(basePath);
+  if (!isOverlay) lastBase.current = basePath;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-sm">
-                ⚙
-              </div>
-              <h1 className="text-xl font-semibold tracking-tight">LeadOS pt-D — Universal Automation Engine</h1>
-            </div>
-            <p className="mt-1 text-sm text-slate-500">
-              An operating system anticipates. Every automation below is labeled, reversible, and auditable — built only from this demo's own event log.
-            </p>
-          </div>
-          <Button variant="secondary" onClick={api.resetDemo}>
-            Reset demo data
-          </Button>
+    <>
+      <Shell
+        currentPath={isOverlay ? lastBase.current : basePath}
+        onOpenSearch={() => setPaletteOpen(true)}
+        storeState={storeState}
+        focusMode={focusMode}
+      >
+        {renderBase(isOverlay ? lastBase.current : basePath)}
+      </Shell>
+
+      {basePath === "trace" && route.path[1] && (
+        <EventTracerPanel eventId={route.path[1]} P={P} storeState={storeState} onClose={() => (location.hash = `#/${lastBase.current}`)} />
+      )}
+      {basePath === "explain" && route.path[1] && (
+        <RuleExplainerPanel ruleId={route.path[1]} P={P} storeState={storeState} onClose={() => (location.hash = `#/${lastBase.current}`)} />
+      )}
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        P={P}
+        storeState={storeState}
+        sessionAccessed={sessionAccessed}
+        currentDomain={route.query.get("domain") || undefined}
+        onNotify={setToast}
+        onToggleFocus={() => setFocusMode((f) => !f)}
+      />
+
+      {toast && (
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+          {toast}
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-6 pb-2">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "whitespace-nowrap rounded-full px-3.5 py-1.5 text-sm font-medium transition",
-                tab === t.id ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      </header>
+      )}
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        {tab === "today" && <TodayView store={api.store} onLogBundle={api.logBundle} />}
-        {tab === "bundles" && <BundlesView store={api.store} onLogBundle={api.logBundle} />}
-        {tab === "maintenance" && (
-          <MaintenanceView
-            store={api.store}
-            onRunMaintenance={api.runMaintenanceOnce}
-            onClearStaleSuppressions={api.clearStaleSuppressions}
-            onRecordExport={api.recordExport}
-            onSimulateImport={() =>
-              api.simulateImport(
-                [{ id: "p-new1", name: "Imported: Lia Park", role: "New Hire" }],
-                [
-                  { type: "oneonone.logged", payload: { personId: "p-new1", notes: "Onboarding 1:1." } },
-                  { type: "unknown.customfield.logged", payload: { note: "from a foreign export" } },
-                ]
-              )
-            }
-          />
-        )}
-        {tab === "contract" && <ContractView />}
-        {tab === "provenance" && <ProvenanceView />}
-      </main>
-
-      <footer className="mx-auto max-w-6xl px-6 pb-10 text-xs text-slate-400">
-        Demo data is fabricated for this delivery. See README.md and AI-SESSION-LOG.md for exactly what was verified against github.com/wbweve/Leados
-        versus invented for this build.
-      </footer>
-
-      <UndoToast toast={api.toast} onUndo={api.undoLast} onDismiss={api.dismissToast} />
-    </div>
+      {focusMode && (
+        <button
+          onClick={() => setFocusMode(false)}
+          className="fixed bottom-4 right-4 z-50 rounded-full bg-violet-600 px-4 py-2 text-xs font-medium text-white shadow-lg hover:bg-violet-700"
+        >
+          Exit focus mode
+        </button>
+      )}
+    </>
   );
 }
