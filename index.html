@@ -143,8 +143,11 @@ main{flex:1;min-width:0;padding:34px 40px 90px;max-width:1180px}
 .ins .body{color:var(--ink2);font-size:13px;line-height:1.65;white-space:pre-wrap}
 .ins .keys{font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.7;word-break:break-word}
 .ins .foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.ins suppressed{opacity:.6}
 .ins.acked{opacity:.62;background:var(--paper2)}
+.fin.focus{outline:2px solid var(--accent);outline-offset:2px}
+.pill[data-act]{cursor:pointer}
+.pill[data-act]:hover{border-color:var(--ink);color:var(--ink)}
+.spark{font-family:var(--mono);font-size:13px;letter-spacing:.08em}
 .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--ink);border-radius:4px;padding:7px 13px;
   font-size:12px;font-weight:600;background:var(--ink);color:var(--paper);transition:opacity .12s ease}
 .btn:hover{opacity:.86}
@@ -377,7 +380,10 @@ const REGISTRY = {
   /* notes */
   'note.added':             D({id:'s',domain:'s',text:'s'},{refId:'s',context:'s'},null,'notes'),
   /* intelligence layer (pt-5 set — shapes byte-verified from upstream engine.js fold handlers) */
-  'insight.acknowledged':   D({insightId:'s'},{note:'s'}),
+  /* pt-10: optional fingerprint — an ack with a fingerprint suppresses only
+     while the constituents are byte-identical; a state change resurfaces the
+     insight and the old ack stays as audited history (brief T25). */
+  'insight.acknowledged':   D({insightId:'s'},{note:'s',fingerprint:'s'}),
   'benchmark.set':          D({metric:'s',value:'n',unit:'s',source:'s',period:'s'},{type:'s'}),
   'signal.tagged':          D({eventId:'s',tag:'s'},{note:'s'}),
   /* pt-9: interactive-playbook submissions. 'playbook.completed' is named by the
@@ -706,7 +712,7 @@ const MODULE_FOLD={
   'exec.crisis.logged':(s,p,at)=>{ s.crises[p.id]={id:p.id,title:p.title,severity:p.severity,type:p.type,ownerId:p.ownerId||null,responseTeam:p.responseTeam.slice(),activatedAt:p.activatedAt,resolved:false,postmortem:'',loggedAt:at,resolvedAt:null}; },
   'exec.crisis.resolved':(s,p,at)=>{ const c=s.crises[p.crisisId]; if(c){ c.resolved=true; c.postmortem=p.postmortem||''; c.resolvedAt=p.resolvedAt||at; } },
   /* intelligence layer (pt-5) — shapes byte-verified this session */
-  'insight.acknowledged':(s,p,at,ev)=>{ s.insightAcks[p.insightId]={at:at,note:p.note||'',_ev:ev&&ev.id}; },
+  'insight.acknowledged':(s,p,at,ev)=>{ s.insightAcks[p.insightId]={at:at,note:p.note||'',fingerprint:p.fingerprint||null,_ev:ev&&ev.id}; },
   'benchmark.set':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p); s.benchmarks.push(rec); group(s.benchmarkByMetric,p.metric,rec); },
   'signal.tagged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p); s.signalTags.push(rec); group(s.tagsByEvent,p.eventId,rec); },
   /* pt-9 */
@@ -1591,20 +1597,62 @@ function heat(P,today,findings){
       confFactor:cf,decayVal:dec,term:term,
       math:'sev '+f.sev+' × conf '+f.conf+' ('+cf.toFixed(2)+') × '+decay+'^('+age+'/7) = '+U.rd3(dec)+(clamped?' [future-dated → clamped 0]':'')+' → '+U.rd3(term)});
   });
+  /* G35: the map is COMPLETE over the canonical domains. A domain with no
+     active findings scores exactly 0 — present in the map, labeled "no
+     signal", never read as a measurement of health. */
+  LeadOS.engine.DOMAINS.forEach(d=>{ if(!cells[d]) cells[d]={domain:d,contrib:[],raw:0}; });
   const list=Object.keys(cells).map(k=>cells[k]);
   list.forEach(c=>{
     c.contrib.sort((a,b)=>(b.term-a.term)||(a.key<b.key?-1:1));
-    c.score=Math.min(10,c.raw);
+    c.score=Math.min(10,Math.max(0,c.raw));
     c.capped=c.raw>10;
+    if(!c.contrib.length) c.zeroWhy='no active findings — composite of nothing; labeled "no signal", not a measurement of health';
   });
   list.sort((a,b)=>(b.score-a.score)||(a.domain<b.domain?-1:1));
   return {
     formula:'score = min(10, Σ  sev × CONF_FACTOR[conf] × decay^(days/7) )',
     decaySource:'decay = heatmapDecayFactor ^ (days_since_finding / 7), weekly compounding',
     confFactor:CONF_FACTOR, confFactorWhy:CONF_FACTOR_WHY,
-    decayFactor:decay, windowDays:win,
+    decayFactor:decay, windowDays:win, complete:true,
     label:HEAT_LABEL, cells:list, excluded:excluded, notes:notes
   };
+}
+/* Trend (printed definition): same formula, bucketed by evidence age —
+   "last 7d" = terms with ageDays ≤ 7; "prior 7d" = 7 < ageDays ≤ 14. */
+function heatTrend(P,today,findings){
+  const set=LeadOS.engine.settings(P), win=set.correlationWindowDays, decay=set.heatmapDecayFactor;
+  const buckets={};
+  findings.forEach(f=>{
+    if(f.evidenceAt===null) return;
+    let age=U.days(today,f.evidenceAt); if(age<0||age>win) return;
+    const cf=CONF_FACTOR[f.conf], term=f.sev*cf*Math.pow(decay,age/7);
+    const d=LeadOS.engine.DOMAINS.indexOf(f.domain)!==-1?f.domain:'system';
+    if(!buckets[d]) buckets[d]={recent:0,prior:0};
+    if(age<=7) buckets[d].recent+=term; else if(age<=14) buckets[d].prior+=term;
+  });
+  const out={};
+  LeadOS.engine.DOMAINS.forEach(d=>{
+    const b=buckets[d]||{recent:0,prior:0};
+    out[d]={recent:Math.min(10,b.recent),prior:Math.min(10,b.prior),
+      delta:U.rd(Math.min(10,b.recent)-Math.min(10,b.prior),2)};
+  });
+  return {def:'last 7d (ageDays ≤ 7) vs prior 7d (7 < ageDays ≤ 14), same formula, cap applied',byDomain:out};
+}
+/* 30-day history: the heat AS-OF each weekly snapshot, computed the only
+   honest way — the log sliced at that instant, re-projected, re-run. */
+function heatHistory(events,today,weeks){
+  const n=weeks||4, snaps=[], domains={};
+  LeadOS.engine.DOMAINS.forEach(d=>{ domains[d]=[]; });
+  for(let w=n-1;w>=0;w--){
+    const t=today-w*7*DAY;
+    snaps.push(t);
+    const evts=events.filter(e=>e.at<=t);
+    const Px=LeadOS.engine.project(evts);
+    const ht=LeadOS.rules.runFull(Px,t).heatmap;
+    const score={}; ht.cells.forEach(c=>{ score[c.domain]=c.score; });
+    LeadOS.engine.DOMAINS.forEach(d=>{ domains[d].push(U.rd(score[d]||0,2)); });
+  }
+  return {snapshots:snaps,domains:domains};
 }
 
 /* ---------- named pattern library (pt-6 byte-verified, carried) ---------- */
@@ -1639,11 +1687,23 @@ const PATTERNS=[
    narrative:'The team is carrying debt, not running experiments, and OKRs have gone quiet. The output of this combination is maintenance-mode drift.'},
   {id:'QUALITY_COLLAPSE',sev:5,conf:'MEDIUM',windowDays:30,requires:['R27','R28','R29'],play:'production-stop',
    narrative:'Three simultaneous quality signals in manufacturing. Production output, worker safety, and equipment state are all degraded. Stop the line and audit before resuming at full rate.'},
-  {id:'LEADERSHIP_VACUUM',sev:4,conf:'MEDIUM',requires:['R1','R3','R8','R10'],play:'leadership-audit',
+  {id:'LEADERSHIP_VACUUM',sev:4,conf:'MEDIUM',entityShared:true,requires:['R1','R3','R8','R10'],play:'leadership-audit',
    narrative:'A manager is not meeting their people, not growing them, and not owning team goals. This is not a busy week — it is an absent leader.'},
   {id:'CASHFLOW_WARNING',sev:4,conf:'MEDIUM',requires:['R22','R23','R24'],play:'finance-reforecast',
    narrative:'Budget is off, KPIs are behind target, and forecast accuracy is degraded. The financial model is no longer reliable as a planning tool.'}
 ];
+/* entity-shared enforcement (brief G34): a pattern claiming one shared subject
+   may only fire when person-resolvable limbs do not point at DIFFERENT people.
+   Org-level (unresolvable) limbs are silent on personhood, printed as such. */
+function resolvePersons(f,P){
+  const out={};
+  try{ anchorsFor(f,P).persons.forEach(p=>{ out[p]=true; }); }catch(e){/* anchors never throw; belt-and-braces */}
+  (f.refs||[]).forEach(ref=>{
+    const o=P.objectives&&P.objectives[ref]; if(o&&o.owner) out[o.owner]=true;
+    const d=P.decisions&&P.decisions[ref]; if(d&&d.owner) out[d.owner]=true;
+  });
+  return Object.keys(out);
+}
 function heritageNotes(def){
   return def.requires.filter(r=>HERITAGE_LABELS[r]).map(r=>{
     const n=HERITAGE_LABELS[r];
@@ -1657,6 +1717,18 @@ function detectPatterns(P,today,findings){
   PATTERNS.forEach(def=>{
     const missing=def.requires.filter(r=>!byRule[r]);
     if(missing.length){ dormant.push({name:def.id,missing:missing,present:def.requires.filter(r=>byRule[r])}); return; }
+    let sharedPerson; /* undefined = not entity-gated; null = gated, no person resolvable */
+    if(def.entityShared){
+      const distinct={};
+      def.requires.forEach(r=>byRule[r].forEach(f=>{ resolvePersons(f,P).forEach(p=>{ distinct[p]=true; }); }));
+      const people=Object.keys(distinct).sort();
+      if(people.length>1){
+        dormant.push({name:def.id,missing:[],present:def.requires.slice(),
+          blockedBy:'entity-shared: limbs resolve to different people ('+people.join(' · ')+') — a shared-subject claim is not verifiable; printed, not inferred (G34)'});
+        return;
+      }
+      sharedPerson=people[0]||null;
+    }
     let windowRes=null;
     if(def.windowDays){
       const limbs=def.requires.map(r=>{
@@ -1669,7 +1741,7 @@ function detectPatterns(P,today,findings){
       windowRes={days:def.windowDays,ok:limbs.every(l=>l.status==='fresh'),limbs:limbs};
     }
     active.push({
-      name:def.id,sev:def.sev,conf:def.conf,
+      name:def.id,sev:def.sev,conf:def.conf,sharedPerson:sharedPerson,
       confWhy:'medium — '+def.requires.length+' correlated signals, '+CONF_NOTE+' (uniform MEDIUM, printed)',
       narrative:def.narrative,play:def.play,requires:def.requires.slice(),
       members:def.requires.map(r=>({rule:r,count:byRule[r].length,keys:byRule[r].map(f=>f.key)})),
@@ -1722,6 +1794,13 @@ function benchmarkCompare(P){
 /* ---------- INSIGHTS — spec shape, verbatim ---------- */
 function buildInsights(P,today,findings,clus,pats,benches){
   const out=[];
+  const byKey={};
+  findings.forEach(f=>{ byKey[f.key]=f; });
+  /* Fingerprints: absolute constituent state (keys + evidenceAt + sev), never
+     derived ages — an ack must resurface ONLY when constituents change state,
+     not because a day passed (brief T25). */
+  const fpFindings=keys=>JSON.stringify(keys.slice().sort().map(k=>{ const f=byKey[k]||{};
+    return {k:k,e:(typeof f.evidenceAt==='number')?f.evidenceAt:null,s:f.sev||null,c:f.conf||null}; }));
   const PROMO='promotion rule: a cluster becomes an insight when severity ≥ 4, or ≥ 3 members, or it spans >1 domain';
   /* kind: cluster */
   clus.list.forEach(c=>{
@@ -1736,7 +1815,8 @@ function buildInsights(P,today,findings,clus,pats,benches){
       findingKeys:c.findings.slice(),
       severity:c.severity,
       play:'playbook:'+c.domains[0],
-      suppressedBy:null
+      suppressedBy:null,
+      _fp:'fp1:'+fpFindings(c.findings)
     });
   });
   /* kind: pattern */
@@ -1744,6 +1824,10 @@ function buildInsights(P,today,findings,clus,pats,benches){
     const keys=U.uniq([].concat.apply([],p.members.map(m=>m.keys))).sort();
     const lines=[p.narrative,'',p.confWhy,
       'requires: '+p.requires.join(' · ')+' — every limb verified against active findings at read time'];
+    if(p.sharedPerson!==undefined&&p.sharedPerson!==null)
+      lines.push('shared-subject check (G34): all person-resolvable limbs point to '+p.sharedPerson);
+    else if(p.sharedPerson===null)
+      lines.push('shared-subject check (G34): no limb resolves a person — org-level read, printed, not inferred');
     p.members.forEach(m=>lines.push('  '+m.rule+': '+m.count+' finding(s) ['+m.keys.join(', ')+']'));
     if(p.window){ lines.push('window limb ('+p.window.days+'d, evaluated as a printed sub-claim):');
       p.window.limbs.forEach(l=>lines.push('  '+l.line));
@@ -1757,7 +1841,8 @@ function buildInsights(P,today,findings,clus,pats,benches){
       findingKeys:keys,
       severity:p.sev,
       play:'interactive:'+p.play,
-      suppressedBy:null
+      suppressedBy:null,
+      _fp:'fp1:'+fpFindings(keys)
     });
   });
   /* kind: benchmark-gap — the pt-7 trigger, verbatim */
@@ -1777,17 +1862,28 @@ function buildInsights(P,today,findings,clus,pats,benches){
       findingKeys:[],
       severity:BENCH_GAP_SEV,
       play:last.type==='product.metric.logged'?'playbook:product':'playbook:finance',
-      suppressedBy:null
+      suppressedBy:null,
+      _fp:'fp1:'+JSON.stringify({v:last.value,va:last.at,b:bench.value})
     });
   });
   out.sort((a,b)=>(b.severity-a.severity)||(a.id<b.id?-1:1));
-  /* suppression by event — insight.acknowledged suppresses per read and stays audited */
+  /* suppression by event — insight.acknowledged suppresses per read and stays audited.
+     pt-10: fingerprinted acks suppress ONLY while constituents are identical;
+     a changed state resurfaces the insight and keeps the stale ack visible. */
   const ackMap=P.insightAcks||{};
   const active=[], suppressed=[];
   out.forEach(i=>{
     const ack=ackMap[i.id];
-    if(ack){ i.suppressedBy=ack._ev||'(event id unavailable)'; i._ackNote=ack.note; i._ackAt=ack.at; suppressed.push(i); }
-    else active.push(i);
+    if(!ack){ active.push(i); return; }
+    const legacy=!ack.fingerprint;
+    if(legacy||ack.fingerprint===i._fp){
+      i.suppressedBy=ack._ev||'(event id unavailable)'; i._ackNote=ack.note; i._ackAt=ack.at;
+      if(legacy) i._legacyAck=true;
+      suppressed.push(i);
+    } else {
+      i._staleAck={at:ack.at,note:ack.note,_ev:ack._ev,fingerprint:ack.fingerprint};
+      active.push(i);
+    }
   });
   const orphanAcks=Object.keys(ackMap).filter(id=>!out.some(i=>i.id===id))
     .map(id=>Object.assign({insightId:id},ackMap[id])).sort((a,b)=>a.insightId<b.insightId?-1:1);
@@ -1803,7 +1899,8 @@ function run(P,today){
 }
 LeadOS.correlate={CONF_FACTOR:CONF_FACTOR,CONF_FACTOR_WHY:CONF_FACTOR_WHY,HEAT_LABEL:HEAT_LABEL,
   BENCH_GAP_SEV:BENCH_GAP_SEV,PATTERNS:PATTERNS,HERITAGE_LABELS:HERITAGE_LABELS,
-  anchorsFor:anchorsFor,clusters:clusters,heat:heat,detectPatterns:detectPatterns,
+  anchorsFor:anchorsFor,clusters:clusters,heat:heat,heatTrend:heatTrend,heatHistory:heatHistory,
+  resolvePersons:resolvePersons,detectPatterns:detectPatterns,
   internalSeriesFor:internalSeriesFor,benchmarkCompare:benchmarkCompare,buildInsights:buildInsights,run:run};
 })();
 
@@ -1903,6 +2000,49 @@ const wrap=evts=>evts.map((e,i)=>({seq:i+1,id:pad(i+1),at:e.at,type:e.type,paylo
 const projectSeed=(base,extra)=>{
   const evts=wrap(buildSeed(base).concat(extra||[]));
   return {P:LeadOS.engine.project(evts),evts:evts};
+};
+/* Golden fixtures (G31–G40) — ONE source, consumed by both suites so T=
+   and G= can never drift against each other. */
+const FX={
+  fourLimbs(withR4){
+    const list=[
+      {type:'hr.attrition.logged',payload:{personId:'p1',reason:'voluntary'},at:FIXED-10*DAY},
+      {type:'hr.attrition.logged',payload:{personId:'p2',reason:'voluntary'},at:FIXED-5*DAY},
+      {type:'hr.engagement.logged',payload:{score:6.8},at:FIXED-40*DAY},
+      {type:'hr.engagement.logged',payload:{score:6.4},at:FIXED-20*DAY},
+      {type:'hr.engagement.logged',payload:{score:5.9},at:FIXED-3*DAY},
+      {type:'sales.quota.set',payload:{id:'q',personId:'ava',period:'p',target:100},at:FIXED-20*DAY},
+      {type:'sales.quota.actuals',payload:{quotaId:'q',actual:60,period:'p'},at:FIXED-10*DAY}];
+    if(withR4) list.push({type:'cadence.review',payload:{kind:'compliance'},at:FIXED-200*DAY});
+    return wrap(list);
+  },
+  revLimbs(withChurn){
+    const list=[
+      {type:'sales.deal.logged',payload:{id:'dl',title:'Globex',value:40000,stage:'proposal',closeDate:FIXED-40*DAY,ownerId:'ava'},at:FIXED-50*DAY},
+      {type:'sales.quota.set',payload:{id:'q',personId:'ava',period:'p',target:100},at:FIXED-20*DAY},
+      {type:'sales.quota.actuals',payload:{quotaId:'q',actual:60,period:'p'},at:FIXED-10*DAY}];
+    if(withChurn) list.push({type:'cs.churn.logged',payload:{period:'2026-01',churned:3,total:40,mrr_lost:12000,mrr_total:60000},at:FIXED-25*DAY});
+    return wrap(list);
+  },
+  qualLimbs(withEquip){
+    const list=[
+      {type:'mfg.yield.logged',payload:{line:'L1',yield_pct:88},at:FIXED-30*DAY},
+      {type:'mfg.yield.logged',payload:{line:'L1',yield_pct:86},at:FIXED-15*DAY},
+      {type:'mfg.yield.logged',payload:{line:'L1',yield_pct:84},at:FIXED-5*DAY},
+      {type:'mfg.safety.incident',payload:{severity:4,title:'near-miss'},at:FIXED-10*DAY},
+      {type:'mfg.safety.incident',payload:{severity:3,title:'slip'},at:FIXED-6*DAY}];
+    if(withEquip) list.push({type:'mfg.equipment.logged',payload:{assetId:'PRESS-01',status:'down'},at:FIXED-8*3600000});
+    return wrap(list);
+  },
+  lvLimbs(divergent){
+    const objB={id:'oB',objective:'Win segment'};
+    if(divergent) objB.owner='ben';
+    return wrap([
+      {type:'cadence.review',payload:{kind:'revenue'},at:FIXED-45*DAY},
+      {type:'cadence.review',payload:{kind:'board'},at:FIXED-100*DAY},
+      {type:'objective.set',payload:{id:'oA',objective:'Grow NRR',owner:'ava',keyResults:[{kr:'NRR 110'}]},at:FIXED-30*DAY},
+      {type:'objective.set',payload:objB,at:FIXED-20*DAY}]);
+  }
 };
 
 /* ---------- tiny harness ---------- */
@@ -2005,8 +2145,11 @@ function runT(){
     const w1=h.excluded.filter(e=>e.key==='T:old')[0], w2=h.excluded.filter(e=>e.key==='T:und')[0];
     if(!w1||!w1.why.includes('correlationWindowDays')) return {why:'old finding not dropped with window reason'};
     if(!w2||!w2.why.includes('undated')) return {why:'undated finding not excluded with reason'};
-    if(h.cells.length!==0) return {why:'excluded findings still contributed'};
-    return {ok:true,why:'both excluded with printed reasons'};
+    const legal=h.cells.filter(c=>c.domain==='legal')[0];
+    if(!legal||legal.raw!==0||legal.contrib.length!==0) return {why:'excluded findings still contributed'};
+    if(h.cells.length!==LeadOS.engine.DOMAINS.length) return {why:'G35 broken: map is not complete over the canonical domains'};
+    if(!legal.zeroWhy||legal.zeroWhy.indexOf('no signal')===-1) return {why:'zero-finding domain lacks the "no signal" label'};
+    return {ok:true,why:'both excluded with reasons · zero cells score exactly 0 with the no-signal label'};
   }));
   T.push(check('T10','benchmark-gap: ≤80% boundary; only fin.kpi / product.metric count',()=>{
     const mkp=(val,type)=>{
@@ -2243,6 +2386,70 @@ function runT(){
     if(!f31.length) return {why:'past-due branch should still fire on the superseding record'};
     return {ok:true,why:'1 risk remains, owned · unowned quiets · past-due persists · both pt-9 types fold'};
   }));
+  /* pt-10 — brief T21–T25 ship as T23–T27: T21/T22 were already assigned to
+     the pt-9 playbook checks. ID MAP (printed, ids are the contract):
+     brief T21→T23 · T22→T24 · T23→T25 · T24→T26 · T25→T27 */
+  const fourLimbEvts=FX.fourLimbs; /* single fixture source with the G-goldens */
+  T.push(check('T23','[brief T21] correlate detects DEATH_SPIRAL when all 4 limbs fire (mkState)',()=>{
+    const P4=LeadOS.engine.project(fourLimbEvts(true));
+    const r4=LeadOS.rules.runFull(P4,FIXED);
+    const pat=r4.patterns.active.filter(p=>p.name==='DEATH_SPIRAL')[0];
+    if(!pat) return {why:'DEATH_SPIRAL not detected with all 4 limbs'};
+    if(pat.sev!==5) return {why:'pattern severity '+pat.sev+' ≠ 5'};
+    if(!r4.findings.some(f=>f.key==='CORR:DEATH_SPIRAL')) return {why:'R41 finding absent'};
+    return {ok:true,why:'4 limbs → DEATH_SPIRAL sev 5 + CORR:DEATH_SPIRAL'};
+  }));
+  T.push(check('T24','[brief T22] boundary: exactly 3 of 4 limbs → NO pattern',()=>{
+    const P3x=LeadOS.engine.project(fourLimbEvts(false));
+    const r3x=LeadOS.rules.runFull(P3x,FIXED);
+    if(r3x.patterns.active.some(p=>p.name==='DEATH_SPIRAL')) return {why:'fired with only 3 limbs'};
+    const dor=r3x.patterns.dormant.filter(d=>d.name==='DEATH_SPIRAL')[0];
+    if(!dor||dor.missing.join(',')!=='R4') return {why:'dormant should name exactly R4 missing: '+JSON.stringify(dor&&dor.missing)};
+    if(r3x.findings.some(f=>f.key==='CORR:DEATH_SPIRAL')) return {why:'R41 fired on 3 limbs'};
+    return {ok:true,why:'3 limbs → dormant missing exactly R4 · no CORR finding'};
+  }));
+  T.push(check('T25','[brief T23] decay monotone: 1d-old finding outscores 14d-old (same sev/conf)',()=>{
+    const Px={appliedSettings:{},rosterById:{}};
+    const fs=[
+      {key:'T:fresh',rule:'R1',sev:4,conf:'HIGH',domain:'sales',evidenceAt:FIXED-1*DAY},
+      {key:'T:stale',rule:'R1',sev:4,conf:'HIGH',domain:'sales',evidenceAt:FIXED-14*DAY}];
+    const cell=LeadOS.correlate.heat(Px,FIXED,fs).cells.filter(c=>c.domain==='sales')[0];
+    const fresh=cell.contrib.filter(c=>c.key==='T:fresh')[0], stale=cell.contrib.filter(c=>c.key==='T:stale')[0];
+    if(!(fresh.term>stale.term)) return {why:'decay not monotone: '+fresh.term+' vs '+stale.term};
+    const expect=[4*1*Math.pow(0.85,1/7),4*1*Math.pow(0.85,14/7)];
+    if(fresh.term!==expect[0]||stale.term!==expect[1]) return {why:'terms deviate from the formula'};
+    if(!fresh.math.includes('^(1/7)')||!stale.math.includes('^(14/7)')) return {why:'exponents not printed in math'};
+    return {ok:true,why:'1d: '+U.rd3(fresh.term)+' > 14d: '+U.rd3(stale.term)+' · exponents printed'};
+  }));
+  T.push(check('T26','[brief T24] benchmark-gap: 75% fires, 81% quiet (brief numbers)',()=>{
+    const mkp=v=>LeadOS.engine.project(wrap([
+      {type:'benchmark.set',payload:{metric:'revenue',value:1000,unit:'$',source:'src',period:'2026'},at:FIXED-10*DAY},
+      {type:'fin.kpi.logged',payload:{metric:'revenue',value:v},at:FIXED}]));
+    const fires=v=>LeadOS.correlate.run(mkp(v),FIXED).insights.all.some(i=>i.kind==='benchmark-gap');
+    if(!fires(750)) return {why:'75% of benchmark did not fire'};
+    if(fires(810)) return {why:'81% fired (must be quiet)'};
+    return {ok:true,why:'750/1000 fires · 810/1000 quiet'};
+  }));
+  T.push(check('T27','[brief T25] acknowledged suppresses; RESURFACES when constituents change state',()=>{
+    const P4=LeadOS.engine.project(fourLimbEvts(true));
+    const r1x=LeadOS.rules.runFull(P4,FIXED);
+    const ins=r1x.insights.active.filter(i=>i.kind==='pattern'&&i.id==='insight:pattern:DEATH_SPIRAL')[0];
+    if(!ins) return {why:'pattern insight missing'};
+    const ackEv={type:'insight.acknowledged',payload:{insightId:ins.id,fingerprint:ins._fp,note:'seen it'},at:FIXED};
+    const evts2=wrap(fourLimbEvts(true).map(e=>({type:e.type,payload:e.payload,at:e.at})).concat([ackEv]));
+    const r2x=LeadOS.rules.runFull(LeadOS.engine.project(evts2),FIXED);
+    const got2=r2x.insights.suppressed.filter(i=>i.id===ins.id)[0];
+    if(!got2) return {why:'fingerprinted ack did not suppress'};
+    /* a NEW attrition event changes R19's constituent state (refs/evidence) → fp changes → resurface */
+    const evts3=evts2.concat([{seq:evts2.length+1,id:pad(evts2.length+1),at:FIXED-1*DAY,
+      type:'hr.attrition.logged',payload:{personId:'p3',reason:'voluntary'}}]);
+    const r3x=LeadOS.rules.runFull(LeadOS.engine.project(evts3),FIXED);
+    const back=r3x.insights.active.filter(i=>i.id===ins.id)[0];
+    if(!back) return {why:'constituent state changed but insight stayed suppressed'};
+    if(!back._staleAck||back._staleAck.note!=='seen it') return {why:'stale ack not preserved/printed'};
+    if(back._fp===ins._fp) return {why:'fingerprint failed to notice the state change'};
+    return {ok:true,why:'fp ack suppresses → constituent change resurfaces · stale ack kept as history'};
+  }));
   return T;
 }
 
@@ -2335,8 +2542,124 @@ function runG(){
     if(h.label!=='COMPOSITE SIGNAL, NOT A MEASUREMENT') return {why:'label wrong: '+h.label};
     for(const c of h.cells){
       if(c.score<0||c.score>10) return {why:'score out of range in '+c.domain+': '+c.score};
-      if(!c.contrib.length||c.contrib.some(x=>!x.math)) return {why:'unprinted terms in '+c.domain}; }
-    return {ok:true,why:h.cells.length+' domains scored · all within [0,10] · math printed · label present'};
+      if(!c.contrib.length){ if(!c.zeroWhy) return {why:'zero cell without no-signal label in '+c.domain}; continue; }
+      if(c.contrib.some(x=>!x.math)) return {why:'unprinted terms in '+c.domain}; }
+    if(h.cells.length!==LeadOS.engine.DOMAINS.length) return {why:'G35: live map not complete ('+h.cells.length+' cells)'};
+    const zeroCell=h.cells.filter(c=>!c.contrib.length)[0];
+    if(zeroCell&&(!zeroCell.zeroWhy||zeroCell.zeroWhy.indexOf('no signal')===-1)) return {why:'zero cell without the no-signal label'};
+    if(zeroCell&&zeroCell.score!==0) return {why:'zero cell must score exactly 0, got '+zeroCell.score};
+    return {ok:true,why:h.cells.length+' domains (complete map) · all within [0,10] · math printed · zeros labeled no signal'};
+  }));
+  G.push(check('G10','module registry: all 9 expected modules registered (boot guard list)',()=>{
+    const EXPECTED=['util','events','store','engine','rules','correlate','health','playbooks','ui'];
+    const missing=EXPECTED.filter(ns=>!LeadOS[ns]);
+    return missing.length?{why:'missing modules: '+missing.join(', ')+' — boot guard must halt'}
+      :{ok:true,why:'util · events · store · engine · rules · correlate · health · playbooks · ui all registered'};
+  }));
+  /* ---- G31–G40 — correlation goldens (fixture-pinned, the pt-10 brief) ---- */
+  G.push(check('G31','DEATH_SPIRAL: 4 limbs → detected; 3 limbs → no pattern',()=>{
+    const r4=LeadOS.rules.runFull(LeadOS.engine.project(FX.fourLimbs(true)),FIXED);
+    const r3=LeadOS.rules.runFull(LeadOS.engine.project(FX.fourLimbs(false)),FIXED);
+    const p4=r4.patterns.active.filter(p=>p.name==='DEATH_SPIRAL')[0];
+    if(!p4||p4.sev!==5) return {why:'4 limbs did not produce DEATH_SPIRAL sev 5'};
+    if(r3.patterns.active.some(p=>p.name==='DEATH_SPIRAL')) return {why:'3 limbs produced the pattern'};
+    return {ok:true,why:'4 → detected sev 5 · 3 → dormant'};
+  }));
+  G.push(check('G32','REVENUE_AT_RISK: R12+R13+R34 → sev 4; R12+R13 only → no pattern',()=>{
+    const rAll=LeadOS.rules.runFull(LeadOS.engine.project(FX.revLimbs(true)),FIXED);
+    const rTwo=LeadOS.rules.runFull(LeadOS.engine.project(FX.revLimbs(false)),FIXED);
+    const f=rAll.findings.filter(x=>x.key==='CORR:REVENUE_AT_RISK')[0];
+    if(!f||f.sev!==4) return {why:'all 3 limbs should produce CORR:REVENUE_AT_RISK sev 4'};
+    if(rTwo.patterns.active.some(p=>p.name==='REVENUE_AT_RISK')) return {why:'fired on R12+R13 only'};
+    const dor=rTwo.patterns.dormant.filter(d=>d.name==='REVENUE_AT_RISK')[0];
+    if(!dor||dor.missing.join(',')!=='R34') return {why:'dormant must name exactly R34'};
+    return {ok:true,why:'all 3 → sev 4 · two → dormant missing R34 (must be all 3)'};
+  }));
+  G.push(check('G33','QUALITY_COLLAPSE: sev 5 when all 3 mfg rules fire; 2 of 3 → no pattern',()=>{
+    const rAll=LeadOS.rules.runFull(LeadOS.engine.project(FX.qualLimbs(true)),FIXED);
+    const rTwo=LeadOS.rules.runFull(LeadOS.engine.project(FX.qualLimbs(false)),FIXED);
+    const f=rAll.findings.filter(x=>x.key==='CORR:QUALITY_COLLAPSE')[0];
+    if(!f||f.sev!==5) return {why:'all 3 limbs should produce CORR:QUALITY_COLLAPSE sev 5'};
+    if(f.basis.join(' ').indexOf('sev 5 by EXCEPTION')===-1) return {why:'exception warrant not printed'};
+    if(rTwo.patterns.active.some(p=>p.name==='QUALITY_COLLAPSE')) return {why:'fired on 2 of 3'};
+    return {ok:true,why:'3 → sev 5 (exception printed) · 2 → dormant'};
+  }));
+  G.push(check('G34','LEADERSHIP_VACUUM: shared person → fires; different people → no pattern',()=>{
+    const rSame=LeadOS.rules.runFull(LeadOS.engine.project(FX.lvLimbs(false)),FIXED);
+    const pSame=rSame.patterns.active.filter(p=>p.name==='LEADERSHIP_VACUUM')[0];
+    if(!pSame) return {why:'consistent limbs did not fire'};
+    if(pSame.sharedPerson!=='ava') return {why:'shared subject should resolve to ava, got '+pSame.sharedPerson};
+    const rDiff=LeadOS.rules.runFull(LeadOS.engine.project(FX.lvLimbs(true)),FIXED);
+    if(rDiff.patterns.active.some(p=>p.name==='LEADERSHIP_VACUUM')) return {why:'fired for different personIds'};
+    if(rDiff.findings.some(f=>f.key==='CORR:LEADERSHIP_VACUUM')) return {why:'R45 fired across people'};
+    const dor=rDiff.patterns.dormant.filter(d=>d.name==='LEADERSHIP_VACUUM')[0];
+    if(!dor||!dor.blockedBy||dor.blockedBy.indexOf('ava')===-1||dor.blockedBy.indexOf('ben')===-1)
+      return {why:'blockedBy disclosure missing/names wrong'};
+    return {ok:true,why:'shared ava → fires · ava+ben → blocked, both named (entity must be shared)'};
+  }));
+  G.push(check('G35','heat bounds: ≤10, ≥0; no-finding domain scores 0 with the no-signal label',()=>{
+    const seed=projectSeed(FIXED);
+    const h=LeadOS.rules.runFull(seed.P,FIXED).heatmap;
+    let out=[]; 
+    h.cells.forEach(c=>{ if(c.score<0||c.score>10) out.push(c.domain+'='+c.score); });
+    if(out.length) return {why:'out of bounds: '+out.join(', ')};
+    if(h.cells.length!==LeadOS.engine.DOMAINS.length) return {why:'map incomplete'};
+    const zeros=h.cells.filter(c=>!c.contrib.length);
+    if(!zeros.length) return {why:'seed should show at least one no-signal domain'};
+    const bad=zeros.filter(c=>c.score!==0||!c.zeroWhy||c.zeroWhy.indexOf('no signal')===-1);
+    if(bad.length) return {why:'mislabeled zeros: '+bad.map(c=>c.domain).join(', ')};
+    return {ok:true,why:'all scores in [0,10] · '+zeros.length+' zero domains labeled "no signal", present in the map'};
+  }));
+  G.push(check('G36','correlate() purity: two calls identical; the projection is untouched',()=>{
+    const seed=projectSeed(FIXED);
+    const before=JSON.stringify(seed.P);
+    const a=LeadOS.rules.runFull(seed.P,FIXED), b=LeadOS.rules.runFull(seed.P,FIXED);
+    const after=JSON.stringify(seed.P);
+    if(before!==after) return {why:'P mutated by a read'};
+    return eq(a,b)?{ok:true,why:'byte-identical reads, zero side effects'}:{why:'two reads diverged'};
+  }));
+  G.push(check('G37','acknowledged insight does NOT suppress the R41 finding',()=>{
+    const P4=LeadOS.engine.project(FX.fourLimbs(true));
+    const r1=LeadOS.rules.runFull(P4,FIXED);
+    const ins=r1.insights.active.filter(i=>i.id==='insight:pattern:DEATH_SPIRAL')[0];
+    if(!ins) return {why:'pattern insight missing'};
+    const evts=FX.fourLimbs(true).concat([{seq:99,id:pad(99),at:FIXED,type:'insight.acknowledged',
+      payload:{insightId:ins.id,fingerprint:ins._fp,note:'noted'}}]);
+    const r2=LeadOS.rules.runFull(LeadOS.engine.project(evts),FIXED);
+    if(!r2.insights.suppressed.some(i=>i.id===ins.id)) return {why:'insight not suppressed by the ack'};
+    if(!r2.findings.some(f=>f.key==='CORR:DEATH_SPIRAL')) return {why:'R41 finding was suppressed by insight.acknowledged — suppression belongs on the findings path only'};
+    return {ok:true,why:'insight suppressed · CORR:DEATH_SPIRAL still fires — the two lifecycles are separate'};
+  }));
+  G.push(check('G38','benchmark gap (brief numbers): 790/1000 fires · 810 quiet · missing kpi → silent',()=>{
+    const mk=v=>{
+      const list=[{type:'benchmark.set',payload:{metric:'revenue',value:1000,unit:'USD',source:'src',period:'2026'},at:FIXED-10*DAY}];
+      if(v!==null) list.push({type:'fin.kpi.logged',payload:{metric:'revenue',value:v},at:FIXED});
+      return LeadOS.engine.project(wrap(list)); };
+    const fires=Px=>LeadOS.correlate.run(Px,FIXED).insights.all.some(i=>i.kind==='benchmark-gap');
+    if(!fires(mk(790))) return {why:'790/1000 (79%) did not fire'};
+    if(fires(mk(810))) return {why:'810/1000 (81%) fired'};
+    const noKpi=LeadOS.correlate.benchmarkCompare(mk(null))[0];
+    if(noKpi.comparable!==false||fires(mk(null))) return {why:'missing kpi must keep the comparison silent, not inferred'};
+    return {ok:true,why:'79% fires · 81% quiet · missing series stays silent'};
+  }));
+  G.push(check('G39','cluster stability: same findings → same cluster ids, key-sorted joins',()=>{
+    const seed=projectSeed(FIXED);
+    const a=LeadOS.rules.runFull(seed.P,FIXED).clusters.list;
+    const b=LeadOS.rules.runFull(seed.P,FIXED).clusters.list;
+    if(!a.length) return {why:'no clusters in seed to stabilize'};
+    if(JSON.stringify(a.map(c=>c.id))!==JSON.stringify(b.map(c=>c.id))) return {why:'ids not deterministic across reads'};
+    for(const c of a){ const parts=c.id.split('+'); const sorted=parts.slice().sort();
+      if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
+    return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
+  }));
+  G.push(check('G40','extended buildSeed fires all 45 rules (patterns seeded too)',()=>{
+    const seed=projectSeed(FIXED);
+    const r=LeadOS.rules.runFull(seed.P,FIXED);
+    const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
+    const missing=[];
+    for(let i=1;i<=45;i++) if(!fired['R'+i]) missing.push('R'+i);
+    if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
+    return {ok:true,why:'45/45 — the seed already contains all 4 DEATH_SPIRAL conditions (attrition window, declining engagement, quota shortfall, compliance-cadence overdue) plus the other pattern limbs'};
   }));
   return {checks:G,P:P,raw:raw};
 }
@@ -2348,12 +2671,13 @@ const CLAIMS=[
   {id:'C4',text:'Trend discipline: ≥3 points, sev-3 ceiling with disclosed clamp',by:['T5','T17']},
   {id:'C5',text:'Heat implements the pt-7 formula exactly; math printed; "composite signal, not a measurement"',by:['T7','T8','T9','G9']},
   {id:'C6',text:'Benchmark-gap: ≤80% trigger on fin.kpi/product.metric only; MEDIUM; source printed, unverified',by:['T10']},
-  {id:'C7',text:'Insights: stable ids, three kinds, printed promotion; acks suppress per read and stay audited',by:['T11','T12','T13','G8']},
+  {id:'C7',text:'Insights: stable ids, three kinds, printed promotion; acks suppress per read and stay audited — fingerprinted acks resurface when constituents change state',by:['T11','T12','T13','T27','G8','G37']},
   {id:'C8',text:'Named patterns fire iff every limb fires; windows evaluated as printed sub-claims',by:['T14']},
   {id:'C9',text:'All 40 individual rules + all 5 correlation rules exercised by one deterministic seed',by:['T18','T19']},
   {id:'C10',text:'The registry rejects bad payloads; the import gate rewires and counts skips',by:['T15','T16','G3']},
   {id:'C11',text:'R41–R45 fire iff their pattern is active, carry literal CORR keys, and the correlation pass receives the already-computed (unsuppressed) list; suppression is audited and reversible; engine faults surface loudly',by:['T19','T20','G7']},
-  {id:'C12',text:'Interactive playbooks prefill from the log and emit only registry-valid event specs — nothing is written without review; escalation and supersede semantics hold',by:['T21','T22','G3']}
+  {id:'C12',text:'Interactive playbooks prefill from the log and emit only registry-valid event specs — nothing is written without review; escalation and supersede semantics hold',by:['T21','T22','G3']},
+  {id:'C13',text:'Correlation goldens hold: all-limb boundaries, shared-entity enforcement, heat bounds with labeled zeros, deterministic ids, purity, 45/45 seed coverage',by:['G31','G32','G33','G34','G35','G36','G37','G38','G39','G40','T23','T24','T25','T26']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -2713,7 +3037,7 @@ function playLine(play,playNone){
 function finCard(f){
   const age=f.evidenceAt===null?'undated':U.days(Date.now(),f.evidenceAt)+'d';
   const isCorr=/^R4[1-5]$/.test(f.rule), isEng=f.rule==='ENG';
-  return '<div class="fin">'+
+  return '<div class="fin" data-fkey="'+esc(f.key)+'">'+
     '<div class="top">'+SEVCHIP(f.sev)+'<span class="rule">'+f.rule+'</span>'+CONFC(f.conf)+
       (isCorr?'<span class="pill">correlation rule</span>':'')+
       (isEng?'<span class="sev s5">engine fault</span>':'')+
@@ -2745,18 +3069,22 @@ function finCardSup(f){
 }
 function insightCard(i){
   const acked=!!i.suppressedBy;
-  const keys=i.findingKeys.length?i.findingKeys.join('\n'):'(none — computed from events, not from findings)';
-  return '<div class="ins k-'+i.kind+(acked?' acked':'')+'" data-ins="'+esc(i.id)+'">'+
+  const keys=i.findingKeys.length
+    ?i.findingKeys.map(k=>'<button class="pill" data-act="gotofinding" data-key="'+esc(k)+'" title="scroll to the finding">'+esc(k)+'</button>').join(' ')
+    :'<span class="small muted">(none — computed from events, not from findings)</span>';
+  return '<div class="ins k-'+i.kind+(acked?' acked':'')+'" data-ins="'+esc(i.id)+'" data-fp="'+esc(i._fp||'')+'">'+
     '<div class="top">'+SEVCHIP(i.severity)+'<span class="kind">'+i.kind+'</span><h3>'+esc(i.title)+'</h3></div>'+
     '<div class="body">'+esc(i.body)+'</div>'+
-    '<div class="keys">'+esc(keys)+'</div>'+
+    '<div class="keys" style="display:flex;gap:6px;flex-wrap:wrap">'+keys+'</div>'+
     '<div class="foot">'+playLine(i.play,null)+
       '<span class="conf" title="stable insight id">'+esc(i.id)+'</span>'+
       (acked
         ?'<span class="pill">suppressed by event '+esc(i.suppressedBy)+'</span>'+
+         (i._legacyAck?'<span class="pill">fingerprint-less ack — suppresses by id (pre-fingerprint doctrine)</span>':'')+
          (i._ackNote?'<span class="pill">note: '+esc(i._ackNote)+'</span>':'')+
          '<span class="pill">acknowledged '+U.iso(i._ackAt)+'</span>'
         :'<button class="btn ghost sm" data-act="ack" data-id="'+esc(i.id)+'">'+icon('check',12)+' acknowledge</button>')+
+      (i._staleAck?'<span class="pill" style="border-color:rgba(179,41,30,.55);color:var(--accent)">ack stale since '+U.iso(i._staleAck.at)+' — constituents changed state; surfaced again</span>':'')+
     '</div>'+
     '<div class="basis"><div class="lbl">contract (7 spec fields): id · kind · title · body · findingKeys['+i.findingKeys.length+'] · severity '+i.severity+' · play '+(i.play===null?'null':i.play)+' · suppressedBy '+(i.suppressedBy||'null')+'</div></div>'+
     (ui.ackOpen===i.id
@@ -3139,9 +3467,22 @@ document.addEventListener('click',e=>{
   else if(act==='ackdo'){
     const host=b.closest('.ins'), input=host&&host.querySelector('[data-acknote]');
     const note=input?input.value.trim():'';
-    try{ LeadOS.store.append('insight.acknowledged',{insightId:b.dataset.id,note:note});
-      ui.ackOpen=null; toast('insight.acknowledged appended'); render(); }
+    const fp=host&&host.dataset?host.dataset.fp:'';
+    const payload={insightId:b.dataset.id,note:note};
+    if(fp) payload.fingerprint=fp;
+    try{ LeadOS.store.append('insight.acknowledged',payload);
+      ui.ackOpen=null; toast('insight.acknowledged appended (fingerprinted)'); render(); }
     catch(err){ toast(err.message); } }
+  else if(act==='acktoday'){
+    const payload={insightId:b.dataset.id,note:''};
+    if(b.dataset.fp) payload.fingerprint=b.dataset.fp;
+    try{ LeadOS.store.append('insight.acknowledged',payload);
+      toast('acknowledged — '+b.dataset.id.slice(0,42)); render(); }
+    catch(err){ toast(err.message); } }
+  else if(act==='gotofinding'){
+    ui.chip='ALL'; ui.focusFinding=b.dataset.key;
+    if(location.hash!=='#/signals') location.hash='#/signals'; else render();
+  }
   else if(act==='capsave'){
     const p=collectCapture(); if(!p) return;
     try{ LeadOS.store.append(ui.capType,p); toast(ui.capType+' appended'); render(); }
