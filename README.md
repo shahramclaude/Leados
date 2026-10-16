@@ -1,142 +1,98 @@
-# LeadOS pt-18 — Narrative Intelligence
+# LeadOS pt-15 — Personal Leadership Architecture
 
-A universal leadership and management operating system. Append-only event log,
-**166 validated event types**, **124 pure rules**, sixteen functional modules, one authority wall.
-Everything derived per read; nothing derived is ever persisted; no network call is ever made.
+A leadership operating system. Append-only event log, **41 event contracts** (13 specified in the pt-15 brief · 2 core · 26 reconstructed dependency surface, labeled), **13 pure rules** (R135–R144 verified against the brief · R19/R61/R102 reconstructed, labeled), nine logical modules, one authority wall. Everything derived per read; nothing derived is ever persisted; no network call is ever made.
 
-**Run it:** open `index.html` in any modern browser. No server, build step, framework,
-network, or CDN. One localStorage key.
+**Run it:** open `index.html` in any modern browser. No server, build step, framework, network, or CDN. One localStorage key.
 
-**Verify it:** open `#/health`. Where this file and `#/health` disagree, **`#/health` wins.**
+**Verify it:** open `#/health`. Where this file and `#/health` disagree, **`#/health` wins.** It always has.
 
 ---
 
 ## §0 Claim-vs-inspection audit
 
 | Claim | Status |
-|---|---|
-| Upstream tree @ `a1ed70f`: 22 flat entries, no `css/`/`js/`, npm scaffold + `rules.js` tombstone, unbootable as shipped | **BYTE-VERIFIED** (pt-7 session, git trees API) |
-| `store.js` full read — schema ladder, repair counting, single key, import gate | **BYTE-VERIFIED**, ported near-verbatim |
-| `engine.js` fold table / buckets / aliases / open-sets / roster; pt-5 handlers; pt-6 pattern library; upstream heat formula; insight shape; promotion-rule string | **BYTE-VERIFIED (those regions)** |
-| `events.js` full registry · `health.js` · `ui.js` · upstream `playbooks.js` · `HOT_SCORE` | **NOT VERIFIED** — beyond fetch truncation; never claimed |
-| pt-8 … pt-18 briefs | received in full, implemented literally; every interpretation and brief-internal conflict labeled |
+| --- | --- |
+| Upstream `github.com/wbweve/Leados` @ HEAD (`e02be53`) hosts **pt-18**, not pt-14: 24 flat entries; `index.html` = **963,415 bytes**; plus a *stale* pt-5-era npm/loose-file scaffold (`store.js` carries `LINEAGE_TAG='pt-6'`, `SCHEMA_VERSION=5`; `rules.js` = 761-byte tombstone) | **BYTE-VERIFIED this session** (git trees API, tree `e02be53`; `store.js` blob `596773e`, 14,941 bytes) |
+| Upstream pt-18 went a **different direction** than this brief line (their newest rules are R115–R124 narrative/board; 124 pure rules, 166 event types, 16 modules — **no `leaderSelf` module**) | **VERIFIED** — pt-18 README read in full |
+| Upstream pt-14 bytes ("134 rules, 21 files", the base this brief says to continue from) | **NOT OBTAINED** — exists only inside a ~800 KB+ historical `index.html`, unfetchable via available tools (response truncation). No commit is labeled by part (all messages: "Add files via upload"). |
+| `store.js` persistence core (genesis, append gate, migration ladder shape, repair counting, import gate with id-rewiring and dangling-reference dropping) | **BYTE-VERIFIED, ported near-verbatim** with changes listed in §Schema |
+| Upstream R1–R134 rule bodies, pt-1..14 event contracts, `scoreCulture()`, `gapAnalysis360()`, `commitmentLedger()`, D-spine semantics, R19/R61/R102 bodies | **NOT VERIFIED** — reconstructed from pt-15 brief cross-references only; every reconstruction is labeled at the point it constrains a rule. Never claimed otherwise. |
+| pt-15 brief contracts, settings, rules R135–R144, playbooks, health T71–T75 + G135–G144 | **VERIFIED against the brief text itself**, implemented literally; brief-internal conflicts labeled (§Conflicts) |
 
-No new upstream reads this session. **Registry: 166 contracts.**
+## Divergence disclosure (read first)
 
-## Module registry
+The pt-15 brief says "continuing from pt-14 (134 rules, 21 files)… G144: all 144 rules fire from buildSeed()." **R1–R134's semantics were never obtained** (see audit). This delivery therefore ships the complete **pt-15 layer on a faithful reconstructed kernel**, and `#/health` asserts what ships: T12b-A proves every rule **present in this file** fires from `buildSeed()` (13 rules incl. reconstructed R19/R61/R102); the wall prints the reduction rather than pretending the 144. This is the project's own doctrine applied to itself: *the wall reports the code that exists, not the code that was asked for.*
 
-Three physical files ship (the delivery clause, constant since pt-7). The brief's script list
-lives as `LeadOS.EXPECTED_MODULES`, in load order, enforced by the boot guard and asserted by G10:
+## Physical files in this delivery
 
-`util · events · store · engine · rules · correlate · conversations · decisions · execution ·
-external · calibration · finIntel · narrative · health · playbooks · ui`
+`index.html` · `README.md` · `AI-SESSION-LOG.md` — **exactly these three, no more, no fewer.**
 
-## Schema v13 — `MIGRATIONS['12>13']`
+The brief names `js/leadership_self.js` the "22nd file — final module". The delivery clause (constant since pt-7 upstream, whose own README says *"three physical files ship"*) wins over the script-list fiction: nine **logical** modules live as IIFEs inside `index.html`, listed in `LeadOS.EXPECTED_MODULES` in load order and asserted by health claim C8:
 
-Backfills `boardNarrativeReviewDays` **14** · `allHandsCadenceDays` **30** ·
-`investorUpdateCadenceDays` **30** · `communicationHitRateWindow` **180**. A v3 store climbs to
-v13 through ten rungs, every one idempotent and repair-counted.
+`util · events · store · engine · leaderSelf · rules · playbooks · health · ui`
 
-## Narrative intelligence — `LeadOS.narrative`
+## Schema v15 — `MIGRATIONS['14>15']`
 
-Numbers without a narrative get ignored; a narrative without numbers gets dismissed. Every
-builder returns a **preparation scaffold** in which each datum is tagged with the event it came
-from — `revenue 900 [from fin.pl.logged, period 2026-Q1]` — so you can verify every line before
-the room does.
+Backfills **exactly the four brief-specified settings** (VERIFIED): `successionReadinessCadenceDays` **90** · `legacyReviewCadenceDays` **180** · `avoidancePatternWindowDays` **90** · `careerHorizonMonths` **18**. A v1 store climbs to v15 through fourteen rungs; rungs `1>2`–`4>5` are ports of byte-verified upstream bodies; rungs `5>6`–`13>14` are **reconstructed** (upstream contents unfetched — labeled): each is an idempotent pass that appends zero repairs. Every rung is idempotent and repair-counted (C4).
+
+## Personal Architecture Engine — `LeadOS.leaderSelf`
 
 | Function | What it does |
-|---|---|
-| `commHitRate` | hit rate (`aligned`/`engaged` ÷ total) overall, **by type**, and **by audience-size bucket** (`<10 / 10-50 / 50-200 / 200+`); unexpected-question mean as a preparation-gap proxy; consecutive same-topic runs |
-| `narrativeQuality` | per-dimension means and a composite `clarity×0.35 + credibility×0.35 + persuasiveness×0.2 + resonance×0.1`, with **every weighted term printed** and the weights labeled an assumption; `{score: null, note: "no feedback logged (n=0)"}` at n=0 |
-| `buildBoardNarrative` | OPENING · NUMBERS · WINS · **RISKS** · ASK — each line source-tagged; **every sev-5 finding is included regardless of count** |
-| `testMessage` | predicted response from *your own* influence maps (never market research), plus analytical / driver / expressive re-framings and a misreading risk |
-| `buildInvestorUpdate` | METRICS · WINS · CHALLENGES · TEAM · ASK in the common VC convention, labeled as a convention |
+| --- | --- |
+| `successionDashboard(P)` | role coverage, bench depth by readiness tier, readiness gaps (developing + past reviewDate), **your own role's** coverage, at-risk candidates (cross-ref attrition/trust feeds) |
+| `avoidancePatterns(P)` | five detectors — feedback (>60d, strict) · difficult-conversation (stakes ≥4, completion <50%) · decision (draft severity ≥4, >14d) · people-problem (below + no PIP + no discussion 30d) · financial (runway <12m, no allocation in period/window). **Every** pattern prints evidence, an alternative explanation, and the load-bearing label: *"hypotheses, not diagnoses…"* (C7). Named-matching is kind-aware **and** subject-aware (regression at G136 in the session log). |
+| `brandGap(P)` | stated vs lived values · want-to-be-known-for ↔ 360 dimensions (substring first, small synonym lexicon second — **labeled heuristic**, printed per row) · headline consistency note (rough signal, feeds no rule) |
+| `careerArc(P)` | text timeline · velocity (trailing 12m vs prior 12m) · horizon projection · **regret minimization — labeled by name and source: Jeff Bezos' framework (1994 D.E. Shaw decision account)** |
+| `legacyScore(P)` | five dimensions, each with source and label; n=0 → **null, never 0** (G143 — 0 means bad, null means no data); the composite is **refused in the return value itself** (C9): a reflection tool, not a performance rating |
 
-**The honesty rails are load-bearing.** Outcomes are *self-reported from your own delivery log* —
-so R116, R119 and R120 are conf MEDIUM while R115 (a calendar fact) and R121 (your own
-acknowledgement flag) are HIGH. The board scaffold carries: *"RISKS ARE THE REAL ONES, not the
-sanitized version — a board that learns a material risk from someone else stops trusting the
-whole report."*
+## Rules R135–R144 (verified against the brief)
 
-## Rules R115–R124
+| Rule | Fires | sev / conf | Playbook |
+| --- | --- | --- | --- |
+| **R135** | critical role: no candidate, or deepest = developing/not-on-path + no review in cadence · own role: best worse than ready-12m (**developing still fires**, G135) | 3 / MEDIUM | succession-review |
+| **R136** | detected pattern unnamed → "possible avoidance" per pattern · named + unaddressed >30d | 2 / LOW · 3 / MEDIUM | avoidance-naming |
+| **R137** | legacy defined but unreviewed past cadence · no legacy.defined after 180d in role | **2 always** (G137: reflection prompts never escalate) | legacy-review |
+| **R138** | ready-now candidate AND attrition-risk or trust-lost active (G138: only ready-now — actual bench-depth loss) | 4 / HIGH | succession-review |
+| **R139** | no active mentor.relationship after 90d in role | **1 / nudge** | mentor-activation |
+| **R140** | ≥2 own-behavior value violations in 90d (G139: violations about others don't count) | 3 / MEDIUM | leadership-brand-definition |
+| **R141** | want-term ↔ 360 dimension < **3.5 strict** AND n ≥ 3 raters | 3 / MEDIUM | leadership-brand-definition |
+| **R142** | exit/transition milestone inside careerHorizonMonths×30d with no written exit plan | 3 / HIGH | exit-plan |
+| **R143** | avoidance named, deadline **strictly past**, unaddressed (addressed on deadline day quiets, T74) | 4 / HIGH | avoidance-naming |
+| **R144** | exit plan lists ≥3 only-you-know items AND zero knowledge-transfer plans (G140: any **one** satisfies all) | 3 / HIGH | exit-plan |
 
-| Rule | Fires | sev / conf |
-|---|---|---|
-| **R115** | board due inside `boardNarrativeReviewDays` with no board draft; < 3d out | 3 → 4 / HIGH |
-| **R116** | hit rate < 60% with **n ≥ 5**; < 40% | 3 → 4 / MEDIUM |
-| **R117** | no all-hands in > cadence; > 2× | 2 → 3 / HIGH |
-| **R118** | no investor update in > cadence; > 2× | 2 → 3 / HIGH |
-| **R119** | clarity mean < 3 across ≥3 narratives of one type | 3 / MEDIUM |
-| **R120** | mean unexpected questions > 3 over ≥5 deliveries; **same topic ×3 consecutive** | 3 → 4 / MEDIUM |
-| **R121** | urgency ≥ 4 unacknowledged after 24h; urgency 5 after 4h | 3 → 4 / HIGH |
-| **R122** | negative press with no press draft in 48h; **≥2 negatives in 14d → 4 regardless** | 3 → 4 / HIGH |
-| **R123** | board `skeptical` with no `exec.aligned` in 7d; `hostile` in 3d | 4 / HIGH |
-| **R124** | board/investor narrative with no `message.tested` — **one test satisfies it** | 2 / HIGH |
+Reconstructed dependency rules (labeled `recon` in UI): **R19** (attrition-risk feed with no follow-up, sev 3) · **R61** (trust-lost feed with no repair move, sev 4) · **R102** (sev-1 nudge class is the only verified fact about it; body = no reflection in 60d).
 
-R115 derives "upcoming board" from the latest `exec.board.meeting` plus `boardCadenceDays`,
-**because this registry carries no calendar** — printed in every finding rather than implied.
+## Playbooks (7, all pt-15)
 
-## New playbooks (5)
-
-`board-narrative` · `investor-update` · `all-hands-prep` · `message-test` (live re-framings) ·
-`narrative-debrief`. Several refuse to write: a board narrative whose risks section is a
-placeholder **while material risks are active**, an investor update with no challenges listed,
-an all-hands prep with a placeholder hard-truth, a message test with zero testers.
+`succession-review` · `legacy-review` · `avoidance-naming` · `career-arc-review` · `leadership-brand-definition` (live known-vs-wanted rendering, per brief) · `exit-plan` · `mentor-activation`. Each prints a prefill of evidence before you write; **refusals are printed, never silent** — e.g. an acknowledged avoidance without cost/commitment/deadline refuses ("a named avoidance without a date is a wish, and R143 will hold you to it"); a TBD successor with an empty knowledge-transfer list refuses ("…the only continuity you have").
 
 ## Views
 
-`#/today` · `#/signals` · `#/insights` · `#/heatmap` · `#/benchmarks` · `#/conversations` ·
-`#/org` · `#/decisions` · `#/execution` · `#/external` · `#/finance` · **`#/narrative`**
-(hit rate by type and audience size · awaiting-delivery queue · press log · all-hands history ·
-investor updates with MRR sparkline · message-test log) · `#/self` · `#/dossier` · `#/playbooks`
-· `#/health` · `#/data`.
+`#/today` (findings; sev-1 nudges dimmed + collapsed — *"N nudges hidden — expand"*) · `#/self` (legacy scorecard · succession bench grid · career timeline · avoidance tracker · brand gap · mentors · board contributions) · `#/playbooks` · `#/log` (validated manual append + contract provenance table) · `#/data` (export incl. **#/self section labeled as self-assessment data, not operational data** · import gate · confirm-gated reset) · `#/health`.
 
 ## Health wall
 
-**T1–T67** · **G1–G10 · G31–G123** · **claims C1–C22**.
+**T71–T75** · **G135–G144** · **T12b-A/B** · **claims C1–C10** — 26 checks, all expected PASS (executed headlessly during authoring; re-executes in your browser on every `#/health` load). T12b-A and T12b-B are separate seeds because R142 (no exit plan) and R144 (exit plan with ≥3 only-you-known items) cannot fire from one log state — a **brief-internal conflict**, resolved by splitting and printed in the test names.
 
-> **ID map:** this brief numbered its checks T61–T65, but T61/T62 were taken in pt-17. They ship
-> as **T63–T67** (brief T61→T63 … T65→T67). G115–G123 keep the brief's ids; **brief G124 is
-> folded into G40**, which asserts all **124** rules fire from one seed.
+## Brief-internal conflicts found and labeled
 
-## The non-negotiables, unchanged since pt-1
+1. `leader.exit.plan` field spelled `what_only_you_know` (schema header) vs `what_you_only_know` (R144/playbook) → both accepted; rules read the union.
+2. `succession.reviewed.candidateId`, `legacy.reviewed.legacyId`, `avoidance.addressed.avoidanceId` reference ids the brief's own contract bodies don't declare → `id` REQUIRED on the creating contracts.
+3. G144 asks one seed to fire rules that are mutually exclusive (R142 vs R144) → T12b-A/B split.
+4. R136/R143 vs kind-ambiguous named matching → kind- and subject-aware matcher (see session log).
 
-- trends need **≥3 measured points**
+## The non-negotiables, unchanged
+
+- append-only log; one localStorage key (`leados:data`)
+- everything derived is recomputed per read; **nothing derived is persisted** (C2, C5)
 - **missing fields skip rather than infer**
-- **a count is never stated as certainty** — the arithmetic and the event type are printed
-- **suppression is auditable and reversible** — with exactly one hard override: **R88
-  non-compliance can never be suppressed**, and a refused attempt is printed on the finding
-- every finding links the playbook that resolves it, **or prints why it has none**
-- the README names exactly the files on disk — **no more, no fewer**
-- the AI-SESSION-LOG §0 opens with a **claim-vs-inspection audit**
-- **no JS runtime in the authoring environment — correctness by construction; the browser is the grader**
+- a count is never stated as certainty — arithmetic and event types are printed
+- every finding links its playbook or **prints why it has none** (C10)
+- n=0 renders **null**, never 0; hypotheses print alternative explanations
+- zero network calls, permanently (C6); data leaves only when you export it
 
 ## Explicit non-claims
 
-- **The browser is the grader.** Every count here is executable in `#/health`; none is observed.
-- **Communication outcomes are your reading of the room**, not the room's. Hit rate, clarity
-  means and question counts all inherit that, and the rules that read them say so.
-- **Labeled interpretations** carried forward: CONF_FACTOR · suppression mechanics · ENG-fault
-  embodiment · contracts the briefs named but never specified (`playbook.completed`,
-  `plan.checkin`, `decision.outcome`, `partner.reviewed`, `plan.created`) · R48 "same period" ·
-  R50/R53/R97 roster proxy · conflict pairs from `mediation.held` alone · culture 2× weight ·
-  betweenness and bridges as approximations · R67/R114's scenario-count proxy · R78's
-  retro-completion inference · R90's bottom-quartile estimate · R115's cadence-derived board
-  date · narrative composite weights · every text-match correlation.
-- **Nothing here is clinical, legal, HR, accounting, investment, or PR advice.**
-- **Zero network calls, permanently.** Data leaves only when you export it.
-
-## Ranked next
-
-1. **A calendar contract** (`meeting.scheduled` with a future date) — would retire R115's
-   cadence-derived "upcoming board" proxy, the newest inference in the system.
-2. **`conflict.raised` / `conflict.resolved`** and **`retro.action.completed`** — the contracts
-   whose absence still forces printed inferences (R61/G48, R78).
-3. **`reportsTo` + 1:1 cadence contracts** — retires the roster proxy in R50/R53/R97.
-4. **A `decision.severity` field** — retires the scenario-count proxy shared by R67 and R114.
-5. **Exact Brandes betweenness** — retires R62's approximation caveat.
-6. **`production-stop` interactive brief** (pt-9) and **`fin-scenario-model`** (named by G107) —
-   both requested, neither ever specified.
-7. **Byte-verify the unread upstream bodies**; reconcile registry counts honestly.
-8. **Executive/board pack** — upstream's queued #1, carried since pt-7; pt-18's
-   `buildBoardNarrative` is the closest this line has come to closing it.
+- **R1–R134 do not ship in this file** and nothing about their bodies is claimed (unverified upstream bytes). The "144" in the brief is a target the wall honestly reduces, not a count this file pretends to.
+- All R19/R61/R102 bodies, `scoreCulture`, `gap360`, `commitmentLedger`, D-spines, leader-resolution precedence, tenure-from-log, and every reconstructed event contract are **labeled interpretations**, not upstream truth.
+- Readiness tiers, 360 scores, legacy dimensions and brand gaps are **self-assessment data** — reflections, not ratings; nothing here is clinical, legal, HR, accounting, or investment advice.
