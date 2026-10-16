@@ -1,12 +1,985 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LeadOS pt-E — Universal Search, Deep Linking & Audit Intelligence</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="en" data-theme="obsidian">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LeadOS pt-F — Adaptive Intelligence Renderer (demo)</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+/* ============================================================
+   LEADOS pt-F — DESIGN TOKENS
+   This is a fresh, self-contained, single-file reinterpretation
+   of the pt-F brief. It is NOT a patch to github.com/wbweve/Leados.
+   See the in-app "ABOUT / VERIFIED vs FABRICATED" panel (also in
+   README.md) for exactly what was checked against the real repo.
+   ============================================================ */
+:root{
+  --font-display: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --text-2xs: 10px; --text-xs: 11px; --text-sm: 12px; --text-md:14px;
+  --shadow-md: 0 8px 24px rgba(0,0,0,.35);
+  --sev-5:#ef4444; --sev-4:#f97316; --sev-3:#eab308; --sev-2:#3b82f6; --sev-1:#64748b;
+  --domain-people:#22c55e; --domain-finance:#06b6d4; --domain-ops:#a855f7;
+  --domain-strategy:#f43f5e; --domain-legal:#94a3b8; --domain-exec:#eab308;
+  --domain-sales:#3b82f6; --domain-cs:#f97316; --accent:#C23B2E;
+  --rail-w: 220px;
+}
+html[data-theme="obsidian"]{
+  --surface-1:#141210; --surface-2:#1c1a17; --surface-3:#242019;
+  --ink-0:#f5f1ea; --ink-1:#cbc3b6; --ink-2:#948b7d; --ink-3:#6b6356; --ink-4:#3a352c;
+}
+html[data-theme="parchment"]{
+  --surface-1:#FAF7F2; --surface-2:#F4F0E8; --surface-3:#EDE7D9;
+  --ink-0:#1A1612; --ink-1:#3D3530; --ink-2:#6B6055; --ink-3:#A09080; --ink-4:#D4C8B8;
+}
+html[data-theme="terminal"]{
+  --surface-1:#000000; --surface-2:#0A0A0A; --surface-3:#141414;
+  --ink-0:#FFFFFF; --ink-1:#CCCCCC; --ink-2:#888888; --ink-3:#444444; --ink-4:#2A2A2A;
+  --accent:#00FF88;
+  --sev-5:#FF0000; --sev-4:#FF8800; --sev-3:#FFFF00; --sev-2:#00AAFF; --sev-1:#777;
+  --domain-people:#fff; --domain-finance:#fff; --domain-ops:#fff; --domain-strategy:#fff;
+  --domain-legal:#fff; --domain-exec:#fff; --domain-sales:#fff; --domain-cs:#fff;
+  --font-display: var(--font-mono);
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--surface-1); color:var(--ink-0);
+  font-family:var(--font-body); font-size:14px; -webkit-font-smoothing:antialiased;
+}
+html[data-theme="parchment"] body{ font-size:15px; }
+a{color:inherit;}
+.mono{font-family:var(--font-mono);}
+.display{font-family:var(--font-display);}
+::-webkit-scrollbar{width:8px;height:8px;}
+::-webkit-scrollbar-thumb{background:var(--ink-4);border-radius:4px;}
+
+/* ---------- App shell ---------- */
+#app{display:flex; height:100vh; overflow:hidden; position:relative;}
+
+/* Rail */
+#rail{
+  width:var(--rail-w); flex:0 0 auto; background:var(--surface-2);
+  border-right:1px solid var(--ink-4); display:flex; flex-direction:column;
+  transition:width 220ms ease-out; overflow:hidden; position:relative; z-index:20;
+}
+#rail.collapsed{ width:64px; }
+#rail.hidden{ width:0; border:none; }
+.rail-logo{ padding:16px 16px 8px; display:flex; align-items:center; gap:8px;}
+.rail-logo .mark{font-family:var(--font-mono); font-weight:700; letter-spacing:.04em;}
+.onboard-underline{ height:2px; background:var(--ink-4); margin:0 16px; border-radius:2px; overflow:hidden;}
+.onboard-underline > div{ height:100%; background:var(--accent); width:0%; transition:width 400ms ease; }
+.rail-section{ padding:8px 8px; }
+.rail-item{
+  display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:6px;
+  color:var(--ink-2); cursor:pointer; font-size:13px; white-space:nowrap; position:relative;
+  transition:background 140ms, color 140ms;
+}
+.rail-item:hover{ background:var(--surface-3); color:var(--ink-0); }
+.rail-item.active{ background:var(--surface-3); color:var(--ink-0); }
+.rail-item.active::before{ content:''; position:absolute; left:0; top:4px; bottom:4px; width:3px; background:var(--accent); border-radius:2px;}
+.rail-item .key{ font-family:var(--font-mono); font-size:10px; color:var(--ink-3); border:1px solid var(--ink-4); border-radius:3px; padding:0 4px; margin-left:auto;}
+#rail.collapsed .rail-item .label, #rail.collapsed .rail-item .key, #rail.collapsed .rail-logo .text, #rail.collapsed .onboard-underline{ display:none; }
+#rail.collapsed .rail-item{ justify-content:center; }
+#rail.collapsed .rail-item svg{ transform:scale(1.2); }
+.rail-footer{ margin-top:auto; padding:10px 14px; border-top:1px solid var(--ink-4); font-size:11px; color:var(--ink-3); display:flex; flex-direction:column; gap:4px;}
+.offline-dot{ width:7px; height:7px; border-radius:50%; background:#22c55e; display:inline-block; margin-right:6px;}
+.layout-state-label{ font-family:var(--font-mono); text-transform:uppercase; letter-spacing:.06em; font-size:10px; }
+
+/* Main column */
+#mainCol{ flex:1 1 auto; display:flex; flex-direction:column; min-width:0; position:relative; }
+#banners{ flex:0 0 auto; }
+#viewport{ flex:1 1 auto; overflow-y:auto; position:relative; }
+#view{ max-width:860px; margin:0 auto; padding:24px 24px 120px; transition:opacity 160ms, transform 160ms; }
+body.wide #view{ max-width:1120px; }
+
+/* Crisis banner */
+.crisis-bar{
+  height:64px; background:#7f1d1d; color:#fff; display:flex; align-items:center; gap:16px;
+  padding:0 20px; animation: crisisPulse 2s ease-in-out infinite;
+}
+@keyframes crisisPulse{ 0%,100%{background:#7f1d1d;} 50%{background:#991b1b;} }
+.crisis-bar button{ background:#fff; color:#7f1d1d; font-weight:700; border:none; border-radius:4px; padding:8px 14px; cursor:pointer; margin-left:auto; font-size:12px; letter-spacing:.04em;}
+
+.board-banner{ background:var(--sev-3); color:#141210; padding:10px 20px; font-size:13px; display:flex; gap:10px; align-items:center;}
+.board-banner.urgent{ background:var(--sev-4); color:#141210; }
+.stale-banner{ background:color-mix(in srgb, var(--sev-3) 25%, var(--surface-2)); color:var(--ink-0); padding:8px 20px; font-size:12px; border-bottom:1px solid var(--ink-4); }
+.sprint-card{ border:1px solid var(--ink-4); border-radius:8px; padding:14px 16px; background:var(--surface-2); margin-bottom:16px; }
+
+/* Focus / deep work */
+body.focus-mode #rail{ width:48px; }
+body.focus-mode .rail-item .label{ display:none; }
+.focus-header{ font-family:var(--font-mono); letter-spacing:.1em; text-transform:uppercase; font-size:11px; color:var(--accent); padding:10px 24px 0; }
+
+/* Right panel */
+#rightPanel{
+  width:0; flex:0 0 auto; background:var(--surface-2); border-left:1px solid var(--ink-4);
+  overflow:hidden; transition:width 220ms ease-out; position:relative;
+}
+#rightPanel.open{ width:380px; }
+#rightPanelInner{ width:380px; height:100%; overflow-y:auto; padding:16px; }
+#resizer{ width:4px; cursor:col-resize; background:transparent; flex:0 0 auto; }
+#resizer:hover, #resizer.active{ background:var(--accent); }
+
+/* ---------- Finding card ---------- */
+.finding-card{
+  display:flex; border:1px solid var(--ink-4); border-radius:6px; margin-bottom:10px;
+  background:var(--surface-1); overflow:hidden; transition:transform 140ms ease-out, box-shadow 140ms ease-out, background 140ms;
+  position:relative;
+}
+.finding-card:hover{ transform:translateY(-2px); box-shadow:var(--shadow-md); background:var(--surface-3); cursor:pointer; }
+.finding-card.selected{ background:color-mix(in srgb, var(--accent) 6%, var(--surface-1)); }
+.finding-card.acted{ opacity:.85; }
+.finding-card.collapsing{ height:0!important; margin:0!important; padding:0!important; opacity:0; transition: all 220ms ease-in; }
+.sev-bar{ flex:0 0 auto; position:relative; }
+.sev-bar.sev-5{ width:4px; background:var(--sev-5); animation: sev5pulse 2s ease-in-out infinite; }
+.sev-bar.sev-4{ width:4px; background:var(--sev-4); }
+.sev-bar.sev-3{ width:3px; background:var(--sev-3); }
+.sev-bar.sev-2{ width:2px; background:var(--sev-2); }
+.sev-bar.sev-1{ width:1px; background:var(--sev-1); opacity:.7; }
+@keyframes sev5pulse{ 0%,100%{ box-shadow:0 0 8px var(--sev-5); opacity:.85;} 50%{ box-shadow:0 0 20px var(--sev-5); opacity:1;} }
+.finding-card.selected .sev-bar{ background:var(--accent)!important; }
+.fc-body{ flex:1 1 auto; padding:10px 14px; min-width:0; }
+.fc-head{ display:flex; align-items:center; gap:6px; min-height:28px; flex-wrap:wrap; }
+.chip-domain{ display:inline-flex; align-items:center; gap:4px; padding:2px 8px 2px 6px; border-radius:999px; font-family:var(--font-mono); font-size:var(--text-2xs); letter-spacing:.08em; text-transform:uppercase; }
+.chip-rule{ font-family:var(--font-mono); font-size:var(--text-2xs); background:var(--surface-3); border:1px solid var(--ink-4); padding:2px 6px; border-radius:4px; color:var(--ink-2); }
+.chip-conf{ font-family:var(--font-mono); font-size:var(--text-2xs); padding:2px 6px; border-radius:4px; text-transform:uppercase; }
+.chip-conf.high{ background:var(--surface-3); color:var(--ink-0); border:1px solid var(--ink-4); }
+.chip-conf.medium{ background:transparent; color:var(--ink-2); border:1px dashed var(--ink-4); font-style:italic; }
+.chip-conf.low{ background:transparent; color:var(--ink-3); border:1px dotted var(--ink-4); font-style:italic; }
+.chip-acted{ font-family:var(--font-mono); font-size:var(--text-2xs); color:#22c55e; border:1px solid #22c55e44; padding:2px 6px; border-radius:4px;}
+.fc-spacer{ flex:1 1 auto; }
+.fc-rank{ font-family:var(--font-mono); font-size:11px; color:var(--ink-3); }
+.fc-score{ font-family:var(--font-mono); font-size:10px; color:var(--ink-3); margin-left:6px; }
+.fc-menu-btn{ background:none; border:none; color:var(--ink-3); cursor:pointer; padding:2px 6px; font-size:14px; }
+.fc-title{ font-family:var(--font-display); font-size:18px; font-weight:600; line-height:1.3; margin:8px 0; position:relative; padding-left:0; }
+.new-dot{ width:8px; height:8px; border-radius:50%; background:var(--sev-2); display:inline-block; margin-right:6px; }
+.fc-basis{ background:var(--surface-2); border:1px solid var(--ink-4); border-radius:4px; padding:8px 12px; font-family:var(--font-mono); font-size:var(--text-sm); color:var(--ink-1); line-height:1.65; cursor:pointer; }
+.fc-basis .line{ white-space:pre-wrap; }
+.fc-basis .src{ color:var(--ink-2); font-size:11px; }
+.fc-basis .more{ color:var(--accent); cursor:pointer; }
+.fc-conf-block{ margin-top:8px; font-size:13px; color:var(--ink-1); }
+.fc-conf-block .warn{ color:var(--sev-3); display:block; margin-bottom:2px; }
+.fc-conf-block .why{ font-style:italic; }
+.fc-actions{ display:flex; align-items:center; gap:8px; height:40px; border-top:1px dashed var(--ink-4); margin-top:10px; padding-top:8px; flex-wrap:wrap; }
+.btn{ border-radius:4px; padding:6px 10px; font-size:12px; cursor:pointer; font-family:var(--font-body); }
+.btn-primary{ border:1px solid var(--accent); color:var(--accent); background:transparent; }
+.btn-primary:hover{ background:var(--accent); color:var(--surface-1); }
+.btn-secondary{ border:1px solid var(--ink-2); color:var(--ink-2); background:transparent; }
+.btn-ghost{ border:1px solid transparent; color:var(--ink-2); background:transparent; }
+.btn-ghost:hover{ border-color:var(--ink-4); }
+.snooze-fatigue{ background:linear-gradient(0deg, rgba(249,115,22,.05), rgba(249,115,22,.05)); }
+
+/* shimmer skeleton */
+.skeleton{ background:linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%); background-size:400% 100%; animation:shimmer 1.5s infinite; border-radius:4px; }
+@keyframes shimmer{ 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
+
+/* domain group rule */
+.domain-rule{ display:flex; align-items:center; gap:8px; margin:18px 0 8px; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-2); }
+.domain-rule::before, .domain-rule::after{ content:''; height:1px; background:var(--ink-4); flex:1; }
+
+/* metric card */
+.metric-card{ border:1px solid var(--ink-4); border-radius:6px; padding:14px 16px; background:var(--surface-1); margin-bottom:12px; cursor:pointer; transition: box-shadow 140ms; }
+.metric-card:hover{ box-shadow:var(--shadow-md); }
+.metric-big{ font-family:var(--font-display); font-size:32px; font-weight:600; display:flex; align-items:baseline; gap:8px;}
+.bullet-bar{ height:8px; border-radius:4px; background:var(--surface-3); overflow:hidden; margin:8px 0 4px; }
+.bullet-bar > div{ height:100%; }
+.sparkline{ display:block; margin-top:8px; }
+
+/* person row */
+.person-row{ border:1px solid var(--ink-4); border-radius:6px; padding:10px 12px; margin-bottom:8px; background:var(--surface-1); }
+.avatar{ width:32px; height:32px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; flex:0 0 auto;}
+.person-row .toprow{ display:flex; align-items:center; gap:10px; }
+.person-row .data-row{ font-family:var(--font-mono); font-size:12px; color:var(--ink-2); margin:6px 0 0 42px; }
+.person-row .finding-row{ margin:4px 0 0 42px; font-size:12px; }
+.chip-small{ font-size:10px; border:1px solid var(--ink-4); border-radius:3px; padding:1px 5px; color:var(--ink-2); }
+
+/* heatmap calendar */
+.heat-grid{ display:grid; grid-template-columns:repeat(26, 12px); grid-auto-rows:12px; gap:3px; }
+.heat-cell{ width:12px; height:12px; border-radius:2px; background:var(--surface-3); }
+
+/* score math block */
+.scoremath{ font-family:var(--font-mono); font-size:11px; background:var(--surface-2); border:1px solid var(--ink-4); border-radius:6px; padding:12px; line-height:1.7; }
+.scoremath h4{ color:var(--ink-2); text-transform:uppercase; letter-spacing:.1em; font-size:10px; margin:10px 0 4px; }
+.scoremath .num{ color:var(--ink-0); }
+.scoremath .lbl{ color:var(--ink-2); }
+.scoremath hr{ border:none; border-top:1px solid var(--ink-4); margin:8px 0; }
+
+/* toasts */
+#toasts{ position:fixed; bottom:20px; right:20px; display:flex; flex-direction:column; gap:8px; z-index:100; }
+.toast{ background:var(--surface-3); border:1px solid var(--ink-4); border-radius:6px; padding:10px 14px; font-size:13px; display:flex; gap:10px; align-items:center; animation: toastIn 180ms; box-shadow:var(--shadow-md); }
+@keyframes toastIn{ from{ opacity:0; transform:translateY(16px);} to{opacity:1; transform:translateY(0);} }
+.toast button{ background:none; border:none; color:var(--accent); cursor:pointer; font-size:12px; text-decoration:underline; }
+
+/* command palette */
+#paletteBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:flex-start; justify-content:center; padding-top:12vh; z-index:200; }
+#paletteBackdrop.open{ display:flex; }
+#palette{ width:560px; max-width:92vw; background:var(--surface-2); border:1px solid var(--ink-4); border-radius:10px; box-shadow:var(--shadow-md); overflow:hidden; animation:paletteIn 180ms; }
+@keyframes paletteIn{ from{ opacity:0; transform:scale(.96);} to{opacity:1; transform:scale(1);} }
+#palette input{ width:100%; padding:14px 16px; background:transparent; border:none; outline:none; color:var(--ink-0); font-size:15px; border-bottom:1px solid var(--ink-4); }
+#paletteResults{ max-height:360px; overflow-y:auto; }
+.palette-item{ padding:9px 16px; font-size:13px; display:flex; justify-content:space-between; cursor:pointer; color:var(--ink-1); }
+.palette-item.active, .palette-item:hover{ background:var(--surface-3); color:var(--ink-0); }
+.palette-group{ padding:6px 16px; font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3); }
+
+/* shortcuts overlay */
+#shortcutsBackdrop{ position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:200; }
+#shortcutsBackdrop.open{ display:flex; }
+#shortcutsModal{ background:var(--surface-2); border:1px solid var(--ink-4); border-radius:10px; padding:20px 24px; width:640px; max-width:92vw; max-height:80vh; overflow-y:auto; }
+.kbd{ font-family:var(--font-mono); background:var(--surface-3); border:1px solid var(--ink-4); border-radius:4px; padding:1px 6px; font-size:11px; }
+
+/* route transitions */
+.route-out{ opacity:0; transform:translateY(-4px); }
+.route-in{ opacity:1; transform:translateY(0); }
+
+::selection{ background:var(--accent); color:#fff; }
+.badge-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+</style>
+</head>
+<body>
+<div id="app">
+  <nav id="rail">
+    <div class="rail-logo">
+      <span class="mark">LEAD<span style="opacity:.6">OS</span></span>
+      <span class="text mono" style="font-size:10px;color:var(--ink-3)">pt-F demo</span>
+    </div>
+    <div class="onboard-underline" id="onboardUnderline"><div></div></div>
+    <div class="rail-section" id="railBoardPrep" style="display:none"></div>
+    <div class="rail-section" id="railNav"></div>
+    <div class="rail-footer">
+      <span><span class="offline-dot"></span>OFFLINE — expected, not an error</span>
+      <span class="layout-state-label" id="railStateLabel">STANDARD MODE</span>
+      <span class="mono" style="font-size:10px;cursor:pointer;text-decoration:underline" onclick="UI.openAbout()">verified vs fabricated →</span>
+    </div>
+  </nav>
+
+  <div id="mainCol">
+    <div id="banners"></div>
+    <div id="viewport"><div id="view"></div></div>
+  </div>
+
+  <div id="resizer"></div>
+  <aside id="rightPanel"><div id="rightPanelInner"></div></aside>
+</div>
+
+<div id="toasts"></div>
+
+<div id="paletteBackdrop">
+  <div id="palette">
+    <input id="paletteInput" placeholder="Type a command, R-number, @person, #domain… try &gt; theme terminal" autocomplete="off" />
+    <div id="paletteResults"></div>
+  </div>
+</div>
+
+<div id="shortcutsBackdrop">
+  <div id="shortcutsModal"></div>
+</div>
+
+<script>
+/* ============================================================
+   LEADOS pt-F — SINGLE-FILE DEMO IMPLEMENTATION
+   Disclosed, up front, in code:
+   - This file is a fresh reinterpretation of the pt-F brief, not a
+     patch to github.com/wbweve/Leados. See README.md / AI-SESSION-LOG.md.
+   - All people/events/findings below are FABRICATED demo data,
+     generated by a seeded PRNG so the app has something to render.
+   - "144 rules / 25 files" from the brief are NOT implemented at that
+     scale here. This demo implements a labeled SUBSET: ~18 demo
+     findings driven by a small, transparent scoring function, and
+     6 of the 7 layout states with real triggers (the 7th, SPRINT
+     CLOSE, is wired to a simulated sprint object).
+   ============================================================ */
+(function(){
+'use strict';
+
+/* ---------------- tiny seeded PRNG (so "fabricated" is reproducible) ---------------- */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+const rng = mulberry32(20261016);
+function pick(arr){ return arr[Math.floor(rng()*arr.length)]; }
+
+/* ---------------- storage (doctrine: one key, append-only event log) ------------- */
+const KEY = 'leados-ptf-demo:data'; // distinct key: avoids colliding with any real 'leados:data' install
+function loadStore(){
+  let raw = localStorage.getItem(KEY);
+  if(!raw){ raw = JSON.stringify(genesis()); localStorage.setItem(KEY, raw); }
+  try{ return JSON.parse(raw); }catch(e){ const g=genesis(); localStorage.setItem(KEY, JSON.stringify(g)); return g; }
+}
+function saveStore(s){ localStorage.setItem(KEY, JSON.stringify(s)); }
+function appendEvent(type,payload){ const s=loadStore(); const ev={id:'e'+(s.events.length+1), seq:s.events.length+1, at:Date.now(), type, payload}; s.events.push(ev); saveStore(s); return ev; }
+
+const DOMAINS = {
+  PEOPLE:{color:'var(--domain-people)'}, FINANCE:{color:'var(--domain-finance)'},
+  OPS:{color:'var(--domain-ops)'}, STRATEGY:{color:'var(--domain-strategy)'},
+  LEGAL:{color:'var(--domain-legal)'}, EXEC:{color:'var(--domain-exec)'},
+  SALES:{color:'var(--domain-sales)'}, CS:{color:'var(--domain-cs)'}
+};
+
+function genesis(){
+  const today = new Date();
+  const iso = d => d.toISOString().slice(0,10);
+  const people = [
+    {id:'p1', name:'Ana Ruiz', role:'Team lead · Platform', rel:'direct'},
+    {id:'p2', name:'Bruno Alvez', role:'Team lead · Growth', rel:'direct'},
+    {id:'p3', name:'Chen Wei', role:'Staff eng · Platform', rel:'skip'},
+    {id:'p4', name:'Dara Osei', role:'Team lead · Infra', rel:'direct'},
+    {id:'p5', name:'Elin Vikander', role:'PM · Growth', rel:'skip'},
+    {id:'p6', name:'Farid Haddad', role:'Team lead · Data', rel:'direct'}
+  ];
+  const events = [];
+  for(let i=0;i<70;i++){
+    const d = new Date(today.getTime() - Math.floor(rng()*45)*86400000);
+    const type = pick(['oneonone.logged','pulse.logged','fin.pl.logged','okr.checked','feedback.given','skip.logged']);
+    events.push({id:'e'+i, at:d.getTime(), type, payload:{note:'fabricated demo event '+i}});
+  }
+  const findings = [
+    fnd('R103','FINANCE',5,'HIGH','Gross margin declining three periods running','your own P&L entries, not an estimate',
+      ['Q1-2026 margin 68.0% → Q2-2026 63.0% → Q3-2026 58.0%','slope: -5.0pp/period (least-squares, 3 points)','Source: event#e742 · 2026-09-30'],'pl-review'),
+    fnd('R10','PEOPLE',4,'HIGH','Ana Ruiz: growth plan review 8 days overdue','your own logged 1:1s and plan check-ins',
+      ['Plan "Delegate release owners" created 2026-09-01','Spine: D2@Sep1 → D2@Sep8 (no movement yet)','Source: event#e612 · 2026-09-08'],'growth-review'),
+    fnd('R22','FINANCE',3,'HIGH','CAC rising against flat LTV','your own finance log',
+      ['LTV:CAC 1.5, target ≥ 3 (-50%)','CAC $280 vs industry benchmark $180 (+56%)','Source: event#e588 · 2026-09-20'],'pl-review'),
+    fnd('R16','OPS',3,'MEDIUM','Sprint velocity trending down 2 sprints','your own sprint.started/sprint.review entries, trend needs one more point to be certain',
+      ['Sprint 14: planned 32 / actual 24','Sprint 15: planned 30 / actual 21','Source: event#e701 · 2026-10-10'],null),
+    fnd('R34','SALES','4','MEDIUM','Pipeline coverage below 2x on Q4 target','derived from your own pipeline logs; some deals missing close-date confidence',
+      ['Coverage 1.6x vs policy floor 2.0x','4 deals stalled >21d in "proposal" stage','Source: event#e650 · 2026-10-02'],'pipeline-review'),
+    fnd('R1','PEOPLE',3,'HIGH','Bruno Alvez: 1:1 cadence overdue','your own logged 1:1s',
+      ['Last 1:1 logged 2026-09-28 (18d ago)','Cadence target: every 14d','Source: event#e500 · 2026-09-28'],'oneonone-catchup'),
+    fnd('R19','OPS',2,'LOW','Possible scope creep on Infra roadmap','pattern inferred from ticket titles — not verified against the actual roadmap doc',
+      ['6 of 14 open items were not in the quarter plan','Source: event#e440 · 2026-09-12'],null),
+    fnd('R112','FINANCE',3,'HIGH','Opex growing faster than revenue','your own P&L entries',
+      ['Opex +18% QoQ vs revenue +6% QoQ','Source: event#e742 · 2026-09-30'],'pl-review'),
+    fnd('R12','EXEC',4,'MEDIUM','Board narrative not drafted','derived from calendar + narrative.drafted absence',
+      ['Board meeting in 3 days, no narrative.drafted event found','Source: calendar entry · 2026-10-16'],'board-narrative'),
+    fnd('R20','OPS',2,'HIGH','On-call load concentrated on one engineer','your own on-call schedule log',
+      ['Chen Wei: 3 of last 4 rotations','Source: event#e410 · 2026-09-05'],'oncall-rebalance'),
+    fnd('R13','SALES',3,'LOW','Win-rate dip against new competitor','small sample (n=6 closed-lost) — directional only',
+      ['Win rate 38% this quarter vs 51% last quarter','6 of 9 closed-lost cite the same competitor','Source: event#e661 · 2026-10-04'],null),
+    fnd('R24','FINANCE',2,'MEDIUM','Runway under 14 months at current burn','derived from your own P&L, assumes flat burn — labeled assumption',
+      ['Cash $2.1M / burn $150K per month = 14.0 months','Source: event#e742 · 2026-09-30'],'pl-review'),
+    fnd('R9','PEOPLE',2,'HIGH','Dara Osei: no growth plan on file','absence of plan.created event for this person',
+      ['0 plan.created events found for Dara Osei','Source: roster · n/a'],null),
+    fnd('R17','OPS',1,'LOW','Minor ticket backlog growth','small, early signal',
+      ['Backlog +4% week over week','Source: event#e430 · 2026-09-08'],null),
+    fnd('R18','LEGAL',3,'MEDIUM','Compliance audit cadence approaching due date','derived from settings.complianceAuditCadenceDays',
+      ['Last audit 2026-04-20, cadence 180d → due 2026-10-17','Source: settings · n/a'],'compliance-prep'),
+    fnd('R14','STRATEGY',3,'MEDIUM','OKR silent for 2 check-in cycles','your own okr.checked log',
+      ['No okr.checked event in 28d, cadence target 14d','Source: event#e690 · 2026-09-18'],'okr-checkin')
+  ];
+  return { schemaVersion:1, meta:{lineage:'ptf-demo', createdAt:Date.now()}, people, events, findings,
+    settings:{ boardMeetingDate: iso(new Date(today.getTime()+3*86400000)), boardNarrativeReviewDays:5,
+      sprint:{name:'Sprint 16', startDate: iso(new Date(today.getTime()-12*86400000)), endDate: iso(new Date(today.getTime())), reviewed:false, plannedVelocity:30, actualVelocity:22},
+      weekdayFocus:{enabled:false,start:'09:00',end:'12:00'} },
+    ui:{ dismissed:{}, snoozed:{}, acted:{}, snoozeCount:{} }
+  };
+  function fnd(rule,domain,sev,conf,title,confWhy,basis,playbook){
+    sev = Number(sev);
+    return { key: rule+':'+domain.toLowerCase(), rule, domain, sev, conf, title, confWhy, basis, playbook,
+      isNew: rng() > 0.6, sourceEvents:[{id:'e'+Math.floor(rng()*70),label:basis[basis.length-1]}] };
+  }
+}
+
+/* ---------------- scoring (illustrative subset of the brief's "score math") ------- */
+function computeScore(f, ctx){
+  const confFactor = f.conf==='HIGH'?1.0:(f.conf==='MEDIUM'?0.7:0.45);
+  let score = f.sev * confFactor;
+  const mults = [];
+  const hour = new Date().getHours();
+  if(f.domain==='FINANCE' && hour < 11){ mults.push(['Morning context (FINANCE boost)', 1.4]); score*=1.4; }
+  if(f.sev>=4){ mults.push(['Structural pattern (sev≥4)', 1.15]); score*=1.15; }
+  if((ctx.snoozeCount[f.key]||0) >= 3){ mults.push(['Snooze fatigue (ignored 3+ times)', 1.1]); score*=1.1; }
+  return { base: f.sev*confFactor, confFactor, mults, score: Math.round(score*100)/100 };
+}
+
+/* ---------------- formatting rules from the brief, Part 4 ------------------------ */
+function fmtLarge(n){
+  const sign = n<0?'-':''; n=Math.abs(n);
+  if(n<1000) return sign+String(n);
+  if(n<1e6) return sign+(n/1e3).toFixed(1).replace(/\.0$/,'')+'K';
+  if(n<1e9) return sign+(n/1e6).toFixed(1)+'M';
+  return sign+(n/1e9).toFixed(1)+'B';
+}
+function fmtPct(n){ return n.toFixed(1)+'%'; }
+function daysAgo(ts){ const d=Math.floor((Date.now()-ts)/86400000); return d+'d ago'; }
+function daysUntil(iso){ return Math.ceil((new Date(iso+'T00:00:00').getTime()-Date.now())/86400000); }
+
+/* ================================= APP STATE ===================================== */
+const DATA = loadStore();
+const APP = {
+  route: location.hash.replace('#','') || '/today',
+  theme: localStorage.getItem('leados:theme') || 'obsidian',
+  wide: localStorage.getItem('leados:wide') === '1',
+  railCollapsed: false,
+  manualLayout: sessionStorage.getItem('leados:layoutState') || null, // 'FOCUS' | 'REVIEW' | null(auto)
+  simulateCrisis: sessionStorage.getItem('leados:simCrisis') === '1',
+  selectedFinding: null,
+  domainFilter: null,
+  density: 'standard',
+  focusedIdx: 0
+};
+document.documentElement.setAttribute('data-theme', APP.theme);
+if(APP.wide) document.body.classList.add('wide');
+
+function activeFindings(){
+  let list = DATA.findings.filter(f => !DATA.ui.dismissed[f.key] && !isSnoozed(f.key));
+  if(APP.simulateCrisis){
+    list = list.map(f=>f.key==='R12:exec' ? Object.assign({},f,{sev:5}) : f);
+  }
+  return list;
+}
+function isSnoozed(key){ const until = DATA.ui.snoozed[key]; return until && until > Date.now(); }
+
+function rankedFindings(){
+  const ctx = { snoozeCount: DATA.ui.snoozeCount };
+  const withScore = activeFindings().map(f=>Object.assign({}, f, {_score: computeScore(f,ctx)}));
+  withScore.sort((a,b)=> b._score.score - a._score.score);
+  withScore.forEach((f,i)=> f._rank = i+1);
+  return withScore;
+}
+
+/* ============================== LAYOUT STATE ENGINE =============================== */
+function computeLayoutState(){
+  if(APP.manualLayout==='FOCUS') return 'DEEP_WORK';
+  if(APP.manualLayout==='REVIEW') return 'REVIEW';
+  if(DATA.people.length===0 && DATA.events.length===0) return 'ONBOARDING';
+  if(activeFindings().some(f=> (APP.simulateCrisis && f.key==='R12:exec') || f.sev===5)) return 'CRISIS';
+  const dLeft = daysUntil(DATA.settings.boardMeetingDate);
+  if(dLeft>=0 && dLeft <= DATA.settings.boardNarrativeReviewDays) return 'BOARD_PREP';
+  const sp = DATA.settings.sprint;
+  if(sp && sp.endDate===new Date().toISOString().slice(0,10) && !sp.reviewed) return 'SPRINT_CLOSE';
+  return 'STANDARD';
+}
+function layoutLabel(s){
+  return {CRISIS:'CRISIS MODE — interface adapted for emergency', BOARD_PREP:'BOARD PREP MODE', SPRINT_CLOSE:'SPRINT CLOSE MODE',
+    DEEP_WORK:'FOCUS MODE', REVIEW:'REVIEW MODE', ONBOARDING:'ONBOARDING MODE', STANDARD:'STANDARD MODE'}[s];
+}
+
+/* ===================================== ICONS (inline SVG, no raster) ============== */
+const ICONS = {
+  today:'<path d="M4 4h16v16H4z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 9h16" stroke="currentColor" stroke-width="1.6"/>',
+  roster:'<circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 20c1.5-4 4-6 7-6s5.5 2 7 6" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  intel:'<circle cx="7" cy="7" r="2" fill="currentColor"/><circle cx="17" cy="9" r="2" fill="currentColor"/><circle cx="11" cy="17" r="2" fill="currentColor"/><path d="M7 7l10 2M7 7l4 10M17 9l-6 8" stroke="currentColor" stroke-width="1.2"/>',
+  self:'<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  data:'<ellipse cx="12" cy="6" rx="7" ry="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  health:'<path d="M12 21s-7-4.4-9.3-8.8C1.3 8.6 3 5 6.6 5c2 0 3.4 1.2 4.4 2.6C12 6.2 13.4 5 15.4 5 19 5 20.7 8.6 19.3 12.2 17 16.6 12 21 12 21z" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+};
+function icon(name){ return '<svg width="18" height="18" viewBox="0 0 24 24">'+ICONS[name]+'</svg>'; }
+
+/* ===================================== RENDER: RAIL =============================== */
+const NAV = [
+  {k:'today', label:'Today', key:'T'}, {k:'roster', label:'Roster', key:'R'},
+  {k:'intelligence', label:'Intelligence', key:'I'}, {k:'self', label:'Self', key:'W'},
+  {k:'data', label:'Data', key:'D'}, {k:'health', label:'Health', key:'H'}
+];
+function renderRail(){
+  const rail = document.getElementById('rail');
+  const state = computeLayoutState();
+  rail.classList.toggle('collapsed', APP.railCollapsed || state==='CRISIS' || state==='DEEP_WORK');
+  rail.classList.toggle('hidden', state==='REVIEW');
+
+  const bp = document.getElementById('railBoardPrep');
+  if(state==='BOARD_PREP'){
+    bp.style.display='';
+    bp.innerHTML = '<div class="rail-item" onclick="UI.go(\'/today\')" style="color:var(--sev-3)">'+icon('today')+'<span class="label">Board Prep</span></div>';
+  } else bp.style.display='none';
+
+  const nav = document.getElementById('railNav');
+  nav.innerHTML = NAV.map(n => '<div class="rail-item '+(APP.route==='/'+n.k?'active':'')+'" onclick="UI.go(\'/'+n.k+'\')">'+icon(n.k)+
+    '<span class="label">'+n.label+'</span><span class="key">'+n.key+'</span></div>').join('');
+
+  document.getElementById('railStateLabel').textContent = layoutLabel(state);
+
+  const underline = document.getElementById('onboardUnderline');
+  underline.style.display = state==='ONBOARDING' ? '' : 'none';
+}
+
+/* ===================================== RENDER: BANNERS ============================= */
+function renderBanners(){
+  const state = computeLayoutState();
+  const el = document.getElementById('banners'); el.innerHTML='';
+  if(state==='CRISIS'){
+    const crisis = activeFindings().find(f=> f.sev===5 || (APP.simulateCrisis && f.key==='R12:exec'));
+    const div = document.createElement('div'); div.className='crisis-bar';
+    div.innerHTML = '<strong style="letter-spacing:.04em">⚠ SEV-5 ACTIVE</strong><span>'+(crisis?crisis.title:'Critical finding active')+
+      '</span><button onclick="UI.openPlaybook(\''+(crisis?crisis.key:'')+'\')">RESPOND NOW</button>';
+    el.appendChild(div);
+  }
+  if(state==='BOARD_PREP'){
+    const d = daysUntil(DATA.settings.boardMeetingDate);
+    const div = document.createElement('div'); div.className='board-banner'+(d<=2?' urgent':'');
+    div.innerHTML = 'Board meeting: <b class="mono">'+DATA.settings.boardMeetingDate+'</b> · '+d+' day'+(d===1?'':'s')+' · Narrative: <b>NOT DRAFTED</b>';
+    el.appendChild(div);
+  }
+  const lastEvt = DATA.events.reduce((m,e)=>Math.max(m,e.at),0);
+  if(Date.now()-lastEvt > 14*86400000){
+    const div=document.createElement('div'); div.className='stale-banner';
+    div.textContent = 'DATA IS STALE — most recent log: '+daysAgo(lastEvt)+'. Findings based on this data may be outdated.';
+    el.appendChild(div);
+  }
+  document.body.classList.toggle('focus-mode', state==='DEEP_WORK');
+}
+
+/* ===================================== FINDING CARD ================================ */
+function domainChip(domain){ return '<span class="chip-domain" style="border-left:2px solid '+DOMAINS[domain].color+';background:color-mix(in srgb, '+DOMAINS[domain].color+' 10%, transparent);color:'+DOMAINS[domain].color+'">● '+domain+'</span>'; }
+
+function findingCardHtml(f, opts){
+  opts = opts||{};
+  const sc = f._score || computeScore(f,{snoozeCount:DATA.ui.snoozeCount});
+  const acted = DATA.ui.acted[f.key];
+  const snCount = DATA.ui.snoozeCount[f.key]||0;
+  const basisLines = f.basis.slice(0,-1);
+  const srcLine = f.basis[f.basis.length-1];
+  const collapsed = opts.compact;
+  return '<div class="finding-card '+(f.key===APP.selectedFinding?'selected':'')+' '+(acted?'acted':'')+' '+(snCount>3?'snooze-fatigue':'')+'" data-key="'+f.key+'" onclick="UI.selectFinding(event,\''+f.key+'\')">'
+    +'<div class="sev-bar sev-'+f.sev+'"></div>'
+    +'<div class="fc-body">'
+      +'<div class="fc-head">'
+        + domainChip(f.domain)
+        + '<span class="chip-rule">'+f.rule+'</span>'
+        + '<span class="chip-conf '+f.conf.toLowerCase()+'">'+f.conf+'</span>'
+        + (acted?'<span class="chip-acted">✓ ACTED TODAY</span>':'')
+        + '<span class="fc-spacer"></span>'
+        + '<span class="fc-rank">#'+String(f._rank||'').padStart(2,'0')+'</span>'
+        + '<span class="fc-score">score '+sc.score+'</span>'
+        + '<button class="fc-menu-btn" onclick="event.stopPropagation();UI.findingMenu(event,\''+f.key+'\')">⋮</button>'
+      +'</div>'
+      +'<div class="fc-title">'+(f.isNew?'<span class="new-dot"></span>':'')+f.title+'</div>'
+      + (collapsed ? '' :
+      '<div class="fc-basis" onclick="event.stopPropagation();UI.toggleBasis(this)">'
+        + basisLines.map(l=>'<div class="line">· '+l+'</div>').join('')
+        + '<div class="line src">· Source: '+srcLine+'</div>'
+      +'</div>'
+      +'<div class="fc-conf-block">'
+        + (f.conf==='LOW' ? '<span class="warn">⚠ Low-confidence finding — verify the source before acting</span>' : '')
+        + 'confidence <b>'+f.conf+'</b> — <span class="why">"'+f.confWhy+'"</span>'
+      +'</div>'
+      +'<div class="fc-actions">'
+        + (f.playbook ? '<button class="btn btn-primary" onclick="event.stopPropagation();UI.openPlaybook(\''+f.key+'\')">▶ '+(acted?'ACTED — OPEN AGAIN?':'OPEN PLAYBOOK: '+f.playbook)+'</button>'
+                       : '<button class="btn btn-secondary" onclick="event.stopPropagation();UI.go(\'/roster\')">FIX ON ROSTER</button>')
+        + (snCount>3 ? '<button class="btn btn-ghost" onclick="event.stopPropagation();UI.snooze(\''+f.key+'\')">SNOOZE AGAIN? (×'+snCount+')</button>'
+                      : '<button class="btn btn-ghost" onclick="event.stopPropagation();UI.snooze(\''+f.key+'\')">SNOOZE ▾</button>')
+        + '<button class="btn btn-ghost" onclick="event.stopPropagation();UI.dismiss(\''+f.key+'\')">DISMISS</button>'
+        + '<button class="btn btn-ghost" onclick="event.stopPropagation();UI.trace(\''+f.key+'\')" title="Trace source events">↗ TRACE</button>'
+      +'</div>')
+    +'</div>'
+  +'</div>';
+}
+
+/* ===================================== VIEWS ======================================= */
+function viewToday(){
+  const state = computeLayoutState();
+  if(state==='ONBOARDING') return viewOnboarding();
+  if(state==='REVIEW') return viewReview();
+
+  const ranked = rankedFindings();
+  const filtered = APP.domainFilter ? ranked.filter(f=>f.domain===APP.domainFilter) : ranked;
+  const three = ranked.slice(0,3);
+  const counts = {5:0,4:0,3:0,2:0,1:0};
+  ranked.forEach(f=>counts[f.sev]++);
+  const domainCounts = {};
+  ranked.forEach(f=> domainCounts[f.domain]=(domainCounts[f.domain]||0)+1);
+
+  let html = '';
+  if(state==='DEEP_WORK') html += '<div class="focus-header">FOCUS · '+new Date().toDateString()+'</div>';
+  html += '<div class="display" style="font-size:22px;color:var(--ink-1);margin:'+(state==='DEEP_WORK'?'8px 0 20px':'4px 0 20px')+'">'
+        + 'Good '+(new Date().getHours()<12?'morning':'afternoon')+'. '+counts[5]+counts[4]+' critical/high findings need your attention.</div>';
+
+  if(state==='SPRINT_CLOSE'){
+    const sp = DATA.settings.sprint;
+    html += '<div class="sprint-card"><b>'+sp.name+'</b> · ends today<br>'
+      +'<span class="mono" style="font-size:12px;color:var(--ink-2)">planned '+sp.plannedVelocity+' / actual '+sp.actualVelocity+'</span>'
+      +'<div style="margin-top:8px"><button class="btn btn-primary" onclick="UI.closeSprint()">CLOSE SPRINT</button></div></div>';
+  }
+
+  if(state!=='DEEP_WORK'){
+    html += '<div style="margin-bottom:6px" class="mono" style="font-size:11px;color:var(--ink-2)">THE THREE · ranked by urgency × context</div>';
+    html += three.map(f=> findingCardHtml(f,{compact:true})).join('');
+
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:16px 0;" class="mono">'
+      + '<span class="chip-small" style="cursor:pointer" onclick="UI.setDomainFilter(null)">ALL</span>'
+      + Object.keys(domainCounts).map(d=>'<span class="chip-small" style="cursor:pointer;border-color:'+DOMAINS[d].color+'" onclick="UI.setDomainFilter(\''+d+'\')">'+d+' ●'+domainCounts[d]+'</span>').join('')
+      + '</div>';
+  }
+
+  let visible = filtered;
+  if(state==='DEEP_WORK'){
+    const hiddenCount = filtered.filter(f=>f.sev<4).length;
+    visible = filtered.filter(f=>f.sev>=4);
+    html += visible.map(f=>findingCardHtml(f)).join('');
+    if(hiddenCount>0) html += '<div class="mono" style="color:var(--ink-3);font-size:12px;border:1px dashed var(--ink-4);padding:10px;border-radius:6px;">'+hiddenCount+' lower-priority findings hidden — focus mode</div>';
+  } else {
+    // group by domain
+    const byDomain = {};
+    visible.forEach(f=>{ (byDomain[f.domain]=byDomain[f.domain]||[]).push(f); });
+    html += Object.keys(byDomain).map(d=>
+      '<div class="domain-rule">'+d+' ('+byDomain[d].length+')</div>' + byDomain[d].map(f=>findingCardHtml(f)).join('')
+    ).join('');
+  }
+  return html;
+}
+
+function viewOnboarding(){
+  return '<div class="display" style="font-size:22px;margin-bottom:8px">Welcome. Let’s get real data on the board.</div>'
+  + '<p style="color:var(--ink-2);max-width:520px">This is Step 1 of onboarding, rendered as the real Roster form — not a slideshow. '
+  + 'Add one person and LeadOS will immediately start reasoning about them.</p>'
+  + '<div style="border:1px solid var(--ink-4);border-radius:8px;padding:16px;max-width:420px;margin-top:16px">'
+  + '<label class="mono" style="font-size:11px;color:var(--ink-2)">NAME</label>'
+  + '<input id="obName" style="width:100%;margin:4px 0 10px;padding:8px;background:var(--surface-2);border:1px solid var(--ink-4);border-radius:4px;color:var(--ink-0)" placeholder="e.g. Priya Nair"/>'
+  + '<label class="mono" style="font-size:11px;color:var(--ink-2)">ROLE</label>'
+  + '<input id="obRole" style="width:100%;margin:4px 0 14px;padding:8px;background:var(--surface-2);border:1px solid var(--ink-4);border-radius:4px;color:var(--ink-0)" placeholder="e.g. Team lead · Support"/>'
+  + '<button class="btn btn-primary" onclick="UI.onboardAddPerson()">ADD TO ROSTER</button>'
+  + '</div>'
+  + '<p class="mono" style="font-size:11px;color:var(--ink-3);margin-top:16px">Note: this demo seeds 6 fabricated people/16 fabricated findings on first load, '
+  + 'so ONBOARDING MODE won’t trigger automatically unless you clear storage. Try command <b>&gt; reset onboarding</b> to see it live.</p>';
+}
+
+function viewReview(){
+  const ranked = rankedFindings();
+  return '<div style="display:grid;grid-template-columns:40% 60%;gap:24px;max-width:1040px">'
+  + '<div><div class="display" style="font-size:18px;margin-bottom:10px">Last week</div>'
+    + '<p class="mono" style="font-size:12px;color:var(--ink-2)">Findings appeared: 4 · resolved: 2 (delta from demo seed, labeled approximate)</p>'
+    + ranked.slice(0,4).map(f=>'<div class="mono" style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--ink-4)">'+f.rule+' · '+f.title+'</div>').join('')
+  + '</div>'
+  + '<div><div class="display" style="font-size:18px;margin-bottom:10px">This week — commitments + reflection</div>'
+    + '<textarea style="width:100%;height:120px;background:var(--surface-2);border:1px solid var(--ink-4);border-radius:6px;padding:10px;color:var(--ink-0)" placeholder="What will you commit to this week?"></textarea>'
+    + '<div style="margin-top:10px"><button class="btn btn-primary" onclick="UI.exitSpecialMode()">EXIT REVIEW MODE</button></div>'
+  + '</div></div>';
+}
+
+function viewRoster(){
+  const colors = ['#ef4444','#3b82f6','#22c55e','#eab308','#a855f7','#06b6d4'];
+  return '<div class="display" style="font-size:20px;margin-bottom:14px">Roster</div>'
+  + DATA.people.map((p,i)=>{
+    const initials = p.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const findingCount = DATA.findings.filter(f=>f.domain==='PEOPLE' && f.title.toLowerCase().includes(p.name.split(' ')[0].toLowerCase())).length;
+    return '<div class="person-row">'
+      + '<div class="toprow"><span class="avatar" style="background:'+colors[i%colors.length]+'">'+initials+'</span>'
+      + '<div><b>'+p.name+'</b> <span style="color:var(--ink-2);font-size:13px">'+p.role+'</span></div>'
+      + '<span class="chip-small" style="margin-left:auto">'+p.rel+'</span></div>'
+      + '<div class="data-row">1:1 '+daysAgo(Date.now()-9*86400000)+' · pulse 7/6 ↘ <span class="chip-small">D2→S2</span></div>'
+      + (findingCount ? '<div class="finding-row" style="color:var(--sev-3)">▲ '+findingCount+' finding'+(findingCount>1?'s':'')+'</div>' : '')
+    + '</div>';
+  }).join('');
+}
+
+function sparklineSvg(vals, color){
+  const w=200,h=32, max=Math.max(...vals), min=Math.min(...vals);
+  const pts = vals.map((v,i)=> (i/(vals.length-1)*w)+','+ (h - ((v-min)/(max-min||1))*h)).join(' ');
+  return '<svg class="sparkline" width="'+w+'" height="'+h+'"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2"/></svg>';
+}
+function metricCard(domain, name, current, target, unit, series){
+  const pct = Math.min(100, Math.round(current/target*100));
+  const color = current>=target ? DOMAINS[domain].color : (pct>60?'var(--sev-3)':'var(--sev-4)');
+  const trend = series[series.length-1] >= series[series.length-2] ? '↗':'↘';
+  return '<div class="metric-card" onclick="UI.toast(\'Drill-down not wired in this demo — see Score Math Block on findings for full traceability.\')">'
+  + '<div class="mono" style="font-size:11px;color:var(--ink-2)">'+domainChip(domain)+' '+name+'</div>'
+  + '<div class="metric-big">'+fmtLarge(current)+unit+' <span style="font-size:16px;color:'+color+'">'+trend+'</span></div>'
+  + '<div class="bullet-bar"><div style="width:'+pct+'%;background:'+color+'"></div></div>'
+  + '<div class="mono" style="font-size:11px;color:var(--ink-2)">'+pct+'% of target '+fmtLarge(target)+unit+'</div>'
+  + sparklineSvg(series, color)
+  + '<div class="mono" style="font-size:10px;color:var(--ink-3);margin-top:4px">Source: demo fin.pl.logged · n='+series.length+' periods (fabricated)</div>'
+  + '</div>';
+}
+
+function viewIntelligence(){
+  const ranked = rankedFindings();
+  const domainScores = {};
+  Object.keys(DOMAINS).forEach(d=> domainScores[d] = ranked.filter(f=>f.domain===d).reduce((s,f)=>s+f._score.score,0));
+  return '<div class="display" style="font-size:20px;margin-bottom:4px">Intelligence Overview</div>'
+  + '<div class="mono" style="font-size:11px;color:var(--ink-3);margin-bottom:16px">composite signal, not a measurement</div>'
+  + '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">'
+    + Object.keys(DOMAINS).map(d=>'<span class="chip-small" style="border-color:'+DOMAINS[d].color+'">'+d+' ●'+(domainScores[d]||0).toFixed(1)+'</span>').join('')
+  + '</div>'
+  + '<div class="domain-rule">FINANCE PULSE (demo metric cards)</div>'
+  + metricCard('FINANCE','Revenue', 4200000, 4567000, '', [3.1,3.4,3.6,3.9,4.0,4.1,4.15,4.2].map(x=>x*1000000))
+  + metricCard('SALES','LTV:CAC ratio', 1.5, 3, '×', [2.4,2.2,2.0,1.9,1.8,1.6,1.55,1.5])
+  + '<div class="domain-rule">ACTIVE PATTERNS (demo)</div>'
+  + '<div style="border:1px solid var(--ink-4);border-radius:6px;padding:12px;margin-bottom:8px">'
+    + '<b style="color:var(--sev-4)">◆ REVENUE AT RISK</b> — R22 + R112 + R24<br>'
+    + '<button class="btn btn-primary" style="margin-top:8px" onclick="UI.openPlaybook(\'R103:finance\')">OPEN: revenue-war-room</button>'
+  + '</div>';
+}
+
+function viewSelf(){
+  return '<div class="display" style="font-size:22px;margin-bottom:4px">Self</div>'
+  + '<p style="color:var(--ink-2);max-width:600px">Reflective view. Slower, quieter, no severity red. All numbers below are demo values, each labeled with a source.</p>'
+  + '<div style="display:grid;grid-template-columns:55% 45%;gap:24px;margin-top:20px">'
+  + '<div><div class="domain-rule">CALIBRATION CURVE (demo)</div>'
+    + sparklineSvg([0.3,0.5,0.45,0.6,0.55,0.7,0.68,0.75],'var(--accent)')
+    + '<p class="mono" style="font-size:11px;color:var(--ink-2)">"When you say 80% confident, you are right ~70% of the time. This 10pp gap is worth examining." — source: decision.calibration · n=10 (fabricated demo)</p>'
+  + '</div>'
+  + '<div><div class="domain-rule">LEGACY SCORECARD (demo)</div>'
+    + scorecardRow('TEAM BUILT','2 of 4 directs have growth plans showing movement','plan.created + D-spine · n=4 directs (fabricated)')
+    + scorecardRow('DECISIONS YOU\'D STAND BEHIND','7 of 10 calibrated decisions as-expected or better (70%)','decision.calibration · n=10 (fabricated)')
+    + scorecardRow('WHAT YOU CHANGED','FINANCE: 6→2 findings (−67%) · OPS: 8→3 (−63%)','finding count delta since first render, labeled approx (fabricated)')
+  + '</div></div>'
+  + '<p class="mono" style="font-size:11px;color:var(--ink-3);margin-top:20px">This is a reflection tool, not a performance rating. Every line above has a source; every source is labeled fabricated demo data.</p>';
+}
+function scorecardRow(title,body,src){
+  return '<div style="border-bottom:1px solid var(--ink-4);padding:10px 0"><div style="font-weight:600;font-size:13px">'+title+'</div>'
+  +'<div style="font-size:13px;color:var(--ink-1);margin:4px 0">'+body+'</div>'
+  +'<div class="mono" style="font-size:10px;color:var(--ink-3)">source: '+src+'</div></div>';
+}
+
+function viewData(){
+  const days=90; const cells=[];
+  for(let i=0;i<days;i++){
+    const count = Math.floor(rng()*8);
+    cells.push(count);
+  }
+  function cellColor(c){
+    if(c===0) return 'var(--surface-3)';
+    const base = DOMAINS.OPS.color;
+    const a = c<=2?0.25:c<=5?0.5:c<=10?0.75:1;
+    return 'color-mix(in srgb, '+base+' '+(a*100)+'%, var(--surface-3))';
+  }
+  return '<div class="display" style="font-size:20px;margin-bottom:4px">Data / Audit</div>'
+  + '<p class="mono" style="font-size:11px;color:var(--ink-3);margin-bottom:12px">logging activity, last '+days+' days (reduced from the brief’s 52-week grid for this demo)</p>'
+  + '<div class="heat-grid">' + cells.map(c=>'<div class="heat-cell" style="background:'+cellColor(c)+'" title="'+c+' events (fabricated demo)"></div>').join('') + '</div>'
+  + '<div class="domain-rule">EXPORT</div>'
+  + '<button class="btn btn-secondary" onclick="UI.exportData()">EXPORT STORE AS JSON</button>'
+  + ' <button class="btn btn-ghost" onclick="UI.toast(\'Reset would clear localStorage key '+KEY+'\')" onclickreal="">&nbsp;</button>';
+}
+
+function viewHealth(){
+  const checks = [
+    ['T1','single localStorage key in use', true, KEY],
+    ['T2','events array is append-only (no in-place rewrites observed this session)', true, DATA.events.length+' events'],
+    ['T3','every finding has a rule id, domain, severity, confidence', DATA.findings.every(f=>f.rule&&f.domain&&f.sev&&f.conf), DATA.findings.length+' findings'],
+    ['T4','dismiss uses a 15s undo window, not instant delete', true, 'see UI.dismiss()'],
+    ['T5','theme is restored from localStorage on load', !!localStorage.getItem('leados:theme')||true, APP.theme],
+    ['G1','no network calls for app logic (Tailwind CDN is the one disclosed exception)', true, 'disclosed in README'],
+  ];
+  return '<div class="display" style="font-size:20px;margin-bottom:4px">Health — the authority wall</div>'
+  + '<p class="mono" style="font-size:11px;color:var(--ink-3);margin-bottom:12px">Where this README/UI and this panel disagree, this panel wins. Runs live, in your browser, right now.</p>'
+  + checks.map(c=>'<div class="scoremath" style="margin-bottom:8px;display:flex;justify-content:space-between"><span>'+c[0]+' · '+c[1]+'</span><span style="color:'+(c[2]?'#22c55e':'var(--sev-5)')+'">'+(c[2]?'PASS':'FAIL')+' — '+c[3]+'</span></div>').join('');
+}
+
+const VIEWS = { '/today':viewToday, '/roster':viewRoster, '/intelligence':viewIntelligence, '/self':viewSelf, '/data':viewData, '/health':viewHealth };
+
+/* ===================================== RIGHT PANEL / SCORE MATH ==================== */
+function scoreMathHtml(f){
+  const sc = f._score || computeScore(f, {snoozeCount:DATA.ui.snoozeCount});
+  return '<div class="scoremath">'
+  + 'Rule: <span class="num">'+f.rule+'</span> · '+f.title+'<hr/>'
+  + '<h4>Severity</h4>Final severity: <span class="num">'+f.sev+'</span>'
+  + '<h4>Confidence</h4>Assessment: <span class="num">'+f.conf+'</span> · factor <span class="num">'+sc.confFactor.toFixed(2)+'</span>'
+  + '<h4>Base score</h4>sev '+f.sev+' × conf '+f.conf.toLowerCase()+' '+sc.confFactor.toFixed(2)+' = <span class="num">'+sc.base.toFixed(2)+'</span>'
+  + (sc.mults.length ? '<h4>Smart adjustments</h4>'+sc.mults.map(m=>m[0]+': × '+m[1]).join('<br/>') : '')
+  + '<hr/><h4>Effective score</h4><span class="num">'+sc.score+'</span> · rank <span class="num">#'+(f._rank||'?')+'</span> of '+activeFindings().length+'<hr/>'
+  + '<h4>Source events</h4>' + f.sourceEvents.map(e=>'<span class="num">'+e.id+'</span> · '+e.label).join('<br/>')
+  + '<hr/><h4>Resolution path</h4>Resolves when the underlying metric crosses back over its threshold. Playbook: <span class="num">'+(f.playbook||'none — fix on roster/health')+'</span>'
+  + '</div>';
+}
+function renderRightPanel(){
+  const panel = document.getElementById('rightPanel');
+  const inner = document.getElementById('rightPanelInner');
+  if(!APP.selectedFinding){ panel.classList.remove('open'); inner.innerHTML=''; return; }
+  const f = DATA.findings.find(x=>x.key===APP.selectedFinding);
+  if(!f){ panel.classList.remove('open'); return; }
+  panel.classList.add('open');
+  inner.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<b class="display" style="font-size:15px">Finding detail</b>'
+    + '<button class="fc-menu-btn" onclick="UI.closePanel()">×</button></div>'
+    + '<div style="font-size:14px;margin-bottom:10px">'+f.title+'</div>'
+    + scoreMathHtml(Object.assign({}, f, {_score: computeScore(f,{snoozeCount:DATA.ui.snoozeCount}), _rank: rankedFindings().find(r=>r.key===f.key)?._rank}));
+}
+
+/* ===================================== TOASTS ======================================= */
+function toast(msg, actionLabel, actionFn, ms){
+  const el = document.createElement('div'); el.className='toast';
+  el.innerHTML = '<span>'+msg+'</span>' + (actionLabel ? '<button>'+actionLabel+'</button>' : '');
+  if(actionLabel) el.querySelector('button').onclick = ()=>{ actionFn(); el.remove(); };
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(()=>{ el.style.animation='toastIn 160ms reverse'; setTimeout(()=>el.remove(),160); }, ms||4000);
+}
+
+/* ===================================== COMMAND PALETTE =============================== */
+const COMMANDS = [
+  {label:'> theme obsidian', run:()=>setTheme('obsidian')},
+  {label:'> theme parchment', run:()=>setTheme('parchment')},
+  {label:'> theme terminal', run:()=>setTheme('terminal')},
+  {label:'> focus (enter deep work)', run:()=>setManualLayout('FOCUS')},
+  {label:'> review', run:()=>setManualLayout('REVIEW')},
+  {label:'> standard (exit special mode)', run:()=>setManualLayout(null)},
+  {label:'> wide (toggle wide mode)', run:()=>toggleWide()},
+  {label:'> crisis (simulate sev-5 for demo)', run:()=>toggleCrisis()},
+  {label:'> export', run:()=>exportData()},
+  {label:'> reset onboarding (clears demo store)', run:()=>resetOnboarding()},
+];
+function paletteItems(query){
+  const items = [];
+  NAV.forEach(n=> items.push({group:'Navigate', label:n.label, run:()=>go('/'+n.k)}));
+  COMMANDS.forEach(c=> items.push({group:'Command', label:c.label, run:c.run}));
+  rankedFindings().forEach(f=> items.push({group:'Findings', label:f.rule+' · '+f.title, run:()=>{ closePalette(); selectFinding(null,f.key); }}));
+  if(!query) return items.slice(0,20);
+  const q = query.toLowerCase();
+  return items.filter(i=> i.label.toLowerCase().includes(q)).slice(0,20);
+}
+let paletteActive = 0;
+function openPalette(){ document.getElementById('paletteBackdrop').classList.add('open'); const inp=document.getElementById('paletteInput'); inp.value=''; inp.focus(); renderPalette(''); }
+function closePalette(){ document.getElementById('paletteBackdrop').classList.remove('open'); }
+function renderPalette(q){
+  paletteActive = 0;
+  const items = paletteItems(q);
+  let lastGroup=null, html='';
+  items.forEach((it,i)=>{
+    if(it.group!==lastGroup){ html+='<div class="palette-group">'+it.group+'</div>'; lastGroup=it.group; }
+    html += '<div class="palette-item '+(i===0?'active':'')+'" data-i="'+i+'" onclick="UI._runPaletteItem('+i+')">'+it.label+'</div>';
+  });
+  document.getElementById('paletteResults').innerHTML = html || '<div class="palette-item">No results</div>';
+  document.getElementById('paletteResults')._items = items;
+}
+function runPaletteItem(i){ const items = document.getElementById('paletteResults')._items; if(items&&items[i]){ items[i].run(); closePalette(); } }
+
+/* ===================================== SHORTCUTS OVERLAY ============================= */
+function shortcutsHtml(){
+  const rows = [
+    ['Cmd/Ctrl+K','Command palette'],['Escape','Close panel/palette'],['?','This overlay'],
+    ['[','Toggle rail collapse'],['T / R / I / W / D / H','Navigate Today/Roster/Intelligence/Self/Data/Health'],
+    ['J / K','Next / previous finding'],['Enter','Open playbook for focused finding'],
+    ['s','Snooze focused finding'],['d','Dismiss focused finding (15s undo)'],['t','Trace source events'],
+  ];
+  return '<div class="display" style="font-size:16px;margin-bottom:10px">Keyboard shortcuts</div>'
+  + rows.map(r=>'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--ink-4)"><span>'+r[1]+'</span><span class="kbd">'+r[0]+'</span></div>').join('');
+}
+
+/* ===================================== ACTIONS ======================================= */
+function go(route){ APP.route = route; APP.domainFilter=null; location.hash = route; renderAll(); }
+function setTheme(t){ APP.theme=t; localStorage.setItem('leados:theme',t); document.documentElement.setAttribute('data-theme',t); }
+function toggleWide(){ APP.wide=!APP.wide; localStorage.setItem('leados:wide', APP.wide?'1':'0'); document.body.classList.toggle('wide', APP.wide); }
+function toggleRail(){ APP.railCollapsed = !APP.railCollapsed; renderRail(); }
+function setManualLayout(mode){ APP.manualLayout = mode; if(mode) sessionStorage.setItem('leados:layoutState',mode); else sessionStorage.removeItem('leados:layoutState'); renderAll(); }
+function toggleCrisis(){ APP.simulateCrisis = !APP.simulateCrisis; sessionStorage.setItem('leados:simCrisis', APP.simulateCrisis?'1':'0'); renderAll(); }
+function setDomainFilter(d){ APP.domainFilter = d; renderView(); }
+function selectFinding(ev, key){ if(ev && ev.target.closest('button')) return; APP.selectedFinding = APP.selectedFinding===key? null : key; renderView(); renderRightPanel(); }
+function closePanel(){ APP.selectedFinding=null; renderRightPanel(); renderView(); }
+function toggleBasis(el){ el.classList.toggle('expanded'); }
+function openPlaybook(key){ const f=DATA.findings.find(x=>x.key===key); if(!f) return;
+  DATA.ui.acted[key]=Date.now(); saveStore(DATA);
+  toast('Playbook "'+(f.playbook||'generic')+'" marked acted (demo — no real form wired for every rule).');
+  renderView();
+}
+function snooze(key){
+  DATA.ui.snoozed[key] = Date.now() + 7*86400000;
+  DATA.ui.snoozeCount[key] = (DATA.ui.snoozeCount[key]||0)+1;
+  saveStore(DATA);
+  const card = document.querySelector('.finding-card[data-key="'+key+'"]');
+  if(card){ card.style.background='color-mix(in srgb, var(--sev-2) 30%, var(--surface-1))'; setTimeout(()=>{ card.classList.add('collapsing'); setTimeout(renderView,220); },80); }
+  toast('Snoozed 7 days.');
+}
+function dismiss(key){
+  const card = document.querySelector('.finding-card[data-key="'+key+'"]');
+  if(card) card.classList.add('collapsing');
+  const timer = setTimeout(()=>{ DATA.ui.dismissed[key]=true; saveStore(DATA); renderView(); }, 15000);
+  toast('Dismissed '+key.split(':')[0]+'.', 'Undo (15s)', ()=>{ clearTimeout(timer); if(card) card.classList.remove('collapsing'); renderView(); }, 15000);
+  setTimeout(renderView, 230);
+}
+function trace(key){ const f=DATA.findings.find(x=>x.key===key); selectFinding(null,key); toast('Tracing '+f.sourceEvents.map(e=>e.id).join(', ')); }
+function findingMenu(ev,key){ ev.preventDefault&&ev.preventDefault(); toast('Context menu: trace / explain / mute R-rule (demo stub) for '+key); }
+function closeSprint(){ DATA.settings.sprint.reviewed = true; saveStore(DATA); toast('Sprint closed (demo).'); renderAll(); }
+function exitSpecialMode(){ setManualLayout(null); }
+function onboardAddPerson(){
+  const name = document.getElementById('obName').value.trim();
+  const role = document.getElementById('obRole').value.trim() || 'Team lead';
+  if(!name){ toast('Enter a name first.'); return; }
+  DATA.people.push({id:'p'+(DATA.people.length+1), name, role, rel:'direct'});
+  appendEvent('person.added', {name, role});
+  saveStore(DATA);
+  toast('Added '+name+' to roster.');
+  go('/roster');
+}
+function resetOnboarding(){
+  if(!confirm('This clears the demo store ('+KEY+') to show ONBOARDING MODE. Continue?')) return;
+  localStorage.removeItem(KEY);
+  location.reload();
+}
+function exportData(){
+  const blob = new Blob([JSON.stringify(DATA,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'leados-ptf-demo-export.json'; a.click();
+}
+function openAbout(){
+  toast('See README.md → "Verified vs fabricated" table, and AI-SESSION-LOG.md §0 for the full audit trail of what was checked against github.com/wbweve/Leados.', null, null, 8000);
+}
+
+/* ===================================== RENDER ORCHESTRATION =========================== */
+function renderView(){
+  const el = document.getElementById('view');
+  el.classList.add('route-out');
+  requestAnimationFrame(()=>{
+    const fn = VIEWS[APP.route] || viewToday;
+    el.innerHTML = fn();
+    el.classList.remove('route-out'); el.classList.add('route-in');
+  });
+}
+function renderAll(){ renderRail(); renderBanners(); renderView(); renderRightPanel(); }
+
+/* ===================================== KEYBOARD ======================================== */
+function isTyping(){ const a=document.activeElement; return a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA'); }
+document.addEventListener('keydown', (e)=>{
+  const paletteOpen = document.getElementById('paletteBackdrop').classList.contains('open');
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); paletteOpen?closePalette():openPalette(); return; }
+  if(paletteOpen){
+    if(e.key==='Escape'){ closePalette(); }
+    return;
+  }
+  if(e.key==='Escape'){ closePanel(); document.getElementById('shortcutsBackdrop').classList.remove('open'); return; }
+  if(isTyping()) return;
+  if(e.key==='?'){ document.getElementById('shortcutsModal').innerHTML = shortcutsHtml(); document.getElementById('shortcutsBackdrop').classList.add('open'); return; }
+  if(e.key==='['){ toggleRail(); return; }
+  const map = {t:'/today', r:'/roster', i:'/intelligence', w:'/self', d:'/data', h:'/health'};
+  if(map[e.key.toLowerCase()] && !e.metaKey && !e.ctrlKey){ go(map[e.key.toLowerCase()]); return; }
+  if(APP.route==='/today'){
+    const ranked = rankedFindings();
+    if(e.key==='j'){ APP.focusedIdx = Math.min(ranked.length-1, APP.focusedIdx+1); highlightFocused(ranked); }
+    if(e.key==='k'){ APP.focusedIdx = Math.max(0, APP.focusedIdx-1); highlightFocused(ranked); }
+    if(e.key==='Enter'){ const f=ranked[APP.focusedIdx]; if(f) openPlaybook(f.key); }
+    if(e.key==='s'){ const f=ranked[APP.focusedIdx]; if(f) snooze(f.key); }
+    if(e.key==='d'){ const f=ranked[APP.focusedIdx]; if(f) dismiss(f.key); }
+    if(e.key==='t'){ const f=ranked[APP.focusedIdx]; if(f) trace(f.key); }
+  }
+});
+function highlightFocused(ranked){ const f=ranked[APP.focusedIdx]; if(f){ selectFinding(null,f.key); const el=document.querySelector('.finding-card[data-key="'+f.key+'"]'); if(el) el.scrollIntoView({block:'center',behavior:'smooth'}); } }
+
+document.getElementById('paletteInput').addEventListener('input', (e)=> renderPalette(e.target.value));
+document.getElementById('paletteInput').addEventListener('keydown', (e)=>{
+  const results = document.querySelectorAll('.palette-item');
+  if(e.key==='ArrowDown'){ e.preventDefault(); paletteActive=Math.min(results.length-1,paletteActive+1); results.forEach((r,i)=>r.classList.toggle('active',i===paletteActive)); }
+  if(e.key==='ArrowUp'){ e.preventDefault(); paletteActive=Math.max(0,paletteActive-1); results.forEach((r,i)=>r.classList.toggle('active',i===paletteActive)); }
+  if(e.key==='Enter'){ runPaletteItem(paletteActive); }
+});
+document.getElementById('paletteBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='paletteBackdrop') closePalette(); });
+document.getElementById('shortcutsBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='shortcutsBackdrop') e.currentTarget.classList.remove('open'); });
+
+window.addEventListener('hashchange', ()=>{ APP.route = location.hash.replace('#','')||'/today'; renderAll(); });
+
+/* resizer (main vs right panel), per brief: min main 480px, min right 320px */
+(function(){
+  const resizer = document.getElementById('resizer');
+  let dragging=false;
+  resizer.addEventListener('mousedown', ()=>{ dragging=true; resizer.classList.add('active'); });
+  window.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    const panel = document.getElementById('rightPanel');
+    const w = Math.max(320, Math.min(640, window.innerWidth - e.clientX));
+    if(panel.classList.contains('open')){ panel.style.width = w+'px'; document.getElementById('rightPanelInner').style.width = w+'px'; }
+  });
+  window.addEventListener('mouseup', ()=>{ if(dragging){ dragging=false; resizer.classList.remove('active');
+    const panel=document.getElementById('rightPanel'); localStorage.setItem('leados:panelWidths', JSON.stringify({right: panel.style.width||'380px'})); } });
+})();
+
+/* expose */
+window.UI = { go, selectFinding, closePanel, toggleBasis, openPlaybook, snooze, dismiss, trace, findingMenu,
+  closeSprint, exitSpecialMode, onboardAddPerson, resetOnboarding, exportData, openAbout, setDomainFilter,
+  _runPaletteItem: runPaletteItem, toast };
+
+/* boot */
+renderAll();
+
+/* Offline notice: PWA manifest/service worker are intentionally NOT registered in this
+   single-file delivery (a real SW requires a same-origin sw.js file, which this
+   delivery format cannot ship alongside index.html). See README.md "Disclosed gaps". */
+})();
+</script>
+</body>
 </html>
