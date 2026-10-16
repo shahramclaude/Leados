@@ -1,13 +1,14 @@
-# LeadOS pt-11 — Conversation Intelligence Layer
+# LeadOS pt-12 — Organizational Dynamics
 
-A universal leadership and management operating system. Append-only event log, **97 validated
-event types**, **52 pure rules** (R1–R40 individual · R41–R45 correlation · **R46–R52
-conversation**), a correlation engine (clusters · confidence-weighted decayed heat · named
-patterns · benchmark gating), an insight layer, interactive playbook runners, and now a
-**conversation preparation system** — everything derived per read, nothing derived persisted.
+A universal leadership and management operating system. Append-only event log, **107 validated
+event types**, **62 pure rules** (R1–R40 individual · R41–R45 correlation · R46–R52 conversation
+· **R53–R62 organizational**), a correlation engine (clusters · confidence-weighted decayed heat
+· named patterns · benchmark gating · **network analysis · culture scoring · meeting load**), a
+conversation preparation system, and 20 interactive playbook runners. Everything derived per
+read; nothing derived is ever persisted.
 
-**Run it:** open `index.html` in any modern browser. No server, no build step, no framework,
-no network, no CDN. One localStorage key.
+**Run it:** open `index.html` in any modern browser. No server, build step, framework, network,
+or CDN. One localStorage key.
 
 **Verify it:** open `#/health` — the authority wall. Where this file and `#/health` disagree,
 **`#/health` on your machine wins.**
@@ -19,137 +20,124 @@ no network, no CDN. One localStorage key.
 | Claim | Status |
 |---|---|
 | Upstream tree @ `a1ed70f`: 22 flat entries, no `css/`/`js/`, npm scaffold + `rules.js` tombstone, unbootable as shipped | **BYTE-VERIFIED** (pt-7 session, git trees API) |
-| `store.js` full read (schema ladder, repair counting, single key) | **BYTE-VERIFIED** — ported near-verbatim |
-| `engine.js` fold table / buckets / aliases / open-sets / roster; pt-5 handlers; pt-6 pattern library; upstream heat `sev × decay^ageDays` with no CONF_FACTOR; upstream insight shape; promotion-rule string | **BYTE-VERIFIED (those regions)** |
-| `events.js` full 92-type registry · `health.js` · `ui.js` · upstream `playbooks.js` · `HOT_SCORE` | **NOT VERIFIED** — beyond fetch truncation; never claimed |
-| pt-8/pt-9/pt-10/pt-11 briefs | received in full, implemented literally; every interpretation labeled below |
+| `store.js` full read — schema ladder, repair counting, single key, import gate | **BYTE-VERIFIED**, ported near-verbatim |
+| `engine.js` fold table / buckets / aliases / open-sets / roster; pt-5 handlers; pt-6 pattern library; upstream heat `sev × decay^ageDays` (no CONF_FACTOR); upstream insight shape; promotion-rule string | **BYTE-VERIFIED (those regions)** |
+| `events.js` full registry · `health.js` · `ui.js` · upstream `playbooks.js` · `HOT_SCORE` | **NOT VERIFIED** — beyond fetch truncation; never claimed |
+| pt-8 … pt-12 briefs | received in full, implemented literally; every interpretation labeled |
 
-**Registry:** 97 contracts (85 pt-7 + 2 pt-9 + 10 pt-11). Upstream claims 92 for its own tree;
-the sets are not comparable without the unread `events.js` — **stated, not reconciled by guess.**
+No new upstream reads this session. **Registry: 107 contracts** (85 + 2 + 10 + 10).
 
-## Delivery & the file-table question
+## Module registry (the brief's file list, structurally)
 
-The brief names `js/conversations.js` as a 12th file and asks for a 12-entry table. **This
-delivery has shipped as three files since pt-7** (the delivery clause: `index.html`,
-`README.md`, `AI-SESSION-LOG.md`), so the multi-file doctrine is honored **structurally rather
-than physically** and the divergence is stated rather than papered over:
+This line has shipped **three physical files** since pt-7 (the delivery clause). The brief's
+script list lives as `LeadOS.EXPECTED_MODULES`, in the brief's load order, enforced by the boot
+guard (which halts and names a missing module) and asserted by G10:
 
-| # | Logical module (`LeadOS.*`) | Upstream path analog | Role |
-|---|---|---|---|
-| 1 | `util` | `js/util.js` | time/number/string helpers, deep-equality |
-| 2 | `events` | `js/events.js` | 97-type registry + append-gate validator |
-| 3 | `store` | `js/store.js` | persistence wall, **schema v6**, migrations, import gate |
-| 4 | `engine` | `js/engine.js` | `project()` fold, named projections, selectors |
-| 5 | `rules` | `js/rules.js` | R1–R52, `fin()` contract, the `run()` pipeline |
-| 6 | `correlate` | `js/correlate.js` | clusters · heat · patterns · insights · benchmarks |
-| 7 | **`conversations`** | **`js/conversations.js`** | **styles · models · ZOPA · `prepareConv()`** |
-| 8 | `health` | `js/health.js` | T-suite, G-suite, claims |
-| 9 | `playbooks` | `js/playbooks.js` | descriptors + 14 interactive runners |
-| 10 | `ui` | `js/ui.js` | rail, hash routes, views, boot gate |
-| — | `index.html` · `README.md` · `AI-SESSION-LOG.md` | shipped files | the three physical artifacts |
+`util · events · store · engine · rules · correlate · conversations · health · playbooks · ui`
 
-`LeadOS.EXPECTED_MODULES` is the boot guard's list, **load-ordered exactly as the brief's script
-list** (`conversations` after `correlate`, before `playbooks`). A missing module halts rendering
-and names it; G10 asserts the list including `conversations`.
+`analyzeNetwork` / `scoreCulture` / `meetingLoad` extend **`correlate`**, exactly as the brief
+specifies ("extend js/correlate.js").
 
----
+## Schema v7 — `MIGRATIONS['6>7']`
 
-## Schema v6 — `MIGRATIONS['5>6']`
+Backfills `influenceNetworkDecayDays` **180** · `cultureSignalWindowDays` **90** ·
+`infoPipelineCheckCadenceDays` **30** under the unchanged contract (leader values never
+overwritten, every repair counted, idempotent). A v3 store climbs to v7.
 
-Backfills three settings as repair events under the identical contract (leader values never
-overwritten, every repair counted, idempotent — T1): `negotiationStyleDefault` **'collaborative'**
-· `feedbackDeliveryModel` **'SBI'** · `conflictMediationModel` **'DESC'**. These are the ladder's
-**first string settings**: the Data view renders enum dropdowns and never coerces them to Number
-(a coercion bug here would write `NaN` into your operating doctrine). A v3 store climbs to v6.
+## Organizational Network Analysis
 
-## The conversation engine — `LeadOS.conversations`
+`analyzeNetwork(P, today)` builds a directed weighted graph from `org.network.edge` events inside
+`influenceNetworkDecayDays`, with **edge weight = `strength × decayFactor^(age_days / 30)`** —
+the decay math is printed on every edge, and edges outside the window are listed as dropped with
+their reason. Every output carries the standing label:
 
-- **`styleFor(personId, P)`** — latest `influence.mapped` wins (append order), returns the style
-  plus its printed guidance. Unmapped returns `known:false` with *"never guessed"* — R50 nudges
-  you to observe; it never infers a style.
-- **`prepareConv(type, ctx, P)`** — 14 types, each returning `opening_line` (**SCAFFOLD, not a
-  script — use the shape, not the words**), `their_likely_response` (**HYPOTHESIS from the log,
-  not a prediction**), 2–3 `your_reframes` as if-they-say → you-say pairs, `non_negotiables`,
-  `BATNA_check` (negotiation/compensation/performance/termination only; other types print *why*
-  they have none), and 3 type-specific `debrief_questions`. The opening adapts to the mapped
-  influence style: analytical leads with data **before** conclusions (G43), expressive leads with
-  the relationship, driver leads with the outcome.
-- **Models** — SBI · **COIN** (C/O/I/N, where **N is the action, not optional** — `validateModel`
-  rejects a missing N with that reason printed, G41) · BID · **GROW** (3 options minimum) ·
-  DESC · **ICF** (Interests / Common ground / Forward). Which model applies is read from the v6
-  settings and the source is printed on the output.
-- **`zopaFor(neg)`** — numeric range when both BATNAs are numeric; **null when either is missing**
-  (T29); inverted BATNAs print *"recalibrate before entering"* rather than a fake zone; always
-  carries the caveat that their BATNA is an estimate you wrote.
+> **approximation derived from YOUR logged observations — not a sociometric study; the graph
+> contains only edges you recorded.**
 
-## Rules R46–R52
+| Function | Exactness — as printed at runtime |
+|---|---|
+| `indegree` / `outdegree` / `weightedIn` / `weightedOut` | exact counts/sums over the decayed edge set |
+| `betweenness` | **SIMPLIFIED** — one BFS shortest path per ordered pair, interior nodes credited. **Not exact Brandes** (which credits all shortest paths fractionally) |
+| `stronglyConnected` | **EXACT** — Tarjan over the collaboration subgraph, O(V+E) |
+| `bridges` | **SIMPLIFIED** — articulation *nodes* on the undirected projection (remove-and-count-reachable), not Tarjan bridge-*edges* |
+| `clusters` | multi-node SCCs only |
+| `isolates` | roster ∪ graph nodes with no collaboration edge |
+| `informationBottlenecks` | high betweenness **AND** a blocked `info.pipeline.check` through them |
+
+**`scoreCulture`** — `(positive_weighted − negative_weighted) / total_weighted × 10`, clamped
+**0–10**, with `value-violated` and `villain-named` at **2× weight**. That coefficient is printed
+everywhere as *"a PRINTED ASSUMPTION from organizational-psychology literature (bad signals are
+stickier than good ones), NOT a coefficient measured in your org."* The score is labeled a
+**composite observation, not a measurement**; with no signals it returns **null**, never a
+flattering default (G58).
+
+**`meetingLoad`** — hours/week per person, outcome distribution by *minutes* (the cost is time),
+wasted-hours per person, and the loaded cost **only if you logged one** ("never invented").
+
+## Rules R53–R62
 
 | Rule | Fires | sev / conf |
 |---|---|---|
-| **R46** | `conv.planned` stakes ≥ 4, no `conv.completed` within 7d (>14d escalates) | 3 → 4 / HIGH |
-| **R47** | outcome `escalated` with no follow-up `conv.planned` or `mediation.held` within 5d | 4 / HIGH |
-| **R48** | `comp.discussed` "held" + `perf.discussed` "exceeds" in the same period | 3 / HIGH |
-| **R49** | rating `disputed`, no `conv.planned` or `hr.pip.started` within 14d | 3 / HIGH |
-| **R50** | no `influence.mapped` for a person on file > 60d | **1 / LOW — a nudge, not an alarm** |
-| **R51** | `negotiation.logged` with `myBatna` null or absent | 3 / HIGH |
-| **R52** | `board.presented` "rejected" with no `exec.aligned` in the 30d prior | 4 / HIGH |
+| **R53** | roster person with no `org.network.edge` (any type), no 1:1 in 30d, no skip-level | 3 / MEDIUM — *absence of signal is the signal*, labeled |
+| **R54** | `info.pipeline.check` blocked ≥ 2× for the same (from,to) in 60d | 3 / HIGH |
+| **R55** | any `culture.signal` `value-violated` — **single event, immediately**, description verbatim | 3 / HIGH |
+| **R56** | culture score drops **strictly more than 2** (30d vs prior 30d); score < 4 | 3 / MEDIUM (trend) · 4 |
+| **R57** | psych safety ≤ 2 → 4 · = 3 → 3 · none in > 90d → 2 — **method printed in basis** | 4 / 3 / 2 |
+| **R58** | `org.silo.logged` severity ≥ 3 unresolved (clamped 3–4); > 60d → 4 | 3–4 / HIGH |
+| **R59** | `informalPower ≥ 4` **and** `formalPower ≤ 2` | 2 / MEDIUM — advisory, not an alarm |
+| **R60** | `meeting.audit` wasted ≥ 40% → 3 · ≥ 60% → 4 · none in > 60d → 1 | 3 / 4 / 1 |
+| **R61** | trust `lost` with no later `gained`, ≤ 90d; 2 distinct sources → 4 | 3 → 4 / MEDIUM |
+| **R62** | R19 attrition **and** the leaver is top-2 by betweenness — betweenness printed | **5** / MEDIUM |
 
-Printed scope decisions: *"same period"* (R48) = `revenueReviewCadenceDays`, because the registry
-carries no period field on `perf.discussed`; *"direct report"* (R50) = roster membership, because
-this registry has **no `reportsTo` contract** — both gaps printed in the finding basis, never
-inferred away.
+R62 is sev 5 on a MEDIUM confidence deliberately: *the departure is a fact, the graph is your
+observations* — and that split is printed in the finding.
 
-## New playbooks (7)
+## New playbooks (6)
 
-`conv-prep` (master router, **live** `prepareConv()` preview as you type) · `conv-debrief`
-(prints the 3 type-specific questions carried from the plan, G47) · `negotiation-prep` (**live**
-ZOPA) · `compensation-prep` (prints the R48 retention signal when active) · `termination-prep`
-(carries the brief's verbatim note and the unconditional BATNA copy, G42) · `mediation-prep`
-(**live** ICF frame) · `restructure-announcement-prep` (affected list drives `exec.aligned`
-stakeholders exactly, G49). All emit **event specs you review before anything is appended**.
+`culture-audit` · `network-review` · `silo-break` · `meeting-audit` · `trust-repair` ·
+`psych-safety-build` — each prefills from the live log and emits **event specs you review before
+anything is appended**. `silo-break` prints why it writes `objective.set` rather than a `goal.set`
+the registry does not have, and why the second joint owner lives in the objective text.
 
 ## Views
 
-`#/today` · `#/signals` · `#/insights` · `#/heatmap` · `#/benchmarks` · **`#/conversations`**
-(upcoming by stakes desc then oldest prep · last 20 completed with outcome chips · influence map
-with unmapped rows dimmed · negotiations with BATNA + ZOPA · open conflict pairs · quick capture)
-· **`#/dossier`** (per person: conversation history, influence-style card with behavioral notes,
-negotiation history, live findings) · `#/playbooks` · `#/health` · `#/data`.
-
-Conversation findings on Today/Signals carry a **prepare** button that opens `conv-prep` with the
-conversation type and subject pre-populated from the finding (R47→mediation, R48→compensation,
-R49→performance, R51→negotiation, R52→board-presentation, R46→the planned conversation's own type).
+`#/today` · `#/signals` · `#/insights` · `#/heatmap` · `#/benchmarks` · `#/conversations` ·
+**`#/org`** (network summary · culture gauge with 30d trend · silo register · power map · meeting
+load · open lost-trust pairs · quick capture) · `#/dossier` (now with **network position** —
+in/out degree, betweenness with its approximation label, isolate and bridge flags, power map,
+meeting load — plus **trust signals** involving the person) · `#/playbooks` · `#/health` · `#/data`.
 
 ## Health wall
 
-**T1–T32** (pinned fixtures, epoch `2026-02-16T12:00:00.000Z`) · **G1–G10 + G31–G49** (live store
-and goldens) · **claims C1–C14**.
+**T1–T37** (pinned fixtures, epoch `2026-02-16T12:00:00.000Z`) · **G1–G10 · G31–G59** ·
+**claims C1–C15**.
 
-> **ID map, printed because ids are the contract:** this part's brief numbered its checks T26–T30,
-> but T26/T27 were already assigned in pt-10. They ship as **T28–T32** (brief T26→T28 · T27→T29 ·
-> T28→T30 · T29→T31 · T30→T32). G41–G50 keep the brief's ids; **brief G50 is folded into G40**,
-> which now asserts all 52 rules fire from the extended seed (the T12b requirement).
+> **ID map, printed because ids are the contract:** this brief numbered its checks T31–T35, but
+> T31/T32 were taken in pt-11. They ship as **T33–T37** (brief T31→T33 · T32→T34 · T33→T35 ·
+> T34→T36 · T35→T37). **G51–G59 keep the brief's ids; brief G60 is folded into G40**, which now
+> asserts all **62** rules fire from the extended seed (the T12b requirement).
 
 ## Explicit non-claims
 
 - **The browser is the grader.** No JS runtime at authoring time; correctness is by construction
-  and fixture tracing. Every count is executable in `#/health`, none is claimed observed.
+  and fixture tracing. Every count is executable in `#/health`; none is claimed observed.
 - **Labeled interpretations:** CONF_FACTOR values · findings-suppression mechanics · ENG-fault
-  embodiment · `playbook.completed` / `plan.checkin` shapes · R48's "same period" window ·
-  R50's "direct report" proxy · conflict pairs derived from `mediation.held` alone (no
-  `conflict.raised` contract exists — the gap is printed wherever it matters).
-- **Every conversation output is a scaffold, never a script**; every counterpart response is a
-  hypothesis, never a prediction. The system prepares you; it does not speak for you.
-- Heat is a composite signal, not a measurement. The seed is a fixture, not a diagnosis. Nothing
-  here is legal, HR, or financial counsel — least of all `termination-prep`.
+  embodiment · `playbook.completed`/`plan.checkin` shapes · R48's "same period" window · R50/R53's
+  "direct report" = roster-membership proxy (**no `reportsTo` contract exists**) · conflict pairs
+  derived from `mediation.held` alone (**no `conflict.raised` contract exists**) · the culture 2×
+  weight · betweenness and bridges as **approximations**.
+- **The graph is only what you logged.** Network analysis is not a sociometric study; a person
+  absent from the graph is absent from your observations, which is precisely what R53 says.
+- Heat and culture are composite signals, not measurements. The seed is a fixture, not a
+  diagnosis. Nothing here is legal, HR, or financial counsel.
 - No accounts, no sync, no network, permanently. Data leaves only when you export it.
 
 ## Ranked next
 
-1. **`conflict.raised` / `conflict.resolved` contracts** — conflict pairs currently derive from
-   `mediation.held` alone; R6-style conflict rules deserve a first-class signal.
-2. **`reportsTo` / 1:1 cadence events** — would retire R50's roster proxy and LEADERSHIP_VACUUM's
-   heritage proxies in one stroke.
-3. **`production-stop` interactive brief** (requested in pt-9, still not received).
-4. **Byte-verify the unread upstream bodies** and reconcile the registry count honestly.
-5. **Executive/board pack** (upstream's own queued #1, still open).
+1. **`conflict.raised` / `conflict.resolved`** — pairs still derive from mediations alone.
+2. **`reportsTo` + 1:1 cadence contracts** — would retire the roster proxy in R50/R53 and the
+   heritage proxies in LEADERSHIP_VACUUM simultaneously.
+3. **Exact Brandes betweenness** — would let R62 drop its approximation caveat.
+4. **`production-stop` interactive brief** (requested pt-9, still outstanding).
+5. **Byte-verify the unread upstream bodies**; reconcile registry counts honestly.
+6. **Executive/board pack** (upstream queued #1, carried since pt-7).

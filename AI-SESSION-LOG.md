@@ -305,3 +305,91 @@ unread; nothing about them is claimed.
 3. `production-stop` interactive brief (requested pt-9, still outstanding).
 4. Byte-verify the unread upstream bodies; reconcile registry counts honestly.
 5. Executive/board pack (upstream queued #1, carried since pt-7).
+
+---
+
+## Session 12 — pt-12 (brief "pt-7"): organizational dynamics
+
+**Date:** February 2026, same-week continuation. **Env:** as Sessions 7–11 — no JS runtime at
+authoring time; `#/health` in the reader's browser is the authority wall.
+
+### §0 Opening audit — all modules (the brief's 11/12-file list)
+
+No new upstream reads this session; the upstream status table in README §0 stands unchanged
+(`store.js` + `engine.js` regions byte-verified in pt-7; `events.js`/`health.js`/`ui.js`/
+upstream `playbooks.js`/`HOT_SCORE` still unread and still unclaimed). Per-module changes:
+
+| Module (`LeadOS.*`) | Brief's path | This session |
+|---|---|---|
+| `util` | `js/util.js` | unchanged |
+| `events` | `js/events.js` | **+10 contracts** (97→107); enums on edge type, culture type/polarity, meeting type/outcome, trust direction |
+| `store` | `js/store.js` | **schema v7**, `MIGRATIONS['6>7']`, 3 settings |
+| `engine` | `js/engine.js` | **+18 buckets**, 10 fold handlers, `openSilos` open-set |
+| `rules` | `js/rules.js` | **+R53–R62** (52→62) |
+| `correlate` | **`js/correlate.js`** | **+`analyzeNetwork`, `scoreCulture`, `meetingLoad`** — extended exactly as the brief directs |
+| `conversations` | `js/conversations.js` | unchanged |
+| `health` | `js/health.js` | **+T33–T37, +G51–G59**, G40 → 62 rules, `FX.net3()` fixture, seed extended |
+| `playbooks` | `js/playbooks.js` | **+6 runners** (14→20) |
+| `ui` | `js/ui.js` | **+`#/org`**, dossier network-position + trust sections, monospace bar helper |
+
+### §1 Non-obvious decisions, one line of WHY each
+
+1. **Every graph function prints its own exactness class** — the brief asked for labels on
+   betweenness and bridges; I labeled Tarjan as *exact* too, because a reader who sees three
+   "approximation" notes and one silent function will assume the silent one is also approximate.
+2. **Betweenness credits one BFS path per ordered pair** — exact Brandes needs fractional
+   credit across all shortest paths; implementing a half-Brandes and calling it Brandes would be
+   the exact dishonesty this system exists to prevent, so the simplification is named in the
+   function, in the finding basis, and in the README table.
+3. **`bridges()` returns articulation NODES, not edges** — the brief itself says "simplified:
+   articulation-point detection on undirected projection"; the name `bridges` is kept (it is the
+   brief's) and the discrepancy between name and semantics is printed.
+4. **Culture score returns `null`, not 0, with no signals** — a zero would read as "culture is
+   terrible"; null reads as "you have not observed anything", which is the truth (G58).
+5. **R56 compares two scoring windows, not a stored history** — nothing derived persists, so the
+   prior window is recomputed by re-scoring at `today − 30d`; both windows' math is printed.
+6. **R62 is sev 5 at conf MEDIUM** — the departure is a fact and the graph is an estimate; the
+   finding states both halves rather than averaging them into a dishonest single confidence.
+7. **R53 requires ALL THREE absences** (no edge of any type, no 1:1 in 30d, no skip-level) — a
+   single absence is a logging gap, not an isolation signal; and even then conf is MEDIUM with
+   the absence-of-signal doctrine printed.
+8. **`silo-break` writes `objective.set`, not `goal.set`** — the brief names `goal.set`, which
+   this registry does not have; the shipped equivalent is used and the substitution (plus the
+   single-owner field forcing the second owner into the objective text) is printed in code.
+9. **Meeting distribution is % of MINUTES, not of meeting count** — a 15-minute standup and a
+   two-hour "wasted" review are not one vote each; the denominator is printed with the number.
+10. **`#/org` quick capture reuses the registry-driven form** rather than a bespoke one, so new
+    org event types can never drift out of the capture surface.
+
+### §2 Self-caught defects during authoring (this part)
+
+- D16 The seed fired R53–R61 but **not R62**: the only non-zero-betweenness node in the seeded
+  graph is `lee`, and no attrition existed for them. Traced the BFS by hand (ava→lee→dana gives
+  `bet[lee] = 1`, everything else 0), then added `lee`'s departure — which is also the most
+  honest illustration of the rule.
+- D17 First draft of `R62` used `U.maxAt` on bare timestamps again (the pt-8 D9 failure mode);
+  caught before it shipped by re-reading the helper's contract rather than its name.
+- D18 `G51`'s isolate fixture originally had no roster anchor, so `px` existed only as a graph
+  node and R53 (which iterates the roster) could never see them — fixture corrected to put `px`
+  on the roster via `hr.performance.logged`.
+
+### §3 Expected (NOT yet observed) outcomes — pt-12
+
+- **T33–T37** = brief T31–T35 (ID map printed in README and in code beside the checks).
+- **G51–G59** as the brief wrote them; **brief G60 folded into G40**, now asserting 62/62 from
+  the extended seed: isolate with no edges/1:1 (`kai`, `max`), repeated pipeline block, a
+  value-violated signal, a declining culture window, psych safety 2, a 70-day silo, an
+  informal-power gap, 45% meeting waste, two trust losses from different sources, and the
+  bridge-person departure.
+- **C15** proven iff T33–T37 + G51–G59 + G40 pass. T1–T32 and G1–G49 expected unchanged-green;
+  G2 now reads `store.SCHEMA_VERSION` (the pt-11 D13 fix), so the v7 bump cannot wall anyone out.
+
+### §4 Open items (ranked)
+
+1. `conflict.raised` / `conflict.resolved` contracts.
+2. `reportsTo` + 1:1 cadence contracts — retires the roster proxy in R50/R53 **and**
+   LEADERSHIP_VACUUM's heritage proxies.
+3. **Exact Brandes betweenness** — would let R62 and `#/org` drop the approximation caveat.
+4. `production-stop` interactive brief (requested pt-9, outstanding).
+5. Byte-verify the unread upstream bodies; reconcile registry counts.
+6. Executive/board pack (upstream queued #1, carried since pt-7).

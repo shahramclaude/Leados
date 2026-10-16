@@ -415,7 +415,24 @@ const REGISTRY = {
   'exec.aligned':           D({topic:'s',stakeholders:'a',result:'s'},{note:'s'},
                               {result:['aligned','misaligned','partial']}),
   'mediation.held':         D({parties:'a',result:'s'},{conflictId:'s',mediatorId:'s',note:'s'},
-                              {result:['resolved','partial','escalated']})
+                              {result:['resolved','partial','escalated']}),
+  /* pt-12 (brief "pt-7") — organizational dynamics. 10 contracts. */
+  'org.network.edge':       D({fromId:'s',toId:'s',type:'s',strength:'n',observed:'ms'},{note:'s'},
+                              {type:['collaboration','information','decision','blocker']}),
+  'org.silo.logged':        D({id:'s',teams:'a',symptom:'s',severity:'n'},{note:'s'},null,'silos'),
+  'org.silo.resolved':      D({siloId:'s',how:'s'},{note:'s'},null,null,{siloId:'silos'}),
+  'culture.signal':         D({type:'s',description:'s',polarity:'s',personIds:'a'},{note:'s'},
+                              {type:['artifact','ritual','value-lived','value-violated','story','hero-celebrated','villain-named'],
+                               polarity:['positive','negative','neutral']}),
+  'info.pipeline.check':    D({from:'s',to:'s',blocked:'b',topic:'s'},{latency_days:'n',note:'s'}),
+  'power.map.logged':       D({personId:'s',formalPower:'n',informalPower:'n',coalition:'a'},{note:'s'}),
+  'meeting.logged':         D({title:'s',type:'s',attendees:'a',duration_min:'n',outcome:'s'},{note:'s'},
+                              {type:['standup','1on1','all-hands','planning','review','social','ad-hoc'],
+                               outcome:['decision','update','discussion','wasted']}),
+  'meeting.audit':          D({period:'s',total_hours:'n',wasted_pct:'n'},{loaded_cost_est:'n',note:'s'}),
+  'trust.signal':           D({fromId:'s',toId:'s',direction:'s',evidence:'s'},{note:'s'},
+                              {direction:['gained','lost']}),
+  'psychological.safety':   D({period:'s',score:'n',method:'s'},{teamId:'s',note:'s'})
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -442,7 +459,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=6, LINEAGE='pt', LINEAGE_TAG='pt-11';
+const KEY='leados:data', SCHEMA_VERSION=7, LINEAGE='pt', LINEAGE_TAG='pt-12';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -460,7 +477,11 @@ const V6_SETTING_DEFAULTS={negotiationStyleDefault:'collaborative',feedbackDeliv
 const V6_NEW_KEYS=Object.keys(V6_SETTING_DEFAULTS);
 const SETTING_ENUMS={feedbackDeliveryModel:['SBI','COIN','BID'],conflictMediationModel:['DESC','GROW','ICF'],
   negotiationStyleDefault:['collaborative','competitive','accommodating','avoiding','compromising']};
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS);
+/* v7 — organizational dynamics. Numbers again; the network decay is a
+   LABELED assumption exactly like heatmapDecayFactor (printed wherever used). */
+const V7_SETTING_DEFAULTS={influenceNetworkDecayDays:180,cultureSignalWindowDays:90,infoPipelineCheckCadenceDays:30};
+const V7_NEW_KEYS=Object.keys(V7_SETTING_DEFAULTS);
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -517,7 +538,14 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V6_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V6_SETTING_DEFAULTS[k]},{repair:true,migration:'5>6',reason:'backfill v6 setting default'}); repairs++; }});
-    recordMigration(raw,'5>6',repairs); raw.schemaVersion=6; return repairs; }
+    recordMigration(raw,'5>6',repairs); raw.schemaVersion=6; return repairs; },
+  /* v6 -> v7: the organizational-dynamics settings. Same contract, unchanged
+     since 3>4: replay, backfill only what the leader never set, count it all. */
+  '6>7':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V7_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V7_SETTING_DEFAULTS[k]},{repair:true,migration:'6>7',reason:'backfill v7 setting default'}); repairs++; }});
+    recordMigration(raw,'6>7',repairs); raw.schemaVersion=7; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -605,7 +633,8 @@ function purge(){ localStorage.removeItem(KEY); return load(); }
 const getEvents=()=>load().events.slice();
 const rawBytes=()=>{ const t=localStorage.getItem(KEY); return t?t.length:0; };
 LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V4_NEW_KEYS,
-  V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,SETTING_ENUMS,
+  V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,
+  V7_SETTING_DEFAULTS,V7_NEW_KEYS,SETTING_ENUMS,
   RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
@@ -790,7 +819,28 @@ const MODULE_FOLD={
     s.mediations.push(rec);
     const key=p.parties.slice().sort().join('|');
     if(p.result==='resolved'){ delete s.conflictPairs[key]; s.resolvedPairs[key]={at:at,_ev:ev&&ev.id}; }
-    else s.conflictPairs[key]={key:key,parties:p.parties.slice(),result:p.result,at:at,_ev:ev&&ev.id}; }
+    else s.conflictPairs[key]={key:key,parties:p.parties.slice(),result:p.result,at:at,_ev:ev&&ev.id}; },
+  /* pt-12 — organizational dynamics */
+  'org.network.edge':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.networkEdges.push(rec);
+    group(s.edgesByFrom,p.fromId,rec); group(s.edgesByTo,p.toId,rec);
+    s.networkNodes[p.fromId]=true; s.networkNodes[p.toId]=true; },
+  'org.silo.logged':(s,p,at)=>{ s.silos[p.id]={id:p.id,teams:p.teams.slice(),symptom:p.symptom,
+    severity:p.severity,note:p.note||'',loggedAt:at,resolved:false,how:'',resolvedAt:null}; },
+  'org.silo.resolved':(s,p,at)=>{ const x=s.silos[p.siloId];
+    if(x){ x.resolved=true; x.how=p.how; x.resolvedAt=at; } },
+  'culture.signal':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.cultureSignals.push(rec); group(s.cultureByType,p.type,rec); },
+  'info.pipeline.check':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.pipelineChecks.push(rec); group(s.pipelineByPair,p.from+'→'+p.to,rec); },
+  'power.map.logged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.powerLog.push(rec); s.powerByPerson[p.personId]=rec; /* latest wins */ },
+  'meeting.logged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.meetings.push(rec); p.attendees.forEach(a=>group(s.meetingsByPerson,a,rec)); },
+  'meeting.audit':(s,p,at,ev)=>{ push(s.meetingAudits,p,at,ev); },
+  'trust.signal':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.trustSignals.push(rec); group(s.trustByPair,p.fromId+'→'+p.toId,rec); group(s.trustByTarget,p.toId,rec); },
+  'psychological.safety':(s,p,at,ev)=>{ push(s.psychSafety,p,at,ev); }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -814,6 +864,12 @@ function blankBuckets(s){
   s.influenceLog=[];s.influenceByPerson={};s.negotiations={};
   s.compDiscussions=[];s.compByPerson={};s.perfDiscussions=[];s.perfDiscByPerson={};
   s.boardPresentations=[];s.execAlignments=[];s.mediations=[];s.conflictPairs={};s.resolvedPairs={};
+  /* pt-12 organizational buckets */
+  s.networkEdges=[];s.edgesByFrom={};s.edgesByTo={};s.networkNodes={};
+  s.silos={};s.cultureSignals=[];s.cultureByType={};
+  s.pipelineChecks=[];s.pipelineByPair={};s.powerLog=[];s.powerByPerson={};
+  s.meetings=[];s.meetingsByPerson={};s.meetingAudits=[];
+  s.trustSignals=[];s.trustByPair={};s.trustByTarget={};s.psychSafety=[];
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -841,7 +897,8 @@ const OPEN_SETS={
   openDecisions:['decisions',d=>!d.decided],
   openConvs:['convs',c=>c.completed===null],
   openNegotiations:['negotiations',n=>!n.outcome],
-  openConflictPairs:['conflictPairs',()=>true]
+  openConflictPairs:['conflictPairs',()=>true],
+  openSilos:['silos',s=>!s.resolved]
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -1501,9 +1558,181 @@ function R52(P,today){ const f=F('R52'),out=[];
         'source: board.presented + exec.aligned'],
       refs:[],scope:'board:'+b.period,evidenceAt:b.at})); });
   return out; }
+/* ---- pt-12 organizational-dynamics rules R53–R62 ---- */
+Object.assign(META,{
+  R53:{domain:'people',play:'network-review'},R54:{domain:'operations',play:'network-review'},
+  R55:{domain:'people',play:'culture-audit'},R56:{domain:'people',play:'culture-audit'},
+  R57:{domain:'people',play:'psych-safety-build'},R58:{domain:'operations',play:'silo-break'},
+  R59:{domain:'people',play:'network-review'},R60:{domain:'operations',play:'meeting-audit'},
+  R61:{domain:'people',play:'trust-repair'},R62:{domain:'people',play:'network-review'}
+});
+function R53(P,today){ const f=F('R53'),out=[];
+  const net=LeadOS.correlate.analyzeNetwork(P,today);
+  const touched={}; (P.networkEdges||[]).forEach(e=>{ touched[e.fromId]=true; touched[e.toId]=true; });
+  Object.keys(P.rosterById||{}).sort().forEach(pid=>{
+    if(P.rosterById[pid].departed) return;
+    if(touched[pid]) return; /* ANY edge type quiets it */
+    const recent1on1=(P.meetings||[]).some(m=>m.type==='1on1'&&m.attendees.indexOf(pid)!==-1&&days(today,m.at)<=30);
+    if(recent1on1) return;
+    const skip=vals(P.convs||{}).some(c=>c.type==='skip-level'&&c.personIds.indexOf(pid)!==-1);
+    if(skip) return;
+    out.push(f({sev:3,conf:'MEDIUM',title:'Off the collaboration graph entirely: '+pid,
+      basis:['zero org.network.edge events (any type) naming '+pid+' · no 1:1 meeting.logged in 30d · no skip-level conversation on record',
+        'ABSENCE OF SIGNAL IS THE SIGNAL — labeled: this finding is built on what the log does NOT contain, so conf is MEDIUM, never HIGH',
+        'graph context: '+net.nodeCount+' node(s), '+net.edgeCount+' edge(s) in window — '+net.label,
+        'someone fully off the collaboration graph is invisible, and that is never fine'],
+      refs:[pid],scope:pid+':isolate',evidenceAt:P.lastAt})); });
+  return out; }
+function R54(P,today){ const f=F('R54'),out=[];
+  Object.keys(P.pipelineByPair||{}).sort().forEach(pair=>{
+    const blocked=P.pipelineByPair[pair].filter(c=>c.blocked===true&&days(today,c.at)<=60);
+    if(blocked.length<2) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Information pipeline blocked '+blocked.length+'× in 60d: '+pair,
+      basis:[blocked.length+' info.pipeline.check events with blocked=true for the same (from, to) pair inside 60d: '+
+          blocked.map(c=>U.iso(c.at)+' "'+c.topic+'"'+(typeof c.latency_days==='number'?' (latency '+c.latency_days+'d)':'')).join(' · '),
+        'a repeated block is a structural problem, not a one-time miss',
+        'source: info.pipeline.check'],
+      refs:[],scope:pair,evidenceAt:U.maxAt(blocked)})); });
+  return out; }
+function R55(P,today){ const f=F('R55'),out=[];
+  (P.cultureSignals||[]).filter(s=>s.type==='value-violated').forEach(s=>{
+    out.push(f({sev:3,conf:'HIGH',title:'Value violated: '+s.description,
+      basis:['culture.signal type "value-violated" logged '+U.iso(s.at)+' ('+(s._ev||'?')+') — a SINGLE event fires this rule immediately',
+        'verbatim description: "'+s.description+'"'+(s.note?' · note: "'+s.note+'"':''),
+        'people named: '+(s.personIds.length?s.personIds.join(', '):'none named in the event'),
+        'every instance must be addressed; they compound'],
+      refs:s.personIds.slice(),scope:'violated:'+(s._ev||U.iso(s.at)),evidenceAt:s.at})); });
+  return out; }
+function R56(P,today){ const f=F('R56'),out=[];
+  const recent=LeadOS.correlate.scoreCulture(P,today,30);
+  const prior=LeadOS.correlate.scoreCulture(P,today-30*DAY,30);
+  if(recent.score===null) return out;
+  const basis=['current 30d window: '+recent.math,'culture score is a '+recent.label,recent.weightWhy];
+  if(prior.score!==null){
+    const drop=prior.score-recent.score;
+    basis.push('prior 30d window: '+prior.math);
+    basis.push('delta = prior '+prior.score+' − current '+recent.score+' = '+U.rd(drop,2)+' · threshold: a drop STRICTLY greater than 2 fires (exactly 2 is quiet)');
+    if(drop>2) out.push(f({sev:3,conf:'MEDIUM',trend:true,title:'Culture score declining '+U.rd(drop,2)+' points (30d vs prior 30d)',
+      basis:basis,refs:[],scope:'culture:decline',evidenceAt:U.maxAt(P.cultureSignals)}));
+  } else basis.push('no prior-window score to compare — decline not claimed');
+  if(recent.score<4) out.push(f({sev:4,conf:'MEDIUM',title:'Culture score '+recent.score+' (below 4)',
+    basis:basis.concat(['score < 4 → sev 4, read as a composite of YOUR logged signals, not a measurement of the organization']),
+    refs:[],scope:'culture:low',evidenceAt:U.maxAt(P.cultureSignals)}));
+  return out; }
+function R57(P,today){ const f=F('R57'),out=[];
+  const logs=(P.psychSafety||[]).slice().sort((a,b)=>a.at-b.at);
+  if(!logs.length){
+    if(P.firstAt!==null&&days(today,P.firstAt)>90)
+      out.push(f({sev:2,conf:'MEDIUM',title:'Psychological safety never measured',
+        basis:['zero psychological.safety events · log spans '+days(today,P.firstAt)+'d > 90d','source: (absence of) psychological.safety'],
+        refs:[],scope:'psafety:never',evidenceAt:P.firstAt}));
+    return out; }
+  const latest=logs[logs.length-1];
+  const age=days(today,latest.at);
+  const mBasis='method: "'+latest.method+'" — HOW it was measured matters: a Likert self-report, observed behavior, and an anonymous survey are not the same instrument, and this rule does not pretend they are';
+  if(latest.score<=2) out.push(f({sev:4,conf:'HIGH',title:'Psychological safety '+latest.score+'/5 ('+latest.period+')',
+    basis:['latest psychological.safety score '+latest.score+' ≤ 2 → sev 4 · logged '+U.iso(latest.at)+(latest.teamId?' · team '+latest.teamId:''),mBasis],
+    refs:[],scope:'psafety:'+latest.period,evidenceAt:latest.at}));
+  else if(latest.score===3) out.push(f({sev:3,conf:'HIGH',title:'Psychological safety 3/5 ('+latest.period+')',
+    basis:['latest psychological.safety score 3 → sev 3 · logged '+U.iso(latest.at),mBasis],
+    refs:[],scope:'psafety:'+latest.period,evidenceAt:latest.at}));
+  if(age>90) out.push(f({sev:2,conf:'HIGH',title:'Psychological safety stale: '+age+'d since the last check',
+    basis:['latest psychological.safety '+U.iso(latest.at)+' is '+age+'d old (>90d)',mBasis],
+    refs:[],scope:'psafety:cadence',evidenceAt:latest.at}));
+  return out; }
+function R58(P,today){ const f=F('R58'),out=[];
+  (P.openSilos||[]).forEach(s=>{ if(s.severity<3) return;
+    const age=days(today,s.loggedAt);
+    const sev=age>60?4:U.clamp(s.severity,3,4);
+    out.push(f({sev:sev,conf:'HIGH',title:'Silo unresolved '+age+'d: '+s.teams.join(' | '),
+      basis:['org.silo.logged severity '+s.severity+' on '+U.iso(s.loggedAt)+' · no org.silo.resolved · sev = '+
+          (age>60?'4 (>60d unresolved overrides the inherited severity)':'clamp(inherited '+s.severity+', 3, 4) = '+sev),
+        'symptom: "'+s.symptom+'" · teams: '+s.teams.join(', '),
+        'a silo nobody named is invisible; one that is named but not resolved is a choice',
+        'source: org.silo.logged'],
+      refs:[s.id],evidenceAt:s.loggedAt})); });
+  return out; }
+function R59(P,today){ const f=F('R59'),out=[];
+  Object.keys(P.powerByPerson||{}).sort().forEach(pid=>{
+    const p=P.powerByPerson[pid];
+    if(!(p.informalPower>=4&&p.formalPower<=2)) return;
+    out.push(f({sev:2,conf:'MEDIUM',title:'Informal power without formal authority: '+pid,
+      basis:['power.map.logged '+U.iso(p.at)+': informalPower '+p.informalPower+' ≥ 4 AND formalPower '+p.formalPower+' ≤ 2',
+        'coalition: '+(p.coalition.length?p.coalition.join(', '):'none recorded'),
+        'informal power without formal authority is a succession and accountability gap — sev 2 ADVISORY: a flag to address deliberately, not an alarm',
+        'both numbers are YOUR assessment, logged by you — conf MEDIUM because a power map is an observation, not a measurement'],
+      refs:[pid],scope:pid+':power',evidenceAt:p.at})); });
+  return out; }
+function R60(P,today){ const f=F('R60'),out=[];
+  const audits=(P.meetingAudits||[]).slice().sort((a,b)=>a.at-b.at);
+  if(!audits.length){
+    if(P.firstAt!==null&&days(today,P.firstAt)>60)
+      out.push(f({sev:1,conf:'MEDIUM',title:'No meeting audit on record — audit your meetings',
+        basis:['zero meeting.audit events · log spans '+days(today,P.firstAt)+'d > 60d · sev 1 NUDGE, not an alarm','source: (absence of) meeting.audit'],
+        refs:[],scope:'meeting:never',evidenceAt:P.firstAt}));
+    return out; }
+  const latest=audits[audits.length-1], age=days(today,latest.at);
+  if(latest.wasted_pct>=60) out.push(f({sev:4,conf:'HIGH',title:'Meeting waste '+latest.wasted_pct+'% ('+latest.period+')',
+    basis:['meeting.audit wasted_pct '+latest.wasted_pct+' ≥ 60 → sev 4 · total_hours '+latest.total_hours+
+        (typeof latest.loaded_cost_est==='number'?' · loaded cost estimate '+latest.loaded_cost_est+' (your figure)':' · no loaded_cost_est logged'),
+      'this is YOUR OWN LOGGED DATA — conf HIGH, nothing inferred'],
+    refs:[],scope:'meeting:'+latest.period,evidenceAt:latest.at}));
+  else if(latest.wasted_pct>=40) out.push(f({sev:3,conf:'HIGH',title:'Meeting waste '+latest.wasted_pct+'% ('+latest.period+')',
+    basis:['meeting.audit wasted_pct '+latest.wasted_pct+' ≥ 40 → sev 3 · total_hours '+latest.total_hours,
+      'this is YOUR OWN LOGGED DATA — conf HIGH, nothing inferred'],
+    refs:[],scope:'meeting:'+latest.period,evidenceAt:latest.at}));
+  if(age>60) out.push(f({sev:1,conf:'MEDIUM',title:'Meeting audit stale: '+age+'d',
+    basis:['latest meeting.audit '+U.iso(latest.at)+' is '+age+'d old (>60d) · sev 1 nudge'],
+    refs:[],scope:'meeting:cadence',evidenceAt:latest.at}));
+  return out; }
+function R61(P,today){ const f=F('R61'),out=[];
+  const openLost=[];
+  Object.keys(P.trustByPair||{}).sort().forEach(pair=>{
+    const recs=P.trustByPair[pair].slice().sort((a,b)=>a.at-b.at);
+    const lost=recs.filter(r=>r.direction==='lost').slice(-1)[0];
+    if(!lost) return;
+    const regained=recs.some(r=>r.direction==='gained'&&r.at>lost.at);
+    if(regained) return;
+    if(days(today,lost.at)>90) return;
+    openLost.push(lost);
+    out.push(f({sev:3,conf:'MEDIUM',title:'Trust lost, not regained: '+pair,
+      basis:['trust.signal direction "lost" '+U.iso(lost.at)+' ('+days(today,lost.at)+'d ago, within 90d) · no later "gained" for this pair',
+        'evidence as logged: "'+lost.evidence+'"',
+        'TRUST SIGNALS ARE OBSERVATIONS, NOT FACTS — conf MEDIUM by construction',
+        'source: trust.signal'],
+      refs:[lost.toId],scope:pair,evidenceAt:lost.at})); });
+  /* two distinct sources losing trust in the same target inside 30d */
+  Object.keys(P.trustByTarget||{}).sort().forEach(target=>{
+    const recent=P.trustByTarget[target].filter(r=>r.direction==='lost'&&days(today,r.at)<=30);
+    const sources=U.uniq(recent.map(r=>r.fromId));
+    if(sources.length<2) return;
+    out.push(f({sev:4,conf:'MEDIUM',title:sources.length+' people lost trust in '+target+' within 30d',
+      basis:[sources.length+' DISTINCT sources ('+sources.join(', ')+') logged trust.signal "lost" toward '+target+' inside 30d',
+        recent.map(r=>r.fromId+' '+U.iso(r.at)+': "'+r.evidence+'"').join(' · '),
+        'multiple independent sources raise severity to 4 — still conf MEDIUM: these are observations, not facts',
+        'source: trust.signal'],
+      refs:[target],scope:target+':multi-lost',evidenceAt:U.maxAt(recent)})); });
+  return out; }
+function R62(P,today){ const f=F('R62'),out=[];
+  const attr=(P.attrition||[]).filter(a=>days(today,a.at)<=60);
+  if(!attr.length) return out;
+  const net=LeadOS.correlate.analyzeNetwork(P,today);
+  const rank=net.betweennessRank.filter(n=>net.betweennessAll[n]>0);
+  const top2=rank.slice(0,2);
+  attr.forEach(a=>{
+    if(top2.indexOf(a.personId)===-1) return;
+    out.push(f({sev:5,conf:'MEDIUM',title:'BRIDGE PERSON LEAVING: '+a.personId+' (betweenness rank #'+(top2.indexOf(a.personId)+1)+')',
+      basis:['hr.attrition.logged '+U.iso(a.at)+' reason "'+a.reason+'" (R19 window) AND '+a.personId+' is top-2 by betweenness',
+        'betweenness score '+net.betweennessAll[a.personId]+' · full ranking: '+rank.slice(0,5).map(n=>n+' '+net.betweennessAll[n]).join(' · '),
+        net.betweennessNote,
+        'losing a bridge is not just losing a person — it is losing the information flow that ran through them',
+        'sev 5 on a '+net.label+' — conf MEDIUM: the graph is your observations, the departure is a fact'],
+      refs:[a.personId],scope:a.personId+':bridge-loss',evidenceAt:a.at})); });
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
-             R46,R47,R48,R49,R50,R51,R52];
+             R46,R47,R48,R49,R50,R51,R52,
+             R53,R54,R55,R56,R57,R58,R59,R60,R61,R62];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -2082,7 +2311,182 @@ function buildInsights(P,today,findings,clus,pats,benches){
 function run(P,today){
   return LeadOS.rules.runFull(P,today);
 }
+/* ============ ORGANIZATIONAL NETWORK ANALYSIS (pt-12) ====================
+   EVERY output here is an APPROXIMATION DERIVED FROM YOUR OBSERVATIONS, not a
+   sociometric study: the graph is only the edges you bothered to log. Each
+   algorithm prints its own exactness class (exact / approximation). */
+const NET_LABEL='approximation derived from YOUR logged observations — not a sociometric study; the graph contains only edges you recorded';
+function analyzeNetwork(P,today){
+  const set=LeadOS.engine.settings(P);
+  const win=set.influenceNetworkDecayDays, decay=set.heatmapDecayFactor;
+  const edges=[], dropped=[];
+  (P.networkEdges||[]).forEach(e=>{
+    const age=U.days(today,e.observed);
+    if(age<0||age>win){ dropped.push({from:e.fromId,to:e.toId,type:e.type,ageDays:age,
+      why:'observed '+U.iso(e.observed)+' · '+age+'d '+(age<0?'in the future':'> influenceNetworkDecayDays '+win)+' — excluded, stated'}); return; }
+    const w=e.strength*Math.pow(decay,age/30);
+    edges.push({from:e.fromId,to:e.toId,type:e.type,strength:e.strength,ageDays:age,weight:w,
+      math:'strength '+e.strength+' × '+decay+'^('+age+'/30) = '+U.rd3(w)});
+  });
+  const nodes=U.uniq([].concat.apply([],edges.map(e=>[e.from,e.to]))).sort();
+  const collab=edges.filter(e=>e.type==='collaboration');
+  const adjOut={}, adjIn={}, undirected={};
+  nodes.forEach(n=>{ adjOut[n]=[]; adjIn[n]=[]; undirected[n]=[]; });
+  edges.forEach(e=>{ adjOut[e.from].push(e.to); adjIn[e.to].push(e.from);
+    if(undirected[e.from].indexOf(e.to)===-1) undirected[e.from].push(e.to);
+    if(undirected[e.to].indexOf(e.from)===-1) undirected[e.to].push(e.from); });
+  const indegree=n=>(adjIn[n]||[]).length;
+  const outdegree=n=>(adjOut[n]||[]).length;
+  const weightedIn=n=>U.sum(edges.filter(e=>e.to===n).map(e=>e.weight));
+  const weightedOut=n=>U.sum(edges.filter(e=>e.from===n).map(e=>e.weight));
+  /* betweenness — SIMPLIFIED: BFS shortest paths per ordered pair, counting
+     interior nodes on ONE shortest path per pair. Not exact Brandes (which
+     credits all shortest paths fractionally). LABELED. */
+  const bet={}; nodes.forEach(n=>{ bet[n]=0; });
+  nodes.forEach(src=>{
+    const prev={}, seen={}; seen[src]=true; let q=[src];
+    while(q.length){ const nq=[];
+      q.forEach(u=>(adjOut[u]||[]).forEach(v=>{ if(!seen[v]){ seen[v]=true; prev[v]=u; nq.push(v); } }));
+      q=nq; }
+    nodes.forEach(dst=>{ if(dst===src||!seen[dst]) return;
+      let cur=prev[dst];
+      while(cur!==undefined&&cur!==src){ bet[cur]++; cur=prev[cur]; } });
+  });
+  const betweenness=n=>bet[n]||0;
+  const betRank=nodes.slice().sort((a,b)=>(bet[b]-bet[a])||(a<b?-1:1));
+  const isolates=()=>{
+    const touched={}; collab.forEach(e=>{ touched[e.from]=true; touched[e.to]=true; });
+    return Object.keys(P.networkNodes||{}).concat(Object.keys(P.rosterById||{}))
+      .filter((n,i,arr)=>arr.indexOf(n)===i).filter(n=>!touched[n]).sort();
+  };
+  /* Tarjan SCC over the collaboration subgraph — EXACT, O(V+E) */
+  function stronglyConnected(){
+    const cAdj={}; const cNodes=U.uniq([].concat.apply([],collab.map(e=>[e.from,e.to]))).sort();
+    cNodes.forEach(n=>{ cAdj[n]=[]; });
+    collab.forEach(e=>{ if(cAdj[e.from].indexOf(e.to)===-1) cAdj[e.from].push(e.to); });
+    let idx=0; const index={},low={},onStack={},stack=[],out=[];
+    function strong(v){
+      index[v]=idx; low[v]=idx; idx++; stack.push(v); onStack[v]=true;
+      (cAdj[v]||[]).forEach(w=>{
+        if(index[w]===undefined){ strong(w); low[v]=Math.min(low[v],low[w]); }
+        else if(onStack[w]) low[v]=Math.min(low[v],index[w]); });
+      if(low[v]===index[v]){ const comp=[]; let w;
+        do{ w=stack.pop(); onStack[w]=false; comp.push(w); }while(w!==v);
+        out.push(comp.sort()); }
+    }
+    cNodes.forEach(n=>{ if(index[n]===undefined) strong(n); });
+    return out.sort((a,b)=>(b.length-a.length)||(a[0]<b[0]?-1:1));
+  }
+  /* bridges — SIMPLIFIED: articulation NODES on the undirected projection,
+     found by removal-and-reachability. Labeled; not Tarjan bridge-edges. */
+  function reachableCount(skip){
+    const ns=nodes.filter(n=>n!==skip);
+    if(!ns.length) return 0;
+    const seen={}; let q=[ns[0]]; seen[ns[0]]=true; let c=1;
+    while(q.length){ const nq=[];
+      q.forEach(u=>(undirected[u]||[]).forEach(v=>{ if(v!==skip&&!seen[v]){ seen[v]=true; c++; nq.push(v); } }));
+      q=nq; }
+    return c;
+  }
+  function bridges(){
+    const whole=nodes.length?reachableCount(null):0;
+    const connectedWhole=(whole===nodes.length);
+    return nodes.filter(n=>{
+      if(!connectedWhole) { /* already fragmented: a node still bridges if removing it adds a fragment */ }
+      const before=nodes.length-1;
+      return before>1&&reachableCount(n)<before;
+    }).sort();
+  }
+  const blockedPairs=(P.pipelineChecks||[]).filter(c=>c.blocked===true);
+  function informationBottlenecks(){
+    const top=betRank.filter(n=>bet[n]>0);
+    const half=top.length?bet[top[0]]/2:0;
+    return top.filter(n=>bet[n]>=half&&blockedPairs.some(c=>c.from===n||c.to===n))
+      .map(n=>({node:n,betweenness:bet[n],
+        blocked:blockedPairs.filter(c=>c.from===n||c.to===n).map(c=>c.from+'→'+c.to+' ("'+c.topic+'")'),
+        why:'betweenness '+bet[n]+' (top half of non-zero) AND blocked info.pipeline.check through them — '+NET_LABEL}));
+  }
+  const scc=stronglyConnected();
+  return {
+    label:NET_LABEL,
+    decayNote:'edge weight = strength × '+decay+'^(age_days/30); window influenceNetworkDecayDays '+win+'d',
+    windowDays:win,decayFactor:decay,
+    nodes:nodes,edges:edges,droppedEdges:dropped,
+    nodeCount:nodes.length,edgeCount:edges.length,
+    indegree:indegree,outdegree:outdegree,weightedIn:weightedIn,weightedOut:weightedOut,
+    betweenness:betweenness,betweennessRank:betRank,betweennessAll:bet,
+    betweennessNote:'SIMPLIFIED: one BFS shortest path per ordered pair, interior nodes credited. NOT exact Brandes — labeled approximation',
+    isolates:isolates,stronglyConnected:()=>scc,clusters:()=>scc.filter(c=>c.length>1),
+    sccNote:'Tarjan over the collaboration subgraph — EXACT, O(V+E)',
+    bridges:bridges,bridgesNote:'SIMPLIFIED: articulation NODES on the undirected projection (remove-and-count-reachable), not Tarjan bridge-edges — labeled approximation',
+    informationBottlenecks:informationBottlenecks
+  };
+}
+/* Culture scoring — a COMPOSITE OBSERVATION, never a measurement. */
+const CULTURE_NEG_WEIGHT=2;
+const CULTURE_WEIGHT_WHY='value-violated and villain-named carry 2× weight — a PRINTED ASSUMPTION from organizational-psychology literature (bad signals are stickier than good ones), NOT a coefficient measured in your org';
+function scoreCulture(P,today,windowOverride){
+  const set=LeadOS.engine.settings(P);
+  const win=windowOverride||set.cultureSignalWindowDays;
+  const since=today-win*DAY;
+  const sig=(P.cultureSignals||[]).filter(s=>s.at<=today&&s.at>since);
+  const heavy=t=>(t==='value-violated'||t==='villain-named');
+  let pos=0,neg=0,neu=0,total=0;
+  const terms=[], byType={};
+  sig.forEach(s=>{
+    const w=heavy(s.type)?CULTURE_NEG_WEIGHT:1;
+    byType[s.type]=byType[s.type]||{positive:0,negative:0,neutral:0,count:0};
+    byType[s.type][s.polarity]++; byType[s.type].count++;
+    if(s.polarity==='positive') pos+=w; else if(s.polarity==='negative') neg+=w; else neu+=w;
+    total+=w;
+    terms.push(s.type+' ('+s.polarity+') × '+w+(heavy(s.type)?' [2× weight]':''));
+  });
+  if(!total) return {score:null,count:0,window:win,
+    why:'no culture.signal events in the last '+win+'d — no score computed; absence is printed, never scored as neutral-good',
+    byType:byType,label:'composite observation, not a measurement',weightWhy:CULTURE_WEIGHT_WHY};
+  const raw=(pos-neg)/total*10;
+  const score=U.clamp(raw,0,10);
+  return {score:U.rd(score,2),raw:U.rd(raw,2),clamped:raw!==score,
+    positiveWeighted:pos,negativeWeighted:neg,neutralWeighted:neu,totalWeighted:total,
+    count:sig.length,window:win,byType:byType,terms:terms,
+    math:'(positive '+pos+' − negative '+neg+') ÷ total '+total+' × 10 = '+U.rd(raw,2)+(raw!==score?' → clamped to '+U.rd(score,2)+' (bounded 0–10)':''),
+    label:'composite observation, not a measurement',weightWhy:CULTURE_WEIGHT_WHY};
+}
+/* Meeting load — straight arithmetic over meeting.logged. */
+function meetingLoad(P,today,windowDays){
+  const win=windowDays||30, since=today-win*DAY;
+  const inWin=(P.meetings||[]).filter(m=>m.at<=today&&m.at>since);
+  const byPerson={};
+  const dist={decision:0,update:0,discussion:0,wasted:0};
+  let totalMin=0;
+  inWin.forEach(m=>{
+    dist[m.outcome]=(dist[m.outcome]||0)+m.duration_min;
+    totalMin+=m.duration_min;
+    m.attendees.forEach(a=>{
+      const p=byPerson[a]=byPerson[a]||{person:a,minutes:0,wastedMinutes:0,count:0};
+      p.minutes+=m.duration_min; p.count++;
+      if(m.outcome==='wasted') p.wastedMinutes+=m.duration_min; });
+  });
+  const weeks=win/7;
+  const people=Object.keys(byPerson).sort().map(k=>{ const p=byPerson[k];
+    p.hours=U.rd(p.minutes/60,2); p.hoursPerWeek=U.rd(p.minutes/60/weeks,2);
+    p.wastedHours=U.rd(p.wastedMinutes/60,2); p.wastedHoursPerWeek=U.rd(p.wastedMinutes/60/weeks,2);
+    p.math=p.count+' meeting(s) · '+p.minutes+' min ÷ 60 ÷ '+U.rd(weeks,2)+' weeks = '+p.hoursPerWeek+' h/wk';
+    return p; });
+  const audit=(P.meetingAudits||[]).slice(-1)[0]||null;
+  const pct=k=>totalMin?U.rd(dist[k]/totalMin*100,1):0;
+  return {windowDays:win,totalMinutes:totalMin,totalHours:U.rd(totalMin/60,2),
+    meetingCount:inWin.length,byPerson:people,
+    distribution:{decision:pct('decision'),update:pct('update'),discussion:pct('discussion'),wasted:pct('wasted')},
+    distributionNote:'% of logged MINUTES by outcome (not meeting count) — the cost is time, printed',
+    latestAudit:audit,
+    costNote:audit&&typeof audit.loaded_cost_est==='number'
+      ?'loaded cost estimate from your meeting.audit: '+audit.loaded_cost_est+' (your figure, printed, not computed by LeadOS)'
+      :'no loaded_cost_est logged — cost not estimated, never invented'};
+}
 LeadOS.correlate={CONF_FACTOR:CONF_FACTOR,CONF_FACTOR_WHY:CONF_FACTOR_WHY,HEAT_LABEL:HEAT_LABEL,
+  NET_LABEL:NET_LABEL,CULTURE_WEIGHT_WHY:CULTURE_WEIGHT_WHY,
+  analyzeNetwork:analyzeNetwork,scoreCulture:scoreCulture,meetingLoad:meetingLoad,
   BENCH_GAP_SEV:BENCH_GAP_SEV,PATTERNS:PATTERNS,HERITAGE_LABELS:HERITAGE_LABELS,
   anchorsFor:anchorsFor,clusters:clusters,heat:heat,heatTrend:heatTrend,heatHistory:heatHistory,
   resolvePersons:resolvePersons,detectPatterns:detectPatterns,
@@ -2405,7 +2809,33 @@ function buildSeed(base){
     E('conv.planned',{id:'conv-1',type:'performance',personIds:['ava'],topic:'Q1 performance and the quota gap',stakes:4,
       myGoal:'agree the gap is real and name one change',theirLikelyGoal:'protect the comp outcome',preparedAt:base-10*DAY},10),   /* R46 */
     E('negotiation.logged',{id:'neg-1',topic:'Acme Widgets master supply terms',parties:['ava','acme-rep']},12),                   /* R51 — no BATNA */
-    E('board.presented',{period:'2026-Q1',audience_size:7,outcome:'rejected',note:'capital plan sent back'},8)                     /* R52 — no exec.aligned prior */
+    E('board.presented',{period:'2026-Q1',audience_size:7,outcome:'rejected',note:'capital plan sent back'},8),                    /* R52 — no exec.aligned prior */
+    /* ---- pt-12 organizational layer: seeds R53–R62 (G60) ---- */
+    E('hr.performance.logged',{personId:'kai',score:3,note:'quiet quarter'},40),  /* kai: on file, zero edges → R53 isolate */
+    E('org.network.edge',{fromId:'ava',toId:'lee',type:'collaboration',strength:4,observed:base-20*DAY},20),
+    E('org.network.edge',{fromId:'lee',toId:'ava',type:'collaboration',strength:3,observed:base-18*DAY},18),
+    E('org.network.edge',{fromId:'lee',toId:'dana',type:'collaboration',strength:4,observed:base-15*DAY},15),
+    E('org.network.edge',{fromId:'lee',toId:'ann',type:'information',strength:5,observed:base-12*DAY},12),
+    E('org.network.edge',{fromId:'ava',toId:'ann',type:'decision',strength:2,observed:base-10*DAY},10),
+    E('meeting.logged',{title:'Weekly 1:1 — ava',type:'1on1',attendees:['ava'],duration_min:30,outcome:'decision'},7),
+    E('meeting.logged',{title:'Platform planning',type:'planning',attendees:['ava','lee','ann'],duration_min:90,outcome:'discussion'},6),
+    E('meeting.logged',{title:'Status sync (again)',type:'ad-hoc',attendees:['ava','lee','dana','ann'],duration_min:60,outcome:'wasted'},4),
+    E('meeting.audit',{period:'2026-02',total_hours:46,wasted_pct:45,loaded_cost_est:18400},5),                                    /* R60 sev 3 */
+    E('info.pipeline.check',{from:'lee',to:'ann',blocked:true,topic:'roadmap changes',latency_days:9},30),
+    E('info.pipeline.check',{from:'lee',to:'ann',blocked:true,topic:'incident learnings',latency_days:12},9),                      /* R54 */
+    E('culture.signal',{type:'value-violated',description:'Decision reversed in private after public commitment',polarity:'negative',personIds:['ann']},14), /* R55 */
+    E('culture.signal',{type:'villain-named',description:'Team blamed one engineer for the outage',polarity:'negative',personIds:['lee']},12),
+    E('culture.signal',{type:'ritual',description:'Friday demo skipped for the third week',polarity:'negative',personIds:[]},40),
+    E('culture.signal',{type:'value-lived',description:'Engineer stopped the release over a data concern',polarity:'positive',personIds:['dana']},45),
+    E('culture.signal',{type:'hero-celebrated',description:'On-call work recognized publicly',polarity:'positive',personIds:['lee']},50), /* R56: prior window healthier than current */
+    E('power.map.logged',{personId:'lee',formalPower:2,informalPower:5,coalition:['ava','dana','ann']},16),                        /* R59 */
+    E('trust.signal',{fromId:'dana',toId:'ann',direction:'lost',evidence:'commitment reversed without telling the team'},20),      /* R61 sev 3 */
+    E('trust.signal',{fromId:'lee',toId:'ann',direction:'lost',evidence:'heard the reorg news second-hand'},11),                   /* R61 sev 4 (2 sources/30d) */
+    E('psychological.safety',{period:'2026-Q1',score:2,method:'anonymous survey, 11 of 14 responded'},10),                         /* R57 sev 4 */
+    E('org.silo.logged',{id:'silo-1',teams:['platform','support'],symptom:'escalations rewritten rather than routed',severity:4},70), /* R58 sev 4 (>60d) */
+    /* lee is the seed's only non-zero-betweenness node (ava→lee→dana) — their
+       departure is what R62 exists to catch: the flow leaves with the person */
+    E('hr.attrition.logged',{personId:'lee',reason:'voluntary'},3)                                                                 /* R62 sev 5 */
   ];
   return out;
 }
@@ -2455,6 +2885,15 @@ const FX={
       {type:'cadence.review',payload:{kind:'board'},at:FIXED-100*DAY},
       {type:'objective.set',payload:{id:'oA',objective:'Grow NRR',owner:'ava',keyResults:[{kr:'NRR 110'}]},at:FIXED-30*DAY},
       {type:'objective.set',payload:objB,at:FIXED-20*DAY}]);
+  },
+  /* pt-12: pa↔pb cycle, pa→pc spur, pd on the roster with zero edges.
+     pa is the articulation node of the undirected projection (G56). */
+  net3(){
+    return wrap([
+      {type:'hr.performance.logged',payload:{personId:'pd',score:3},at:FIXED-40*DAY},
+      {type:'org.network.edge',payload:{fromId:'pa',toId:'pb',type:'collaboration',strength:4,observed:FIXED-10*DAY},at:FIXED-10*DAY},
+      {type:'org.network.edge',payload:{fromId:'pb',toId:'pa',type:'collaboration',strength:3,observed:FIXED-9*DAY},at:FIXED-9*DAY},
+      {type:'org.network.edge',payload:{fromId:'pa',toId:'pc',type:'collaboration',strength:2,observed:FIXED-8*DAY},at:FIXED-8*DAY}]);
   }
 };
 
@@ -2687,10 +3126,10 @@ function runT(){
     if(!f3||f3.conf!=='MEDIUM') return {why:'3 declining points must print slope and drop to MEDIUM'};
     return {ok:true,why:'2 pts → HIGH + no-slope printed · 3 pts → MEDIUM with slope'};
   }));
-  T.push(check('T18','[T12b] extended seed fires all 52 rules + every insight kind',()=>{
+  T.push(check('T18','[T12b] extended seed fires all 62 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=52;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=62;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -2950,6 +3389,89 @@ function runT(){
     if(r52(approved).length) return {why:'a non-rejected outcome fired'};
     return {ok:true,why:'rejected+none → sev 4 · aligned@25d quiet · aligned@40d still fires · approved quiet'};
   }));
+  /* ---- pt-12: brief T31–T35 ship as T33–T37 (T31/T32 taken in pt-11).
+     ID MAP, printed: brief T31→T33 · T32→T34 · T33→T35 · T34→T36 · T35→T37 ---- */
+  T.push(check('T33','[brief T31] analyzeNetwork: isolates / indegree / outdegree exact on 3 edges',()=>{
+    const Px=LeadOS.engine.project(FX.net3());
+    const n=LeadOS.correlate.analyzeNetwork(Px,FIXED);
+    if(n.nodeCount!==3) return {why:'expected 3 graph nodes (pa,pb,pc), got '+n.nodeCount+': '+n.nodes.join(',')};
+    if(n.edgeCount!==3) return {why:'expected 3 edges, got '+n.edgeCount};
+    if(n.outdegree('pa')!==2) return {why:'pa outdegree should be 2, got '+n.outdegree('pa')};
+    if(n.indegree('pa')!==1) return {why:'pa indegree should be 1 (pb→pa), got '+n.indegree('pa')};
+    if(n.indegree('pb')!==1||n.outdegree('pb')!==1) return {why:'pb degrees wrong'};
+    if(n.indegree('pc')!==1||n.outdegree('pc')!==0) return {why:'pc degrees wrong'};
+    const iso=n.isolates();
+    if(iso.indexOf('pd')===-1) return {why:'pd (roster person, zero collaboration edges) should be an isolate: '+iso.join(',')};
+    if(iso.indexOf('pa')!==-1||iso.indexOf('pb')!==-1) return {why:'pa/pb wrongly isolated'};
+    if(n.edges[0].math.indexOf('^(')===-1) return {why:'edge decay math not printed'};
+    return {ok:true,why:'3 nodes/3 edges · pa out2/in1 · pb 1/1 · pc in1/out0 · pd isolate · decay math printed'};
+  }));
+  T.push(check('T34','[brief T32] Tarjan SCC: pa↔pb is one component; pc is its own',()=>{
+    const Px=LeadOS.engine.project(FX.net3());
+    const scc=LeadOS.correlate.analyzeNetwork(Px,FIXED).stronglyConnected();
+    const pair=scc.filter(c=>c.length===2)[0];
+    if(!pair||pair.join(',')!=='pa,pb') return {why:'expected SCC [pa,pb], got '+JSON.stringify(scc)};
+    const solo=scc.filter(c=>c.length===1&&c[0]==='pc')[0];
+    if(!solo) return {why:'pc should form its own singleton SCC: '+JSON.stringify(scc)};
+    const clusters=LeadOS.correlate.analyzeNetwork(Px,FIXED).clusters();
+    if(clusters.length!==1) return {why:'clusters() should return only multi-node SCCs, got '+JSON.stringify(clusters)};
+    return {ok:true,why:'SCC [pa,pb] + singleton [pc] · clusters() returns the cycle only'};
+  }));
+  T.push(check('T35','[brief T33] culture score: 3 positive + 1 value-violated, 2× weight, math printed',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'culture.signal',payload:{type:'ritual',description:'demo held',polarity:'positive',personIds:[]},at:FIXED-10*DAY},
+      {type:'culture.signal',payload:{type:'value-lived',description:'raised a concern',polarity:'positive',personIds:[]},at:FIXED-9*DAY},
+      {type:'culture.signal',payload:{type:'hero-celebrated',description:'on-call thanked',polarity:'positive',personIds:[]},at:FIXED-8*DAY},
+      {type:'culture.signal',payload:{type:'value-violated',description:'promise broken',polarity:'negative',personIds:[]},at:FIXED-7*DAY}]));
+    const c=LeadOS.correlate.scoreCulture(Px,FIXED);
+    /* positive 3×1 = 3 · negative 1×2 = 2 · total 5 → (3−2)/5×10 = 2 */
+    if(c.positiveWeighted!==3) return {why:'positive weight should be 3, got '+c.positiveWeighted};
+    if(c.negativeWeighted!==2) return {why:'value-violated must carry 2× weight, got '+c.negativeWeighted};
+    if(c.totalWeighted!==5) return {why:'total weight should be 5, got '+c.totalWeighted};
+    if(c.score!==2) return {why:'(3−2)/5×10 = 2, got '+c.score};
+    if(c.math.indexOf('× 10')===-1) return {why:'math not printed: '+c.math};
+    if(c.weightWhy.indexOf('PRINTED ASSUMPTION')===-1) return {why:'the 2× weight assumption is not labeled'};
+    if(c.label!=='composite observation, not a measurement') return {why:'label missing'};
+    return {ok:true,why:'math printed: '+c.math+' · 2× weight labeled as an assumption'};
+  }));
+  T.push(check('T36','[brief T34] meeting load: 3 meetings totalling 90min → 90min for that person',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'meeting.logged',payload:{title:'a',type:'standup',attendees:['p1','p2'],duration_min:15,outcome:'update'},at:FIXED-5*DAY},
+      {type:'meeting.logged',payload:{title:'b',type:'1on1',attendees:['p1'],duration_min:30,outcome:'decision'},at:FIXED-4*DAY},
+      {type:'meeting.logged',payload:{title:'c',type:'ad-hoc',attendees:['p1','p3'],duration_min:45,outcome:'wasted'},at:FIXED-3*DAY}]));
+    const ml=LeadOS.correlate.meetingLoad(Px,FIXED,30);
+    const p1=ml.byPerson.filter(p=>p.person==='p1')[0];
+    if(!p1||p1.minutes!==90) return {why:'p1 load should be 90 min, got '+(p1&&p1.minutes)};
+    if(p1.count!==3) return {why:'p1 should be in 3 meetings'};
+    if(p1.wastedMinutes!==45) return {why:'p1 wasted load should be 45 min, got '+p1.wastedMinutes};
+    const p2=ml.byPerson.filter(p=>p.person==='p2')[0];
+    if(!p2||p2.minutes!==15) return {why:'p2 load should be 15 min'};
+    if(ml.totalMinutes!==90) return {why:'total distinct meeting minutes should be 90, got '+ml.totalMinutes};
+    if(ml.distribution.wasted!==50) return {why:'wasted share of minutes should be 50%, got '+ml.distribution.wasted};
+    if(p1.math.indexOf('÷ 60')===-1) return {why:'per-person math not printed'};
+    return {ok:true,why:'p1 90min/3 meetings (45 wasted) · p2 15min · 50% of minutes wasted · math printed'};
+  }));
+  T.push(check('T37','[brief T35] R61: lost→fires · gained after lost→quiet · 2 sources/30d→sev 4',()=>{
+    const r61=Px=>LeadOS.rules.RULES[60](Px,FIXED); /* index 60 = R61 */
+    const lost=LeadOS.engine.project(wrap([
+      {type:'trust.signal',payload:{fromId:'a',toId:'t',direction:'lost',evidence:'e1'},at:FIXED-20*DAY}]));
+    const one=r61(lost);
+    if(one.length!==1||one[0].sev!==3||one[0].conf!=='MEDIUM') return {why:'single lost should be sev 3 MEDIUM, got '+JSON.stringify(one.map(f=>f.sev+'/'+f.conf))};
+    const regained=LeadOS.engine.project(wrap([
+      {type:'trust.signal',payload:{fromId:'a',toId:'t',direction:'lost',evidence:'e1'},at:FIXED-20*DAY},
+      {type:'trust.signal',payload:{fromId:'a',toId:'t',direction:'gained',evidence:'repaired'},at:FIXED-5*DAY}]));
+    if(r61(regained).length) return {why:'a later "gained" must quiet the pair'};
+    const old=LeadOS.engine.project(wrap([
+      {type:'trust.signal',payload:{fromId:'a',toId:'t',direction:'lost',evidence:'e1'},at:FIXED-120*DAY}]));
+    if(r61(old).length) return {why:'a loss older than 90d must not fire'};
+    const two=LeadOS.engine.project(wrap([
+      {type:'trust.signal',payload:{fromId:'a',toId:'t',direction:'lost',evidence:'e1'},at:FIXED-20*DAY},
+      {type:'trust.signal',payload:{fromId:'b',toId:'t',direction:'lost',evidence:'e2'},at:FIXED-10*DAY}]));
+    const multi=r61(two).filter(f=>f.sev===4)[0];
+    if(!multi) return {why:'2 distinct sources in 30d should raise a sev 4'};
+    if(multi.conf!=='MEDIUM') return {why:'trust findings stay MEDIUM — observations, not facts'};
+    return {ok:true,why:'lost → sev 3 · gained quiets · >90d quiets · 2 sources/30d → sev 4, still MEDIUM'};
+  }));
   return T;
 }
 
@@ -3153,14 +3675,14 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','extended buildSeed fires all 52 rules (patterns + conversations seeded)',()=>{
+  G.push(check('G40','[G60] extended buildSeed fires all 62 rules (patterns + conversations + org)',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=52;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=62;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'52/52 — DEATH_SPIRAL limbs + the other patterns + the pt-11 conversation conditions (stakes-4 unheld conv, escalation without follow-up, exceeds+held comp pair, disputed rating, unmapped person, BATNA-less negotiation, rejected board with no prior alignment)'};
+    return {ok:true,why:'62/62 — pattern limbs + conversation conditions + the pt-12 org layer (isolate with no edges/1:1, repeated pipeline block, value-violated, declining culture, psych safety 2, 70d silo, informal-power gap, 45% meeting waste, trust lost ×2 sources, bridge-person attrition)'};
   }));
   /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
      the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
@@ -3270,6 +3792,131 @@ function runG(){
     if(P2.execAlignments.length!==1||P2.execAlignments[0].stakeholders.length!==3) return {why:'projection did not read exec.aligned history'};
     return {ok:true,why:'stakeholders x,y,z round-trip form → event → projection'};
   }));
+  /* ---- G51–G59 — organizational-dynamics goldens (pt-12) ---- */
+  G.push(check('G51','R53 isolate: no 1:1 and no edge → sev 3; any edge type → quiet',()=>{
+    const base=[{type:'hr.performance.logged',payload:{personId:'px',score:3},at:FIXED-40*DAY}];
+    const r53=Px=>LeadOS.rules.RULES[47](Px,FIXED); /* index 47 = R53 */
+    const fired=r53(LeadOS.engine.project(wrap(base))).filter(f=>f.refs[0]==='px');
+    if(fired.length!==1||fired[0].sev!==3||fired[0].conf!=='MEDIUM') return {why:'isolate should be sev 3 MEDIUM, got '+JSON.stringify(fired.map(f=>f.sev+'/'+f.conf))};
+    if(fired[0].basis.join(' ').indexOf('ABSENCE OF SIGNAL IS THE SIGNAL')===-1) return {why:'absence-of-signal label missing'};
+    const withEdge=LeadOS.engine.project(wrap(base.concat([
+      {type:'org.network.edge',payload:{fromId:'py',toId:'px',type:'blocker',strength:1,observed:FIXED-5*DAY},at:FIXED-5*DAY}])));
+    if(r53(withEdge).filter(f=>f.refs[0]==='px').length) return {why:'ANY edge type (even blocker) must quiet it'};
+    const with1on1=LeadOS.engine.project(wrap(base.concat([
+      {type:'meeting.logged',payload:{title:'1:1',type:'1on1',attendees:['px'],duration_min:30,outcome:'update'},at:FIXED-10*DAY}])));
+    if(r53(with1on1).filter(f=>f.refs[0]==='px').length) return {why:'a 1:1 inside 30d must quiet it'};
+    return {ok:true,why:'bare roster person → sev 3 MEDIUM with the absence label · any edge quiets · 1:1 quiets'};
+  }));
+  G.push(check('G52','R55 value-violated: single event → sev 3 immediately; silo.resolved irrelevant',()=>{
+    const evts=[{type:'culture.signal',payload:{type:'value-violated',description:'promise broken in public',polarity:'negative',personIds:['pz']},at:FIXED-3*DAY}];
+    const r55=Px=>LeadOS.rules.RULES[49](Px,FIXED); /* index 49 = R55 */
+    const one=r55(LeadOS.engine.project(wrap(evts)));
+    if(one.length!==1||one[0].sev!==3||one[0].conf!=='HIGH') return {why:'single value-violated should fire sev 3 HIGH immediately'};
+    if(one[0].basis.join(' ').indexOf('promise broken in public')===-1) return {why:'description not printed VERBATIM in basis'};
+    const withSilo=LeadOS.engine.project(wrap(evts.concat([
+      {type:'org.silo.logged',payload:{id:'s1',teams:['a','b'],symptom:'x',severity:4},at:FIXED-10*DAY},
+      {type:'org.silo.resolved',payload:{siloId:'s1',how:'merged standups'},at:FIXED-2*DAY}])));
+    if(r55(withSilo).length!==1) return {why:'silo.resolved must not touch R55 — different domain'};
+    return {ok:true,why:'single event → sev 3 HIGH, description verbatim · silo resolution has no effect'};
+  }));
+  G.push(check('G53','R56 culture decline: drop > 2 fires; exactly 2 quiet (strictly past)',()=>{
+    const mk=(curPos,curNeg)=>{ const list=[
+      {type:'culture.signal',payload:{type:'ritual',description:'p',polarity:'positive',personIds:[]},at:FIXED-45*DAY},
+      {type:'culture.signal',payload:{type:'story',description:'p',polarity:'positive',personIds:[]},at:FIXED-40*DAY}];
+      for(let i=0;i<curPos;i++) list.push({type:'culture.signal',payload:{type:'ritual',description:'p'+i,polarity:'positive',personIds:[]},at:FIXED-10*DAY});
+      for(let i=0;i<curNeg;i++) list.push({type:'culture.signal',payload:{type:'story',description:'n'+i,polarity:'negative',personIds:[]},at:FIXED-9*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r56=Px=>LeadOS.rules.RULES[50](Px,FIXED); /* index 50 = R56 */
+    const exact=LeadOS.correlate.scoreCulture(mk(9,1),FIXED,30);
+    if(exact.score!==8) return {why:'fixture drift: expected current score 8, got '+exact.score};
+    if(r56(mk(9,1)).some(f=>f.scope==='culture:decline')) return {why:'a drop of exactly 2 must be quiet (strictly > 2 fires)'};
+    const over=r56(mk(8,2)).filter(f=>f.scope==='culture:decline')[0];
+    if(!over) return {why:'a drop of 4 should fire'};
+    if(over.sev!==3||over.conf!=='MEDIUM') return {why:'decline should be sev 3 MEDIUM (trend), got '+over.sev+'/'+over.conf};
+    if(over.basis.join(' ').indexOf('strictly greater than 2')===-1) return {why:'the boundary rule is not printed'};
+    return {ok:true,why:'drop exactly 2 quiet · drop 4 → sev 3 MEDIUM, boundary printed'};
+  }));
+  G.push(check('G54','R62 bridge attrition: top-2 betweenness → sev 5; non-bridge → R19 only',()=>{
+    const graph=[
+      {type:'org.network.edge',payload:{fromId:'pa',toId:'pb',type:'collaboration',strength:4,observed:FIXED-10*DAY},at:FIXED-10*DAY},
+      {type:'org.network.edge',payload:{fromId:'pb',toId:'pc',type:'collaboration',strength:4,observed:FIXED-9*DAY},at:FIXED-9*DAY}];
+    const r62=Px=>LeadOS.rules.RULES[56](Px,FIXED); /* index 56 = R62 */
+    const r19=Px=>LeadOS.rules.RULES[18](Px,FIXED);
+    const bridgeGone=LeadOS.engine.project(wrap(graph.concat([
+      {type:'hr.attrition.logged',payload:{personId:'pb',reason:'voluntary'},at:FIXED-5*DAY},
+      {type:'hr.attrition.logged',payload:{personId:'pz',reason:'voluntary'},at:FIXED-4*DAY}])));
+    const hit=r62(bridgeGone);
+    if(hit.length!==1||hit[0].sev!==5) return {why:'pb (the only interior node) should fire sev 5, got '+JSON.stringify(hit.map(f=>f.refs[0]+':'+f.sev))};
+    if(hit[0].basis.join(' ').indexOf('betweenness score')===-1) return {why:'betweenness score not printed'};
+    if(!r19(bridgeGone).length) return {why:'R19 must still fire independently'};
+    const edgeGone=LeadOS.engine.project(wrap(graph.concat([
+      {type:'hr.attrition.logged',payload:{personId:'pa',reason:'voluntary'},at:FIXED-5*DAY},
+      {type:'hr.attrition.logged',payload:{personId:'pz',reason:'voluntary'},at:FIXED-4*DAY}])));
+    if(r62(edgeGone).length) return {why:'pa has betweenness 0 — R62 must not fire for a non-bridge'};
+    if(!r19(edgeGone).length) return {why:'R19 should still fire for the non-bridge departures'};
+    return {ok:true,why:'bridge departure → sev 5 with betweenness printed · non-bridge → R19 only'};
+  }));
+  G.push(check('G55','R60 meeting waste: 39% quiet · 41% sev3 · 61% sev4 · no audit >60d → sev 1',()=>{
+    const mk=pct=>LeadOS.engine.project(wrap([
+      {type:'hr.performance.logged',payload:{personId:'p',score:3},at:FIXED-200*DAY},
+      {type:'meeting.audit',payload:{period:'2026-02',total_hours:40,wasted_pct:pct},at:FIXED-5*DAY}]));
+    const r60=Px=>LeadOS.rules.RULES[54](Px,FIXED); /* index 54 = R60 */
+    const waste=Px=>r60(Px).filter(f=>f.scope!=='meeting:cadence'&&f.scope!=='meeting:never');
+    if(waste(mk(39)).length) return {why:'39% must be quiet'};
+    const a=waste(mk(41)); if(a.length!==1||a[0].sev!==3) return {why:'41% should be sev 3'};
+    const b=waste(mk(61)); if(b.length!==1||b[0].sev!==4) return {why:'61% should be sev 4'};
+    const never=r60(LeadOS.engine.project(wrap([{type:'hr.performance.logged',payload:{personId:'p',score:3},at:FIXED-200*DAY}])));
+    if(never.length!==1||never[0].sev!==1) return {why:'no audit on a >60d log should be a sev 1 nudge'};
+    return {ok:true,why:'39 quiet · 41 sev3 · 61 sev4 · never → sev 1 nudge'};
+  }));
+  G.push(check('G56','bridges(): pa joins pb and pc — removing pa disconnects them',()=>{
+    const n=LeadOS.correlate.analyzeNetwork(LeadOS.engine.project(FX.net3()),FIXED);
+    const br=n.bridges();
+    if(br.indexOf('pa')===-1) return {why:'pa should be the articulation node, got '+JSON.stringify(br)};
+    if(br.indexOf('pb')!==-1||br.indexOf('pc')!==-1) return {why:'leaf nodes must not be bridges: '+JSON.stringify(br)};
+    if(n.bridgesNote.indexOf('SIMPLIFIED')===-1) return {why:'the approximation is not labeled'};
+    return {ok:true,why:'pa detected · leaves excluded · approximation labeled'};
+  }));
+  G.push(check('G57','R59 power advisory: informal 4 + formal 2 → sev 2; informal 3 → quiet',()=>{
+    const mk=(inf,form)=>LeadOS.engine.project(wrap([{type:'power.map.logged',
+      payload:{personId:'p1',formalPower:form,informalPower:inf,coalition:['a','b']},at:FIXED-5*DAY}]));
+    const r59=Px=>LeadOS.rules.RULES[53](Px,FIXED); /* index 53 = R59 */
+    const hit=r59(mk(4,2));
+    if(hit.length!==1||hit[0].sev!==2) return {why:'informal 4 + formal 2 should fire sev 2 advisory'};
+    if(r59(mk(3,2)).length) return {why:'informal 3 must be quiet (threshold is ≥4)'};
+    if(r59(mk(5,3)).length) return {why:'formal 3 must be quiet (threshold is ≤2)'};
+    if(hit[0].basis.join(' ').indexOf('ADVISORY')===-1) return {why:'advisory framing not printed'};
+    return {ok:true,why:'4/2 → sev 2 advisory · 3/2 quiet · 5/3 quiet'};
+  }));
+  G.push(check('G58','scoreCulture bounded 0–10: all-negative → 0 · all-positive → 10 · none → null',()=>{
+    const mk=pol=>{ const list=[];
+      for(let i=0;i<4;i++) list.push({type:'culture.signal',
+        payload:{type:pol==='negative'?'value-violated':'value-lived',description:'d'+i,polarity:pol,personIds:[]},at:FIXED-(i+1)*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const neg=LeadOS.correlate.scoreCulture(mk('negative'),FIXED);
+    if(neg.score!==0) return {why:'all-negative must clamp to 0, got '+neg.score};
+    if(neg.raw>=0) return {why:'raw pre-clamp value should be negative and printed: '+neg.raw};
+    if(!neg.clamped||neg.math.indexOf('clamped')===-1) return {why:'the clamp must be disclosed in the math'};
+    const pos=LeadOS.correlate.scoreCulture(mk('positive'),FIXED);
+    if(pos.score!==10) return {why:'all-positive must be exactly 10, got '+pos.score};
+    const none=LeadOS.correlate.scoreCulture(LeadOS.engine.project([]),FIXED);
+    if(none.score!==null) return {why:'no signals must yield null, never a flattering default'};
+    return {ok:true,why:'all-negative → 0 (raw '+neg.raw+', clamp disclosed) · all-positive → 10 · no data → null'};
+  }));
+  G.push(check('G59','org.silo.resolved clears openSilos and quiets R58',()=>{
+    const base=[{type:'org.silo.logged',payload:{id:'s1',teams:['a','b'],symptom:'handoffs rewritten',severity:4},at:FIXED-70*DAY}];
+    const open=LeadOS.engine.project(wrap(base));
+    if(open.openSilos.length!==1) return {why:'silo not in openSilos'};
+    const r58=Px=>LeadOS.rules.RULES[52](Px,FIXED); /* index 52 = R58 */
+    const fired=r58(open);
+    if(fired.length!==1||fired[0].sev!==4) return {why:'70d unresolved severity-4 silo should be sev 4'};
+    const done=LeadOS.engine.project(wrap(base.concat([
+      {type:'org.silo.resolved',payload:{siloId:'s1',how:'shared on-call rotation'},at:FIXED-2*DAY}])));
+    if(done.openSilos.length!==0) return {why:'resolved silo still in openSilos'};
+    if(r58(done).length) return {why:'R58 must go quiet after resolution'};
+    if(!done.silos.s1.resolved||done.silos.s1.how!=='shared on-call rotation') return {why:'resolution details not folded'};
+    return {ok:true,why:'open → sev 4 · resolved clears openSilos, quiets R58, keeps the "how" on record'};
+  }));
   return {checks:G,P:P,raw:raw};
 }
 
@@ -3287,7 +3934,8 @@ const CLAIMS=[
   {id:'C11',text:'R41–R45 fire iff their pattern is active, carry literal CORR keys, and the correlation pass receives the already-computed (unsuppressed) list; suppression is audited and reversible; engine faults surface loudly',by:['T19','T20','G7']},
   {id:'C12',text:'Interactive playbooks prefill from the log and emit only registry-valid event specs — nothing is written without review; escalation and supersede semantics hold',by:['T21','T22','G3']},
   {id:'C13',text:'Correlation goldens hold: all-limb boundaries, shared-entity enforcement, heat bounds with labeled zeros, deterministic ids, purity, 52/52 seed coverage',by:['G31','G32','G33','G34','G35','G36','G37','G38','G39','G40','T23','T24','T25','T26']},
-  {id:'C14',text:'Conversation layer: schema v6 (string settings), 10 contracts fold correctly, styleFor/zopaFor/prepareConv are pure and labeled (scaffold not script, hypothesis not prediction), R46–R52 boundaries hold, mediation resolves conflict pairs',by:['T28','T29','T30','T31','T32','G10','G41','G42','G43','G44','G45','G46','G47','G48','G49','G40']}
+  {id:'C14',text:'Conversation layer: schema v6 (string settings), 10 contracts fold correctly, styleFor/zopaFor/prepareConv are pure and labeled (scaffold not script, hypothesis not prediction), R46–R52 boundaries hold, mediation resolves conflict pairs',by:['T28','T29','T30','T31','T32','G10','G41','G42','G43','G44','G45','G46','G47','G48','G49','G40']},
+  {id:'C15',text:'Organizational dynamics: schema v7, graph analysis is exact where claimed exact (Tarjan SCC) and labeled where approximate (betweenness, bridges), culture scoring is a bounded composite with its 2× assumption printed, meeting load is arithmetic over your own logs, R53–R62 boundaries hold, 62/62 rules fire from the seed',by:['T33','T34','T35','T36','T37','G51','G52','G53','G54','G55','G56','G57','G58','G59','G40']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -3894,6 +4542,216 @@ SPECS['restructure-announcement-prep']={
       {type:'exec.aligned',payload:{topic:'restructure: '+v.scope,stakeholders:(v.affected||[]).slice(),result:'partial',
         note:'announcement prepared; alignment logged as partial until each 1:1 is held'}}]};
   }};
+/* ---------- pt-12 organizational playbooks ---------- */
+const CR=()=>LeadOS.correlate;
+SPECS['culture-audit']={
+  pattern:null,title:'Culture audit',free:true,
+  blurb:'What the culture is actually doing, not what the values deck says.',
+  prefill(R,P,now){
+    const c=CR().scoreCulture(P,now);
+    const lines=[];
+    if(c.score===null) lines.push(c.why);
+    else { lines.push('culture score '+c.score+'/10 — '+c.label); lines.push('  '+c.math); lines.push('  '+c.weightWhy);
+      Object.keys(c.byType).sort().forEach(t=>{ const b=c.byType[t];
+        lines.push('  '+t+': '+b.count+' signal(s) — +'+b.positive+' / −'+b.negative+' / ~'+b.neutral); }); }
+    const recent=(P.cultureSignals||[]).slice().sort((a,b)=>b.at-a.at).slice(0,10);
+    lines.push('last '+recent.length+' culture signals:');
+    recent.forEach(s=>lines.push('  '+U.iso(s.at)+' ['+s.polarity+'] '+s.type+': '+s.description));
+    const viol=(P.cultureSignals||[]).filter(s=>s.type==='value-violated');
+    lines.push(viol.length?('VALUE-VIOLATED EVENTS REQUIRING ACCOUNTABILITY ('+viol.length+'):'):'no value-violated events on record');
+    viol.forEach(s=>lines.push('  '+U.iso(s.at)+': "'+s.description+'"'+(s.personIds.length?' · named: '+s.personIds.join(', '):'')));
+    return lines;
+  },
+  fields(){ return [
+    {key:'actualVsStated',label:'what the data says about actual culture vs stated values',kind:'textarea',req:true},
+    {key:'strengthen',label:'one ritual to strengthen',kind:'text',req:true},
+    {key:'stop',label:'one ritual to stop',kind:'text',req:true},
+    {key:'accountability',label:'accountability action for value-violated events',kind:'textarea',req:true},
+    {key:'owner',label:'who owns culture next quarter',kind:'text',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'culture.signal',payload:{type:'ritual',description:'STRENGTHEN: '+v.strengthen,polarity:'positive',personIds:[v.owner],note:'declared in culture-audit'}},
+      {type:'culture.signal',payload:{type:'artifact',description:'STOP: '+v.stop,polarity:'neutral',personIds:[v.owner],note:'declared in culture-audit'}},
+      note('people','CULTURE AUDIT — actual vs stated:\n'+v.actualVsStated+'\nstrengthen: '+v.strengthen+'\nstop: '+v.stop+
+        '\naccountability for violations:\n'+v.accountability+'\nowner next quarter: '+v.owner,'culture-audit'),
+      {type:'playbook.completed',payload:{playbookId:'culture-audit',note:'owner '+v.owner}}]};
+  }};
+SPECS['network-review']={
+  pattern:null,title:'Network review',free:true,
+  blurb:'The invisible architecture: who actually influences whom.',
+  prefill(R,P,now){
+    const n=CR().analyzeNetwork(P,now);
+    const lines=[n.label,n.decayNote,
+      'graph: '+n.nodeCount+' node(s) · '+n.edgeCount+' edge(s) in window'+(n.droppedEdges.length?' · '+n.droppedEdges.length+' decayed out':'')];
+    const iso=n.isolates();
+    lines.push('isolates (no collaboration edge): '+(iso.length?iso.join(', '):'none'));
+    const br=n.bridges();
+    lines.push('bridges / articulation nodes: '+(br.length?br.join(', '):'none')+' — '+n.bridgesNote);
+    const cl=n.clusters();
+    lines.push('informal clusters (SCC, '+n.sccNote+'): '+(cl.length?cl.map(c=>'['+c.join(' ')+']').join(' '):'none'));
+    const bn=n.informationBottlenecks();
+    lines.push('information bottlenecks: '+(bn.length?'':'none detected'));
+    bn.forEach(b=>lines.push('  '+b.node+' — betweenness '+b.betweenness+' · blocked: '+b.blocked.join(' · ')));
+    lines.push('betweenness ranking ('+n.betweennessNote+'):');
+    n.betweennessRank.slice(0,5).forEach(x=>lines.push('  '+x+': '+n.betweennessAll[x]));
+    return lines;
+  },
+  fields(){ return [
+    {key:'isolateAction',label:'isolates: action per person',kind:'textarea',req:true},
+    {key:'bottleneck',label:'bottleneck: restructure or support',kind:'textarea',req:true},
+    {key:'bridgeAction',label:'bridge: cross-train or document',kind:'textarea',req:true},
+    {key:'edgeFrom',label:'new edge — from (personId)',kind:'text',req:false},
+    {key:'edgeTo',label:'new edge — to (personId)',kind:'text',req:false},
+    {key:'edgeType',label:'new edge — type',kind:'select',req:false,
+      options:['collaboration','information','decision','blocker'].map(t=>({value:t,label:t}))},
+    {key:'edgeStrength',label:'new edge — strength 1–5',kind:'number',req:false},
+    {key:'coalition',label:'coalition to build for a strategic initiative',kind:'textarea',req:true}]; },
+  submit(v){
+    const events=[];
+    if(v.edgeFrom&&v.edgeTo&&v.edgeType)
+      events.push({type:'org.network.edge',payload:{fromId:v.edgeFrom,toId:v.edgeTo,type:v.edgeType,
+        strength:U.clamp(Math.round(v.edgeStrength||3),1,5),observed:Date.now(),note:'declared in network-review'}});
+    events.push(note('people','NETWORK REVIEW — isolates:\n'+v.isolateAction+'\nbottlenecks:\n'+v.bottleneck+
+      '\nbridges:\n'+v.bridgeAction+'\ncoalition to build:\n'+v.coalition,'network-review'));
+    return {events:events};
+  }};
+SPECS['silo-break']={
+  pattern:null,title:'Silo break',free:true,
+  blurb:'A named silo that stays unresolved is a choice.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const lines=['open silos:'];
+    (P.openSilos||[]).forEach(s=>lines.push('  '+s.id+' · teams '+s.teams.join(' | ')+' · severity '+s.severity+
+      ' · '+U.days(now,s.loggedAt)+'d unresolved · symptom: "'+s.symptom+'"'));
+    if(!(P.openSilos||[]).length) lines.push('  none open');
+    const okrs=(P.openOkrs||[]);
+    lines.push('open OKRs available as shared goals: '+(okrs.length?'':'none — a shared goal will have to be created from scratch'));
+    okrs.forEach(o=>lines.push('  '+o.id+' · '+o.objective+' ('+o.quarter+')'+(o.ownerId?' · owner '+o.ownerId:' · UNOWNED')));
+    const objs=Object.keys(P.objectives||{}).map(k=>P.objectives[k]).filter(o=>!o.closedAt);
+    objs.forEach(o=>lines.push('  objective '+o.id+' · '+o.objective+(o.owner?' · owner '+o.owner:' · UNOWNED')));
+    return lines;
+  },
+  fields(R,P){
+    return [
+      {key:'siloId',label:'silo',kind:'select',req:true,
+        options:(P.openSilos||[]).map(s=>({value:s.id,label:s.id+' · '+s.teams.join(' | ')}))},
+      {key:'sharedGoal',label:'shared goal to create',kind:'text',req:true},
+      {key:'cadence',label:'cross-team meeting cadence to start',kind:'text',req:true},
+      {key:'ownerA',label:'joint owner — team A',kind:'text',req:true},
+      {key:'ownerB',label:'joint owner — team B',kind:'text',req:true},
+      {key:'deliverable',label:'first deliverable together',kind:'text',req:true},
+      {key:'timeline',label:'timeline',kind:'text',req:true}]; },
+  submit(v){
+    /* the registry has no goal.set contract — objective.set is the shipped
+       equivalent and carries a single owner field, so the second owner is
+       printed in the objective text rather than invented into the schema */
+    return {events:[
+      {type:'org.silo.resolved',payload:{siloId:v.siloId,how:v.sharedGoal+' · cadence '+v.cadence+' · joint owners '+v.ownerA+' + '+v.ownerB,
+        note:'first deliverable: '+v.deliverable+' by '+v.timeline}},
+      {type:'objective.set',payload:{id:U.uid('obj'),objective:'SHARED (silo-break): '+v.sharedGoal+' — joint owners '+v.ownerA+' + '+v.ownerB,
+        owner:v.ownerA,keyResults:[{kr:v.deliverable,target:1,unit:'delivered'}]}},
+      {type:'playbook.completed',payload:{playbookId:'silo-break',note:v.siloId+' → '+v.sharedGoal}}]};
+  }};
+SPECS['meeting-audit']={
+  pattern:null,title:'Meeting audit',free:true,
+  blurb:'Meeting load is a budget you are already spending.',
+  prefill(R,P,now){
+    const ml=CR().meetingLoad(P,now,30);
+    const lines=['last 30d: '+ml.meetingCount+' meeting(s) · '+ml.totalHours+'h logged'];
+    lines.push('outcome distribution ('+ml.distributionNote+'): decision '+ml.distribution.decision+'% · update '+
+      ml.distribution.update+'% · discussion '+ml.distribution.discussion+'% · wasted '+ml.distribution.wasted+'%');
+    lines.push('load per person:');
+    ml.byPerson.forEach(p=>lines.push('  '+p.person+': '+p.hoursPerWeek+' h/wk (wasted '+p.wastedHoursPerWeek+' h/wk) — '+p.math));
+    if(!ml.byPerson.length) lines.push('  no meeting.logged events in the window');
+    lines.push(ml.costNote);
+    if(ml.latestAudit) lines.push('latest meeting.audit: '+ml.latestAudit.period+' · '+ml.latestAudit.wasted_pct+'% wasted of '+ml.latestAudit.total_hours+'h');
+    return lines;
+  },
+  fields(){ return [
+    {key:'kill',label:'which recurring meetings to kill',kind:'textarea',req:true},
+    {key:'shorten',label:'which to shorten',kind:'textarea',req:true},
+    {key:'async',label:'which to convert to async',kind:'textarea',req:true},
+    {key:'period',label:'audit period',kind:'text',req:true},
+    {key:'totalHours',label:'total hours',kind:'number',req:true},
+    {key:'wastedPct',label:'wasted %',kind:'number',req:true},
+    {key:'cost',label:'loaded cost estimate (your figure)',kind:'number',req:false},
+    {key:'target',label:'target wasted_pct going forward',kind:'number',req:true}]; },
+  submit(v){
+    const p={period:v.period,total_hours:v.totalHours,wasted_pct:v.wastedPct,
+      note:'kill: '+v.kill+' | shorten: '+v.shorten+' | async: '+v.async+' | target '+v.target+'%'};
+    if(typeof v.cost==='number') p.loaded_cost_est=v.cost;
+    return {events:[{type:'meeting.audit',payload:p}]};
+  }};
+SPECS['trust-repair']={
+  pattern:null,title:'Trust repair',free:true,
+  blurb:'Trust is repaid in behavior over time, never in one conversation.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const a=(draft.fromId||'').trim(), b=(draft.toId||'').trim();
+    const lines=['trust signals on record:'];
+    (P.trustSignals||[]).slice().sort((x,y)=>y.at-x.at).slice(0,10)
+      .forEach(t=>lines.push('  '+U.iso(t.at)+' '+t.fromId+' → '+t.toId+' ['+t.direction+'] "'+t.evidence+'"'));
+    if(!(P.trustSignals||[]).length) lines.push('  none');
+    if(a&&b){
+      const pair=(P.trustByPair||{})[a+'→'+b]||[];
+      lines.push('this pair ('+a+' → '+b+'): '+(pair.length?pair.length+' signal(s)':'no signals logged'));
+      const convs=((P.convsByPerson||{})[b]||[]).filter(c=>c.personIds.indexOf(a)!==-1||true).slice(0,5);
+      lines.push('conversation history involving '+b+': '+(convs.length?'':'none'));
+      convs.forEach(c=>lines.push('  '+U.iso(c.plannedAt)+' '+c.type+' → '+(c.completed?c.completed.outcome:'not completed')));
+      const key=[a,b].sort().join('|');
+      const conflict=(P.openConflictPairs||[]).filter(p=>p.key===key)[0];
+      lines.push(conflict?('OPEN CONFLICT PAIR: last mediation result "'+conflict.result+'" on '+U.iso(conflict.at))
+        :'no open conflict pair for these two (conflict pairs derive from mediation.held only — the registry has no conflict.raised contract)');
+    } else lines.push('(enter both ids to read the pair history)');
+    return lines;
+  },
+  fields(){ return [
+    {key:'fromId',label:'who lost trust (fromId)',kind:'text',req:true},
+    {key:'toId',label:'in whom (toId)',kind:'text',req:true},
+    {key:'cause',label:'what caused the trust loss',kind:'textarea',req:true},
+    {key:'behavior',label:'the one specific behavior change being committed to',kind:'textarea',req:true},
+    {key:'action',label:'timeline for a trust-building action',kind:'text',req:true},
+    {key:'checkpoint',label:'checkpoint date',kind:'date',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'conv.planned',payload:{id:U.uid('conv'),type:'conflict',personIds:[v.fromId,v.toId],
+        topic:'Trust repair: '+v.cause.slice(0,60),stakes:4,
+        myGoal:v.behavior,preparedAt:Date.now()}},
+      note('people','TRUST REPAIR — '+v.fromId+' → '+v.toId+'\ncause:\n'+v.cause+'\nbehavior change committed:\n'+v.behavior+
+        '\naction timeline: '+v.action+'\ncheckpoint: '+U.iso(v.checkpoint),'trust-repair')]};
+  }};
+SPECS['psych-safety-build']={
+  pattern:null,title:'Psychological safety build',free:true,
+  blurb:'Safety is built by what the leader does after someone speaks up.',
+  prefill(R,P,now){
+    const logs=(P.psychSafety||[]).slice().sort((a,b)=>a.at-b.at);
+    const lines=['psychological safety history:'];
+    logs.forEach(l=>lines.push('  '+U.iso(l.at)+' · '+l.period+' · score '+l.score+'/5'+(l.teamId?' · team '+l.teamId:'')+' · method: "'+l.method+'"'));
+    if(!logs.length) lines.push('  never measured — R57 fires on a log older than 90d');
+    const lowest=logs.slice().sort((a,b)=>(a.score-b.score)||(a.at-b.at))[0];
+    if(lowest){
+      lines.push('lowest-scoring period: '+lowest.period+' ('+lowest.score+'/5, '+U.iso(lowest.at)+') · method "'+lowest.method+'"');
+      const from=lowest.at-30*DAY, to=lowest.at+30*DAY;
+      const near=(P.cultureSignals||[]).filter(s=>s.at>=from&&s.at<=to);
+      lines.push('culture signals within ±30d of that period: '+(near.length?'':'none'));
+      near.forEach(s=>lines.push('  '+U.iso(s.at)+' ['+s.polarity+'] '+s.type+': '+s.description));
+    }
+    return lines;
+  },
+  fields(){ return [
+    {key:'absent',label:'what specific behaviors are absent (speaking up, disagreeing publicly, admitting mistakes)',kind:'textarea',req:true},
+    {key:'myChange',label:'one leadership behavior YOU will change',kind:'textarea',req:true},
+    {key:'measure',label:'measurement plan',kind:'textarea',req:true},
+    {key:'period',label:'period label for the next check',kind:'text',req:true},
+    {key:'method',label:'method for the next check',kind:'text',req:true},
+    {key:'score',label:'current score 1–5 (log it now)',kind:'number',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'culture.signal',payload:{type:'value-lived',description:'Leader commitment: '+v.myChange,polarity:'positive',
+        personIds:[],note:'declared in psych-safety-build; absent behaviors named: '+v.absent.slice(0,120)}},
+      {type:'psychological.safety',payload:{period:v.period,score:U.clamp(Math.round(v.score),1,5),method:v.method,
+        note:'measurement plan: '+v.measure}}]};
+  }};
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -4319,6 +5177,84 @@ V['#/conversations']={kicker:'leadership is executed in dialogue',title:'Convers
     '<div class="sect"><h2>Quick capture</h2><span class="meta">conv.planned · conv.completed · influence.mapped · negotiation.logged</span></div>'+
     '<div class="card">'+captureForm()+'</div>';
 }};
+const BAR=(score,max)=>{ const filled=Math.round((score/(max||10))*10);
+  return '<span class="spark">'+'█'.repeat(U.clamp(filled,0,10))+'░'.repeat(U.clamp(10-filled,0,10))+'</span>'; };
+V['#/org']={kicker:'the invisible architecture',title:'Organization',render(ctx){
+  const P=ctx.P, now=ctx.now;
+  const net=LeadOS.correlate.analyzeNetwork(P,now);
+  const cul=LeadOS.correlate.scoreCulture(P,now);
+  const culPrior=LeadOS.correlate.scoreCulture(P,now-30*DAY,30);
+  const culNow=LeadOS.correlate.scoreCulture(P,now,30);
+  const ml=LeadOS.correlate.meetingLoad(P,now,30);
+  const iso=net.isolates(), br=net.bridges(), cl=net.clusters(), bn=net.informationBottlenecks();
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
+  const trend=(culNow.score!==null&&culPrior.score!==null)
+    ? (()=>{ const d=U.rd(culNow.score-culPrior.score,2);
+        return (d>0?'▲ +':d<0?'▼ ':'● ')+d+' vs prior 30d'; })()
+    : 'no comparable prior window — trend not claimed';
+  const powerRows=Object.keys(P.powerByPerson||{}).sort().map(k=>{ const p=P.powerByPerson[k];
+    const gap=p.informalPower>=4&&p.formalPower<=2;
+    return '<tr'+(gap?' style="background:rgba(179,41,30,.05)"':'')+'><td class="mono">'+esc(k)+'</td>'+
+      '<td class="mono">'+p.formalPower+'</td><td class="mono">'+p.informalPower+'</td>'+
+      '<td class="mono">'+p.coalition.length+(p.coalition.length?' ('+esc(p.coalition.join(', '))+')':'')+'</td>'+
+      '<td>'+(gap?'<span class="sev s2">informal &gt; formal</span>':'<span class="pill">aligned</span>')+'</td></tr>'; }).join('');
+  const siloRows=(P.openSilos||[]).map(s=>'<tr><td class="mono">'+esc(s.id)+'</td><td>'+esc(s.teams.join(' | '))+'</td>'+
+    '<td><span class="sev s'+U.clamp(s.severity,1,5)+'">sev '+s.severity+'</span></td>'+
+    '<td class="mono">'+U.days(now,s.loggedAt)+'d</td><td class="small">'+esc(s.symptom)+'</td></tr>').join('');
+  const mlRows=ml.byPerson.slice().sort((a,b)=>b.hoursPerWeek-a.hoursPerWeek).map(p=>
+    '<tr><td class="mono">'+esc(p.person)+'</td><td class="mono">'+p.hoursPerWeek+'</td>'+
+    '<td class="mono">'+(p.wastedHoursPerWeek>0?'<span class="sev s3">'+p.wastedHoursPerWeek+'</span>':'0')+'</td>'+
+    '<td class="small muted">'+esc(p.math)+'</td></tr>').join('');
+  const lostPairs=Object.keys(P.trustByPair||{}).map(k=>{
+    const recs=P.trustByPair[k].slice().sort((a,b)=>a.at-b.at);
+    const lost=recs.filter(r=>r.direction==='lost').slice(-1)[0];
+    if(!lost) return null;
+    if(recs.some(r=>r.direction==='gained'&&r.at>lost.at)) return null;
+    return {pair:k,at:lost.at,evidence:lost.evidence}; }).filter(Boolean);
+  return '<div class="vhead"><div class="kicker">the invisible architecture</div><h1>Organization</h1>'+
+    '<div class="sub">Who actually influences whom, where information stops, where informal power lives, and what the culture is doing. <b>'+esc(net.label)+'.</b></div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['network-review','culture-audit','silo-break','meeting-audit','trust-repair','psych-safety-build']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    runner+
+    '<div class="grid3">'+
+      '<div class="card"><h3>Network</h3><div class="basis" style="margin-top:8px">'+
+        '<div>nodes '+net.nodeCount+' · edges '+net.edgeCount+(net.droppedEdges.length?' · '+net.droppedEdges.length+' decayed out':'')+'</div>'+
+        '<div>isolates: '+esc(iso.length?iso.join(', '):'none')+'</div>'+
+        '<div>bridges: '+esc(br.length?br.join(', '):'none')+'</div>'+
+        '<div>clusters: '+esc(cl.length?cl.map(c=>'['+c.join(' ')+']').join(' '):'none')+'</div>'+
+        '<div class="lbl">'+esc(net.decayNote)+'</div></div></div>'+
+      '<div class="card"><h3>Culture</h3>'+
+        (cul.score===null?'<div class="small muted" style="margin-top:8px">'+esc(cul.why)+'</div>'
+          :'<div style="margin-top:8px">'+BAR(cul.score,10)+' <b class="mono">'+cul.score+'/10</b></div>'+
+           '<div class="small muted" style="margin-top:4px">'+esc(trend)+'</div>'+
+           '<div class="basis" style="margin-top:8px"><div>'+esc(cul.math)+'</div>'+
+           '<div class="lbl">'+esc(cul.label)+' · '+esc(cul.weightWhy)+'</div></div>')+'</div>'+
+      '<div class="card"><h3>Meetings (30d)</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+ml.meetingCount+' meeting(s) · '+ml.totalHours+'h</div>'+
+        '<div>decision '+ml.distribution.decision+'% · update '+ml.distribution.update+'%</div>'+
+        '<div>discussion '+ml.distribution.discussion+'% · <b>wasted '+ml.distribution.wasted+'%</b></div>'+
+        '<div class="lbl">'+esc(ml.costNote)+'</div></div></div>'+
+    '</div>'+
+    (bn.length?'<div class="sect"><h2>Information bottlenecks</h2><span class="meta">'+bn.length+'</span></div>'+
+      '<div class="card">'+bn.map(b=>'<div class="heatrow"><b>'+esc(b.node)+'</b><span>'+esc(b.blocked.join(' · '))+'</span><span class="w">betweenness '+b.betweenness+'</span></div>').join('')+
+      '<div class="formnote">'+esc(net.betweennessNote)+'</div></div>':'')+
+    '<div class="sect"><h2>Silo register</h2><span class="meta">'+(P.openSilos||[]).length+' open</span></div>'+
+    ((P.openSilos||[]).length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>id</th><th>teams</th><th>severity</th><th>age</th><th>symptom</th></tr>'+siloRows+'</table></div>'
+      :'<div class="empty">No open silos. A silo nobody named is invisible — log one when you see it.</div>')+
+    '<div class="sect"><h2>Power map</h2><span class="meta">'+Object.keys(P.powerByPerson||{}).length+' mapped · your assessment, logged by you</span></div>'+
+    (powerRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>person</th><th>formal</th><th>informal</th><th>coalition</th><th>state</th></tr>'+powerRows+'</table></div>'
+      :'<div class="empty">No power.map.logged events.</div>')+
+    '<div class="sect"><h2>Meeting load</h2><span class="meta">per person, last 30d</span></div>'+
+    (mlRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>person</th><th>h/wk</th><th>wasted h/wk</th><th>math</th></tr>'+mlRows+'</table></div>'
+      :'<div class="empty">No meeting.logged events in the window.</div>')+
+    '<div class="sect"><h2>Open lost-trust pairs</h2><span class="meta">'+lostPairs.length+' · observations, not facts</span></div>'+
+    (lostPairs.length?'<div class="card">'+lostPairs.map(p=>'<div class="heatrow"><b>'+esc(p.pair)+'</b><span>'+esc(p.evidence)+'</span>'+
+      '<span class="w">'+U.iso(p.at)+' <button class="btn ghost sm" data-act="playrun" data-id="trust-repair">repair</button></span></div>').join('')+'</div>'
+      :'<div class="empty">No unrepaired trust losses on record.</div>')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">org.network.edge · culture.signal · meeting.logged · trust.signal · power.map.logged · psychological.safety</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
 V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',render(ctx){
   const P=ctx.P, R=ctx.R, now=ctx.now;
   const vals=o=>Object.keys(o||{}).map(k=>o[k]);
@@ -4373,7 +5309,32 @@ V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',re
       :'<div class="empty">No completed conversations with '+esc(id)+'. Absence of dialogue is itself data — R46 and R50 read it.</div>')+
     '<div class="sect"><h2>Negotiation history</h2><span class="meta">'+negs.length+'</span></div>'+
     (negs.length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>when</th><th>topic</th><th>my BATNA</th><th>ZOPA</th><th>state</th></tr>'+negRows+'</table></div>'
-      :'<div class="empty">No negotiations involving '+esc(id)+'.</div>');
+      :'<div class="empty">No negotiations involving '+esc(id)+'.</div>')+
+    (function(){
+      const net=LeadOS.correlate.analyzeNetwork(P,now);
+      const isIso=net.isolates().indexOf(id)!==-1;
+      const isBridge=net.bridges().indexOf(id)!==-1;
+      const rank=net.betweennessRank.indexOf(id);
+      const trust=(P.trustSignals||[]).filter(t=>t.fromId===id||t.toId===id).sort((a,b)=>b.at-a.at);
+      const power=(P.powerByPerson||{})[id];
+      const load=LeadOS.correlate.meetingLoad(P,now,30).byPerson.filter(p=>p.person===id)[0];
+      return '<div class="sect"><h2>Network position</h2><span class="meta">'+esc(net.label)+'</span></div>'+
+        '<div class="grid2"><div class="card"><div class="basis">'+
+          '<div>indegree (influence received): '+net.indegree(id)+' · weighted '+U.rd3(net.weightedIn(id))+'</div>'+
+          '<div>outdegree (influence given): '+net.outdegree(id)+' · weighted '+U.rd3(net.weightedOut(id))+'</div>'+
+          '<div>betweenness: '+net.betweenness(id)+(rank>=0?' (rank #'+(rank+1)+' of '+net.betweennessRank.length+')':'')+'</div>'+
+          '<div class="lbl">'+esc(net.betweennessNote)+'</div>'+
+          '<div>'+(isIso?'<b>ISOLATE</b> — no collaboration edge touches this person (R53)':'on the collaboration graph')+'</div>'+
+          '<div>'+(isBridge?'<b>BRIDGE</b> — removing them disconnects part of the graph (R62 watches this)':'not an articulation node')+'</div>'+
+          (power?'<div>power map: formal '+power.formalPower+' · informal '+power.informalPower+' · coalition '+power.coalition.length+'</div>':'<div>no power.map.logged entry</div>')+
+          (load?'<div>meeting load: '+load.hoursPerWeek+' h/wk ('+load.wastedHoursPerWeek+' wasted)</div>':'<div>no meetings logged in 30d</div>')+
+        '</div></div>'+
+        '<div class="card"><h3>Trust signals</h3>'+
+          (trust.length?trust.slice(0,8).map(t=>'<div class="heatrow"><span class="rule">'+(t.direction==='lost'?'<span class="sev s3">lost</span>':'<span class="pill">gained</span>')+'</span>'+
+            '<span>'+esc(t.fromId)+' → '+esc(t.toId)+': '+esc(t.evidence)+'</span><span class="w">'+U.iso(t.at)+'</span></div>').join('')
+            :'<div class="small muted" style="margin-top:8px">No trust signals involving '+esc(id)+'. These are observations, never facts — log them when you see them.</div>')+
+        '</div></div>';
+    })();
 }};
 V['#/data']={kicker:'the log, the settings, the walls',title:'Data',render(ctx){
   const raw=ctx.R?LeadOS.store.exportRaw():null;
@@ -4471,6 +5432,7 @@ function shell(ctx){
     ['#/heatmap','gauge','Heatmap',R.heat.cells.length?Math.max.apply(null,R.heat.cells.map(c=>c.score)):null],
     ['#/benchmarks','bars','Benchmarks',R.insights.active.filter(i=>i.kind==='benchmark-gap').length||null],
     ['#/conversations','link','Conversations',(ctx.P.openConvs||[]).length||null],
+    ['#/org','grid','Organization',(ctx.P.openSilos||[]).length||null],
     ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],
     ['#/health','shield','Health',null],
