@@ -222,6 +222,10 @@ footer.colophon{margin-top:60px;border-top:1px solid var(--hair);padding-top:14p
    this delivery is exactly the three files the brief asks for.
 ============================================================================ */
 const LeadOS = window.LeadOS = window.LeadOS || {};
+/* Module registry — the single-file analog of the brief's script list.
+   Each logical "file" registers exactly one namespace, in this load order.
+   The boot guard halts rendering if any entry is missing (data untouched). */
+LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','health','playbooks','ui'];
 
 /* ==================== 1 · UTIL ==================== */
 (function(){
@@ -391,7 +395,27 @@ const REGISTRY = {
      plan.created/.checkin/.closed — payloads never byte-verified, minimal shape
      chosen and LABELED). */
   'playbook.completed':     D({playbookId:'s'},{note:'s'}),
-  'plan.checkin':           D({note:'s'},{outcome:'s',planId:'s'})
+  'plan.checkin':           D({note:'s'},{outcome:'s',planId:'s'}),
+  /* pt-11 (brief "pt-6") — conversation intelligence. 10 contracts. */
+  'conv.planned':           D({id:'s',type:'s',personIds:'a',topic:'s',stakes:'n',myGoal:'s',preparedAt:'ms'},
+                              {theirLikelyGoal:'s'},{type:['feedback','compensation','performance','conflict','negotiation','skip-level','board-presentation','stakeholder-alignment','difficult-decision','termination','promotion','restructure-announcement','one-on-one-checkin','mediation']},'convs'),
+  'conv.completed':         D({convId:'s',outcome:'s',note:'s'},{nextStep:'s'},
+                              {outcome:['achieved','partial','no-agreement','escalated']},null,{convId:'convs'}),
+  'conv.debrief':           D({convId:'s',whatWorked:'s',whatMissed:'s',adjustment:'s'},null,null,null,{convId:'convs'}),
+  'influence.mapped':       D({personId:'s',influenceStyle:'s',evidence:'s'},{note:'s'},
+                              {influenceStyle:['driver','expressive','analytical','amiable']}),
+  'negotiation.logged':     D({id:'s',topic:'s',parties:'a'},
+                              {myBatna:'any',theirEstimatedBatna:'any',zopa_low:'n',zopa_high:'n',outcome:'s',ownerId:'s'},null,'negotiations'),
+  'comp.discussed':         D({personId:'s',currentBand:'s',outcome:'s'},{marketBand:'s',note:'s'},
+                              {outcome:['raised','held','pipeline']}),
+  'perf.discussed':         D({personId:'s',rating:'s',reactionType:'s'},{note:'s'},
+                              {rating:['exceeds','meets','below'],reactionType:['accepted','surprised','disputed']}),
+  'board.presented':        D({period:'s',audience_size:'n',outcome:'s'},{note:'s'},
+                              {outcome:['approved','questions','deferred','rejected']}),
+  'exec.aligned':           D({topic:'s',stakeholders:'a',result:'s'},{note:'s'},
+                              {result:['aligned','misaligned','partial']}),
+  'mediation.held':         D({parties:'a',result:'s'},{conflictId:'s',mediatorId:'s',note:'s'},
+                              {result:['resolved','partial','escalated']})
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -418,7 +442,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=5, LINEAGE='pt', LINEAGE_TAG='pt-7';
+const KEY='leados:data', SCHEMA_VERSION=6, LINEAGE='pt', LINEAGE_TAG='pt-11';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -429,7 +453,14 @@ const V4_NEW_KEYS=Object.keys(V4_SETTING_DEFAULTS);
    prints the factor it used (carried doctrine, pt-15 §62). */
 const V5_SETTING_DEFAULTS={correlationWindowDays:90,trendMinPeriods:3,heatmapDecayFactor:0.85};
 const V5_NEW_KEYS=Object.keys(V5_SETTING_DEFAULTS);
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS);
+/* v6 — conversation-intelligence settings. These are STRINGS (models/styles),
+   the first non-numeric settings in the ladder: the Data view must not coerce
+   them to Number, and the migration contract is otherwise identical. */
+const V6_SETTING_DEFAULTS={negotiationStyleDefault:'collaborative',feedbackDeliveryModel:'SBI',conflictMediationModel:'DESC'};
+const V6_NEW_KEYS=Object.keys(V6_SETTING_DEFAULTS);
+const SETTING_ENUMS={feedbackDeliveryModel:['SBI','COIN','BID'],conflictMediationModel:['DESC','GROW','ICF'],
+  negotiationStyleDefault:['collaborative','competitive','accommodating','avoiding','compromising']};
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -478,7 +509,15 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V5_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V5_SETTING_DEFAULTS[k]},{repair:true,migration:'4>5',reason:'backfill v5 setting default'}); repairs++; }});
-    recordMigration(raw,'4>5',repairs); raw.schemaVersion=5; return repairs; }
+    recordMigration(raw,'4>5',repairs); raw.schemaVersion=5; return repairs; },
+  /* v5 -> v6: backfill the three conversation-intelligence settings. Same
+     contract as every rung: leader values never overwritten, every repair
+     counted, idempotent. First rung to carry STRING values. */
+  '5>6':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V6_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V6_SETTING_DEFAULTS[k]},{repair:true,migration:'5>6',reason:'backfill v6 setting default'}); repairs++; }});
+    recordMigration(raw,'5>6',repairs); raw.schemaVersion=6; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -566,7 +605,8 @@ function purge(){ localStorage.removeItem(KEY); return load(); }
 const getEvents=()=>load().events.slice();
 const rawBytes=()=>{ const t=localStorage.getItem(KEY); return t?t.length:0; };
 LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V4_NEW_KEYS,
-  V5_SETTING_DEFAULTS,V5_NEW_KEYS,RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
+  V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,SETTING_ENUMS,
+  RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
 
@@ -717,7 +757,40 @@ const MODULE_FOLD={
   'signal.tagged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p); s.signalTags.push(rec); group(s.tagsByEvent,p.eventId,rec); },
   /* pt-9 */
   'playbook.completed':(s,p,at,ev)=>{ push(s.playbookRuns,p,at,ev); },
-  'plan.checkin':(s,p,at,ev)=>{ push(s.planCheckins,p,at,ev); }
+  'plan.checkin':(s,p,at,ev)=>{ push(s.planCheckins,p,at,ev); },
+  /* pt-11 — conversation intelligence */
+  'conv.planned':(s,p,at,ev)=>{ s.convs[p.id]={id:p.id,type:p.type,personIds:p.personIds.slice(),topic:p.topic,
+    stakes:p.stakes,myGoal:p.myGoal,theirLikelyGoal:p.theirLikelyGoal||null,preparedAt:p.preparedAt,
+    plannedAt:at,completed:null,debriefs:[]};
+    p.personIds.forEach(pid=>group(s.convsByPerson,pid,s.convs[p.id])); },
+  'conv.completed':(s,p,at,ev)=>{ const c=s.convs[p.convId]; if(!c) return;
+    /* history STACKS — a conversation completed twice keeps both records */
+    const rec={outcome:p.outcome,note:p.note,nextStep:p.nextStep||null,at:at,_ev:ev&&ev.id};
+    c.completed=rec; (c.completions=c.completions||[]).push(rec);
+    s.convCompletions.push(Object.assign({convId:p.convId,type:c.type,personIds:c.personIds,topic:c.topic,stakes:c.stakes},rec)); },
+  'conv.debrief':(s,p,at,ev)=>{ const c=s.convs[p.convId];
+    const rec={convId:p.convId,whatWorked:p.whatWorked,whatMissed:p.whatMissed,adjustment:p.adjustment,at:at,_ev:ev&&ev.id};
+    if(c) c.debriefs.push(rec); s.convDebriefs.push(rec); },
+  'influence.mapped':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.influenceLog.push(rec); s.influenceByPerson[p.personId]=rec; /* latest append wins */ },
+  'negotiation.logged':(s,p,at,ev)=>{ s.negotiations[p.id]={id:p.id,topic:p.topic,parties:p.parties.slice(),
+    myBatna:(p.myBatna===undefined?null:p.myBatna),theirEstimatedBatna:(p.theirEstimatedBatna===undefined?null:p.theirEstimatedBatna),
+    zopa_low:(p.zopa_low===undefined?null:p.zopa_low),zopa_high:(p.zopa_high===undefined?null:p.zopa_high),
+    outcome:p.outcome||null,ownerId:p.ownerId||null,at:at,_ev:ev&&ev.id}; },
+  'comp.discussed':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.compDiscussions.push(rec); group(s.compByPerson,p.personId,rec); },
+  'perf.discussed':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.perfDiscussions.push(rec); group(s.perfDiscByPerson,p.personId,rec); },
+  'board.presented':(s,p,at,ev)=>{ push(s.boardPresentations,p,at,ev); },
+  'exec.aligned':(s,p,at,ev)=>{ push(s.execAlignments,p,at,ev); },
+  /* mediation.held is the ONLY conflict-pair signal in this registry: no
+     conflict.raised/.resolved contract exists (gap printed, not invented).
+     'resolved' closes the pair; 'partial'/'escalated' opens or keeps it open. */
+  'mediation.held':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.mediations.push(rec);
+    const key=p.parties.slice().sort().join('|');
+    if(p.result==='resolved'){ delete s.conflictPairs[key]; s.resolvedPairs[key]={at:at,_ev:ev&&ev.id}; }
+    else s.conflictPairs[key]={key:key,parties:p.parties.slice(),result:p.result,at:at,_ev:ev&&ev.id}; }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -736,6 +809,11 @@ function blankBuckets(s){
   s.notes={};s.noteLog=[];s.notesByRef={};
   s.insightAcks={};s.benchmarks=[];s.benchmarkByMetric={};s.reviewLog=[];s.signalTags=[];s.tagsByEvent={};
   s.playbookRuns=[];s.planCheckins=[];
+  /* pt-11 conversation buckets */
+  s.convs={};s.convsByPerson={};s.convCompletions=[];s.convDebriefs=[];
+  s.influenceLog=[];s.influenceByPerson={};s.negotiations={};
+  s.compDiscussions=[];s.compByPerson={};s.perfDiscussions=[];s.perfDiscByPerson={};
+  s.boardPresentations=[];s.execAlignments=[];s.mediations=[];s.conflictPairs={};s.resolvedPairs={};
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -760,7 +838,10 @@ const OPEN_SETS={
   openExperiments:['experiments',e=>e.result===null],
   openCrises:['crises',c=>!c.resolved],
   openContracts:['contracts',c=>c.status==='active'],
-  openDecisions:['decisions',d=>!d.decided]
+  openDecisions:['decisions',d=>!d.decided],
+  openConvs:['convs',c=>c.completed===null],
+  openNegotiations:['negotiations',n=>!n.outcome],
+  openConflictPairs:['conflictPairs',()=>true]
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -1317,8 +1398,112 @@ function R40(P,today){ const f=F('R40'),out=[];
   else if(gap>cad) out.push(f({sev:2,conf:'HIGH',title:'Executive KPI review gap '+gap+'d',
     basis:['latest exec.kpi.reviewed '+U.iso(last)+' · gap '+gap+'d > revenueReviewCadenceDays '+cad+'d'],refs:[],scope:'exec-kpi',evidenceAt:last}));
   return out; }
+/* ---- pt-11 conversation rules R46–R52 (individual rules; they read the
+   conversation fold, never the correlation layer) ---- */
+Object.assign(META,{
+  R46:{domain:'people',play:'conv-prep'},R47:{domain:'people',play:'mediation-prep'},
+  R48:{domain:'people',play:'compensation-prep'},R49:{domain:'people',play:'conv-prep'},
+  R50:{domain:'people',play:'conv-prep'},R51:{domain:'sales',play:'negotiation-prep'},
+  R52:{domain:'executive',play:'conv-prep'}
+});
+function R46(P,today){ const f=F('R46'),out=[];
+  (P.openConvs||[]).forEach(c=>{ if(c.stakes<4) return; /* below threshold → quiet */
+    const age=days(today,c.plannedAt);
+    if(age<=7) return;
+    out.push(f({sev:age>14?4:3,conf:'HIGH',title:'High-stakes conversation planned '+age+'d ago, never held: '+c.topic,
+      basis:['stakes '+c.stakes+' ≥ 4 · planned '+U.iso(c.plannedAt)+' · '+age+'d with no conv.completed'+(age>14?' · >14d → sev 4':' · >7d → sev 3'),
+        'a high-stakes conversation you keep not having is making the decision for you by inaction',
+        'source: conv.planned without conv.completed'],
+      refs:[c.id],evidenceAt:c.plannedAt})); });
+  return out; }
+function R47(P,today){ const f=F('R47'),out=[];
+  (P.convCompletions||[]).forEach(c=>{ if(c.outcome!=='escalated') return;
+    const age=days(today,c.at);
+    if(age<=5) return;
+    const laterConv=vals(P.convs).some(x=>x.plannedAt>c.at);
+    const laterMed=(P.mediations||[]).some(m=>m.at>c.at);
+    if(laterConv||laterMed) return;
+    out.push(f({sev:4,conf:'HIGH',title:'Escalated conversation with no follow-up ('+age+'d): '+c.topic,
+      basis:['conv.completed outcome "escalated" on '+U.iso(c.at)+' · '+age+'d > 5d · no later conv.planned and no mediation.held since',
+        'escalation that nobody follows up on is an organizational wound left open',
+        'source: conv.completed / conv.planned / mediation.held'],
+      refs:[c.convId],evidenceAt:c.at})); });
+  return out; }
+function R48(P,today){ const f=F('R48'),out=[];
+  (P.compDiscussions||[]).forEach(c=>{ if(c.outcome!=='held') return;
+    /* "same period" — the comp discussion and the perf rating inside one
+       review window; the registry has no period field on perf.discussed, so
+       the window is revenueReviewCadenceDays, printed (not invented). */
+    const set=LeadOS.engine.settings(P), win=set.revenueReviewCadenceDays;
+    const peers=(P.perfDiscByPerson||{})[c.personId]||[];
+    const hit=peers.filter(p=>p.rating==='exceeds'&&Math.abs(p.at-c.at)<=win*DAY)[0];
+    if(!hit) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Top performer held at band: '+c.personId,
+      basis:['comp.discussed outcome "held" '+U.iso(c.at)+' · currentBand '+c.currentBand+(c.marketBand?' vs market '+c.marketBand:' · no marketBand logged — the comparison is not inferred'),
+        'perf.discussed rating "exceeds" '+U.iso(hit.at)+' — within '+win+'d of the comp conversation ("same period" = revenueReviewCadenceDays, printed)',
+        'paying top performers at market floor is a retention risk you documented yourself',
+        'source: comp.discussed + perf.discussed'],
+      refs:[c.personId],scope:c.personId+':'+U.iso(c.at),evidenceAt:c.at})); });
+  return out; }
+function R49(P,today){ const f=F('R49'),out=[];
+  (P.perfDiscussions||[]).forEach(p=>{ if(p.reactionType!=='disputed') return;
+    const age=days(today,p.at);
+    if(age<=14) return;
+    const laterConv=vals(P.convs).some(c=>c.plannedAt>p.at&&c.personIds.indexOf(p.personId)!==-1);
+    const laterPip=vals(P.pips).some(x=>x.personId===p.personId&&x.startedAt>p.at);
+    if(laterConv||laterPip) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Disputed rating with no follow-up plan ('+age+'d): '+p.personId,
+      basis:['perf.discussed rating "'+p.rating+'" reaction "disputed" on '+U.iso(p.at)+' · '+age+'d > 14d',
+        'no conv.planned involving '+p.personId+' and no hr.pip.started since',
+        'a disputed rating with no follow-up plan is a legal and relationship risk',
+        'source: perf.discussed + conv.planned + hr.pip.started'],
+      refs:[p.personId],scope:p.personId+':disputed:'+U.iso(p.at),evidenceAt:p.at})); });
+  return out; }
+function R50(P,today){ const f=F('R50'),out=[];
+  /* "direct report" — this registry has no reportsTo contract (gap printed):
+     the proxy is a roster person, derived because the log mentions them. */
+  Object.keys(P.rosterById||{}).sort().forEach(pid=>{
+    const r=P.rosterById[pid];
+    if(r.departed) return;
+    if((P.influenceByPerson||{})[pid]) return;
+    const firstSeen=U.maxAt([{at:P.firstAt}])||P.firstAt;
+    const seen=[].concat(r.quotas.map(q=>q.setAt),r.deals.map(d=>d.loggedAt),
+      r.performance.map(x=>x.at),r.pips.map(x=>x.startedAt),r.compensation.map(x=>x.at))
+      .filter(x=>typeof x==='number');
+    if(!seen.length) return;
+    const onFile=Math.min.apply(null,seen);
+    const age=days(today,onFile);
+    if(age<=60) return; /* exactly 60d is quiet */
+    out.push(f({sev:1,conf:'LOW',title:'No influence style mapped for '+pid+' ('+age+'d on file)',
+      basis:['first appears in the log '+U.iso(onFile)+' · '+age+'d > 60d · no influence.mapped event',
+        'you cannot tailor a conversation to someone you have not observed — sev 1 advisory, conf LOW: a nudge, not an alarm',
+        '"direct report" proxy: this registry carries no reportsTo contract, so roster membership (the log mentions them) stands in — printed, not inferred',
+        'source: (absence of) influence.mapped'],
+      refs:[pid],scope:pid+':unmapped',evidenceAt:onFile})); });
+  return out; }
+function R51(P,today){ const f=F('R51'),out=[];
+  vals(P.negotiations||{}).forEach(n=>{
+    if(n.myBatna!==null&&n.myBatna!==undefined&&String(n.myBatna).trim()!=='') return;
+    out.push(f({sev:3,conf:'HIGH',title:'Negotiation without a BATNA: '+n.topic,
+      basis:['negotiation.logged '+U.iso(n.at)+' · myBatna is '+(n.myBatna===null?'null':'absent')+' · parties: '+n.parties.join(', '),
+        'a negotiation without a BATNA is a concession without a floor',
+        'source: negotiation.logged'],
+      refs:[n.id],evidenceAt:n.at})); });
+  return out; }
+function R52(P,today){ const f=F('R52'),out=[];
+  (P.boardPresentations||[]).forEach(b=>{ if(b.outcome!=='rejected') return;
+    const prior=(P.execAlignments||[]).filter(a=>a.at<=b.at&&days(b.at,a.at)<=30);
+    if(prior.length) return;
+    out.push(f({sev:4,conf:'HIGH',title:'Board rejection with no prior stakeholder alignment ('+b.period+')',
+      basis:['board.presented outcome "rejected" '+U.iso(b.at)+' · audience '+b.audience_size,
+        'zero exec.aligned events in the 30d before '+U.iso(b.at)+' (searched '+U.iso(b.at-30*DAY)+' → '+U.iso(b.at)+')',
+        'a board rejection that was not preceded by stakeholder alignment is not a board problem — it is a preparation problem',
+        'source: board.presented + exec.aligned'],
+      refs:[],scope:'board:'+b.period,evidenceAt:b.at})); });
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
-             R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40];
+             R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
+             R46,R47,R48,R49,R50,R51,R52];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -1904,6 +2089,222 @@ LeadOS.correlate={CONF_FACTOR:CONF_FACTOR,CONF_FACTOR_WHY:CONF_FACTOR_WHY,HEAT_L
   internalSeriesFor:internalSeriesFor,benchmarkCompare:benchmarkCompare,buildInsights:buildInsights,run:run};
 })();
 
+/* ============ 6b · CONVERSATIONS — preparation engine (pt-11) ==============
+   The engine tells you what to do; the playbooks give you a form; this module
+   prepares the ACTUAL DIALOGUE. Everything it returns is a SCAFFOLD, labeled:
+   "use the shape, not the words." Hypotheses are never printed as predictions.
+   Pure: (args, P) → object. No clock reads except the injected `now`. */
+(function(){
+const LeadOS = window.LeadOS, U = LeadOS.util, DAY = U.DAY;
+const SCAFFOLD='SCAFFOLD, not a script — use the shape, not the words. The sentence must sound like you or it will not survive the first reply.';
+const HYPOTHESIS='HYPOTHESIS from the log, not a prediction — if they do something else, they are right and this note is wrong.';
+const STYLES={
+  driver:{label:'Driver',notes:'Direct, fast, results-first. Lead with the outcome; justify after they ask. Debate is not resistance — it is engagement.',
+    openWith:'outcome'},
+  expressive:{label:'Expressive',notes:'Relationship and vision first. Acknowledge them before the agenda. Stories land better than data.',
+    openWith:'relationship'},
+  analytical:{label:'Analytical',notes:'Precision matters. Give them time to think. Data before conclusions. Surprises feel like attacks.',
+    openWith:'data'},
+  amiable:{label:'Amiable',notes:'Harmony is their currency. Conflict avoidance is real. Name the relationship before the disagreement. Give them an exit that saves face.',
+    openWith:'relationship'}
+};
+function styleFor(personId,P){
+  const rec=(P.influenceByPerson||{})[personId];
+  if(!rec) return {personId:personId,style:null,known:false,
+    notes:'no influence.mapped event for '+personId+' — style unknown, printed, never guessed (R50 nudges you to observe, it does not infer)',
+    evidence:null,at:null};
+  const s=STYLES[rec.influenceStyle];
+  return {personId:personId,style:rec.influenceStyle,known:true,label:s.label,notes:s.notes,
+    openWith:s.openWith,evidence:rec.evidence,note:rec.note||null,at:rec.at,
+    basis:'latest influence.mapped ('+U.iso(rec.at)+', '+(rec._ev||'?')+') — append-order latest wins'};
+}
+/* ---- models ---- */
+const MODELS={
+  SBI:{id:'SBI',for:'feedback',limbs:[['S','Situation: when and where, concretely'],['B','Behavior: what you observed, no interpretation'],['I','Impact: what it caused for the work, team, or you']]},
+  COIN:{id:'COIN',for:'corrective feedback',limbs:[['C','Context: when/where'],['O','Observation: what you saw (no interpretation)'],['I','Impact: on the work, team, or relationship'],['N','Next: the one change you need']],
+    required:['C','O','I','N'],requiredWhy:'N is the action, not optional — feedback without a named next change is a complaint'},
+  BID:{id:'BID',for:'feedback',limbs:[['B','Behavior'],['I','Impact'],['D','Do differently next time']]},
+  GROW:{id:'GROW',for:'development/coaching',limbs:[['G','Goal: what does growth look like for this topic?'],['R','Reality: where are they actually today?'],['O','Options: what could they try? (3 minimum)'],['W','Will: what will they commit to before your next 1:1?']],
+    required:['G','R','O','W'],requiredWhy:'Options needs 3 minimum or it is advice wearing a coaching hat'},
+  DESC:{id:'DESC',for:'conflict',limbs:[['D','Describe the behavior'],['E','Express the impact'],['S','Specify the change'],['C','Consequences, stated plainly']]},
+  ICF:{id:'ICF',for:'mediation',limbs:[['I','Interests: what does each party actually NEED (not want)?'],['C','Common ground: what do they both already agree on?'],['F','Forward: the minimum viable agreement to move forward']],
+    required:['I','C','F'],requiredWhy:'all three limbs are load-bearing; a mediation without common ground is an arbitration'}
+};
+function validateModel(id,values){
+  const m=MODELS[id]; if(!m) return {ok:false,errors:['unknown model '+id]};
+  const req=m.required||m.limbs.map(l=>l[0]);
+  const errors=[];
+  req.forEach(k=>{ const v=values&&values[k];
+    if(v===undefined||v===null||String(v).trim()==='')
+      errors.push('missing '+k+' — '+(m.limbs.filter(l=>l[0]===k)[0]||[,k])[1]+(m.requiredWhy&&(k==='N'||k==='O'||k==='F')?' · '+m.requiredWhy:'')); });
+  return {ok:errors.length===0,errors:errors,model:m};
+}
+/* ---- ZOPA ---- */
+function zopaFor(neg){
+  if(!neg) return null;
+  const mine=neg.myBatna, theirs=neg.theirEstimatedBatna;
+  const num=v=>(typeof v==='number'&&isFinite(v))?v:(typeof v==='string'&&v.trim()!==''&&isFinite(Number(v))?Number(v):null);
+  const a=num(mine), b=num(theirs);
+  if(a===null||b===null) return null; /* either missing → null, per contract */
+  const low=Math.min(a,b), high=Math.max(a,b);
+  const exists=b>=a;
+  return {low:low,high:high,exists:exists,myBatna:a,theirEstimatedBatna:b,
+    math:'my BATNA '+a+' · their estimated BATNA '+b+' → '+(exists
+      ?'ZOPA exists: '+a+' → '+b+' (width '+U.rd(b-a,2)+')'
+      :'BATNAs overlap inverted — agreement zone is narrow or negative, recalibrate before entering'),
+    label:'their BATNA is an ESTIMATE you wrote; the zone is only as good as that guess'};
+}
+/* ---- preparation generator ---- */
+const REFRAME=(ifThey,youSay)=>({ifTheySay:ifThey,youSay:youSay});
+const BATNA_TYPES={negotiation:1,compensation:1,performance:1,termination:1};
+function openingFor(type,style,ctx){
+  const who=(ctx.personIds&&ctx.personIds[0])||'them';
+  const topic=ctx.topic||'this';
+  const byStyle={
+    data:'Here is what I am seeing in the numbers on '+topic+', then I want your read before I conclude anything.',
+    outcome:'I want to land one outcome on '+topic+' in this conversation: '+(ctx.myGoal||'[your goal]')+'.',
+    relationship:'Before the agenda — I value working with you, and that is exactly why I want to be straight about '+topic+'.'
+  };
+  const base=byStyle[style&&STYLES[style]?STYLES[style].openWith:'outcome'];
+  const TYPE_OPENERS={
+    termination:'I have made a decision about your role here, and it is final. I want to tell you directly and clearly.',
+    compensation:'I want to be transparent about where your compensation sits against the band and what I can and cannot do this cycle.',
+    performance:'I want to give you my assessment of this period, and then I want to hear where you disagree.',
+    feedback:'I have one piece of feedback and one request. It will take four minutes.',
+    conflict:'Something between us is not working, and I would rather name it than route around it.',
+    mediation:'You both want this resolved more than you want to be right about it. I am here to get to the minimum we can all live with.',
+    'board-presentation':'The headline is '+(ctx.myGoal||'[the one sentence]')+'. The detail supports it; interrupt me where you want depth.',
+    'restructure-announcement':'I am going to tell you what is changing, what it means for you specifically, and what I do not know yet.',
+    promotion:'I want to talk about what the next level looks like and whether we are building toward it.',
+    'skip-level':'This is your time, not a status report. I am here to learn what I am not seeing from one level up.',
+    'one-on-one-checkin':'What is on your mind this week that I should know about first?',
+    'difficult-decision':'I have a decision to make on '+topic+', the tradeoff is real, and I want your view before I make it.',
+    'stakeholder-alignment':'I want us aligned on '+topic+' before it reaches a room where disagreement costs us.',
+    negotiation:'I want an agreement that holds after we both leave the room, so let me start with what I actually need.'
+  };
+  const line=TYPE_OPENERS[type]||base;
+  return {line:line,styleAdaptedOpening:base,
+    note:SCAFFOLD+(style&&STYLES[style]?' · adapted for a '+STYLES[style].label.toLowerCase()+': lead with '+STYLES[style].openWith:' · no influence style mapped for '+who+' — generic shape, printed')};
+}
+const TYPE_SPEC={
+  feedback:{nonNeg:['They can repeat back the specific behavior without arguing about whether it happened','One named change exists, with a date'],
+    likely:'Defensiveness in the first 30 seconds, then engagement once the impact is concrete',
+    reframes:[REFRAME('That is not what happened','I may have the detail wrong — tell me what you saw. The impact is what I need us to agree on.'),
+      REFRAME('Everyone does that','Maybe. I am talking about this instance, and about what it cost.'),
+      REFRAME('Why am I only hearing this now?','Fair. That is on me, and it is why I am saying it today rather than at review time.')],
+    debrief:['Did they agree the behavior happened, or only that I was upset?','Did I name one change or a list?','What did I say that made them defensive?']},
+  compensation:{nonNeg:['They know exactly where they sit in the band and why','No promise is made that you cannot sign today'],
+    likely:'Relief or disappointment, then a question about the process or a comparison to a peer',
+    reframes:[REFRAME('So-and-so makes more','I do not discuss others\u2019 pay. I will tell you exactly how your number is set.'),
+      REFRAME('Is that final?','For this cycle, yes. What is open is what changes before the next one.'),
+      REFRAME('Then I am looking elsewhere','I would rather you stay, and I am not going to counter a threat. Tell me what would make staying right.')],
+    debrief:['Did I promise anything I cannot sign?','Did they leave with a number and a reason?','What will they tell their peer tonight?']},
+  performance:{nonNeg:['The rating is stated plainly, in one sentence, before the evidence','They know whether their job is at risk'],
+    likely:'Surprise is a preparation failure; dispute is a documentation test',
+    reframes:[REFRAME('I disagree with this rating','Good — that is worth resolving. Show me the evidence I am missing and I will look at it properly.'),
+      REFRAME('My manager never told me','Then I failed you on cadence. The rating still stands for this period; the cadence changes now.'),
+      REFRAME('Is this a PIP?','Let me be unambiguous: ' )],
+    debrief:['Did they hear the rating or only the softening around it?','Was any of this news?','What did I commit to follow up on, and when?']},
+  conflict:{nonNeg:['Both people describe the other\u2019s position accurately','One concrete behavioral change each'],
+    likely:'History surfaces that predates the incident you called the meeting about',
+    reframes:[REFRAME('They started it','I am not assigning blame for the past. I am asking what each of you changes from Monday.'),
+      REFRAME('I can work around them','Working around each other is the cost I am no longer paying.')],
+    debrief:['Did we solve the incident or the pattern?','Who conceded more, and was that fair?','What happens if it repeats?']},
+  negotiation:{nonNeg:['You never go below your walk-away','The other side can state your interest back to you'],
+    likely:'An anchor well outside your range, followed by a search for the real constraint',
+    reframes:[REFRAME('That is our final offer','Then we are done on that term — let us see if another term has room.'),
+      REFRAME('We need an answer today','Urgency is not a reason for me to agree to something I would regret. Here is what I can decide today.')],
+    debrief:['Did I open or did they?','Did I ever go below my floor in my own head?','What did I learn about their actual constraint?']},
+  'skip-level':{nonNeg:['You learn one thing you did not know','You commit to nothing that undermines their manager'],
+    likely:'Safe answers for ten minutes, the real thing at minute eleven',
+    reframes:[REFRAME('Everything is fine','I believe you. What is one thing that would be better if it were different?'),
+      REFRAME('Is my manager in trouble?','No. I am here to see what I am missing, not to check on them.')],
+    debrief:['What did I learn that their manager would not have told me?','Did I undermine anyone by accident?','What am I now obliged to act on?']},
+  'board-presentation':{nonNeg:['The ask is explicit and on one slide','Bad news is delivered by you, early, with a plan'],
+    likely:'Questions concentrate on whatever you sounded least certain about',
+    reframes:[REFRAME('Why is this behind?','Here is the cause, here is what changes, here is the date I will report back.'),
+      REFRAME('Do you need more money?','Not yet. Here is the trigger that would change that answer.')],
+    debrief:['What did they ask that I had not prepared?','Did I bury any bad news?','Who in the room was unconvinced?']},
+  'stakeholder-alignment':{nonNeg:['Each stakeholder states what they are agreeing to in their own words','Disagreement is surfaced here, not in the board room'],
+    likely:'Public agreement, private reservation — ask for the reservation explicitly',
+    reframes:[REFRAME('I am fine with it','What would have to be true for you to actively defend it when I am not in the room?'),
+      REFRAME('I was not consulted','You are being consulted now, and I want the objection before the decision, not after.')],
+    debrief:['Who agreed without committing?','What objection arrived only after the meeting?','Is this alignment or politeness?']},
+  'difficult-decision':{nonNeg:['The decision is made and said out loud, or the date it will be made is','The tradeoff you accepted is named'],
+    likely:'Pressure to defer; deferral will feel reasonable in the moment',
+    reframes:[REFRAME('Can we revisit next quarter?','We can revisit the implementation. The decision needs to hold or it is not a decision.')],
+    debrief:['Did I decide or defer?','Who did I not consult who will be affected?','What would make me reverse this?']},
+  termination:{nonNeg:['They understand it is final and today','Logistics are written down, not spoken only','You are finished in under 10 minutes'],
+    likely:'Shock, then either silence or bargaining — both are normal and neither changes the decision',
+    reframes:[REFRAME('Can I have another chance?','The decision is final. I want to spend our remaining time on what happens next for you.'),
+      REFRAME('This is unfair','I understand you see it that way. The decision is not changing. Here is what we do next.'),
+      REFRAME('Who else knows?','Your team will be told after this conversation, and here is exactly what they will be told.')],
+    debrief:['Did I say it in the first 30 seconds?','Did I argue when I should have repeated?','Did they leave with the logistics in writing?']},
+  promotion:{nonNeg:['They know whether this is a yes, a not-yet with a date, or a no','The gap is described behaviorally, not as a vibe'],
+    likely:'They have already decided what fairness looks like here',
+    reframes:[REFRAME('What else do I need to do?','Two specific things, and here is what evidence of them looks like.')],
+    debrief:['Did I give a date or a vague "keep going"?','Was my evidence specific?','Did I over-promise to avoid disappointing them?']},
+  'restructure-announcement':{nonNeg:['Affected people hear it first, individually','You state what you do not know yet, explicitly'],
+    likely:'The first question is "is my job safe"; answer it before anything else',
+    reframes:[REFRAME('Are more cuts coming?','Here is what I know and what I do not. I will not pretend certainty I do not have.'),
+      REFRAME('Why was this not communicated earlier?','Because it was not decided earlier. Now it is, so you are hearing it now.')],
+    debrief:['Did anyone affected hear it second-hand?','What did I say that I cannot stand behind in a month?','What question could I not answer?']},
+  'one-on-one-checkin':{nonNeg:['They set at least half the agenda','One thing you owe them is written down'],
+    likely:'Status reporting unless you explicitly stop it',
+    reframes:[REFRAME('Nothing much to report','Then let us not do status. What is the most annoying part of your week?')],
+    debrief:['Who talked more?','What did I commit to?','What did I learn that was not on the agenda?']},
+  mediation:{nonNeg:['Each party states the other\u2019s interest accurately before any solution is discussed','A minimum viable agreement exists in writing'],
+    likely:'Both arrive with positions; interests only appear once they feel heard',
+    reframes:[REFRAME('I just want them to admit they were wrong','That is a position. What do you need going forward, from Monday?'),
+      REFRAME('This is a waste of time','Possibly. The alternative is that I decide for you both — I would rather you did.')],
+    debrief:['Did I get interests, or just positions restated?','What was the common ground?','Who is accountable for the agreement holding?']}
+};
+const BATNA_COPY={
+  termination:'If they refuse to accept the decision, the decision is not negotiable. Repeat it once. Then stop talking.',
+  negotiation:'If no agreement is reached you execute your BATNA — write it down BEFORE the conversation, because your in-room self will negotiate against it.',
+  compensation:'If they escalate or threaten to leave: you do not counter under threat. Your fallback is the retention plan you are willing to fund, or an orderly transition.',
+  performance:'If the rating is disputed and unresolved: the next step is a written plan (PIP) or a documented disagreement on file — never silence.'
+};
+function prepareConv(type,ctx,P){
+  ctx=ctx||{};
+  const spec=TYPE_SPEC[type];
+  const ids=(ctx.personIds||[]).slice();
+  const styles=ids.map(id=>styleFor(id,P));
+  const primary=styles.filter(s=>s.known)[0]||styles[0]||null;
+  const opening=openingFor(type,primary&&primary.style,ctx);
+  const set=LeadOS.engine.settings(P);
+  if(!spec) return {type:type,unknown:true,
+    note:'no preparation template for type "'+type+'" — printed, not improvised'};
+  const out={
+    type:type,stakes:ctx.stakes||null,topic:ctx.topic||null,personIds:ids,
+    styles:styles,
+    opening_line:opening.line,opening_note:opening.note,opening_styleAdapted:opening.styleAdaptedOpening,
+    their_likely_response:spec.likely,their_likely_note:HYPOTHESIS,
+    your_reframes:spec.reframes.slice(),
+    non_negotiables:spec.nonNeg.slice(),
+    BATNA_check:BATNA_TYPES[type]?(BATNA_COPY[type]||'Decide your fallback before you enter the room.'):null,
+    BATNA_note:BATNA_TYPES[type]?null:'no BATNA_check for this type — it is not a negotiation; pretending it is would be a category error',
+    debrief_questions:spec.debrief.slice(),
+    model:null
+  };
+  if(type==='feedback'||type==='performance') out.model=MODELS[set.feedbackDeliveryModel]||MODELS.SBI;
+  if(type==='conflict'||type==='mediation') out.model=MODELS[set.conflictMediationModel]||MODELS.DESC;
+  if(type==='promotion'||type==='one-on-one-checkin'||type==='skip-level') out.model=MODELS.GROW;
+  if(type==='negotiation') out.negotiationStyle=set.negotiationStyleDefault;
+  if(out.model) out.model_source='settings: '+(type==='conflict'||type==='mediation'?'conflictMediationModel':'feedbackDeliveryModel')+' — leader-changeable in #/data';
+  /* performance reframe completion (kept honest: the sentence depends on truth) */
+  if(type==='performance'){
+    out.your_reframes=out.your_reframes.map(r=>r.ifTheySay==='Is this a PIP?'
+      ?REFRAME('Is this a PIP?','Let me be unambiguous: '+(ctx.isPip?'yes, and here is what the plan requires.':'no — and I will tell you plainly if that changes.'))
+      :r);
+  }
+  return out;
+}
+LeadOS.conversations={STYLES:STYLES,MODELS:MODELS,TYPE_SPEC:TYPE_SPEC,SCAFFOLD:SCAFFOLD,
+  styleFor:styleFor,validateModel:validateModel,zopaFor:zopaFor,prepareConv:prepareConv,
+  TYPES:Object.keys(TYPE_SPEC)};
+})();
+
 /* ==================== 7 · HEALTH — authority wall + fixture seed ==========
    T-suite runs against pinned in-memory fixtures (FIXED epoch, never the
    clock, never localStorage). G-suite inspects the LIVE store. The boot gate
@@ -1992,7 +2393,19 @@ function buildSeed(base){
     E('exec.kpi.reviewed',{note:'monthly'},45),
     E('benchmark.set',{metric:'nrr',value:120,unit:'%',source:'SaaS Capital 2025 survey',period:'2025',type:'industry'},15),
     E('fin.kpi.logged',{metric:'nrr',value:90,unit:'%'},8),
-    E('benchmark.set',{metric:'cac-payback-months',value:12,unit:'months',source:'OpenView 2025',period:'2025',type:'industry'},14)
+    E('benchmark.set',{metric:'cac-payback-months',value:12,unit:'months',source:'OpenView 2025',period:'2025',type:'industry'},14),
+    /* ---- pt-11 conversation layer: seeds R46–R52 (G50) ---- */
+    E('hr.performance.logged',{personId:'dana',score:4,note:'strong quarter'},70),   /* puts dana on file >60d → R50 */
+    E('influence.mapped',{personId:'ava',influenceStyle:'driver',evidence:'interrupts to get to the decision; argues then commits'},40),
+    E('perf.discussed',{personId:'dana',rating:'exceeds',reactionType:'disputed',note:'disagrees with the calibration band'},20), /* R49 */
+    E('comp.discussed',{personId:'dana',currentBand:'L4',marketBand:'L4 +12%',outcome:'held',note:'cycle closed'},18),            /* R48 */
+    E('conv.planned',{id:'conv-0',type:'negotiation',personIds:['ava'],topic:'Renewal terms with Globex',stakes:3,
+      myGoal:'3-year term at current pricing',preparedAt:base-30*DAY},30),
+    E('conv.completed',{convId:'conv-0',outcome:'escalated',note:'pushed to their VP'},6),                                        /* R47 */
+    E('conv.planned',{id:'conv-1',type:'performance',personIds:['ava'],topic:'Q1 performance and the quota gap',stakes:4,
+      myGoal:'agree the gap is real and name one change',theirLikelyGoal:'protect the comp outcome',preparedAt:base-10*DAY},10),   /* R46 */
+    E('negotiation.logged',{id:'neg-1',topic:'Acme Widgets master supply terms',parties:['ava','acme-rep']},12),                   /* R51 — no BATNA */
+    E('board.presented',{period:'2026-Q1',audience_size:7,outcome:'rejected',note:'capital plan sent back'},8)                     /* R52 — no exec.aligned prior */
   ];
   return out;
 }
@@ -2072,7 +2485,24 @@ function runT(){
     const raw2=mk(undefined); delete raw2.events[0]; raw2.events=[]; 
     const n3=LeadOS.store.MIGRATIONS['4>5'](raw2);
     if(n3!==3||raw2.meta.migrationRepairs['4>5']!==3) return {why:'fresh v4 store expected 3 repairs, got '+n3};
-    return {ok:true,why:'2/3 repairs as expected · rerun adds 0 · leader value kept'};
+    /* v6 rung: STRING values, same contract (leader kept, counted, idempotent) */
+    const v5raw={schemaVersion:5,meta:{lineage:'pt',createdAt:FIXED,migrationsApplied:[],migrationRepairs:{}},
+      events:[{seq:1,id:pad(1),at:FIXED,type:'settings.changed',payload:{key:'feedbackDeliveryModel',value:'COIN'}}]};
+    const m1=LeadOS.store.MIGRATIONS['5>6'](v5raw);
+    const applied=LeadOS.store.foldSettings(v5raw.events);
+    if(m1!==2) return {why:'v6 with one leader value expected 2 repairs, got '+m1};
+    if(applied.feedbackDeliveryModel!=='COIN') return {why:'leader string value overwritten'};
+    if(applied.negotiationStyleDefault!=='collaborative') return {why:'v6 string default not backfilled'};
+    if(typeof applied.conflictMediationModel!=='string') return {why:'v6 value coerced away from string'};
+    if(LeadOS.store.MIGRATIONS['5>6'](v5raw)!==0||v5raw.schemaVersion!==6) return {why:'5>6 not idempotent'};
+    /* full climb v3 → v6 */
+    const v3={schemaVersion:3,meta:{lineage:'pt',createdAt:FIXED,migrationsApplied:[],migrationRepairs:{}},events:[]};
+    LeadOS.store.MIGRATIONS['3>4'](v3); LeadOS.store.MIGRATIONS['4>5'](v3); LeadOS.store.MIGRATIONS['5>6'](v3);
+    const all=LeadOS.store.foldSettings(v3.events);
+    const miss=Object.keys(LeadOS.store.ALL_SETTING_DEFAULTS).filter(k=>!(k in all)&&['decisionMaxOpenDays','krCheckInCadenceDays','riskReviewCadenceDays'].indexOf(k)===-1);
+    if(miss.length) return {why:'v3→v6 climb missed: '+miss.join(', ')};
+    if(v3.schemaVersion!==6) return {why:'climb did not land on v6'};
+    return {ok:true,why:'4>5: 2/3 repairs · 5>6: 2 repairs, strings preserved, idempotent · v3→v6 climb lands clean'};
   }));
   T.push(check('T2','fin() contract: violations throw, never ship silently',()=>{
     let threw=0;
@@ -2257,9 +2687,10 @@ function runT(){
     if(!f3||f3.conf!=='MEDIUM') return {why:'3 declining points must print slope and drop to MEDIUM'};
     return {ok:true,why:'2 pts → HIGH + no-slope printed · 3 pts → MEDIUM with slope'};
   }));
-  T.push(check('T18','extended seed fires all 40 rules + every insight kind',()=>{
+  T.push(check('T18','[T12b] extended seed fires all 52 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
-    const missing=[]; for(let i=1;i<=40;i++) if(!fired['R'+i]) missing.push('R'+i);
+    const missing=[];
+    for(let i=1;i<=52;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -2450,6 +2881,75 @@ function runT(){
     if(back._fp===ins._fp) return {why:'fingerprint failed to notice the state change'};
     return {ok:true,why:'fp ack suppresses → constituent change resurfaces · stale ack kept as history'};
   }));
+  /* ---- pt-11: brief T26–T30 ship as T28–T32 (ID map printed above G41) ---- */
+  T.push(check('T28','[brief T26] conv projection: outcome read; multiple convs STACK, never overwrite',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'conv.planned',payload:{id:'cA',type:'feedback',personIds:['p1'],topic:'A',stakes:3,myGoal:'g',preparedAt:FIXED-20*DAY},at:FIXED-20*DAY},
+      {type:'conv.completed',payload:{convId:'cA',outcome:'achieved',note:'went well'},at:FIXED-19*DAY},
+      {type:'conv.planned',payload:{id:'cB',type:'performance',personIds:['p1'],topic:'B',stakes:4,myGoal:'g',preparedAt:FIXED-10*DAY},at:FIXED-10*DAY},
+      {type:'conv.completed',payload:{convId:'cB',outcome:'no-agreement',note:'stuck'},at:FIXED-9*DAY}]));
+    if(Px.convs.cA.completed.outcome!=='achieved') return {why:'cA outcome misread'};
+    if(Px.convs.cB.completed.outcome!=='no-agreement') return {why:'cB outcome misread'};
+    const hist=Px.convsByPerson.p1||[];
+    if(hist.length!==2) return {why:'person history should stack 2 conversations, got '+hist.length};
+    if(Px.convCompletions.length!==2) return {why:'completion log should hold both'};
+    if(Px.openConvs.length!==0) return {why:'both are completed; none should be open'};
+    return {ok:true,why:'2 convs stack per person · outcomes read correctly · openConvs empty'};
+  }));
+  T.push(check('T29','[brief T27] zopaFor(): range when both BATNAs set; null when either missing',()=>{
+    const z=LeadOS.conversations.zopaFor({myBatna:100,theirEstimatedBatna:140});
+    if(!z||z.low!==100||z.high!==140||z.exists!==true) return {why:'range wrong: '+JSON.stringify(z)};
+    if(z.math.indexOf('ZOPA exists')===-1) return {why:'math not printed'};
+    const inv=LeadOS.conversations.zopaFor({myBatna:150,theirEstimatedBatna:120});
+    if(!inv||inv.exists!==false||inv.math.indexOf('recalibrate')===-1) return {why:'inverted BATNAs not flagged'};
+    if(LeadOS.conversations.zopaFor({myBatna:100})!==null) return {why:'missing theirs must return null'};
+    if(LeadOS.conversations.zopaFor({theirEstimatedBatna:100})!==null) return {why:'missing mine must return null'};
+    if(LeadOS.conversations.zopaFor({myBatna:null,theirEstimatedBatna:null})!==null) return {why:'both null must return null'};
+    return {ok:true,why:'100/140 → exists 100→140 · 150/120 → recalibrate · any missing → null'};
+  }));
+  T.push(check('T30','[brief T28] influence.mapped latest-wins; styleFor returns style + notes',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'influence.mapped',payload:{personId:'p1',influenceStyle:'amiable',evidence:'first read'},at:FIXED-30*DAY},
+      {type:'influence.mapped',payload:{personId:'p1',influenceStyle:'analytical',evidence:'asked for the model twice'},at:FIXED-2*DAY}]));
+    const s=LeadOS.conversations.styleFor('p1',Px);
+    if(s.style!=='analytical') return {why:'latest did not win: '+s.style};
+    if(s.notes.indexOf('Data before conclusions')===-1) return {why:'guidance notes missing'};
+    if(s.evidence!=='asked for the model twice') return {why:'evidence not from the latest event'};
+    const unknown=LeadOS.conversations.styleFor('nobody',Px);
+    if(unknown.known!==false||unknown.notes.indexOf('never guessed')===-1) return {why:'unmapped person must print unknown, not guess'};
+    return {ok:true,why:'amiable → analytical (latest wins) · notes + evidence carried · unmapped prints unknown'};
+  }));
+  T.push(check('T31','[brief T29] R46: stakes4@8d → sev3 · stakes3@8d quiet · stakes4 completed@6d quiet',()=>{
+    const mk=(stakes,age,completedAt)=>{ const list=[{type:'conv.planned',
+      payload:{id:'c1',type:'feedback',personIds:['p1'],topic:'t',stakes:stakes,myGoal:'g',preparedAt:FIXED-age*DAY},at:FIXED-age*DAY}];
+      if(completedAt!==undefined) list.push({type:'conv.completed',payload:{convId:'c1',outcome:'achieved',note:'n'},at:completedAt});
+      return LeadOS.engine.project(wrap(list)); };
+    const r46=Px=>LeadOS.rules.RULES[40](Px,FIXED); /* index 40 = R46 */
+    const a=r46(mk(4,8));
+    if(a.length!==1||a[0].sev!==3) return {why:'stakes 4 @8d should be sev 3, got '+JSON.stringify(a.map(f=>f.sev))};
+    if(r46(mk(3,8)).length) return {why:'stakes 3 fired (below the ≥4 threshold)'};
+    if(r46(mk(4,6,FIXED-6*DAY)).length) return {why:'completed conversation still fired'};
+    if(r46(mk(4,7)).length) return {why:'exactly 7d fired (must be strictly >7d)'};
+    const b=r46(mk(4,15));
+    if(b.length!==1||b[0].sev!==4) return {why:'>14d should escalate to sev 4'};
+    return {ok:true,why:'stakes4@8d sev3 · stakes3 quiet · completed quiet · 7d boundary quiet · 15d sev4'};
+  }));
+  T.push(check('T32','[brief T30] R52: rejected + no alignment in 30d → sev4; aligned 25d prior → quiet',()=>{
+    const mk=alignAge=>{ const list=[{type:'board.presented',
+      payload:{period:'2026-Q1',audience_size:6,outcome:'rejected'},at:FIXED-5*DAY}];
+      if(alignAge!==undefined) list.push({type:'exec.aligned',
+        payload:{topic:'capital plan',stakeholders:['a'],result:'aligned'},at:FIXED-alignAge*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r52=Px=>LeadOS.rules.RULES[46](Px,FIXED); /* index 46 = R52 */
+    const none=r52(mk(undefined));
+    if(none.length!==1||none[0].sev!==4) return {why:'rejection without alignment should be sev 4'};
+    if(r52(mk(25)).length) return {why:'exec.aligned 25d prior should quiet it'};
+    if(!r52(mk(40)).length) return {why:'alignment 40d prior is outside the 30d window — should still fire'};
+    const approved=LeadOS.engine.project(wrap([{type:'board.presented',
+      payload:{period:'2026-Q1',audience_size:6,outcome:'approved'},at:FIXED-5*DAY}]));
+    if(r52(approved).length) return {why:'a non-rejected outcome fired'};
+    return {ok:true,why:'rejected+none → sev 4 · aligned@25d quiet · aligned@40d still fires · approved quiet'};
+  }));
   return T;
 }
 
@@ -2462,14 +2962,14 @@ function runG(){
     const keys=[]; for(let i=0;i<localStorage.length;i++) keys.push(localStorage.key(i));
     return eq(keys.sort(),['leados:data'])?{ok:true,why:'keys: '+keys.join(', ')}:{why:'unexpected keys: '+keys.join(', ')};
   }));
-  G.push(check('G2','schema v5 · lineage pt · root/meta whitelists',()=>{
+  G.push(check('G2','schema v6 · lineage pt · root/meta whitelists',()=>{
     if(loadErr) return {why:'store load threw: '+loadErr.message};
     if(!raw) return {why:'no raw store'};
-    if(raw.schemaVersion!==5||raw.meta.lineage!=='pt') return {why:'schema '+raw.schemaVersion+' lineage '+raw.meta.lineage};
+    if(raw.schemaVersion!==LeadOS.store.SCHEMA_VERSION||raw.meta.lineage!=='pt') return {why:'schema '+raw.schemaVersion+' lineage '+raw.meta.lineage};
     const rootBad=Object.keys(raw).filter(k=>LeadOS.store.RAW_ROOT_WHITELIST.indexOf(k)===-1);
     const metaBad=Object.keys(raw.meta).filter(k=>LeadOS.store.META_WHITELIST.indexOf(k)===-1);
     if(rootBad.length||metaBad.length) return {why:'foreign keys root['+rootBad+'] meta['+metaBad+'] — derived data persisted?'};
-    return {ok:true,why:'v5 · pt · whitelists clean'};
+    return {ok:true,why:'v'+raw.schemaVersion+' · pt · whitelists clean'};
   }));
   G.push(check('G3','append-only integrity: seq, ids, uniqueness',()=>{
     if(!raw) return {why:'no raw store'};
@@ -2550,11 +3050,12 @@ function runG(){
     if(zeroCell&&zeroCell.score!==0) return {why:'zero cell must score exactly 0, got '+zeroCell.score};
     return {ok:true,why:h.cells.length+' domains (complete map) · all within [0,10] · math printed · zeros labeled no signal'};
   }));
-  G.push(check('G10','module registry: all 9 expected modules registered (boot guard list)',()=>{
-    const EXPECTED=['util','events','store','engine','rules','correlate','health','playbooks','ui'];
+  G.push(check('G10','module registry: all 10 expected modules registered (boot guard list)',()=>{
+    const EXPECTED=LeadOS.EXPECTED_MODULES;
     const missing=EXPECTED.filter(ns=>!LeadOS[ns]);
-    return missing.length?{why:'missing modules: '+missing.join(', ')+' — boot guard must halt'}
-      :{ok:true,why:'util · events · store · engine · rules · correlate · health · playbooks · ui all registered'};
+    if(missing.length) return {why:'missing modules: '+missing.join(', ')+' — boot guard must halt'};
+    if(EXPECTED.indexOf('conversations')===-1) return {why:'conversations missing from the EXPECTED registry list'};
+    return {ok:true,why:EXPECTED.join(' · ')+' all registered'};
   }));
   /* ---- G31–G40 — correlation goldens (fixture-pinned, the pt-10 brief) ---- */
   G.push(check('G31','DEATH_SPIRAL: 4 limbs → detected; 3 limbs → no pattern',()=>{
@@ -2652,14 +3153,122 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','extended buildSeed fires all 45 rules (patterns seeded too)',()=>{
+  G.push(check('G40','extended buildSeed fires all 52 rules (patterns + conversations seeded)',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=45;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=52;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'45/45 — the seed already contains all 4 DEATH_SPIRAL conditions (attrition window, declining engagement, quota shortfall, compliance-cadence overdue) plus the other pattern limbs'};
+    return {ok:true,why:'52/52 — DEATH_SPIRAL limbs + the other patterns + the pt-11 conversation conditions (stakes-4 unheld conv, escalation without follow-up, exceeds+held comp pair, disputed rating, unmapped person, BATNA-less negotiation, rejected board with no prior alignment)'};
+  }));
+  /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
+     the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
+     T29→T31 · T30→T32. G41–G50 keep the brief's own ids. ---- */
+  const CV=()=>LeadOS.conversations;
+  G.push(check('G41','COIN: all 4 limbs valid; missing O → error; missing N → error (N is the action)',()=>{
+    const full={C:'Tuesday standup',O:'you cut Priya off twice',I:'she stopped contributing',N:'let her finish, then respond'};
+    if(!CV().validateModel('COIN',full).ok) return {why:'complete COIN rejected'};
+    const noO=CV().validateModel('COIN',Object.assign({},full,{O:''}));
+    if(noO.ok) return {why:'missing Observation accepted'};
+    const noN=CV().validateModel('COIN',Object.assign({},full,{N:''}));
+    if(noN.ok) return {why:'missing Next accepted — N is the action, not optional'};
+    if(noN.errors.join(' ').indexOf('not optional')===-1) return {why:'the N rationale is not printed in the error'};
+    return {ok:true,why:'4/4 valid · missing O rejected · missing N rejected with the reason printed'};
+  }));
+  G.push(check('G42','prepareConv(termination) always carries the exact BATNA_check copy',()=>{
+    const Px=LeadOS.engine.project([]);
+    const prep=CV().prepareConv('termination',{personIds:['x'],topic:'role'},Px);
+    const want='If they refuse to accept the decision, the decision is not negotiable. Repeat it once. Then stop talking.';
+    if(prep.BATNA_check!==want) return {why:'copy mismatch: '+prep.BATNA_check};
+    const prep2=CV().prepareConv('termination',{personIds:[]},Px); /* no person, no style */
+    if(prep2.BATNA_check!==want) return {why:'copy not unconditional (missing with no personIds)'};
+    return {ok:true,why:'exact copy present, with and without a mapped person'};
+  }));
+  G.push(check('G43','analytical style → opening leads with data, not relationship',()=>{
+    const mk=style=>LeadOS.engine.project(wrap([{type:'influence.mapped',
+      payload:{personId:'p1',influenceStyle:style,evidence:'e'},at:FIXED-DAY}]));
+    const anaPrep=CV().prepareConv('feedback',{personIds:['p1'],topic:'the migration plan'},mk('analytical'));
+    const line=anaPrep.opening_styleAdapted;
+    const iData=line.toLowerCase().indexOf('numbers');
+    const iConclude=line.toLowerCase().indexOf('conclude');
+    if(iData===-1||iConclude===-1||!(iData<iConclude)) return {why:'analytical opening does not put data before conclusions: '+line};
+    if(/value working with you/i.test(line)) return {why:'analytical opening led with relationship'};
+    const expPrep=CV().prepareConv('feedback',{personIds:['p1'],topic:'t'},mk('expressive'));
+    if(!/value working with you/i.test(expPrep.opening_styleAdapted)) return {why:'expressive opening lost its relationship-first shape'};
+    if(anaPrep.styles[0].notes.indexOf('Data before conclusions')===-1) return {why:'analytical guidance not printed'};
+    return {ok:true,why:'analytical: data index '+iData+' < conclusion index '+iConclude+' · expressive still relationship-first'};
+  }));
+  G.push(check('G44','R50: fires at 61d unmapped · quiet at exactly 60d · quiet at 61d when mapped',()=>{
+    const mk=(age,mapped)=>{ const list=[{type:'hr.performance.logged',payload:{personId:'p9',score:4},at:FIXED-age*DAY}];
+      if(mapped) list.push({type:'influence.mapped',payload:{personId:'p9',influenceStyle:'amiable',evidence:'e'},at:FIXED-DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r50=Px=>LeadOS.rules.RULES[44](Px,FIXED); /* index 44 = R50 */
+    const at61=r50(mk(61,false));
+    if(!at61.length) return {why:'61d unmapped did not fire'};
+    if(at61[0].sev!==1||at61[0].conf!=='LOW') return {why:'must be sev 1 / conf LOW, got sev '+at61[0].sev+' / '+at61[0].conf};
+    if(r50(mk(60,false)).length) return {why:'exactly 60d fired (boundary must be quiet)'};
+    if(r50(mk(61,true)).length) return {why:'61d with influence.mapped still fired'};
+    return {ok:true,why:'61d → sev 1 LOW · 60d quiet · 61d mapped quiet'};
+  }));
+  G.push(check('G45','R48: exceeds+held fires · exceeds+raised quiet · meets+held quiet',()=>{
+    const mk=(rating,outcome)=>LeadOS.engine.project(wrap([
+      {type:'perf.discussed',payload:{personId:'p2',rating:rating,reactionType:'accepted'},at:FIXED-10*DAY},
+      {type:'comp.discussed',payload:{personId:'p2',currentBand:'L4',outcome:outcome},at:FIXED-8*DAY}]));
+    const r48=Px=>LeadOS.rules.RULES[42](Px,FIXED); /* index 42 = R48 */
+    if(r48(mk('exceeds','held')).length!==1) return {why:'exceeds + held did not fire'};
+    if(r48(mk('exceeds','raised')).length) return {why:'exceeds + raised fired'};
+    if(r48(mk('meets','held')).length) return {why:'meets + held fired'};
+    return {ok:true,why:'exceeds+held fires · exceeds+raised quiet · meets+held quiet'};
+  }));
+  G.push(check('G46','R51: myBatna null/absent → sev 3; any non-empty value → quiet',()=>{
+    const mk=batna=>{ const p={id:'n1',topic:'t',parties:['a','b']};
+      if(batna!==undefined) p.myBatna=batna;
+      return LeadOS.engine.project(wrap([{type:'negotiation.logged',payload:p,at:FIXED-DAY}])); };
+    const r51=Px=>LeadOS.rules.RULES[45](Px,FIXED); /* index 45 = R51 */
+    const absent=r51(mk(undefined));
+    if(absent.length!==1||absent[0].sev!==3) return {why:'absent myBatna did not fire sev 3'};
+    if(r51(mk(null)).length!==1) return {why:'explicit null did not fire'};
+    if(r51(mk('walk and renew with the incumbent')).length) return {why:'a set BATNA still fired'};
+    return {ok:true,why:'absent → sev 3 · null → sev 3 · set → quiet'};
+  }));
+  G.push(check('G47','conv.debrief prefill reads the planned conversation, not a generic form',()=>{
+    const evts=wrap([
+      {type:'conv.planned',payload:{id:'c9',type:'performance',personIds:['p3'],topic:'calibration',stakes:4,
+        myGoal:'agree the gap',preparedAt:FIXED-9*DAY},at:FIXED-9*DAY},
+      {type:'conv.completed',payload:{convId:'c9',outcome:'partial',note:'ran out of time'},at:FIXED-2*DAY}]);
+    const Px=LeadOS.engine.project(evts);
+    const lines=LeadOS.playbooks.INTERACTIVE['conv-debrief'].prefill(LeadOS.rules.runFull(Px,FIXED),Px,FIXED);
+    const txt=lines.join(' | ');
+    if(txt.indexOf('calibration')===-1) return {why:'prefill did not read the planned topic'};
+    if(txt.indexOf(U.iso(FIXED-9*DAY))===-1) return {why:'prefill did not print preparedAt'};
+    const qs=LeadOS.conversations.prepareConv('performance',{personIds:['p3']},Px).debrief_questions;
+    if(!qs.every(q=>txt.indexOf(q)!==-1)) return {why:'the 3 type-specific debrief questions were not carried into the prefill'};
+    return {ok:true,why:'topic + preparedAt + all 3 type-specific questions printed from the plan'};
+  }));
+  G.push(check('G48','mediation.held "resolved" clears the conflict pair from openConflictPairs',()=>{
+    const base=[{type:'mediation.held',payload:{parties:['a','b'],result:'escalated'},at:FIXED-10*DAY}];
+    const open=LeadOS.engine.project(wrap(base));
+    if(open.openConflictPairs.length!==1) return {why:'escalated mediation did not open a pair'};
+    const resolved=LeadOS.engine.project(wrap(base.concat([
+      {type:'mediation.held',payload:{parties:['b','a'],result:'resolved'},at:FIXED-DAY}])));
+    if(resolved.openConflictPairs.length!==0) return {why:'resolved mediation did not clear the pair (party order must not matter)'};
+    if(!resolved.resolvedPairs['a|b']) return {why:'resolution not recorded for audit'};
+    return {ok:true,why:'escalated opens · resolved clears (sorted pair key, order-insensitive) · resolution audited'};
+  }));
+  G.push(check('G49','restructure prep: exec.aligned stakeholders match the form; projection reads them',()=>{
+    const Px=LeadOS.engine.project([]);
+    const out=LeadOS.playbooks.INTERACTIVE['restructure-announcement-prep']
+      .submit({scope:'platform team',rationale:'r',timeline:'Q2',firstHear:'x,y',faqs:'f',unknown:'u',affected:['x','y','z']},
+        {findings:[]},Px);
+    const ea=out.events.filter(e=>e.type==='exec.aligned')[0];
+    if(!ea) return {why:'no exec.aligned emitted'};
+    if(JSON.stringify(ea.payload.stakeholders)!==JSON.stringify(['x','y','z'])) return {why:'stakeholders do not match the form: '+JSON.stringify(ea.payload.stakeholders)};
+    const v=LeadOS.events.validate('exec.aligned',ea.payload);
+    if(!v.ok) return {why:'emitted an invalid exec.aligned: '+v.errors[0]};
+    const P2=LeadOS.engine.project(wrap([{type:'exec.aligned',payload:ea.payload,at:FIXED-DAY}]));
+    if(P2.execAlignments.length!==1||P2.execAlignments[0].stakeholders.length!==3) return {why:'projection did not read exec.aligned history'};
+    return {ok:true,why:'stakeholders x,y,z round-trip form → event → projection'};
   }));
   return {checks:G,P:P,raw:raw};
 }
@@ -2677,7 +3286,8 @@ const CLAIMS=[
   {id:'C10',text:'The registry rejects bad payloads; the import gate rewires and counts skips',by:['T15','T16','G3']},
   {id:'C11',text:'R41–R45 fire iff their pattern is active, carry literal CORR keys, and the correlation pass receives the already-computed (unsuppressed) list; suppression is audited and reversible; engine faults surface loudly',by:['T19','T20','G7']},
   {id:'C12',text:'Interactive playbooks prefill from the log and emit only registry-valid event specs — nothing is written without review; escalation and supersede semantics hold',by:['T21','T22','G3']},
-  {id:'C13',text:'Correlation goldens hold: all-limb boundaries, shared-entity enforcement, heat bounds with labeled zeros, deterministic ids, purity, 45/45 seed coverage',by:['G31','G32','G33','G34','G35','G36','G37','G38','G39','G40','T23','T24','T25','T26']}
+  {id:'C13',text:'Correlation goldens hold: all-limb boundaries, shared-entity enforcement, heat bounds with labeled zeros, deterministic ids, purity, 52/52 seed coverage',by:['G31','G32','G33','G34','G35','G36','G37','G38','G39','G40','T23','T24','T25','T26']},
+  {id:'C14',text:'Conversation layer: schema v6 (string settings), 10 contracts fold correctly, styleFor/zopaFor/prepareConv are pure and labeled (scaffold not script, hypothesis not prediction), R46–R52 boundaries hold, mediation resolves conflict pairs',by:['T28','T29','T30','T31','T32','G10','G41','G42','G43','G44','G45','G46','G47','G48','G49','G40']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -2752,8 +3362,11 @@ function get(id){
   if(!id) return null;
   if(CURATED[id]) return Object.assign({id:id},CURATED[id]);
   if(id.indexOf('playbook:')===0) return Object.assign({id:id},forDomain(id.slice(9)));
-  if(id.indexOf('interactive:')===0){ const k=id.slice(12);
-    if(CURATED[k]) return Object.assign({id:id},CURATED[k]); }
+  const k=id.indexOf('interactive:')===0?id.slice(12):id;
+  if(CURATED[k]) return Object.assign({id:id},CURATED[k]);
+  /* pt-11 runners live only in INTERACTIVE — resolve their titles too */
+  if(INTERACTIVE&&INTERACTIVE[k]) return {id:id,title:INTERACTIVE[k].title,
+    steps:[INTERACTIVE[k].blurb||'interactive preparation runner'],interactiveOnly:true};
   return null;
 }
 
@@ -2763,6 +3376,7 @@ function get(id){
    them through the validated gate. Nothing here writes to storage. */
 const INTERACTIVE=(function(){
 const U=LeadOS.util, iso=U.iso, days=U.days, rd=U.rd;
+const vals=o=>Object.keys(o||{}).map(k=>o[k]);
 const byRule=(R,rule)=>R.findings.filter(f=>f.rule===rule);
 const firstBasis=f=>f.basis&&f.basis.length?f.basis[0]:f.title;
 const personsOf=(R,P,fs)=>{
@@ -2980,6 +3594,306 @@ const SPECS={
     return {events:events};
   }}
 };
+/* ---------- pt-11 conversation playbooks ---------- */
+const CV=()=>LeadOS.conversations;
+const CONV_TYPES=()=>CV().TYPES;
+const styleLines=(ids,P)=>ids.map(id=>{ const s=CV().styleFor(id,P);
+  return '  '+id+': '+(s.known?s.label+' — '+s.notes:'UNMAPPED — '+s.notes); });
+const convHistory=(P,ids)=>{
+  const seen={},out=[];
+  ids.forEach(id=>((P.convsByPerson||{})[id]||[]).forEach(c=>{ if(!seen[c.id]){seen[c.id]=true;out.push(c);} }));
+  return out.sort((a,b)=>b.plannedAt-a.plannedAt);
+};
+SPECS['conv-prep']={
+  pattern:null,title:'Conversation preparation (master)',free:true,
+  blurb:'Routes to type-specific preparation. The output is a scaffold, never a script.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const ids=(draft.personIds||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const lines=['influence styles (from influence.mapped — latest wins):'];
+    if(ids.length) lines.push.apply(lines,styleLines(ids,P));
+    else lines.push('  (enter personId(s) to read their mapped style)');
+    const hist=convHistory(P,ids).slice(0,5);
+    lines.push('recent conversations with these people: '+(hist.length?'':'none in the log'));
+    hist.forEach(c=>lines.push('  '+U.iso(c.plannedAt)+' · '+c.type+' · "'+c.topic+'" · stakes '+c.stakes+' → '+(c.completed?c.completed.outcome:'NOT COMPLETED')));
+    const t=draft.type;
+    if(t==='performance'||t==='compensation'){
+      ids.forEach(id=>{ ((P.perfDiscByPerson||{})[id]||[]).forEach(p=>lines.push('  perf.discussed '+U.iso(p.at)+': '+p.rating+' · reaction '+p.reactionType));
+        (P.rosterById[id]?P.rosterById[id].performance:[]).forEach(p=>lines.push('  hr.performance.logged '+U.iso(p.at)+': score '+p.score)); });
+    }
+    const dom=R.findings.filter(f=>ids.some(id=>f.refs.indexOf(id)!==-1));
+    if(dom.length){ lines.push('live findings naming these people:');
+      dom.slice(0,6).forEach(f=>lines.push('  '+f.rule+' sev '+f.sev+' — '+f.title)); }
+    return lines;
+  },
+  live(draft,R,P){
+    const t=draft.type; if(!t) return null;
+    const ids=(draft.personIds||'').split(',').map(s=>s.trim()).filter(Boolean);
+    return CV().prepareConv(t,{personIds:ids,topic:draft.topic,stakes:Number(draft.stakes)||null,
+      myGoal:draft.myGoal,theirLikelyGoal:draft.theirLikelyGoal},P);
+  },
+  fields(){ return [
+    {key:'type',label:'conversation type',kind:'select',req:true,options:CONV_TYPES().map(t=>({value:t,label:t}))},
+    {key:'personIds',label:'personId(s), comma-separated',kind:'text',req:true},
+    {key:'topic',label:'topic',kind:'text',req:true},
+    {key:'stakes',label:'stakes 1–5',kind:'number',req:true},
+    {key:'myGoal',label:'my goal',kind:'textarea',req:true},
+    {key:'theirLikelyGoal',label:'their likely goal (hypothesis)',kind:'textarea',req:false}]; },
+  submit(v){
+    const ids=v.personIds.split(',').map(s=>s.trim()).filter(Boolean);
+    const p={id:U.uid('conv'),type:v.type,personIds:ids,topic:v.topic,stakes:U.clamp(Math.round(v.stakes),1,5),
+      myGoal:v.myGoal,preparedAt:Date.now()};
+    if(v.theirLikelyGoal) p.theirLikelyGoal=v.theirLikelyGoal;
+    return {events:[{type:'conv.planned',payload:p},
+      {type:'playbook.completed',payload:{playbookId:'conv-prep',note:v.type+' · stakes '+p.stakes}}]};
+  }};
+SPECS['conv-debrief']={
+  pattern:null,title:'Conversation debrief',free:true,
+  blurb:'The learning is in the debrief, not the conversation.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const all=vals(P.convs||{}).sort((a,b)=>b.plannedAt-a.plannedAt);
+    const target=draft.convId?(P.convs||{})[draft.convId]:all[0];
+    const lines=[];
+    if(!target){ lines.push('no conv.planned in the log yet — nothing to debrief (printed absence)'); return lines; }
+    lines.push('debriefing: '+target.id+' · '+target.type+' · "'+target.topic+'" · stakes '+target.stakes);
+    lines.push('prepared '+U.iso(target.preparedAt)+' · planned '+U.iso(target.plannedAt)+
+      ' → '+(target.completed?('completed '+U.iso(target.completed.at)+' outcome "'+target.completed.outcome+'"'+(target.completed.note?' · '+target.completed.note:'')):'NOT COMPLETED — debriefing an unheld conversation is itself the finding (R46)'));
+    lines.push('my goal was: '+target.myGoal);
+    if(target.theirLikelyGoal) lines.push('their likely goal (hypothesis at prep time): '+target.theirLikelyGoal);
+    const prep=CV().prepareConv(target.type,{personIds:target.personIds,topic:target.topic},P);
+    lines.push('answer these three (carried from the '+target.type+' preparation, not a generic form):');
+    (prep.debrief_questions||[]).forEach((q,i)=>lines.push('  '+(i+1)+'. '+q));
+    if(target.debriefs.length) lines.push('previous debriefs for this conversation: '+target.debriefs.length+' (they stack, nothing is overwritten)');
+    return lines;
+  },
+  fields(R,P){
+    const all=vals(P.convs||{}).sort((a,b)=>b.plannedAt-a.plannedAt);
+    return [
+      {key:'convId',label:'conversation',kind:'select',req:true,
+        options:all.map(c=>({value:c.id,label:c.id+' · '+c.type+' · '+c.topic.slice(0,40)}))},
+      {key:'outcome',label:'outcome',kind:'select',req:true,
+        options:['achieved','partial','no-agreement','escalated'].map(o=>({value:o,label:o}))},
+      {key:'whatWorked',label:'what worked',kind:'textarea',req:true},
+      {key:'whatMissed',label:'what missed',kind:'textarea',req:true},
+      {key:'adjustment',label:'adjustment for next time',kind:'textarea',req:true},
+      {key:'nextConv',label:'next conversation needed Y/N',kind:'yn',req:true}]; },
+  submit(v,R,P){
+    const c=(P.convs||{})[v.convId];
+    const events=[];
+    if(c&&!c.completed) events.push({type:'conv.completed',payload:{convId:v.convId,outcome:v.outcome,note:'recorded at debrief'}});
+    events.push({type:'conv.debrief',payload:{convId:v.convId,whatWorked:v.whatWorked,whatMissed:v.whatMissed,adjustment:v.adjustment}});
+    if(v.nextConv==='Y'&&c) events.push({type:'conv.planned',payload:{id:U.uid('conv'),type:c.type,
+      personIds:c.personIds.slice(),topic:'FOLLOW-UP: '+c.topic,stakes:c.stakes,
+      myGoal:'[scaffold from debrief] '+v.adjustment,preparedAt:Date.now()}});
+    return {events:events};
+  }};
+SPECS['negotiation-prep']={
+  pattern:null,title:'Negotiation preparation',free:true,
+  blurb:'A negotiation without a BATNA is a concession without a floor.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const ids=(draft.parties||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const lines=['negotiation history on record:'];
+    const negs=vals(P.negotiations||{}).sort((a,b)=>b.at-a.at);
+    if(!negs.length) lines.push('  none');
+    negs.slice(0,5).forEach(n=>lines.push('  '+U.iso(n.at)+' · "'+n.topic+'" · parties '+n.parties.join(', ')+
+      ' · myBatna '+(n.myBatna===null?'NOT SET (R51 fires)':n.myBatna)+' · outcome '+(n.outcome||'open')));
+    lines.push('counterparty styles:');
+    lines.push.apply(lines,ids.length?styleLines(ids,P):['  (enter parties to read their mapped styles)']);
+    const set=LeadOS.engine.settings(P);
+    lines.push('default negotiation style (settings): '+set.negotiationStyleDefault);
+    return lines;
+  },
+  live(draft){
+    const z=CV().zopaFor({myBatna:draft.myBatna,theirEstimatedBatna:draft.theirBatna});
+    if(!z) return {zopa:null,line:'ZOPA not computable — both BATNAs must be numeric. A missing estimate is printed, never guessed.'};
+    return {zopa:z,line:z.math,caveat:z.label};
+  },
+  fields(){ return [
+    {key:'topic',label:'topic',kind:'text',req:true},
+    {key:'parties',label:'parties (personIds, comma-separated)',kind:'text',req:true},
+    {key:'myBatna',label:'my BATNA (numeric for ZOPA math)',kind:'text',req:true},
+    {key:'theirBatna',label:'their estimated BATNA',kind:'text',req:false},
+    {key:'zopaLow',label:'ZOPA low',kind:'number',req:false},
+    {key:'zopaHigh',label:'ZOPA high',kind:'number',req:false},
+    {key:'walkAway',label:'walk-away condition',kind:'textarea',req:true}]; },
+  submit(v){
+    const p={id:U.uid('neg'),topic:v.topic,parties:v.parties.split(',').map(s=>s.trim()).filter(Boolean),
+      myBatna:v.myBatna};
+    if(v.theirBatna) p.theirEstimatedBatna=v.theirBatna;
+    if(typeof v.zopaLow==='number') p.zopa_low=v.zopaLow;
+    if(typeof v.zopaHigh==='number') p.zopa_high=v.zopaHigh;
+    return {events:[{type:'negotiation.logged',payload:p},
+      note('sales','NEGOTIATION PREP — '+v.topic+'\nwalk-away: '+v.walkAway,'negotiation-prep')]};
+  }};
+SPECS['compensation-prep']={
+  pattern:null,title:'Compensation preparation',free:true,
+  blurb:'Know your ceiling before you open your mouth.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const id=(draft.personId||'').trim();
+    const lines=[];
+    if(!id){ lines.push('(enter a personId to read their performance and comp history)'); return lines; }
+    const r=P.rosterById[id];
+    lines.push('performance history for '+id+':');
+    if(r&&r.performance.length) r.performance.forEach(p=>lines.push('  hr.performance.logged '+U.iso(p.at)+' score '+p.score));
+    else lines.push('  none logged');
+    ((P.perfDiscByPerson||{})[id]||[]).forEach(p=>lines.push('  perf.discussed '+U.iso(p.at)+': '+p.rating+' (reaction '+p.reactionType+')'));
+    lines.push('compensation history:');
+    const comps=(P.compByPerson||{})[id]||[];
+    if(!comps.length) lines.push('  none logged');
+    comps.forEach(c=>lines.push('  comp.discussed '+U.iso(c.at)+': band '+c.currentBand+(c.marketBand?' vs market '+c.marketBand:' (no market band logged)')+' → '+c.outcome));
+    (r?r.compensation:[]).forEach(c=>lines.push('  hr.compensation.reviewed '+U.iso(c.at)));
+    const risk=R.findings.filter(f=>f.rule==='R48'&&f.refs.indexOf(id)!==-1);
+    lines.push(risk.length
+      ?'RETENTION RISK ACTIVE (R48): '+risk[0].title+' — '+risk[0].basis[0]
+      :'R48 retention signal: not active for '+id+' at read time');
+    lines.push.apply(lines,styleLines([id],P));
+    return lines;
+  },
+  fields(){ return [
+    {key:'personId',label:'personId',kind:'text',req:true},
+    {key:'currentBand',label:'current band',kind:'text',req:true},
+    {key:'marketBand',label:'market band',kind:'text',req:false},
+    {key:'opening',label:'your opening offer',kind:'text',req:true},
+    {key:'theirAsk',label:'their likely ask (hypothesis)',kind:'text',req:false},
+    {key:'ceiling',label:'your ceiling',kind:'text',req:true},
+    {key:'walkAway',label:'walk-away: keep in role vs manage out',kind:'select',req:true,
+      options:[{value:'keep-in-role',label:'keep in role'},{value:'manage-out',label:'manage out'}]},
+    {key:'outcome',label:'outcome to log',kind:'select',req:true,
+      options:['raised','held','pipeline'].map(o=>({value:o,label:o}))}]; },
+  live(draft,R,P){
+    const id=(draft.personId||'').trim();
+    return id?CV().prepareConv('compensation',{personIds:[id],topic:'compensation',stakes:4},P):null; },
+  submit(v){
+    const p={personId:v.personId,currentBand:v.currentBand,outcome:v.outcome,
+      note:'opening '+v.opening+' · ceiling '+v.ceiling+' · walk-away '+v.walkAway};
+    if(v.marketBand) p.marketBand=v.marketBand;
+    return {events:[{type:'comp.discussed',payload:p}]};
+  }};
+SPECS['termination-prep']={
+  pattern:null,title:'Termination preparation',free:true,
+  blurb:'The one nobody prepares for.',
+  notes:['This conversation will be remembered for years — by them, by the team that hears about it, and by you. Be direct, be kind, be finished in under 10 minutes. Do not argue. Do not over-explain. Do not take it back after you have started.'],
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const id=(draft.personId||'').trim();
+    const lines=[];
+    if(!id){ lines.push('(enter a personId to read the documented basis)'); return lines; }
+    const r=P.rosterById[id];
+    const pips=(r?r.pips:[]).filter(x=>x.result!==null);
+    lines.push('PIP record: '+(pips.length?pips.map(x=>U.iso(x.closedAt)+' result "'+x.result+'"').join(' · '):'none closed'));
+    const openPips=(r?r.openPips:[])||[];
+    if(openPips.length) lines.push('OPEN PIP(s): '+openPips.map(x=>x.id+' started '+U.iso(x.startedAt)+' ('+x.duration_days+'d)').join(' · '));
+    const lowPerf=(r?r.performance:[]).filter(p=>p.score<=2);
+    lines.push('performance "below" signals: '+(lowPerf.length?lowPerf.map(p=>U.iso(p.at)+' score '+p.score).join(' · '):'none at score ≤2'));
+    ((P.perfDiscByPerson||{})[id]||[]).filter(p=>p.rating==='below')
+      .forEach(p=>lines.push('  perf.discussed "below" '+U.iso(p.at)+' · reaction '+p.reactionType));
+    const hist=convHistory(P,[id]).slice(0,6);
+    lines.push('conversation history with '+id+': '+(hist.length?'':'NONE — a termination with no prior documented conversation is a process risk, printed'));
+    hist.forEach(c=>lines.push('  '+U.iso(c.plannedAt)+' '+c.type+' → '+(c.completed?c.completed.outcome:'not completed')));
+    const prep=CV().prepareConv('termination',{personIds:[id],topic:'role'},P);
+    lines.push('BATNA_check: '+prep.BATNA_check);
+    return lines;
+  },
+  live(draft,R,P){ const id=(draft.personId||'').trim();
+    return id?CV().prepareConv('termination',{personIds:[id],topic:'role',stakes:5},P):null; },
+  fields(){ return [
+    {key:'personId',label:'personId',kind:'text',req:true},
+    {key:'reason',label:'reason',kind:'select',req:true,
+      options:[{value:'involuntary',label:'performance / conduct (involuntary)'},
+        {value:'restructure',label:'role eliminated (restructure)'}]},
+    {key:'severance',label:'severance decision',kind:'text',req:true},
+    {key:'warn',label:'WARN act applicable Y/N',kind:'yn',req:true},
+    {key:'hr',label:'HR present Y/N',kind:'yn',req:true},
+    {key:'script',label:'script outline (first 30 seconds verbatim)',kind:'textarea',req:true},
+    {key:'theirSay',label:'what they will likely say',kind:'textarea',req:true},
+    {key:'yourResponse',label:'your responses',kind:'textarea',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'hr.attrition.logged',payload:{personId:v.personId,reason:v.reason}},
+      {type:'conv.planned',payload:{id:U.uid('conv'),type:'termination',personIds:[v.personId],
+        topic:'Termination conversation',stakes:5,myGoal:v.script,
+        theirLikelyGoal:v.theirSay,preparedAt:Date.now()}},
+      note('people','TERMINATION PREP — '+v.personId+'\nreason: '+v.reason+'\nseverance: '+v.severance+
+        '\nWARN applicable: '+v.warn+' · HR present: '+v.hr+'\nresponses:\n'+v.yourResponse,'termination-prep')]};
+  }};
+SPECS['mediation-prep']={
+  pattern:null,title:'Mediation preparation (ICF)',free:true,
+  blurb:'Interests, not positions. Common ground before solutions.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const ids=(draft.parties||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const lines=['open conflict pairs (from mediation.held — this registry has no conflict.raised contract; the gap is printed):'];
+    const pairs=P.openConflictPairs||[];
+    if(!pairs.length) lines.push('  none open');
+    pairs.forEach(p=>lines.push('  '+p.parties.join(' ↔ ')+' · last result "'+p.result+'" '+U.iso(p.at)));
+    lines.push('mediation history: '+((P.mediations||[]).length?'':'none'));
+    (P.mediations||[]).slice(-5).forEach(m=>lines.push('  '+U.iso(m.at)+' '+m.parties.join(' ↔ ')+' → '+m.result));
+    lines.push('party styles:');
+    lines.push.apply(lines,ids.length?styleLines(ids,P):['  (enter both parties to read their styles)']);
+    const hist=convHistory(P,ids).slice(0,5);
+    if(hist.length){ lines.push('conversations involving these parties:');
+      hist.forEach(c=>lines.push('  '+U.iso(c.plannedAt)+' '+c.type+' → '+(c.completed?c.completed.outcome:'not completed'))); }
+    return lines;
+  },
+  live(draft,R,P){
+    const m=CV().MODELS.ICF;
+    return {icf:[['I',draft.interestsA||'(party A interests unfilled)',draft.interestsB||'(party B interests unfilled)'],
+      ['C',draft.common||'(common ground hypothesis unfilled)'],['F',draft.mva||'(minimum viable agreement unfilled)']],
+      model:m,note:'ICF frame — a mediation without common ground is an arbitration'}; },
+  fields(){ return [
+    {key:'parties',label:'parties (two personIds, comma-separated)',kind:'text',req:true},
+    {key:'mediator',label:'mediator role',kind:'select',req:true,
+      options:[{value:'self',label:'you'},{value:'external',label:'external'}]},
+    {key:'interestsA',label:'party A interests (needs, not wants)',kind:'textarea',req:true},
+    {key:'interestsB',label:'party B interests (needs, not wants)',kind:'textarea',req:true},
+    {key:'common',label:'common ground hypothesis',kind:'textarea',req:true},
+    {key:'mva',label:'minimum viable agreement',kind:'textarea',req:true},
+    {key:'result',label:'result to log',kind:'select',req:true,
+      options:['resolved','partial','escalated'].map(o=>({value:o,label:o}))}]; },
+  submit(v){
+    const parties=v.parties.split(',').map(s=>s.trim()).filter(Boolean);
+    const p={parties:parties,result:v.result,
+      note:'ICF · interests A: '+v.interestsA.slice(0,80)+' · B: '+v.interestsB.slice(0,80)+' · MVA: '+v.mva.slice(0,80)};
+    if(v.mediator==='self') p.mediatorId='me';
+    return {events:[{type:'mediation.held',payload:p},
+      note('people','MEDIATION (ICF) — '+parties.join(' ↔ ')+'\ninterests A: '+v.interestsA+'\ninterests B: '+v.interestsB+
+        '\ncommon ground: '+v.common+'\nminimum viable agreement: '+v.mva,'mediation-prep')]};
+  }};
+SPECS['restructure-announcement-prep']={
+  pattern:null,title:'Restructure announcement preparation',free:true,
+  blurb:'The order of communication IS the message.',
+  notes:['Tell the people affected before you tell anyone else. The order of communication IS the message. FAQs for questions you cannot answer yet are not weakness — they are honesty.'],
+  prefill(R,P,now,draft){
+    const roster=Object.keys(P.rosterById||{}).filter(id=>!P.rosterById[id].departed).sort();
+    const lines=['people on file (this registry has no reportsTo contract — "org structure" is roster membership, printed not inferred):'];
+    lines.push('  '+(roster.length?roster.join(', '):'none'));
+    lines.push('affected list below drives exec.aligned.stakeholders exactly — what you type is what is logged');
+    const prep=CV().prepareConv('restructure-announcement',{personIds:roster,topic:'restructure'},P);
+    lines.push('non-negotiables: '+prep.non_negotiables.join(' · '));
+    lines.push('likely first question (hypothesis): '+prep.their_likely_response);
+    return lines;
+  },
+  fields(R,P){
+    const roster=Object.keys(P.rosterById||{}).filter(id=>!P.rosterById[id].departed).sort();
+    return [
+      {key:'scope',label:'scope',kind:'text',req:true},
+      {key:'rationale',label:'rationale',kind:'textarea',req:true},
+      {key:'timeline',label:'timeline',kind:'text',req:true},
+      {key:'affected',label:'affected people (stakeholders for exec.aligned)',kind:'checks',req:true,
+        options:roster.map(id=>({value:id,label:id}))},
+      {key:'firstHear',label:'who hears first (1:1 before all-hands)',kind:'text',req:true},
+      {key:'faqs',label:'FAQs',kind:'textarea',req:true},
+      {key:'unknown',label:'what you do not know yet',kind:'textarea',req:true}]; },
+  submit(v){
+    return {events:[
+      note('people','RESTRUCTURE ANNOUNCEMENT — scope: '+v.scope+'\nrationale: '+v.rationale+'\ntimeline: '+v.timeline+
+        '\nfirst to hear (1:1): '+v.firstHear+'\nFAQs:\n'+v.faqs+'\nwhat I do not know yet:\n'+v.unknown,'restructure-announcement-prep'),
+      {type:'exec.aligned',payload:{topic:'restructure: '+v.scope,stakeholders:(v.affected||[]).slice(),result:'partial',
+        note:'announcement prepared; alignment logged as partial until each 1:1 is held'}}]};
+  }};
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -3018,22 +3932,44 @@ function readAll(){
   const P=LeadOS.engine.project(events);
   const now=Date.now();
   const R=LeadOS.correlate.run(P,now);
+  _lastP=P;
   return {events:events,P:P,now:now,R:R};
 }
-const ui={route:'#/today',chip:'ALL',heatSel:null,capType:null,ackOpen:null,supOpen:null,playRunner:null};
+const ui={route:'#/today',chip:'ALL',heatSel:null,capType:null,ackOpen:null,supOpen:null,
+  playRunner:null,playDraft:{},focusFinding:null};
 const fmtN=n=>Number(n).toLocaleString('en-US');
 const SEVCHIP=s=>'<span class="sev s'+s+'">sev '+s+'</span>';
 const CONFC=c=>'<span class="conf '+c+'" title="confidence">'+c.toLowerCase()+'</span>';
 
 /* ---------- shared renderers ---------- */
-function playLine(play,playNone){
+/* pt-11: conversation findings carry their conversation TYPE into conv-prep,
+   and their subject when the finding names one. The mapping is printed on the
+   button so a leader can see why that type was chosen. */
+const CONV_RULE_TYPE={R46:null,R47:'mediation',R48:'compensation',R49:'performance',
+  R50:'one-on-one-checkin',R51:'negotiation',R52:'board-presentation'};
+function playLine(play,playNone,f){
   if(!play) return '<span class="pill" title="'+(playNone?esc(playNone):'no playbook linked')+'">no play — '+(playNone?esc(playNone):'reason unprinted')+'</span>';
   const pb=LeadOS.playbooks.get(play);
   const iid=String(play).replace(/^interactive:/,'');
-  const runBtn=LeadOS.playbooks.INTERACTIVE[iid]
-    ?' <button class="btn sm" data-act="playrun" data-id="'+iid+'">run playbook</button>':'';
+  let runBtn='';
+  if(LeadOS.playbooks.INTERACTIVE[iid]){
+    let attrs='', hint='';
+    if(f&&Object.prototype.hasOwnProperty.call(CONV_RULE_TYPE,f.rule)){
+      let t=CONV_RULE_TYPE[f.rule];
+      /* R46 is about a conversation that already exists — carry ITS type */
+      if(f.rule==='R46'){ const c=(ctxP()&&ctxP().convs||{})[f.refs[0]]; t=c?c.type:null; }
+      if(t){ attrs+=' data-ptype="'+esc(t)+'"'; hint=' as "'+t+'"'; }
+      const person=(f.refs||[]).filter(r=>ctxP()&&ctxP().rosterById&&ctxP().rosterById[r])[0]
+        ||((f.rule==='R48'||f.rule==='R49'||f.rule==='R50')?f.refs[0]:null);
+      if(person) attrs+=' data-pperson="'+esc(person)+'"';
+    }
+    runBtn=' <button class="btn sm" data-act="playrun" data-id="'+iid+'"'+attrs+
+      ' title="opens the runner'+esc(hint)+', pre-populated from this finding">prepare'+esc(hint)+'</button>';
+  }
   return '<a class="playlink" href="#/playbooks">'+icon('book',12)+' '+esc(pb?pb.title:play)+'</a> <span class="conf" title="playbook id">'+esc(play)+'</span>'+runBtn;
 }
+/* last projection read, for link enrichment only — never a cache for logic */
+let _lastP=null; const ctxP=()=>_lastP;
 function finCard(f){
   const age=f.evidenceAt===null?'undated':U.days(Date.now(),f.evidenceAt)+'d';
   const isCorr=/^R4[1-5]$/.test(f.rule), isEng=f.rule==='ENG';
@@ -3043,7 +3979,7 @@ function finCard(f){
       (isEng?'<span class="sev s5">engine fault</span>':'')+
       '<span class="title">'+esc(f.title)+'</span><span class="key">'+esc(f.key)+'</span></div>'+
     '<div class="basis">'+f.basis.map(b=>'<div>'+esc(b)+'</div>').join('')+'</div>'+
-    '<div class="foot">'+playLine(f.play,f.playNone)+
+    '<div class="foot">'+playLine(f.play,f.playNone,f)+
       '<span class="pill">'+f.domain+'</span>'+
       '<span class="pill">evidence '+(f.evidenceAt===null?'undated':U.iso(f.evidenceAt)+' · '+age)+'</span>'+
       (f.trend?'<span class="pill">trend-derived</span>':'')+
@@ -3241,29 +4177,73 @@ V['#/health']={kicker:'the authority wall — executed, not declared',title:'Hea
     '<div class="sect"><h2>Claims</h2><span class="meta">a claim is only as good as the checks under it</span></div><div class="card">'+
     res.claims.map(c=>'<div class="claim"><span class="cid">'+c.id+'</span><span class="st">'+(c.proven?icon('check',13):icon('x',13))+'</span><div>'+esc(c.text)+'<div class="why">authorized by '+c.by.join(' · ')+(c.proven?'':' — <b>UNPROVEN: '+c.unproven.join(', ')+'</b>')+'</div></div></div>').join('')+'</div>';
 }};
+function prepHtml(prep){
+  if(!prep) return '';
+  if(prep.icf) return '<div class="basis">'+
+    prep.icf.map(r=>'<div><b>'+r[0]+'</b> — '+esc(r.slice(1).join('  ||  '))+'</div>').join('')+
+    '<div class="lbl">'+esc(prep.note)+'</div></div>';
+  if(prep.line!==undefined&&prep.zopa!==undefined) return '<div class="basis"><div><b>'+esc(prep.line)+'</b></div>'+
+    (prep.caveat?'<div class="lbl">'+esc(prep.caveat)+'</div>':'')+'</div>';
+  if(prep.unknown) return '<div class="basis"><div>'+esc(prep.note)+'</div></div>';
+  const kv=(k,v)=>'<div><b>'+k+'</b> '+esc(v)+'</div>';
+  let h='<div class="basis">';
+  h+=kv('opening →',prep.opening_line);
+  h+='<div class="lbl">'+esc(prep.opening_note)+'</div>';
+  h+=kv('their likely response →',prep.their_likely_response);
+  h+='<div class="lbl">'+esc(prep.their_likely_note)+'</div>';
+  (prep.your_reframes||[]).forEach(r=>{ h+='<div>if they say: "'+esc(r.ifTheySay)+'" → you say: "'+esc(r.youSay)+'"</div>'; });
+  (prep.non_negotiables||[]).forEach(n=>{ h+=kv('non-negotiable ·',n); });
+  if(prep.BATNA_check) h+=kv('BATNA check ·',prep.BATNA_check);
+  else if(prep.BATNA_note) h+='<div class="lbl">'+esc(prep.BATNA_note)+'</div>';
+  if(prep.model){ h+=kv('model ·',prep.model.id+' ('+prep.model.for+')');
+    prep.model.limbs.forEach(l=>{ h+='<div>   '+l[0]+' — '+esc(l[1])+'</div>'; });
+    if(prep.model_source) h+='<div class="lbl">'+esc(prep.model_source)+'</div>'; }
+  if(prep.negotiationStyle) h+=kv('default negotiation style ·',prep.negotiationStyle);
+  (prep.styles||[]).forEach(s=>{ h+=kv('style · '+s.personId+' →',(s.known?s.label+': '+s.notes:s.notes)); });
+  (prep.debrief_questions||[]).forEach((q,i)=>{ h+=kv('debrief Q'+(i+1)+' ·',q); });
+  h+='</div>';
+  return h;
+}
 function playRunnerHtml(ctx,id){
   const spec=LeadOS.playbooks.INTERACTIVE[id];
   if(!spec) return '<div class="empty">Unknown interactive playbook '+esc(id)+'.</div>';
-  const on=ctx.R.patterns.active.some(p=>p.name===spec.pattern);
-  const lines=spec.prefill(ctx.R,ctx.P,ctx.now);
+  const gated=!spec.free&&!!spec.pattern;
+  const on=!gated||ctx.R.patterns.active.some(p=>p.name===spec.pattern);
+  const draft=ui.playDraft||{};
+  let lines=[];
+  try{ lines=spec.prefill(ctx.R,ctx.P,ctx.now,draft)||[]; }
+  catch(e){ lines=['prefill threw: '+e.message+' — printed, not hidden']; }
   const fields=spec.fields(ctx.R,ctx.P);
   const fieldHtml=fields.map(fd=>{
     const lab='<label>'+esc(fd.label)+(fd.req?' *':'')+'</label>';
-    if(fd.kind==='textarea') return '<div class="full">'+lab+'<textarea rows="3" data-pf="'+fd.key+'" data-kind="textarea"></textarea></div>';
-    if(fd.kind==='yn') return '<div>'+lab+'<select data-pf="'+fd.key+'" data-kind="yn"><option value="">—</option><option>Y</option><option>N</option></select></div>';
-    if(fd.kind==='number') return '<div>'+lab+'<input type="number" step="any" data-pf="'+fd.key+'" data-kind="number"></div>';
+    const dv=draft[fd.key];
+    if(fd.kind==='textarea') return '<div class="full">'+lab+'<textarea rows="3" data-pf="'+fd.key+'" data-kind="textarea">'+esc(dv||'')+'</textarea></div>';
+    if(fd.kind==='yn') return '<div>'+lab+'<select data-pf="'+fd.key+'" data-kind="yn"><option value="">—</option>'+
+      ['Y','N'].map(o=>'<option'+(dv===o?' selected':'')+'>'+o+'</option>').join('')+'</select></div>';
+    if(fd.kind==='select') return '<div>'+lab+'<select data-pf="'+fd.key+'" data-kind="text"><option value="">—</option>'+
+      (fd.options||[]).map(o=>'<option value="'+esc(o.value)+'"'+(dv===o.value?' selected':'')+'>'+esc(o.label)+'</option>').join('')+'</select></div>';
+    if(fd.kind==='number') return '<div>'+lab+'<input type="number" step="any" data-pf="'+fd.key+'" data-kind="number" value="'+esc(dv===undefined?'':dv)+'"></div>';
     if(fd.kind==='date') return '<div>'+lab+'<input type="date" data-pf="'+fd.key+'" data-kind="date"></div>';
     if(fd.kind==='checks') return '<div class="full">'+lab+'<div style="display:flex;flex-direction:column;gap:5px;margin-top:4px">'+
       (fd.options&&fd.options.length?fd.options.map(o=>'<label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink2)"><input type="checkbox" style="width:auto" data-pf="'+fd.key+'" value="'+esc(o.value)+'"> '+esc(o.label)+'</label>').join(''):'<span class="muted small">(none available — printed absence)</span>')+'</div></div>';
-    return '<div>'+lab+'<input data-pf="'+fd.key+'" data-kind="text"></div>';
+    return '<div>'+lab+'<input data-pf="'+fd.key+'" data-kind="text" value="'+esc(dv||'')+'"></div>';
   }).join('');
+  let live='';
+  if(spec.live){
+    let lv=null;
+    try{ lv=spec.live(draft,ctx.R,ctx.P); }catch(e){ lv=null; }
+    live=lv?('<div class="sect" style="margin-top:16px"><h2>Live preparation</h2><span class="meta">regenerates as you type · '+esc(LeadOS.conversations.SCAFFOLD)+'</span></div>'+prepHtml(lv))
+      :'<div class="formnote">Live preparation appears once the required fields are filled.</div>';
+  }
   return '<div class="card" style="border-left:3px solid var(--accent);margin-bottom:18px">'+
-    '<h3>'+esc(spec.title)+'</h3><div class="mono small muted">'+id+' · gates on pattern '+spec.pattern+' · emits event specs only — you review before anything is appended</div>'+
-    '<div class="small muted" style="margin-top:6px">'+esc(spec.blurb)+'</div>'+
+    '<h3>'+esc(spec.title)+'</h3><div class="mono small muted">'+id+' · '+(gated?'gates on pattern '+spec.pattern:'always available (no pattern gate)')+' · emits event specs only — you review before anything is appended</div>'+
+    '<div class="small muted" style="margin-top:6px">'+esc(spec.blurb||'')+'</div>'+
+    (spec.notes||[]).map(n=>'<div class="callout" style="margin-top:12px">'+icon('alert')+'<div>'+esc(n)+'</div></div>').join('')+
     '<div class="sect" style="margin-top:16px"><h2>Prefill — read from the log</h2></div>'+
     '<div class="basis">'+lines.map(l=>'<div>'+esc(l)+'</div>').join('')+'</div>'+
     (on?'':'<div class="callout" style="margin-top:12px">'+icon('alert')+'<div>PATTERN '+esc(spec.pattern)+' IS NOT ACTIVE at read time — submission disabled; the prefill above shows what it would address, printed, not hidden.</div></div>')+
     '<div class="fgrid">'+fieldHtml+'</div>'+
+    live+
     '<div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
       '<button class="btn sm" data-act="playsubmit" data-id="'+id+'"'+(on?'':' disabled style="opacity:.45;cursor:not-allowed"')+'>'+icon('check',13)+' review & append events</button>'+
       '<button class="btn ghost sm" data-act="playcancel">close runner</button>'+
@@ -3284,15 +4264,132 @@ V['#/playbooks']={kicker:'the mentor layer',title:'Playbooks',render(ctx){
     '<div class="sect"><h2>Curated</h2><span class="meta">'+Object.keys(cur).length+' · '+Object.keys(LeadOS.playbooks.INTERACTIVE).length+' interactive</span></div><div class="grid2">'+cards+'</div>'+
     '<div class="sect"><h2>Domain playbooks</h2><span class="meta">generated descriptors, labeled</span></div><div class="grid2">'+doms+'</div>';
 }};
+V['#/conversations']={kicker:'leadership is executed in dialogue',title:'Conversations',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const upcoming=(P.openConvs||[]).slice().sort((a,b)=>(b.stakes-a.stakes)||(a.preparedAt-b.preparedAt));
+  const hist=(P.convCompletions||[]).slice().sort((a,b)=>b.at-a.at).slice(0,20);
+  const roster=Object.keys(P.rosterById||{}).sort();
+  const styled=U.uniq(roster.concat(Object.keys(P.influenceByPerson||{}))).sort();
+  const negs=vals(P.negotiations).sort((a,b)=>b.at-a.at);
+  const outChip=o=>{
+    const sev={achieved:'',partial:'s3','no-agreement':'s3',escalated:'s4'}[o];
+    return sev?'<span class="sev '+sev+'">'+o+'</span>':'<span class="pill">'+o+'</span>'; };
+  const upRows=upcoming.map(c=>'<tr><td><span class="sev s'+U.clamp(c.stakes,1,5)+'">stakes '+c.stakes+'</span></td>'+
+    '<td class="mono">'+esc(c.type)+'</td><td>'+esc(c.topic)+'</td>'+
+    '<td class="mono">'+esc(c.personIds.join(', '))+'</td>'+
+    '<td class="mono">'+U.iso(c.preparedAt)+' · '+U.days(now,c.plannedAt)+'d ago</td>'+
+    '<td><button class="btn ghost sm" data-act="playrun" data-id="conv-prep">prep again</button></td></tr>').join('');
+  const hRows=hist.map(h=>'<tr><td class="mono">'+U.iso(h.at)+'</td><td class="mono">'+esc(h.type||'?')+'</td>'+
+    '<td>'+esc(h.topic||'')+'</td><td class="mono">'+esc((h.personIds||[]).join(', '))+'</td>'+
+    '<td>'+outChip(h.outcome)+'</td><td class="small muted">'+esc(h.note||'')+'</td></tr>').join('');
+  const sRows=styled.map(id=>{ const s=LeadOS.conversations.styleFor(id,P);
+    return '<tr'+(s.known?'':' style="opacity:.5"')+'><td class="mono">'+esc(id)+'</td>'+
+      '<td>'+(s.known?'<span class="pill">'+esc(s.label)+'</span>':'<span class="pill">unmapped</span>')+'</td>'+
+      '<td class="small">'+esc(s.known?s.notes:'no influence.mapped event — R50 nudges, it never guesses')+'</td>'+
+      '<td class="small muted">'+esc(s.known?(s.evidence||''):'')+'</td>'+
+      '<td class="mono">'+(s.at?U.iso(s.at):'—')+'</td></tr>'; }).join('');
+  const nRows=negs.map(n=>{ const z=LeadOS.conversations.zopaFor(n);
+    return '<tr><td>'+esc(n.topic)+'</td><td class="mono">'+esc(n.parties.join(', '))+'</td>'+
+      '<td class="mono">'+(n.myBatna===null?'<span class="sev s3">not set</span>':esc(String(n.myBatna)))+'</td>'+
+      '<td class="mono">'+(n.theirEstimatedBatna===null?'—':esc(String(n.theirEstimatedBatna)))+'</td>'+
+      '<td class="mono small">'+(z?esc(z.math):'ZOPA not computable — both BATNAs must be numeric; not guessed')+'</td>'+
+      '<td>'+(n.outcome?'<span class="pill">'+esc(n.outcome)+'</span>':'<span class="pill">open</span>')+'</td></tr>'; }).join('');
+  const pairs=P.openConflictPairs||[];
+  return '<div class="vhead"><div class="kicker">leadership is executed in dialogue</div><h1>Conversations</h1>'+
+    '<div class="sub">The engine tells you what to do; the playbooks give you a form; this is where the actual conversation gets prepared. Every output is a <b>scaffold, not a script</b> — use the shape, not the words. Their responses are printed as <b>hypotheses from the log</b>, never predictions.</div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['conv-prep','conv-debrief','negotiation-prep','compensation-prep','termination-prep','mediation-prep','restructure-announcement-prep']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    (ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'')+
+    '<div class="sect"><h2>Upcoming</h2><span class="meta">'+upcoming.length+' planned, not yet held · stakes desc, then oldest preparation first</span></div>'+
+    (upcoming.length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>stakes</th><th>type</th><th>topic</th><th>people</th><th>prepared</th><th></th></tr>'+upRows+'</table></div>'
+      :'<div class="empty">No conversations planned. A planned conversation is a commitment the log can hold you to.</div>')+
+    '<div class="sect"><h2>History</h2><span class="meta">last '+hist.length+' completed</span></div>'+
+    (hist.length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>when</th><th>type</th><th>topic</th><th>people</th><th>outcome</th><th>note</th></tr>'+hRows+'</table></div>'
+      :'<div class="empty">No conversations completed yet.</div>')+
+    '<div class="sect"><h2>Influence map</h2><span class="meta">'+Object.keys(P.influenceByPerson||{}).length+' of '+styled.length+' mapped · unmapped rows dimmed (R50 advisory)</span></div>'+
+    (styled.length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>person</th><th>style</th><th>how to run the conversation</th><th>evidence</th><th>mapped</th></tr>'+sRows+'</table></div>'
+      :'<div class="empty">No people on file yet.</div>')+
+    '<div class="sect"><h2>Negotiations</h2><span class="meta">'+negs.length+' logged · ZOPA shown only when both BATNAs are numeric</span></div>'+
+    (negs.length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>topic</th><th>parties</th><th>my BATNA</th><th>their est.</th><th>ZOPA</th><th>state</th></tr>'+nRows+'</table></div>'
+      :'<div class="empty">No negotiations logged.</div>')+
+    (pairs.length?'<div class="sect"><h2>Open conflict pairs</h2><span class="meta">'+pairs.length+' · derived from mediation.held only — this registry has no conflict.raised contract, printed</span></div>'+
+      '<div class="card">'+pairs.map(p=>'<div class="heatrow"><b>'+esc(p.parties.join(' ↔ '))+'</b><span>last result "'+esc(p.result)+'" on '+U.iso(p.at)+'</span><span class="w"><button class="btn ghost sm" data-act="playrun" data-id="mediation-prep">mediate</button></span></div>').join('')+'</div>':'')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">conv.planned · conv.completed · influence.mapped · negotiation.logged</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
+V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const people=U.uniq(Object.keys(P.rosterById||{})
+    .concat(Object.keys(P.influenceByPerson||{}))
+    .concat(Object.keys(P.convsByPerson||{}))).sort();
+  const id=ui.dossier&&people.indexOf(ui.dossier)!==-1?ui.dossier:null;
+  const picker='<div class="chips" style="margin-bottom:16px">'+
+    (people.length?people.map(p=>'<button class="chip'+(id===p?' on':'')+'" data-act="dossier" data-id="'+esc(p)+'">'+esc(p)+'</button>').join('')
+      :'<span class="muted small">No people in the log yet — a person exists here because an event mentions them, never because a directory says so.</span>')+'</div>';
+  if(!id) return '<div class="vhead"><div class="kicker">one person, everything the log knows</div><h1>Dossier</h1>'+
+    '<div class="sub">The roster is <b>derived</b>: a person exists because the log mentions them. Select someone to read their conversation history, influence style, and negotiations.</div></div>'+picker+
+    '<div class="empty">Select a person above.</div>';
+  const s=LeadOS.conversations.styleFor(id,P);
+  const r=P.rosterById[id]||{quotas:[],deals:[],performance:[],pips:[],compensation:[],attrition:null,sources:{}};
+  const convs=((P.convsByPerson||{})[id]||[]).slice().sort((a,b)=>b.plannedAt-a.plannedAt);
+  const completed=convs.filter(c=>c.completed).slice(0,10);
+  const open=convs.filter(c=>!c.completed);
+  const negs=vals(P.negotiations).filter(n=>n.parties.indexOf(id)!==-1||n.ownerId===id).sort((a,b)=>b.at-a.at);
+  const mine=R.findings.filter(f=>(f.refs||[]).indexOf(id)!==-1);
+  const outChip=o=>{ const sev={achieved:'',partial:'s3','no-agreement':'s3',escalated:'s4'}[o];
+    return sev?'<span class="sev '+sev+'">'+o+'</span>':'<span class="pill">'+o+'</span>'; };
+  const convRows=completed.map(c=>'<tr><td class="mono">'+U.iso(c.completed.at)+'</td><td class="mono">'+esc(c.type)+'</td>'+
+    '<td>'+esc(c.topic)+'</td><td><span class="sev s'+U.clamp(c.stakes,1,5)+'">stakes '+c.stakes+'</span></td>'+
+    '<td>'+outChip(c.completed.outcome)+'</td>'+
+    '<td class="small muted">'+esc(c.completed.note||'')+(c.debriefs.length?' · '+c.debriefs.length+' debrief(s)':' · <b>no debrief</b>')+'</td></tr>').join('');
+  const negRows=negs.map(n=>{ const z=LeadOS.conversations.zopaFor(n);
+    return '<tr><td class="mono">'+U.iso(n.at)+'</td><td>'+esc(n.topic)+'</td>'+
+      '<td class="mono">'+(n.myBatna===null?'<span class="sev s3">no BATNA</span>':esc(String(n.myBatna)))+'</td>'+
+      '<td class="mono small">'+(z?esc(z.math):'ZOPA not computable — not guessed')+'</td>'+
+      '<td>'+(n.outcome?'<span class="pill">'+esc(n.outcome)+'</span>':'<span class="pill">open</span>')+'</td></tr>'; }).join('');
+  return '<div class="vhead"><div class="kicker">one person, everything the log knows</div><h1>'+esc(id)+'</h1>'+
+    '<div class="sub">Derived from '+Object.keys(r.sources||{}).length+' event source(s): <span class="mono">'+esc(Object.keys(r.sources||{}).join(' · ')||'conversation events only')+'</span>'+
+    (r.attrition?' · <b>departed</b> ('+esc(r.attrition.reason)+', '+U.iso(r.attrition.at)+')':'')+'</div></div>'+picker+
+    '<div class="grid2">'+
+      '<div class="card" style="border-left:3px solid '+(s.known?'var(--accent)':'var(--hair2)')+'"><h3>Influence style</h3>'+
+        (s.known
+          ?'<div style="margin:8px 0"><span class="pill">'+esc(s.label)+'</span></div>'+
+           '<div class="small" style="color:var(--ink2);line-height:1.7">'+esc(s.notes)+'</div>'+
+           '<div class="basis" style="margin-top:10px"><div>evidence: '+esc(s.evidence)+'</div>'+
+           (s.note?'<div>note: '+esc(s.note)+'</div>':'')+'<div class="lbl">'+esc(s.basis)+'</div></div>'
+          :'<div class="small muted" style="margin-top:8px">'+esc(s.notes)+'</div>')+
+        '<div style="margin-top:12px"><button class="btn ghost sm" data-act="playrun" data-id="conv-prep" data-pperson="'+esc(id)+'">prepare a conversation</button></div></div>'+
+      '<div class="card"><h3>Live findings naming '+esc(id)+'</h3>'+
+        (mine.length?mine.map(f=>'<div class="heatrow"><span class="rule">'+f.rule+'</span><span>'+esc(f.title)+'</span><b class="w">sev '+f.sev+'</b></div>').join('')
+          :'<div class="small muted" style="margin-top:8px">No active findings name this person.</div>')+
+        (open.length?'<div class="callout" style="margin-top:12px">'+icon('clock')+'<div>'+open.length+' planned conversation(s) not yet held: '+
+          open.map(c=>esc(c.topic)+' (stakes '+c.stakes+')').join(' · ')+'</div></div>':'')+'</div>'+
+    '</div>'+
+    '<div class="sect"><h2>Conversation history</h2><span class="meta">last '+completed.length+' completed'+(convs.length>completed.length?' of '+convs.length+' planned':'')+'</span></div>'+
+    (completed.length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>when</th><th>type</th><th>topic</th><th>stakes</th><th>outcome</th><th>note</th></tr>'+convRows+'</table></div>'
+      :'<div class="empty">No completed conversations with '+esc(id)+'. Absence of dialogue is itself data — R46 and R50 read it.</div>')+
+    '<div class="sect"><h2>Negotiation history</h2><span class="meta">'+negs.length+'</span></div>'+
+    (negs.length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>when</th><th>topic</th><th>my BATNA</th><th>ZOPA</th><th>state</th></tr>'+negRows+'</table></div>'
+      :'<div class="empty">No negotiations involving '+esc(id)+'.</div>');
+}};
 V['#/data']={kicker:'the log, the settings, the walls',title:'Data',render(ctx){
   const raw=ctx.R?LeadOS.store.exportRaw():null;
   const set=LeadOS.engine.settings(ctx.P);
   const evts=LeadOS.store.getEvents();
   const tail=evts.slice(-14).reverse().map(e=>'<tr><td class="mono">'+e.seq+'</td><td class="mono">'+e.id+'</td><td class="mono">'+new Date(e.at).toISOString().slice(0,16).replace('T',' ')+'</td><td class="mono">'+esc(e.type)+'</td><td class="small muted">'+esc(JSON.stringify(e.payload||{}).slice(0,90))+'</td></tr>').join('');
   const mig=(raw&&raw.meta.migrationsApplied.length?raw.meta.migrationsApplied.join(', '):'none')+' · repairs '+JSON.stringify(raw?raw.meta.migrationRepairs:{});
-  const setRows=Object.keys(LeadOS.store.ALL_SETTING_DEFAULTS).map(k=>
-    '<tr><td class="mono">'+k+'</td><td class="mono">'+(k in set?set[k]:'—')+'</td><td class="mono muted">'+LeadOS.store.ALL_SETTING_DEFAULTS[k]+'</td>'+
-    '<td><input style="max-width:110px" type="number" step="any" data-setk="'+k+'" value="'+(k in set?set[k]:'')+'"></td></tr>').join('');
+  const setRows=Object.keys(LeadOS.store.ALL_SETTING_DEFAULTS).map(k=>{
+    const isStr=typeof LeadOS.store.ALL_SETTING_DEFAULTS[k]==='string';
+    const en=LeadOS.store.SETTING_ENUMS[k];
+    const input=en
+      ?'<select style="max-width:170px" data-setk="'+k+'" data-settype="string">'+en.map(o=>'<option'+(set[k]===o?' selected':'')+'>'+esc(o)+'</option>').join('')+'</select>'
+      :(isStr?'<input style="max-width:170px" data-setk="'+k+'" data-settype="string" value="'+esc(k in set?set[k]:'')+'">'
+            :'<input style="max-width:110px" type="number" step="any" data-setk="'+k+'" data-settype="number" value="'+esc(k in set?set[k]:'')+'">');
+    return '<tr><td class="mono">'+k+'</td><td class="mono">'+esc(k in set?String(set[k]):'—')+'</td>'+
+      '<td class="mono muted">'+esc(String(LeadOS.store.ALL_SETTING_DEFAULTS[k]))+'</td><td>'+input+'</td></tr>'; }).join('');
   return '<div class="vhead"><div class="kicker">the log, the settings, the walls</div><h1>Data</h1>'+
     '<div class="sub">One key · <span class="mono">leados:data</span> · schema v5 · lineage pt · '+fmtN(LeadOS.store.rawBytes())+' chars of JSON · '+ctx.events.length+' events. Data leaves this browser only when you export it yourself.</div></div>'+
     '<div class="grid2">'+
@@ -3373,6 +4470,8 @@ function shell(ctx){
     ['#/insights','layers','Insights',R.insights.active.length],
     ['#/heatmap','gauge','Heatmap',R.heat.cells.length?Math.max.apply(null,R.heat.cells.map(c=>c.score)):null],
     ['#/benchmarks','bars','Benchmarks',R.insights.active.filter(i=>i.kind==='benchmark-gap').length||null],
+    ['#/conversations','link','Conversations',(ctx.P.openConvs||[]).length||null],
+    ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],
     ['#/health','shield','Health',null],
     ['#/data','db','Data',null]
@@ -3408,6 +4507,8 @@ document.addEventListener('click',e=>{
   if(!b) return;
   const act=b.dataset.act;
   if(act==='chip'){ ui.chip=b.dataset.d; render(); }
+  else if(act==='dossier'){ ui.dossier=b.dataset.id;
+    if(location.hash!=='#/dossier') location.hash='#/dossier'; else render(); }
   else if(act==='heat'){ ui.heatSel=(ui.heatSel===b.dataset.d)?null:b.dataset.d; render(); }
   else if(act==='ack'){ ui.ackOpen=b.dataset.id; render(); }
   else if(act==='ackcancel'){ ui.ackOpen=null; render(); }
@@ -3424,10 +4525,15 @@ document.addEventListener('click',e=>{
       toast('signal.tagged · unsuppress appended'); render(); }
     catch(err){ toast(err.message); } }
   else if(act==='playrun'){
-    ui.playRunner=b.dataset.id;
-    if(location.hash!=='#/playbooks') location.hash='#/playbooks'; else render();
+    const nid=b.dataset.id;
+    if(ui.playRunner!==nid) ui.playDraft={};
+    ui.playRunner=nid;
+    if(b.dataset.ptype) ui.playDraft.type=b.dataset.ptype;
+    if(b.dataset.pperson) ui.playDraft.personIds=b.dataset.pperson;
+    const target=LeadOS.playbooks.INTERACTIVE[nid]&&LeadOS.playbooks.INTERACTIVE[nid].free?'#/conversations':'#/playbooks';
+    if(location.hash!==target) location.hash=target; else render();
     window.scrollTo(0,0); }
-  else if(act==='playcancel'){ ui.playRunner=null; render(); }
+  else if(act==='playcancel'){ ui.playRunner=null; ui.playDraft={}; render(); }
   else if(act==='playsubmit'){
     if(b.disabled) return;
     const id=b.dataset.id, spec=LeadOS.playbooks.INTERACTIVE[id];
@@ -3501,7 +4607,13 @@ document.addEventListener('click',e=>{
         const k=el.dataset.setk;
         const folded=LeadOS.engine.settings(LeadOS.engine.project(LeadOS.store.getEvents()));
         if(String(folded[k])===cur) return;
-        LeadOS.store.append('settings.changed',{key:k,value:Number(cur)}); n++;
+        /* v6 settings are STRINGS — coercing them to Number would write NaN */
+        const isStr=el.dataset.settype==='string';
+        const en=LeadOS.store.SETTING_ENUMS[k];
+        if(en&&en.indexOf(cur)===-1){ toast(k+' must be one of '+en.join('|')); return; }
+        const val=isStr?cur:Number(cur);
+        if(!isStr&&!isFinite(val)){ toast(k+' must be numeric'); return; }
+        LeadOS.store.append('settings.changed',{key:k,value:val}); n++;
       });
       toast(n?n+' settings.changed appended':'no changes'); render();
     }catch(err){ toast(err.message); } }
@@ -3519,8 +4631,31 @@ document.addEventListener('click',e=>{
     a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),500);
     toast('exported — data leaves only because you asked'); }
 });
+/* live preparation: re-render on input for runners that expose live() */
+let liveTimer=null;
+document.addEventListener('input',e=>{
+  const el=e.target;
+  if(!el.dataset||!el.dataset.pf||!ui.playRunner) return;
+  const spec=LeadOS.playbooks.INTERACTIVE[ui.playRunner];
+  if(!spec||!spec.live) return;
+  ui.playDraft=ui.playDraft||{};
+  ui.playDraft[el.dataset.pf]=el.value;
+  const active=el.dataset.pf, pos=(el.selectionStart!==undefined)?el.selectionStart:null;
+  clearTimeout(liveTimer);
+  liveTimer=setTimeout(()=>{
+    render();
+    const again=document.querySelector('[data-pf="'+active+'"]');
+    if(again){ again.focus(); if(pos!==null&&again.setSelectionRange){ try{ again.setSelectionRange(pos,pos); }catch(e2){} } }
+  },220);
+});
 document.addEventListener('change',e=>{
   const el=e.target;
+  if(el.dataset&&el.dataset.pf&&ui.playRunner){
+    ui.playDraft=ui.playDraft||{};
+    ui.playDraft[el.dataset.pf]=el.value;
+    const spec=LeadOS.playbooks.INTERACTIVE[ui.playRunner];
+    if(spec&&(spec.live||el.dataset.pf==='type'||el.dataset.pf==='convId'||el.dataset.pf==='personId')) render();
+  }
   if(el.dataset&&el.dataset.actChange==='captype'){ ui.capType=el.value||null; render(); }
   if(el.dataset&&el.dataset.actFile==='import'&&el.files&&el.files[0]){
     const reader=new FileReader();
@@ -3548,6 +4683,14 @@ window.addEventListener('hashchange',()=>{
 
 /* ---------- boot ---------- */
 (function boot(){
+  /* module guard first — a missing module must name the path, not throw deep */
+  const missing=LeadOS.EXPECTED_MODULES.filter(ns=>!LeadOS[ns]);
+  if(missing.length){
+    gateWall('Module registry incomplete — rendering halted',
+      'EXPECTED: '+LeadOS.EXPECTED_MODULES.join(' · ')+'\nMISSING: '+missing.join(', ')+
+      '\n\nEach module registers one LeadOS.* namespace in doctrinal load order.\nYour data is untouched.');
+    return;
+  }
   let res;
   try{ LeadOS.store.load(); res=LeadOS.health.runG(); }
   catch(e){ gateWall('The store failed integrity at load',e.message); return; }

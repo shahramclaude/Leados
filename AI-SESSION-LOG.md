@@ -201,7 +201,7 @@ re-issued complete; this log created. The upstream working tree was not modified
   buckets — projections would have dropped them silently; both now fold into `playbookRuns` /
   `planCheckins` and T22 pins it.
 
-### §3 Expected (NOT yet observed) check outcomes — pt-9 additions
+### §3 Expected (NOT yet observed) check outcomes — pt-9 additions (see also Session 11)
 
 - **T21** — all 7 runners prefill with ≥1 printed line on the seed; every emitted spec validates
   against the registry; systemic-intervention emits `note.added` (+`exec.crisis.logged` iff
@@ -212,3 +212,96 @@ re-issued complete; this log created. The upstream working tree was not modified
 - **C12** — proven iff T21 + T22 + G3 pass. T1–T20 expected unchanged-green.
 
 `#/health` remains the grader for every line above.
+
+---
+
+## Session 11 — pt-11 (brief "pt-6"): conversation intelligence layer
+
+**Date:** February 2026, same-week continuation. **Env:** as Sessions 7–10 — no JS runtime at
+authoring time; `#/health` is the authority wall.
+
+### §0 Opening audit — ALL ELEVEN/TWELVE FILES
+
+The brief requires §0 to audit all 11 files (12 with `js/conversations.js`). This delivery ships
+**three physical files**; the brief's file list exists here as the **module registry**
+(`LeadOS.EXPECTED_MODULES`), load-ordered exactly as the brief's script list. Audited per module:
+
+| # | Brief's file | This delivery | Status this session |
+|---|---|---|---|
+| 1 | `index.html` | the shipped shell + all modules | **re-read in full**; rail gained `#/conversations` + `#/dossier`; boot guard now checks the registry before anything else |
+| 2 | `css/app.css` | the inline `<style>` block | unchanged except 5 rules (focus ring, clickable pills, sparkline mono) |
+| 3 | `js/util.js` | `LeadOS.util` | unchanged |
+| 4 | `js/events.js` | `LeadOS.events` | **+10 contracts** (87→97); enums declared for all 6 enumerated fields |
+| 5 | `js/store.js` | `LeadOS.store` | **schema v6**, `MIGRATIONS['5>6']`, `SETTING_ENUMS`; first string settings |
+| 6 | `js/engine.js` | `LeadOS.engine` | **+16 buckets**, 10 fold handlers, 3 open-sets (`openConvs`, `openNegotiations`, `openConflictPairs`) |
+| 7 | `js/rules.js` | `LeadOS.rules` | **+R46–R52** (45→52 rules) |
+| 8 | `js/correlate.js` | `LeadOS.correlate` | unchanged this part |
+| 9 | **`js/conversations.js`** | **`LeadOS.conversations`** | **NEW** — styles, 6 models, `zopaFor`, `prepareConv` (14 types) |
+| 10 | `js/health.js` | `LeadOS.health` | **+T28–T32, +G10, +G41–G49**, G40 extended to 52 rules, seed extended |
+| 11 | `js/playbooks.js` | `LeadOS.playbooks` | **+7 runners** with `live()` support |
+| 12 | `js/ui.js` | `LeadOS.ui` (the UI IIFE) | **+2 views**, live-preview input loop, select/notes field kinds, string-safe settings editor |
+
+Upstream byte-verification status is **unchanged since pt-7** and restated in README §0: no new
+upstream reads this session. `events.js`/`health.js`/`ui.js`/`playbooks.js` upstream bodies remain
+unread; nothing about them is claimed.
+
+### §1 Non-obvious decisions, one line of WHY each
+
+1. **v6 settings are strings, so the Data editor had to change** — the existing editor ran
+   `Number(cur)` on every field; shipping v6 without that fix would have written `NaN` into
+   `feedbackDeliveryModel` the first time anyone touched settings. Enums now render as dropdowns
+   and are validated against `SETTING_ENUMS` before the append.
+2. **`conv.planned` gains an `id`** — the brief's payload has no id, but `conv.completed` needs a
+   `convId` ref; without an id the import gate and the refs contract cannot work. Documented as a
+   contract addition, not a silent one.
+3. **Conversation history STACKS** — `conv.completed` appends to `completions[]` and a global
+   `convCompletions[]`, so a person's history is a list, never an overwrite (brief T26 → T28).
+4. **`mediation.held` is the only conflict-pair signal** — the registry has no `conflict.raised`
+   contract, so `openConflictPairs` is derived from mediations alone, with the gap printed in the
+   UI and in `mediation-prep`'s prefill. `resolved` clears the pair under a **sorted** pair key so
+   party order cannot leak a duplicate (G48).
+5. **R48's "same period" = `revenueReviewCadenceDays`** — `perf.discussed` carries no period
+   field; a window had to be chosen, so it is a named setting and it is printed in the basis.
+6. **R50's "direct report" = roster membership** — no `reportsTo` contract exists; the proxy is
+   printed in every R50 finding rather than implied by silence.
+7. **`prepareConv` returns `BATNA_note` when BATNA_check is null** — "no BATNA here" is itself
+   information; an absent field would read as an oversight.
+8. **Termination gets a BATNA_check despite not being in the brief's three types** — the brief's
+   own G42 demands that exact copy for `termination`; the brief's list and its golden disagreed,
+   and the golden (the executable one) wins. Recorded here as a resolved brief-internal conflict.
+9. **Live preview re-renders on a 220 ms debounce with focus/caret restoration** — a full re-render
+   on every keystroke would eat the cursor; the restoration is explicit, not incidental.
+10. **Runners are now `free` (ungated) vs pattern-gated** — pt-9 runners gate on an active pattern;
+    conversation runners must be available before anything has gone wrong, which is the entire point.
+
+### §2 Self-caught defects during authoring (this part)
+
+- D12 `G10` referenced `LeadOS.EXPECTED_MODULES` before it existed — caught on the verification
+  sweep; the constant is now declared at the top of the shell and drives both G10 and the boot guard.
+- D13 `G2` hard-asserted `schemaVersion === 5`; with v6 shipping, a **fresh store would have failed
+  the boot gate** and walled every user out of their own data. Now reads `store.SCHEMA_VERSION`.
+- D14 The playbooks module used `vals()` (defined in engine, not in scope) inside the new prefills —
+  would have thrown on first render of `conv-debrief`; a local helper was added.
+- D15 `playbooks.get()` could not resolve the 7 new ids (they exist only in `INTERACTIVE`, not
+  `CURATED`), so `playLine` printed raw ids on R46–R52 findings; `get()` now falls through to
+  `INTERACTIVE`.
+
+### §3 Expected (NOT yet observed) outcomes — pt-11
+
+- **T1** extended: `5>6` backfills 2 with a leader value present, preserves the string, is
+  idempotent, and a v3 store climbs to v6.
+- **T28–T32** = brief T26–T30 (ID map printed in README and beside G41).
+- **G41–G49** as written in the brief; **brief G50 folded into G40**, now asserting 52/52 rules
+  from the extended seed (the T12b requirement) — the seed gained a stakes-4 unheld conversation,
+  an escalation with no follow-up, an `exceeds`+`held` comp pair, a disputed rating, an unmapped
+  person on file >60d, a BATNA-less negotiation, and a rejected board presentation with no prior
+  alignment.
+- **C14** proven iff T28–T32 + G10 + G41–G49 + G40 pass.
+
+### §4 Open items (ranked)
+
+1. `conflict.raised`/`conflict.resolved` contracts — would retire the mediation-only derivation.
+2. `reportsTo` + 1:1 cadence events — retires R50's proxy and LEADERSHIP_VACUUM's heritage proxies.
+3. `production-stop` interactive brief (requested pt-9, still outstanding).
+4. Byte-verify the unread upstream bodies; reconcile registry counts honestly.
+5. Executive/board pack (upstream queued #1, carried since pt-7).
