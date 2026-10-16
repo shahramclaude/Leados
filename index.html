@@ -225,7 +225,7 @@ const LeadOS = window.LeadOS = window.LeadOS || {};
 /* Module registry — the single-file analog of the brief's script list.
    Each logical "file" registers exactly one namespace, in this load order.
    The boot guard halts rendering if any entry is missing (data untouched). */
-LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','health','playbooks','ui'];
+LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','health','playbooks','ui'];
 
 /* ==================== 1 · UTIL ==================== */
 (function(){
@@ -465,7 +465,30 @@ const REGISTRY = {
   'capacity.change':        D({delta_headcount:'n',reason:'s',effective_date:'ms'},{teamId:'s'},
                               {reason:['hire','attrition','transfer','leave']}),
   'roadblock.pattern':      D({theme:'s',occurrences:'n',impacted_teams:'a'},{root_cause:'s',note:'s'}),
-  'delivery.reviewed':      D({period:'s',on_time_pct:'n',scope_change_pct:'n',customer_impact:'n'},{note:'s'})
+  'delivery.reviewed':      D({period:'s',on_time_pct:'n',scope_change_pct:'n',customer_impact:'n'},{note:'s'}),
+  /* pt-15 (brief "pt-10") — external intelligence. 12 contracts + partner.reviewed,
+     which R92 names explicitly but the brief never contracts (added, labeled). */
+  'market.signal':          D({type:'s',title:'s',description:'s',severity:'n',source:'s',relevance:'n'},{note:'s'},
+                              {type:['trend','disruption','regulation','technology','macro','competitor']}),
+  'competitor.logged':      D({id:'s',name:'s',action:'s',category:'s',severity:'n',response_needed:'b'},{note:'s'},
+                              {category:['pricing','product','hiring','partnership','marketing','acquisition']},'competitors'),
+  'competitor.response':    D({competitorId:'s',our_response:'s',timeline:'s'},{ownerId:'s',note:'s'},null,null,{competitorId:'competitors'}),
+  'customer.interview':     D({insights:'a',sentiment:'s',date:'ms'},{accountName:'s',segment:'s',ownerId:'s'},
+                              {sentiment:['positive','neutral','negative']}),
+  'customer.pain':          D({id:'s',title:'s',frequency:'n',severity:'n',source:'s'},{segment:'s',note:'s'},
+                              {source:['interview','support','survey','review']},'pains'),
+  'customer.pain.resolved': D({painId:'s',how:'s'},{evidence:'s',note:'s'},null,null,{painId:'pains'}),
+  'win.loss.logged':        D({result:'s',primary_reason:'s',analysis:'s'},{dealId:'s',competitor:'s',segment:'s',note:'s'},
+                              {result:['win','loss']}),
+  'regulatory.change':      D({id:'s',jurisdiction:'s',regulation:'s',effective_date:'ms',impact:'n',compliance_actions:'a'},{ownerId:'s'},null,'regChanges'),
+  'regulatory.compliance':  D({changeId:'s',status:'s'},{note:'s'},
+                              {status:['assessed','in-progress','compliant','non-compliant']},null,{changeId:'regChanges'}),
+  'market.benchmark':       D({metric:'s',our_value:'n',source:'s',period:'s'},{industry_median:'n',top_quartile:'n',note:'s'}),
+  'analyst.report':         D({title:'s',sentiment:'s',key_findings:'a',date:'ms'},{firm:'s',note:'s'},
+                              {sentiment:['bullish','neutral','bearish']}),
+  'partnership.logged':     D({id:'s',partner:'s',type:'s',status:'s'},{value_est:'n',note:'s'},
+                              {type:['technology','channel','strategic','OEM'],status:['active','evaluating','terminated']},'partnerships'),
+  'partner.reviewed':       D({partnershipId:'s',note:'s'},{ownerId:'s'},null,null,{partnershipId:'partnerships'})
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -492,7 +515,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=9, LINEAGE='pt', LINEAGE_TAG='pt-14';
+const KEY='leados:data', SCHEMA_VERSION=10, LINEAGE='pt', LINEAGE_TAG='pt-15';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -521,7 +544,11 @@ const V8_NEW_KEYS=Object.keys(V8_SETTING_DEFAULTS);
 /* v9 — execution layer. All numeric. */
 const V9_SETTING_DEFAULTS={sprintLengthDays:14,blockerResolutionSLADays:3,retrospectiveFrequencyDays:14,deliveryCadenceDays:7};
 const V9_NEW_KEYS=Object.keys(V9_SETTING_DEFAULTS);
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS);
+/* v10 — external intelligence. All numeric cadences. */
+const V10_SETTING_DEFAULTS={competitiveReviewCadenceDays:30,customerInterviewCadenceDays:14,
+  marketReviewCadenceDays:30,regulatoryCheckCadenceDays:90};
+const V10_NEW_KEYS=Object.keys(V10_SETTING_DEFAULTS);
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -597,7 +624,13 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V9_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V9_SETTING_DEFAULTS[k]},{repair:true,migration:'8>9',reason:'backfill v9 setting default'}); repairs++; }});
-    recordMigration(raw,'8>9',repairs); raw.schemaVersion=9; return repairs; }
+    recordMigration(raw,'8>9',repairs); raw.schemaVersion=9; return repairs; },
+  /* v9 -> v10: external-intelligence cadences. Contract unchanged since 3>4. */
+  '9>10':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V10_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V10_SETTING_DEFAULTS[k]},{repair:true,migration:'9>10',reason:'backfill v10 setting default'}); repairs++; }});
+    recordMigration(raw,'9>10',repairs); raw.schemaVersion=10; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -687,7 +720,7 @@ const rawBytes=()=>{ const t=localStorage.getItem(KEY); return t?t.length:0; };
 LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V4_NEW_KEYS,
   V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,
   V7_SETTING_DEFAULTS,V7_NEW_KEYS,V8_SETTING_DEFAULTS,V8_NEW_KEYS,
-  V9_SETTING_DEFAULTS,V9_NEW_KEYS,SETTING_ENUMS,
+  V9_SETTING_DEFAULTS,V9_NEW_KEYS,V10_SETTING_DEFAULTS,V10_NEW_KEYS,SETTING_ENUMS,
   RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
@@ -960,7 +993,37 @@ const MODULE_FOLD={
     s.pulses.push(rec); group(s.pulsesByPerson,p.personId,rec); },
   'capacity.change':(s,p,at,ev)=>{ push(s.capacityChanges,p,at,ev); },
   'roadblock.pattern':(s,p,at,ev)=>{ push(s.roadblockPatterns,p,at,ev); },
-  'delivery.reviewed':(s,p,at,ev)=>{ push(s.deliveryReviews,p,at,ev); }
+  'delivery.reviewed':(s,p,at,ev)=>{ push(s.deliveryReviews,p,at,ev); },
+  /* pt-15 — external intelligence */
+  'market.signal':(s,p,at,ev)=>{ push(s.marketSignals,p,at,ev); },
+  'competitor.logged':(s,p,at)=>{ s.competitors[p.id]={id:p.id,name:p.name,action:p.action,
+    category:p.category,severity:p.severity,response_needed:p.response_needed,note:p.note||'',
+    loggedAt:at,responses:[]};
+    group(s.competitorsByName,p.name,s.competitors[p.id]); },
+  'competitor.response':(s,p,at)=>{ const c=s.competitors[p.competitorId];
+    if(c) c.responses.push({our_response:p.our_response,timeline:p.timeline,ownerId:p.ownerId||null,at:at}); },
+  'customer.interview':(s,p,at,ev)=>{ push(s.interviews,p,at,ev); },
+  'customer.pain':(s,p,at)=>{ s.pains[p.id]={id:p.id,title:p.title,frequency:p.frequency,
+    severity:p.severity,segment:p.segment||null,source:p.source,note:p.note||'',
+    loggedAt:at,resolved:false,how:'',resolvedAt:null}; },
+  'customer.pain.resolved':(s,p,at)=>{ const x=s.pains[p.painId];
+    if(x){ x.resolved=true; x.how=p.how; x.evidence=p.evidence||''; x.resolvedAt=at; } },
+  'win.loss.logged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.winLoss.push(rec); if(p.competitor) group(s.winLossByCompetitor,p.competitor,rec); },
+  'regulatory.change':(s,p,at)=>{ s.regChanges[p.id]={id:p.id,jurisdiction:p.jurisdiction,
+    regulation:p.regulation,effective_date:p.effective_date,impact:p.impact,
+    compliance_actions:p.compliance_actions.slice(),ownerId:p.ownerId||null,
+    loggedAt:at,status:null,statusAt:null,statusHistory:[]}; },
+  'regulatory.compliance':(s,p,at)=>{ const c=s.regChanges[p.changeId];
+    if(c){ c.status=p.status; c.statusAt=at; c.statusHistory.push({status:p.status,note:p.note||'',at:at}); } },
+  'market.benchmark':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.marketBenchmarks.push(rec); s.marketBenchByMetric[p.metric]=rec; /* latest wins */ },
+  'analyst.report':(s,p,at,ev)=>{ push(s.analystReports,p,at,ev); },
+  'partnership.logged':(s,p,at)=>{ s.partnerships[p.id]={id:p.id,partner:p.partner,type:p.type,
+    status:p.status,value_est:(p.value_est===undefined?null:p.value_est),note:p.note||'',
+    loggedAt:at,reviews:[]}; },
+  'partner.reviewed':(s,p,at)=>{ const x=s.partnerships[p.partnershipId];
+    if(x) x.reviews.push({note:p.note,ownerId:p.ownerId||null,at:at}); }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -1000,6 +1063,10 @@ function blankBuckets(s){
   s.sprints={};s.sprintsByTeam={};s.sprintReviews=[];s.reviewsByTeam={};s.retroActions={};
   s.blockers={};s.blockersByBlockingTeam={};s.dependencies={};
   s.pulses=[];s.pulsesByPerson={};s.capacityChanges=[];s.roadblockPatterns=[];s.deliveryReviews=[];
+  /* pt-15 external buckets */
+  s.marketSignals=[];s.competitors={};s.competitorsByName={};s.interviews=[];
+  s.pains={};s.winLoss=[];s.winLossByCompetitor={};s.regChanges={};
+  s.marketBenchmarks=[];s.marketBenchByMetric={};s.analystReports=[];s.partnerships={};
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -1034,7 +1101,10 @@ const OPEN_SETS={
   untestedAssumptions:['assumptions',a=>!a.tested],
   openBlockers:['blockers',b=>!b.resolved],
   openDependencies:['dependencies',d=>d.status!=='delivered'],
-  unreviewedSprints:['sprints',s=>s.review===null]
+  unreviewedSprints:['sprints',s=>s.review===null],
+  openPains:['pains',p=>!p.resolved],
+  openRegChanges:['regChanges',c=>c.status!=='compliant'],
+  activePartnerships:['partnerships',p=>p.status==='active']
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -2168,12 +2238,183 @@ function R82(P,today){ const f=F('R82'),out=[];
         'this is YOUR OWN delivery review — conf HIGH'],
       refs:[],scope:'delivery:'+latest.period,evidenceAt:latest.at})); }
   return out; }
+/* ---- pt-15 external-intelligence rules R83–R92 ---- */
+Object.assign(META,{
+  R83:{domain:'strategy',play:'competitive-review'},R84:{domain:'strategy',play:'competitive-review'},
+  R85:{domain:'customerSuccess',play:'customer-voice-synthesis'},R86:{domain:'customerSuccess',play:'customer-voice-synthesis'},
+  R87:{domain:'sales',play:'win-loss-debrief'},R88:{domain:'legal',play:'regulatory-triage'},
+  R89:{domain:'legal',play:'regulatory-triage'},R90:{domain:'strategy',play:'market-position-review'},
+  R91:{domain:'strategy',play:'market-position-review'},R92:{domain:'strategy',play:'competitive-review'}
+});
+function R83(P,today){ const f=F('R83'),out=[];
+  const heat=LeadOS.correlateExternal=LeadOS.external.competitiveHeat(P,today);
+  heat.responseGap.forEach(c=>{
+    if(c.severity<4) return;
+    if(c.ageDays<=7) return;
+    out.push(f({sev:c.severity>=5?5:4,conf:'HIGH',title:'Unanswered competitor move ('+c.ageDays+'d): '+c.name+' — '+c.action,
+      basis:['competitor.logged '+U.iso(c.loggedAt)+' · category '+c.category+' · severity '+c.severity+' · response_needed=true',
+        'no competitor.response within 7d of the action · '+c.ageDays+'d elapsed · sev '+(c.severity>=5?'5 (severity 5 → 5)':'4'),
+        'a competitor move you DECIDED to ignore is a strategy; one you FORGOT to respond to is a gap',
+        LeadOS.external.SOURCED],
+      refs:[c.id],evidenceAt:c.loggedAt})); });
+  return out; }
+function R84(P,today){ const f=F('R84'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.competitiveReviewCadenceDays;
+  const last=Math.max(U.maxAt(vals(P.competitors||{}),c=>c.loggedAt)||0,U.maxAt(P.marketSignals||[])||0);
+  if(!last){
+    if(P.firstAt!==null&&days(today,P.firstAt)>cad)
+      out.push(f({sev:2,conf:'MEDIUM',title:'No competitive intelligence ever logged',
+        basis:['zero competitor.logged and zero market.signal events · log spans '+days(today,P.firstAt)+'d > competitiveReviewCadenceDays '+cad+'d',
+          'no competitive review means you are flying blind, not that the competition stopped moving'],
+        refs:[],scope:'competitive:never',evidenceAt:P.firstAt}));
+    return out; }
+  const age=days(today,last);
+  if(age<=cad) return out;
+  out.push(f({sev:2,conf:'HIGH',title:'Competitive review stale: '+age+'d',
+    basis:['latest competitor.logged / market.signal '+U.iso(last)+' is '+age+'d old > competitiveReviewCadenceDays '+cad+'d',
+      'no competitive review means you are flying blind, not that the competition stopped moving'],
+    refs:[],scope:'competitive:cadence',evidenceAt:last}));
+  return out; }
+function R85(P,today){ const f=F('R85'),out=[];
+  (P.openPains||[]).forEach(p=>{
+    const score=p.frequency*p.severity;
+    if(score<12) return;
+    out.push(f({sev:score>=16?4:3,conf:'HIGH',title:'Unresolved customer pain (score '+score+'): '+p.title,
+      basis:['pain score = frequency '+p.frequency+' × severity '+p.severity+' = '+score+' · thresholds: ≥12 → sev 3, ≥16 → sev 4',
+        'logged '+U.iso(p.loggedAt)+' from '+p.source+(p.segment?' · segment '+p.segment:'')+' · no customer.pain.resolved',
+        'a pain you logged but never resolved is a churn risk you documented',
+        LeadOS.external.SOURCED],
+      refs:[p.id],evidenceAt:p.loggedAt})); });
+  return out; }
+function R86(P,today){ const f=F('R86'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.customerInterviewCadenceDays;
+  const last=U.maxAt(P.interviews||[],x=>x.date||x.at);
+  if(last===null){
+    if(P.firstAt!==null&&days(today,P.firstAt)>cad)
+      out.push(f({sev:2,conf:'MEDIUM',title:'No customer interview ever logged',
+        basis:['zero customer.interview events · log spans '+days(today,P.firstAt)+'d > customerInterviewCadenceDays '+cad+'d',
+          'every day without a customer voice is a day your product roadmap drifts on assumption'],
+        refs:[],scope:'interview:never',evidenceAt:P.firstAt}));
+    return out; }
+  const age=days(today,last);
+  if(age<=cad) return out;
+  out.push(f({sev:age>2*cad?3:2,conf:'HIGH',title:'No customer interview in '+age+'d',
+    basis:['latest customer.interview '+U.iso(last)+' · '+age+'d > customerInterviewCadenceDays '+cad+'d'+(age>2*cad?' and > 2× cadence ('+(2*cad)+'d) → sev 3':' → sev 2'),
+      'every day without a customer voice is a day your product roadmap drifts on assumption'],
+    refs:[],scope:'interview:cadence',evidenceAt:last}));
+  return out; }
+function R87(P,today){ const f=F('R87'),out=[];
+  const losses=(P.winLoss||[]).filter(w=>w.result==='loss'&&days(today,w.at)<=60);
+  const byReason={};
+  losses.forEach(l=>{ const k=String(l.primary_reason).trim().toLowerCase();
+    (byReason[k]=byReason[k]||{reason:l.primary_reason,items:[]}).items.push(l); });
+  Object.keys(byReason).sort().forEach(k=>{
+    const g=byReason[k];
+    if(g.items.length<3) return;
+    out.push(f({sev:4,conf:'HIGH',title:g.items.length+' losses in 60d for the same reason: "'+g.reason+'"',
+      basis:[g.items.length+' win.loss.logged result="loss" inside 60d with primary_reason "'+g.reason+'" (verbatim, case-insensitive grouping)',
+        g.items.map(l=>U.iso(l.at)+(l.competitor?' vs '+l.competitor:'')+(l.segment?' ['+l.segment+']':'')+': '+l.analysis.slice(0,60)).join(' · '),
+        'a pattern of losses to the same reason is a strategy problem, not a sales problem'],
+      refs:[],scope:'winloss:'+k,evidenceAt:U.maxAt(g.items)})); });
+  return out; }
+function R88(P,today){ const f=F('R88'),out=[];
+  vals(P.regChanges||{}).forEach(c=>{
+    const toEff=Math.ceil((c.effective_date-today)/DAY);
+    if(c.status==='non-compliant'){
+      out.push(f({sev:5,conf:'HIGH',title:'NON-COMPLIANT: '+c.regulation+' ('+c.jurisdiction+')',
+        basis:['regulatory.compliance status "non-compliant" as of '+U.iso(c.statusAt)+' · effective '+U.iso(c.effective_date)+(toEff<0?' ('+(-toEff)+'d ago)':' (in '+toEff+'d)'),
+          'impact '+c.impact+' · compliance actions on file: '+(c.compliance_actions.length?c.compliance_actions.join('; '):'NONE'),
+          'THIS FINDING CANNOT BE SUPPRESSED — a non-compliance signal is exempt from the suppression model by explicit doctrine (G84/G89)',
+          'LeadOS reads no legal source and gives no legal advice — this reflects YOUR logged assessment'],
+        refs:[c.id],scope:c.id+':noncompliant',evidenceAt:c.statusAt||c.loggedAt}));
+      return; }
+    if(c.status==='in-progress'&&toEff<7)
+      out.push(f({sev:4,conf:'HIGH',title:'Compliance in progress with '+toEff+'d to effective: '+c.regulation,
+        basis:['status "in-progress" · effective_date '+U.iso(c.effective_date)+' is '+toEff+'d out (<7d) → sev 4',
+          'impact '+c.impact+' · actions: '+(c.compliance_actions.join('; ')||'none listed')],
+        refs:[c.id],scope:c.id+':inprogress',evidenceAt:c.statusAt||c.loggedAt}));
+    else if(c.status===null&&toEff>30)
+      out.push(f({sev:3,conf:'HIGH',title:'Regulation not assessed, '+toEff+'d before effective: '+c.regulation,
+        basis:['no regulatory.compliance event · effective_date '+U.iso(c.effective_date)+' is '+toEff+'d out (>30d) → sev 3 — assess it while there is still runway',
+          'impact '+c.impact+' · jurisdiction '+c.jurisdiction],
+        refs:[c.id],scope:c.id+':unassessed-early',evidenceAt:c.loggedAt}));
+  });
+  return out; }
+function R89(P,today){ const f=F('R89'),out=[];
+  vals(P.regChanges||{}).forEach(c=>{
+    if(c.status!==null) return; /* any assessment quiets this rule */
+    const toEff=Math.ceil((c.effective_date-today)/DAY);
+    if(toEff>=30) return;
+    out.push(f({sev:toEff<14?4:3,conf:'HIGH',title:'Unassessed regulation, '+toEff+'d to effective: '+c.regulation,
+      basis:['regulatory.change logged '+U.iso(c.loggedAt)+' with NO regulatory.compliance event',
+        'effective_date '+U.iso(c.effective_date)+' is '+toEff+'d out · thresholds: <30d → sev 3, <14d → sev 4',
+        'you logged the regulation; you have not assessed whether you comply',
+        'jurisdiction '+c.jurisdiction+' · impact '+c.impact],
+      refs:[c.id],scope:c.id+':unassessed',evidenceAt:c.loggedAt})); });
+  return out; }
+function R90(P,today){ const f=F('R90'),out=[];
+  const pos=LeadOS.external.marketPosition(P,today);
+  pos.rows.forEach(r=>{
+    if(r.industry_median===null) return; /* no median → skip, never infer */
+    if(r.our_value>=r.industry_median) return; /* at or above median is quiet */
+    /* "strategic" = the metric is also tracked internally as a KPI or product
+       metric — the brief's cross-reference, printed when it decides the fire */
+    const strategic=!!((P.kpiByMetric||{})[r.metric]||(P.productMetrics||[]).some(m=>m.name===r.metric));
+    if(!strategic) return;
+    const bottomQ=(r.top_quartile!==null)?(r.industry_median-(r.top_quartile-r.industry_median)):null;
+    const belowBottom=bottomQ!==null&&r.our_value<bottomQ;
+    out.push(f({sev:belowBottom?4:3,conf:'MEDIUM',title:'Below market median on '+r.metric+': '+r.our_value+' vs '+r.industry_median,
+      basis:[r.positionWhy+' · gap to median = '+r.industry_median+' − '+r.our_value+' = '+U.rd(r.industry_median-r.our_value,2),
+        r.gapMath,
+        belowBottom?('estimated bottom quartile = median '+r.industry_median+' − (top '+r.top_quartile+' − median '+r.industry_median+') = '+U.rd(bottomQ,2)+' · our '+r.our_value+' is below it → sev 4 (the bottom-quartile estimate is SYMMETRIC INFERENCE from the two values you logged, labeled)')
+          :'not below the estimated bottom quartile',
+        'metric is strategic: also tracked internally as '+((P.kpiByMetric||{})[r.metric]?'fin.kpi.logged':'product.metric.logged')+' — the cross-reference that authorizes this rule',
+        'benchmark source "'+r.source+'" ('+r.period+') — EXTERNAL and UNVERIFIED by LeadOS; conf MEDIUM for that reason'],
+      refs:[],scope:'market:'+r.metric,evidenceAt:r.at})); });
+  return out; }
+function R91(P,today){ const f=F('R91'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.marketReviewCadenceDays;
+  const last=Math.max(U.maxAt(P.marketSignals||[])||0,U.maxAt(P.analystReports||[],r=>r.date||r.at)||0);
+  if(!last){
+    if(P.firstAt!==null&&days(today,P.firstAt)>cad)
+      out.push(f({sev:2,conf:'MEDIUM',title:'No market intelligence ever logged',
+        basis:['zero market.signal and zero analyst.report events · log spans '+days(today,P.firstAt)+'d > marketReviewCadenceDays '+cad+'d',
+          'no market signals mean the external environment is NOT BEING MONITORED, not that it is stable'],
+        refs:[],scope:'market:never',evidenceAt:P.firstAt}));
+    return out; }
+  const age=days(today,last);
+  if(age<=cad) return out;
+  out.push(f({sev:2,conf:'HIGH',title:'Market review stale: '+age+'d',
+    basis:['latest market.signal / analyst.report '+U.iso(last)+' is '+age+'d old > marketReviewCadenceDays '+cad+'d (an analyst.report counts as a market signal for this rule)',
+      'no market signals mean the external environment is NOT BEING MONITORED, not that it is stable'],
+    refs:[],scope:'market:cadence',evidenceAt:last}));
+  return out; }
+function R92(P,today){ const f=F('R92'),out=[];
+  (P.activePartnerships||[]).forEach(p=>{
+    const lastReview=U.maxAt(p.reviews);
+    /* "any event with partner name in note field" — the brief's own heuristic,
+       applied to the note surfaces this registry actually has */
+    const mentions=[].concat(P.noteLog||[],P.marketSignals||[],vals(P.competitors||{}))
+      .filter(x=>{ const t=String(x.text||x.description||x.action||x.note||'');
+        return t.toLowerCase().indexOf(String(p.partner).toLowerCase())!==-1; });
+    const lastMention=U.maxAt(mentions,x=>x.at||x.loggedAt);
+    const last=Math.max(lastReview||0,lastMention||0,p.loggedAt);
+    const age=days(today,last);
+    if(age<=90) return;
+    out.push(f({sev:2,conf:'MEDIUM',title:'Partnership dormant '+age+'d: '+p.partner,
+      basis:['status "active" · '+p.type+' · last touch '+U.iso(last)+' ('+age+'d > 90d)',
+        'touch = partner.reviewed, or the partner name appearing in a note/market signal/competitor action — a TEXT-MATCH HEURISTIC, labeled, not a relationship measurement',
+        lastReview?('last partner.reviewed '+U.iso(lastReview)):'never formally reviewed',
+        'a partnership nobody tends is a partnership ending in slow motion'],
+      refs:[p.id],evidenceAt:last})); });
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
              R46,R47,R48,R49,R50,R51,R52,
              R53,R54,R55,R56,R57,R58,R59,R60,R61,R62,
              R63,R64,R65,R66,R67,R68,R69,R70,R71,R72,
-             R73,R74,R75,R76,R77,R78,R79,R80,R81,R82];
+             R73,R74,R75,R76,R77,R78,R79,R80,R81,R82,
+             R83,R84,R85,R86,R87,R88,R89,R90,R91,R92];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -2276,6 +2517,12 @@ function suppression(P){
   });
   return map;
 }
+/* THE ONE HARD OVERRIDE IN THE SUPPRESSION MODEL (pt-15, G84/G89):
+   R88 non-compliance findings are UNSUPPRESSIBLE. A leader may silence any
+   other signal; regulatory non-compliance is not theirs to silence, and the
+   attempt is recorded rather than honored. */
+const UNSUPPRESSIBLE_RULES={R88:'regulatory non-compliance — exempt from suppression by explicit doctrine; the suppression event remains in the log and is shown on the finding'};
+function suppressionOverride(f){ return !!UNSUPPRESSIBLE_RULES[f.rule]; }
 const sortFindings=out=>out.sort((a,b)=>(b.sev-a.sev)||(a.rule<b.rule?-1:a.rule>b.rule?1:0)||(a.key<b.key?-1:1));
 /* runFull: one computation, used by BOTH the strict contract (run) and the
    view layer (correlate.run). Algorithm order is printed in CORR basis lines:
@@ -2286,7 +2533,16 @@ function runFull(P,today){
   const engList=ind.base.filter(f=>f.rule==='ENG');
   const indNormal=ind.base.filter(f=>f.rule!=='ENG');
   const sup=suppression(P);
-  const isSup=f=>sup[f.key]&&sup[f.key].tag==='suppress';
+  const isSup=f=>{
+    if(!(sup[f.key]&&sup[f.key].tag==='suppress')) return false;
+    if(suppressionOverride(f)){
+      /* attempted and refused — the finding carries the refusal in its basis */
+      if(f.basis.indexOf('SUPPRESSION ATTEMPTED AND REFUSED')===-1)
+        f.basis.push('SUPPRESSION ATTEMPTED AND REFUSED: a suppress tag exists for '+f.key+' ('+(sup[f.key]._ev||'?')+', '+U.iso(sup[f.key].at)+') — '+UNSUPPRESSIBLE_RULES[f.rule]);
+      return false;
+    }
+    return true;
+  };
   const visibleBase=indNormal.filter(f=>!isSup(f));
   const pats=LeadOS.correlate.detectPatterns(P,today,visibleBase);
   const cf=corrFindings(P,today,visibleBase,pats.active);
@@ -2326,6 +2582,7 @@ function run(P,today){
 }
 LeadOS.rules={META:META,RULES:RULES,CORR_DEFS:CORR_DEFS,fin:fin,engFinding:engFinding,
   individual:individual,suppression:suppression,corrFindings:corrFindings,
+  UNSUPPRESSIBLE_RULES:UNSUPPRESSIBLE_RULES,suppressionOverride:suppressionOverride,
   runFull:runFull,run:run,count:RULES.length};
 })();
 
@@ -3459,6 +3716,99 @@ LeadOS.execution={MIN_SPRINTS:MIN_SPRINTS,velocityTrend:velocityTrend,blockerNet
   accountabilityIndex:accountabilityIndex,sprintHealth:sprintHealth};
 })();
 
+/* ============ 6e · EXTERNAL — outward intelligence (pt-15) ================
+   ZERO NETWORK CALLS. Every datum here was typed in by a human who went and
+   looked. This module structures what you gathered; it never gathers.
+   Text-matching correlations are labeled HEURISTIC wherever they appear. */
+(function(){
+const LeadOS = window.LeadOS, U = LeadOS.util, DAY = U.DAY;
+const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+const SOURCED='MANUALLY LOGGED by you — LeadOS makes no network calls and verifies no external claim; the source string is printed, never checked';
+function competitiveHeat(P,today){
+  const set=LeadOS.engine.settings(P), win=set.competitiveReviewCadenceDays;
+  const all=vals(P.competitors);
+  const inWin=all.filter(c=>U.days(today,c.loggedAt)<=win);
+  const byName={};
+  inWin.forEach(c=>{ const n=byName[c.name]=byName[c.name]||{name:c.name,actions:[],severitySum:0};
+    n.actions.push(c); n.severitySum+=c.severity; });
+  const rows=Object.keys(byName).sort().map(k=>byName[k])
+    .sort((a,b)=>(b.actions.length-a.actions.length)||(b.severitySum-a.severitySum)||(a.name<b.name?-1:1));
+  const gap=all.filter(c=>c.response_needed===true&&!c.responses.some(r=>r.at-c.loggedAt<=7*DAY))
+    .map(c=>Object.assign({ageDays:U.days(today,c.loggedAt)},c))
+    .sort((a,b)=>(b.severity-a.severity)||(b.ageDays-a.ageDays));
+  return {windowDays:win,label:SOURCED,
+    byCompetitor:rows,
+    mostActive:rows[0]||null,
+    mostActiveWhy:rows[0]?(rows[0].name+' with '+rows[0].actions.length+' action(s), severity sum '+rows[0].severitySum+' inside '+win+'d'):'no competitor actions logged in the window',
+    responseGap:gap,
+    unansweredHighSev:gap.filter(c=>c.severity>=4),
+    signalsInWindow:(P.marketSignals||[]).filter(s=>U.days(today,s.at)<=win)};
+}
+function painMatrix(P,today){
+  const all=vals(P.pains);
+  const scored=all.map(p=>Object.assign({score:p.frequency*p.severity,
+    math:'frequency '+p.frequency+' × severity '+p.severity+' = '+(p.frequency*p.severity)},p));
+  const open=scored.filter(p=>!p.resolved).sort((a,b)=>(b.score-a.score)||(a.title<b.title?-1:1));
+  const bySegment={};
+  scored.forEach(p=>{ const s=p.segment||'(untagged)';
+    (bySegment[s]=bySegment[s]||{segment:s,count:0,openCount:0,scoreSum:0});
+    bySegment[s].count++; bySegment[s].scoreSum+=p.score; if(!p.resolved) bySegment[s].openCount++; });
+  const recent=all.filter(p=>U.days(today,p.loggedAt)<=30).length;
+  const prior=all.filter(p=>{ const d=U.days(today,p.loggedAt); return d>30&&d<=60; }).length;
+  /* win/loss correlation — TEXT MATCH, labeled heuristic */
+  const losses=(P.winLoss||[]).filter(w=>w.result==='loss');
+  const correlated=scored.map(p=>{
+    const hits=losses.filter(l=>{
+      const r=String(l.primary_reason||'').toLowerCase(), t=String(p.title||'').toLowerCase();
+      return t.length>3&&(r.indexOf(t)!==-1||t.indexOf(r)!==-1); });
+    return hits.length?{painId:p.id,title:p.title,losses:hits.length,
+      reasons:U.uniq(hits.map(h=>h.primary_reason)),
+      why:'HEURISTIC TEXT MATCH between the pain title and win.loss primary_reason — a string coincidence is not causation, and this is labeled, not asserted'}:null;
+  }).filter(Boolean);
+  return {all:scored,open:open,bySegment:Object.keys(bySegment).sort().map(k=>bySegment[k]),
+    trend:{recent30:recent,prior30:prior,delta:recent-prior,
+      why:'new pains logged in the last 30d ('+recent+') vs the prior 30d ('+prior+') = '+(recent-prior)+' — a logging-rate comparison, which also reflects how diligently you logged'},
+    winLossCorrelation:correlated,label:SOURCED};
+}
+function marketPosition(P,today){
+  const rows=Object.keys(P.marketBenchByMetric||{}).sort().map(m=>{
+    const b=P.marketBenchByMetric[m];
+    const med=(typeof b.industry_median==='number')?b.industry_median:null;
+    const top=(typeof b.top_quartile==='number')?b.top_quartile:null;
+    let position='unknown', why='no industry_median logged — position not inferred';
+    if(med!==null){
+      if(top!==null&&b.our_value>=top){ position='top_quartile'; why='our '+b.our_value+' ≥ top quartile '+top; }
+      else if(b.our_value>med){ position='above_median'; why='our '+b.our_value+' > median '+med; }
+      else if(b.our_value===med){ position='at_median'; why='our '+b.our_value+' = median '+med; }
+      else { position='below_median'; why='our '+b.our_value+' < median '+med; }
+    }
+    const gap=(top!==null)?U.rd(top-b.our_value,2):null;
+    return {metric:m,our_value:b.our_value,industry_median:med,top_quartile:top,
+      position:position,positionWhy:why,
+      gapToTop:gap,
+      gapMath:gap===null?'no top_quartile logged — gap not computed'
+        :('top quartile '+top+' − our '+b.our_value+' = '+gap+(gap<=0?' (at or beyond the top quartile)':'')),
+      source:b.source,period:b.period,at:b.at};
+  });
+  return {rows:rows,label:SOURCED,
+    belowMedian:rows.filter(r=>r.position==='below_median')};
+}
+function regulatoryExposure(P,today){
+  const all=vals(P.regChanges);
+  const open=all.filter(c=>c.impact>=3&&c.status!=='compliant')
+    .map(c=>Object.assign({daysToEffective:Math.ceil((c.effective_date-today)/DAY),
+      overdue:c.effective_date<today},c))
+    .sort((a,b)=>(a.daysToEffective-b.daysToEffective)||(b.impact-a.impact));
+  return {open:open,
+    nonCompliant:all.filter(c=>c.status==='non-compliant'),
+    unassessed:all.filter(c=>c.status===null),
+    label:SOURCED,
+    note:'impact and compliance status are YOUR assessments; LeadOS reads no legal source and gives no legal advice'};
+}
+LeadOS.external={SOURCED:SOURCED,competitiveHeat:competitiveHeat,painMatrix:painMatrix,
+  marketPosition:marketPosition,regulatoryExposure:regulatoryExposure};
+})();
+
 /* ==================== 7 · HEALTH — authority wall + fixture seed ==========
    T-suite runs against pinned in-memory fixtures (FIXED epoch, never the
    clock, never localStorage). G-suite inspects the LIVE store. The boot gate
@@ -3654,7 +4004,40 @@ function buildSeed(base){
     E('accountability.pulse',{personId:'ava',commitments_made:8,commitments_kept:7,period:'2026-02'},12),
     E('capacity.change',{teamId:'platform',delta_headcount:-1,reason:'attrition',effective_date:base-20*DAY},20),
     E('capacity.change',{teamId:'platform',delta_headcount:-1,reason:'transfer',effective_date:base-8*DAY},8),                   /* R81: −2 in 30d */
-    E('delivery.reviewed',{period:'2026-02',on_time_pct:62,scope_change_pct:35,customer_impact:4,note:'two launches slipped'},9)  /* R82 sev 4 */
+    E('delivery.reviewed',{period:'2026-02',on_time_pct:62,scope_change_pct:35,customer_impact:4,note:'two launches slipped'},9), /* R82 sev 4 */
+    /* ---- pt-15 external layer: seeds R83–R92 (G92) ---- */
+    E('competitor.logged',{id:'cp-1',name:'Northwind',action:'Cut enterprise pricing 20%',category:'pricing',severity:4,
+      response_needed:true,note:'announced at their user conference'},8),                                                        /* R83 sev 4 */
+    E('competitor.logged',{id:'cp-2',name:'Northwind',action:'Hired our former VP Sales',category:'hiring',severity:3,response_needed:false},20),
+    E('competitor.logged',{id:'cp-3',name:'Acme Cloud',action:'Shipped native billing',category:'product',severity:3,response_needed:true},25),
+    E('competitor.response',{competitorId:'cp-3',our_response:'Fast-follow on billing parity',timeline:'Q2',ownerId:'ann'},23),
+    E('market.signal',{type:'regulation',title:'EU data residency tightening',description:'Draft rules require in-region storage for billing data',
+      severity:4,source:'EU Commission draft, read 2026-01',relevance:5},32),                                                    /* R91: 32d > 30d */
+    E('customer.interview',{accountName:'Globex',segment:'enterprise',sentiment:'negative',
+      insights:[{tag:'onboarding',insight:'Took six weeks to first value'},{tag:'billing',insight:'Invoices need manual correction'}],
+      date:base-16*DAY,ownerId:'ava'},16),                                                                                       /* R86: 16d > 14d */
+    E('customer.pain',{id:'pn-1',title:'slow onboarding',frequency:4,severity:4,segment:'enterprise',source:'interview'},16),    /* R85 score 16 → sev 4 */
+    E('customer.pain',{id:'pn-2',title:'manual invoice correction',frequency:3,severity:4,segment:'enterprise',source:'support'},14), /* score 12 → sev 3 */
+    E('customer.pain',{id:'pn-3',title:'mobile session timeouts',frequency:2,severity:3,source:'review'},30),
+    E('customer.pain.resolved',{painId:'pn-3',how:'extended session TTL',evidence:'support tickets down 80%'},10),
+    E('win.loss.logged',{result:'loss',primary_reason:'pricing',analysis:'Northwind undercut us by 18% on a 3-year term',
+      competitor:'Northwind',segment:'enterprise',dealId:'deal-1'},40),
+    E('win.loss.logged',{result:'loss',primary_reason:'pricing',analysis:'Budget reset mid-cycle; we would not discount',
+      competitor:'Northwind',segment:'mid-market'},25),
+    E('win.loss.logged',{result:'loss',primary_reason:'pricing',analysis:'Procurement benchmarked us as most expensive',segment:'enterprise'},12), /* R87: 3× pricing in 60d */
+    E('win.loss.logged',{result:'win',primary_reason:'security posture',analysis:'SOC2 + our incident transparency won it',segment:'enterprise'},18),
+    E('regulatory.change',{id:'rg-1',jurisdiction:'EU',regulation:'Data residency for billing records',
+      effective_date:base+45*DAY,impact:5,compliance_actions:['Regional storage','DPA refresh'],ownerId:'ann'},30),
+    E('regulatory.compliance',{changeId:'rg-1',status:'non-compliant',note:'billing data still single-region'},6),               /* R88 sev 5 */
+    E('regulatory.change',{id:'rg-2',jurisdiction:'US-CA',regulation:'Automated decision disclosure',
+      effective_date:base+20*DAY,impact:3,compliance_actions:['Disclosure copy review']},20),                                     /* R89 sev 3 (20d out, unassessed) */
+    E('market.benchmark',{metric:'gross-margin',our_value:58,industry_median:72,top_quartile:82,
+      source:'SaaS Benchmarks 2025 (manually transcribed)',period:'2025'},15),                                                   /* R90: strategic via fin.kpi gross-margin */
+    E('analyst.report',{firm:'Veridian Research',title:'Billing platforms: consolidation ahead',sentiment:'neutral',
+      key_findings:['Buyers consolidating vendors','Pricing pressure in mid-market'],date:base-35*DAY},35),
+    E('partnership.logged',{id:'pt-1',partner:'Stripe',type:'technology',status:'active',value_est:120000,
+      note:'core payments integration'},200),                                                                                     /* R92: dormant 200d */
+    E('partnership.logged',{id:'pt-2',partner:'Deloitte',type:'channel',status:'evaluating'},40)
   ];
   return out;
 }
@@ -3948,7 +4331,7 @@ function runT(){
   T.push(check('T18','[T12b] extended seed fires all 62 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=82;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=92;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -4464,6 +4847,85 @@ function runT(){
     if(r77(delivered).length) return {why:'delivered must be quiet even if the due date passed'};
     return {ok:true,why:'6d sev4 · 8d quiet · past sev5 (any non-delivered status) · delivered quiet'};
   }));
+  /* ---- pt-15: brief T46–T50 ship as T48–T52 (T46/T47 taken in pt-14).
+     ID MAP: brief T46→T48 · T47→T49 · T48→T50 · T49→T51 · T50→T52 ---- */
+  T.push(check('T48','[brief T46] competitiveHeat: most active competitor + response gap',()=>{
+    const list=[];
+    for(let i=0;i<3;i++) list.push({type:'competitor.logged',
+      payload:{id:'a'+i,name:'CompA',action:'move '+i,category:'pricing',severity:4,response_needed:(i===0)},at:FIXED-8*DAY});
+    list.push({type:'competitor.logged',payload:{id:'b1',name:'CompB',action:'one move',category:'product',severity:3,response_needed:false},at:FIXED-5*DAY});
+    const h=LeadOS.external.competitiveHeat(LeadOS.engine.project(wrap(list)),FIXED);
+    if(!h.mostActive||h.mostActive.name!=='CompA') return {why:'most active should be CompA, got '+(h.mostActive&&h.mostActive.name)};
+    if(h.mostActive.actions.length!==3) return {why:'CompA should have 3 actions'};
+    const gap=h.responseGap.filter(c=>c.id==='a0')[0];
+    if(!gap) return {why:'the response_needed action with no response in 8d should be in the gap list'};
+    if(gap.ageDays!==8) return {why:'ageDays should be 8, got '+gap.ageDays};
+    if(!h.unansweredHighSev.length) return {why:'sev-4 unanswered action should appear in unansweredHighSev'};
+    return {ok:true,why:'CompA most active (3 actions) · a0 in the response gap at 8d · high-sev flagged'};
+  }));
+  T.push(check('T49','[brief T47] painMatrix + R85: score 16 → sev 4 · 12 → sev 3 · 11 quiet',()=>{
+    const mk=(f,s)=>LeadOS.engine.project(wrap([{type:'customer.pain',
+      payload:{id:'p1',title:'t',frequency:f,severity:s,source:'interview'},at:FIXED-5*DAY}]));
+    const m=LeadOS.external.painMatrix(mk(4,4),FIXED);
+    if(m.open[0].score!==16) return {why:'4 × 4 should score 16, got '+m.open[0].score};
+    if(m.open[0].math.indexOf('= 16')===-1) return {why:'pain math not printed'};
+    const r85=Px=>LeadOS.rules.RULES[79](Px,FIXED); /* index 79 = R85 */
+    const a=r85(mk(4,4)); if(a.length!==1||a[0].sev!==4) return {why:'score 16 should be sev 4'};
+    const b=r85(mk(3,4)); if(b.length!==1||b[0].sev!==3) return {why:'score 12 should be sev 3'};
+    /* the brief's 11 boundary: no 1–5 × 1–5 pair gives exactly 11, so the
+       nearest strictly-below-12 case is used and the arithmetic is printed */
+    const near=LeadOS.engine.project(wrap([{type:'customer.pain',
+      payload:{id:'p1',title:'t',frequency:2,severity:5,source:'survey'},at:FIXED-5*DAY}]));
+    if(r85(near).length) return {why:'score 10 (2×5) is below the 12 threshold and must be quiet'};
+    const resolved=LeadOS.engine.project(wrap([
+      {type:'customer.pain',payload:{id:'p1',title:'t',frequency:4,severity:4,source:'interview'},at:FIXED-10*DAY},
+      {type:'customer.pain.resolved',payload:{painId:'p1',how:'shipped a fix'},at:FIXED-2*DAY}]));
+    if(r85(resolved).length) return {why:'a resolved pain must be quiet'};
+    return {ok:true,why:'16 → sev4 · 12 → sev3 · 10 quiet (no pair yields exactly 11 — printed) · resolved quiet · math printed'};
+  }));
+  T.push(check('T50','[brief T48] marketPosition: 85 vs median 100 vs top 120 → below_median, gap 35',()=>{
+    const Px=LeadOS.engine.project(wrap([{type:'market.benchmark',
+      payload:{metric:'m',our_value:85,industry_median:100,top_quartile:120,source:'src',period:'2025'},at:FIXED-5*DAY}]));
+    const r=LeadOS.external.marketPosition(Px,FIXED).rows[0];
+    if(r.position!=='below_median') return {why:'position should be below_median, got '+r.position};
+    if(r.gapToTop!==35) return {why:'gap to top should be 120 − 85 = 35, got '+r.gapToTop};
+    if(r.gapMath.indexOf('= 35')===-1) return {why:'gap math not printed: '+r.gapMath};
+    const at=LeadOS.engine.project(wrap([{type:'market.benchmark',
+      payload:{metric:'m',our_value:100,industry_median:100,source:'src',period:'2025'},at:FIXED-5*DAY}]));
+    if(LeadOS.external.marketPosition(at,FIXED).rows[0].position!=='at_median') return {why:'equal value should be at_median'};
+    const noMed=LeadOS.engine.project(wrap([{type:'market.benchmark',
+      payload:{metric:'m',our_value:100,source:'src',period:'2025'},at:FIXED-5*DAY}]));
+    if(LeadOS.external.marketPosition(noMed,FIXED).rows[0].position!=='unknown') return {why:'no median → position must stay unknown, never inferred'};
+    return {ok:true,why:'below_median · gap 35 printed · at_median exact · no median → unknown'};
+  }));
+  T.push(check('T51','[brief T49] regulatoryExposure: non-compliant listed, compliant excluded',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'regulatory.change',payload:{id:'r1',jurisdiction:'EU',regulation:'A',effective_date:FIXED+30*DAY,impact:4,compliance_actions:['x']},at:FIXED-10*DAY},
+      {type:'regulatory.compliance',payload:{changeId:'r1',status:'non-compliant'},at:FIXED-2*DAY},
+      {type:'regulatory.change',payload:{id:'r2',jurisdiction:'US',regulation:'B',effective_date:FIXED+30*DAY,impact:4,compliance_actions:['y']},at:FIXED-10*DAY},
+      {type:'regulatory.compliance',payload:{changeId:'r2',status:'compliant'},at:FIXED-2*DAY}]));
+    const e=LeadOS.external.regulatoryExposure(Px,FIXED);
+    if(!e.open.some(c=>c.id==='r1')) return {why:'non-compliant r1 must be in the open list'};
+    if(e.open.some(c=>c.id==='r2')) return {why:'compliant r2 must NOT be in the open list'};
+    if(e.nonCompliant.length!==1) return {why:'exactly one non-compliant expected'};
+    if(e.open[0].daysToEffective!==30) return {why:'daysToEffective should be 30, got '+e.open[0].daysToEffective};
+    return {ok:true,why:'r1 open (30d to effective) · r2 compliant and excluded'};
+  }));
+  T.push(check('T52','[brief T50] R87: 3 losses same reason in 60d → sev 4; 2 → quiet',()=>{
+    const mk=n=>{ const list=[];
+      for(let i=0;i<n;i++) list.push({type:'win.loss.logged',
+        payload:{result:'loss',primary_reason:'price',analysis:'a'+i},at:FIXED-(10+i)*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r87=Px=>LeadOS.rules.RULES[81](Px,FIXED); /* index 81 = R87 */
+    const three=r87(mk(3));
+    if(three.length!==1||three[0].sev!==4) return {why:'3 losses on one reason should fire sev 4'};
+    if(three[0].title.indexOf('price')===-1) return {why:'the reason must be printed verbatim in the title'};
+    if(r87(mk(2)).length) return {why:'2 losses must be quiet'};
+    const old=LeadOS.engine.project(wrap([0,1,2].map(i=>({type:'win.loss.logged',
+      payload:{result:'loss',primary_reason:'price',analysis:'a'},at:FIXED-(70+i)*DAY}))));
+    if(r87(old).length) return {why:'losses older than 60d must be outside the window'};
+    return {ok:true,why:'3 same-reason losses → sev 4 with the reason verbatim · 2 quiet · >60d quiet'};
+  }));
   return T;
 }
 
@@ -4667,14 +5129,14 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','[G60/G70/G80] extended buildSeed fires all 82 rules',()=>{
+  G.push(check('G40','[G60/G70/G80/G92] extended buildSeed fires ALL 92 rules',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=82;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=92;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'82/82 — patterns + conversations + org + decisions + the pt-14 execution layer (3-sprint velocity decline 30→26→22, 50% goal hit rate, sev-4 blocker open 4d, data team chronic at 3 blocks, at-risk dependency due in 5d, ghosted retro action, unreviewed sprint, accountability 55%, −2 headcount, delivery 62% with customer impact 4)'};
+    return {ok:true,why:'92/92 — every rule in the system fires from one deterministic fixture: patterns, conversations, org dynamics, decisions, execution, and the pt-15 external layer (unanswered sev-4 competitor move at 8d, no interview in 16d, 3 pricing losses in 60d, non-compliant EU regulation, pain scored 16, gross-margin 58 vs median 72, market signal 32d stale, Stripe partnership dormant 200d)'};
   }));
   /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
      the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
@@ -5165,6 +5627,158 @@ function runG(){
     if(Px.openMilestones.filter(m=>m.id==='ms-9').length!==1) return {why:'milestone should still be open'};
     return {ok:true,why:'ms-9 records missedInSprints [spx] · status untouched (only ops.milestone.updated changes it)'};
   }));
+  /* ---- G81–G91 — external-intelligence goldens (pt-15) ---- */
+  G.push(check('G81','R83: sev4 + no response in 8d → fires; response in 6d → quiet; sev3 → quiet',()=>{
+    const mk=(sev,respondAfter)=>{ const list=[{type:'competitor.logged',
+      payload:{id:'c1',name:'N',action:'cut price',category:'pricing',severity:sev,response_needed:true},at:FIXED-8*DAY}];
+      if(respondAfter!==undefined) list.push({type:'competitor.response',
+        payload:{competitorId:'c1',our_response:'match',timeline:'Q2'},at:FIXED-(8-respondAfter)*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r83=Px=>LeadOS.rules.RULES[77](Px,FIXED); /* index 77 = R83 */
+    const a=r83(mk(4,undefined));
+    if(a.length!==1||a[0].sev!==4) return {why:'sev-4 unanswered at 8d should fire sev 4'};
+    if(r83(mk(4,6)).length) return {why:'a response within 7d must quiet it'};
+    if(r83(mk(3,undefined)).length) return {why:'severity 3 is below the ≥4 threshold'};
+    const five=r83(mk(5,undefined));
+    if(five.length!==1||five[0].sev!==5) return {why:'severity 5 should escalate to sev 5'};
+    return {ok:true,why:'sev4@8d fires · response@6d quiets · sev3 quiet · sev5 → sev5'};
+  }));
+  G.push(check('G82','R86: 15d → sev 2 · 13d quiet · 29d (>2× cadence) → sev 3',()=>{
+    const mk=ageD=>LeadOS.engine.project(wrap([{type:'customer.interview',
+      payload:{insights:[{tag:'t',insight:'i'}],sentiment:'neutral',date:FIXED-ageD*DAY},at:FIXED-ageD*DAY}]));
+    const r86=Px=>LeadOS.rules.RULES[80](Px,FIXED); /* index 80 = R86 */
+    const a=r86(mk(15));
+    if(a.length!==1||a[0].sev!==2) return {why:'15d should fire sev 2 (cadence 14d)'};
+    if(r86(mk(13)).length) return {why:'13d must be quiet'};
+    if(r86(mk(14)).length) return {why:'exactly 14d must be quiet (strictly past the cadence)'};
+    const b=r86(mk(29));
+    if(b.length!==1||b[0].sev!==3) return {why:'29d (>2× 14) should be sev 3'};
+    return {ok:true,why:'15d sev2 · 13d and 14d quiet · 29d sev3'};
+  }));
+  G.push(check('G83','R87: 3 losses SAME reason fire; 3 losses with different reasons quiet',()=>{
+    const r87=Px=>LeadOS.rules.RULES[81](Px,FIXED);
+    const same=LeadOS.engine.project(wrap([0,1,2].map(i=>({type:'win.loss.logged',
+      payload:{result:'loss',primary_reason:'pricing',analysis:'a'+i},at:FIXED-(5+i)*DAY}))));
+    if(r87(same).length!==1) return {why:'3 identical reasons should fire once'};
+    const diff=LeadOS.engine.project(wrap(['pricing','product gap','timing'].map((r,i)=>({type:'win.loss.logged',
+      payload:{result:'loss',primary_reason:r,analysis:'a'+i},at:FIXED-(5+i)*DAY}))));
+    if(r87(diff).length) return {why:'3 DIFFERENT reasons must be quiet — the pattern requires the same reason ≥3'};
+    const mixedCase=LeadOS.engine.project(wrap(['Pricing','pricing','PRICING'].map((r,i)=>({type:'win.loss.logged',
+      payload:{result:'loss',primary_reason:r,analysis:'a'+i},at:FIXED-(5+i)*DAY}))));
+    if(r87(mixedCase).length!==1) return {why:'case variants of one reason should group into a single pattern'};
+    return {ok:true,why:'3 same → fires · 3 different → quiet · case-insensitive grouping'};
+  }));
+  G.push(check('G84','R88 non-compliant → sev 5, and a suppress tag does NOT silence it',()=>{
+    const base=[{type:'regulatory.change',payload:{id:'r1',jurisdiction:'EU',regulation:'Residency',
+        effective_date:FIXED+20*DAY,impact:5,compliance_actions:['move storage']},at:FIXED-20*DAY},
+      {type:'regulatory.compliance',payload:{changeId:'r1',status:'non-compliant'},at:FIXED-3*DAY}];
+    const plain=LeadOS.rules.runFull(LeadOS.engine.project(wrap(base)),FIXED);
+    const f=plain.findings.filter(x=>x.rule==='R88')[0];
+    if(!f||f.sev!==5) return {why:'non-compliant must fire sev 5'};
+    const suppressed=LeadOS.rules.runFull(LeadOS.engine.project(wrap(base.concat([
+      {type:'signal.tagged',payload:{eventId:f.key,tag:'suppress',note:'not now'},at:FIXED-DAY}]))),FIXED);
+    const still=suppressed.findings.filter(x=>x.rule==='R88')[0];
+    if(!still) return {why:'R88 was suppressed — the one hard override failed'};
+    if(suppressed.suppressedCount!==0) return {why:'a refused suppression must not increment suppressedCount'};
+    if(still.basis.join(' ').indexOf('SUPPRESSION ATTEMPTED AND REFUSED')===-1)
+      return {why:'the refused attempt must be printed on the finding'};
+    return {ok:true,why:'sev 5 fires · suppress tag refused and disclosed on the finding · count unaffected'};
+  }));
+  G.push(check('G85','R89: 15d unassessed → sev 3 · 13d → sev 4 · in-progress at 13d → quiet',()=>{
+    const mk=(daysOut,status)=>{ const list=[{type:'regulatory.change',
+      payload:{id:'r1',jurisdiction:'EU',regulation:'A',effective_date:FIXED+daysOut*DAY,impact:4,compliance_actions:['x']},at:FIXED-30*DAY}];
+      if(status) list.push({type:'regulatory.compliance',payload:{changeId:'r1',status:status},at:FIXED-2*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r89=Px=>LeadOS.rules.RULES[83](Px,FIXED); /* index 83 = R89 */
+    const a=r89(mk(15,null));
+    if(a.length!==1||a[0].sev!==3) return {why:'15d out unassessed should be sev 3'};
+    const b=r89(mk(13,null));
+    if(b.length!==1||b[0].sev!==4) return {why:'13d out unassessed should be sev 4'};
+    if(r89(mk(13,'in-progress')).length) return {why:'an in-progress assessment must quiet R89 (R88 owns that case)'};
+    if(r89(mk(40,null)).length) return {why:'40d out is outside the <30d trigger'};
+    return {ok:true,why:'15d sev3 · 13d sev4 · in-progress quiets R89 · 40d outside the window'};
+  }));
+  G.push(check('G86','R90: 95 vs median 100 (strategic) fires; 100 quiet; non-strategic quiet',()=>{
+    const mk=(val,strategic)=>{ const list=[{type:'market.benchmark',
+      payload:{metric:'gross-margin',our_value:val,industry_median:100,top_quartile:120,source:'s',period:'2025'},at:FIXED-5*DAY}];
+      if(strategic) list.push({type:'fin.kpi.logged',payload:{metric:'gross-margin',value:val,target:120},at:FIXED-6*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r90=Px=>LeadOS.rules.RULES[84](Px,FIXED); /* index 84 = R90 */
+    const a=r90(mk(95,true));
+    if(a.length!==1||a[0].sev!==3) return {why:'95 vs median 100 on a strategic metric should fire sev 3'};
+    if(a[0].conf!=='MEDIUM') return {why:'external benchmark → conf MEDIUM'};
+    if(r90(mk(100,true)).length) return {why:'exactly at median must be quiet'};
+    if(r90(mk(95,false)).length) return {why:'a non-strategic metric (no internal KPI) must be quiet'};
+    const deep=r90(mk(70,true)); /* bottom quartile estimate = 100 − 20 = 80 */
+    if(deep.length!==1||deep[0].sev!==4) return {why:'below the estimated bottom quartile should be sev 4'};
+    return {ok:true,why:'95 strategic → sev3 MEDIUM · 100 quiet · non-strategic quiet · 70 → sev4'};
+  }));
+  G.push(check('G87','R92: active + no touch in 91d → sev 2; touch at 89d quiet; terminated quiet',()=>{
+    const mk=(age,status,review)=>{ const list=[{type:'partnership.logged',
+      payload:{id:'p1',partner:'Stripe',type:'technology',status:status},at:FIXED-age*DAY}];
+      if(review!==undefined) list.push({type:'partner.reviewed',payload:{partnershipId:'p1',note:'QBR'},at:FIXED-review*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r92=Px=>LeadOS.rules.RULES[86](Px,FIXED); /* index 86 = R92 */
+    const a=r92(mk(91,'active'));
+    if(a.length!==1||a[0].sev!==2) return {why:'91d dormant active partnership should fire sev 2'};
+    if(r92(mk(120,'active',89)).length) return {why:'a partner.reviewed at 89d must quiet it'};
+    if(r92(mk(120,'terminated')).length) return {why:'a terminated partnership must be quiet'};
+    if(r92(mk(90,'active')).length) return {why:'exactly 90d must be quiet (strictly past)'};
+    const mentioned=LeadOS.engine.project(wrap([
+      {type:'partnership.logged',payload:{id:'p1',partner:'Stripe',type:'technology',status:'active'},at:FIXED-120*DAY},
+      {type:'note.added',payload:{id:'n1',domain:'strategy',text:'Stripe renewal discussion started'},at:FIXED-10*DAY}]));
+    if(r92(mentioned).length) return {why:'a note naming the partner counts as a touch (labeled heuristic)'};
+    return {ok:true,why:'91d sev2 · review@89d quiets · terminated quiet · 90d boundary quiet · note mention quiets'};
+  }));
+  G.push(check('G88','win/loss ↔ competitor cross-reference by name (labeled heuristic)',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'competitor.logged',payload:{id:'c1',name:'Northwind',action:'cut pricing',category:'pricing',severity:4,response_needed:true},at:FIXED-10*DAY},
+      {type:'win.loss.logged',payload:{result:'loss',primary_reason:'pricing',analysis:'undercut',competitor:'Northwind'},at:FIXED-5*DAY}]));
+    if(!Px.winLossByCompetitor['Northwind']||Px.winLossByCompetitor['Northwind'].length!==1)
+      return {why:'win/loss should be indexed by competitor name'};
+    if(!Px.competitorsByName['Northwind']) return {why:'competitors should be indexed by name'};
+    const lines=LeadOS.playbooks.INTERACTIVE['competitive-review'].prefill(LeadOS.rules.runFull(Px,FIXED),Px,FIXED);
+    const txt=lines.join(' | ');
+    if(txt.indexOf('Northwind')===-1) return {why:'the competitor must appear in the prefill'};
+    if(txt.toLowerCase().indexOf('loss')===-1) return {why:'linked win/loss records must appear in the prefill'};
+    if(txt.toLowerCase().indexOf('heuristic')===-1) return {why:'the name-match linkage must be labeled a heuristic'};
+    return {ok:true,why:'indexed both ways · prefill shows the linked losses · linkage labeled heuristic'};
+  }));
+  G.push(check('G89','the suppression filter explicitly exempts rule R88 (the one hard override)',()=>{
+    if(!LeadOS.rules.UNSUPPRESSIBLE_RULES||!LeadOS.rules.UNSUPPRESSIBLE_RULES.R88)
+      return {why:'R88 is not registered in UNSUPPRESSIBLE_RULES'};
+    const fake={rule:'R88',key:'R88:x',basis:[]};
+    if(!LeadOS.rules.suppressionOverride(fake)) return {why:'suppressionOverride must return true for R88'};
+    if(LeadOS.rules.suppressionOverride({rule:'R13',key:'R13:x',basis:[]}))
+      return {why:'no other rule may be exempt — the override is deliberately singular'};
+    const exempt=Object.keys(LeadOS.rules.UNSUPPRESSIBLE_RULES);
+    if(exempt.length!==1) return {why:'exactly one exemption expected, found: '+exempt.join(', ')};
+    return {ok:true,why:'R88 exempt · every other rule suppressible · exactly one override in the model'};
+  }));
+  G.push(check('G90','R91: 31d → fires · 30d quiet · an analyst.report counts as a signal',()=>{
+    const mk=(age,type)=>LeadOS.engine.project(wrap([type==='analyst'
+      ? {type:'analyst.report',payload:{title:'t',sentiment:'neutral',key_findings:['f'],date:FIXED-age*DAY},at:FIXED-age*DAY}
+      : {type:'market.signal',payload:{type:'trend',title:'t',description:'d',severity:3,source:'s',relevance:3},at:FIXED-age*DAY}]));
+    const r91=Px=>LeadOS.rules.RULES[85](Px,FIXED); /* index 85 = R91 */
+    if(r91(mk(31,'signal')).length!==1) return {why:'31d stale should fire'};
+    if(r91(mk(30,'signal')).length) return {why:'exactly 30d must be quiet'};
+    if(r91(mk(10,'analyst')).length) return {why:'a recent analyst.report must count as a market signal and quiet the rule'};
+    if(r91(mk(31,'analyst')).length!==1) return {why:'a stale analyst report should still fire'};
+    return {ok:true,why:'31d fires · 30d quiet · analyst.report counts both ways'};
+  }));
+  G.push(check('G91','painMatrix win/loss correlation: text match flagged, labeled; no match not flagged',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'customer.pain',payload:{id:'p1',title:'slow onboarding',frequency:4,severity:4,source:'interview'},at:FIXED-10*DAY},
+      {type:'customer.pain',payload:{id:'p2',title:'mobile timeouts',frequency:2,severity:2,source:'review'},at:FIXED-10*DAY},
+      {type:'win.loss.logged',payload:{result:'loss',primary_reason:'slow onboarding',analysis:'took too long'},at:FIXED-5*DAY}]));
+    const m=LeadOS.external.painMatrix(Px,FIXED);
+    const hit=m.winLossCorrelation.filter(c=>c.painId==='p1')[0];
+    if(!hit) return {why:'the matching pain title should be flagged as correlated'};
+    if(hit.why.indexOf('HEURISTIC TEXT MATCH')===-1) return {why:'the correlation must be labeled a heuristic'};
+    if(hit.why.indexOf('not causation')===-1) return {why:'the causation caveat is missing'};
+    if(m.winLossCorrelation.some(c=>c.painId==='p2')) return {why:'a non-matching pain must not be flagged'};
+    return {ok:true,why:'slow onboarding flagged with the heuristic + causation caveat · mobile timeouts not flagged'};
+  }));
   return {checks:G,P:P,raw:raw};
 }
 
@@ -5185,7 +5799,9 @@ const CLAIMS=[
   {id:'C14',text:'Conversation layer: schema v6 (string settings), 10 contracts fold correctly, styleFor/zopaFor/prepareConv are pure and labeled (scaffold not script, hypothesis not prediction), R46–R52 boundaries hold, mediation resolves conflict pairs',by:['T28','T29','T30','T31','T32','G10','G41','G42','G43','G44','G45','G46','G47','G48','G49','G40']},
   {id:'C15',text:'Organizational dynamics: schema v7, graph analysis is exact where claimed exact (Tarjan SCC) and labeled where approximate (betweenness, bridges), culture scoring is a bounded composite with its 2× assumption printed, meeting load is arithmetic over your own logs, R53–R62 boundaries hold',by:['T33','T34','T35','T36','T37','G51','G52','G53','G54','G55','G56','G57','G58','G59']},
   {id:'C16',text:'Decision intelligence: schema v8, three prioritization models each printing their own math AND epistemic class, scenario EV + minimax regret + sensitivity with the probability caveat, commitment ledger excluding open items from hit rate, assumption tracking, R63–R72 boundaries hold',by:['T38','T39','T40','T41','T42','G61','G62','G63','G64','G65','G66','G67','G68','G69']},
-  {id:'C17',text:'Execution layer: schema v9, velocity trends respect the ≥3-point discipline and label extrapolation as extrapolation, blocker MTTR and chronic windows are exact, dependency graph infers no transitive edges, accountability prints its data source, R73–R82 boundaries hold, 82/82 rules fire from the seed',by:['T43','T44','T45','T46','T47','G71','G72','G73','G74','G75','G76','G77','G78','G79','G40']}
+  {id:'C17',text:'Execution layer: schema v9, velocity trends respect the ≥3-point discipline and label extrapolation as extrapolation, blocker MTTR and chronic windows are exact, dependency graph infers no transitive edges, accountability prints its data source, R73–R82 boundaries hold',by:['T43','T44','T45','T46','T47','G71','G72','G73','G74','G75','G76','G77','G78','G79']},
+  {id:'C18',text:'External intelligence: schema v10, ZERO network calls (every external datum is manually logged and its source printed, never verified), text-match correlations labeled heuristic, R83–R92 boundaries hold, and R88 non-compliance is the single unsuppressible rule in the model',by:['T48','T49','T50','T51','T52','G81','G82','G83','G84','G85','G86','G87','G88','G89','G90','G91']},
+  {id:'C19',text:'ALL 92 RULES fire from one deterministic seed; every rule has a golden, every golden a boundary, every finding its printed math',by:['T18','G40','G7','G13']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -6505,6 +7121,224 @@ SPECS['accountability-checkin']={
     }
     return {events:events};
   }};
+/* ---------- pt-15 external playbooks ---------- */
+const XT=()=>LeadOS.external;
+SPECS['competitive-review']={
+  pattern:null,title:'Competitive review',free:true,
+  blurb:'A move you decided to ignore is a strategy; one you forgot is a gap.',
+  prefill(R,P,now){
+    const h=XT().competitiveHeat(P,now);
+    const lines=[h.label,'window: last '+h.windowDays+'d'];
+    lines.push('most active: '+h.mostActiveWhy);
+    lines.push('actions by competitor:');
+    h.byCompetitor.forEach(c=>lines.push('  '+c.name+': '+c.actions.length+' action(s), severity sum '+c.severitySum+
+      ' — '+c.actions.map(a=>a.category+' "'+a.action+'" (sev '+a.severity+')').join(' · ')));
+    if(!h.byCompetitor.length) lines.push('  none in the window');
+    lines.push('UNANSWERED (response_needed, no response within 7d): '+(h.responseGap.length?'':'none'));
+    h.responseGap.forEach(c=>lines.push('  '+c.name+' · sev '+c.severity+' · '+c.ageDays+'d · '+c.action));
+    /* G88: name-matched win/loss history, labeled heuristic */
+    const names=U.uniq(h.byCompetitor.map(c=>c.name).concat(Object.keys(P.competitorsByName||{})));
+    names.forEach(n=>{ const wl=(P.winLossByCompetitor||{})[n]||[];
+      if(wl.length) lines.push('linked win/loss vs '+n+' (HEURISTIC name match, not a verified attribution): '+
+        wl.map(w=>w.result+' — "'+w.primary_reason+'" '+U.iso(w.at)).join(' · ')); });
+    lines.push('market signals in the window: '+(h.signalsInWindow.length?'':'none'));
+    h.signalsInWindow.forEach(s=>lines.push('  ['+s.type+'] '+s.title+' (sev '+s.severity+', relevance '+s.relevance+') — source: '+s.source));
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'competitorId',label:'competitor action to respond to',kind:'select',req:true,
+      options:vals(P.competitors||{}).sort((a,b)=>b.loggedAt-a.loggedAt)
+        .map(c=>({value:c.id,label:c.name+' · '+c.action.slice(0,45)}))},
+    {key:'response',label:'our response',kind:'textarea',req:true},
+    {key:'timeline',label:'timeline',kind:'text',req:true},
+    {key:'owner',label:'owner',kind:'text',req:true},
+    {key:'roadmap',label:'roadmap implication (leave blank for none)',kind:'text',req:false},
+    {key:'quarter',label:'roadmap quarter (if adding an item)',kind:'text',req:false}]; },
+  submit(v){
+    const events=[{type:'competitor.response',payload:{competitorId:v.competitorId,
+      our_response:v.response,timeline:v.timeline,ownerId:v.owner}}];
+    if(v.roadmap&&v.quarter) events.push({type:'product.roadmap.item',payload:{id:U.uid('rm'),
+      title:'Competitive response: '+v.roadmap,quarter:v.quarter,status:'planned',ownerId:v.owner,
+      pillar:'competitive'}});
+    events.push(note('strategy','COMPETITIVE REVIEW — response to '+v.competitorId+'\n'+v.response+
+      '\ntimeline: '+v.timeline+' · owner: '+v.owner+(v.roadmap?'\nroadmap: '+v.roadmap:''),'competitive-review'));
+    return {events:events};
+  }};
+SPECS['customer-voice-synthesis']={
+  pattern:null,title:'Customer voice synthesis',free:true,
+  blurb:'Every day without a customer voice, the roadmap drifts on assumption.',
+  prefill(R,P,now){
+    const m=XT().painMatrix(P,now);
+    const lines=['top unresolved pains (score = frequency × severity):'];
+    m.open.slice(0,5).forEach(p=>lines.push('  '+p.math+' — "'+p.title+'"'+(p.segment?' ['+p.segment+']':'')+' from '+p.source));
+    if(!m.open.length) lines.push('  none open');
+    lines.push('pain trend: '+m.trend.why);
+    m.bySegment.forEach(s=>lines.push('  segment '+s.segment+': '+s.openCount+' open of '+s.count+', score sum '+s.scoreSum));
+    m.winLossCorrelation.forEach(c=>lines.push('CORRELATED WITH LOSSES: "'+c.title+'" appears in '+c.losses+' loss reason(s) — '+c.why));
+    const iv=(P.interviews||[]).slice().sort((a,b)=>(b.date||b.at)-(a.date||a.at)).slice(0,3);
+    lines.push('last '+iv.length+' interview(s):');
+    iv.forEach(i=>lines.push('  '+U.iso(i.date||i.at)+' '+(i.accountName||'(unnamed)')+' ['+i.sentiment+'] — '+
+      (i.insights||[]).map(x=>x.tag+': '+x.insight).join(' · ')));
+    if(!iv.length) lines.push('  none logged');
+    const nps=(P.npsLogs||[]).slice(-1)[0];
+    lines.push('latest NPS: '+(nps?nps.score+' ('+U.iso(nps.at)+')':'never logged'));
+    return lines;
+  },
+  fields(R,P){
+    const open=(P.openPains||[]).slice().sort((a,b)=>(b.frequency*b.severity)-(a.frequency*a.severity));
+    return [
+      {key:'escalate',label:'pain to escalate to roadmap',kind:'select',req:false,
+        options:open.map(p=>({value:p.id,label:'score '+(p.frequency*p.severity)+' · '+p.title}))},
+      {key:'quarter',label:'roadmap quarter (if escalating)',kind:'text',req:false},
+      {key:'resolve',label:'pain to resolve now',kind:'select',req:false,
+        options:open.map(p=>({value:p.id,label:p.title}))},
+      {key:'how',label:'how it was resolved',kind:'text',req:false},
+      {key:'wontFix',label:'pain to close as won\u2019t-fix',kind:'select',req:false,
+        options:open.map(p=>({value:p.id,label:p.title}))},
+      {key:'wontFixWhy',label:'won\u2019t-fix rationale (required if closing)',kind:'textarea',req:false},
+      {key:'insight',label:'customer insight to share with product',kind:'textarea',req:true},
+      {key:'nextDate',label:'next interview date',kind:'date',req:true}]; },
+  submit(v){
+    const events=[];
+    if(v.escalate){
+      if(!v.quarter) throw new Error('escalating a pain to the roadmap requires a quarter');
+      events.push({type:'product.roadmap.item',payload:{id:U.uid('rm'),title:'Customer pain: '+v.escalate,
+        quarter:v.quarter,status:'planned',pillar:'customer'}}); }
+    if(v.resolve){
+      if(!v.how) throw new Error('resolving a pain requires saying how — "resolved" with no mechanism is a wish');
+      events.push({type:'customer.pain.resolved',payload:{painId:v.resolve,how:v.how}}); }
+    if(v.wontFix){
+      if(!v.wontFixWhy) throw new Error('closing a pain as won\u2019t-fix requires a rationale on the record');
+      events.push({type:'customer.pain.resolved',payload:{painId:v.wontFix,how:'WON\u2019T FIX',evidence:v.wontFixWhy}}); }
+    events.push(note('customerSuccess','CUSTOMER VOICE SYNTHESIS — insight for product:\n'+v.insight+
+      '\nnext interview: '+U.iso(v.nextDate),'customer-voice-synthesis'));
+    return {events:events};
+  }};
+SPECS['win-loss-debrief']={
+  pattern:null,title:'Win/loss debrief',free:true,
+  blurb:'The reason you lose three times is not a sales problem.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const lines=['recent win/loss records:'];
+    (P.winLoss||[]).slice().sort((a,b)=>b.at-a.at).slice(0,8)
+      .forEach(w=>lines.push('  '+U.iso(w.at)+' ['+w.result.toUpperCase()+'] "'+w.primary_reason+'"'+
+        (w.competitor?' vs '+w.competitor:'')+(w.segment?' ['+w.segment+']':'')));
+    if(!(P.winLoss||[]).length) lines.push('  none logged');
+    const did=(draft.dealId||'').trim();
+    if(did){ const d=(P.deals||{})[did];
+      lines.push(d?('deal '+did+': '+d.title+' · value '+d.value+' · stage '+d.stage+' · result '+(d.result||'open')+
+        (d.lostReason?' · lostReason "'+d.lostReason+'"':'')):'deal '+did+' not found in the log'); }
+    const comp=(draft.competitor||'').trim();
+    if(comp){ const acts=(P.competitorsByName||{})[comp]||[];
+      lines.push('competitor actions by '+comp+' (HEURISTIC name match): '+(acts.length?'':'none logged'));
+      acts.forEach(a=>lines.push('  '+U.iso(a.loggedAt)+' '+a.category+': '+a.action+' (sev '+a.severity+')')); }
+    const losses=(P.winLoss||[]).filter(w=>w.result==='loss'&&U.days(now,w.at)<=60);
+    const byR={}; losses.forEach(l=>{ const k=String(l.primary_reason).toLowerCase(); byR[k]=(byR[k]||0)+1; });
+    Object.keys(byR).filter(k=>byR[k]>=2).forEach(k=>lines.push('PATTERN FORMING: "'+k+'" × '+byR[k]+' in 60d'+(byR[k]>=3?' — R87 is firing':' (3 fires R87)')));
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'result',label:'result',kind:'select',req:true,options:[{value:'win',label:'win'},{value:'loss',label:'loss'}]},
+    {key:'reason',label:'primary reason',kind:'select',req:true,
+      options:['pricing','product gap','competitor','timing','sales execution','no decision','security/compliance']
+        .map(r=>({value:r,label:r}))},
+    {key:'reasonDetail',label:'primary reason — free text detail',kind:'text',req:false},
+    {key:'dealId',label:'dealId (optional)',kind:'text',req:false},
+    {key:'competitor',label:'competitor (optional)',kind:'text',req:false},
+    {key:'segment',label:'segment',kind:'text',req:false},
+    {key:'competitive',label:'competitive factor Y/N',kind:'yn',req:true},
+    {key:'productGap',label:'product gap Y/N',kind:'yn',req:true},
+    {key:'pricing',label:'pricing factor Y/N',kind:'yn',req:true},
+    {key:'execution',label:'sales execution factor Y/N',kind:'yn',req:true},
+    {key:'differently',label:'what we would do differently',kind:'textarea',req:true},
+    {key:'gapTitle',label:'if product gap: the gap, in one line',kind:'text',req:false},
+    {key:'quarter',label:'if product gap: roadmap quarter',kind:'text',req:false}]; },
+  submit(v){
+    const p={result:v.result,primary_reason:v.reason+(v.reasonDetail?' — '+v.reasonDetail:''),
+      analysis:v.differently+' | factors: competitive '+v.competitive+', product '+v.productGap+
+        ', pricing '+v.pricing+', execution '+v.execution};
+    if(v.dealId) p.dealId=v.dealId;
+    if(v.competitor) p.competitor=v.competitor;
+    if(v.segment) p.segment=v.segment;
+    const events=[{type:'win.loss.logged',payload:p}];
+    if(v.productGap==='Y'){
+      if(!v.gapTitle) throw new Error('you marked a product gap — name it in one line so it can be tracked');
+      if(v.quarter) events.push({type:'product.roadmap.item',payload:{id:U.uid('rm'),
+        title:'Win/loss gap: '+v.gapTitle,quarter:v.quarter,status:'planned',pillar:'competitive'}});
+      else events.push({type:'rd.tech.debt.logged',payload:{id:U.uid('td'),title:'Win/loss gap: '+v.gapTitle,
+        severity:3,effort:3,note:'raised in win-loss debrief; no quarter assigned'}});
+    }
+    return {events:events};
+  }};
+SPECS['regulatory-triage']={
+  pattern:null,title:'Regulatory triage',free:true,
+  blurb:'You logged the regulation. Have you assessed whether you comply?',
+  prefill(R,P,now){
+    const e=XT().regulatoryExposure(P,now);
+    const lines=[e.note];
+    lines.push('NON-COMPLIANT ('+e.nonCompliant.length+') — these cannot be suppressed:');
+    e.nonCompliant.forEach(c=>lines.push('  '+c.regulation+' ('+c.jurisdiction+') · impact '+c.impact+
+      ' · effective '+U.iso(c.effective_date)));
+    if(!e.nonCompliant.length) lines.push('  none');
+    lines.push('open exposure (impact ≥3, not compliant):');
+    e.open.forEach(c=>lines.push('  '+c.regulation+' ('+c.jurisdiction+') · status '+(c.status||'NOT ASSESSED')+
+      ' · '+(c.overdue?('effective '+(-c.daysToEffective)+'d AGO'):(c.daysToEffective+'d to effective'))+
+      ' · actions: '+(c.compliance_actions.join('; ')||'none listed')));
+    if(!e.open.length) lines.push('  none');
+    if(e.unassessed.length) lines.push('never assessed: '+e.unassessed.map(c=>c.regulation).join(', '));
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'changeId',label:'regulation',kind:'select',req:true,
+      options:vals(P.regChanges||{}).map(c=>({value:c.id,label:c.regulation+' ('+c.jurisdiction+') · '+(c.status||'unassessed')}))},
+    {key:'status',label:'assessment status',kind:'select',req:true,
+      options:['assessed','in-progress','compliant','non-compliant'].map(s=>({value:s,label:s}))},
+    {key:'actions',label:'compliance actions',kind:'textarea',req:true},
+    {key:'owner',label:'owner',kind:'text',req:true},
+    {key:'targetDate',label:'target compliance date',kind:'date',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'regulatory.compliance',payload:{changeId:v.changeId,status:v.status,
+        note:'owner '+v.owner+' · target '+U.iso(v.targetDate)+' · actions: '+v.actions.slice(0,160)}},
+      note('legal','REGULATORY TRIAGE — '+v.changeId+' → '+v.status+'\nowner: '+v.owner+
+        '\ntarget: '+U.iso(v.targetDate)+'\nactions:\n'+v.actions,'regulatory-triage')]};
+  }};
+SPECS['market-position-review']={
+  pattern:null,title:'Market position review',free:true,
+  blurb:'Every internal metric means something different next to the market.',
+  prefill(R,P,now){
+    const m=XT().marketPosition(P,now);
+    const lines=[m.label,'benchmarked metrics:'];
+    m.rows.forEach(r=>lines.push('  '+r.metric+': ours '+r.our_value+
+      ' · median '+(r.industry_median===null?'not logged':r.industry_median)+
+      ' · top quartile '+(r.top_quartile===null?'not logged':r.top_quartile)+
+      ' → '+r.position+' ('+r.positionWhy+') · '+r.gapMath+' · source "'+r.source+'" '+r.period));
+    if(!m.rows.length) lines.push('  none logged');
+    lines.push('below median ('+m.belowMedian.length+'): '+(m.belowMedian.map(r=>r.metric).join(', ')||'none'));
+    const reports=(P.analystReports||[]).slice().sort((a,b)=>(b.date||b.at)-(a.date||a.at)).slice(0,3);
+    lines.push('analyst sentiment:');
+    reports.forEach(r=>lines.push('  '+U.iso(r.date||r.at)+' '+(r.firm||'(unattributed)')+' ['+r.sentiment+'] "'+r.title+'" — '+
+      (r.key_findings||[]).join(' · ')));
+    if(!reports.length) lines.push('  no analyst.report events');
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'metrics',label:'metrics to target for improvement',kind:'text',req:true},
+    {key:'okrObjective',label:'benchmark-aligned OKR objective',kind:'text',req:true},
+    {key:'okrQuarter',label:'OKR quarter',kind:'text',req:true},
+    {key:'krText',label:'key result (one line)',kind:'text',req:true},
+    {key:'krTarget',label:'key result target value',kind:'number',req:true},
+    {key:'krUnit',label:'key result unit',kind:'text',req:true},
+    {key:'narrative',label:'competitive positioning narrative update',kind:'textarea',req:true},
+    {key:'analystPlan',label:'analyst response plan',kind:'textarea',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'strategy.okr.set',payload:{id:U.uid('okr'),objective:v.okrObjective,quarter:v.okrQuarter,
+        keyResults:[{kr:v.krText,target:v.krTarget,unit:v.krUnit}]}},
+      {type:'exec.kpi.reviewed',payload:{note:'market position review · targeting '+v.metrics}},
+      note('strategy','MARKET POSITION REVIEW — targeting: '+v.metrics+'\npositioning narrative:\n'+v.narrative+
+        '\nanalyst response plan:\n'+v.analystPlan,'market-position-review')]};
+  }};
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -7014,6 +7848,87 @@ const SPARK=arr=>{ if(!arr.length) return '<span class="muted small">no data</sp
   const mx=Math.max.apply(null,arr), mn=Math.min.apply(null,arr);
   const rng=(mx-mn)||1;
   return '<span class="spark">'+arr.map(v=>ch[U.clamp(Math.round((v-mn)/rng*7),0,7)]).join('')+'</span>'; };
+V['#/external']={kicker:'the outward lens',title:'External',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now, X=LeadOS.external;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
+  const heat=X.competitiveHeat(P,now), pain=X.painMatrix(P,now),
+        pos=X.marketPosition(P,now), reg=X.regulatoryExposure(P,now);
+  const compRows=heat.byCompetitor.map(c=>{
+    const un=heat.responseGap.filter(g=>g.name===c.name);
+    return '<tr><td class="mono">'+esc(c.name)+'</td><td class="mono">'+c.actions.length+'</td>'+
+      '<td class="mono">'+c.severitySum+'</td>'+
+      '<td>'+(un.length?'<span class="sev s4">'+un.length+' unanswered</span>':'<span class="pill">answered</span>')+'</td>'+
+      '<td class="small muted">'+esc(c.actions.map(a=>a.action).join(' · ').slice(0,80))+'</td></tr>'; }).join('');
+  const painRows=pain.all.slice().sort((a,b)=>(b.score-a.score)).map(p=>
+    '<tr><td>'+esc(p.title)+'</td><td class="mono">'+p.frequency+'</td><td class="mono">'+p.severity+'</td>'+
+    '<td class="mono">'+(p.score>=16?'<span class="sev s4">'+p.score+'</span>':p.score>=12?'<span class="sev s3">'+p.score+'</span>':p.score)+'</td>'+
+    '<td>'+(p.resolved?'<span class="pill">resolved</span>':'<span class="sev s3">open</span>')+'</td>'+
+    '<td class="mono small">'+esc(p.segment||'—')+'</td></tr>').join('');
+  const posRows=pos.rows.map(r=>'<tr><td class="mono">'+esc(r.metric)+'</td><td class="mono">'+r.our_value+'</td>'+
+    '<td class="mono">'+(r.industry_median===null?'—':r.industry_median)+'</td>'+
+    '<td class="mono">'+(r.top_quartile===null?'—':r.top_quartile)+'</td>'+
+    '<td>'+(r.position==='below_median'?'<span class="sev s3">below median</span>'
+      :r.position==='top_quartile'?'<span class="pill">top quartile</span>':'<span class="pill">'+esc(r.position.replace(/_/g,' '))+'</span>')+'</td>'+
+    '<td class="small muted">'+esc(r.gapMath)+'</td></tr>').join('');
+  const regRows=reg.open.map(c=>'<tr><td>'+esc(c.regulation)+'</td><td class="mono">'+esc(c.jurisdiction)+'</td>'+
+    '<td class="mono">'+(c.overdue?'<span class="sev s5">'+(-c.daysToEffective)+'d ago</span>':c.daysToEffective+'d')+'</td>'+
+    '<td>'+(c.status==='non-compliant'?'<span class="sev s5">non-compliant</span>'
+      :c.status===null?'<span class="sev s3">unassessed</span>':'<span class="pill">'+esc(c.status)+'</span>')+'</td>'+
+    '<td class="mono">'+c.impact+'</td></tr>').join('');
+  const wl=(P.winLoss||[]).filter(w=>U.days(now,w.at)<=90);
+  const wins=wl.filter(w=>w.result==='win').length, losses=wl.filter(w=>w.result==='loss').length;
+  const byReason={}; wl.filter(w=>w.result==='loss').forEach(l=>{ const k=String(l.primary_reason).toLowerCase();
+    byReason[k]=(byReason[k]||0)+1; });
+  const patterns=Object.keys(byReason).filter(k=>byReason[k]>=3).sort();
+  const partRows=vals(P.partnerships).map(p=>{
+    const last=U.maxAt(p.reviews)||p.loggedAt;
+    const age=U.days(now,last);
+    return '<tr><td class="mono">'+esc(p.partner)+'</td><td class="mono">'+esc(p.type)+'</td>'+
+      '<td>'+(p.status==='active'?'<span class="pill">active</span>':'<span class="pill">'+esc(p.status)+'</span>')+'</td>'+
+      '<td class="mono">'+U.iso(last)+'</td>'+
+      '<td class="mono">'+(p.status==='active'&&age>90?'<span class="sev s2">'+age+'d dormant</span>':age+'d')+'</td></tr>'; }).join('');
+  return '<div class="vhead"><div class="kicker">the outward lens</div><h1>External</h1>'+
+    '<div class="sub">Leaders who only look inward optimize a burning ship. <b>ZERO network calls:</b> every datum below was typed in by a human who went and looked — LeadOS structures the intelligence you gather, it never gathers it, and it verifies no external claim.</div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['competitive-review','customer-voice-synthesis','win-loss-debrief','regulatory-triage','market-position-review']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    runner+
+    '<div class="grid3">'+
+      '<div class="card"><h3>Competitive</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+heat.byCompetitor.length+' competitor(s) active in '+heat.windowDays+'d</div>'+
+        '<div>most active: '+esc(heat.mostActive?heat.mostActive.name:'—')+'</div>'+
+        '<div>unanswered: '+heat.responseGap.length+' ('+heat.unansweredHighSev.length+' at sev ≥4)</div></div></div>'+
+      '<div class="card"><h3>Win / loss (90d)</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+wins+' win(s) · '+losses+' loss(es)</div>'+
+        '<div>'+(wins+losses?'win rate '+U.rd(wins/(wins+losses)*100,1)+'% ('+wins+' ÷ '+(wins+losses)+')':'nothing logged')+'</div>'+
+        (patterns.length?'<div><b>PATTERN: '+patterns.map(k=>esc(k)+' × '+byReason[k]).join(' · ')+'</b></div>':'<div>no reason repeated 3×</div>')+
+        '</div></div>'+
+      '<div class="card"><h3>Regulatory</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+reg.open.length+' open exposure(s)</div>'+
+        '<div>'+(reg.nonCompliant.length?'<b>'+reg.nonCompliant.length+' NON-COMPLIANT — unsuppressible</b>':'none non-compliant')+'</div>'+
+        '<div>'+reg.unassessed.length+' never assessed</div></div></div>'+
+    '</div>'+
+    '<div class="sect"><h2>Competitive heat</h2><span class="meta">last '+heat.windowDays+'d</span></div>'+
+    (compRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>competitor</th><th>actions</th><th>severity</th><th>response</th><th>what they did</th></tr>'+compRows+'</table></div>'
+      :'<div class="empty">No competitor actions logged in the window. R84 reads this silence as blindness, not calm.</div>')+
+    '<div class="sect"><h2>Customer pain matrix</h2><span class="meta">'+pain.open.length+' open · score = frequency × severity</span></div>'+
+    (painRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>pain</th><th>freq</th><th>sev</th><th>score</th><th>status</th><th>segment</th></tr>'+painRows+'</table></div>'
+      :'<div class="empty">No customer pains logged.</div>')+
+    (pain.winLossCorrelation.length?'<div class="card" style="margin-top:10px;border-left:3px solid var(--accent)">'+
+      pain.winLossCorrelation.map(c=>'<div class="heatrow"><b>'+esc(c.title)+'</b><span>appears in '+c.losses+' loss reason(s) — '+esc(c.why)+'</span></div>').join('')+'</div>':'')+
+    '<div class="sect"><h2>Market position</h2><span class="meta">'+pos.belowMedian.length+' below median · sources printed, unverified</span></div>'+
+    (posRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>metric</th><th>ours</th><th>median</th><th>top quartile</th><th>position</th><th>gap math</th></tr>'+posRows+'</table></div>'
+      :'<div class="empty">No market.benchmark events.</div>')+
+    '<div class="sect"><h2>Regulatory exposure</h2><span class="meta">impact ≥3, not yet compliant</span></div>'+
+    (regRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>regulation</th><th>jurisdiction</th><th>to effective</th><th>status</th><th>impact</th></tr>'+regRows+'</table></div>'
+      :'<div class="empty">No open regulatory exposure.</div>')+
+    '<div class="sect"><h2>Partnership health</h2><span class="meta">'+(P.activePartnerships||[]).length+' active</span></div>'+
+    (partRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>partner</th><th>type</th><th>status</th><th>last touch</th><th>dormancy</th></tr>'+partRows+'</table></div>'
+      :'<div class="empty">No partnerships logged.</div>')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">market.signal · competitor.logged · customer.interview · customer.pain · win.loss.logged · regulatory.change</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
 V['#/execution']={kicker:'strategy without execution is fiction',title:'Execution',render(ctx){
   const P=ctx.P, R=ctx.R, now=ctx.now, EXm=LeadOS.execution;
   const vals=o=>Object.keys(o||{}).map(k=>o[k]);
@@ -7380,6 +8295,7 @@ function shell(ctx){
     ['#/org','grid','Organization',(ctx.P.openSilos||[]).length||null],
     ['#/decisions','check','Decisions',(ctx.P.openCommitments||[]).length||null],
     ['#/execution','activity','Execution',(ctx.P.openBlockers||[]).length||null],
+    ['#/external','layers','External',(ctx.P.openPains||[]).length||null],
     ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],
     ['#/health','shield','Health',null],
