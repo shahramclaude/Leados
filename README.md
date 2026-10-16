@@ -1,136 +1,174 @@
-# LeadOS pt-A — Design System & Interaction Architecture (reference build)
+# LeadOS pt-B — Ambient Intelligence Interface
 
-A single-file implementation of the **pt-A** brief: a complete design
-token system, component library, navigation rail, command palette, and
-interaction layer for a "leadership intelligence" interface. Open
-`index.html` in any modern browser — no server, build step, or network
-call.
+A single-file implementation of the **pt-B** brief: a behavioral/ambient
+layer (`LeadOS.ambient`, aliased as `LEADOS.ambient`) that sits between a
+small sample leadership-event log and what actually gets shown to the
+user — contextual greetings, a daily digest, "The Three" priority signals,
+smart (context-weighted) scoring, a status strip, focus mode, a guided
+weekly review, natural-language quick logging, and smart snooze options.
+
+Open `index.html` in any modern browser. No server, build step, or network
+call except the one Tailwind CDN `<script>` tag required by this
+assistant's platform (purely for layout utility classes — no data of any
+kind leaves the browser; everything else lives in one `localStorage` key).
 
 > **This is not a verified continuation of `github.com/wbweve/Leados`'s
-> real engine/rules/health code.** See "What was actually inspected"
-> below and `AI-SESSION-LOG.md` §0 for the full audit. The pt-A brief is
-> scoped to CSS + UI architecture, not rule semantics, so this build
-> ships that layer against a small, clearly-labeled sample data set.
+> real `engine.js`/`events.js`/`health.js`/`ui.js` code.** This session
+> independently re-inspected that repository (GitHub's Git Trees API +
+> direct raw-file reads of `store.js`, `events.js`, `rules.js`,
+> `README.md`, `AI-SESSION-LOG.md`, and the live `index.html`) rather than
+> trusting prior claims. See "What was actually inspected" below and
+> `AI-SESSION-LOG.md` §0 for the full, re-derived audit.
 
-## What was actually inspected (and what wasn't)
+## What was actually inspected this session (and what wasn't)
 
 | Area | Status |
 |---|---|
-| `github.com/wbweve/Leados` README content | **Verified** — fetched and read in full. Describes "pt-15", 41 event contracts, 13 rules, schema v15, and claims exactly 3 files ship. |
-| Actual git tree at HEAD | **Byte-verified via GitHub's Git Trees API**: 21 entries, including loose `app.css`, `engine.js`, `events.js`, `health.js`, `playbooks.js`, `rules.js`, `store.js`, `ui.js`, **and** an unrelated React/Vite scaffold (`App.tsx`, `main.tsx`, `vite.config.ts`, `tsconfig.json`, `package.json`). This **contradicts** the README's "exactly 3 files" claim. |
-| Real contents of `index.html`, `engine.js`, `ui.js`, `app.css`, `health.js`, `playbooks.js`, `store.js` | **NOT obtained.** The fetch tooling available this session strips/renders script and style content from the large (145 KB+) `index.html`, returning almost no usable text. The other files (24–175 KB each) were not individually fetched this session (budget). Any claim about their internal logic is explicitly **unverified** and not repeated here as fact. |
-| "963,415-byte upstream index.html", "pt-5 relic store.js" etc. | These figures appear **inside the target repo's own README/session-log**, describing what it calls a separate "upstream" state of itself. They are **relayed, not independently re-verified**, and are flagged as such. |
+| Git tree at `main` HEAD | **Verified** via GitHub's Git Trees API (`truncated:false`, 21 entries). No `js/` folder exists anywhere — all `.js` files are loose at repo root. |
+| `correlate.js`, `leadership_self.js` | **Verified absent.** The pt-B brief's instruction that `ambient.js` "depends on… correlate" and is "loaded after correlate.js" does not describe anything that exists in this repository. |
+| `rules.js` | **Read in full (761 bytes).** It is a disclosed tombstone: its own header says the rules engine was merged into `engine.js` and that the file is not loaded by the browser. |
+| `store.js` | **Read in full (14,941 bytes, byte-matched to the tree API).** Confirms: `window.LeadOS` (mixed case) namespace, one localStorage key `leados:data`, append-only doctrine, `SCHEMA_VERSION=5`, `LINEAGE_TAG='pt-6'`. |
+| `events.js` | **Partially read** (~40% of 24,512 bytes; tool truncated the rest). Its own header states 92 registered event types across 15 domains. |
+| `engine.js` (105,072 B), `health.js` (175,053 B), `ui.js` (97,565 B), `playbooks.js` (59,592 B), `app.css` (22,636 B) | Byte sizes **confirmed via API only**. Internal contents **not read this session** — no claim is made about their logic. |
+| Live `index.html` (74,587 bytes per the API — a different number from a prior session's 145,271-byte figure for the "same" file) | Raw fetch returns only stripped visible text: `"Schema v15 · pt-A · leados:data"`. This is **suggestive but not proof** that it's a particular prior deliverable; its actual `<script>` contents were not recovered. |
+| Internal consistency of the repo | **A real, independently-confirmed contradiction**: `store.js` says schema 5 / `pt-6`; the live page's rendered text says "Schema v15"; `events.js`'s own comment says 92 event types vs. "41" cited elsewhere. All three numbers were read directly this session, not relayed. |
 
-Given that the two primary sources of truth in the target repo (its
-README and its own file tree) disagree with each other, nothing from
-that repo's internals is treated as ground truth here. This build
-implements the pt-A **specification text** (which was supplied directly
-and does not depend on the repo's internal code), using original sample
-data.
+Given this, nothing about the target repo's internal rule/engine logic is
+treated as ground truth here. This build implements the **pt-B
+specification text** against a new, small, clearly-labeled sample data set.
 
 ## Files in this delivery
 
-Exactly three, matching the convention described by the target project:
+Three files, matching this tool environment's constraint (not a claim about
+the target repo's file count, which this session found to be disputed — see
+above):
 
 | File | Role |
 |---|---|
-| `index.html` | Everything: design tokens, all CSS (organized into the 10 sections the brief specifies), and all JS (sample data layer + `LeadOS` module namespace + UI managers), inlined. No build step. |
+| `index.html` | Everything: sample data/event layer, the `LeadOS` module namespace (`store`, `events`, `engine`, `correlate`, `leadership_self`, `playbooks`, `ambient`, UI layer), all CSS, all JS. No build step. |
 | `README.md` | This file. |
-| `AI-SESSION-LOG.md` | Append-style engineering log: claim-vs-inspection audit, what was built, every deliberate deviation from the literal brief and why, and a decisions log. |
+| `AI-SESSION-LOG.md` | Append-style engineering log: the full claim-vs-inspection audit, what was built, every deliberate deviation and why, and a decisions log. |
 
-## What's implemented
+## Module table (brief's required `LEADOS._mod` registry)
 
-- **Full token system** from the brief: 5-level surface/ink hierarchies,
-  semantic severity colors (never decorative), 14 domain colors, type
-  scale, 4px spacing grid, radii, dark-mode glow shadows, motion
-  durations/easings, layout widths. Light theme via `[data-theme="light"]`.
-- **Component library**: severity-coded finding cards (distinct per sev
-  1–5, including the sev-5 pulsing glow), monospace score-math blocks,
-  domain/rule/confidence chips, confidence-as-rendering-weight (solid /
-  dashed+70% / dotted+italic+45%), insight (pattern) cards with a
-  **hard-coded, non-bypassable** no-suppress state for sev-5 patterns,
-  metric cards with SVG sparklines + CSS bullet graphs, a 14-cell domain
-  heatmap, zebra-striped sticky-header data tables, toasts, empty
-  states that teach (what's missing → why it matters → fastest fix),
-  shimmer skeleton loading states.
-- **Navigation**: collapsible left rail with the brief's exact section
-  grouping (Command / Intelligence / Operations / Business / People /
-  Organization / Self / System), badges colored by highest active
-  severity in that section, footer with schema/storage info.
-- **Command palette** (`⌘/Ctrl+K`): recent / suggested / quick-log
-  groups by default; `#domain`, `sev:N`, `@person`, `>command` query
-  modes; arrow-key navigation, Enter to execute, Escape to close.
-- **Context panel**: opens on finding click with full detail + actions;
-  closes on Escape, ✕, or nav change.
-- **Keyboard shortcuts**: `K T R P H D J Enter S X U [ ? Esc`, plus an
-  on-screen shortcuts overlay (`?`).
-- **Managers** exposed on `window.LeadOS`: `renderComponent`,
-  `commandPalette`, `keyboardShortcuts`, `densityManager`,
-  `themeManager`, `panelManager`, `scrollManager`, `toastManager` —
-  matching the interface the brief specifies.
-- **Theme** (dark / light / system) and **density** (compact / standard
-  / comfortable / reading) with `localStorage` persistence.
-- **Accessibility**: visible focus rings, `aria-live="polite"` main
-  region, icon-only buttons labeled, `prefers-reduced-motion` and
-  `prefers-contrast: more` media queries honored.
-- **Print stylesheet**: rail/panel/toasts hidden, colors flattened,
-  footer stamp.
-- A persistent, non-dismissable **sev-5 crisis banner** when critical
-  findings are present.
+| Module | Status | Notes |
+|---|---|---|
+| `store` | Implemented (inline) | Mirrors the *verified* real doctrine: one localStorage key, append-only, single `append()` write path. New schema/lineage (`schemaVersion 1`, `pt-B`) — not a continuation of the real `pt-6`/schema-5 store. |
+| `events` | Implemented (inline) | ~20-type sample registry, far smaller than the real, partially-verified 92-type registry. |
+| `engine` | Implemented (inline) | Hand-written sample rule set (R103, R12, R20, R55, R71, R40…). Rule IDs are labels/homage, not verified ports. |
+| `correlate` | Implemented (inline) | No real file exists to port (verified absent); minimal same-file stand-in. |
+| `leadership_self` | Implemented (inline) | No real file exists to port (verified absent); minimal same-file stand-in (`avoidancePatterns`). |
+| `playbooks` | Implemented (inline) | 4 sample playbook defs, open/complete/completionRate. |
+| **`ambient`** | **Implemented (inline) — this is the pt-B deliverable** | All ten brief functions; 100% pure (reads only, never calls `store.append`). |
+| `ui` | Implemented (inline) | Rail, Today view, domain views, digest/review modals, command palette, snooze menu, toasts. |
 
-## What's intentionally not implemented (and why)
+`LeadOS._mod.ambient` is registered and loaded (in source order) after
+`correlate`/`leadership_self`/`playbooks` are defined, honoring the brief's
+dependency order even though it is all one `<script>` tag rather than
+separate files. The `EXPECTED` guard array checks all seven module keys at
+boot and renders "Modules: N/N OK" in the rail footer.
 
-See `AI-SESSION-LOG.md` §2 for the full list with reasoning. Short
-version: no real rules engine (sample data only, clearly labeled
-everywhere), no `<canvas>` sparkline (SVG instead), no D-Spine widget,
-no drag-resize table columns, no generic form system — each omission is
-because this build refuses to render a convincing-looking feature with
-nothing real behind it, which is the same discipline the target
-project's own documentation claims for itself.
+## What's implemented (pt-B feature by feature)
+
+- **Contextual Time Intelligence** — `currentContext()`: time-of-day bucket
+  (MORNING_REVIEW/DEEP_WORK/MIDDAY_PULSE/EXECUTION/REFLECTION/ASYNC),
+  day-of-week modes (WEEK_START/WEEK_END/BOARD_PREP/SPRINT_CLOSE), and an
+  inferred (explicitly labeled "not confirmed schedule") cadence note from
+  the day-of-week distribution of `oneonone.logged` events.
+- **Daily Intelligence Digest** — `buildDigest()`, triggered only via the
+  `> digest` command or button, never automatic, never cached. Every line
+  is sourced inline (event/finding that produced it).
+- **Behavioral Learning Engine** — `learnPatterns()`: dismissal-rate per
+  rule, playbook completion rate, finding latency (R99 variant), domain
+  neglect (via `leadership_self.avoidancePatterns`), snooze-fatigue. All
+  observations carry the brief's exact label: "behavioral pattern
+  observation — derived from your suppression and playbook history."
+  Surfaced at `#/data`, with a working "mute rule globally" control writing
+  to `meta.mutedRules`.
+- **Smart Priority Scoring** — `smartScore()`: base sev×confidence plus the
+  six multiplicative modifiers from the brief, printed as a mono
+  base/smart breakdown block on every finding card. A **base vs. smart**
+  rank toggle lives on The Three panel.
+- **The Three** — `computeTheThree()`, top 3 by smart score, excluding
+  findings already acted on this session.
+- **Ambient Warning System** — clickable status strip (severity counts +
+  domain bubbles), filters the finding list, persists for the session.
+- **Focus Mode** — `F` key or `> focus`; hides the full list, keeps The
+  Three + quick capture; auto-exits on `playbook.completed`.
+- **Weekly Review Mode** — `> review`; 5-step guided wizard, saves
+  `reflection.logged` (+ `commitment.made` from step 5) only at the end.
+- **Natural Language Event Logging** — `parseQuickLog()`: regex + person
+  lookup for the three example phrasings in the brief (1:1 + pulse, sales
+  deal, conflict). Always shows parsed fields and requires an explicit
+  "Confirm & save" click; never auto-saves.
+- **Snooze Intelligence** — contextual `snoozeOptions()` dropdown (next
+  1:1, sprint end, board meeting, Monday, tomorrow, custom), snooze-count
+  chip, and a dedicated snooze-fatigue observation after 3+.
+- **Notification Badges as Intelligence** — rail badges encode count via
+  number, severity via (simplified) color, and trend via shape (circle/
+  diamond/square), backed by a disclosed `meta.badgeHistory` cache (a
+  pt-B addition analogous to the brief's own `meta.mutedRules`/`patterns`
+  exceptions — see `AI-SESSION-LOG.md` §2.4).
+- **Session Intelligence** — `LeadOS.session` (in-memory only, never
+  persisted): `lastViewedFindings`, `actedOnFindings`, `sessionStart`,
+  `viewHistory`/`searchHistory` (search history tracked via the command
+  palette and quick-capture inputs).
+
+## What's intentionally not fully implemented (and why)
+
+See `AI-SESSION-LOG.md` §2 for the complete list with reasoning. Short
+version: no port of the real `engine.js`/`health.js`/`ui.js`/`playbooks.js`
+logic (not read this session — budget; see audit table above), a few
+streak/series numbers (ops "3 consecutive weeks," R8/R34 quiet-win streaks)
+are fabricated sample constants labeled inline rather than derived from a
+real weekly-series event family that wasn't in scope to build honestly.
 
 ## Run it
 
-Open `index.html`. Press `Cmd/Ctrl+K` for the command palette, `?` for
-the shortcut list, `[` to collapse the rail, `T`/`R`/`P`/`H`/`D` to jump
-views.
+Open `index.html`. `Cmd/Ctrl+K` for the command palette, `F` for focus
+mode, click **digest** / **review** buttons on the Today view, click any
+finding's **Snooze ▾** for contextual snooze options, visit **Data &
+Calibration** in the rail for behavioral pattern observations and rule
+muting.
 
 ---
 
 ## Changelog
 
-### pt-A (this delivery)
-- **Added** complete design token system (`:root`, light theme, density
-  variants) per brief — *why: establishes the single source of truth
-  every component below reads from, so severity/confidence/domain
-  colors stay semantic instead of ad-hoc.*
-- **Added** finding card, insight card, metric card, score-math block,
-  chips, bullet graph, heatmap, sparkline, data table, toast, empty
-  state, skeleton components via a `renderComponent(type, data)`
-  factory — *why: brief explicitly calls for a component factory, not
-  ad-hoc string concatenation, so new card types can be added in one
-  place.*
-- **Added** full left rail navigation, command palette, context panel,
-  keyboard shortcut system, theme/density managers — *why: these are
-  the primary "power user" surfaces the brief is built around; without
-  them the component library has nothing to live inside.*
-- **Added** sev-5 persistent crisis banner, collapsed sev-1 nudges,
-  mini-TOC for long lists, print stylesheet, reduced-motion/high-
-  contrast support — *why: brief requirements for graded urgency and
-  accessibility, not optional polish.*
-- **Replaced** "port the real `engine.js`/`ui.js`/`app.css`" with "build
-  the pt-A layer against labeled sample data" — *why: the real files
-  could not be read this session (tooling strips large inline-script
-  HTML on fetch; the loose `.js` files were 25–175 KB each and porting
-  them byte-faithfully was out of budget and, per the target repo's own
-  README, already unverifiable against "upstream" anyway). Shipping
-  invented rule logic as if it were the real R1–R144 set would repeat
-  the exact failure mode that repo's README is written to call out in
-  itself.*
-- **Used** inline SVG for sparklines instead of `<canvas>` — *why:
-  equivalent visual result, simpler to keep in sync with sample data
-  re-renders, no DPI/resize handling needed for a reference build.*
-- **Kept** everything in one `index.html` instead of separate
-  `css/app.css` + `js/ui.js` — *why: hard constraint of this delivery
-  environment (single-file output); CSS and JS are still organized into
-  the exact sections/managers the brief names, so the separation is
-  logical even if not physical.*
+### pt-B (this delivery)
+
+- **Added** `LeadOS.ambient` (aliased `LEADOS.ambient`) implementing all
+  ten functions the brief names — *why: this is the actual deliverable;
+  everything else exists to give it real data to read.*
+- **Added** Today view redesign (context greeting, status strip, The
+  Three, focus mode, NL quick capture, `[NEW]` tracking) — *why: these are
+  the primary surfaces the brief defines as what actually gets shown, not
+  optional UI polish.*
+- **Added** digest modal, 5-step weekly review wizard, command palette
+  `>` commands, contextual snooze dropdown — *why: each is an explicit,
+  user-triggered flow per the brief's "generated on demand, never
+  cached"/"confirm always required" doctrine.*
+- **Added** Data & Calibration view with working rule-mute control against
+  `meta.mutedRules` — *why: the brief calls this out as a genuinely new
+  pt-B capability; implementing it as a real control (not prose) honors
+  the brief's "ambient surfaces, store writes" separation.*
+- **Added** rail badge shape system + disclosed `meta.badgeHistory` cache
+  — *why: the shape feature is meaningless without some persisted
+  prior-day snapshot; the brief didn't specify where, so one sanctioned
+  field was added and documented, mirroring the brief's own
+  `mutedRules`/`patterns` exception pattern.*
+- **Replaced** "port `js/ambient.js` alongside real `js/store.js` /
+  `js/events.js` / `js/engine.js` / `js/correlate.js`" with "build pt-B
+  as a new single-file sample system" — *why: independently verified this
+  session that no `js/` folder, `correlate.js`, or `leadership_self.js`
+  exists in the target repo at all (GitHub Git Trees API, byte-checked);
+  building against a described file layout that was confirmed not to
+  exist would be building on fiction rather than inspected code.*
+- **Kept** `LeadOS` (mixed case) as the canonical namespace, with `LEADOS`
+  as a live alias — *why: `LeadOS` is the one namespace this session
+  actually verified by reading real code (`store.js`, `events.js`); the
+  brief's `LEADOS` capitalization could not be verified against any real
+  file, so it's supported without being asserted as "correct."*
+- **Declined** to assert any internal correctness for `engine.js`,
+  `health.js`, `ui.js`, or `playbooks.js` — *why: not read this session
+  (budget); see `AI-SESSION-LOG.md` §0.7.*
