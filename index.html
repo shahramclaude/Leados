@@ -145,6 +145,11 @@ main{flex:1;min-width:0;padding:34px 40px 90px;max-width:1180px}
 .ins .foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .ins.acked{opacity:.62;background:var(--paper2)}
 .fin.focus{outline:2px solid var(--accent);outline-offset:2px}
+/* pt-19: a sev-5 crisis finding reads differently from every other finding */
+.fin.sevmax{border-left:5px double var(--accent-ink);box-shadow:0 0 0 1px rgba(179,41,30,.25);background:rgba(179,41,30,.035)}
+.slabreach{border:1px solid var(--accent-ink);background:rgba(179,41,30,.09);border-radius:4px;
+  padding:10px 13px;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent-ink);
+  letter-spacing:.02em;margin:10px 0}
 .pill[data-act]{cursor:pointer}
 .pill[data-act]:hover{border-color:var(--ink);color:var(--ink)}
 .spark{font-family:var(--mono);font-size:13px;letter-spacing:.08em}
@@ -225,7 +230,7 @@ const LeadOS = window.LeadOS = window.LeadOS || {};
 /* Module registry — the single-file analog of the brief's script list.
    Each logical "file" registers exactly one namespace, in this load order.
    The boot guard halts rendering if any entry is missing (data untouched). */
-LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','calibration','finIntel','narrative','health','playbooks','ui'];
+LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','calibration','finIntel','narrative','resilience','health','playbooks','ui'];
 
 /* ==================== 1 · UTIL ==================== */
 (function(){
@@ -535,7 +540,26 @@ const REGISTRY = {
   'press.mention':          D({outlet:'s',sentiment:'s',topic:'s',date:'ms'},{reach:'n',note:'s'},
                               {sentiment:['positive','neutral','negative']}),
   'internal.comms.sent':    D({id:'s',channel:'s',audience:'s',topic:'s',urgency:'n',acknowledged:'b'},{note:'s'},
-                              {channel:['slack','email','meeting','doc'],audience:['team','org','exec','cross-team']},'internalComms')
+                              {channel:['slack','email','meeting','doc'],audience:['team','org','exec','cross-team']},'internalComms'),
+  /* pt-19 (brief "pt-14") — resilience engine. 12 contracts. */
+  /* NOTE: distinct from the pt-4 exec.crisis.* family, which stays as it was.
+     These fold into `crisisEvents`; `crises` remains the exec family's bucket. */
+  'crisis.detected':        D({id:'s',title:'s',type:'s',severity:'n',trigger:'s',responseTeam:'a',detectedAt:'ms'},{commanderId:'s'},
+                              {type:['system','people','financial','legal','reputational','operational','external','security']},'crisisEvents'),
+  'crisis.update':          D({crisisId:'s',status:'s',note:'s',updatedAt:'ms'},null,
+                              {status:['active','contained','recovering','resolved']},null,{crisisId:'crisisEvents'}),
+  'crisis.resolved':        D({crisisId:'s',resolvedAt:'ms',rootCause:'s',timeline_accurate:'b',postmortem_due_date:'ms'},null,null,null,{crisisId:'crisisEvents'}),
+  'crisis.postmortem':      D({crisisId:'s',what_happened:'s',why_it_happened:'s',contributing_factors:'a',what_went_well:'a',what_went_wrong:'a',action_items:'a',severity_accurate:'b'},null,null,null,{crisisId:'crisisEvents'}),
+  'continuity.plan':        D({id:'s',process:'s',criticality:'n',primary_owner:'s',documented:'b',tested:'b'},{backup_owner:'s',last_tested_date:'ms',note:'s'},null,'continuityPlans'),
+  'continuity.tested':      D({planId:'s',test_type:'s',result:'s',gaps:'a'},{note:'s'},
+                              {test_type:['tabletop','simulation','live'],result:['pass','partial','fail']},null,{planId:'continuityPlans'}),
+  'key.dependency.logged':  D({personId:'s',processes_owned:'a',bus_factor:'n',documented:'b',cross_trained:'b'},{note:'s',criticality_sum:'n'}),
+  'stress.test.logged':     D({id:'s',scenario:'s',scope:'s',assumptions:'a',results:'a',mitigations:'a',conducted_by:'s',date:'ms'},null,null,'stressTests'),
+  'recovery.milestone':     D({id:'s',crisisId:'s',milestone:'s',achieved:'b'},{achieved_at:'ms',note:'s'},null,'recoveryMilestones',{crisisId:'crisisEvents'}),
+  'incident.comms.sent':    D({crisisId:'s',audience:'s',channel:'s',message_summary:'s',sentiment_neutral:'b'},{note:'s'},
+                              {audience:['internal','customer','public','investor','regulator']},null,{crisisId:'crisisEvents'}),
+  'war.room.opened':        D({id:'s',crisisId:'s',members:'a',location:'s',cadence_hours:'n',ownerId:'s'},null,null,'warRooms',{crisisId:'crisisEvents'}),
+  'war.room.closed':        D({warRoomId:'s',closedAt:'ms'},{note:'s'},null,null,{warRoomId:'warRooms'})
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -562,7 +586,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=13, LINEAGE='pt', LINEAGE_TAG='pt-18';
+const KEY='leados:data', SCHEMA_VERSION=14, LINEAGE='pt', LINEAGE_TAG='pt-19';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -608,7 +632,12 @@ const V12_NEW_KEYS=Object.keys(V12_SETTING_DEFAULTS);
 const V13_SETTING_DEFAULTS={boardNarrativeReviewDays:14,allHandsCadenceDays:30,
   investorUpdateCadenceDays:30,communicationHitRateWindow:180};
 const V13_NEW_KEYS=Object.keys(V13_SETTING_DEFAULTS);
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS,V11_SETTING_DEFAULTS,V12_SETTING_DEFAULTS,V13_SETTING_DEFAULTS);
+/* v14 — resilience. crisisResponseSLAHours is the only HOURS setting in the
+   ladder; every rule that reads it prints the unit so it cannot be misread. */
+const V14_SETTING_DEFAULTS={crisisResponseSLAHours:2,continuityReviewCadenceDays:90,
+  keyPersonDependencyThreshold:3,stressTestCadenceDays:180};
+const V14_NEW_KEYS=Object.keys(V14_SETTING_DEFAULTS);
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS,V11_SETTING_DEFAULTS,V12_SETTING_DEFAULTS,V13_SETTING_DEFAULTS,V14_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -709,7 +738,13 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V13_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V13_SETTING_DEFAULTS[k]},{repair:true,migration:'12>13',reason:'backfill v13 setting default'}); repairs++; }});
-    recordMigration(raw,'12>13',repairs); raw.schemaVersion=13; return repairs; }
+    recordMigration(raw,'12>13',repairs); raw.schemaVersion=13; return repairs; },
+  /* v13 -> v14: resilience settings. The fourteenth rung, same contract as the third. */
+  '13>14':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V14_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V14_SETTING_DEFAULTS[k]},{repair:true,migration:'13>14',reason:'backfill v14 setting default'}); repairs++; }});
+    recordMigration(raw,'13>14',repairs); raw.schemaVersion=14; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -801,7 +836,7 @@ LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SET
   V7_SETTING_DEFAULTS,V7_NEW_KEYS,V8_SETTING_DEFAULTS,V8_NEW_KEYS,
   V9_SETTING_DEFAULTS,V9_NEW_KEYS,V10_SETTING_DEFAULTS,V10_NEW_KEYS,
   V11_SETTING_DEFAULTS,V11_NEW_KEYS,V12_SETTING_DEFAULTS,V12_NEW_KEYS,
-  V13_SETTING_DEFAULTS,V13_NEW_KEYS,SETTING_ENUMS,
+  V13_SETTING_DEFAULTS,V13_NEW_KEYS,V14_SETTING_DEFAULTS,V14_NEW_KEYS,SETTING_ENUMS,
   RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
@@ -1165,7 +1200,50 @@ const MODULE_FOLD={
   'investor.update.sent':(s,p,at,ev)=>{ push(s.investorUpdates2,p,at,ev); },
   'press.mention':(s,p,at,ev)=>{ push(s.pressMentions,p,at,ev); },
   'internal.comms.sent':(s,p,at)=>{ s.internalComms[p.id]={id:p.id,channel:p.channel,audience:p.audience,
-    topic:p.topic,urgency:p.urgency,acknowledged:p.acknowledged,note:p.note||'',at:at}; }
+    topic:p.topic,urgency:p.urgency,acknowledged:p.acknowledged,note:p.note||'',at:at}; },
+  /* pt-19 — resilience */
+  'crisis.detected':(s,p,at)=>{ s.crisisEvents[p.id]={id:p.id,title:p.title,type:p.type,
+    severity:p.severity,trigger:p.trigger,responseTeam:p.responseTeam.slice(),
+    commanderId:p.commanderId||null,detectedAt:p.detectedAt,loggedAt:at,
+    updates:[],status:null,statusAt:null,resolved:null,postmortem:null,comms:[],warRooms:[],milestones:[]}; },
+  'crisis.update':(s,p,at)=>{ const c=s.crisisEvents[p.crisisId]; if(!c) return;
+    c.updates.push({status:p.status,note:p.note,updatedAt:p.updatedAt,at:at});
+    c.status=p.status; c.statusAt=p.updatedAt; },
+  'crisis.resolved':(s,p,at)=>{ const c=s.crisisEvents[p.crisisId]; if(!c) return;
+    c.resolved={resolvedAt:p.resolvedAt,rootCause:p.rootCause,
+      timeline_accurate:p.timeline_accurate,postmortem_due_date:p.postmortem_due_date,at:at};
+    c.status='resolved'; },
+  'crisis.postmortem':(s,p,at,ev)=>{ const c=s.crisisEvents[p.crisisId];
+    const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    if(c) c.postmortem=rec;
+    s.postmortems.push(rec); },
+  'continuity.plan':(s,p,at)=>{ s.continuityPlans[p.id]={id:p.id,process:p.process,
+    criticality:p.criticality,primary_owner:p.primary_owner,backup_owner:p.backup_owner||null,
+    documented:p.documented,tested:p.tested,
+    last_tested_date:(p.last_tested_date===undefined?null:p.last_tested_date),
+    note:p.note||'',loggedAt:at,tests:[]}; },
+  'continuity.tested':(s,p,at)=>{ const pl=s.continuityPlans[p.planId]; if(!pl) return;
+    pl.tests.push({test_type:p.test_type,result:p.result,gaps:p.gaps.slice(),note:p.note||'',at:at});
+    pl.tested=true; pl.last_tested_date=at; },
+  'key.dependency.logged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.keyDeps.push(rec); s.keyDepByPerson[p.personId]=rec; /* latest wins */ },
+  'stress.test.logged':(s,p,at)=>{ s.stressTests[p.id]={id:p.id,scenario:p.scenario,scope:p.scope,
+    assumptions:p.assumptions.slice(),results:p.results.slice(),mitigations:p.mitigations.slice(),
+    conducted_by:p.conducted_by,date:p.date,loggedAt:at};
+    s.stressTestLog.push(s.stressTests[p.id]); },
+  'recovery.milestone':(s,p,at)=>{ const rec={id:p.id,crisisId:p.crisisId,milestone:p.milestone,
+    achieved:p.achieved,achieved_at:(p.achieved_at===undefined?null:p.achieved_at),note:p.note||'',at:at};
+    s.recoveryMilestones[p.id]=rec;
+    const c=s.crisisEvents[p.crisisId]; if(c) c.milestones.push(rec); },
+  'incident.comms.sent':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.incidentComms.push(rec);
+    const c=s.crisisEvents[p.crisisId]; if(c) c.comms.push(rec); },
+  'war.room.opened':(s,p,at)=>{ s.warRooms[p.id]={id:p.id,crisisId:p.crisisId,members:p.members.slice(),
+    location:p.location,cadence_hours:p.cadence_hours,ownerId:p.ownerId,
+    openedAt:at,closed:false,closedAt:null,closeNote:''};
+    const c=s.crisisEvents[p.crisisId]; if(c) c.warRooms.push(s.warRooms[p.id]); },
+  'war.room.closed':(s,p,at)=>{ const w=s.warRooms[p.warRoomId];
+    if(w){ w.closed=true; w.closedAt=p.closedAt; w.closeNote=p.note||''; } }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -1220,6 +1298,9 @@ function blankBuckets(s){
   /* pt-18 narrative buckets */
   s.narratives={};s.narrativesByType={};s.deliveries=[];s.narrativeFeedback=[];
   s.messageTests=[];s.allHands=[];s.investorUpdates2=[];s.pressMentions=[];s.internalComms={};
+  /* pt-19 resilience buckets */
+  s.crisisEvents={};s.postmortems=[];s.continuityPlans={};s.keyDeps=[];s.keyDepByPerson={};
+  s.stressTests={};s.stressTestLog=[];s.recoveryMilestones={};s.incidentComms=[];s.warRooms={};
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -1261,7 +1342,10 @@ const OPEN_SETS={
   openBiases:['biases',b=>!b.acknowledged],
   unreviewedCapex:['capex',c=>c.status===null],
   undeliveredNarratives:['narratives',n=>n.delivery===null],
-  unackedComms:['internalComms',c=>!c.acknowledged]
+  unackedComms:['internalComms',c=>!c.acknowledged],
+  openCrises2:['crisisEvents',c=>!c.resolved],
+  openWarRooms:['warRooms',w=>!w.closed],
+  openRecoveryMilestones:['recoveryMilestones',m=>!m.achieved]
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -3076,6 +3160,203 @@ function R124(P,today){ const f=F('R124'),out=[];
           'Testing a message is not weakness — it is not walking into a room having only heard yourself say it.'],
         refs:[n.id],scope:n.id+':untested',evidenceAt:n.draftedAt})); }); });
   return out; }
+/* ---- pt-19 resilience rules R125–R134. Elapsed time is a fact, so the SLA
+   and age rules are conf HIGH; bus factors, impact and likelihood are your
+   own assessments, so the rules reading them are MEDIUM and say which. ---- */
+Object.assign(META,{
+  R125:{domain:'operations',play:'crisis-response'},R126:{domain:'customerSuccess',play:'crisis-response'},
+  R127:{domain:'operations',play:'crisis-postmortem'},R128:{domain:'operations',play:'crisis-postmortem'},
+  R129:{domain:'people',play:'key-person-risk-mitigation'},R130:{domain:'operations',play:'continuity-review'},
+  R131:{domain:'operations',play:'stress-test'},R132:{domain:'operations',play:'stress-test'},
+  R133:{domain:'operations',play:'crisis-postmortem'},R134:{domain:'operations',play:'recovery-tracking'}
+});
+function R125(P,today){ const f=F('R125'),out=[];
+  const set=LeadOS.engine.settings(P), slaH=set.crisisResponseSLAHours;
+  (P.openCrises2||[]).forEach(c=>{
+    const es=LeadOS.resilience.crisisSeverity(c.id,P,today);
+    const hrs=(today-c.detectedAt)/H;
+    const firstUpdate=c.updates.length?c.updates[0].updatedAt:null;
+    const breached=(firstUpdate===null)?(hrs>slaH):(((firstUpdate-c.detectedAt)/H)>slaH);
+    if(breached)
+      out.push(f({sev:5,conf:'HIGH',title:'Crisis response SLA breached ('+U.rd(hrs,1)+'h): '+c.title,
+        basis:['crisis.detected '+U.isoT(c.detectedAt)+' · '+(firstUpdate===null
+            ?('NO crisis.update at all after '+U.rd(hrs,1)+'h')
+            :('first crisis.update at +'+U.rd((firstUpdate-c.detectedAt)/H,1)+'h')) +
+          ' · crisisResponseSLAHours '+slaH+'h (HOURS, not days)',
+          'ELAPSED TIME IS A FACT — conf HIGH; the severity escalation model is printed below',
+          'escalation chain: '+es.chainText,
+          'A crisis that nobody officially owns within '+slaH+' hours owns itself.'],
+        refs:[c.id],scope:c.id+':sla',evidenceAt:c.detectedAt}));
+    if(c.severity>=4){
+      const wr=c.warRooms.filter(w=>(w.openedAt-c.detectedAt)<=1*H);
+      if(!wr.length&&hrs>1)
+        out.push(f({sev:4,conf:'HIGH',title:'No war room for severity-'+c.severity+' crisis after '+U.rd(hrs,1)+'h: '+c.title,
+          basis:['crisis.detected severity '+c.severity+' ≥ 4 · no war.room.opened within 1h of detection · '+U.rd(hrs,1)+'h elapsed',
+            'escalation chain: '+es.chainText],
+          refs:[c.id],scope:c.id+':warroom',evidenceAt:c.detectedAt})); } });
+  return out; }
+function R126(P,today){ const f=F('R126'),out=[];
+  (P.openCrises2||[]).forEach(c=>{
+    if(c.type!=='reputational'&&c.type!=='system') return; /* only these two types trigger */
+    if(c.severity<3) return;
+    const cust=c.comms.filter(x=>x.audience==='customer');
+    const first=cust.length?Math.min.apply(null,cust.map(x=>x.at)):null;
+    const hrs=(today-c.detectedAt)/H;
+    if(first!==null&&((first-c.detectedAt)/H)<=4) return;
+    if(hrs<=4) return;
+    out.push(f({sev:hrs>8?5:4,conf:'HIGH',
+      title:'No customer comms '+U.rd(hrs,1)+'h into a '+c.type+' crisis: '+c.title,
+      basis:['crisis.detected type "'+c.type+'" severity '+c.severity+' ≥ 3 at '+U.isoT(c.detectedAt),
+        (first===null?'zero incident.comms.sent with audience "customer"'
+          :('first customer comms at +'+U.rd((first-c.detectedAt)/H,1)+'h, outside the 4h window'))+
+          ' · '+U.rd(hrs,1)+'h elapsed'+(hrs>8?' > 8h → sev 5':' > 4h → sev 4'),
+        'The customer who finds out from Twitter never fully trusts you again.'],
+      refs:[c.id],scope:c.id+':comms',evidenceAt:c.detectedAt})); });
+  return out; }
+function R127(P,today){ const f=F('R127'),out=[];
+  vals(P.crisisEvents||{}).forEach(c=>{
+    if(!c.resolved||c.postmortem) return;
+    const due=c.resolved.postmortem_due_date;
+    if(due>=today) return; /* exactly on the due date is quiet */
+    const late=days(today,due);
+    out.push(f({sev:late>14?5:4,conf:'HIGH',title:'Postmortem '+late+'d overdue: '+c.title,
+      basis:['crisis.resolved '+U.iso(c.resolved.resolvedAt)+' with postmortem_due_date '+U.iso(due)+' · '+late+'d past'+(late>14?' > 14d → sev 5':' → sev 4'),
+        'root cause as recorded at resolution: "'+c.resolved.rootCause+'"',
+        'A crisis without a postmortem is a crisis that will happen again.'],
+      refs:[c.id],scope:c.id+':postmortem',evidenceAt:due})); });
+  return out; }
+function R128(P,today){ const f=F('R128'),out=[];
+  (P.postmortems||[]).forEach(pm=>{
+    (pm.action_items||[]).forEach(a=>{
+      const due=a&&a.dueDate;
+      if(typeof due!=='number'||due>=today) return;
+      const t=String((a&&a.action)||'').toLowerCase().slice(0,24);
+      const done=t.length>6&&(P.noteLog||[]).some(n=>n.at>pm.at&&String(n.text||'').toLowerCase().indexOf(t)!==-1);
+      if(done) return;
+      out.push(f({sev:3,conf:'MEDIUM',title:'Postmortem action overdue: '+(a.action||'(unnamed)'),
+        basis:['crisis.postmortem for '+pm.crisisId+' logged '+U.iso(pm.at)+' · action "'+a.action+'" owned by '+(a.owner||'NOBODY NAMED')+' due '+U.iso(due)+' · '+days(today,due)+'d past',
+          'no note.added since the postmortem mentions this action — HEURISTIC TEXT MATCH on the first 24 characters, which is weak evidence and labeled as such (conf MEDIUM for that reason)',
+          'NOTE ON THE GUARD: the brief expected R10 to guard postmortem follow-through. As shipped, R10 reads OBJECTIVES with zero key results, not plans — so THIS rule is the guard, and the divergence is printed rather than assumed away.'],
+        refs:[pm.crisisId],scope:pm.crisisId+':action:'+t.slice(0,12),evidenceAt:due})); }); });
+  /* recurring root cause across postmortems escalates */
+  const pat=LeadOS.resilience.crisisPatterns(P,today);
+  pat.recurringRootCauses.forEach(r=>{
+    const withPm=r.crises.filter(c=>c.postmortem);
+    if(withPm.length<2) return;
+    out.push(f({sev:4,conf:'MEDIUM',title:'Same root cause postmortemed '+withPm.length+'×: "'+r.verbatim+'"',
+      basis:[withPm.length+' postmortems share the normalized root cause "'+r.key+'" — '+withPm.map(c=>c.title+' ('+U.iso(c.resolved.resolvedAt)+')').join(' · '),
+        pat.normalizationNote,
+        'You learned the lesson and did not apply it.',
+        pat.confidenceNote],
+      refs:withPm.map(c=>c.id),scope:'postmortem:recurring:'+r.key.slice(0,16),
+      evidenceAt:U.maxAt(withPm,c=>c.resolved.resolvedAt)})); });
+  return out; }
+function R129(P,today){ const f=F('R129'),out=[];
+  const k=LeadOS.resilience.keyPersonRisk(P,today);
+  k.rows.forEach(r=>{
+    if(r.busFactor!==1) return; /* threshold is exactly 1 */
+    if(r.crossTrained||r.documented) return;
+    if(r.criticalitySum<4) return;
+    /* compound escalation: their team is also firing the attrition rule */
+    const attrition=LeadOS.rules.RULES[18](P,today).length>0;
+    out.push(f({sev:attrition?5:4,conf:'HIGH',
+      title:'Single point of failure'+(attrition?' AND attrition risk active':'')+': '+r.personId,
+      basis:[r.math,
+        'bus_factor 1 · NOT cross-trained · NOT documented · criticality '+r.criticalitySum+' ≥ 4 ('+r.criticalityNote+')',
+        'processes owned: '+(r.processes.join(', ')||'none listed'),
+        attrition?'R19 (attrition window) is ALSO firing — compound escalation to sev 5: you have one person who knows how to do a critical thing and the log says people are leaving'
+          :'R19 is not firing; severity stays at 4',
+        r.departing?'this person has an hr.attrition.logged record — they are already leaving':'no attrition record for this person',
+        k.label],
+      refs:[r.personId],scope:r.personId+':spof',evidenceAt:r.at})); });
+  return out; }
+function R130(P,today){ const f=F('R130'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.continuityReviewCadenceDays;
+  vals(P.continuityPlans||{}).forEach(p=>{
+    if(p.criticality<4) return; /* below the threshold → quiet */
+    const fails=p.tests.filter(t=>t.result==='fail');
+    const lastFail=fails.length?fails[fails.length-1]:null;
+    if(lastFail){
+      const retested=p.tests.some(t=>t.at>lastFail.at);
+      const age=days(today,lastFail.at);
+      if(!retested&&age>30){
+        out.push(f({sev:4,conf:'HIGH',title:'Continuity test FAILED '+age+'d ago with no re-test: '+p.process,
+          basis:['continuity.tested result "fail" on '+U.iso(lastFail.at)+' ('+lastFail.test_type+') · '+age+'d > 30d with no subsequent test',
+            'gaps recorded: '+(lastFail.gaps.join('; ')||'none listed'),
+            'criticality '+p.criticality+' · primary owner '+p.primary_owner+(p.backup_owner?' · backup '+p.backup_owner:' · NO BACKUP OWNER')],
+          refs:[p.id],scope:p.id+':failed',evidenceAt:lastFail.at}));
+        return; } }
+    const last=p.tests.slice(-1)[0];
+    const age=last?days(today,last.at):(p.last_tested_date?days(today,p.last_tested_date):null);
+    if(last&&age<=cad) return;
+    if(!last&&p.last_tested_date&&age<=cad) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Critical continuity plan untested'+(age===null?' — ever':' for '+age+'d')+': '+p.process,
+      basis:['criticality '+p.criticality+' ≥ 4 · '+(age===null?'no continuity.tested event ever recorded'
+          :('last tested '+U.iso(last?last.at:p.last_tested_date)+' · '+age+'d > continuityReviewCadenceDays '+cad+'d')),
+        'primary owner '+p.primary_owner+(p.backup_owner?' · backup '+p.backup_owner:' · NO BACKUP OWNER')+
+          ' · documented: '+(p.documented?'yes':'NO'),
+        'A plan that has never been tested is a plan that will fail under the worst possible conditions.'],
+      refs:[p.id],evidenceAt:last?last.at:p.loggedAt})); });
+  return out; }
+function R131(P,today){ const f=F('R131'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.stressTestCadenceDays;
+  const s=LeadOS.resilience.stressTestResults(P,today);
+  if(s.daysSinceLast===null){
+    if(P.firstAt!==null&&days(today,P.firstAt)>cad)
+      out.push(f({sev:2,conf:'MEDIUM',title:'No stress test ever conducted',
+        basis:['zero stress.test.logged events · log spans '+days(today,P.firstAt)+'d > stressTestCadenceDays '+cad+'d',
+          'Organizations that never test their resilience discover it during a crisis.'],
+        refs:[],scope:'stress:never',evidenceAt:P.firstAt}));
+    return out; }
+  if(s.daysSinceLast<=cad) return out;
+  out.push(f({sev:s.daysSinceLast>2*cad?3:2,conf:'HIGH',title:'No stress test in '+s.daysSinceLast+'d',
+    basis:['latest stress.test.logged '+U.iso(s.last.date||s.last.loggedAt)+' ("'+s.last.scenario+'") · '+s.daysSinceLast+'d > stressTestCadenceDays '+cad+'d'+
+        (s.daysSinceLast>2*cad?' and > 2× cadence → sev 3':' → sev 2'),
+      'Organizations that never test their resilience discover it during a crisis.'],
+    refs:[],scope:'stress:cadence',evidenceAt:s.last.date||s.last.loggedAt}));
+  return out; }
+function R132(P,today){ const f=F('R132'),out=[];
+  const s=LeadOS.resilience.stressTestResults(P,today);
+  s.unmitigated.forEach(g=>{
+    out.push(f({sev:4,conf:'MEDIUM',title:'Unmitigated high-risk gap: '+g.area+' ('+g.scenario+')',
+      basis:[g.why+' · from stress.test.logged '+U.iso(g.at)+' ('+g.ageDays+'d ago'+(g.ageDays>30?', >30d and still unmitigated — severity maintained, not decayed':'')+')',
+        'impact and likelihood are YOUR OWN assessments from the test — conf MEDIUM for that reason',
+        s.label],
+      refs:[g.testId],scope:g.testId+':'+String(g.area).slice(0,16),evidenceAt:g.at})); });
+  return out; }
+function R133(P,today){ const f=F('R133'),out=[];
+  const pat=LeadOS.resilience.crisisPatterns(P,today);
+  pat.recurringRootCauses.forEach(r=>{
+    /* systemic fix heuristic: a process log, resolved debt, or passing
+       compliance check whose text mentions the root-cause key */
+    const key=r.key;
+    const word=key.split(/\s+/).filter(w=>w.length>3)[0]||key.slice(0,8);
+    const latest=U.maxAt(r.crises,c=>c.resolved.resolvedAt);
+    const fixed=(P.processLogs||[]).some(x=>x.at>latest&&(String(x.name||'')+' '+String(x.note||'')).toLowerCase().indexOf(word)!==-1)
+      ||vals(P.techDebt||{}).some(d=>d.resolved&&d.resolvedAt>latest&&(d.title+' '+d.resolveNote).toLowerCase().indexOf(word)!==-1)
+      ||(P.complianceChecks||[]).some(x=>x.at>latest&&x.result==='pass'&&(String(x.framework||'')+' '+String(x.note||'')).toLowerCase().indexOf(word)!==-1);
+    if(fixed) return;
+    out.push(f({sev:4,conf:'MEDIUM',title:'Recurring crisis root cause with no systemic fix: "'+r.verbatim+'"',
+      basis:[r.count+' crises share the normalized root cause "'+key+'": '+r.crises.map(c=>c.title+' ('+U.iso(c.resolved.resolvedAt)+')').join(' · '),
+        'searched for a systemic fix after '+U.iso(latest)+' — no ops.process.logged, resolved rd.tech.debt, or passing legal.compliance.check whose text contains "'+word+'"',
+        'HEURISTIC TEXT MATCH on "'+word+'" — verify manually; a fix described in different words will not be found by this search, and a coincidental word match would wrongly quiet it',
+        pat.normalizationNote,
+        'You have solved the same crisis twice and not fixed the system that caused it.',
+        pat.confidenceNote],
+      refs:r.crises.map(c=>c.id),scope:'crisis:recurring:'+key.slice(0,16),evidenceAt:latest})); });
+  return out; }
+function R134(P,today){ const f=F('R134'),out=[];
+  (P.openWarRooms||[]).forEach(w=>{
+    const hrs=(today-w.openedAt)/H;
+    if(hrs<=72) return;
+    const c=(P.crisisEvents||{})[w.crisisId];
+    out.push(f({sev:hrs>120?4:3,conf:'HIGH',title:'War room open '+U.rd(hrs,1)+'h: '+(c?c.title:w.crisisId),
+      basis:['war.room.opened '+U.isoT(w.openedAt)+' · no war.room.closed · '+U.rd(hrs,1)+'h'+(hrs>120?' > 120h → sev 4':' > 72h → sev 3'),
+        'members: '+(w.members.join(', ')||'none listed')+' · cadence every '+w.cadence_hours+'h · owner '+w.ownerId,
+        (c&&c.status?'crisis status is "'+c.status+'"':'no crisis.update status on record'),
+        'A war room that never closes signals a crisis that was never actually resolved — only managed indefinitely.'],
+      refs:[w.id],evidenceAt:w.openedAt})); });
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
              R46,R47,R48,R49,R50,R51,R52,
@@ -3085,7 +3366,8 @@ const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,
              R83,R84,R85,R86,R87,R88,R89,R90,R91,R92,
              R93,R94,R95,R96,R97,R98,R99,R100,R101,R102,
              R103,R104,R105,R106,R107,R108,R109,R110,R111,R112,R113,R114,
-             R115,R116,R117,R118,R119,R120,R121,R122,R123,R124];
+             R115,R116,R117,R118,R119,R120,R121,R122,R123,R124,
+             R125,R126,R127,R128,R129,R130,R131,R132,R133,R134];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -5066,6 +5348,181 @@ LeadOS.narrative={SELF_REPORTED:SELF_REPORTED,SCAFFOLD:SCAFFOLD,commHitRate:comm
   testMessage:testMessage,buildInvestorUpdate:buildInvestorUpdate};
 })();
 
+/* ============ 6i · RESILIENCE — the non-steady state (pt-19) ==============
+   Every other module optimizes the steady state. This one prepares for the
+   moment it ends. Crises are not edge cases; they are when leadership is
+   most visible and most consequential. Severity ESCALATES on elapsed time
+   — a fact — while bus factors and stress-test scores are your own
+   assessments and say so. Text matching is labeled heuristic, always. */
+(function(){
+const LeadOS = window.LeadOS, U = LeadOS.util, DAY = U.DAY, H = 3600000;
+const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+const OWN_ASSESSMENT='bus factor, criticality, impact and likelihood are YOUR OWN assessments — this is a prioritization tool, not an actuarial model';
+/* same normalization as the conflict pair key: lowercase + 32-char slice */
+const normRoot=s=>String(s||'').toLowerCase().trim().slice(0,32);
+const COMMS_TYPES={reputational:1,system:1};
+function crisisSeverity(crisisId,P,today){
+  const set=LeadOS.engine.settings(P);
+  const slaH=set.crisisResponseSLAHours;
+  const c=(P.crisisEvents||{})[crisisId];
+  if(!c) return {crisisId:crisisId,found:false,why:'no crisis.detected with id '+crisisId};
+  const base=c.severity;
+  const chain=[], esc=[];
+  chain.push('base severity '+base+' as detected '+U.isoT(c.detectedAt));
+  let sev=base;
+  const firstUpdate=c.updates.length?c.updates[0].updatedAt:null;
+  const sinceDetect=(today-c.detectedAt)/H;
+  if(firstUpdate===null||((firstUpdate-c.detectedAt)/H)>slaH){
+    sev++; esc.push('+1: no crisis.update within crisisResponseSLAHours '+slaH+'h'+
+      (firstUpdate===null?(' (none at all; '+U.rd(sinceDetect,1)+'h elapsed)'):(' (first update at +'+U.rd((firstUpdate-c.detectedAt)/H,1)+'h)')));
+  }
+  if(COMMS_TYPES[c.type]){
+    const cust=c.comms.filter(x=>x.audience==='customer');
+    const first=cust.length?Math.min.apply(null,cust.map(x=>x.at)):null;
+    if(first===null||((first-c.detectedAt)/H)>4){
+      sev++; esc.push('+1: type "'+c.type+'" with no incident.comms.sent to customers within 4h'+
+        (first===null?(' (none sent; '+U.rd(sinceDetect,1)+'h elapsed)'):(' (first at +'+U.rd((first-c.detectedAt)/H,1)+'h)')));
+    }
+  }
+  const stillActive=(c.status==='active'||c.status===null)&&!c.resolved;
+  if(stillActive&&sinceDetect>24){
+    sev++; esc.push('+1: status still "'+(c.status||'unacknowledged')+'" after '+U.rd(sinceDetect,1)+'h (>24h)');
+  }
+  const capped=sev>5;
+  const effective=U.clamp(sev,1,5);
+  esc.forEach(e=>chain.push(e));
+  if(capped) chain.push('escalation capped at 5 (computed '+sev+') — severity cannot escalate past the top of the scale');
+  chain.push('effective severity '+effective);
+  return {crisisId:crisisId,found:true,base:base,effective:effective,escalations:esc.length,
+    capped:capped,chain:chain,
+    chainText:chain.join(' → '),
+    ageHours:U.rd(sinceDetect,1),
+    slaBreached:(firstUpdate===null||((firstUpdate-c.detectedAt)/H)>slaH),
+    slaHours:slaH,crisis:c};
+}
+function keyPersonRisk(P,today){
+  const rows=vals(P.keyDepByPerson).map(d=>{
+    const critSum=(typeof d.criticality_sum==='number')?d.criticality_sum:(d.processes_owned.length*3);
+    const critNote=(typeof d.criticality_sum==='number')?'as logged':'ESTIMATED as processes_owned × 3 — no criticality_sum logged, printed not inferred silently';
+    const xFactor=d.cross_trained?0.5:1;
+    const docFactor=d.documented?0.7:1;
+    const score=d.bus_factor*critSum*xFactor*docFactor;
+    const r=P.rosterById&&P.rosterById[d.personId];
+    const departing=!!(r&&r.departed);
+    return {personId:d.personId,processes:d.processes_owned.slice(),
+      busFactor:d.bus_factor,criticalitySum:critSum,criticalityNote:critNote,
+      crossTrained:d.cross_trained,documented:d.documented,
+      departing:departing,
+      score:U.rd(score,2),
+      math:'risk = bus_factor '+d.bus_factor+' × criticality_sum '+critSum+' × '+
+        (d.cross_trained?'0.5 (cross-trained)':'1 (NOT cross-trained)')+' × '+
+        (d.documented?'0.7 (documented)':'1 (NOT documented)')+' = '+U.rd(score,2),
+      singlePoint:(d.bus_factor===1&&!d.cross_trained&&!d.documented),
+      at:d.at};
+  }).sort((a,b)=>(b.score-a.score)||(a.personId<b.personId?-1:1));
+  return {rows:rows,label:OWN_ASSESSMENT,
+    singlePoints:rows.filter(r=>r.singlePoint),
+    departingOwners:rows.filter(r=>r.departing)};
+}
+function continuityCoverage(P,today){
+  const set=LeadOS.engine.settings(P), cad=set.continuityReviewCadenceDays;
+  const plans=vals(P.continuityPlans);
+  const critical=plans.filter(p=>p.criticality>=4);
+  const passing=critical.filter(p=>{
+    const last=p.tests.slice(-1)[0];
+    return last&&last.result==='pass'&&U.days(today,last.at)<=cad; });
+  const noBackup=plans.filter(p=>!p.backup_owner);
+  const stale=plans.filter(p=>{
+    const last=p.tests.slice(-1)[0];
+    return !last||U.days(today,last.at)>cad; });
+  const failedNoRetest=plans.filter(p=>{
+    const fails=p.tests.filter(t=>t.result==='fail');
+    if(!fails.length) return false;
+    const lastFail=fails[fails.length-1];
+    return !p.tests.some(t=>t.at>lastFail.at); });
+  const denom=critical.length;
+  const coverage=denom?U.rd(passing.length/denom*100,1):null;
+  return {plans:plans,critical:critical,
+    coverage:coverage,
+    coverageMath:denom?(passing.length+'/'+denom+' critical processes tested and passing = '+coverage+'%')
+      :'no plans at criticality ≥ 4 — coverage not computed, and an empty register is not full coverage',
+    noBackup:noBackup,stale:stale,failedNoRetest:failedNoRetest,
+    cadenceDays:cad,label:OWN_ASSESSMENT};
+}
+function stressTestResults(P,today){
+  const set=LeadOS.engine.settings(P), cad=set.stressTestCadenceDays;
+  const all=(P.stressTestLog||[]).slice().sort((a,b)=>(a.date||a.loggedAt)-(b.date||b.loggedAt));
+  const inWin=all.filter(t=>U.days(today,t.date||t.loggedAt)<=cad);
+  const last=all[all.length-1]||null;
+  const byScenario={};
+  all.forEach(t=>{ byScenario[t.scenario]=t; });
+  const gaps=[];
+  inWin.forEach(t=>{
+    (t.results||[]).forEach(r=>{
+      if(!(r.impact>=4&&r.likelihood>=4)) return;
+      const mitigated=(t.mitigations||[]).some(m=>
+        String(m).toLowerCase().indexOf(String(r.area||'').toLowerCase())!==-1);
+      gaps.push({testId:t.id,scenario:t.scenario,area:r.area,impact:r.impact,likelihood:r.likelihood,
+        mitigated:mitigated,at:t.date||t.loggedAt,
+        ageDays:U.days(today,t.date||t.loggedAt),
+        why:'impact '+r.impact+' × likelihood '+r.likelihood+' on "'+r.area+'"'+
+          (mitigated?' — a mitigation mentioning this area is logged (HEURISTIC TEXT MATCH, verify manually)'
+            :' — NO mitigation logged mentioning this area')}); });
+  });
+  return {all:all,inWindow:inWin,last:last,
+    daysSinceLast:last?U.days(today,last.date||last.loggedAt):null,
+    cadenceDays:cad,
+    byScenario:Object.keys(byScenario).sort().map(k=>byScenario[k]),
+    highRiskGaps:gaps,
+    unmitigated:gaps.filter(g=>!g.mitigated),
+    label:OWN_ASSESSMENT};
+}
+function crisisPatterns(P,today){
+  const resolved=vals(P.crisisEvents).filter(c=>c.resolved);
+  const n=resolved.length;
+  const byType={};
+  vals(P.crisisEvents).forEach(c=>{ byType[c.type]=(byType[c.type]||0)+1; });
+  const mttrBySev={};
+  resolved.forEach(c=>{
+    const hrs=(c.resolved.resolvedAt-c.detectedAt)/H;
+    (mttrBySev[c.severity]=mttrBySev[c.severity]||[]).push(hrs); });
+  const mttr=Object.keys(mttrBySev).sort().map(k=>({severity:Number(k),n:mttrBySev[k].length,
+    meanHours:U.rd(U.sum(mttrBySev[k])/mttrBySev[k].length,1),
+    math:'sev '+k+': Σ(resolvedAt − detectedAt) ÷ '+mttrBySev[k].length+' = '+U.rd(U.sum(mttrBySev[k])/mttrBySev[k].length,1)+'h'}));
+  /* recurring root causes — normalized exactly like the conflict pair key */
+  const byRoot={};
+  resolved.forEach(c=>{ const k=normRoot(c.resolved.rootCause);
+    if(!k) return;
+    (byRoot[k]=byRoot[k]||{key:k,verbatim:c.resolved.rootCause,crises:[]}).crises.push(c); });
+  const recurring=Object.keys(byRoot).filter(k=>byRoot[k].crises.length>=2).sort()
+    .map(k=>Object.assign({count:byRoot[k].crises.length},byRoot[k]));
+  /* postmortem action completion — heuristic text match against later notes */
+  let actions=0,done=0;
+  (P.postmortems||[]).forEach(pm=>{ (pm.action_items||[]).forEach(a=>{
+    actions++;
+    const t=String((a&&a.action)||'').toLowerCase().slice(0,24);
+    if(t.length>6&&(P.noteLog||[]).some(nt=>nt.at>pm.at&&String(nt.text||'').toLowerCase().indexOf(t)!==-1)) done++; }); });
+  const pmLag=[];
+  resolved.forEach(c=>{ if(c.postmortem) pmLag.push((c.postmortem.at-c.resolved.resolvedAt)/DAY); });
+  return {n:n,
+    confidenceNote:n<3?('patterns from n='+n+' crisis/crises — SMALL n, LOW CONFIDENCE; read these as questions, not conclusions')
+      :('patterns from n='+n+' resolved crises'),
+    byType:Object.keys(byType).sort().map(k=>({type:k,count:byType[k]})),
+    mttr:mttr,
+    recurringRootCauses:recurring,
+    normalizationNote:'root causes are grouped by lowercase + 32-character slice — the same normalization the conflict pair key uses; two differently-worded causes with the same first 32 characters group together, and two phrasings of one cause that differ early do NOT',
+    actionItems:actions,actionsCompleted:done,
+    actionRate:actions?U.rd(done/actions*100,1):null,
+    actionMath:actions?('postmortem actions matched to a later note: '+done+' of '+actions+' = '+U.rd(done/actions*100,1)+'% — HEURISTIC TEXT MATCH, weak evidence, labeled')
+      :'no postmortem action items logged',
+    meanPostmortemLagDays:pmLag.length?U.rd(U.sum(pmLag)/pmLag.length,1):null,
+    label:OWN_ASSESSMENT};
+}
+LeadOS.resilience={OWN_ASSESSMENT:OWN_ASSESSMENT,normRoot:normRoot,
+  crisisSeverity:crisisSeverity,keyPersonRisk:keyPersonRisk,continuityCoverage:continuityCoverage,
+  stressTestResults:stressTestResults,crisisPatterns:crisisPatterns};
+})();
+
 /* ==================== 7 · HEALTH — authority wall + fixture seed ==========
    T-suite runs against pinned in-memory fixtures (FIXED epoch, never the
    clock, never localStorage). G-suite inspects the LIVE store. The boot gate
@@ -5417,7 +5874,55 @@ function buildSeed(base){
     E('internal.comms.sent',{id:'ic-1',channel:'slack',audience:'org',topic:'Payments incident — action required',
       urgency:5,acknowledged:false},2),                                                                      /* R121 sev4 */
     E('internal.comms.sent',{id:'ic-2',channel:'email',audience:'exec',topic:'Board pack review',
-      urgency:4,acknowledged:true},5)
+      urgency:4,acknowledged:true},5),
+    /* ---- pt-19 resilience layer: seeds R125–R134 (G134) ---- */
+    /* active sev-4 system crisis detected 3h ago: no update, no customer comms,
+       no war room → R125 sev5 + R125 war-room sev4 + R126 sev4 */
+    E('crisis.detected',{id:'cr-1',title:'Billing ledger write failures',type:'system',severity:4,
+      trigger:'migration cutover',responseTeam:['ann','lee'],commanderId:'ann',
+      detectedAt:base-3*H},0,3),
+    /* an older crisis, resolved, postmortem 3d overdue → R127 sev4 */
+    E('crisis.detected',{id:'cr-2',title:'Payments webhook outage',type:'system',severity:4,
+      trigger:'consumer lag',responseTeam:['ann'],detectedAt:base-40*DAY},40),
+    E('crisis.update',{crisisId:'cr-2',status:'contained',note:'consumers scaled',updatedAt:base-40*DAY+H},40),
+    E('crisis.resolved',{crisisId:'cr-2',resolvedAt:base-38*DAY,rootCause:'deploy process gap',
+      timeline_accurate:true,postmortem_due_date:base-3*DAY},38),
+    /* a third crisis with the SAME normalized root cause, postmortemed →
+       R128 recurring sev4 + R133 sev4 (no systemic fix mentions "deploy") */
+    E('crisis.detected',{id:'cr-3',title:'Config rollback failure',type:'operational',severity:3,
+      trigger:'bad config push',responseTeam:['lee'],detectedAt:base-90*DAY},90),
+    E('crisis.update',{crisisId:'cr-3',status:'resolved',note:'rolled forward',updatedAt:base-89*DAY},89),
+    E('crisis.resolved',{crisisId:'cr-3',resolvedAt:base-89*DAY,rootCause:'Deploy Process Gap',
+      timeline_accurate:true,postmortem_due_date:base-82*DAY},89),
+    E('crisis.postmortem',{crisisId:'cr-3',what_happened:'A config push bypassed staging',
+      why_it_happened:'the deploy path has no staging gate for config-only changes',
+      contributing_factors:['no staging gate','on-call unfamiliar with rollback'],
+      what_went_well:['rollback took 9 minutes'],what_went_wrong:['nobody was paged for 20 minutes'],
+      action_items:[{action:'Add a staging gate for config-only pushes',owner:'ann',dueDate:base-20*DAY},
+        {action:'Rewrite the rollback runbook',owner:'lee',dueDate:base+30*DAY}],
+      severity_accurate:true},85),                                                                   /* R128 action overdue sev3 */
+    E('war.room.opened',{id:'wr-1',crisisId:'cr-1',members:['ann','lee','ava'],location:'#war-billing',
+      cadence_hours:2,ownerId:'ann'},4),                                                             /* 4d old → R134 sev4 (>120h) */
+    E('key.dependency.logged',{personId:'lee',processes_owned:['billing reconciliation','ledger migration','payout batch'],
+      bus_factor:1,documented:false,cross_trained:false,criticality_sum:13},20),                     /* R129 sev5 (R19 is firing) */
+    E('key.dependency.logged',{personId:'ava',processes_owned:['pipeline review'],
+      bus_factor:2,documented:true,cross_trained:true,criticality_sum:4},20),
+    E('continuity.plan',{id:'cp-1',process:'Billing reconciliation',criticality:5,primary_owner:'lee',
+      documented:false,tested:false},120),                                                           /* R130 sev3 — never tested */
+    E('continuity.plan',{id:'cp-2',process:'Customer data restore',criticality:4,primary_owner:'ann',
+      backup_owner:'ava',documented:true,tested:true},150),
+    E('continuity.tested',{planId:'cp-2',test_type:'simulation',result:'fail',
+      gaps:['restore exceeded RTO by 4h','no runbook for partial restore']},45),                     /* R130 sev4 — failed, 45d no re-test */
+    E('stress.test.logged',{id:'st-1',scenario:'operational',scope:'billing platform',
+      assumptions:['peak volume','one region down'],
+      results:[{area:'ledger write throughput',impact:5,likelihood:4},
+        {area:'support queue depth',impact:3,likelihood:2}],
+      mitigations:['add support surge rota'],conducted_by:'ann',date:base-190*DAY},190),             /* R131 sev2 + R132 sev4 */
+    E('recovery.milestone',{id:'rm-1',crisisId:'cr-2',milestone:'Customer credits issued',achieved:true,
+      achieved_at:base-36*DAY},36),
+    E('recovery.milestone',{id:'rm-2',crisisId:'cr-2',milestone:'Root-cause fix deployed',achieved:false},36),
+    E('incident.comms.sent',{crisisId:'cr-2',audience:'customer',channel:'status page',
+      message_summary:'Degraded webhook delivery, mitigation in progress',sentiment_neutral:true},40)
   ];
   return out;
 }
@@ -5711,7 +6216,7 @@ function runT(){
   T.push(check('T18','[T12b] extended seed fires all 62 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=124;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=134;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -6592,6 +7097,109 @@ function runT(){
     if(r[0].basis.join(' ').indexOf('margin')===-1) return {why:'the repeated topic must be printed'};
     return {ok:true,why:'mean 3.5 → sev3 · mean 2.8 quiet · same topic ×3 → sev4 with the topic printed'};
   }));
+  /* ---- pt-19: brief T66–T70 ship as T68–T72 (T66/T67 taken in pt-18).
+     ID MAP: brief T66→T68 · T67→T69 · T68→T70 · T69→T71 · T70→T72 ---- */
+  const CR=(id,type,sev,hrsAgo,extra)=>([{type:'crisis.detected',
+    payload:Object.assign({id:id,title:id,type:type,severity:sev,trigger:'t',
+      responseTeam:['a'],detectedAt:FIXED-hrsAgo*3600000},extra||{}),at:FIXED-hrsAgo*3600000}]);
+  T.push(check('T68','[brief T66] crisisSeverity escalation: 3 → 4 on SLA → 5 on comms gap, chain printed',()=>{
+    /* system crisis sev 3, detected 5h ago, no update and no customer comms */
+    const Px=LeadOS.engine.project(wrap(CR('c1','system',3,5)));
+    const es=LeadOS.resilience.crisisSeverity('c1',Px,FIXED);
+    if(es.base!==3) return {why:'base should be 3'};
+    if(es.effective!==5) return {why:'SLA breach (+1) and comms gap (+1) should reach 5, got '+es.effective};
+    if(es.escalations!==2) return {why:'expected exactly 2 escalations, got '+es.escalations};
+    if(es.chainText.indexOf('crisisResponseSLAHours 2h')===-1) return {why:'the SLA escalation must print the setting and its unit'};
+    if(es.chainText.indexOf('within 4h')===-1) return {why:'the comms escalation must print its 4h window'};
+    /* with a prompt update and prompt comms, no escalation */
+    const clean=LeadOS.engine.project(wrap(CR('c1','system',3,5).concat([
+      {type:'crisis.update',payload:{crisisId:'c1',status:'contained',note:'n',updatedAt:FIXED-4.5*3600000},at:FIXED-4.5*3600000},
+      {type:'incident.comms.sent',payload:{crisisId:'c1',audience:'customer',channel:'status',
+        message_summary:'m',sentiment_neutral:true},at:FIXED-4*3600000}])));
+    const es2=LeadOS.resilience.crisisSeverity('c1',clean,FIXED);
+    if(es2.effective!==3) return {why:'a prompt update and prompt comms should leave severity at 3, got '+es2.effective};
+    /* cap at 5 */
+    const capped=LeadOS.engine.project(wrap(CR('c5','system',5,40)));
+    const es3=LeadOS.resilience.crisisSeverity('c5',capped,FIXED);
+    if(es3.effective!==5||!es3.capped) return {why:'escalation must cap at 5 and say so'};
+    return {ok:true,why:'3 → 4 (SLA) → 5 (comms) with the chain printed · prompt response stays 3 · cap at 5 disclosed'};
+  }));
+  T.push(check('T69','[brief T67] keyPersonRisk math: 1×12×1×1 = 12 · cross-trained → 6',()=>{
+    const mk=(xt,doc)=>LeadOS.engine.project(wrap([{type:'key.dependency.logged',
+      payload:{personId:'p1',processes_owned:['a','b','c'],bus_factor:1,
+        documented:doc,cross_trained:xt,criticality_sum:12},at:FIXED-5*DAY}]));
+    const a=LeadOS.resilience.keyPersonRisk(mk(false,false),FIXED).rows[0];
+    if(a.score!==12) return {why:'1 × 12 × 1 × 1 should be 12, got '+a.score};
+    if(a.math.indexOf('= 12')===-1) return {why:'the math must print the result: '+a.math};
+    const b=LeadOS.resilience.keyPersonRisk(mk(true,false),FIXED).rows[0];
+    if(b.score!==6) return {why:'cross-trained halves to 6, got '+b.score};
+    if(b.math.indexOf('0.5 (cross-trained)')===-1) return {why:'the cross-trained factor must be named'};
+    const c=LeadOS.resilience.keyPersonRisk(mk(false,true),FIXED).rows[0];
+    if(c.score!==8.4) return {why:'documented → ×0.7 = 8.4, got '+c.score};
+    const noSum=LeadOS.engine.project(wrap([{type:'key.dependency.logged',
+      payload:{personId:'p2',processes_owned:['a','b'],bus_factor:1,documented:false,cross_trained:false},at:FIXED-5*DAY}]));
+    const d=LeadOS.resilience.keyPersonRisk(noSum,FIXED).rows[0];
+    if(d.criticalityNote.indexOf('ESTIMATED')===-1) return {why:'a missing criticality_sum must be printed as estimated, not silently defaulted'};
+    return {ok:true,why:'12 · cross-trained 6 · documented 8.4 · missing criticality_sum labeled ESTIMATED'};
+  }));
+  T.push(check('T70','[brief T68] continuityCoverage: 2 of 3 critical tested+passing = 67%',()=>{
+    const CP=(id,crit,tests)=>{ const list=[{type:'continuity.plan',
+      payload:{id:id,process:id,criticality:crit,primary_owner:'o',documented:true,tested:false},at:FIXED-100*DAY}];
+      (tests||[]).forEach(t=>list.push({type:'continuity.tested',
+        payload:{planId:id,test_type:'tabletop',result:t.r,gaps:[]},at:FIXED-t.ago*DAY}));
+      return list; };
+    const Px=LeadOS.engine.project(wrap([].concat(
+      CP('a',5,[{r:'pass',ago:10}]),CP('b',4,[{r:'pass',ago:20}]),CP('c',5,[]))));
+    const cov=LeadOS.resilience.continuityCoverage(Px,FIXED);
+    if(cov.coverage!==66.7) return {why:'2/3 should be 66.7%, got '+cov.coverage};
+    if(cov.coverageMath.indexOf('2/3 critical processes tested and passing')===-1)
+      return {why:'exact coverage sentence required: '+cov.coverageMath};
+    if(cov.stale.length!==1||cov.stale[0].id!=='c') return {why:'only plan c is untested'};
+    const none=LeadOS.resilience.continuityCoverage(LeadOS.engine.project([]),FIXED);
+    if(none.coverage!==null||none.coverageMath.indexOf('empty register is not full coverage')===-1)
+      return {why:'an empty register must return null coverage and say why'};
+    return {ok:true,why:'2/3 = 66.7% with the sentence printed · 1 stale · empty register → null, not 100%'};
+  }));
+  T.push(check('T71','[brief T69] crisisPatterns root-cause normalization: case-insensitive, 32-char slice',()=>{
+    const CRR=(id,root,ago)=>([
+      {type:'crisis.detected',payload:{id:id,title:id,type:'system',severity:3,trigger:'t',
+        responseTeam:['a'],detectedAt:FIXED-(ago+1)*DAY},at:FIXED-(ago+1)*DAY},
+      {type:'crisis.resolved',payload:{crisisId:id,resolvedAt:FIXED-ago*DAY,rootCause:root,
+        timeline_accurate:true,postmortem_due_date:FIXED-(ago-7)*DAY},at:FIXED-ago*DAY}]);
+    const two=LeadOS.engine.project(wrap([].concat(CRR('x','deploy process',40),CRR('y','DEPLOY PROCESS',20))));
+    const p2=LeadOS.resilience.crisisPatterns(two,FIXED);
+    if(p2.recurringRootCauses.length!==1) return {why:'case variants must group into one recurring cause'};
+    if(p2.recurringRootCauses[0].count!==2) return {why:'count should be 2'};
+    const one=LeadOS.engine.project(wrap(CRR('x','deploy process',40)));
+    if(LeadOS.resilience.crisisPatterns(one,FIXED).recurringRootCauses.length)
+      return {why:'a single crisis must not be a recurring pattern'};
+    if(LeadOS.resilience.normRoot('Deploy Process')!==LeadOS.resilience.normRoot('DEPLOY PROCESS'))
+      return {why:'normalization must be case-insensitive'};
+    if(LeadOS.resilience.normRoot('deploy process failure')===LeadOS.resilience.normRoot('deploy process failed'))
+      return {why:'causes differing inside 32 chars must NOT collapse'};
+    const long1='deploy process failure in the billing service';
+    const long2='deploy process failure in the billing pipeline';
+    if(LeadOS.resilience.normRoot(long1)!==LeadOS.resilience.normRoot(long2))
+      return {why:'two causes sharing their first 32 characters DO collapse — that is the documented tradeoff'};
+    if(p2.confidenceNote.indexOf('SMALL n')===-1) return {why:'small-n confidence must be printed'};
+    return {ok:true,why:'case variants group · single crisis no pattern · 32-char tradeoff asserted in both directions · small-n printed'};
+  }));
+  T.push(check('T72','[brief T70] R125 SLA: 2h01m fires sev5 · update at 1h59m quiet · exactly 2h quiet',()=>{
+    const mk=updateAfterH=>{ const list=CR('c1','operational',3,3);
+      if(updateAfterH!==undefined) list.push({type:'crisis.update',
+        payload:{crisisId:'c1',status:'active',note:'n',updatedAt:FIXED-3*3600000+updateAfterH*3600000},
+        at:FIXED-3*3600000+updateAfterH*3600000});
+      return LeadOS.engine.project(wrap(list)); };
+    const r125=Px=>LeadOS.rules.RULES[119](Px,FIXED).filter(f=>/:sla$/.test(f.scope)); /* index 119 = R125 */
+    const none=r125(mk(undefined));
+    if(none.length!==1||none[0].sev!==5) return {why:'no update after 3h should fire sev 5'};
+    if(r125(mk(1.983)).length) return {why:'an update at 1h59m is inside the 2h SLA'};
+    if(r125(mk(2)).length) return {why:'an update at exactly 2h must be quiet (strictly past fires)'};
+    const late=r125(mk(2.017));
+    if(late.length!==1||late[0].sev!==5) return {why:'an update at 2h01m should fire sev 5'};
+    if(late[0].basis.join(' ').indexOf('HOURS, not days')===-1) return {why:'the hours unit must be printed'};
+    return {ok:true,why:'no update sev5 · 1h59m quiet · exactly 2h quiet · 2h01m sev5 · unit printed'};
+  }));
   return T;
 }
 
@@ -6795,14 +7403,14 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','[G60…G124] extended buildSeed fires ALL 124 rules',()=>{
+  G.push(check('G40','[G60…G134] extended buildSeed fires ALL 134 rules',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=124;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=134;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'124/124 — every rule in the system fires from ONE deterministic fixture spanning cadences, correlation patterns, conversations, org dynamics, decisions, execution, external intelligence, calibration, finance, and the pt-18 narrative layer (board due in 5d with no draft, 50% hit rate over 6 deliveries, clarity mean 2.3 across 3 board narratives, same-topic unexpected questions ×3, all-hands 39d, investor update 36d, negative press 3d unanswered, urgency-5 message unacknowledged, skeptical board with no follow-up, untested high-stakes narratives)'};
+    return {ok:true,why:'134/134 — every rule in the system fires from ONE deterministic fixture spanning cadences, correlation, conversations, org dynamics, decisions, execution, external intelligence, calibration, finance, narrative, and the pt-19 resilience layer (sev-4 system crisis 3h old with no update/comms/war-room, postmortem 3d overdue, overdue postmortem action, recurring "deploy process gap" root cause with no systemic fix, bus-factor-1 owner with attrition active, untested and failed continuity plans, stress test 190d old with an unmitigated 5×4 gap, war room open 4 days)'};
   }));
   /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
      the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
@@ -7912,6 +8520,171 @@ function runG(){
     if(r118(mk(0)).length) return {why:'an update sent today must be quiet'};
     if(r118(mk(30)).length) return {why:'exactly 30d must be quiet'};
     return {ok:true,why:'31d sev2 · 61d sev3 · today quiet · exactly 30d quiet'};
+  }));
+  /* ---- G125–G133 — resilience goldens (pt-19) ---- */
+  const CRG=(id,type,sev,hrsAgo)=>([{type:'crisis.detected',
+    payload:{id:id,title:id,type:type,severity:sev,trigger:'t',responseTeam:['a'],
+      detectedAt:FIXED-hrsAgo*3600000},at:FIXED-hrsAgo*3600000}]);
+  G.push(check('G125','R126: reputational sev3 no comms 5h fires sev4 · comms at 3h quiet · financial quiet',()=>{
+    const mk=(type,commsAtH,hrsAgo)=>{ const list=CRG('c1',type,3,hrsAgo||5);
+      if(commsAtH!==undefined) list.push({type:'incident.comms.sent',
+        payload:{crisisId:'c1',audience:'customer',channel:'email',message_summary:'m',sentiment_neutral:true},
+        at:FIXED-(hrsAgo||5)*3600000+commsAtH*3600000});
+      return LeadOS.engine.project(wrap(list)); };
+    const r126=Px=>LeadOS.rules.RULES[120](Px,FIXED); /* index 120 = R126 */
+    const a=r126(mk('reputational',undefined,5));
+    if(a.length!==1||a[0].sev!==4) return {why:'reputational with no comms at 5h should fire sev 4'};
+    if(r126(mk('reputational',3,5)).length) return {why:'comms within 4h must quiet it'};
+    if(r126(mk('financial',undefined,20)).length) return {why:'type "financial" is not in the trigger list — must be quiet'};
+    const b=r126(mk('system',undefined,9));
+    if(b.length!==1||b[0].sev!==5) return {why:'>8h should escalate to sev 5'};
+    const low=LeadOS.engine.project(wrap(CRG('c2','system',2,10)));
+    if(r126(low).length) return {why:'severity 2 is below the ≥3 trigger'};
+    return {ok:true,why:'reputational 5h sev4 · comms@3h quiet · financial quiet · system 9h sev5 · sev2 quiet'};
+  }));
+  G.push(check('G126','R127: due+1d sev4 · exactly on due date quiet · due+15d sev5',()=>{
+    const mk=dueAgo=>LeadOS.engine.project(wrap([].concat(CRG('c1','system',3,2000),[
+      {type:'crisis.resolved',payload:{crisisId:'c1',resolvedAt:FIXED-40*DAY,rootCause:'r',
+        timeline_accurate:true,postmortem_due_date:FIXED-dueAgo*DAY},at:FIXED-40*DAY}])));
+    const r127=Px=>LeadOS.rules.RULES[121](Px,FIXED); /* index 121 = R127 */
+    const a=r127(mk(1));
+    if(a.length!==1||a[0].sev!==4) return {why:'1d past due should fire sev 4'};
+    if(r127(mk(0)).length) return {why:'exactly on the due date must be quiet'};
+    const b=r127(mk(15));
+    if(b.length!==1||b[0].sev!==5) return {why:'15d past due should fire sev 5'};
+    const done=LeadOS.engine.project(wrap([].concat(CRG('c1','system',3,2000),[
+      {type:'crisis.resolved',payload:{crisisId:'c1',resolvedAt:FIXED-40*DAY,rootCause:'r',
+        timeline_accurate:true,postmortem_due_date:FIXED-10*DAY},at:FIXED-40*DAY},
+      {type:'crisis.postmortem',payload:{crisisId:'c1',what_happened:'w',why_it_happened:'y',
+        contributing_factors:[],what_went_well:[],what_went_wrong:[],action_items:[],
+        severity_accurate:true},at:FIXED-5*DAY}])));
+    if(r127(done).length) return {why:'a logged postmortem must quiet it'};
+    return {ok:true,why:'due+1d sev4 · on due date quiet · due+15d sev5 · postmortem quiets'};
+  }));
+  G.push(check('G127','crisis-postmortem creates one plan.created per action item, R128 guards them',()=>{
+    const Px=LeadOS.engine.project(wrap([].concat(CRG('c9','system',4,500),[
+      {type:'crisis.resolved',payload:{crisisId:'c9',resolvedAt:FIXED-20*DAY,rootCause:'cache stampede',
+        timeline_accurate:true,postmortem_due_date:FIXED-13*DAY},at:FIXED-20*DAY}])));
+    const out=LeadOS.playbooks.INTERACTIVE['crisis-postmortem'].submit({
+      crisisId:'c9',what:'cache fell over',why:'no jitter on retries',
+      factors:'no jitter\nno circuit breaker',wentWell:'paged fast',wentWrong:'no runbook',
+      actions:'Add retry jitter | ann | '+(FIXED+10*DAY)+'\nAdd circuit breaker | lee | '+(FIXED+20*DAY),
+      severityAccurate:'Y'},LeadOS.rules.runFull(Px,FIXED),Px);
+    const plans=out.events.filter(e=>e.type==='plan.created');
+    if(plans.length!==2) return {why:'expected one plan.created per action item, got '+plans.length};
+    const pm=out.events.filter(e=>e.type==='crisis.postmortem')[0];
+    if(!pm||pm.payload.action_items.length!==2) return {why:'postmortem must carry both action items'};
+    if(plans[0].payload.checkpointDate!==pm.payload.action_items[0].dueDate)
+      return {why:'plan checkpointDate must equal the action item dueDate'};
+    out.events.forEach(e=>{ const v=LeadOS.events.validate(e.type,e.payload);
+      if(!v.ok) throw new Error('emitted invalid '+e.type+': '+v.errors[0]); });
+    /* and the guard: an overdue action with no note fires R128 */
+    const overdue=LeadOS.engine.project(wrap([].concat(CRG('c9','system',4,500),[
+      {type:'crisis.resolved',payload:{crisisId:'c9',resolvedAt:FIXED-20*DAY,rootCause:'cache stampede',
+        timeline_accurate:true,postmortem_due_date:FIXED-13*DAY},at:FIXED-20*DAY},
+      {type:'crisis.postmortem',payload:{crisisId:'c9',what_happened:'w',why_it_happened:'y',
+        contributing_factors:[],what_went_well:[],what_went_wrong:[],
+        action_items:[{action:'Add retry jitter to the client',owner:'ann',dueDate:FIXED-5*DAY}],
+        severity_accurate:true},at:FIXED-12*DAY}])));
+    const g=LeadOS.rules.RULES[122](overdue,FIXED); /* index 122 = R128 */
+    if(!g.length||g[0].sev!==3) return {why:'an overdue postmortem action should fire R128 sev 3'};
+    if(g[0].basis.join(' ').indexOf('R10 reads OBJECTIVES')===-1)
+      return {why:'the R10-vs-shipped divergence must be printed — the brief expected R10 to be the guard'};
+    return {ok:true,why:'2 action items → 2 plan.created with matching checkpointDates · all specs valid · R128 is the real guard, divergence printed'};
+  }));
+  G.push(check('G128','R129: bus_factor 1 uncovered sev4 · with R19 firing sev5 · bus_factor 2 quiet',()=>{
+    const dep=(bf,xt,doc)=>({type:'key.dependency.logged',
+      payload:{personId:'pk',processes_owned:['critical thing'],bus_factor:bf,
+        documented:doc,cross_trained:xt,criticality_sum:5},at:FIXED-10*DAY});
+    const attr=[{type:'hr.attrition.logged',payload:{personId:'z1',reason:'voluntary'},at:FIXED-10*DAY},
+      {type:'hr.attrition.logged',payload:{personId:'z2',reason:'voluntary'},at:FIXED-5*DAY}];
+    const r129=Px=>LeadOS.rules.RULES[123](Px,FIXED); /* index 123 = R129 */
+    const plain=r129(LeadOS.engine.project(wrap([dep(1,false,false)])));
+    if(plain.length!==1||plain[0].sev!==4) return {why:'bus_factor 1, uncovered, criticality 5 should fire sev 4'};
+    const compound=r129(LeadOS.engine.project(wrap([dep(1,false,false)].concat(attr))));
+    if(compound.length!==1||compound[0].sev!==5) return {why:'with R19 also firing it must escalate to sev 5'};
+    if(compound[0].basis.join(' ').indexOf('compound escalation')===-1) return {why:'the compound escalation must be named'};
+    if(r129(LeadOS.engine.project(wrap([dep(2,false,false)]))).length) return {why:'bus_factor 2 must be quiet (threshold is exactly 1)'};
+    if(r129(LeadOS.engine.project(wrap([dep(1,true,false)]))).length) return {why:'cross-trained must quiet it'};
+    if(r129(LeadOS.engine.project(wrap([dep(1,false,true)]))).length) return {why:'documented must quiet it'};
+    return {ok:true,why:'sev4 · +R19 → sev5 with the compound named · bf2 quiet · cross-trained quiet · documented quiet'};
+  }));
+  G.push(check('G129','R131 stress test: 181d sev2 · 179d quiet · 361d sev3',()=>{
+    const mk=ago=>LeadOS.engine.project(wrap([{type:'stress.test.logged',
+      payload:{id:'s1',scenario:'operational',scope:'x',assumptions:[],results:[],
+        mitigations:[],conducted_by:'a',date:FIXED-ago*DAY},at:FIXED-ago*DAY}]));
+    const r131=Px=>LeadOS.rules.RULES[125](Px,FIXED); /* index 125 = R131 */
+    const a=r131(mk(181));
+    if(a.length!==1||a[0].sev!==2) return {why:'181d should fire sev 2'};
+    if(r131(mk(179)).length) return {why:'179d must be quiet'};
+    if(r131(mk(180)).length) return {why:'exactly 180d must be quiet'};
+    const b=r131(mk(361));
+    if(b.length!==1||b[0].sev!==3) return {why:'361d should fire sev 3'};
+    return {ok:true,why:'181d sev2 · 179d and 180d quiet · 361d sev3'};
+  }));
+  G.push(check('G130','R134 war room: 73h sev3 · exactly 72h quiet · 121h sev4 · closed quiet',()=>{
+    const mk=(hrs,closed)=>{ const list=[].concat(CRG('c1','system',4,hrs+1),[
+      {type:'war.room.opened',payload:{id:'w1',crisisId:'c1',members:['a'],location:'#w',
+        cadence_hours:2,ownerId:'a'},at:FIXED-hrs*3600000}]);
+      if(closed) list.push({type:'war.room.closed',payload:{warRoomId:'w1',closedAt:FIXED-3600000},at:FIXED-3600000});
+      return LeadOS.engine.project(wrap(list)); };
+    const r134=Px=>LeadOS.rules.RULES[128](Px,FIXED); /* index 128 = R134 */
+    const a=r134(mk(73));
+    if(a.length!==1||a[0].sev!==3) return {why:'73h should fire sev 3'};
+    if(r134(mk(72)).length) return {why:'exactly 72h must be quiet'};
+    const b=r134(mk(121));
+    if(b.length!==1||b[0].sev!==4) return {why:'121h should fire sev 4'};
+    if(r134(mk(200,true)).length) return {why:'a closed war room must be quiet'};
+    return {ok:true,why:'73h sev3 · 72h quiet · 121h sev4 · closed quiet'};
+  }));
+  G.push(check('G131','root-cause normalization: case folds · early divergence splits · 32-char tradeoff',()=>{
+    const n=LeadOS.resilience.normRoot;
+    if(n('deploy process failure')!==n('Deploy Process Failure')) return {why:'case must fold'};
+    if(n('deploy process failure')!==n('DEPLOY PROCESS FAILURE')) return {why:'upper case must fold'};
+    if(n('deploy process failure')===n('deploy process failed')) return {why:'"failure" vs "failed" differ inside 32 chars and must NOT collapse'};
+    const a='deploy process failure in billing one';
+    const b='deploy process failure in billing two';
+    if(a.slice(0,32)!==b.slice(0,32)) return {why:'fixture drift: these should share 32 chars'};
+    if(n(a)!==n(b)) return {why:'strings sharing their first 32 characters DO collapse — the documented tradeoff'};
+    if(n('  Padded  ')!=='padded') return {why:'normalization must trim'};
+    return {ok:true,why:'case folds · early divergence splits · shared 32-char prefix collapses (tradeoff asserted) · trims'};
+  }));
+  G.push(check('G132','R130: criticality 3 quiet · 4 tested+pass quiet · 4 failed +31d sev4',()=>{
+    const CP=(crit,tests)=>{ const list=[{type:'continuity.plan',
+      payload:{id:'p1',process:'proc',criticality:crit,primary_owner:'o',documented:true,tested:false},at:FIXED-200*DAY}];
+      (tests||[]).forEach(t=>list.push({type:'continuity.tested',
+        payload:{planId:'p1',test_type:'tabletop',result:t.r,gaps:['g']},at:FIXED-t.ago*DAY}));
+      return LeadOS.engine.project(wrap(list)); };
+    const r130=Px=>LeadOS.rules.RULES[124](Px,FIXED); /* index 124 = R130 */
+    if(r130(CP(3,[])).length) return {why:'criticality 3 is below the ≥4 threshold'};
+    if(r130(CP(4,[{r:'pass',ago:10}])).length) return {why:'tested+pass inside the cadence must be quiet'};
+    const failed=r130(CP(4,[{r:'fail',ago:31}]));
+    if(failed.length!==1||failed[0].sev!==4) return {why:'a failed test with no re-test at 31d should fire sev 4'};
+    if(r130(CP(4,[{r:'fail',ago:29}])).length) return {why:'a failed test at 29d is inside the 30d grace'};
+    if(r130(CP(4,[{r:'fail',ago:60},{r:'pass',ago:5}])).length) return {why:'a later passing re-test must quiet it'};
+    const never=r130(CP(5,[]));
+    if(never.length!==1||never[0].sev!==3) return {why:'a never-tested critical plan should fire sev 3'};
+    return {ok:true,why:'crit3 quiet · pass quiet · fail+31d sev4 · fail+29d quiet · re-test quiets · never-tested sev3'};
+  }));
+  G.push(check('G133','R133 systemic-fix heuristic: a matching process log quiets it, and is labeled',()=>{
+    const CRR=(id,root,ago)=>([
+      {type:'crisis.detected',payload:{id:id,title:id,type:'system',severity:3,trigger:'t',
+        responseTeam:['a'],detectedAt:FIXED-(ago+1)*DAY},at:FIXED-(ago+1)*DAY},
+      {type:'crisis.resolved',payload:{crisisId:id,resolvedAt:FIXED-ago*DAY,rootCause:root,
+        timeline_accurate:true,postmortem_due_date:FIXED-(ago-7)*DAY},at:FIXED-ago*DAY}]);
+    const base=[].concat(CRR('x','deploy process',60),CRR('y','deploy process',30));
+    const r133=Px=>LeadOS.rules.RULES[127](Px,FIXED); /* index 127 = R133 */
+    const unfixed=r133(LeadOS.engine.project(wrap(base)));
+    if(unfixed.length!==1||unfixed[0].sev!==4) return {why:'a recurring root cause with no fix should fire sev 4'};
+    if(unfixed[0].basis.join(' ').indexOf('HEURISTIC TEXT MATCH')===-1) return {why:'the heuristic must be labeled'};
+    if(unfixed[0].basis.join(' ').indexOf('verify manually')===-1) return {why:'the manual-verification caveat must be printed'};
+    const fixed=r133(LeadOS.engine.project(wrap(base.concat([
+      {type:'ops.process.logged',payload:{name:'Deploy gate',note:'added a staging gate to the deploy path'},at:FIXED-10*DAY}]))));
+    if(fixed.length) return {why:'an ops.process.logged mentioning "deploy" after the latest crisis must quiet it'};
+    const before=r133(LeadOS.engine.project(wrap(base.concat([
+      {type:'ops.process.logged',payload:{name:'Deploy gate',note:'deploy path'},at:FIXED-45*DAY}]))));
+    if(!before.length) return {why:'a process logged BEFORE the latest recurrence must not count as the fix'};
+    return {ok:true,why:'recurring unfixed sev4 with heuristic labeled · matching later process quiets · earlier process does not'};
   }));
   return {checks:G,P:P,raw:raw};
 }
@@ -10123,6 +10896,325 @@ SPECS['narrative-debrief']={
         credibility:cl('credibility'),persuasiveness:cl('persuasiveness'),
         emotional_resonance:cl('resonance'),note:'will test: '+v.test.slice(0,140)}}]};
   }};
+/* ---------- pt-19 resilience playbooks ---------- */
+const RS=()=>LeadOS.resilience;
+SPECS['crisis-response']={
+  pattern:null,title:'Crisis response',free:true,
+  blurb:'A crisis that nobody officially owns within two hours owns itself.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const open=(P.openCrises2||[]).slice().sort((a,b)=>b.detectedAt-a.detectedAt);
+    const cid=(draft.crisisId||'').trim()||(open[0]||{}).id;
+    const lines=[];
+    if(!cid){ lines.push('no open crisis — log crisis.detected first'); return lines; }
+    const es=RS().crisisSeverity(cid,P,now);
+    if(!es.found){ lines.push(es.why); return lines; }
+    const c=es.crisis;
+    /* the SLA banner the brief demands, stated first and unmissably */
+    if(es.slaBreached) lines.push('*** SLA BREACHED: response is '+U.rd(es.ageHours-es.slaHours,1)+
+      ' hours late (detected '+U.rd(es.ageHours,1)+'h ago, crisisResponseSLAHours '+es.slaHours+'h) ***');
+    else lines.push('SLA status: '+U.rd(es.slaHours-es.ageHours,1)+'h remaining to first response');
+    lines.push('crisis '+cid+': '+c.title+' · type '+c.type+' · detected '+U.isoT(c.detectedAt));
+    lines.push('effective severity '+es.effective+' (base '+es.base+', '+es.escalations+' escalation(s))');
+    es.chain.forEach(x=>lines.push('  '+x));
+    lines.push('response team as logged: '+(c.responseTeam.join(', ')||'NOBODY NAMED')+
+      ' · commander '+(c.commanderId||'NONE ASSIGNED'));
+    const cust=c.comms.filter(x=>x.audience==='customer');
+    lines.push('customer comms: '+(cust.length?cust.length+' sent, first at +'+
+      U.rd((Math.min.apply(null,cust.map(x=>x.at))-c.detectedAt)/3600000,1)+'h'
+      :'NONE SENT'+((c.type==='system'||c.type==='reputational')?' — a 4h window applies to this crisis type (R126)':'')));
+    lines.push('war rooms: '+(c.warRooms.length?c.warRooms.map(w=>w.id+(w.closed?' (closed)':' (OPEN)')).join(', '):'none opened'));
+    return lines;
+  },
+  fields(R,P){
+    const open=(P.openCrises2||[]).slice().sort((a,b)=>b.detectedAt-a.detectedAt);
+    return [
+      {key:'crisisId',label:'crisis',kind:'select',req:true,
+        options:open.map(c=>({value:c.id,label:c.id+' · '+c.title+' (sev '+c.severity+')'}))},
+      {key:'commander',label:'commander assignment',kind:'text',req:true},
+      {key:'team',label:'response team (comma separated)',kind:'text',req:true},
+      {key:'containment',label:'immediate containment action (3 bullets max)',kind:'textarea',req:true},
+      {key:'custNeeded',label:'customer comms needed Y/N',kind:'yn',req:true},
+      {key:'custMessage',label:'customer message draft',kind:'textarea',req:false},
+      {key:'regNeeded',label:'regulator notification needed Y/N',kind:'yn',req:true},
+      {key:'warRoom',label:'war room needed Y/N',kind:'yn',req:true}]; },
+  submit(v,R,P){
+    const bullets=String(v.containment).split('\n').map(s=>s.trim()).filter(Boolean);
+    if(bullets.length>3) throw new Error('containment is capped at 3 bullets — in the first hour, a list of ten is a list of none');
+    if(v.custNeeded==='Y'&&!v.custMessage)
+      throw new Error('you marked customer comms as needed — draft the message here, now, while the clock is running');
+    const events=[{type:'crisis.update',payload:{crisisId:v.crisisId,status:'active',
+      note:'commander '+v.commander+' · containment: '+bullets.join(' | '),updatedAt:Date.now()}}];
+    if(v.warRoom==='Y') events.push({type:'war.room.opened',payload:{id:U.uid('wr'),crisisId:v.crisisId,
+      members:v.team.split(',').map(s=>s.trim()).filter(Boolean),location:'(set at open)',
+      cadence_hours:2,ownerId:v.commander}});
+    if(v.custNeeded==='Y') events.push({type:'incident.comms.sent',payload:{crisisId:v.crisisId,
+      audience:'customer',channel:'status page',message_summary:v.custMessage.slice(0,200),
+      sentiment_neutral:true}});
+    if(v.regNeeded==='Y') events.push({type:'incident.comms.sent',payload:{crisisId:v.crisisId,
+      audience:'regulator',channel:'formal notification',
+      message_summary:'notification required — '+bullets[0],sentiment_neutral:true}});
+    return {events:events};
+  }};
+SPECS['crisis-postmortem']={
+  pattern:null,title:'Crisis postmortem',free:true,
+  blurb:'A crisis without a postmortem is a crisis that will happen again.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const done=vals(P.crisisEvents||{}).filter(c=>c.resolved&&!c.postmortem)
+      .sort((a,b)=>b.resolved.resolvedAt-a.resolved.resolvedAt);
+    const cid=(draft.crisisId||'').trim()||(done[0]||{}).id;
+    const lines=[];
+    if(!cid){ lines.push('no resolved crisis awaiting a postmortem'); return lines; }
+    const c=(P.crisisEvents||{})[cid];
+    if(!c||!c.resolved){ lines.push('crisis '+cid+' is not resolved yet'); return lines; }
+    lines.push(c.title+' · type '+c.type+' · severity '+c.severity);
+    lines.push('detected '+U.isoT(c.detectedAt)+' → resolved '+U.isoT(c.resolved.resolvedAt)+
+      ' = '+U.rd((c.resolved.resolvedAt-c.detectedAt)/3600000,1)+'h');
+    lines.push('postmortem due '+U.iso(c.resolved.postmortem_due_date)+
+      (c.resolved.postmortem_due_date<now?' — '+U.days(now,c.resolved.postmortem_due_date)+'d OVERDUE':''));
+    lines.push('root cause at resolution: "'+c.resolved.rootCause+'" · timeline accurate: '+c.resolved.timeline_accurate);
+    lines.push('war room timeline:');
+    c.warRooms.forEach(w=>lines.push('  '+w.id+' opened '+U.isoT(w.openedAt)+
+      (w.closed?' → closed '+U.isoT(w.closedAt)+' ('+U.rd((w.closedAt-w.openedAt)/3600000,1)+'h)':' → STILL OPEN')));
+    if(!c.warRooms.length) lines.push('  none opened');
+    lines.push('comms sent:');
+    c.comms.forEach(x=>lines.push('  '+U.isoT(x.at)+' → '+x.audience+' via '+x.channel+': '+x.message_summary));
+    if(!c.comms.length) lines.push('  none');
+    lines.push('recovery milestones:');
+    c.milestones.forEach(m=>lines.push('  '+(m.achieved?'[done] ':'[open] ')+m.milestone));
+    if(!c.milestones.length) lines.push('  none logged');
+    const pat=RS().crisisPatterns(P,now);
+    const rec=pat.recurringRootCauses.filter(r=>r.crises.some(x=>x.id===cid))[0];
+    lines.push(rec?('RECURRING: this root cause appears in '+rec.count+' crises — '+pat.normalizationNote)
+      :'root cause not seen in another resolved crisis');
+    lines.push(pat.confidenceNote);
+    return lines;
+  },
+  fields(R,P){
+    const done=vals(P.crisisEvents||{}).filter(c=>c.resolved&&!c.postmortem)
+      .sort((a,b)=>b.resolved.resolvedAt-a.resolved.resolvedAt);
+    return [
+      {key:'crisisId',label:'crisis',kind:'select',req:true,
+        options:done.map(c=>({value:c.id,label:c.id+' · '+c.title}))},
+      {key:'what',label:'what happened (timeline narrative)',kind:'textarea',req:true},
+      {key:'why',label:'why it happened (5 Whys — one per line)',kind:'textarea',req:true},
+      {key:'factors',label:'contributing factors (one per line)',kind:'textarea',req:true},
+      {key:'wentWell',label:'what went well (one per line)',kind:'textarea',req:true},
+      {key:'wentWrong',label:'what went wrong (one per line)',kind:'textarea',req:true},
+      {key:'actions',label:'action items, one per line as "action | owner | dueDate(ms or yyyy-mm-dd)"',kind:'textarea',req:true},
+      {key:'severityAccurate',label:'was the severity accurate in hindsight Y/N',kind:'yn',req:true}]; },
+  submit(v,R,P){
+    const split=s=>String(s).split('\n').map(x=>x.trim()).filter(Boolean);
+    const actions=split(v.actions).map(l=>{
+      const bits=l.split('|').map(x=>x.trim());
+      const raw=bits[2];
+      let due=Number(raw);
+      if(!isFinite(due)&&raw) due=Date.parse(raw+'T12:00:00Z');
+      return {action:bits[0]||'',owner:bits[1]||'',dueDate:isFinite(due)?due:null}; })
+      .filter(a=>a.action);
+    if(!actions.length) throw new Error('a postmortem with no action items is a story, not a learning artifact');
+    const unowned=actions.filter(a=>!a.owner);
+    if(unowned.length) throw new Error('every action needs an owner — unowned: '+unowned.map(a=>a.action).join('; '));
+    const undated=actions.filter(a=>a.dueDate===null);
+    if(undated.length) throw new Error('every action needs a due date, or nothing guards it: '+undated.map(a=>a.action).join('; '));
+    const events=[{type:'crisis.postmortem',payload:{crisisId:v.crisisId,
+      what_happened:v.what,why_it_happened:v.why,
+      contributing_factors:split(v.factors),what_went_well:split(v.wentWell),
+      what_went_wrong:split(v.wentWrong),action_items:actions,
+      severity_accurate:v.severityAccurate==='Y'}}];
+    /* one plan per action item, checkpointDate = the action's dueDate.
+       NOTE: the brief expected R10 to guard these. As shipped R10 reads
+       objectives with zero key results, so R128 is the actual guard —
+       printed here and in R128's own basis rather than assumed. */
+    actions.forEach(a=>events.push({type:'plan.created',payload:{id:U.uid('plan'),
+      personId:a.owner,goal:a.action,dimension:'crisis-followup',
+      checkpointDate:a.dueDate,note:'postmortem action for '+v.crisisId+' — guarded by R128'}}));
+    return {events:events};
+  }};
+SPECS['continuity-review']={
+  pattern:null,title:'Continuity review',free:true,
+  blurb:'A plan never tested is a plan that fails under the worst conditions.',
+  prefill(R,P,now){
+    const cov=RS().continuityCoverage(P,now);
+    const lines=[cov.label,cov.coverageMath];
+    lines.push('untested or stale plans ('+cov.stale.length+'):');
+    cov.stale.forEach(p=>lines.push('  '+p.process+' · criticality '+p.criticality+' · owner '+p.primary_owner+
+      ' · '+(p.tests.length?('last tested '+U.iso(p.tests.slice(-1)[0].at)):'NEVER TESTED')));
+    lines.push('plans with no backup owner ('+cov.noBackup.length+'): '+
+      (cov.noBackup.map(p=>p.process).join(', ')||'none'));
+    lines.push('failed with no re-test ('+cov.failedNoRetest.length+'): '+
+      (cov.failedNoRetest.map(p=>p.process).join(', ')||'none'));
+    const k=RS().keyPersonRisk(P,now);
+    lines.push('top bus-factor risks:');
+    k.rows.slice(0,5).forEach(r=>lines.push('  '+r.personId+': '+r.math+
+      ' · processes: '+(r.processes.join(', ')||'none listed')));
+    if(!k.rows.length) lines.push('  no key.dependency.logged events');
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'process',label:'process to add a backup owner to',kind:'text',req:true},
+    {key:'backup',label:'backup owner',kind:'text',req:true},
+    {key:'criticality',label:'criticality 1–5',kind:'number',req:true},
+    {key:'primary',label:'primary owner',kind:'text',req:true},
+    {key:'documented',label:'documented Y/N',kind:'yn',req:true},
+    {key:'testDate',label:'next continuity test date',kind:'date',req:true},
+    {key:'crossTrainPerson',label:'top bus-factor person to cross-train',kind:'text',req:true},
+    {key:'crossTrainPlan',label:'cross-training plan (who shadows whom, by when)',kind:'textarea',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'continuity.plan',payload:{id:U.uid('cp'),process:v.process,
+        criticality:U.clamp(Math.round(v.criticality),1,5),primary_owner:v.primary,
+        backup_owner:v.backup,documented:v.documented==='Y',tested:false,
+        note:'next test scheduled '+U.iso(v.testDate)}},
+      {type:'plan.created',payload:{id:U.uid('plan'),personId:v.crossTrainPerson,
+        goal:'Cross-training: '+v.crossTrainPlan.slice(0,120),dimension:'continuity',
+        checkpointDate:v.testDate,note:'raised in continuity-review'}},
+      note('operations','CONTINUITY REVIEW — '+v.process+'\nprimary '+v.primary+' · backup '+v.backup+
+        '\nnext test '+U.iso(v.testDate)+'\ncross-training:\n'+v.crossTrainPlan,'continuity-review')]};
+  }};
+SPECS['stress-test']={
+  pattern:null,title:'Stress test',free:true,
+  blurb:'Organizations that never test their resilience discover it during a crisis.',
+  prefill(R,P,now){
+    const s=RS().stressTestResults(P,now);
+    const lines=[s.label];
+    lines.push('last test: '+(s.last?(U.iso(s.last.date||s.last.loggedAt)+' · "'+s.last.scenario+'" · '+s.daysSinceLast+'d ago (cadence '+s.cadenceDays+'d)')
+      :'never conducted'));
+    lines.push('unaddressed high-risk gaps from tests in window ('+s.unmitigated.length+'):');
+    s.unmitigated.forEach(g=>lines.push('  '+g.scenario+' / '+g.area+' — '+g.why));
+    if(!s.unmitigated.length) lines.push('  none');
+    lines.push('tests by scenario: '+(s.byScenario.map(t=>t.scenario+' ('+U.iso(t.date||t.loggedAt)+')').join(' · ')||'none'));
+    const crises=vals(P.crisisEvents||{});
+    if(crises.length){ const byType={};
+      crises.forEach(c=>{ byType[c.type]=(byType[c.type]||0)+1; });
+      lines.push('your actual crisis history — test what has already happened to you: '+
+        Object.keys(byType).sort().map(k=>k+' ×'+byType[k]).join(' · ')); }
+    return lines;
+  },
+  fields(){ return [
+    {key:'scenario',label:'scenario',kind:'select',req:true,
+      options:['financial','operational','people','cyber','regulatory','reputational','supply']
+        .map(s=>({value:s,label:s}))},
+    {key:'scope',label:'scope',kind:'text',req:true},
+    {key:'assumptions',label:'3 key assumptions (one per line)',kind:'textarea',req:true},
+    {key:'results',label:'results, one per line as "area | impact 1-5 | likelihood 1-5"',kind:'textarea',req:true},
+    {key:'mitigations',label:'mitigations (one per line — name the area so the gap links)',kind:'textarea',req:true},
+    {key:'conductedBy',label:'conducted by',kind:'text',req:true}]; },
+  submit(v){
+    const split=s=>String(s).split('\n').map(x=>x.trim()).filter(Boolean);
+    const results=split(v.results).map(l=>{ const b=l.split('|').map(x=>x.trim());
+      return {area:b[0]||'',impact:U.clamp(Math.round(Number(b[1])||0),1,5),
+        likelihood:U.clamp(Math.round(Number(b[2])||0),1,5)}; }).filter(r=>r.area);
+    if(!results.length) throw new Error('a stress test with no scored areas produces nothing to act on — use "area | impact | likelihood"');
+    return {events:[{type:'stress.test.logged',payload:{id:U.uid('st'),scenario:v.scenario,
+      scope:v.scope,assumptions:split(v.assumptions),results:results,
+      mitigations:split(v.mitigations),conducted_by:v.conductedBy,date:Date.now()}}]};
+  }};
+SPECS['recovery-tracking']={
+  pattern:null,title:'Recovery tracking',free:true,
+  blurb:'Resolution is an event. Recovery is a process.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const resolved=vals(P.crisisEvents||{}).filter(c=>c.resolved)
+      .sort((a,b)=>b.resolved.resolvedAt-a.resolved.resolvedAt);
+    const cid=(draft.crisisId||'').trim()||(resolved[0]||{}).id;
+    const lines=[];
+    if(!cid){ lines.push('no resolved crisis to track recovery for'); return lines; }
+    const c=(P.crisisEvents||{})[cid];
+    lines.push(c.title+' · resolved '+U.iso(c.resolved.resolvedAt)+' ('+U.days(now,c.resolved.resolvedAt)+'d ago)');
+    const done=c.milestones.filter(m=>m.achieved), open=c.milestones.filter(m=>!m.achieved);
+    lines.push('milestones: '+done.length+' of '+c.milestones.length+' achieved'+
+      (c.milestones.length?' = '+U.rd(done.length/c.milestones.length*100,0)+'%':''));
+    c.milestones.forEach(m=>lines.push('  '+(m.achieved?'[done] ':'[open] ')+m.milestone+
+      (m.achieved&&m.achieved_at?' ('+U.iso(m.achieved_at)+')':'')));
+    if(c.postmortem){ lines.push('postmortem action items:');
+      (c.postmortem.action_items||[]).forEach(a=>lines.push('  '+a.action+' · '+a.owner+
+        ' · due '+(typeof a.dueDate==='number'?U.iso(a.dueDate):'no date'))); }
+    else lines.push('no postmortem logged yet (R127 watches that)');
+    const plans=vals(P.plans||{}).filter(p=>String(p.note||'').indexOf(cid)!==-1);
+    if(plans.length) lines.push('linked plans: '+plans.map(p=>p.goal.slice(0,40)).join(' · '));
+    const nps=(P.npsLogs||[]).slice(-2);
+    if(nps.length===2) lines.push('customer trust signal — NPS '+nps[0].score+' → '+nps[1].score+
+      ' (delta '+U.rd(nps[1].score-nps[0].score,1)+'); CORRELATION ONLY, a crisis is not the only thing moving NPS');
+    else lines.push('customer trust signal: fewer than 2 cs.nps.logged readings — no delta computed');
+    return lines;
+  },
+  fields(R,P){
+    const resolved=vals(P.crisisEvents||{}).filter(c=>c.resolved)
+      .sort((a,b)=>b.resolved.resolvedAt-a.resolved.resolvedAt);
+    const openMs=(P.openRecoveryMilestones||[]);
+    return [
+      {key:'crisisId',label:'crisis',kind:'select',req:true,
+        options:resolved.map(c=>({value:c.id,label:c.id+' · '+c.title}))},
+      {key:'achieved',label:'milestones achieved since the last update',kind:'checks',req:false,
+        options:openMs.map(m=>({value:m.id,label:m.milestone}))},
+      {key:'newMilestone',label:'new milestone to track',kind:'text',req:false},
+      {key:'blockers',label:'blockers on the remaining milestones',kind:'textarea',req:true},
+      {key:'estimate',label:'updated completion estimate',kind:'text',req:true},
+      {key:'status',label:'crisis status now',kind:'select',req:true,
+        options:[{value:'recovering',label:'recovering'},{value:'resolved',label:'fully resolved'}]}]; },
+  submit(v,R,P){
+    const events=(v.achieved||[]).map(id=>{
+      const m=(P.recoveryMilestones||{})[id];
+      return {type:'recovery.milestone',payload:{id:id,crisisId:v.crisisId,
+        milestone:m?m.milestone:id,achieved:true,achieved_at:Date.now()}}; });
+    if(v.newMilestone) events.push({type:'recovery.milestone',payload:{id:U.uid('rm'),
+      crisisId:v.crisisId,milestone:v.newMilestone,achieved:false}});
+    events.push({type:'crisis.update',payload:{crisisId:v.crisisId,status:v.status,
+      note:'recovery: '+v.estimate+' | blockers: '+v.blockers.slice(0,120),updatedAt:Date.now()}});
+    return {events:events};
+  }};
+SPECS['key-person-risk-mitigation']={
+  pattern:null,title:'Key person risk mitigation',free:true,
+  blurb:'One person knows how to do a critical thing, and they might leave.',
+  prefill(R,P,now){
+    const k=RS().keyPersonRisk(P,now);
+    const lines=[k.label,'top risks by score:'];
+    k.rows.slice(0,3).forEach(r=>{ lines.push('  '+r.personId+' — '+r.math);
+      lines.push('    processes: '+(r.processes.join(', ')||'none listed')+
+        ' · cross-trained '+(r.crossTrained?'yes':'NO')+' · documented '+(r.documented?'yes':'NO')+
+        (r.departing?' · ALREADY DEPARTING (hr.attrition.logged on file)':'')); });
+    if(!k.rows.length) lines.push('  no key.dependency.logged events yet');
+    const plans=vals(P.plans||{});
+    k.rows.slice(0,3).forEach(r=>{
+      const theirs=plans.filter(p=>p.personId===r.personId);
+      lines.push('  growth plans for '+r.personId+': '+(theirs.length?theirs.map(p=>p.goal.slice(0,40)).join(' · '):'none')); });
+    const r48=R.findings.filter(f=>f.rule==='R48');
+    if(r48.length) lines.push('RETENTION SIGNAL ACTIVE (R48): '+r48.map(f=>f.title).join(' · '));
+    const r19=R.findings.filter(f=>f.rule==='R19');
+    if(r19.length) lines.push('ATTRITION WINDOW ACTIVE (R19): '+r19[0].title);
+    return lines;
+  },
+  fields(R,P){
+    const k=RS().keyPersonRisk(P,Date.now());
+    return [
+      {key:'personId',label:'person',kind:'select',req:true,
+        options:k.rows.map(r=>({value:r.personId,label:r.personId+' (risk '+r.score+')'}))},
+      {key:'docOwner',label:'documentation plan — who',kind:'text',req:true},
+      {key:'docBy',label:'documentation plan — by when',kind:'date',req:true},
+      {key:'shadow',label:'cross-training — who shadows whom, and the timeline',kind:'textarea',req:true},
+      {key:'runbook',label:'if they left this week: emergency runbook location',kind:'text',req:true},
+      {key:'retention',label:'retention action for this person',kind:'textarea',req:true}]; },
+  submit(v,R,P){
+    const cur=(P.keyDepByPerson||{})[v.personId];
+    return {events:[
+      {type:'key.dependency.logged',payload:{personId:v.personId,
+        processes_owned:cur?cur.processes_owned.slice():[],
+        bus_factor:cur?cur.bus_factor:1,documented:false,cross_trained:false,
+        criticality_sum:cur&&typeof cur.criticality_sum==='number'?cur.criticality_sum:undefined,
+        note:'mitigation in flight: docs by '+v.docOwner+' ('+U.iso(v.docBy)+'), shadowing: '+v.shadow.slice(0,80)+
+          ' — flags stay false until the work lands, so the rule keeps firing until it is actually done'}},
+      {type:'plan.created',payload:{id:U.uid('plan'),personId:v.docOwner,
+        goal:'Document the processes owned by '+v.personId,dimension:'continuity',
+        checkpointDate:v.docBy,note:'key-person risk mitigation'}},
+      {type:'plan.created',payload:{id:U.uid('plan'),personId:v.personId,
+        goal:'Cross-train a backup: '+v.shadow.slice(0,100),dimension:'continuity',
+        checkpointDate:v.docBy,note:'key-person risk mitigation'}},
+      note('people','KEY PERSON RISK — '+v.personId+'\ndocumentation: '+v.docOwner+' by '+U.iso(v.docBy)+
+        '\ncross-training:\n'+v.shadow+'\nemergency runbook: '+v.runbook+
+        '\nretention action:\n'+v.retention,'key-person-risk-mitigation')]};
+  }};
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -10202,7 +11294,10 @@ let _lastP=null; const ctxP=()=>_lastP;
 function finCard(f){
   const age=f.evidenceAt===null?'undated':U.days(Date.now(),f.evidenceAt)+'d';
   const isCorr=/^R4[1-5]$/.test(f.rule), isEng=f.rule==='ENG';
-  return '<div class="fin" data-fkey="'+esc(f.key)+'">'+
+  /* pt-19: sev-5 crisis-domain findings get their own weight, any domain */
+  const CRISIS_RULES={R125:1,R126:1,R127:1,R128:1,R129:1,R130:1,R131:1,R132:1,R133:1,R134:1};
+  const sevmax=(f.sev===5&&CRISIS_RULES[f.rule])?' sevmax':'';
+  return '<div class="fin'+sevmax+'" data-fkey="'+esc(f.key)+'">'+
     '<div class="top">'+SEVCHIP(f.sev)+'<span class="rule">'+f.rule+'</span>'+CONFC(f.conf)+
       (isCorr?'<span class="pill">correlation rule</span>':'')+
       (isEng?'<span class="sev s5">engine fault</span>':'')+
@@ -10632,6 +11727,93 @@ const SPARK=arr=>{ if(!arr.length) return '<span class="muted small">no data</sp
   const mx=Math.max.apply(null,arr), mn=Math.min.apply(null,arr);
   const rng=(mx-mn)||1;
   return '<span class="spark">'+arr.map(v=>ch[U.clamp(Math.round((v-mn)/rng*7),0,7)]).join('')+'</span>'; };
+V['#/resilience']={kicker:'prepared for the non-steady state',title:'Resilience',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now, RSm=LeadOS.resilience;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const set=LeadOS.engine.settings(P);
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
+  const open=(P.openCrises2||[]).slice().sort((a,b)=>b.detectedAt-a.detectedAt);
+  const cov=RSm.continuityCoverage(P,now), kp=RSm.keyPersonRisk(P,now),
+        st=RSm.stressTestResults(P,now), pat=RSm.crisisPatterns(P,now);
+  const crisisRows=open.map(c=>{
+    const es=RSm.crisisSeverity(c.id,P,now);
+    return '<tr'+(es.slaBreached?' style="background:rgba(179,41,30,.06)"':'')+'>'+
+      '<td><span class="sev s'+es.effective+'">sev '+es.effective+'</span>'+
+        (es.effective!==es.base?' <span class="conf">from '+es.base+'</span>':'')+'</td>'+
+      '<td>'+esc(c.title)+'</td><td class="mono">'+esc(c.type)+'</td>'+
+      '<td class="mono">'+U.rd(es.ageHours,1)+'h</td>'+
+      '<td>'+(es.slaBreached?'<span class="sev s5">BREACHED</span>':'<span class="pill">within SLA</span>')+'</td>'+
+      '<td class="mono">'+esc(c.status||'no update')+'</td>'+
+      '<td><button class="btn ghost sm" data-act="playrun" data-id="crisis-response">respond</button></td></tr>'; }).join('');
+  const kpRows=kp.rows.map(r=>'<tr'+(r.singlePoint?' style="background:rgba(179,41,30,.05)"':'')+'>'+
+    '<td class="mono">'+esc(r.personId)+'</td><td class="mono">'+r.busFactor+'</td>'+
+    '<td class="mono">'+r.criticalitySum+'</td>'+
+    '<td>'+(r.crossTrained?'<span class="pill">yes</span>':'<span class="sev s3">no</span>')+'</td>'+
+    '<td>'+(r.documented?'<span class="pill">yes</span>':'<span class="sev s3">no</span>')+'</td>'+
+    '<td class="mono">'+r.score+'</td><td class="small muted">'+esc(r.math)+'</td></tr>').join('');
+  const pmRows=vals(P.crisisEvents||{}).filter(c=>c.resolved).sort((a,b)=>b.resolved.resolvedAt-a.resolved.resolvedAt)
+    .map(c=>{ const due=c.resolved.postmortem_due_date;
+      const state=c.postmortem?'<span class="pill">done '+U.iso(c.postmortem.at)+'</span>'
+        :(due<now?'<span class="sev s'+(U.days(now,due)>14?5:4)+'">'+U.days(now,due)+'d overdue</span>'
+          :'<span class="pill">due '+U.iso(due)+'</span>');
+      return '<tr><td>'+esc(c.title)+'</td><td class="mono">'+U.iso(c.resolved.resolvedAt)+'</td>'+
+        '<td class="small">'+esc(c.resolved.rootCause)+'</td><td>'+state+'</td></tr>'; }).join('');
+  const recRows=vals(P.crisisEvents||{}).filter(c=>c.milestones.length).map(c=>{
+    const done=c.milestones.filter(m=>m.achieved).length;
+    const pct=U.rd(done/c.milestones.length*100,0);
+    return '<tr><td>'+esc(c.title)+'</td><td>'+BAR(pct,100)+' <span class="mono">'+pct+'%</span></td>'+
+      '<td class="mono">'+done+' / '+c.milestones.length+'</td>'+
+      '<td class="small muted">'+esc(c.milestones.filter(m=>!m.achieved).map(m=>m.milestone).join(' · ')||'all achieved')+'</td></tr>'; }).join('');
+  const wr=(P.openWarRooms||[]);
+  return '<div class="vhead"><div class="kicker">prepared for the non-steady state</div><h1>Resilience</h1>'+
+    '<div class="sub">Every other view optimizes the steady state. This one prepares for the moment it ends. <b>Elapsed time is a fact</b> — SLA and age rules are HIGH confidence. <b>'+esc(RSm.OWN_ASSESSMENT)+'.</b></div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['crisis-response','crisis-postmortem','continuity-review','stress-test','recovery-tracking','key-person-risk-mitigation']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    runner+
+    (open.filter(c=>RSm.crisisSeverity(c.id,P,now).slaBreached).map(c=>{
+      const es=RSm.crisisSeverity(c.id,P,now);
+      return '<div class="slabreach">*** SLA BREACHED — '+esc(c.title)+': response is '+
+        U.rd(es.ageHours-es.slaHours,1)+'h late (detected '+U.rd(es.ageHours,1)+'h ago, SLA '+es.slaHours+'h) ***</div>'; }).join(''))+
+    '<div class="grid3">'+
+      '<div class="card"><h3>Open crises</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+open.length+' open · '+wr.length+' war room(s) open</div>'+
+        '<div>'+open.filter(c=>RSm.crisisSeverity(c.id,P,now).slaBreached).length+' past the '+set.crisisResponseSLAHours+'h SLA</div>'+
+        '<div class="lbl">severity escalates on elapsed time; the chain is printed on every finding</div></div></div>'+
+      '<div class="card"><h3>Continuity coverage</h3>'+
+        (cov.coverage===null?'<div class="small muted" style="margin-top:8px">'+esc(cov.coverageMath)+'</div>'
+          :'<div style="margin-top:8px">'+BAR(cov.coverage,100)+' <b class="mono">'+cov.coverage+'%</b></div>'+
+           '<div class="basis" style="margin-top:8px"><div>'+esc(cov.coverageMath)+'</div>'+
+           '<div>'+cov.stale.length+' stale · '+cov.noBackup.length+' with no backup owner</div></div>')+'</div>'+
+      '<div class="card"><h3>Stress testing</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+(st.daysSinceLast===null?'never conducted':st.daysSinceLast+'d since the last test (cadence '+st.cadenceDays+'d)')+'</div>'+
+        '<div>'+st.unmitigated.length+' unmitigated high-risk gap(s)</div>'+
+        '<div class="lbl">'+esc(pat.confidenceNote)+'</div></div></div>'+
+    '</div>'+
+    '<div class="sect"><h2>Crisis tracker</h2><span class="meta">'+open.length+' open · effective severity includes time-based escalation</span></div>'+
+    (crisisRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>severity</th><th>crisis</th><th>type</th><th>age</th><th>SLA</th><th>status</th><th></th></tr>'+crisisRows+'</table></div>'
+      :'<div class="empty">No open crises. The resilience layer is a preparation system — the time to use it is now.</div>')+
+    (wr.length?'<div class="card" style="margin-top:10px">'+wr.map(w=>{
+      const hrs=U.rd((now-w.openedAt)/3600000,1);
+      return '<div class="heatrow"><b>war room '+esc(w.id)+'</b><span>open '+hrs+'h · owner '+esc(w.ownerId)+
+        ' · members '+esc(w.members.join(', '))+'</span><span class="w">'+
+        (hrs>120?'<span class="sev s4">>120h</span>':hrs>72?'<span class="sev s3">>72h</span>':'')+'</span></div>'; }).join('')+'</div>':'')+
+    '<div class="sect"><h2>Key person risk</h2><span class="meta">'+kp.singlePoints.length+' single point(s) of failure</span></div>'+
+    (kpRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>person</th><th>bus factor</th><th>criticality</th><th>cross-trained</th><th>documented</th><th>risk</th><th>math</th></tr>'+kpRows+'</table>'+
+      '<div class="formnote">'+esc(kp.label)+'</div></div>'
+      :'<div class="empty">No key.dependency.logged events. The processes only one person can run are invisible until they leave.</div>')+
+    '<div class="sect"><h2>Postmortems</h2><span class="meta">'+vals(P.crisisEvents||{}).filter(c=>c.resolved).length+' resolved crises</span></div>'+
+    (pmRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>crisis</th><th>resolved</th><th>root cause</th><th>postmortem</th></tr>'+pmRows+'</table>'+
+      (pat.recurringRootCauses.length?'<div class="formnote">RECURRING: '+
+        pat.recurringRootCauses.map(r=>'"'+esc(r.verbatim)+'" ×'+r.count).join(' · ')+' — '+esc(pat.normalizationNote)+'</div>':'')+
+      '<div class="formnote">'+esc(pat.actionMath)+'</div></div>'
+      :'<div class="empty">No resolved crises on record.</div>')+
+    '<div class="sect"><h2>Recovery milestones</h2><span class="meta">'+(P.openRecoveryMilestones||[]).length+' open</span></div>'+
+    (recRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>crisis</th><th>progress</th><th>done</th><th>remaining</th></tr>'+recRows+'</table></div>'
+      :'<div class="empty">No recovery milestones tracked.</div>')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">crisis.detected · crisis.update · continuity.plan · key.dependency.logged · stress.test.logged</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
 V['#/narrative']={kicker:'numbers need a story; stories need numbers',title:'Narrative',render(ctx){
   const P=ctx.P, R=ctx.R, now=ctx.now, N=LeadOS.narrative;
   const vals=o=>Object.keys(o||{}).map(k=>o[k]);
@@ -11195,6 +12377,18 @@ V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',re
               '<div>blockers received: '+received.length+(received.length?' — '+esc(received.slice(0,3).map(b=>b.title).join(' · ')):'')+'</div>'+
             '</div>'; })()+
         '</div>'+
+        '<div class="card"><h3>Key-person dependency</h3>'+
+          (function(){
+            const d=(P.keyDepByPerson||{})[id];
+            if(!d) return '<div class="small muted" style="margin-top:8px">No key.dependency.logged entry for '+esc(id)+' — the processes only they can run are not on record.</div>';
+            const row=LeadOS.resilience.keyPersonRisk(P,now).rows.filter(r=>r.personId===id)[0];
+            return '<div class="basis" style="margin-top:8px">'+
+              '<div>processes owned: '+esc(d.processes_owned.join(', ')||'none listed')+'</div>'+
+              '<div>bus factor '+d.bus_factor+(d.bus_factor===1?' — <b>single point of failure</b>':'')+'</div>'+
+              '<div>cross-trained: '+(d.cross_trained?'yes':'<b>NO</b>')+' · documented: '+(d.documented?'yes':'<b>NO</b>')+'</div>'+
+              (row?'<div>risk score '+row.score+'</div><div class="lbl">'+esc(row.math)+'</div>':'')+
+              '<div class="lbl">'+esc(LeadOS.resilience.OWN_ASSESSMENT)+'</div></div>'; })()+
+        '</div>'+
         '<div class="card"><h3>Commitments to '+esc(id)+'</h3>'+
           (function(){
             const L=LeadOS.decisions.commitmentLedger(P,now);
@@ -11318,6 +12512,7 @@ function shell(ctx){
     ['#/external','layers','External',(ctx.P.openPains||[]).length||null],
     ['#/finance','bars','Finance',(ctx.P.unreviewedCapex||[]).length||null],
     ['#/narrative','book','Narrative',(ctx.P.undeliveredNarratives||[]).length||null],
+    ['#/resilience','shield','Resilience',(ctx.P.openCrises2||[]).length||null],
     ['#/self','gauge','Self',(ctx.P.openBiases||[]).length||null],
     ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],
