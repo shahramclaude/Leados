@@ -254,7 +254,7 @@ LeadOS.util={DAY,days,iso,isoT,rd,rd3,clamp,sum,uniq,esc,deepEq,slope,median,max
 })();
 
 /* ==================== 2 · EVENTS — registry & append-gate ====================
-   85 event types under contract in this file. Upstream claims 92; the delta
+   87 event types under contract in this file. Upstream claims 92; the delta
    is types whose payload contracts could NOT be byte-verified this session
    (upstream events.js unread) — they are not registered rather than guessed.
    validate() is the mandatory gate for every append (store.append). */
@@ -358,7 +358,7 @@ const REGISTRY = {
   'rd.tech.debt.resolved':  D({debtId:'s'},{note:'s'},null,null,{debtId:'techDebt'}),
   /* legal & compliance */
   'legal.compliance.check': D({framework:'s',result:'s'},{note:'s'},{result:['pass','finding','fail']}),
-  'legal.risk.logged':      D({title:'s',dueDate:'ms'},{ownerId:'any'}),
+  'legal.risk.logged':      D({title:'s',dueDate:'ms'},{ownerId:'any',supersedes:'s',note:'s'}),
   'legal.contract.logged':  D({id:'s',counterparty:'s',type:'s'},{value:'n',expiryDate:'ms',ownerId:'s'},null,'contracts'),
   'legal.contract.updated': D({contractId:'s',status:'s'},{note:'s'},{status:['active','renewed','terminated']},null,{contractId:'contracts'}),
   'legal.incident.logged':  D({title:'s',severity:'n'}),
@@ -379,7 +379,13 @@ const REGISTRY = {
   /* intelligence layer (pt-5 set — shapes byte-verified from upstream engine.js fold handlers) */
   'insight.acknowledged':   D({insightId:'s'},{note:'s'}),
   'benchmark.set':          D({metric:'s',value:'n',unit:'s',source:'s',period:'s'},{type:'s'}),
-  'signal.tagged':          D({eventId:'s',tag:'s'},{note:'s'})
+  'signal.tagged':          D({eventId:'s',tag:'s'},{note:'s'}),
+  /* pt-9: interactive-playbook submissions. 'playbook.completed' is named by the
+     brief; 'plan.checkin' is a reconstructed mentor-lineage contract (pt-3 named
+     plan.created/.checkin/.closed — payloads never byte-verified, minimal shape
+     chosen and LABELED). */
+  'playbook.completed':     D({playbookId:'s'},{note:'s'}),
+  'plan.checkin':           D({note:'s'},{outcome:'s',planId:'s'})
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -669,8 +675,18 @@ const MODULE_FOLD={
   /* legal */
   'legal.compliance.check':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p); s.complianceChecks.push(rec); group(s.complianceByFramework,p.framework,rec); },
   /* legal.risk.logged carries no id — keyed by its originating event id
-     (append-ordered, unique by construction, G3). Ported verbatim. */
-  'legal.risk.logged':(s,p,at,ev)=>{ const rec=Object.assign({id:ev.id,at:at},p); s.legalRisks.push(rec); s.legalRiskById[ev.id]=rec; },
+     (append-ordered, unique by construction, G3). pt-9: payload.supersedes is a
+     PROJECTION-level rewrite (the log itself is never touched): the superseded
+     record leaves the computed list, the new one takes its place, and the
+     supersession is printed on the new record. */
+  'legal.risk.logged':(s,p,at,ev)=>{
+    if(p.supersedes&&s.legalRiskById[p.supersedes]){
+      const old=s.legalRiskById[p.supersedes];
+      old.supersededBy=ev.id; old.supersededAt=at;
+      s.legalRisks=s.legalRisks.filter(r=>r.id!==old.id);
+      delete s.legalRiskById[old.id];
+    }
+    const rec=Object.assign({id:ev.id,at:at},p); s.legalRisks.push(rec); s.legalRiskById[ev.id]=rec; },
   'legal.contract.logged':(s,p,at)=>{ s.contracts[p.id]={id:p.id,counterparty:p.counterparty,type:p.type,value:p.value||null,expiryDate:p.expiryDate||null,ownerId:p.ownerId||null,status:'active',note:'',loggedAt:at,statusAt:at}; },
   'legal.contract.updated':(s,p,at)=>{ const c=s.contracts[p.contractId]; if(c){ c.status=p.status; c.statusAt=at; if(p.note) c.note=p.note; } },
   'legal.incident.logged':(s,p,at,ev)=>{ push(s.legalIncidents,p,at,ev); },
@@ -692,7 +708,10 @@ const MODULE_FOLD={
   /* intelligence layer (pt-5) — shapes byte-verified this session */
   'insight.acknowledged':(s,p,at,ev)=>{ s.insightAcks[p.insightId]={at:at,note:p.note||'',_ev:ev&&ev.id}; },
   'benchmark.set':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p); s.benchmarks.push(rec); group(s.benchmarkByMetric,p.metric,rec); },
-  'signal.tagged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p); s.signalTags.push(rec); group(s.tagsByEvent,p.eventId,rec); }
+  'signal.tagged':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p); s.signalTags.push(rec); group(s.tagsByEvent,p.eventId,rec); },
+  /* pt-9 */
+  'playbook.completed':(s,p,at,ev)=>{ push(s.playbookRuns,p,at,ev); },
+  'plan.checkin':(s,p,at,ev)=>{ push(s.planCheckins,p,at,ev); }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -710,6 +729,7 @@ function blankBuckets(s){
   s.boardMeetings=[];s.execKpiReviews=[];s.investorUpdates=[];s.crises={};
   s.notes={};s.noteLog=[];s.notesByRef={};
   s.insightAcks={};s.benchmarks=[];s.benchmarkByMetric={};s.reviewLog=[];s.signalTags=[];s.tagsByEvent={};
+  s.playbookRuns=[];s.planCheckins=[];
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -2170,6 +2190,59 @@ function runT(){
     if(rClean.engErrors.length!==0) return {why:'engine did not return to clean after pop'};
     return {ok:true,why:'5-key contract exact · suppress 1 → quieted cascade disclosed · unsuppress restores · ENG loud + reversible'};
   }));
+  T.push(check('T21','pt-9 playbooks: prefills run; every submit emits only registry-valid specs',()=>{
+    const gi=id=>LeadOS.playbooks.INTERACTIVE[id];
+    ['systemic-intervention','ops-triage','revenue-war-room','governance-sprint','finance-reforecast','innovation-reset','leadership-audit']
+      .forEach(id=>{ if(!gi(id)) throw new Error('missing interactive spec '+id); });
+    const full={plan30:'p',owner_R19:'a',owner_R20:'b',owner_R13:'c',owner_R4:'d',escalation:'Y',board:'N',
+      rootCause:'rc',mitigation:'m',oncall:'o',postmortem:FIXED+7*DAY,deals:'d1',accounts:'a1',counter:'ca',sponsor:'s',
+      legalOwner:'gc',remediation:FIXED+14*DAY,boardDate:FIXED+21*DAY,contract:'renew',
+      revForecast:111000,costForecast:88000,why:'w',nextReview:FIXED+30*DAY,
+      closeExps:['exp-1'],debt:'td-1',okr:'okr-1',alloc:20,rootSelf:'rs',recovery:'rp',support:'sp'};
+    const bad=[];
+    Object.keys(LeadOS.playbooks.INTERACTIVE).forEach(id=>{
+      const spec=gi(id);
+      let lines=null;
+      try{ lines=spec.prefill(run1,P,FIXED); }catch(e){ bad.push(id+' prefill threw: '+e.message); return; }
+      if(!Array.isArray(lines)||!lines.length) bad.push(id+' prefill returned no lines');
+      let out=null;
+      try{ out=spec.submit(Object.assign({},full),run1,P); }catch(e){ bad.push(id+' submit threw: '+e.message); return; }
+      if(!out||!Array.isArray(out.events)||!out.events.length){ bad.push(id+' emitted zero event specs'); return; }
+      out.events.forEach(e=>{
+        const v=LeadOS.events.validate(e.type,e.payload);
+        if(!v.ok) bad.push(id+' emitted INVALID '+e.type+': '+v.errors[0]); });
+      if(id==='systemic-intervention'){
+        const types=out.events.map(e=>e.type);
+        if(types.indexOf('exec.crisis.logged')===-1) bad.push('escalation=Y must emit exec.crisis.logged');
+        if(types.indexOf('playbook.completed')===-1) bad.push('systemic-intervention must emit playbook.completed');
+        if(types.indexOf('note.added')===-1) bad.push('systemic-intervention must emit note.added');
+      }
+    });
+    /* escalation=N must NOT emit the crisis event */
+    const noEsc=gi('systemic-intervention').submit(Object.assign({},full,{escalation:'N'}),run1,P);
+    if(noEsc.events.some(e=>e.type==='exec.crisis.logged')) return {why:'escalation=N still emitted a crisis event'};
+    if(bad.length) return {why:bad.join(' · ')};
+    return {ok:true,why:'7 runners prefill + submit clean · all specs registry-valid · escalation gate honored'};
+  }));
+  T.push(check('T22','pt-9 folds: playbook.completed / plan.checkin logs · legal.risk supersede',()=>{
+    const list=wrap([
+      {type:'legal.risk.logged',payload:{title:'IP gap',dueDate:FIXED-5*DAY,ownerId:null},at:FIXED-40*DAY},
+      {type:'playbook.completed',payload:{playbookId:'governance-sprint',note:'x'},at:FIXED-DAY},
+      {type:'plan.checkin',payload:{note:'checkin',outcome:'on track'},at:FIXED-DAY},
+      {type:'legal.risk.logged',payload:{title:'IP gap',dueDate:FIXED-5*DAY,ownerId:'gc',supersedes:'e-00001'},at:FIXED}
+    ]);
+    const Px=LeadOS.engine.project(list);
+    if(Px.playbookRuns.length!==1) return {why:'playbook.completed not folded'};
+    if(Px.planCheckins.length!==1) return {why:'plan.checkin not folded'};
+    if(Px.legalRisks.length!==1) return {why:'supersede must leave exactly one risk, found '+Px.legalRisks.length};
+    if(Px.legalRisks[0].ownerId!=='gc') return {why:'superseding record did not carry the new owner'};
+    /* the unowned record is gone from the computed list — R31 unowned branch quiets,
+       the past-due branch still fires (assigning an owner does not erase overdue) */
+    const f31=LeadOS.rules.RULES[30](Px,FIXED);
+    if(f31.some(f=>/:unowned$/.test(f.key))) return {why:'superseded unowned risk still fires :unowned'};
+    if(!f31.length) return {why:'past-due branch should still fire on the superseding record'};
+    return {ok:true,why:'1 risk remains, owned · unowned quiets · past-due persists · both pt-9 types fold'};
+  }));
   return T;
 }
 
@@ -2279,7 +2352,8 @@ const CLAIMS=[
   {id:'C8',text:'Named patterns fire iff every limb fires; windows evaluated as printed sub-claims',by:['T14']},
   {id:'C9',text:'All 40 individual rules + all 5 correlation rules exercised by one deterministic seed',by:['T18','T19']},
   {id:'C10',text:'The registry rejects bad payloads; the import gate rewires and counts skips',by:['T15','T16','G3']},
-  {id:'C11',text:'R41–R45 fire iff their pattern is active, carry literal CORR keys, and the correlation pass receives the already-computed (unsuppressed) list; suppression is audited and reversible; engine faults surface loudly',by:['T19','T20','G7']}
+  {id:'C11',text:'R41–R45 fire iff their pattern is active, carry literal CORR keys, and the correlation pass receives the already-computed (unsuppressed) list; suppression is audited and reversible; engine faults surface loudly',by:['T19','T20','G7']},
+  {id:'C12',text:'Interactive playbooks prefill from the log and emit only registry-valid event specs — nothing is written without review; escalation and supersede semantics hold',by:['T21','T22','G3']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -2358,7 +2432,232 @@ function get(id){
     if(CURATED[k]) return Object.assign({id:id},CURATED[k]); }
   return null;
 }
-LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain};
+
+/* ================= 8b · INTERACTIVE PLAYBOOKS (pt-9 brief) =================
+   prefill PRINTS what the log knows (never invents); fields are the form;
+   submit returns EVENT SPECS ONLY — the UI shows them, asks, and appends
+   them through the validated gate. Nothing here writes to storage. */
+const INTERACTIVE=(function(){
+const U=LeadOS.util, iso=U.iso, days=U.days, rd=U.rd;
+const byRule=(R,rule)=>R.findings.filter(f=>f.rule===rule);
+const firstBasis=f=>f.basis&&f.basis.length?f.basis[0]:f.title;
+const personsOf=(R,P,fs)=>{
+  const seen={},out=[];
+  fs.forEach(f=>{ LeadOS.correlate.anchorsFor(f,P).persons.forEach(p=>{ if(!seen[p]){seen[p]=true;out.push(p);} }); });
+  return out;
+};
+const FD=(key,label,kind,req,extra)=>Object.assign({key:key,label:label,kind:kind,req:!!req},extra||{});
+const note=(domain,text,context,payload)=>({type:'note.added',payload:Object.assign({id:U.uid('note'),domain:domain,text:text,context:context},payload||{})});
+const gateLine=(R,pattern)=>{
+  const on=R.patterns.active.some(p=>p.name===pattern);
+  return {on:on,line:on?null:('PATTERN '+pattern+' IS NOT ACTIVE at read time — submission disabled; the prefill below shows what it would address, printed, not hidden')};
+};
+const fnsOf=(R,ids)=>[].concat.apply([],ids.map(r=>byRule(R,r)));
+
+const SPECS={
+/* ---------- systemic-intervention (DEATH_SPIRAL) ---------- */
+'systemic-intervention':{
+  pattern:'DEATH_SPIRAL',title:'Systemic intervention',
+  blurb:'Address the four-limb collapse signal as one problem, not four.',
+  prefill(R,P,now){
+    const fs=fnsOf(R,['R19','R20','R13','R4']);
+    const lines=['constituent findings (live):'];
+    fs.forEach(f=>lines.push('  '+f.rule+' — '+f.title+'  ['+f.key+']'));
+    const people=personsOf(R,P,fs);
+    lines.push('people named by the evidence: '+(people.length?people.join(', '):'none resolvable — stated, not guessed'));
+    const corr=R.findings.filter(f=>f.key==='CORR:DEATH_SPIRAL')[0];
+    const cell=corr?(R.heat.cells.filter(c=>c.domain===corr.domain)[0]):null;
+    if(cell){ lines.push('heatmap, '+cell.domain+' (composite signal, not a measurement): score '+U.rd(cell.score,2)+(cell.capped?' (capped from '+U.rd(cell.raw,2)+')':'')+' over '+cell.contrib.length+' term(s)');
+      cell.contrib.slice(0,3).forEach(t=>lines.push('  '+t.math)); }
+    else lines.push('heatmap: no cell for the charged domain — printed absence');
+    return lines;
+  },
+  fields(R){ 
+    const limbs=['R19','R20','R13','R4'];
+    return [FD('plan30','30-day action plan','textarea',true)]
+      .concat(limbs.map(r=>FD('owner_'+r,'owner for '+r+' findings','text',true)))
+      .concat([FD('escalation','escalation decision Y/N','yn',true),FD('board','board-awareness needed Y/N','yn',true)]);
+  },
+  submit(v){
+    const owners=['R19','R20','R13','R4'].map(r=>r+' → '+v['owner_'+r]).join(' · ');
+    const events=[note('people','SYSTEMIC INTERVENTION (DEATH_SPIRAL) — 30-day plan:\n'+v.plan30+'\n\nowners: '+owners+'\nboard awareness: '+v.board,'systemic-intervention')];
+    if(v.escalation==='Y') events.push({type:'exec.crisis.logged',payload:{id:U.uid('crisis'),
+      title:'DEATH_SPIRAL intervention',severity:5,type:'organizational',
+      responseTeam:['R19','R20','R13','R4'].map(r=>v['owner_'+r]).filter(Boolean),
+      activatedAt:Date.now()}});
+    events.push({type:'playbook.completed',payload:{playbookId:'systemic-intervention',note:'escalation '+v.escalation+' · board '+v.board}});
+    return {events:events};
+  }},
+/* ---------- ops-triage (EXECUTION_BREAKDOWN) ---------- */
+'ops-triage':{
+  pattern:'EXECUTION_BREAKDOWN',title:'Ops triage',
+  blurb:'Response time, commitments, and delivery are failing together.',
+  prefill(R,P,now){
+    const lines=['constituent findings with the measured actuals:'];
+    byRule(R,'R16').forEach(f=>{ lines.push('  '+f.rule+' — '+f.title); lines.push('    '+firstBasis(f)); });
+    byRule(R,'R17').forEach(f=>lines.push('  SLA breach: '+(f.scope||f.title)+'  ['+f.key+']'));
+    byRule(R,'R18').forEach(f=>lines.push('  milestone: '+f.title+'  ['+f.key+']'));
+    if(!lines.length||lines.length===1) lines.push('  (no EXECUTION_BREAKDOWN limbs currently firing — printed absence)');
+    return lines;
+  },
+  fields(){ return [FD('rootCause','root cause','textarea',true),FD('mitigation','immediate mitigation','text',true),
+    FD('oncall','on-call owner','text',true),FD('postmortem','post-mortem date','date',true)]; },
+  submit(v,R,P){
+    const events=[];
+    const openIds={}; (P.openIncidents||[]).forEach(i=>{ openIds[i.id]=true; });
+    byRule(R,'R16').forEach(f=>f.refs.forEach(id=>{
+      if(openIds[id]) events.push({type:'ops.incident.resolved',payload:{incidentId:id,
+        resolvedAt:Date.now(),rootCause:v.rootCause,actions:[v.mitigation]}});
+    }));
+    byRule(R,'R18').forEach(f=>f.refs.forEach(id=>{
+      events.push({type:'ops.milestone.updated',payload:{milestoneId:id,status:'on-track',
+        note:'ops-triage unblock by '+v.oncall+': '+v.mitigation+' — evidence to follow'}});
+    }));
+    events.push(note('operations','OPS TRIAGE — root cause:\n'+v.rootCause+'\nmitigation: '+v.mitigation+'\non-call: '+v.oncall+'\npost-mortem: '+iso(v.postmortem),'ops-triage'));
+    return {events:events};
+  }},
+/* ---------- revenue-war-room (REVENUE_AT_RISK) ---------- */
+'revenue-war-room':{
+  pattern:'REVENUE_AT_RISK',title:'Revenue war room',
+  blurb:'Pipeline hygiene, quota performance, and retention as one problem.',
+  prefill(R,P,now){
+    const open=P.openDeals||[];
+    const pv=U.sum(open.map(d=>d.value||0));
+    const lines=['pipeline: Σ open deal value = '+pv+' across '+open.length+' open deal(s)'+(open.length?' ('+open.map(d=>d.title+':'+d.value).join(' · ')+')':'')];
+    Object.keys(P.quotas||{}).sort().forEach(k=>{ const q=P.quotas[k];
+      if(!q.actuals.length||!q.target) return;
+      const la=q.actuals[q.actuals.length-1];
+      lines.push('quota '+q.personId+': '+la.actual+' ÷ '+q.target+' = '+rd(la.actual/q.target,3)+' ('+rd(la.actual/q.target*100,1)+'% of target, period '+q.period+')'); });
+    const churn=(P.churnLogs||[]).slice(-1)[0];
+    if(churn){ const pct=rd(churn.churned/churn.total*100,2);
+      lines.push('churn ('+churn.period+'): '+churn.churned+' ÷ '+churn.total+' = '+pct+'%'
+        +(typeof churn.mrr_lost==='number'&&typeof churn.mrr_total==='number'&&churn.mrr_total>0
+          ?' · MRR impact '+churn.mrr_lost+' ÷ '+churn.mrr_total+' = '+rd(churn.mrr_lost/churn.mrr_total*100,1)+'%'
+          :' · MRR impact not computable (no mrr figures) — stated, not inferred')); }
+    return lines;
+  },
+  fields(){ return [FD('deals','deals to prioritize this week','text',true),
+    FD('accounts','accounts at churn risk','text',true),FD('counter','counter-action','textarea',true),
+    FD('sponsor','exec sponsor','text',true)]; },
+  submit(v){
+    return {events:[
+      note('sales','REVENUE WAR ROOM — prioritize: '+v.deals+'\nat-risk accounts: '+v.accounts+'\ncounter-action:\n'+v.counter+'\nexec sponsor: '+v.sponsor,'revenue-war-room'),
+      {type:'exec.kpi.reviewed',payload:{note:'revenue war room held — counter-action: '+v.counter.slice(0,140)}}
+    ]};
+  }},
+/* ---------- governance-sprint (GOVERNANCE_GAP) ---------- */
+'governance-sprint':{
+  pattern:'GOVERNANCE_GAP',title:'Governance sprint',
+  blurb:'Legal and board infrastructure under-investment, fixed as one sprint.',
+  prefill(R,P,now){
+    const lines=['the four governance limbs, days-overdue per item:'];
+    fnsOf(R,['R30','R31','R32','R39']).forEach(f=>{
+      let age;
+      if(f.evidenceAt===null) age='undated';
+      else if(f.evidenceAt>now) age='due in '+U.days(f.evidenceAt,now)+'d (future-dated reference)';
+      else age=days(now,f.evidenceAt)+'d past its reference date';
+      lines.push('  '+f.rule+' — '+f.title+'  ['+age+']'); });
+    const unowned=byRule(R,'R31').filter(f=>/:unowned$/.test(f.key));
+    lines.push('explicitly unowned legal risks: '+(unowned.length?unowned.map(f=>f.refs[0]).join(', '):'none — the owner field below would write nothing, printed'));
+    lines.push('CAVEAT (printed): logging exec.board.meeting records the meeting as held in the cadence computation — log it only when the invite is actually out.');
+    return lines;
+  },
+  fields(){ return [FD('legalOwner','legal owner assignment','text',true),
+    FD('remediation','compliance remediation target date','date',true),
+    FD('boardDate','board meeting scheduled date','date',true),
+    FD('contract','contract renewal action','text',true)]; },
+  submit(v,R,P){
+    const events=[];
+    const unowned=byRule(R,'R31').filter(f=>/:unowned$/.test(f.key));
+    unowned.forEach(f=>{
+      const old=P.legalRiskById[f.refs[0]];
+      if(!old) return;
+      events.push({type:'legal.risk.logged',payload:{title:old.title,dueDate:old.dueDate,
+        ownerId:v.legalOwner,supersedes:old.id,note:'owner assigned via governance-sprint'}});
+    });
+    events.push({type:'exec.board.meeting',payload:{note:'scheduled '+iso(v.boardDate)+' — logged by governance-sprint as the commitment (invite must be out)'}});
+    events.push(note('legal','GOVERNANCE SPRINT — legal owner: '+v.legalOwner+'\nremediation target: '+iso(v.remediation)+'\nboard scheduled: '+iso(v.boardDate)+'\ncontract action: '+v.contract,'governance-sprint'));
+    return {events:events};
+  }},
+/* ---------- finance-reforecast (CASHFLOW_WARNING) ---------- */
+'finance-reforecast':{
+  pattern:'CASHFLOW_WARNING',title:'Finance reforecast',
+  blurb:'Budget, KPIs, and forecast accuracy re-baselined in one sitting.',
+  prefill(R,P,now){
+    const lines=[];
+    byRule(R,'R22').forEach(f=>lines.push('variance: '+firstBasis(f)));
+    byRule(R,'R23').forEach(f=>lines.push('KPI: '+firstBasis(f)));
+    const done=(P.finForecasts||[]).filter(x=>typeof x.actual==='number'&&x.actual!==0);
+    if(done.length){ lines.push('forecast accuracy history (reconciled periods):');
+      done.forEach(x=>{ const dev=rd((x.forecast-x.actual)/Math.abs(x.actual)*100,1);
+        lines.push('  '+x.period+': forecast '+x.forecast+' vs actual '+x.actual+' → '+dev+'% '+(dev>0?'over-optimistic':'over-conservative')); }); }
+    else lines.push('forecast accuracy history: no reconciled periods — stated, not inferred');
+    return lines;
+  },
+  fields(){ return [FD('revForecast','revised forecast revenue','number',true),
+    FD('costForecast','revised forecast cost','number',true),
+    FD('why','explanation for variance','textarea',true),
+    FD('nextReview','next review date','date',true)]; },
+  submit(v){
+    const period='reforecast-'+iso(Date.now());
+    return {events:[
+      {type:'fin.forecast.logged',payload:{period:period,metric:'revenue',forecast:v.revForecast}},
+      {type:'fin.forecast.logged',payload:{period:period,metric:'cost',forecast:v.costForecast}},
+      {type:'exec.kpi.reviewed',payload:{note:'reforecast: '+v.why.slice(0,120)+' · next review '+iso(v.nextReview)}}
+    ]};
+  }},
+/* ---------- innovation-reset (INNOVATION_STALL) ---------- */
+'innovation-reset':{
+  pattern:'INNOVATION_STALL',title:'Innovation reset',
+  blurb:'Debt down, experiments closed, OKRs re-lit — one small bet re-opened.',
+  prefill(R,P,now){
+    const lines=['open experiments:'];
+    (P.openExperiments||[]).forEach(e=>lines.push('  '+e.id+' — '+e.hypothesis+(e.reviewDate?' (reviewDate '+iso(e.reviewDate)+', '+ (e.reviewDate<now?days(now,e.reviewDate)+'d past':'due in '+U.days(e.reviewDate,now)+'d')+')':' (no reviewDate)')));
+    if(!(P.openExperiments||[]).length) lines.push('  (none open — printed absence)');
+    const debt=(P.openTechDebt||[]).filter(d=>days(now,d.loggedAt)<=90);
+    const mass=U.sum(debt.map(d=>d.severity*d.effort));
+    lines.push('unresolved tech-debt mass (90d): '+debt.map(d=>'('+d.severity+'×'+d.effort+')').join(' + ')+' = '+mass);
+    const silent=byRule(R,'R14');
+    lines.push('silent OKRs: '+(silent.length?silent.map(f=>f.title).join(' · '):'none'));
+    return lines;
+  },
+  fields(R,P){
+    return [FD('closeExps','experiments to close/debrief (select)','checks',false,
+      {options:(P.openExperiments||[]).map(e=>({value:e.id,label:e.id+' — '+e.hypothesis.slice(0,60)}))}),
+      FD('debt','tech debt items to schedule','textarea',true),
+      FD('okr','OKR to update this week','text',true),
+      FD('alloc','innovation time allocation % this sprint','number',true)];
+  },
+  submit(v){
+    const events=(v.closeExps||[]).map(id=>({type:'rd.experiment.result',payload:{
+      experimentId:id,result:'closed during innovation-reset (debrief recorded in note)',learnings:[],next:''}}));
+    events.push(note('rnd','INNOVATION RESET — closed: '+((v.closeExps||[]).join(', ')||'none')+'\ndebt scheduled: '+v.debt+'\nOKR update: '+v.okr+'\nallocation: '+v.alloc+'%','innovation-reset'));
+    return {events:events};
+  }},
+/* ---------- leadership-audit (LEADERSHIP_VACUUM) ---------- */
+'leadership-audit':{
+  pattern:'LEADERSHIP_VACUUM',title:'Leadership audit',
+  blurb:'Presence, growth, and owned goals — read your own log first.',
+  prefill(R,P,now){
+    const lines=['the four cadence limbs, last date for each:'];
+    fnsOf(R,['R1','R3','R8','R10']).forEach(f=>lines.push('  '+f.rule+' — '+f.title+'  [evidence '+(f.evidenceAt===null?'undated':iso(f.evidenceAt)+' · '+days(now,f.evidenceAt)+'d')+']'));
+    lines.push('growth-plan status: '+((P.planCheckins||[]).length
+      ? (P.planCheckins.length+' plan.checkin event(s) in the log')
+      : 'no plan entity exists in this build’s registry — the mentor-lineage plan.* contract is carried only as plan.checkin; the gap is printed, not patched'));
+    return lines;
+  },
+  fields(){ return [FD('rootSelf','root cause self-assessment','textarea',true),
+    FD('recovery','3-week recovery plan','textarea',true),
+    FD('support','support needed from your manager','textarea',true)]; },
+  submit(v,R,P){
+    const events=[];
+    if((P.planCheckins||[]).length) events.push({type:'plan.checkin',payload:{note:'leadership-audit recovery plan: '+v.recovery.slice(0,140),outcome:'recovery started'}});
+    events.push(note('people','LEADERSHIP AUDIT — root cause (self):\n'+v.rootSelf+'\n\n3-week recovery:\n'+v.recovery+'\n\nsupport needed:\n'+v.support,'leadership-audit'));
+    return {events:events};
+  }}
+};
+return SPECS;})();
+LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
 
 /* ==================== 9 · UI — rail, hash routes, views, boot gate ======= */
@@ -2397,7 +2696,7 @@ function readAll(){
   const R=LeadOS.correlate.run(P,now);
   return {events:events,P:P,now:now,R:R};
 }
-const ui={route:'#/today',chip:'ALL',heatSel:null,capType:null,ackOpen:null,supOpen:null};
+const ui={route:'#/today',chip:'ALL',heatSel:null,capType:null,ackOpen:null,supOpen:null,playRunner:null};
 const fmtN=n=>Number(n).toLocaleString('en-US');
 const SEVCHIP=s=>'<span class="sev s'+s+'">sev '+s+'</span>';
 const CONFC=c=>'<span class="conf '+c+'" title="confidence">'+c.toLowerCase()+'</span>';
@@ -2406,7 +2705,10 @@ const CONFC=c=>'<span class="conf '+c+'" title="confidence">'+c.toLowerCase()+'<
 function playLine(play,playNone){
   if(!play) return '<span class="pill" title="'+(playNone?esc(playNone):'no playbook linked')+'">no play — '+(playNone?esc(playNone):'reason unprinted')+'</span>';
   const pb=LeadOS.playbooks.get(play);
-  return '<a class="playlink" href="#/playbooks">'+icon('book',12)+' '+esc(pb?pb.title:play)+'</a> <span class="conf" title="playbook id">'+esc(play)+'</span>';
+  const iid=String(play).replace(/^interactive:/,'');
+  const runBtn=LeadOS.playbooks.INTERACTIVE[iid]
+    ?' <button class="btn sm" data-act="playrun" data-id="'+iid+'">run playbook</button>':'';
+  return '<a class="playlink" href="#/playbooks">'+icon('book',12)+' '+esc(pb?pb.title:play)+'</a> <span class="conf" title="playbook id">'+esc(play)+'</span>'+runBtn;
 }
 function finCard(f){
   const age=f.evidenceAt===null?'undated':U.days(Date.now(),f.evidenceAt)+'d';
@@ -2497,7 +2799,7 @@ V['#/today']={kicker:'operating picture',title:'Today',render(ctx){
     '<div class="grid2">'+
       '<div class="card"><h3>Operating rhythm</h3><table class="t" style="margin-top:10px"><tr><th>review</th><th>interval</th><th>last</th><th>due</th><th>state</th></tr>'+cadRows+'</table>'+
       '<div class="formnote">Intervals from settings (leader-changeable in Data): revenue '+set.revenueReviewCadenceDays+'d · ops '+set.opsReviewCadenceDays+'d · board '+set.boardCadenceDays+'d · compliance '+set.complianceAuditCadenceDays+'d.</div></div>'+
-      '<div class="card"><h3>Quick capture</h3><div class="formnote">Every action is an append to the event log. Payloads are validated against the 85-type registry before they may enter.</div>'+captureForm()+'</div>'+
+      '<div class="card"><h3>Quick capture</h3><div class="formnote">Every action is an append to the event log. Payloads are validated against the '+LeadOS.events.count+'-type registry before they may enter.</div>'+captureForm()+'</div>'+
     '</div>'+
     '<div class="sect"><h2>Signals</h2><span class="meta">'+list.length+' shown · ranked by severity, then rule</span></div>'+
     chips(chipsDom)+'<div style="height:14px"></div>'+
@@ -2611,16 +2913,47 @@ V['#/health']={kicker:'the authority wall — executed, not declared',title:'Hea
     '<div class="sect"><h2>Claims</h2><span class="meta">a claim is only as good as the checks under it</span></div><div class="card">'+
     res.claims.map(c=>'<div class="claim"><span class="cid">'+c.id+'</span><span class="st">'+(c.proven?icon('check',13):icon('x',13))+'</span><div>'+esc(c.text)+'<div class="why">authorized by '+c.by.join(' · ')+(c.proven?'':' — <b>UNPROVEN: '+c.unproven.join(', ')+'</b>')+'</div></div></div>').join('')+'</div>';
 }};
+function playRunnerHtml(ctx,id){
+  const spec=LeadOS.playbooks.INTERACTIVE[id];
+  if(!spec) return '<div class="empty">Unknown interactive playbook '+esc(id)+'.</div>';
+  const on=ctx.R.patterns.active.some(p=>p.name===spec.pattern);
+  const lines=spec.prefill(ctx.R,ctx.P,ctx.now);
+  const fields=spec.fields(ctx.R,ctx.P);
+  const fieldHtml=fields.map(fd=>{
+    const lab='<label>'+esc(fd.label)+(fd.req?' *':'')+'</label>';
+    if(fd.kind==='textarea') return '<div class="full">'+lab+'<textarea rows="3" data-pf="'+fd.key+'" data-kind="textarea"></textarea></div>';
+    if(fd.kind==='yn') return '<div>'+lab+'<select data-pf="'+fd.key+'" data-kind="yn"><option value="">—</option><option>Y</option><option>N</option></select></div>';
+    if(fd.kind==='number') return '<div>'+lab+'<input type="number" step="any" data-pf="'+fd.key+'" data-kind="number"></div>';
+    if(fd.kind==='date') return '<div>'+lab+'<input type="date" data-pf="'+fd.key+'" data-kind="date"></div>';
+    if(fd.kind==='checks') return '<div class="full">'+lab+'<div style="display:flex;flex-direction:column;gap:5px;margin-top:4px">'+
+      (fd.options&&fd.options.length?fd.options.map(o=>'<label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink2)"><input type="checkbox" style="width:auto" data-pf="'+fd.key+'" value="'+esc(o.value)+'"> '+esc(o.label)+'</label>').join(''):'<span class="muted small">(none available — printed absence)</span>')+'</div></div>';
+    return '<div>'+lab+'<input data-pf="'+fd.key+'" data-kind="text"></div>';
+  }).join('');
+  return '<div class="card" style="border-left:3px solid var(--accent);margin-bottom:18px">'+
+    '<h3>'+esc(spec.title)+'</h3><div class="mono small muted">'+id+' · gates on pattern '+spec.pattern+' · emits event specs only — you review before anything is appended</div>'+
+    '<div class="small muted" style="margin-top:6px">'+esc(spec.blurb)+'</div>'+
+    '<div class="sect" style="margin-top:16px"><h2>Prefill — read from the log</h2></div>'+
+    '<div class="basis">'+lines.map(l=>'<div>'+esc(l)+'</div>').join('')+'</div>'+
+    (on?'':'<div class="callout" style="margin-top:12px">'+icon('alert')+'<div>PATTERN '+esc(spec.pattern)+' IS NOT ACTIVE at read time — submission disabled; the prefill above shows what it would address, printed, not hidden.</div></div>')+
+    '<div class="fgrid">'+fieldHtml+'</div>'+
+    '<div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+      '<button class="btn sm" data-act="playsubmit" data-id="'+id+'"'+(on?'':' disabled style="opacity:.45;cursor:not-allowed"')+'>'+icon('check',13)+' review & append events</button>'+
+      '<button class="btn ghost sm" data-act="playcancel">close runner</button>'+
+      '<span class="formnote" style="display:inline">Nothing is written until you confirm the exact event specs.</span></div></div>';
+}
 V['#/playbooks']={kicker:'the mentor layer',title:'Playbooks',render(ctx){
   const cur=LeadOS.playbooks.CURATED;
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
   const cards=Object.keys(cur).sort().map(id=>{ const p=cur[id];
-    return '<div class="card"><h3>'+esc(p.title)+'</h3><div class="mono small muted">'+id+'</div><ol style="margin:10px 0 0 18px;display:flex;flex-direction:column;gap:6px" class="small">'+p.steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol></div>';
+    const run=LeadOS.playbooks.INTERACTIVE[id]?' <button class="btn sm" style="margin-top:10px" data-act="playrun" data-id="'+id+'">'+icon('zap',12)+' run</button>':'';
+    return '<div class="card"><h3>'+esc(p.title)+'</h3><div class="mono small muted">'+id+(LeadOS.playbooks.INTERACTIVE[id]?' · interactive':'')+'</div><ol style="margin:10px 0 0 18px;display:flex;flex-direction:column;gap:6px" class="small">'+p.steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol>'+run+'</div>';
   }).join('');
   const doms=LeadOS.engine.DOMAINS.filter(d=>d!=='system').map(d=>{ const p=LeadOS.playbooks.forDomain(d);
     return '<div class="card"><h3>'+esc(p.title)+'</h3><div class="mono small muted">playbook:'+d+' · generated descriptor</div><ol style="margin:10px 0 0 18px;display:flex;flex-direction:column;gap:6px" class="small">'+p.steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol></div>';
   }).join('');
-  return '<div class="vhead"><div class="kicker">the mentor layer</div><h1>Playbooks</h1><div class="sub">Every finding carries the playbook that resolves it, or prints why it has none. Descriptors are data; the next playbook is a line of data, not a screen.</div></div>'+
-    '<div class="sect"><h2>Curated</h2><span class="meta">'+Object.keys(cur).length+'</span></div><div class="grid2">'+cards+'</div>'+
+  return '<div class="vhead"><div class="kicker">the mentor layer</div><h1>Playbooks</h1><div class="sub">Every finding carries the playbook that resolves it, or prints why it has none. Interactive runners prefill from the live log, then emit event specs — nothing is written until you confirm each one.</div></div>'+
+    runner+
+    '<div class="sect"><h2>Curated</h2><span class="meta">'+Object.keys(cur).length+' · '+Object.keys(LeadOS.playbooks.INTERACTIVE).length+' interactive</span></div><div class="grid2">'+cards+'</div>'+
     '<div class="sect"><h2>Domain playbooks</h2><span class="meta">generated descriptors, labeled</span></div><div class="grid2">'+doms+'</div>';
 }};
 V['#/data']={kicker:'the log, the settings, the walls',title:'Data',render(ctx){
@@ -2762,6 +3095,47 @@ document.addEventListener('click',e=>{
     try{ LeadOS.store.append('signal.tagged',{eventId:b.dataset.key,tag:'unsuppress',note:''});
       toast('signal.tagged · unsuppress appended'); render(); }
     catch(err){ toast(err.message); } }
+  else if(act==='playrun'){
+    ui.playRunner=b.dataset.id;
+    if(location.hash!=='#/playbooks') location.hash='#/playbooks'; else render();
+    window.scrollTo(0,0); }
+  else if(act==='playcancel'){ ui.playRunner=null; render(); }
+  else if(act==='playsubmit'){
+    if(b.disabled) return;
+    const id=b.dataset.id, spec=LeadOS.playbooks.INTERACTIVE[id];
+    if(!spec) return;
+    const ctx=readAll();
+    if(!ctx.R.patterns.active.some(p=>p.name===spec.pattern)){ toast('pattern not active — submission disabled'); return; }
+    const root=b.closest('.card');
+    const values={}, errs=[];
+    spec.fields(ctx.R,ctx.P).forEach(fd=>{
+      if(fd.kind==='checks'){
+        values[fd.key]=Array.prototype.slice.call(root.querySelectorAll('[data-pf="'+fd.key+'"]:checked')).map(el=>el.value);
+        if(fd.req&&!values[fd.key].length) errs.push(fd.label+' is required');
+        return;
+      }
+      const el=root.querySelector('[data-pf="'+fd.key+'"]');
+      let v=el?String(el.value).trim():'';
+      if(v===''){ if(fd.req) errs.push(fd.label+' is required'); return; }
+      if(fd.kind==='number'){ v=Number(v); if(!isFinite(v)){ errs.push(fd.label+' must be a number'); return; } }
+      if(fd.kind==='date'){ v=new Date(v+'T12:00:00Z').getTime(); if(!isFinite(v)){ errs.push(fd.label+' must be a date'); return; } }
+      values[fd.key]=v;
+    });
+    if(errs.length){ toast(errs[0]); return; }
+    let out;
+    try{ out=spec.submit(values,ctx.R,ctx.P); }
+    catch(e2){ toast('submit adapter threw: '+e2.message); return; }
+    const evts=(out&&out.events)||[];
+    if(!evts.length){ toast('nothing to append — the form produced no events (printed)'); return; }
+    const preview=evts.map((e,i)=>{
+      const v=LeadOS.events.validate(e.type,e.payload);
+      return (i+1)+'. '+e.type+(v.ok?'':'  [WOULD BE REJECTED: '+v.errors[0]+']')+'\n   '+JSON.stringify(e.payload).slice(0,150);
+    }).join('\n');
+    if(!confirm('This playbook will append '+evts.length+' event(s). Review the specs:\n\n'+preview+'\n\nAppend all?')) return;
+    let done=0, fail=null;
+    for(const e of evts){ try{ LeadOS.store.append(e.type,e.payload); done++; }catch(ex){ fail=ex; break; } }
+    toast('appended '+done+' of '+evts.length+(fail?' · FAILED: '+fail.message:'')+(done<evts.length?' · partial completion is possible — every successful append is in the audit tail':''));
+    ui.playRunner=null; render(); }
   else if(act==='ackdo'){
     const host=b.closest('.ins'), input=host&&host.querySelector('[data-acknote]');
     const note=input?input.value.trim():'';
@@ -2826,7 +3200,9 @@ document.addEventListener('change',e=>{
 });
 window.addEventListener('hashchange',()=>{
   const r=location.hash||'#/today';
-  if(ui.route!==r){ ui.route=r; ui.heatSel=null; ui.ackOpen=null; ui.supOpen=null; render(); }
+  if(ui.route!==r){ ui.route=r; ui.heatSel=null; ui.ackOpen=null; ui.supOpen=null;
+    if(r!=='#/playbooks') ui.playRunner=null;
+    render(); }
 });
 
 /* ---------- boot ---------- */

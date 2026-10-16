@@ -151,3 +151,64 @@ re-issued complete; this log created. The upstream working tree was not modified
 2. Byte-verify upstream `events.js` (the 7-contract registry delta), `health.js` T33–T37, `ui.js`.
 3. Feed the pt-7 heat formula + CORR key contract back upstream so the interpretation converges.
 4. Board pack (upstream queued #1 — still open, carried).
+
+---
+
+## Session 9 — pt-9: seven interactive playbook runners
+
+**Date:** February 2026, same-week continuation. **Env:** as Sessions 7–8.
+
+### §0 Opening audit (pt-9)
+
+| # | Claim | Status | Basis |
+|---|---|---|---|
+| 1 | Brief text for the seven interactive playbooks | **received in full** | this session's brief |
+| 2 | `playbook.completed` payload | **NOT in the brief beyond the name** → minimal shape `{playbookId, note?}` chosen, labeled | Session-9 §1.1 |
+| 3 | `plan.checkin` payload | **reconstructed** — the pt-3 lineage names `plan.created/.checkin/.closed` (that lineage README was readable); payloads never byte-verified | Session-9 §1.2 |
+| 4 | `legal.risk.logged (update owner)` semantics | the brief's exact words; realized as **projection-level supersede** (`payload.supersedes`), never a rewrite of the log | Session-9 §1.3 |
+| 5 | `production-stop` (QUALITY_COLLAPSE's play) interactive form | **NOT in this brief** — ships as curated descriptor only; the runner brief for it is recorded missing, not invented | Session-9 §1.4 |
+
+### §1 Non-obvious decisions, one line of WHY each
+
+1. **`playbook.completed {playbookId, note?}`** — the brief names the type only at the
+   systemic-intervention submit; a minimal contract keeps the audit trail useful without
+   inventing fields nobody reads.
+2. **Registry grew 85 → 87** (`playbook.completed`, `plan.checkin`) — submission targets must be
+   registry types or the gate rejects the runner's own emits; both contracts are labeled.
+3. **Owner update = projection-level supersede** — `legal.risk.logged` is keyed by its event id with
+   no update handler in the readable upstream fold; rewriting history is forbidden, so the fold
+   retires the superseded record per read and the new record prints what it supersedes (T22).
+4. **Runners emit event SPECS only; the UI confirms before append** — carried upstream doctrine
+   ("emits event specs only"); the confirm dialog prints every spec INCLUDING pre-validation
+   verdicts, so a bad payload is seen before it is rejected, not discovered after.
+5. **Submit is gated on the pattern being active** — a runner for a dormant pattern has no live
+   subject; it shows its prefill with the dormancy printed instead of writing fiction.
+6. **`ops-triage` resolves only OPEN incidents** (seed's inc-1 is already resolved → no event) —
+   the brief's own "(if open)" guard; firing resolved events at closed incidents would corrupt R16.
+7. **`exec.board.meeting` gets the caveat printed twice** (prefill + confirm) — logging a *scheduled*
+   meeting quiets R39 as if it *happened*; any meeting logged must have its invite actually out.
+8. **Prefill of `leadership-audit` prints the plan-entity gap** — no `plan.created` exists in this
+   registry, so "growth plan status" reads "no plan entity exists — gap printed"; hallucinating a
+   plan would be the exact failure this system exists to prevent.
+9. **Partial-append honesty** — events append sequentially through the gate; if one fails, the toast
+   says exactly how many landed and that the audit tail shows them; no all-or-nothing pretense.
+
+### §2 Self-caught defects during authoring (this part)
+
+- D10 T21 invoked `spec.prefill(P, R, now)` against the module's `(R, P, now)` signature — caught on
+  the mandated re-read; would have failed every runner's prefill in the suite.
+- D11 `playbook.completed`/`plan.checkin` were registered but initially had no fold handlers or
+  buckets — projections would have dropped them silently; both now fold into `playbookRuns` /
+  `planCheckins` and T22 pins it.
+
+### §3 Expected (NOT yet observed) check outcomes — pt-9 additions
+
+- **T21** — all 7 runners prefill with ≥1 printed line on the seed; every emitted spec validates
+  against the registry; systemic-intervention emits `note.added` (+`exec.crisis.logged` iff
+  escalation=Y) + `playbook.completed`; escalation=N emits no crisis event.
+- **T22** — the two new types fold; the supersede leaves exactly one owned risk; R31's unowned branch
+  quiets while the past-due branch persists (Socratic ownership: assigning an owner does not erase
+  the overdue).
+- **C12** — proven iff T21 + T22 + G3 pass. T1–T20 expected unchanged-green.
+
+`#/health` remains the grader for every line above.
