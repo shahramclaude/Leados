@@ -1,10 +1,12 @@
-/* LeadOS pt-5 - js/health.js
+/* LeadOS pt-6 - js/health.js
    The authority wall.
    T-suite: deterministic proof on synthetic fixtures (never touches the store).
    G-suite: live inspection of the real localStorage payload.
    pt-4 part 3 adds T12–T17 (rules engine R1–R40) and G9 (live rules run).
    pt-5 adds T32–T37 (schema v5 + correlation/insights/heatmap/benchmarks),
-   G31 (live correlation run), and claims C32–C36. Boot gate unchanged: G1–G13. */
+   G31 (live correlation run), and claims C32–C36. Boot gate unchanged: G1–G13.
+   pt-6 adds T38–T42 (pattern library), G32 (live pattern run), claims C37–C42.
+   G2's lineage tag moves pt-5 -> pt-6; schema v5 stands (no new settings). */
 (function () {
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
@@ -45,28 +47,29 @@
      are documentation of that reading, not a runtime assertion (the no-network
      doctrine means the app cannot re-read its own source to confirm them). */
   const MANIFEST = [
-    // `lines` = measured by reading each file; the part-15 values were taken at
-    // part-15 close and the doc rows digit-patched in place, so they are exact
-    // post-patch counts, not pre-freeze readings (log §59.4/§65).
+    // `lines` = measured by reading each file; the values below were taken at
+    // part-16 close and the doc rows digit-patched in place, so they are exact
+    // post-patch counts, not pre-freeze readings (log §59.4/§65/§73).
     // Verify any time with `wc -l`.
     { path: 'index.html',          kind: 'html', ns: null,                   lines: 53 },
     { path: 'css/app.css',         kind: 'css',  ns: null,                   lines: 361 },
     { path: 'js/events.js',        kind: 'js',   ns: ['events'],             lines: 247 },
     { path: 'js/store.js',         kind: 'js',   ns: ['store'],              lines: 368 },
-    { path: 'js/engine.js',        kind: 'js',   ns: ['engine', 'rules', 'correlate'], lines: 1248 },
-    { path: 'js/playbooks.js',     kind: 'js',   ns: ['playbooks'],          lines: 475 },
-    { path: 'js/health.js',        kind: 'js',   ns: ['health'],             lines: 1877 },
-    { path: 'js/ui.js',            kind: 'js',   ns: ['ui'],                 lines: 1042 },
-    { path: 'README.md',           kind: 'doc',  ns: null,                   lines: 670 },
-    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,                   lines: 1037 }
+    { path: 'js/engine.js',        kind: 'js',   ns: ['engine', 'rules', 'correlate', 'patterns'], lines: 1410 },
+    { path: 'js/playbooks.js',     kind: 'js',   ns: ['playbooks'],          lines: 596 },
+    { path: 'js/health.js',        kind: 'js',   ns: ['health'],             lines: 2100 },
+    { path: 'js/ui.js',            kind: 'js',   ns: ['ui'],                 lines: 1117 },
+    { path: 'README.md',           kind: 'doc',  ns: null,                   lines: 811 },
+    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,                   lines: 1201 }
   ];
   // Files that must NOT be loaded. js/rules.js was merged into js/engine.js in
   // part 11 and shipped as a tombstone; part 13 removed it from the delivery
   // entirely. js/correlate.js was mandated by the pt-5 brief but merged into
   // engine.js as its third IIFE (part 15) because the brief simultaneously
-  // mandates the 10-file structure. The guard stays: a script tag referencing
-  // either path is still a failure.
-  const UNLOADED = ['js/rules.js', 'js/correlate.js'];
+  // mandates the 10-file structure. js/patterns.js follows the same resolution
+  // for pt-6: the pattern library is the fourth IIFE of engine.js. The guard
+  // stays: a script tag referencing any of these paths is still a failure.
+  const UNLOADED = ['js/rules.js', 'js/correlate.js', 'js/patterns.js'];
 
   // ---------- part-2 fixtures: one canonical payload per registered new type ----------
   const NEW_TYPE_FIXTURES = {
@@ -890,8 +893,12 @@
       const ok = missing.length === 0 && failed.length === 0;
       return { pass: ok, detail: ok ? required.length + ' named projections present; ' + checks.length + ' structural assertions hold' : (missing.length ? 'missing: ' + missing.join(', ') + ' | ' : '') + 'failed: ' + failed.join('; ') };
     }],
-    ['T26', 'interactive playbooks: 14 present, prefill pure, fields declared, submit emits registry-valid events', function () {
-      const REQUIRED = ['risk-review', 'deal-review', 'quota-review', 'okr-checkin', 'incident-review', 'attrition-review', 'budget-review', 'vendor-review', 'safety-review', 'compliance-review', 'churn-review', 'tech-debt-sprint', 'board-prep', 'experiment-debrief'];
+    ['T26', 'interactive playbooks: 22 present (14 pt-4 + 8 pt-6 pattern playbooks), prefill pure, fields declared, submit emits registry-valid events', function () {
+      const REQUIRED = ['risk-review', 'deal-review', 'quota-review', 'okr-checkin', 'incident-review', 'attrition-review', 'budget-review', 'vendor-review', 'safety-review', 'compliance-review', 'churn-review', 'tech-debt-sprint', 'board-prep', 'experiment-debrief']
+        // pt-6: the eight pattern playbooks join the same contract — every one
+        // must find a candidate in the battery, prefill with facts, and submit
+        // registry-valid event specs (the generic loop below exercises all 22).
+        .concat(['systemic-intervention', 'ops-triage', 'revenue-war-room', 'governance-sprint', 'innovation-reset', 'production-stop', 'leadership-audit', 'finance-reforecast']);
       const have = LeadOS.playbooks.INTERACTIVE.map(function (p) { return p.id; });
       const missingPb = REQUIRED.filter(function (id) { return have.indexOf(id) === -1; });
       if (missingPb.length) return { pass: false, detail: 'missing playbooks: ' + missingPb.join(', ') };
@@ -973,7 +980,7 @@
       if (!UI) return { pass: false, detail: 'ui module not loaded' };
 
       // (a) routes <-> views
-      ['today', 'signals', 'insights', 'playbooks', 'finance', 'sales', 'ops', 'strategy', 'domains', 'roster', 'cadences', 'decisions', 'risks', 'data', 'health'].forEach(function (id) {
+      ['today', 'signals', 'insights', 'patterns', 'playbooks', 'finance', 'sales', 'ops', 'strategy', 'domains', 'roster', 'cadences', 'decisions', 'risks', 'data', 'health'].forEach(function (id) {
         if (UI.ROUTE_IDS.indexOf(id) === -1) problems.push('route missing: ' + id);
         if (typeof UI.VIEWS[id] !== 'function') problems.push('no view for route ' + id);
       });
@@ -1324,6 +1331,187 @@
       if (c1 !== c2) problems.push('benchmarkCompare nondeterministic');
       if (JSON.stringify(P) !== snapshot) problems.push('analytics mutated the projection');
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : '5 accepted / 6 rejected at the gate · 92 types · insightAcks/benchmarks/reviewLog/tags fold · 56 named projections · correlate + benchmarkCompare deterministic and pure' };
+    }],
+
+    /* ---- pt-6: the pattern library (hard-coded, not ML) ---- */
+    ['T38', 'pattern library: exactly the 8 named pt-6 patterns, triggers/sev/conf/play exact per spec, every rule id and playbook id resolvable', function () {
+      const problems = [];
+      const lib = LeadOS.patterns && LeadOS.patterns.PATTERNS;
+      if (!lib) return { pass: false, detail: 'LeadOS.patterns.PATTERNS missing' };
+      const EXPECTED = {
+        DEATH_SPIRAL:        { sev: 5, conf: 'MEDIUM', req: ['R19', 'R20', 'R13', 'R4'], win: 60, play: 'systemic-intervention' },
+        EXECUTION_BREAKDOWN: { sev: 4, conf: 'MEDIUM', req: ['R16', 'R17', 'R18'], win: null, play: 'ops-triage' },
+        REVENUE_AT_RISK:     { sev: 4, conf: 'MEDIUM', req: ['R12', 'R13', 'R34'], win: null, play: 'revenue-war-room' },
+        GOVERNANCE_GAP:      { sev: 4, conf: 'MEDIUM', req: ['R30', 'R31', 'R32', 'R39'], win: null, play: 'governance-sprint' },
+        INNOVATION_STALL:    { sev: 3, conf: 'MEDIUM', req: ['R37', 'R38', 'R14'], win: null, play: 'innovation-reset' },
+        QUALITY_COLLAPSE:    { sev: 5, conf: 'MEDIUM', req: ['R27', 'R28', 'R29'], win: 30, play: 'production-stop' },
+        LEADERSHIP_VACUUM:   { sev: 4, conf: 'MEDIUM', req: ['R1', 'R3', 'R8', 'R10'], win: null, play: 'leadership-audit' },
+        CASHFLOW_WARNING:    { sev: 4, conf: 'MEDIUM', req: ['R22', 'R23', 'R24'], win: null, play: 'finance-reforecast' }
+      };
+      const ruleIds = LeadOS.rules.RULES.map(function (r) { return r.id; });
+      const got = lib.map(function (d) { return d.id; }).sort();
+      if (JSON.stringify(got) !== JSON.stringify(Object.keys(EXPECTED).sort())) problems.push('library ids differ from spec: ' + got.join(','));
+      lib.forEach(function (d) {
+        const e = EXPECTED[d.id]; if (!e) return;
+        if (d.sev !== e.sev) problems.push(d.id + ' sev ' + d.sev + ' != spec ' + e.sev);
+        if (d.conf !== e.conf) problems.push(d.id + ' conf ' + d.conf + ' != spec ' + e.conf);
+        if (JSON.stringify(d.requires) !== JSON.stringify(e.req)) problems.push(d.id + ' requires ' + d.requires.join('+') + ' != spec ' + e.req.join('+'));
+        if ((d.windowDays || null) !== e.win) problems.push(d.id + ' window ' + d.windowDays + 'd != spec ' + e.win + 'd');
+        if (d.play !== e.play) problems.push(d.id + ' play ' + d.play + ' != spec ' + e.play);
+        if (typeof d.narrative !== 'string' || d.narrative.length < 40) problems.push(d.id + ' narrative missing');
+        d.requires.forEach(function (r) { if (ruleIds.indexOf(r) === -1) problems.push(d.id + ' requires unknown rule ' + r); });
+        const pb = LeadOS.playbooks.byId(d.play);
+        if (!pb) problems.push(d.id + ' playbook not found: ' + d.play);
+        else if (JSON.stringify(pb.forRules) !== JSON.stringify(e.req)) problems.push('playbook ' + d.play + ' forRules do not mirror the pattern trigger (G11 contract)');
+      });
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'all 8 spec patterns · sev/conf/triggers/windows/plays exact · narratives present · every rule id and playbook id resolves · playbook forRules mirror triggers' };
+    }],
+    ['T39', 'DEATH_SPIRAL: full four-member combination fires sev-5 MEDIUM with the spec narrative; 60d limbs print exact ages; R4 stale-disclosed; one member quiet -> dormant, not overreach', function () {
+      const problems = []; const A = T0, today = A + 100 * DAY;
+      function mk(withSecondAttrition) {
+        let seq = 0; const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A - 200 * DAY })];
+        function add(t, p, at) { evs.push(fev(++seq, t, p, { at: at })); }
+        add('review.scheduled', { id: 'rc', kind: 'compliance', dueAt: A - 81 * DAY }, A - 200 * DAY);
+        add('review.completed', { id: 'rc', outcome: 'filed' }, A - 81 * DAY);      // R4: overdue by 1d, evidence 181d old
+        add('hr.attrition.logged', { personId: 'u-1', reason: 'voluntary' }, A + 60 * DAY);
+        if (withSecondAttrition) add('hr.attrition.logged', { personId: 'u-2', reason: 'voluntary' }, A + 80 * DAY); // R19
+        add('hr.engagement.logged', { score: 6.2, period: 'H1', respondents: 40 }, A + 85 * DAY);                  // R20
+        add('sales.quota.set', { id: 'q1', personId: 'rep-1', period: 'Q3', target: 1000, currency: 'USD' }, A + 50 * DAY);
+        add('sales.quota.actuals', { quotaId: 'q1', actual: 400, period: 'Q3' }, A + 90 * DAY);                    // R13: 40%
+        return LeadOS.engine.project(evs);
+      }
+      const F = LeadOS.rules.run(mk(true), today);
+      ['R19', 'R20', 'R13', 'R4'].forEach(function (r) { if (!F.some(function (f) { return f.rule === r; })) problems.push('fixture does not fire ' + r); });
+      const D = LeadOS.patterns.detect(mk(true), today);
+      const ds = D.active.filter(function (p) { return p.name === 'DEATH_SPIRAL'; })[0];
+      if (!ds) problems.push('DEATH_SPIRAL not active with all four members firing');
+      else {
+        if (ds.sev !== 5 || ds.conf !== 'MEDIUM') problems.push('sev/conf wrong: ' + ds.sev + '/' + ds.conf);
+        if (!/4 correlated signals/.test(ds.confWhy)) problems.push('confWhy missing the brief confidence clause');
+        if (!/precedes organizational collapse/.test(ds.narrative)) problems.push('narrative is not the spec text');
+        if (ds.play !== 'interactive:systemic-intervention') problems.push('play = ' + ds.play);
+        if (ds.members.length !== 4) problems.push('members != 4');
+        if (!ds.window || ds.window.days !== 60) problems.push('60d window missing');
+        else {
+          const limb = {}; ds.window.limbs.forEach(function (l) { limb[l.rule] = l; });
+          const ages = { R19: 20, R20: 15, R13: 10, R4: 181 };
+          ds.window.limbs.forEach(function (l) { if (l.age !== ages[l.rule]) problems.push(l.rule + ' limb age ' + l.age + ' != ' + ages[l.rule]); });
+          if (!limb.R4 || limb.R4.status !== 'stale') problems.push('R4 limb should be stale-disclosed, got ' + (limb.R4 && limb.R4.status));
+          ['R19', 'R20', 'R13'].forEach(function (r) { if (!limb[r] || limb[r].status !== 'fresh') problems.push(r + ' limb should be fresh, got ' + (limb[r] && limb[r].status)); });
+          if (ds.window.ok) problems.push('window.ok true despite the stale-disclosed R4 limb — honesty regression');
+        }
+        if (!ds.notes.some(function (n) { return /feedback imbalance/.test(n) && /spec-vs-shipped/.test(n); })) problems.push('spec-vs-shipped R4 label note not printed');
+        if (!ds.notes.some(function (n) { return /unreachable as shipped/.test(n); })) problems.push('R4 reachability disclosure not printed');
+        if (D.dormant.some(function (d) { return d.name === 'DEATH_SPIRAL'; })) problems.push('an active pattern is also listed dormant');
+      }
+      const D2 = LeadOS.patterns.detect(mk(false), today);
+      if (D2.active.some(function (p) { return p.name === 'DEATH_SPIRAL'; })) problems.push('pattern fired without R19 — overreach');
+      const d2 = D2.dormant.filter(function (x) { return x.name === 'DEATH_SPIRAL'; })[0];
+      if (!d2 || JSON.stringify(d2.missing) !== JSON.stringify(['R19']) || JSON.stringify(d2.present) !== JSON.stringify(['R20', 'R13', 'R4'])) problems.push('dormant record wrong: ' + JSON.stringify(d2));
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : '4 members -> active sev 5 · limbs R19 20d / R20 15d / R13 10d fresh, R4 181d stale-disclosed with window.ok false · one-member-quiet -> dormant [R19 missing] · disclosures printed' };
+    }],
+    ['T40', 'QUALITY_COLLAPSE: three manufacturing signals fire sev-5 with the 30d window fully verified; equipment healthy -> dormant [R29]; two patterns co-active sort sev-then-name', function () {
+      const problems = []; const A = T0, today = A + 100 * DAY;
+      function mk(equipmentDown, withOpsBreakdown) {
+        let seq = 0; const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+        function add(t, p, at) { evs.push(fev(++seq, t, p, { at: at })); }
+        add('mfg.yield.logged', { period: 'W40', yield_pct: 78, line: 'line-A' }, A + 95 * DAY);                                  // R27 sev 4
+        add('mfg.safety.incident', { severity: 3, type: 'cut', description: 'guard', corrective_actions: ['refit'], date: A + 90 * DAY }, A + 90 * DAY);
+        add('mfg.safety.incident', { severity: 2, type: 'near-miss', description: 'forklift', corrective_actions: ['barrier'], date: A + 97 * DAY }, A + 97 * DAY); // R28: 2 in 30d
+        add('mfg.equipment.logged', { assetId: 'press-1', status: equipmentDown ? 'down' : 'operational' }, A + 96 * DAY);          // R29 at 96h
+        if (withOpsBreakdown) {
+          add('ops.incident.logged', { id: 'in1', title: 'DB saturation', severity: 2, systems: ['db'], startedAt: A + 90 * DAY }, A + 90 * DAY);
+          add('ops.incident.resolved', { incidentId: 'in1', resolvedAt: A + 93 * DAY + 8 * H, actions: ['restart'] }, A + 93 * DAY + 8 * H); // R16: 80h > 72h
+          add('ops.sla.logged', { metric: 'uptime', target: 99.9, actual: 98.1, period: 'W40', met: false }, A + 98 * DAY);                  // R17
+          add('ops.milestone.set', { id: 'm1', title: 'Beta', dueDate: A + 50 * DAY, dependsOn: [] }, A + 10 * DAY);
+          add('ops.milestone.updated', { milestoneId: 'm1', status: 'blocked' }, A + 60 * DAY);                                            // R18
+        }
+        return LeadOS.engine.project(evs);
+      }
+      const D = LeadOS.patterns.detect(mk(true, false), today);
+      const qc = D.active.filter(function (p) { return p.name === 'QUALITY_COLLAPSE'; })[0];
+      if (!qc) problems.push('QUALITY_COLLAPSE not active');
+      else {
+        if (qc.sev !== 5) problems.push('sev ' + qc.sev + ' != 5');
+        if (!/Stop the line and audit/.test(qc.narrative)) problems.push('spec narrative missing');
+        if (!qc.window || qc.window.days !== 30 || !qc.window.ok) problems.push('30d window should be fully verified: ' + (qc.window ? qc.window.limbs.map(function (l) { return l.rule + '=' + l.status + ' ' + l.age + 'd'; }).join(', ') : 'none'));
+        else {
+          const ages = {}; qc.window.limbs.forEach(function (l) { ages[l.rule] = l.age; });
+          if (ages.R27 !== 5 || ages.R28 !== 3 || ages.R29 !== 4) problems.push('limb ages wrong: ' + JSON.stringify(ages));
+        }
+      }
+      const D2 = LeadOS.patterns.detect(mk(false, false), today);
+      if (D2.active.some(function (p) { return p.name === 'QUALITY_COLLAPSE'; })) problems.push('fired with equipment healthy — overreach');
+      const d2 = D2.dormant.filter(function (x) { return x.name === 'QUALITY_COLLAPSE'; })[0];
+      if (!d2 || JSON.stringify(d2.missing) !== JSON.stringify(['R29']) || d2.present.length !== 2) problems.push('dormant record wrong: ' + JSON.stringify(d2));
+      const D3 = LeadOS.patterns.detect(mk(true, true), today);
+      const names = D3.active.map(function (p) { return p.name; });
+      if (names.indexOf('EXECUTION_BREAKDOWN') === -1) problems.push('EXECUTION_BREAKDOWN did not fire on R16+R17+R18');
+      if (names.indexOf('QUALITY_COLLAPSE') === -1 || names.indexOf('QUALITY_COLLAPSE') > names.indexOf('EXECUTION_BREAKDOWN')) problems.push('sev-then-name order broken: ' + names.join(','));
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : '3 mfg signals -> sev 5 · 30d window ok with limbs 5d/3d/4d · healthy equipment -> dormant [R29] · QC (5) sorts before EXECUTION_BREAKDOWN (4)' };
+    }],
+    ['T41', 'LEADERSHIP_VACUUM: shipped R1/R3/R8/R10 combination fires; every heritage label divergence (1:1, ownerless goals, skip, growth plan) printed; active+dormant partition the library', function () {
+      const problems = []; const A = T0, today = A + 100 * DAY;
+      let seq = 0; const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(t, p, at) { evs.push(fev(++seq, t, p, { at: at })); }
+      // shipped R1/R3: never-ran branches on a 100d-old log (no reviews of those kinds at all)
+      add('objective.created', { id: 'o1', domain: 'operations', title: 'Reliability' }, A + 1 * DAY);
+      add('kr.created', { id: 'k1', objectiveId: 'o1', title: 'Uptime', target: 99.9, unit: '%' }, A + 1 * DAY);   // R8: silent 99d > 7d
+      add('objective.created', { id: 'o2', domain: 'operations', title: 'Cost' }, A + 1 * DAY);                     // R10: no KRs, >14d
+      const D = LeadOS.patterns.detect(LeadOS.engine.project(evs), today);
+      const lv = D.active.filter(function (p) { return p.name === 'LEADERSHIP_VACUUM'; })[0];
+      if (!lv) problems.push('LEADERSHIP_VACUUM not active on shipped R1+R3+R8+R10');
+      else {
+        if (lv.sev !== 4) problems.push('sev ' + lv.sev + ' != 4');
+        ['R1', 'R3', 'R8', 'R10'].forEach(function (r) { if (!lv.notes.some(function (n) { return /spec-vs-shipped/.test(n) && n.indexOf('brief labels ' + r) !== -1; })) problems.push('heritage note for ' + r + ' not printed'); });
+        ['1:1 cadence', 'ownerless goals', 'skip-level cadence', 'growth plan overdue'].forEach(function (lbl) { if (!lv.notes.some(function (n) { return n.indexOf(lbl) !== -1; })) problems.push('mentor-lineage label "' + lbl + '" missing from the disclosure'); });
+        if (!lv.scope.some(function (s) { return /no manager entity/.test(s); })) problems.push('"same manager" unverifiable line missing');
+        if (lv.window !== null) problems.push('LEADERSHIP_VACUUM has no spec window and must not print one');
+      }
+      const all = {};
+      D.active.forEach(function (p) { all[p.name] = 'active'; });
+      D.dormant.forEach(function (d) { if (all[d.name]) problems.push(d.name + ' in both active and dormant'); all[d.name] = 'dormant'; });
+      const libIds = LeadOS.patterns.PATTERNS.map(function (d) { return d.id; });
+      libIds.forEach(function (id) { if (!all[id]) problems.push(id + ' is neither active nor dormant — partition broken'); });
+      if (Object.keys(all).length !== 8) problems.push('partition size ' + Object.keys(all).length + ' != 8');
+      const D9 = LeadOS.patterns.detect(LeadOS.engine.project([fev(1, 'store.initialized', { schemaVersion: 5, lineageTag: 'pt-6' }, { at: A })]), today);
+      if (D9.active.length !== 0 || D9.dormant.length !== 8) problems.push('bare log: active=' + D9.active.length + ' dormant=' + D9.dormant.length + ' (want 0/8)');
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'shipped heritage combo fires sev 4 · all four spec-vs-shipped labels printed · "same manager" honestly unverifiable · 8-pattern partition · bare log 0 active / 8 dormant' };
+    }],
+    ['T42', 'pattern engine: deterministic, non-mutating, nothing persisted; member findings mirror the real rule run; dormant records carry only printed facts', function () {
+      const problems = []; const A = T0, today = A + 100 * DAY;
+      let seq = 0; const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(t, p, at) { evs.push(fev(++seq, t, p, { at: at })); }
+      add('mfg.yield.logged', { period: 'W40', yield_pct: 78, line: 'line-A' }, A + 95 * DAY);
+      add('mfg.safety.incident', { severity: 3, type: 'cut', description: 'g', corrective_actions: ['r'], date: A + 90 * DAY }, A + 90 * DAY);
+      add('mfg.safety.incident', { severity: 2, type: 'nm', description: 'f', corrective_actions: ['b'], date: A + 97 * DAY }, A + 97 * DAY);
+      add('mfg.equipment.logged', { assetId: 'press-1', status: 'down' }, A + 96 * DAY);
+      const P = LeadOS.engine.project(evs);
+      const snapshot = JSON.stringify(P);
+      const r1 = JSON.stringify(LeadOS.patterns.detect(P, today));
+      const r2 = JSON.stringify(LeadOS.patterns.detect(P, today));
+      if (r1 !== r2) problems.push('detect nondeterministic across runs');
+      if (JSON.stringify(P) !== snapshot) problems.push('detect mutated the projection');
+      const D = JSON.parse(r1);
+      const realKeys = {};
+      LeadOS.rules.run(P, today).forEach(function (f) { (realKeys[f.rule] = realKeys[f.rule] || {})[f.key] = true; });
+      D.active.forEach(function (p) {
+        if (p.key !== 'pattern:' + p.name || !Array.isArray(p.members) || p.members.length !== p.requires.length) problems.push('active pattern shape broken: ' + p.name);
+        if (!/^interactive:[a-z-]+$/.test(p.play) || !LeadOS.playbooks.byId(p.playbookId)) problems.push('pattern play unresolvable: ' + p.play);
+        if (!/correlated/.test(p.confWhy)) problems.push('confWhy missing the correlation clause: ' + p.name);
+        (p.members || []).forEach(function (m) {
+          if (!realKeys[m.rule]) problems.push('member ' + m.rule + ' has no real findings');
+          else m.keys.forEach(function (k) { if (!realKeys[m.rule][k]) problems.push('member key not from the real rule run: ' + k); });
+        });
+      });
+      D.dormant.forEach(function (d) {
+        const def = LeadOS.patterns.PATTERNS.filter(function (x) { return x.id === d.name; })[0];
+        if (!def) { problems.push('dormant names a pattern outside the library: ' + d.name); return; }
+        const union = d.present.concat(d.missing).sort();
+        if (JSON.stringify(union) !== JSON.stringify(def.requires.slice().sort())) problems.push('dormant present+missing != requires for ' + d.name);
+        d.missing.forEach(function (r) { if (realKeys[r]) problems.push('dormant lists ' + r + ' missing yet it fired'); });
+      });
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'bit-identical across runs · projection untouched · member keys all from the real R1–R40 run · dormant unions equal their requires · nothing written anywhere' };
     }]
   ];
 
@@ -1337,7 +1525,7 @@
     }],
     ['G2', 'schemaVersion is 5 and lineage is pt', function () {
       const raw = LeadOS.store.load();
-      const ok = raw.schemaVersion === 5 && raw.meta.lineage === 'pt' && LeadOS.store.LINEAGE_TAG === 'pt-5';
+      const ok = raw.schemaVersion === 5 && raw.meta.lineage === 'pt' && LeadOS.store.LINEAGE_TAG === 'pt-6';
       return { pass: ok, detail: 'schemaVersion=' + raw.schemaVersion + ', lineage=' + raw.meta.lineage + ', tag=' + LeadOS.store.LINEAGE_TAG };
     }],
     ['G3', 'append-only integrity: contiguous seq, unique ids, monotonic time, every event registry-valid', function () {
@@ -1812,6 +2000,35 @@
     if (!Array.isArray(LeadOS.correlate.benchmarkCompare(P))) problems.push('benchmarkCompare did not return an array');
     return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : R1.clusters.length + ' clusters · ' + R1.insights.filter(function (i) { return !i.acknowledged; }).length + ' active insights over ' + raw.events.length + ' live events · deterministic · nothing persisted' };
   }]);
+  // G32 (pt-6) is likewise live and deliberately outside the boot gate.
+  G.push(['G32', 'pattern library over the live log: exact 8-def registry, fired patterns shape-valid and printed, dormant honest, deterministic, nothing derived persisted', function () {
+    const raw = LeadOS.store.load();
+    const P = LeadOS.engine.project(raw.events);
+    const before = JSON.stringify(P);
+    const problems = [];
+    const now = Date.now();
+    const D1 = LeadOS.patterns.detect(P, now);
+    const D2 = LeadOS.patterns.detect(P, now);
+    if (JSON.stringify(D1) !== JSON.stringify(D2)) problems.push('detect nondeterministic across runs');
+    if (!LeadOS.patterns.PATTERNS || LeadOS.patterns.PATTERNS.length !== 8) problems.push('library registry size != 8');
+    D1.active.forEach(function (p) {
+      if (p.key !== 'pattern:' + p.name) problems.push('pattern key shape: ' + p.key);
+      if (!Number.isInteger(p.sev) || p.sev < 1 || p.sev > 5) problems.push('pattern sev out of range: ' + p.name);
+      if (['HIGH', 'MEDIUM', 'LOW'].indexOf(p.conf) === -1) problems.push('pattern conf out of enum: ' + p.conf);
+      if (typeof p.confWhy !== 'string' || p.confWhy.indexOf('correlated') === -1) problems.push('confWhy missing the correlation clause: ' + p.name);
+      if (!Array.isArray(p.members) || p.members.length !== p.requires.length) problems.push('members do not mirror requires: ' + p.name);
+      if (p.window) p.window.limbs.forEach(function (l) { if (['fresh', 'stale', 'undated'].indexOf(l.status) === -1 || !l.line) problems.push('window limb malformed: ' + p.name); });
+      if (!LeadOS.playbooks.byId(p.playbookId)) problems.push('pattern playbook unresolvable: ' + p.playbookId);
+    });
+    D1.dormant.forEach(function (d) {
+      if (!Array.isArray(d.missing) || d.missing.length === 0) problems.push('dormant without a printed missing set: ' + d.name);
+      if (d.present.some(function (r) { return d.missing.indexOf(r) !== -1; })) problems.push('dormant present/missing overlap: ' + d.name);
+    });
+    const persisted = Object.keys(raw).concat(Object.keys(raw.meta));
+    ['patterns', 'active', 'dormant'].forEach(function (k) { if (persisted.indexOf(k) !== -1) problems.push(k + ' leaked into storage'); });
+    if (JSON.stringify(P) !== before) problems.push('detect mutated the projection');
+    return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : D1.active.length + ' active · ' + D1.dormant.length + ' dormant over ' + raw.events.length + ' live events · 8-def registry exact · deterministic · nothing persisted' };
+  }]);
   GOLDENS.forEach(function (row) { G.push(row); });
 
   const CLAIMS = [
@@ -1850,7 +2067,13 @@
     { id: 'C33', text: 'The correlation engine groups findings into stable, printed clusters: shared-anchor edges and windowed domain edges.', by: ['T33', 'G31'] },
     { id: 'C34', text: 'Insights promote qualifying clusters; acknowledgment suppresses per read with the audit trail kept; nothing insight-shaped is persisted.', by: ['T34', 'G4', 'G7', 'G31'] },
     { id: 'C35', text: 'The heatmap prices recency with the printed v5 decay formula; undated evidence is excluded, never re-dated.', by: ['T35', 'G31'] },
-    { id: 'C36', text: 'Benchmarks compare internal series only when one exists; trend claims are gated by trendMinPeriods with the gate printed.', by: ['T36', 'G31'] }
+    { id: 'C36', text: 'Benchmarks compare internal series only when one exists; trend claims are gated by trendMinPeriods with the gate printed.', by: ['T36', 'G31'] },
+    { id: 'C37', text: 'The pattern library is exactly the pt-6 spec: 8 named patterns with exact triggers, severities, narratives and plays; every rule id and playbook id resolves.', by: ['T38'] },
+    { id: 'C38', text: 'A named pattern fires iff its full rule combination is active; a partial combination is dormant with the missing rules printed — hard-coded, no ML, no overreach.', by: ['T39', 'T40', 'T41', 'G32'] },
+    { id: 'C39', text: 'Window clauses are evaluated limb-by-limb with exact ages printed; stale, undated, or unreachable-as-shipped limbs are disclosed, never silently satisfied.', by: ['T39', 'T40'] },
+    { id: 'C40', text: 'Wherever the pt-6 labels for R1/R3/R4/R8/R10 diverge from the shipped rule meanings, the runtime prints both labels; triggers read the shipped semantics, disclosed.', by: ['T41'] },
+    { id: 'C41', text: 'Pattern detection is pure and deterministic per read; nothing pattern-shaped is ever persisted.', by: ['T42', 'G32', 'G4', 'G7'] },
+    { id: 'C42', text: 'The 8 pattern playbooks emit only registry-valid events and mirror their patterns\u2019 triggers in forRules.', by: ['T26', 'T38', 'G11'] }
   ];
 
   function runSuite(suite) {

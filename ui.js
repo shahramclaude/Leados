@@ -1,9 +1,12 @@
-/* LeadOS pt-5 - js/ui.js
+/* LeadOS pt-6 - js/ui.js
    Vanilla rendering. Every screen renders from engine.project(store events) -
    a fresh read, every time. Every user action is an event append.
    pt-4 part 6: rail nav + hash routes, domain views, roster dossier, data view.
    pt-5: #/insights (clusters, insights + ack, domain heat, benchmarks), general
    review log on #/cadences, v5 settings surface on #/data.
+   pt-6: #/patterns (hard-coded pattern library: 8 named finding combinations
+   with printed limbs, dormant table, spec-vs-shipped label disclosures);
+   Patterns card on #/today now leads with named patterns.
    View state (route, domain filter, open tab, selected person) lives in
    sessionStorage ONLY - it is never written to leados:data. */
 (function () {
@@ -38,6 +41,7 @@
     play: '<polygon points="6 3 20 12 6 21 6 3"/>',
     refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
     layers: '<path d="m12 2 9 4.9-9 4.9-9-4.9Z"/><path d="m3 11.9 9 4.9 9-4.9"/><path d="m3 16.9 9 4.9 9-4.9"/>',
+    zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
     database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
     activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
     coins: '<circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/>',
@@ -91,6 +95,7 @@
     { id: 'today', label: 'Today', icon: 'gauge', group: 'Command' },
     { id: 'signals', label: 'Signals', icon: 'activity', group: 'Command' },
     { id: 'insights', label: 'Insights', icon: 'layers', group: 'Command' },
+    { id: 'patterns', label: 'Patterns', icon: 'zap', group: 'Command' },
     { id: 'playbooks', label: 'Playbooks', icon: 'play', group: 'Command' },
     { id: 'finance', label: 'Finance', icon: 'coins', group: 'Functions' },
     { id: 'sales', label: 'Sales', icon: 'trending', group: 'Functions' },
@@ -251,13 +256,18 @@
     h += shown.length ? '<table class="tbl"><thead><tr><th>rule</th><th>sev</th><th>conf</th><th>finding</th><th>playbook</th></tr></thead><tbody>' + findingRows(shown.slice(0, 40)) + '</tbody></table>' : '<p class="empty">No findings in this filter.</p>';
     h += '</section>';
 
-    // pt-5: cross-finding patterns at a glance (the diagnosis over the list)
+    // pt-5 correlation insights + pt-6 named pattern library (the diagnosis over the list)
     const C = LeadOS.correlate.correlate(s, now);
     const topIns = C.insights.filter(function (i) { return !i.acknowledged; }).slice(0, 3);
-    h += '<section class="card"><header class="card-h"><h3>' + icon('layers') + ' Patterns today</h3><a class="btn ghost" href="#/insights">open insights</a></header>';
-    h += topIns.length ? topIns.map(function (i) {
+    const pats = LeadOS.patterns.detect(s, now).active;
+    h += '<section class="card"><header class="card-h"><h3>' + icon('zap') + ' Patterns today</h3><span><a class="btn ghost" href="#/patterns">open patterns</a> <a class="btn ghost" href="#/insights">open insights</a></span></header>';
+    h += pats.map(function (p) {
+      return '<div class="insp"><div><span class="dim">' + sevBadge(p.sev) + '</span><span><a href="#/patterns"><code>' + esc(p.name) + '</code></a> · ' + esc(p.narrative.split('. ')[0]) + '.</span></div></div>';
+    }).join('');
+    h += topIns.map(function (i) {
       return '<div class="insp"><div><span class="dim">' + sevBadge(i.sev) + '</span><span>' + esc(i.title) + '</span></div></div>';
-    }).join('') : '<p class="empty">No cross-finding patterns right now — ' + all.length + ' finding(s), each standing alone.</p>';
+    }).join('');
+    if (!pats.length && !topIns.length) h += '<p class="empty">No named pattern and no correlation insight right now — ' + all.length + ' finding(s), each standing alone.</p>';
     h += '</section>';
 
     h += '<section class="card"><header class="card-h"><h3>' + icon('calendar') + ' Operating rhythm</h3><a class="btn ghost" href="#/cadences">open cadences</a></header><div class="cad-row">';
@@ -350,6 +360,71 @@
     h += '</section>';
 
     return h + captureBlock('Quick capture — intelligence', ['insight.acknowledged', 'benchmark.set', 'signal.tagged']);
+  }
+
+  // ================================================================= PATTERNS (pt-6)
+  /* The hard-coded pattern library: 8 named finding combinations from the
+     pt-6 spec. A pattern fires IFF every required rule id has an active
+     finding — no ML, no scoring. Every limb, scope check and spec-vs-shipped
+     label divergence is printed on the card. */
+  function patternCard(p) {
+    let s = '<div class="pbfacts"><h4>' + sevBadge(p.sev) + ' ' + confBadge(p.conf) + ' <code>' + esc(p.name) + '</code></h4>' +
+      '<p class="pad" style="padding-top:2px"><strong>' + esc(p.narrative) + '</strong></p>' +
+      '<div class="basis">' + esc(p.confWhy) + '<br>trigger: ' + esc(p.requires.join(' + ')) + ' — all active' + (p.window ? ', window ' + p.window.days + 'd (limbs below)' : ' at read time') + '</div>' +
+      '<table class="tbl slim"><tbody>' + p.members.map(function (m) {
+        return '<tr><td class="mono dim">' + esc(m.rule) + '</td><td>' + m.count + ' finding(s)</td><td class="dim mono tiny-t">' + esc(m.keys.slice(0, 4).join(' · ')) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    if (p.window) {
+      s += '<table class="tbl slim"><tbody>' + p.window.limbs.map(function (l) {
+        const cls = l.status === 'fresh' ? 'pill-ok' : (l.status === 'stale' ? 'pill-overdue' : 'pill-never');
+        return '<tr><td style="white-space:nowrap"><span class="pill ' + cls + '">' + esc(l.status) + '</span></td><td class="dim">' + esc(l.line) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="dim tiny-t">window clause ' + p.window.days + 'd: ' + (p.window.ok ? 'every limb fresh at read time' : 'not every limb is fresh — disclosed above; the pattern reports, it does not suppress itself') + '</p>';
+    }
+    if (p.scope.length) s += '<div class="basis">' + p.scope.map(esc).join('<br>') + '</div>';
+    if (p.notes.length) s += '<div class="unknowns"><span class="pill pill-unknown">disclosure</span>' + p.notes.map(function (n) { return '<div>' + esc(n) + '</div>'; }).join('') + '</div>';
+    s += '<div class="frow" style="align-items:center;margin-top:8px"><span class="chip">' + esc(p.play) + '</span><a class="btn ghost tiny" href="#/playbooks">run the playbook</a><span class="dim tiny-t mono" style="margin-left:auto">' + esc(p.key) + '</span></div></div>';
+    return s;
+  }
+  function viewPatterns(ctx) {
+    const P = ctx.state, now = ctx.now;
+    const D = LeadOS.patterns.detect(P, now);
+    const lib = LeadOS.patterns.PATTERNS;
+
+    let h = '<section class="stats">' +
+      stat('zap', D.active.length, 'patterns active', 'of ' + D.librarySize + ' named in the library') +
+      stat('activity', D.findings, 'findings scanned', 'R1–R40, fresh per read') +
+      stat('alert', D.active.filter(function (p) { return p.sev === 5; }).length, 'sev-5 patterns', 'systemic, act now') +
+      stat('shield', D.dormant.length, 'dormant', 'trigger incomplete — printed below') +
+      stat('sliders', 0, 'ML models', 'hard-coded triggers only') + '</section>';
+
+    h += '<section class="card"><header class="card-h"><h3>' + icon('zap') + ' Active named patterns</h3><span class="dim">fire iff every required rule has ≥1 active finding · every limb printed</span></header>';
+    h += D.active.length ? D.active.map(patternCard).join('') : '<p class="empty">No named pattern fires on the current log — ' + D.findings + ' finding(s), none in a library combination.</p>';
+    h += '</section>';
+
+    h += '<section class="card"><header class="card-h"><h3>' + icon('shield') + ' Dormant patterns</h3><span class="dim">which rules are missing — overreach impossible by construction</span></header>';
+    h += D.dormant.length ? '<table class="tbl"><thead><tr><th>pattern</th><th>present</th><th>missing</th></tr></thead><tbody>' + D.dormant.map(function (d) {
+      const def = lib.filter(function (x) { return x.id === d.name; })[0];
+      return '<tr><td><code>' + esc(d.name) + '</code> ' + (def ? sevBadge(def.sev) : '') + '</td><td class="mono tiny-t dim">' + esc(d.present.join(' + ') || '—') + '</td><td class="mono tiny-t">' + esc(d.missing.join(' + ')) + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">Every library pattern is firing at once — that is not good news.</p>';
+    h += '</section>';
+
+    h += '<section class="card"><header class="card-h"><h3>' + icon('list') + ' The library — hard-coded, not ML</h3><span class="dim">' + lib.length + ' named patterns · trigger = exact rule combination · sev / conf / play per the pt-6 spec</span></header>' +
+      '<table class="tbl"><thead><tr><th>name</th><th>sev</th><th>conf</th><th>trigger (all active)</th><th>window</th><th>play</th></tr></thead><tbody>' +
+      lib.map(function (d) {
+        return '<tr><td><code>' + esc(d.id) + '</code><div class="dim tiny-t">' + esc(d.narrative.slice(0, 88)) + (d.narrative.length > 88 ? '…' : '') + '</div></td>' +
+          '<td>' + sevBadge(d.sev) + '</td><td>' + confBadge(d.conf) + '</td><td class="mono tiny-t">' + esc(d.requires.join(' + ')) + '</td>' +
+          '<td class="mono tiny-t dim">' + (d.windowDays ? d.windowDays + 'd' : '—') + '</td><td class="mono tiny-t dim">interactive:' + esc(d.play) + '</td></tr>';
+      }).join('') + '</tbody></table></section>';
+
+    h += '<section class="card"><header class="card-h"><h3>' + icon('scale') + ' Spec-vs-shipped rule labels</h3><span class="dim">the pt-6 brief names the mentor lineage for heritage ids — what actually triggers is the shipped meaning</span></header>' +
+      '<table class="tbl"><thead><tr><th>rule</th><th>pt-6 spec label (mentor lineage)</th><th>shipped meaning read by the trigger</th></tr></thead><tbody>' +
+      Object.keys(LeadOS.patterns.HERITAGE_LABELS).map(function (r) {
+        const n = LeadOS.patterns.HERITAGE_LABELS[r];
+        return '<tr><td class="mono">' + esc(r) + '</td><td>' + esc(n.spec) + '</td><td class="dim">' + esc(n.shipped) + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<p class="dim pad tiny-t">DEATH_SPIRAL touches R4; LEADERSHIP_VACUUM touches R1/R3/R8/R10. Every other pt-6 rule label matches its shipped meaning. The mentor-lineage events the spec labels assume (1:1s, skip-levels, ownerless goals, growth plans, feedback balance) do not exist under contract — README gap #2 tracks them.</p></section>';
+    return h;
   }
 
   // ================================================================= FINANCE
@@ -860,11 +935,11 @@
   function viewHealth() {
     const R = LAST_HEALTH;
     const pass = R.t.concat(R.g).filter(function (r) { return r.pass; }).length;
-    let h = '<section class="verify-notice"><strong>Runtime grader</strong><span>Authoring sessions 1–12 had no JavaScript runtime; part 13 executed the battery headlessly under Node + jsdom, part 14 executed it twice (source + dist), and pt-5/part 15 executed the intelligence-layer battery the same way (T 38/38 · G 31/31 · claims 36/36 — AI-SESSION-LOG §66). The results below are the authoritative execution in THIS browser, and supersede every recorded result.</span></section>' +
+    let h = '<section class="verify-notice"><strong>Runtime grader</strong><span>Authoring sessions 1–12 had no JavaScript runtime; part 13 executed the battery headlessly under Node + jsdom, part 14 executed it twice (source + dist), pt-5/part 15 executed the intelligence-layer battery (T 38/38 · G 31/31 · claims 36/36 — log §66), and pt-6/part 16 executed the pattern-library battery (T 43/43 · G 32/32 · claims 42/42 — log §73). The results below are the authoritative execution in THIS browser, and supersede every recorded result.</span></section>' +
       '<section class="card"><header class="card-h"><h3>' + icon('shield') + ' Authority wall</h3><div><span class="pill ' + (R.ok ? 'pill-ok' : 'pill-overdue') + '">' + pass + '/' + (R.t.length + R.g.length) + ' checks pass</span> <button class="btn tiny" data-action="run-health">' + icon('refresh') + ' re-run</button></div></header>' +
       '<p class="dim pad">T-suite proves behavior on pinned fixtures. G-suite inspects the live store at <code>leados:data</code>. The boot sequence runs G before rendering anything; a failed G check halts the app behind the wall.</p>' +
       '<div class="two-col">' + suiteTable('T-suite · fixtures (' + R.t.length + ')', R.t) +
-      suiteTable('G-suite · live store G1–G13 + goldens G14–G30 (' + R.g.length + ')', R.g) + '</div></section>';
+      suiteTable('G-suite · live G1–G13 · live G31–G32 · goldens G14–G30 (' + R.g.length + ')', R.g) + '</div></section>';
     h += '<section class="card"><header class="card-h"><h3>' + icon('activity') + ' Claim coverage</h3></header><table class="tbl"><thead><tr><th></th><th>claim</th><th>covered by</th><th>status</th></tr></thead><tbody>' +
       R.claims.map(function (c) {
         return '<tr><td class="mono dim">' + c.id + '</td><td>' + esc(c.text) + '</td><td>' + c.by.map(function (id) { return '<span class="pill ' + (findCheck(R, id).pass ? 'pill-ok' : 'pill-overdue') + '">' + id + '</span>'; }).join(' ') + '</td><td>' + pill(c.pass ? 'ok' : 'overdue', c.pass ? 'proven' : 'unproven') + '</td></tr>';
@@ -873,7 +948,7 @@
   }
 
   const VIEWS = {
-    today: viewToday, signals: viewSignals, insights: viewInsights, playbooks: viewPlaybooks, finance: viewFinance,
+    today: viewToday, signals: viewSignals, insights: viewInsights, patterns: viewPatterns, playbooks: viewPlaybooks, finance: viewFinance,
     sales: viewSales, ops: viewOps, strategy: viewStrategy, domains: viewDomains, roster: viewRoster,
     cadences: viewCadences, decisions: viewDecisions, risks: viewRisks, data: viewData, health: viewHealth
   };

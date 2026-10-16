@@ -1246,3 +1246,165 @@
 
   LeadOS.correlate = { correlate: correlate, benchmarkCompare: benchmarkCompare, HOT_SCORE: HOT_SCORE, INTERNAL_SERIES: INTERNAL_SERIES };
 })();
+
+/* ============================================================================
+   PATTERN LIBRARY  (pt-6; fourth IIFE — the pt-6 brief names a pattern library
+   while the 10-file structure stands in the same breath. Part-11/part-15
+   precedent resolves it: LeadOS.patterns merges into js/engine.js after the
+   rules whose findings it consumes. js/patterns.js joins UNLOADED; T31 fails
+   if a script tag ever references it.)
+
+   patterns.detect(P, today) -> { active, dormant, librarySize, findings }
+   — hard-coded named patterns over the R1–R40 finding combination. No ML, no
+   scoring, no clustering math: a pattern fires IFF every required rule id has
+   at least one active finding, then every printed limb is verified and the
+   verification is shown. Derived per read; nothing persisted (G32/T42).
+
+   LINEAGE DISCLOSURE (structural, printed at runtime for every affected
+   pattern): the pt-6 brief's labels for R1/R3/R4/R8/R10 come from the mentor
+   lineage (the same heritage the README gap list names for 1:1 / skip-level
+   cadences). The SHIPPED R1–R10 are cadence/ops rules with different meanings.
+   Rule ids are the contract, so triggers key on the shipped ids; every def's
+   `notes` prints spec-label-vs-shipped-meaning wherever they diverge. The
+   window clauses ("all active within 60d") are evaluated as a PRINTED
+   sub-claim over evidence timestamps — findings are all active at read time
+   by construction, so a window limb can be fresh, stale, or undated; a
+   non-fresh limb is disclosed, never suppressed and never silently treated
+   as satisfied. Where shipped semantics make a limb unreachable (R4's 180d
+   cadence inside a 60d window), the disclosure says exactly that.
+   ============================================================================ */
+(function () {
+  'use strict';
+  const LeadOS = (window.LeadOS = window.LeadOS || {});
+  const DAY = 86400000;
+
+  const iso = function (ts) { return (typeof ts === 'number') ? new Date(ts).toISOString().slice(0, 10) : 'undated'; };
+  const maxAt = function (arr, sel) {
+    let t = null;
+    (arr || []).forEach(function (x) { const v = sel ? sel(x) : x.at; if (typeof v === 'number' && (t === null || v > t)) t = v; });
+    return t;
+  };
+
+  /* Evidence timestamps for the rules named by windowed patterns. Newest
+     evidence date for the signal the rule measures, read from the fold itself;
+     null = undated (stated, never re-dated). */
+  const EVIDENCE = {
+    R19: function (P) { return maxAt(P.attrition); },
+    R20: function (P) { return maxAt(P.engagement); },
+    R13: function (P) { return maxAt(Object.keys(P.quotas).map(function (k) { return P.quotas[k]; }), function (q) { return q.actuals.length ? q.actuals[q.actuals.length - 1].at : null; }); },
+    R4:  function (P, today) { return LeadOS.engine.cadenceStatus(P, today).compliance.lastCompletedAt; },
+    R27: function (P) { return maxAt(P.yieldLogs); },
+    R28: function (P) { return maxAt(P.safetyIncidents); },
+    R29: function (P) { return maxAt(Object.keys(P.equipment).map(function (k) { return P.equipment[k]; }).filter(function (e) { return e.status === 'down' || e.status === 'degraded'; })); }
+  };
+
+  /* The pt-6 brief's mentor-lineage labels for heritage ids vs the shipped
+     rule meanings — printed verbatim at runtime wherever a pattern is affected. */
+  const HERITAGE_LABELS = {
+    R1:  { spec: '1:1 cadence',        shipped: 'revenue review cadence (revenueReviewCadenceDays 30d)' },
+    R3:  { spec: 'ownerless goals',    shipped: 'board meeting cadence (boardCadenceDays 90d)' },
+    R4:  { spec: 'feedback imbalance', shipped: 'compliance audit cadence (complianceAuditCadenceDays 180d)' },
+    R8:  { spec: 'skip-level cadence', shipped: 'KR of an active objective silent past krCheckInCadenceDays' },
+    R10: { spec: 'growth plan overdue', shipped: 'active objective older than 14d with zero key results' }
+  };
+  function heritageNotes(def) {
+    return def.requires.filter(function (r) { return HERITAGE_LABELS[r]; }).map(function (r) {
+      const n = HERITAGE_LABELS[r];
+      return 'spec-vs-shipped · brief labels ' + r + ' "' + n.spec + '" (mentor lineage); shipped ' + r + ' is ' + n.shipped + ' — the trigger reads the SHIPPED rule. Ids are the contract; the difference is printed, never remapped silently.';
+    });
+  }
+
+  const CONF_NOTE = 'a compound of correlated rule signals, not a single measured fact';
+  const PATTERNS = [
+    { id: 'DEATH_SPIRAL', sev: 5, conf: 'MEDIUM', windowDays: 60,
+      requires: ['R19', 'R20', 'R13', 'R4'], play: 'systemic-intervention',
+      narrative: 'People are leaving, the ones remaining are disengaged, revenue is behind, and feedback culture is broken. This compound signal precedes organizational collapse. Intervene systemically, not individually.',
+      confWhy: 'medium — 4 correlated signals (R19 attrition · R20 engagement · R13 quota gap · R4), ' + CONF_NOTE + ' (confidence named by the pt-6 brief)',
+      scope: function () { return ['cross-domain by design: people (R19, R20) × sales (R13) × the R4 limb — a collapse signal cannot live in one domain']; },
+      notes: ['window limb R4 reads shipped compliance-audit semantics: an OVERDUE 180d cadence cannot produce evidence inside any 60d window — that limb is unreachable as shipped, disclosed on the card, not hidden. The mentor-lineage feedback events it assumes are ranked gap #2 in README.'] },
+    { id: 'EXECUTION_BREAKDOWN', sev: 4, conf: 'MEDIUM',
+      requires: ['R16', 'R17', 'R18'], play: 'ops-triage',
+      narrative: 'Operations is failing on three simultaneous vectors: response time, commitments, and delivery. The system is overloaded or under-managed.',
+      confWhy: 'medium — 3 correlated signals, ' + CONF_NOTE + ' (brief names confidence only for DEATH_SPIRAL; uniform MEDIUM applied and printed)',
+      scope: function () { return ['domain verified: R16 incidents, R17 SLA, R18 milestones all resolve to operations via their playbook binding', '"same team" not verifiable — the log carries no team entity; the three vectors are verified, the team is printed as unknown']; } },
+    { id: 'REVENUE_AT_RISK', sev: 4, conf: 'MEDIUM',
+      requires: ['R12', 'R13', 'R34'], play: 'revenue-war-room',
+      narrative: 'New revenue is stalling and existing revenue is leaving. Pipeline hygiene, quota performance, and retention must be addressed as one problem.',
+      confWhy: 'medium — 3 correlated signals, ' + CONF_NOTE + ' (uniform MEDIUM, printed)',
+      scope: function () { return ['revenue chain spans sales (R12 stale deals, R13 quota) × customerSuccess (R34 churn) — cross-domain by design; addressed as one problem']; } },
+    { id: 'GOVERNANCE_GAP', sev: 4, conf: 'MEDIUM',
+      requires: ['R30', 'R31', 'R32', 'R39'], play: 'governance-sprint',
+      narrative: 'Four governance signals are red at the same time. This is not a coincidence — it is a systemic under-investment in legal and board infrastructure.',
+      confWhy: 'medium — 4 correlated signals, ' + CONF_NOTE + ' (uniform MEDIUM, printed)',
+      scope: function () { return ['governance arc verified across legal (R30 compliance, R31 unowned/overdue risk, R32 contracts) × executive (R39 board cadence)']; } },
+    { id: 'INNOVATION_STALL', sev: 3, conf: 'MEDIUM',
+      requires: ['R37', 'R38', 'R14'], play: 'innovation-reset',
+      narrative: 'The team is carrying debt, not running experiments, and OKRs have gone quiet. The output of this combination is maintenance-mode drift.',
+      confWhy: 'medium — 3 correlated signals, ' + CONF_NOTE + ' (uniform MEDIUM, printed)',
+      scope: function (fired, P) {
+        const quarters = Object.keys(P.okrs).map(function (k) { return P.okrs[k]; }).filter(function (o) { return !o.closedAt; }).map(function (o) { return o.quarter; });
+        return ['"same team / period" not verifiable — the log has no team entity; involved domains: R&D (R37, R38) × product strategy (R14)', 'open OKR quarters at read time: ' + (quarters.length ? quarters.join(', ') : 'none (R14 fired on cadence silence, not a quarter)')];
+      } },
+    { id: 'QUALITY_COLLAPSE', sev: 5, conf: 'MEDIUM', windowDays: 30,
+      requires: ['R27', 'R28', 'R29'], play: 'production-stop',
+      narrative: 'Three simultaneous quality signals in manufacturing. Production output, worker safety, and equipment state are all degraded. Stop the line and audit before resuming at full rate.',
+      confWhy: 'medium — 3 correlated signals, ' + CONF_NOTE + ' (uniform MEDIUM, printed; constituent severities include direct-data safety readings)',
+      scope: function () { return ['manufacturing-only combination verified: R27 yield, R28 safety, R29 equipment all bind playbook:manufacturing']; } },
+    { id: 'LEADERSHIP_VACUUM', sev: 4, conf: 'MEDIUM',
+      requires: ['R1', 'R3', 'R8', 'R10'], play: 'leadership-audit',
+      narrative: 'A manager is not meeting their people, not growing them, and not owning team goals. This is not a busy week — it is an absent leader.',
+      confWhy: 'medium — 4 correlated signals, ' + CONF_NOTE + ' (uniform MEDIUM, printed)',
+      scope: function () { return ['"same manager" not verifiable — the log has no manager entity; as shipped, R1/R3 are org-level cadences read as operating-rhythm proxies, R8/R10 are object-scoped goal signals (refs on each finding)']; } },
+    { id: 'CASHFLOW_WARNING', sev: 4, conf: 'MEDIUM',
+      requires: ['R22', 'R23', 'R24'], play: 'finance-reforecast',
+      narrative: 'Budget is off, KPIs are behind target, and forecast accuracy is degraded. The financial model is no longer reliable as a planning tool.',
+      confWhy: 'medium — 3 correlated signals, ' + CONF_NOTE + ' (uniform MEDIUM, printed)',
+      scope: function () { return ['finance-only combination verified: R22 budget variance, R23 KPI off-target, R24 forecast accuracy all bind playbook:finance — the "Finance domain" clause of the brief holds by construction']; } }
+  ];
+
+  function detect(P, today) {
+    const findings = LeadOS.rules.run(P, today);
+    const byRule = {};
+    findings.forEach(function (f) { (byRule[f.rule] = byRule[f.rule] || []).push(f); });
+
+    const active = [], dormant = [];
+    PATTERNS.forEach(function (def) {
+      const missing = def.requires.filter(function (r) { return !byRule[r]; });
+      if (missing.length) { dormant.push({ name: def.id, missing: missing, present: def.requires.filter(function (r) { return byRule[r]; }) }); return; }
+
+      let window = null;
+      if (def.windowDays) {
+        const limbs = def.requires.map(function (r) {
+          const t = EVIDENCE[r] ? EVIDENCE[r](P, today) : null;
+          if (t === null) return { rule: r, status: 'undated', line: r + ': evidence undated in the fold — the ' + def.windowDays + 'd limb is unverifiable, stated, never re-dated' };
+          const age = Math.floor((today - t) / DAY);
+          const fresh = age <= def.windowDays;
+          return { rule: r, status: fresh ? 'fresh' : 'stale', age: age, at: t, line: r + ': newest evidence ' + iso(t) + ' (' + age + 'd old' + (fresh ? ' ≤ ' : ' > ') + def.windowDays + 'd window)' };
+        });
+        window = { days: def.windowDays, ok: limbs.every(function (l) { return l.status === 'fresh'; }), limbs: limbs };
+      }
+
+      active.push({
+        key: 'pattern:' + def.id,
+        name: def.id,
+        sev: def.sev,
+        conf: def.conf,
+        confWhy: def.confWhy,
+        narrative: def.narrative,
+        play: 'interactive:' + def.play,
+        playbookId: def.play,
+        requires: def.requires.slice(),
+        members: def.requires.map(function (r) { return { rule: r, count: byRule[r].length, keys: byRule[r].map(function (f) { return f.key; }) }; }),
+        window: window,
+        scope: (def.scope ? def.scope(byRule, P, today) : []),
+        notes: heritageNotes(def).concat(def.notes || [])
+      });
+    });
+
+    active.sort(function (a, b) { return (b.sev - a.sev) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0); });
+    dormant.sort(function (a, b) { return (a.name < b.name ? -1 : 1); });
+    return { active: active, dormant: dormant, librarySize: PATTERNS.length, findings: findings.length };
+  }
+
+  LeadOS.patterns = { PATTERNS: PATTERNS, EVIDENCE: EVIDENCE, HERITAGE_LABELS: HERITAGE_LABELS, detect: detect };
+})();

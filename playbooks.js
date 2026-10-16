@@ -461,8 +461,129 @@
       },
       submit: function (v, ctx, pre) {
         return [{ type: 'rd.experiment.result', payload: { experimentId: ctx.targetId, result: v.result, learnings: v.learnings, next: v.next || undefined } }];
-      } }
+      } },
+
+    /* ================= pt-6: PATTERN PLAYBOOKS =================
+       One per named pattern (LeadOS.patterns). Each prefill runs the REAL
+       detector at ctx.today and prints its verdict — active with members and
+       window limbs, or dormant with the rules still missing. A playbook never
+       fabricates the pattern it responds to; a dormant run records deliberate
+       intent and says so. Each submit emits a scheduled review, a dated task,
+       and a note — registry-valid events, nothing else. */
+    /* ---------- systemic-intervention : DEATH_SPIRAL ---------- */
+    { id: 'systemic-intervention', title: 'Systemic intervention', domain: 'executive', forRules: ['R19', 'R20', 'R13', 'R4'],
+      blurb: 'DEATH_SPIRAL response: one sponsored, whole-system session — not four separate pep talks. Intervenes in the compound, not the individuals.',
+      candidates: function (P) { return (P.attrition.length || P.engagement.length || vals(P.quotaById).length) ? [{ id: 'whole-system', label: 'Whole-system session (people × revenue × feedback)' }] : []; },
+      prefill: function (ctx, P) { const f = patternFacts('DEATH_SPIRAL', ctx, P); return { ok: true, kind: 'pattern', title: 'Systemic intervention — DEATH_SPIRAL', facts: f.facts, suggest: {}, missing: f.missing }; },
+      fields: function () { return patternFields('board', 30); },
+      submit: function (v, ctx) { return patternSubmit(v, ctx, 'board', 'executive', 'DEATH_SPIRAL systemic intervention', 'systemic-intervention'); } },
+
+    /* ---------- ops-triage : EXECUTION_BREAKDOWN ---------- */
+    { id: 'ops-triage', title: 'Ops triage', domain: 'operations', forRules: ['R16', 'R17', 'R18'],
+      blurb: 'EXECUTION_BREAKDOWN response: stop new intake, name the overload, and sequence response-time, commitment, and delivery recovery as one triage.',
+      candidates: function (P) { return (vals(P.incidentById).length || P.slaLogs.length || vals(P.milestoneById).length) ? [{ id: 'ops-system', label: 'Operations triage (MTTR × SLA × milestones)' }] : []; },
+      prefill: function (ctx, P) { const f = patternFacts('EXECUTION_BREAKDOWN', ctx, P); return { ok: true, kind: 'pattern', title: 'Ops triage — EXECUTION_BREAKDOWN', facts: f.facts, suggest: {}, missing: f.missing }; },
+      fields: function () { return patternFields('ops', 14); },
+      submit: function (v, ctx) { return patternSubmit(v, ctx, 'ops', 'operations', 'EXECUTION_BREAKDOWN ops triage', 'ops-triage'); } },
+
+    /* ---------- revenue-war-room : REVENUE_AT_RISK ---------- */
+    { id: 'revenue-war-room', title: 'Revenue war room', domain: 'sales', forRules: ['R12', 'R13', 'R34'],
+      blurb: 'REVENUE_AT_RISK response: pipeline hygiene, quota support, and retention saves planned in one room — new and existing revenue as one problem.',
+      candidates: function (P) { return (vals(P.dealById).length || vals(P.quotaById).length || P.churnHistory.length) ? [{ id: 'revenue-chain', label: 'Revenue war room (pipeline × quota × churn)' }] : []; },
+      prefill: function (ctx, P) { const f = patternFacts('REVENUE_AT_RISK', ctx, P); return { ok: true, kind: 'pattern', title: 'Revenue war room — REVENUE_AT_RISK', facts: f.facts, suggest: {}, missing: f.missing }; },
+      fields: function () { return patternFields('revenue', 14); },
+      submit: function (v, ctx) { return patternSubmit(v, ctx, 'revenue', 'sales', 'REVENUE_AT_RISK war room', 'revenue-war-room'); } },
+
+    /* ---------- governance-sprint : GOVERNANCE_GAP ---------- */
+    { id: 'governance-sprint', title: 'Governance sprint', domain: 'legal', forRules: ['R30', 'R31', 'R32', 'R39'],
+      blurb: 'GOVERNANCE_GAP response: a funded sprint across compliance, legal-risk ownership, contracts and the board rhythm — infrastructure, not heroics.',
+      candidates: function (P) { return (P.complianceChecks.length || P.legalRisks.length || vals(P.contractById).length || P.boardMeetings.length) ? [{ id: 'governance-arc', label: 'Governance sprint (legal × board)' }] : []; },
+      prefill: function (ctx, P) {
+        const f = patternFacts('GOVERNANCE_GAP', ctx, P);
+        const fw = P.complianceChecks.length ? P.complianceChecks[P.complianceChecks.length - 1].framework : undefined;
+        return { ok: true, kind: 'pattern', title: 'Governance sprint — GOVERNANCE_GAP', facts: f.facts, suggest: fw ? { framework: fw, frameworkSource: SRC('latest framework in legal.compliance.check — confirm it anchors the sprint') } : {}, missing: f.missing };
+      },
+      fields: function (pre) { return [{ name: 'framework', label: 'Anchor framework', type: 'text', value: pre.suggest.framework, recommended: pre.suggest.framework !== undefined, source: pre.suggest.frameworkSource, required: true }].concat(patternFields('compliance', 30)); },
+      submit: function (v, ctx) { return patternSubmit(v, ctx, 'compliance', 'legal', 'GOVERNANCE_GAP sprint anchored on ' + v.framework, 'governance-sprint'); } },
+
+    /* ---------- innovation-reset : INNOVATION_STALL ---------- */
+    { id: 'innovation-reset', title: 'Innovation reset', domain: 'rd', forRules: ['R37', 'R38', 'R14'],
+      blurb: 'INNOVATION_STALL response: call the debt, kill or staff the stalled experiments, and reopen the OKR line — one reset, not three reminders.',
+      candidates: function (P) { return (vals(P.experimentById).length || vals(P.techDebtById).length || vals(P.okrById).length) ? [{ id: 'innovation-line', label: 'Innovation reset (debt × experiments × OKRs)' }] : []; },
+      prefill: function (ctx, P) { const f = patternFacts('INNOVATION_STALL', ctx, P); return { ok: true, kind: 'pattern', title: 'Innovation reset — INNOVATION_STALL', facts: f.facts, suggest: {}, missing: f.missing }; },
+      fields: function () { return patternFields('ops', 21); },
+      submit: function (v, ctx) { return patternSubmit(v, ctx, 'ops', 'rd', 'INNOVATION_STALL reset', 'innovation-reset'); } },
+
+    /* ---------- production-stop : QUALITY_COLLAPSE ---------- */
+    { id: 'production-stop', title: 'Production stop + audit', domain: 'manufacturing', forRules: ['R27', 'R28', 'R29'],
+      blurb: 'QUALITY_COLLAPSE response: stop the line, audit yield, safety and equipment together, and only resume at full rate with the audit on the record.',
+      candidates: function (P) { return (P.safetyIncidents.length || P.yieldHistory.length || vals(P.equipmentById).length) ? [{ id: 'line-state', label: 'Line halt-and-audit (yield × safety × equipment)' }] : []; },
+      prefill: function (ctx, P) { const f = patternFacts('QUALITY_COLLAPSE', ctx, P); return { ok: true, kind: 'pattern', title: 'Production stop — QUALITY_COLLAPSE', facts: f.facts, suggest: {}, missing: f.missing }; },
+      fields: function () { return patternFields('ops', 7); },
+      submit: function (v, ctx) { return patternSubmit(v, ctx, 'ops', 'manufacturing', 'QUALITY_COLLAPSE stop-and-audit', 'production-stop'); } },
+
+    /* ---------- leadership-audit : LEADERSHIP_VACUUM ---------- */
+    { id: 'leadership-audit', title: 'Leadership audit', domain: 'people', forRules: ['R1', 'R3', 'R8', 'R10'],
+      blurb: 'LEADERSHIP_VACUUM response: audit the operating rhythm itself — reviews, goal ownership, check-ins — and name who restores it. Reads shipped rule meanings; the card prints the spec-vs-shipped labels.',
+      candidates: function (P) { return (Object.keys(P.rosterById).length || Object.keys(P.objectives).length || Object.keys(P.krs).length) ? [{ id: 'operating-rhythm', label: 'Operating-rhythm audit (reviews × goals × check-ins)' }] : []; },
+      prefill: function (ctx, P) { const f = patternFacts('LEADERSHIP_VACUUM', ctx, P); return { ok: true, kind: 'pattern', title: 'Leadership audit — LEADERSHIP_VACUUM', facts: f.facts, suggest: {}, missing: f.missing }; },
+      fields: function () { return patternFields('ops', 14); },
+      submit: function (v, ctx) { return patternSubmit(v, ctx, 'ops', 'people', 'LEADERSHIP_VACUUM audit', 'leadership-audit'); } },
+
+    /* ---------- finance-reforecast : CASHFLOW_WARNING ---------- */
+    { id: 'finance-reforecast', title: 'Finance re-forecast', domain: 'finance', forRules: ['R22', 'R23', 'R24'],
+      blurb: 'CASHFLOW_WARNING response: re-baseline budgets, KPIs and the forecast against actuals in one pass, so planning stops reading a model that lies.',
+      candidates: function (P) { return (vals(P.budgetById).length || P.finKpis.length || P.finForecasts.length) ? [{ id: 'model-rebase', label: 'Model re-baseline (budget × KPI × forecast)' }] : []; },
+      prefill: function (ctx, P) {
+        const f = patternFacts('CASHFLOW_WARNING', ctx, P);
+        let period;
+        vals(P.budgetById).forEach(function (b) { if (b.actuals.length) period = b.actuals[b.actuals.length - 1].period; });
+        return { ok: true, kind: 'pattern', title: 'Finance re-forecast — CASHFLOW_WARNING', facts: f.facts, suggest: period ? { period: period, periodSource: SRC('latest reconciled actuals period — re-forecast from the last known truth') } : {}, missing: f.missing };
+      },
+      fields: function (pre) { return [{ name: 'period', label: 'Re-forecast from period', type: 'text', value: pre.suggest.period, recommended: pre.suggest.period !== undefined, source: pre.suggest.periodSource, required: true }].concat(patternFields('revenue', 14)); },
+      submit: function (v, ctx) { return patternSubmit(v, ctx, 'revenue', 'finance', 'CASHFLOW_WARNING re-forecast from ' + v.period, 'finance-reforecast'); } }
   ];
+
+  /* ---- pt-6 pattern-playbook shared machinery --------------------------
+     patternFacts runs the real detector at the caller-injected clock and turns
+     its verdict into prefill facts. A pattern the detector does not see is
+     reported DORMANT with the missing rules — a playbook run never fabricates
+     the condition it claims to answer. */
+  function patternFacts(patternId, ctx, P) {
+    const D = (LeadOS.patterns && LeadOS.patterns.detect) ? LeadOS.patterns.detect(P, ctx.today) : { active: [], dormant: [] };
+    const facts = [], missing = [];
+    const hit = D.active.filter(function (p) { return p.name === patternId; })[0];
+    if (hit) {
+      facts.push(fact('detector verdict', 'ACTIVE — sev ' + hit.sev + ' · conf ' + hit.conf, hit.confWhy));
+      facts.push(fact('pattern', hit.narrative));
+      hit.members.forEach(function (m) { facts.push(fact('firing ' + m.rule, m.count + ' active finding(s)', m.keys.slice(0, 3).join(' · ') + (m.keys.length > 3 ? ' (+' + (m.keys.length - 3) + ' more)' : ''))); });
+      if (hit.window) hit.window.limbs.forEach(function (l) { facts.push(fact('window ' + l.rule, l.status, l.line)); });
+      (hit.scope || []).forEach(function (s) { facts.push(fact('scope check', s)); });
+      (hit.notes || []).forEach(function (n) { missing.push(n); });
+    } else {
+      const d = D.dormant.filter(function (x) { return x.name === patternId; })[0];
+      facts.push(fact('detector verdict', 'DORMANT at read time', d ? ('present: ' + (d.present.join(', ') || 'none') + ' · missing: ' + d.missing.join(', ')) : 'pattern not in library'));
+      missing.push('The detector is quiet: ' + (d && d.missing.length ? d.missing.join(', ') : 'some required rules') + ' are not firing. This run records deliberate intent — it does not fabricate ' + patternId + '.');
+    }
+    return { facts: facts, missing: missing };
+  }
+  function patternFields(kind, reviewDays) {
+    return [
+      { name: 'session', label: 'Session date', type: 'date', required: true },
+      { name: 'chair', label: 'Sponsor / chair', type: 'text', required: true, hint: 'A compound problem needs an owner above any single function.' },
+      { name: 'actions', label: 'Interventions agreed (one per line)', type: 'lines', required: true },
+      { name: 'reviewDays', label: 'Re-inspect in (days)', type: 'number', value: reviewDays, recommended: true, source: 'recommended — default ' + kind + '-rhythm horizon for a pattern response; change it to what you will actually hold' }
+    ];
+  }
+  function patternSubmit(v, ctx, kind, domain, title, context) {
+    const due = typeof v.session === 'number' ? v.session : ctx.today;
+    const days = (typeof v.reviewDays === 'number' && v.reviewDays > 0) ? v.reviewDays : 14;
+    return [
+      { type: 'review.scheduled', payload: { id: uid('rev'), kind: kind, domain: domain, dueAt: due } },
+      { type: 'task.created', payload: { id: uid('task'), domain: domain, title: title + ' — chair ' + v.chair, dueAt: due + days * DAY } },
+      note(domain, title + '. Chair: ' + v.chair + '. Interventions agreed:\n' + (v.actions || []).join('\n') + '\nRe-inspection in ' + days + 'd.', undefined, context)
+    ];
+  }
 
   const byId = function (id) { return INTERACTIVE.find(function (p) { return p.id === id; }) || null; };
   const forRule = function (ruleId) { return INTERACTIVE.filter(function (p) { return p.forRules.indexOf(ruleId) !== -1; }); };

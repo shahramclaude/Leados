@@ -10,7 +10,7 @@
   const KEY = 'leados:data';
   const SCHEMA_VERSION = 5;
   const LINEAGE = 'pt';
-  const LINEAGE_TAG = 'pt-5';
+  const LINEAGE_TAG = 'pt-6';   // pt-6: pattern library; no schema change (v5 stands — no new settings, no new event types)
 
   // Setting defaults by schema era. v4 adds the universal-domain cadence set.
   const V1_SETTING_DEFAULTS = { decisionMaxOpenDays: 21 };

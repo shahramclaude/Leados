@@ -40,7 +40,7 @@ for (const s of srcs) {
   try { window.eval(code); } catch (e) { loadErrors.push(s + ' -> ' + (e && e.message)); }
 }
 const L = window.LeadOS || {};
-report.counts.namespaces = ['events', 'store', 'engine', 'rules', 'correlate', 'playbooks', 'health', 'ui'].filter((k) => !!L[k]);
+report.counts.namespaces = ['events', 'store', 'engine', 'rules', 'correlate', 'patterns', 'playbooks', 'health', 'ui'].filter((k) => !!L[k]);
 if (loadErrors.length) report.loadErrors = loadErrors;
 
 if (L.events) report.counts.registryTypes = Object.keys(L.events.REGISTRY).length;
@@ -104,6 +104,12 @@ try {
   const vi = document.getElementById('view').innerHTML;
   report.ui.insightsViewBytes = vi.length;
   report.ui.insightsViewRenders = /Clusters/.test(vi) && /Domain heat/.test(vi) && /Benchmarks/.test(vi) && /Quick capture — intelligence/.test(vi);
+  // pt-6: the pattern-library route renders the library, dormancy and disclosures for real
+  window.location.hash = '#/patterns';
+  window.dispatchEvent(new window.HashChangeEvent('hashchange'));
+  const vp = document.getElementById('view').innerHTML;
+  report.ui.patternsViewBytes = vp.length;
+  report.ui.patternsViewRenders = /Active named patterns/.test(vp) && /Dormant patterns/.test(vp) && /Spec-vs-shipped rule labels/.test(vp) && /DEATH_SPIRAL/.test(vp);
 } catch (e) {
   report.ui.error = String((e && e.message) || e).slice(0, 300);
 }
@@ -112,4 +118,4 @@ console.log(JSON.stringify(report, null, 2));
 const suitesRed = (report.suites.T && report.suites.T.failed.length) ||
   (report.suites.GplusGoldens && report.suites.GplusGoldens.failed.length) ||
   (report.suites.bootGate && !report.suites.bootGate.ok) || report.suites.runAllError || report.suites.bootError;
-process.exit(report.problems.length || loadErrors.length || suitesRed || !report.ruleBattery.ok || report.ui.insightsViewRenders === false ? 1 : 0);
+process.exit(report.problems.length || loadErrors.length || suitesRed || !report.ruleBattery.ok || report.ui.insightsViewRenders === false || report.ui.patternsViewRenders === false ? 1 : 0);
