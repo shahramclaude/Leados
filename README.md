@@ -1,670 +1,252 @@
-# LeadOS pt-5 — Intelligence Layer
+# LeadOS pt-7 — Authoritative Heatmap & Insights
 
-A universal leadership and management operating system covering every domain where
-leadership and management decisions are made: engineering, finance, sales, product
-strategy, operations, people/HR, marketing, manufacturing/production, design, R&D,
-legal/compliance, customer success, supply chain, executive/board, and business
-development — 15 domains, **92 event types under contract, 40 pure rules plus a
-correlation engine (clusters · insights · decayed domain heat · benchmark gating),
-15 domain playbooks + 14 interactive playbooks, 56 named projections**, one
-operating rhythm. pt-5 layers intelligence over pt-4's 40 independent rules:
-findings that co-occur stop being four separate problems and become one named
-pattern — printed, priced, and suppressible by event.
+A universal leadership and management operating system: append-only event log, 85 validated
+event types, 40 pure rules (R1–R40) with printed arithmetic, a correlation engine (clusters ·
+decayed domain heat · named patterns · benchmark gating), and an insight layer in the pt-7
+spec shape — everything derived per read, nothing derived ever persisted.
 
-**Run it:** open `index.html` in any modern browser. No server, no build step, no
-framework, no network, no CDN. Everything runs locally against one localStorage key.
+**Run it:** open `index.html` in any modern browser. No server, no build step, no framework,
+no network, no CDN — system fonts only. Everything runs locally against one localStorage key.
 
-**Verify it:** open `#/health` in the browser — the authoritative grader. A headless
-run of the same modules and the same suites is also possible since part 13:
-`node scripts/headless-verify.mjs` (the harness is a verification aid, not an 11th
-shipped file; the application never loads it).
-
-> **Part 13 (README accuracy) re-issue.** The file table below names exactly the
-> 10 files delivered; the rules section enumerates all forty rules at the density
-> R1–R10 were always described at; the gap list and the non-claims are current.
-> Every check count this file states was **runtime-executed, not merely declared** —
-> headless under Node + jsdom, recorded in `AI-SESSION-LOG.md` §52 with the two
-> defects the execution exposed. Where this file and `#/health` ever disagree,
-> `#/health` in your browser wins.
-
-> **Part 14 (delivery integrity) re-issue.** The 10 files named below were
-> re-issued from upstream `main @ 12ad31d` — where they sat flat, scattered
-> among a growing npm scaffold, unbootable as shipped — into the `css/`+`js/`
-> structure the docs and `index.html` have always named. Every file was read in
-> full this session; the battery was **runtime-executed again**, against both
-> the source tree and a fresh `dist/` build — identical green lines — recorded
-> in `AI-SESSION-LOG.md` §55–§61. No rule, check, golden or playbook body was
-> touched in this part.
-
-> **Part 15 (pt-5) — intelligence layer.** Schema v5 (`4>5` backfills
-> `correlationWindowDays` 90 · `trendMinPeriods` 3 · `heatmapDecayFactor` 0.85),
-> four new event types (92 under contract), `#/insights`, benchmarks + domain
-> review log surfaces, and the correlation engine — built as a third IIFE in
-> `js/engine.js` because the brief mandates a `js/correlate.js` module *and* the
-> 10-file structure in the same breath (part-11 precedent; `UNLOADED` guards
-> both paths). First headless run red, fixed, then green: **T 38/38 · G 31/31 ·
-> claims 36/36 proven · boot gate green · exit 0** — recorded in
-> `AI-SESSION-LOG.md` §62–§68.
+**Verify it:** open `#/health` in the browser — the authoritative grader. Where any document
+(this file included) and `#/health` disagree, **`#/health` on your machine wins.**
 
 ---
 
-## Architecture doctrine (non-negotiable)
+## §0 Claim-vs-inspection audit (opens every delivery, per doctrine)
 
-| Doctrine | Enforcement |
-|---|---|
-| Vanilla JS only — no framework, no build step, no network, no CDN | classic `<script>` tags; registry validation; no external references anywhere |
-| Exactly one localStorage key: `leados:data` | G1 inspects `localStorage` keys |
-| Lineage `pt`; schema v4 | `store.js` constants; G2 verifies |
-| Append-only event store | seq/id/time integrity checked by G3; no update/delete API exists |
-| Nothing derived is ever persisted — `project()` runs per read | root/meta whitelists (G4); projection purity (G7, T7, T13) |
-| `health.js` is the authority wall | boot gate runs G-suite; failure halts rendering; every claim maps to T/G checks |
-| AI-SESSION-LOG §0 opens with a claim-vs-inspection audit | see `AI-SESSION-LOG.md` |
+The brief for this part demanded: *inspect the actual code before claiming anything about it;
+label anything unverified.* This section is that audit.
 
-## Schema v4 — `MIGRATIONS['3>4']`
-
-Backfills five settings as repair events (leader values never overwritten):
-`salesCycleDays` 90, `revenueReviewCadenceDays` 30, `opsReviewCadenceDays` 14,
-`boardCadenceDays` 90, `complianceAuditCadenceDays` 180. A **repair** is any write
-a migration performs beyond bumping `schemaVersion`; repairs accumulate per
-migration id in `meta.migrationRepairs` and are reconstructible from the log
-(T5/G6). `3>4` is idempotent (T3).
-
-## Schema v5 — `MIGRATIONS['4>5']`
-
-Backfills three settings as repair events under the identical contract (leader
-values never overwritten, every repair counted, idempotent — T32/G6):
-`correlationWindowDays` **90**, `trendMinPeriods` **3**, `heatmapDecayFactor`
-**0.85**. The decay factor is a **labeled assumption**: it prices recency in the
-domain-heat formula, and every rendered heat value prints the factor it used.
-A v3 store climbs straight to v5; a v4 store gains exactly three repair events.
-
-## Rules engine (pt-4 part 3) — R1–R40
-
-Every rule is a pure function `(P, today) → findings[]`. `P` is a projection from
-`engine.project()`; `today` is injected — no rule reads the clock or the disk.
-The **Signals** tab renders `rules.run(P, now)` per read; findings are never
-persisted.
-
-Finding shape (`fin()` contract, enforced by T12b/G9): `{ rule, sev 1–5,
-conf HIGH|MEDIUM|LOW, title, basis[], refs[], play | playNone }`. Every finding
-carries a playbook id in `.play`, or `.playNone` prints why it has none. `fin()`
-**throws** on a finding missing identity fields — a shape violation fails loudly,
-never silently (§52 records the defect this produce once exposed, and its fix).
-
-Discipline (tested by T21/T22/T23, goldens G14–G29):
-- **≥ 3 measured points** before any trend claim (explicit spec exceptions: R20
-  and R33 slopes, marked in code).
-- **Missing fields skip, never infer** (e.g. quota without actuals, contract
-  without expiryDate, KPI without target → silent).
-- **sev 3 ceiling for trend-derived findings** unless the spec escalates with
-  printed basis; the clamp is disclosed in the finding's own `basis` line. The
-  named exceptions — safety (R28) and legal `fail` (R30) — read direct data and
-  are never marked.
-- **The math is printed.** Every finding that computes shows the computation in
-  `basis` so a skeptical leader can check it by hand.
-
-Lineage note: R1–R10 predated the attached codebase and were not inspectable;
-they are reconstructed and pinned to the settings the pt-1 selectors already
-prove — full disclosure in `AI-SESSION-LOG.md` §10.
-
-## The forty rules
-
-Each rule below is stated the way the heritage ten were always stated: trigger
-with exact thresholds, severity behavior, and the boundary or skip that keeps it
-honest. `set.*` = the v4 settings (`revenueReviewCadenceDays` 30 ·
-`opsReviewCadenceDays` 14 · `boardCadenceDays` 90 · `complianceAuditCadenceDays`
-180 · `salesCycleDays` 90 · `riskReviewCadenceDays` · `krCheckInCadenceDays` ·
-`decisionMaxOpenDays`).
-
-**Heritage cluster (reconstructed; §10).** **R1** revenue review cadence —
-strictly overdue → sev 3 with interval/last/due printed; never run and the log
-older than the interval → sev 2 · **R2** ops rhythm, same shape (14d) · **R3**
-board cadence (90d) · **R4** compliance audit cadence (180d) · **R5** decision
-open past `decisionMaxOpenDays` → sev 3, owner and domain printed, per-domain
-playbook · **R6** sales-domain decision open past one full `salesCycleDays` →
-sev 3; past 1.5× a cycle → sev 4 · **R7** register risk unreviewed past
-`riskReviewCadenceDays` → sev 2; past 3× the cycle → sev 3; prints
-score = L×I · **R8** KR of an active objective silent past
-`krCheckInCadenceDays` (since its latest progress log, else the objective's
-creation) → sev 2 · **R9** task past due → sev 2; >14d late → sev 3
-· **R10** active objective older than 14d with zero key results → sev 2,
-"unmeasurable".
-
-**Finance.** **R11** `fin.risk` past its `reviewDate` →
-sev = clamp(severity + (likelihood ≥ 4 ? 1 : 0), 3, 5) with the math printed;
-cleared only by a `fin.risk.updated` on/after the reviewDate with status
-mitigated/accepted/closed — an update *before* the date does not count (G14)
-· **R12** open deal with `closeDate` past and untouched since `closeDate` →
-sev 3; >30d past → sev 4; a later update quiets it (G15) · **R13** latest
-quota actuals ÷ target <70% → sev 3, <50% → sev 4; exactly 70% (and 100%) quiet;
-no actuals or no target → skip (G16) · **R22** budget
-|actual − amount| ÷ amount >15% → sev 3, >30% → sev 4, scoped per budget ×
-period; underspend fires on the same thresholds with the direction printed
-(G20) · **R23** finance KPI latest value ÷ target <85% → sev 3, <70% → sev 4;
-when ≥3 measured points show a declining slope the slope is printed and conf
-drops to MEDIUM; KPI without target → skip · **R24** forecast for a period with
-reconciled actuals deviating >20% → sev 3 with direction named
-(over-optimistic / over-conservative); ≥3 consecutive over-forecasts in the
-same direction → a *systematic over-optimism* trend finding, capped at sev 3
-with the clamp printed; periods without actuals → skip.
-
-**Strategy.** **R14** OKR with zero progress events >21d after being set →
-sev 2; >42d → sev 3; exactly 21d quiet; closed OKR quiet regardless (G17)
-· **R15** closed OKR scored <0.4 → sev 3; score 0 → sev 4 (explicit score is
-direct data, not a pattern); ≥3 consecutive OKRs <0.4 adds a *pattern* finding
-scoped `R15:pattern` — capped at sev 3 by the trend ceiling, clamp disclosed
-(G28) · **R18** milestone `at-risk`/`blocked` → sev 3; past its `dueDate` →
-sev 4; `done` quiet; dependencies printed.
-
-**Operations.** **R16** incident resolved slower than its threshold (sev ≥ 4:
-4h · sev 3: 24h · else 72h) → finding at sev = clamp(incident severity, 3, 5)
-with MTTR math printed; an incident still *open* past threshold fires too
-(G18) · **R17** SLA missed (`met=false`) → sev 3 per metric × period with the
-gap math; ≥3 consecutive misses on one metric adds a streak finding, trend-capped
-at sev 3, streak printed · **R29** equipment `down` >4h → sev 4; `degraded`
->24h → sev 3; age measured from the latest status entry, note printed.
-
-**People.** **R19** ≥2 departures inside a rolling 60d window → sev 3 MEDIUM
-with the voluntary/involuntary/restructure breakdown; ≥3 suggests sev 4 but the
-trend ceiling clamps to 3 and says so (G19) · **R20** latest engagement score
-<6.5/10 → sev 3, <5 → sev 4; a declining 2-point slope is a named spec
-exception — printed, and drops conf to MEDIUM; with ≥3 surveys, silence beyond
-2× the median interval → a separate sev 2 cadence finding · **R21** PIP past
-its declared `duration_days` with no result → sev 4; "a PIP is a commitment,
-not a filing".
-
-**Supply chain.** **R25** vendor with `risk_level` ≥ 4 past its `reviewDate`
-with no review on/after that date → sev 3; risk 5 → sev 4; risk < 4 skipped
-(G29) · **R26** supply disruption with severity ≥ 4 sitting >7d with neither a
-vendor review nor a mitigation acknowledgement since → sev 4.
-
-**Manufacturing.** **R27** yield <90% on a line → sev 3; <80% → sev 4; ≥3
-measured points with a declining slope printed, conf drops to MEDIUM · **R28**
-any sev-5 safety incident → sev 5 immediately — direct data, never capped;
-≥2 safety incidents in 30d → sev 4; safety is the named exception to the trend
-ceiling (G21).
-
-**Legal & compliance.** **R30** latest check for a framework `fail` → sev 5
-immediately (direct data, exempt from the ceiling); latest `finding` unpassed
-for >30d → sev 4; no check for longer than `complianceAuditCadenceDays` (or
-none ever and the log older) → sev 2 cadence finding (G22) · **R31** legal risk
-past its `dueDate` → sev 4; explicitly unowned (`ownerId` null — an explicit
-null is data) → sev 3 · **R32** contract expiring ≤30d → sev 3; ≤7d → sev 4;
-past expiry with status still `active` → sev 5; `renewed`/`terminated` quiet;
-no `expiryDate` → skip (G23).
-
-**Customer success.** **R33** latest NPS < 0 → sev 4 (direct measurement);
-declining slope landing below 30 → sev 3 MEDIUM (spec slope exception); latest
-NPS beyond 90d → sev 2; never-logged silent · **R34** period churn >5% → sev 3, >10%
-→ sev 4 with the division printed; MRR loss >15% → sev 4 *regardless of account
-count*; `mrr_lost` without `mrr_total` → the escalation is named as **not
-inferred** (G24) · **R35** sev-5 escalation unresolved >4h → sev 5; any open
-escalation past its `dueDate` → inherited severity clamped 3–5.
-
-**Marketing.** **R36** campaign CPA >2× the mean of its three prior measured
-campaigns → sev 3 MEDIUM, the arithmetic and its basis campaigns printed
-(trend); campaign live >14d with zero results → sev 2.
-
-**R&D.** **R37** experiment past `reviewDate` with no result → sev 3; a result
-logged on or before the date quiets it (G25) · **R38** tech-debt mass —
-Σ severity × effort over unresolved items inside 90d — >30 → sev 3, >60 →
-sev 4, MEDIUM, the sum printed term by term; resolved items leave the total
-(G26).
-
-**Executive.** **R39** board meeting gap >`boardCadenceDays` → sev 3; none ever
-and the log older than the cadence → sev 2; exactly the cadence quiet, quorum
-state printed (G27) · **R40** executive KPI review gap >`revenueReviewCadenceDays`
-→ sev 2; >2× → sev 3; silence only fires once a review exists (no invented
-expectation on an empty log).
-
-Non-negotiables (carried): trends need ≥3 measured points · missing fields skip
-rather than infer · a count is never stated as certainty — the arithmetic and
-the event type it read are printed · suppression is auditable and reversible ·
-every finding links the playbook that resolves it, or prints why it has none.
-
-## Strict doctrines (pt-4 part 9)
-
-| Doctrine | How it is enforced structurally | Proof |
+| Claim | Status | Basis |
 |---|---|---|
-| Projections: last-writer-wins by append order; derived values re-computed per read, never persisted | entity maps keyed by id, `open*` rebuilt in `finalize()`, named projections are *aliases* of the folded objects | T25, G10, G4, G7 |
-| Findings: stable keys (`R11:<riskId>`, `R12:<dealId>`) — second-run safe | `fin()` computes `key = <rule>:<scope‖refs[0]>`; ref-less findings declare an explicit `scope` (`R17:uptime:streak`, `R39:board`) so keys never depend on wording or dates | T28, G13 |
-| Import gate rewires `*Id` fields automatically | `store.mergeInto()` plans an id map from `events.CREATES`, then **recursively walks every payload** — any data value matching a known incoming id is rewired, including inside arrays and nested objects the gate has no schema for | T30 |
-| Dangling refs: skip + `_skipped.dangling*` | each event's declared `refs`/`refArrays` must resolve in (this store ∪ already-accepted imports), else the event is dropped and `_skipped.danglingDeals` / `danglingFinBudgets` / `danglingMilestones` … is incremented | T30 |
-| Missing fields skip rather than infer | every rule returns early on an absent key date/value | T22, G16, G25, G29 |
-| A count is never stated as certainty | every computed finding prints its arithmetic **and** names the event type it read | T29/G13 (empty `basis` fails), G18, G20, G24, G26 |
-| Sev 3 ceiling for trend-based findings | `fin()` clamps any finding marked `trend: true` to 3 **and prints that it did**. Marked: R15 pattern, R17 streak, R19 window, R24 streak, R33 slope, R36 CPA. Exceptions named by the doctrine — safety (R28) and legal fail (R30) — read direct data and are never marked | T29, G13, G19, G28 |
+| Upstream tree at inspection: 22 flat entries — no `css/`/`js/` dirs; npm scaffold (`App.tsx`, `cn.ts`, `index.css`, `main.tsx`, `vite.config.ts`, `package.json` 653 B, lockfile 104 KB, `tsconfig.json`) + `rules.js` 761 B tombstone + `SESSION-3.patch.md` + `AI-SESSION-LOG.append.md` present | **BYTE-VERIFIED** | git trees API, `main @ a1ed70f` |
+| Upstream `index.html` (2,119 B) references a pt-6 lineage and cannot boot as shipped (flat tree vs `css/`+`js/` loader paths) | **VERIFIED (title only)** | raw fetch returned title `LeadOS pt-6 — Universal Leadership OS`; full source not text-extractable this session → labeled partial |
+| `store.js`: schema v5, migrations `1>2`–`4>5` with repair counting, single key, `V5_SETTING_DEFAULTS = {correlationWindowDays 90, trendMinPeriods 3, heatmapDecayFactor 0.85}` | **BYTE-VERIFIED (full read)** | raw fetch; ported near-verbatim (LINEAGE_TAG → `pt-7`) |
+| `engine.js` fold table (`MODULE_FOLD`), bucket list, `ALIASES`, `OPEN_SETS`, roster builder; pt-5 fold handlers incl. `insight.acknowledged {insightId, note}` and `benchmark.set {metric, value, unit, source, period, type}` | **BYTE-VERIFIED (full read of that region)** | raw fetch; ported with two documented deltas (fixture `at` support; `fin.risk.updated` keeps an updates array so R11 can honor *update-before-reviewDate-does-not-count*) |
+| `engine.js` rules bodies R1–R40 | **PARTIALLY VERIFIED** | fetch truncated mid-file; thresholds re-derived from the upstream README's own public rule table (which enumerates all forty at golden density) and cross-checked against the readable fragments |
+| Upstream pt-5 **heat formula**: contribution `w = sev × decay^(ageDays)` — per-day exponent, **no CONF_FACTOR anywhere in the readable text**, exclusion of undated (>window) findings | **BYTE-VERIFIED in the readable region** | raw fetch of the correlate IIFE (truncated) |
+| Upstream insight shape `{id, kind, title, basis[], clusterIds, sev, conf, play, suppressible}` and the promotion rule string *"sev ≥ 4, or ≥ 3 findings, or > 1 domain"* | **BYTE-VERIFIED** | same truncated read |
+| Upstream `HOT_SCORE` threshold value; `CONF_FACTOR` definition (if any); G31/T33–T37 bodies; `events.js` full registry (92 types claimed); `health.js`; `ui.js`; `playbooks.js`; pt-6 full README | **NOT VERIFIED** | not byte-readable this session (truncation/size). Nothing about them is claimed anywhere in this delivery |
+| pt-6 pattern library: 8 named patterns, triggers, herit­age-label disclosure machinery | **BYTE-VERIFIED (near-complete read)** | raw fetch reached the module end; ported with scope functions simplified but limb logic intact |
 
-> **Behaviour change recorded:** this ceiling supersedes part 7's G28 (*3 consecutive
-> OKRs <0.4 → sev 4*) and part 3's R19 (*≥3 departures → sev 4*). Both now cap at
-> sev 3 with the clamp disclosed in the basis line — and the goldens themselves
-> assert the capped values (G19, G28). Single-OKR scores stay sev 3/4 because an
-> explicit score is direct data, not a pattern. See `AI-SESSION-LOG.md` §35.
+**Registry honesty:** this build registers **85 event types**. Upstream claims 92 under contract;
+the 7-type delta is contracts not byte-verified this session (`events.js` unread). They are
+**not registered rather than guessed** — appending an unregistered type fails loudly at the gate.
 
-## Views (pt-4 part 6)
+---
 
-Left **rail nav** with hash routes — deep-linkable, no router library:
+## On the record, upstream divergence found by inspection
 
-| Route | What it shows |
-|---|---|
-| `#/today` | Signal summary + domain **filter chips** (ALL · PEOPLE · FINANCE · SALES · OPS · STRATEGY · MFG · LEGAL · CS · EXEC) with per-domain counts in the subline, plus the operating rhythm |
-| `#/signals` | All findings from R1–R40 with printed basis |
-| `#/insights` | **pt-5**: active + acknowledged insights (ack appends an event) · clusters with printed `confWhy` · domain heat with per-contribution decay math · benchmarks vs internal series with the trend gate · intelligence quick capture |
-| `#/playbooks` | The 14 interactive playbooks |
-| `#/finance` | Budget vs actuals (variance math) · KPI sparklines · forecast vs actuals · financial risk register sorted severity × likelihood |
-| `#/sales` | Pipeline by stage (count + value) · quota attainment per person · cycle time from closed deals · open deal list |
-| `#/ops` | Incident log with MTTR · SLA dashboard by metric · **text Gantt** milestone tracker |
-| `#/strategy` | OKR tree (monospace progress bars) · roadmap by quarter · decision log |
-| `#/domains` | Tabbed index — HR · Marketing · Mfg · Supply · Design · R&D · Legal · CS · Exec — each with that domain's active findings, metric sparklines, and capture |
-| `#/roster` | People derived from the log + dossier: quota attainment history, performance ratings, PIP status, compensation history, open deals (sales roles) |
-| `#/cadences` `#/decisions` `#/risks` | Governance surfaces |
-| `#/data` | All settings incl. the five v4 cadences · **domain-filtered export** · storage inspector · projection inspector · event log with domain column |
-| `#/health` | T/G suites + claim coverage |
+- The pt-15 README describes a corrected 10-file `css/`+`js/` tree and says `js/rules.js` "is gone,
+  and stays forbidden." The tree at `a1ed70f` is **still flat**, **still carries `rules.js`**, and the
+  README at HEAD still describes pt-15 while `index.html`/`store.js` carry pt-6 tags. Upstream's own
+  documents already flag most of this; this delivery records the current measurement, not a discovery.
+- The pt-5 brief arrived upstream truncated at the cluster shape; heat/insight semantics there were
+  **interpreted** (their log says so). The pt-7 brief in this delivery is **authoritative** and
+  supersedes the interpretation wherever they differ — see *Divergence register* below.
 
-**Quick capture is generated from the registry.** Each function view renders a
-collapsible form per event type in its namespace, built directly from
-`REGISTRY[type]` (required/optional, enums → select, booleans → checkbox,
-arrays → one-per-line, numeric date-ish names → date picker, ranges shown
-inline). A form therefore cannot drift from the contract: change the registry
-and the form changes with it. Two object-array payloads (`strategy.okr.set`,
-`exec.kpi.reviewed`) use a documented pipe protocol (`name | value | target |
-trend`). **T27** drives every generated form with synthetic input and fails if
-any produced payload is rejected by the append gate — including the one
-cross-field contract in the registry (`strategy.decision`: `chosen` must be one
-of `alternatives`), which the synthetic driver now honors explicitly (§52).
+## Delivery: exactly three files (and why)
 
-**View state is sessionStorage only.** Route, domain filter, open domain tab,
-selected person and export filter live under `leados:ui` in **sessionStorage** —
-never in `leados:data`, never as events. G12 fails if a `leados:*` key other
-than the store appears in localStorage, or if any `ui.*` event reaches the log.
-
-**Roster is derived, never declared.** A person exists because events mention
-them (`sales.quota.set`, `sales.deal.logged.ownerId`, `hr.*.personId`).
-`rosterById` lists its own sources per person; nobody is invented.
-
-**Export** filters events by domain (`engine.eventDomain`: explicit `domain`
-field → namespace prefix → parent-entity lookup → honest `system` for
-`store.initialized` / `settings.changed`) and downloads a local Blob. No network.
-
-## Interactive playbooks (pt-4 part 5)
-
-Fourteen playbooks turn a finding into an append. Each declares:
-
-```
-candidates(P)       -> eligible targets drawn from the log
-prefill(ctx, P)     -> { ok, title, facts[], suggest{}, missing[] }   (pure)
-fields(pre)         -> [{ name, label, type, value?, recommended?, source?, hint? }]
-submit(v, ctx, pre) -> [{ type, payload }]   event specs only — never writes
-```
-
-| Playbook | Rules | Appends |
-|---|---|---|
-| `risk-review` | R11 R31 R32 | `fin.risk.updated` / `legal.contract.updated` / `note.added` + dated `task.created` |
-| `deal-review` | R12 | `sales.deal.updated` (+ `sales.deal.closed`) |
-| `quota-review` | R13 | `fin.kpi.logged` + `note.added` |
-| `okr-checkin` | R14 R15 | `strategy.okr.progress` per KR (+ `strategy.okr.closed`) |
-| `incident-review` | R16 R17 | `ops.incident.resolved` |
-| `attrition-review` | R19 | `note.added` (+ `hr.engagement.logged`) |
-| `budget-review` | R22 R23 R24 | `fin.kpi.logged` + `note.added` |
-| `vendor-review` | R25 R26 | `supply.vendor.reviewed` |
-| `safety-review` | R28 | `mfg.safety.incident` with mandatory `corrective_actions[]` |
-| `compliance-review` | R30 | `legal.compliance.check` + `note.added` |
-| `churn-review` | R33 R34 R35 | `cs.churn.logged` + `note.added` |
-| `tech-debt-sprint` | R38 | `rd.tech.debt.resolved` per selected item + `note.added` |
-| `board-prep` | R39 R40 | `exec.board.meeting` + `exec.kpi.reviewed` |
-| `experiment-debrief` | R37 | `rd.experiment.result` |
-
-**No playbook fakes certainty.** Every prefilled value is rendered with a
-`recommended` chip and a `source` line naming where it came from ("last logged
-value", "computed from actual ÷ target"). Everything the log does not know is
-listed under a **not in the log** banner and left blank — T26 and G11 fail the
-build if a recommended field ships without a source. Running a playbook also
-appends `playbook.applied` so the intervention itself is on the record.
-
-`note.added` (`{id, domain, text, refId?, context?}`) was added to the registry
-in part 5 — the spec required it and it did not exist. pt-5 adds four more
-(intelligence, below): **92 types** total, counted at runtime.
-
-## Intelligence layer (pt-5) — `LeadOS.correlate`
-
-The brief specified a new module `js/correlate.js` and, in the same breath, the
-unchanged 10-file structure. The part-11 precedent resolves it: the engine is a
-**third IIFE inside `js/engine.js`**, after the rules it consumes;
-`js/correlate.js` joins `UNLOADED` and T31 fails if a script tag loads it.
-
-`correlate(P, today) → { clusters, insights, heatmap }` — pure, injected clock,
-recomputed per read; nothing derived is persisted (G31/T37).
-
-**Clusters.** Findings are nodes. An edge forms when two findings share a
-**typed anchor** — `entity:<id>` resolved across the entity buckets,
-`person:<id>` resolved through projections (`quotaById.personId`,
-`dealById.ownerId`, `pipById.personId`, roster), `metric:<name>` / `line:<name>`
-claimed only when a scope string is a real folded metric/line — **or** when they
-share a domain and both evidence ages sit inside `correlationWindowDays` (90).
-Connected components of ≥ 2 findings ship in the brief's exact shape: stable id
-(sorted finding keys joined), findings, domains, sharedEntity, severity =
-max sev, one-line printed `pattern`, `confidence` + `confWhy`. Anchor-verified →
-**high**; ≥ 3 co-occurring domain findings → **medium**; a 2-finding domain-only
-pair stays **low** — ages and the window are always printed. Findings without
-dated evidence are stated as undated (never re-dated).
-
-**Insights.** A cluster is promoted to an insight when `sev ≥ 4`, or it holds
-≥ 3 findings, or it spans > 1 domain — the rule is printed in the basis. Two
-context insight kinds join clusters: a person anchored in findings across ≥ 2
-domains, and a domain whose heat passes the labeled `HOT_SCORE` threshold
-(**9** — "three sev-3 signals at full weight", printed where used).
-`insight.acknowledged {insightId, note?}` removes an insight from the *active*
-list; it keeps computing and renders under Acknowledged with note + date —
-suppression is a per-read state and the record is the audit, nothing is
-deleted (C34). Recorded caveat: insight ids derive from the finding set, so they
-re-key when membership changes; an ack can outlive the insight it named (see
-non-claims).
-
-**Domain heat.** `weight = sev × heatmapDecayFactor^ageDays`, summed per domain
-over dated evidence inside the window; the formula string always carries the
-factor and the window. Undated findings land in `heatmap.excluded` with the
-reason printed; evidence older than the window decays out with its age printed.
-A leader-set window is honored, not just the default (T35).
-
-**Benchmarks & trend gate.** `benchmark.set` rows compare against the log's own
-series only when one exists (`fin.kpi`, NPS, engagement, yield, SLA, product/UX
-metrics); a benchmark with no internal series reports exactly that — not
-inferred. A trend is claimed only with ≥ `trendMinPeriods` measured points, and
-the gate prints its arithmetic (T36). This setting gates the *analytics* layer;
-the rules' hard `MIN_TREND_POINTS = 3` doctrine for findings is unchanged.
-
-| New type (pt-5) | Contract |
-|---|---|
-| `insight.acknowledged` | `{insightId, note?}` — no `refs`: insights are derived, not an entity family |
-| `benchmark.set` | `{metric, value, unit, source, period, type ∈ internal\|industry\|peer}` |
-| `cadence.review` | `{type, note, period}` — the general leadership review log (1:1s, skip-levels, retros) |
-| `signal.tagged` | `{eventId, tag, note?}` — no `refs`: log event ids are not entity families |
-
-## Named projections (pt-4 part 4)
-
-`engine.project(events)` returns **56 named projections** (counted at runtime):
-the 50 from pt-4 (the 40 required by the pt-4 part-4 list, the 6 documented
-symmetry siblings, the three added with `note.added`, `rosterById`) **plus the
-six pt-5 intelligence buckets** (`insightAcks`, `benchmarks`,
-`benchmarkByMetric`, `reviewLog`, `signalTags`, `tagsByEvent`). The **Data** tab
-renders a live inspector of every one with its current size.
-
-Three guarantees, each mechanically inspected:
-
-| Guarantee | How it is structural (not merely tested) |
-|---|---|
-| **append-order wins** | entity maps are keyed by id and every handler writes last-value-wins; index maps (`kpiByMetric`, `slaByMetric`, `complianceByFramework`, `dealsByPerson`, `quotaByPerson`) append in log order |
-| **nothing derived persists** | projections exist only in the returned object; G10 asserts none of their keys appear in the stored payload, G4 whitelists the payload shape |
-| **stale state impossible by construction** | `*ById` projections are **aliases — the same object references the fold mutates**, not copies, and every `open*` set is recomputed in `finalize()` at the end of each fold. There is no path that updates an entity without the projection seeing it, because there is only one object. T18/G10 assert reference identity directly. |
-
-`open*` means *the log has not recorded the closing event* — never "overdue"
-(aging is a rule's job, not a projection's). Two definitions worth stating:
-`openBudgets` = budgets with no actuals logged (unreconciled); `openVendors` =
-vendors never reviewed. `legal.risk.logged` carries no `id` in the spec, so
-`legalRiskById` is keyed by the originating event id — unique and append-ordered
-by construction (G3).
-
-## Event registry (pt-4 part 2 · pt-5)
-
-**92 types** under append-gate contract (88 from pt-4 + 4 intelligence types
-above); the validator enforces required fields, whitelists, enums, ranges,
-booleans, arrays, non-empty arrays, and per-type custom rules. Family table and
-field-level notes: see `AI-SESSION-LOG.md` §7 and the registry source.
-References (`refs`/`refArrays`) are inspected by **G8** — the two pt-5 types
-whose payloads point at derived insights or log events deliberately declare
-none, with the reason recorded in the registry comments.
-
-## Health — the authority wall
-
-### Verification status
-
-**Part 13 executed the battery headlessly.** Every check count in this section
-is a runtime measurement, not a declaration: Node v20 + jsdom, six modules
-loaded in the doctrinal `<script>` order, the full T-suite, live G-suite,
-goldens, claims, boot gate, and a real-DOM UI boot — all recorded with output
-in `AI-SESSION-LOG.md` §52. Result: **T 32/32 · G 30/30 · claims 31/31 proven ·
-boot gate green · shipped-seed battery produces 57 findings with all 40 rules
-firing.** The execution exposed two latent defects (a blank rule id crashing
-R1–R4 through `fin()`, a 90-day boundary fixture in T19) plus one driver gap
-(T27); all three are fixed and their fixes are re-proven by the same suites.
-
-**Part 14 re-executed the same battery twice**: once against the re-issued
-source tree and once against a fresh `dist/` assembled by `vite build` (T31's
-inline-stylesheet fingerprint branch engaged, as designed in part 13). Both
-runs: **T 32/32 · G 30/30 · claims 31/31 proven · boot gate green · exit 0** —
-output recorded in `AI-SESSION-LOG.md` §58.
-
-**Part 15 (pt-5) executed the enlarged battery** the same way, against the tree
-after the intelligence layer landed: **T 38/38 · G 31/31 · claims 36/36 proven ·
-boot gate green · UI boots and renders `#/insights` (gated in the harness) ·
-exit 0** — recorded with the one defect the first run caught (a synthetic-driver
-bug in my own new check, fixed and re-proven) in `AI-SESSION-LOG.md` §66.
-
-The authority hierarchy is unchanged: **`#/health` in your browser supersedes
-this record.** jsdom is not a browser — layout, paint, focus and real event
-timing were not observed. Parts 1–12 authored under the *no runtime
-available* doctrine (log, Part 12); their claims should be read with that
-status. This section replaces that doctrine for the delivered tree.
-
-**T-suite — fixtures (38 checks)**
-
-| ID | Proves |
-|---|---|
-| T1–T5 | migration `3>4`: backfill set, exact defaults, idempotence, user values preserved, repair accounting |
-| T6–T9 | cadence boundaries · fold purity · registry rejection · sales-cycle flag |
-| T10–T11 | part-2 family folds · all 72 contracts |
-| T12b · T13 | finding shape (`fin()` contract) · rules determinism |
-| **T14** | **v3 store climbs to v4, all five settings backfilled** |
-| **T15** | **`fin.risk.*` projection: open vs closed counts across every status** |
-| **T16** | **`sales.deal.*` projection: pipeline math (open value after update, won/lost, actual)** |
-| **T17** | **`strategy.okr.*` projection: KR latest-wins + closing score math** |
-| **T18** | **`ops.incident.*` projection: MTTR computed = (2h + 6h) / 2** |
-| **T19** | **`hr.attrition.logged` projection: counts by reason and by 60d/90d windows (boundary fixed in part 13 — the day-90 edge is now strictly outside)** |
-| **T20** | **`supply.vendor.*` projection: review gap from reviewDate to last review** |
-| **T20b** | **extended seed fires all 40 rules *and* reaches both severity bands of R13/R22/R30 plus the open-incident branch of R16** |
-| T21–T24 | ≥3-point trend discipline · skip-not-infer · severity escalations · all 40 rules fire |
-| T25–T27 | named projections · playbook contract · UI contract (routes ↔ views, generated-form payloads, roster derivation) |
-| **T28–T30** | **stable finding keys · sev-3 trend ceiling with named exceptions · import gate (recursive rewire, dangling counters)** |
-| **T31** | **shipped manifest: README's file table == the assets `index.html` actually loads; all local; every module registers** |
-| **T32** | **migration `4>5`: three v5 settings exact, repairs counted, idempotent, leader values kept, full v3→v5 climb** |
-| **T33** | **correlation clusters: shared-anchor and windowed domain edges, window boundary honored, stable ids, ≥2 members only** |
-| **T34** | **insights: promotion rule printed, stable ids, acknowledgment suppresses per read and stays audited** |
-| **T35** | **domain heat: exact decay arithmetic, undated excluded, outside-window dropped, leader-set window honored** |
-| **T36** | **benchmarks: latest-wins, delta math printed, trend gated by `trendMinPeriods`, missing internals not inferred** |
-| **T37** | **pt-5 contracts (4 types) + six new projections + analytics deterministic and non-mutating** |
-
-**G-suite — live store (G1–G13) + live correlation (G31) + goldens (G14–G30) — 31 checks**
-
-G1 single key · G2 schema/lineage · G3 append-only + registry-valid · G4
-whitelist · G5 v4 settings live · G6 repair accounting · G7 deterministic reads ·
-G8 referential integrity · G9 live rules run · G10 live projections · G11 live
-playbooks · G12 live UI state · **G13 live doctrines** (finding keys unique +
-stable, trend ceiling held, every finding shows its math).
-
-| Golden | Boundary pinned |
-|---|---|
-| **G14** R11 | past due fires sev5 HIGH · resolved quiets · **update before reviewDate does not count** |
-| **G15** R12 | closeDate+1 → sev3 · update after close quiets · 31d past → sev4 |
-| **G16** R13 | <70% sev3 · <50% sev4 · exactly 70% and 100% quiet · missing actuals skip |
-| **G17** R14 | exactly 21d quiet · 22d sev2 · 43d sev3 · closed OKR quiet regardless |
-| **G18** R16 | sev4 resolved 3h quiet · 10h sev4 with MTTR math printed · unresolved 5h fires |
-| **G19** R19 | 1 quiet · 2 in 60d sev3 MEDIUM · **3 in 60d stays sev3 — the part-9 trend ceiling clamps from 4 and the clamp is disclosed** · voluntary/involuntary breakdown printed |
-| **G20** R22 | 14% quiet · 16% sev3 · 31% sev4 · underspend fires with direction printed |
-| **G21** R28 | single quiet · 2 in 30d sev4 · any sev5 immediate · **sev4 alone not immediate** |
-| **G22** R30 | pass quiet · finding+31d sev4 · fail sev5 immediately · cadence miss sev2 |
-| **G23** R32 | 31d quiet · 29d sev3 · 6d sev4 · expired + still active sev5 |
-| **G24** R34 | 4.9% quiet · 5.1% sev3 · 10.1% sev4 · **MRR >15% sev4 regardless of count** |
-| **G25** R37 | reviewDate+1 fires · result before or exactly on reviewDate quiet |
-| **G26** R38 | 29 quiet · 31 sev3 · 62 sev4 · resolved items leave the total · math printed |
-| **G27** R39 | exactly `boardCadenceDays` quiet · +1d fires · never + aged log sev2 |
-| **G28** R15 | 0.41 quiet · 0.39 sev3 · score 0 sev4 (direct data) · **3 consecutive <0.4 → pattern finding capped at sev3 by the part-9 ceiling, disclosed** |
-| **G29** R25 | risk 3 skipped · risk 4 past due sev3 · risk 5 sev4 · reviewed after due quiets |
-| **G30** | `buildSeed()` fires all 40 rules, every finding shape-valid |
-
-The **boot gate runs G1–G13 only**. Goldens run in the full suite so a rule-logic
-regression is loud in Health without walling a leader off from their own data.
-**G31 is live but deliberately outside the boot gate**: integrity may halt
-rendering; intelligence analytics never may.
-
-### The seed
-
-`health.buildSeed()` is one deterministic fixture log pinned to `T0`, read at
-`today = T0 + 100d`. It drives T12b, T13, T20b, T23, T24 and G30 — coverage and
-shape can therefore never drift apart. It exercises **all 40 rules**, and after
-part 8 it reaches both severity bands of R13 (60% → sev 3, 40% → sev 4), R22
-(18% overspend → sev 3, 40% underspend → sev 4) and R30 (`finding`+35d → sev 4,
-`fail` → sev 5), plus R16's *open-past-threshold* branch alongside its resolved
-MTTR branch, and R34 at the exact 5.1% boundary. Part 13 ran it: 57 findings,
-all 40 rule ids present (§52).
-
-- **Claims C1–C36** in the Health tab: each shows the checks that authorize it;
-  a failing check marks the claim *unproven*. In the part-15 headless run all
-  36 were proven (exit 0).
-
-## Files
-
-Exactly these **10 files** ship — no more, no fewer. The structure below is the
-delivery: `index.html` at the root, the stylesheet under `css/`, the six
-modules under `js/`, the two documents at the root. **T31 enforces this table
-against the live DOM**: `index.html` must load exactly the 7 web assets listed
-here, in this order, all local. Line counts are measured by reading each file;
-the values below were taken at part-15 close (§65) with the doc rows
-digit-patched in place (convention §59.4). Byte counts are deliberately **not**
-stated — see §0.3; run `wc -l index.html css/app.css js/*.js *.md` to verify.
+The pt-7 brief's delivery clause asks for `index.html`, `README.md`, `AI-SESSION-LOG.md` — no
+more. The upstream 10-file doctrine is therefore **adapted, not violated silently**: all nine
+modules (util · events · store · engine · rules · correlate · health · playbooks · ui) ship as
+labeled IIFEs inside the single `index.html`, in doctrinal load order. The shipped-manifest check
+upstream ran as T31 is replaced by G1–G3 + the module-registration discipline (every module
+assigns exactly one `LeadOS.*` namespace; the UI halts if integrity fails).
 
 | File | Lines | Role |
 |---|---|---|
-| `index.html` | 53 | Shell: rail nav + view host; six scripts in doctrinal order; authority-wall overlay |
-| `css/app.css` | 361 | Hand-rolled design system incl. severity/confidence language; `/*! sentinel */` provenance line for raw serves |
-| `js/events.js` | 247 | Event registry (92 types), `CREATES` map, append-gate validator with refs/refArrays |
-| `js/store.js` | 368 | Persistence wall: single key, **schema v5**, migrations with repair counting, `mergeInto()` import gate |
-| `js/engine.js` | 1248 | `project()` fold (56 named projections), `eventDomain()`, selectors — **the R1–R40 rules engine** (second IIFE) **and the pt-5 correlation engine** (third IIFE, `LeadOS.correlate`) |
-| `js/playbooks.js` | 475 | 15 domain playbooks + 14 interactive playbooks; emits event specs only |
-| `js/health.js` | 1877 | Authority wall: T1–T37 (+T12b, T20b), G1–G13 + live G31 + goldens G14–G30, claims C1–C36, `MANIFEST`, `UNLOADED`, `FIXED` |
-| `js/ui.js` | 1042 | Rail nav, hash routes, 15 views, registry-driven quick capture; every action is an event append |
-| `README.md` | 670 | This file |
-| `AI-SESSION-LOG.md` | 1037 | Session log; §0 is the opening audit; §55–§61 part 14; §62–§68 the pt-5 entry |
+| `index.html` | 2,599 | The entire application: design system + 9 modules + boot gate (measured at delivery; `wc -l index.html` to re-verify) |
+| `README.md` | this file | Doctrine, audit, divergence register, verification contract |
+| `AI-SESSION-LOG.md` | the append-only engineering log, §0 audit onward | Session 7 entry; prior sessions' 1,037-line log lives upstream and was not editable from here |
 
-Totals: **7378 lines** across 10 files. The two doc rows are exact post-patch
-figures, digit-patched in place at part-15 close so the counts survive their own
-statement (§65); `index.html`, `css/app.css` and `js/playbooks.js` are unchanged
-since part 14.
+Anything else in a working checkout of `wbweve/Leados` is **not this delivery** (the npm scaffold,
+the flat upstream modules, the stale patch docs — see §0).
 
-Anything else in a working checkout is **not LeadOS**: `scripts/` (the part-13
-headless verification harness), `package.json` / `vite.config.ts` and friends
-(delivery tooling), the `public/` symlink mirror that lets `vite build`
-assemble `dist/` as exactly this 10-file bundle (re-verified headlessly against
-`dist/` itself: T 32/32 · G 30/30 · claims 31/31 · boot gate green), and any
-historical debris in the upstream repo (an npm scaffold, `rules.js`' former
-tombstone, stale patch docs — §50 inventoried them). The app loads exactly the
-7 web assets above; T31 fails on anything more or less.
+---
 
-> **`js/rules.js` is gone, and stays forbidden.** The rules engine was merged
-> into `js/engine.js` in part 11; part 13 finally deleted the 16-line tombstone
-> the part-11 tooling could not (§46 had prescribed `rm js/rules.js`; this
-> delivery simply omits the file). `health.UNLOADED` keeps the guard: T31
-> **fails** if any script tag references the path again.
+## Architecture doctrine (carried, non-negotiable)
 
-### Fixture epoch
+| Doctrine | Enforcement here |
+|---|---|
+| Vanilla JS only — no framework, build step, network, CDN | one classic `<script>`; zero external references |
+| Exactly one localStorage key: `leados:data` | G1 inspects all keys |
+| Lineage `pt`; schema v5 | store constants; G2 verifies |
+| Append-only event store | seq/id chain checked by G3; no update/delete API exists |
+| Nothing derived is ever persisted — `project()` runs per read | root/meta whitelists (G2); determinism (G6, T3) |
+| `#/health` is the authority wall | boot gate runs G1–G5; failure halts rendering with a named failure; data untouched |
+| Every claim maps to executed checks | claims C1–C10 list their authorizing checks; a failing check marks the claim **unproven** |
 
-All date-pinned fixtures — the entire T-suite, `buildSeed()`, and every golden
-G14–G30 — use one constant, declared at the top of `health.js` and labeled
-plainly:
+## Schema v5 (carried)
+
+Migration ladder `1>2`, `2>3`, `3>4`, `4>5` — pure replay-repair passes that may only APPEND
+`settings.changed` repair events and count every repair in `meta.migrationRepairs`; leader-set
+values are never overwritten; every migration is idempotent (T1). v5 defaults:
+`correlationWindowDays` **90** · `trendMinPeriods` **3** · `heatmapDecayFactor` **0.85** (a
+**labeled assumption** that prices recency in the heat formula; every rendered heat value prints
+the factor in effect, and a leader can change it in `#/data` — the heatmap then prints the new one).
+
+---
+
+## THE PT-7 BRIEF — implemented verbatim
+
+### Heatmap
+
+A map of **domain → score (0–10)**. For each domain:
 
 ```
-FIXED = 2026-02-16T12:00:00.000Z   (1771243200000 ms)
+score = min(10,  Σ  finding.sev × CONF_FACTOR[finding.conf] × decay(days_since_finding) )
+decay(days) = heatmapDecayFactor ^ (days / 7)        — weekly compounding
 ```
 
-Goldens express day offsets relative to `FIXED`, so they are reproducible
-forever and never call `Date.now()`. G1–G13 are the exception by design: they
-are live-store inspections and must read the real clock and the real
-`localStorage`.
+over that domain's **active** findings (the ones the rules engine produces at read time).
+`days_since_finding` = whole days since the finding's newest underlying evidence, which every
+finding carries as `evidenceAt` and prints in its own basis.
 
-## What a new multi-team leader still needs (updated, part 15)
+Honesty rail, all printed on the `#/heatmap` view:
 
-Delivered in pt-4/pt-5 to date: 15 domains under one contract, 40 rules with
-printed arithmetic, the correlation layer that turns co-firing rules into named
-patterns (clusters, insights, decayed heat, benchmark gating), 14
-finding-to-append playbooks, the import gate, goldens on every fire/quiet
-boundary, a README that verifies, and a headless way to execute the whole
-battery outside a browser. Ranked next (unchanged in order):
+- The **math is printed per domain, term by term**:
+  `sev 4 × conf HIGH (1.00) × 0.85^(14/7) = 0.723 → 2.890`, then the raw Σ, then the
+  `min(10, …)` cap with a disclosure flag when it binds (T7 pins the arithmetic to the double; T8 pins the cap).
+- **Undated findings are excluded** ("stated, never re-dated") and findings older than
+  `correlationWindowDays` are dropped ("decays out of the picture") — both listed by name and reason (T9).
+- Every heat value is labeled, in the UI and in code:
+  **"COMPOSITE SIGNAL, NOT A MEASUREMENT."**
+- Domains with no active findings show *absence of signal*, not a zero measurement.
+- Future-dated evidence (e.g. a contract's `expiryDate` ahead of today) is clamped to age 0
+  and the clamp is printed next to the term.
 
-1. **Executive/board pack** (queued): a one-click board narrative compiled from
-   the log — R39/R40 guard the rhythm and `board-prep` appends the meeting, but
-   no document is produced yet. This closes pt-4.
-2. **1:1 and skip-level cadences with verified reporting lines.** The people
-   domain covers headcount, offers, attrition, performance, PIPs, engagement
-   and compensation — but no recurring 1:1 / skip-level event type exists, so
-   no rule can guard the cadences a multi-team leader lives by (the mentor
-   lineage's R1/R8 lineage). Highest-value missing *events*.
-3. **Boss-expectations capture + listening-tour coverage** (carried from the
-   pt-1/pt-3 ranked lists; still no `exec.expectations` type).
-4. **Entity-level dedupe on import.** `mergeInto()` rewires ids and counts
-   duplicate-id / dangling skips; two same-named people across a merge stay two
-   people — flagged as an accepted gap since pt-3, still open.
-5. **Meeting-load pricing** from declared recurring minutes (carried; no
-   capacity events exist for it yet).
-6. **Temporal weighting for the windowed rules** — R19/R24/R28 windows are
-   flat; recency is printed, not priced.
-7. **Continuous execution of the battery.** `scripts/headless-verify.mjs` makes
-   the suites runnable anywhere Node runs, but nothing *schedules* it; a
-   regression between sessions is silent until someone opens `#/health` or runs
-   the harness. (The T19 boundary defect sat green-looking for five parts this
-   way.)
+**CONF_FACTOR = HIGH 1.00 · MEDIUM 0.60 · LOW 0.30 — a labeled interpretation.** The brief names
+`CONF_FACTOR[conf]` without pinning values; the readable upstream code never defines one. Chosen
+so confidence *discounts but never amplifies* a measured severity, and printed everywhere heat is
+rendered (also in code as `CONF_FACTOR_WHY`). This is the one unpinned constant in the formula.
 
-## Explicit non-claims (updated, part 13)
+### Insights
 
-- **Authoring-runtime honesty.** Parts 1–12 had no JavaScript runtime;
-  their "verified" language meant *source-inspected* and *fixture-traced*
-  (Part 12 is the controlling statement). Part 13's counts **are executed
-  results** — under Node + jsdom, not a branded browser. Paint, layout, focus
-  order and real event timing remain **unobserved, labeled**.
-- **The browser is still the grader.** Any disagreement between this file and
-  `#/health` on your machine is resolved in `#/health`'s favor.
-- **R1–R10 are reconstructions.** Upstream bodies were never byte-readable in
-  any session; they are pinned to the settings the pt-1 selectors prove (§10).
-- **pt-5's brief arrived truncated at the cluster shape** (the text received
-  ends at `confWhy`). Insights, acknowledgment semantics, the heat formula, and
-  the `HOT_SCORE` threshold are constructed under the documented doctrines and
-  labeled as interpretation — each assumption is printed at runtime (formula,
-  threshold, promotion rule) and recorded in `AI-SESSION-LOG.md` §62–§63.
-- **Insight ids re-key when membership changes.** They are stable within and
-  across identical reads (T34), but an acknowledgment can outlive the exact
-  insight it named; orphaned acks remain visible in the log and in
-  `insightAcks` — never silently deleted, never claimed to be resolvable.
-- **The decay factor is a priced assumption, not a measurement.** 0.85 is a
-  default a leader can change; the heatmap always prints the factor in effect.
-- **The upstream repo drifted and this delivery corrects it without pretending
-  otherwise.** At inspection (`main @ c9fcb6d`, measured via the git trees API
-  this session): 16 files flat, including an npm scaffold, an 87 KB lockfile, a
-  tsconfig, the `rules.js` tombstone and two stale patch documents — while
-  `index.html` referenced `css/`+`js/` paths that did not exist in the tree,
-  which means upstream HEAD could not boot as shipped. This delivery is the
-  corrected 10-file set. Repo-side cleanup is the owner's delete key (§50).
-  **Part-14 re-inspection** (`main @ 12ad31d`, same method): now **22 flat
-  entries** — the scaffold grew (`App.tsx`, `cn.ts`, `index.css`, `main.tsx`,
-  `vite.config.ts` appeared; `package.json` now 653 B) — the 10 canonical files
-  are byte-identical to the part-13 readings, and upstream still cannot boot as
-  shipped. The two stale documents are predecessor-lineage debris (mf-era),
-  verified by reading them this session (§55).
-- **The battery grades logic, not pixels.** T27 drives real generated forms in
-  a DOM and asserts payloads; visual rendering at any viewport is constructed
-  and source-inspected, not graded.
-- **The seed is a fixture, not a diagnosis.** Thresholds are defaults a leader
-  can change; every finding prints its basis and arithmetic; nothing here is
-  legal, HR, or financial counsel.
-- **No accounts, sync, or other real humans: permanently out of scope.** Data
-  leaves the browser only when you export a file yourself; there are no
-  network calls to carry it anywhere.
-- **Byte counts are not stated** for any file (log §0.3; the tooling records
-  content and lines, not bytes — claiming figures you cannot measure is how
-  drift starts). Line counts are measured by reading.
+Every firing cluster or pattern produces exactly:
 
-## Roadmap
+```js
+{ id: string, kind: 'pattern'|'cluster'|'benchmark-gap', title: string,
+  body: string,            /* the diagnosis text, including the printed verification */
+  findingKeys: [], severity: number, play: string|null,
+  suppressedBy: 'insight.acknowledged' event id | null }
+```
 
-- **pt-5 (intelligence layer): shipped and executed green this part** —
-  schema v5, 4 event types, correlation engine, insights + acknowledgment,
-  domain heat, benchmarks, `#/insights`, T32–T37 + G31 + C32–C36.
-- **Executive/board pack** (queued, still next — **carried, not closed**:
-  pt-5's scope did not include it and pretending otherwise would be drift):
-  one-click board narrative compiled from the log (feeds R39/R40 discipline),
-  plus module surfaces for finance and people.
+- **kind `cluster`** — a correlation cluster is *promoted* to an insight under the byte-verified
+  upstream rule: **sev ≥ 4, or ≥ 3 members, or spans > 1 domain**. The rule is printed in every
+  cluster insight's body, and clusters below the line are rendered (with their shortfall) rather
+  than hidden. Cluster ids key on membership (keys joined with `+`); **they re-key when membership
+  changes — carried doctrine, printed**.
+- **kind `pattern`** — the 8-pattern named library (DEATH_SPIRAL · EXECUTION_BREAKDOWN ·
+  REVENUE_AT_RISK · GOVERNANCE_GAP · INNOVATION_STALL · QUALITY_COLLAPSE · LEADERSHIP_VACUUM ·
+  CASHFLOW_WARNING) fires iff every required rule id has ≥1 active finding; window clauses are
+  evaluated as **printed sub-claims** (fresh/stale/undated), never silently satisfied (T14).
+  Heritage-label divergences (spec's R1/R3/R4/R8/R10 names vs shipped meanings) are printed, never remapped.
+- **kind `benchmark-gap`** — the brief's trigger, verbatim: `benchmark.set` exists for a metric
+  **and** the latest `fin.kpi.logged` *or* `product.metric.logged` of the same name is **≤ 80% of
+  the benchmark value** → fires with the gap in the body
+  (`latest … ≤ 80% of benchmark … (0.8 × b = t)`, the delta, and the %).
+  **conf MEDIUM**, printed; **benchmark source printed, not verified by LeadOS**, printed;
+  `findingKeys: []` (it is computed from events, not from member findings).
+  `severity: 3` — the brief pins trigger and confidence, not severity; labeled in code.
+  Boundary is executable: **80 fires, 80.01 is quiet**; only the two named event types feed the
+  rule — a same-named NPS/KPI of another family cannot leak in (T10). The comparison reads the
+  benchmark as a target to reach; for lower-is-better metrics that reading is inverted — printed
+  as an assumption, not inferred away.
+- **Suppression**: acknowledging an insight appends `insight.acknowledged {insightId, note}`.
+  Suppression happens **per read** (the log is never rewritten), `suppressedBy` carries the
+  **ack event's id** (T12), and both the suppressed insight (with note + date) and any **orphaned
+  acks** (whose insight id no longer fires) stay visible forever. No un-acknowledgement event type
+  exists — stated as an accepted gap, not silently patched.
+
+### Divergence register (upstream implementation vs this brief)
+
+| Topic | Upstream pt-5 (byte-verified where noted) | This delivery (pt-7 brief) | Why |
+|---|---|---|---|
+| Heat contribution | `sev × decay^(ageDays)` — verified | `sev × CONF_FACTOR[conf] × decay^(days/7)` | the brief is authoritative; per-week compounding makes the factor leader-legible (0.85/week) |
+| Confidence in heat | none observed in the readable code | `CONF_FACTOR` weighting, values labeled | the brief names it; upstream interpretation predates it |
+| Heat label | "priced assumption" language | verbatim **"composite signal, not a measurement"** on every render | the brief's exact words |
+| Insight shape | `{id,kind,title,basis[],clusterIds,sev,conf,play,suppressible}` — verified | `{id,kind,title,body,findingKeys,severity,play,suppressedBy}` | the brief's literal contract; UI prints the 7 fields per card |
+| Insight kinds | cluster / heat-domain (HOT_SCORE-referenced, value unread) / person-anchor | exactly `pattern`, `cluster`, `benchmark-gap` | the brief's closed enumeration; upstream's `HOT_SCORE` unverifiable → dropped, not guessed |
+| Benchmark-gap | a `benchmarkCompare` exists (verified); insight promotion for gaps not observed | gap insight fires at ≤ 80% with basis gap, MEDIUM, source unverified | the brief specifies it end-to-end |
+
+---
+
+## Rules engine — R1–R40
+
+Every rule is a pure function `(P, today) → findings[]`; `P` comes from `engine.project()`;
+`today` is injected. Findings are never persisted. The finding contract (`fin()`, T2): `{rule,
+sev 1–5, conf HIGH|MEDIUM|LOW, title, basis[], refs[], play|playNone, domain, evidenceAt}` —
+violations **throw**, never ship silently. Discipline: ≥ 3 measured points before a trend claim
+(named exceptions printed); missing fields skip, never infer (T6); **sev-3 ceiling on
+trend-derived findings with the clamp disclosed in basis** (T5); the math is printed, term by
+term, alongside the event type it read. R1–R10 are **reconstructions in the pt-1 lineage**
+(same status upstream assigns its own R1–R10) pinned to the stored cadence settings.
+
+Implemented thresholds follow the upstream README's public rule table (source-inspected at golden
+density): cadences R1–R4 · open decisions R5 (per-domain) · sales-cycle decisions R6 · register
+risk R7 (prints L×I) · KR silence R8 · tasks R9 · KR-less objectives R10 · fin risk past review
+R11 (clears only via update on/after reviewDate) · stale deals R12 · quota ratio R13 (70%/50%,
+exactly-70% quiet) · OKR silence R14 (21/42) · OKR scores R15 (+consecutive pattern, clamped) ·
+incident MTTR R16 (4/24/72h, open-past-threshold included) · SLA R17 (+streak) · milestones R18 ·
+attrition window R19 (60d, MEDIUM) · engagement R20 (6.5/5, slope exception, median-cadence) ·
+PIP R21 · budget variance R22 (15%/30%, direction printed) · KPI R23 (85%/70%, slope→MEDIUM) ·
+forecast R24 (20%, systematic streak) · vendor R25 (risk ≥ 4) · disruption R26 (sev ≥ 4, 7d) ·
+yield R27 (90%/80%) · safety R28 (sev-5 immediate — never capped) · equipment R29 (4h/24h) ·
+compliance R30 (fail → 5, finding+30d → 4, cadence → 2) · legal risk R31 (explicit-null owner is
+data) · contracts R32 (30/7d bands, expired+active → 5) · NPS R33 (<0 → 4; slope<30 → 3 MEDIUM;
+90d stale) · churn R34 (5%/10%; MRR >15% → 4; missing `mrr_total` named-not-inferred) ·
+escalations R35 (sev-5 4h → 5) · campaign CPA R36 (2× mean of three prior, MEDIUM) · experiments
+R37 · tech-debt mass R38 (Σ sev×effort, 30/60, MEDIUM, terms printed) · board R39 · exec KPI R40.
+
+**T18 executes the proof**: one deterministic seed fires all forty rules and all three insight
+kinds; a silent rule fails the suite loudly in `#/health`.
+
+## Views
+
+| Route | What it shows |
+|---|---|
+| `#/today` | Operating rhythm (four cadences w/ due math), quick capture (registry-driven generated forms), ranked signals with domain chips |
+| `#/signals` | All findings, printed basis, evidence dates, plays |
+| `#/insights` | Active / acknowledged / orphaned-ack sections; the promotion rule; below-the-line clusters; dormant patterns with missing limbs |
+| `#/heatmap` | The 0–10 domain grid, formula + factor + CONF_FACTOR printout, per-domain term-by-term math, named exclusions, the label |
+| `#/benchmarks` | Every benchmark metric: source printed-unverified, latest internal, 80% threshold math, trend gate (≥ trendMinPeriods) with its why, fire/quiet/silent state; a set-benchmark form |
+| `#/playbooks` | 33 curated + 15 generated domain descriptors |
+| `#/health` | T-suite (18 checks, pinned fixtures) · G-suite (9 checks, live store) · claims C1–C10 with per-claim proven/unproven |
+| `#/data` | Export/import (dry-run report first), settings as appended events, demo seed, purge, audit tail |
+
+## Fixture epoch
+
+All date-pinned checks use `FIXED = 2026-02-16T12:00:00.000Z` (1,771,243,200,000 ms), declared in
+the health module. G-checks read the real clock and the real store — they are live inspections by design.
+
+## Explicit non-claims
+
+- **The browser is the grader.** This file was authored without a JS runtime; every T/G count is
+  *executable* in `#/health` and expected green by construction + three rounds of self-review, but
+  **not here claimed as observed**. §5 of the log lists what each check is expected to prove and why.
+- **Partial upstream reads are labeled** (§0). Nothing is claimed about `events.js`, `health.js`,
+  `ui.js`, `playbooks.js` bodies, `HOT_SCORE`, or upstream's full 92-type registry.
+- **R1–R10 are reconstructions** (as upstream's own are), pinned to cadence settings.
+- **Single-file divergence** from the 10-file doctrine is deliberate (delivery clause) and recorded.
+- **Heat is a composite signal, not a measurement.** The 0.85 decay factor and the CONF_FACTOR
+  table are printed assumptions; the benchmark-gap comparison reads benchmarks as targets and says so.
+- **The seed is a fixture, not a diagnosis.** Nothing here is legal, HR, or financial counsel.
+- **No accounts, sync, or other humans: permanently out of scope.** Data leaves the browser only
+  when you export it yourself; there are no network calls to carry it anywhere.
+- Paint, layout, focus order, and real event timing are constructed and source-inspected, **not
+  observed**, this session.
+
+## Ranked next (carried + updated)
+
+1. **Byte-verify the unread upstream bodies** (`events.js` full registry; `health.js` T33–T37/G31;
+   `ui.js`; `playbooks.js`) and reconcile the 7-type registry delta — register or formally retire each.
+2. **Executive/board pack** (upstream's own queued #1, still open): one-click board narrative from
+   the log; R39/R40 already guard the rhythm.
+3. **1:1 / skip-level cadence events** (upstream gap #2) — the mentor-lineage limbs in
+   LEADERSHIP_VACUUM would stop reading proxies.
+4. **Un-acknowledgement event** (`insight.acknowledged` is currently one-way; reversed only by a
+   changed log). Needs a registry contract, so it is a deliberate next-part decision, not a patch.
+5. **Feed this heat formula back upstream** so their pt-5 interpretation and the authoritative
+   brief converge (their log invites exactly this correction).
