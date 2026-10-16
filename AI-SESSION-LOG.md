@@ -669,3 +669,99 @@ wrote it. What changed is only what the briefs added.
    playbook (named by G107, never specified).
 6. Byte-verify the unread upstream bodies; reconcile registry counts honestly.
 7. Executive/board pack — upstream's own queued #1, carried since pt-7 and still open.
+
+---
+
+## Session 18 — pt-18 (brief "pt-13"): narrative intelligence
+
+**Date:** February 2026, final slice of the run. **Env:** as Sessions 7–17 — no JS runtime at
+authoring time; `#/health` in the reader's browser is the authority wall.
+
+### §0 Opening audit
+
+No new upstream reads; README §0 stands unchanged since pt-7. Module deltas:
+
+| Module | This session |
+|---|---|
+| `events` | **+8 contracts** (158→166) |
+| `store` | **schema v13**, `MIGRATIONS['12>13']`, 4 settings |
+| `engine` | **+9 buckets**, 8 fold handlers, 2 open-sets (`undeliveredNarratives`, `unackedComms`) |
+| **`narrative`** | **NEW module** — `commHitRate`, `narrativeQuality`, `buildBoardNarrative`, `testMessage`, `buildInvestorUpdate` |
+| `rules` | **+R115–R124** (114→124) |
+| `health` | **+T63–T67, +G115–G123**, G40 → 124 rules, seed extended |
+| `playbooks` | **+5 runners** (41→46) |
+| `ui` | **+`#/narrative`** view |
+
+### §1 Non-obvious decisions, one line of WHY each
+
+1. **R115 derives "upcoming board" from cadence, and says so in every finding** — this registry
+   has no calendar contract. The brief assumed one. Rather than invent `meeting.scheduled` in a
+   rule, the inference is made from `exec.board.meeting + boardCadenceDays`, printed as derived,
+   and the missing contract is now ranked #1 in the next list.
+2. **R123 reads two different surfaces and names both** — `board.presented` (pt-15) and
+   `narrative.delivered type="board"` (pt-18) can each carry a hostile outcome. Reading only one
+   would have let the finding depend on which part a leader happened to log through.
+3. **`board.presented` outcome `rejected` is read as `skeptical` for R123**, printed on the
+   finding — the two enums never aligned across parts, and silently mapping them without saying
+   so is exactly the drift this log exists to catch.
+4. **R124 accepts ANY message test in the period**, per the brief's G121 — the habit of testing
+   is the behavior being encouraged, not the specific test, and the rule says that out loud.
+5. **The board scaffold can never drop a sev-5 risk** (G122) — the risk list takes all sev-5
+   findings *plus* the top 3 others, so a crowded board does not push a material risk off the page.
+6. **`board-narrative` refuses to submit a placeholder risks section while material risks are
+   active** — the registry would accept the string; the playbook will not.
+7. **Audience-size buckets are computed from `audience_actual`, not the planned size** — who
+   actually showed up is the denominator that matters.
+8. **Narrative composite weights are printed term by term** (G120 asserts the printed formula
+   equals the computed value) — a weighted score whose weights are invisible is a number pretending
+   to be a measurement.
+
+### §2 Self-caught defects during authoring (this part)
+
+- D28 `commHitRate`'s same-topic run initially compared the *current* topic to itself rather
+  than to the previous delivery's, so any single delivery with >3 questions scored a run of 1
+  and three in a row never incremented. Rewritten with an explicit `lastTopic`, and T67 now pins
+  both the firing and non-firing cases.
+- D29 The seed's three board deliveries originally used distinct topics, so R120 would have
+  fired its sev-3 branch rather than the sev-4 same-topic branch the brief describes — and G40
+  would still have passed, hiding it. Topics set to `margin` across all three so the stronger
+  branch is the one the seed exercises.
+- D30 `R115` first read `narrative.drafted` with a *future* `draftedAt` as the signal for an
+  upcoming board, which no event in the registry ever produces; corrected to the cadence
+  derivation, with the derivation printed.
+
+### §3 Expected (NOT yet observed) outcomes — pt-18
+
+- **T63–T67** = brief T61–T65 (ID map printed in README and in code).
+- **G115–G123** as written; **brief G124 folded into G40**, now asserting **124/124** rules from
+  one deterministic seed: a board due in 5d with no draft, 50% hit rate across 6 deliveries,
+  clarity mean 2.3 over 3 board narratives, the same topic drawing >3 unexpected questions in 3
+  consecutive deliveries, all-hands at 39d, investor update at 36d, negative press 3d
+  unanswered, an urgency-5 message unacknowledged, a skeptical board with no follow-up, and two
+  untested high-stakes narratives.
+- **C21** proven iff T63–T67 + G115–G123 pass; **C22** iff T18 + G40 + G7 + G13 pass.
+
+### §4 Closing state of the run (pt-7 → pt-18)
+
+124 rules · 166 event contracts · 16 modules · 18 views · T1–T67 · G1–G123 · C1–C22 · schema v13
+with a thirteen-rung migration ladder, every rung idempotent and repair-counted. Three files on
+disk, exactly as the delivery clause has required since pt-7.
+
+Twelve consecutive parts. The oldest rules never moved: trends still need three points, missing
+fields still skip, counts still print their arithmetic, suppression is still auditable and
+reversible with the single declared override at R88, every finding still links a playbook or
+prints why it cannot. What grew is the surface; what held is the discipline — and the standing
+fact that **none of this has ever executed in the environment that wrote it.**
+
+### §5 Open items (ranked, carried into any future part)
+
+1. **A calendar contract** (`meeting.scheduled`) — would retire R115's cadence-derived board
+   date, the newest inference in the system and the one most likely to mislead.
+2. `conflict.raised` / `conflict.resolved` · `retro.action.completed`.
+3. `reportsTo` + 1:1 cadence contracts — retires the roster proxy in R50/R53/R97.
+4. A `decision.severity` field — retires the proxy shared by R67 and R114.
+5. Exact Brandes betweenness — retires R62's approximation caveat.
+6. `production-stop` (pt-9) and `fin-scenario-model` (G107) — requested, never specified.
+7. Byte-verify the unread upstream bodies; reconcile registry counts honestly.
+8. Executive/board pack — carried since pt-7; `buildBoardNarrative` is the closest this line has
+   come to closing it, and it is a scaffold, not the pack.

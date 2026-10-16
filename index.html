@@ -225,7 +225,7 @@ const LeadOS = window.LeadOS = window.LeadOS || {};
 /* Module registry — the single-file analog of the brief's script list.
    Each logical "file" registers exactly one namespace, in this load order.
    The boot guard halts rendering if any entry is missing (data untouched). */
-LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','calibration','finIntel','health','playbooks','ui'];
+LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','calibration','finIntel','narrative','health','playbooks','ui'];
 
 /* ==================== 1 · UTIL ==================== */
 (function(){
@@ -517,7 +517,25 @@ const REGISTRY = {
   'fin.scenario.modeled':   D({name:'s',assumptions:'o',revenue_base:'n',revenue_bull:'n',revenue_bear:'n',cost_base:'n',cost_bull:'n',cost_bear:'n',period:'s'},{decisionId:'s'}),
   'fin.allocation.decision':D({period:'s',allocations:'a',total_budget:'n',board_approved:'b'},{ownerId:'s'}),
   'fin.metric.alert':       D({metric:'s',value:'n',threshold:'n',direction:'s',severity:'n'},{note:'s'},
-                              {direction:['above','below']})
+                              {direction:['above','below']}),
+  /* pt-18 (brief "pt-13") — narrative intelligence. 8 contracts. */
+  'narrative.drafted':      D({id:'s',type:'s',title:'s',key_message:'s',supporting_data:'a',draftedAt:'ms'},
+                              {audience_size:'n',call_to_action:'s',ownerId:'s',period:'s'},
+                              {type:['board','investor','all-hands','team-update','exec-alignment','press','customer','regulator']},'narratives'),
+  'narrative.delivered':    D({narrativeId:'s',delivered_at:'ms',audience_actual:'n',outcome:'s',questions_unexpected:'a'},{note:'s',topic:'s'},
+                              {outcome:['aligned','skeptical','confused','hostile','engaged']},null,{narrativeId:'narratives'}),
+  'narrative.feedback':     D({narrativeId:'s',clarity:'n',credibility:'n',persuasiveness:'n',emotional_resonance:'n'},{from_personId:'s',note:'s'},null,null,{narrativeId:'narratives'}),
+  'message.tested':         D({message:'s',audience_segment:'s',response:'s',n_tested:'n'},{note:'s',period:'s'},
+                              {response:['positive','neutral','negative']}),
+  'allhands.logged':        D({date:'ms',attendees:'n',topics:'a',sentiment_post:'s',questions_raised:'a'},{note:'s'},
+                              {sentiment_post:['positive','neutral','negative']}),
+  'investor.update.sent':   D({period:'s',key_wins:'a',key_risks:'a',sentiment_expected:'s'},
+                              {mrr:'n',arr:'n',growth_pct:'n',burn:'n',runway_months:'n',ask:'s'},
+                              {sentiment_expected:['positive','neutral','concern']}),
+  'press.mention':          D({outlet:'s',sentiment:'s',topic:'s',date:'ms'},{reach:'n',note:'s'},
+                              {sentiment:['positive','neutral','negative']}),
+  'internal.comms.sent':    D({id:'s',channel:'s',audience:'s',topic:'s',urgency:'n',acknowledged:'b'},{note:'s'},
+                              {channel:['slack','email','meeting','doc'],audience:['team','org','exec','cross-team']},'internalComms')
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -544,7 +562,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=12, LINEAGE='pt', LINEAGE_TAG='pt-17';
+const KEY='leados:data', SCHEMA_VERSION=13, LINEAGE='pt', LINEAGE_TAG='pt-18';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -586,7 +604,11 @@ const V11_NEW_KEYS=Object.keys(V11_SETTING_DEFAULTS);
 const V12_SETTING_DEFAULTS={unitEconomicsRefreshDays:30,burnRateAlertMultiple:18,
   grossMarginFloorPct:60,cacPaybackMonthsCeiling:18,fundraiseLeadTimeDays:90};
 const V12_NEW_KEYS=Object.keys(V12_SETTING_DEFAULTS);
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS,V11_SETTING_DEFAULTS,V12_SETTING_DEFAULTS);
+/* v13 — narrative intelligence cadences. */
+const V13_SETTING_DEFAULTS={boardNarrativeReviewDays:14,allHandsCadenceDays:30,
+  investorUpdateCadenceDays:30,communicationHitRateWindow:180};
+const V13_NEW_KEYS=Object.keys(V13_SETTING_DEFAULTS);
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS,V11_SETTING_DEFAULTS,V12_SETTING_DEFAULTS,V13_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -681,7 +703,13 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V12_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V12_SETTING_DEFAULTS[k]},{repair:true,migration:'11>12',reason:'backfill v12 setting default'}); repairs++; }});
-    recordMigration(raw,'11>12',repairs); raw.schemaVersion=12; return repairs; }
+    recordMigration(raw,'11>12',repairs); raw.schemaVersion=12; return repairs; },
+  /* v12 -> v13: narrative cadences. The thirteenth rung, same contract as the third. */
+  '12>13':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V13_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V13_SETTING_DEFAULTS[k]},{repair:true,migration:'12>13',reason:'backfill v13 setting default'}); repairs++; }});
+    recordMigration(raw,'12>13',repairs); raw.schemaVersion=13; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -772,7 +800,8 @@ LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SET
   V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,
   V7_SETTING_DEFAULTS,V7_NEW_KEYS,V8_SETTING_DEFAULTS,V8_NEW_KEYS,
   V9_SETTING_DEFAULTS,V9_NEW_KEYS,V10_SETTING_DEFAULTS,V10_NEW_KEYS,
-  V11_SETTING_DEFAULTS,V11_NEW_KEYS,V12_SETTING_DEFAULTS,V12_NEW_KEYS,SETTING_ENUMS,
+  V11_SETTING_DEFAULTS,V11_NEW_KEYS,V12_SETTING_DEFAULTS,V12_NEW_KEYS,
+  V13_SETTING_DEFAULTS,V13_NEW_KEYS,SETTING_ENUMS,
   RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
@@ -1114,7 +1143,29 @@ const MODULE_FOLD={
   'fin.scenario.modeled':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
     s.finScenarios.push(rec); if(p.decisionId) group(s.finScenariosByDecision,p.decisionId,rec); },
   'fin.allocation.decision':(s,p,at,ev)=>{ push(s.allocations,p,at,ev); },
-  'fin.metric.alert':(s,p,at,ev)=>{ push(s.metricAlerts,p,at,ev); }
+  'fin.metric.alert':(s,p,at,ev)=>{ push(s.metricAlerts,p,at,ev); },
+  /* pt-18 — narrative intelligence */
+  'narrative.drafted':(s,p,at)=>{ s.narratives[p.id]={id:p.id,type:p.type,title:p.title,
+    key_message:p.key_message,supporting_data:p.supporting_data.slice(),
+    audience_size:(p.audience_size===undefined?null:p.audience_size),
+    call_to_action:p.call_to_action||null,ownerId:p.ownerId||null,period:p.period||null,
+    draftedAt:p.draftedAt,loggedAt:at,delivery:null,feedback:[]};
+    group(s.narrativesByType,p.type,s.narratives[p.id]); },
+  'narrative.delivered':(s,p,at,ev)=>{ const n=s.narratives[p.narrativeId]; if(!n) return;
+    const rec={narrativeId:p.narrativeId,delivered_at:p.delivered_at,audience_actual:p.audience_actual,
+      outcome:p.outcome,questions_unexpected:p.questions_unexpected.slice(),
+      topic:p.topic||null,note:p.note||'',at:at,_ev:ev&&ev.id};
+    n.delivery=rec;
+    s.deliveries.push(Object.assign({type:n.type,title:n.title},rec)); },
+  'narrative.feedback':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.narrativeFeedback.push(rec);
+    const n=s.narratives[p.narrativeId]; if(n) n.feedback.push(rec); },
+  'message.tested':(s,p,at,ev)=>{ push(s.messageTests,p,at,ev); },
+  'allhands.logged':(s,p,at,ev)=>{ push(s.allHands,p,at,ev); },
+  'investor.update.sent':(s,p,at,ev)=>{ push(s.investorUpdates2,p,at,ev); },
+  'press.mention':(s,p,at,ev)=>{ push(s.pressMentions,p,at,ev); },
+  'internal.comms.sent':(s,p,at)=>{ s.internalComms[p.id]={id:p.id,channel:p.channel,audience:p.audience,
+    topic:p.topic,urgency:p.urgency,acknowledged:p.acknowledged,note:p.note||'',at:at}; }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -1166,6 +1217,9 @@ function blankBuckets(s){
   s.plStatements=[];s.plByPeriod={};s.unitEcon=[];s.unitBySegment={};s.unitHistoryBySegment={};
   s.runwayLogs=[];s.headcountCosts=[];s.capex={};s.cohorts={};s.cohortLog=[];
   s.finScenarios=[];s.finScenariosByDecision={};s.allocations=[];s.metricAlerts=[];
+  /* pt-18 narrative buckets */
+  s.narratives={};s.narrativesByType={};s.deliveries=[];s.narrativeFeedback=[];
+  s.messageTests=[];s.allHands=[];s.investorUpdates2=[];s.pressMentions=[];s.internalComms={};
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -1205,7 +1259,9 @@ const OPEN_SETS={
   openRegChanges:['regChanges',c=>c.status!=='compliant'],
   activePartnerships:['partnerships',p=>p.status==='active'],
   openBiases:['biases',b=>!b.acknowledged],
-  unreviewedCapex:['capex',c=>c.status===null]
+  unreviewedCapex:['capex',c=>c.status===null],
+  undeliveredNarratives:['narratives',n=>n.delivery===null],
+  unackedComms:['internalComms',c=>!c.acknowledged]
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -2841,6 +2897,185 @@ function R114(P,today){ const f=F('R114'),out=[];
         'COMPLEMENTS R67 (premortem), it does not duplicate it: R67 asks how this fails, R114 asks what it costs when it does. Different keys, different playbooks, resolving one leaves the other firing.'],
       refs:[d.id],scope:d.id+':no-fin-scenario',evidenceAt:d.at})); });
   return out; }
+/* ---- pt-18 narrative rules R115–R124. Communication outcomes are
+   self-reported, so anything derived from them is conf MEDIUM; calendar
+   facts and your own acknowledgement flags are conf HIGH. ---- */
+Object.assign(META,{
+  R115:{domain:'executive',play:'board-narrative'},R116:{domain:'executive',play:'narrative-debrief'},
+  R117:{domain:'people',play:'all-hands-prep'},R118:{domain:'executive',play:'investor-update'},
+  R119:{domain:'executive',play:'message-test'},R120:{domain:'executive',play:'narrative-debrief'},
+  R121:{domain:'operations',play:'conv-prep'},R122:{domain:'marketing',play:'board-narrative'},
+  R123:{domain:'executive',play:'board-narrative'},R124:{domain:'executive',play:'message-test'}
+});
+function R115(P,today){ const f=F('R115'),out=[];
+  const set=LeadOS.engine.settings(P), win=set.boardNarrativeReviewDays;
+  /* an upcoming board meeting = a narrative.drafted type board with a future
+     draftedAt, or a planned exec.board.meeting; the registry carries no
+     calendar, so "upcoming" is read from the board cadence — printed */
+  const lastBoard=U.maxAt(P.boardMeetings||[]);
+  const cad=set.boardCadenceDays;
+  if(lastBoard===null) return out;
+  const nextDue=lastBoard+cad*DAY;
+  const daysOut=Math.ceil((nextDue-today)/DAY);
+  if(daysOut<0||daysOut>win) return out;
+  const drafts=((P.narrativesByType||{})['board']||[]).filter(n=>days(today,n.draftedAt)<=win&&n.draftedAt<=today);
+  if(drafts.length) return out;
+  out.push(f({sev:daysOut<3?4:3,conf:'HIGH',
+    title:'Board meeting in '+daysOut+'d with no prepared narrative',
+    basis:['next board due '+U.iso(nextDue)+' ('+daysOut+'d out) — derived from the latest exec.board.meeting '+U.iso(lastBoard)+' + boardCadenceDays '+cad+'d, since this registry carries no calendar (printed, not inferred)',
+      'no narrative.drafted type="board" inside boardNarrativeReviewDays '+win+'d'+(daysOut<3?' · under 3 days out → sev 4':' → sev 3'),
+      'A board meeting without a prepared narrative is a board meeting you are improvising.'],
+    refs:[],scope:'narrative:board-prep',evidenceAt:lastBoard}));
+  return out; }
+function R116(P,today){ const f=F('R116'),out=[];
+  const set=LeadOS.engine.settings(P);
+  const h=LeadOS.narrative.commHitRate(P,today);
+  if(!h.claimed||h.n<5) return out; /* n guard */
+  if(h.hitRate>=0.6) return out; /* exactly 60% is quiet */
+  out.push(f({sev:h.hitRate<0.4?4:3,conf:'MEDIUM',
+    title:'Communication hit rate '+h.hitRatePct+'% across '+h.n+' deliveries',
+    basis:[h.math+' · thresholds: <60% → sev 3, <40% → sev 4; exactly 60% is quiet · n ≥ 5 required',
+      'by type: '+h.byType.map(t=>t.line).join(' · '),
+      'by audience size: '+h.bySize.map(s=>s.line).join(' · '),
+      h.worstWhy,
+      'When fewer than 60% of your communications land as intended, the problem is in the communication, not the audiences.',
+      h.alternative,h.label],
+    refs:[],scope:'narrative:hitrate',evidenceAt:U.maxAt(P.deliveries,d=>d.delivered_at||d.at)}));
+  return out; }
+function R117(P,today){ const f=F('R117'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.allHandsCadenceDays;
+  const last=U.maxAt(P.allHands||[],x=>x.date||x.at);
+  if(last===null){
+    if(P.firstAt!==null&&days(today,P.firstAt)>cad)
+      out.push(f({sev:2,conf:'MEDIUM',title:'No all-hands ever logged',
+        basis:['zero allhands.logged events · log spans '+days(today,P.firstAt)+'d > allHandsCadenceDays '+cad+'d',
+          'An org that does not hear from its leader fills the vacuum with rumor. That is not a metaphor.'],
+        refs:[],scope:'narrative:allhands:never',evidenceAt:P.firstAt}));
+    return out; }
+  const age=days(today,last);
+  if(age<=cad) return out;
+  out.push(f({sev:age>2*cad?3:2,conf:'HIGH',title:'No all-hands in '+age+'d',
+    basis:['latest allhands.logged '+U.iso(last)+' · '+age+'d > allHandsCadenceDays '+cad+'d'+(age>2*cad?' and > 2× cadence ('+(2*cad)+'d) → sev 3':' → sev 2'),
+      'An org that does not hear from its leader fills the vacuum with rumor.'],
+    refs:[],scope:'narrative:allhands:cadence',evidenceAt:last}));
+  return out; }
+function R118(P,today){ const f=F('R118'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.investorUpdateCadenceDays;
+  const last=U.maxAt(P.investorUpdates2||[]);
+  if(last===null){
+    if(P.firstAt!==null&&days(today,P.firstAt)>cad)
+      out.push(f({sev:2,conf:'MEDIUM',title:'No investor update ever sent',
+        basis:['zero investor.update.sent events · log spans '+days(today,P.firstAt)+'d > investorUpdateCadenceDays '+cad+'d',
+          'The investor you did not update assumes the worst.'],
+        refs:[],scope:'narrative:investor:never',evidenceAt:P.firstAt}));
+    return out; }
+  const age=days(today,last);
+  if(age<=cad) return out;
+  out.push(f({sev:age>2*cad?3:2,conf:'HIGH',title:'Investor update '+age+'d overdue',
+    basis:['latest investor.update.sent '+U.iso(last)+' · '+age+'d > investorUpdateCadenceDays '+cad+'d'+(age>2*cad?' and > 2× cadence → sev 3':' → sev 2'),
+      'The investor you did not update assumes the worst.'],
+    refs:[],scope:'narrative:investor:cadence',evidenceAt:last}));
+  return out; }
+function R119(P,today){ const f=F('R119'),out=[];
+  Object.keys(P.narrativesByType||{}).sort().forEach(type=>{
+    const withFb=(P.narrativesByType[type]||[]).filter(n=>n.feedback.length);
+    if(withFb.length<3) return;
+    const clar=[]; withFb.forEach(n=>n.feedback.forEach(x=>clar.push(x.clarity)));
+    const mean=U.sum(clar)/clar.length;
+    if(mean>=3) return;
+    out.push(f({sev:3,conf:'MEDIUM',title:'Clarity mean '+U.rd(mean,2)+'/5 across '+withFb.length+' '+type+' narratives',
+      basis:['clarity ratings across '+withFb.length+' '+type+' narratives ('+clar.length+' rating(s)): mean '+U.rd(mean,2)+' < 3 · requires ≥3 narratives of one type',
+        withFb.map(n=>'"'+n.title+'" clarity '+U.rd(U.sum(n.feedback.map(x=>x.clarity))/n.feedback.length,2)).join(' · '),
+        'A pattern of confused audiences is a pattern of unclear messaging.',
+        'conf MEDIUM: these are ratings you collected and logged yourself',
+        LeadOS.narrative.SELF_REPORTED],
+      refs:[],scope:'narrative:clarity:'+type,evidenceAt:U.maxAt(withFb,n=>n.draftedAt)})); });
+  return out; }
+function R120(P,today){ const f=F('R120'),out=[];
+  const h=LeadOS.narrative.commHitRate(P,today);
+  if(!h.claimed||h.n<5) return out;
+  if(h.sameTopicRun>=3)
+    out.push(f({sev:4,conf:'MEDIUM',title:'Same unaddressed topic drew unexpected questions in '+h.sameTopicRun+' consecutive deliveries',
+      basis:[h.sameTopicRun+' consecutive deliveries with >3 unexpected questions on the same topic ("'+(h.sameTopicTopic||'unlabeled')+'")',
+        'same topic across consecutive deliveries = you are consistently not addressing it and the audience keeps asking',
+        h.unexpectedMath,h.label],
+      refs:[],scope:'narrative:questions:topic',evidenceAt:U.maxAt(P.deliveries,d=>d.delivered_at||d.at)}));
+  else if(h.unexpectedMean>3)
+    out.push(f({sev:3,conf:'MEDIUM',title:'Mean '+h.unexpectedMean+' unexpected questions per delivery',
+      basis:[h.unexpectedMath+' · threshold: mean > 3 across ≥5 deliveries',
+        'Questions you did not anticipate are preparation gaps.',
+        h.alternative,h.label],
+      refs:[],scope:'narrative:questions',evidenceAt:U.maxAt(P.deliveries,d=>d.delivered_at||d.at)}));
+  return out; }
+function R121(P,today){ const f=F('R121'),out=[];
+  (P.unackedComms||[]).forEach(c=>{
+    if(c.urgency<4) return;
+    const hrs=(today-c.at)/H;
+    const limit=c.urgency>=5?4:24;
+    if(hrs<=limit) return;
+    out.push(f({sev:c.urgency>=5?4:3,conf:'HIGH',
+      title:'Urgency-'+c.urgency+' message unacknowledged '+U.rd(hrs,1)+'h: '+c.topic,
+      basis:['internal.comms.sent via '+c.channel+' to '+c.audience+' · urgency '+c.urgency+' · '+U.rd(hrs,1)+'h > '+limit+'h threshold'+(c.urgency>=5?' (urgency 5 → 4h, sev 4)':' (urgency 4 → 24h, sev 3)'),
+        'acknowledged=false as you logged it',
+        'A critical communication that nobody confirms receiving is a message that may not have landed.',
+        'conf HIGH: this is your own acknowledgement flag, not an inference'],
+      refs:[c.id],evidenceAt:c.at})); });
+  return out; }
+function R122(P,today){ const f=F('R122'),out=[];
+  const neg=(P.pressMentions||[]).filter(m=>m.sentiment==='negative');
+  const recent=neg.filter(m=>days(today,m.date||m.at)<=14);
+  if(recent.length>=2){
+    out.push(f({sev:4,conf:'HIGH',title:recent.length+' negative press mentions in 14d',
+      basis:[recent.map(m=>U.iso(m.date||m.at)+' '+m.outlet+' on "'+m.topic+'"'+(m.reach?' (reach '+m.reach+')':'')).join(' · '),
+        '≥2 negative mentions inside 14d → sev 4 REGARDLESS of whether a response was drafted — a cycle is not a mention',
+        'A negative press cycle you are not actively shaping shapes itself.'],
+      refs:[],scope:'narrative:press:cycle',evidenceAt:U.maxAt(recent,m=>m.date||m.at)}));
+    return out; }
+  neg.forEach(m=>{
+    const at=m.date||m.at;
+    const hrs=(today-at)/H;
+    if(hrs<=48) return;
+    const responded=((P.narrativesByType||{})['press']||[]).some(n=>n.draftedAt>=at&&(n.draftedAt-at)<=48*H);
+    if(responded) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Negative press unanswered '+U.rd(hrs,1)+'h: '+m.outlet,
+      basis:['press.mention sentiment "negative" '+U.iso(at)+' on "'+m.topic+'"'+(m.reach?' · reach '+m.reach:''),
+        'no narrative.drafted type="press" within 48h of the mention · '+U.rd(hrs,1)+'h elapsed',
+        'A negative press cycle you are not actively shaping shapes itself.'],
+      refs:[],scope:'narrative:press:'+U.iso(at),evidenceAt:at})); });
+  return out; }
+function R123(P,today){ const f=F('R123'),out=[];
+  /* both the pt-4 exec.board.meeting outcome surface and the pt-6
+     board.presented surface feed this rule — printed */
+  const items=[];
+  (P.boardPresentations||[]).forEach(b=>{
+    if(b.outcome==='rejected') items.push({at:b.at,outcome:'skeptical',src:'board.presented outcome "rejected" (read as skeptical for this rule)',label:b.period}); });
+  (P.deliveries||[]).filter(d=>d.type==='board').forEach(d=>{
+    if(d.outcome==='hostile'||d.outcome==='skeptical')
+      items.push({at:d.delivered_at||d.at,outcome:d.outcome,src:'narrative.delivered type="board" outcome "'+d.outcome+'"',label:d.title}); });
+  items.forEach(it=>{
+    const limit=it.outcome==='hostile'?3:7;
+    const age=days(today,it.at);
+    if(age<=limit) return;
+    const aligned=(P.execAlignments||[]).some(a=>a.at>it.at&&days(a.at,it.at)<=limit);
+    if(aligned) return;
+    out.push(f({sev:4,conf:'HIGH',title:'Board left '+it.outcome+' with no follow-up: '+it.label,
+      basis:[it.src+' on '+U.iso(it.at)+' · '+age+'d elapsed · no exec.aligned within '+limit+'d'+(it.outcome==='hostile'?' (hostile → 3d window)':' (skeptical → 7d window)'),
+        'A skeptical board that you do not follow up with becomes a hostile board.'],
+      refs:[],scope:'narrative:board:'+U.iso(it.at),evidenceAt:it.at})); });
+  return out; }
+function R124(P,today){ const f=F('R124'),out=[];
+  ['board','investor'].forEach(type=>{
+    ((P.narrativesByType||{})[type]||[]).forEach(n=>{
+      const period=n.period||null;
+      const tested=(P.messageTests||[]).some(m=>period?(m.period===period):Math.abs(m.at-n.draftedAt)<=30*DAY);
+      if(tested) return;
+      out.push(f({sev:2,conf:'HIGH',title:'High-stakes '+type+' narrative never message-tested: '+n.title,
+        basis:['narrative.drafted type="'+type+'" on '+U.iso(n.draftedAt)+(period?' (period '+period+')':' (no period label — a ±30d window is used instead, printed)'),
+          'no message.tested '+(period?'for period '+period:'within 30d of the draft'),
+          'ONE test satisfies this rule — it does not require testing THIS narrative specifically; the habit is the point',
+          'Testing a message is not weakness — it is not walking into a room having only heard yourself say it.'],
+        refs:[n.id],scope:n.id+':untested',evidenceAt:n.draftedAt})); }); });
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
              R46,R47,R48,R49,R50,R51,R52,
@@ -2849,7 +3084,8 @@ const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,
              R73,R74,R75,R76,R77,R78,R79,R80,R81,R82,
              R83,R84,R85,R86,R87,R88,R89,R90,R91,R92,
              R93,R94,R95,R96,R97,R98,R99,R100,R101,R102,
-             R103,R104,R105,R106,R107,R108,R109,R110,R111,R112,R113,R114];
+             R103,R104,R105,R106,R107,R108,R109,R110,R111,R112,R113,R114,
+             R115,R116,R117,R118,R119,R120,R121,R122,R123,R124];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -4649,6 +4885,187 @@ LeadOS.finIntel={OWN_BOOKS:OWN_BOOKS,MIN_PERIODS:MIN_PERIODS,plHealth:plHealth,u
   runwayStatus:runwayStatus,allocationReview:allocationReview,cohortCurves:cohortCurves};
 })();
 
+/* ============ 6h · NARRATIVE — numbers need a story (pt-18) ===============
+   Numbers without a narrative get ignored; a narrative without numbers gets
+   dismissed. Every builder here returns a PREPARATION SCAFFOLD with each data
+   point labeled by its source event, so you can verify every line before you
+   walk into the room. Outcomes are self-reported from your own delivery log
+   and the confidence of anything derived from them says so. */
+(function(){
+const LeadOS = window.LeadOS, U = LeadOS.util, DAY = U.DAY, H = 3600000;
+const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+const SELF_REPORTED='outcomes are SELF-REPORTED from your own delivery log — the room may have read differently than you did';
+const SCAFFOLD='PREPARATION SCAFFOLD, not a script — every number is labeled with the event it came from so you can verify it before the room does';
+const HIT=o=>(o==='aligned'||o==='engaged');
+const BUCKET=n=>(n===null||n===undefined)?'unknown':(n<10?'<10':n<=50?'10-50':n<=200?'50-200':'200+');
+function commHitRate(P,today){
+  const set=LeadOS.engine.settings(P), win=set.communicationHitRateWindow;
+  const list=(P.deliveries||[]).filter(d=>U.days(today,d.delivered_at||d.at)<=win)
+    .sort((a,b)=>(a.delivered_at||a.at)-(b.delivered_at||b.at));
+  const n=list.length;
+  const base={n:n,windowDays:win,label:SELF_REPORTED};
+  if(!n) return Object.assign(base,{claimed:false,hitRate:null,
+    why:'no narrative.delivered events in the last '+win+'d — nothing computed; a silent log is not a good hit rate'});
+  const hits=list.filter(d=>HIT(d.outcome)).length;
+  const rate=hits/n;
+  const byType={}, bySize={};
+  list.forEach(d=>{
+    const t=byType[d.type]=byType[d.type]||{type:d.type,n:0,hits:0};
+    t.n++; if(HIT(d.outcome)) t.hits++;
+    const b=BUCKET(d.audience_actual);
+    const s=bySize[b]=bySize[b]||{bucket:b,n:0,hits:0};
+    s.n++; if(HIT(d.outcome)) s.hits++; });
+  const typeRows=Object.keys(byType).sort().map(k=>{ const t=byType[k];
+    return {type:t.type,n:t.n,hits:t.hits,rate:U.rd(t.hits/t.n*100,1),
+      line:t.type+': '+t.hits+' of '+t.n+' landed = '+U.rd(t.hits/t.n*100,1)+'%'}; });
+  const sizeRows=Object.keys(bySize).sort().map(k=>{ const s=bySize[k];
+    return {bucket:s.bucket,n:s.n,hits:s.hits,rate:U.rd(s.hits/s.n*100,1),
+      line:'audience '+s.bucket+': '+s.hits+' of '+s.n+' = '+U.rd(s.hits/s.n*100,1)+'%'}; });
+  const worst=typeRows.slice().sort((a,b)=>(a.rate-b.rate)||(a.type<b.type?-1:1))[0]||null;
+  const qTotal=U.sum(list.map(d=>(d.questions_unexpected||[]).length));
+  const qMean=U.rd(qTotal/n,2);
+  /* consecutive deliveries whose unexpected questions touch the same topic */
+  let run=0,best=0,bestTopic=null,lastTopic=null;
+  list.forEach(d=>{
+    const t=(d.topic||'').toLowerCase()||((d.questions_unexpected||[])[0]||'').toLowerCase().slice(0,20);
+    const many=(d.questions_unexpected||[]).length>3;
+    if(many&&t&&t===lastTopic){ run++; } else if(many&&t){ run=1; lastTopic=t; } else { run=0; lastTopic=null; }
+    if(run>best){ best=run; bestTopic=t; } });
+  return Object.assign(base,{claimed:true,
+    hits:hits,hitRate:U.rd(rate,3),hitRatePct:U.rd(rate*100,1),
+    math:'outcomes "aligned" or "engaged": '+hits+' of '+n+' deliveries = '+U.rd(rate*100,1)+'% over '+win+'d',
+    byType:typeRows,bySize:sizeRows,worst:worst,
+    worstWhy:worst?('lowest-performing type: '+worst.line):'no type breakdown',
+    unexpectedTotal:qTotal,unexpectedMean:qMean,
+    unexpectedMath:'unexpected questions across '+n+' deliveries = '+qTotal+' ÷ '+n+' = '+qMean+' per delivery (a PROXY for preparation gaps, not a measure of audience hostility)',
+    sameTopicRun:best,sameTopicTopic:bestTopic,
+    alternative:'ALTERNATIVE READING: a low hit rate can mean you are carrying harder messages than usual. The per-type table is printed so you can tell which.'});
+}
+function narrativeQuality(narrativeId,P){
+  const W={clarity:0.35,credibility:0.35,persuasiveness:0.2,emotional_resonance:0.1};
+  const WHY='WEIGHTS ARE A PRINTED ASSUMPTION: clarity 0.35 · credibility 0.35 · persuasiveness 0.20 · emotional resonance 0.10. Communication to a technical audience weights clarity differently than a town hall does — these are defaults, not findings about your org.';
+  const n=P.narratives&&P.narratives[narrativeId];
+  const fb=n?n.feedback:((P.narrativeFeedback||[]).filter(f=>f.narrativeId===narrativeId));
+  if(!fb||!fb.length) return {narrativeId:narrativeId,score:null,n:0,
+    note:'no feedback logged (n=0)',weightsWhy:WHY};
+  const mean=k=>U.sum(fb.map(f=>f[k]))/fb.length;
+  const c=mean('clarity'), cr=mean('credibility'), p=mean('persuasiveness'), e=mean('emotional_resonance');
+  const score=c*W.clarity+cr*W.credibility+p*W.persuasiveness+e*W.emotional_resonance;
+  /* trend vs the prior narrative of the same type */
+  let gap=null,gapWhy='no prior narrative of this type with feedback';
+  if(n){
+    const peers=((P.narrativesByType||{})[n.type]||[]).filter(x=>x.id!==narrativeId&&x.feedback.length)
+      .sort((a,b)=>b.draftedAt-a.draftedAt);
+    if(peers.length){
+      const pf=peers[0].feedback;
+      const pm=k=>U.sum(pf.map(f=>f[k]))/pf.length;
+      const prior=pm('clarity')*W.clarity+pm('credibility')*W.credibility+pm('persuasiveness')*W.persuasiveness+pm('emotional_resonance')*W.emotional_resonance;
+      gap=U.rd(score-prior,2);
+      gapWhy='vs prior '+n.type+' narrative "'+peers[0].title+'": '+U.rd(prior,2)+' → '+U.rd(score,2)+' ('+(gap>0?'+':'')+gap+')'; } }
+  return {narrativeId:narrativeId,n:fb.length,
+    clarity:U.rd(c,2),credibility:U.rd(cr,2),persuasiveness:U.rd(p,2),emotional_resonance:U.rd(e,2),
+    score:U.rd(score,2),
+    math:'composite = clarity '+U.rd(c,2)+' × 0.35 + credibility '+U.rd(cr,2)+' × 0.35 + persuasiveness '+U.rd(p,2)+' × 0.2 + resonance '+U.rd(e,2)+' × 0.1 = '+
+      U.rd(c*W.clarity,3)+' + '+U.rd(cr*W.credibility,3)+' + '+U.rd(p*W.persuasiveness,3)+' + '+U.rd(e*W.emotional_resonance,3)+' = '+U.rd(score,2),
+    gap:gap,gapWhy:gapWhy,weightsWhy:WHY,n_raters:fb.length};
+}
+function buildBoardNarrative(P,today){
+  const R=LeadOS.rules.runFull(P,today);
+  const sec=(name,lines,empty)=>({section:name,lines:lines.length?lines:[empty],empty:!lines.length});
+  /* OPENING — highest-delta exec KPI review, else the loudest finding */
+  const kpiRev=(P.execKpiReviews||[]).slice(-1)[0];
+  const opening=[];
+  if(kpiRev) opening.push('since the last review ('+U.iso(kpiRev.at)+'): '+(kpiRev.note||'(no note logged)')+'  [from exec.kpi.reviewed]');
+  const top=R.findings[0];
+  if(top) opening.push('loudest signal right now: '+top.title+'  [from '+top.rule+', sev '+top.sev+']');
+  /* NUMBERS — labeled by source event and period */
+  const nums=[];
+  const pl=(P.plStatements||[]).slice(-1)[0];
+  if(pl){ nums.push('revenue '+pl.revenue+'  [from fin.pl.logged, period '+pl.period+']');
+    if(pl.revenue) nums.push('gross margin '+U.rd(pl.gross_profit/pl.revenue*100,1)+'%  [from fin.pl.logged, period '+pl.period+']'); }
+  const rw=(P.runwayLogs||[]).slice(-1)[0];
+  if(rw) nums.push('runway '+rw.runway_months+' months  [from fin.runway.logged, '+U.iso(rw.date||rw.at)+']');
+  Object.keys(P.unitBySegment||{}).forEach(seg=>{ const u=P.unitBySegment[seg];
+    if(u.cac) nums.push('LTV:CAC '+U.rd(u.ltv/u.cac,2)+' on '+seg+'  [from fin.unit.logged, period '+u.period+']'); });
+  /* WINS — things that were true and are now resolved, proxied by shipped work */
+  const wins=[];
+  vals(P.roadmap||{}).filter(r=>r.status==='shipped').slice(-3).forEach(r=>wins.push(r.title+'  [from product.roadmap.updated, status shipped]'));
+  vals(P.milestones||{}).filter(m=>m.status==='done').slice(-3).forEach(m=>wins.push(m.title+'  [from ops.milestone.updated, status done]'));
+  (P.sprintReviews||[]).slice(-1).forEach(s=>{ (s.goals_met||[]).slice(0,3).forEach(g=>
+    wins.push(String(typeof g==='object'?(g.goal||JSON.stringify(g)):g)+'  [from sprint.review, '+s.sprintId+']')); });
+  /* RISKS — the REAL ones; sev-5 findings can never be dropped */
+  const sev5=R.findings.filter(f=>f.sev===5);
+  const rest=R.findings.filter(f=>f.sev<5).slice(0,3);
+  const riskSet=sev5.concat(rest).slice(0,Math.max(3,sev5.length));
+  const risks=riskSet.map(f=>f.rule+' active — '+f.title+'  [sev '+f.sev+', '+f.conf+']');
+  /* ASK — unapproved allocations */
+  const asks=[];
+  (P.allocations||[]).filter(a=>a.board_approved===false).slice(-2).forEach(a=>
+    asks.push('approve the '+a.period+' allocation of '+a.total_budget+'  [from fin.allocation.decision, board_approved=false]'));
+  return {label:SCAFFOLD,
+    sev5Count:sev5.length,
+    riskNote:'RISKS ARE THE REAL ONES, not the sanitized version — every sev-5 finding is included regardless of how many there are, because a board that learns a material risk from someone else stops trusting the whole report',
+    sections:[
+      sec('OPENING',opening,'no data — log exec.kpi.reviewed first'),
+      sec('NUMBERS',nums,'no data — log fin.pl.logged, fin.runway.logged or fin.unit.logged first'),
+      sec('WINS',wins,'no data — log product.roadmap.updated (shipped), ops.milestone.updated (done) or sprint.review first'),
+      sec('RISKS',risks,'no active findings — which is itself worth saying out loud'),
+      sec('ASK',asks,'no data — log fin.allocation.decision with board_approved=false if you need a decision')]};
+}
+function testMessage(message,audienceSegment,P){
+  const styles={driver:0,expressive:0,analytical:0,amiable:0};
+  let n=0;
+  vals(P.influenceByPerson||{}).forEach(r=>{ if(styles[r.influenceStyle]!==undefined){ styles[r.influenceStyle]++; n++; } });
+  const dominant=Object.keys(styles).sort((a,b)=>(styles[b]-styles[a])||(a<b?-1:1))[0];
+  const msg=String(message||'');
+  return {message:msg,audienceSegment:audienceSegment,
+    mappedPeople:n,
+    distribution:styles,
+    predicted:n?('your mapped audience skews '+dominant+' ('+styles[dominant]+' of '+n+' mapped) — expect '+
+        ({driver:'immediate challenge on the outcome, which is engagement not rejection',
+          expressive:'questions about who is affected before questions about the data',
+          analytical:'a request for the underlying numbers before any agreement',
+          amiable:'public agreement and private reservation — ask for the reservation explicitly'}[dominant]))
+      :'no influence.mapped events — no prediction made, because a prediction from zero observations is a guess wearing a number',
+    predictionLabel:'PREDICTION FROM YOUR OWN INFLUENCE MAPS, not market research — it reflects who you have bothered to observe',
+    framings:[
+      {style:'analytical',version:'Here is the data: '+msg+' I want your read before I conclude anything.'},
+      {style:'driver',version:msg+' That is the outcome I am driving to. Challenge it.'},
+      {style:'expressive',version:'This matters because of who it affects. '+msg}],
+    risk:'WHAT COULD BE MISREAD: a message this short carries its tone from the room, not the words. Read it aloud once as your harshest critic would hear it, then decide if the shape survives.'};
+}
+function buildInvestorUpdate(P,today){
+  const metrics=[], wins=[], challenges=[], team=[];
+  const pl=(P.plStatements||[]).slice(-1)[0];
+  if(pl){ metrics.push('revenue '+pl.revenue+'  [fin.pl.logged, '+pl.period+']');
+    if(pl.revenue) metrics.push('gross margin '+U.rd(pl.gross_profit/pl.revenue*100,1)+'%  [fin.pl.logged, '+pl.period+']'); }
+  const rw=(P.runwayLogs||[]).slice(-1)[0];
+  if(rw){ metrics.push('burn '+rw.burn_rate_monthly+'/mo · runway '+rw.runway_months+' months  [fin.runway.logged, '+U.iso(rw.date||rw.at)+']'); }
+  Object.keys(P.unitBySegment||{}).forEach(seg=>{ const u=P.unitBySegment[seg];
+    metrics.push('CAC '+u.cac+' · LTV '+u.ltv+' on '+seg+'  [fin.unit.logged, '+u.period+']'); });
+  const ch=(P.churnLogs||[]).slice(-1)[0];
+  if(ch&&ch.total) metrics.push('churn '+U.rd(ch.churned/ch.total*100,2)+'%  [cs.churn.logged, '+ch.period+']');
+  vals(P.roadmap||{}).filter(r=>r.status==='shipped').slice(-3).forEach(r=>wins.push(r.title+'  [product.roadmap.updated shipped]'));
+  vals(P.milestones||{}).filter(m=>m.status==='done').slice(-2).forEach(m=>wins.push(m.title+'  [ops.milestone.updated done]'));
+  const R=LeadOS.rules.runFull(P,today);
+  R.findings.slice(0,2).forEach(f=>challenges.push(f.title+'  ['+f.rule+', sev '+f.sev+']'));
+  (P.capacityChanges||[]).slice(-3).forEach(c=>team.push((c.delta_headcount>0?'+':'')+c.delta_headcount+' '+(c.teamId||'org')+' ('+c.reason+')  [capacity.change, '+U.iso(c.effective_date)+']'));
+  (P.offers||[]).filter(o=>o.status==='accepted').slice(-3).forEach(o=>team.push('hired '+o.personId+' as '+o.role+'  [hr.offer.logged accepted]'));
+  return {label:SCAFFOLD,
+    formatLabel:'this is the COMMON VC UPDATE CONVENTION, not a universal requirement — a bootstrapped company owes this to nobody and may still find the discipline useful',
+    honestyNote:'Investors who receive proactive bad news stay on your side. Investors who discover it themselves do not.',
+    sections:[
+      {section:'METRICS',lines:metrics.length?metrics:['no data — log fin.pl.logged or fin.unit.logged first']},
+      {section:'WINS',lines:wins.length?wins:['no data — log product.roadmap.updated (shipped) or ops.milestone.updated (done) first']},
+      {section:'CHALLENGES',lines:challenges.length?challenges:['no active findings to report — say so plainly rather than inventing a challenge']},
+      {section:'TEAM',lines:team.length?team:['no data — log capacity.change or hr.offer.logged first']},
+      {section:'ASK',lines:['(open-ended — what do you need from the network?)']}]};
+}
+LeadOS.narrative={SELF_REPORTED:SELF_REPORTED,SCAFFOLD:SCAFFOLD,commHitRate:commHitRate,
+  narrativeQuality:narrativeQuality,buildBoardNarrative:buildBoardNarrative,
+  testMessage:testMessage,buildInvestorUpdate:buildInvestorUpdate};
+})();
+
 /* ==================== 7 · HEALTH — authority wall + fixture seed ==========
    T-suite runs against pinned in-memory fixtures (FIXED epoch, never the
    clock, never localStorage). G-suite inspects the LIVE store. The boot gate
@@ -4959,8 +5376,48 @@ function buildSeed(base){
       allocations:[{bucket:'platform',amount:650000,pct_of_total:65,rationale:'re-platform is the year thesis'},
         {bucket:'go-to-market',amount:250000,pct_of_total:25,rationale:'hold the line'},
         {bucket:'support',amount:100000,pct_of_total:10,rationale:'escalation load'}]},30),                                    /* R111 sev2 */
-    E('fin.headcount.cost',{period:'2026-Q1',total_headcount_cost:620000,cost_per_head:62000,productivity_ratio:1.45,ownerId:'cfo'},25)
+    E('fin.headcount.cost',{period:'2026-Q1',total_headcount_cost:620000,cost_per_head:62000,productivity_ratio:1.45,ownerId:'cfo'},25),
     /* R114 fires on dec-1 — scenario-planned in pt-13, no fin.scenario.modeled anywhere near it */
+    /* ---- pt-18 narrative layer: seeds R115–R124 (G124) ---- */
+    /* board meeting was 85d ago → next due in 5d on a 90d cadence, no board draft → R115 sev3 */
+    /* 6 deliveries, 3 land (hit rate 50% < 60%) → R116 sev3; 4 unexpected questions each on
+       the same topic for 3 consecutive board deliveries → R120 sev4; clarity mean 2.3 → R119 */
+    E('narrative.drafted',{id:'nr-1',type:'board',title:'Q3 board narrative',key_message:'Margin compression is temporary',
+      supporting_data:['fin.pl.logged Q3'],draftedAt:base-150*DAY,audience_size:7,period:'2025-Q3'},150),
+    E('narrative.delivered',{narrativeId:'nr-1',delivered_at:base-148*DAY,audience_actual:7,outcome:'skeptical',
+      topic:'margin',questions_unexpected:['why now','what changed','who owns it','when does it reverse']},148),
+    E('narrative.feedback',{narrativeId:'nr-1',clarity:2,credibility:3,persuasiveness:2,emotional_resonance:3},147),
+    E('narrative.drafted',{id:'nr-2',type:'board',title:'Q4 board narrative',key_message:'Margin plan is working',
+      supporting_data:['fin.pl.logged Q4'],draftedAt:base-100*DAY,audience_size:7,period:'2025-Q4'},100),
+    E('narrative.delivered',{narrativeId:'nr-2',delivered_at:base-98*DAY,audience_actual:7,outcome:'confused',
+      topic:'margin',questions_unexpected:['is this the same plan','why is COGS up','what is the floor','who signed off']},98),
+    E('narrative.feedback',{narrativeId:'nr-2',clarity:2,credibility:3,persuasiveness:3,emotional_resonance:2},97),
+    E('narrative.drafted',{id:'nr-3',type:'board',title:'Q1 board narrative',key_message:'Re-platform pays back in Q3',
+      supporting_data:['fin.pl.logged 2026-Q1'],draftedAt:base-60*DAY,audience_size:7,period:'2026-Q1'},60),
+    E('narrative.delivered',{narrativeId:'nr-3',delivered_at:base-58*DAY,audience_actual:7,outcome:'skeptical',
+      topic:'margin',questions_unexpected:['third plan in three quarters','what is different','what if it slips','what is plan B']},58), /* R120 sev4 + R123 */
+    E('narrative.feedback',{narrativeId:'nr-3',clarity:3,credibility:2,persuasiveness:2,emotional_resonance:2},57),
+    E('narrative.drafted',{id:'nr-4',type:'all-hands',title:'Reorg all-hands',key_message:'Shape changes, mission does not',
+      supporting_data:[],draftedAt:base-40*DAY,audience_size:60},40),
+    E('narrative.delivered',{narrativeId:'nr-4',delivered_at:base-39*DAY,audience_actual:58,outcome:'aligned',
+      questions_unexpected:['who moves']},39),
+    E('narrative.drafted',{id:'nr-5',type:'team-update',title:'Billing migration status',key_message:'Two sprints, not one',
+      supporting_data:[],draftedAt:base-20*DAY,audience_size:9},20),
+    E('narrative.delivered',{narrativeId:'nr-5',delivered_at:base-19*DAY,audience_actual:9,outcome:'engaged',
+      questions_unexpected:[]},19),
+    E('narrative.drafted',{id:'nr-6',type:'investor',title:'February investor update',key_message:'Runway extended, margin watched',
+      supporting_data:['fin.runway.logged'],draftedAt:base-36*DAY,audience_size:12,period:'2026-02'},36),  /* R124 sev2 ×2 (board + investor) */
+    E('narrative.delivered',{narrativeId:'nr-6',delivered_at:base-35*DAY,audience_actual:12,outcome:'engaged',
+      questions_unexpected:['burn multiple']},35),
+    E('allhands.logged',{date:base-39*DAY,attendees:58,topics:['reorg','roadmap'],sentiment_post:'neutral',
+      questions_raised:['who moves','when']},39),                                                            /* R117: 39d > 30d */
+    E('investor.update.sent',{period:'2026-01',key_wins:['Globex renewal'],key_risks:['margin compression'],
+      sentiment_expected:'concern',mrr:84000,runway_months:9},36),                                           /* R118: 36d > 30d */
+    E('press.mention',{outlet:'The Register',sentiment:'negative',topic:'billing outage',date:base-3*DAY,reach:40000},3), /* R122 sev3 (>48h, no press draft) */
+    E('internal.comms.sent',{id:'ic-1',channel:'slack',audience:'org',topic:'Payments incident — action required',
+      urgency:5,acknowledged:false},2),                                                                      /* R121 sev4 */
+    E('internal.comms.sent',{id:'ic-2',channel:'email',audience:'exec',topic:'Board pack review',
+      urgency:4,acknowledged:true},5)
   ];
   return out;
 }
@@ -5254,7 +5711,7 @@ function runT(){
   T.push(check('T18','[T12b] extended seed fires all 62 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=114;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=124;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -6033,6 +6490,108 @@ function runT(){
     if(r112(two).length) return {why:'2 P&L periods must be quiet (trend discipline)'};
     return {ok:true,why:'−25 sev4 · −10 sev3 · 0 quiet · 2 periods quiet'};
   }));
+  /* ---- pt-18: brief T61–T65 ship as T63–T67 (T61/T62 taken in pt-17).
+     ID MAP: brief T61→T63 · T62→T64 · T63→T65 · T64→T66 · T65→T67 ---- */
+  const ND=(id,type,ago,outcome,qs,size,topic)=>([
+    {type:'narrative.drafted',payload:{id:id,type:type,title:id,key_message:'m',
+      supporting_data:[],draftedAt:FIXED-(ago+1)*DAY,audience_size:size||10},at:FIXED-(ago+1)*DAY},
+    {type:'narrative.delivered',payload:{narrativeId:id,delivered_at:FIXED-ago*DAY,
+      audience_actual:size||10,outcome:outcome,questions_unexpected:qs||[],topic:topic||'t'},at:FIXED-ago*DAY}]);
+  T.push(check('T63','[brief T61] commHitRate: 3 aligned + 2 confused = 60% quiet · 4/7 = 57% fires',()=>{
+    const five=LeadOS.engine.project(wrap([].concat(
+      ND('a','board',50,'aligned'),ND('b','board',45,'aligned'),ND('c','board',40,'engaged'),
+      ND('d','board',35,'confused'),ND('e','board',30,'confused'))));
+    const h=LeadOS.narrative.commHitRate(five,FIXED);
+    if(h.hitRatePct!==60) return {why:'3 of 5 should be 60%, got '+h.hitRatePct};
+    const r116=Px=>LeadOS.rules.RULES[110](Px,FIXED); /* index 110 = R116 */
+    if(r116(five).length) return {why:'exactly 60% must be quiet (strictly below fires)'};
+    const seven=LeadOS.engine.project(wrap([].concat(
+      ND('a','board',50,'aligned'),ND('b','board',48,'aligned'),ND('c','board',46,'engaged'),ND('d','board',44,'engaged'),
+      ND('e','board',42,'confused'),ND('f','board',40,'skeptical'),ND('g','board',38,'hostile'))));
+    const h7=LeadOS.narrative.commHitRate(seven,FIXED);
+    if(h7.hitRatePct!==57.1) return {why:'4 of 7 should be 57.1%, got '+h7.hitRatePct};
+    const fired=r116(seven);
+    if(fired.length!==1||fired[0].sev!==3) return {why:'57% should fire sev 3'};
+    return {ok:true,why:'3/5 = 60% quiet · 4/7 = 57.1% → sev 3'};
+  }));
+  T.push(check('T64','[brief T62] buildBoardNarrative on an EMPTY store: scaffold, never null, never throws',()=>{
+    const empty=LeadOS.engine.project([]);
+    let b=null;
+    try{ b=LeadOS.narrative.buildBoardNarrative(empty,FIXED); }
+    catch(e){ return {why:'threw on empty state: '+e.message}; }
+    if(!b||!b.sections) return {why:'returned null or shapeless'};
+    const names=b.sections.map(s=>s.section);
+    if(names.join(',')!=='OPENING,NUMBERS,WINS,RISKS,ASK') return {why:'section order wrong: '+names.join(',')};
+    const emptySections=b.sections.filter(s=>s.empty);
+    if(!emptySections.length) return {why:'an empty store should mark sections empty'};
+    const bad=b.sections.filter(s=>!s.lines.length);
+    if(bad.length) return {why:'no section may be line-less: '+bad.map(s=>s.section).join(',')};
+    const numbers=b.sections.filter(s=>s.section==='NUMBERS')[0];
+    if(numbers.lines[0].indexOf('no data — log')===-1) return {why:'empty sections must say which event type to log: '+numbers.lines[0]};
+    return {ok:true,why:'5 sections in order · every empty one names the event type to log · no throw, no null'};
+  }));
+  T.push(check('T65','[brief T63] narrativeQuality composite: 4/3/2/5 → 3.35 with the math printed',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'narrative.drafted',payload:{id:'n1',type:'board',title:'t',key_message:'m',
+        supporting_data:[],draftedAt:FIXED-10*DAY},at:FIXED-10*DAY},
+      {type:'narrative.feedback',payload:{narrativeId:'n1',clarity:4,credibility:3,
+        persuasiveness:2,emotional_resonance:5},at:FIXED-9*DAY}]));
+    const q=LeadOS.narrative.narrativeQuality('n1',Px);
+    /* 4×0.35 + 3×0.35 + 2×0.2 + 5×0.1 = 1.4 + 1.05 + 0.4 + 0.5 = 3.35 */
+    if(q.score!==3.35) return {why:'composite should be 3.35, got '+q.score};
+    if(q.math.indexOf('= 3.35')===-1) return {why:'the math must print the result: '+q.math};
+    if(q.math.indexOf('1.4')===-1||q.math.indexOf('1.05')===-1||q.math.indexOf('0.4')===-1||q.math.indexOf('0.5')===-1)
+      return {why:'each weighted term must be printed: '+q.math};
+    if(q.weightsWhy.indexOf('PRINTED ASSUMPTION')===-1) return {why:'the weights must be labeled an assumption'};
+    const none=LeadOS.narrative.narrativeQuality('nope',Px);
+    if(none.score!==null||none.note.indexOf('no feedback logged (n=0)')===-1)
+      return {why:'zero feedback must return {score:null, note:"no feedback logged (n=0)"}'};
+    return {ok:true,why:q.math};
+  }));
+  T.push(check('T66','[brief T64] R121: urgency 4 unacked 25h fires · urgency 3 quiet · acked quiet',()=>{
+    const mk=(urg,acked,hrsAgo)=>LeadOS.engine.project(wrap([{type:'internal.comms.sent',
+      payload:{id:'c1',channel:'slack',audience:'org',topic:'t',urgency:urg,acknowledged:acked},
+      at:FIXED-hrsAgo*3600000}]));
+    const r121=Px=>LeadOS.rules.RULES[115](Px,FIXED); /* index 115 = R121 */
+    const a=r121(mk(4,false,25));
+    if(a.length!==1||a[0].sev!==3) return {why:'urgency 4 unacked at 25h should fire sev 3'};
+    if(r121(mk(4,false,23)).length) return {why:'23h is inside the 24h window'};
+    if(r121(mk(3,false,100)).length) return {why:'urgency 3 must be quiet'};
+    if(r121(mk(4,true,100)).length) return {why:'acknowledged=true must be quiet'};
+    const b=r121(mk(5,false,5));
+    if(b.length!==1||b[0].sev!==4) return {why:'urgency 5 unacked at 5h should fire sev 4'};
+    if(r121(mk(5,false,3)).length) return {why:'urgency 5 at 3h is inside the 4h window'};
+    return {ok:true,why:'u4@25h sev3 · u4@23h quiet · u3 quiet · acked quiet · u5@5h sev4 · u5@3h quiet'};
+  }));
+  T.push(check('T67','[brief T65] R120: mean 3.5 fires sev3 · mean 2.8 quiet · same topic ×3 sev4',()=>{
+    const r120=Px=>LeadOS.rules.RULES[114](Px,FIXED); /* index 114 = R120 */
+    const Q=n=>{ const a=[]; for(let i=0;i<n;i++) a.push('q'+i); return a; };
+    /* 6 deliveries, questions 4,4,3,3,4,3 → mean 3.5; topics alternate so no run of 3 */
+    const mean35=LeadOS.engine.project(wrap([].concat(
+      ND('a','board',60,'aligned',Q(4),10,'alpha'),ND('b','board',55,'aligned',Q(4),10,'beta'),
+      ND('c','board',50,'aligned',Q(3),10,'alpha'),ND('d','board',45,'aligned',Q(3),10,'beta'),
+      ND('e','board',40,'aligned',Q(4),10,'gamma'),ND('f','board',35,'aligned',Q(3),10,'delta'))));
+    const h=LeadOS.narrative.commHitRate(mean35,FIXED);
+    if(h.unexpectedMean!==3.5) return {why:'mean should be 3.5, got '+h.unexpectedMean};
+    const a=r120(mean35);
+    if(a.length!==1||a[0].sev!==3) return {why:'mean 3.5 with no topic run should fire sev 3, got '+JSON.stringify(a.map(f=>f.sev))};
+    /* 5 deliveries, questions 3,3,3,3,2 → mean 2.8 */
+    const mean28=LeadOS.engine.project(wrap([].concat(
+      ND('a','board',60,'aligned',Q(3),10,'alpha'),ND('b','board',55,'aligned',Q(3),10,'beta'),
+      ND('c','board',50,'aligned',Q(3),10,'gamma'),ND('d','board',45,'aligned',Q(3),10,'delta'),
+      ND('e','board',40,'aligned',Q(2),10,'eps'))));
+    if(LeadOS.narrative.commHitRate(mean28,FIXED).unexpectedMean!==2.8) return {why:'control mean should be 2.8'};
+    if(r120(mean28).length) return {why:'mean 2.8 must be quiet'};
+    /* 5 deliveries, 3 consecutive with >3 questions on the SAME topic → sev 4 */
+    const run=LeadOS.engine.project(wrap([].concat(
+      ND('a','board',60,'aligned',Q(1),10,'alpha'),ND('b','board',55,'aligned',Q(1),10,'beta'),
+      ND('c','board',50,'aligned',Q(4),10,'margin'),ND('d','board',45,'aligned',Q(4),10,'margin'),
+      ND('e','board',40,'aligned',Q(4),10,'margin'))));
+    const r=r120(run);
+    if(r.length!==1||r[0].sev!==4) return {why:'3 consecutive same-topic deliveries should fire sev 4, got '+JSON.stringify(r.map(f=>f.sev))};
+    if(r[0].basis.join(' ').indexOf('margin')===-1) return {why:'the repeated topic must be printed'};
+    return {ok:true,why:'mean 3.5 → sev3 · mean 2.8 quiet · same topic ×3 → sev4 with the topic printed'};
+  }));
   return T;
 }
 
@@ -6236,14 +6795,14 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','[G60/G70/G80/G92/G102/G114] extended buildSeed fires ALL 114 rules',()=>{
+  G.push(check('G40','[G60…G124] extended buildSeed fires ALL 124 rules',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=114;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=124;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'114/114 — every rule in the system fires from ONE deterministic fixture: cadences, correlation patterns, conversations, org dynamics, decisions, execution, external intelligence, calibration, and the pt-17 financial layer (GM 80→70→55% crossing the floor, LTV:CAC 1.5, payback 24mo, runway 8mo, burn multiple, 100d unreviewed capex, cohort M6 70→60→45%, 65% allocation bucket, Rule of 40 −10, unowned P&L period, scenario-planned decision with no financial model)'};
+    return {ok:true,why:'124/124 — every rule in the system fires from ONE deterministic fixture spanning cadences, correlation patterns, conversations, org dynamics, decisions, execution, external intelligence, calibration, finance, and the pt-18 narrative layer (board due in 5d with no draft, 50% hit rate over 6 deliveries, clarity mean 2.3 across 3 board narratives, same-topic unexpected questions ×3, all-hands 39d, investor update 36d, negative press 3d unanswered, urgency-5 message unacknowledged, skeptical board with no follow-up, untested high-stakes narratives)'};
   }));
   /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
      the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
@@ -7203,6 +7762,157 @@ function runG(){
     if(f[0].basis.join(' ').indexOf('Rule of 40 score')===-1) return {why:'the score sentence must be printed'};
     return {ok:true,why:'2 periods quiet · 3 periods → sev 3 with the score sentence printed'};
   }));
+  /* ---- G115–G123 — narrative goldens (pt-18) ---- */
+  const NDG=(id,type,ago,outcome,qs,topic)=>([
+    {type:'narrative.drafted',payload:{id:id,type:type,title:id,key_message:'m',
+      supporting_data:[],draftedAt:FIXED-(ago+1)*DAY,audience_size:10},at:FIXED-(ago+1)*DAY},
+    {type:'narrative.delivered',payload:{narrativeId:id,delivered_at:FIXED-ago*DAY,audience_actual:10,
+      outcome:outcome,questions_unexpected:qs||[],topic:topic||'t'},at:FIXED-ago*DAY}]);
+  G.push(check('G115','R115: board in 10d no draft sev3 · in 2d sev4 · draft quiet · no board quiet',()=>{
+    /* board cadence 90d: a meeting N days ago puts the next one (90−N) days out */
+    const mk=(sinceBoard,draftAgo)=>{ const list=[{type:'exec.board.meeting',
+      payload:{quorum:true,note:'prior'},at:FIXED-sinceBoard*DAY}];
+      if(draftAgo!==undefined) list.push({type:'narrative.drafted',
+        payload:{id:'nb',type:'board',title:'t',key_message:'m',supporting_data:[],
+          draftedAt:FIXED-draftAgo*DAY},at:FIXED-draftAgo*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r115=Px=>LeadOS.rules.RULES[109](Px,FIXED); /* index 109 = R115 */
+    const ten=r115(mk(80));
+    if(ten.length!==1||ten[0].sev!==3) return {why:'board 10d out with no draft should fire sev 3, got '+JSON.stringify(ten.map(f=>f.sev))};
+    const two=r115(mk(88));
+    if(two.length!==1||two[0].sev!==4) return {why:'board 2d out should fire sev 4'};
+    if(r115(mk(80,3)).length) return {why:'a draft inside the review window must quiet it'};
+    if(r115(mk(10)).length) return {why:'a board 80d out is beyond the 14d prep window — quiet'};
+    if(r115(LeadOS.engine.project([])).length) return {why:'no board history → no upcoming board → quiet'};
+    return {ok:true,why:'10d sev3 · 2d sev4 · draft quiets · far-out board quiet · no history quiet'};
+  }));
+  G.push(check('G116','R116 n guard: 4 deliveries quiet · 5 at 40% fires · 5 at exactly 60% quiet',()=>{
+    const r116=Px=>LeadOS.rules.RULES[110](Px,FIXED);
+    const four=LeadOS.engine.project(wrap([].concat(
+      NDG('a','board',40,'confused'),NDG('b','board',35,'confused'),
+      NDG('c','board',30,'confused'),NDG('d','board',25,'aligned'))));
+    if(r116(four).length) return {why:'n=4 must be quiet regardless of hit rate'};
+    const five=LeadOS.engine.project(wrap([].concat(
+      NDG('a','board',40,'aligned'),NDG('b','board',38,'aligned'),NDG('c','board',36,'confused'),
+      NDG('d','board',34,'confused'),NDG('e','board',32,'hostile'))));
+    const f=r116(five);
+    if(f.length!==1||f[0].sev!==3) return {why:'2 of 5 = 40%... should fire; got '+JSON.stringify(f.map(x=>x.sev))};
+    const sixty=LeadOS.engine.project(wrap([].concat(
+      NDG('a','board',40,'aligned'),NDG('b','board',38,'aligned'),NDG('c','board',36,'engaged'),
+      NDG('d','board',34,'confused'),NDG('e','board',32,'confused'))));
+    if(r116(sixty).length) return {why:'exactly 60% with n=5 must be quiet'};
+    return {ok:true,why:'n=4 quiet · n=5 at 40% fires · n=5 at exactly 60% quiet'};
+  }));
+  G.push(check('G117','R117 all-hands: 31d sev2 · 29d quiet · 61d sev3',()=>{
+    const mk=ago=>LeadOS.engine.project(wrap([{type:'allhands.logged',
+      payload:{date:FIXED-ago*DAY,attendees:50,topics:['t'],sentiment_post:'neutral',questions_raised:[]},
+      at:FIXED-ago*DAY}]));
+    const r117=Px=>LeadOS.rules.RULES[111](Px,FIXED); /* index 111 = R117 */
+    const a=r117(mk(31));
+    if(a.length!==1||a[0].sev!==2) return {why:'31d should fire sev 2'};
+    if(r117(mk(29)).length) return {why:'29d must be quiet'};
+    if(r117(mk(30)).length) return {why:'exactly 30d must be quiet'};
+    const b=r117(mk(61));
+    if(b.length!==1||b[0].sev!==3) return {why:'61d should fire sev 3'};
+    return {ok:true,why:'31d sev2 · 29d and 30d quiet · 61d sev3'};
+  }));
+  G.push(check('G118','R122 press: 1 negative at 49h fires · draft at 47h quiets · 2 in 14d sev4 regardless',()=>{
+    const mk=(hrsAgo,draftHrs,second)=>{ const list=[{type:'press.mention',
+      payload:{outlet:'Outlet',sentiment:'negative',topic:'outage',date:FIXED-hrsAgo*3600000},at:FIXED-hrsAgo*3600000}];
+      if(draftHrs!==undefined) list.push({type:'narrative.drafted',
+        payload:{id:'np',type:'press',title:'response',key_message:'m',supporting_data:[],
+          draftedAt:FIXED-(hrsAgo-draftHrs)*3600000},at:FIXED-(hrsAgo-draftHrs)*3600000});
+      if(second) list.push({type:'press.mention',
+        payload:{outlet:'Other',sentiment:'negative',topic:'pricing',date:FIXED-5*DAY},at:FIXED-5*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r122=Px=>LeadOS.rules.RULES[116](Px,FIXED); /* index 116 = R122 */
+    const a=r122(mk(49));
+    if(a.length!==1||a[0].sev!==3) return {why:'1 negative at 49h with no draft should fire sev 3'};
+    if(r122(mk(49,47)).length) return {why:'a press draft within 48h must quiet it'};
+    if(r122(mk(40)).length) return {why:'40h is inside the 48h window'};
+    const two=r122(mk(49,47,true));
+    if(two.length!==1||two[0].sev!==4) return {why:'2 negative mentions in 14d should fire sev 4 even with a draft'};
+    return {ok:true,why:'49h sev3 · draft@47h quiets · 40h quiet · 2-in-14d sev4 regardless of draft'};
+  }));
+  G.push(check('G119','R123: hostile+aligned@2d quiet · hostile no follow-up 4d fires · skeptical@6d quiet',()=>{
+    const mk=(outcome,ago,alignAgo)=>{ const list=[].concat(NDG('nb','board',ago,outcome));
+      if(alignAgo!==undefined) list.push({type:'exec.aligned',
+        payload:{topic:'board follow-up',stakeholders:['chair'],result:'aligned'},at:FIXED-alignAgo*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r123=Px=>LeadOS.rules.RULES[117](Px,FIXED); /* index 117 = R123 */
+    if(r123(mk('hostile',4,2)).length) return {why:'hostile with exec.aligned 2d later (inside 3d) must be quiet'};
+    const h=r123(mk('hostile',4));
+    if(h.length!==1||h[0].sev!==4) return {why:'hostile with no follow-up at 4d should fire sev 4'};
+    if(r123(mk('skeptical',8,2)).length) return {why:'skeptical with alignment 6d after (inside 7d) must be quiet'};
+    const s=r123(mk('skeptical',9));
+    if(s.length!==1||s[0].sev!==4) return {why:'skeptical with no follow-up past 7d should fire sev 4'};
+    if(r123(mk('aligned',20)).length) return {why:'an aligned board outcome must never fire'};
+    return {ok:true,why:'hostile+2d quiet · hostile 4d sev4 · skeptical+6d quiet · skeptical 9d sev4 · aligned quiet'};
+  }));
+  G.push(check('G120','narrativeQuality: printed formula matches the computed value; n=0 → null',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'narrative.drafted',payload:{id:'n1',type:'board',title:'t',key_message:'m',
+        supporting_data:[],draftedAt:FIXED-10*DAY},at:FIXED-10*DAY},
+      {type:'narrative.feedback',payload:{narrativeId:'n1',clarity:5,credibility:4,
+        persuasiveness:3,emotional_resonance:2},at:FIXED-9*DAY}]));
+    const q=LeadOS.narrative.narrativeQuality('n1',Px);
+    /* 5×0.35 + 4×0.35 + 3×0.2 + 2×0.1 = 1.75 + 1.4 + 0.6 + 0.2 = 3.95 */
+    const expected=U.rd(5*0.35+4*0.35+3*0.2+2*0.1,2);
+    if(q.score!==expected) return {why:'score '+q.score+' ≠ independently computed '+expected};
+    if(q.math.indexOf('= '+expected)===-1) return {why:'the printed formula must end in the computed value: '+q.math};
+    const none=LeadOS.narrative.narrativeQuality('ghost',Px);
+    if(none.score!==null) return {why:'unknown narrative must return score null'};
+    if(none.note!=='no feedback logged (n=0)') return {why:'exact n=0 note required, got: '+none.note};
+    return {ok:true,why:'printed formula = computed '+expected+' · n=0 → {score:null, "no feedback logged (n=0)"}'};
+  }));
+  G.push(check('G121','R124: board draft with no message.tested fires sev2 · ANY test quiets',()=>{
+    const mk=tested=>{ const list=[{type:'narrative.drafted',
+      payload:{id:'nb',type:'board',title:'t',key_message:'m',supporting_data:[],
+        draftedAt:FIXED-5*DAY,period:'2026-Q1'},at:FIXED-5*DAY}];
+      if(tested) list.push({type:'message.tested',payload:{message:'something else entirely',
+        audience_segment:'exec',response:'positive',n_tested:4,period:'2026-Q1'},at:FIXED-4*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r124=Px=>LeadOS.rules.RULES[118](Px,FIXED); /* index 118 = R124 */
+    const a=r124(mk(false));
+    if(a.length!==1||a[0].sev!==2) return {why:'an untested board narrative should fire sev 2'};
+    if(r124(mk(true)).length) return {why:'ANY message.tested in the period must quiet it — one test satisfies the rule'};
+    const teamUpdate=LeadOS.engine.project(wrap([{type:'narrative.drafted',
+      payload:{id:'nt',type:'team-update',title:'t',key_message:'m',supporting_data:[],
+        draftedAt:FIXED-5*DAY},at:FIXED-5*DAY}]));
+    if(r124(teamUpdate).length) return {why:'only board and investor narratives are high-stakes for this rule'};
+    return {ok:true,why:'untested board sev2 · any test quiets · team-update out of scope'};
+  }));
+  G.push(check('G122','buildBoardNarrative RISKS: never omits a sev-5 finding; "R[n] active — title" format',()=>{
+    /* a store with several sev-5 findings plus lower ones */
+    const Px=LeadOS.engine.project(wrap([
+      {type:'legal.compliance.check',payload:{framework:'SOC2',result:'fail'},at:FIXED-3*DAY},
+      {type:'mfg.safety.incident',payload:{severity:5,title:'press line guard bypassed'},at:FIXED-4*DAY},
+      {type:'legal.contract.logged',payload:{id:'c9',counterparty:'BigCo',type:'MSA',expiryDate:FIXED-10*DAY},at:FIXED-60*DAY},
+      {type:'cs.nps.logged',payload:{score:-20},at:FIXED-5*DAY}]));
+    const b=LeadOS.narrative.buildBoardNarrative(Px,FIXED);
+    const risks=b.sections.filter(s=>s.section==='RISKS')[0];
+    const all=LeadOS.rules.runFull(Px,FIXED).findings;
+    const sev5=all.filter(f=>f.sev===5);
+    if(!sev5.length) return {why:'fixture drift: expected at least one sev-5 finding'};
+    const missing=sev5.filter(f=>!risks.lines.some(l=>l.indexOf(f.rule+' active — ')===0&&l.indexOf(f.title)!==-1));
+    if(missing.length) return {why:'sev-5 findings omitted from RISKS: '+missing.map(f=>f.rule).join(', ')};
+    if(!/^R\d+ active — /.test(risks.lines[0])) return {why:'format must be "R[n] active — [title]": '+risks.lines[0]};
+    if(b.riskNote.indexOf('not the sanitized version')===-1) return {why:'the honesty note must be present'};
+    if(b.sev5Count!==sev5.length) return {why:'sev5Count must match the engine'};
+    return {ok:true,why:sev5.length+' sev-5 finding(s) all present in RISKS · format asserted · honesty note printed'};
+  }));
+  G.push(check('G123','R118 investor: 31d sev2 · 61d sev3 · sent today quiet',()=>{
+    const mk=ago=>LeadOS.engine.project(wrap([{type:'investor.update.sent',
+      payload:{period:'p',key_wins:['w'],key_risks:['r'],sentiment_expected:'neutral'},at:FIXED-ago*DAY}]));
+    const r118=Px=>LeadOS.rules.RULES[112](Px,FIXED); /* index 112 = R118 */
+    const a=r118(mk(31));
+    if(a.length!==1||a[0].sev!==2) return {why:'31d should fire sev 2'};
+    const b=r118(mk(61));
+    if(b.length!==1||b[0].sev!==3) return {why:'61d should fire sev 3'};
+    if(r118(mk(0)).length) return {why:'an update sent today must be quiet'};
+    if(r118(mk(30)).length) return {why:'exactly 30d must be quiet'};
+    return {ok:true,why:'31d sev2 · 61d sev3 · today quiet · exactly 30d quiet'};
+  }));
   return {checks:G,P:P,raw:raw};
 }
 
@@ -7227,7 +7937,8 @@ const CLAIMS=[
   {id:'C18',text:'External intelligence: schema v10, ZERO network calls (every external datum is manually logged and its source printed, never verified), text-match correlations labeled heuristic, R83–R92 boundaries hold, and R88 non-compliance is the single unsuppressible rule in the model',by:['T48','T49','T50','T51','T52','G81','G82','G83','G84','G85','G86','G87','G88','G89','G90','G91']},
   {id:'C19',text:'Calibration engine: schema v11, every bias output carries its n, its window and an alternative explanation; biasSampleMin is enforced before any bias claim; R100 is permanently conf LOW; hidden strengths never raise a finding; R93–R102 boundaries hold',by:['T53','T54','T55','T56','T57','G93','G94','G95','G96','G97','G98','G99','G100','G101']},
   {id:'C20',text:'Financial intelligence: schema v12, every benchmark (Rule of 40, LTV:CAC ≥3, burn multiple, CAC payback, margin floor) prints its source and the business model it assumes; ≥3-period discipline holds for P&L and cohort trends; R107 skips rather than inventing a denominator; R114 complements R67 without duplicating it; R103–R114 boundaries hold',by:['T58','T59','T60','T61','T62','G103','G104','G105','G106','G107','G108','G109','G110','G111','G112','G113']},
-  {id:'C21',text:'ALL 114 RULES fire from one deterministic seed; every rule has a golden, every golden a boundary, every finding its printed math',by:['T18','G40','G7','G13']}
+  {id:'C21',text:'Narrative intelligence: schema v13, communication outcomes are self-reported and everything derived from them is conf MEDIUM while calendar facts and acknowledgement flags are HIGH; the board scaffold labels every datum with its source event and never drops a sev-5 risk; R115–R124 boundaries hold',by:['T63','T64','T65','T66','T67','G115','G116','G117','G118','G119','G120','G121','G122','G123']},
+  {id:'C22',text:'ALL 124 RULES fire from one deterministic seed; every rule has a golden, every golden a boundary, every finding its printed math',by:['T18','G40','G7','G13']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -9215,6 +9926,203 @@ SPECS['cohort-analysis']={
     if(typeof v.arpu12==='number') p.arpu_m12=v.arpu12;
     return {events:[{type:'fin.cohort.logged',payload:p}]};
   }};
+/* ---------- pt-18 narrative playbooks ---------- */
+const NA=()=>LeadOS.narrative;
+SPECS['board-narrative']={
+  pattern:null,title:'Board narrative',free:true,
+  blurb:'Numbers without a narrative get ignored. A narrative without numbers gets dismissed.',
+  prefill(R,P,now){
+    const b=NA().buildBoardNarrative(P,now);
+    const lines=[b.label,b.riskNote];
+    b.sections.forEach(s=>{ lines.push(s.section+':'); s.lines.forEach(l=>lines.push('  '+l)); });
+    const lastBoard=(P.boardMeetings||[]).slice(-1)[0];
+    lines.push('last board: '+(lastBoard?U.iso(lastBoard.at)+(lastBoard.note?' — '+lastBoard.note:''):'none logged'));
+    lines.push('top 5 active findings — the board will ask, so have the answer ready:');
+    R.findings.slice(0,5).forEach(f=>lines.push('  sev '+f.sev+' '+f.rule+': '+f.title));
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'opening',label:'opening sentence',kind:'textarea',req:true},
+    {key:'wins',label:'wins',kind:'textarea',req:true},
+    {key:'risks',label:'risks (material risks cannot be blank — see the scaffold)',kind:'textarea',req:true},
+    {key:'ask',label:'ask',kind:'textarea',req:true},
+    {key:'challenge',label:'what you expect to be challenged on',kind:'textarea',req:true},
+    {key:'response',label:'your response to that challenge',kind:'textarea',req:true},
+    {key:'period',label:'period label',kind:'text',req:true},
+    {key:'audience',label:'expected audience size',kind:'number',req:false}]; },
+  submit(v,R,P){
+    /* material risks may not be silently dropped */
+    const material=R.findings.filter(f=>f.sev===5||f.rule==='R88'||f.rule==='R30'||f.rule==='R106');
+    if(material.length&&String(v.risks).trim().length<20)
+      throw new Error(material.length+' material risk(s) are active ('+material.map(f=>f.rule).join(', ')+') — the risks section cannot be a placeholder. A board that learns these elsewhere stops trusting the whole report.');
+    const p={id:U.uid('nar'),type:'board',title:'Board narrative '+v.period,
+      key_message:v.opening,supporting_data:[v.wins,v.risks,v.ask],
+      call_to_action:v.ask,draftedAt:Date.now(),period:v.period};
+    if(typeof v.audience==='number') p.audience_size=v.audience;
+    return {events:[{type:'narrative.drafted',payload:p},
+      note('executive','BOARD NARRATIVE '+v.period+'\nopening: '+v.opening+'\nwins:\n'+v.wins+
+        '\nrisks:\n'+v.risks+'\nask: '+v.ask+'\nexpected challenge: '+v.challenge+'\nresponse: '+v.response,'board-narrative')]};
+  }};
+SPECS['investor-update']={
+  pattern:null,title:'Investor update',free:true,
+  blurb:'Investors who receive proactive bad news stay on your side.',
+  prefill(R,P,now){
+    const b=NA().buildInvestorUpdate(P,now);
+    const lines=[b.label,b.formatLabel,b.honestyNote];
+    b.sections.forEach(s=>{ lines.push(s.section+':'); s.lines.forEach(l=>lines.push('  '+l)); });
+    const prev=(P.investorUpdates2||[]).slice(-3);
+    if(prev.length){ lines.push('previous updates:');
+      prev.forEach(u=>lines.push('  '+u.period+' ('+U.iso(u.at)+') sentiment '+u.sentiment_expected+
+        (u.mrr?' · MRR '+u.mrr:'')+(u.runway_months?' · runway '+u.runway_months+'mo':''))); }
+    return lines;
+  },
+  fields(){ return [
+    {key:'period',label:'period',kind:'text',req:true},
+    {key:'mrr',label:'MRR',kind:'number',req:false},
+    {key:'arr',label:'ARR',kind:'number',req:false},
+    {key:'growth',label:'growth %',kind:'number',req:false},
+    {key:'burn',label:'burn',kind:'number',req:false},
+    {key:'runway',label:'runway months',kind:'number',req:false},
+    {key:'wins',label:'key wins (one per line)',kind:'textarea',req:true},
+    {key:'risks',label:'key challenges — include the real ones (one per line)',kind:'textarea',req:true},
+    {key:'ask',label:'ask from the network',kind:'text',req:true},
+    {key:'sentiment',label:'sentiment you expect this to create',kind:'select',req:true,
+      options:['positive','neutral','concern'].map(s=>({value:s,label:s}))}]; },
+  submit(v){
+    const split=s=>String(s).split('\n').map(x=>x.trim()).filter(Boolean);
+    const risks=split(v.risks);
+    if(!risks.length) throw new Error('an update with no challenges is an update nobody believes — list the real ones');
+    const p={period:v.period,key_wins:split(v.wins),key_risks:risks,
+      sentiment_expected:v.sentiment,ask:v.ask};
+    ['mrr','arr','burn'].forEach(k=>{ if(typeof v[k]==='number') p[k]=v[k]; });
+    if(typeof v.growth==='number') p.growth_pct=v.growth;
+    if(typeof v.runway==='number') p.runway_months=v.runway;
+    return {events:[{type:'investor.update.sent',payload:p},
+      {type:'narrative.drafted',payload:{id:U.uid('nar'),type:'investor',
+        title:'Investor update '+v.period,key_message:v.ask,
+        supporting_data:split(v.wins).concat(risks),draftedAt:Date.now(),period:v.period}}]};
+  }};
+SPECS['all-hands-prep']={
+  pattern:null,title:'All-hands preparation',free:true,
+  blurb:'An org that does not hear from its leader fills the vacuum with rumor.',
+  prefill(R,P,now){
+    const lines=[];
+    const prev=(P.allHands||[]).slice().sort((a,b)=>(b.date||b.at)-(a.date||a.at)).slice(0,3);
+    lines.push('recent all-hands:');
+    prev.forEach(a=>lines.push('  '+U.iso(a.date||a.at)+' · '+a.attendees+' attendees · sentiment '+a.sentiment_post+
+      ' · topics: '+(a.topics||[]).join(', ')+(a.questions_raised&&a.questions_raised.length?' · they asked: '+a.questions_raised.join('; '):'')));
+    if(!prev.length) lines.push('  none logged');
+    lines.push('what the team is living through right now (they know; say it before they ask):');
+    R.findings.slice(0,6).forEach(f=>lines.push('  sev '+f.sev+' '+f.rule+': '+f.title));
+    const cs=(P.cultureSignals||[]).slice().sort((a,b)=>b.at-a.at).slice(0,5);
+    lines.push('culture signals:');
+    cs.forEach(s=>lines.push('  '+U.iso(s.at)+' ['+s.polarity+'] '+s.type+': '+s.description));
+    if(!cs.length) lines.push('  none logged');
+    return lines;
+  },
+  fields(){ return [
+    {key:'date',label:'date',kind:'date',req:true},
+    {key:'topics',label:'topics (one per line)',kind:'textarea',req:true},
+    {key:'hardTruth',label:'the one thing they most need to hear that you most do not want to say',kind:'textarea',req:true},
+    {key:'qa',label:'Q&A scenarios for the hard questions',kind:'textarea',req:true},
+    {key:'survey',label:'post-survey planned Y/N',kind:'yn',req:true},
+    {key:'attendees',label:'expected attendees',kind:'number',req:true}]; },
+  submit(v){
+    const topics=String(v.topics).split('\n').map(s=>s.trim()).filter(Boolean);
+    if(String(v.hardTruth).trim().length<15)
+      throw new Error('the hard-truth field is where credibility is built or destroyed — a placeholder there defeats the playbook');
+    return {events:[
+      {type:'narrative.drafted',payload:{id:U.uid('nar'),type:'all-hands',
+        title:'All-hands '+U.iso(v.date),key_message:v.hardTruth,
+        supporting_data:topics,draftedAt:Date.now(),audience_size:v.attendees}},
+      note('people','ALL-HANDS PREP '+U.iso(v.date)+'\ntopics:\n'+topics.map(t=>'  • '+t).join('\n')+
+        '\nthe hard truth:\n'+v.hardTruth+'\nQ&A scenarios:\n'+v.qa+'\npost-survey: '+v.survey,'all-hands-prep')]};
+  }};
+SPECS['message-test']={
+  pattern:null,title:'Message test',free:true,
+  blurb:'Not walking into a room having only heard yourself say it.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const t=NA().testMessage(draft.message||'(enter a message)',draft.segment||'(segment)',P);
+    const lines=[t.predictionLabel];
+    lines.push('mapped influence styles across '+t.mappedPeople+' people: '+
+      Object.keys(t.distribution).map(k=>k+' '+t.distribution[k]).join(' · '));
+    lines.push('predicted response: '+t.predicted);
+    lines.push('alternative framings:');
+    t.framings.forEach(f=>lines.push('  ['+f.style+'] '+f.version));
+    lines.push(t.risk);
+    return lines;
+  },
+  live(draft,R,P){
+    if(!draft.message) return null;
+    const t=NA().testMessage(draft.message,draft.segment||'',P);
+    return {icf:t.framings.map(f=>[f.style,f.version]),
+      model:{id:'framings',for:'audience adaptation',limbs:[]},
+      note:t.predicted+' — '+t.predictionLabel}; },
+  fields(){ return [
+    {key:'message',label:'message text',kind:'textarea',req:true},
+    {key:'segment',label:'audience segment',kind:'text',req:true},
+    {key:'nTested',label:'test with N people before delivery',kind:'number',req:true},
+    {key:'response',label:'response observed',kind:'select',req:true,
+      options:['positive','neutral','negative'].map(r=>({value:r,label:r}))},
+    {key:'change',label:'what you will change based on the feedback',kind:'textarea',req:true},
+    {key:'period',label:'period label',kind:'text',req:true}]; },
+  submit(v){
+    if(v.nTested<1) throw new Error('a message test with zero testers is a rehearsal, not a test');
+    return {events:[{type:'message.tested',payload:{message:v.message,audience_segment:v.segment,
+      response:v.response,n_tested:Math.round(v.nTested),period:v.period,
+      note:'change: '+v.change.slice(0,160)}}]};
+  }};
+SPECS['narrative-debrief']={
+  pattern:null,title:'Narrative debrief',free:true,
+  blurb:'Every communication is a data point. This is where it becomes one.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const undelivered=(P.undeliveredNarratives||[]).slice().sort((a,b)=>b.draftedAt-a.draftedAt);
+    const nid=(draft.narrativeId||'').trim()||(undelivered[0]||{}).id;
+    const lines=[];
+    const n=nid?(P.narratives||{})[nid]:null;
+    if(!n){ lines.push('no undelivered narrative to debrief — draft one first'); }
+    else { lines.push('debriefing: '+n.title+' ('+n.type+', drafted '+U.iso(n.draftedAt)+')');
+      lines.push('key message as drafted: '+n.key_message);
+      const q=NA().narrativeQuality(nid,P);
+      lines.push('feedback so far: '+(q.score===null?q.note:q.math));
+      if(q.gapWhy) lines.push('  '+q.gapWhy);
+      lines.push('  '+q.weightsWhy); }
+    const h=NA().commHitRate(P,now);
+    if(h.claimed){ lines.push('your hit rate: '+h.math);
+      h.byType.forEach(t=>lines.push('  '+t.line));
+      lines.push('  '+h.unexpectedMath); }
+    else lines.push(h.why);
+    return lines;
+  },
+  fields(R,P){
+    const undelivered=(P.undeliveredNarratives||[]).slice().sort((a,b)=>b.draftedAt-a.draftedAt);
+    return [
+      {key:'narrativeId',label:'narrative',kind:'select',req:true,
+        options:undelivered.map(n=>({value:n.id,label:n.type+' · '+n.title}))},
+      {key:'outcome',label:'actual outcome',kind:'select',req:true,
+        options:['aligned','engaged','skeptical','confused','hostile'].map(o=>({value:o,label:o}))},
+      {key:'audience',label:'actual audience size',kind:'number',req:true},
+      {key:'questions',label:'unexpected questions (one per line)',kind:'textarea',req:false},
+      {key:'topic',label:'dominant topic of those questions',kind:'text',req:false},
+      {key:'clarity',label:'clarity 1–5',kind:'number',req:true},
+      {key:'credibility',label:'credibility 1–5',kind:'number',req:true},
+      {key:'persuasiveness',label:'persuasiveness 1–5',kind:'number',req:true},
+      {key:'resonance',label:'emotional resonance 1–5',kind:'number',req:true},
+      {key:'change',label:'what you would change',kind:'textarea',req:true},
+      {key:'test',label:'what you will test before the next delivery',kind:'textarea',req:true}]; },
+  submit(v){
+    const qs=String(v.questions||'').split('\n').map(s=>s.trim()).filter(Boolean);
+    const cl=k=>U.clamp(Math.round(v[k]),1,5);
+    const p={narrativeId:v.narrativeId,delivered_at:Date.now(),audience_actual:v.audience,
+      outcome:v.outcome,questions_unexpected:qs,note:v.change.slice(0,160)};
+    if(v.topic) p.topic=v.topic;
+    return {events:[{type:'narrative.delivered',payload:p},
+      {type:'narrative.feedback',payload:{narrativeId:v.narrativeId,clarity:cl('clarity'),
+        credibility:cl('credibility'),persuasiveness:cl('persuasiveness'),
+        emotional_resonance:cl('resonance'),note:'will test: '+v.test.slice(0,140)}}]};
+  }};
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -9724,6 +10632,86 @@ const SPARK=arr=>{ if(!arr.length) return '<span class="muted small">no data</sp
   const mx=Math.max.apply(null,arr), mn=Math.min.apply(null,arr);
   const rng=(mx-mn)||1;
   return '<span class="spark">'+arr.map(v=>ch[U.clamp(Math.round((v-mn)/rng*7),0,7)]).join('')+'</span>'; };
+V['#/narrative']={kicker:'numbers need a story; stories need numbers',title:'Narrative',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now, N=LeadOS.narrative;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const set=LeadOS.engine.settings(P);
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
+  const h=N.commHitRate(P,now);
+  const typeRows=h.claimed?h.byType.map(t=>'<tr><td class="mono">'+esc(t.type)+'</td><td class="mono">'+t.n+'</td>'+
+    '<td>'+BAR(t.rate,100)+' <span class="mono">'+t.rate+'%</span></td>'+
+    '<td class="small muted">'+esc(t.line)+'</td></tr>').join(''):'';
+  const sizeRows=h.claimed?h.bySize.map(s=>'<tr><td class="mono">'+esc(s.bucket)+'</td><td class="mono">'+s.n+'</td>'+
+    '<td class="mono">'+s.rate+'%</td></tr>').join(''):'';
+  const pending=(P.undeliveredNarratives||[]).slice().sort((a,b)=>b.draftedAt-a.draftedAt);
+  const pendRows=pending.map(n=>'<tr><td class="mono">'+esc(n.type)+'</td><td>'+esc(n.title)+'</td>'+
+    '<td class="mono">'+U.iso(n.draftedAt)+'</td><td class="mono">'+(n.audience_size===null?'—':n.audience_size)+'</td>'+
+    '<td><button class="btn ghost sm" data-act="playrun" data-id="narrative-debrief">debrief</button></td></tr>').join('');
+  const press=(P.pressMentions||[]).slice().sort((a,b)=>(b.date||b.at)-(a.date||a.at));
+  const pressRows=press.slice(0,10).map(m=>'<tr><td class="mono">'+U.iso(m.date||m.at)+'</td><td class="mono">'+esc(m.outlet)+'</td>'+
+    '<td>'+(m.sentiment==='negative'?'<span class="sev s3">negative</span>'
+      :m.sentiment==='positive'?'<span class="pill">positive</span>':'<span class="pill">neutral</span>')+'</td>'+
+    '<td>'+esc(m.topic)+'</td><td class="mono">'+(m.reach?fmtN(m.reach):'—')+'</td></tr>').join('');
+  const ah=(P.allHands||[]).slice().sort((a,b)=>(a.date||a.at)-(b.date||b.at));
+  const ahRows=ah.slice(-6).reverse().map(a=>'<tr><td class="mono">'+U.iso(a.date||a.at)+'</td><td class="mono">'+a.attendees+'</td>'+
+    '<td>'+(a.sentiment_post==='negative'?'<span class="sev s3">negative</span>'
+      :a.sentiment_post==='positive'?'<span class="pill">positive</span>':'<span class="pill">neutral</span>')+'</td>'+
+    '<td class="small">'+esc((a.topics||[]).join(', '))+'</td></tr>').join('');
+  const iu=(P.investorUpdates2||[]).slice().sort((a,b)=>a.at-b.at);
+  const mrrArr=iu.map(u=>u.mrr).filter(x=>typeof x==='number');
+  const iuRows=iu.slice(-6).reverse().map(u=>'<tr><td class="mono">'+esc(u.period)+'</td>'+
+    '<td class="mono">'+(u.mrr?fmtN(u.mrr):'—')+'</td><td class="mono">'+(u.runway_months||'—')+'</td>'+
+    '<td>'+(u.sentiment_expected==='concern'?'<span class="sev s3">concern</span>':'<span class="pill">'+esc(u.sentiment_expected)+'</span>')+'</td>'+
+    '<td class="small muted">'+esc((u.key_risks||[]).join('; ').slice(0,60))+'</td></tr>').join('');
+  const mt=(P.messageTests||[]).slice().sort((a,b)=>b.at-a.at);
+  const mtRows=mt.slice(0,8).map(m=>'<tr><td class="mono">'+U.iso(m.at)+'</td><td class="small">'+esc(String(m.message).slice(0,50))+'</td>'+
+    '<td class="mono">'+esc(m.audience_segment)+'</td><td class="mono">'+m.n_tested+'</td>'+
+    '<td>'+(m.response==='negative'?'<span class="sev s3">negative</span>':'<span class="pill">'+esc(m.response)+'</span>')+'</td></tr>').join('');
+  return '<div class="vhead"><div class="kicker">numbers need a story; stories need numbers</div><h1>Narrative</h1>'+
+    '<div class="sub">Board presentations that lost the room. All-hands that landed flat. Investor updates that created doubt instead of confidence. <b>Every communication is a data point</b> — this view collects them and learns from them. '+esc(N.SELF_REPORTED)+'.</div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['board-narrative','investor-update','all-hands-prep','message-test','narrative-debrief']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    runner+
+    '<div class="grid3">'+
+      '<div class="card"><h3>Hit rate</h3>'+
+        (h.claimed?'<div style="margin-top:8px">'+BAR(h.hitRatePct,100)+' <b class="mono">'+h.hitRatePct+'%</b></div>'+
+          '<div class="basis" style="margin-top:8px"><div>'+esc(h.math)+'</div>'+
+          '<div class="lbl">'+esc(h.label)+'</div></div>'
+          :'<div class="small muted" style="margin-top:8px">'+esc(h.why)+'</div>')+'</div>'+
+      '<div class="card"><h3>Preparation gaps</h3><div class="basis" style="margin-top:8px">'+
+        (h.claimed?'<div>'+esc(h.unexpectedMath)+'</div>'+
+          '<div>'+(h.sameTopicRun>=3?'<b>same topic in '+h.sameTopicRun+' consecutive deliveries ("'+esc(h.sameTopicTopic||'')+'")</b>':'no repeated-topic run')+'</div>'
+          :'<div>no deliveries logged</div>')+
+        '<div>'+pending.length+' drafted, not yet delivered</div></div></div>'+
+      '<div class="card"><h3>Cadence</h3><div class="basis" style="margin-top:8px">'+
+        '<div>all-hands: '+(ah.length?U.days(now,ah[ah.length-1].date||ah[ah.length-1].at)+'d ago (cadence '+set.allHandsCadenceDays+'d)':'never logged')+'</div>'+
+        '<div>investor update: '+(iu.length?U.days(now,iu[iu.length-1].at)+'d ago (cadence '+set.investorUpdateCadenceDays+'d)':'never sent')+'</div>'+
+        '<div>board prep window: '+set.boardNarrativeReviewDays+'d</div></div></div>'+
+    '</div>'+
+    '<div class="sect"><h2>Hit rate by type</h2><span class="meta">'+(h.claimed?h.n+' deliveries in '+h.windowDays+'d':'no deliveries')+'</span></div>'+
+    (typeRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>type</th><th>n</th><th>landed</th><th>reading</th></tr>'+typeRows+'</table>'+
+      '<div class="formnote">'+esc(h.worstWhy)+' · '+esc(h.alternative)+'</div></div>'
+      :'<div class="empty">No narrative.delivered events. A silent log is not a good hit rate.</div>')+
+    (sizeRows?'<div class="card" style="margin-top:10px;overflow-x:auto"><table class="t"><tr><th>audience size</th><th>n</th><th>landed</th></tr>'+sizeRows+'</table></div>':'')+
+    '<div class="sect"><h2>Awaiting delivery</h2><span class="meta">'+pending.length+'</span></div>'+
+    (pendRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>type</th><th>title</th><th>drafted</th><th>audience</th><th></th></tr>'+pendRows+'</table></div>'
+      :'<div class="empty">Nothing drafted and undelivered.</div>')+
+    '<div class="sect"><h2>Press</h2><span class="meta">'+press.length+' mention(s)</span></div>'+
+    (pressRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>date</th><th>outlet</th><th>sentiment</th><th>topic</th><th>reach</th></tr>'+pressRows+'</table></div>'
+      :'<div class="empty">No press mentions logged.</div>')+
+    '<div class="sect"><h2>All-hands</h2><span class="meta">'+ah.length+' logged</span></div>'+
+    (ahRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>date</th><th>attendees</th><th>sentiment after</th><th>topics</th></tr>'+ahRows+'</table></div>'
+      :'<div class="empty">No all-hands logged. R117 reads that silence.</div>')+
+    '<div class="sect"><h2>Investor updates</h2><span class="meta">'+iu.length+' sent'+(mrrArr.length>1?' · MRR trend '+SPARK(mrrArr):'')+'</span></div>'+
+    (iuRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>period</th><th>MRR</th><th>runway</th><th>expected sentiment</th><th>risks disclosed</th></tr>'+iuRows+'</table></div>'
+      :'<div class="empty">No investor updates sent.</div>')+
+    '<div class="sect"><h2>Message tests</h2><span class="meta">'+mt.length+'</span></div>'+
+    (mtRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>when</th><th>message</th><th>segment</th><th>n</th><th>response</th></tr>'+mtRows+'</table></div>'
+      :'<div class="empty">No messages tested. Testing is not weakness — it is not walking into a room having only heard yourself say it.</div>')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">narrative.drafted · narrative.delivered · allhands.logged · press.mention · internal.comms.sent</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
 V['#/finance']={kicker:'finance as a decision language',title:'Finance',render(ctx){
   const P=ctx.P, R=ctx.R, now=ctx.now, F=LeadOS.finIntel;
   const vals=o=>Object.keys(o||{}).map(k=>o[k]);
@@ -10329,6 +11317,7 @@ function shell(ctx){
     ['#/execution','activity','Execution',(ctx.P.openBlockers||[]).length||null],
     ['#/external','layers','External',(ctx.P.openPains||[]).length||null],
     ['#/finance','bars','Finance',(ctx.P.unreviewedCapex||[]).length||null],
+    ['#/narrative','book','Narrative',(ctx.P.undeliveredNarratives||[]).length||null],
     ['#/self','gauge','Self',(ctx.P.openBiases||[]).length||null],
     ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],
