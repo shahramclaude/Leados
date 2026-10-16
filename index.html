@@ -870,7 +870,9 @@ function fin(rule,f){
     out.sev=3; }
   if(out.evidenceAt===null)
     out.basis.push('evidence undated — excluded from domain heat (stated, never re-dated)');
-  out.key=out.rule+':'+(out.scope||out.refs[0]||'global');
+  /* literal key override: the pt-8 brief pins exact CORR:* keys. A provided
+     key wins over the computed one; both are shown in the finding card. */
+  out.key=(typeof f.key==='string'&&f.key.length)?f.key:out.rule+':'+(out.scope||out.refs[0]||'global');
   return out;
 }
 const F=rule=>f=>fin(rule,f);
@@ -1291,13 +1293,159 @@ function R40(P,today){ const f=F('R40'),out=[];
   return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40];
-function run(P,today){
-  const out=[];
-  RULES.forEach(r=>{ const got=r(P,today); got.forEach(x=>out.push(x)); });
-  out.sort((a,b)=>(b.sev-a.sev)||(a.rule<b.rule?-1:a.rule>b.rule?1:0)||(a.key<b.key?-1:1));
-  return out;
+
+/* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
+   Run AFTER the individual rules; the correlation pass receives the already-
+   computed findings list (the unsuppressed, non-ENG individual findings —
+   printed in every CORR basis). Keys are LITERAL per the brief
+   (CORR:<PATTERN>). A correlation finding resolves by derivation: it stops
+   firing the moment its pattern goes dormant ("resolved when all constituent
+   findings are resolved" — there is no state to clear; printed).
+   Play ids are the brief's literal playbook ids (CURATED resolves them). */
+const CORR_DEFS=[
+  {rule:'R41',pattern:'DEATH_SPIRAL',sev:5,conf:'MEDIUM',play:'systemic-intervention',key:'CORR:DEATH_SPIRAL',
+   confWhy:'conf MEDIUM — a compound of four correlated signals, not a single measured fact (per the brief)'},
+  {rule:'R42',pattern:'REVENUE_AT_RISK',sev:4,conf:'MEDIUM',play:'revenue-war-room',key:'CORR:REVENUE_AT_RISK',
+   confWhy:'conf MEDIUM — three correlated revenue signals, addressed as one problem (per the brief)'},
+  {rule:'R43',pattern:'GOVERNANCE_GAP',sev:4,conf:'MEDIUM',play:'governance-sprint',key:'CORR:GOVERNANCE_GAP',
+   confWhy:'conf MEDIUM — four correlated governance signals (per the brief)'},
+  {rule:'R44',pattern:'QUALITY_COLLAPSE',sev:5,conf:'HIGH',play:'production-stop',key:'CORR:QUALITY_COLLAPSE',
+   confWhy:'sev 5 by EXCEPTION — all inputs are measured production data; same class as R28 safety (per the brief, printed)',
+   confNote:'conf HIGH — measured production data, not a pattern extrapolation'},
+  {rule:'R45',pattern:'LEADERSHIP_VACUUM',sev:4,conf:'HIGH',play:'leadership-audit',key:'CORR:LEADERSHIP_VACUUM',
+   confWhy:'conf HIGH — all inputs are cadence data: your own logs (per the brief). A manager firing all 4 cadence rules simultaneously is not having a bad week'}
+];
+Object.assign(META,{
+  R41:{domain:'system',play:'systemic-intervention'},R42:{domain:'system',play:'revenue-war-room'},
+  R43:{domain:'system',play:'governance-sprint'},R44:{domain:'system',play:'production-stop'},
+  R45:{domain:'system',play:'leadership-audit'},
+  ENG:{domain:'system',play:null}
+});
+/* Heat domain for a cross-domain composite: the most common limb domain,
+   ties broken alphabetically — mechanical, and printed (never claimed to be
+   the pattern's "location"). */
+function corrDomain(def,pat){
+  const counts={};
+  (pat?pat.requires:[]).forEach(r=>{ const d=(META[r]||{domain:'system'}).domain; counts[d]=(counts[d]||0)+1; });
+  const total=(pat?pat.requires.length:0);
+  const best=Object.keys(counts).sort((a,b)=>(counts[b]-counts[a])||(a<b?-1:1))[0]||'system';
+  return {domain:best,why:'charged to '+best+' ('+(counts[best]||0)+' of '+total+' limb domains) — a composite is not "located" anywhere; this is printed, not claimed'};
 }
-LeadOS.rules={META:META,RULES:RULES,fin:fin,run:run,count:RULES.length};
+function corrFindings(P,today,received,patternsActive){
+  const out=[], errs=[];
+  CORR_DEFS.forEach(def=>{
+    const pat=patternsActive.filter(p=>p.name===def.pattern)[0];
+    if(!pat) return;
+    try{
+      const byKey={}; received.forEach(f=>{ byKey[f.key]=f; });
+      const evid=U.maxAt([].concat.apply([],pat.members.map(m=>m.keys.map(k=>(byKey[k]||{}).evidenceAt).filter(x=>typeof x==='number'))),x=>x);
+      const dom=corrDomain(def,pat);
+      const limbs=pat.members.map(m=>'  '+m.rule+': '+m.count+' finding(s) ['+m.keys.join(', ')+']');
+      out.push(fin(def.rule,{
+        sev:def.sev, conf:def.conf, play:def.play,
+        key:def.key, /* literal key — the pt-8 brief pins CORR:<PATTERN> exactly */
+        title:'Pattern active: '+def.pattern.toLowerCase().replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),
+        basis:['correlation rules run AFTER the individual rules — this pass received '+received.length+' already-computed, unsuppressed individual finding(s)',
+          'trigger: pattern '+def.pattern+' active — every required limb verified against that received list:'].concat(limbs).concat([
+          def.confWhy+(def.confNote?' · '+def.confNote:''),
+          'resolved when all '+pat.requires.length+' constituent rules stop firing — findings are derived per read, so resolution is derivation, not a stored state',
+          'heat domain: '+dom.why,
+          'one phenomenon, two surfaces: the intelligence layer also renders this as insight:pattern:'+def.pattern+' in #/insights — printed, not duplicated silently']),
+        domain:dom.domain, evidenceAt:evid}));
+    }catch(e){ errs.push({rule:def.rule,message:e.message});
+      out.push(engFinding(def.rule,e)); }
+  });
+  return {corr:out,errs:errs};
+}
+/* ENG findings: a throwing rule surfaces LOUDLY as a finding and in engErrors —
+   never silently (carried lineage doctrine). ENG findings are not suppressible
+   and are undated (auto-excluded from heat, disclosed). */
+function engFinding(rule,e){
+  return fin('ENG',{sev:5,conf:'HIGH',play:null,
+    playNone:'engine fault — fix the rule, not the data',
+    key:'ENG:'+rule,
+    title:'Rule '+rule+' threw during evaluation',
+    basis:['the rule engine caught this exception and is showing it loudly instead of failing silently: '+e.message,
+      'this finding is an ENGINE FAULT, not evidence about the organization — it is not suppressible and it does not charge the heatmap'],
+    domain:'system'});
+}
+function individual(P,today){
+  const base=[], errs=[];
+  RULES.forEach(r=>{
+    let got=null;
+    try{ got=r(P,today); }
+    catch(e){ errs.push({rule:r.name||'(anonymous)',message:e.message});
+      base.push(engFinding(r.name||'(anonymous)',e)); return; }
+    (got||[]).forEach(x=>base.push(x));
+  });
+  return {base:base,errs:errs};
+}
+/* Findings suppression — INTERPRETATION, printed (the brief pins
+   suppressedCount but not the mechanism): signal.tagged with tag
+   'suppress'|'unsuppress', eventId = the finding's stable key, LATEST append
+   wins. Auditable (the tag event is in the log forever) and reversible
+   (unsuppress). Suppressing every limb of a pattern makes the pattern go
+   dormant — suppression is allowed to quiet cascades, and the dormant-listing
+   disclosure shows WHY. */
+function suppression(P){
+  const map={};
+  (P.signalTags||[]).forEach(t=>{
+    if(t.tag!=='suppress'&&t.tag!=='unsuppress') return;
+    map[t.eventId]={tag:t.tag,note:t.note||'',at:t.at,_ev:t._ev||null}; /* later append overwrites — latest wins */
+  });
+  return map;
+}
+const sortFindings=out=>out.sort((a,b)=>(b.sev-a.sev)||(a.rule<b.rule?-1:a.rule>b.rule?1:0)||(a.key<b.key?-1:1));
+/* runFull: one computation, used by BOTH the strict contract (run) and the
+   view layer (correlate.run). Algorithm order is printed in CORR basis lines:
+   individual → suppression → correlation pass (receives the visible list) →
+   sort. Deterministic: same log + same injected today → identical output. */
+function runFull(P,today){
+  const ind=individual(P,today);
+  const engList=ind.base.filter(f=>f.rule==='ENG');
+  const indNormal=ind.base.filter(f=>f.rule!=='ENG');
+  const sup=suppression(P);
+  const isSup=f=>sup[f.key]&&sup[f.key].tag==='suppress';
+  const visibleBase=indNormal.filter(f=>!isSup(f));
+  const pats=LeadOS.correlate.detectPatterns(P,today,visibleBase);
+  const cf=corrFindings(P,today,visibleBase,pats.active);
+  const corrVisible=cf.corr.filter(f=>!isSup(f)&&f.rule!=='ENG');
+  const corrEng=cf.corr.filter(f=>f.rule==='ENG');
+  const engAll=engList.concat(corrEng);
+  const suppressedFindings=indNormal.concat(cf.corr.filter(f=>f.rule!=='ENG'))
+    .filter(isSup)
+    .map(f=>Object.assign({},f,{_supBy:sup[f.key]._ev,_supNote:sup[f.key].note,_supAt:sup[f.key].at}));
+  const findings=sortFindings(visibleBase.concat(corrVisible).concat(engAll));
+  /* suppression-quieted cascades, disclosed rather than hidden: patterns that
+     WOULD fire on the unsuppressed list but are dormant on the visible list */
+  const allPats=LeadOS.correlate.detectPatterns(P,today,indNormal);
+  const quieted=pats.dormant.filter(d=>allPats.active.some(a=>a.name===d.name))
+    .map(d=>({name:d.name,
+      why:'dormant because limb finding(s) are suppressed — suppression quieted the cascade; printed, not hidden. Missing on the visible list: '+d.missing.join(', ')}));
+  const clus=LeadOS.correlate.clusters(P,today,findings);
+  const benches=LeadOS.correlate.benchmarkCompare(P);
+  const ins=LeadOS.correlate.buildInsights(P,today,findings,clus,pats,benches);
+  const ht=LeadOS.correlate.heat(P,today,findings);
+  const nonPromoted=clus.list.filter(c=>!(c.severity>=4||c.findings.length>=3||c.domains.length>1));
+  const engErrors=ind.errs.concat(cf.errs);
+  return {
+    /* the strict pt-8 contract keys: */
+    findings:findings, suppressedCount:suppressedFindings.length, engErrors:engErrors,
+    insights:ins, heatmap:ht,
+    /* view-aid fields (same computation, printed): */
+    suppressedFindings:suppressedFindings, clusters:clus, nonPromoted:nonPromoted,
+    patterns:pats, quieted:quieted, benchmarks:benches, heat:ht
+  };
+}
+/* The strict pt-8 contract — exactly five keys, in the brief's order. */
+function run(P,today){
+  const r=runFull(P,today);
+  return {findings:r.findings,suppressedCount:r.suppressedCount,engErrors:r.engErrors,
+    insights:r.insights,heatmap:r.heatmap};
+}
+LeadOS.rules={META:META,RULES:RULES,CORR_DEFS:CORR_DEFS,fin:fin,engFinding:engFinding,
+  individual:individual,suppression:suppression,corrFindings:corrFindings,
+  runFull:runFull,run:run,count:RULES.length};
 })();
 
 /* ==================== 6 · CORRELATE — clusters · heat · insights ============
@@ -1627,16 +1775,11 @@ function buildInsights(P,today,findings,clus,pats,benches){
 }
 
 /* ---------- one deterministic read ---------- */
+/* pt-8: the rules engine owns the pipeline (individual → suppression →
+   correlation pass → analytics). correlate.run delegates so there is exactly
+   ONE computation path; LeadOS.rules.run stays the strict 5-key contract. */
 function run(P,today){
-  const findings=LeadOS.rules.run(P,today);
-  const clus=clusters(P,today,findings);
-  const ht=heat(P,today,findings);
-  const pats=detectPatterns(P,today,findings);
-  const benches=benchmarkCompare(P);
-  const ins=buildInsights(P,today,findings,clus,pats,benches);
-  const nonPromoted=clus.list.filter(c=>!(c.severity>=4||c.findings.length>=3||c.domains.length>1));
-  return {findings:findings,clusters:clus,nonPromoted:nonPromoted,heat:ht,patterns:pats,
-    benchmarks:benches,insights:ins};
+  return LeadOS.rules.runFull(P,today);
 }
 LeadOS.correlate={CONF_FACTOR:CONF_FACTOR,CONF_FACTOR_WHY:CONF_FACTOR_WHY,HEAT_LABEL:HEAT_LABEL,
   BENCH_GAP_SEV:BENCH_GAP_SEV,PATTERNS:PATTERNS,HERITAGE_LABELS:HERITAGE_LABELS,
@@ -1911,7 +2054,7 @@ function runT(){
     if(!ds.window||ds.window.ok) return {why:'DEATH_SPIRAL window limb should be non-fresh in seed (R4 staleness disclosed)'};
     const noChurn=wrap(buildSeed(FIXED).filter(e=>e.type!=='cs.churn.logged'));
     const P3=LeadOS.engine.project(noChurn);
-    const pats=LeadOS.correlate.detectPatterns(P3,FIXED,LeadOS.rules.run(P3,FIXED));
+    const pats=LeadOS.rules.runFull(P3,FIXED).patterns;
     const dor=pats.dormant.filter(d=>d.name==='REVENUE_AT_RISK')[0];
     if(!dor||dor.missing.join(',')!=='R34') return {why:'without churn events the pattern must go dormant missing exactly R34'};
     return {ok:true,why:'all 8 fire in seed · R34 removed → dormant missing [R34] · window sub-claims printed'};
@@ -1957,9 +2100,75 @@ function runT(){
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
+    const corrKeys=run1.findings.filter(f=>/^R4[1-5]$/.test(f.rule)).map(f=>f.key).sort();
+    const expect=['CORR:DEATH_SPIRAL','CORR:GOVERNANCE_GAP','CORR:LEADERSHIP_VACUUM','CORR:QUALITY_COLLAPSE','CORR:REVENUE_AT_RISK'];
+    if(!eq(corrKeys,expect)) return {why:'CORR keys in seed: '+corrKeys.join(', ')+' — expected all 5'};
+    if(run1.suppressedCount!==0) return {why:'seed carries no suppression; suppressedCount should be 0, got '+run1.suppressedCount};
+    if(run1.engErrors.length) return {why:'engine fault in seed: '+run1.engErrors[0].message};
     if(!run1.heat.cells.length) return {why:'heat produced no cells'};
     if(!run1.heat.excluded.length) return {why:'heat produced no exclusions (seed should demonstrate them)'};
-    return {ok:true,why:run1.findings.length+' findings across all 40 rules · insights: '+Object.keys(kinds).map(k=>k+' '+kinds[k]).join(' · ')};
+    return {ok:true,why:run1.findings.length+' findings: all 40 individual rules + all 5 CORR keys · 0 suppressed · 0 engine faults · insights: '+Object.keys(kinds).map(k=>k+' '+kinds[k]).join(' · ')};
+  }));
+  T.push(check('T19','R41–R45: CORR keys exact, sev/conf per brief, resolution by dormancy',()=>{
+    const by={}; run1.findings.forEach(f=>{ if(/^R4[1-5]$/.test(f.rule)) by[f.rule]=f; });
+    const expect={R41:{k:'CORR:DEATH_SPIRAL',sev:5,conf:'MEDIUM',play:'systemic-intervention'},
+      R42:{k:'CORR:REVENUE_AT_RISK',sev:4,conf:'MEDIUM',play:'revenue-war-room'},
+      R43:{k:'CORR:GOVERNANCE_GAP',sev:4,conf:'MEDIUM',play:'governance-sprint'},
+      R44:{k:'CORR:QUALITY_COLLAPSE',sev:5,conf:'HIGH',play:'production-stop'},
+      R45:{k:'CORR:LEADERSHIP_VACUUM',sev:4,conf:'HIGH',play:'leadership-audit'}};
+    for(const id of Object.keys(expect)){
+      const e=expect[id], f=by[id];
+      if(!f) return {why:id+' did not fire in the full seed'};
+      if(f.key!==e.k||f.sev!==e.sev||f.conf!==e.conf||f.play!==e.play)
+        return {why:id+' mismatch: key '+f.key+', sev '+f.sev+', conf '+f.conf+', play '+f.play};
+      if(f.basis.join(' ').indexOf('correlation rules run AFTER the individual rules')===-1)
+        return {why:id+' does not print the pass order'};
+      const patDef=LeadOS.correlate.PATTERNS.filter(p=>p.id===e.k.slice(5))[0];
+      if(!patDef) return {why:'no pattern def for '+e.k};
+      if(f.basis.join(' ').indexOf('resolved when all '+patDef.requires.length+' constituent rules')===-1)
+        return {why:id+' resolution clause not printed'}; }
+    if(by.R44.basis.join(' ').indexOf('sev 5 by EXCEPTION')===-1||by.R44.basis.join(' ').indexOf('R28 safety')===-1)
+      return {why:'R44 exception note (same class as R28 safety) not printed'};
+    if(by.R45.basis.join(' ').indexOf('cadence data')===-1)
+      return {why:'R45 cadence-data conf rationale not printed'};
+    /* geometry of existence: R41/R44/R45 are cross-input composites; none may
+       exist when its pattern is dormant */
+    const noChurn=wrap(buildSeed(FIXED).filter(e=>e.type!=='cs.churn.logged'));
+    const r2=LeadOS.rules.runFull(LeadOS.engine.project(noChurn),FIXED);
+    if(r2.findings.some(f=>f.key==='CORR:REVENUE_AT_RISK')) return {why:'CORR:REVENUE_AT_RISK fired while its pattern was dormant'};
+    if(!r2.patterns.dormant.some(d=>d.name==='REVENUE_AT_RISK')) return {why:'REVENUE_AT_RISK should be dormant without churn'};
+    return {ok:true,why:'5/5 keys,sev,conf,play exact · pass order + resolution printed · dormant ⇒ no CORR finding'};
+  }));
+  T.push(check('T20','run() strict contract · suppress/unsuppress latest-wins · ENG loud path',()=>{
+    const r=LeadOS.rules.run(P,FIXED);
+    const keys=Object.keys(r).sort();
+    if(JSON.stringify(keys)!==JSON.stringify(['engErrors','findings','heatmap','insights','suppressedCount']))
+      return {why:'contract keys wrong: '+keys.join(', ')};
+    /* suppression mechanics (interpretation under test): signal.tagged, latest wins */
+    const supEv=[{seq:evts.length+1,id:pad(evts.length+1),at:FIXED,type:'signal.tagged',
+      payload:{eventId:'R13:q-1',tag:'suppress',note:'accepted at staff'}}];
+    const rSup=LeadOS.rules.runFull(LeadOS.engine.project(evts.concat(supEv)),FIXED);
+    if(rSup.suppressedCount!==1) return {why:'expected suppressedCount 1, got '+rSup.suppressedCount};
+    if(rSup.findings.some(f=>f.key==='R13:q-1')) return {why:'suppressed finding still in list'};
+    const sf=rSup.suppressedFindings[0];
+    if(!sf||sf._supBy!==pad(evts.length+1)||sf._supNote!=='accepted at staff') return {why:'suppression not audited (event id + note)'};
+    if(rSup.findings.some(f=>f.key==='CORR:DEATH_SPIRAL')) return {why:'cascade not quieted: limb suppressed but CORR finding still fired'};
+    if(!rSup.quieted.some(q=>q.name==='DEATH_SPIRAL')) return {why:'quieted-cascade disclosure missing'};
+    const rUn=LeadOS.rules.runFull(LeadOS.engine.project(evts.concat(supEv).concat([
+      {seq:evts.length+2,id:pad(evts.length+2),at:FIXED,type:'signal.tagged',
+        payload:{eventId:'R13:q-1',tag:'unsuppress',note:'back on the agenda'}}])),FIXED);
+    if(rUn.suppressedCount!==0||!rUn.findings.some(f=>f.key==='R13:q-1')) return {why:'latest-wins unsuppress did not restore the finding'};
+    /* ENG path: a throwing rule is loud as a finding AND in engErrors, never silent */
+    LeadOS.rules.RULES.push(function RTEST(){ throw new Error('boom-T20'); });
+    try{
+      const rEng=LeadOS.rules.runFull(P,FIXED);
+      if(rEng.engErrors.length!==1||rEng.engErrors[0].rule!=='RTEST') return {why:'engErrors did not capture RTEST'};
+      if(!rEng.findings.some(f=>f.key==='ENG:RTEST'&&f.sev===5)) return {why:'no loud ENG finding for RTEST'};
+      if(rEng.suppressedCount!==0) return {why:'ENG faults must not affect suppression accounting'};
+    } finally { LeadOS.rules.RULES.pop(); }
+    const rClean=LeadOS.rules.run(P,FIXED);
+    if(rClean.engErrors.length!==0) return {why:'engine did not return to clean after pop'};
+    return {ok:true,why:'5-key contract exact · suppress 1 → quieted cascade disclosed · unsuppress restores · ENG loud + reversible'};
   }));
   return T;
 }
@@ -2015,17 +2224,24 @@ function runG(){
     const P2=LeadOS.engine.project(raw.events);
     return U.deepEq(P,P2)?{ok:true,why:'folds identical, nothing cached'}:{why:'folds diverged'};
   }));
-  G.push(check('G7','live rules run: clean + every finding shape-valid',()=>{
+  G.push(check('G7','live run: strict 5-key contract · findings valid · zero engine faults',()=>{
     if(!P) return {why:'no projection (see G6)'};
-    const fs=LeadOS.rules.run(P,Date.now());
+    const r=LeadOS.rules.run(P,Date.now());
+    const keys=Object.keys(r).sort();
+    if(JSON.stringify(keys)!==JSON.stringify(['engErrors','findings','heatmap','insights','suppressedCount']))
+      return {why:'contract keys wrong: '+keys.join(', ')};
+    if(!Array.isArray(r.findings)||typeof r.suppressedCount!=='number'||!Array.isArray(r.engErrors))
+      return {why:'contract field types wrong'};
+    if(r.engErrors.length) return {why:'engine fault live: '+r.engErrors[0].rule+': '+r.engErrors[0].message};
+    const fs=r.findings;
     for(const f of fs){
       if(!f.rule||typeof f.sev!=='number'||f.sev<1||f.sev>5) return {why:'bad sev on '+f.key};
       if(['HIGH','MEDIUM','LOW'].indexOf(f.conf)===-1) return {why:'bad conf on '+f.key};
       if(!f.basis.length) return {why:'empty basis on '+f.key};
       if(!f.title) return {why:'missing title on '+(f.key||'?')}; }
-    const keys=fs.map(f=>f.key), dup=keys.filter((k,i)=>keys.indexOf(k)!==i);
+    const fkeys=fs.map(f=>f.key), dup=fkeys.filter((k,i)=>fkeys.indexOf(k)!==i);
     if(dup.length) return {why:'duplicate finding keys: '+U.uniq(dup).join(', ')};
-    return {ok:true,why:fs.length+' findings · shapes valid · keys unique'};
+    return {ok:true,why:fs.length+' findings · '+r.suppressedCount+' suppressed · 0 engine faults · contract exact'};
   }));
   G.push(check('G8','live insights: 3 kinds only · ids unique · suppression coherent',()=>{
     if(!P) return {why:'no projection (see G6)'};
@@ -2061,8 +2277,9 @@ const CLAIMS=[
   {id:'C6',text:'Benchmark-gap: ≤80% trigger on fin.kpi/product.metric only; MEDIUM; source printed, unverified',by:['T10']},
   {id:'C7',text:'Insights: stable ids, three kinds, printed promotion; acks suppress per read and stay audited',by:['T11','T12','T13','G8']},
   {id:'C8',text:'Named patterns fire iff every limb fires; windows evaluated as printed sub-claims',by:['T14']},
-  {id:'C9',text:'All 40 rules exercised by one deterministic seed',by:['T18']},
-  {id:'C10',text:'The registry rejects bad payloads; the import gate rewires and counts skips',by:['T15','T16','G3']}
+  {id:'C9',text:'All 40 individual rules + all 5 correlation rules exercised by one deterministic seed',by:['T18','T19']},
+  {id:'C10',text:'The registry rejects bad payloads; the import gate rewires and counts skips',by:['T15','T16','G3']},
+  {id:'C11',text:'R41–R45 fire iff their pattern is active, carry literal CORR keys, and the correlation pass receives the already-computed (unsuppressed) list; suppression is audited and reversible; engine faults surface loudly',by:['T19','T20','G7']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -2180,7 +2397,7 @@ function readAll(){
   const R=LeadOS.correlate.run(P,now);
   return {events:events,P:P,now:now,R:R};
 }
-const ui={route:'#/today',chip:'ALL',heatSel:null,capType:null,ackOpen:null};
+const ui={route:'#/today',chip:'ALL',heatSel:null,capType:null,ackOpen:null,supOpen:null};
 const fmtN=n=>Number(n).toLocaleString('en-US');
 const SEVCHIP=s=>'<span class="sev s'+s+'">sev '+s+'</span>';
 const CONFC=c=>'<span class="conf '+c+'" title="confidence">'+c.toLowerCase()+'</span>';
@@ -2193,8 +2410,11 @@ function playLine(play,playNone){
 }
 function finCard(f){
   const age=f.evidenceAt===null?'undated':U.days(Date.now(),f.evidenceAt)+'d';
+  const isCorr=/^R4[1-5]$/.test(f.rule), isEng=f.rule==='ENG';
   return '<div class="fin">'+
     '<div class="top">'+SEVCHIP(f.sev)+'<span class="rule">'+f.rule+'</span>'+CONFC(f.conf)+
+      (isCorr?'<span class="pill">correlation rule</span>':'')+
+      (isEng?'<span class="sev s5">engine fault</span>':'')+
       '<span class="title">'+esc(f.title)+'</span><span class="key">'+esc(f.key)+'</span></div>'+
     '<div class="basis">'+f.basis.map(b=>'<div>'+esc(b)+'</div>').join('')+'</div>'+
     '<div class="foot">'+playLine(f.play,f.playNone)+
@@ -2202,6 +2422,23 @@ function finCard(f){
       '<span class="pill">evidence '+(f.evidenceAt===null?'undated':U.iso(f.evidenceAt)+' · '+age)+'</span>'+
       (f.trend?'<span class="pill">trend-derived</span>':'')+
       (f.refs.length?'<span class="conf" title="refs">refs: '+esc(f.refs.join(', '))+'</span>':'')+
+      (isEng?'':'<button class="btn ghost sm" data-act="findsup" data-key="'+esc(f.key)+'" title="append signal.tagged tag=suppress">'+icon('x',12)+' suppress</button>')+
+    '</div>'+
+    (ui.supOpen===f.key
+      ?'<div class="foot"><input style="max-width:340px" data-supnote placeholder="note (audited, optional)">'+
+       '<button class="btn sm" data-act="findsupdo" data-key="'+esc(f.key)+'">append signal.tagged · suppress</button>'+
+       '<button class="btn ghost sm" data-act="supcancel">cancel</button></div>'
+      :'')+'</div>';
+}
+function finCardSup(f){
+  return '<div class="fin" style="opacity:.68">'+
+    '<div class="top">'+SEVCHIP(f.sev)+'<span class="rule">'+f.rule+'</span>'+CONFC(f.conf)+
+      '<span class="title">'+esc(f.title)+'</span><span class="key">'+esc(f.key)+'</span></div>'+
+    '<div class="foot">'+
+      '<span class="pill">suppressed by '+esc(f._supBy||'signal.tagged')+'</span>'+
+      (f._supNote?'<span class="pill">note: '+esc(f._supNote)+'</span>':'')+
+      '<span class="pill">'+U.iso(f._supAt)+'</span>'+
+      '<button class="btn ghost sm" data-act="findunsup" data-key="'+esc(f.key)+'">'+icon('check',12)+' unsuppress</button>'+
     '</div></div>';
 }
 function insightCard(i){
@@ -2272,10 +2509,13 @@ V['#/signals']={kicker:'rules R1–R40 · pure over the log',title:'Signals',ren
   const domCounts={}; R.findings.forEach(f=>{ domCounts[f.domain]=(domCounts[f.domain]||0)+1; });
   const chipsDom=Object.keys(domCounts).sort().map(d=>[d,domCounts[d]]);
   const list=ui.chip==='ALL'?R.findings:R.findings.filter(f=>f.domain===ui.chip);
-  return '<div class="vhead"><div class="kicker">rules R1–R40 · pure over the log</div><h1>Signals</h1>'+
-    '<div class="sub">'+R.findings.length+' findings from rules.run(P, now). Findings are never persisted; the same log at the same instant always yields the same list (T3/T4). Every finding prints its arithmetic, the event type it read, and the playbook that resolves it — or why it has none.</div></div>'+
+  const sup=(R.suppressedFindings||[]);
+  return '<div class="vhead"><div class="kicker">rules R1–R45 · pure over the log</div><h1>Signals</h1>'+
+    '<div class="sub">'+R.findings.length+' findings from rules.run(P, now) — R1–R40 individual, R41–R45 correlation rules (they run after, receiving the already-computed list). Findings are never persisted; the same log at the same instant always yields the same list (T3/T4). Every finding prints its arithmetic, the event type it read, and the playbook that resolves it — or why it has none.</div></div>'+
     chips(chipsDom)+'<div style="height:14px"></div>'+
-    (list.length?list.map(finCard).join(''):'<div class="empty">No findings'+(ui.chip!=='ALL'?' in '+ui.chip:'')+'.</div>');
+    (list.length?list.map(finCard).join(''):'<div class="empty">No findings'+(ui.chip!=='ALL'?' in '+ui.chip:'')+'.</div>')+
+    '<div class="sect"><h2>Suppressed</h2><span class="meta">'+sup.length+' — via signal.tagged · latest-wins · audited & reversible (interpretation, printed)</span></div>'+
+    (sup.length?sup.map(finCardSup).join(''):'<div class="empty">Nothing suppressed. Suppressing a finding appends <span class="mono">signal.tagged {eventId: &lt;finding key&gt;, tag: suppress}</span> — the event stays in the log forever, and appending tag unsuppress reverses it.</div>');
 }};
 V['#/insights']={kicker:'clusters · patterns · benchmark gaps',title:'Insights',render(ctx){
   const R=ctx.R, ins=R.insights;
@@ -2291,6 +2531,8 @@ V['#/insights']={kicker:'clusters · patterns · benchmark gaps',title:'Insights
       ins.orphanAcks.map(o=>'<div class="card" style="margin-bottom:8px"><span class="mono">'+esc(o.insightId)+'</span><div class="small muted">acknowledged '+U.iso(o.at)+' by '+esc(o._ev||'?')+(o.note?' · note: '+esc(o.note):'')+' · insight ids re-key when membership changes — this orphan is the doctrine made visible</div></div>').join(''):'')+
     '<div class="sect"><h2>Below the promotion line</h2><span class="meta">'+nonP.length+' clusters that exist but do not produce insights</span></div>'+
     (nonP.length?nonP.map(c=>'<div class="card" style="margin-bottom:8px"><b>'+esc(c.pattern)+'</b><div class="small muted" style="margin-top:4px">'+esc(c.confWhy)+'</div><div class="mono small" style="margin-top:4px">members: '+esc(c.findings.join(', '))+' · sev '+c.severity+' · '+c.domains.length+' domain(s) — falls short of sev ≥4 / ≥3 members / >1 domain</div></div>').join(''):'<div class="empty">No unpromoted clusters.</div>')+
+    ((R.quieted||[]).length?'<div class="sect"><h2>Quieted by suppression</h2><span class="meta">'+R.quieted.length+' — suppression silenced a cascade; disclosed, not hidden</span></div>'+
+      R.quieted.map(q=>'<div class="card" style="margin-bottom:8px;opacity:.78"><b>'+esc(q.name)+'</b> <span class="pill">quieted</span><div class="small muted" style="margin-top:4px">'+esc(q.why)+'</div></div>').join(''):'')+
     '<div class="sect"><h2>Pattern library</h2><span class="meta">'+R.patterns.librarySize+' named patterns · '+R.patterns.active.length+' firing</span></div>'+
     (dorm.length?dorm.map(d=>'<div class="card" style="margin-bottom:8px;opacity:.75"><b>'+esc(d.name)+'</b> <span class="pill">dormant</span><div class="small muted" style="margin-top:4px">missing limbs: <span class="mono">'+esc(d.missing.join(', '))+'</span>'+(d.present.length?' · present: '+esc(d.present.join(', ')):'')+'</div></div>').join(''):'<div class="empty">Every pattern in the library is firing.</div>');
 }};
@@ -2508,6 +2750,18 @@ document.addEventListener('click',e=>{
   else if(act==='heat'){ ui.heatSel=(ui.heatSel===b.dataset.d)?null:b.dataset.d; render(); }
   else if(act==='ack'){ ui.ackOpen=b.dataset.id; render(); }
   else if(act==='ackcancel'){ ui.ackOpen=null; render(); }
+  else if(act==='findsup'){ ui.supOpen=b.dataset.key; render(); }
+  else if(act==='supcancel'){ ui.supOpen=null; render(); }
+  else if(act==='findsupdo'){
+    const host=b.closest('.fin'), input=host&&host.querySelector('[data-supnote]');
+    const note=input?input.value.trim():'';
+    try{ LeadOS.store.append('signal.tagged',{eventId:b.dataset.key,tag:'suppress',note:note});
+      ui.supOpen=null; toast('signal.tagged · suppress appended'); render(); }
+    catch(err){ toast(err.message); } }
+  else if(act==='findunsup'){
+    try{ LeadOS.store.append('signal.tagged',{eventId:b.dataset.key,tag:'unsuppress',note:''});
+      toast('signal.tagged · unsuppress appended'); render(); }
+    catch(err){ toast(err.message); } }
   else if(act==='ackdo'){
     const host=b.closest('.ins'), input=host&&host.querySelector('[data-acknote]');
     const note=input?input.value.trim():'';
@@ -2572,7 +2826,7 @@ document.addEventListener('change',e=>{
 });
 window.addEventListener('hashchange',()=>{
   const r=location.hash||'#/today';
-  if(ui.route!==r){ ui.route=r; ui.heatSel=null; ui.ackOpen=null; render(); }
+  if(ui.route!==r){ ui.route=r; ui.heatSel=null; ui.ackOpen=null; ui.supOpen=null; render(); }
 });
 
 /* ---------- boot ---------- */
