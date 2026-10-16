@@ -225,7 +225,7 @@ const LeadOS = window.LeadOS = window.LeadOS || {};
 /* Module registry — the single-file analog of the brief's script list.
    Each logical "file" registers exactly one namespace, in this load order.
    The boot guard halts rendering if any entry is missing (data untouched). */
-LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','health','playbooks','ui'];
+LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','health','playbooks','ui'];
 
 /* ==================== 1 · UTIL ==================== */
 (function(){
@@ -432,7 +432,24 @@ const REGISTRY = {
   'meeting.audit':          D({period:'s',total_hours:'n',wasted_pct:'n'},{loaded_cost_est:'n',note:'s'}),
   'trust.signal':           D({fromId:'s',toId:'s',direction:'s',evidence:'s'},{note:'s'},
                               {direction:['gained','lost']}),
-  'psychological.safety':   D({period:'s',score:'n',method:'s'},{teamId:'s',note:'s'})
+  'psychological.safety':   D({period:'s',score:'n',method:'s'},{teamId:'s',note:'s'}),
+  /* pt-13 (brief "pt-8") — decision intelligence. 10 contracts.
+     decision.outcome is an 11th, REQUIRED by R66/R71 which the brief names
+     but never contracts — added openly, labeled in the log, not assumed. */
+  'decision.scenario':      D({id:'s',decisionId:'s',name:'s',probability:'n',outcome_if_true:'n',cost_if_true:'n'},{note:'s'},null,'scenarios'),
+  'decision.premortem':     D({decisionId:'s',failure_modes:'a',mitigation_per_mode:'a'},{facilitatedBy:'s'}),
+  'decision.outcome':       D({decisionId:'s',actual:'s'},{matchedRationale:'b',note:'s'}),
+  'commitment.made':        D({id:'s',to_personId:'s',what:'s',by_date:'ms',stakes:'n',public:'b'},{context:'s'},null,'commitments'),
+  'commitment.completed':   D({commitmentId:'s'},{note:'s'},null,null,{commitmentId:'commitments'}),
+  'commitment.missed':      D({commitmentId:'s',reason:'s',impact:'n'},{recovery:'s'},null,null,{commitmentId:'commitments'}),
+  'initiative.logged':      D({id:'s',title:'s',reach_est:'n',impact_est:'n',confidence_pct:'n',effort_days:'n',model:'s'},
+                              {pillar:'s',ownerId:'s',quarter:'s'},{model:['RICE','WSJF','ICE']},'initiatives'),
+  'initiative.updated':     D({initiativeId:'s',status:'s'},{note:'s'},
+                              {status:['active','paused','killed','shipped']},null,{initiativeId:'initiatives'}),
+  'initiative.prioritized': D({rankedIds:'a',model:'s',rationale:'s',period:'s'},null,{model:['RICE','WSJF','ICE']}),
+  'assumption.logged':      D({id:'s',decisionId:'s',assumption:'s',testable:'b'},{test_method:'s'},null,'assumptions'),
+  'assumption.tested':      D({assumptionId:'s',result:'s',evidence:'s'},{note:'s'},
+                              {result:['confirmed','refuted','inconclusive']},null,{assumptionId:'assumptions'})
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -459,7 +476,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=7, LINEAGE='pt', LINEAGE_TAG='pt-12';
+const KEY='leados:data', SCHEMA_VERSION=8, LINEAGE='pt', LINEAGE_TAG='pt-13';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -476,12 +493,16 @@ const V5_NEW_KEYS=Object.keys(V5_SETTING_DEFAULTS);
 const V6_SETTING_DEFAULTS={negotiationStyleDefault:'collaborative',feedbackDeliveryModel:'SBI',conflictMediationModel:'DESC'};
 const V6_NEW_KEYS=Object.keys(V6_SETTING_DEFAULTS);
 const SETTING_ENUMS={feedbackDeliveryModel:['SBI','COIN','BID'],conflictMediationModel:['DESC','GROW','ICF'],
-  negotiationStyleDefault:['collaborative','competitive','accommodating','avoiding','compromising']};
+  negotiationStyleDefault:['collaborative','competitive','accommodating','avoiding','compromising'],
+  prioritizationModel:['RICE','WSJF','ICE']};
 /* v7 — organizational dynamics. Numbers again; the network decay is a
    LABELED assumption exactly like heatmapDecayFactor (printed wherever used). */
 const V7_SETTING_DEFAULTS={influenceNetworkDecayDays:180,cultureSignalWindowDays:90,infoPipelineCheckCadenceDays:30};
 const V7_NEW_KEYS=Object.keys(V7_SETTING_DEFAULTS);
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS);
+/* v8 — decision intelligence. prioritizationModel is a STRING (enum). */
+const V8_SETTING_DEFAULTS={commitmentReviewCadenceDays:7,scenarioHorizonDays:90,prioritizationModel:'RICE'};
+const V8_NEW_KEYS=Object.keys(V8_SETTING_DEFAULTS);
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -545,7 +566,13 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V7_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V7_SETTING_DEFAULTS[k]},{repair:true,migration:'6>7',reason:'backfill v7 setting default'}); repairs++; }});
-    recordMigration(raw,'6>7',repairs); raw.schemaVersion=7; return repairs; }
+    recordMigration(raw,'6>7',repairs); raw.schemaVersion=7; return repairs; },
+  /* v7 -> v8: decision-intelligence settings. Contract unchanged since 3>4. */
+  '7>8':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V8_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V8_SETTING_DEFAULTS[k]},{repair:true,migration:'7>8',reason:'backfill v8 setting default'}); repairs++; }});
+    recordMigration(raw,'7>8',repairs); raw.schemaVersion=8; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -634,7 +661,7 @@ const getEvents=()=>load().events.slice();
 const rawBytes=()=>{ const t=localStorage.getItem(KEY); return t?t.length:0; };
 LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V4_NEW_KEYS,
   V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,
-  V7_SETTING_DEFAULTS,V7_NEW_KEYS,SETTING_ENUMS,
+  V7_SETTING_DEFAULTS,V7_NEW_KEYS,V8_SETTING_DEFAULTS,V8_NEW_KEYS,SETTING_ENUMS,
   RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
@@ -840,7 +867,37 @@ const MODULE_FOLD={
   'meeting.audit':(s,p,at,ev)=>{ push(s.meetingAudits,p,at,ev); },
   'trust.signal':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
     s.trustSignals.push(rec); group(s.trustByPair,p.fromId+'→'+p.toId,rec); group(s.trustByTarget,p.toId,rec); },
-  'psychological.safety':(s,p,at,ev)=>{ push(s.psychSafety,p,at,ev); }
+  'psychological.safety':(s,p,at,ev)=>{ push(s.psychSafety,p,at,ev); },
+  /* pt-13 — decision intelligence */
+  'decision.scenario':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.scenarios[p.id]=rec; group(s.scenariosByDecision,p.decisionId,rec); },
+  'decision.premortem':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.premortems.push(rec); s.premortemByDecision[p.decisionId]=rec; /* latest wins */ },
+  'decision.outcome':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.decisionOutcomes.push(rec); s.outcomeByDecision[p.decisionId]=rec;
+    const d=s.decisions[p.decisionId]; if(d){ d.outcome=rec; d.outcomeAt=at; } },
+  'commitment.made':(s,p,at)=>{ s.commitments[p.id]={id:p.id,to_personId:p.to_personId,what:p.what,
+    by_date:p.by_date,stakes:p.stakes,public:p.public,context:p.context||'',madeAt:at,
+    settled:null,settledAt:null,reason:'',impact:null,recovery:'',note:''};
+    group(s.commitmentsByPerson,p.to_personId,s.commitments[p.id]); },
+  'commitment.completed':(s,p,at)=>{ const c=s.commitments[p.commitmentId];
+    if(c){ c.settled='completed'; c.settledAt=at; c.note=p.note||''; } },
+  'commitment.missed':(s,p,at)=>{ const c=s.commitments[p.commitmentId];
+    if(c){ c.settled='missed'; c.settledAt=at; c.reason=p.reason; c.impact=p.impact; c.recovery=p.recovery||''; } },
+  'initiative.logged':(s,p,at)=>{ s.initiatives[p.id]={id:p.id,title:p.title,pillar:p.pillar||'',
+    reach_est:p.reach_est,impact_est:p.impact_est,confidence_pct:p.confidence_pct,effort_days:p.effort_days,
+    ownerId:p.ownerId||null,quarter:p.quarter||null,model:p.model,status:'active',
+    loggedAt:at,statusAt:at,history:[]}; },
+  'initiative.updated':(s,p,at)=>{ const i=s.initiatives[p.initiativeId];
+    if(i){ i.history.push({from:i.status,to:p.status,note:p.note||'',at:at});
+      i.status=p.status; i.statusAt=at; } },
+  'initiative.prioritized':(s,p,at,ev)=>{ push(s.prioritizations,p,at,ev); },
+  'assumption.logged':(s,p,at,ev)=>{ s.assumptions[p.id]={id:p.id,decisionId:p.decisionId,
+    assumption:p.assumption,testable:p.testable,test_method:p.test_method||null,
+    tested:false,result:null,evidence:'',loggedAt:at,testedAt:null};
+    group(s.assumptionsByDecision,p.decisionId,s.assumptions[p.id]); },
+  'assumption.tested':(s,p,at)=>{ const a=s.assumptions[p.assumptionId];
+    if(a){ a.tested=true; a.result=p.result; a.evidence=p.evidence; a.testedAt=at; } }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -870,6 +927,12 @@ function blankBuckets(s){
   s.pipelineChecks=[];s.pipelineByPair={};s.powerLog=[];s.powerByPerson={};
   s.meetings=[];s.meetingsByPerson={};s.meetingAudits=[];
   s.trustSignals=[];s.trustByPair={};s.trustByTarget={};s.psychSafety=[];
+  /* pt-13 decision buckets */
+  s.scenarios={};s.scenariosByDecision={};s.premortems=[];s.premortemByDecision={};
+  s.decisionOutcomes=[];s.outcomeByDecision={};
+  s.commitments={};s.commitmentsByPerson={};
+  s.initiatives={};s.prioritizations=[];
+  s.assumptions={};s.assumptionsByDecision={};
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -898,7 +961,10 @@ const OPEN_SETS={
   openConvs:['convs',c=>c.completed===null],
   openNegotiations:['negotiations',n=>!n.outcome],
   openConflictPairs:['conflictPairs',()=>true],
-  openSilos:['silos',s=>!s.resolved]
+  openSilos:['silos',s=>!s.resolved],
+  openCommitments:['commitments',c=>c.settled===null],
+  activeInitiatives:['initiatives',i=>i.status==='active'],
+  untestedAssumptions:['assumptions',a=>!a.tested]
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -1729,10 +1795,152 @@ function R62(P,today){ const f=F('R62'),out=[];
         'sev 5 on a '+net.label+' — conf MEDIUM: the graph is your observations, the departure is a fact'],
       refs:[a.personId],scope:a.personId+':bridge-loss',evidenceAt:a.at})); });
   return out; }
+/* ---- pt-13 decision-intelligence rules R63–R72 ---- */
+Object.assign(META,{
+  R63:{domain:'people',play:'commitment-review'},R64:{domain:'people',play:'commitment-review'},
+  R65:{domain:'strategy',play:'assumption-audit'},R66:{domain:'strategy',play:'assumption-audit'},
+  R67:{domain:'strategy',play:'premortem'},R68:{domain:'strategy',play:'initiative-prioritize'},
+  R69:{domain:'strategy',play:'initiative-prioritize'},R70:{domain:'strategy',play:'premortem'},
+  R71:{domain:'executive',play:'decision-scenario'},R72:{domain:'executive',play:'conv-prep'}
+});
+function R63(P,today){ const f=F('R63'),out=[];
+  (P.openCommitments||[]).forEach(c=>{
+    if(c.by_date>=today) return; /* strictly past */
+    if(c.stakes<3) return;
+    const past=days(today,c.by_date);
+    const sev=(past>7||c.stakes>=5)?4:3;
+    out.push(f({sev:sev,conf:'HIGH',title:'Commitment overdue '+past+'d to '+c.to_personId+': '+c.what,
+      basis:['by_date '+U.iso(c.by_date)+' is '+past+'d past · stakes '+c.stakes+' ≥ 3 · no commitment.completed and no commitment.missed',
+        'sev '+sev+' = '+(past>7?'>7d past → 4 always':(c.stakes>=5?'stakes 5 → 4':'stakes '+c.stakes+' → 3')),
+        (c.public?'this was a PUBLIC commitment — the audience remembers it too':'private commitment'),
+        'every overdue commitment is a trust withdrawal you have not acknowledged',
+        'source: commitment.made'],
+      refs:[c.id],evidenceAt:c.by_date})); });
+  return out; }
+function R64(P,today){ const f=F('R64'),out=[];
+  const led=LeadOS.decisions.commitmentLedger(P,today);
+  led.patterns.forEach(p=>{
+    const misses=led.byPerson.filter(x=>x.person===p.person)[0].missed;
+    out.push(f({sev:4,conf:'HIGH',title:p.count+' missed commitments to '+p.person+' in 90d',
+      basis:[p.why,
+        misses.map(c=>U.iso(c.settledAt)+' "'+c.what+'" (impact '+c.impact+', stakes '+c.stakes+', reason: '+c.reason+')').join(' · '),
+        'source: commitment.missed, rolling 90d'],
+      refs:[p.person],scope:p.person+':missed-pattern',evidenceAt:U.maxAt(misses,c=>c.settledAt)})); });
+  return out; }
+function R65(P,today){ const f=F('R65'),out=[];
+  (P.untestedAssumptions||[]).forEach(a=>{
+    if(!a.testable) return; /* testable=false → quiet */
+    const d=(P.decisions||{})[a.decisionId];
+    const decidedAt=d&&d.decidedAt?d.decidedAt:(d?d.at:a.loggedAt);
+    const age=days(today,decidedAt);
+    if(age<=14) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Testable assumption never tested ('+age+'d): '+a.assumption,
+      basis:['assumption.logged testable=true on '+U.iso(a.loggedAt)+(a.test_method?' · declared method: "'+a.test_method+'"':' · no test_method declared'),
+        'parent decision '+a.decisionId+(d?' ('+d.title+')':' (not in the decisions fold — id printed as logged)')+' dated '+U.iso(decidedAt)+' · '+age+'d > 14d',
+        'no assumption.tested event · YOU wrote down that this needed testing and then did not',
+        'source: assumption.logged'],
+      refs:[a.id],evidenceAt:decidedAt})); });
+  return out; }
+function R66(P,today){ const f=F('R66'),out=[];
+  vals(P.assumptions||{}).forEach(a=>{
+    if(a.result!=='refuted') return;
+    const outcome=(P.outcomeByDecision||{})[a.decisionId];
+    const revised=(P.strategyDecisions||[]).some(s=>s.at>a.testedAt);
+    if((outcome&&outcome.at>a.testedAt)||revised) return;
+    out.push(f({sev:4,conf:'HIGH',title:'Refuted assumption, decision unchanged: '+a.assumption,
+      basis:['assumption.tested result "refuted" on '+U.iso(a.testedAt)+' · evidence: "'+a.evidence+'"',
+        'parent decision '+a.decisionId+' has no decision.outcome and no later strategy.decision since the refutation',
+        'a refuted assumption that changes nothing is a decision made on data you KNOW to be wrong',
+        'source: assumption.tested + decision.outcome / strategy.decision'],
+      refs:[a.id],evidenceAt:a.testedAt})); });
+  return out; }
+function R67(P,today){ const f=F('R67'),out=[];
+  /* "strategy.decision severity ≥ 4" — strategy.decision carries no severity
+     field in this registry, so the shipped proxy is a logged decision whose
+     scenarios/stakes mark it high-stakes; printed, never inferred silently. */
+  vals(P.decisions||{}).forEach(d=>{
+    const scen=((P.scenariosByDecision||{})[d.id]||[]);
+    const sev4=scen.length>0; /* scenario-planned ⇒ treated as a ≥4 decision */
+    if(!sev4) return;
+    const pm=(P.premortemByDecision||{})[d.id];
+    const age=days(today,d.at);
+    if(pm&&pm.at-d.at<=7*DAY) return;
+    if(age<=7&&!pm) return; /* the 7d window has not closed yet */
+    out.push(f({sev:3,conf:'HIGH',title:'High-stakes decision without a premortem: '+d.title,
+      basis:['decision logged '+U.iso(d.at)+' ('+age+'d ago) with '+scen.length+' modeled scenario(s) — the shipped high-stakes proxy, since strategy.decision carries no severity field in this registry (printed, not inferred)',
+        pm?('a premortem exists but was logged '+days(pm.at,d.at)+'d after the decision, outside the 7d window')
+          :'no decision.premortem within 7d of the decision',
+        'this fires RETROACTIVELY on old decisions too — the gap does not expire',
+        'source: decision.scenario + decision.premortem'],
+      refs:[d.id],scope:d.id+':premortem',evidenceAt:d.at})); });
+  return out; }
+function R68(P,today){ const f=F('R68'),out=[];
+  const active=(P.activeInitiatives||[]);
+  if(active.length<8) return out;
+  const last=U.maxAt(P.prioritizations||[]);
+  const age=last===null?null:days(today,last);
+  if(last!==null&&age<=21) return out;
+  out.push(f({sev:3,conf:'MEDIUM',title:active.length+' active initiatives, no prioritization in '+(age===null?'the entire log':age+'d'),
+    basis:[active.length+' initiative(s) at status "active" ≥ 8 · '+(last===null
+        ?'zero initiative.prioritized events ever'
+        :'latest initiative.prioritized '+U.iso(last)+' is '+age+'d old > 21d'),
+      '8+ active initiatives without a recent prioritization is not a portfolio — it is a queue nobody manages',
+      'conf MEDIUM: the count is exact, the judgement that it is too many is a threshold you can change',
+      'source: initiative.logged / .updated / .prioritized'],
+    refs:active.map(i=>i.id),scope:'initiative:backlog',evidenceAt:last||U.maxAt(active,i=>i.loggedAt)}));
+  return out; }
+function R69(P,today){ const f=F('R69'),out=[];
+  const killed=vals(P.initiatives||{}).filter(i=>i.status==='killed'&&days(today,i.statusAt)<=90);
+  if(killed.length<3) return out;
+  out.push(f({sev:3,conf:'MEDIUM',trend:true,title:killed.length+' initiatives killed in 90d',
+    basis:[killed.length+' initiative(s) reached "killed" inside 90d — either strategy is unclear or scope is being under-estimated',
+      killed.map(i=>i.title+' (killed '+U.iso(i.statusAt)+', age at death '+days(i.statusAt,i.loggedAt)+'d)').join(' · '),
+      'conf MEDIUM: killing work can be healthy pruning — this flags the rate, it does not judge the calls',
+      'source: initiative.updated status=killed'],
+    refs:killed.map(i=>i.id),scope:'initiative:kill-rate',evidenceAt:U.maxAt(killed,i=>i.statusAt)}));
+  return out; }
+function R70(P,today){ const f=F('R70'),out=[];
+  Object.keys(P.scenariosByDecision||{}).sort().forEach(did=>{
+    if((P.premortemByDecision||{})[did]) return;
+    const scen=P.scenariosByDecision[did];
+    const d=(P.decisions||{})[did];
+    out.push(f({sev:2,conf:'HIGH',title:'Scenarios modeled, failure modes not: '+(d?d.title:did),
+      basis:[scen.length+' decision.scenario event(s) on '+did+' but zero decision.premortem',
+        'you are modeling the upside but not the failure modes',
+        'source: decision.scenario without decision.premortem'],
+      refs:[did],scope:did+':no-premortem',evidenceAt:U.maxAt(scen)})); });
+  return out; }
+function R71(P,today){ const f=F('R71'),out=[];
+  const diverged=(P.decisionOutcomes||[]).filter(o=>o.matchedRationale===false&&days(today,o.at)<=180);
+  if(diverged.length<3) return out;
+  out.push(f({sev:3,conf:'MEDIUM',trend:true,title:'Decision calibration: '+diverged.length+' outcomes diverged from rationale in 180d',
+    basis:[diverged.length+' decision.outcome event(s) with matchedRationale=false inside 180d (≥3 fires)',
+      diverged.map(o=>U.iso(o.at)+' '+o.decisionId+': actual "'+o.actual+'"').join(' · '),
+      'your decisions are consistently missing their projected outcomes — this is a CALIBRATION signal about the process, not a verdict on any single call',
+      'matchedRationale is YOUR OWN judgement logged at outcome time — conf MEDIUM because the comparison is self-assessed',
+      'source: decision.outcome'],
+    refs:diverged.map(o=>o.decisionId),scope:'decision:calibration',evidenceAt:U.maxAt(diverged)}));
+  return out; }
+function R72(P,today){ const f=F('R72'),out=[];
+  (P.execAlignments||[]).forEach(a=>{
+    if(a.result!=='misaligned') return;
+    const age=days(today,a.at);
+    if(age<=7) return;
+    const later=(P.execAlignments||[]).some(x=>x.at>a.at);
+    const conv=vals(P.convs||{}).some(c=>c.plannedAt>a.at);
+    if(later||conv) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Misalignment with no follow-up ('+age+'d): '+a.topic,
+      basis:['exec.aligned result "misaligned" on '+U.iso(a.at)+' · stakeholders: '+a.stakeholders.join(', ')+' · '+age+'d > 7d',
+        'no later exec.aligned and no conv.planned since',
+        'misalignment that nobody follows up on becomes the default position',
+        'source: exec.aligned + conv.planned'],
+      refs:[],scope:'misaligned:'+(a._ev||U.iso(a.at)),evidenceAt:a.at})); });
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
              R46,R47,R48,R49,R50,R51,R52,
-             R53,R54,R55,R56,R57,R58,R59,R60,R61,R62];
+             R53,R54,R55,R56,R57,R58,R59,R60,R61,R62,
+             R63,R64,R65,R66,R67,R68,R69,R70,R71,R72];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -2709,6 +2917,168 @@ LeadOS.conversations={STYLES:STYLES,MODELS:MODELS,TYPE_SPEC:TYPE_SPEC,SCAFFOLD:S
   TYPES:Object.keys(TYPE_SPEC)};
 })();
 
+/* ============ 6c · DECISIONS — decision intelligence (pt-13) ==============
+   Prioritization, scenario EV + minimax regret, premortem residual risk,
+   commitment ledger, assumption tracking. Pure: (args, P, today) → object.
+   Every model prints its own math AND its own epistemic class. */
+(function(){
+const LeadOS = window.LeadOS, U = LeadOS.util, DAY = U.DAY;
+const MODEL_LABELS={
+  RICE:'RICE = (reach × impact × confidence%/100) ÷ effort_days — LABELED heuristic; the inputs are YOUR estimates, so the ranking inherits their error',
+  WSJF:'WSJF here = (reach + impact + confidence%/20) ÷ effort_days — a LABELED HEURISTIC in the spirit of Cost-of-Delay ÷ Job-Size. NOT SAFe-certified and not the canonical WSJF formula',
+  ICE:'ICE = (impact + confidence%/10 + (100 − effort_days)) ÷ 3 — a FAST FILTER, not a rigorous model; effort enters as a raw subtraction, which distorts beyond ~100 days'
+};
+function scoreOne(i,model){
+  const R=i.reach_est,I=i.impact_est,C=i.confidence_pct,E=i.effort_days;
+  if(model==='RICE'){
+    if(!E) return {score:null,math:'effort_days is 0 — RICE is undefined (division by zero); skipped, never faked'};
+    const s=(R*I*(C/100))/E;
+    return {score:s,math:'RICE = ('+R+' × '+I+' × '+C+'%/100) ÷ '+E+' = '+U.rd(s,2)};
+  }
+  if(model==='WSJF'){
+    if(!E) return {score:null,math:'effort_days is 0 — WSJF is undefined; skipped'};
+    const s=(R+I+(C/20))/E;
+    return {score:s,math:'WSJF = ('+R+' + '+I+' + '+C+'/20) ÷ '+E+' = '+U.rd(s,2)};
+  }
+  const s=(I+(C/10)+(100-E))/3;
+  return {score:s,math:'ICE = ('+I+' + '+C+'/10 + (100 − '+E+')) ÷ 3 = '+U.rd(s,2)};
+}
+function prioritize(initiatives,model){
+  const m=MODEL_LABELS[model]?model:'RICE';
+  const rows=(initiatives||[]).map(i=>{
+    const s=scoreOne(i,m);
+    return {id:i.id,title:i.title,status:i.status,ownerId:i.ownerId,model:m,
+      score:s.score===null?null:U.rd(s.score,4),math:s.math,inputs:{reach:i.reach_est,impact:i.impact_est,confidence:i.confidence_pct,effort:i.effort_days}};
+  });
+  rows.sort((a,b)=>{
+    if(a.score===null&&b.score===null) return a.id<b.id?-1:1;
+    if(a.score===null) return 1;
+    if(b.score===null) return -1;
+    return (b.score-a.score)||(a.id<b.id?-1:1);
+  });
+  rows.forEach((r,idx)=>{ r.rank=idx+1; });
+  return {model:m,label:MODEL_LABELS[m],rows:rows,
+    note:'ranking is only as good as the estimates you logged — the inputs are printed beside every score'};
+}
+/* Scenario matrix: expected value, minimax regret, sensitivity. */
+function buildScenario(decisionId,P){
+  const list=((P.scenariosByDecision||{})[decisionId]||[]).slice().sort((a,b)=>(a.at-b.at)||(a.id<b.id?-1:1));
+  if(!list.length) return {decisionId:decisionId,scenarios:[],
+    status:'no decision.scenario events for '+decisionId+' — nothing modeled, printed, not invented'};
+  const pSum=U.sum(list.map(s=>s.probability));
+  const evs=list.map(s=>{
+    const ev=s.probability*s.outcome_if_true;
+    return {id:s.id,name:s.name,probability:s.probability,outcome:s.outcome_if_true,cost:s.cost_if_true,
+      ev:U.rd(ev,2),math:'EV = P '+s.probability+' × outcome '+s.outcome_if_true+' = '+U.rd(ev,2)};
+  });
+  /* Minimax regret — LABELED framework: regret of committing to i when j
+     actually occurs = outcome_j − EV_i (the brief's own arithmetic). */
+  const regret=evs.map(i=>{
+    const cells=evs.filter(j=>j.id!==i.id).map(j=>({ifOccurs:j.name,
+      regret:U.rd(j.outcome-i.ev,2),
+      math:'regret(choose '+i.name+', '+j.name+' occurs) = outcome '+j.outcome+' − EV('+i.name+') '+i.ev+' = '+U.rd(j.outcome-i.ev,2)}));
+    const max=cells.length?Math.max.apply(null,cells.map(c=>c.regret)):0;
+    return {id:i.id,name:i.name,cells:cells,maxRegret:U.rd(max,2)};
+  });
+  const minimax=regret.slice().sort((a,b)=>(a.maxRegret-b.maxRegret)||(a.name<b.name?-1:1))[0]||null;
+  const best=evs.slice().sort((a,b)=>(b.ev-a.ev)||(a.name<b.name?-1:1))[0];
+  /* Sensitivity: a 10pp shift between the top two scenarios. */
+  let sens=null;
+  if(evs.length>=2){
+    const s=evs.slice().sort((a,b)=>b.ev-a.ev);
+    const delta=(s[0].outcome-s[1].outcome)*0.1;
+    sens={formula:'a 10pp change in P('+s[0].name+'), taken from P('+s[1].name+'), moves EV by (outcome_'+s[0].name+' − outcome_'+s[1].name+') × 0.1',
+      math:'('+s[0].outcome+' − '+s[1].outcome+') × 0.1 = '+U.rd(delta,2),
+      delta:U.rd(delta,2),
+      note:'simple partial difference, not a full sensitivity analysis — labeled'};
+  }
+  return {decisionId:decisionId,scenarios:evs,regret:regret,
+    minimaxChoice:minimax,recommended:best,sensitivity:sens,
+    probabilitySum:U.rd(pSum,3),
+    probabilityWarning:Math.abs(pSum-1)>0.001
+      ?'probabilities sum to '+U.rd(pSum,3)+', not 1.0 — these are YOUR estimates and they are printed as logged, never normalized behind your back'
+      :null,
+    caveat:'probability estimates are YOUR OWN and are not verified by LeadOS; the recommendation is arithmetic over your numbers, not advice',
+    regretLabel:'minimax-regret framework — LABELED: it minimizes worst-case regret, which is a different objective from maximizing expected value'};
+}
+function facilitatePremortem(decisionId,P){
+  const pm=(P.premortemByDecision||{})[decisionId];
+  if(!pm) return {decisionId:decisionId,modes:[],
+    status:'no decision.premortem for '+decisionId+' — the failure modes have not been written down'};
+  const modes=(pm.failure_modes||[]).map((m,idx)=>{
+    const raw=(typeof m==='object'&&m)?m:{mode:String(m)};
+    const mit=pm.mitigation_per_mode&&pm.mitigation_per_mode[idx];
+    const mitRaw=(typeof mit==='object'&&mit)?mit:{mitigation:(mit===undefined?null:String(mit))};
+    const L=typeof raw.likelihood==='number'?raw.likelihood:null;
+    const I=typeof raw.impact==='number'?raw.impact:null;
+    const residual=(L!==null&&I!==null)?L*I:null;
+    return {mode:raw.mode||raw.name||String(m),likelihood:L,impact:I,
+      mitigation:mitRaw.mitigation||null,
+      residual:residual,
+      math:residual===null
+        ?'likelihood/impact not scored on this mode — residual risk not computed, never guessed'
+        :'residual risk after mitigation = likelihood '+L+' × impact '+I+' = '+residual};
+  });
+  modes.sort((a,b)=>((b.residual===null?-1:b.residual)-(a.residual===null?-1:a.residual))||(a.mode<b.mode?-1:1));
+  const top=modes.filter(m=>m.residual!==null)[0]||modes[0]||null;
+  return {decisionId:decisionId,modes:modes,facilitatedBy:pm.facilitatedBy||null,at:pm.at,
+    headline:top?('The thing most likely to kill this decision is: '+top.mode+(top.residual!==null?' (residual risk '+top.residual+')':'')):null,
+    note:'likelihood and impact are YOUR scores; residual risk is their product, printed'};
+}
+function commitmentLedger(P,today){
+  const all=Object.keys(P.commitments||{}).map(k=>P.commitments[k]);
+  const open=all.filter(c=>c.settled===null);
+  const overdue=open.filter(c=>c.by_date<today)
+    .sort((a,b)=>(a.by_date-b.by_date)||(a.id<b.id?-1:1))
+    .map(c=>Object.assign({daysPast:U.days(today,c.by_date)},c));
+  const win=90*DAY;
+  const settled=all.filter(c=>c.settled!==null&&(today-c.settledAt)<=win);
+  const done=settled.filter(c=>c.settled==='completed').length;
+  const missed=settled.filter(c=>c.settled==='missed');
+  const total=done+missed.length;
+  const hitRate=total?U.rd(done/total*100,1):null;
+  const byPerson={};
+  all.forEach(c=>{ const p=byPerson[c.to_personId]=byPerson[c.to_personId]||
+      {person:c.to_personId,open:[],completed:0,missed:[],total:0};
+    p.total++;
+    if(c.settled===null) p.open.push(c);
+    else if(c.settled==='completed') p.completed++;
+    else if(c.settled==='missed'&&(today-c.settledAt)<=win) p.missed.push(c); });
+  const patterns=Object.keys(byPerson).filter(k=>byPerson[k].missed.length>=2).sort()
+    .map(k=>({person:k,count:byPerson[k].missed.length,
+      why:byPerson[k].missed.length+' missed commitments to '+k+' inside 90d — a relationship prognosis, not a scheduling problem'}));
+  const weighted=U.sum(missed.map(c=>(c.impact||0)*(c.stakes||0)));
+  return {open:open,overdue:overdue,
+    hitRate:hitRate,
+    hitRateMath:total?('completed '+done+' ÷ settled ('+done+' + '+missed.length+') × 100 = '+hitRate+'% — OPEN commitments are excluded from the denominator; only settled ones count')
+      :'no commitments settled in the last 90d — no hit rate computed, never defaulted to 100%',
+    settledCount:total,completedCount:done,missedCount:missed.length,
+    byPerson:Object.keys(byPerson).sort().map(k=>byPerson[k]),
+    patterns:patterns,
+    stakesWeightedMiss:weighted,
+    stakesWeightedMath:missed.length?('Σ (impact × stakes) over missed = '+missed.map(c=>'('+(c.impact||0)+'×'+(c.stakes||0)+')').join(' + ')+' = '+weighted):'no misses in window'};
+}
+function trackAssumptions(decisionId,P){
+  const list=((P.assumptionsByDecision||{})[decisionId]||[]).slice()
+    .sort((a,b)=>(a.loggedAt-b.loggedAt)||(a.id<b.id?-1:1));
+  const scen=(P.scenariosByDecision||{})[decisionId]||[];
+  return {decisionId:decisionId,
+    assumptions:list.map(a=>({id:a.id,assumption:a.assumption,testable:a.testable,
+      test_method:a.test_method,
+      status:a.tested?a.result:'untested',
+      evidence:a.evidence||null,loggedAt:a.loggedAt,testedAt:a.testedAt,
+      note:(!a.testable&&!a.tested)?'declared NOT testable — it stays an assumption forever; that is a choice, printed':null})),
+    untested:list.filter(a=>!a.tested&&a.testable).map(a=>a.id),
+    refuted:list.filter(a=>a.result==='refuted').map(a=>a.id),
+    dependentScenarios:scen.map(s=>({id:s.id,name:s.name,
+      why:'this decision has '+scen.length+' modeled scenario(s); a refuted assumption invalidates the probabilities you assigned them'})),
+    note:'downstream dependency is scoped to THIS decision\u2019s scenarios — the registry carries no assumption→decision dependency graph, so nothing wider is claimed'};
+}
+LeadOS.decisions={MODEL_LABELS:MODEL_LABELS,scoreOne:scoreOne,prioritize:prioritize,
+  buildScenario:buildScenario,facilitatePremortem:facilitatePremortem,
+  commitmentLedger:commitmentLedger,trackAssumptions:trackAssumptions};
+})();
+
 /* ==================== 7 · HEALTH — authority wall + fixture seed ==========
    T-suite runs against pinned in-memory fixtures (FIXED epoch, never the
    clock, never localStorage). G-suite inspects the LIVE store. The boot gate
@@ -2835,7 +3205,42 @@ function buildSeed(base){
     E('org.silo.logged',{id:'silo-1',teams:['platform','support'],symptom:'escalations rewritten rather than routed',severity:4},70), /* R58 sev 4 (>60d) */
     /* lee is the seed's only non-zero-betweenness node (ava→lee→dana) — their
        departure is what R62 exists to catch: the flow leaves with the person */
-    E('hr.attrition.logged',{personId:'lee',reason:'voluntary'},3)                                                                 /* R62 sev 5 */
+    E('hr.attrition.logged',{personId:'lee',reason:'voluntary'},3),                                                                /* R62 sev 5 */
+    /* ---- pt-13 decision layer: seeds R63–R72 (G70) ---- */
+    E('commitment.made',{id:'cm-1',to_personId:'dana',what:'Publish the calibration rubric',by_date:base-4*DAY,stakes:3,public:false},25),  /* R63 sev 3 */
+    E('commitment.made',{id:'cm-2',to_personId:'ava',what:'Approve the Globex discount floor',by_date:base-9*DAY,stakes:5,public:true},30), /* R63 sev 4 */
+    E('commitment.made',{id:'cm-3',to_personId:'dana',what:'Shadow one customer call',by_date:base-50*DAY,stakes:3,public:false},60),
+    E('commitment.missed',{commitmentId:'cm-3',reason:'quarter close',impact:3,recovery:'rescheduled, then dropped'},48),
+    E('commitment.made',{id:'cm-4',to_personId:'dana',what:'Review the growth plan draft',by_date:base-30*DAY,stakes:4,public:false},40),
+    E('commitment.missed',{commitmentId:'cm-4',reason:'board prep',impact:4,recovery:'none'},28),                                  /* R64: 2 misses → dana */
+    E('commitment.made',{id:'cm-5',to_personId:'ann',what:'Share the incident writeup',by_date:base-20*DAY,stakes:3,public:true},26),
+    E('commitment.completed',{commitmentId:'cm-5',note:'sent'},19),
+    E('decision.logged',{id:'dec-1',title:'Re-platform the billing stack',domain:'strategy',owner:'ann'},60),
+    E('decision.scenario',{id:'sc-1',decisionId:'dec-1',name:'Build in-house',probability:0.6,outcome_if_true:900,cost_if_true:400},55),
+    E('decision.scenario',{id:'sc-2',decisionId:'dec-1',name:'Buy vendor',probability:0.4,outcome_if_true:600,cost_if_true:250},55),       /* R67 + R70 */
+    E('assumption.logged',{id:'as-1',decisionId:'dec-1',assumption:'Vendor API covers our tax edge cases',testable:true,test_method:'spike against sandbox'},55), /* R65 */
+    E('assumption.logged',{id:'as-2',decisionId:'dec-1',assumption:'Migration can run without downtime',testable:true,test_method:'dry run on staging'},54),
+    E('assumption.tested',{assumptionId:'as-2',result:'refuted',evidence:'staging dry run required a 40-minute write freeze'},20),          /* R66 */
+    E('decision.outcome',{decisionId:'dec-1',actual:'slipped a quarter',matchedRationale:false},18),
+    E('decision.logged',{id:'dec-2',title:'Consolidate the support tooling',domain:'operations',owner:'lee'},90),
+    E('decision.outcome',{decisionId:'dec-2',actual:'cost savings below projection',matchedRationale:false},50),
+    E('decision.logged',{id:'dec-3',title:'Open the EU region',domain:'strategy',owner:'ava'},120),
+    E('decision.outcome',{decisionId:'dec-3',actual:'launched late, adoption under plan',matchedRationale:false},40),                       /* R71: 3 diverged */
+    E('initiative.logged',{id:'in-1',title:'Self-serve onboarding',reach_est:1000,impact_est:3,confidence_pct:80,effort_days:5,model:'RICE',ownerId:'ava'},45),
+    E('initiative.logged',{id:'in-2',title:'Billing migration',reach_est:800,impact_est:3,confidence_pct:60,effort_days:30,model:'RICE',ownerId:'ann'},44),
+    E('initiative.logged',{id:'in-3',title:'Support macros',reach_est:400,impact_est:2,confidence_pct:90,effort_days:4,model:'RICE'},43),
+    E('initiative.logged',{id:'in-4',title:'Partner API',reach_est:600,impact_est:4,confidence_pct:50,effort_days:25,model:'RICE'},42),
+    E('initiative.logged',{id:'in-5',title:'Mobile parity',reach_est:900,impact_est:3,confidence_pct:40,effort_days:40,model:'RICE'},41),
+    E('initiative.logged',{id:'in-6',title:'Data warehouse v2',reach_est:300,impact_est:3,confidence_pct:70,effort_days:20,model:'RICE'},40),
+    E('initiative.logged',{id:'in-7',title:'Pricing experiments',reach_est:700,impact_est:2,confidence_pct:65,effort_days:8,model:'RICE'},39),
+    E('initiative.logged',{id:'in-8',title:'SSO for enterprise',reach_est:500,impact_est:4,confidence_pct:75,effort_days:12,model:'RICE'},38), /* R68: 8 active, never prioritized */
+    E('initiative.logged',{id:'in-9',title:'Referral loop',reach_est:200,impact_est:2,confidence_pct:50,effort_days:10,model:'RICE'},80),
+    E('initiative.updated',{initiativeId:'in-9',status:'killed',note:'no channel fit'},30),
+    E('initiative.logged',{id:'in-10',title:'In-app community',reach_est:150,impact_est:2,confidence_pct:40,effort_days:15,model:'RICE'},75),
+    E('initiative.updated',{initiativeId:'in-10',status:'killed',note:'scope tripled'},25),
+    E('initiative.logged',{id:'in-11',title:'Gamified checklists',reach_est:100,impact_est:1,confidence_pct:30,effort_days:9,model:'RICE'},70),
+    E('initiative.updated',{initiativeId:'in-11',status:'killed',note:'strategy changed'},22),                                              /* R69: 3 killed in 90d */
+    E('exec.aligned',{topic:'EU region staffing plan',stakeholders:['ann','ava'],result:'misaligned',note:'headcount unresolved'},12)        /* R72 */
   ];
   return out;
 }
@@ -3129,7 +3534,7 @@ function runT(){
   T.push(check('T18','[T12b] extended seed fires all 62 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=62;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=72;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -3472,6 +3877,94 @@ function runT(){
     if(multi.conf!=='MEDIUM') return {why:'trust findings stay MEDIUM — observations, not facts'};
     return {ok:true,why:'lost → sev 3 · gained quiets · >90d quiets · 2 sources/30d → sev 4, still MEDIUM'};
   }));
+  /* ---- pt-13: brief T36–T40 ship as T38–T42 (T36/T37 taken in pt-12).
+     ID MAP: brief T36→T38 · T37→T39 · T38→T40 · T39→T41 · T40→T42 ---- */
+  const INIT=(id,r,i,c,e)=>({id:id,title:id,status:'active',ownerId:null,reach_est:r,impact_est:i,confidence_pct:c,effort_days:e});
+  T.push(check('T38','[brief T36] prioritize(): RICE order + printed math; order changes under WSJF',()=>{
+    const list=[INIT('a',1000,3,80,5),INIT('b',100,5,90,2),INIT('c',900,2,50,30)];
+    const rice=LeadOS.decisions.prioritize(list,'RICE');
+    /* a=(1000×3×0.8)/5=480 · b=(100×5×0.9)/2=225 · c=(900×2×0.5)/30=30 */
+    if(rice.rows.map(r=>r.id).join(',')!=='a,b,c') return {why:'RICE order wrong: '+rice.rows.map(r=>r.id+':'+r.score).join(' ')};
+    if(rice.rows[0].score!==480) return {why:'RICE top score should be 480, got '+rice.rows[0].score};
+    if(rice.rows[0].math.indexOf('480')===-1) return {why:'score math not printed'};
+    if(rice.rows[0].rank!==1||rice.rows[2].rank!==3) return {why:'ranks not assigned'};
+    const wsjf=LeadOS.decisions.prioritize(list,'WSJF');
+    /* a=(1000+3+4)/5=201.4 · b=(100+5+4.5)/2=54.75 · c=(900+2+2.5)/30=30.15 */
+    if(wsjf.rows.map(r=>r.id).join(',')!=='a,b,c') return {why:'WSJF order unexpected: '+wsjf.rows.map(r=>r.id+':'+r.score).join(' ')};
+    const ice=LeadOS.decisions.prioritize(list,'ICE');
+    /* a=(3+8+95)/3=35.33 · b=(5+9+98)/3=37.33 · c=(2+5+70)/3=25.67 → b first */
+    if(ice.rows[0].id!=='b') return {why:'ICE should reorder to put b first, got '+ice.rows.map(r=>r.id).join(',')};
+    if(ice.label.indexOf('FAST FILTER')===-1) return {why:'ICE epistemic label missing'};
+    if(wsjf.label.indexOf('NOT SAFe-certified')===-1) return {why:'WSJF label must disclaim SAFe'};
+    const zero=LeadOS.decisions.prioritize([INIT('z',10,1,50,0)],'RICE');
+    if(zero.rows[0].score!==null||zero.rows[0].math.indexOf('division by zero')===-1) return {why:'effort 0 must be skipped, not faked'};
+    return {ok:true,why:'RICE a(480),b(225),c(30) · ICE reorders to b first · labels printed · effort 0 skipped'};
+  }));
+  T.push(check('T39','[brief T37] buildScenario(): EV + minimax regret computed and printed',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'decision.logged',payload:{id:'d1',title:'test'},at:FIXED-20*DAY},
+      {type:'decision.scenario',payload:{id:'sA',decisionId:'d1',name:'A',probability:0.7,outcome_if_true:100,cost_if_true:10},at:FIXED-10*DAY},
+      {type:'decision.scenario',payload:{id:'sB',decisionId:'d1',name:'B',probability:0.3,outcome_if_true:200,cost_if_true:50},at:FIXED-9*DAY}]));
+    const s=LeadOS.decisions.buildScenario('d1',Px);
+    const A=s.scenarios.filter(x=>x.name==='A')[0], B=s.scenarios.filter(x=>x.name==='B')[0];
+    if(A.ev!==70) return {why:'EV(A) should be 0.7×100 = 70, got '+A.ev};
+    if(B.ev!==60) return {why:'EV(B) should be 0.3×200 = 60, got '+B.ev};
+    if(s.recommended.name!=='A') return {why:'highest EV should be A'};
+    const rA=s.regret.filter(x=>x.name==='A')[0];
+    /* regret(choose A, B occurs) = 200 − 70 = 130 — the brief's own arithmetic */
+    if(rA.cells[0].regret!==130) return {why:'regret should be 130, got '+rA.cells[0].regret};
+    if(rA.cells[0].math.indexOf('130')===-1) return {why:'regret math not printed'};
+    if(s.regretLabel.indexOf('LABELED')===-1) return {why:'minimax framework not labeled'};
+    if(!s.caveat||s.caveat.indexOf('not verified')===-1) return {why:'probability caveat missing'};
+    return {ok:true,why:'EV A=70 B=60 · regret(A|B)=200−70=130 printed · framework + caveat labeled'};
+  }));
+  T.push(check('T40','[brief T38] commitmentLedger(): 1 completed + 1 missed + 1 overdue → 50% hit rate',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'commitment.made',payload:{id:'k1',to_personId:'p1',what:'done thing',by_date:FIXED-20*DAY,stakes:3,public:false},at:FIXED-30*DAY},
+      {type:'commitment.completed',payload:{commitmentId:'k1'},at:FIXED-21*DAY},
+      {type:'commitment.made',payload:{id:'k2',to_personId:'p1',what:'missed thing',by_date:FIXED-15*DAY,stakes:3,public:false},at:FIXED-30*DAY},
+      {type:'commitment.missed',payload:{commitmentId:'k2',reason:'slipped',impact:3},at:FIXED-14*DAY},
+      {type:'commitment.made',payload:{id:'k3',to_personId:'p2',what:'overdue thing',by_date:FIXED-3*DAY,stakes:4,public:true},at:FIXED-20*DAY}]));
+    const L=LeadOS.decisions.commitmentLedger(Px,FIXED);
+    if(L.hitRate!==50) return {why:'hit rate should be 1/(1+1) = 50%, got '+L.hitRate};
+    if(L.hitRateMath.indexOf('OPEN commitments are excluded')===-1) return {why:'denominator rule not printed'};
+    if(L.overdue.length!==1||L.overdue[0].id!=='k3') return {why:'k3 should be the only overdue entry'};
+    if(L.overdue[0].daysPast!==3) return {why:'daysPast should be 3, got '+L.overdue[0].daysPast};
+    if(L.open.length!==1) return {why:'only k3 remains open'};
+    if(L.stakesWeightedMiss!==9) return {why:'stakes-weighted miss should be impact 3 × stakes 3 = 9, got '+L.stakesWeightedMiss};
+    return {ok:true,why:'hit rate 50% (open excluded, printed) · k3 overdue 3d · weighted miss 9'};
+  }));
+  T.push(check('T41','[brief T39] R63: stakes3+1d → sev3 · stakes2 → quiet · stakes5 → sev4 · completed → quiet',()=>{
+    const mk=(stakes,pastDays,settle)=>{ const list=[{type:'commitment.made',
+      payload:{id:'c1',to_personId:'p',what:'w',by_date:FIXED-pastDays*DAY,stakes:stakes,public:false},at:FIXED-30*DAY}];
+      if(settle) list.push({type:'commitment.completed',payload:{commitmentId:'c1'},at:FIXED-pastDays*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r63=Px=>LeadOS.rules.RULES[57](Px,FIXED); /* index 57 = R63 */
+    const a=r63(mk(3,1,false));
+    if(a.length!==1||a[0].sev!==3) return {why:'stakes 3, 1d past → sev 3, got '+JSON.stringify(a.map(f=>f.sev))};
+    if(r63(mk(2,1,false)).length) return {why:'stakes 2 must be quiet'};
+    const b=r63(mk(5,1,false));
+    if(b.length!==1||b[0].sev!==4) return {why:'stakes 5 → sev 4, got '+JSON.stringify(b.map(f=>f.sev))};
+    const c=r63(mk(3,8,false));
+    if(c.length!==1||c[0].sev!==4) return {why:'>7d past → sev 4 always'};
+    if(r63(mk(3,0,true)).length) return {why:'completed on the by_date must be quiet'};
+    if(r63(mk(3,-1,false)).length) return {why:'not yet due must be quiet (strictly past)'};
+    return {ok:true,why:'3/1d sev3 · 2 quiet · 5 sev4 · 8d sev4 · completed quiet · future quiet'};
+  }));
+  T.push(check('T42','[brief T40] R65: testable+>14d fires · testable=false quiet · tested quiet',()=>{
+    const mk=(testable,tested,age)=>{ const list=[
+      {type:'decision.logged',payload:{id:'d1',title:'t'},at:FIXED-age*DAY},
+      {type:'assumption.logged',payload:{id:'a1',decisionId:'d1',assumption:'x',testable:testable,test_method:'m'},at:FIXED-age*DAY}];
+      if(tested) list.push({type:'assumption.tested',payload:{assumptionId:'a1',result:'confirmed',evidence:'e'},at:FIXED-DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r65=Px=>LeadOS.rules.RULES[59](Px,FIXED); /* index 59 = R65 */
+    if(r65(mk(true,false,20)).length!==1) return {why:'testable + 20d + untested should fire'};
+    if(r65(mk(true,false,20))[0].sev!==3) return {why:'should be sev 3'};
+    if(r65(mk(false,false,20)).length) return {why:'testable=false must be quiet'};
+    if(r65(mk(true,true,20)).length) return {why:'a tested assumption must be quiet'};
+    if(r65(mk(true,false,14)).length) return {why:'exactly 14d must be quiet (strictly >14d)'};
+    return {ok:true,why:'testable+20d fires sev3 · testable=false quiet · tested quiet · 14d boundary quiet'};
+  }));
   return T;
 }
 
@@ -3675,14 +4168,14 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','[G60] extended buildSeed fires all 62 rules (patterns + conversations + org)',()=>{
+  G.push(check('G40','[G60/G70] extended buildSeed fires all 72 rules',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=62;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=72;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'62/62 — pattern limbs + conversation conditions + the pt-12 org layer (isolate with no edges/1:1, repeated pipeline block, value-violated, declining culture, psych safety 2, 70d silo, informal-power gap, 45% meeting waste, trust lost ×2 sources, bridge-person attrition)'};
+    return {ok:true,why:'72/72 — pattern limbs + conversation conditions + org layer + the pt-13 decision layer (2 overdue commitments at sev 3 and sev 4, 2 misses to one person, untested + refuted assumptions on a scenario-planned decision, 8-initiative backlog never prioritized, 3 kills in 90d, 3 diverged outcomes, misalignment with no follow-up)'};
   }));
   /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
      the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
@@ -3917,6 +4410,132 @@ function runG(){
     if(!done.silos.s1.resolved||done.silos.s1.how!=='shared on-call rotation') return {why:'resolution details not folded'};
     return {ok:true,why:'open → sev 4 · resolved clears openSilos, quiets R58, keeps the "how" on record'};
   }));
+  /* ---- G61–G69 — decision-intelligence goldens (pt-13) ---- */
+  G.push(check('G61','RICE: 1000 × 3 × 80% ÷ 5 = 480, printed exactly',()=>{
+    const r=LeadOS.decisions.prioritize([{id:'x',title:'x',status:'active',reach_est:1000,impact_est:3,confidence_pct:80,effort_days:5}],'RICE');
+    const row=r.rows[0];
+    if(row.score!==480) return {why:'score should be 480, got '+row.score};
+    if(row.math!=='RICE = (1000 × 3 × 80%/100) ÷ 5 = 480') return {why:'math string not exact: '+row.math};
+    if(r.label.indexOf('LABELED heuristic')===-1) return {why:'RICE epistemic label missing'};
+    return {ok:true,why:row.math};
+  }));
+  G.push(check('G62','minimax regret: A(P .7, 100) vs B(P .3, 200) → regret 130, labeled',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'decision.scenario',payload:{id:'sA',decisionId:'d',name:'A',probability:0.7,outcome_if_true:100,cost_if_true:0},at:FIXED-5*DAY},
+      {type:'decision.scenario',payload:{id:'sB',decisionId:'d',name:'B',probability:0.3,outcome_if_true:200,cost_if_true:0},at:FIXED-4*DAY}]));
+    const s=LeadOS.decisions.buildScenario('d',Px);
+    const rA=s.regret.filter(x=>x.name==='A')[0];
+    if(rA.cells[0].regret!==130) return {why:'expected 200 − (0.7×100) = 130, got '+rA.cells[0].regret};
+    if(rA.maxRegret!==130) return {why:'maxRegret should be 130'};
+    if(s.regretLabel.indexOf('minimax-regret framework')===-1) return {why:'framework not labeled'};
+    if(!s.minimaxChoice) return {why:'minimax choice not computed'};
+    return {ok:true,why:rA.cells[0].math};
+  }));
+  G.push(check('G63','R67: scenario-planned decision 8d old with no premortem fires; premortem quiets',()=>{
+    const base=[{type:'decision.logged',payload:{id:'d1',title:'big one'},at:FIXED-8*DAY},
+      {type:'decision.scenario',payload:{id:'s1',decisionId:'d1',name:'A',probability:0.5,outcome_if_true:10,cost_if_true:1},at:FIXED-8*DAY}];
+    const r67=Px=>LeadOS.rules.RULES[61](Px,FIXED); /* index 61 = R67 */
+    const fired=r67(LeadOS.engine.project(wrap(base)));
+    if(fired.length!==1||fired[0].sev!==3) return {why:'8d-old scenario-planned decision with no premortem should fire sev 3'};
+    const withPm=LeadOS.engine.project(wrap(base.concat([
+      {type:'decision.premortem',payload:{decisionId:'d1',failure_modes:['vendor misses'],mitigation_per_mode:['dual-source']},at:FIXED-7*DAY}])));
+    if(r67(withPm).length) return {why:'a premortem inside 7d must quiet it'};
+    const noScen=LeadOS.engine.project(wrap([{type:'decision.logged',payload:{id:'d2',title:'small'},at:FIXED-8*DAY}]));
+    if(r67(noScen).length) return {why:'a decision with no scenarios is not high-stakes under the shipped proxy — must be quiet'};
+    return {ok:true,why:'8d + scenarios + no premortem → sev 3 · premortem quiets · non-scenario decision quiet'};
+  }));
+  G.push(check('G64','R64: 2 misses to one person → sev 4; 2 misses to different people → R63 only',()=>{
+    const mk=(p1,p2)=>LeadOS.engine.project(wrap([
+      {type:'commitment.made',payload:{id:'m1',to_personId:p1,what:'a',by_date:FIXED-40*DAY,stakes:3,public:false},at:FIXED-50*DAY},
+      {type:'commitment.missed',payload:{commitmentId:'m1',reason:'r',impact:3},at:FIXED-39*DAY},
+      {type:'commitment.made',payload:{id:'m2',to_personId:p2,what:'b',by_date:FIXED-20*DAY,stakes:3,public:false},at:FIXED-30*DAY},
+      {type:'commitment.missed',payload:{commitmentId:'m2',reason:'r',impact:3},at:FIXED-19*DAY}]));
+    const r64=Px=>LeadOS.rules.RULES[58](Px,FIXED); /* index 58 = R64 */
+    const same=r64(mk('p1','p1'));
+    if(same.length!==1||same[0].sev!==4) return {why:'2 misses to the same person should fire sev 4'};
+    if(r64(mk('p1','p2')).length) return {why:'misses to different people must not fire R64'};
+    /* and the settled ones must not leak into R63 (they are settled, not open) */
+    const r63=Px=>LeadOS.rules.RULES[57](Px,FIXED);
+    if(r63(mk('p1','p2')).length) return {why:'settled (missed) commitments must not also fire R63 — they are no longer open'};
+    return {ok:true,why:'same person → sev 4 · different people → no R64 · settled misses never re-fire R63'};
+  }));
+  G.push(check('G65','R66: refuted + no decision.outcome → sev 4; outcome present → quiet',()=>{
+    const base=[{type:'decision.logged',payload:{id:'d1',title:'t'},at:FIXED-40*DAY},
+      {type:'assumption.logged',payload:{id:'a1',decisionId:'d1',assumption:'x',testable:true},at:FIXED-39*DAY},
+      {type:'assumption.tested',payload:{assumptionId:'a1',result:'refuted',evidence:'measured otherwise'},at:FIXED-10*DAY}];
+    const r66=Px=>LeadOS.rules.RULES[60](Px,FIXED); /* index 60 = R66 */
+    const fired=r66(LeadOS.engine.project(wrap(base)));
+    if(fired.length!==1||fired[0].sev!==4) return {why:'refuted with no response should fire sev 4'};
+    const withOutcome=LeadOS.engine.project(wrap(base.concat([
+      {type:'decision.outcome',payload:{decisionId:'d1',actual:'revised to vendor path',matchedRationale:false},at:FIXED-5*DAY}])));
+    if(r66(withOutcome).length) return {why:'a later decision.outcome must quiet it'};
+    const confirmed=LeadOS.engine.project(wrap(base.slice(0,2).concat([
+      {type:'assumption.tested',payload:{assumptionId:'a1',result:'confirmed',evidence:'held up'},at:FIXED-10*DAY}])));
+    if(r66(confirmed).length) return {why:'a CONFIRMED assumption must never fire R66'};
+    return {ok:true,why:'refuted+silence → sev 4 · later outcome quiets · confirmed never fires'};
+  }));
+  G.push(check('G66','R68: 8 active + no prioritization in 22d fires; 7 active quiet; 20d quiet',()=>{
+    const mk=(n,prioAge)=>{ const list=[];
+      for(let i=0;i<n;i++) list.push({type:'initiative.logged',
+        payload:{id:'i'+i,title:'t'+i,reach_est:10,impact_est:2,confidence_pct:50,effort_days:5,model:'RICE'},at:FIXED-60*DAY});
+      if(prioAge!==undefined) list.push({type:'initiative.prioritized',
+        payload:{rankedIds:['i0'],model:'RICE',rationale:'r',period:'p'},at:FIXED-prioAge*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r68=Px=>LeadOS.rules.RULES[62](Px,FIXED); /* index 62 = R68 */
+    if(r68(mk(8,22)).length!==1) return {why:'8 active + 22d-old prioritization should fire'};
+    if(r68(mk(8,22))[0].sev!==3) return {why:'should be sev 3'};
+    if(r68(mk(7,22)).length) return {why:'7 active must be quiet'};
+    if(r68(mk(8,20)).length) return {why:'prioritized 20d ago must be quiet (≤21d)'};
+    if(r68(mk(8,undefined)).length!==1) return {why:'never prioritized with 8 active should fire'};
+    return {ok:true,why:'8+22d fires · 7 quiet · 8+20d quiet · never-prioritized fires'};
+  }));
+  G.push(check('G67','scenario sensitivity: 10pp shift moves EV by (outcome_A − outcome_B) × 0.1',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'decision.scenario',payload:{id:'sA',decisionId:'d',name:'A',probability:0.7,outcome_if_true:100,cost_if_true:0},at:FIXED-5*DAY},
+      {type:'decision.scenario',payload:{id:'sB',decisionId:'d',name:'B',probability:0.3,outcome_if_true:200,cost_if_true:0},at:FIXED-4*DAY}]));
+    const s=LeadOS.decisions.buildScenario('d',Px);
+    /* EV: A=70 (top), B=60 → delta = (100 − 200) × 0.1 = −10 */
+    if(s.sensitivity.delta!==-10) return {why:'expected (100 − 200) × 0.1 = −10, got '+s.sensitivity.delta};
+    if(s.sensitivity.math.indexOf('× 0.1')===-1) return {why:'the formula is not printed'};
+    if(s.sensitivity.note.indexOf('not a full sensitivity analysis')===-1) return {why:'approximation not labeled'};
+    return {ok:true,why:s.sensitivity.math+' — formula and caveat printed'};
+  }));
+  G.push(check('G68','R71: 3 diverged outcomes in 180d → sev 3; fewer → quiet',()=>{
+    const mk=n=>{ const list=[];
+      for(let i=0;i<n;i++){
+        list.push({type:'decision.logged',payload:{id:'d'+i,title:'t'+i},at:FIXED-100*DAY});
+        list.push({type:'decision.outcome',payload:{decisionId:'d'+i,actual:'missed',matchedRationale:false},at:FIXED-(50-i)*DAY}); }
+      return LeadOS.engine.project(wrap(list)); };
+    const r71=Px=>LeadOS.rules.RULES[65](Px,FIXED); /* index 65 = R71 */
+    const three=r71(mk(3));
+    if(three.length!==1||three[0].sev!==3) return {why:'3 diverged should fire sev 3'};
+    if(three[0].conf!=='MEDIUM') return {why:'calibration is self-assessed — conf must be MEDIUM'};
+    if(r71(mk(2)).length) return {why:'2 diverged must be quiet'};
+    const matched=LeadOS.engine.project(wrap([
+      {type:'decision.logged',payload:{id:'dm',title:'t'},at:FIXED-100*DAY},
+      {type:'decision.outcome',payload:{decisionId:'dm',actual:'as planned',matchedRationale:true},at:FIXED-10*DAY}]));
+    if(r71(matched).length) return {why:'matched outcomes must never contribute'};
+    return {ok:true,why:'3 diverged → sev 3 MEDIUM · 2 quiet · matched outcomes excluded'};
+  }));
+  G.push(check('G69','trackAssumptions: refuted surfaces as refuted; confirmed never fires R66',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'decision.logged',payload:{id:'d1',title:'t'},at:FIXED-40*DAY},
+      {type:'assumption.logged',payload:{id:'a1',decisionId:'d1',assumption:'refuted one',testable:true,test_method:'m'},at:FIXED-39*DAY},
+      {type:'assumption.logged',payload:{id:'a2',decisionId:'d1',assumption:'confirmed one',testable:true},at:FIXED-38*DAY},
+      {type:'assumption.logged',payload:{id:'a3',decisionId:'d1',assumption:'untested one',testable:true},at:FIXED-37*DAY},
+      {type:'assumption.tested',payload:{assumptionId:'a1',result:'refuted',evidence:'e1'},at:FIXED-5*DAY},
+      {type:'assumption.tested',payload:{assumptionId:'a2',result:'confirmed',evidence:'e2'},at:FIXED-4*DAY}]));
+    const t=LeadOS.decisions.trackAssumptions('d1',Px);
+    const byId={}; t.assumptions.forEach(a=>{ byId[a.id]=a; });
+    if(byId.a1.status!=='refuted') return {why:'a1 should read refuted, got '+byId.a1.status};
+    if(byId.a2.status!=='confirmed') return {why:'a2 should read confirmed'};
+    if(byId.a3.status!=='untested') return {why:'a3 should read untested'};
+    if(t.refuted.join(',')!=='a1') return {why:'refuted list wrong: '+t.refuted.join(',')};
+    if(t.untested.join(',')!=='a3') return {why:'untested list wrong: '+t.untested.join(',')};
+    const r66=LeadOS.rules.RULES[60](Px,FIXED);
+    if(r66.length!==1||r66[0].refs[0]!=='a1') return {why:'only the refuted assumption may fire R66'};
+    return {ok:true,why:'a1 refuted (fires R66) · a2 confirmed (never fires) · a3 untested'};
+  }));
   return {checks:G,P:P,raw:raw};
 }
 
@@ -3935,7 +4554,8 @@ const CLAIMS=[
   {id:'C12',text:'Interactive playbooks prefill from the log and emit only registry-valid event specs — nothing is written without review; escalation and supersede semantics hold',by:['T21','T22','G3']},
   {id:'C13',text:'Correlation goldens hold: all-limb boundaries, shared-entity enforcement, heat bounds with labeled zeros, deterministic ids, purity, 52/52 seed coverage',by:['G31','G32','G33','G34','G35','G36','G37','G38','G39','G40','T23','T24','T25','T26']},
   {id:'C14',text:'Conversation layer: schema v6 (string settings), 10 contracts fold correctly, styleFor/zopaFor/prepareConv are pure and labeled (scaffold not script, hypothesis not prediction), R46–R52 boundaries hold, mediation resolves conflict pairs',by:['T28','T29','T30','T31','T32','G10','G41','G42','G43','G44','G45','G46','G47','G48','G49','G40']},
-  {id:'C15',text:'Organizational dynamics: schema v7, graph analysis is exact where claimed exact (Tarjan SCC) and labeled where approximate (betweenness, bridges), culture scoring is a bounded composite with its 2× assumption printed, meeting load is arithmetic over your own logs, R53–R62 boundaries hold, 62/62 rules fire from the seed',by:['T33','T34','T35','T36','T37','G51','G52','G53','G54','G55','G56','G57','G58','G59','G40']}
+  {id:'C15',text:'Organizational dynamics: schema v7, graph analysis is exact where claimed exact (Tarjan SCC) and labeled where approximate (betweenness, bridges), culture scoring is a bounded composite with its 2× assumption printed, meeting load is arithmetic over your own logs, R53–R62 boundaries hold',by:['T33','T34','T35','T36','T37','G51','G52','G53','G54','G55','G56','G57','G58','G59']},
+  {id:'C16',text:'Decision intelligence: schema v8, three prioritization models each printing their own math AND epistemic class, scenario EV + minimax regret + sensitivity with the probability caveat, commitment ledger excluding open items from hit rate, assumption tracking, R63–R72 boundaries hold, 72/72 rules fire from the seed',by:['T38','T39','T40','T41','T42','G61','G62','G63','G64','G65','G66','G67','G68','G69','G40']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -4752,6 +5372,253 @@ SPECS['psych-safety-build']={
       {type:'psychological.safety',payload:{period:v.period,score:U.clamp(Math.round(v.score),1,5),method:v.method,
         note:'measurement plan: '+v.measure}}]};
   }};
+/* ---------- pt-13 decision playbooks ---------- */
+const DEC=()=>LeadOS.decisions;
+const decOptions=P=>vals(P.decisions||{}).sort((a,b)=>b.at-a.at)
+  .map(d=>({value:d.id,label:d.id+' · '+d.title.slice(0,50)}));
+SPECS['decision-scenario']={
+  pattern:null,title:'Decision scenario planning',free:true,
+  blurb:'Expected value and the regret you would feel if the other branch happened.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const did=(draft.decisionId||'').trim()||(vals(P.decisions||{}).sort((a,b)=>b.at-a.at)[0]||{}).id;
+    const lines=[];
+    if(!did){ lines.push('no decisions in the log — log one first (decision.logged)'); return lines; }
+    const d=(P.decisions||{})[did];
+    lines.push('decision '+did+(d?': '+d.title+' · logged '+U.iso(d.at)+(d.decided?' · DECIDED "'+d.choice+'"':' · still open'):''));
+    const s=DEC().buildScenario(did,P);
+    if(!s.scenarios.length){ lines.push(s.status); return lines; }
+    lines.push('expected value per scenario:');
+    s.scenarios.forEach(x=>lines.push('  '+x.name+': '+x.math+' (cost if true '+x.cost+')'));
+    if(s.probabilityWarning) lines.push('  ! '+s.probabilityWarning);
+    lines.push('minimax regret ('+s.regretLabel+'):');
+    s.regret.forEach(r=>{ r.cells.forEach(c=>lines.push('  '+c.math)); lines.push('  → max regret for '+r.name+': '+r.maxRegret); });
+    if(s.minimaxChoice) lines.push('minimax choice (lowest worst-case regret): '+s.minimaxChoice.name);
+    lines.push('highest EV: '+s.recommended.name+' at '+s.recommended.ev);
+    if(s.sensitivity) lines.push('sensitivity: '+s.sensitivity.formula+' → '+s.sensitivity.math+' · '+s.sensitivity.note);
+    lines.push(s.caveat);
+    return lines;
+  },
+  live(draft,R,P){
+    const p=Number(draft.probability), o=Number(draft.outcome);
+    if(!isFinite(p)||!isFinite(o)) return null;
+    const ev=p*o;
+    return {line:'EV of the scenario you are entering = P '+p+' × outcome '+o+' = '+U.rd(ev,2),
+      zopa:null,caveat:'probability is your estimate; this EV inherits it'};
+  },
+  fields(R,P){ return [
+    {key:'decisionId',label:'decision',kind:'select',req:true,options:decOptions(P)},
+    {key:'name',label:'new scenario name',kind:'text',req:true},
+    {key:'probability',label:'probability 0–1',kind:'number',req:true},
+    {key:'outcome',label:'outcome_if_true',kind:'number',req:true},
+    {key:'cost',label:'cost_if_true',kind:'number',req:true},
+    {key:'update',label:'decision update based on this analysis',kind:'textarea',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'decision.scenario',payload:{id:U.uid('sc'),decisionId:v.decisionId,name:v.name,
+        probability:U.clamp(v.probability,0,1),outcome_if_true:v.outcome,cost_if_true:v.cost}},
+      note('strategy','DECISION SCENARIO — '+v.decisionId+' · added "'+v.name+'" (P '+v.probability+', outcome '+v.outcome+')\nupdate:\n'+v.update,'decision-scenario')]};
+  }};
+SPECS['premortem']={
+  pattern:null,title:'Premortem',free:true,
+  blurb:'Assume it failed. Now say why.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const did=(draft.decisionId||'').trim()||(vals(P.decisions||{}).sort((a,b)=>b.at-a.at)[0]||{}).id;
+    const lines=[];
+    if(!did){ lines.push('no decisions in the log'); return lines; }
+    const d=(P.decisions||{})[did];
+    if(d) lines.push('decision: '+d.title+' · logged '+U.iso(d.at));
+    const pm=DEC().facilitatePremortem(did,P);
+    if(!pm.modes.length){ lines.push(pm.status); lines.push('start by naming the ways this fails — one per line in the field below'); return lines; }
+    lines.push('failure modes by residual risk (highest first):');
+    pm.modes.forEach(m=>lines.push('  '+m.mode+' — '+m.math+(m.mitigation?' · mitigation: '+m.mitigation:' · NO MITIGATION RECORDED')));
+    if(pm.headline) lines.push(pm.headline);
+    lines.push(pm.note);
+    return lines;
+  },
+  live(draft){
+    const L=Number(draft.likelihood), I=Number(draft.impact);
+    if(!isFinite(L)||!isFinite(I)) return null;
+    return {line:'residual risk for the mode you are entering = likelihood '+L+' × impact '+I+' = '+(L*I),
+      zopa:null,caveat:'likelihood and impact are your scores; the product is arithmetic'};
+  },
+  fields(R,P){ return [
+    {key:'decisionId',label:'decision',kind:'select',req:true,options:decOptions(P)},
+    {key:'mode',label:'failure mode (how this dies)',kind:'textarea',req:true},
+    {key:'likelihood',label:'likelihood 1–5',kind:'number',req:true},
+    {key:'impact',label:'impact 1–5',kind:'number',req:true},
+    {key:'mitigation',label:'mitigation action',kind:'textarea',req:true},
+    {key:'facilitator',label:'facilitated by',kind:'text',req:false},
+    {key:'goNoGo',label:'overall go / no-go signal',kind:'select',req:true,
+      options:[{value:'go',label:'go'},{value:'go-with-mitigations',label:'go, with mitigations'},{value:'no-go',label:'no-go'}]}]; },
+  submit(v,R,P){
+    const existing=(P.premortemByDecision||{})[v.decisionId];
+    const modes=(existing?existing.failure_modes.slice():[]);
+    const mits=(existing?existing.mitigation_per_mode.slice():[]);
+    modes.push({mode:v.mode,likelihood:U.clamp(Math.round(v.likelihood),1,5),impact:U.clamp(Math.round(v.impact),1,5)});
+    mits.push({mitigation:v.mitigation});
+    const p={decisionId:v.decisionId,failure_modes:modes,mitigation_per_mode:mits};
+    if(v.facilitator) p.facilitatedBy=v.facilitator;
+    return {events:[{type:'decision.premortem',payload:p},
+      note('strategy','PREMORTEM — '+v.decisionId+' · signal: '+v.goNoGo+'\nmode: '+v.mode+'\nmitigation: '+v.mitigation,'premortem')]};
+  }};
+SPECS['commitment-review']={
+  pattern:null,title:'Commitment review',free:true,
+  blurb:'Every overdue commitment is a trust withdrawal you have not acknowledged.',
+  prefill(R,P,now){
+    const L=DEC().commitmentLedger(P,now);
+    const lines=['hit rate (90d): '+(L.hitRate===null?'not computed':L.hitRate+'%')];
+    lines.push('  '+L.hitRateMath);
+    lines.push('overdue ('+L.overdue.length+'):');
+    L.overdue.forEach(c=>lines.push('  '+c.id+' → '+c.to_personId+': "'+c.what+'" · due '+U.iso(c.by_date)+' · '+c.daysPast+'d past · stakes '+c.stakes+(c.public?' · PUBLIC':'')));
+    if(!L.overdue.length) lines.push('  none');
+    lines.push('open, not yet due ('+(L.open.length-L.overdue.length)+')');
+    L.patterns.forEach(p=>lines.push('PATTERN: '+p.why));
+    if(L.missedCount) lines.push('stakes-weighted miss: '+L.stakesWeightedMath);
+    return lines;
+  },
+  fields(R,P){
+    const L=DEC().commitmentLedger(P,Date.now());
+    return [
+      {key:'target',label:'commitment to settle',kind:'select',req:false,
+        options:L.open.map(c=>({value:c.id,label:c.id+' → '+c.to_personId+': '+c.what.slice(0,40)}))},
+      {key:'action',label:'action',kind:'select',req:false,
+        options:[{value:'completed',label:'mark completed'},{value:'missed',label:'log missed'},{value:'extend',label:'extend (new by_date)'}]},
+      {key:'reason',label:'if missed: reason',kind:'text',req:false},
+      {key:'impact',label:'if missed: impact 1–5',kind:'number',req:false},
+      {key:'recovery',label:'if missed: recovery',kind:'text',req:false},
+      {key:'newDate',label:'if extending: new by_date',kind:'date',req:false},
+      {key:'newTo',label:'new commitment — to whom',kind:'text',req:false},
+      {key:'newWhat',label:'new commitment — what',kind:'text',req:false},
+      {key:'newBy',label:'new commitment — by date',kind:'date',req:false},
+      {key:'newStakes',label:'new commitment — stakes 1–5',kind:'number',req:false}]; },
+  submit(v,R,P){
+    const events=[];
+    if(v.target&&v.action==='completed') events.push({type:'commitment.completed',payload:{commitmentId:v.target,note:'settled in commitment-review'}});
+    else if(v.target&&v.action==='missed'){
+      if(!v.reason||typeof v.impact!=='number') throw new Error('logging a miss requires a reason and an impact — a miss without a reason teaches nothing');
+      events.push({type:'commitment.missed',payload:{commitmentId:v.target,reason:v.reason,
+        impact:U.clamp(Math.round(v.impact),1,5),recovery:v.recovery||''}});
+    } else if(v.target&&v.action==='extend'){
+      const old=(P.commitments||{})[v.target];
+      if(!old) throw new Error('commitment '+v.target+' not found');
+      if(typeof v.newDate!=='number') throw new Error('extending requires a new by_date');
+      /* extension = settle the old one as missed + make the new one: the
+         original date is NEVER silently rewritten (append-only doctrine) */
+      events.push({type:'commitment.missed',payload:{commitmentId:v.target,reason:'extended to '+U.iso(v.newDate),
+        impact:1,recovery:'re-committed with a new date'}});
+      events.push({type:'commitment.made',payload:{id:U.uid('cm'),to_personId:old.to_personId,what:old.what,
+        by_date:v.newDate,stakes:old.stakes,public:old.public,context:'extension of '+v.target}});
+    }
+    if(v.newTo&&v.newWhat&&typeof v.newBy==='number')
+      events.push({type:'commitment.made',payload:{id:U.uid('cm'),to_personId:v.newTo,what:v.newWhat,
+        by_date:v.newBy,stakes:U.clamp(Math.round(v.newStakes||3),1,5),public:false}});
+    if(!events.length) throw new Error('nothing to do — settle a commitment or make a new one');
+    return {events:events};
+  }};
+SPECS['initiative-prioritize']={
+  pattern:null,title:'Initiative prioritization',free:true,
+  blurb:'A portfolio is a ranked list you maintain, not a queue you accumulate.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const set=LeadOS.engine.settings(P);
+    const model=(draft.model||set.prioritizationModel);
+    const active=(P.activeInitiatives||[]);
+    const pr=DEC().prioritize(active,model);
+    const lines=['model: '+pr.model+' (settings default: '+set.prioritizationModel+')',pr.label,pr.note,
+      active.length+' active initiative(s):'];
+    pr.rows.forEach(r=>lines.push('  #'+r.rank+' '+r.title+' — '+r.math));
+    if(!active.length) lines.push('  none');
+    const last=U.maxAt(P.prioritizations||[]);
+    lines.push('last initiative.prioritized: '+(last===null?'never':U.iso(last)+' ('+U.days(now,last)+'d ago)'));
+    const killed=vals(P.initiatives||{}).filter(i=>i.status==='killed');
+    if(killed.length) lines.push('killed to date: '+killed.map(i=>i.title+' ('+U.iso(i.statusAt)+')').join(' · '));
+    return lines;
+  },
+  live(draft,R,P){
+    const set=LeadOS.engine.settings(P);
+    const pr=DEC().prioritize((P.activeInitiatives||[]),draft.model||set.prioritizationModel);
+    return {icf:pr.rows.slice(0,8).map(r=>['#'+r.rank,r.title+' — '+r.math]),
+      model:{id:pr.model,for:'prioritization',limbs:[]},note:pr.label};
+  },
+  fields(R,P){
+    const active=(P.activeInitiatives||[]);
+    return [
+      {key:'model',label:'model',kind:'select',req:true,options:['RICE','WSJF','ICE'].map(m=>({value:m,label:m}))},
+      {key:'period',label:'period',kind:'text',req:true},
+      {key:'keep',label:'top 3 to keep active',kind:'checks',req:true,
+        options:active.map(i=>({value:i.id,label:i.title}))},
+      {key:'pause',label:'initiatives to pause',kind:'checks',req:false,
+        options:active.map(i=>({value:i.id,label:i.title}))},
+      {key:'kill',label:'initiatives to kill',kind:'checks',req:false,
+        options:active.map(i=>({value:i.id,label:i.title}))},
+      {key:'rationale',label:'rationale',kind:'textarea',req:true}]; },
+  submit(v,R,P){
+    const pr=DEC().prioritize((P.activeInitiatives||[]),v.model);
+    const events=[{type:'initiative.prioritized',payload:{rankedIds:pr.rows.map(r=>r.id),
+      model:v.model,rationale:v.rationale,period:v.period}}];
+    (v.pause||[]).forEach(id=>events.push({type:'initiative.updated',payload:{initiativeId:id,status:'paused',note:'paused in '+v.period+' prioritization'}}));
+    (v.kill||[]).forEach(id=>events.push({type:'initiative.updated',payload:{initiativeId:id,status:'killed',note:'killed in '+v.period+' prioritization: '+v.rationale.slice(0,80)}}));
+    return {events:events};
+  }};
+SPECS['assumption-audit']={
+  pattern:null,title:'Assumption audit',free:true,
+  blurb:'You wrote down what had to be true. Is it?',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const did=(draft.decisionId||'').trim()||(vals(P.decisions||{}).sort((a,b)=>b.at-a.at)[0]||{}).id;
+    const lines=[];
+    if(!did){ lines.push('no decisions in the log'); return lines; }
+    const t=DEC().trackAssumptions(did,P);
+    const d=(P.decisions||{})[did];
+    if(d) lines.push('decision: '+d.title+' · logged '+U.iso(d.at));
+    lines.push(t.assumptions.length+' assumption(s):');
+    t.assumptions.forEach(a=>lines.push('  ['+a.status.toUpperCase()+'] '+a.assumption+
+      (a.testable?(a.test_method?' · method: '+a.test_method:' · testable but NO METHOD declared'):' · declared not testable')+
+      (a.evidence?' · evidence: '+a.evidence:'')+(a.note?' · '+a.note:'')));
+    if(t.untested.length) lines.push('UNTESTED and testable (R65 watches these): '+t.untested.join(', '));
+    if(t.refuted.length){ lines.push('REFUTED (R66 watches these): '+t.refuted.join(', '));
+      t.dependentScenarios.forEach(s=>lines.push('  downstream: scenario "'+s.name+'" — '+s.why)); }
+    lines.push(t.note);
+    return lines;
+  },
+  fields(R,P){
+    const did=(ui_draftDecision()||'');
+    const list=((P.assumptionsByDecision||{})[did]||[]);
+    return [
+      {key:'decisionId',label:'decision',kind:'select',req:true,options:decOptions(P)},
+      {key:'assumptionId',label:'assumption to record a test for',kind:'select',req:false,
+        options:list.map(a=>({value:a.id,label:(a.tested?'['+a.result+'] ':'[untested] ')+a.assumption.slice(0,50)}))},
+      {key:'result',label:'test result',kind:'select',req:false,
+        options:['confirmed','refuted','inconclusive'].map(r=>({value:r,label:r}))},
+      {key:'evidence',label:'evidence',kind:'textarea',req:false},
+      {key:'newAssumption',label:'new assumption to log',kind:'text',req:false},
+      {key:'newTestable',label:'new assumption: testable Y/N',kind:'yn',req:false},
+      {key:'newMethod',label:'new assumption: test method',kind:'text',req:false},
+      {key:'updateNeeded',label:'decision update needed Y/N',kind:'yn',req:true},
+      {key:'updateRationale',label:'revised rationale (if update needed)',kind:'textarea',req:false}]; },
+  submit(v){
+    const events=[];
+    if(v.assumptionId&&v.result){
+      if(!v.evidence) throw new Error('a test result without evidence is an opinion — evidence is required');
+      events.push({type:'assumption.tested',payload:{assumptionId:v.assumptionId,result:v.result,evidence:v.evidence}});
+    }
+    if(v.newAssumption){
+      const p={id:U.uid('as'),decisionId:v.decisionId,assumption:v.newAssumption,testable:v.newTestable==='Y'};
+      if(v.newMethod) p.test_method=v.newMethod;
+      events.push({type:'assumption.logged',payload:p});
+    }
+    if(v.updateNeeded==='Y'){
+      if(!v.updateRationale) throw new Error('you marked an update as needed — the revised rationale is required');
+      events.push({type:'strategy.decision',payload:{title:'REVISED after assumption audit: '+v.decisionId,context:v.updateRationale}});
+      events.push({type:'decision.outcome',payload:{decisionId:v.decisionId,actual:'rationale revised after assumption audit',
+        matchedRationale:false,note:v.updateRationale.slice(0,160)}});
+    }
+    if(!events.length) throw new Error('nothing to record — test an assumption, log a new one, or revise the decision');
+    return {events:events};
+  }};
+function ui_draftDecision(){ try{ return (window.LeadOS.__uiDraft||{}).decisionId||''; }catch(e){ return ''; } }
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -5068,6 +5935,7 @@ function playRunnerHtml(ctx,id){
   const gated=!spec.free&&!!spec.pattern;
   const on=!gated||ctx.R.patterns.active.some(p=>p.name===spec.pattern);
   const draft=ui.playDraft||{};
+  LeadOS.__uiDraft=draft; /* lets a field builder read the in-progress draft */
   let lines=[];
   try{ lines=spec.prefill(ctx.R,ctx.P,ctx.now,draft)||[]; }
   catch(e){ lines=['prefill threw: '+e.message+' — printed, not hidden']; }
@@ -5255,6 +6123,77 @@ V['#/org']={kicker:'the invisible architecture',title:'Organization',render(ctx)
     '<div class="sect"><h2>Quick capture</h2><span class="meta">org.network.edge · culture.signal · meeting.logged · trust.signal · power.map.logged · psychological.safety</span></div>'+
     '<div class="card">'+captureForm()+'</div>';
 }};
+V['#/decisions']={kicker:'decide, track, learn',title:'Decisions',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const set=LeadOS.engine.settings(P);
+  const D=LeadOS.decisions;
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
+  const decs=vals(P.decisions).sort((a,b)=>(b.at-a.at));
+  const sevOf=d=>{ const fs=R.findings.filter(f=>(f.refs||[]).indexOf(d.id)!==-1);
+    return fs.length?Math.max.apply(null,fs.map(f=>f.sev)):0; };
+  const decRows=decs.sort((a,b)=>(sevOf(b)-sevOf(a))||(b.at-a.at)).map(d=>{
+    const scen=(P.scenariosByDecision||{})[d.id]||[];
+    const pm=(P.premortemByDecision||{})[d.id];
+    const tr=D.trackAssumptions(d.id,P);
+    const s=scen.length?D.buildScenario(d.id,P):null;
+    const sv=sevOf(d);
+    return '<tr><td>'+(sv?'<span class="sev s'+sv+'">sev '+sv+'</span>':'<span class="pill">quiet</span>')+'</td>'+
+      '<td class="mono">'+esc(d.id)+'</td><td>'+esc(d.title)+'</td>'+
+      '<td>'+(d.decided?'<span class="pill">decided</span>':'<span class="sev s2">open</span>')+'</td>'+
+      '<td class="mono small">'+(s?s.scenarios.map(x=>x.name+' EV '+x.ev).join(' · '):'none')+'</td>'+
+      '<td>'+(pm?'<span class="pill">premortem done</span>':(scen.length?'<span class="sev s3">no premortem</span>':'<span class="pill">—</span>'))+'</td>'+
+      '<td class="mono small">'+(tr.assumptions.length
+        ? tr.assumptions.length+' ('+tr.untested.length+' untested'+(tr.refuted.length?', '+tr.refuted.length+' REFUTED':'')+')'
+        : 'none')+'</td>'+
+      '<td><button class="btn ghost sm" data-act="playrun" data-id="decision-scenario">scenarios</button></td></tr>';
+  }).join('');
+  const pr=D.prioritize((P.activeInitiatives||[]),set.prioritizationModel);
+  const initRows=pr.rows.map(r=>'<tr><td class="mono">#'+r.rank+'</td><td>'+esc(r.title)+'</td>'+
+    '<td class="mono">'+(r.score===null?'—':r.score)+'</td><td class="small muted">'+esc(r.math)+'</td>'+
+    '<td class="mono">'+esc(r.ownerId||'—')+'</td></tr>').join('');
+  const L=D.commitmentLedger(P,now);
+  const ovRows=L.overdue.map(c=>'<tr><td class="mono">'+esc(c.to_personId)+'</td><td>'+esc(c.what)+'</td>'+
+    '<td class="mono">'+U.iso(c.by_date)+'</td><td class="mono"><span class="sev s'+(c.daysPast>7||c.stakes>=5?4:3)+'">'+c.daysPast+'d</span></td>'+
+    '<td class="mono">'+c.stakes+'</td><td>'+(c.public?'<span class="pill">public</span>':'')+'</td></tr>').join('');
+  const openNotDue=L.open.filter(c=>c.by_date>=now);
+  return '<div class="vhead"><div class="kicker">decide, track, learn</div><h1>Decisions</h1>'+
+    '<div class="sub">Scenario planning before the call, risk-adjusted prioritization of the portfolio, and a commitment ledger that surfaces broken promises before they erode trust. Every model prints its math <b>and</b> its epistemic class.</div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['decision-scenario','premortem','commitment-review','initiative-prioritize','assumption-audit']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    runner+
+    '<div class="grid3">'+
+      '<div class="card"><h3>Commitment hit rate (90d)</h3>'+
+        (L.hitRate===null?'<div class="small muted" style="margin-top:8px">'+esc(L.hitRateMath)+'</div>'
+          :'<div style="margin-top:8px">'+BAR(L.hitRate,100)+' <b class="mono">'+L.hitRate+'%</b></div>'+
+           '<div class="basis" style="margin-top:8px"><div>'+esc(L.hitRateMath)+'</div></div>')+
+        '<div class="formnote">'+L.open.length+' open · '+L.overdue.length+' overdue</div></div>'+
+      '<div class="card"><h3>Portfolio</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+(P.activeInitiatives||[]).length+' active · model '+esc(pr.model)+'</div>'+
+        '<div>'+vals(P.initiatives).filter(i=>i.status==='killed').length+' killed · '+
+          vals(P.initiatives).filter(i=>i.status==='shipped').length+' shipped</div>'+
+        '<div class="lbl">'+esc(pr.label)+'</div></div></div>'+
+      '<div class="card"><h3>Assumptions</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+(P.untestedAssumptions||[]).length+' untested of '+Object.keys(P.assumptions||{}).length+'</div>'+
+        '<div>'+vals(P.assumptions).filter(a=>a.result==='refuted').length+' refuted</div>'+
+        '<div class="lbl">a refuted assumption that changes nothing is a decision made on data you know to be wrong (R66)</div></div></div>'+
+    '</div>'+
+    '<div class="sect"><h2>Decisions</h2><span class="meta">'+decs.length+' · ranked by live finding severity</span></div>'+
+    (decs.length?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>signal</th><th>id</th><th>title</th><th>state</th><th>scenarios (EV)</th><th>premortem</th><th>assumptions</th><th></th></tr>'+decRows+'</table></div>'
+      :'<div class="empty">No decisions logged.</div>')+
+    '<div class="sect"><h2>Initiative backlog</h2><span class="meta">'+pr.rows.length+' active · scored by '+esc(pr.model)+'</span></div>'+
+    (initRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>rank</th><th>initiative</th><th>score</th><th>math</th><th>owner</th></tr>'+initRows+'</table></div>'
+      :'<div class="empty">No active initiatives.</div>')+
+    '<div class="sect"><h2>Overdue commitments</h2><span class="meta">'+L.overdue.length+' · '+openNotDue.length+' more open and not yet due</span></div>'+
+    (ovRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>to</th><th>what</th><th>due</th><th>past</th><th>stakes</th><th></th></tr>'+ovRows+'</table></div>'
+      :'<div class="empty">Nothing overdue. Open commitments are excluded from the hit rate until they settle.</div>')+
+    (L.patterns.length?'<div class="sect"><h2>Miss patterns</h2><span class="meta">'+L.patterns.length+'</span></div>'+
+      '<div class="card">'+L.patterns.map(p=>'<div class="heatrow"><b>'+esc(p.person)+'</b><span>'+esc(p.why)+'</span>'+
+      '<span class="w"><button class="btn ghost sm" data-act="playrun" data-id="trust-repair">repair</button></span></div>').join('')+'</div>':'')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">commitment.made · initiative.logged · decision.scenario · assumption.logged</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
 V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',render(ctx){
   const P=ctx.P, R=ctx.R, now=ctx.now;
   const vals=o=>Object.keys(o||{}).map(k=>o[k]);
@@ -5318,8 +6257,8 @@ V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',re
       const trust=(P.trustSignals||[]).filter(t=>t.fromId===id||t.toId===id).sort((a,b)=>b.at-a.at);
       const power=(P.powerByPerson||{})[id];
       const load=LeadOS.correlate.meetingLoad(P,now,30).byPerson.filter(p=>p.person===id)[0];
-      return '<div class="sect"><h2>Network position</h2><span class="meta">'+esc(net.label)+'</span></div>'+
-        '<div class="grid2"><div class="card"><div class="basis">'+
+      return '<div class="sect"><h2>Network position &amp; accountability</h2><span class="meta">'+esc(net.label)+'</span></div>'+
+        '<div class="grid3"><div class="card"><div class="basis">'+
           '<div>indegree (influence received): '+net.indegree(id)+' · weighted '+U.rd3(net.weightedIn(id))+'</div>'+
           '<div>outdegree (influence given): '+net.outdegree(id)+' · weighted '+U.rd3(net.weightedOut(id))+'</div>'+
           '<div>betweenness: '+net.betweenness(id)+(rank>=0?' (rank #'+(rank+1)+' of '+net.betweennessRank.length+')':'')+'</div>'+
@@ -5329,6 +6268,20 @@ V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',re
           (power?'<div>power map: formal '+power.formalPower+' · informal '+power.informalPower+' · coalition '+power.coalition.length+'</div>':'<div>no power.map.logged entry</div>')+
           (load?'<div>meeting load: '+load.hoursPerWeek+' h/wk ('+load.wastedHoursPerWeek+' wasted)</div>':'<div>no meetings logged in 30d</div>')+
         '</div></div>'+
+        '<div class="card"><h3>Commitments to '+esc(id)+'</h3>'+
+          (function(){
+            const L=LeadOS.decisions.commitmentLedger(P,now);
+            const mine=L.byPerson.filter(p=>p.person===id)[0];
+            if(!mine) return '<div class="small muted" style="margin-top:8px">No commitments made to '+esc(id)+'.</div>';
+            const rate=(mine.completed+mine.missed.length)
+              ? U.rd(mine.completed/(mine.completed+mine.missed.length)*100,1) : null;
+            return '<div class="basis" style="margin-top:8px">'+
+              '<div>open: '+mine.open.length+(mine.open.length?' — '+mine.open.map(c=>esc(c.what)+' (due '+U.iso(c.by_date)+')').join(' · '):'')+'</div>'+
+              '<div>completed: '+mine.completed+' · missed (90d): '+mine.missed.length+'</div>'+
+              '<div>hit rate to this person: '+(rate===null?'not computed — nothing settled':rate+'% ('+mine.completed+' ÷ '+(mine.completed+mine.missed.length)+')')+'</div>'+
+              (mine.missed.length>=2?'<div><b>PATTERN: '+mine.missed.length+' misses in 90d — R64 is firing</b></div>':'')+
+            '</div>'; })()+
+        '</div>'+
         '<div class="card"><h3>Trust signals</h3>'+
           (trust.length?trust.slice(0,8).map(t=>'<div class="heatrow"><span class="rule">'+(t.direction==='lost'?'<span class="sev s3">lost</span>':'<span class="pill">gained</span>')+'</span>'+
             '<span>'+esc(t.fromId)+' → '+esc(t.toId)+': '+esc(t.evidence)+'</span><span class="w">'+U.iso(t.at)+'</span></div>').join('')
@@ -5433,6 +6386,7 @@ function shell(ctx){
     ['#/benchmarks','bars','Benchmarks',R.insights.active.filter(i=>i.kind==='benchmark-gap').length||null],
     ['#/conversations','link','Conversations',(ctx.P.openConvs||[]).length||null],
     ['#/org','grid','Organization',(ctx.P.openSilos||[]).length||null],
+    ['#/decisions','check','Decisions',(ctx.P.openCommitments||[]).length||null],
     ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],
     ['#/health','shield','Health',null],
