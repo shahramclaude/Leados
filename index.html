@@ -225,7 +225,7 @@ const LeadOS = window.LeadOS = window.LeadOS || {};
 /* Module registry — the single-file analog of the brief's script list.
    Each logical "file" registers exactly one namespace, in this load order.
    The boot guard halts rendering if any entry is missing (data untouched). */
-LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','health','playbooks','ui'];
+LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','health','playbooks','ui'];
 
 /* ==================== 1 · UTIL ==================== */
 (function(){
@@ -449,7 +449,23 @@ const REGISTRY = {
   'initiative.prioritized': D({rankedIds:'a',model:'s',rationale:'s',period:'s'},null,{model:['RICE','WSJF','ICE']}),
   'assumption.logged':      D({id:'s',decisionId:'s',assumption:'s',testable:'b'},{test_method:'s'},null,'assumptions'),
   'assumption.tested':      D({assumptionId:'s',result:'s',evidence:'s'},{note:'s'},
-                              {result:['confirmed','refuted','inconclusive']},null,{assumptionId:'assumptions'})
+                              {result:['confirmed','refuted','inconclusive']},null,{assumptionId:'assumptions'}),
+  /* pt-14 (brief "pt-9") — execution layer. 12 contracts. */
+  'sprint.started':         D({id:'s',name:'s',startDate:'ms',endDate:'ms',goals:'a'},{teamId:'s',capacity_pts:'n'},null,'sprints'),
+  'sprint.review':          D({sprintId:'s',velocity_actual:'n',goals_met:'a',goals_missed:'a'},{velocity_planned:'n',note:'s'},null,null,{sprintId:'sprints'}),
+  'sprint.retro.action':    D({id:'s',sprintId:'s',action:'s'},{ownerId:'s',dueDate:'ms'},null,'retroActions',{sprintId:'sprints'}),
+  'blocker.logged':         D({id:'s',title:'s',severity:'n',raisedAt:'ms'},{blockedTeamId:'s',blockingTeamId:'s',ownerId:'s'},null,'blockers'),
+  'blocker.resolved':       D({blockerId:'s',resolvedAt:'ms',how:'s'},{note:'s'},null,null,{blockerId:'blockers'}),
+  'blocker.escalated':      D({blockerId:'s',escalatedTo:'s'},{note:'s'},null,null,{blockerId:'blockers'}),
+  'dependency.logged':      D({id:'s',fromTeamId:'s',toTeamId:'s',what:'s',dueDate:'ms',status:'s'},{note:'s'},
+                              {status:['pending','at-risk','delivered']},'dependencies'),
+  'dependency.updated':     D({dependencyId:'s',status:'s'},{note:'s'},
+                              {status:['pending','at-risk','delivered']},null,{dependencyId:'dependencies'}),
+  'accountability.pulse':   D({personId:'s',commitments_made:'n',commitments_kept:'n',period:'s'},{note:'s',observed:'b'}),
+  'capacity.change':        D({delta_headcount:'n',reason:'s',effective_date:'ms'},{teamId:'s'},
+                              {reason:['hire','attrition','transfer','leave']}),
+  'roadblock.pattern':      D({theme:'s',occurrences:'n',impacted_teams:'a'},{root_cause:'s',note:'s'}),
+  'delivery.reviewed':      D({period:'s',on_time_pct:'n',scope_change_pct:'n',customer_impact:'n'},{note:'s'})
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -476,7 +492,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=8, LINEAGE='pt', LINEAGE_TAG='pt-13';
+const KEY='leados:data', SCHEMA_VERSION=9, LINEAGE='pt', LINEAGE_TAG='pt-14';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -502,7 +518,10 @@ const V7_NEW_KEYS=Object.keys(V7_SETTING_DEFAULTS);
 /* v8 — decision intelligence. prioritizationModel is a STRING (enum). */
 const V8_SETTING_DEFAULTS={commitmentReviewCadenceDays:7,scenarioHorizonDays:90,prioritizationModel:'RICE'};
 const V8_NEW_KEYS=Object.keys(V8_SETTING_DEFAULTS);
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS);
+/* v9 — execution layer. All numeric. */
+const V9_SETTING_DEFAULTS={sprintLengthDays:14,blockerResolutionSLADays:3,retrospectiveFrequencyDays:14,deliveryCadenceDays:7};
+const V9_NEW_KEYS=Object.keys(V9_SETTING_DEFAULTS);
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -572,7 +591,13 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V8_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V8_SETTING_DEFAULTS[k]},{repair:true,migration:'7>8',reason:'backfill v8 setting default'}); repairs++; }});
-    recordMigration(raw,'7>8',repairs); raw.schemaVersion=8; return repairs; }
+    recordMigration(raw,'7>8',repairs); raw.schemaVersion=8; return repairs; },
+  /* v8 -> v9: execution-layer settings. Contract unchanged since 3>4. */
+  '8>9':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V9_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V9_SETTING_DEFAULTS[k]},{repair:true,migration:'8>9',reason:'backfill v9 setting default'}); repairs++; }});
+    recordMigration(raw,'8>9',repairs); raw.schemaVersion=9; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -661,7 +686,8 @@ const getEvents=()=>load().events.slice();
 const rawBytes=()=>{ const t=localStorage.getItem(KEY); return t?t.length:0; };
 LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V4_NEW_KEYS,
   V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,
-  V7_SETTING_DEFAULTS,V7_NEW_KEYS,V8_SETTING_DEFAULTS,V8_NEW_KEYS,SETTING_ENUMS,
+  V7_SETTING_DEFAULTS,V7_NEW_KEYS,V8_SETTING_DEFAULTS,V8_NEW_KEYS,
+  V9_SETTING_DEFAULTS,V9_NEW_KEYS,SETTING_ENUMS,
   RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
@@ -897,7 +923,44 @@ const MODULE_FOLD={
     tested:false,result:null,evidence:'',loggedAt:at,testedAt:null};
     group(s.assumptionsByDecision,p.decisionId,s.assumptions[p.id]); },
   'assumption.tested':(s,p,at)=>{ const a=s.assumptions[p.assumptionId];
-    if(a){ a.tested=true; a.result=p.result; a.evidence=p.evidence; a.testedAt=at; } }
+    if(a){ a.tested=true; a.result=p.result; a.evidence=p.evidence; a.testedAt=at; } },
+  /* pt-14 — execution layer */
+  'sprint.started':(s,p,at)=>{ s.sprints[p.id]={id:p.id,name:p.name,teamId:p.teamId||'(unassigned)',
+    startDate:p.startDate,endDate:p.endDate,capacity_pts:(p.capacity_pts===undefined?null:p.capacity_pts),
+    goals:p.goals.slice(),startedAt:at,review:null,retroActions:[]};
+    group(s.sprintsByTeam,p.teamId||'(unassigned)',s.sprints[p.id]); },
+  'sprint.review':(s,p,at,ev)=>{ const sp=s.sprints[p.sprintId]; if(!sp) return;
+    const rec={sprintId:p.sprintId,velocity_actual:p.velocity_actual,
+      velocity_planned:(p.velocity_planned===undefined?null:p.velocity_planned),
+      goals_met:p.goals_met.slice(),goals_missed:p.goals_missed.slice(),note:p.note||'',at:at,_ev:ev&&ev.id};
+    sp.review=rec; s.sprintReviews.push(Object.assign({teamId:sp.teamId,endDate:sp.endDate,capacity_pts:sp.capacity_pts},rec));
+    group(s.reviewsByTeam,sp.teamId,rec);
+    /* G79: a missed goal naming a milestone id is cross-referenced, never
+       auto-closed — the projection records the link and the rule reads it. */
+    p.goals_missed.forEach(g=>{ const mid=(g&&typeof g==='object')?g.milestoneId:null;
+      if(mid&&s.milestones[mid]){ (s.milestones[mid].missedInSprints=s.milestones[mid].missedInSprints||[]).push(p.sprintId); } }); },
+  'sprint.retro.action':(s,p,at)=>{ const rec={id:p.id,sprintId:p.sprintId,action:p.action,
+    ownerId:p.ownerId||null,dueDate:p.dueDate||null,at:at};
+    s.retroActions[p.id]=rec;
+    const sp=s.sprints[p.sprintId]; if(sp) sp.retroActions.push(rec); },
+  'blocker.logged':(s,p,at)=>{ s.blockers[p.id]={id:p.id,title:p.title,severity:p.severity,
+    blockedTeamId:p.blockedTeamId||null,blockingTeamId:p.blockingTeamId||null,ownerId:p.ownerId||null,
+    raisedAt:p.raisedAt,loggedAt:at,resolved:false,resolvedAt:null,how:'',escalated:false,escalatedTo:null};
+    if(p.blockingTeamId) group(s.blockersByBlockingTeam,p.blockingTeamId,s.blockers[p.id]); },
+  'blocker.resolved':(s,p,at)=>{ const b=s.blockers[p.blockerId];
+    if(b){ b.resolved=true; b.resolvedAt=p.resolvedAt; b.how=p.how; } },
+  'blocker.escalated':(s,p,at)=>{ const b=s.blockers[p.blockerId];
+    if(b){ b.escalated=true; b.escalatedTo=p.escalatedTo; b.escalatedAt=at; } },
+  'dependency.logged':(s,p,at)=>{ s.dependencies[p.id]={id:p.id,fromTeamId:p.fromTeamId,toTeamId:p.toTeamId,
+    what:p.what,dueDate:p.dueDate,status:p.status,note:p.note||'',loggedAt:at,statusAt:at,history:[]}; },
+  'dependency.updated':(s,p,at)=>{ const d=s.dependencies[p.dependencyId];
+    if(d){ d.history.push({from:d.status,to:p.status,note:p.note||'',at:at});
+      d.status=p.status; d.statusAt=at; } },
+  'accountability.pulse':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.pulses.push(rec); group(s.pulsesByPerson,p.personId,rec); },
+  'capacity.change':(s,p,at,ev)=>{ push(s.capacityChanges,p,at,ev); },
+  'roadblock.pattern':(s,p,at,ev)=>{ push(s.roadblockPatterns,p,at,ev); },
+  'delivery.reviewed':(s,p,at,ev)=>{ push(s.deliveryReviews,p,at,ev); }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -933,6 +996,10 @@ function blankBuckets(s){
   s.commitments={};s.commitmentsByPerson={};
   s.initiatives={};s.prioritizations=[];
   s.assumptions={};s.assumptionsByDecision={};
+  /* pt-14 execution buckets */
+  s.sprints={};s.sprintsByTeam={};s.sprintReviews=[];s.reviewsByTeam={};s.retroActions={};
+  s.blockers={};s.blockersByBlockingTeam={};s.dependencies={};
+  s.pulses=[];s.pulsesByPerson={};s.capacityChanges=[];s.roadblockPatterns=[];s.deliveryReviews=[];
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -964,7 +1031,10 @@ const OPEN_SETS={
   openSilos:['silos',s=>!s.resolved],
   openCommitments:['commitments',c=>c.settled===null],
   activeInitiatives:['initiatives',i=>i.status==='active'],
-  untestedAssumptions:['assumptions',a=>!a.tested]
+  untestedAssumptions:['assumptions',a=>!a.tested],
+  openBlockers:['blockers',b=>!b.resolved],
+  openDependencies:['dependencies',d=>d.status!=='delivered'],
+  unreviewedSprints:['sprints',s=>s.review===null]
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -1936,11 +2006,174 @@ function R72(P,today){ const f=F('R72'),out=[];
         'source: exec.aligned + conv.planned'],
       refs:[],scope:'misaligned:'+(a._ev||U.iso(a.at)),evidenceAt:a.at})); });
   return out; }
+/* ---- pt-14 execution rules R73–R82 ---- */
+Object.assign(META,{
+  R73:{domain:'operations',play:'capacity-replan'},R74:{domain:'operations',play:'sprint-review'},
+  R75:{domain:'operations',play:'blocker-escalation'},R76:{domain:'operations',play:'blocker-escalation'},
+  R77:{domain:'operations',play:'dependency-review'},R78:{domain:'operations',play:'sprint-review'},
+  R79:{domain:'operations',play:'sprint-review'},R80:{domain:'people',play:'accountability-checkin'},
+  R81:{domain:'people',play:'capacity-replan'},R82:{domain:'operations',play:'sprint-review'}
+});
+function R73(P,today){ const f=F('R73'),out=[];
+  Object.keys(P.reviewsByTeam||{}).sort().forEach(team=>{
+    const v=LeadOS.execution.velocityTrend(team,P);
+    if(!v.claimed||v.slope>=-0.5) return;
+    const proj=v.projection;
+    const soon=proj&&proj.sprintsToZero<4;
+    out.push(f({sev:soon?4:3,conf:'MEDIUM',trend:true,
+      title:'Velocity declining '+v.slope+' pts/sprint on '+team+(soon?' — zero in ~'+proj.sprintsToZero+' sprints':''),
+      basis:[v.slopeMath+' · threshold: slope < −0.5 over ≥3 sprints',v.meanMath,
+        proj?(proj.math+' — '+proj.label):'slope negative but no projection computed',
+        'a shrinking team that keeps shrinking reaches zero'],
+      refs:[],scope:'velocity:'+team,evidenceAt:U.maxAt((P.reviewsByTeam||{})[team])})); });
+  return out; }
+function R74(P,today){ const f=F('R74'),out=[];
+  Object.keys(P.reviewsByTeam||{}).sort().forEach(team=>{
+    const revs=(P.reviewsByTeam[team]||[]).slice().sort((a,b)=>a.at-b.at).slice(-3);
+    if(revs.length<3) return;
+    let met=0,missed=0;
+    revs.forEach(r=>{ met+=r.goals_met.length; missed+=r.goals_missed.length; });
+    const total=met+missed; if(!total) return;
+    const rate=met/total*100;
+    if(rate>=60) return; /* exactly 60% stays quiet */
+    out.push(f({sev:rate<40?4:3,conf:'HIGH',
+      title:'Sprint goal hit rate '+U.rd(rate,1)+'% on '+team+' (last 3 sprints)',
+      basis:['goals met '+met+' ÷ (met '+met+' + missed '+missed+') × 100 = '+U.rd(rate,1)+'% over the last 3 sprint reviews · thresholds: <60% → sev 3, <40% → sev 4; exactly 60% is quiet',
+        'this is YOUR OWN sprint review data — conf HIGH, nothing inferred',
+        'a sprint process that misses 40–60% of its own goals is not planning — it is wishful thinking institutionalized'],
+      refs:[],scope:'goals:'+team,evidenceAt:U.maxAt(revs)})); });
+  return out; }
+function R75(P,today){ const f=F('R75'),out=[];
+  const set=LeadOS.engine.settings(P), sla=set.blockerResolutionSLADays;
+  (P.openBlockers||[]).forEach(b=>{
+    const hrs=(today-b.raisedAt)/H, ageD=days(today,b.raisedAt);
+    if(b.severity>=5){
+      if(hrs<=4) return;
+      out.push(f({sev:5,conf:'HIGH',title:'Severity-5 blocker open '+U.rd(hrs,1)+'h: '+b.title,
+        basis:['severity 5 · raised '+U.iso(b.raisedAt)+' · open '+U.rd(hrs,1)+'h > 4h → sev 5 immediately',
+          (b.blockingTeamId?'blocking team: '+b.blockingTeamId:'no blocking team recorded')+(b.escalated?' · escalated to '+b.escalatedTo:' · NOT escalated'),
+          'every hour an unresolved blocker ages, the probability of a missed commitment rises'],
+        refs:[b.id],evidenceAt:b.raisedAt}));
+      return; }
+    if(b.severity<3) return;
+    if(ageD<=sla) return; /* strictly past the SLA */
+    out.push(f({sev:U.clamp(b.severity,3,4),conf:'HIGH',title:'Blocker unresolved '+ageD+'d: '+b.title,
+      basis:['severity '+b.severity+' ≥ 3 · raised '+U.iso(b.raisedAt)+' · '+ageD+'d > blockerResolutionSLADays '+sla+'d · sev = clamp('+b.severity+', 3, 4) = '+U.clamp(b.severity,3,4),
+        (b.blockingTeamId?'blocking team: '+b.blockingTeamId:'no blocking team recorded')+(b.escalated?' · escalated to '+b.escalatedTo:' · NOT escalated'),
+        'source: blocker.logged without blocker.resolved'],
+      refs:[b.id],evidenceAt:b.raisedAt})); });
+  return out; }
+function R76(P,today){ const f=F('R76'),out=[];
+  const net=LeadOS.execution.blockerNetwork(P,today);
+  net.chronic.forEach(c=>{
+    out.push(f({sev:4,conf:'HIGH',title:'Chronic blocking team: '+c.team+' ('+c.count+' blockers in 90d)',
+      basis:[c.why,c.blockers.join(' · '),
+        'this is YOUR OWN blocker log — conf HIGH',
+        'source: blocker.logged, rolling 90d by blockingTeamId'],
+      refs:[],scope:'chronic:'+c.team,evidenceAt:U.maxAt((P.blockersByBlockingTeam||{})[c.team],b=>b.raisedAt)})); });
+  return out; }
+function R77(P,today){ const f=F('R77'),out=[];
+  (P.openDependencies||[]).forEach(d=>{
+    const past=d.dueDate<today;
+    if(past){
+      out.push(f({sev:5,conf:'HIGH',title:'Dependency past due, not delivered: '+d.what,
+        basis:['dueDate '+U.iso(d.dueDate)+' is '+days(today,d.dueDate)+'d past · status "'+d.status+'" (not delivered) → sev 5',
+          d.fromTeamId+' → '+d.toTeamId,'source: dependency.logged / .updated'],
+        refs:[d.id],evidenceAt:d.dueDate}));
+      return; }
+    if(d.status!=='at-risk') return;
+    const until=Math.ceil((d.dueDate-today)/DAY);
+    if(until>=7) return; /* only inside the 7d horizon */
+    out.push(f({sev:4,conf:'HIGH',title:'At-risk dependency due in '+until+'d: '+d.what,
+      basis:['status "at-risk" · dueDate '+U.iso(d.dueDate)+' is '+until+'d out (<7d) → sev 4 · no dependency.updated to "delivered"',
+        d.fromTeamId+' → '+d.toTeamId,'source: dependency.logged / .updated'],
+      refs:[d.id],evidenceAt:d.dueDate})); });
+  return out; }
+function R78(P,today){ const f=F('R78'),out=[];
+  vals(P.retroActions||{}).forEach(a=>{
+    if(!a.dueDate||a.dueDate>=today) return; /* strictly past */
+    const noteDone=(P.noteLog||[]).some(n=>String(n.text||'').indexOf(a.sprintId)!==-1&&n.at>a.at);
+    const checkin=a.ownerId&&(P.planCheckins||[]).some(c=>c.at>a.at);
+    if(noteDone||checkin) return;
+    out.push(f({sev:2,conf:'MEDIUM',title:'Retro action with no follow-through: '+a.action,
+      basis:['sprint.retro.action from '+a.sprintId+' · dueDate '+U.iso(a.dueDate)+' is '+days(today,a.dueDate)+'d past',
+        'no note.added naming "'+a.sprintId+'" since, and no plan.checkin by '+(a.ownerId||'(no owner recorded)'),
+        'the registry has NO retro-action completion event — completion is inferred from those two signals and the gap is printed, not hidden (conf MEDIUM for that reason)',
+        'a retrospective whose actions nobody follows through on is a ritual, not improvement — sev 2: retrospective debt compounds quietly'],
+      refs:[a.id],evidenceAt:a.dueDate})); });
+  return out; }
+function R79(P,today){ const f=F('R79'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.retrospectiveFrequencyDays;
+  (P.unreviewedSprints||[]).forEach(s=>{
+    if(s.endDate>=today) return; /* strictly past */
+    const age=days(today,s.endDate);
+    if(age<=cad) return;
+    out.push(f({sev:3,conf:'HIGH',title:'Sprint ended '+age+'d ago with no review: '+s.name,
+      basis:['sprint.started endDate '+U.iso(s.endDate)+' · '+age+'d > retrospectiveFrequencyDays '+cad+'d · no sprint.review',
+        'team '+s.teamId+' · '+s.goals.length+' goal(s) planned, none scored',
+        'a sprint that ends without review is a sprint you cannot learn from'],
+      refs:[s.id],evidenceAt:s.endDate})); });
+  return out; }
+function R80(P,today){ const f=F('R80'),out=[];
+  Object.keys(P.pulsesByPerson||{}).sort().forEach(pid=>{
+    const a=LeadOS.execution.accountabilityIndex(pid,P,today);
+    if(!a.claimed||a.hitRate===null) return;
+    if(a.hitRate>=60) return; /* strictly below */
+    out.push(f({sev:a.hitRate<40?4:3,conf:'MEDIUM',
+      title:'Accountability index '+a.hitRate+'% for '+pid,
+      basis:[a.math+' · thresholds: <60% → sev 3, <40% → sev 4; exactly 60% is quiet',
+        'DATA SOURCE: '+a.source,
+        a.slopeNote,a.comparison],
+      refs:[pid],scope:pid+':accountability',evidenceAt:U.maxAt((P.pulsesByPerson||{})[pid])})); });
+  return out; }
+function R81(P,today){ const f=F('R81'),out=[];
+  const recent=(P.capacityChanges||[]).filter(c=>days(today,c.effective_date)<=30&&c.effective_date<=today);
+  if(!recent.length) return out;
+  const byTeam={};
+  recent.forEach(c=>{ const t=c.teamId||'(unassigned)';
+    (byTeam[t]=byTeam[t]||{team:t,delta:0,events:[]});
+    byTeam[t].delta+=c.delta_headcount; byTeam[t].events.push(c); });
+  Object.keys(byTeam).sort().forEach(t=>{
+    const b=byTeam[t];
+    if(b.delta>-2) return;
+    const replan=(P.capacityLogs||[]).some(c=>days(today,c.at)<=30);
+    if(replan) return;
+    out.push(f({sev:4,conf:'HIGH',title:'Capacity shock on '+t+': '+b.delta+' headcount in 30d, no replan',
+      basis:['Σ delta_headcount over 30d = '+b.events.map(e=>e.delta_headcount+' ('+e.reason+' '+U.iso(e.effective_date)+')').join(' + ')+' = '+b.delta+' ≤ −2',
+        'no ops.capacity.logged event in the last 30d',
+        'a team that lost 2+ people in a month needs a capacity replan — not next quarter, this week'],
+      refs:[],scope:'capacity:'+t,evidenceAt:U.maxAt(b.events,e=>e.effective_date)})); });
+  return out; }
+function R82(P,today){ const f=F('R82'),out=[];
+  const set=LeadOS.engine.settings(P), cad=set.deliveryCadenceDays;
+  const revs=(P.deliveryReviews||[]).slice().sort((a,b)=>a.at-b.at);
+  if(!revs.length){
+    if(P.firstAt!==null&&days(today,P.firstAt)>cad)
+      out.push(f({sev:2,conf:'MEDIUM',title:'Delivery never reviewed',
+        basis:['zero delivery.reviewed events · log spans '+days(today,P.firstAt)+'d > deliveryCadenceDays '+cad+'d'],
+        refs:[],scope:'delivery:never',evidenceAt:P.firstAt}));
+    return out; }
+  const latest=revs[revs.length-1], age=days(today,latest.at);
+  if(age>cad) out.push(f({sev:2,conf:'HIGH',title:'Delivery review stale: '+age+'d',
+    basis:['latest delivery.reviewed '+U.iso(latest.at)+' ('+latest.period+') is '+age+'d old > deliveryCadenceDays '+cad+'d'],
+    refs:[],scope:'delivery:cadence',evidenceAt:latest.at}));
+  const impact=latest.customer_impact>=4;
+  const pct=latest.on_time_pct;
+  if(impact||pct<50||pct<70){
+    const sev=(impact||pct<50)?4:3;
+    out.push(f({sev:sev,conf:'HIGH',title:'Delivery '+pct+'% on time, customer impact '+latest.customer_impact+' ('+latest.period+')',
+      basis:['on_time_pct '+pct+' · thresholds <70% → sev 3, <50% → sev 4 · scope change '+latest.scope_change_pct+'%',
+        impact?('customer_impact '+latest.customer_impact+' ≥ 4 → sev 4 REGARDLESS of on_time_pct — a delivery that arrived on time but hurt a customer failed')
+          :'customer_impact '+latest.customer_impact+' (below the 4 override)',
+        'this is YOUR OWN delivery review — conf HIGH'],
+      refs:[],scope:'delivery:'+latest.period,evidenceAt:latest.at})); }
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
              R46,R47,R48,R49,R50,R51,R52,
              R53,R54,R55,R56,R57,R58,R59,R60,R61,R62,
-             R63,R64,R65,R66,R67,R68,R69,R70,R71,R72];
+             R63,R64,R65,R66,R67,R68,R69,R70,R71,R72,
+             R73,R74,R75,R76,R77,R78,R79,R80,R81,R82];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -3079,6 +3312,153 @@ LeadOS.decisions={MODEL_LABELS:MODEL_LABELS,scoreOne:scoreOne,prioritize:priorit
   commitmentLedger:commitmentLedger,trackAssumptions:trackAssumptions};
 })();
 
+/* ============ 6d · EXECUTION — delivery analytics (pt-14) =================
+   Strategy without execution is fiction. Velocity, blockers, dependencies,
+   accountability, sprint health — all pure, all printing their math, all
+   labeling extrapolation as extrapolation. */
+(function(){
+const LeadOS = window.LeadOS, U = LeadOS.util, DAY = U.DAY, H = 3600000;
+const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+const MIN_SPRINTS=3;
+function velocityTrend(teamId,P){
+  const revs=((P.reviewsByTeam||{})[teamId]||[]).slice().sort((a,b)=>a.at-b.at);
+  const base={teamId:teamId,sprints:revs.length};
+  if(revs.length<MIN_SPRINTS) return Object.assign(base,{claimed:false,mean:null,slope:null,
+    why:'only '+revs.length+' sprint review(s) for '+teamId+' — a velocity trend needs ≥ '+MIN_SPRINTS+' measured points; silent by discipline, not by absence of opinion'});
+  const last3=revs.slice(-3);
+  const vs=last3.map(r=>r.velocity_actual);
+  const mean=U.sum(vs)/vs.length;
+  const allV=revs.map(r=>r.velocity_actual);
+  const slope=U.slope(allV);
+  let met=0,missed=0;
+  revs.forEach(r=>{ met+=r.goals_met.length; missed+=r.goals_missed.length; });
+  const totalGoals=met+missed;
+  const hitRate=totalGoals?U.rd(met/totalGoals*100,1):null;
+  const capAdj=last3.filter(r=>typeof r.capacity_pts==='number'&&r.capacity_pts>0)
+    .map(r=>({sprint:r.sprintId,ratio:U.rd(r.velocity_actual/r.capacity_pts,3),
+      math:'actual '+r.velocity_actual+' ÷ capacity '+r.capacity_pts+' = '+U.rd(r.velocity_actual/r.capacity_pts,3)}));
+  let projection=null;
+  if(slope<0){
+    const latest=allV[allV.length-1];
+    const n=latest/Math.abs(slope);
+    projection={sprintsToZero:U.rd(n,1),
+      math:'latest velocity '+latest+' ÷ |slope '+U.rd3(slope)+'| = '+U.rd(n,1)+' sprints',
+      label:'LINEAR EXTRAPOLATION of your last '+allV.length+' reviews — printed, NOT a forecast; velocity does not actually travel in a straight line to zero'};
+  }
+  return Object.assign(base,{claimed:true,
+    mean:U.rd(mean,2),meanMath:'mean of last 3 velocities ('+vs.join(', ')+') = '+U.rd(mean,2),
+    slope:U.rd3(slope),slopeMath:'least-squares slope over '+allV.length+' sprint(s) ['+allV.join(', ')+'] = '+U.rd3(slope)+' pts/sprint',
+    goalHitRate:hitRate,
+    goalMath:totalGoals?('goals met '+met+' ÷ (met '+met+' + missed '+missed+') × 100 = '+hitRate+'%'):'no goals recorded in these reviews',
+    goalsMet:met,goalsMissed:missed,
+    capacityAdjusted:capAdj,
+    capacityNote:capAdj.length?null:'no capacity_pts logged on these sprints — capacity-adjusted velocity not computed, never assumed',
+    projection:projection});
+}
+function blockerNetwork(P,today){
+  const all=vals(P.blockers);
+  const open=all.filter(b=>!b.resolved);
+  const resolved=all.filter(b=>b.resolved&&typeof b.resolvedAt==='number');
+  const durations=resolved.map(b=>(b.resolvedAt-b.raisedAt)/H);
+  const mttr=durations.length?U.sum(durations)/durations.length:null;
+  const byTeam={};
+  all.forEach(b=>{ if(!b.blockingTeamId) return;
+    const t=byTeam[b.blockingTeamId]=byTeam[b.blockingTeamId]||{team:b.blockingTeamId,all:[],inWindow:[]};
+    t.all.push(b);
+    if(U.days(today,b.raisedAt)<=90) t.inWindow.push(b); });
+  const chronic=Object.keys(byTeam).filter(k=>byTeam[k].inWindow.length>=3).sort().map(k=>({
+    team:k,count:byTeam[k].inWindow.length,
+    blockers:byTeam[k].inWindow.map(b=>b.title+' ('+U.iso(b.raisedAt)+')'),
+    why:byTeam[k].inWindow.length+' blockers caused by '+k+' inside 90d — under-resourced, misaligned, or a control bottleneck; all three are leadership problems'}));
+  const escalated=open.filter(b=>b.escalated).length;
+  const deps=vals(P.dependencies).map(d=>({from:d.fromTeamId,to:d.toTeamId,what:d.what,
+    status:d.status,dueDate:d.dueDate,
+    edge:d.fromTeamId+' → '+d.toTeamId+' | '+d.status+' | due '+U.iso(d.dueDate)}));
+  return {open:open.slice().sort((a,b)=>(b.severity-a.severity)||(a.raisedAt-b.raisedAt)),
+    openCount:open.length,resolvedCount:resolved.length,
+    mttrHours:mttr===null?null:U.rd(mttr,2),
+    mttrMath:durations.length
+      ?('Σ (resolvedAt − raisedAt) over '+durations.length+' resolved blocker(s) ÷ '+durations.length+' = '+U.rd(mttr,2)+'h')
+      :'no resolved blockers — MTTR not computed, never defaulted',
+    byTeam:Object.keys(byTeam).sort().map(k=>byTeam[k]),
+    chronic:chronic,
+    escalatedRate:open.length?U.rd(escalated/open.length*100,1):null,
+    escalatedMath:open.length?('escalated '+escalated+' ÷ open '+open.length+' × 100 = '+U.rd(escalated/open.length*100,1)+'%'):'no open blockers',
+    dependencyGraph:deps,
+    graphNote:'edges are logged dependencies ONLY — no transitive edge is inferred (A→B and B→C does not create A→C)'};
+}
+function accountabilityIndex(personId,P,today){
+  const win=90*DAY;
+  const list=((P.pulsesByPerson||{})[personId]||[]).filter(p=>(today-p.at)<=win)
+    .sort((a,b)=>a.at-b.at);
+  if(!list.length) return {personId:personId,claimed:false,hitRate:null,
+    why:'no accountability.pulse events for '+personId+' in 90d — nothing computed, never assumed'};
+  const made=U.sum(list.map(p=>p.commitments_made));
+  const kept=U.sum(list.map(p=>p.commitments_kept));
+  const rate=made?U.rd(kept/made*100,1):null;
+  const perPeriod=list.map(p=>p.commitments_made?(p.commitments_kept/p.commitments_made*100):0);
+  const slope=perPeriod.length>=3?U.rd3(U.slope(perPeriod)):null;
+  const observed=list.every(p=>p.observed===true);
+  const anyObserved=list.some(p=>p.observed===true);
+  /* team mean across everyone else with pulses in window */
+  const others=Object.keys(P.pulsesByPerson||{}).filter(k=>k!==personId);
+  const otherRates=others.map(k=>{
+    const l=(P.pulsesByPerson[k]||[]).filter(p=>(today-p.at)<=win);
+    const m=U.sum(l.map(p=>p.commitments_made)), kp=U.sum(l.map(p=>p.commitments_kept));
+    return m?kp/m*100:null; }).filter(x=>x!==null);
+  const teamMean=otherRates.length?U.rd(U.sum(otherRates)/otherRates.length,1):null;
+  return {personId:personId,claimed:true,periods:list.length,
+    made:made,kept:kept,hitRate:rate,
+    math:'kept '+kept+' ÷ made '+made+' × 100 = '+rate+'% over '+list.length+' period(s) in 90d',
+    slope:slope,
+    slopeNote:slope===null?'fewer than 3 periods — no trend claimed (trend discipline)':'per-period hit-rate slope '+slope+' over '+list.length+' periods',
+    teamMean:teamMean,
+    comparison:teamMean===null?'no other people have pulses in window — no comparison made'
+      :('team mean (others with pulses, n='+otherRates.length+') = '+teamMean+'% · this person '+rate+'%'),
+    source:observed?'every pulse in window is marked observed=true — conf may be HIGH'
+      :(anyObserved?'MIXED: some pulses observed, some self-reported — conf MEDIUM'
+        :'SELF-REPORTED (no pulse marked observed) — conf MEDIUM: accountability.pulse is self-reported unless you observed it')};
+}
+function sprintHealth(sprintId,P,today){
+  const sp=(P.sprints||{})[sprintId];
+  if(!sp) return {sprintId:sprintId,status:'no sprint.started event with id '+sprintId};
+  const rev=sp.review;
+  const totalGoals=rev?(rev.goals_met.length+rev.goals_missed.length):sp.goals.length;
+  const scopeChange=rev&&totalGoals?U.rd(rev.goals_missed.length/totalGoals,3):null;
+  const delivery=(P.deliveryReviews||[]).filter(d=>d.at>=sp.startDate&&d.at<=sp.endDate+7*DAY)
+    .sort((a,b)=>b.at-a.at)[0]||null;
+  const boundaryBlockers=vals(P.blockers).filter(b=>b.raisedAt<=sp.endDate&&(!b.resolved||b.resolvedAt>sp.endDate));
+  /* retro actions from the PRIOR sprint of this team */
+  const teamSprints=((P.sprintsByTeam||{})[sp.teamId]||[]).slice().sort((a,b)=>a.startDate-b.startDate);
+  const idx=teamSprints.map(x=>x.id).indexOf(sprintId);
+  const prior=idx>0?teamSprints[idx-1]:null;
+  let retro=null;
+  if(prior){
+    const actions=prior.retroActions||[];
+    const notes=(P.noteLog||[]);
+    const done=actions.filter(a=>notes.some(n=>String(n.text||'').indexOf(a.sprintId)!==-1&&n.at>a.at)
+      ||(a.ownerId&&(P.planCheckins||[]).some(c=>c.at>a.at)));
+    retro={total:actions.length,completed:done.length,
+      rate:actions.length?U.rd(done.length/actions.length*100,1):null,
+      math:actions.length?('completed '+done.length+' ÷ '+actions.length+' prior-sprint retro actions × 100')
+        :'the prior sprint ('+prior.id+') logged no retro actions',
+      note:'completion is inferred from a note.added naming the sprint id, or a plan.checkin by the owner — the registry has no retro-action completion event, and that gap is printed'};
+  }
+  return {sprintId:sprintId,teamId:sp.teamId,name:sp.name,
+    startDate:sp.startDate,endDate:sp.endDate,reviewed:!!rev,
+    scopeChange:scopeChange,
+    scopeMath:rev&&totalGoals?('goals missed '+rev.goals_missed.length+' ÷ total '+totalGoals+' = '+scopeChange):'no review logged — scope change not computed',
+    customerImpact:delivery?delivery.customer_impact:null,
+    deliveryNote:delivery?('delivery.reviewed '+delivery.period+': on-time '+delivery.on_time_pct+'% · customer impact '+delivery.customer_impact)
+      :'no delivery.reviewed inside this sprint window',
+    openBlockersAtBoundary:boundaryBlockers.length,
+    boundaryBlockers:boundaryBlockers.map(b=>b.title+' (sev '+b.severity+')'),
+    retro:retro};
+}
+LeadOS.execution={MIN_SPRINTS:MIN_SPRINTS,velocityTrend:velocityTrend,blockerNetwork:blockerNetwork,
+  accountabilityIndex:accountabilityIndex,sprintHealth:sprintHealth};
+})();
+
 /* ==================== 7 · HEALTH — authority wall + fixture seed ==========
    T-suite runs against pinned in-memory fixtures (FIXED epoch, never the
    clock, never localStorage). G-suite inspects the LIVE store. The boot gate
@@ -3240,7 +3620,41 @@ function buildSeed(base){
     E('initiative.updated',{initiativeId:'in-10',status:'killed',note:'scope tripled'},25),
     E('initiative.logged',{id:'in-11',title:'Gamified checklists',reach_est:100,impact_est:1,confidence_pct:30,effort_days:9,model:'RICE'},70),
     E('initiative.updated',{initiativeId:'in-11',status:'killed',note:'strategy changed'},22),                                              /* R69: 3 killed in 90d */
-    E('exec.aligned',{topic:'EU region staffing plan',stakeholders:['ann','ava'],result:'misaligned',note:'headcount unresolved'},12)        /* R72 */
+    E('exec.aligned',{topic:'EU region staffing plan',stakeholders:['ann','ava'],result:'misaligned',note:'headcount unresolved'},12),       /* R72 */
+    /* ---- pt-14 execution layer: seeds R73–R82 (G80) ---- */
+    /* platform team: 3 reviewed sprints, velocity 30 → 26 → 22 (slope −4),
+       goals 2/4 met each → hit rate 50% → R73 + R74 */
+    E('sprint.started',{id:'sp-1',teamId:'platform',name:'Sprint 21',startDate:base-60*DAY,endDate:base-46*DAY,capacity_pts:34,
+      goals:['v2 API freeze','billing spike','on-call rotation','docs refresh']},60),
+    E('sprint.review',{sprintId:'sp-1',velocity_actual:30,velocity_planned:34,
+      goals_met:['v2 API freeze','billing spike'],goals_missed:['on-call rotation','docs refresh'],note:'spillover'},46),
+    E('sprint.started',{id:'sp-2',teamId:'platform',name:'Sprint 22',startDate:base-45*DAY,endDate:base-31*DAY,capacity_pts:34,
+      goals:['payments retry','billing migration plan','alert cleanup','runbook']},45),
+    E('sprint.review',{sprintId:'sp-2',velocity_actual:26,velocity_planned:34,
+      goals_met:['payments retry','alert cleanup'],goals_missed:['billing migration plan','runbook'],note:'two people out'},31),
+    E('sprint.started',{id:'sp-3',teamId:'platform',name:'Sprint 23',startDate:base-30*DAY,endDate:base-16*DAY,capacity_pts:30,
+      goals:['webhook backlog','billing migration plan','SLO dashboard','flaky tests']},30),
+    E('sprint.review',{sprintId:'sp-3',velocity_actual:22,velocity_planned:30,
+      goals_met:['webhook backlog','SLO dashboard'],goals_missed:['billing migration plan','flaky tests'],note:'blocked on data team'},16),
+    E('sprint.retro.action',{id:'ra-1',sprintId:'sp-3',action:'Split the billing migration into two sprints',ownerId:'ann',dueDate:base-6*DAY},16), /* R78 */
+    /* sprint 24 started and ended, never reviewed → R79 */
+    E('sprint.started',{id:'sp-4',teamId:'platform',name:'Sprint 24',startDate:base-30*DAY,endDate:base-16*DAY,capacity_pts:30,
+      goals:['billing migration','incident tooling']},30),
+    E('blocker.logged',{id:'bl-1',title:'Data team owns the billing schema change',severity:4,
+      blockedTeamId:'platform',blockingTeamId:'data',ownerId:'ann',raisedAt:base-4*DAY},4),                                      /* R75 sev 4 */
+    E('blocker.logged',{id:'bl-2',title:'Schema review queue',severity:3,blockedTeamId:'platform',blockingTeamId:'data',raisedAt:base-30*DAY},30),
+    E('blocker.resolved',{blockerId:'bl-2',resolvedAt:base-27*DAY,how:'pair session'},27),
+    E('blocker.logged',{id:'bl-3',title:'Warehouse access for the SLO dashboard',severity:3,blockedTeamId:'platform',blockingTeamId:'data',raisedAt:base-20*DAY},20),
+    E('blocker.resolved',{blockerId:'bl-3',resolvedAt:base-16*DAY,how:'granted read role'},16),                                  /* R76: data = 3 in 90d */
+    E('dependency.logged',{id:'dep-1',fromTeamId:'platform',toTeamId:'data',what:'Billing schema migration',
+      dueDate:base+5*DAY,status:'at-risk',note:'no owner confirmed'},10),                                                        /* R77 sev 4 */
+    E('dependency.logged',{id:'dep-2',fromTeamId:'data',toTeamId:'support',what:'Churn export',dueDate:base+40*DAY,status:'pending'},10),
+    E('accountability.pulse',{personId:'ann',commitments_made:9,commitments_kept:5,period:'2026-01'},40),
+    E('accountability.pulse',{personId:'ann',commitments_made:11,commitments_kept:6,period:'2026-02'},12),                       /* R80: 11/20 = 55% */
+    E('accountability.pulse',{personId:'ava',commitments_made:8,commitments_kept:7,period:'2026-02'},12),
+    E('capacity.change',{teamId:'platform',delta_headcount:-1,reason:'attrition',effective_date:base-20*DAY},20),
+    E('capacity.change',{teamId:'platform',delta_headcount:-1,reason:'transfer',effective_date:base-8*DAY},8),                   /* R81: −2 in 30d */
+    E('delivery.reviewed',{period:'2026-02',on_time_pct:62,scope_change_pct:35,customer_impact:4,note:'two launches slipped'},9)  /* R82 sev 4 */
   ];
   return out;
 }
@@ -3534,7 +3948,7 @@ function runT(){
   T.push(check('T18','[T12b] extended seed fires all 62 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=72;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=82;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -3965,6 +4379,91 @@ function runT(){
     if(r65(mk(true,false,14)).length) return {why:'exactly 14d must be quiet (strictly >14d)'};
     return {ok:true,why:'testable+20d fires sev3 · testable=false quiet · tested quiet · 14d boundary quiet'};
   }));
+  /* ---- pt-14: brief T41–T45 ship as T43–T47 (T41/T42 taken in pt-13).
+     ID MAP: brief T41→T43 · T42→T44 · T43→T45 · T44→T46 · T45→T47 ---- */
+  const SPR=(id,team,vel,met,missed,endAgo)=>([
+    {type:'sprint.started',payload:{id:id,teamId:team,name:id,startDate:FIXED-(endAgo+14)*DAY,endDate:FIXED-endAgo*DAY,
+      goals:met.concat(missed)},at:FIXED-(endAgo+14)*DAY},
+    {type:'sprint.review',payload:{sprintId:id,velocity_actual:vel,goals_met:met,goals_missed:missed},at:FIXED-endAgo*DAY}]);
+  T.push(check('T43','[brief T41] velocityTrend: least-squares slope over 3 sprints; <3 silent',()=>{
+    const three=LeadOS.engine.project(wrap([].concat(
+      SPR('s1','t',30,['a'],[],40),SPR('s2','t',26,['a'],[],26),SPR('s3','t',22,['a'],[],12))));
+    const v=LeadOS.execution.velocityTrend('t',three);
+    if(!v.claimed) return {why:'3 reviews should produce a trend'};
+    if(v.slope!==-4) return {why:'slope over [30,26,22] should be −4, got '+v.slope};
+    if(v.mean!==26) return {why:'mean should be 26, got '+v.mean};
+    if(v.slopeMath.indexOf('least-squares')===-1) return {why:'slope math not printed'};
+    const two=LeadOS.engine.project(wrap([].concat(SPR('s1','t',30,['a'],[],40),SPR('s2','t',20,['a'],[],20))));
+    const v2=LeadOS.execution.velocityTrend('t',two);
+    if(v2.claimed||v2.slope!==null) return {why:'2 reviews must stay silent (trend discipline)'};
+    if(v2.why.indexOf('≥ 3')===-1) return {why:'the discipline reason is not printed'};
+    return {ok:true,why:'slope −4 over [30,26,22], mean 26 · 2 reviews silent with the reason printed'};
+  }));
+  T.push(check('T44','[brief T42] blockerNetwork: 3 from one team → chronic; 2 → none; MTTR exact',()=>{
+    const mk=n=>{ const list=[];
+      for(let i=0;i<n;i++){
+        list.push({type:'blocker.logged',payload:{id:'b'+i,title:'t'+i,severity:3,blockingTeamId:'data',raisedAt:FIXED-(20-i)*DAY},at:FIXED-(20-i)*DAY});
+        list.push({type:'blocker.resolved',payload:{blockerId:'b'+i,resolvedAt:FIXED-(20-i)*DAY+2*3600000,how:'fixed'},at:FIXED-(19-i)*DAY}); }
+      return LeadOS.engine.project(wrap(list)); };
+    const three=LeadOS.execution.blockerNetwork(mk(3),FIXED);
+    if(three.chronic.length!==1||three.chronic[0].team!=='data') return {why:'3 blockers from data should flag chronic'};
+    if(three.mttrHours!==2) return {why:'MTTR should be exactly 2h, got '+three.mttrHours};
+    if(three.mttrMath.indexOf('÷ 3')===-1) return {why:'MTTR math not printed'};
+    const two=LeadOS.execution.blockerNetwork(mk(2),FIXED);
+    if(two.chronic.length) return {why:'2 blockers must not flag chronic'};
+    return {ok:true,why:'3 → chronic · 2 → none · MTTR 2h with math printed'};
+  }));
+  T.push(check('T45','[brief T43] accountabilityIndex 3/5 = 60%; exactly 60% does not fire R80',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'accountability.pulse',payload:{personId:'p1',commitments_made:5,commitments_kept:3,period:'2026-02'},at:FIXED-10*DAY}]));
+    const a=LeadOS.execution.accountabilityIndex('p1',Px,FIXED);
+    if(a.hitRate!==60) return {why:'3/5 should be 60%, got '+a.hitRate};
+    if(a.math.indexOf('× 100 = 60%')===-1) return {why:'math not printed: '+a.math};
+    if(a.source.indexOf('SELF-REPORTED')===-1) return {why:'unobserved pulses must be labeled self-reported'};
+    const r80=LeadOS.rules.RULES[74](Px,FIXED); /* index 74 = R80 */
+    if(r80.length) return {why:'exactly 60% must be quiet (strictly below fires)'};
+    const low=LeadOS.engine.project(wrap([
+      {type:'accountability.pulse',payload:{personId:'p1',commitments_made:5,commitments_kept:2,period:'2026-02'},at:FIXED-10*DAY}]));
+    const fired=LeadOS.rules.RULES[74](low,FIXED);
+    if(fired.length!==1||fired[0].sev!==4) return {why:'40% should fire sev 4 (strictly under 40 is 4; 2/5 = 40 → sev 3)'};
+    return {ok:true,why:'3/5 = 60% quiet with math and source printed · 2/5 fires'};
+  }));
+  T.push(check('T46','[brief T44] R75: sev-3 blocker age >3d fires · exactly 3d quiet · resolved quiet',()=>{
+    const mk=(ageD,resolved)=>{ const list=[{type:'blocker.logged',
+      payload:{id:'b1',title:'t',severity:3,blockingTeamId:'x',raisedAt:FIXED-ageD*DAY},at:FIXED-ageD*DAY}];
+      if(resolved) list.push({type:'blocker.resolved',payload:{blockerId:'b1',resolvedAt:FIXED-DAY,how:'fixed'},at:FIXED-DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r75=Px=>LeadOS.rules.RULES[69](Px,FIXED); /* index 69 = R75 */
+    const a=r75(mk(4,false));
+    if(a.length!==1||a[0].sev!==3) return {why:'4d-old sev-3 blocker should fire sev 3'};
+    if(r75(mk(3,false)).length) return {why:'exactly 3d must be quiet (strictly past the SLA)'};
+    if(r75(mk(10,true)).length) return {why:'a resolved blocker must be quiet'};
+    const sev5=LeadOS.engine.project(wrap([{type:'blocker.logged',
+      payload:{id:'b5',title:'critical',severity:5,raisedAt:FIXED-5*3600000},at:FIXED-5*3600000}]));
+    const hot=r75(sev5);
+    if(hot.length!==1||hot[0].sev!==5) return {why:'sev-5 blocker open 5h should fire sev 5'};
+    const young=LeadOS.engine.project(wrap([{type:'blocker.logged',
+      payload:{id:'b6',title:'critical',severity:5,raisedAt:FIXED-3*3600000},at:FIXED-3*3600000}]));
+    if(r75(young).length) return {why:'sev-5 under 4h must be quiet'};
+    return {ok:true,why:'4d sev3 · 3d quiet · resolved quiet · sev5 at 5h fires, at 3h quiet'};
+  }));
+  T.push(check('T47','[brief T45] R77: at-risk due in 6d → sev 4 · 8d → quiet · past → sev 5',()=>{
+    const mk=(daysOut,status)=>LeadOS.engine.project(wrap([{type:'dependency.logged',
+      payload:{id:'d1',fromTeamId:'a',toTeamId:'b',what:'thing',dueDate:FIXED+daysOut*DAY,status:status},at:FIXED-10*DAY}]));
+    const r77=Px=>LeadOS.rules.RULES[71](Px,FIXED); /* index 71 = R77 */
+    const a=r77(mk(6,'at-risk'));
+    if(a.length!==1||a[0].sev!==4) return {why:'at-risk due in 6d should be sev 4'};
+    if(r77(mk(8,'at-risk')).length) return {why:'8d out must be quiet'};
+    const past=r77(mk(-2,'at-risk'));
+    if(past.length!==1||past[0].sev!==5) return {why:'past due + not delivered should be sev 5'};
+    const pastPending=r77(mk(-2,'pending'));
+    if(pastPending.length!==1||pastPending[0].sev!==5) return {why:'past due in ANY non-delivered status is sev 5'};
+    const delivered=LeadOS.engine.project(wrap([
+      {type:'dependency.logged',payload:{id:'d1',fromTeamId:'a',toTeamId:'b',what:'thing',dueDate:FIXED-2*DAY,status:'at-risk'},at:FIXED-10*DAY},
+      {type:'dependency.updated',payload:{dependencyId:'d1',status:'delivered'},at:FIXED-DAY}]));
+    if(r77(delivered).length) return {why:'delivered must be quiet even if the due date passed'};
+    return {ok:true,why:'6d sev4 · 8d quiet · past sev5 (any non-delivered status) · delivered quiet'};
+  }));
   return T;
 }
 
@@ -4168,14 +4667,14 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','[G60/G70] extended buildSeed fires all 72 rules',()=>{
+  G.push(check('G40','[G60/G70/G80] extended buildSeed fires all 82 rules',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=72;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=82;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'72/72 — pattern limbs + conversation conditions + org layer + the pt-13 decision layer (2 overdue commitments at sev 3 and sev 4, 2 misses to one person, untested + refuted assumptions on a scenario-planned decision, 8-initiative backlog never prioritized, 3 kills in 90d, 3 diverged outcomes, misalignment with no follow-up)'};
+    return {ok:true,why:'82/82 — patterns + conversations + org + decisions + the pt-14 execution layer (3-sprint velocity decline 30→26→22, 50% goal hit rate, sev-4 blocker open 4d, data team chronic at 3 blocks, at-risk dependency due in 5d, ghosted retro action, unreviewed sprint, accountability 55%, −2 headcount, delivery 62% with customer impact 4)'};
   }));
   /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
      the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
@@ -4536,6 +5035,136 @@ function runG(){
     if(r66.length!==1||r66[0].refs[0]!=='a1') return {why:'only the refuted assumption may fire R66'};
     return {ok:true,why:'a1 refuted (fires R66) · a2 confirmed (never fires) · a3 untested'};
   }));
+  /* ---- G71–G79 — execution goldens (pt-14) ---- */
+  const SP=(id,team,vel,met,missed,endAgo)=>([
+    {type:'sprint.started',payload:{id:id,teamId:team,name:id,startDate:FIXED-(endAgo+14)*DAY,endDate:FIXED-endAgo*DAY,
+      goals:met.concat(missed)},at:FIXED-(endAgo+14)*DAY},
+    {type:'sprint.review',payload:{sprintId:id,velocity_actual:vel,goals_met:met,goals_missed:missed},at:FIXED-endAgo*DAY}]);
+  /* BRIEF-INTERNAL CONFLICT, resolved and printed: the brief's R74 text says
+     "<60% → sev 3, <40% → sev 4", but its G71 line says "2/4 = 50% → sev 4".
+     50% is below 60 and NOT below 40, so the two cannot both hold. The RULE
+     TEXT wins (it is the contract; the golden line is an example), and this
+     check asserts the rule text plus the 60% boundary the golden also names. */
+  G.push(check('G71','R74 goal hit rate: 50% → sev 3 (rule text beats the G71 example) · 60% quiet',()=>{
+    const r74=Px=>LeadOS.rules.RULES[68](Px,FIXED); /* index 68 = R74 */
+    const half=LeadOS.engine.project(wrap([].concat(
+      SP('a1','t',20,['g1','g2'],['g3','g4'],40),SP('a2','t',20,['g1','g2'],['g3','g4'],26),SP('a3','t',20,['g1','g2'],['g3','g4'],12))));
+    const fired=r74(half);
+    if(fired.length!==1) return {why:'50% hit rate should fire'};
+    if(fired[0].sev!==3) return {why:'50% is <60 but not <40 → sev 3 per the rule text, got '+fired[0].sev};
+    /* 3/5 = 60% exactly → quiet */
+    const sixty=LeadOS.engine.project(wrap([].concat(
+      SP('b1','t',20,['g1','g2','g3'],['g4','g5'],40),
+      SP('b2','t',20,['g1','g2','g3'],['g4','g5'],26),
+      SP('b3','t',20,['g1','g2','g3'],['g4','g5'],12))));
+    if(r74(sixty).length) return {why:'exactly 60% must be quiet'};
+    /* 1/5 = 20% → sev 4 */
+    const low=LeadOS.engine.project(wrap([].concat(
+      SP('c1','t',20,['g1'],['g2','g3','g4','g5'],40),
+      SP('c2','t',20,['g1'],['g2','g3','g4','g5'],26),
+      SP('c3','t',20,['g1'],['g2','g3','g4','g5'],12))));
+    const deep=r74(low);
+    if(deep.length!==1||deep[0].sev!==4) return {why:'20% should be sev 4'};
+    return {ok:true,why:'50% → sev 3 (rule text) · 60% quiet · 20% → sev 4 — brief-internal conflict resolved in favor of the rule text, printed'};
+  }));
+  G.push(check('G72','R76 chronic window: 3 blocks in 90d → sev 4; 2 → quiet; 3 older than 90d → quiet',()=>{
+    const mk=(n,ageD)=>{ const list=[];
+      for(let i=0;i<n;i++) list.push({type:'blocker.logged',
+        payload:{id:'b'+i,title:'t'+i,severity:3,blockingTeamId:'data',raisedAt:FIXED-(ageD+i)*DAY},at:FIXED-(ageD+i)*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r76=Px=>LeadOS.rules.RULES[70](Px,FIXED); /* index 70 = R76 */
+    const three=r76(mk(3,10));
+    if(three.length!==1||three[0].sev!==4) return {why:'3 blocks in 90d should fire sev 4'};
+    if(r76(mk(2,10)).length) return {why:'2 blocks must be quiet'};
+    if(r76(mk(3,100)).length) return {why:'3 blocks older than 90d must be quiet — the window matters'};
+    return {ok:true,why:'3 in-window sev4 · 2 quiet · 3 out-of-window quiet'};
+  }));
+  G.push(check('G73','R81 capacity shock: −2 in 30d no replan → sev 4; −1 quiet; replan quiets',()=>{
+    const mk=(deltas,replan)=>{ const list=deltas.map((d,i)=>({type:'capacity.change',
+      payload:{teamId:'t',delta_headcount:d,reason:'attrition',effective_date:FIXED-(10+i)*DAY},at:FIXED-(10+i)*DAY}));
+      if(replan) list.push({type:'ops.capacity.logged',payload:{team:'t',utilization:0.8,note:'replanned'},at:FIXED-5*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r81=Px=>LeadOS.rules.RULES[75](Px,FIXED); /* index 75 = R81 */
+    const shock=r81(mk([-1,-1],false));
+    if(shock.length!==1||shock[0].sev!==4) return {why:'−2 total in 30d should fire sev 4'};
+    if(r81(mk([-1],false)).length) return {why:'−1 must be quiet'};
+    if(r81(mk([-1,-1],true)).length) return {why:'an ops.capacity.logged replan inside 30d must quiet it'};
+    return {ok:true,why:'−2 → sev 4 · −1 quiet · replan quiets'};
+  }));
+  G.push(check('G74','R79 no retro: ended 15d ago → fires; 13d → quiet; review present → quiet',()=>{
+    const mk=(endAgo,reviewed)=>{ const list=[{type:'sprint.started',
+      payload:{id:'s1',teamId:'t',name:'S',startDate:FIXED-(endAgo+14)*DAY,endDate:FIXED-endAgo*DAY,goals:['g']},at:FIXED-(endAgo+14)*DAY}];
+      if(reviewed) list.push({type:'sprint.review',payload:{sprintId:'s1',velocity_actual:10,goals_met:['g'],goals_missed:[]},at:FIXED-(endAgo-1)*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r79=Px=>LeadOS.rules.RULES[73](Px,FIXED); /* index 73 = R79 */
+    const late=r79(mk(15,false));
+    if(late.length!==1||late[0].sev!==3) return {why:'15d past end with no review should fire sev 3'};
+    if(r79(mk(13,false)).length) return {why:'13d must be quiet (≤ retrospectiveFrequencyDays 14)'};
+    if(r79(mk(15,true)).length) return {why:'a review present must quiet it'};
+    return {ok:true,why:'15d fires · 13d quiet · reviewed quiet'};
+  }));
+  G.push(check('G75','R82 delivery: 69% → sev 3; 71% → quiet; impact 4 at 80% → sev 4 (override)',()=>{
+    const mk=(pct,impact)=>LeadOS.engine.project(wrap([
+      {type:'delivery.reviewed',payload:{period:'p',on_time_pct:pct,scope_change_pct:10,customer_impact:impact},at:FIXED-2*DAY}]));
+    const r82=Px=>LeadOS.rules.RULES[76](Px,FIXED).filter(f=>f.scope!=='delivery:cadence'&&f.scope!=='delivery:never');
+    const a=r82(mk(69,2));
+    if(a.length!==1||a[0].sev!==3) return {why:'69% should be sev 3, got '+JSON.stringify(a.map(f=>f.sev))};
+    if(r82(mk(71,2)).length) return {why:'71% with low impact must be quiet'};
+    const b=r82(mk(80,4));
+    if(b.length!==1||b[0].sev!==4) return {why:'customer_impact 4 at 80% on-time must fire sev 4 (override)'};
+    if(b[0].basis.join(' ').indexOf('REGARDLESS')===-1) return {why:'the override rationale is not printed'};
+    const c=r82(mk(45,1));
+    if(c.length!==1||c[0].sev!==4) return {why:'45% should be sev 4'};
+    return {ok:true,why:'69 sev3 · 71 quiet · impact-4 override sev4 printed · 45 sev4'};
+  }));
+  G.push(check('G76','velocityTrend projection: slope −1 from 6 → ~6 sprints, labeled extrapolation',()=>{
+    const Px=LeadOS.engine.project(wrap([].concat(
+      SP('v1','t',8,['g'],[],40),SP('v2','t',7,['g'],[],26),SP('v3','t',6,['g'],[],12))));
+    const v=LeadOS.execution.velocityTrend('t',Px);
+    if(v.slope!==-1) return {why:'slope over [8,7,6] should be −1, got '+v.slope};
+    if(!v.projection) return {why:'a negative slope must produce a projection'};
+    if(v.projection.sprintsToZero!==6) return {why:'6 ÷ |−1| = 6 sprints, got '+v.projection.sprintsToZero};
+    if(v.projection.label.indexOf('LINEAR EXTRAPOLATION')===-1) return {why:'extrapolation not labeled'};
+    if(v.projection.label.indexOf('NOT a forecast')===-1) return {why:'the not-a-forecast caveat is missing'};
+    return {ok:true,why:v.projection.math+' — labeled linear extrapolation, not a forecast'};
+  }));
+  G.push(check('G77','dependency graph: A→B and B→C are edges; A→C is never inferred',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'dependency.logged',payload:{id:'d1',fromTeamId:'A',toTeamId:'B',what:'x',dueDate:FIXED+10*DAY,status:'pending'},at:FIXED-5*DAY},
+      {type:'dependency.logged',payload:{id:'d2',fromTeamId:'B',toTeamId:'C',what:'y',dueDate:FIXED+10*DAY,status:'pending'},at:FIXED-4*DAY}]));
+    const g=LeadOS.execution.blockerNetwork(Px,FIXED).dependencyGraph;
+    if(g.length!==2) return {why:'expected exactly 2 edges, got '+g.length};
+    if(!g.some(e=>e.from==='A'&&e.to==='B')||!g.some(e=>e.from==='B'&&e.to==='C')) return {why:'logged edges missing'};
+    if(g.some(e=>e.from==='A'&&e.to==='C')) return {why:'a transitive A→C edge was invented'};
+    return {ok:true,why:'A→B and B→C present · no transitive edge inferred'};
+  }));
+  G.push(check('G78','R78 retro ghost: past due + no note → sev 2; a note naming the sprint quiets it',()=>{
+    const base=[
+      {type:'sprint.started',payload:{id:'sp9',teamId:'t',name:'S9',startDate:FIXED-40*DAY,endDate:FIXED-26*DAY,goals:['g']},at:FIXED-40*DAY},
+      {type:'sprint.retro.action',payload:{id:'ra9',sprintId:'sp9',action:'fix the handoff',ownerId:'p1',dueDate:FIXED-5*DAY},at:FIXED-26*DAY}];
+    const r78=Px=>LeadOS.rules.RULES[72](Px,FIXED); /* index 72 = R78 */
+    const ghost=r78(LeadOS.engine.project(wrap(base)));
+    if(ghost.length!==1||ghost[0].sev!==2) return {why:'a past-due retro action with no follow-through should fire sev 2'};
+    const withNote=LeadOS.engine.project(wrap(base.concat([
+      {type:'note.added',payload:{id:'n1',domain:'operations',text:'closed the handoff action from sp9'},at:FIXED-2*DAY}])));
+    if(r78(withNote).length) return {why:'a note naming the sprint id must quiet it (text match)'};
+    const future=LeadOS.engine.project(wrap([base[0],
+      {type:'sprint.retro.action',payload:{id:'ra9',sprintId:'sp9',action:'x',ownerId:'p1',dueDate:FIXED+5*DAY},at:FIXED-26*DAY}]));
+    if(r78(future).length) return {why:'a not-yet-due action must be quiet'};
+    return {ok:true,why:'past due + silence → sev 2 · note naming sp9 quiets · future due quiet'};
+  }));
+  G.push(check('G79','sprint.review goals_missed cross-references milestones without closing them',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'ops.milestone.set',payload:{id:'ms-9',title:'API freeze',dueDate:FIXED+10*DAY},at:FIXED-40*DAY},
+      {type:'sprint.started',payload:{id:'spx',teamId:'t',name:'S',startDate:FIXED-30*DAY,endDate:FIXED-16*DAY,goals:['API freeze']},at:FIXED-30*DAY},
+      {type:'sprint.review',payload:{sprintId:'spx',velocity_actual:10,goals_met:[],
+        goals_missed:[{goal:'API freeze',milestoneId:'ms-9'}]},at:FIXED-16*DAY}]));
+    const ms=Px.milestones['ms-9'];
+    if(!ms.missedInSprints||ms.missedInSprints.indexOf('spx')===-1) return {why:'the missed goal did not cross-reference the milestone'};
+    if(ms.status!=='on-track') return {why:'the projection must NOT mutate milestone status from a sprint review — only ops.milestone.updated may do that'};
+    if(Px.openMilestones.filter(m=>m.id==='ms-9').length!==1) return {why:'milestone should still be open'};
+    return {ok:true,why:'ms-9 records missedInSprints [spx] · status untouched (only ops.milestone.updated changes it)'};
+  }));
   return {checks:G,P:P,raw:raw};
 }
 
@@ -4555,7 +5184,8 @@ const CLAIMS=[
   {id:'C13',text:'Correlation goldens hold: all-limb boundaries, shared-entity enforcement, heat bounds with labeled zeros, deterministic ids, purity, 52/52 seed coverage',by:['G31','G32','G33','G34','G35','G36','G37','G38','G39','G40','T23','T24','T25','T26']},
   {id:'C14',text:'Conversation layer: schema v6 (string settings), 10 contracts fold correctly, styleFor/zopaFor/prepareConv are pure and labeled (scaffold not script, hypothesis not prediction), R46–R52 boundaries hold, mediation resolves conflict pairs',by:['T28','T29','T30','T31','T32','G10','G41','G42','G43','G44','G45','G46','G47','G48','G49','G40']},
   {id:'C15',text:'Organizational dynamics: schema v7, graph analysis is exact where claimed exact (Tarjan SCC) and labeled where approximate (betweenness, bridges), culture scoring is a bounded composite with its 2× assumption printed, meeting load is arithmetic over your own logs, R53–R62 boundaries hold',by:['T33','T34','T35','T36','T37','G51','G52','G53','G54','G55','G56','G57','G58','G59']},
-  {id:'C16',text:'Decision intelligence: schema v8, three prioritization models each printing their own math AND epistemic class, scenario EV + minimax regret + sensitivity with the probability caveat, commitment ledger excluding open items from hit rate, assumption tracking, R63–R72 boundaries hold, 72/72 rules fire from the seed',by:['T38','T39','T40','T41','T42','G61','G62','G63','G64','G65','G66','G67','G68','G69','G40']}
+  {id:'C16',text:'Decision intelligence: schema v8, three prioritization models each printing their own math AND epistemic class, scenario EV + minimax regret + sensitivity with the probability caveat, commitment ledger excluding open items from hit rate, assumption tracking, R63–R72 boundaries hold',by:['T38','T39','T40','T41','T42','G61','G62','G63','G64','G65','G66','G67','G68','G69']},
+  {id:'C17',text:'Execution layer: schema v9, velocity trends respect the ≥3-point discipline and label extrapolation as extrapolation, blocker MTTR and chronic windows are exact, dependency graph infers no transitive edges, accountability prints its data source, R73–R82 boundaries hold, 82/82 rules fire from the seed',by:['T43','T44','T45','T46','T47','G71','G72','G73','G74','G75','G76','G77','G78','G79','G40']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -5619,6 +6249,262 @@ SPECS['assumption-audit']={
     return {events:events};
   }};
 function ui_draftDecision(){ try{ return (window.LeadOS.__uiDraft||{}).decisionId||''; }catch(e){ return ''; } }
+/* ---------- pt-14 execution playbooks ---------- */
+const EX=()=>LeadOS.execution;
+const teamsOf=P=>U.uniq(vals(P.sprints||{}).map(s=>s.teamId)
+  .concat(vals(P.blockers||{}).map(b=>b.blockingTeamId).filter(Boolean))
+  .concat(vals(P.dependencies||{}).map(d=>d.fromTeamId))).sort();
+SPECS['sprint-plan']={
+  pattern:null,title:'Sprint planning',free:true,
+  blurb:'Plan against measured velocity, not hope.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const team=(draft.teamId||teamsOf(P)[0]||'').trim();
+    const lines=[];
+    if(!team){ lines.push('no teams in the log yet — the first sprint.started creates one'); return lines; }
+    const v=EX().velocityTrend(team,P);
+    lines.push(v.claimed
+      ? 'velocity for '+team+': '+v.meanMath+' · '+v.slopeMath+(v.projection?' · '+v.projection.math+' ('+v.projection.label+')':'')
+      : v.why);
+    if(v.claimed) lines.push('goal hit rate: '+(v.goalHitRate===null?'no goals recorded':v.goalMath));
+    if(v.capacityAdjusted&&v.capacityAdjusted.length) v.capacityAdjusted.forEach(c=>lines.push('  capacity-adjusted '+c.sprint+': '+c.math));
+    else if(v.capacityNote) lines.push('  '+v.capacityNote);
+    const net=EX().blockerNetwork(P,now);
+    lines.push('open blockers ('+net.openCount+'):');
+    net.open.slice(0,6).forEach(b=>lines.push('  sev '+b.severity+' · '+b.title+(b.blockingTeamId?' (blocking: '+b.blockingTeamId+')':'')+' · '+U.days(now,b.raisedAt)+'d old'));
+    if(!net.openCount) lines.push('  none');
+    lines.push('dependencies:');
+    net.dependencyGraph.forEach(e=>lines.push('  '+e.edge));
+    if(!net.dependencyGraph.length) lines.push('  none logged');
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'teamId',label:'team',kind:'text',req:true},
+    {key:'name',label:'sprint name',kind:'text',req:true},
+    {key:'startDate',label:'start date',kind:'date',req:true},
+    {key:'endDate',label:'end date',kind:'date',req:true},
+    {key:'capacity',label:'capacity points',kind:'number',req:false},
+    {key:'goals',label:'goals (one per line)',kind:'textarea',req:true},
+    {key:'mitigations',label:'risk mitigations for open blockers',kind:'textarea',req:true}]; },
+  submit(v){
+    const goals=v.goals.split('\n').map(s=>s.trim()).filter(Boolean);
+    if(!goals.length) throw new Error('a sprint with no goals cannot be reviewed — list at least one');
+    const p={id:U.uid('sp'),teamId:v.teamId,name:v.name,startDate:v.startDate,endDate:v.endDate,goals:goals};
+    if(typeof v.capacity==='number') p.capacity_pts=v.capacity;
+    return {events:[{type:'sprint.started',payload:p},
+      note('operations','SPRINT PLAN — '+v.teamId+' · '+v.name+'\ngoals:\n'+goals.map(g=>'  • '+g).join('\n')+
+        '\nblocker mitigations:\n'+v.mitigations,'sprint-plan')]};
+  }};
+SPECS['sprint-review']={
+  pattern:null,title:'Sprint review',free:true,
+  blurb:'A sprint that ends without review is a sprint you cannot learn from.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const unrev=(P.unreviewedSprints||[]).slice().sort((a,b)=>a.endDate-b.endDate);
+    const sid=(draft.sprintId||'').trim()||(unrev[0]||{}).id;
+    const lines=[];
+    if(!sid){ lines.push('no unreviewed sprints — every sprint.started has a sprint.review'); return lines; }
+    const sp=(P.sprints||{})[sid];
+    if(!sp){ lines.push('sprint '+sid+' not found'); return lines; }
+    lines.push('reviewing '+sp.name+' ('+sp.teamId+') · '+U.iso(sp.startDate)+' → '+U.iso(sp.endDate)+
+      (sp.capacity_pts!==null?' · capacity '+sp.capacity_pts+' pts':' · no capacity logged'));
+    lines.push('planned goals:');
+    sp.goals.forEach(g=>lines.push('  • '+(typeof g==='object'?(g.goal||JSON.stringify(g)):g)));
+    const h=EX().sprintHealth(sid,P,now);
+    lines.push('open blockers at the sprint boundary: '+h.openBlockersAtBoundary+(h.boundaryBlockers.length?' — '+h.boundaryBlockers.join(' · '):''));
+    if(h.retro) lines.push('prior-sprint retro actions: '+h.retro.math+' · '+h.retro.note);
+    const v=EX().velocityTrend(sp.teamId,P);
+    lines.push(v.claimed?('team velocity so far: '+v.slopeMath):v.why);
+    return lines;
+  },
+  live(draft,R,P){
+    const met=String(draft.met||'').split('\n').map(s=>s.trim()).filter(Boolean);
+    const missed=String(draft.missed||'').split('\n').map(s=>s.trim()).filter(Boolean);
+    const total=met.length+missed.length;
+    if(!total) return null;
+    const rate=U.rd(met.length/total*100,1);
+    const vel=Number(draft.velocity);
+    const sp=(P.sprints||{})[draft.sprintId];
+    const planned=sp&&sp.capacity_pts;
+    return {line:'goal hit rate = met '+met.length+' ÷ total '+total+' × 100 = '+rate+'%'+
+      (isFinite(vel)&&planned?(' · velocity delta = actual '+vel+' − capacity '+planned+' = '+U.rd(vel-planned,1)):''),
+      zopa:null,
+      caveat:rate<60?'below the 60% threshold — R74 will fire on the last 3 sprints':'at or above the 60% threshold'};
+  },
+  fields(R,P){
+    const unrev=(P.unreviewedSprints||[]).slice().sort((a,b)=>a.endDate-b.endDate);
+    return [
+      {key:'sprintId',label:'sprint',kind:'select',req:true,
+        options:unrev.map(s=>({value:s.id,label:s.name+' ('+s.teamId+', ended '+U.iso(s.endDate)+')'}))},
+      {key:'velocity',label:'velocity_actual',kind:'number',req:true},
+      {key:'met',label:'goals met (one per line)',kind:'textarea',req:false},
+      {key:'missed',label:'goals missed (one per line)',kind:'textarea',req:false},
+      {key:'missedReason',label:'reason per missed goal',kind:'textarea',req:false},
+      {key:'learnings',label:'key learnings',kind:'textarea',req:true},
+      {key:'onTime',label:'delivery on_time_pct',kind:'number',req:true},
+      {key:'scopeChange',label:'scope_change_pct',kind:'number',req:true},
+      {key:'impact',label:'customer_impact 1–5',kind:'number',req:true},
+      {key:'period',label:'delivery period label',kind:'text',req:true}]; },
+  submit(v,R,P){
+    const met=String(v.met||'').split('\n').map(s=>s.trim()).filter(Boolean);
+    const missed=String(v.missed||'').split('\n').map(s=>s.trim()).filter(Boolean);
+    if(!met.length&&!missed.length) throw new Error('score at least one goal as met or missed — an unscored review teaches nothing');
+    const sp=(P.sprints||{})[v.sprintId];
+    const p={sprintId:v.sprintId,velocity_actual:v.velocity,goals_met:met,goals_missed:missed,
+      note:v.learnings+(v.missedReason?' | missed because: '+v.missedReason:'')};
+    if(sp&&typeof sp.capacity_pts==='number') p.velocity_planned=sp.capacity_pts;
+    return {events:[{type:'sprint.review',payload:p},
+      {type:'delivery.reviewed',payload:{period:v.period,on_time_pct:v.onTime,
+        scope_change_pct:v.scopeChange,customer_impact:U.clamp(Math.round(v.impact),1,5),
+        note:'logged at review of '+v.sprintId}}]};
+  }};
+SPECS['blocker-escalation']={
+  pattern:null,title:'Blocker escalation',free:true,
+  blurb:'An unresolved blocker ages into a missed commitment.',
+  prefill(R,P,now){
+    const net=EX().blockerNetwork(P,now);
+    const lines=['open blockers by severity × age:'];
+    net.open.forEach(b=>lines.push('  sev '+b.severity+' · '+U.days(now,b.raisedAt)+'d · '+b.title+
+      (b.blockingTeamId?' (blocking: '+b.blockingTeamId+')':'')+(b.escalated?' · ALREADY ESCALATED to '+b.escalatedTo:'')));
+    if(!net.openCount) lines.push('  none');
+    lines.push('MTTR: '+(net.mttrHours===null?net.mttrMath:net.mttrHours+'h — '+net.mttrMath));
+    lines.push('escalation rate: '+(net.escalatedRate===null?net.escalatedMath:net.escalatedRate+'% — '+net.escalatedMath));
+    net.chronic.forEach(c=>lines.push('CHRONIC (R76 active): '+c.why));
+    if(!net.chronic.length) lines.push('no chronic blocking team at read time');
+    const people=Object.keys(P.rosterById||{}).sort();
+    lines.push('people on file who could own an escalation: '+(people.length?people.join(', '):'none'));
+    return lines;
+  },
+  fields(R,P){
+    return [
+      {key:'blockers',label:'blockers to escalate',kind:'checks',req:true,
+        options:(P.openBlockers||[]).map(b=>({value:b.id,label:'sev '+b.severity+' · '+b.title}))},
+      {key:'escalateTo',label:'escalation owner',kind:'text',req:true},
+      {key:'teamLead',label:'blocking team lead (for the conversation)',kind:'text',req:true},
+      {key:'fix',label:'structural fix proposed',kind:'textarea',req:true},
+      {key:'timeline',label:'timeline',kind:'text',req:true}]; },
+  submit(v){
+    const events=(v.blockers||[]).map(id=>({type:'blocker.escalated',
+      payload:{blockerId:id,escalatedTo:v.escalateTo,note:v.fix.slice(0,140)}}));
+    events.push({type:'conv.planned',payload:{id:U.uid('conv'),type:'stakeholder-alignment',
+      personIds:[v.teamLead],topic:'Structural fix for recurring blockers',stakes:4,
+      myGoal:v.fix,preparedAt:Date.now()}});
+    events.push(note('operations','BLOCKER ESCALATION — owner: '+v.escalateTo+'\nstructural fix:\n'+v.fix+'\ntimeline: '+v.timeline,'blocker-escalation'));
+    return {events:events};
+  }};
+SPECS['dependency-review']={
+  pattern:null,title:'Dependency review',free:true,
+  blurb:'Cross-team promises, tracked like the commitments they are.',
+  prefill(R,P,now){
+    const net=EX().blockerNetwork(P,now);
+    const lines=['dependency graph ('+net.graphNote+'):'];
+    net.dependencyGraph.forEach(e=>lines.push('  '+e.edge));
+    if(!net.dependencyGraph.length) lines.push('  none logged');
+    const open=(P.openDependencies||[]);
+    const atRisk=open.filter(d=>d.status==='at-risk');
+    const overdue=open.filter(d=>d.dueDate<now);
+    lines.push('at-risk ('+atRisk.length+'): '+(atRisk.map(d=>d.what+' due '+U.iso(d.dueDate)).join(' · ')||'none'));
+    lines.push('overdue, not delivered ('+overdue.length+'): '+(overdue.map(d=>d.what+' due '+U.iso(d.dueDate)+' ('+U.days(now,d.dueDate)+'d past)').join(' · ')||'none'));
+    return lines;
+  },
+  fields(R,P){
+    return [
+      {key:'target',label:'dependency to update',kind:'select',req:false,
+        options:(P.openDependencies||[]).map(d=>({value:d.id,label:d.fromTeamId+'→'+d.toTeamId+': '+d.what.slice(0,40)}))},
+      {key:'status',label:'new status',kind:'select',req:false,
+        options:['pending','at-risk','delivered'].map(s=>({value:s,label:s}))},
+      {key:'recovery',label:'recovery plan',kind:'textarea',req:false},
+      {key:'newFrom',label:'new dependency — from team',kind:'text',req:false},
+      {key:'newTo',label:'new dependency — to team',kind:'text',req:false},
+      {key:'newWhat',label:'new dependency — what',kind:'text',req:false},
+      {key:'newDue',label:'new dependency — due date',kind:'date',req:false}]; },
+  submit(v){
+    const events=[];
+    if(v.target&&v.status) events.push({type:'dependency.updated',
+      payload:{dependencyId:v.target,status:v.status,note:v.recovery||'updated in dependency-review'}});
+    if(v.newFrom&&v.newTo&&v.newWhat&&typeof v.newDue==='number')
+      events.push({type:'dependency.logged',payload:{id:U.uid('dep'),fromTeamId:v.newFrom,toTeamId:v.newTo,
+        what:v.newWhat,dueDate:v.newDue,status:'pending'}});
+    if(!events.length) throw new Error('nothing to do — update a dependency or log a new one');
+    return {events:events};
+  }};
+SPECS['capacity-replan']={
+  pattern:null,title:'Capacity replan',free:true,
+  blurb:'A team that lost people needs a new plan this week, not next quarter.',
+  prefill(R,P,now){
+    const lines=['capacity changes (last 90d):'];
+    (P.capacityChanges||[]).filter(c=>U.days(now,c.effective_date)<=90)
+      .forEach(c=>lines.push('  '+U.iso(c.effective_date)+' '+(c.teamId||'(unassigned)')+': '+
+        (c.delta_headcount>0?'+':'')+c.delta_headcount+' ('+c.reason+')'));
+    if(!(P.capacityChanges||[]).length) lines.push('  none');
+    const lastCap=(P.capacityLogs||[]).slice(-1)[0];
+    lines.push('latest ops.capacity.logged: '+(lastCap?U.iso(lastCap.at)+' · '+lastCap.team+' utilization '+lastCap.utilization:'never — R81 reads this absence'));
+    teamsOf(P).forEach(t=>{ const v=EX().velocityTrend(t,P);
+      lines.push('velocity '+t+': '+(v.claimed?v.slopeMath:v.why)); });
+    const act=(P.activeInitiatives||[]);
+    lines.push('active initiatives competing for the remaining capacity ('+act.length+'):');
+    act.slice(0,10).forEach(i=>lines.push('  '+i.title+' ('+i.effort_days+'d est)'));
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'team',label:'team',kind:'text',req:true},
+    {key:'headcount',label:'current headcount',kind:'number',req:true},
+    {key:'utilization',label:'realistic utilization 0–1',kind:'number',req:true},
+    {key:'pause',label:'initiatives to pause due to capacity',kind:'checks',req:false,
+      options:(P.activeInitiatives||[]).map(i=>({value:i.id,label:i.title}))},
+    {key:'hiring',label:'hiring priority',kind:'text',req:true},
+    {key:'coverage',label:'interim coverage plan',kind:'textarea',req:true}]; },
+  submit(v){
+    const events=[{type:'ops.capacity.logged',payload:{team:v.team,utilization:v.utilization,
+      note:'replan: headcount '+v.headcount+' · hiring priority '+v.hiring+' · coverage: '+v.coverage.slice(0,120)}}];
+    (v.pause||[]).forEach(id=>events.push({type:'initiative.updated',
+      payload:{initiativeId:id,status:'paused',note:'paused in capacity replan for '+v.team}}));
+    events.push(note('operations','CAPACITY REPLAN — '+v.team+'\nheadcount '+v.headcount+' · utilization '+v.utilization+
+      '\nhiring: '+v.hiring+'\ncoverage:\n'+v.coverage,'capacity-replan'));
+    return {events:events};
+  }};
+SPECS['accountability-checkin']={
+  pattern:null,title:'Accountability check-in',free:true,
+  blurb:'Count what was promised and what landed. Then talk about the gap.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const pid=(draft.personId||'').trim();
+    const lines=[];
+    if(!pid){ lines.push('(enter a personId to read their accountability history)'); return lines; }
+    const a=EX().accountabilityIndex(pid,P,now);
+    lines.push(a.claimed?('hit rate: '+a.math):a.why);
+    if(a.claimed){ lines.push('DATA SOURCE: '+a.source); lines.push(a.slopeNote); lines.push(a.comparison); }
+    const L=LeadOS.decisions.commitmentLedger(P,now);
+    const mine=L.byPerson.filter(x=>x.person===pid)[0];
+    if(mine){
+      lines.push('commitments TO this person: '+mine.open.length+' open · '+mine.completed+' completed · '+mine.missed.length+' missed (90d)');
+      mine.open.forEach(c=>lines.push('  open: "'+c.what+'" due '+U.iso(c.by_date)+(c.by_date<now?' (OVERDUE '+U.days(now,c.by_date)+'d)':'')));
+    } else lines.push('no commitments logged to this person');
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'personId',label:'personId',kind:'text',req:true},
+    {key:'period',label:'period',kind:'text',req:true},
+    {key:'made',label:'commitments made this period',kind:'number',req:true},
+    {key:'kept',label:'commitments kept',kind:'number',req:true},
+    {key:'observed',label:'observed by you (not self-reported) Y/N',kind:'yn',req:true},
+    {key:'miss',label:'specific miss to acknowledge',kind:'text',req:false},
+    {key:'missTarget',label:'if acknowledging: commitment id',kind:'select',req:false,
+      options:(P.openCommitments||[]).map(c=>({value:c.id,label:c.id+' → '+c.to_personId+': '+c.what.slice(0,40)}))},
+    {key:'missImpact',label:'if acknowledging: impact 1–5',kind:'number',req:false},
+    {key:'barrier',label:'barrier and who owns removing it',kind:'textarea',req:true}]; },
+  submit(v){
+    if(v.kept>v.made) throw new Error('kept ('+v.kept+') cannot exceed made ('+v.made+') — the arithmetic has to survive contact with reality');
+    const events=[{type:'accountability.pulse',payload:{personId:v.personId,
+      commitments_made:v.made,commitments_kept:v.kept,period:v.period,
+      observed:v.observed==='Y',note:'barrier: '+v.barrier.slice(0,140)}}];
+    if(v.miss&&v.missTarget){
+      if(typeof v.missImpact!=='number') throw new Error('acknowledging a miss requires an impact score');
+      events.push({type:'commitment.missed',payload:{commitmentId:v.missTarget,reason:v.miss,
+        impact:U.clamp(Math.round(v.missImpact),1,5),recovery:v.barrier.slice(0,120)}});
+    }
+    return {events:events};
+  }};
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -6123,6 +7009,93 @@ V['#/org']={kicker:'the invisible architecture',title:'Organization',render(ctx)
     '<div class="sect"><h2>Quick capture</h2><span class="meta">org.network.edge · culture.signal · meeting.logged · trust.signal · power.map.logged · psychological.safety</span></div>'+
     '<div class="card">'+captureForm()+'</div>';
 }};
+const SPARK=arr=>{ if(!arr.length) return '<span class="muted small">no data</span>';
+  const ch='▁▂▃▄▅▆▇█'.split('');
+  const mx=Math.max.apply(null,arr), mn=Math.min.apply(null,arr);
+  const rng=(mx-mn)||1;
+  return '<span class="spark">'+arr.map(v=>ch[U.clamp(Math.round((v-mn)/rng*7),0,7)]).join('')+'</span>'; };
+V['#/execution']={kicker:'strategy without execution is fiction',title:'Execution',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now, EXm=LeadOS.execution;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
+  const teams=U.uniq(vals(P.sprints).map(s=>s.teamId)).sort();
+  const net=EXm.blockerNetwork(P,now);
+  const sprintRows=teams.map(t=>{
+    const v=EXm.velocityTrend(t,P);
+    const revs=((P.reviewsByTeam||{})[t]||[]).slice().sort((a,b)=>a.at-b.at);
+    const vels=revs.map(r=>r.velocity_actual);
+    const active=vals(P.sprints).filter(s=>s.teamId===t&&s.endDate>=now);
+    return '<tr><td class="mono">'+esc(t)+'</td>'+
+      '<td>'+SPARK(vels)+' <span class="mono small">'+(vels.join(' → ')||'—')+'</span></td>'+
+      '<td class="mono">'+(v.claimed?v.slope+' pts/sprint':'—')+'</td>'+
+      '<td>'+(v.claimed&&v.goalHitRate!==null
+        ? BAR(v.goalHitRate,100)+' <span class="mono">'+v.goalHitRate+'%</span>'
+        : '<span class="muted small">'+esc(v.claimed?'no goals':'<3 sprints')+'</span>')+'</td>'+
+      '<td class="mono small">'+(active.length?esc(active.map(s=>s.name).join(', ')):'none active')+'</td>'+
+      '<td class="small muted">'+esc(v.claimed?(v.projection?v.projection.math:'slope flat or rising'):v.why)+'</td></tr>'; }).join('');
+  const blRows=net.open.map(b=>'<tr><td><span class="sev s'+U.clamp(b.severity,1,5)+'">sev '+b.severity+'</span></td>'+
+    '<td>'+esc(b.title)+'</td><td class="mono">'+U.days(now,b.raisedAt)+'d</td>'+
+    '<td class="mono">'+esc(b.blockingTeamId||'—')+'</td>'+
+    '<td>'+(b.escalated?'<span class="pill">escalated → '+esc(b.escalatedTo)+'</span>':'<span class="sev s3">not escalated</span>')+'</td></tr>').join('');
+  const depRows=net.dependencyGraph.map(e=>'<tr><td class="mono">'+esc(e.from)+' → '+esc(e.to)+'</td>'+
+    '<td>'+esc(e.what)+'</td>'+
+    '<td>'+(e.status==='delivered'?'<span class="pill">delivered</span>'
+      :e.status==='at-risk'?'<span class="sev s4">at-risk</span>':'<span class="pill">pending</span>')+'</td>'+
+    '<td class="mono">'+U.iso(e.dueDate)+(e.dueDate<now&&e.status!=='delivered'?' <span class="sev s5">past</span>':'')+'</td></tr>').join('');
+  const people=Object.keys(P.pulsesByPerson||{}).sort();
+  const accRows=people.map(pid=>{ const a=EXm.accountabilityIndex(pid,P,now);
+    return '<tr><td class="mono">'+esc(pid)+'</td>'+
+      '<td>'+(a.hitRate===null?'—':BAR(a.hitRate,100)+' <span class="mono">'+a.hitRate+'%</span>')+'</td>'+
+      '<td class="mono">'+(a.slope===null?'—':a.slope)+'</td>'+
+      '<td class="small muted">'+esc(a.claimed?a.source.split(' — ')[0]:'no pulses')+'</td></tr>'; }).join('');
+  const dels=(P.deliveryReviews||[]).slice().sort((a,b)=>a.at-b.at);
+  const delRows=dels.slice(-8).reverse().map(d=>'<tr><td class="mono">'+esc(d.period)+'</td>'+
+    '<td class="mono">'+d.on_time_pct+'%</td><td class="mono">'+d.scope_change_pct+'%</td>'+
+    '<td>'+(d.customer_impact>=4?'<span class="sev s4">'+d.customer_impact+'</span>':'<span class="pill">'+d.customer_impact+'</span>')+'</td>'+
+    '<td class="mono">'+U.iso(d.at)+'</td></tr>').join('');
+  return '<div class="vhead"><div class="kicker">strategy without execution is fiction</div><h1>Execution</h1>'+
+    '<div class="sub">The loop between what you decided and what actually shipped: sprint cadence, cross-team blockers, dependencies, accountability, and the delivery signals that arrive <b>before</b> the deadline does.</div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['sprint-plan','sprint-review','blocker-escalation','dependency-review','capacity-replan','accountability-checkin']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    runner+
+    '<div class="grid3">'+
+      '<div class="card"><h3>Blockers</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+net.openCount+' open · '+net.resolvedCount+' resolved</div>'+
+        '<div>MTTR: '+(net.mttrHours===null?'—':net.mttrHours+'h')+'</div>'+
+        '<div class="lbl">'+esc(net.mttrMath)+'</div>'+
+        '<div>escalated: '+(net.escalatedRate===null?'—':net.escalatedRate+'%')+'</div></div></div>'+
+      '<div class="card"><h3>Dependencies</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+(P.openDependencies||[]).length+' open of '+Object.keys(P.dependencies||{}).length+'</div>'+
+        '<div>at-risk: '+(P.openDependencies||[]).filter(d=>d.status==='at-risk').length+'</div>'+
+        '<div>past due: '+(P.openDependencies||[]).filter(d=>d.dueDate<now).length+'</div>'+
+        '<div class="lbl">'+esc(net.graphNote)+'</div></div></div>'+
+      '<div class="card"><h3>Sprints</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+Object.keys(P.sprints||{}).length+' logged · '+(P.unreviewedSprints||[]).length+' unreviewed</div>'+
+        '<div>'+Object.keys(P.retroActions||{}).length+' retro action(s) on record</div>'+
+        '<div class="lbl">a velocity trend needs ≥3 reviewed sprints — fewer stays silent by discipline</div></div></div>'+
+    '</div>'+
+    '<div class="sect"><h2>Sprint board</h2><span class="meta">'+teams.length+' team(s)</span></div>'+
+    (sprintRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>team</th><th>velocity</th><th>slope</th><th>goal hit rate</th><th>active</th><th>projection / why silent</th></tr>'+sprintRows+'</table></div>'
+      :'<div class="empty">No sprints logged.</div>')+
+    '<div class="sect"><h2>Blocker tracker</h2><span class="meta">'+net.openCount+' open · sorted by severity then age</span></div>'+
+    (blRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>sev</th><th>blocker</th><th>age</th><th>blocking team</th><th>state</th></tr>'+blRows+'</table></div>'
+      :'<div class="empty">No open blockers.</div>')+
+    (net.chronic.length?'<div class="card" style="margin-top:10px;border-left:3px solid var(--accent)">'+
+      net.chronic.map(c=>'<div class="heatrow"><b>'+esc(c.team)+'</b><span>'+esc(c.why)+'</span>'+
+      '<span class="w"><button class="btn ghost sm" data-act="playrun" data-id="blocker-escalation">escalate</button></span></div>').join('')+'</div>':'')+
+    '<div class="sect"><h2>Dependency graph</h2><span class="meta">'+net.dependencyGraph.length+' edge(s), logged only</span></div>'+
+    (depRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>edge</th><th>what</th><th>status</th><th>due</th></tr>'+depRows+'</table></div>'
+      :'<div class="empty">No dependencies logged.</div>')+
+    '<div class="sect"><h2>Accountability</h2><span class="meta">'+people.length+' person(s) with pulses · 90d window</span></div>'+
+    (accRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>person</th><th>hit rate</th><th>slope</th><th>data source</th></tr>'+accRows+'</table></div>'
+      :'<div class="empty">No accountability.pulse events. The index is only as good as the pulses you log — and self-reported pulses are labeled as such.</div>')+
+    '<div class="sect"><h2>Delivery reviews</h2><span class="meta">'+dels.length+' · on-time trend '+(dels.length?'':'—')+' '+(dels.length?SPARK(dels.map(d=>d.on_time_pct)):'')+'</span></div>'+
+    (delRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>period</th><th>on time</th><th>scope change</th><th>customer impact</th><th>logged</th></tr>'+delRows+'</table></div>'
+      :'<div class="empty">No delivery reviews logged.</div>')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">sprint.started · blocker.logged · dependency.logged · accountability.pulse · capacity.change</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
 V['#/decisions']={kicker:'decide, track, learn',title:'Decisions',render(ctx){
   const P=ctx.P, R=ctx.R, now=ctx.now;
   const vals=o=>Object.keys(o||{}).map(k=>o[k]);
@@ -6257,8 +7230,8 @@ V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',re
       const trust=(P.trustSignals||[]).filter(t=>t.fromId===id||t.toId===id).sort((a,b)=>b.at-a.at);
       const power=(P.powerByPerson||{})[id];
       const load=LeadOS.correlate.meetingLoad(P,now,30).byPerson.filter(p=>p.person===id)[0];
-      return '<div class="sect"><h2>Network position &amp; accountability</h2><span class="meta">'+esc(net.label)+'</span></div>'+
-        '<div class="grid3"><div class="card"><div class="basis">'+
+      return '<div class="sect"><h2>Network, execution &amp; accountability</h2><span class="meta">'+esc(net.label)+'</span></div>'+
+        '<div class="grid2"><div class="card"><div class="basis">'+
           '<div>indegree (influence received): '+net.indegree(id)+' · weighted '+U.rd3(net.weightedIn(id))+'</div>'+
           '<div>outdegree (influence given): '+net.outdegree(id)+' · weighted '+U.rd3(net.weightedOut(id))+'</div>'+
           '<div>betweenness: '+net.betweenness(id)+(rank>=0?' (rank #'+(rank+1)+' of '+net.betweennessRank.length+')':'')+'</div>'+
@@ -6268,6 +7241,25 @@ V['#/dossier']={kicker:'one person, everything the log knows',title:'Dossier',re
           (power?'<div>power map: formal '+power.formalPower+' · informal '+power.informalPower+' · coalition '+power.coalition.length+'</div>':'<div>no power.map.logged entry</div>')+
           (load?'<div>meeting load: '+load.hoursPerWeek+' h/wk ('+load.wastedHoursPerWeek+' wasted)</div>':'<div>no meetings logged in 30d</div>')+
         '</div></div>'+
+        '<div class="card"><h3>Execution</h3>'+
+          (function(){
+            const a=LeadOS.execution.accountabilityIndex(id,P,now);
+            const ledTeams=U.uniq(Object.keys(P.sprintsByTeam||{}));
+            const leads=ledTeams.filter(t=>((P.sprintsByTeam[t]||[]).some(s=>s.teamId===t))&&t===id);
+            const vt=leads.length?LeadOS.execution.velocityTrend(id,P):null;
+            const caused=Object.keys(P.blockers||{}).map(k=>P.blockers[k])
+              .filter(b=>b.blockingTeamId===id||b.ownerId===id);
+            const received=Object.keys(P.blockers||{}).map(k=>P.blockers[k])
+              .filter(b=>b.blockedTeamId===id);
+            return '<div class="basis" style="margin-top:8px">'+
+              '<div>accountability: '+(a.claimed?a.math:a.why)+'</div>'+
+              (a.claimed?'<div class="lbl">'+esc(a.source)+'</div>':'')+
+              (vt?'<div>velocity (as a team id): '+esc(vt.claimed?vt.slopeMath:vt.why)+'</div>'
+                :'<div class="lbl">not a team id in the sprint log — no velocity trend applies</div>')+
+              '<div>blockers caused/owned: '+caused.length+(caused.length?' — '+esc(caused.slice(0,3).map(b=>b.title).join(' · ')):'')+'</div>'+
+              '<div>blockers received: '+received.length+(received.length?' — '+esc(received.slice(0,3).map(b=>b.title).join(' · ')):'')+'</div>'+
+            '</div>'; })()+
+        '</div>'+
         '<div class="card"><h3>Commitments to '+esc(id)+'</h3>'+
           (function(){
             const L=LeadOS.decisions.commitmentLedger(P,now);
@@ -6387,6 +7379,7 @@ function shell(ctx){
     ['#/conversations','link','Conversations',(ctx.P.openConvs||[]).length||null],
     ['#/org','grid','Organization',(ctx.P.openSilos||[]).length||null],
     ['#/decisions','check','Decisions',(ctx.P.openCommitments||[]).length||null],
+    ['#/execution','activity','Execution',(ctx.P.openBlockers||[]).length||null],
     ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],
     ['#/health','shield','Health',null],

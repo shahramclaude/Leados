@@ -393,3 +393,88 @@ upstream `playbooks.js`/`HOT_SCORE` still unread and still unclaimed). Per-modul
 4. `production-stop` interactive brief (requested pt-9, outstanding).
 5. Byte-verify the unread upstream bodies; reconcile registry counts.
 6. Executive/board pack (upstream queued #1, carried since pt-7).
+
+---
+
+## Session 14 — pt-14 (brief "pt-9"): execution layer
+
+**Date:** February 2026, same-week continuation. **Env:** as Sessions 7–13 — no JS runtime at
+authoring time; `#/health` in the reader's browser is the authority wall.
+
+### §0 Opening audit
+
+No new upstream reads; the status table in README §0 stands (pt-7 byte-verification of
+`store.js` and the readable `engine.js` regions; `events.js`/`health.js`/`ui.js`/upstream
+`playbooks.js`/`HOT_SCORE` still unread and still unclaimed). Per-module deltas this session:
+
+| Module | This session |
+|---|---|
+| `events` | **+12 contracts** (117→129) |
+| `store` | **schema v9**, `MIGRATIONS['8>9']`, 4 settings |
+| `engine` | **+14 buckets**, 12 fold handlers, 3 open-sets (`openBlockers`, `openDependencies`, `unreviewedSprints`) |
+| `rules` | **+R73–R82** (72→82) |
+| **`execution`** | **NEW module** — `velocityTrend`, `blockerNetwork`, `accountabilityIndex`, `sprintHealth` |
+| `health` | **+T43–T47, +G71–G79**, G40 → 82 rules, seed extended |
+| `playbooks` | **+6 runners** (25→31) |
+| `ui` | **+`#/execution`**, dossier execution block, sparkline helper |
+
+### §1 Non-obvious decisions, one line of WHY each
+
+1. **Brief-internal conflict on R74 resolved in favor of the rule text** — the brief's threshold
+   prose and its G71 example disagree about 50% (sev 3 vs sev 4). The rule text is the contract
+   and the golden was an illustration; the resolution is printed inside G71 itself so a reader
+   who remembers the brief sees why the check differs from the line they wrote.
+2. **`sprint.review` cross-references milestones but never mutates them** (G79) — only
+   `ops.milestone.updated` may change milestone status; a review that silently closed milestones
+   would make two event types fight over one field.
+3. **R78 prints its own inference rule** — there is no retro-action completion event, so
+   completion is inferred from a note naming the sprint or an owner check-in; conf is MEDIUM
+   *because* of that inference, and the missing contract is named in the basis.
+4. **`accountability.pulse` gained an optional `observed` flag** — the brief says "self-reported
+   unless you observed it — conf matches verification method"; without a field for it, that
+   sentence is unimplementable. Added, defaulted to self-reported, and printed in R80's basis.
+5. **R75 splits sev-5 onto an hours clock** while sev 3–4 run on the day-based SLA — the brief
+   specifies both, and mixing them into one unit would have rounded a 4-hour critical blocker
+   into "0 days" and lost it.
+6. **R82 lets `customer_impact ≥ 4` override a passing on-time number** — the brief's own
+   reasoning, quoted in the basis: a delivery that arrived on time but hurt a customer failed.
+7. **Velocity projections are computed only for negative slopes** and always carry the
+   extrapolation label — projecting a rising velocity to infinity would be the same arithmetic
+   dressed as optimism.
+8. **`#/execution` sparklines are monospace block characters** — no canvas, no SVG chart library,
+   consistent with the no-dependency doctrine and readable when copied into a text document.
+9. **Several submit handlers throw instead of writing** (sprint with no goals, unscored review,
+   `kept > made`, miss without impact) — the gate rejects malformed payloads anyway, but a
+   specific error teaches more than a registry rejection.
+
+### §2 Self-caught defects during authoring (this part)
+
+- D19 First draft of G71 asserted the brief's `sev 4` for 50%, which my own R74 cannot produce;
+  instead of quietly changing the rule to match the example, I traced both statements, found
+  they are mutually exclusive, and documented the resolution in the check and the README.
+- D20 `R81` initially read `P.capacityChanges` without filtering future-dated `effective_date`
+  entries — a planned departure would have fired a shock finding before it happened. Now bounded
+  to `effective_date <= today`.
+- D21 The dossier's execution block called `velocityTrend(id)` for every person; for non-team
+  ids that silently returned the "<3 sprints" message as though the person had sprints. Now it
+  checks whether the id is a team in the sprint log and prints *"not a team id"* otherwise.
+
+### §3 Expected (NOT yet observed) outcomes — pt-14
+
+- **T43–T47** = brief T41–T45 (ID map printed in README and in code).
+- **G71–G79** as written (G71 with the documented conflict resolution); **brief G80 folded into
+  G40**, now asserting 82/82 from the extended seed: a 3-sprint velocity decline 30→26→22 with a
+  50% goal hit rate, a sev-4 blocker open 4 days, the data team chronic at 3 blocks in 90d, an
+  at-risk dependency due in 5 days, a ghosted retro action, an unreviewed sprint, accountability
+  at 55%, −2 headcount in 30 days, and a delivery review at 62% with customer impact 4.
+- **C17** proven iff T43–T47 + G71–G79 + G40 pass. T1–T42 and G1–G69 expected unchanged-green.
+
+### §4 Open items (ranked, carried)
+
+1. **`conflict.raised`/`conflict.resolved`** and **`retro.action.completed`** — the two missing
+   contracts that currently force printed inferences (R61/G48, R78).
+2. `reportsTo` + 1:1 cadence contracts.
+3. Exact Brandes betweenness.
+4. `production-stop` interactive brief (requested pt-9, outstanding).
+5. Byte-verify the unread upstream bodies.
+6. Executive/board pack (upstream queued #1, carried since pt-7).
