@@ -478,3 +478,96 @@ No new upstream reads; the status table in README §0 stands (pt-7 byte-verifica
 4. `production-stop` interactive brief (requested pt-9, outstanding).
 5. Byte-verify the unread upstream bodies.
 6. Executive/board pack (upstream queued #1, carried since pt-7).
+
+---
+
+## Session 16 — pt-16 (brief "pt-11"): calibration engine
+
+**Date:** February 2026, final slice of the run. **Env:** as Sessions 7–15 — no JS runtime at
+authoring time; `#/health` in the reader's browser is the authority wall.
+
+### §0 Opening audit
+
+No new upstream reads; the status table in README §0 stands unchanged since pt-7. Module deltas:
+
+| Module | This session |
+|---|---|
+| `events` | **+10 contracts** (138→148), incl. `plan.created` which `360-debrief` needs |
+| `store` | **schema v11**, `MIGRATIONS['10>11']`, 3 settings |
+| `engine` | **+13 buckets**, 10 fold handlers, `openBiases` open-set |
+| **`calibration`** | **NEW module** — overconfidence, sunk cost, anchoring, confirmation bias, 360 gap, energy, reflection quality |
+| `rules` | **+R93–R102** (92→102) |
+| `health` | **+T53–T57, +G93–G101**, G40 → 102 rules, seed extended |
+| `playbooks` | **+5 runners** (31→36) |
+| `ui` | **+`#/self`** view |
+
+### §1 Non-obvious decisions, one line of WHY each
+
+1. **`biasSampleMin` is enforced inside the analytics, not only in the rules** — a UI that shows
+   "you are overconfident" at n=2 does the damage whether or not a finding fired, so the guard
+   and the n travel with the number everywhere it is rendered.
+2. **R100's confidence is hard-coded LOW and G96 asserts it** — the brief is explicit that a
+   false positive on confirmation bias is worse than a false negative. A future part that
+   "upgrades" it to MEDIUM will fail a golden, which is the point.
+3. **The alternative explanation is printed before the flag** in `bias-acknowledgement`, not
+   after — ordering is the whole argument: a leader who reads the accusation first has already
+   formed a view by the time they reach the caveat.
+4. **Hidden strengths are computed and surfaced but wired to no rule** (G101) — the system may
+   tell you that people rate you higher than you rate yourself; it may not alarm about it.
+5. **R94 requires a negative *calibration* signal, not just age** — otherwise every long-running
+   healthy initiative becomes "sunk cost," which would train leaders to kill good work.
+6. **Reflections are private by construction** — the dossier shows a direct's 360 in aggregate
+   only and never their reflection content. The brief asked for this explicitly; I implemented it
+   as an absence (no code path reads another person's reflections) rather than a permission flag.
+7. **`reflectionQuality` floors at "medium" when a commitment exists** (G99) — a single testable
+   commitment is worth more than three vague wins, and the grading says so.
+8. **Energy is labeled SELF-REPORTED everywhere and R98 is framed as a decision-quality finding,
+   not a wellness verdict** — the system has no standing to make a health claim and says so.
+9. **The anchoring finding prints the whole forecast/actual table** rather than a summary — this
+   is the one bias where the leader can check the arithmetic by hand in ten seconds.
+
+### §2 Self-caught defects during authoring (this part)
+
+- D22 First draft of `overconfidenceScore` divided by `n` without filtering the window, so a
+  two-year-old calibration counted equally against this quarter's. Fixed to the
+  `calibrationWindowDays` filter, with the window printed in every output.
+- D23 `sunkCostPattern` initially flagged on age + any negative signal, which made every
+  long-running initiative a sunk cost; corrected to require the founding-decision calibration the
+  brief specifies, and G100 now pins "old but healthy → quiet."
+- D24 T53's fixture originally targeted a gap of exactly 0.25 by eyeballing; recomputing by hand
+  showed the stated mean/hit-rate pair actually produced 0.2 — exactly the threshold, which must
+  be *quiet* under "greater than." I kept the corrected fixture and added it as the boundary case
+  rather than nudging the numbers to make the test pass.
+
+### §3 Expected (NOT yet observed) outcomes — pt-16
+
+- **T53–T57** = brief T51–T55 (ID map printed in README and in code).
+- **G93–G101** as written; **brief G102 folded into G40**, now asserting **102/102** rules from
+  one deterministic seed: 6 calibrations at mean conf 0.8 / hit rate 0.5, a 70d sunk-cost
+  initiative, a 3-period anchoring run, a 360 blind spot on `decisions`, energy mean 3.5 over
+  15d, a 36d reflection gap, a 100% assumption-confirm rate, 3 unacted feedback items, and an
+  unexplained style shift.
+- **C19** proven iff T53–T57 + G93–G101 pass; **C20** iff T18 + G40 + G7 + G13 pass.
+
+### §4 Closing state of the run (pt-7 → pt-16)
+
+102 rules · 148 event contracts · 14 modules · 16 views · T1–T57 · G1–G101 · C1–C20 · schema v11
+with an eleven-rung migration ladder, every rung idempotent and repair-counted. Three files on
+disk, exactly as the delivery clause requires.
+
+What did **not** change across ten parts: trends still need three points, missing fields still
+skip, counts still print their arithmetic, suppression is still auditable and reversible (with
+the single declared override at R88), every finding still links a playbook or prints why it
+cannot, and no part of this system has ever executed in the environment that wrote it. The
+browser remains the grader.
+
+### §5 Open items (ranked, carried into any future part)
+
+1. `conflict.raised` / `conflict.resolved` · `retro.action.completed` — the contracts whose
+   absence still forces printed inferences (R61/G48, R78).
+2. `reportsTo` + 1:1 cadence contracts — retires the roster proxy in R50/R53/R97.
+3. Exact Brandes betweenness — retires R62's approximation caveat.
+4. `production-stop` interactive brief (requested pt-9, never received).
+5. Byte-verify the unread upstream bodies (`events.js`, `health.js`, `ui.js`, `playbooks.js`);
+   reconcile registry counts honestly.
+6. Executive/board pack — upstream's own queued #1, carried since pt-7 and still open.

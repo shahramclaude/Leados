@@ -225,7 +225,7 @@ const LeadOS = window.LeadOS = window.LeadOS || {};
 /* Module registry — the single-file analog of the brief's script list.
    Each logical "file" registers exactly one namespace, in this load order.
    The boot guard halts rendering if any entry is missing (data untouched). */
-LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','health','playbooks','ui'];
+LeadOS.EXPECTED_MODULES=['util','events','store','engine','rules','correlate','conversations','decisions','execution','external','calibration','health','playbooks','ui'];
 
 /* ==================== 1 · UTIL ==================== */
 (function(){
@@ -488,7 +488,21 @@ const REGISTRY = {
                               {sentiment:['bullish','neutral','bearish']}),
   'partnership.logged':     D({id:'s',partner:'s',type:'s',status:'s'},{value_est:'n',note:'s'},
                               {type:['technology','channel','strategic','OEM'],status:['active','evaluating','terminated']},'partnerships'),
-  'partner.reviewed':       D({partnershipId:'s',note:'s'},{ownerId:'s'},null,null,{partnershipId:'partnerships'})
+  'partner.reviewed':       D({partnershipId:'s',note:'s'},{ownerId:'s'},null,null,{partnershipId:'partnerships'}),
+  /* pt-16 (brief "pt-11") — calibration engine. 9 contracts + plan.created,
+     which `360-debrief` needs and the pt-3 lineage named but never contracted. */
+  'decision.calibration':   D({decisionId:'s',stated_confidence:'n',stated_probability:'n',actual_outcome:'s',deviation_magnitude:'n'},{note:'s'},
+                              {actual_outcome:['better','as-expected','worse','much-worse']}),
+  'bias.flagged':           D({id:'s',type:'s',evidence:'s',decisionIds:'a',severity:'n'},{note:'s'},null,'biases'),
+  'bias.acknowledged':      D({biasId:'s',reflection:'s',commitment_change:'s'},null,null,null,{biasId:'biases'}),
+  'leadership.360':         D({subjectId:'s',dimensions:'o',anonymous:'b'},{from_personId:'s',note:'s'}),
+  'leadership.self':        D({dimensions:'o',period:'s'},{note:'s'}),
+  'energy.logged':          D({date:'ms',level:'n',drains:'a',sources:'a'},{note:'s'}),
+  'reflection.logged':      D({period:'s',wins:'a',misses:'a',patterns:'a',commitments:'a'},{note:'s'}),
+  'feedback.received':      D({content:'s',valence:'s',topic:'s',acted:'b'},{fromId:'s',note:'s'},
+                              {valence:['positive','corrective','developmental']}),
+  'style.shift':            D({from_style:'s',to_style:'s'},{reason:'any',trigger_event_id:'any',note:'s'}),
+  'plan.created':           D({id:'s',personId:'s',goal:'s'},{dimension:'s',checkpointDate:'ms',note:'s'},null,'plans')
 };
 const CREATES={};
 Object.keys(REGISTRY).forEach(t=>{ if(REGISTRY[t].c) CREATES[t]=REGISTRY[t].c; });
@@ -515,7 +529,7 @@ LeadOS.events={REGISTRY:REGISTRY,CREATES:CREATES,validate:validate,count:Object.
    schema v5 with repair-counting migrations; nothing derived is persisted. */
 (function(){
 const LeadOS = window.LeadOS;
-const KEY='leados:data', SCHEMA_VERSION=10, LINEAGE='pt', LINEAGE_TAG='pt-15';
+const KEY='leados:data', SCHEMA_VERSION=11, LINEAGE='pt', LINEAGE_TAG='pt-16';
 const V1_SETTING_DEFAULTS={decisionMaxOpenDays:21};
 const V2_SETTING_DEFAULTS={krCheckInCadenceDays:7};
 const V3_SETTING_DEFAULTS={riskReviewCadenceDays:7};
@@ -548,7 +562,11 @@ const V9_NEW_KEYS=Object.keys(V9_SETTING_DEFAULTS);
 const V10_SETTING_DEFAULTS={competitiveReviewCadenceDays:30,customerInterviewCadenceDays:14,
   marketReviewCadenceDays:30,regulatoryCheckCadenceDays:90};
 const V10_NEW_KEYS=Object.keys(V10_SETTING_DEFAULTS);
-const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS);
+/* v11 — calibration. biasSampleMin is the honesty floor: no bias claim
+   may fire below it, and the n is printed on every calibration output. */
+const V11_SETTING_DEFAULTS={calibrationWindowDays:180,biasSampleMin:5,overconfidenceThreshold:0.2};
+const V11_NEW_KEYS=Object.keys(V11_SETTING_DEFAULTS);
+const ALL_SETTING_DEFAULTS=Object.assign({},V1_SETTING_DEFAULTS,V2_SETTING_DEFAULTS,V3_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V5_SETTING_DEFAULTS,V6_SETTING_DEFAULTS,V7_SETTING_DEFAULTS,V8_SETTING_DEFAULTS,V9_SETTING_DEFAULTS,V10_SETTING_DEFAULTS,V11_SETTING_DEFAULTS);
 const RAW_ROOT_WHITELIST=['schemaVersion','meta','events'];
 const META_WHITELIST=['lineage','createdAt','migrationsApplied','migrationRepairs'];
 const ms=()=>Date.now();
@@ -630,7 +648,13 @@ const MIGRATIONS={
     const applied=foldSettings(raw.events); let repairs=0;
     V10_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
       appendRaw(raw,'settings.changed',{key:k,value:V10_SETTING_DEFAULTS[k]},{repair:true,migration:'9>10',reason:'backfill v10 setting default'}); repairs++; }});
-    recordMigration(raw,'9>10',repairs); raw.schemaVersion=10; return repairs; }
+    recordMigration(raw,'9>10',repairs); raw.schemaVersion=10; return repairs; },
+  /* v10 -> v11: calibration settings. The ladder's contract, unchanged since 3>4. */
+  '10>11':function(raw){ ensureMeta(raw);
+    const applied=foldSettings(raw.events); let repairs=0;
+    V11_NEW_KEYS.forEach(k=>{ if(!(k in applied)){
+      appendRaw(raw,'settings.changed',{key:k,value:V11_SETTING_DEFAULTS[k]},{repair:true,migration:'10>11',reason:'backfill v11 setting default'}); repairs++; }});
+    recordMigration(raw,'10>11',repairs); raw.schemaVersion=11; return repairs; }
 };
 function genesis(){ const raw={schemaVersion:SCHEMA_VERSION,
   meta:{lineage:LINEAGE,createdAt:ms(),migrationsApplied:[],migrationRepairs:{}},events:[]};
@@ -720,7 +744,8 @@ const rawBytes=()=>{ const t=localStorage.getItem(KEY); return t?t.length:0; };
 LeadOS.store={KEY,SCHEMA_VERSION,LINEAGE,LINEAGE_TAG,ALL_SETTING_DEFAULTS,V4_SETTING_DEFAULTS,V4_NEW_KEYS,
   V5_SETTING_DEFAULTS,V5_NEW_KEYS,V6_SETTING_DEFAULTS,V6_NEW_KEYS,
   V7_SETTING_DEFAULTS,V7_NEW_KEYS,V8_SETTING_DEFAULTS,V8_NEW_KEYS,
-  V9_SETTING_DEFAULTS,V9_NEW_KEYS,V10_SETTING_DEFAULTS,V10_NEW_KEYS,SETTING_ENUMS,
+  V9_SETTING_DEFAULTS,V9_NEW_KEYS,V10_SETTING_DEFAULTS,V10_NEW_KEYS,
+  V11_SETTING_DEFAULTS,V11_NEW_KEYS,SETTING_ENUMS,
   RAW_ROOT_WHITELIST,META_WHITELIST,MIGRATIONS,foldSettings,genesis,
   load,append,loadFixture,mergeInto,familyUniverse,rewire,exportRaw,purge,getEvents,rawBytes};
 })();
@@ -1023,7 +1048,24 @@ const MODULE_FOLD={
     status:p.status,value_est:(p.value_est===undefined?null:p.value_est),note:p.note||'',
     loggedAt:at,reviews:[]}; },
   'partner.reviewed':(s,p,at)=>{ const x=s.partnerships[p.partnershipId];
-    if(x) x.reviews.push({note:p.note,ownerId:p.ownerId||null,at:at}); }
+    if(x) x.reviews.push({note:p.note,ownerId:p.ownerId||null,at:at}); },
+  /* pt-16 — calibration */
+  'decision.calibration':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.calibrations.push(rec); s.calibrationByDecision[p.decisionId]=rec; /* latest wins */ },
+  'bias.flagged':(s,p,at)=>{ s.biases[p.id]={id:p.id,type:p.type,evidence:p.evidence,
+    decisionIds:p.decisionIds.slice(),severity:p.severity,note:p.note||'',
+    at:at,acknowledged:false,reflection:'',commitment_change:'',ackAt:null}; },
+  'bias.acknowledged':(s,p,at)=>{ const b=s.biases[p.biasId];
+    if(b){ b.acknowledged=true; b.reflection=p.reflection; b.commitment_change=p.commitment_change; b.ackAt=at; } },
+  'leadership.360':(s,p,at,ev)=>{ const rec=Object.assign({at:at,_ev:ev&&ev.id},p);
+    s.three60.push(rec); group(s.three60BySubject,p.subjectId,rec); },
+  'leadership.self':(s,p,at,ev)=>{ push(s.selfAssessments,p,at,ev); },
+  'energy.logged':(s,p,at,ev)=>{ push(s.energyLogs,p,at,ev); },
+  'reflection.logged':(s,p,at,ev)=>{ push(s.reflections,p,at,ev); },
+  'feedback.received':(s,p,at,ev)=>{ push(s.feedbackReceived,p,at,ev); },
+  'style.shift':(s,p,at,ev)=>{ push(s.styleShifts,p,at,ev); },
+  'plan.created':(s,p,at)=>{ s.plans[p.id]={id:p.id,personId:p.personId,goal:p.goal,
+    dimension:p.dimension||null,checkpointDate:p.checkpointDate||null,note:p.note||'',createdAt:at}; }
 };
 function blankBuckets(s){
   s.finBudgets={};s.finForecasts=[];s.finKpis=[];s.finRisks={};
@@ -1067,6 +1109,10 @@ function blankBuckets(s){
   s.marketSignals=[];s.competitors={};s.competitorsByName={};s.interviews=[];
   s.pains={};s.winLoss=[];s.winLossByCompetitor={};s.regChanges={};
   s.marketBenchmarks=[];s.marketBenchByMetric={};s.analystReports=[];s.partnerships={};
+  /* pt-16 calibration buckets */
+  s.calibrations=[];s.calibrationByDecision={};s.biases={};
+  s.three60=[];s.three60BySubject={};s.selfAssessments=[];
+  s.energyLogs=[];s.reflections=[];s.feedbackReceived=[];s.styleShifts=[];s.plans={};
   s.kpiByMetric={};s.slaByMetric={};s.complianceByFramework={};
 }
 const ALIASES={
@@ -1104,7 +1150,8 @@ const OPEN_SETS={
   unreviewedSprints:['sprints',s=>s.review===null],
   openPains:['pains',p=>!p.resolved],
   openRegChanges:['regChanges',c=>c.status!=='compliant'],
-  activePartnerships:['partnerships',p=>p.status==='active']
+  activePartnerships:['partnerships',p=>p.status==='active'],
+  openBiases:['biases',b=>!b.acknowledged]
 };
 function buildRoster(s){ const r={};
   const touch=id=>{ if(!id) return null;
@@ -2408,13 +2455,152 @@ function R92(P,today){ const f=F('R92'),out=[];
         'a partnership nobody tends is a partnership ending in slow motion'],
       refs:[p.id],evidenceAt:last})); });
   return out; }
+/* ---- pt-16 calibration rules R93–R102. These findings are about the
+   LEADER, not the organization. Every one carries its n, its window, and an
+   alternative explanation; the weakest inference (R100) carries conf LOW by
+   construction because a false positive there damages good judgement. ---- */
+Object.assign(META,{
+  R93:{domain:'executive',play:'calibration-review'},R94:{domain:'strategy',play:'calibration-review'},
+  R95:{domain:'finance',play:'calibration-review'},R96:{domain:'people',play:'360-debrief'},
+  R97:{domain:'people',play:'360-debrief'},R98:{domain:'people',play:'energy-audit'},
+  R99:{domain:'people',play:'weekly-reflection'},R100:{domain:'executive',play:'bias-acknowledgement'},
+  R101:{domain:'people',play:'weekly-reflection'},R102:{domain:'people',play:'weekly-reflection'}
+});
+function R93(P,today){ const f=F('R93'),out=[];
+  const o=LeadOS.calibration.overconfidenceScore(P,today);
+  if(!o.fires) return out;
+  out.push(f({sev:o.severe?4:3,conf:'MEDIUM',
+    title:'Overconfidence gap '+o.gap+' across '+o.n+' calibrated decisions',
+    basis:[o.sentence,
+      o.math+(o.severe?' · gap > 0.3 → sev 4':''),
+      'calibration curve: '+o.curve.map(c=>c.line).join(' | '),
+      'A miscalibrated leader is not a bad leader — they are an unpredictable one.',
+      o.alternative,o.label],
+    refs:[],scope:'calibration:overconfidence',evidenceAt:U.maxAt(P.calibrations)}));
+  return out; }
+function R94(P,today){ const f=F('R94'),out=[];
+  const s=LeadOS.calibration.sunkCostPattern(P,today);
+  s.flagged.forEach(x=>{
+    out.push(f({sev:x.ageDays>90?4:3,conf:'MEDIUM',
+      title:'Sunk-cost persistence ('+x.ageDays+'d): '+x.initiative.title,
+      basis:[x.why,
+        'age '+x.ageDays+'d · '+(x.ageDays>90?'>90d with negative signals → sev 4':'>60d with negative signals → sev 3'),
+        'negative signals: '+x.negatives.join(' · '),
+        'cost absorbed (PROXY): '+x.costMath,
+        x.alternative,s.label],
+      refs:[x.initiative.id],evidenceAt:x.initiative.loggedAt})); });
+  return out; }
+function R95(P,today){ const f=F('R95'),out=[];
+  const a=LeadOS.calibration.anchoringPattern(P,today);
+  if(!a.fires) return out;
+  out.push(f({sev:3,conf:'MEDIUM',trend:true,title:'Anchoring: '+a.longestRun+' consecutive forecasts barely moved after big misses',
+    basis:[a.why,
+      'forecast vs actual, period by period — check it yourself:'].concat(a.rows.map(r=>'  '+r.line+(r.anchored?'  ← ANCHORED':'')))
+      .concat([a.alternative,a.label]),
+    refs:[],scope:'calibration:anchoring',evidenceAt:U.maxAt(P.finForecasts)}));
+  return out; }
+function R96(P,today){ const f=F('R96'),out=[];
+  Object.keys(P.three60BySubject||{}).sort().forEach(pid=>{
+    const g=LeadOS.calibration.gapAnalysis360(pid,P,today);
+    if(!g.claimed||g.n<3) return; /* n guard: fewer than 3 raters never fires */
+    if(!g.blindSpots.length) return;
+    out.push(f({sev:g.blindSpots.length>1?4:3,conf:'MEDIUM',
+      title:g.blindSpots.length+' blind spot(s) for '+pid+': '+g.blindSpots.map(b=>b.dimension).join(', '),
+      basis:[g.blindSpots.map(b=>'you score yourself '+b.self+' on '+b.dimension+', raters average '+b.raterMean+' (gap '+b.gap+' ≥ 1.5, n='+b.n+')').join(' · '),
+        'n='+g.n+' rater(s) in the last '+LeadOS.engine.settings(P).calibrationWindowDays+'d · '+g.anonymityNote,
+        'rater consistency: '+g.blindSpots.map(b=>b.dimension+' — '+b.consistency).join(' · '),
+        'A blind spot you cannot see is the definition of a blind spot — that is why we MEASURE it, not why we claim certainty.',
+        g.alternative,g.label],
+      refs:[pid],scope:pid+':blindspot',evidenceAt:U.maxAt((P.three60BySubject||{})[pid])})); });
+  return out; }
+function R97(P,today){ const f=F('R97'),out=[];
+  const set=LeadOS.engine.settings(P), win=set.calibrationWindowDays;
+  if(P.firstAt===null||days(today,P.firstAt)<=90) return out; /* "leader for >90d" via log age */
+  const subjects=Object.keys(P.three60BySubject||{});
+  const recent=subjects.filter(pid=>((P.three60BySubject[pid])||[]).some(r=>days(today,r.at)<=win));
+  if(recent.length) return out;
+  out.push(f({sev:2,conf:'HIGH',title:'No 360 feedback in '+win+'d',
+    basis:['zero leadership.360 events inside the calibration window ('+win+'d) · log spans '+days(today,P.firstAt)+'d (>90d)',
+      subjects.length?('360s exist but all are older than the window: '+subjects.join(', ')):'no leadership.360 events at all',
+      'No feedback system is a leadership system that only hears itself.'],
+    refs:[],scope:'calibration:no360',evidenceAt:P.firstAt}));
+  return out; }
+function R98(P,today){ const f=F('R98'),out=[];
+  const set=LeadOS.engine.settings(P), minN=set.biasSampleMin;
+  const e=LeadOS.calibration.energyPattern(P,today);
+  if(!e.claimed||e.n<minN) return out;
+  if(e.spanDays<14) return out;
+  if(e.mean>4) return out;
+  out.push(f({sev:3,conf:'MEDIUM',title:'Energy mean '+e.mean+'/10 across '+e.n+' logs over '+e.spanDays+'d',
+    basis:[e.math+' · threshold: mean ≤ 4 with n ≥ '+minN+' over ≥14d',
+      'top drains: '+(e.drains.slice(0,3).map(d=>d.item+' ×'+d.count).join(' · ')||'none logged')+
+        ' · top sources: '+(e.sources.slice(0,3).map(s=>s.item+' ×'+s.count).join(' · ')||'none logged'),
+      e.meetingContext,
+      'A leader running on empty makes worse decisions by definition — this is a DECISION QUALITY finding, not a wellness verdict.',
+      e.source,e.label],
+    refs:[],scope:'calibration:energy',evidenceAt:U.maxAt(P.energyLogs,x=>x.date||x.at)}));
+  return out; }
+function R99(P,today){ const f=F('R99'),out=[];
+  const q=LeadOS.calibration.reflectionQuality(P,today);
+  if(q.daysSince===null){
+    if(P.firstAt!==null&&days(today,P.firstAt)>30)
+      out.push(f({sev:2,conf:'MEDIUM',title:'No reflection ever logged',
+        basis:['zero reflection.logged events · log spans '+days(today,P.firstAt)+'d > 30d',
+          'A leader who does not reflect does not learn from their own experience — they just repeat it.'],
+        refs:[],scope:'calibration:noreflection',evidenceAt:P.firstAt}));
+    return out; }
+  if(q.daysSince<=30) return out;
+  out.push(f({sev:q.daysSince>60?3:2,conf:'HIGH',title:'No reflection in '+q.daysSince+'d',
+    basis:['latest reflection.logged '+U.iso(q.last.at)+' ('+q.last.period+') is '+q.daysSince+'d old · thresholds: >30d → sev 2, >60d → sev 3',
+      'quality of the last entries: '+(q.recent.map(r=>r.period+' '+r.quality+' ['+r.fields+']').join(' · ')||'none'),
+      'commitment follow-through: '+(q.followThrough.rate===null?q.followThrough.why:q.followThrough.matched+' of '+q.followThrough.made+' = '+q.followThrough.rate+'% — '+q.followThrough.why),
+      'A leader who does not reflect does not learn from their own experience — they just repeat it.',
+      q.label],
+    refs:[],scope:'calibration:reflection',evidenceAt:q.last.at}));
+  return out; }
+function R100(P,today){ const f=F('R100'),out=[];
+  const c=LeadOS.calibration.confirmationBias(P,today);
+  if(!c.assumptionTest.fires) return out; /* only the assumption-rate branch fires a finding */
+  out.push(f({sev:3,conf:'LOW',
+    title:'POSSIBLE pattern, not a diagnosis: '+c.assumptionTest.rate+'% of tested assumptions came back confirmed',
+    basis:['POSSIBLE PATTERN, NOT A DIAGNOSIS — read the alternative explanation before you act on this at all',
+      c.assumptionTest.math,
+      c.assumptionTest.why,
+      c.ignoredSignals.length?('also observed: '+c.ignoredSignals.length+' high-relevance disruption signal(s) with no subsequent decision or response — '+c.ignoredSignals.map(s=>'"'+s.title+'"').join(', ')):'no ignored high-relevance disruption signals',
+      c.alternative,
+      'conf LOW by construction: a false positive here is MORE damaging than a false negative, because overcorrecting on this finding degrades good decision-making.',
+      c.label],
+    refs:[],scope:'calibration:confirmation',evidenceAt:U.maxAt(vals(P.assumptions||{}),a=>a.testedAt)}));
+  return out; }
+function R101(P,today){ const f=F('R101'),out=[];
+  const unacted=(P.feedbackReceived||[]).filter(x=>x.acted===false&&days(today,x.at)<=90);
+  if(unacted.length<3) return out;
+  out.push(f({sev:3,conf:'HIGH',title:unacted.length+' pieces of feedback logged as not acted on (90d)',
+    basis:[unacted.length+' feedback.received events with acted=false inside 90d (≥3 fires)',
+      unacted.map(x=>U.iso(x.at)+' ['+x.valence+'] '+x.topic+': "'+String(x.content).slice(0,60)+'"').join(' · '),
+      'Feedback you logged as not acted on is feedback you CHOSE not to use. If the feedback is wrong, log why — that is also data.',
+      'conf HIGH: this is your own log of your own choices, not an inference'],
+    refs:[],scope:'calibration:feedback',evidenceAt:U.maxAt(unacted)}));
+  return out; }
+function R102(P,today){ const f=F('R102'),out=[];
+  (P.styleShifts||[]).forEach(s=>{
+    const noReason=(s.reason===null||s.reason===undefined||String(s.reason).trim()==='');
+    const noTrigger=(s.trigger_event_id===null||s.trigger_event_id===undefined||String(s.trigger_event_id).trim()==='');
+    if(!(noReason&&noTrigger)) return;
+    out.push(f({sev:1,conf:'HIGH',title:'Unexplained style shift: '+s.from_style+' → '+s.to_style,
+      basis:['style.shift logged '+U.iso(s.at)+' with no reason and no trigger_event_id',
+        'Style changes you cannot explain to yourself are style DRIFTS. Neither is bad by definition; both deserve a name. · sev 1 NUDGE',
+        'source: style.shift'],
+      refs:[],scope:'calibration:style:'+(s._ev||U.iso(s.at)),evidenceAt:s.at})); });
+  return out; }
 const RULES=[R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R18,R19,R20,
              R21,R22,R23,R24,R25,R26,R27,R28,R29,R30,R31,R32,R33,R34,R35,R36,R37,R38,R39,R40,
              R46,R47,R48,R49,R50,R51,R52,
              R53,R54,R55,R56,R57,R58,R59,R60,R61,R62,
              R63,R64,R65,R66,R67,R68,R69,R70,R71,R72,
              R73,R74,R75,R76,R77,R78,R79,R80,R81,R82,
-             R83,R84,R85,R86,R87,R88,R89,R90,R91,R92];
+             R83,R84,R85,R86,R87,R88,R89,R90,R91,R92,
+             R93,R94,R95,R96,R97,R98,R99,R100,R101,R102];
 
 /* ================= 5b · CORRELATION RULES R41–R45 (pt-8 brief) ============
    Run AFTER the individual rules; the correlation pass receives the already-
@@ -3809,6 +3995,246 @@ LeadOS.external={SOURCED:SOURCED,competitiveHeat:competitiveHeat,painMatrix:pain
   marketPosition:marketPosition,regulatoryExposure:regulatoryExposure};
 })();
 
+/* ============ 6f · CALIBRATION — the leader's own distortions (pt-16) =====
+   The most dangerous bugs in a leadership system are not missing data —
+   they are systematic distortions in how the leader reads data. Everything
+   here is computed from DECISIONS YOU MADE AND OUTCOMES THEY PRODUCED, never
+   from a personality instrument. Every output carries its n, its window, and
+   at least one alternative explanation. These are PATTERN OBSERVATIONS,
+   NEVER DIAGNOSES — the weaker the inference, the louder the caveat. */
+(function(){
+const LeadOS = window.LeadOS, U = LeadOS.util, DAY = U.DAY;
+const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+const NOT_A_DIAGNOSIS='This is a PATTERN OBSERVATION, not a diagnosis. It is computed from your own logged decisions and outcomes, and it can be wrong.';
+const HIT=o=>(o==='as-expected'||o==='better');
+const BUCKETS=[[0,0.4,'0–0.4'],[0.4,0.6,'0.4–0.6'],[0.6,0.8,'0.6–0.8'],[0.8,1.01,'0.8–1.0']];
+function overconfidenceScore(P,today){
+  const set=LeadOS.engine.settings(P);
+  const win=set.calibrationWindowDays, minN=set.biasSampleMin, thr=set.overconfidenceThreshold;
+  const list=(P.calibrations||[]).filter(c=>U.days(today,c.at)<=win).sort((a,b)=>a.at-b.at);
+  const n=list.length;
+  const base={n:n,windowDays:win,minN:minN,threshold:thr,label:NOT_A_DIAGNOSIS};
+  if(!n) return Object.assign(base,{fires:false,meanConfidence:null,hitRate:null,
+    why:'no decision.calibration events in the last '+win+'d — nothing computed, and silence is not evidence of good calibration'});
+  const meanConf=U.sum(list.map(c=>c.stated_confidence))/n;
+  const hits=list.filter(c=>HIT(c.actual_outcome)).length;
+  const hitRate=hits/n;
+  const gap=meanConf-hitRate;
+  const curve=BUCKETS.map(b=>{
+    const inB=list.filter(c=>c.stated_confidence>=b[0]&&c.stated_confidence<b[1]);
+    const h=inB.filter(c=>HIT(c.actual_outcome)).length;
+    const rate=inB.length?h/inB.length:null;
+    const mid=(b[0]+Math.min(b[1],1))/2;
+    return {bucket:b[2],n:inB.length,hits:h,
+      hitRate:rate===null?null:U.rd(rate*100,1),
+      calibrated:(rate===null||inB.length<2)?null:Math.abs(rate-mid)<=0.10,
+      line:inB.length===0?('stated '+b[2]+': no decisions in this bucket')
+        :inB.length===1?('stated '+b[2]+': insufficient data (n=1)')
+        :('stated '+b[2]+': right '+h+' of '+inB.length+' = '+U.rd(rate*100,1)+'% (well-calibrated band ±10pp of '+U.rd(mid*100,0)+'%)')};
+  });
+  /* the brief's verbatim sentence, anchored to the richest high-confidence bucket */
+  const hi=curve.filter(c=>c.n>=2).sort((a,b)=>b.n-a.n)[0];
+  const sentence=hi
+    ? 'When you say '+hi.bucket.split('–')[1].replace('1.0','100').replace(/0\./,'')+'0% confident, you are right '+hi.hitRate+'% of the time.'
+    : 'When you say '+U.rd(meanConf*100,0)+'% confident, you are right '+U.rd(hitRate*100,1)+'% of the time.';
+  return Object.assign(base,{
+    meanConfidence:U.rd(meanConf,3),hitRate:U.rd(hitRate,3),
+    gap:U.rd(gap,3),
+    fires:(gap>thr&&n>=minN),
+    severe:gap>0.3,
+    sentence:sentence,
+    math:'mean stated confidence '+U.rd(meanConf,3)+' − hit rate ('+hits+' of '+n+' = '+U.rd(hitRate,3)+') = gap '+U.rd(gap,3)+' · threshold '+thr+' · n='+n+' (minimum '+minN+')',
+    curve:curve,
+    nGuard:n>=minN?null:('n='+n+' is below biasSampleMin '+minN+' — NO bias claim may fire; the number is shown so you can keep calibrating'),
+    alternative:'ALTERNATIVE EXPLANATION: you took on harder decisions this window, or the outcomes were scored harshly in hindsight. Check the per-bucket curve before concluding anything about yourself.'});
+}
+function sunkCostPattern(P,today){
+  const flagged=[];
+  (P.activeInitiatives||[]).forEach(i=>{
+    const age=U.days(today,i.loggedAt);
+    if(age<=60) return;
+    const negatives=[];
+    /* negative signal 1: the founding decision was calibrated as worse */
+    const cal=vals(P.calibrationByDecision||{}).filter(c=>
+      String(i.title||'').toLowerCase().indexOf(String(c.decisionId||'').toLowerCase())!==-1||
+      (P.decisions&&P.decisions[c.decisionId]&&String(P.decisions[c.decisionId].title||'').toLowerCase().split(' ')
+        .some(w=>w.length>4&&String(i.title||'').toLowerCase().indexOf(w)!==-1)));
+    const bad=cal.filter(c=>c.actual_outcome==='worse'||c.actual_outcome==='much-worse');
+    bad.forEach(c=>negatives.push('founding decision '+c.decisionId+' calibrated "'+c.actual_outcome+'" ('+U.iso(c.at)+') — linked by HEURISTIC title match'));
+    /* negative signal 2: declining velocity on any team, ≥2 periods */
+    Object.keys(P.reviewsByTeam||{}).forEach(t=>{
+      const v=LeadOS.execution.velocityTrend(t,P);
+      if(v.claimed&&v.slope<0) negatives.push('team '+t+' velocity slope '+v.slope+' over '+v.sprints+' sprints'); });
+    /* negative signal 3: OKRs silent or scored low */
+    (P.openOkrs||[]).forEach(o=>{ const logs=U.sum(o.keyResults.map(k=>k.logs.length));
+      if(logs===0&&U.days(today,o.setAt)>21) negatives.push('OKR "'+o.objective+'" silent '+U.days(today,o.setAt)+'d'); });
+    if(negatives.length<2) return;
+    if(bad.length===0) return; /* the brief requires the calibration signal */
+    const headcount=U.sum((P.capacityChanges||[]).map(c=>c.delta_headcount));
+    flagged.push({initiative:i,ageDays:age,negatives:negatives,
+      costProxy:i.effort_days,
+      costMath:'effort_days '+i.effort_days+(headcount?(' · net headcount change in log '+headcount+' (a PROXY, not a cost accounting — labeled)'):' (no capacity data to weight it — stated)'),
+      why:'This initiative has absorbed cost through '+negatives.length+' negative signal(s) over '+age+'d without a re-decision. That is sunk-cost persistence — not commitment.',
+      alternative:'ALTERNATIVE EXPLANATION: the thesis is long-horizon and the negative signals are early noise. If so, say that out loud and set the date you WILL re-decide.'});
+  });
+  return {flagged:flagged,label:NOT_A_DIAGNOSIS};
+}
+function anchoringPattern(P,today){
+  const fc=(P.finForecasts||[]).slice().sort((a,b)=>a.at-b.at);
+  const rows=[], hits=[];
+  for(let i=1;i<fc.length;i++){
+    const prev=fc[i-1], cur=fc[i];
+    if(typeof prev.actual!=='number'||prev.actual===0) continue;
+    const miss=Math.abs(prev.forecast-prev.actual)/Math.abs(prev.actual);
+    const drift=Math.abs(cur.forecast-prev.forecast)/Math.abs(prev.forecast||1);
+    const anchored=(miss>0.15&&drift<0.05);
+    const row={period:cur.period,prevPeriod:prev.period,prevForecast:prev.forecast,prevActual:prev.actual,
+      curForecast:cur.forecast,missPct:U.rd(miss*100,1),driftPct:U.rd(drift*100,1),anchored:anchored,
+      line:prev.period+': forecast '+prev.forecast+' vs actual '+prev.actual+' = '+U.rd(miss*100,1)+'% miss → next forecast '+cur.forecast+' moved only '+U.rd(drift*100,1)+'%'};
+    rows.push(row);
+    if(anchored) hits.push(row);
+  }
+  /* consecutive run of anchored periods */
+  let run=0,best=0;
+  rows.forEach(r=>{ run=r.anchored?run+1:0; if(run>best) best=run; });
+  return {rows:rows,anchoredCount:hits.length,longestRun:best,
+    fires:best>=3,
+    why:best>=3?('Your forecast for the next period is almost identical to the last one ('+hits[hits.length-1].driftPct+'% move) despite actuals missing by '+hits[hits.length-1].missPct+'%. Anchoring is keeping the number stable when the data says it should move.')
+      :('longest consecutive anchored run is '+best+' — 3 are required before any anchoring claim fires'),
+    label:NOT_A_DIAGNOSIS,
+    alternative:'ALTERNATIVE EXPLANATION: the underlying business genuinely is stable and the misses were one-off events. The table above is printed so you can check that yourself.'};
+}
+function confirmationBias(P,today){
+  const set=LeadOS.engine.settings(P), minN=set.biasSampleMin;
+  const tested=vals(P.assumptions||{}).filter(a=>a.tested);
+  const confirmed=tested.filter(a=>a.result==='confirmed').length;
+  const rate=tested.length?confirmed/tested.length:null;
+  const testFires=(tested.length>=minN&&rate!==null&&rate>0.8);
+  /* high-relevance disruption signals that triggered nothing */
+  const sigs=(P.marketSignals||[]).filter(s=>s.type==='disruption'&&s.relevance>=4);
+  const ignored=sigs.filter(s=>{
+    const laterDecision=(P.strategyDecisions||[]).some(d=>d.at>s.at);
+    const laterResponse=vals(P.competitors||{}).some(c=>c.responses.some(r=>r.at>s.at));
+    return !laterDecision&&!laterResponse; });
+  return {
+    assumptionTest:{n:tested.length,confirmed:confirmed,
+      rate:rate===null?null:U.rd(rate*100,1),
+      fires:testFires,
+      math:tested.length?('confirmed '+confirmed+' ÷ tested '+tested.length+' = '+U.rd(rate*100,1)+'% · fires above 80% with n ≥ '+minN)
+        :'no assumptions tested — nothing computed',
+      why:testFires?'You may be designing tests that confirm rather than challenge.':'assumption-test rate is not in the flagged band'},
+    ignoredSignals:ignored.map(s=>({title:s.title,relevance:s.relevance,at:s.at,
+      why:'a disruption signal at relevance '+s.relevance+' with no subsequent strategy.decision or competitor.response — possible selective attention'})),
+    fires:testFires||ignored.length>0,
+    label:NOT_A_DIAGNOSIS,
+    alternative:'ALTERNATIVE EXPLANATION — read this first: you may simply make well-calibrated decisions and write down assumptions that are usually right. Check the calibration curve before giving this finding any weight. A false positive here is more damaging than a false negative, which is why its confidence is LOW.'};
+}
+const DIMS=['vision','execution','communication','trust','growth','decisions','composure','listening'];
+function gapAnalysis360(personId,P,today){
+  const set=LeadOS.engine.settings(P), win=set.calibrationWindowDays;
+  const raters=((P.three60BySubject||{})[personId]||[]).filter(r=>U.days(today,r.at)<=win);
+  const selfList=(P.selfAssessments||[]).filter(s=>U.days(today,s.at)<=win).sort((a,b)=>a.at-b.at);
+  const self=selfList[selfList.length-1]||null;
+  const n=raters.length;
+  if(!n) return {personId:personId,n:0,claimed:false,
+    why:'no leadership.360 events for '+personId+' in the last '+win+'d — no gap analysis; the absence of feedback is itself the R97 signal',
+    label:NOT_A_DIAGNOSIS};
+  const anyNamed=raters.some(r=>r.anonymous===false);
+  const rows=DIMS.map(d=>{
+    const scores=raters.map(r=>(r.dimensions||{})[d]).filter(x=>typeof x==='number');
+    if(!scores.length) return {dimension:d,n:0,raterMean:null,self:null,gap:null,
+      line:d+': no rater scored this dimension — skipped, never interpolated'};
+    const mean=U.sum(scores)/scores.length;
+    const sd=Math.sqrt(U.sum(scores.map(x=>Math.pow(x-mean,2)))/scores.length);
+    const sv=self&&typeof (self.dimensions||{})[d]==='number'?self.dimensions[d]:null;
+    const gap=sv===null?null:U.rd(sv-mean,2);
+    const half=Math.floor(raters.length/2);
+    const firstHalf=raters.slice(0,half).map(r=>(r.dimensions||{})[d]).filter(x=>typeof x==='number');
+    const secondHalf=raters.slice(half).map(r=>(r.dimensions||{})[d]).filter(x=>typeof x==='number');
+    const trend=(firstHalf.length&&secondHalf.length)
+      ? U.rd(U.sum(secondHalf)/secondHalf.length-U.sum(firstHalf)/firstHalf.length,2) : null;
+    return {dimension:d,n:scores.length,raterMean:U.rd(mean,2),stdDev:U.rd(sd,2),self:sv,gap:gap,
+      blindSpot:(gap!==null&&gap>=1.5),hiddenStrength:(gap!==null&&gap<=-1.5),
+      consistency:sd>=1?'raters DISAGREE (sd '+U.rd(sd,2)+') — behavior may be context-dependent':'raters broadly agree (sd '+U.rd(sd,2)+')',
+      trend:trend,
+      line:d+': raters '+U.rd(mean,2)+' (n='+scores.length+', sd '+U.rd(sd,2)+')'+
+        (sv===null?' · no self score':' · self '+sv+' · gap '+gap)};
+  });
+  return {personId:personId,n:n,claimed:true,
+    anonymous:!anyNamed,
+    anonymityNote:anyNamed?'at least one rater is NAMED (anonymous=false) — weigh candour accordingly, and never quote a named rater back without consent'
+      :'all raters anonymous — candour likelier, attribution impossible',
+    selfAt:self?self.at:null,
+    selfNote:self?null:'no leadership.self in window — gaps cannot be computed without your own scores',
+    rows:rows,
+    blindSpots:rows.filter(r=>r.blindSpot),
+    hiddenStrengths:rows.filter(r=>r.hiddenStrength),
+    label:NOT_A_DIAGNOSIS,
+    alternative:'ALTERNATIVE EXPLANATION: raters see a sample of your work and you see all of it. A gap can mean they lack context as easily as it can mean you lack insight.'};
+}
+function energyPattern(P,today){
+  const list=(P.energyLogs||[]).filter(e=>U.days(today,e.date||e.at)<=60).sort((a,b)=>(a.date||a.at)-(b.date||b.at));
+  const n=list.length;
+  if(!n) return {n:0,claimed:false,why:'no energy.logged events in 60d',label:NOT_A_DIAGNOSIS};
+  const levels=list.map(e=>e.level);
+  const mean=U.sum(levels)/n;
+  const spanDays=U.days(list[n-1].date||list[n-1].at,list[0].date||list[0].at);
+  const tally=(key)=>{ const c={};
+    list.forEach(e=>(e[key]||[]).forEach(x=>{ c[x]=(c[x]||0)+1; }));
+    return Object.keys(c).sort((a,b)=>(c[b]-c[a])||(a<b?-1:1)).map(k=>({item:k,count:c[k]})); };
+  const ml=LeadOS.execution.meetingLoad(P,today,60);
+  const myHours=ml.byPerson.length?U.sum(ml.byPerson.map(p=>p.minutes))/60:0;
+  const low=list.filter(e=>e.level<=4).map(e=>({date:e.date||e.at,level:e.level,
+    drains:(e.drains||[]).join(', '),note:e.note||''}));
+  return {n:n,claimed:true,spanDays:spanDays,
+    mean:U.rd(mean,2),min:Math.min.apply(null,levels),max:Math.max.apply(null,levels),
+    math:'mean level = Σ('+levels.join('+')+') ÷ '+n+' = '+U.rd(mean,2)+' over a '+spanDays+'d span',
+    drains:tally('drains'),sources:tally('sources'),
+    lowDays:low,
+    meetingContext:myHours?('meeting load in the same 60d: '+U.rd(myHours,1)+'h logged across all attendees — CORRELATION IS NOT CAUSATION, but if your meeting load and your energy move inversely in YOUR OWN logs, that is your data and worth a week of experiment')
+      :'no meeting.logged events to correlate against',
+    source:'SELF-REPORTED — energy.logged is your own subjective scale; it is not a clinical instrument and LeadOS makes no health claim',
+    label:NOT_A_DIAGNOSIS};
+}
+function reflectionQuality(P,today){
+  const set=LeadOS.engine.settings(P), cad=set.commitmentReviewCadenceDays;
+  const list=(P.reflections||[]).slice().sort((a,b)=>a.at-b.at);
+  const last=list[list.length-1]||null;
+  const grade=r=>{
+    if(!r) return null;
+    const has=k=>Array.isArray(r[k])&&r[k].length>0;
+    const full=has('wins')&&has('misses')&&has('patterns')&&has('commitments');
+    if(full) return 'high';
+    if(has('commitments')) return 'medium'; /* commitment present → floor is medium */
+    if(has('wins')&&has('misses')) return 'medium';
+    if(has('wins')||has('misses')||has('patterns')) return 'low';
+    return 'low';
+  };
+  const recent=list.slice(-3).map(r=>({period:r.period,at:r.at,quality:grade(r),
+    fields:['wins','misses','patterns','commitments'].filter(k=>Array.isArray(r[k])&&r[k].length).join(', ')||'none populated'}));
+  /* commitment follow-through — heuristic text match against later events */
+  const allText=[].concat((P.noteLog||[]).map(x=>x.text),
+    vals(P.commitments||{}).map(x=>x.what),
+    vals(P.convs||{}).map(x=>x.topic)).map(x=>String(x||'').toLowerCase());
+  let made=0,matched=0;
+  list.forEach(r=>{ (r.commitments||[]).forEach(c=>{ made++;
+    const t=String(c).toLowerCase();
+    if(t.length>6&&allText.some(x=>x.indexOf(t.slice(0,24))!==-1)) matched++; }); });
+  return {count:list.length,last:last,
+    daysSince:last?U.days(today,last.at):null,
+    cadenceDays:cad,
+    recent:recent,
+    followThrough:made?{made:made,matched:matched,rate:U.rd(matched/made*100,1),
+      why:'HEURISTIC TEXT MATCH of reflection commitments against later notes, commitments and conversations — a string match is weak evidence of follow-through, and it is labeled'}
+      :{made:0,matched:0,rate:null,why:'no commitments logged in any reflection'},
+    label:'reflection quality is a PROXY FOR CADENCE AND STRUCTURE, not a measure of depth — a shallow four-field entry scores "high" and an profound one-liner scores "low"'};
+}
+LeadOS.calibration={NOT_A_DIAGNOSIS:NOT_A_DIAGNOSIS,DIMS:DIMS,BUCKETS:BUCKETS,
+  overconfidenceScore:overconfidenceScore,sunkCostPattern:sunkCostPattern,
+  anchoringPattern:anchoringPattern,confirmationBias:confirmationBias,
+  gapAnalysis360:gapAnalysis360,energyPattern:energyPattern,reflectionQuality:reflectionQuality};
+})();
+
 /* ==================== 7 · HEALTH — authority wall + fixture seed ==========
    T-suite runs against pinned in-memory fixtures (FIXED epoch, never the
    clock, never localStorage). G-suite inspects the LIVE store. The boot gate
@@ -4037,7 +4463,62 @@ function buildSeed(base){
       key_findings:['Buyers consolidating vendors','Pricing pressure in mid-market'],date:base-35*DAY},35),
     E('partnership.logged',{id:'pt-1',partner:'Stripe',type:'technology',status:'active',value_est:120000,
       note:'core payments integration'},200),                                                                                     /* R92: dormant 200d */
-    E('partnership.logged',{id:'pt-2',partner:'Deloitte',type:'channel',status:'evaluating'},40)
+    E('partnership.logged',{id:'pt-2',partner:'Deloitte',type:'channel',status:'evaluating'},40),
+    /* ---- pt-16 calibration layer: seeds R93–R102 (G102) ---- */
+    /* 6 calibrations: stated conf mean 0.8, 3 of 6 hit → hit rate 0.5, gap 0.3 → R93 */
+    E('decision.calibration',{decisionId:'dec-1',stated_confidence:0.9,stated_probability:0.9,actual_outcome:'worse',deviation_magnitude:4},60),
+    E('decision.calibration',{decisionId:'dec-2',stated_confidence:0.8,stated_probability:0.8,actual_outcome:'as-expected',deviation_magnitude:1},55),
+    E('decision.calibration',{decisionId:'dec-3',stated_confidence:0.9,stated_probability:0.85,actual_outcome:'much-worse',deviation_magnitude:5},50),
+    E('decision.calibration',{decisionId:'dec-4',stated_confidence:0.7,stated_probability:0.7,actual_outcome:'better',deviation_magnitude:2},45),
+    E('decision.calibration',{decisionId:'dec-5',stated_confidence:0.8,stated_probability:0.75,actual_outcome:'worse',deviation_magnitude:3},40),
+    E('decision.calibration',{decisionId:'dec-6',stated_confidence:0.7,stated_probability:0.7,actual_outcome:'as-expected',deviation_magnitude:1},35),
+    /* sunk cost: in-2 "Billing migration" is 44d... extend via a dedicated 70d initiative
+       whose founding decision (dec-1, "Re-platform the billing stack") calibrated 'worse' */
+    E('initiative.logged',{id:'in-12',title:'Re-platform the billing stack rollout',reach_est:400,impact_est:3,
+      confidence_pct:50,effort_days:60,model:'RICE',ownerId:'ann'},70),                                                         /* R94 sev 3 (>60d, ≤90d) */
+    /* anchoring: 3 consecutive forecasts that barely move after >15% misses */
+    E('fin.forecast.logged',{period:'2025-09',metric:'revenue',forecast:1000,actual:800},95),
+    E('fin.forecast.logged',{period:'2025-10',metric:'revenue',forecast:1010,actual:790},90),
+    E('fin.forecast.logged',{period:'2025-11',metric:'revenue',forecast:1020,actual:810},85),
+    E('fin.forecast.logged',{period:'2025-12b',metric:'revenue',forecast:1030,actual:800},80),                                  /* R95: run of 3 */
+    /* 360: 3 raters, blind spot on 'decisions' (self 4.5 vs raters ~2.8) */
+    E('leadership.self',{period:'2026-Q1',dimensions:{vision:4,execution:4,communication:4,trust:4,
+      growth:3,decisions:4.5,composure:4,listening:2.5}},30),
+    E('leadership.360',{subjectId:'me',from_personId:'ava',anonymous:false,dimensions:{vision:4,execution:3,
+      communication:3,trust:4,growth:3,decisions:3,composure:4,listening:4}},28),
+    E('leadership.360',{subjectId:'me',anonymous:true,dimensions:{vision:4,execution:3,
+      communication:3,trust:4,growth:3,decisions:2.5,composure:3,listening:4}},26),
+    E('leadership.360',{subjectId:'me',anonymous:true,dimensions:{vision:3,execution:3,
+      communication:4,trust:4,growth:2,decisions:3,composure:4,listening:4}},24),                                               /* R96: decisions gap 1.67 */
+    /* energy: 6 logs, mean 3.5, spanning 15d */
+    E('energy.logged',{date:base-15*DAY,level:4,drains:['back-to-back meetings','unclear priorities'],sources:['customer calls']},15),
+    E('energy.logged',{date:base-12*DAY,level:3,drains:['back-to-back meetings'],sources:[]},12),
+    E('energy.logged',{date:base-9*DAY,level:3,drains:['escalations','back-to-back meetings'],sources:['shipping']},9),
+    E('energy.logged',{date:base-6*DAY,level:4,drains:['unclear priorities'],sources:['shipping']},6),
+    E('energy.logged',{date:base-3*DAY,level:3,drains:['escalations'],sources:[]},3),
+    E('energy.logged',{date:base-1*DAY,level:4,drains:['back-to-back meetings'],sources:['customer calls']},1),                 /* R98: mean 3.5 */
+    /* reflection: last one 36d ago → R99 sev 2 */
+    E('reflection.logged',{period:'2026-W02',wins:['Closed Globex renewal'],misses:['Let the billing decision drift'],
+      patterns:['I defer hard calls to the next review'],commitments:['Decide billing path by Friday']},36),
+    /* feedback: 3 logged as not acted on in 90d → R101 */
+    E('feedback.received',{fromId:'ava',content:'You interrupt in design reviews',valence:'corrective',topic:'listening',acted:false},40),
+    E('feedback.received',{fromId:'dana',content:'Priorities change without explanation',valence:'developmental',topic:'communication',acted:false},25),
+    E('feedback.received',{content:'The reorg rationale never reached my team',valence:'corrective',topic:'communication',acted:false},10),
+    E('feedback.received',{fromId:'lee',content:'Incident comms were excellent',valence:'positive',topic:'composure',acted:true},20),
+    /* style shift with neither reason nor trigger → R102 sev 1 */
+    E('style.shift',{from_style:'coaching',to_style:'directive'},18),
+    /* confirmation bias: 5 assumptions tested, 5 confirmed (100% > 80%) → R100 conf LOW */
+    E('decision.logged',{id:'dec-7',title:'Pricing model refresh',domain:'strategy',owner:'ava'},70),
+    E('assumption.logged',{id:'as-10',decisionId:'dec-7',assumption:'Enterprise will accept tiering',testable:true,test_method:'5 interviews'},68),
+    E('assumption.tested',{assumptionId:'as-10',result:'confirmed',evidence:'4 of 5 said yes'},60),
+    E('assumption.logged',{id:'as-11',decisionId:'dec-7',assumption:'Mid-market is price sensitive',testable:true},67),
+    E('assumption.tested',{assumptionId:'as-11',result:'confirmed',evidence:'win rate drops above list'},59),
+    E('assumption.logged',{id:'as-12',decisionId:'dec-7',assumption:'Churn will not spike',testable:true},66),
+    E('assumption.tested',{assumptionId:'as-12',result:'confirmed',evidence:'cohort held'},58),
+    E('assumption.logged',{id:'as-13',decisionId:'dec-7',assumption:'Sales can explain the tiers',testable:true},65),
+    E('assumption.tested',{assumptionId:'as-13',result:'confirmed',evidence:'ride-alongs went fine'},57),
+    E('assumption.logged',{id:'as-14',decisionId:'dec-7',assumption:'Billing supports tiering',testable:true},64),
+    E('assumption.tested',{assumptionId:'as-14',result:'confirmed',evidence:'spike passed'},56)
   ];
   return out;
 }
@@ -4331,7 +4812,7 @@ function runT(){
   T.push(check('T18','[T12b] extended seed fires all 62 rules + every insight kind',()=>{
     const fired={}; run1.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=92;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=102;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'rules silent in seed: '+missing.join(', ')};
     const kinds={}; run1.insights.all.forEach(i=>{ kinds[i.kind]=(kinds[i.kind]||0)+1; });
     ['pattern','cluster','benchmark-gap'].forEach(k=>{ if(!kinds[k]) throw new Error('no '+k+' insight in seed'); });
@@ -4926,6 +5407,105 @@ function runT(){
     if(r87(old).length) return {why:'losses older than 60d must be outside the window'};
     return {ok:true,why:'3 same-reason losses → sev 4 with the reason verbatim · 2 quiet · >60d quiet'};
   }));
+  /* ---- pt-16: brief T51–T55 ship as T53–T57 (T51/T52 taken in pt-15).
+     ID MAP: brief T51→T53 · T52→T54 · T53→T55 · T54→T56 · T55→T57 ---- */
+  const CAL=(conf,outcome,ago,id)=>({type:'decision.calibration',
+    payload:{decisionId:id||('d'+ago),stated_confidence:conf,stated_probability:conf,
+      actual_outcome:outcome,deviation_magnitude:2},at:FIXED-ago*DAY});
+  T.push(check('T53','[brief T51] overconfidence: gap 0.25 fires · 0.15 quiet · n=4 quiet',()=>{
+    const r93=Px=>LeadOS.rules.RULES[87](Px,FIXED); /* index 87 = R93 */
+    /* 5 at conf 0.8, hits as-expected 3 of 5 → hit 0.6? need 0.55-ish: use mixed confs */
+    const mk=(rows)=>LeadOS.engine.project(wrap(rows.map((r,i)=>CAL(r[0],r[1],30-i,'d'+i))));
+    /* mean conf 0.8, 2 hits of 5 → hit 0.4, gap 0.4 (severe) */
+    const severe=mk([[0.8,'worse'],[0.8,'worse'],[0.8,'as-expected'],[0.8,'better'],[0.8,'much-worse']]);
+    const sv=r93(severe);
+    if(sv.length!==1||sv[0].sev!==4) return {why:'gap 0.4 should fire sev 4, got '+JSON.stringify(sv.map(f=>f.sev))};
+    /* mean conf 0.8, 3 hits of 5 → hit 0.6, gap 0.2 — NOT > 0.2, so quiet (strict) */
+    const atThr=mk([[0.8,'worse'],[0.8,'as-expected'],[0.8,'as-expected'],[0.8,'better'],[0.8,'worse']]);
+    if(r93(atThr).length) return {why:'gap exactly 0.2 must be quiet (strictly greater fires)'};
+    /* mean conf 0.7, 4 hits of 5 → hit 0.8, gap −0.1 → quiet */
+    const good=mk([[0.7,'as-expected'],[0.7,'better'],[0.7,'as-expected'],[0.7,'better'],[0.7,'worse']]);
+    if(r93(good).length) return {why:'well-calibrated leader must be quiet'};
+    /* n=4 below biasSampleMin 5 → quiet even with a huge gap */
+    const few=mk([[0.9,'worse'],[0.9,'worse'],[0.9,'worse'],[0.9,'much-worse']]);
+    if(r93(few).length) return {why:'n=4 is below biasSampleMin 5 — no bias claim may fire'};
+    const o=LeadOS.calibration.overconfidenceScore(few,FIXED);
+    if(!o.nGuard||o.nGuard.indexOf('below biasSampleMin')===-1) return {why:'the n guard must be printed'};
+    return {ok:true,why:'gap 0.4 → sev4 · gap exactly 0.2 quiet · calibrated quiet · n=4 blocked with the guard printed'};
+  }));
+  T.push(check('T54','[brief T52] gapAnalysis360: blind spot ≥1.5 · hidden strength ≤−1.5 · 0.5 quiet',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'leadership.self',payload:{period:'p',dimensions:{vision:4,execution:4,communication:4,trust:4,
+        growth:3,decisions:4.5,composure:4,listening:2.5}},at:FIXED-20*DAY},
+      {type:'leadership.360',payload:{subjectId:'me',anonymous:true,dimensions:{vision:3.5,execution:4,
+        communication:4,trust:4,growth:3,decisions:2.8,composure:4,listening:4}},at:FIXED-10*DAY},
+      {type:'leadership.360',payload:{subjectId:'me',anonymous:true,dimensions:{vision:3.5,execution:4,
+        communication:4,trust:4,growth:3,decisions:2.8,composure:4,listening:4}},at:FIXED-9*DAY},
+      {type:'leadership.360',payload:{subjectId:'me',anonymous:true,dimensions:{vision:3.5,execution:4,
+        communication:4,trust:4,growth:3,decisions:2.8,composure:4,listening:4}},at:FIXED-8*DAY}]));
+    const g=LeadOS.calibration.gapAnalysis360('me',Px,FIXED);
+    const dec=g.rows.filter(r=>r.dimension==='decisions')[0];
+    if(!dec.blindSpot) return {why:'self 4.5 vs raters 2.8 (gap 1.7) should be a blind spot'};
+    const lis=g.rows.filter(r=>r.dimension==='listening')[0];
+    if(!lis.hiddenStrength) return {why:'raters 4.0 vs self 2.5 (gap −1.5) should be a hidden strength'};
+    const vis=g.rows.filter(r=>r.dimension==='vision')[0];
+    if(vis.blindSpot||vis.hiddenStrength) return {why:'gap 0.5 must be neither (threshold is 1.5)'};
+    if(g.n!==3) return {why:'n should be 3 raters, got '+g.n};
+    return {ok:true,why:'decisions gap 1.7 → blind spot · listening −1.5 → hidden strength · vision 0.5 quiet'};
+  }));
+  T.push(check('T55','[brief T53] sunkCostPattern: 70d + negatives + worse outcome flags; 50d positive does not',()=>{
+    const base=[
+      {type:'decision.logged',payload:{id:'dz',title:'Rebuild the widget pipeline'},at:FIXED-80*DAY},
+      {type:'decision.calibration',payload:{decisionId:'dz',stated_confidence:0.8,stated_probability:0.8,
+        actual_outcome:'worse',deviation_magnitude:4},at:FIXED-20*DAY},
+      {type:'strategy.okr.set',payload:{id:'okz',objective:'Pipeline rebuild adoption',quarter:'Q1',
+        keyResults:[{kr:'80% migrated',target:80,unit:'%'}]},at:FIXED-40*DAY}];
+    const old=LeadOS.engine.project(wrap(base.concat([
+      {type:'initiative.logged',payload:{id:'iz',title:'Rebuild the widget pipeline rollout',reach_est:100,
+        impact_est:3,confidence_pct:50,effort_days:40,model:'RICE'},at:FIXED-70*DAY}])));
+    const s=LeadOS.calibration.sunkCostPattern(old,FIXED);
+    if(!s.flagged.length) return {why:'70d initiative with a worse-calibrated founding decision and a silent OKR should flag'};
+    if(s.flagged[0].ageDays!==70) return {why:'age should be 70d, got '+s.flagged[0].ageDays};
+    if(!s.flagged[0].alternative||s.flagged[0].alternative.indexOf('ALTERNATIVE')===-1) return {why:'alternative explanation missing'};
+    const young=LeadOS.engine.project(wrap(base.concat([
+      {type:'initiative.logged',payload:{id:'iz',title:'Rebuild the widget pipeline rollout',reach_est:100,
+        impact_est:3,confidence_pct:50,effort_days:40,model:'RICE'},at:FIXED-50*DAY}])));
+    if(LeadOS.calibration.sunkCostPattern(young,FIXED).flagged.length) return {why:'50d is inside the 60d grace — must not flag'};
+    return {ok:true,why:'70d + 2 negatives + worse calibration → flagged with alternative · 50d quiet'};
+  }));
+  T.push(check('T56','[brief T54] R99: 31d → sev 2 · 29d quiet · 61d → sev 3',()=>{
+    const mk=ageD=>LeadOS.engine.project(wrap([{type:'reflection.logged',
+      payload:{period:'p',wins:['w'],misses:['m'],patterns:['p'],commitments:['c']},at:FIXED-ageD*DAY}]));
+    const r99=Px=>LeadOS.rules.RULES[93](Px,FIXED); /* index 93 = R99 */
+    const a=r99(mk(31));
+    if(a.length!==1||a[0].sev!==2) return {why:'31d should fire sev 2'};
+    if(r99(mk(29)).length) return {why:'29d must be quiet'};
+    if(r99(mk(30)).length) return {why:'exactly 30d must be quiet (strictly past)'};
+    const b=r99(mk(61));
+    if(b.length!==1||b[0].sev!==3) return {why:'61d should fire sev 3'};
+    return {ok:true,why:'31d sev2 · 29d and 30d quiet · 61d sev3'};
+  }));
+  T.push(check('T57','[brief T55] energyPattern + R98: mean 3.8 fires · 4.1 quiet · n=4 quiet',()=>{
+    const mk=(levels)=>LeadOS.engine.project(wrap(levels.map((l,i)=>({type:'energy.logged',
+      payload:{date:FIXED-(15-i*3)*DAY,level:l,drains:['meetings'],sources:[]},at:FIXED-(15-i*3)*DAY}))));
+    const r98=Px=>LeadOS.rules.RULES[92](Px,FIXED); /* index 92 = R98 */
+    const low=mk([4,4,4,3,4]); /* mean 3.8 over 12d... need ≥14d span */
+    const lowSpan=LeadOS.engine.project(wrap([4,4,4,3,4].map((l,i)=>({type:'energy.logged',
+      payload:{date:FIXED-(16-i*4)*DAY,level:l,drains:['meetings'],sources:[]},at:FIXED-(16-i*4)*DAY}))));
+    const e=LeadOS.calibration.energyPattern(lowSpan,FIXED);
+    if(e.mean!==3.8) return {why:'mean should be 3.8, got '+e.mean};
+    const fired=r98(lowSpan);
+    if(fired.length!==1||fired[0].sev!==3) return {why:'mean 3.8 over ≥14d with n=5 should fire sev 3'};
+    if(fired[0].basis.join(' ').indexOf('SELF-REPORTED')===-1) return {why:'self-reported label missing'};
+    const ok=LeadOS.engine.project(wrap([5,4,4,4,4].map((l,i)=>({type:'energy.logged',
+      payload:{date:FIXED-(16-i*4)*DAY,level:l,drains:[],sources:[]},at:FIXED-(16-i*4)*DAY}))));
+    if(LeadOS.calibration.energyPattern(ok,FIXED).mean!==4.2) return {why:'control fixture mean should be 4.2'};
+    if(r98(ok).length) return {why:'mean above 4 must be quiet'};
+    const few=LeadOS.engine.project(wrap([3,3,3,3].map((l,i)=>({type:'energy.logged',
+      payload:{date:FIXED-(16-i*5)*DAY,level:l,drains:[],sources:[]},at:FIXED-(16-i*5)*DAY}))));
+    if(r98(few).length) return {why:'n=4 is below biasSampleMin 5 — must be quiet'};
+    return {ok:true,why:'mean 3.8 fires sev3 with the self-reported label · 4.2 quiet · n=4 quiet'};
+  }));
   return T;
 }
 
@@ -5129,14 +5709,14 @@ function runG(){
       if(JSON.stringify(parts)!==JSON.stringify(sorted)) return {why:'id parts not key-sorted in '+c.id.slice(0,60)}; }
     return {ok:true,why:a.length+' clusters · ids byte-identical across reads · sorted key joins'};
   }));
-  G.push(check('G40','[G60/G70/G80/G92] extended buildSeed fires ALL 92 rules',()=>{
+  G.push(check('G40','[G60/G70/G80/G92/G102] extended buildSeed fires ALL 102 rules',()=>{
     const seed=projectSeed(FIXED);
     const r=LeadOS.rules.runFull(seed.P,FIXED);
     const fired={}; r.findings.forEach(f=>{ fired[f.rule]=true; });
     const missing=[];
-    for(let i=1;i<=92;i++) if(!fired['R'+i]) missing.push('R'+i);
+    for(let i=1;i<=102;i++) if(!fired['R'+i]) missing.push('R'+i);
     if(missing.length) return {why:'silent in seed: '+missing.join(', ')};
-    return {ok:true,why:'92/92 — every rule in the system fires from one deterministic fixture: patterns, conversations, org dynamics, decisions, execution, and the pt-15 external layer (unanswered sev-4 competitor move at 8d, no interview in 16d, 3 pricing losses in 60d, non-compliant EU regulation, pain scored 16, gross-margin 58 vs median 72, market signal 32d stale, Stripe partnership dormant 200d)'};
+    return {ok:true,why:'102/102 — every rule in the system fires from ONE deterministic fixture: cadences, correlation patterns, conversations, org dynamics, decisions, execution, external intelligence, and the pt-16 calibration layer (6 calibrations at mean conf 0.8 / hit rate 0.5, 70d sunk-cost initiative, 3-period anchoring run, 360 blind spot on decisions, energy mean 3.5 over 15d, 36d reflection gap, 100% assumption-confirm rate, 3 unacted feedback items, unexplained style shift)'};
   }));
   /* ---- T26–T30 of the pt-11 brief ship as T28–T32 (T26/T27 were assigned in
      the pt-10 part). ID MAP, printed: brief T26→T28 · T27→T29 · T28→T30 ·
@@ -5779,6 +6359,160 @@ function runG(){
     if(m.winLossCorrelation.some(c=>c.painId==='p2')) return {why:'a non-matching pain must not be flagged'};
     return {ok:true,why:'slow onboarding flagged with the heuristic + causation caveat · mobile timeouts not flagged'};
   }));
+  /* ---- G93–G101 — calibration goldens (pt-16) ---- */
+  const CALE=(conf,outcome,ago,id)=>({type:'decision.calibration',
+    payload:{decisionId:id||('d'+ago),stated_confidence:conf,stated_probability:conf,
+      actual_outcome:outcome,deviation_magnitude:2},at:FIXED-ago*DAY});
+  G.push(check('G93','calibration curve: per-bucket hit rates with n, and n=1 printed as insufficient',()=>{
+    const rows=[[0.2,'worse'],[0.2,'as-expected'],[0.2,'as-expected'],[0.2,'worse'],[0.2,'worse'],
+      [0.9,'as-expected'],[0.9,'better'],[0.9,'as-expected'],[0.9,'worse'],
+      [0.5,'better']];
+    const Px=LeadOS.engine.project(wrap(rows.map((r,i)=>CALE(r[0],r[1],40-i,'d'+i))));
+    const o=LeadOS.calibration.overconfidenceScore(Px,FIXED);
+    const lo=o.curve.filter(c=>c.bucket==='0–0.4')[0];
+    if(lo.n!==5||lo.hits!==2||lo.hitRate!==40) return {why:'0–0.4 bucket should be 2 of 5 = 40%, got '+lo.n+'/'+lo.hits+'/'+lo.hitRate};
+    const hi=o.curve.filter(c=>c.bucket==='0.8–1.0')[0];
+    if(hi.n!==4||hi.hits!==3||hi.hitRate!==75) return {why:'0.8–1.0 bucket should be 3 of 4 = 75%, got '+hi.hits+'/'+hi.n};
+    const mid=o.curve.filter(c=>c.bucket==='0.4–0.6')[0];
+    if(mid.n!==1||mid.line.indexOf('insufficient data (n=1)')===-1) return {why:'an n=1 bucket must print "insufficient data (n=1)": '+mid.line};
+    if(lo.line.indexOf('n=')===-1&&lo.line.indexOf('of 5')===-1) return {why:'per-bucket n must be printed'};
+    return {ok:true,why:'0–0.4: 2/5 = 40% · 0.8–1.0: 3/4 = 75% · n=1 bucket flagged insufficient'};
+  }));
+  G.push(check('G94','R93 prints the verbatim "When you say X% confident, you are right Y%" sentence',()=>{
+    const rows=[[0.8,'worse'],[0.8,'worse'],[0.8,'as-expected'],[0.8,'better'],[0.8,'much-worse']];
+    const Px=LeadOS.engine.project(wrap(rows.map((r,i)=>CALE(r[0],r[1],30-i,'d'+i))));
+    const f=LeadOS.rules.RULES[87](Px,FIXED)[0];
+    if(!f) return {why:'the fixture should fire R93'};
+    const joined=f.basis.join(' ');
+    if(!/When you say \d+% confident, you are right [\d.]+% of the time\./.test(joined))
+      return {why:'the verbatim sentence is missing from basis: '+joined.slice(0,160)};
+    if(joined.indexOf('80% confident')===-1) return {why:'the sentence should anchor on the 80% bucket for this fixture'};
+    return {ok:true,why:'verbatim sentence present and anchored on the richest bucket'};
+  }));
+  G.push(check('G95','R96 n guard: 2 raters quiet · 3 fire · anonymous=false noted explicitly',()=>{
+    const self={type:'leadership.self',payload:{period:'p',dimensions:{vision:4,execution:4,communication:4,
+      trust:4,growth:4,decisions:4.5,composure:4,listening:4}},at:FIXED-20*DAY};
+    const rater=(i,anon)=>({type:'leadership.360',payload:{subjectId:'me',anonymous:anon,
+      from_personId:anon?undefined:'ava',
+      dimensions:{vision:4,execution:4,communication:4,trust:4,growth:4,decisions:2.5,composure:4,listening:4}},
+      at:FIXED-(10+i)*DAY});
+    const r96=Px=>LeadOS.rules.RULES[90](Px,FIXED); /* index 90 = R96 */
+    const two=LeadOS.engine.project(wrap([self,rater(1,true),rater(2,true)]));
+    if(r96(two).length) return {why:'2 raters must be quiet (n < 3)'};
+    const three=LeadOS.engine.project(wrap([self,rater(1,true),rater(2,true),rater(3,true)]));
+    const fired=r96(three);
+    if(fired.length!==1||fired[0].sev!==3) return {why:'3 raters with a 2.0 gap should fire sev 3'};
+    if(fired[0].basis.join(' ').indexOf('n=3')===-1) return {why:'n must be printed'};
+    const named=LeadOS.engine.project(wrap([self,rater(1,false),rater(2,true),rater(3,true)]));
+    const nf=r96(named);
+    if(!nf.length||nf[0].basis.join(' ').indexOf('NAMED')===-1) return {why:'a non-anonymous rater must be called out explicitly in basis'};
+    return {ok:true,why:'2 raters quiet · 3 fire sev 3 with n printed · named rater disclosed'};
+  }));
+  G.push(check('G96','R100 is always conf LOW and always prints "alternative explanation"',()=>{
+    const list=[{type:'decision.logged',payload:{id:'dc',title:'t'},at:FIXED-60*DAY}];
+    for(let i=0;i<5;i++){
+      list.push({type:'assumption.logged',payload:{id:'a'+i,decisionId:'dc',assumption:'x'+i,testable:true},at:FIXED-50*DAY});
+      list.push({type:'assumption.tested',payload:{assumptionId:'a'+i,result:'confirmed',evidence:'e'},at:FIXED-40*DAY}); }
+    const Px=LeadOS.engine.project(wrap(list));
+    const f=LeadOS.rules.RULES[94](Px,FIXED)[0]; /* index 94 = R100 */
+    if(!f) return {why:'100% confirm rate with n=5 should fire R100'};
+    if(f.conf!=='LOW') return {why:'R100 must always be conf LOW, got '+f.conf};
+    const joined=f.basis.join(' ');
+    if(joined.indexOf('ALTERNATIVE EXPLANATION')===-1) return {why:'the phrase "alternative explanation" must appear verbatim'};
+    if(joined.indexOf('not a diagnosis')===-1&&joined.indexOf('NOT A DIAGNOSIS')===-1) return {why:'the not-a-diagnosis caveat is missing'};
+    if(joined.indexOf('false positive')===-1) return {why:'the false-positive rationale for LOW confidence must be printed'};
+    const four=[{type:'decision.logged',payload:{id:'dc',title:'t'},at:FIXED-60*DAY}];
+    for(let i=0;i<4;i++){
+      four.push({type:'assumption.logged',payload:{id:'b'+i,decisionId:'dc',assumption:'x'+i,testable:true},at:FIXED-50*DAY});
+      four.push({type:'assumption.tested',payload:{assumptionId:'b'+i,result:'confirmed',evidence:'e'},at:FIXED-40*DAY}); }
+    if(LeadOS.rules.RULES[94](LeadOS.engine.project(wrap(four)),FIXED).length)
+      return {why:'n=4 is below biasSampleMin — must be quiet'};
+    return {ok:true,why:'conf LOW · alternative explanation + not-a-diagnosis + false-positive rationale all printed · n=4 blocked'};
+  }));
+  G.push(check('G97','anchoringPattern: 3 consecutive anchored periods fire; 2 quiet',()=>{
+    const mk=n=>{ const list=[];
+      for(let i=0;i<=n;i++) list.push({type:'fin.forecast.logged',
+        payload:{period:'p'+i,metric:'revenue',forecast:1000+i*10,actual:800+i*5},at:FIXED-(60-i*5)*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r95=Px=>LeadOS.rules.RULES[89](Px,FIXED); /* index 89 = R95 */
+    const three=LeadOS.calibration.anchoringPattern(mk(3),FIXED);
+    if(three.longestRun<3) return {why:'expected a run of ≥3 anchored periods, got '+three.longestRun};
+    if(!r95(mk(3)).length) return {why:'3 anchored periods should fire R95'};
+    const two=LeadOS.calibration.anchoringPattern(mk(2),FIXED);
+    if(two.longestRun>=3) return {why:'fixture drift: 2-period run should be <3'};
+    if(r95(mk(2)).length) return {why:'2 anchored periods must be quiet'};
+    const f=r95(mk(3))[0];
+    if(f.basis.join(' ').indexOf('forecast 1000 vs actual 800')===-1) return {why:'the forecast/actual table must be printed in basis'};
+    return {ok:true,why:'3 anchored periods fire with the table printed · 2 quiet'};
+  }));
+  G.push(check('G98','R101: 3 unacted feedback in 90d fire · 2 quiet · acted=true never counts',()=>{
+    const mk=(unacted,acted)=>{ const list=[];
+      for(let i=0;i<unacted;i++) list.push({type:'feedback.received',
+        payload:{content:'c'+i,valence:'corrective',topic:'t',acted:false},at:FIXED-(10+i)*DAY});
+      for(let i=0;i<(acted||0);i++) list.push({type:'feedback.received',
+        payload:{content:'ok'+i,valence:'positive',topic:'t',acted:true},at:FIXED-(10+i)*DAY});
+      return LeadOS.engine.project(wrap(list)); };
+    const r101=Px=>LeadOS.rules.RULES[95](Px,FIXED); /* index 95 = R101 */
+    const three=r101(mk(3,0));
+    if(three.length!==1||three[0].sev!==3) return {why:'3 unacted should fire sev 3'};
+    if(r101(mk(2,5)).length) return {why:'2 unacted must be quiet regardless of how many acted entries exist'};
+    const old=LeadOS.engine.project(wrap([0,1,2].map(i=>({type:'feedback.received',
+      payload:{content:'c'+i,valence:'corrective',topic:'t',acted:false},at:FIXED-(100+i)*DAY}))));
+    if(r101(old).length) return {why:'feedback older than 90d is outside the window'};
+    return {ok:true,why:'3 unacted → sev 3 · 2 quiet even with 5 acted · >90d excluded'};
+  }));
+  G.push(check('G99','reflectionQuality: 4 fields = high · wins only = low · wins+misses = medium · commitment floor = medium',()=>{
+    const grade=obj=>{
+      const Px=LeadOS.engine.project(wrap([{type:'reflection.logged',
+        payload:Object.assign({period:'p',wins:[],misses:[],patterns:[],commitments:[]},obj),at:FIXED-2*DAY}]));
+      return LeadOS.calibration.reflectionQuality(Px,FIXED).recent[0].quality; };
+    if(grade({wins:['a'],misses:['b'],patterns:['c'],commitments:['d']})!=='high') return {why:'all four fields should grade high'};
+    if(grade({wins:['a']})!=='low') return {why:'wins only should grade low'};
+    if(grade({wins:['a'],misses:['b']})!=='medium') return {why:'wins + misses should grade medium'};
+    if(grade({commitments:['d']})!=='medium') return {why:'a commitment alone sets the floor at medium'};
+    const q=LeadOS.calibration.reflectionQuality(LeadOS.engine.project([]),FIXED);
+    if(q.label.indexOf('PROXY')===-1) return {why:'the proxy caveat must be printed'};
+    return {ok:true,why:'4 fields high · wins-only low · wins+misses medium · commitment floor medium · proxy caveat printed'};
+  }));
+  G.push(check('G100','R94 sunk cost: >60d sev 3 · >90d sev 4 · exactly 60d quiet · no negatives quiet',()=>{
+    const base=age=>[
+      {type:'decision.logged',payload:{id:'dq',title:'Widget pipeline rebuild'},at:FIXED-(age+20)*DAY},
+      {type:'decision.calibration',payload:{decisionId:'dq',stated_confidence:0.8,stated_probability:0.8,
+        actual_outcome:'much-worse',deviation_magnitude:5},at:FIXED-10*DAY},
+      {type:'strategy.okr.set',payload:{id:'okq',objective:'Widget adoption',quarter:'Q1',
+        keyResults:[{kr:'k',target:1,unit:'x'}]},at:FIXED-40*DAY},
+      {type:'initiative.logged',payload:{id:'iq',title:'Widget pipeline rebuild rollout',reach_est:50,
+        impact_est:2,confidence_pct:40,effort_days:30,model:'RICE'},at:FIXED-age*DAY}];
+    const r94=Px=>LeadOS.rules.RULES[88](Px,FIXED); /* index 88 = R94 */
+    const a=r94(LeadOS.engine.project(wrap(base(70))));
+    if(a.length!==1||a[0].sev!==3) return {why:'70d should be sev 3, got '+JSON.stringify(a.map(f=>f.sev))};
+    const b=r94(LeadOS.engine.project(wrap(base(100))));
+    if(b.length!==1||b[0].sev!==4) return {why:'100d should be sev 4'};
+    if(r94(LeadOS.engine.project(wrap(base(60)))).length) return {why:'exactly 60d must be quiet (strictly past)'};
+    /* no negative calibration → quiet even at 200d */
+    const noNeg=[{type:'initiative.logged',payload:{id:'iq',title:'Clean initiative',reach_est:50,
+      impact_est:2,confidence_pct:40,effort_days:30,model:'RICE'},at:FIXED-200*DAY}];
+    if(r94(LeadOS.engine.project(wrap(noNeg))).length) return {why:'an old initiative with NO negative signals must be quiet — age alone is not sunk cost'};
+    return {ok:true,why:'70d sev3 · 100d sev4 · 60d quiet · old-but-healthy quiet'};
+  }));
+  G.push(check('G101','hidden strengths are surfaced but NEVER fire a rule',()=>{
+    const Px=LeadOS.engine.project(wrap([
+      {type:'leadership.self',payload:{period:'p',dimensions:{vision:2.5,execution:2.5,communication:2.5,
+        trust:2.5,growth:2.5,decisions:2.5,composure:2.5,listening:2.5}},at:FIXED-20*DAY},
+      {type:'leadership.360',payload:{subjectId:'me',anonymous:true,dimensions:{vision:4.5,execution:4.5,
+        communication:4.5,trust:4.5,growth:4.5,decisions:4.5,composure:4.5,listening:4.5}},at:FIXED-10*DAY},
+      {type:'leadership.360',payload:{subjectId:'me',anonymous:true,dimensions:{vision:4.5,execution:4.5,
+        communication:4.5,trust:4.5,growth:4.5,decisions:4.5,composure:4.5,listening:4.5}},at:FIXED-9*DAY},
+      {type:'leadership.360',payload:{subjectId:'me',anonymous:true,dimensions:{vision:4.5,execution:4.5,
+        communication:4.5,trust:4.5,growth:4.5,decisions:4.5,composure:4.5,listening:4.5}},at:FIXED-8*DAY}]));
+    const g=LeadOS.calibration.gapAnalysis360('me',Px,FIXED);
+    if(g.hiddenStrengths.length!==8) return {why:'all 8 dimensions should read as hidden strengths, got '+g.hiddenStrengths.length};
+    if(g.blindSpots.length) return {why:'there are no blind spots in this fixture'};
+    if(LeadOS.rules.RULES[90](Px,FIXED).length) return {why:'R96 must NOT fire on hidden strengths — they are context, never an alarm'};
+    const all=LeadOS.rules.runFull(Px,FIXED).findings.filter(f=>/^R9[0-9]|^R10[0-2]/.test(f.rule)&&f.title.toLowerCase().indexOf('hidden')!==-1);
+    if(all.length) return {why:'no rule may raise a finding titled around hidden strengths'};
+    return {ok:true,why:'8 hidden strengths surfaced in the analysis · zero findings raised'};
+  }));
   return {checks:G,P:P,raw:raw};
 }
 
@@ -5801,7 +6535,8 @@ const CLAIMS=[
   {id:'C16',text:'Decision intelligence: schema v8, three prioritization models each printing their own math AND epistemic class, scenario EV + minimax regret + sensitivity with the probability caveat, commitment ledger excluding open items from hit rate, assumption tracking, R63–R72 boundaries hold',by:['T38','T39','T40','T41','T42','G61','G62','G63','G64','G65','G66','G67','G68','G69']},
   {id:'C17',text:'Execution layer: schema v9, velocity trends respect the ≥3-point discipline and label extrapolation as extrapolation, blocker MTTR and chronic windows are exact, dependency graph infers no transitive edges, accountability prints its data source, R73–R82 boundaries hold',by:['T43','T44','T45','T46','T47','G71','G72','G73','G74','G75','G76','G77','G78','G79']},
   {id:'C18',text:'External intelligence: schema v10, ZERO network calls (every external datum is manually logged and its source printed, never verified), text-match correlations labeled heuristic, R83–R92 boundaries hold, and R88 non-compliance is the single unsuppressible rule in the model',by:['T48','T49','T50','T51','T52','G81','G82','G83','G84','G85','G86','G87','G88','G89','G90','G91']},
-  {id:'C19',text:'ALL 92 RULES fire from one deterministic seed; every rule has a golden, every golden a boundary, every finding its printed math',by:['T18','G40','G7','G13']}
+  {id:'C19',text:'Calibration engine: schema v11, every bias output carries its n, its window and an alternative explanation; biasSampleMin is enforced before any bias claim; R100 is permanently conf LOW; hidden strengths never raise a finding; R93–R102 boundaries hold',by:['T53','T54','T55','T56','T57','G93','G94','G95','G96','G97','G98','G99','G100','G101']},
+  {id:'C20',text:'ALL 102 RULES fire from one deterministic seed; every rule has a golden, every golden a boundary, every finding its printed math',by:['T18','G40','G7','G13']}
 ];
 function runAll(){
   const T=runT(), gres=runG(), G=gres.checks;
@@ -7339,6 +8074,215 @@ SPECS['market-position-review']={
       note('strategy','MARKET POSITION REVIEW — targeting: '+v.metrics+'\npositioning narrative:\n'+v.narrative+
         '\nanalyst response plan:\n'+v.analystPlan,'market-position-review')]};
   }};
+/* ---------- pt-16 calibration playbooks ---------- */
+const CB=()=>LeadOS.calibration;
+SPECS['calibration-review']={
+  pattern:null,title:'Calibration review',free:true,
+  blurb:'A miscalibrated leader is not a bad leader — they are an unpredictable one.',
+  prefill(R,P,now){
+    const o=CB().overconfidenceScore(P,now);
+    const lines=[o.label];
+    if(o.n===0) lines.push(o.why);
+    else { lines.push(o.sentence); lines.push(o.math);
+      lines.push('calibration curve:'); o.curve.forEach(c=>lines.push('  '+c.line));
+      if(o.nGuard) lines.push('  '+o.nGuard);
+      lines.push(o.alternative); }
+    const s=CB().sunkCostPattern(P,now);
+    lines.push('sunk-cost candidates: '+(s.flagged.length?'':'none'));
+    s.flagged.forEach(x=>lines.push('  '+x.initiative.title+' ('+x.ageDays+'d) — '+x.negatives.length+' negative signal(s) · '+x.costMath));
+    const a=CB().anchoringPattern(P,now);
+    lines.push('anchoring: '+a.why);
+    a.rows.slice(-4).forEach(r=>lines.push('  '+r.line+(r.anchored?'  ← ANCHORED':'')));
+    const recent=(P.calibrations||[]).slice().sort((x,y)=>y.at-x.at).slice(0,10);
+    lines.push('last '+recent.length+' calibration(s):');
+    recent.forEach(c=>lines.push('  '+U.iso(c.at)+' '+c.decisionId+': stated '+c.stated_confidence+' → '+c.actual_outcome+' (deviation '+c.deviation_magnitude+')'));
+    return lines;
+  },
+  live(draft,R,P){
+    const conf=Number(draft.confidence);
+    if(!isFinite(conf)) return null;
+    const o=CB().overconfidenceScore(P,Date.now());
+    return {line:'you are about to state '+conf+' confidence. '+(o.n?o.sentence:'no history yet to compare against'),
+      zopa:null,caveat:o.n?('current gap '+o.gap+' over n='+o.n):'n=0 — the first calibration starts the record'};
+  },
+  fields(R,P){ return [
+    {key:'decisionId',label:'decision being calibrated',kind:'select',req:true,
+      options:vals(P.decisions||{}).sort((a,b)=>b.at-a.at).map(d=>({value:d.id,label:d.id+' · '+d.title.slice(0,45)}))},
+    {key:'confidence',label:'stated confidence AT THE TIME (0–1)',kind:'number',req:true},
+    {key:'probability',label:'stated probability of the main scenario (0–1)',kind:'number',req:true},
+    {key:'outcome',label:'actual outcome',kind:'select',req:true,
+      options:['better','as-expected','worse','much-worse'].map(o=>({value:o,label:o}))},
+    {key:'deviation',label:'deviation magnitude 1–5',kind:'number',req:true},
+    {key:'reflection',label:'what the pattern tells you (if one is firing)',kind:'textarea',req:true},
+    {key:'commitment',label:'one commitment to change',kind:'text',req:true},
+    {key:'flagBias',label:'flag a bias from this review Y/N',kind:'yn',req:true},
+    {key:'biasType',label:'if flagging: bias type',kind:'text',req:false}]; },
+  submit(v,R,P){
+    if(v.confidence<0||v.confidence>1) throw new Error('stated_confidence must be between 0 and 1');
+    const events=[{type:'decision.calibration',payload:{decisionId:v.decisionId,
+      stated_confidence:v.confidence,stated_probability:U.clamp(v.probability,0,1),
+      actual_outcome:v.outcome,deviation_magnitude:U.clamp(Math.round(v.deviation),1,5),
+      note:v.reflection.slice(0,160)}}];
+    events.push({type:'reflection.logged',payload:{period:'calibration '+U.iso(Date.now()),
+      wins:[],misses:[],patterns:[v.reflection],commitments:[v.commitment]}});
+    if(v.flagBias==='Y'){
+      if(!v.biasType) throw new Error('name the bias you are flagging — an unnamed flag cannot be acknowledged later');
+      events.push({type:'bias.flagged',payload:{id:U.uid('bias'),type:v.biasType,
+        evidence:v.reflection,decisionIds:[v.decisionId],severity:3}});
+    }
+    return {events:events};
+  }};
+SPECS['360-debrief']={
+  pattern:null,title:'360 debrief',free:true,
+  blurb:'A blind spot you cannot see is the definition of a blind spot.',
+  prefill(R,P,now,draft){
+    draft=draft||{};
+    const pid=(draft.subjectId||'me').trim();
+    const g=CB().gapAnalysis360(pid,P,now);
+    const lines=[g.label];
+    if(!g.claimed){ lines.push(g.why); return lines; }
+    lines.push('n='+g.n+' rater(s) · '+g.anonymityNote);
+    if(g.selfNote) lines.push(g.selfNote);
+    lines.push('dimension table (self vs raters):');
+    g.rows.forEach(r=>lines.push('  '+r.line+(r.blindSpot?'  ← BLIND SPOT':'')+(r.hiddenStrength?'  ← hidden strength':'')));
+    lines.push('consistency:');
+    g.rows.filter(r=>r.n).forEach(r=>lines.push('  '+r.dimension+': '+r.consistency));
+    if(g.hiddenStrengths.length) lines.push('hidden strengths (context, never an alarm): '+g.hiddenStrengths.map(h=>h.dimension).join(', '));
+    lines.push(g.alternative);
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'subjectId',label:'subject',kind:'text',req:true},
+    {key:'dimension',label:'blind spot to work on this quarter',kind:'select',req:true,
+      options:LeadOS.calibration.DIMS.map(d=>({value:d,label:d}))},
+    {key:'behavior',label:'specific behavior to change',kind:'textarea',req:true},
+    {key:'asker',label:'who to ask for real-time feedback on this dimension',kind:'text',req:true},
+    {key:'checkpoint',label:'checkpoint date',kind:'date',req:true},
+    {key:'selfScores',label:'your self scores (dimension:score, comma separated)',kind:'text',req:true},
+    {key:'period',label:'period label',kind:'text',req:true}]; },
+  submit(v){
+    const dims={};
+    String(v.selfScores).split(',').forEach(pair=>{
+      const bits=pair.split(':'); const k=String(bits[0]||'').trim(); const n=Number(bits[1]);
+      if(LeadOS.calibration.DIMS.indexOf(k)!==-1&&isFinite(n)) dims[k]=U.clamp(n,1,5); });
+    if(!Object.keys(dims).length) throw new Error('no valid dimension scores parsed — use e.g. "decisions:4, listening:3"');
+    return {events:[
+      {type:'leadership.self',payload:{dimensions:dims,period:v.period,
+        note:'logged at 360 debrief; focus dimension '+v.dimension}},
+      {type:'plan.created',payload:{id:U.uid('plan'),personId:v.subjectId,
+        goal:v.behavior,dimension:v.dimension,checkpointDate:v.checkpoint,
+        note:'real-time feedback partner: '+v.asker}},
+      {type:'reflection.logged',payload:{period:v.period,wins:[],misses:[],
+        patterns:['360 blind spot: '+v.dimension],commitments:[v.behavior+' (checkpoint '+U.iso(v.checkpoint)+')']}}]};
+  }};
+SPECS['energy-audit']={
+  pattern:null,title:'Energy audit',free:true,
+  blurb:'A leader running on empty makes worse decisions by definition.',
+  prefill(R,P,now){
+    const e=CB().energyPattern(P,now);
+    const lines=[e.label];
+    if(!e.claimed){ lines.push(e.why); return lines; }
+    lines.push(e.math+' · min '+e.min+' · max '+e.max);
+    lines.push('drains by frequency: '+(e.drains.map(d=>d.item+' ×'+d.count).join(' · ')||'none logged'));
+    lines.push('sources by frequency: '+(e.sources.map(s=>s.item+' ×'+s.count).join(' · ')||'none logged'));
+    lines.push('low-energy days (level ≤ 4):');
+    e.lowDays.forEach(d=>lines.push('  '+U.iso(d.date)+' level '+d.level+(d.drains?' · drains: '+d.drains:'')+(d.note?' · '+d.note:'')));
+    if(!e.lowDays.length) lines.push('  none');
+    lines.push(e.meetingContext);
+    lines.push(e.source);
+    return lines;
+  },
+  fields(){ return [
+    {key:'level',label:'energy today 1–10',kind:'number',req:true},
+    {key:'drain',label:'top drain to reduce or eliminate',kind:'text',req:true},
+    {key:'source',label:'top source to protect',kind:'text',req:true},
+    {key:'meeting',label:'meeting to kill that correlates with low energy',kind:'text',req:true},
+    {key:'change',label:'one structural change to your week',kind:'textarea',req:true},
+    {key:'period',label:'audit period label',kind:'text',req:true},
+    {key:'hours',label:'meeting hours in the period',kind:'number',req:true},
+    {key:'wasted',label:'estimated wasted %',kind:'number',req:true}]; },
+  submit(v){
+    return {events:[
+      {type:'energy.logged',payload:{date:Date.now(),level:U.clamp(Math.round(v.level),1,10),
+        drains:[v.drain],sources:[v.source],note:'logged at energy audit'}},
+      {type:'meeting.audit',payload:{period:v.period,total_hours:v.hours,
+        wasted_pct:U.clamp(v.wasted,0,100),note:'estimated from energy-draining meetings; killing: '+v.meeting}},
+      {type:'reflection.logged',payload:{period:v.period,wins:[],misses:[],
+        patterns:['energy drain: '+v.drain],commitments:[v.change]}}]};
+  }};
+SPECS['bias-acknowledgement']={
+  pattern:null,title:'Bias acknowledgement',free:true,
+  blurb:'Read the alternative explanation first. It may be the right one.',
+  prefill(R,P,now){
+    const lines=[CB().NOT_A_DIAGNOSIS];
+    const open=(P.openBiases||[]);
+    lines.push('flagged, not yet acknowledged ('+open.length+'):');
+    open.forEach(b=>lines.push('  ['+b.type+'] sev '+b.severity+' · '+U.iso(b.at)+' · evidence: '+b.evidence+
+      ' · decisions: '+(b.decisionIds.join(', ')||'none linked')));
+    if(!open.length) lines.push('  none');
+    const done=vals(P.biases).filter(b=>b.acknowledged);
+    if(done.length){ lines.push('previously acknowledged:');
+      done.forEach(b=>lines.push('  ['+b.type+'] '+U.iso(b.ackAt)+' → committed: '+b.commitment_change)); }
+    const c=CB().confirmationBias(P,now);
+    lines.push('THE ALTERNATIVE EXPLANATION, FIRST: '+c.alternative);
+    const o=CB().overconfidenceScore(P,now);
+    lines.push('check the calibration curve before accepting any bias flag: '+(o.n?o.math:o.why));
+    return lines;
+  },
+  fields(R,P){ return [
+    {key:'biasId',label:'bias to respond to',kind:'select',req:true,
+      options:(P.openBiases||[]).map(b=>({value:b.id,label:'['+b.type+'] '+b.evidence.slice(0,45)}))},
+    {key:'recognize',label:'do you recognize this pattern Y/N',kind:'yn',req:true},
+    {key:'alternative',label:'if N: your alternative explanation',kind:'textarea',req:false},
+    {key:'different',label:'if Y: what you will do differently on the next decision of this type',kind:'textarea',req:false}]; },
+  submit(v){
+    if(v.recognize==='Y'&&!v.different) throw new Error('you recognized the pattern — name the specific change, or the acknowledgement is theatre');
+    if(v.recognize==='N'&&!v.alternative) throw new Error('you rejected the pattern — record why, because a rejected flag with a reason is MORE useful than a quiet one');
+    const reflection=v.recognize==='Y'?('recognized: '+v.different):('rejected: '+v.alternative);
+    return {events:[
+      {type:'bias.acknowledged',payload:{biasId:v.biasId,reflection:reflection,
+        commitment_change:v.recognize==='Y'?v.different:'none — pattern disputed, reasoning on record'}},
+      {type:'reflection.logged',payload:{period:'bias review '+U.iso(Date.now()),wins:[],misses:[],
+        patterns:[reflection],commitments:v.recognize==='Y'?[v.different]:[]}}]};
+  }};
+SPECS['weekly-reflection']={
+  pattern:null,title:'Weekly reflection',free:true,
+  blurb:'A leader who does not reflect just repeats their experience.',
+  prefill(R,P,now){
+    const q=CB().reflectionQuality(P,now);
+    const lines=[q.label];
+    lines.push('last reflection: '+(q.last?U.iso(q.last.at)+' ('+q.daysSince+'d ago, period '+q.last.period+')':'never'));
+    lines.push('quality of the last '+q.recent.length+': '+(q.recent.map(r=>r.period+' → '+r.quality).join(' · ')||'none'));
+    lines.push('commitment follow-through: '+(q.followThrough.rate===null?q.followThrough.why
+      :q.followThrough.matched+' of '+q.followThrough.made+' = '+q.followThrough.rate+'% · '+q.followThrough.why));
+    if(q.last&&(q.last.commitments||[]).length) lines.push('you committed last time to: '+q.last.commitments.join(' · '));
+    lines.push('top findings right now:');
+    R.findings.slice(0,5).forEach(f=>lines.push('  sev '+f.sev+' '+f.rule+': '+f.title));
+    const cal=(P.calibrations||[]).filter(c=>U.days(now,c.at)<=7);
+    lines.push('calibrations this week: '+(cal.length?cal.map(c=>c.decisionId+'→'+c.actual_outcome).join(' · '):'none'));
+    return lines;
+  },
+  live(draft){
+    const has=k=>String(draft[k]||'').trim().length>0;
+    const full=has('wins')&&has('misses')&&has('pattern')&&has('commitment');
+    const q=full?'high':(has('commitment')||(has('wins')&&has('misses')))?'medium':(has('wins')||has('misses')||has('pattern'))?'low':'empty';
+    return {line:'reflection quality as filled: '+q.toUpperCase()+
+      ' — wins only: low · wins + misses: medium · wins + misses + pattern + commitment: high',
+      zopa:null,
+      caveat:q==='high'?'structure complete — depth is still yours to supply; the score is a cadence proxy, not a judgement of insight'
+        :'add '+['wins','misses','pattern','commitment'].filter(k=>!has(k)).join(', ')+' to reach high'};
+  },
+  fields(){ return [
+    {key:'period',label:'period label',kind:'text',req:true},
+    {key:'wins',label:'wins this week (specific, not general)',kind:'textarea',req:true},
+    {key:'misses',label:'misses this week (what you own, not what happened to you)',kind:'textarea',req:true},
+    {key:'pattern',label:'pattern you noticed in yourself',kind:'textarea',req:true},
+    {key:'commitment',label:'one commitment for next week, testable by date',kind:'textarea',req:true}]; },
+  submit(v){
+    const split=s=>String(s).split('\n').map(x=>x.trim()).filter(Boolean);
+    return {events:[{type:'reflection.logged',payload:{period:v.period,
+      wins:split(v.wins),misses:split(v.misses),patterns:split(v.pattern),commitments:split(v.commitment)}}]};
+  }};
 return SPECS;})();
 LeadOS.playbooks={CURATED:CURATED,get:get,forDomain:forDomain,INTERACTIVE:INTERACTIVE};
 })();
@@ -7848,6 +8792,80 @@ const SPARK=arr=>{ if(!arr.length) return '<span class="muted small">no data</sp
   const mx=Math.max.apply(null,arr), mn=Math.min.apply(null,arr);
   const rng=(mx-mn)||1;
   return '<span class="spark">'+arr.map(v=>ch[U.clamp(Math.round((v-mn)/rng*7),0,7)]).join('')+'</span>'; };
+V['#/self']={kicker:'the instrument is you',title:'Self',render(ctx){
+  const P=ctx.P, R=ctx.R, now=ctx.now, C=LeadOS.calibration;
+  const vals=o=>Object.keys(o||{}).map(k=>o[k]);
+  const runner=ui.playRunner?playRunnerHtml(ctx,ui.playRunner):'';
+  const o=C.overconfidenceScore(P,now), s=C.sunkCostPattern(P,now),
+        e=C.energyPattern(P,now), q=C.reflectionQuality(P,now);
+  const subj=Object.keys(P.three60BySubject||{});
+  const g=subj.length?C.gapAnalysis360(subj[0],P,now):null;
+  const curveRows=o.n?o.curve.map(c=>'<tr><td class="mono">'+esc(c.bucket)+'</td>'+
+    '<td class="mono">'+c.n+'</td>'+
+    '<td>'+(c.hitRate===null?'<span class="muted small">—</span>':BAR(c.hitRate,100)+' <span class="mono">'+c.hitRate+'%</span>')+'</td>'+
+    '<td class="small muted">'+esc(c.line)+'</td></tr>').join(''):'';
+  const dimRows=(g&&g.claimed)?g.rows.map(r=>'<tr><td class="mono">'+esc(r.dimension)+'</td>'+
+    '<td class="mono">'+(r.self===null?'—':r.self)+'</td>'+
+    '<td class="mono">'+(r.raterMean===null?'—':r.raterMean)+'</td>'+
+    '<td class="mono">'+(r.gap===null?'—':r.gap)+'</td>'+
+    '<td>'+(r.blindSpot?'<span class="sev s3">blind spot</span>'
+      :r.hiddenStrength?'<span class="pill">hidden strength</span>':'<span class="pill">aligned</span>')+'</td>'+
+    '<td class="small muted">'+esc(r.n?r.consistency:'no raters')+'</td></tr>').join(''):'';
+  const energyArr=(P.energyLogs||[]).filter(x=>U.days(now,x.date||x.at)<=30)
+    .sort((a,b)=>(a.date||a.at)-(b.date||b.at)).map(x=>x.level);
+  const biasRows=vals(P.biases).sort((a,b)=>b.at-a.at).map(b=>'<tr><td class="mono">'+esc(b.type)+'</td>'+
+    '<td class="small">'+esc(b.evidence.slice(0,70))+'</td><td class="mono">'+U.iso(b.at)+'</td>'+
+    '<td>'+(b.acknowledged?'<span class="pill">acknowledged</span>':'<span class="sev s3">open</span>')+'</td>'+
+    '<td class="small muted">'+esc(b.commitment_change||'')+'</td></tr>').join('');
+  return '<div class="vhead"><div class="kicker">the instrument is you</div><h1>Self</h1>'+
+    '<div class="sub">Every other view measures the organization. This one measures the leader reading it — computed only from <b>decisions you made and outcomes they produced</b>, never from a personality instrument. <b>'+esc(C.NOT_A_DIAGNOSIS)+'</b></div></div>'+
+    '<div class="chips" style="margin-bottom:16px">'+
+      ['weekly-reflection','calibration-review','360-debrief','energy-audit','bias-acknowledgement']
+      .map(id=>'<button class="chip" data-act="playrun" data-id="'+id+'">'+icon('zap',11)+' '+esc(LeadOS.playbooks.INTERACTIVE[id].title)+'</button>').join('')+'</div>'+
+    runner+
+    '<div class="grid3">'+
+      '<div class="card"><h3>Calibration</h3>'+
+        (o.n?'<div class="basis" style="margin-top:8px"><div><b>'+esc(o.sentence)+'</b></div>'+
+          '<div>'+esc(o.math)+'</div>'+(o.nGuard?'<div class="lbl">'+esc(o.nGuard)+'</div>':'')+
+          '<div class="lbl">'+esc(o.alternative)+'</div></div>'
+          :'<div class="small muted" style="margin-top:8px">'+esc(o.why)+'</div>')+'</div>'+
+      '<div class="card"><h3>Reflection</h3><div class="basis" style="margin-top:8px">'+
+        '<div>'+(q.daysSince===null?'never logged':q.daysSince+'d since the last entry')+'</div>'+
+        '<div>last 3 quality: '+esc(q.recent.map(r=>r.quality).join(' · ')||'—')+'</div>'+
+        '<div>follow-through: '+(q.followThrough.rate===null?'—':q.followThrough.rate+'% ('+q.followThrough.matched+' of '+q.followThrough.made+')')+'</div>'+
+        '<div class="lbl">'+esc(q.label)+'</div></div></div>'+
+      '<div class="card"><h3>Energy (60d)</h3>'+
+        (e.claimed?'<div style="margin-top:8px">'+BAR(e.mean,10)+' <span class="mono">'+e.mean+'/10</span></div>'+
+          '<div class="basis" style="margin-top:8px"><div>'+esc(e.math)+'</div>'+
+          '<div>top drain: '+esc(e.drains.length?e.drains[0].item:'none logged')+'</div>'+
+          '<div class="lbl">'+esc(e.source)+'</div></div>'
+          :'<div class="small muted" style="margin-top:8px">'+esc(e.why)+'</div>')+'</div>'+
+    '</div>'+
+    '<div class="sect"><h2>Calibration curve</h2><span class="meta">'+(o.n?'n='+o.n+' decisions in '+o.windowDays+'d':'no calibrated decisions')+'</span></div>'+
+    (curveRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>stated confidence</th><th>n</th><th>actual hit rate</th><th>reading</th></tr>'+curveRows+'</table>'+
+      '<div class="formnote">'+esc(o.alternative)+'</div></div>'
+      :'<div class="empty">No decision.calibration events yet. Calibration is the only bias check that cannot be faked — it compares what you said to what happened.</div>')+
+    '<div class="sect"><h2>Sunk-cost tracker</h2><span class="meta">'+s.flagged.length+' at risk</span></div>'+
+    (s.flagged.length?'<div class="card">'+s.flagged.map(x=>'<div class="heatrow"><b>'+esc(x.initiative.title)+'</b>'+
+      '<span>'+x.ageDays+'d · '+x.negatives.length+' negative signal(s) · '+esc(x.costMath)+'</span>'+
+      '<span class="w"><button class="btn ghost sm" data-act="playrun" data-id="calibration-review">re-decide</button></span></div>').join('')+
+      '<div class="formnote">'+esc(s.flagged[0].alternative)+'</div></div>'
+      :'<div class="empty">No initiative shows sunk-cost persistence. Age alone never flags — a negative calibration signal is required.</div>')+
+    '<div class="sect"><h2>360 gap</h2><span class="meta">'+(g&&g.claimed?('n='+g.n+' raters · '+g.anonymityNote):'no 360 data')+'</span></div>'+
+    (dimRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>dimension</th><th>self</th><th>raters</th><th>gap</th><th>read</th><th>consistency</th></tr>'+dimRows+'</table>'+
+      '<div class="formnote">'+esc(g.alternative)+' Hidden strengths are shown as context and never raise a finding.</div></div>'
+      :'<div class="empty">No leadership.360 events. R97 reads this silence: a leadership system that only hears itself.</div>')+
+    '<div class="sect"><h2>Energy timeline</h2><span class="meta">last 30d · '+energyArr.length+' entries</span></div>'+
+    '<div class="card"><div style="font-size:18px">'+(energyArr.length?SPARK(energyArr)+' <span class="mono small">'+energyArr.join(' ')+'</span>':'<span class="muted small">no entries</span>')+'</div>'+
+      (e.claimed&&e.lowDays.length?'<div class="basis" style="margin-top:10px">'+
+        e.lowDays.map(d=>'<div>'+U.iso(d.date)+' · level '+d.level+(d.drains?' · '+esc(d.drains):'')+'</div>').join('')+'</div>':'')+
+      (e.claimed?'<div class="formnote">'+esc(e.meetingContext)+'</div>':'')+'</div>'+
+    '<div class="sect"><h2>Bias flags</h2><span class="meta">'+(P.openBiases||[]).length+' open</span></div>'+
+    (biasRows?'<div class="card" style="overflow-x:auto"><table class="t"><tr><th>type</th><th>evidence</th><th>flagged</th><th>status</th><th>committed change</th></tr>'+biasRows+'</table></div>'
+      :'<div class="empty">No bias flags. They are raised deliberately in calibration-review, never auto-written to the log.</div>')+
+    '<div class="sect"><h2>Quick capture</h2><span class="meta">reflection.logged · energy.logged · decision.calibration · leadership.360 · feedback.received</span></div>'+
+    '<div class="card">'+captureForm()+'</div>';
+}};
 V['#/external']={kicker:'the outward lens',title:'External',render(ctx){
   const P=ctx.P, R=ctx.R, now=ctx.now, X=LeadOS.external;
   const vals=o=>Object.keys(o||{}).map(k=>o[k]);
@@ -8296,6 +9314,7 @@ function shell(ctx){
     ['#/decisions','check','Decisions',(ctx.P.openCommitments||[]).length||null],
     ['#/execution','activity','Execution',(ctx.P.openBlockers||[]).length||null],
     ['#/external','layers','External',(ctx.P.openPains||[]).length||null],
+    ['#/self','gauge','Self',(ctx.P.openBiases||[]).length||null],
     ['#/dossier','book','Dossier',null],
     ['#/playbooks','book','Playbooks',null],
     ['#/health','shield','Health',null],
