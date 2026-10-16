@@ -1,7 +1,8 @@
-/* LeadOS pt-4 - js/events.js
+/* LeadOS pt-5 - js/events.js
    Event registry: the contract every append must satisfy before it may enter
    the append-only store. Nothing enters localStorage that is not listed here.
-   pt-4 part 2: 72 full-domain event families joined the original 15 types. */
+   pt-4 part 2: 72 full-domain event families joined the original 15 types (+1
+   note type in part 5 of pt-4 = 88). pt-5: 4 intelligence-layer types (92). */
 (function () {
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
@@ -155,7 +156,22 @@
                                  return null; } },
     'exec.investor.update':  { require: ['period', 'sentiment'], optional: ['note'], enums: { sentiment: ['positive', 'neutral', 'concern'] } },
     'exec.crisis.logged':    { require: ['id', 'title', 'severity', 'type', 'responseTeam', 'activatedAt'], optional: ['ownerId'], numbers: ['activatedAt'], ranges: { severity: R15 }, arrays: ['responseTeam'] },
-    'exec.crisis.resolved':  { require: ['crisisId', 'resolvedAt'], optional: ['postmortem'], numbers: ['resolvedAt'], refs: { crisisId: 'crises' } }
+    'exec.crisis.resolved':  { require: ['crisisId', 'resolvedAt'], optional: ['postmortem'], numbers: ['resolvedAt'], refs: { crisisId: 'crises' } },
+
+    // ---------- INTELLIGENCE LAYER (pt-5) ----------
+    // insight.acknowledged carries NO refs: insights are derived per read, never
+    // entities — G8 inspects declared refs only, and there is no 'insights'
+    // family to point at (recorded in AI-SESSION-LOG pt-15 §63).
+    'insight.acknowledged': { require: ['insightId'], optional: ['note'] },
+    // benchmark.set: internal | industry | peer. value is a number; source and
+    // period are mandatory so a benchmark with no provenance cannot enter.
+    'benchmark.set':        { require: ['metric', 'value', 'unit', 'source', 'period', 'type'], optional: [], numbers: ['value'], enums: { type: ['internal', 'industry', 'peer'] } },
+    // cadence.review: the general leadership review log — any review kind, named
+    // in `type` (one-on-one, skip-level, retro, …), with note + period required.
+    'cadence.review':       { require: ['type', 'note', 'period'], optional: [] },
+    // signal.tagged carries NO refs: `eventId` points at a log event by id, and
+    // log events are not entities in any CREATES family — the fold resolves it.
+    'signal.tagged':        { require: ['eventId', 'tag'], optional: ['note'] }
   };
 
   /* Creation types -> the id family they populate. This is the inverse of the

@@ -1,8 +1,10 @@
-/* LeadOS pt-4 - js/health.js
+/* LeadOS pt-5 - js/health.js
    The authority wall.
    T-suite: deterministic proof on synthetic fixtures (never touches the store).
    G-suite: live inspection of the real localStorage payload.
-   pt-4 part 3 adds T12–T17 (rules engine R1–R40) and G9 (live rules run). */
+   pt-4 part 3 adds T12–T17 (rules engine R1–R40) and G9 (live rules run).
+   pt-5 adds T32–T37 (schema v5 + correlation/insights/heatmap/benchmarks),
+   G31 (live correlation run), and claims C32–C36. Boot gate unchanged: G1–G13. */
 (function () {
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
@@ -43,25 +45,28 @@
      are documentation of that reading, not a runtime assertion (the no-network
      doctrine means the app cannot re-read its own source to confirm them). */
   const MANIFEST = [
-    // `lines` = measured by reading each file (parts 11/13); the two doc rows
-    // were re-measured at part-14 close and digit-patched in place, so they are
-    // exact post-patch counts, not pre-freeze readings (log §59.4).
+    // `lines` = measured by reading each file; the part-15 values were taken at
+    // part-15 close and the doc rows digit-patched in place, so they are exact
+    // post-patch counts, not pre-freeze readings (log §59.4/§65).
     // Verify any time with `wc -l`.
     { path: 'index.html',          kind: 'html', ns: null,                   lines: 53 },
     { path: 'css/app.css',         kind: 'css',  ns: null,                   lines: 361 },
-    { path: 'js/events.js',        kind: 'js',   ns: ['events'],             lines: 231 },
-    { path: 'js/store.js',         kind: 'js',   ns: ['store'],              lines: 338 },
-    { path: 'js/engine.js',        kind: 'js',   ns: ['engine', 'rules'],    lines: 914 },
+    { path: 'js/events.js',        kind: 'js',   ns: ['events'],             lines: 247 },
+    { path: 'js/store.js',         kind: 'js',   ns: ['store'],              lines: 368 },
+    { path: 'js/engine.js',        kind: 'js',   ns: ['engine', 'rules', 'correlate'], lines: 1248 },
     { path: 'js/playbooks.js',     kind: 'js',   ns: ['playbooks'],          lines: 475 },
-    { path: 'js/health.js',        kind: 'js',   ns: ['health'],             lines: 1571 },
-    { path: 'js/ui.js',            kind: 'js',   ns: ['ui'],                 lines: 947 },
-    { path: 'README.md',           kind: 'doc',  ns: null,                   lines: 556 },
-    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,                   lines: 902 }
+    { path: 'js/health.js',        kind: 'js',   ns: ['health'],             lines: 1877 },
+    { path: 'js/ui.js',            kind: 'js',   ns: ['ui'],                 lines: 1042 },
+    { path: 'README.md',           kind: 'doc',  ns: null,                   lines: 670 },
+    { path: 'AI-SESSION-LOG.md',   kind: 'doc',  ns: null,                   lines: 1037 }
   ];
   // Files that must NOT be loaded. js/rules.js was merged into js/engine.js in
   // part 11 and shipped as a tombstone; part 13 removed it from the delivery
-  // entirely. The guard stays: a script tag referencing it is still a failure.
-  const UNLOADED = ['js/rules.js'];
+  // entirely. js/correlate.js was mandated by the pt-5 brief but merged into
+  // engine.js as its third IIFE (part 15) because the brief simultaneously
+  // mandates the 10-file structure. The guard stays: a script tag referencing
+  // either path is still a failure.
+  const UNLOADED = ['js/rules.js', 'js/correlate.js'];
 
   // ---------- part-2 fixtures: one canonical payload per registered new type ----------
   const NEW_TYPE_FIXTURES = {
@@ -968,7 +973,7 @@
       if (!UI) return { pass: false, detail: 'ui module not loaded' };
 
       // (a) routes <-> views
-      ['today', 'signals', 'playbooks', 'finance', 'sales', 'ops', 'strategy', 'domains', 'roster', 'cadences', 'decisions', 'risks', 'data', 'health'].forEach(function (id) {
+      ['today', 'signals', 'insights', 'playbooks', 'finance', 'sales', 'ops', 'strategy', 'domains', 'roster', 'cadences', 'decisions', 'risks', 'data', 'health'].forEach(function (id) {
         if (UI.ROUTE_IDS.indexOf(id) === -1) problems.push('route missing: ' + id);
         if (typeof UI.VIEWS[id] !== 'function') problems.push('no view for route ' + id);
       });
@@ -1020,6 +1025,30 @@
         if (!verdict.ok) problems.push(type + ' capture -> ' + verdict.errors[0]);
       });
 
+      // (c2) pt-5: the four intelligence types carry no domain prefix, so the
+      // prefix loop above never reaches them. Driven explicitly — every one
+      // must still produce a registry-valid payload or the form is drift.
+      ['insight.acknowledged', 'benchmark.set', 'cadence.review', 'signal.tagged'].forEach(function (type) {
+        const fields = UI.captureFields(type);
+        const form = document.createElement('form');
+        fields.forEach(function (f) {
+          let el;
+          /* part 15 fix: a bare <select> without option children cannot hold a
+             value — the first run of this suite caught it (benchmark.set.type
+             came back blank). The main loop's input element carries any value. */
+          if (f.kind === 'select') { el = document.createElement('input'); el.value = f.options[0]; }
+          else if (f.kind === 'num') { el = document.createElement('input'); el.value = String(f.range ? f.range[0] : 1); }
+          else { el = document.createElement('input'); el.value = 'synthetic'; }
+          el.name = f.name;
+          form.appendChild(el);
+        });
+        let payload;
+        try { payload = UI.buildCapturePayload(form, type); }
+        catch (e) { problems.push(type + ': capture builder threw ' + e.message); return; }
+        const verdict = LeadOS.events.validate(type, payload);
+        if (!verdict.ok) problems.push(type + ' capture -> ' + verdict.errors[0]);
+      });
+
       // (d) roster + event-domain mapping over a fixture log
       let seq = 0; const A = T0;
       const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
@@ -1049,6 +1078,252 @@
       if (LeadOS.engine.eventDomain(evs[0], P) !== null) problems.push('store.initialized should be domain-less, not guessed');
 
       return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : UI.ROUTE_IDS.length + ' routes wired; ' + captured.length + ' capture forms registry-valid; roster + domain mapping exact' };
+    }],
+
+    /* ---- pt-5: intelligence layer ---- */
+    ['T32', 'migration 4>5: three v5 settings backfilled with repair accounting; full v3→v5 climb', function () {
+      const problems = [];
+      // (a) bare v4 store: all three backfilled with the exact defaults
+      const raw = { schemaVersion: 4, meta: { lineage: 'pt', createdAt: T0, migrationsApplied: ['1>2', '2>3', '3>4'], migrationRepairs: { '1>2': 0, '2>3': 0, '3>4': 5 } }, events: [fev(1, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' })] };
+      LeadOS.store.MIGRATIONS['4>5'](raw);
+      const applied = LeadOS.store.foldSettings(raw.events);
+      LeadOS.store.V5_NEW_KEYS.forEach(function (k) { if (applied[k] !== LeadOS.store.V5_SETTING_DEFAULTS[k]) problems.push('bad default for ' + k + ': ' + applied[k]); });
+      if (repairCount(raw, '4>5') !== 3) problems.push('expected 3 repair events, found ' + repairCount(raw, '4>5'));
+      if (raw.meta.migrationRepairs['4>5'] !== 3) problems.push('repair accounting wrong: ' + raw.meta.migrationRepairs['4>5']);
+      if (raw.schemaVersion !== 5) problems.push('schemaVersion ' + raw.schemaVersion + ' != 5');
+      // (b) idempotent: replay appends nothing
+      const len = raw.events.length;
+      LeadOS.store.MIGRATIONS['4>5'](raw);
+      if (raw.events.length !== len) problems.push('replay mutated the store');
+      // (c) a leader-set value is never overwritten
+      const raw2 = { schemaVersion: 4, meta: { lineage: 'pt', createdAt: T0, migrationsApplied: [], migrationRepairs: {} }, events: [fev(1, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }), fev(2, 'settings.changed', { key: 'correlationWindowDays', value: 30 })] };
+      LeadOS.store.MIGRATIONS['4>5'](raw2);
+      const applied2 = LeadOS.store.foldSettings(raw2.events);
+      if (applied2.correlationWindowDays !== 30) problems.push('leader value overwritten: ' + applied2.correlationWindowDays);
+      if (repairCount(raw2, '4>5') !== 2) problems.push('expected 2 repairs with one leader key set, found ' + repairCount(raw2, '4>5'));
+      // (d) full climb: a v3 store climbs 3>4>5 with all eight settings
+      const raw3 = v3raw([fev(1, 'store.initialized', { schemaVersion: 3, lineageTag: 'pt-3' })]);
+      let v = raw3.schemaVersion;
+      while (v < 5) { LeadOS.store.MIGRATIONS[v + '>' + (v + 1)](raw3); v = raw3.schemaVersion; }
+      const applied3 = LeadOS.store.foldSettings(raw3.events);
+      LeadOS.store.V4_NEW_KEYS.concat(LeadOS.store.V5_NEW_KEYS).forEach(function (k) { if (!(k in applied3)) problems.push('after climb, missing ' + k); });
+      if (raw3.schemaVersion !== 5) problems.push('climb stopped at ' + raw3.schemaVersion);
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'defaults 90 / 3 / 0.85 exact · 3 repairs counted · idempotent · leader value kept · v3 climbs to v5 with all 8 settings' };
+    }],
+
+    ['T33', 'correlation clusters: anchor + domain grouping, window boundary, stable ids, >=2 members', function () {
+      const problems = []; const A = T0, today = A + 100 * DAY;
+      function ev(log) {
+        let seq = 0; const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+        log.forEach(function (x) { evs.push(fev(++seq, x[0], x[1], { at: x[2] !== undefined ? x[2] : (A + seq * 1000) })); });
+        return evs;
+      }
+      // (a) R12 (deal owner rep-1) + R13 (quota holder rep-1): shared PERSON anchor
+      const fa = ev([
+        ['sales.deal.logged', { id: 'd1', title: 'Acme', value: 50000, currency: 'USD', stage: 'proposal', ownerId: 'rep-1', closeDate: A + 40 * DAY }, A + 3 * DAY],
+        ['sales.quota.set', { id: 'q1', personId: 'rep-1', period: 'Q3', target: 1000, currency: 'USD' }, A + 3 * DAY],
+        ['sales.quota.actuals', { quotaId: 'q1', actual: 400, period: 'Q3' }, A + 60 * DAY]
+      ]);
+      const Ca = LeadOS.correlate.correlate(LeadOS.engine.project(fa), today);
+      const cPerson = Ca.clusters.find(function (c) { return c.findings.indexOf('R13:q1') !== -1; });
+      if (!cPerson) problems.push('no cluster contains R13:q1');
+      else {
+        if (cPerson.findings.length !== 2) problems.push('person cluster size ' + cPerson.findings.length + ' != 2');
+        if (cPerson.sharedEntity !== 'person:rep-1') problems.push('sharedEntity=' + cPerson.sharedEntity);
+        if (cPerson.confidence !== 'high') problems.push('anchor-verified cluster not high conf: ' + cPerson.confidence);
+      }
+      const cExec = Ca.clusters.find(function (c) { return c.findings.indexOf('R3:board') !== -1 && c.findings.indexOf('R39:board') !== -1; });
+      if (!cExec) problems.push('R3+R39 same-domain co-occurrence not clustered');
+      else if (cExec.confidence !== 'low') problems.push('2-finding domain-only cluster should be low conf, got ' + cExec.confidence);
+      // (b) window boundary: R7 evidence older than the window cannot domain-cluster with a fresh R9
+      const fb1 = ev([
+        ['risk.raised', { id: 'rk1', domain: 'engineering', title: 'Key person', likelihood: 3, impact: 3 }, A + 5 * DAY],
+        ['task.created', { id: 'tk1', domain: 'engineering', title: 'Runbook', dueAt: A + 94 * DAY }, A + 90 * DAY]
+      ]);
+      const Cb1 = LeadOS.correlate.correlate(LeadOS.engine.project(fb1), today);
+      if (Cb1.clusters.some(function (c) { return c.findings.indexOf('R7:rk1') !== -1; })) problems.push('stale-evidence R7 clustered across the window');
+      if (Cb1.clusters.length !== 1) problems.push('B1 expected exactly the exec pair cluster, got ' + Cb1.clusters.length);
+      const fb2 = ev([
+        ['risk.raised', { id: 'rk1', domain: 'engineering', title: 'Key person', likelihood: 3, impact: 3 }, A + 90 * DAY],
+        ['task.created', { id: 'tk1', domain: 'engineering', title: 'Runbook', dueAt: A + 94 * DAY }, A + 90 * DAY]
+      ]);
+      const Cb2 = LeadOS.correlate.correlate(LeadOS.engine.project(fb2), today);
+      const cEng = Cb2.clusters.find(function (c) { return c.findings.indexOf('R7:rk1') !== -1; });
+      if (!cEng) problems.push('fresh R7+R9 in one domain not clustered');
+      else {
+        if (cEng.findings.indexOf('R9:tk1') === -1) problems.push('R9 not in the engineering cluster');
+        if (!/window 90d/.test(cEng.confWhy)) problems.push('confWhy does not print the window: ' + cEng.confWhy);
+      }
+      // (c) singletons never form clusters
+      const fc = ev([
+        ['sales.quota.set', { id: 'q1', personId: 'rep-1', period: 'Q3', target: 1000, currency: 'USD' }, A + 3 * DAY],
+        ['sales.quota.actuals', { quotaId: 'q1', actual: 400, period: 'Q3' }, A + 60 * DAY]
+      ]);
+      const Cc = LeadOS.correlate.correlate(LeadOS.engine.project(fc), today);
+      if (Cc.clusters.some(function (c) { return c.findings.indexOf('R13:q1') !== -1; })) problems.push('a singleton finding formed a cluster');
+      if (!Cc.clusters.every(function (c) { return c.findings.length >= 2; })) problems.push('cluster with < 2 members emitted');
+      // (d) stable cluster ids across runs
+      if (JSON.stringify(Ca.clusters.map(function (c) { return c.id; })) !== JSON.stringify(LeadOS.correlate.correlate(LeadOS.engine.project(fa), today).clusters.map(function (c) { return c.id; }))) problems.push('cluster ids unstable across runs');
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'person-anchor pair high-conf · exec domain pair low-conf · 95d evidence dropped across the 90d window · singletons excluded · ids stable' };
+    }],
+
+    ['T34', 'insights: promotion rule, stable ids, acknowledgment suppresses per read and stays audited', function () {
+      const problems = []; const A = T0, today = A + 100 * DAY;
+      let seq = 0;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(t, p, at) { evs.push(fev(++seq, t, p, { at: at !== undefined ? at : (A + seq * 1000) })); }
+      add('sales.deal.logged', { id: 'd1', title: 'Acme', value: 50000, currency: 'USD', stage: 'proposal', ownerId: 'rep-1', closeDate: A + 40 * DAY }, A + 3 * DAY);
+      add('sales.quota.set', { id: 'q1', personId: 'rep-1', period: 'Q3', target: 1000, currency: 'USD' }, A + 3 * DAY);
+      add('sales.quota.actuals', { quotaId: 'q1', actual: 400, period: 'Q3' }, A + 60 * DAY);
+      add('decision.proposed', { id: 'dec1', domain: 'sales', question: 'Discount path?', options: ['a', 'b'], owner: 'cro', reversibility: 'reversible' }, A + 1 * DAY);
+      const P0 = LeadOS.engine.project(evs);
+      const snapshot = JSON.stringify(P0);
+      const C0 = LeadOS.correlate.correlate(P0, today);
+      const c13 = C0.clusters.find(function (c) { return c.findings.indexOf('R13:q1') !== -1; });
+      if (!c13) { problems.push('person cluster missing'); }
+      else {
+        const ins = C0.insights.find(function (i) { return i.id === 'insight:' + c13.id; });
+        if (!ins) problems.push('sev-4 cluster not promoted to an insight');
+        else {
+          if (ins.kind !== 'cluster' || ins.sev !== 4) problems.push('insight kind/sev wrong: ' + ins.kind + '/' + ins.sev);
+          if (!/promotion rule/.test(ins.basis.join(' '))) problems.push('insight basis lacks the printed promotion rule');
+          if (ins.play !== 'playbook:sales') problems.push('insight play=' + ins.play);
+        }
+        // the shared-entity pair [R5/R6] below the promotion bar must NOT promote
+        if (C0.insights.some(function (i) { return i.kind === 'cluster' && i.basis.join(' ').indexOf('R5:dec1') !== -1; })) problems.push('below-bar cluster promoted');
+      }
+      if (C0.insights.some(function (i) { return i.kind === 'heatmap'; })) problems.push('heat insight without heat evidence');
+      // stable insight ids across runs
+      const ids1 = JSON.stringify(C0.insights.map(function (i) { return i.id; }));
+      const ids2 = JSON.stringify(LeadOS.correlate.correlate(LeadOS.engine.project(evs), today).insights.map(function (i) { return i.id; }));
+      if (ids1 !== ids2) problems.push('insight ids unstable across runs');
+      // acknowledgment: suppresses the active insight, keeps the audit trail
+      const ackId = 'insight:' + (c13 ? c13.id : 'none');
+      const activeBefore = C0.totals.insightsActive;
+      add('insight.acknowledged', { insightId: ackId, note: 'reviewed at staff meeting' }, A + 99 * DAY);
+      const P1 = LeadOS.engine.project(evs);
+      if (!P1.insightAcks[ackId] || P1.insightAcks[ackId].note !== 'reviewed at staff meeting') problems.push('ack fold missing');
+      const C1 = LeadOS.correlate.correlate(P1, today);
+      if (C1.insights.filter(function (i) { return !i.acknowledged; }).some(function (i) { return i.id === ackId; })) problems.push('acknowledged insight still active');
+      const listed = C1.insights.find(function (i) { return i.id === ackId; });
+      if (!listed || listed.acknowledged !== true || listed.ackNote !== 'reviewed at staff meeting' || listed.ackAt !== A + 99 * DAY) problems.push('acknowledged insight not listed with its audit fields');
+      if (C1.totals.insightsAcked !== 1 || C1.totals.insightsActive !== activeBefore - 1) problems.push('ack totals wrong: ' + JSON.stringify(C1.totals));
+      if (JSON.stringify(P0) !== snapshot) problems.push('correlate mutated the projection');
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : 'sev-4 person cluster promoted with printed rule · below-bar pair not promoted · ack removes from active but keeps note+date · ids stable · projection untouched' };
+    }],
+
+    ['T35', 'heatmap: decay math exact, undated excluded, outside-window dropped, leader-set window honored', function () {
+      const problems = []; const A = T0, today = A + 100 * DAY;
+      let seq = 0;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(t, p, at) { evs.push(fev(++seq, t, p, { at: at !== undefined ? at : (A + seq * 1000) })); }
+      add('risk.raised', { id: 'rk1', domain: 'engineering', title: 'Key person', likelihood: 4, impact: 4 }, A + 90 * DAY);
+      add('task.created', { id: 'tk1', domain: 'engineering', title: 'Runbook', dueAt: A + 95 * DAY }, A + 90 * DAY);
+      add('fin.risk.logged', { id: 'fr1', title: 'Runway', severity: 4, likelihood: 4, reviewDate: A + 50 * DAY }, A + 2 * DAY);
+      const P = LeadOS.engine.project(evs);
+      const C = LeadOS.correlate.correlate(P, today);
+      const eng = C.heatmap.byDomain.find(function (c) { return c.domain === 'engineering'; });
+      const wEach = Math.round(2 * Math.pow(0.85, 10) * 1000) / 1000;
+      if (!eng || eng.contrib.length !== 2) problems.push('engineering contrib count wrong: ' + (eng && eng.contrib.length));
+      else {
+        if (Math.abs(eng.contrib[0].weight - wEach) > 1e-9) problems.push('decay weight off: ' + eng.contrib[0].weight + ' != ' + wEach);
+        if (eng.score !== Math.round(2 * wEach * 1000) / 1000) problems.push('score sum off: ' + eng.score);
+        if (eng.contrib[0].math.indexOf('0.85^10') === -1) problems.push('math string does not print the decay power: ' + eng.contrib[0].math);
+      }
+      // undated evidence is excluded with its reason printed, never re-dated
+      const undated = C.heatmap.excluded.find(function (x) { return x.key === 'R3:board'; });
+      if (!undated || undated.why.indexOf('no resolvable evidence timestamp') === -1) problems.push('undated finding not excluded with printed reason');
+      // evidence outside the window decays out, with the age printed
+      const stale = C.heatmap.excluded.find(function (x) { return x.key === 'R11:fr1'; });
+      if (!stale || stale.why.indexOf('> window 90d') === -1) problems.push('outside-window finding not dropped with printed age');
+      if (C.heatmap.formula.indexOf('0.85') === -1 || C.heatmap.formula.indexOf('90d') === -1) problems.push('formula prints neither decay nor window');
+      if (C.heatmap.decay !== 0.85 || C.heatmap.window !== 90) problems.push('heatmap settings not wired: ' + JSON.stringify({ decay: C.heatmap.decay, window: C.heatmap.window }));
+      // a leader-set window is honored, not just the default
+      add('settings.changed', { key: 'correlationWindowDays', value: 5 }, A + 99 * DAY);
+      const C5 = LeadOS.correlate.correlate(LeadOS.engine.project(evs), today);
+      const eng5 = C5.heatmap.byDomain.find(function (c) { return c.domain === 'engineering'; });
+      if (!eng5 || eng5.score !== 0 || eng5.contrib.length !== 0) problems.push('leader-set 5d window ignored: score ' + (eng5 && eng5.score));
+      if (!C5.heatmap.excluded.some(function (x) { return x.key === 'R9:tk1' && x.why.indexOf('> window 5d') !== -1; })) problems.push('R9 not dropped against the 5d window');
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : '2 × 0.85^10 = ' + wEach + ' per contribution · undated board cadence excluded · 98d-old risk dropped · formula prints 0.85/90d · 5d override zeroes the cell' };
+    }],
+
+    ['T36', 'benchmark compare: latest-wins, delta math printed, trend gated by trendMinPeriods, no internal series not inferred', function () {
+      const problems = []; const A = T0;
+      let seq = 0;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(t, p, at) { evs.push(fev(++seq, t, p, { at: at !== undefined ? at : (A + seq * 1000) })); }
+      add('fin.kpi.logged', { metric: 'gross-margin', value: 60, unit: '%', period: 'Q1', target: 70 }, A + 10 * DAY);
+      add('fin.kpi.logged', { metric: 'gross-margin', value: 55, unit: '%', period: 'Q2', target: 70 }, A + 40 * DAY);
+      add('fin.kpi.logged', { metric: 'gross-margin', value: 50, unit: '%', period: 'Q3', target: 70 }, A + 70 * DAY);
+      add('fin.kpi.logged', { metric: 'burn-multiple', value: 3.1, unit: 'x', period: 'Q2' }, A + 40 * DAY);
+      add('fin.kpi.logged', { metric: 'burn-multiple', value: 2.8, unit: 'x', period: 'Q3' }, A + 70 * DAY);
+      add('benchmark.set', { metric: 'gross-margin', value: 70, unit: '%', source: 'SaaS survey 2025', period: '2025-H2', type: 'industry' }, A + 80 * DAY);
+      add('benchmark.set', { metric: 'gross-margin', value: 66, unit: '%', source: 'SaaS survey 2026', period: '2026-H1', type: 'industry' }, A + 90 * DAY);
+      add('benchmark.set', { metric: 'nps', value: 30, unit: 'nps', source: 'peer council', period: '2026-H1', type: 'peer' }, A + 85 * DAY);
+      const P = LeadOS.engine.project(evs);
+      const cmp = LeadOS.correlate.benchmarkCompare(P);
+      if (cmp.length !== 2) problems.push('compare rows ' + cmp.length + ' != 2 (only benchmarked metrics may appear)');
+      const gm = cmp.find(function (r) { return r.metric === 'gross-margin'; });
+      if (!gm || !gm.comparable) problems.push('gross-margin not comparable');
+      else {
+        if (gm.benchmark.value !== 66) problems.push('latest-wins broken: benchmark ' + gm.benchmark.value + ' != 66');
+        if (gm.delta !== -16) problems.push('delta ' + gm.delta + ' != -16');
+        if (gm.deltaPct === null || Math.abs(gm.deltaPct - (-16 / 66)) > 0.001) problems.push('deltaPct ' + gm.deltaPct);
+        if (!gm.trend.claimed || gm.trend.slope !== -5 || gm.trend.points !== 3) problems.push('trend not claimed at 3 measured points: ' + JSON.stringify(gm.trend));
+      }
+      const nps = cmp.find(function (r) { return r.metric === 'nps'; });
+      if (!nps || nps.comparable !== false || nps.status.indexOf('no internal series') === -1) problems.push('benchmark without internal series not labeled uncomputable');
+      // leader-set trendMinPeriods tightens the gate
+      add('settings.changed', { key: 'trendMinPeriods', value: 5 }, A + 95 * DAY);
+      const cmp5 = LeadOS.correlate.benchmarkCompare(LeadOS.engine.project(evs));
+      const gm5 = cmp5.find(function (r) { return r.metric === 'gross-margin'; });
+      if (!gm5 || gm5.trend.claimed !== false || gm5.trend.why.indexOf('trendMinPeriods 5') === -1) problems.push('trendMinPeriods 5 override not honored: ' + (gm5 && JSON.stringify(gm5.trend)));
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : '70 then 66 logged → 66 wins · 50 − 66 = −16 printed · slope −5 over 3 points claimed · 2-point metric silent · nps without internals labeled not inferred · 5-point gate applied' };
+    }],
+
+    ['T37', 'pt-5 contracts and folds: 4 types gate-enforced; six projections materialize; analytics deterministic and non-mutating', function () {
+      const problems = [];
+      const v = LeadOS.events.validate;
+      // accepts
+      [['insight.acknowledged', { insightId: 'insight:x' }],
+       ['insight.acknowledged', { insightId: 'insight:x', note: 'seen' }],
+       ['benchmark.set', { metric: 'nrr', value: 110, unit: '%', source: 'survey', period: '2026-H1', type: 'internal' }],
+       ['cadence.review', { type: 'one-on-one', note: 'growth plan agreed', period: '2026-W07' }],
+       ['signal.tagged', { eventId: 'e-00042', tag: 'watch', note: 'board asked' }]
+      ].forEach(function (x) { if (!v(x[0], x[1]).ok) problems.push(x[0] + ' canonical rejected: ' + v(x[0], x[1]).errors[0]); });
+      // rejects
+      [['benchmark.set', { metric: 'nrr', value: 110, unit: '%', source: 's', period: 'p', type: 'guess' }],
+       ['benchmark.set', { metric: 'nrr', value: 'high', unit: '%', source: 's', period: 'p', type: 'peer' }],
+       ['cadence.review', { type: 'one-on-one', period: 'W07' }],
+       ['signal.tagged', { eventId: 'e-1' }],
+       ['insight.acknowledged', {}],
+       ['cadence.review', { type: 'x', note: 'y', period: 'z', rogue: 1 }]
+      ].forEach(function (x) { if (v(x[0], x[1]).ok) problems.push(x[0] + ' malformed accepted'); });
+      if (Object.keys(LeadOS.events.REGISTRY).length !== 92) problems.push('registry size ' + Object.keys(LeadOS.events.REGISTRY).length + ' != 92');
+      // folds materialize the six pt-5 projections
+      let seq = 0; const A = T0;
+      const evs = [fev(++seq, 'store.initialized', { schemaVersion: 4, lineageTag: 'pt-4' }, { at: A })];
+      function add(t, p) { evs.push(fev(++seq, t, p, { at: A + seq * 1000 })); }
+      add('insight.acknowledged', { insightId: 'insight:x', note: 'seen' });
+      add('benchmark.set', { metric: 'nrr', value: 110, unit: '%', source: 'survey', period: 'H1', type: 'industry' });
+      add('cadence.review', { type: 'skip-level', note: 'morale ok', period: 'W07' });
+      add('signal.tagged', { eventId: 'e-00001', tag: 'watch', note: 'ask' });
+      const P = LeadOS.engine.project(evs);
+      const snapshot = JSON.stringify(P);
+      if (!P.insightAcks['insight:x'] || P.insightAcks['insight:x'].note !== 'seen') problems.push('insightAcks fold broken');
+      if (!P.benchmarkByMetric.nrr || P.benchmarkByMetric.nrr.length !== 1 || P.benchmarks.length !== 1) problems.push('benchmark fold broken');
+      if (P.reviewLog.length !== 1 || P.reviewLog[0].type !== 'skip-level') problems.push('reviewLog fold broken');
+      if (P.signalTags.length !== 1 || !P.tagsByEvent['e-00001'] || P.tagsByEvent['e-00001'].length !== 1) problems.push('signal tag fold broken');
+      if (LeadOS.engine.NAMED_PROJECTIONS.length !== 56) problems.push('NAMED_PROJECTIONS ' + LeadOS.engine.NAMED_PROJECTIONS.length + ' != 56');
+      // determinism + purity of the whole analytics layer
+      const a = JSON.stringify(LeadOS.correlate.correlate(P, A + 100 * DAY));
+      const b = JSON.stringify(LeadOS.correlate.correlate(P, A + 100 * DAY));
+      if (a !== b) problems.push('correlate nondeterministic');
+      const c1 = JSON.stringify(LeadOS.correlate.benchmarkCompare(P));
+      const c2 = JSON.stringify(LeadOS.correlate.benchmarkCompare(P));
+      if (c1 !== c2) problems.push('benchmarkCompare nondeterministic');
+      if (JSON.stringify(P) !== snapshot) problems.push('analytics mutated the projection');
+      return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : '5 accepted / 6 rejected at the gate · 92 types · insightAcks/benchmarks/reviewLog/tags fold · 56 named projections · correlate + benchmarkCompare deterministic and pure' };
     }]
   ];
 
@@ -1060,9 +1335,9 @@
       const ok = keys.length === 1 && keys[0] === LeadOS.store.KEY;
       return { pass: ok, detail: ok ? 'namespace holds only leados:data' : 'unexpected keys: ' + keys.join(', ') };
     }],
-    ['G2', 'schemaVersion is 4 and lineage is pt', function () {
+    ['G2', 'schemaVersion is 5 and lineage is pt', function () {
       const raw = LeadOS.store.load();
-      const ok = raw.schemaVersion === 4 && raw.meta.lineage === 'pt' && LeadOS.store.LINEAGE_TAG === 'pt-4';
+      const ok = raw.schemaVersion === 5 && raw.meta.lineage === 'pt' && LeadOS.store.LINEAGE_TAG === 'pt-5';
       return { pass: ok, detail: 'schemaVersion=' + raw.schemaVersion + ', lineage=' + raw.meta.lineage + ', tag=' + LeadOS.store.LINEAGE_TAG };
     }],
     ['G3', 'append-only integrity: contiguous seq, unique ids, monotonic time, every event registry-valid', function () {
@@ -1085,11 +1360,12 @@
       const ok = rootBad.length === 0 && metaBad.length === 0;
       return { pass: ok, detail: ok ? 'payload shape clean: only schemaVersion, meta, events' : 'rogue keys: ' + rootBad.concat(metaBad).join(', ') };
     }],
-    ['G5', 'live projection contains all five v4 settings as positive numbers', function () {
+    ['G5', 'live projection contains all eight v4+v5 settings as positive numbers', function () {
       const state = LeadOS.engine.project(LeadOS.store.load().events);
       const set = LeadOS.engine.settings(state);
-      const bad = LeadOS.store.V4_NEW_KEYS.filter(function (k) { return typeof set[k] !== 'number' || !isFinite(set[k]) || set[k] <= 0; });
-      return { pass: bad.length === 0, detail: bad.length ? 'bad: ' + bad.join(', ') : LeadOS.store.V4_NEW_KEYS.map(function (k) { return k + '=' + set[k]; }).join(' ') };
+      const keys = LeadOS.store.V4_NEW_KEYS.concat(LeadOS.store.V5_NEW_KEYS);
+      const bad = keys.filter(function (k) { return typeof set[k] !== 'number' || !isFinite(set[k]) || set[k] <= 0; });
+      return { pass: bad.length === 0, detail: bad.length ? 'bad: ' + bad.join(', ') : keys.map(function (k) { return k + '=' + set[k]; }).join(' ') };
     }],
     ['G6', 'repair accounting consistent: migrationRepairs matches repair events; migrations ordered', function () {
       const raw = LeadOS.store.load();
@@ -1511,6 +1787,31 @@
   // suite: a rule-logic regression must be loud in Health, not a brick wall
   // between a leader and their own data.
   const LIVE_G = G.slice();
+  // G31 (pt-5) is a LIVE check but deliberately NOT in the boot gate: boot stays
+  // G1–G13 — integrity walls the app, intelligence analytics never does.
+  G.push(['G31', 'correlation engine over the live log: shape-valid output, deterministic, nothing derived persisted', function () {
+    const raw = LeadOS.store.load();
+    const P = LeadOS.engine.project(raw.events);
+    const before = JSON.stringify(P);
+    const problems = [];
+    const now = Date.now();
+    const R1 = LeadOS.correlate.correlate(P, now);
+    const R2 = LeadOS.correlate.correlate(P, now);
+    if (!Array.isArray(R1.clusters) || !Array.isArray(R1.insights) || !R1.heatmap || !Array.isArray(R1.heatmap.byDomain) || !Array.isArray(R1.heatmap.excluded)) problems.push('correlate output shape broken');
+    R1.clusters.forEach(function (c) {
+      if (!c.id || !Array.isArray(c.findings) || c.findings.length < 2 || typeof c.pattern !== 'string' || typeof c.confWhy !== 'string') problems.push('cluster violates the contract shape');
+      if (['high', 'medium', 'low'].indexOf(c.confidence) === -1) problems.push('cluster confidence out of enum: ' + c.confidence);
+    });
+    R1.insights.forEach(function (i) {
+      if (!i.id || typeof i.title !== 'string' || !Array.isArray(i.basis) || !i.basis.length) problems.push('insight missing id/title/basis');
+    });
+    const persisted = Object.keys(raw).concat(Object.keys(raw.meta));
+    ['clusters', 'insights', 'heatmap'].forEach(function (k) { if (persisted.indexOf(k) !== -1) problems.push(k + ' leaked into storage'); });
+    if (JSON.stringify(R1) !== JSON.stringify(R2)) problems.push('correlate nondeterministic across runs');
+    if (JSON.stringify(P) !== before) problems.push('correlate mutated the projection');
+    if (!Array.isArray(LeadOS.correlate.benchmarkCompare(P))) problems.push('benchmarkCompare did not return an array');
+    return { pass: problems.length === 0, detail: problems.length ? problems.slice(0, 3).join(' | ') : R1.clusters.length + ' clusters · ' + R1.insights.filter(function (i) { return !i.acknowledged; }).length + ' active insights over ' + raw.events.length + ' live events · deterministic · nothing persisted' };
+  }]);
   GOLDENS.forEach(function (row) { G.push(row); });
 
   const CLAIMS = [
@@ -1530,7 +1831,7 @@
     { id: 'C14', text: 'Every finding honors the fin() contract (sev 1–5, conf, play xor playNone).', by: ['T12b', 'G9'] },
     { id: 'C15', text: 'Trend/severity discipline: >=3 measured points, spec ceilings, skip-not-infer.', by: ['T21', 'T22', 'T23'] },
     { id: 'C16', text: 'Signals are derived per read and never persisted.', by: ['G4', 'G7', 'G9', 'T13'] },
-    { id: 'C17', text: 'All 40 named projections exist; open sets exclude closed entities; append-order wins.', by: ['T25', 'G10'] },
+    { id: 'C17', text: 'All 56 named projections exist (50 pt-4 + 6 pt-5 intelligence buckets); open sets exclude closed entities; append-order wins.', by: ['T25', 'G10', 'T37'] },
     { id: 'C18', text: 'Stale state impossible: projections alias the folded entities and never persist.', by: ['G10', 'G4', 'G7'] },
     { id: 'C19', text: 'All 14 interactive playbooks exist; submit() emits only registry-valid events.', by: ['T26', 'G3'] },
     { id: 'C20', text: 'No playbook fakes certainty: recommendations are labeled with a source, gaps are declared.', by: ['T26', 'G11'] },
@@ -1544,7 +1845,12 @@
     { id: 'C28', text: 'Sev 3 is the ceiling for trend-derived findings; safety (R28) and legal fail (R30) are the only exceptions.', by: ['T29', 'G13', 'G19', 'G28'] },
     { id: 'C29', text: 'Import gate rewires ids recursively and skips dangling refs into _skipped.dangling* counters.', by: ['T30', 'G3', 'G8'] },
     { id: 'C30', text: 'README names exactly the 10 files shipped; index.html loads exactly those assets, all local.', by: ['T31', 'G1'] },
-    { id: 'C31', text: 'Fixtures are pinned to FIXED = 2026-02-16T12:00:00.000Z; rules live in engine.js, no 11th file is loaded.', by: ['T31', 'T13', 'G30'] }
+    { id: 'C31', text: 'Fixtures are pinned to FIXED = 2026-02-16T12:00:00.000Z; rules live in engine.js, no 11th file is loaded.', by: ['T31', 'T13', 'G30'] },
+    { id: 'C32', text: 'Three v5 settings backfilled by migration 4>5 with repair accounting; leader values never overwritten.', by: ['T32', 'G5', 'G6'] },
+    { id: 'C33', text: 'The correlation engine groups findings into stable, printed clusters: shared-anchor edges and windowed domain edges.', by: ['T33', 'G31'] },
+    { id: 'C34', text: 'Insights promote qualifying clusters; acknowledgment suppresses per read with the audit trail kept; nothing insight-shaped is persisted.', by: ['T34', 'G4', 'G7', 'G31'] },
+    { id: 'C35', text: 'The heatmap prices recency with the printed v5 decay formula; undated evidence is excluded, never re-dated.', by: ['T35', 'G31'] },
+    { id: 'C36', text: 'Benchmarks compare internal series only when one exists; trend claims are gated by trendMinPeriods with the gate printed.', by: ['T36', 'G31'] }
   ];
 
   function runSuite(suite) {

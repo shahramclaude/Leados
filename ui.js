@@ -1,7 +1,9 @@
-/* LeadOS pt-4 - js/ui.js
+/* LeadOS pt-5 - js/ui.js
    Vanilla rendering. Every screen renders from engine.project(store events) -
    a fresh read, every time. Every user action is an event append.
    pt-4 part 6: rail nav + hash routes, domain views, roster dossier, data view.
+   pt-5: #/insights (clusters, insights + ack, domain heat, benchmarks), general
+   review log on #/cadences, v5 settings surface on #/data.
    View state (route, domain filter, open tab, selected person) lives in
    sessionStorage ONLY - it is never written to leados:data. */
 (function () {
@@ -88,6 +90,7 @@
   const ROUTES = [
     { id: 'today', label: 'Today', icon: 'gauge', group: 'Command' },
     { id: 'signals', label: 'Signals', icon: 'activity', group: 'Command' },
+    { id: 'insights', label: 'Insights', icon: 'layers', group: 'Command' },
     { id: 'playbooks', label: 'Playbooks', icon: 'play', group: 'Command' },
     { id: 'finance', label: 'Finance', icon: 'coins', group: 'Functions' },
     { id: 'sales', label: 'Sales', icon: 'trending', group: 'Functions' },
@@ -248,6 +251,15 @@
     h += shown.length ? '<table class="tbl"><thead><tr><th>rule</th><th>sev</th><th>conf</th><th>finding</th><th>playbook</th></tr></thead><tbody>' + findingRows(shown.slice(0, 40)) + '</tbody></table>' : '<p class="empty">No findings in this filter.</p>';
     h += '</section>';
 
+    // pt-5: cross-finding patterns at a glance (the diagnosis over the list)
+    const C = LeadOS.correlate.correlate(s, now);
+    const topIns = C.insights.filter(function (i) { return !i.acknowledged; }).slice(0, 3);
+    h += '<section class="card"><header class="card-h"><h3>' + icon('layers') + ' Patterns today</h3><a class="btn ghost" href="#/insights">open insights</a></header>';
+    h += topIns.length ? topIns.map(function (i) {
+      return '<div class="insp"><div><span class="dim">' + sevBadge(i.sev) + '</span><span>' + esc(i.title) + '</span></div></div>';
+    }).join('') : '<p class="empty">No cross-finding patterns right now — ' + all.length + ' finding(s), each standing alone.</p>';
+    h += '</section>';
+
     h += '<section class="card"><header class="card-h"><h3>' + icon('calendar') + ' Operating rhythm</h3><a class="btn ghost" href="#/cadences">open cadences</a></header><div class="cad-row">';
     LeadOS.engine.CADENCE.forEach(function (c) {
       const st = cad[c.kind];
@@ -270,6 +282,74 @@
     h += '<section class="card"><header class="card-h"><h3>' + icon('activity') + ' Findings — rules engine R1–R40</h3><span class="dim">(P, today) → findings[] · derived per read</span></header>';
     h += F.length ? '<table class="tbl"><thead><tr><th>rule</th><th>sev</th><th>conf</th><th>finding</th><th>playbook</th></tr></thead><tbody>' + findingRows(F) + '</tbody></table>' : '<p class="empty">No findings.</p>';
     return h + '</section>';
+  }
+
+  // ================================================================= INSIGHTS (pt-5)
+  function insightCard(i) {
+    return '<div class="pbfacts"><h4>' + sevBadge(i.sev) + ' ' + confBadge(String(i.conf).toUpperCase()) + ' ' + esc(i.title) + '</h4>' +
+      '<div class="basis">' + i.basis.map(esc).join('<br>') + '</div>' +
+      '<div class="frow" style="align-items:center;margin-top:8px"><span class="chip">' + esc(i.play) + '</span><span class="dim tiny-t mono">' + esc(i.id.length > 56 ? i.id.slice(0, 53) + '…' : i.id) + '</span>' +
+      '<form class="inline-form" style="border:0;padding:0;margin-left:auto" data-form="ack-insight" data-id="' + esc(i.id) + '">' +
+      '<input name="note" placeholder="acknowledgment note (optional)" maxlength="120">' +
+      '<button class="btn tiny" type="submit">' + icon('check') + ' acknowledge</button></form></div></div>';
+  }
+  function viewInsights(ctx) {
+    const P = ctx.state, now = ctx.now;
+    const R = LeadOS.correlate.correlate(P, now);
+    const B = LeadOS.correlate.benchmarkCompare(P);
+    const active = R.insights.filter(function (i) { return !i.acknowledged; });
+    const acked = R.insights.filter(function (i) { return i.acknowledged; });
+    const hot = R.heatmap.byDomain.filter(function (c) { return c.domain !== null && c.score >= R.heatmap.hotScore; });
+
+    let h = '<section class="stats">' +
+      stat('layers', R.clusters.length, 'clusters', R.totals.findings + ' findings correlated') +
+      stat('activity', R.totals.insightsActive, 'active insights', R.totals.insightsAcked + ' acknowledged') +
+      stat('alert', hot.length, 'hot domains', 'heat ≥ ' + R.heatmap.hotScore + ' (printed)') +
+      stat('calendar', ctx.set.correlationWindowDays + 'd', 'correlation window', 'v5 setting') +
+      stat('sliders', ctx.set.heatmapDecayFactor, 'decay factor', 'labeled assumption, printed') + '</section>';
+
+    h += '<section class="card"><header class="card-h"><h3>' + icon('layers') + ' Insights</h3><span class="dim">clusters promoted by a printed rule · acknowledging appends an event, never deletes</span></header>' +
+      (active.length ? active.map(insightCard).join('') : '<p class="empty">No active insights — the log currently shows isolated findings, not patterns.</p>') + '</section>';
+
+    if (acked.length) {
+      h += '<section class="card"><header class="card-h"><h3>' + icon('check') + ' Acknowledged</h3><span class="dim">suppressed from active, kept on the record</span></header>' +
+        '<table class="tbl"><thead><tr><th>insight</th><th>ack note</th><th class="num">when</th></tr></thead><tbody>' +
+        acked.map(function (i) { return '<tr><td>' + esc(i.title) + '<div class="dim tiny-t mono">' + esc(i.id.length > 64 ? i.id.slice(0, 61) + '…' : i.id) + '</div></td><td class="dim">' + esc(i.ackNote || '—') + '</td><td class="num dim">' + fmtD(i.ackAt) + '</td></tr>'; }).join('') + '</tbody></table></section>';
+    }
+
+    h += '<section class="card"><header class="card-h"><h3>' + icon('grid') + ' Clusters</h3><span class="dim">≥2 findings sharing a verified anchor, or one domain inside the window</span></header>';
+    h += R.clusters.length ? '<table class="tbl"><thead><tr><th>cluster</th><th>sev</th><th>conf</th><th>members</th></tr></thead><tbody>' + R.clusters.map(function (c) {
+      return '<tr><td><strong>' + esc(c.pattern) + '</strong><div class="basis">' + esc(c.confWhy) + (c.trail.length ? '<br>' + c.trail.map(esc).join('<br>') : '') + '</div>' +
+        '<div class="chips">' + c.domains.map(domainChip).join(' ') + (c.sharedEntity ? ' <span class="chip">anchor: ' + esc(c.sharedEntity) + '</span>' : '') + '</div></td>' +
+        '<td>' + sevBadge(c.severity) + '</td><td>' + confBadge(String(c.confidence).toUpperCase()) + '</td>' +
+        '<td class="mono dim tiny-t">' + c.findings.map(esc).join('<br>') + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">No clusters — every finding currently stands alone.</p>';
+    h += '</section>';
+
+    const maxScore = Math.max.apply(null, R.heatmap.byDomain.map(function (c) { return c.score; }).concat([R.heatmap.hotScore, 1]));
+    h += '<section class="card"><header class="card-h"><h3>' + icon('activity') + ' Domain heat</h3><span class="dim">' + esc(R.heatmap.formula) + '</span></header>';
+    h += '<table class="tbl"><thead><tr><th>domain</th><th class="num">heat</th><th>load</th><th>top contributions</th></tr></thead><tbody>' +
+      R.heatmap.byDomain.filter(function (c) { return c.score > 0 || c.contrib.length; }).map(function (c) {
+        return '<tr><td>' + (c.domain ? domainChip(c.domain) : '<span class="dim tiny-t">system</span>') + '</td>' +
+          '<td class="num">' + (c.score >= R.heatmap.hotScore && c.domain ? '<span class="late"><strong>' + c.score + '</strong></span>' : String(c.score)) + '</td>' +
+          '<td>' + bar(c.score / maxScore * 100) + '</td>' +
+          '<td class="dim mono tiny-t">' + c.contrib.slice(0, 3).map(function (x) { return esc(x.math) + ' · ' + esc(x.key); }).join('<br>') + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      (R.heatmap.excluded.length ? '<p class="dim pad tiny-t">excluded, not re-dated: ' + R.heatmap.excluded.map(function (x) { return esc(x.key) + ' (' + esc(x.why) + ')'; }).join(' · ') + '</p>' : '');
+    h += '</section>';
+
+    h += '<section class="card"><header class="card-h"><h3>' + icon('scale') + ' Benchmarks vs internal</h3><span class="dim">compare only where the log measures the metric · trend gate: trendMinPeriods ' + ctx.set.trendMinPeriods + '</span></header>';
+    h += B.length ? '<table class="tbl"><thead><tr><th>metric</th><th class="num">internal latest</th><th class="num">benchmark</th><th class="num">delta</th><th>trend</th></tr></thead><tbody>' + B.map(function (r) {
+      if (!r.comparable) return '<tr><td class="mono">' + esc(r.metric) + '</td><td class="dim" colspan="4">' + esc(r.status) + ' · benchmark ' + esc(String(r.benchmark.value)) + ' ' + esc(r.benchmark.unit) + ' (' + esc(r.benchmark.source) + ', ' + esc(r.benchmark.type) + ')</td></tr>';
+      return '<tr><td class="mono">' + esc(r.metric) + '<div class="dim tiny-t">' + r.seriesLength + ' pts</div></td>' +
+        '<td class="num">' + esc(String(r.internalLatest.value)) + ' ' + esc(r.internalLatest.unit) + '</td>' +
+        '<td class="num dim">' + esc(String(r.benchmark.value)) + ' ' + esc(r.benchmark.unit) + '<div class="dim tiny-t">' + esc(r.benchmark.source) + ' · ' + esc(r.benchmark.type) + '</div></td>' +
+        '<td class="num ' + (r.delta < 0 ? 'late' : '') + '">' + (r.delta > 0 ? '+' : '') + r.delta + (r.deltaPct === null ? '' : ' (' + (r.deltaPct > 0 ? '+' : '') + Math.round(r.deltaPct * 100) + '%)') + '</td>' +
+        '<td class="dim tiny-t">' + esc(r.trend.why) + '</td></tr>';
+    }).join('') + '</tbody></table>' : '<p class="empty">No benchmarks logged. Log one below to compare the log\'s own metrics against it.</p>';
+    h += '</section>';
+
+    return h + captureBlock('Quick capture — intelligence', ['insight.acknowledged', 'benchmark.set', 'signal.tagged']);
   }
 
   // ================================================================= FINANCE
@@ -581,7 +661,14 @@
       h += history.length ? '<table class="tbl slim"><tbody>' + history.slice(0, 4).map(function (r) { return '<tr><td class="num">' + fmtD(r.completedAt) + '</td><td>' + esc(r.outcome) + '</td><td class="dim">' + esc(r.notes || '') + '</td></tr>'; }).join('') + '</tbody></table>' : '<p class="empty">No completed reviews yet.</p>';
       h += '</article>';
     });
-    return h + '</section>';
+    h += '</section>';
+    // pt-5: the general leadership review log (cadence.review) — any review kind
+    const rl = ctx.state.reviewLog.slice().reverse();
+    h += '<section class="card"><header class="card-h"><h3>' + icon('calendar') + ' General review log</h3><span class="dim">cadence.review · one-on-ones, skip-levels, retros — named per entry</span></header>';
+    h += rl.length ? '<table class="tbl"><thead><tr><th>type</th><th>period</th><th>note</th><th class="num">logged</th></tr></thead><tbody>' +
+      rl.slice(0, 40).map(function (r) { return '<tr><td>' + esc(r.type) + '</td><td class="mono">' + esc(r.period) + '</td><td class="dim">' + esc(r.note) + '</td><td class="num dim">' + fmtD(r.at) + '</td></tr>'; }).join('') + '</tbody></table>' : '<p class="empty">No general reviews logged yet.</p>';
+    h += '</section>' + captureBlock('Quick capture — reviews', ['cadence.review']);
+    return h;
   }
   function domainOptions() { return LeadOS.events.DOMAINS.map(function (d) { return '<option value="' + d.id + '">' + esc(d.label) + '</option>'; }).join(''); }
   function viewDecisions(ctx) {
@@ -684,6 +771,10 @@
     const p = ev.payload || {};
     if (ev.type === 'settings.changed') return p.key + ' = ' + p.value;
     if (ev.type === 'store.initialized') return 'schema v' + p.schemaVersion + ' · ' + (p.lineageTag || '');
+    if (ev.type === 'insight.acknowledged') return 'ack: ' + String(p.insightId).slice(0, 48) + (p.note ? ' — ' + p.note : '');
+    if (ev.type === 'benchmark.set') return p.metric + ' = ' + p.value + ' ' + p.unit + ' (' + p.type + ', ' + p.source + ')';
+    if (ev.type === 'cadence.review') return p.type + ' · ' + p.period;
+    if (ev.type === 'signal.tagged') return 'tag "' + p.tag + '" → ' + p.eventId;
     return p.title || p.name || p.objective || p.hypothesis || p.question || p.metric || p.counterparty ||
       p.accountName || p.candidateName || p.role || p.framework || p.key || p.outcome || p.result ||
       (p.description ? String(p.description).slice(0, 60) : '') || p.id || '';
@@ -694,8 +785,8 @@
     const filtered = raw.events.filter(function (ev) { return !expDomain || (LeadOS.engine.eventDomain(ev, P) || 'system') === expDomain; });
 
     let h = '<section class="card"><header class="card-h"><h3>' + icon('sliders') + ' Settings</h3><span class="dim">derived per read · writes are events</span></header>' +
-      '<p class="dim pad">Settings are never stored directly. Editing appends a <code>settings.changed</code> event; the current value is re-derived from the log on every read. The five v4 keys were backfilled by migration 3&gt;4 as repair events where no leader value existed.</p>' +
-      '<table class="tbl"><thead><tr><th>key</th><th class="num">default</th><th class="num">current</th><th>source</th><th>set new value (days)</th></tr></thead><tbody>';
+      '<p class="dim pad">Settings are never stored directly. Editing appends a <code>settings.changed</code> event; the current value is re-derived from the log on every read. The five v4 keys were backfilled by migration 3&gt;4 as repair events where no leader value existed, and the three v5 keys by 4&gt;5 the same way.</p>' +
+      '<table class="tbl"><thead><tr><th>key</th><th class="num">default</th><th class="num">current</th><th>source</th><th>set new value</th></tr></thead><tbody>';
     Object.keys(LeadOS.store.ALL_SETTING_DEFAULTS).forEach(function (k) {
       let source = '<span class="dim">default · never set</span>';
       for (let i = raw.events.length - 1; i >= 0; i--) {
@@ -705,10 +796,10 @@
           break;
         }
       }
-      const isV4 = LeadOS.store.V4_NEW_KEYS.indexOf(k) !== -1;
-      h += '<tr class="' + (isV4 ? 'row-v4' : '') + '"><td class="mono">' + esc(k) + (isV4 ? ' <span class="pill pill-v4">v4</span>' : '') + '</td>' +
+      const isV4 = LeadOS.store.V4_NEW_KEYS.indexOf(k) !== -1, isV5 = LeadOS.store.V5_NEW_KEYS.indexOf(k) !== -1;
+      h += '<tr class="' + (isV4 || isV5 ? 'row-v4' : '') + '"><td class="mono">' + esc(k) + (isV4 ? ' <span class="pill pill-v4">v4</span>' : '') + (isV5 ? ' <span class="pill pill-v4">v5</span>' : '') + '</td>' +
         '<td class="num dim">' + LeadOS.store.ALL_SETTING_DEFAULTS[k] + '</td><td class="num"><strong>' + set[k] + '</strong></td><td>' + source + '</td>' +
-        '<td><form class="inline-form" data-form="set-setting" data-key="' + esc(k) + '"><input type="number" name="value" min="1" max="3650" value="' + set[k] + '" required><button class="btn tiny" type="submit">append</button></form></td></tr>';
+        '<td><form class="inline-form" data-form="set-setting" data-key="' + esc(k) + '"><input type="number" name="value" min="0.0001" max="3650" step="any" value="' + set[k] + '" required><button class="btn tiny" type="submit">append</button></form></td></tr>';
     });
     h += '</tbody></table></section>';
 
@@ -769,7 +860,7 @@
   function viewHealth() {
     const R = LAST_HEALTH;
     const pass = R.t.concat(R.g).filter(function (r) { return r.pass; }).length;
-    let h = '<section class="verify-notice"><strong>Runtime grader</strong><span>Authoring sessions 1–12 had no JavaScript runtime; part 13 executed the full battery headlessly under Node + jsdom (T 32/32 · G 30/30 · claims 31/31 — recorded in AI-SESSION-LOG §52). The results below are the authoritative execution in THIS browser, and supersede every recorded result.</span></section>' +
+    let h = '<section class="verify-notice"><strong>Runtime grader</strong><span>Authoring sessions 1–12 had no JavaScript runtime; part 13 executed the battery headlessly under Node + jsdom, part 14 executed it twice (source + dist), and pt-5/part 15 executed the intelligence-layer battery the same way (T 38/38 · G 31/31 · claims 36/36 — AI-SESSION-LOG §66). The results below are the authoritative execution in THIS browser, and supersede every recorded result.</span></section>' +
       '<section class="card"><header class="card-h"><h3>' + icon('shield') + ' Authority wall</h3><div><span class="pill ' + (R.ok ? 'pill-ok' : 'pill-overdue') + '">' + pass + '/' + (R.t.length + R.g.length) + ' checks pass</span> <button class="btn tiny" data-action="run-health">' + icon('refresh') + ' re-run</button></div></header>' +
       '<p class="dim pad">T-suite proves behavior on pinned fixtures. G-suite inspects the live store at <code>leados:data</code>. The boot sequence runs G before rendering anything; a failed G check halts the app behind the wall.</p>' +
       '<div class="two-col">' + suiteTable('T-suite · fixtures (' + R.t.length + ')', R.t) +
@@ -782,7 +873,7 @@
   }
 
   const VIEWS = {
-    today: viewToday, signals: viewSignals, playbooks: viewPlaybooks, finance: viewFinance,
+    today: viewToday, signals: viewSignals, insights: viewInsights, playbooks: viewPlaybooks, finance: viewFinance,
     sales: viewSales, ops: viewOps, strategy: viewStrategy, domains: viewDomains, roster: viewRoster,
     cadences: viewCadences, decisions: viewDecisions, risks: viewRisks, data: viewData, health: viewHealth
   };
@@ -866,6 +957,10 @@
     },
     'complete-review': function (f) { LeadOS.store.append('review.completed', { id: f.dataset.id, outcome: f.outcome.value, notes: f.notes.value.trim() || undefined }); render(); },
     'set-setting': function (f) { LeadOS.store.append('settings.changed', { key: f.dataset.key, value: Number(f.value.value) }); render(); },
+    'ack-insight': function (f) {
+      LeadOS.store.append('insight.acknowledged', { insightId: f.dataset.id, note: f.note.value.trim() || undefined });
+      render();
+    },
     'export-filter': function (f) { setUi({ exportDomain: f.domain.value }); render(); },
     'import': function (f) {
       const dry = !f.lastSubmitMode || f.lastSubmitMode === 'dry';

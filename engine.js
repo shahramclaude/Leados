@@ -120,7 +120,12 @@
     'exec.kpi.reviewed':      function (s, p, at) { push(s.execKpiReviews, p, at); },
     'exec.investor.update':   function (s, p, at) { push(s.investorUpdates, p, at); },
     'exec.crisis.logged':     function (s, p, at) { s.crises[p.id] = { id: p.id, title: p.title, severity: p.severity, type: p.type, ownerId: p.ownerId || null, responseTeam: p.responseTeam.slice(), activatedAt: p.activatedAt, resolved: false, postmortem: '', loggedAt: at, resolvedAt: null }; },
-    'exec.crisis.resolved':   function (s, p, at) { const c = s.crises[p.crisisId]; if (c) { c.resolved = true; c.postmortem = p.postmortem || ''; c.resolvedAt = p.resolvedAt; } }
+    'exec.crisis.resolved':  function (s, p, at) { const c = s.crises[p.crisisId]; if (c) { c.resolved = true; c.postmortem = p.postmortem || ''; c.resolvedAt = p.resolvedAt; } },
+    // INTELLIGENCE LAYER (pt-5)
+    'insight.acknowledged': function (s, p, at) { s.insightAcks[p.insightId] = { at: at, note: p.note || '' }; },
+    'benchmark.set':        function (s, p, at) { const rec = Object.assign({ at: at }, p); s.benchmarks.push(rec); group(s.benchmarkByMetric, p.metric, rec); },
+    'cadence.review':       function (s, p, at) { push(s.reviewLog, p, at); },
+    'signal.tagged':        function (s, p, at) { const rec = Object.assign({ at: at }, p); push(s.signalTags, p, at); group(s.tagsByEvent, p.eventId, rec); }
   };
 
   function blankBuckets(s) {
@@ -138,6 +143,8 @@
     s.npsLogs = []; s.churnLogs = []; s.escalations = {}; s.csHealthLogs = [];
     s.boardMeetings = []; s.execKpiReviews = []; s.investorUpdates = []; s.crises = {};
     s.notes = {}; s.noteLog = []; s.notesByRef = {};
+    // pt-5 intelligence buckets
+    s.insightAcks = {}; s.benchmarks = []; s.benchmarkByMetric = {}; s.reviewLog = []; s.signalTags = []; s.tagsByEvent = {};
     // index projections built during the fold (append-order preserved)
     s.kpiByMetric = {}; s.slaByMetric = {}; s.complianceByFramework = {}; s.legalRiskById = {};
   }
@@ -273,7 +280,9 @@
   // Full list of named projections pt-4 part 4 guarantees (inspected by T18/G10).
   const NAMED_PROJECTIONS = Object.keys(ALIASES)
     .concat(Object.keys(OPEN_SETS))
-    .concat(['dealsByPerson', 'quotaByPerson', 'kpiByMetric', 'slaByMetric', 'complianceByFramework', 'legalRiskById', 'safetyIncidents', 'boardMeetings', 'execKpiReviews', 'rosterById', 'noteLog', 'notesByRef']);
+    .concat(['dealsByPerson', 'quotaByPerson', 'kpiByMetric', 'slaByMetric', 'complianceByFramework', 'legalRiskById', 'safetyIncidents', 'boardMeetings', 'execKpiReviews', 'rosterById', 'noteLog', 'notesByRef'])
+    // pt-5: six more named projections (56 total), inspected by the same T25/G10 arms.
+    .concat(['insightAcks', 'benchmarks', 'benchmarkByMetric', 'reviewLog', 'signalTags', 'tagsByEvent']);
 
   /* Event -> domain resolution. Namespaced types map by prefix; core types
      carry an explicit `domain`; the remainder resolve through their parent
@@ -911,4 +920,329 @@
   }
 
   LeadOS.rules = { RULES: RULES, run: run, fin: fin, MIN_TREND_POINTS: MIN_TREND_POINTS, TREND_SEV_CEILING: TREND_SEV_CEILING, PLAY_IDS: Object.keys(PB).map(function (k) { return PB[k]; }) };
+})();
+
+/* ============================================================================
+   CORRELATION ENGINE  (pt-5; third IIFE — the brief asked for a new module
+   `js/correlate.js` while mandating the same 10-file structure. The part-11
+   precedent resolves the contradiction the same way: dependency-ordered merge
+   into js/engine.js after the rules it consumes. LeadOS.correlate is the
+   public namespace; js/correlate.js joins UNLOADED and T31 fails if a script
+   tag ever references it. Logged in AI-SESSION-LOG pt-15 §62/§66.)
+
+   correlate(P, today) -> { clusters, insights, heatmap }  — pure, injected
+   clock, nothing persisted. Findings come from rules.run(P, today) per read.
+
+   DOCTRINES (same as the rules layer, printed everywhere):
+   1. A finding never lies about its evidence: ages come from resolvable entity
+      timestamps; undated evidence is stated, never re-dated.
+   2. The math is printed: every cluster, insight and heat contribution shows
+      its arithmetic and the setting it used.
+   3. Missing fields skip: findings without dated evidence are EXCLUDED from
+      the heat sum (listed in heatmap.excluded), never given an age.
+   4. heatmapDecayFactor is a labeled assumption from settings, printed in
+      every formula string.
+   ============================================================================ */
+(function () {
+  'use strict';
+  const LeadOS = (window.LeadOS = window.LeadOS || {});
+  const DAY = 86400000;
+  /* Labeled threshold, printed wherever used: a domain is "hot" when its heat
+     score reaches the equivalent of three sev-3 signals at full weight. */
+  const HOT_SCORE = 9;
+
+  /* Where evidence timestamps live, per projection bucket. A finding's age is
+     the NEWEST timestamp resolvable from its refs (its evidence is that fresh),
+     else null = undated (stated, never re-dated). */
+  const TIME_FIELDS = {
+    objectives: ['createdAt'], krs: [], tasks: ['createdAt', 'completedAt'], decisions: ['createdAt', 'decidedAt'],
+    risks: ['updatedAt', 'createdAt'], reviews: ['createdAt', 'completedAt'],
+    finBudgets: ['setAt'], finRisks: ['updatedAt', 'loggedAt'], deals: ['updatedAt', 'loggedAt'], quotas: ['setAt'],
+    roadmap: ['statusAt', 'createdAt'], okrs: ['closedAt', 'setAt'], incidents: ['startedAt', 'loggedAt'],
+    milestones: ['statusAt', 'setAt'], pips: ['startedAt'], campaigns: ['loggedAt'], vendors: ['loggedAt'],
+    experiments: ['loggedAt'], techDebt: ['loggedAt'], contracts: ['statusAt', 'loggedAt'],
+    escalations: ['loggedAt'], crises: ['loggedAt'], equipment: ['at'], notes: ['at']
+  };
+
+  const rd3 = function (x) { return Math.round(x * 1000) / 1000; };
+  const vals = function (o) { return Object.keys(o).map(function (k) { return o[k]; }); };
+
+  function domainOf(f) { return f.play ? String(f.play).replace('playbook:', '') : null; }
+
+  /* Latest activity timestamp for a person id, from the roster's own sources. */
+  function personAt(P, pid) {
+    const r = P.rosterById && P.rosterById[pid];
+    if (!r) return null;
+    let t = null;
+    const touch = function (x) { if (typeof x === 'number' && (t === null || x > t)) t = x; };
+    (r.quotas || []).forEach(function (q) { touch(q.setAt); });
+    (r.deals || []).forEach(function (d) { touch(d.updatedAt); touch(d.loggedAt); });
+    (r.performance || []).forEach(function (x) { touch(x.at); });
+    (r.pips || []).forEach(function (x) { touch(x.startedAt); });
+    (r.compensation || []).forEach(function (x) { touch(x.at); });
+    if (r.attrition) touch(r.attrition.at);
+    return t;
+  }
+
+  /* Resolve one ref id across entity buckets: { at, trail[], persons[] }. */
+  function resolveRef(P, ref) {
+    const out = { at: null, trail: [], persons: [] };
+    Object.keys(TIME_FIELDS).forEach(function (bucket) {
+      const ent = P[bucket] && P[bucket][ref];
+      if (!ent) return;
+      TIME_FIELDS[bucket].forEach(function (f) {
+        if (typeof ent[f] === 'number' && (out.at === null || ent[f] > out.at)) out.at = ent[f];
+      });
+      if (bucket === 'krs' && ent.logs && ent.logs.length) {
+        const t = ent.logs[ent.logs.length - 1].at;
+        if (t > out.at || out.at === null) out.at = t;
+      }
+      if (bucket === 'quotas' && ent.personId) { out.persons.push(ent.personId); out.trail.push('ref ' + ref + ' → quota.personId ' + ent.personId); }
+      if (bucket === 'deals' && ent.ownerId) { out.persons.push(ent.ownerId); out.trail.push('ref ' + ref + ' → deal.ownerId ' + ent.ownerId); }
+      if (bucket === 'pips' && ent.personId) { out.persons.push(ent.personId); out.trail.push('ref ' + ref + ' → pip.personId ' + ent.personId); }
+      if (bucket === 'equipment') out.trail.push('ref ' + ref + ' → asset ' + ref);
+    });
+    if (P.rosterById && P.rosterById[ref]) { out.persons.push(ref); out.trail.push('ref ' + ref + ' is a roster person'); }
+    return out;
+  }
+
+  /* Typed anchors for one finding: entity: / person: / metric: / line: — typed
+     so coincidental id strings in different families cannot collide silently.
+     Metric anchors are claimed only when the scope string is an ACTUAL folded
+     metric (kpiByMetric / slaByMetric) — printed, never inferred. */
+  function anchorsFor(f, P) {
+    const anchors = {}, trail = [], persons = [];
+    (f.refs || []).forEach(function (ref) {
+      const r = resolveRef(P, ref);
+      const inAnyBucket = Object.keys(TIME_FIELDS).some(function (b) { return P[b] && P[b][ref]; });
+      if (inAnyBucket) { anchors['entity:' + ref] = true; }
+      else if (!r.persons.length) { trail.push('ref ' + ref + ' resolves to no entity — recorded, not guessed'); }
+      r.persons.forEach(function (pid) { anchors['person:' + pid] = true; persons.push(pid); });
+      trail.push.apply(trail, r.trail);
+    });
+    if (f.rule === 'R23' && P.kpiByMetric && P.kpiByMetric[f.scope]) { anchors['metric:' + f.scope] = true; trail.push('scope ' + f.scope + ' is a folded fin KPI metric'); }
+    if (f.rule === 'R17') {
+      const m = String(f.scope).split(':')[0];
+      if (P.slaByMetric && P.slaByMetric[m]) { anchors['metric:' + m] = true; trail.push('scope ' + f.scope + ' → folded SLA metric ' + m); }
+    }
+    if (f.rule === 'R27') { anchors['line:' + f.scope] = true; trail.push('scope ' + f.scope + ' → production line'); }
+    return { anchors: anchors, trail: trail, persons: persons };
+  }
+
+  function evidenceAt(f, P) {
+    let t = null;
+    (f.refs || []).forEach(function (ref) {
+      const r = resolveRef(P, ref);
+      if (r.at !== null && (t === null || r.at > t)) t = r.at;
+      r.persons.forEach(function (pid) { const pt = personAt(P, pid); if (pt !== null && (t === null || pt > t)) t = pt; });
+    });
+    if (t === null) (f.refs || []).forEach(function (ref) { const pt = personAt(P, ref); if (pt !== null && (t === null || pt > t)) t = pt; });
+    return t;
+  }
+
+  function slope(ys) {
+    const n = ys.length; if (n < 2) return 0;
+    let sx = 0, sy = 0, sxy = 0, sxx = 0;
+    for (let i = 0; i < n; i++) { sx += i; sy += ys[i]; sxy += i * ys[i]; sxx += i * i; }
+    const den = n * sxx - sx * sx;
+    return den === 0 ? 0 : (n * sxy - sx * sy) / den;
+  }
+
+  function correlate(P, today) {
+    const set = LeadOS.engine.settings(P);
+    const win = set.correlationWindowDays, decay = set.heatmapDecayFactor;
+    const findings = LeadOS.rules.run(P, today);
+
+    /* ---- per-finding evidence record ---- */
+    const recs = findings.map(function (f) {
+      const a = anchorsFor(f, P);
+      const t = evidenceAt(f, P);
+      return {
+        key: f.key, rule: f.rule, sev: f.sev, conf: f.conf, title: f.title,
+        domain: domainOf(f), anchors: a.anchors, trail: a.trail, persons: a.persons,
+        at: t, ageDays: t === null ? null : rd3((today - t) / DAY)
+      };
+    });
+    recs.forEach(function (r) { r.fresh = r.ageDays === null ? true : r.ageDays <= win; });
+
+    /* ---- union-find over edges: shared typed anchor, or same domain with
+            both evidence ages inside the correlation window ---- */
+    const parent = recs.map(function (_, i) { return i; });
+    function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+    function union(i, j) { const a = find(i), b = find(j); if (a < b) parent[b] = a; else if (b < a) parent[a] = b; }
+    for (let i = 0; i < recs.length; i++) for (let j = i + 1; j < recs.length; j++) {
+      const A = recs[i], B = recs[j];
+      const shared = Object.keys(A.anchors).filter(function (k) { return B.anchors[k]; });
+      if (shared.length) { union(i, j); continue; }
+      if (A.domain && A.domain === B.domain && A.fresh && B.fresh) union(i, j);
+    }
+    const groups = {};
+    recs.forEach(function (r, i) { (groups[find(i)] = groups[find(i)] || []).push(r); });
+
+    const clusters = vals(groups).filter(function (g) { return g.length >= 2; }).map(function (g) {
+      g.sort(function (a, b) { return a.key < b.key ? -1 : 1; });
+      const keys = g.map(function (r) { return r.key; });
+      const doms = g.map(function (r) { return r.domain || 'system'; });
+      const uniqD = doms.filter(function (d, i) { return doms.indexOf(d) === i; }).sort();
+      const sev = Math.max.apply(null, g.map(function (r) { return r.sev; }));
+      /* shared anchors present in >= 2 members, most-shared first, key asc */
+      const counts = {};
+      g.forEach(function (r) { Object.keys(r.anchors).forEach(function (k) { counts[k] = (counts[k] || 0) + 1; }); });
+      const shared = Object.keys(counts).filter(function (k) { return counts[k] >= 2; })
+        .sort(function (a, b) { return (counts[b] - counts[a]) || (a < b ? -1 : 1); });
+      const anchor = shared.length ? shared[0] : null;
+      const ages = g.map(function (r) { return r.ageDays === null ? 'undated' : r.ageDays + 'd'; });
+      const rulesN = g.map(function (r) { return r.rule; }).filter(function (x, i, a2) { return a2.indexOf(x) === i; }).length;
+      const pattern = anchor
+        ? g.length + ' signals anchored on ' + anchor + ' — a single verified thread, not ' + g.length + ' separate problems'
+        : (uniqD.length === 1
+          ? uniqD[0] + ': ' + g.length + ' co-occurring signals (' + rulesN + ' rules) — systemic, not isolated'
+          : 'cross-domain pattern: ' + g.length + ' signals across ' + uniqD.join(' + ') + ' (' + rulesN + ' rules)');
+      const conf = anchor ? 'high' : (g.length >= 3 ? 'medium' : 'low');
+      const confWhy = anchor
+        ? 'anchor ' + anchor + ' verified in ' + counts[anchor] + ' of ' + g.length + ' findings via projections → high'
+        : (g.length >= 3
+          ? g.length + ' findings in domain scope within window ' + win + 'd (ages ' + ages.join(', ') + ') → medium; 2-point domain-only pairs stay low'
+          : '2 findings, domain co-occurrence only (ages ' + ages.join(', ') + ' vs window ' + win + 'd) → low; no shared entity verified');
+      const trail = [];
+      g.forEach(function (r) { r.trail.slice(0, 2).forEach(function (t) { if (trail.indexOf(t) === -1) trail.push(t); }); });
+      return {
+        id: keys.join('+'),
+        findings: keys,
+        domains: uniqD,
+        sharedEntity: anchor,
+        severity: sev,
+        pattern: pattern,
+        confidence: conf,
+        confWhy: confWhy,
+        trail: trail.slice(0, 4),
+        members: g.map(function (r) { return { key: r.key, rule: r.rule, sev: r.sev, title: r.title, domain: r.domain, ageDays: r.ageDays }; })
+      };
+    }).sort(function (a, b) { return (b.severity - a.severity) || (a.id < b.id ? -1 : 1); });
+
+    /* ---- heatmap: weight = sev x decay^ageDays; windowed; undated excluded ---- */
+    const formula = 'weight = sev × heatmapDecayFactor^ageDays · factor ' + decay + ' (v5 setting · labeled assumption, printed) · window ' + win + 'd';
+    const byDom = {}, excluded = [];
+    LeadOS.events.DOMAINS.forEach(function (d) { byDom[d.id] = { domain: d.id, label: d.label, score: 0, contrib: [] }; });
+    byDom.system = { domain: null, label: 'system', score: 0, contrib: [] };
+    recs.forEach(function (r) {
+      const cell = byDom[r.domain || 'system'];
+      if (r.ageDays === null) { excluded.push({ key: r.key, why: 'no resolvable evidence timestamp — decay not computable; excluded, not dated by fiat' }); return; }
+      if (r.ageDays > win) { excluded.push({ key: r.key, why: 'evidence ' + r.ageDays + 'd old > window ' + win + 'd — decays out of the picture' }); return; }
+      const w = r.sev * Math.pow(decay, r.ageDays);
+      cell.contrib.push({ key: r.key, sev: r.sev, ageDays: r.ageDays, weight: rd3(w), math: 'sev ' + r.sev + ' × ' + decay + '^' + r.ageDays + ' = ' + rd3(w) });
+    });
+    const byDomain = vals(byDom).map(function (c) {
+      c.contrib.sort(function (a, b) { return b.weight - a.weight || (a.key < b.key ? -1 : 1); });
+      c.score = rd3(c.contrib.reduce(function (a, x) { return a + x.weight; }, 0));
+      return c;
+    }).sort(function (a, b) { return b.score - a.score || (a.label < b.label ? -1 : 1); });
+    const heatmap = { byDomain: byDomain, excluded: excluded, formula: formula, window: win, decay: decay, hotScore: HOT_SCORE };
+
+    /* ---- insights: promoted clusters, cross-domain persons, hot domains ---- */
+    const acks = P.insightAcks || {};
+    const insights = [];
+    clusters.forEach(function (c) {
+      if (!(c.severity >= 4 || c.findings.length >= 3 || c.domains.length > 1)) return;
+      insights.push({
+        id: 'insight:' + c.id, kind: 'cluster', title: c.pattern,
+        basis: [c.confWhy, 'members: ' + c.findings.join(', '), 'promotion rule: sev ≥ 4, or ≥ 3 findings, or > 1 domain (this cluster: sev ' + c.severity + ', ' + c.findings.length + ' findings, ' + c.domains.length + ' domain(s))'],
+        clusterIds: [c.id], sev: c.severity, conf: c.confidence, play: 'playbook:' + c.domains[0], suppressible: true
+      });
+    });
+    /* person anchored in >= 2 findings across >= 2 domains */
+    const byPerson = {};
+    recs.forEach(function (r) { Object.keys(r.anchors).forEach(function (k) { if (k.indexOf('person:') === 0) (byPerson[k] = byPerson[k] || []).push(r); }); });
+    Object.keys(byPerson).sort().forEach(function (k) {
+      const rs = byPerson[k];
+      const doms = rs.map(function (r) { return r.domain || 'system'; }).filter(function (d, i, a) { return a.indexOf(d) === i; });
+      if (rs.length < 2 || doms.length < 2) return;
+      const keys = rs.map(function (r) { return r.key; }).sort();
+      insights.push({
+        id: 'insight:' + k + ':' + keys.join('+'), kind: 'person',
+        title: k + ' sits at the center of ' + rs.length + ' findings across ' + doms.length + ' domains (' + doms.join(' + ') + ')',
+        basis: ['resolved through projections (quotaById.personId / dealById.ownerId / pipById.personId / roster), every resolution printed in the cluster trail', 'members: ' + keys.join(', ')],
+        clusterIds: [], sev: Math.max.apply(null, rs.map(function (r) { return r.sev; })), conf: 'medium', play: 'playbook:people', suppressible: true
+      });
+    });
+    byDomain.forEach(function (c) {
+      if (c.domain === null || c.score < HOT_SCORE) return;
+      insights.push({
+        id: 'insight:heat:' + c.domain, kind: 'heatmap',
+        title: c.label + ' heat ' + c.score + ' ≥ ' + HOT_SCORE + ' — sustained, decay-weighted signal load, not a single spike',
+        basis: [formula, 'top contributions: ' + c.contrib.slice(0, 3).map(function (x) { return x.math; }).join(' · ')],
+        clusterIds: [], sev: c.score >= HOT_SCORE * 2 ? 4 : 3, conf: 'medium', play: 'playbook:' + c.domain, suppressible: true
+      });
+    });
+    insights.sort(function (a, b) { return (b.sev - a.sev) || (a.id < b.id ? -1 : 1); });
+    insights.forEach(function (i) {
+      const ack = acks[i.id];
+      i.acknowledged = !!ack; i.ackAt = ack ? ack.at : null; i.ackNote = ack ? ack.note : '';
+    });
+
+    return {
+      clusters: clusters,
+      insights: insights,
+      heatmap: heatmap,
+      totals: { findings: findings.length, clustered: clusters.reduce(function (a, c) { return a + c.findings.length; }, 0), insightsActive: insights.filter(function (i) { return !i.acknowledged; }).length, insightsAcked: insights.filter(function (i) { return i.acknowledged; }).length },
+      settingsUsed: { correlationWindowDays: win, trendMinPeriods: set.trendMinPeriods, heatmapDecayFactor: decay }
+    };
+  }
+
+  /* ---- trend analytics: internal series vs logged benchmarks ----
+     Internal series are assembled from the log's own metric buckets; a metric
+     the log does not measure gets NO comparison (status printed, not inferred).
+     A trend is claimed only with >= trendMinPeriods measured points (v5
+     setting); otherwise the gate prints why it is silent. */
+  const INTERNAL_SERIES = function (P) {
+    const out = {};
+    const add = function (metric, rec) { (out[metric] = out[metric] || []).push(rec); };
+    Object.keys(P.kpiByMetric || {}).forEach(function (m) { P.kpiByMetric[m].forEach(function (r) { add(m, { at: r.at, value: r.value, unit: r.unit }); }); });
+    (P.npsHistory || []).forEach(function (r) { add('nps', { at: r.at, value: r.score, unit: 'nps' }); });
+    (P.engagementHistory || []).forEach(function (r) { add('engagement-score', { at: r.at, value: r.score, unit: '/10' }); });
+    (P.yieldHistory || []).forEach(function (r) { add('yield', { at: r.at, value: r.yield_pct, unit: '%' }); });
+    Object.keys(P.slaByMetric || {}).forEach(function (m) { P.slaByMetric[m].forEach(function (r) { add(m, { at: r.at, value: r.actual, unit: 'sla' }); }); });
+    (P.productMetrics || []).forEach(function (r) { add(r.name, { at: r.at, value: r.value, unit: r.unit }); });
+    (P.uxMetrics || []).forEach(function (r) { add(r.metric, { at: r.at, value: r.value, unit: r.unit }); });
+    Object.keys(out).forEach(function (m) { out[m].sort(function (a, b) { return a.at - b.at; }); });
+    return out;
+  };
+
+  function benchmarkCompare(P) {
+    const set = LeadOS.engine.settings(P);
+    const minP = set.trendMinPeriods;
+    const internal = INTERNAL_SERIES(P);
+    return Object.keys(P.benchmarkByMetric || {}).sort().map(function (m) {
+      const logs = P.benchmarkByMetric[m];
+      const bench = logs[logs.length - 1];
+      const series = internal[m];
+      const base = {
+        metric: m, benchmark: { value: bench.value, unit: bench.unit, source: bench.source, period: bench.period, type: bench.type, at: bench.at },
+        benchmarksLogged: logs.length
+      };
+      if (!series || !series.length) {
+        return Object.assign(base, { comparable: false, status: 'no internal series for ' + m + ' — comparison not inferred' });
+      }
+      const last = series[series.length - 1];
+      const delta = last.value - bench.value;
+      const pct = bench.value !== 0 ? delta / Math.abs(bench.value) : null;
+      let trend;
+      if (series.length >= minP) {
+        const sl = slope(series.map(function (x) { return x.value; }));
+        trend = { claimed: true, slope: rd3(sl), points: series.length, why: 'slope ' + rd3(sl) + ' per point over ' + series.length + ' measured points (>= trendMinPeriods ' + minP + ')' };
+      } else {
+        trend = { claimed: false, points: series.length, why: 'only ' + series.length + ' measured point(s) < trendMinPeriods ' + minP + ' — no trend claimed' };
+      }
+      return Object.assign(base, {
+        comparable: true,
+        internalLatest: { value: last.value, unit: last.unit, at: last.at },
+        seriesLength: series.length,
+        delta: rd3(delta), deltaPct: pct === null ? null : rd3(pct),
+        math: 'internal latest ' + last.value + ' − benchmark ' + bench.value + ' = ' + rd3(delta) + (pct === null ? '' : ' (' + rd3(pct * 100) + '%)'),
+        trend: trend
+      });
+    });
+  }
+
+  LeadOS.correlate = { correlate: correlate, benchmarkCompare: benchmarkCompare, HOT_SCORE: HOT_SCORE, INTERNAL_SERIES: INTERNAL_SERIES };
 })();

@@ -1,16 +1,16 @@
-/* LeadOS pt-4 - js/store.js
+/* LeadOS pt-5 - js/store.js
    Persistence wall. Exactly one localStorage key: 'leados:data'.
    Append-only event store - nothing derived is ever persisted.
-   schemaVersion 4, lineage 'pt'. Migrations are pure replay-repair passes that
+   schemaVersion 5, lineage 'pt'. Migrations are pure replay-repair passes that
    may only APPEND repair events and count every repair in meta.migrationRepairs. */
 (function () {
   'use strict';
   const LeadOS = (window.LeadOS = window.LeadOS || {});
 
   const KEY = 'leados:data';
-  const SCHEMA_VERSION = 4;
+  const SCHEMA_VERSION = 5;
   const LINEAGE = 'pt';
-  const LINEAGE_TAG = 'pt-4';
+  const LINEAGE_TAG = 'pt-5';
 
   // Setting defaults by schema era. v4 adds the universal-domain cadence set.
   const V1_SETTING_DEFAULTS = { decisionMaxOpenDays: 21 };
@@ -24,7 +24,16 @@
     complianceAuditCadenceDays: 180
   };
   const V4_NEW_KEYS = Object.keys(V4_SETTING_DEFAULTS);
-  const ALL_SETTING_DEFAULTS = Object.assign({}, V1_SETTING_DEFAULTS, V2_SETTING_DEFAULTS, V3_SETTING_DEFAULTS, V4_SETTING_DEFAULTS);
+  /* pt-5: the intelligence-layer set. heatmapDecayFactor is a *labeled
+     assumption* — it prices recency in the correlation heatmap, and every
+     rendered heat value prints the factor it used (AI-SESSION-LOG pt-15 §62). */
+  const V5_SETTING_DEFAULTS = {
+    correlationWindowDays: 90,
+    trendMinPeriods: 3,
+    heatmapDecayFactor: 0.85
+  };
+  const V5_NEW_KEYS = Object.keys(V5_SETTING_DEFAULTS);
+  const ALL_SETTING_DEFAULTS = Object.assign({}, V1_SETTING_DEFAULTS, V2_SETTING_DEFAULTS, V3_SETTING_DEFAULTS, V4_SETTING_DEFAULTS, V5_SETTING_DEFAULTS);
 
   // Health G-suite enforces these whitelists on the raw payload.
   const RAW_ROOT_WHITELIST = ['schemaVersion', 'meta', 'events'];
@@ -138,6 +147,25 @@
       });
       recordMigration(raw, '3>4', repairs);
       raw.schemaVersion = 4;
+      return repairs;
+    },
+
+    // v4 -> v5 (pt-5): backfill the three intelligence-layer settings. Same
+    // contract as 3>4: replay the log, backfill only keys the leader never set,
+    // append each as a repair event, count every repair.
+    '4>5': function (raw) {
+      ensureMeta(raw);
+      const applied = foldSettings(raw.events);
+      let repairs = 0;
+      V5_NEW_KEYS.forEach(function (k) {
+        if (!(k in applied)) {
+          appendRaw(raw, 'settings.changed', { key: k, value: V5_SETTING_DEFAULTS[k] },
+            { repair: true, migration: '4>5', reason: 'backfill v5 setting default' });
+          repairs++;
+        }
+      });
+      recordMigration(raw, '4>5', repairs);
+      raw.schemaVersion = 5;
       return repairs;
     }
   };
@@ -322,6 +350,8 @@
     ALL_SETTING_DEFAULTS: ALL_SETTING_DEFAULTS,
     V4_SETTING_DEFAULTS: V4_SETTING_DEFAULTS,
     V4_NEW_KEYS: V4_NEW_KEYS,
+    V5_SETTING_DEFAULTS: V5_SETTING_DEFAULTS,
+    V5_NEW_KEYS: V5_NEW_KEYS,
     RAW_ROOT_WHITELIST: RAW_ROOT_WHITELIST,
     META_WHITELIST: META_WHITELIST,
     MIGRATIONS: MIGRATIONS,

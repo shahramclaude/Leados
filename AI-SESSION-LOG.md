@@ -898,5 +898,140 @@ compiled from the log; feeds R39/R40 discipline; module surfaces for finance and
 people). pt-4 is feature-complete against its brief once it lands; everything
 else is the ranked list in README.
 
-## Part 15+ (queued)
+## Part 15 — pt-5: the intelligence layer (schema v5, correlation, insights, heat, benchmarks)
+
+### §62. Mini-audit (run before editing — the pt-5 brief vs the measured tree)
+
+Convention carried from part 14: seven-section anatomy (§0–§6 of the mandate:
+audit, scope, built, verification, deviations, debt, next) at the continuous
+positions §62–§68. All measurements in this part: same session clock
+(2026-10-15), same runtime (Node v20.20.2, jsdom 29.1.1).
+
+| Instruction / claim in the pt-5 brief | Measured reality (before editing) | Resolution |
+|---|---|---|
+| "New module: `js/correlate.js`" **and** "same flat 10-file structure" — in the same mandate | the tree holds exactly the 10 files; T31/`MANIFEST`/`UNLOADED` enforce the count; part 11 already resolved this exact contradiction once (`rules.js` → second IIFE in `engine.js`) | **contradiction recorded, same resolution applied**: correlation engine ships as the **third IIFE in `js/engine.js`** (after the rules it consumes, before health/ui that call it); `js/correlate.js` joins `UNLOADED`; T31 asserts the `correlate` namespace registers |
+| `MIGRATIONS['4>5']` with three new settings (90 / 3 / 0.85) | store was schema 4; `G2` hard-asserted `schemaVersion === 4`, `G5` asserted the five v4 keys; T1–T5 apply `3>4` directly and T14's loop bound is hardcoded `< 4` (both freeze their own scope — verified by reading, so they stay green untouched) | v5 delivered: defaults, repair accounting, idempotence, leader-preservation — T32; G2 moved to 5/pt-5, G5 extended to all eight keys |
+| 4 new event types with `note?` optional on `insight.acknowledged` / `signal.tagged` | registry at 88, gate generic | 4 types added (registry 88 → **92**, T37 counts it). Self-caught defect before execution: the first draft made `insight.acknowledged.note` **required** — the spec says `note?`; corrected on reread, so this never cost a suite run. `insight.acknowledged` and `signal.tagged` declare **no refs** — insights are derived and log event ids are not entity families; G8 inspects declared refs only; reasons live in registry comments |
+| `correlate(P, today) → {clusters[], insights[], heatmap}`; cluster shape specified in full | the brief text **ends at `confWhy: string`** — insights[] and heatmap shapes never arrived | cluster shape implemented **verbatim**; insights/heatmap **constructed under the doctrines** and every constructed choice is printed at runtime (promotion rule, ack semantics, decay formula, `HOT_SCORE` 9) and labeled as interpretation in README non-claims — not silently treated as spec |
+| "`heatmapDecayFactor` (default 0.85) — labeled assumption, printed" | settings flow through `ALL_SETTING_DEFAULTS`; the settings form hard-blocked values < 1 (`min="1"`) | factor is a v5 setting with the label in the store comment, a `v5` pill in the Data view, and the printed formula everywhere heat appears; the settings form floor moved to `0.0001`/`step=any` so 0.85 is editable |
+| Execution discipline (carried from this lineage's delivery format) | runtime available | executed at every step of construction: module-load check → full battery (first run **red**, §66 records it) → green → insights-route render gate → dist battery (§67) |
+
+### §63. Scope (what pt-5 demanded, unreduced)
+
+Schema v5 via `MIGRATIONS['4>5']` · 4 event types (`insight.acknowledged`,
+`benchmark.set`, `cadence.review`, `signal.tagged`) · the correlation engine
+(`correlate(P, today) → {clusters, insights, heatmap}`) with the brief's cluster
+contract verbatim · the signal-to-insight and trend-analytics layers (insights,
+acknowledgment, domain heat, benchmark gating) constructed under doctrine where
+the brief truncated · surfaces for all of it · health-wall coverage for every
+behavior added (T32–T37, G31, C32–C36) · doctrines intact (no framework, one
+key, append-only, nothing derived persisted, 10 files).
+
+### §64. Built
+
+- `js/store.js` — `SCHEMA_VERSION` 5, `LINEAGE_TAG` pt-5, `V5_SETTING_DEFAULTS`
+  (+`V5_NEW_KEYS`, exported), `MIGRATIONS['4>5']` with repair counting.
+- `js/events.js` — 4 contracts; no refs declared on derived/log-id pointers
+  (reasons in comments). Registry 88 → 92.
+- `js/engine.js` — folds + six buckets (`insightAcks`, `benchmarks`,
+  `benchmarkByMetric`, `reviewLog`, `signalTags`, `tagsByEvent`; named
+  projections 50 → **56**); the **third IIFE**: anchor resolution
+  (entity/person/metric/line, typed so families cannot collide silently),
+  evidence-age resolution (undated stated, never re-dated), union-find clusters
+  in the brief's exact shape, promotion-rule insights + person + heat insights,
+  the decayed heatmap with printed exclusions, `benchmarkCompare` with the
+  `trendMinPeriods` gate.
+- `js/health.js` — G2→v5; G5→8 keys; MANIFEST ns `['engine','rules','correlate']`;
+  `UNLOADED` + `js/correlate.js`; T27 routes + (c2) drives the 4 unprefixed
+  types; **T32–T37** fixture-pinned (window boundary, decay arithmetic exact,
+  latest-wins, ack semantics, determinism); **G31** live, deliberately outside
+  the boot gate; claims **C17 text → 56**, new **C32–C36**.
+- `js/ui.js` — `#/insights` route/view (insights + ack form, clusters with
+  confWhy, heat grid with per-contribution math, benchmarks table, capture);
+  Patterns card on `#/today`; general review log + capture on `#/cadences`;
+  Data view v5 pills + decay-editable settings forms; summaries for the 4
+  types; `ack-insight` action. **No CSS changes** — the pt-4 design system
+  already covers every needed class (severity/conf/basis/chips/cards); adding
+  classes without need is drift, logged here as a deliberate non-change.
+- `index.html` — title/footer to pt-5 · schema v5 (line-neutral; MANIFEST 53
+  stands). `scripts/headless-verify.mjs` — namespaces + `#/insights` render gate
+  (verification aid, never shipped).
+- Docs below: README pt-5 sections; this entry.
+
+### §65. Delivered files
+
+Exactly the mandated 10, complete and self-contained, every function body
+shipped: `index.html` (53) · `css/app.css` (361) · `js/events.js` (247) ·
+  `js/store.js` (368) · `js/engine.js` (1248) · `js/playbooks.js` (475) ·
+  `js/health.js` (1877) · `js/ui.js` (1042) · `README.md` (670) ·
+  `AI-SESSION-LOG.md` (1037). **Totals: 7378 lines.** Doc rows
+digit-patched in place after measuring (convention carried from §59.4); verify
+with `wc -l`.
+
+### §66. Executed verification (this session — nothing traced)
+
+1. **Construction-time module load**: all 8 namespaces register in doctrinal
+   order; `registryTypes: 92`; `namedProjections: 56`; rules R1–R40 intact.
+2. **First full battery: RED — one defect, mine.** T27's new (c2) driver
+   created a bare `<select>` with no option children, so `benchmark.set.type`
+   could not hold a value and its own synthetic payload failed the gate
+   (T 37/38). Exactly the failure class the wall exists to catch — a test
+   harness bug, not app code. Fix: mirror the main loop and carry the enum in
+   an input element; comment at the site. Re-run: **T 38/38 · G 31/31 · claims
+   36/36 proven · boot gate green · seed battery 57 findings with all 40 rules
+   firing · UI boots `#/today` (no wall), `#/insights` renders (8,352 B, gate
+   true) · exit 0.**
+3. **dist battery (after `vite build`): identical green, exit 0** (T31's
+   inline-stylesheet fingerprint branch engaged, as designed in §53). The first
+   dist run this part was **red, not green**: the `public/` symlink mirror had
+   been silently materialized into stale pt-14 real files between sessions —
+   pt-14's dist parity check passed against the links as deployed at that
+   moment, so the degradation sat invisible until this run. The dist battery
+   caught it exactly as designed (T 32 expected-38 mismatch). Resolution: the
+   mirror is now refreshed **real files copied from the root tree immediately
+   before any build** (no symlinks; this environment replaces them
+   unpredictably), and the re-run is the green line above.
+4. Unobserved and labeled: branded-browser paint/layout/focus/timing (jsdom is
+   not a browser; `#/health` remains the grader); pixel checks at any viewport;
+   upstream repo state after this session.
+
+### §67. Deviations
+
+1. `js/correlate.js` mandated yet not shipped as a file — brief-vs-brief
+   contradiction, resolved by the part-11 precedent, guarded by `UNLOADED`
+   (§62 row 1).
+2. Insights/heatmap shapes are **interpretations**: the brief truncated at the
+   cluster shape. Every constructed constant is printed where used (`HOT_SCORE`
+   9, promotion rule, decay formula) and labeled in README non-claims — an
+   interpretation that announces itself, which is the lineage's answer to drift
+   when the spec actually ran out.
+3. Undated findings count as contemporary for **domain edges** (they fired at
+   `today`, a fact), yet are **excluded from heat** (no honest age to price).
+   Two different treatments of the same null, each stated at its site — the
+   window is the cluster's clock, the decay is heat's clock.
+4. G31 excluded from the boot gate; boot stays G1–G13. Integrity walls,
+   analytics informs — the README states the rule in one sentence next to the
+   boot-gate doctrine.
+5. The `c2` driver defect fixed during a green-claimed part (§66.2): recorded
+   in the journal the same way §52 recorded part-13's red-to-green, because the
+   value of the wall is that it catches the author, not absolves them.
+6. No new rules, no new interactive playbooks, no CSS, no buildSeed changes —
+   pt-5's mandate is correlation *above* the rules; the rules engine and its 57
+   pinned seed findings stand unmodified, and every unchanged surface is named
+   here so absence is not mistaken for omission. The mirror incident (§66.3)
+   lands squarely in gap-list item 7 — silent regression between sessions —
+   recorded, fixed, and now covered by the dist battery both directions.
+
+### §68. Debt, non-claims, next
+
+Carried and still true: §60's list in full (board pack **first**; 1:1/skip-level
+events; boss-expectations capture; entity-level import dedupe; meeting-load
+pricing; temporal weighting for the windowed *rules*; scheduled battery
+execution). Newly recorded this part: insight-id re-keying on membership change
+(acks can orphan — visible forever in `insightAcks`, never silently cleaned);
+heatmap decay is a priced assumption, not a measurement; brief truncation
+handling for future parts (spec ran out before insights/heatmap shapes). Next
+part queued below; ranked list stands in README.
+
+## Part 16+ (queued)
 - Executive/board pack document compiled from the log (board-prep feeds it).
