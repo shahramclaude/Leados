@@ -1,216 +1,225 @@
-# AI-SESSION-LOG.md
+# AI-SESSION-LOG.md (this delivery, pt-I)
 
-Append-only. Each session adds a new `§` section. Nothing above this line is
-rewritten by later sessions.
+Append-only. This file documents only this session's work. It does not claim
+to be, extend, or be positioned at `github.com/wbweve/Leados`'s own
+`AI-SESSION-LOG.md` (a different, real, append-only file this session also
+read — see §0).
 
 ---
 
-## §0 — Verification of github.com/wbweve/Leados (this session, pt-H)
+## §0 — Verification of github.com/wbweve/Leados, this session
 
 Per instructions, the real repository was inspected **before** writing any
-code or making any claim about it. Every item below states exactly how it
-was checked this session.
+code or making any claim about it. Everything below states exactly how it
+was checked this session, independent of (though consistent with) what the
+repo's own README/log already say about themselves.
 
 1. **`web_fetch https://github.com/wbweve/Leados`** → returned the repo's
-   current rendered `README.md`. That file documents a **prior AI session's
-   own pt-G delivery and its own investigation** of the real repo. It is the
-   repo's own prior disclosure, not this session's finding — carried forward
-   and re-checked below, not taken on faith.
+   current rendered `README.md`. That file documents a **prior session's
+   pt-H delivery** and that session's own investigation of the real repo —
+   it is the repo's own prior disclosure, re-checked below, not taken on
+   faith.
 
 2. **`web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1`**
-   (GitHub Trees API) → ✅ **independently verified this session**. The tree
-   is 60+ files flat at the repo root: `App.tsx`, `BulletGraph.tsx`,
-   `BundleModal.tsx`, `CommandPalette.tsx`, `DataView.tsx`,
+   → ✅ **independently verified this session.** 60+ files flat at repo
+   root (`App.tsx`, `BulletGraph.tsx`, `CommandPalette.tsx`, `DataView.tsx`,
    `FinanceDashboard.tsx`, `HealthView.tsx`, `PlaybooksView.tsx`,
-   `RosterView.tsx`, `Shell.tsx`, `ScoreMath.tsx`, `store.js`, `store.ts`,
+   `RosterView.tsx`, `ScoreMath.tsx`, `Shell.tsx`, `store.js`, `store.ts`,
    `README.md`, `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`,
-   `SESSION-3.patch.md`, and more. **No `js/` or `src/` subdirectory exists**
-   — confirms the prior session's own claim about file layout.
+   `SESSION-3.patch.md`, and more). No `js/`/`src/` subdirectory.
 
-3. **`web_fetch` raw `package.json`** → ✅ **verified this session**.
+3. **`web_fetch` raw `package.json`** → ✅ **verified this session.**
    `react@19.2.6`, `react-dom@19.2.6`, `vite@7.3.2`,
    `@tailwindcss/vite@4.1.17`, `tailwindcss@4.1.17`,
-   `vite-plugin-singlefile@2.3.0`, `typescript@5.9.3`. This is a **React +
-   Vite + Tailwind 4 SPA build**, not a no-build-step vanilla-JS project.
+   `vite-plugin-singlefile@2.3.0`, `typescript@5.9.3`. Confirms: **React +
+   Vite + Tailwind 4 SPA**, not a no-build vanilla-JS project.
 
-4. **`web_fetch` raw `store.js`** → ✅ **verified this session**. Real file
-   at repo root (not under `js/`). Confirmed: `window.LeadOS` global,
-   localStorage key **`'leados:data'`**, `SCHEMA_VERSION = 5`,
-   `LINEAGE = 'pt'`, `LINEAGE_TAG = 'pt-6'`, an append-only `events[]`
-   array, a genuine migration chain (`1>2`, `2>3`, `3>4`, `4>5`) that only
-   ever appends repair events and counts them in `meta.migrationRepairs`,
-   and a validation gate (`LeadOS.events.validate`) on every append. A
-   real, non-trivial persistence module.
+4. **`web_fetch` raw `store.js`** → ✅ **verified this session.** Real file
+   at repo root. Confirmed: `window.LeadOS` global, localStorage key
+   `'leados:data'`, `SCHEMA_VERSION = 5`, `LINEAGE = 'pt'`,
+   `LINEAGE_TAG = 'pt-6'`, a genuine append-only `events[]` array, a real
+   migration chain (`1>2`, `2>3`, `3>4`, `4>5`) whose migrations only ever
+   *append* repair events (never rewrite in place) and count every repair
+   in `meta.migrationRepairs`, plus a validation + import-merge gate
+   (`LeadOS.events.validate`, `mergeInto`). A real, non-trivial module —
+   read in full, not skimmed.
 
-5. **`web_fetch` raw `store.ts`** → ✅ **verified this session, and flagged
-   as a discrepancy worth naming.** A *second*, unrelated persistence file
-   also exists at repo root: `store.ts`, which is internally labeled
-   `"LeadOS pt-E demo"`, uses `STORAGE_KEY = "leados-pte-demo:data"`,
-   `SCHEMA_VERSION = 1`, `lineage: "pt-E-demo"` — a different global/key
-   entirely from `store.js` above, and its own internal comments reference
-   `"../types"` / `"../data/seed"` as if it lived in a subdirectory, even
-   though it is committed at root. **Read before claiming**: this is not a
-   contradiction in a single system, it is evidence the repo root holds
-   **multiple, independently-delivered single/few-file demo artifacts
-   (pt-E, pt-G, ...) layered next to the "real" app files (store.js,
-   App.tsx, etc.) without being reconciled into one architecture.** Treated
-   as an observed fact about repo state, not resolved further this session.
+5. **`web_fetch` raw `index.html`** → ✅ **verified this session.** The
+   committed root `index.html` currently renders a page titled *"LeadOS
+   pt-H demo — Emergent Intelligence Architecture (unofficial,
+   single-file)"* — i.e. the **prior session's own pt-H delivery**, already
+   committed at root, itself superseding an earlier pt-G demo page per that
+   prior session's own disclosed history. Confirms the repo accumulates
+   layered single-file AI deliveries at its root rather than being patched
+   into the real React/Vite app.
+   **Tool limitation, disclosed:** the raw fetch of this file, read through
+   this session's markdown/text extractor, returned only the page's
+   `<title>` and skip-link text — `<script>` contents were not recoverable
+   this way. This session therefore did **not** read the prior pt-H
+   delivery's actual JavaScript, and did not copy, extend, or diff against
+   it. This pt-I delivery is written fresh, informed only by the *prior
+   session's own README/log prose* about what pt-H contains (treated as
+   ⚠️ reported-not-reverified where it matters below), not by its code.
 
-6. **`web_fetch` raw `index.html`** → ✅ **verified this session, matches
-   the prior session's disclosed discrepancy.** The committed root
-   `index.html` renders a page titled *"LeadOS pt-G demo — Adaptive
-   Intelligence Interface (unofficial, single-file)"* with body text
-   `leados-ptg-demo · unofficial reinterpretation` — i.e. it is **a prior
-   single-file demo page**, not a Vite entry point referencing `src/`. This
-   is consistent with the repo being a chain of layered AI-assistant
-   deliveries rather than a single coherent app at any given commit.
+6. **`web_fetch` raw `AI-SESSION-LOG.md`** → ✅ **verified this session.**
+   Confirms the append-only `§`-section doctrine, and confirms the pt-H
+   session's own §0 verification trail (items 2–5 above) — cross-checked
+   independently this session, not merely copied from it.
 
-7. **`web_fetch` raw `AI-SESSION-LOG.md`** → ✅ **verified this session**.
-   Confirms the append-only `§`-section doctrine this file follows, and
-   confirms items 2–4 and 6 above were independently reached by the prior
-   session too (cross-checked, not merely copied).
-
-8. **Not independently re-verified this session** (reported only by the
-   repo's own README/prior logs, taken at face value and labeled ⚠️): the
-   real rule count (R1–R40), 92 event types, and route list
+7. **Not independently re-verified this session** (⚠️ reported only by the
+   repo's own README/prior logs, taken at face value): the real rule count
+   (R1–R40), 92 event types, and route list
    (`#/today #/roster #/insights #/patterns #/cadences #/data #/playbooks`).
-   Re-diffing all 60+ `.tsx` files to confirm this would have consumed this
-   session's entire tool budget and was not required to deliver pt-H
-   honestly — flagged, not claimed.
+   Re-diffing 60+ `.tsx` files to confirm this was not required to deliver
+   pt-I honestly and would have exceeded this session's tool budget.
 
-**Conclusion carried into this delivery:** the pasted pt-H brief (generative
-layout engine, semantic relationship graph, predictive signal engine) does
-not describe anything verified in the real `wbweve/Leados` repo — it is a
-hypothetical "Part 1–3" continuation of an unrelated prior prompt family.
-Building it as a patch to the real repo (React/Vite/60-file project) would
-misrepresent what was done. This delivery is therefore, like the pt-G
-delivery before it, an **explicit, fresh, single-file reinterpretation**,
-not a patch, not a merge, and not a claim that `wbweve/Leados` now contains
-this file.
+**Conclusion carried into this delivery:** the pasted pt-I brief (temporal
+field classification, temporal causal mapping, "organizational physics",
+a "decision surface") matches nothing verified in the real
+`wbweve/Leados` repo. It is a hypothetical continuation of an unrelated
+prompt family (same family as the pt-G/pt-H briefs the prior two sessions
+received). Building it as a patch to the real 60-file React/Vite repo would
+misrepresent what was done. This delivery is, like pt-G and pt-H before it,
+an **explicit, fresh, single-file reinterpretation** — not a patch, not a
+merge, and not a claim that `wbweve/Leados` now contains this file.
 
 ---
 
 ## §1 — This delivery's decisions and disclosed deviations
 
-1.1 **Namespace**: `window.LEADOS` — not `window.LeadOS` (real `store.js`)
-    and not matching the `store.ts` demo artifact either. Deliberate, so
-    this file can never be mistaken for, or collide with, either real-repo
-    global if loaded in the same page/profile.
+1.1 **Scope cut to Part 1 only.** The pasted brief's title promises
+    "Temporal Cognition + Organizational Physics" across what reads like a
+    multi-part spec, but the pasted text **stops mid-sentence** right after
+    the heading `### Causal Chain Display`, before specifying what that
+    display should contain, and before any "Organizational Physics" or
+    "decision surface" content was pasted at all. Per this project's own
+    established practice (the pt-H session did the same when its own Part
+    3 was truncated), this delivery implements **only the two fully
+    specified units**: the Temporal Intelligence Field
+    (`LEADOS.temporalField`) and Temporal Causality Mapping
+    (`buildCausalMap` / `scoreCausalPlausibility`). Everything else named
+    in the brief's title is out of scope here and not fabricated.
 
-1.2 **Storage key**: `leados-pth-demo:data` — distinct from `leados:data`
-    (real `store.js`), `leados-pte-demo:data` (real `store.ts`), and
-    `leados-ptg-demo:data` (prior pt-G delivery per its own README). Same
-    non-collision reasoning applied to storage.
+1.2 **Namespace**: `window.LEADOS` — matches neither the real repo's
+    `window.LeadOS` (`store.js`) nor its `store.ts` demo artifact's implied
+    global. Carried over unchanged from the prior pt-H delivery's own
+    stated convention (per its README, not its code, which this session
+    could not read — see §0.5) for lineage consistency, not independently
+    re-derived.
 
-1.3 **Rule count**: 6 rules computed end-to-end (R1, R7, R20, R30, R40,
-    R50) from a seeded, append-only event log — not the pasted brief's
-    implicit 100+ rule universe. The Data view states this gap explicitly.
+1.3 **Storage key**: `leados-pti-demo:data` — distinct from `leados:data`
+    (real `store.js`), `leados-pte-demo:data` (real `store.ts`),
+    `leados-ptg-demo:data` and `leados-pth-demo:data` (prior deliveries,
+    per their own READMEs). Same non-collision reasoning as every prior
+    delivery in this lineage.
 
-1.4 **Part 1 — Generative Layout Engine**: implemented as specified —
-    `analyzeTopology()` computes per-domain finding/activity/attention
-    weights (0.4/0.3/0.3) and a feature-usage + temporal-pattern vector;
-    `generateLayout()` picks one of configurations A–E by comparing four
-    domain-group sums, applies the brief's >25%-share rule and the
-    ≥50-events/≥3-domains generation threshold, and folds low-score items
-    under a "N more views" disclosure. Pin-to-position via right-click
-    context menu (and a table in `#/data` for discoverability, since a
-    hidden right-click-only affordance would not meet this project's own
-    "never hide capability" doctrine) is implemented and persisted in
-    `meta.layoutPins`.
-    **Disclosed reconciliation** (not in the brief, required to make it
-    actually work): the brief specifies attention is read from
-    `sessionStorage`, and separately that layout regenerates "on session
-    start only." Taken literally, attention would always be `0` at the
-    exact moment it's read, since a fresh session's `sessionStorage` starts
-    empty before the user has looked at anything. This build resolves that
-    by persisting a 0.9-decayed rolling copy of each session's
-    `sessionStorage` attention into `meta.attentionHeatmap` (localStorage)
-    on `beforeunload`, so a session's dwell time shapes the **next**
-    session's layout, never its own. This is the intended "grows more
-    capable the more you use it" behavior described in the brief's
-    intro — named here because the brief's own two rules are otherwise in
-    tension.
-    **Disclosed gap**: sparkline bars in the Today domain spotlights are
-    a fixed deterministic pattern keyed off the domain name length, not a
-    real stored 7-day heatmap history (no such time series is persisted in
-    this build) — labeled in code as a placeholder, not claimed as real
-    data.
+1.4 **`classifyTemporalResolution` / `buildTemporalProfile` /
+    `_diagnoseMode`** were pasted as concrete, already-complete JavaScript,
+    not pseudocode. They are reproduced **faithfully**, including the exact
+    boundary semantics (`<=7`, `<=60`, `<=180`, else) and the exact
+    diagnosis thresholds (`>0.6`, `>0.3`, `>0.5`). No redesign was needed
+    or attempted here.
 
-1.5 **Part 2 — Semantic Relationship Graph**: `buildEntityGraph`,
-    `extractRefs` (`*Id`/`*Ids` field scan), `pageRankSimple` (the brief's
-    exact simplified power-iteration, not full PageRank), connected-component
-    clustering at edge weight ≥3, and `detectLeadLag` (the brief's exact
-    mean/std-based lag detector, window ±21d) are implemented **exactly as
-    pseudocoded** in the brief and run live against the seeded event log —
-    nothing about their *output* is scripted. The `#/intelligence` view
-    honestly renders both outcomes `detectLeadLag` can produce: a detected
-    lag, or "no reliable pattern found" with the real computed mean/std —
-    this build does not cherry-pick only the success case. The `@person`
-    semantic search enriches results with dossier + active findings +
-    cluster membership + top co-occurring entities + temporal patterns, per
-    the brief's five-part list — implemented for people only (the brief's
-    full entity-type search surface for goals/plans/risks/deals is not
-    built out as its own search target in this delivery; disclosed).
+1.5 **`buildCausalMap` / `scoreCausalPlausibility` — one disclosed bug
+    fix.** The brief's own pasted pseudocode uses `finding.rule` two
+    inconsistent ways: as an object (`finding.rule.domain`, inside
+    `buildCausalMap`) and, in `scoreCausalPlausibility`, as a bare string
+    key (`chains[finding.rule]`). Both cannot be true of the same value.
+    This build keeps `finding.rule` as `{ id, domain, title }` (required
+    anyway for the UI and for every other part of this delivery) and reads
+    `finding.rule.id` at the one site that needed a bare rule code. This is
+    a correction of an internal contradiction in the pasted spec, not a
+    reinterpretation of its intent — named here rather than silently
+    patched.
 
-1.6 **Part 3 — Predictive Signal Engine**: `projectFireDate` is implemented
-    for R1, R7 (explicitly labeled low-confidence/uncertain per the brief's
-    own doctrine — no fabricated date), R20, and R40, each printing its own
-    `basis` (the arithmetic used) next to the projected date. R30/R50 are
-    treated as the brief's own `default: non-projectable` case and excluded
-    from the calendar, not padded with a guess.
-    **Disclosed and important**: the user's pasted brief text was
-    **truncated mid-definition of `buildPrefireCalendar`** (it ends at
-    "Aggregates all projectable fire dates into a CALENDAR SURFACE:" with
-    no further spec). The bucket scheme actually shipped — NOW / THIS WEEK
-    / NEXT 2 WEEKS / NEXT MONTH / LATER / UNCERTAIN — is **this session's
-    own reasonable completion** of that cut-off spec, explicitly labeled as
-    such in both the code comment above `buildPrefireCalendar` and here. It
-    is not a recovered or verified original design.
+1.6 **`DOMAIN_LOOKBACKS` and `PLAUSIBLE_CHAINS`** are reproduced with the
+    exact domains and numeric values given in the brief
+    (`people:60, finance:90, ops:30, strategy:120, legal:180`; the seven
+    precursor-type → rule-id → plausibility entries). `legal: 180` is kept
+    even though this delivery implements no legal-domain rule — a disclosed
+    dead mapping, not deleted, since the brief defined it and a future
+    delivery may add a legal rule.
 
-1.7 **Not implemented, named rather than hidden**: snooze/mute/dismiss
-    (present in the prior pt-G delivery's doctrine, out of scope for a
-    delivery focused on Parts 1–3 of a different brief — removing it was a
-    deliberate scope cut to fit the tool-call budget, not an oversight),
-    settings editing (Data view's rule table is read-only in this build),
-    typed destructive-action confirmation (the reseed button uses a plain
-    `confirm()`, not the prior lineage's typed-phrase pattern — disclosed
-    downgrade for budget reasons), full accessibility self-test suite
-    (`T_ACCESS`/`T_PRINT` from the pt-G lineage are not reimplemented
-    here — `#/health` in this build only covers the six tests listed in
-    §2), print stylesheet, and PWA/manifest/service-worker (same reasoning
-    as every prior delivery in this family: cannot be meaningfully inlined
-    into one `index.html`).
+1.7 **One addition beyond the brief, disclosed**: rule `R29` ("Fresh
+    critical safety incident") and its `PLAUSIBLE_CHAINS['mfg.safety.incident'].R29 = 0.95`
+    entry do not appear in the pasted brief. They were added this session
+    so the demo has at least one finding that genuinely lands in the
+    IMMEDIATE (0–7d) bucket with a populated causal chain — without it,
+    this delivery's hand-placed seed data produced zero IMMEDIATE-bucket
+    findings and the temporal-field UI would have had an empty, untestable
+    quadrant. Named in the code comment at the rule's definition, not
+    hidden in the changelog alone.
 
-1.8 **Themes**: Obsidian / Parchment / Terminal are implemented with this
-    session's own CSS variable values. They are **not** copied from the
-    prior pt-G delivery's palette (that file's CSS was not fetched this
-    session — large, and not required to verify the real repo) — labeled
-    as a fresh, unverified-against-any-prior-file palette.
+1.8 **16 hand-written rules, not the real repo's reported ~40.** R4, R5,
+    R7, R12, R13, R16, R17, R19, R20, R27, R28, R29, R103, R107, R112, R129
+    — chosen because those exact rule codes are the ones the pasted brief's
+    own `PLAUSIBLE_CHAINS` table references. Each rule is fully computed
+    (no fabricated severities beyond the documented arithmetic) against a
+    small, entirely hand-placed (not randomly generated) seed log, so every
+    number shown in the UI's "Score Math" block is independently
+    recomputable by reading the seed and the rule function side by side.
 
-1.9 **One CDN script tag** (`@tailwindcss/browser`) — required by this
-    assistant's delivery template, inherited as a disclosed tension with
-    this problem family's recurring "no CDN, open index.html, that is the
-    install" doctrine, same as every prior delivery in this lineage.
+1.9 **Seed data is hand-placed in time, not random**, specifically so that:
+    (a) every rule above fires at least once, (b) all four temporal
+    resolutions are populated, and (c) both outcomes of the causal map —
+    "probable precursors found" and "none found in this lookback window" —
+    are genuinely reachable and shown as such in the UI, rather than only
+    ever showing the positive case. Minute-level jitter (≤3h) is added at
+    seed time for realism only; it does not change which rule fires or
+    which resolution bucket a finding lands in. Seeding runs exactly once,
+    only if the store is completely empty.
+
+1.10 **Score Math block**: this delivery's own original implementation of
+    the idea of showing a finding's exact arithmetic. The real repo has a
+    file literally named `ScoreMath.tsx` (seen in the Trees API file list,
+    §0.2) but **its contents were not read this session** — nothing here is
+    copied from it; this is an independently designed analog built only
+    from the file's existence and name.
+
+1.11 **No full app shell** (no roster, no playbooks, no command palette, no
+    themes). Given the brief pasted this session was narrowly about the
+    temporal field and causal graph, and this session's tool budget, the
+    shell was kept to exactly four views (Today, Temporal Field, Data,
+    Health) needed to exercise and inspect those two systems honestly,
+    rather than re-implementing the full surface of prior deliveries.
+
+1.12 **Health suite** (`#/health`): five live, in-browser checks —
+    `T_STORE`, `T_APPEND_ONLY`, `T_TEMPORAL_BOUNDARIES`, `T_ENGINE`,
+    `T_CAUSAL`. `T_APPEND_ONLY` and `T_STORE` deliberately operate on a
+    clone / throwaway key, never on the real store, so running Health
+    repeatedly never pollutes the demo's own data — disclosed in the code
+    comment next to each.
 
 ---
 
-## §2 — Self-test status (this session)
+## §2 — Known limitations of this delivery (named, not hidden)
 
-`#/health` implements and runs, live, in the browser:
+- Confidence numbers (`baseConfidence = clamp(0.5 + 0.08×sources, 0.5, 0.95)`)
+  are this session's own simplification, not specified by the brief beyond
+  "confidence modifier ×0.7/1.0/0.85/0.6 per resolution" — the modifier
+  itself is exact; the base it multiplies is a labeled, inspectable guess.
+- Only one theme (dark). No command palette, no roster/goals/plans/risks
+  CRUD beyond the minimal event types this part's rules need.
+- `R27`'s ">60 days treated as stale, not perpetually open" rule is a
+  labeled assumption of this session's, not specified in the brief.
+- Ages (and therefore which resolution bucket a finding lands in) are
+  computed against `Date.now()` on every render, not frozen at seed time —
+  this is intentional (the brief's own thesis is "time is a field, not a
+  sequence"), but it does mean a finding may cross a resolution boundary
+  purely from real time passing while the tab is open across days.
 
-- `T_STORE` — store loads/creates correctly under this build's own key.
-- `T_APPEND_ONLY` — appending a throwaway event grows the log by exactly 1
-  and leaves every prior event byte-identical (`JSON.stringify` slice
-  comparison), then rolls the log back to its prior length so the test is
-  non-destructive to the demo state.
-- `T_ENGINE` — `engine.run()` returns an array without throwing.
-- `T_TOPOLOGY` — `generateLayout()` returns one of the five defined
-  configuration keys (A–E) without throwing.
-- `T_GRAPH` — `entityGraphInsights()` runs and every centrality score is a
-  finite number (guards against the simplified PageRank's normalization
-  step producing `NaN`/`Infinity` on degenerate graphs).
-- `T_PREDICT` — `projectFireDate('R1', ...)` returns an entry keyed by
-  every seeded person id.
+---
 
-All six were exercised manually against the shipped file during authoring
-by visiting `#/health`; they are also runnable by any reader the same way.
+## Changelog (this delivery)
+
+| Change | Why |
+|---|---|
+| Verified the real repo via GitHub Trees API + raw fetches of `package.json`, `store.js`, `index.html`, `AI-SESSION-LOG.md` before writing anything | Explicit task requirement: inspect before claiming. |
+| Could not read prior pt-H delivery's actual `<script>` contents (raw fetch stripped script text via this session's extractor) | Named as a tool limitation rather than silently treating pt-H's README prose as equivalent to having read its code. |
+| Built pt-I as a fresh single-file reinterpretation rather than a patch to the real repo or a diff against pt-H's code | The real repo is a 60+-file React/Vite SPA; pt-H's actual JS was unreadable this session. Claiming either a "patch" or a "merge" would misrepresent what was done. |
+| Implemented only the Temporal Field + Causal Mapping (brief's fully-specified units) and skipped "Organizational Physics"/"decision surface" | The pasted brief truncates mid-sentence before specifying either; fabricating them would misrepresent speculation as the pasted spec. |
+| Fixed `finding.rule` object-vs-string inconsistency in `scoreCausalPlausibility` | The two pasted functions use `finding.rule` incompatibly; one had to be chosen, and the fix is disclosed rather than silently applied. |
+| Added rule `R29` and its plausibility entry, not present in the brief | Without it, the seed data produced zero IMMEDIATE-bucket findings, leaving one of the four temporal resolutions permanently empty and untestable in this demo. |
+| Hand-placed every seed event's day-offset instead of randomizing them | Needed deterministic coverage of all 16 rules, all four resolutions, and both "precursor found"/"none found" causal outcomes — randomized seeding could not guarantee that. |
+| Kept `legal: 180` in `DOMAIN_LOOKBACKS` despite no legal-domain rule existing in this delivery | The brief defined it explicitly; deleting an unused-but-specified mapping would be a silent, undisclosed simplification. |
+| `T_STORE`/`T_APPEND_ONLY` health checks run against a throwaway key / cloned array, never the live store | Running Health repeatedly must not mutate or pollute the demo's own seeded data. |

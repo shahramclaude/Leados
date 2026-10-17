@@ -1,1202 +1,858 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="obsidian">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LeadOS pt-H demo — Emergent Intelligence Architecture (unofficial, single-file)</title>
+<title>LeadOS pt-I demo — Temporal Cognition (unofficial, single-file)</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
-  :root[data-theme="obsidian"]{ --bg:#0b0d10; --surface:#14171a; --surface2:#1b1f23; --text:#e6e8ea; --muted:#8a9099; --accent:#5fb3ff; --border:#2a2f35; --sev2:#5fa8d3; --sev3:#d9a441; --sev4:#e2574c; --good:#52b788; }
-  :root[data-theme="parchment"]{ --bg:#f4ecd8; --surface:#fbf6ea; --surface2:#efe4c8; --text:#2b2316; --muted:#7a6f55; --accent:#8a5a2b; --border:#d8c9a0; --sev2:#5a7a9a; --sev3:#b5832a; --sev4:#a33327; --good:#3f7d52; }
-  :root[data-theme="terminal"]{ --bg:#030603; --surface:#061006; --surface2:#0a1a0a; --text:#39ff6a; --muted:#1f8f3f; --accent:#39ff6a; --border:#145225; --sev2:#39ff6a; --sev3:#e8e24a; --sev4:#ff5555; --good:#39ff6a; }
-  *{box-sizing:border-box;}
-  body{background:var(--bg); color:var(--text); font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; transition:background .15s,color .15s;}
-  [data-theme="terminal"] body, [data-theme="terminal"] *{font-family:"Courier New",monospace !important;}
-  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
-  .surface{background:var(--surface); border:1px solid var(--border);}
-  .surface2{background:var(--surface2); border:1px solid var(--border);}
-  .muted{color:var(--muted);}
-  .accent{color:var(--accent);}
-  .border-base{border-color:var(--border);}
-  a,button{color:inherit;}
-  ::-webkit-scrollbar{width:10px;height:10px;}
-  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;}
-  .badge{display:inline-flex;align-items:center;gap:.25rem;padding:.1rem .45rem;border-radius:4px;font-size:.68rem;border:1px solid var(--border);}
-  .sev2{color:var(--sev2);border-color:var(--sev2);}
-  .sev3{color:var(--sev3);border-color:var(--sev3);}
-  .sev4{color:var(--sev4);border-color:var(--sev4);}
-  .rail-item{display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;border-radius:6px;cursor:pointer;font-size:.82rem;}
-  .rail-item:hover{background:var(--surface2);}
-  .rail-item.active{background:var(--surface2); border-left:2px solid var(--accent); padding-left:calc(.6rem - 2px);}
-  .skip-link{position:absolute;left:-999px;top:0;background:var(--accent);color:#000;padding:.5rem 1rem;z-index:100;}
-  .skip-link:focus{left:0;}
-  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;}
-  .spark{display:flex;align-items:flex-end;gap:2px;height:22px;}
-  .spark div{width:4px;background:var(--accent);opacity:.8;}
-  .fade-in{animation:fadein .15s ease-out;}
-  @keyframes fadein{from{opacity:0;transform:translateY(2px);}to{opacity:1;transform:translateY(0);}}
-  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding-top:8vh;}
-  .kbd{font-family:ui-monospace,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 .3rem;font-size:.7rem;}
-  .contextmenu{position:fixed;z-index:60;min-width:190px;}
-  .toast{position:fixed;bottom:16px;right:16px;z-index:70;max-width:340px;}
-  .bar-track{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;}
-  .bar-fill{height:100%;background:var(--accent);}
-  input,select,textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);}
+  * { scrollbar-width: thin; scrollbar-color: #334155 #0f172a; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .nav-active { background: #1e293b; color: #e2e8f0; }
+  .bar-track { background: #1e293b; }
+  .fade-in { animation: fadeIn .18s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 </head>
-<body class="min-h-screen">
-<a href="#main" class="skip-link">Skip to main content</a>
+<body class="bg-slate-950 text-slate-200 min-h-screen">
 
-<div id="banner-slot"></div>
+<div class="max-w-7xl mx-auto px-4 pb-20">
 
-<div class="flex min-h-screen">
-  <nav id="rail" class="w-64 shrink-0 surface p-3 flex flex-col gap-3 min-h-screen" aria-label="Primary navigation"></nav>
-  <main id="main" class="flex-1 p-5 max-w-6xl" aria-live="polite"></main>
+  <!-- Header -->
+  <header class="pt-6 pb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
+    <div>
+      <h1 class="text-xl font-semibold text-slate-50 tracking-tight">LeadOS <span class="text-emerald-400">pt-I</span> demo</h1>
+      <p class="text-xs text-slate-500 mt-0.5">Temporal Cognition — unofficial, single-file reinterpretation · not a patch to <span class="mono">wbweve/Leados</span></p>
+    </div>
+    <div class="flex items-center gap-4 text-xs text-slate-400">
+      <div id="clock" class="mono"></div>
+      <div class="px-2 py-1 rounded bg-slate-900 border border-slate-800">
+        events: <span id="evCount" class="text-slate-200 mono">0</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Nav -->
+  <nav class="flex flex-wrap gap-1 py-3" id="mainNav">
+    <a href="#/today" data-view="today" class="nav-link px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-slate-100 hover:bg-slate-900">Today</a>
+    <a href="#/temporal" data-view="temporal" class="nav-link px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-slate-100 hover:bg-slate-900">Temporal Field</a>
+    <a href="#/data" data-view="data" class="nav-link px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-slate-100 hover:bg-slate-900">Data</a>
+    <a href="#/health" data-view="health" class="nav-link px-3 py-1.5 rounded-md text-sm text-slate-400 hover:text-slate-100 hover:bg-slate-900">Health</a>
+    <a href="https://github.com/wbweve/Leados" target="_blank" class="ml-auto px-3 py-1.5 rounded-md text-xs text-slate-500 hover:text-slate-300 self-center">real repo ↗</a>
+  </nav>
+
+  <main id="app" class="pt-2"></main>
+
+  <footer class="mt-10 pt-4 border-t border-slate-800 text-[11px] leading-relaxed text-slate-600">
+    Scope note: this delivery implements only <strong>Part 1</strong> of the pasted pt-I brief (Temporal Intelligence Field +
+    Temporal Causality Mapping). The brief's own text was truncated mid-spec right after
+    "<span class="mono">### Causal Chain Display</span>" — "Organizational Physics" and the "decision surface" named in the
+    brief's title were never pasted in enough detail to implement honestly, so they are not in this build. See README.md / AI-SESSION-LOG.md.
+  </footer>
 </div>
-
-<div id="overlay-slot"></div>
-<div id="toast-slot"></div>
 
 <script>
 'use strict';
-(function(){
+const LEADOS = (window.LEADOS = window.LEADOS || {});
 
-/* =========================================================================
-   LEADOS pt-H — single-file demo. window.LEADOS (not LeadOS: see docs).
-   Storage key leados-pth-demo:data (not leados:data: see docs).
-   ========================================================================= */
-const LEADOS = window.LEADOS = window.LEADOS || {};
-const KEY = 'leados-pth-demo:data';
-LEADOS.store = LEADOS.store || {};
+/* ============================================================
+   UTIL
+   ============================================================ */
+LEADOS.util = {
+  dayUTC(ts) { return Math.floor(ts / 86400000); },
+  mean(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; },
+  clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); },
+  fmtDate(ts) {
+    const d = new Date(ts);
+    return d.toISOString().slice(0, 10) + ' ' + d.toTimeString().slice(0, 5);
+  },
+  esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+};
+const dayUTC = LEADOS.util.dayUTC;
 
-/* ---------------- utils ---------------- */
-function uid(p){ return p+'-'+Math.random().toString(36).slice(2,9); }
-function pad(n,w){ return String(n).padStart(w,'0'); }
-function dayUTC(ts){ return Math.floor(new Date(ts).getTime()/86400000); }
-function daysBetween(aTs,bTs){ return dayUTC(bTs)-dayUTC(aTs); }
-function todayIso(){ return new Date().toISOString(); }
-function isoDate(d){ return d.toISOString().slice(0,10); }
-function inDaysIso(n){ return isoDate(new Date(Date.now()+n*86400000)); }
-function inMonthsIso(n){ const d=new Date(); d.setMonth(d.getMonth()+Math.round(n)); return isoDate(d); }
-function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-function fmt1(n){ return (Math.round(n*10)/10).toFixed(1); }
-function linSlope(points){
-  const n=points.length; if(n<2) return 0;
-  const mx=points.reduce((s,p)=>s+p.x,0)/n, my=points.reduce((s,p)=>s+p.y,0)/n;
-  let num=0, den=0;
-  points.forEach(p=>{ num+=(p.x-mx)*(p.y-my); den+=(p.x-mx)*(p.x-mx); });
-  return den===0?0:num/den;
-}
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* ============================================================
+   STORE — one localStorage key, append-only events[].
+   Deliberately distinct from the real repo's 'leados:data' and
+   from the prior pt-G ('leados-ptg-demo:data') / pt-H
+   ('leados-pth-demo:data') delivery keys, so this demo can never
+   collide with any of them in the same browser profile.
+   ============================================================ */
+LEADOS.store = (function () {
+  const KEY = 'leados-pti-demo:data';
+  const KNOWN_TYPES = [
+    'store.initialized', 'conflict.logged', 'pulse.recorded', 'hr.attrition.logged',
+    'hr.hire.logged', 'fin.pl.logged', 'sales.deal.updated', 'ops.incident.logged',
+    'mfg.safety.incident', 'goal.progressLogged'
+  ];
 
-/* ---------------- seed data ---------------- */
-const DOMAINS = ['PEOPLE','ENGINEERING','OPS','SALES','FINANCE','STRATEGY','EXTERNAL','RESILIENCE'];
-const PEOPLE = [
-  { id:'p1', name:'Ana Ruiz',   role:'Eng Manager',      domain:'ENGINEERING', cadenceDays:14 },
-  { id:'p2', name:'Cara Smith', role:'Ops Lead',         domain:'OPS',         cadenceDays:14 },
-  { id:'p3', name:'Devon Lee',  role:'Sales Lead',       domain:'SALES',       cadenceDays:14 },
-  { id:'p4', name:'Priya Patel',role:'Finance Lead',     domain:'FINANCE',     cadenceDays:21 },
-  { id:'p5', name:'Sam Okafor', role:'Chief of Staff',   domain:'STRATEGY',    cadenceDays:21 },
-  { id:'p6', name:'Jun Park',   role:'Staff Engineer',   domain:'ENGINEERING', cadenceDays:14 }
-];
-const GOALS = [
-  { id:'g1', label:'Ship v2 platform',      domain:'ENGINEERING' },
-  { id:'g2', label:'Expand EMEA pipeline',  domain:'SALES' },
-  { id:'g3', label:'Improve NPS',           domain:'EXTERNAL' },
-  { id:'g4', label:'Reduce infra cost',     domain:'FINANCE' }
-];
-const PLANS = [
-  { id:'pl1', label:'Delegate release owners', domain:'ENGINEERING', owner:'p1' },
-  { id:'pl2', label:'SLA improvement plan',    domain:'OPS',         owner:'p2' },
-  { id:'pl3', label:'Pricing experiment',      domain:'SALES',       owner:'p3' }
-];
-const RISKS = [
-  { id:'r1', label:'Vendor outage risk',      domain:'RESILIENCE' },
-  { id:'r2', label:'Key-person dependency: Ana', domain:'RESILIENCE' }
-];
-const DEALS = [
-  { id:'d1', label:'Acme Corp renewal',   domain:'SALES', owner:'p3' },
-  { id:'d2', label:'Globex expansion',    domain:'SALES', owner:'p3' }
-];
-const ENTITY_LABELS = (()=>{
-  const m = {};
-  PEOPLE.forEach(p=>m[p.id]={label:p.name, type:'person', domain:p.domain});
-  GOALS.forEach(g=>m[g.id]={label:g.label, type:'goal', domain:g.domain});
-  PLANS.forEach(p=>m[p.id]={label:p.label, type:'plan', domain:p.domain});
-  RISKS.forEach(r=>m[r.id]={label:r.label, type:'risk', domain:r.domain});
-  DEALS.forEach(d=>m[d.id]={label:d.label, type:'deal', domain:d.domain});
-  return m;
+  function genesis() {
+    return { schemaVersion: 1, meta: { lineage: 'pt-I-demo', createdAt: Date.now(), seeded: false }, events: [] };
+  }
+  function loadRaw() {
+    const t = localStorage.getItem(KEY);
+    if (t === null) return null;
+    try { return JSON.parse(t); }
+    catch (e) { throw new Error('LEADOS: store at ' + KEY + ' is corrupt and was left untouched.'); }
+  }
+  function save() { localStorage.setItem(KEY, JSON.stringify(RAW)); }
+
+  let RAW = loadRaw();
+  if (!RAW || !Array.isArray(RAW.events)) { RAW = genesis(); save(); }
+
+  function nextId() { return 'e-' + String(RAW.events.length + 1).padStart(5, '0'); }
+
+  // Public append path: always stamps "now". Used for anything a user does live.
+  function append(type, payload, meta) {
+    if (KNOWN_TYPES.indexOf(type) === -1) throw new Error('LEADOS rejected unknown event type: ' + type);
+    const ev = { id: nextId(), seq: RAW.events.length + 1, ts: Date.now(), type, payload: payload || {} };
+    if (meta) ev.meta = meta;
+    RAW.events.push(ev);
+    save();
+    return ev;
+  }
+  // Seed-only path: lets the seed script backdate timestamps. Never exposed
+  // for live use — the live log is append-"now"-only, same append-only wall.
+  function appendAt(type, payload, ts, meta) {
+    const ev = { id: nextId(), seq: RAW.events.length + 1, ts, type, payload: payload || {}, meta: Object.assign({ seeded: true }, meta || {}) };
+    RAW.events.push(ev);
+    return ev;
+  }
+
+  return { KEY, KNOWN_TYPES, state: RAW, append, appendAt, save, genesis };
+})();
+const P = { state: LEADOS.store.state }; // the shape temporalField/causality expect: P.state.events
+
+/* ============================================================
+   SEED — runs once only, if the store is genuinely empty.
+   ~39 events, hand-placed in time (not random day-offsets) so
+   every rule below, every temporal resolution bucket, and both
+   the "precursor found" and "no precursor found" causal-map
+   outcomes are deterministically demonstrable. Minute-level
+   jitter only (does not change which bucket/rule fires).
+   ============================================================ */
+(function seedIfEmpty() {
+  if (LEADOS.store.state.events.length > 0) return;
+  const NOW = Date.now();
+  const DAY = 86400000;
+  const jit = () => Math.floor(Math.random() * 3 * 3600000); // up to 3h jitter
+  const at = (daysAgo) => NOW - daysAgo * DAY - jit();
+  const A = LEADOS.store.appendAt;
+
+  A('store.initialized', { schemaVersion: 1 }, NOW);
+
+  // People
+  [3, 9, 17, 24, 55, 70, 140, 230].forEach((d, i) =>
+    A('conflict.logged', { personA: 'P' + (i % 4), personB: 'P' + ((i + 1) % 4), severity: ['low','med','high'][i % 3] }, at(d)));
+  [[50,8],[35,7],[20,5],[5,4]].forEach(([d,s]) => A('pulse.recorded', { team: 'Core', score: s }, at(d)));
+  [[100,6],[85,6],[70,5],[55,5]].forEach(([d,s]) => A('pulse.recorded', { team: 'Ops', score: s }, at(d)));
+  A('hr.attrition.logged', { person: 'E. Diaz', role: 'Engineer', critical: false }, at(40));
+  A('hr.attrition.logged', { person: 'R. Kim', role: 'Designer', critical: false }, at(75));
+  A('hr.attrition.logged', { person: 'J. Ome', role: 'VP Sales', critical: true }, at(200));
+  A('hr.attrition.logged', { person: 'S. Patel', role: 'Analyst', critical: false }, at(230));
+
+  // Strategy
+  A('sales.deal.updated', { dealId: 'D-A', name: 'Northwind Expansion', amount: 120000, stage: 'negotiation' }, at(50));
+  A('sales.deal.updated', { dealId: 'D-B', name: 'Atlas Renewal', amount: 30000, stage: 'proposal' }, at(10));
+  A('sales.deal.updated', { dealId: 'D-C', name: 'Helix Enterprise', amount: 200000, stage: 'negotiation' }, at(60));
+  A('goal.progressLogged', { goalId: 'G-EU', goalName: 'Expand EU market', pct: 62 }, at(45));
+  A('goal.progressLogged', { goalId: 'G-V2', goalName: 'Launch v2', pct: 80 }, at(5));
+
+  // Ops
+  [[90,1],[40,2],[25,2],[12,3],[6,4],[2,5]].forEach(([d,s]) => A('ops.incident.logged', { system: 'checkout-svc', severity: s }, at(d)));
+  A('mfg.safety.incident', { line: 'Line-2', severity: 'high' }, at(5));
+  A('mfg.safety.incident', { line: 'Line-1', severity: 'low' }, at(20));
+  A('mfg.safety.incident', { line: 'Line-3', severity: 'low' }, at(35));
+  A('mfg.safety.incident', { line: 'Line-1', severity: 'low' }, at(100));
+
+  // Finance
+  A('fin.pl.logged', { period: 'Q-3', revenue: 480000, expense: 350000, margin: 27, cash: 1300000 }, at(150));
+  A('fin.pl.logged', { period: 'Q-2', revenue: 500000, expense: 380000, margin: 24, cash: 1200000 }, at(95));
+  A('fin.pl.logged', { period: 'Q-1', revenue: 510000, expense: 430000, margin: 15.7, cash: 1050000 }, at(65));
+
+  LEADOS.store.state.meta.seeded = true;
+  LEADOS.store.save();
 })();
 
-function buildSeedEvents(today){
-  const ev = []; let seq = 0;
-  function add(daysAgo,type,domain,data){
-    const ts = new Date(today.getTime()-daysAgo*86400000).toISOString();
-    ev.push({ seq:++seq, ts, type, domain, data: data||{} });
-  }
-  const cadence = { p1:14,p2:14,p3:14,p4:21,p5:21,p6:14 };
-  const lastGap = { p1:20,p2:9,p3:12,p4:6,p5:17,p6:11 }; // intentionally makes Ana (p1) overdue -> R1
-  Object.keys(cadence).forEach(pid=>{
-    let t = lastGap[pid];
-    while(t < 92){ add(t,'oneonone.logged','PEOPLE',{personId:pid}); t += cadence[pid]; }
-  });
-  const moods = {
-    p1:[4,4,3,3,2,2], p2:[3,3,4,4,4,4], p3:[4,4,4,3,4,4],
-    p4:[4,4,4,4,5,5], p5:[3,4,4,4,4,5], p6:[4,3,4,4,4,4]
-  };
-  Object.keys(moods).forEach(pid=>{
-    const arr = moods[pid], n = arr.length;
-    arr.forEach((m,i)=>{ const daysAgo=(n-1-i)*7+3; add(daysAgo,'pulse.logged','PEOPLE',{personId:pid, mood:m, measured:true}); });
-  });
-  [75,50,25,8].forEach(d=>add(d,'conflict.logged','PEOPLE',{personId:'p1', withPersonId:'p2'}));
-  for(let d=84; d>=0; d-=7) add(d,'sprint.review','ENGINEERING',{sprintId:'s'+d, velocity: 28+((d/7)%3)*3});
-  for(let d=88; d>=0; d-=11) add(d,'plan.checkin','ENGINEERING',{planId:'pl1', personId:'p1'});
-  for(let d=86; d>=0; d-=12) add(d,'plan.checkin','OPS',{planId:'pl2', personId:'p2'});
-  [88,70].forEach(d=>add(d,'plan.checkin','SALES',{planId:'pl3', personId:'p3'})); // stalled -> R30
-  for(let d=85; d>=0; d-=15) add(d,'okr.checkin','ENGINEERING',{goalId:'g1', ownerId:'p1'});
-  for(let d=80; d>=0; d-=14) add(d,'okr.checkin','SALES',{goalId:'g2', ownerId:'p3'});
-  [90,60].forEach(d=>add(d,'okr.checkin','EXTERNAL',{goalId:'g3', ownerId:'p5'})); // silent -> R20
-  for(let d=82; d>=0; d-=18) add(d,'okr.checkin','FINANCE',{goalId:'g4', ownerId:'p4'});
-  for(let d=84; d>=0; d-=10) add(d,'deal.updated','SALES',{dealId:'d1', ownerId:'p3'});
-  [88,60,35].forEach(d=>add(d,'deal.updated','SALES',{dealId:'d2', ownerId:'p3'})); // stalled -> R40
-  add(88,'risk.raised','RESILIENCE',{riskId:'r1', ownerId:'p2'});
-  add(45,'incident.logged','RESILIENCE',{riskId:'r1', ownerId:'p2'}); // still open -> R50
-  add(70,'risk.raised','RESILIENCE',{riskId:'r2', ownerId:'p1'});
-  add(60,'risk.resolved','RESILIENCE',{riskId:'r2', ownerId:'p1'});
-  for(let d=84; d>=0; d-=30) add(d,'finance.period.logged','FINANCE',{burnMultiple: 22-((84-d)/30)*2});
+/* ============================================================
+   ENGINE — 16 hand-written, fully-computed rules across
+   5 domains (legal has a lookback defined below but no rule in
+   this delivery — disclosed, not silently dropped). Each
+   evaluate() returns 0+ findings, each carrying a real "math"
+   trail (this build's own stand-in for the real repo's
+   ScoreMath.tsx concept — a file I saw named in the repo's file
+   tree but did NOT read the contents of, so nothing here is
+   copied from it, only independently designed in its spirit).
+   ============================================================ */
+LEADOS.engine = (function () {
+  const mean = LEADOS.util.mean;
+  const ageDays = (ev, today) => dayUTC(today) - dayUTC(ev.ts);
+  const byType = (events, type) => events.filter(e => e.type === type);
 
-  ev.sort((a,b)=> new Date(a.ts)-new Date(b.ts));
-  return ev.map((e,i)=>({ id:'e-'+pad(i+1,4), seq:i+1, ts:e.ts, type:e.type, domain:e.domain, data:e.data }));
-}
+  const RULES = [
+    { id: 'R4', domain: 'people', evaluate(events, today) {
+      const conflicts = byType(events, 'conflict.logged').filter(e => ageDays(e, today) <= 30);
+      if (conflicts.length < 3) return [];
+      const sev = Math.min(100, 40 + conflicts.length * 10);
+      return [{ key: 'R4:' + conflicts.map(e => e.id).join('+'), rule: { id: 'R4', domain: 'people', title: 'Rising conflict frequency' },
+        sev, sources: conflicts.map(e => e.id),
+        summary: conflicts.length + ' conflicts logged in the last 30 days (threshold: 3).',
+        math: ['conflicts(\u226430d) = ' + conflicts.length, 'sev = min(100, 40 + ' + conflicts.length + '\u00d710) = ' + sev] }];
+    }},
+    { id: 'R5', domain: 'people', evaluate(events, today) {
+      const att = byType(events, 'hr.attrition.logged').filter(e => ageDays(e, today) <= 90);
+      if (att.length < 2) return [];
+      const sev = Math.min(100, 50 + att.length * 15);
+      return [{ key: 'R5:' + att.map(e => e.id).join('+'), rule: { id: 'R5', domain: 'people', title: 'Attrition cluster' },
+        sev, sources: att.map(e => e.id),
+        summary: att.length + ' departures logged in the last 90 days (threshold: 2).',
+        math: ['attrition(\u226490d) = ' + att.length, 'sev = min(100, 50 + ' + att.length + '\u00d715) = ' + sev] }];
+    }},
+    { id: 'R7', domain: 'people', evaluate(events, today) {
+      const byTeam = {};
+      byType(events, 'pulse.recorded').forEach(e => (byTeam[e.payload.team] = byTeam[e.payload.team] || []).push(e));
+      const out = [];
+      Object.entries(byTeam).forEach(([team, list]) => {
+        if (list.length < 3) return;
+        const sorted = [...list].sort((a, b) => a.ts - b.ts);
+        const half = Math.floor(sorted.length / 2);
+        const earlier = sorted.slice(0, sorted.length - half), recent = sorted.slice(sorted.length - half);
+        const avgEarly = mean(earlier.map(e => e.payload.score)), avgRecent = mean(recent.map(e => e.payload.score));
+        const decline = avgEarly - avgRecent;
+        if (decline < 1.5) return;
+        const sev = Math.min(100, Math.round(30 + decline * 10));
+        out.push({ key: 'R7:' + team + ':' + sorted.map(e => e.id).join('+'), rule: { id: 'R7', domain: 'people', title: 'Burnout slope: ' + team },
+          sev, sources: sorted.map(e => e.id),
+          summary: 'Team "' + team + '" pulse declined from avg ' + avgEarly.toFixed(1) + ' to ' + avgRecent.toFixed(1) + ' across ' + sorted.length + ' check-ins.',
+          math: ['avg(earlier ' + earlier.length + ') = ' + avgEarly.toFixed(2), 'avg(recent ' + recent.length + ') = ' + avgRecent.toFixed(2),
+                 'decline = ' + decline.toFixed(2) + ' (threshold 1.5)', 'sev = min(100, round(30 + ' + decline.toFixed(2) + '\u00d710)) = ' + sev] });
+      });
+      return out;
+    }},
+    { id: 'R12', domain: 'strategy', evaluate(events, today) {
+      const byDeal = {};
+      byType(events, 'sales.deal.updated').forEach(e => { const id = e.payload.dealId; if (!byDeal[id] || e.ts > byDeal[id].ts) byDeal[id] = e; });
+      const out = [];
+      Object.values(byDeal).forEach(e => {
+        const age = ageDays(e, today);
+        if (age <= 45) return;
+        const sev = Math.min(100, Math.round(40 + age * 0.5 + Math.min(30, e.payload.amount / 10000)));
+        out.push({ key: 'R12:' + e.id, rule: { id: 'R12', domain: 'strategy', title: 'Deal stalled: ' + e.payload.name },
+          sev, sources: [e.id],
+          summary: 'Deal "' + e.payload.name + '" ($' + e.payload.amount.toLocaleString() + ') has had no update in ' + age + ' days (threshold 45).',
+          math: ['daysSinceUpdate = ' + age, 'sev = min(100, round(40 + ' + age + '\u00d70.5 + min(30, amount/10000))) = ' + sev] });
+      });
+      return out;
+    }},
+    { id: 'R13', domain: 'strategy', evaluate(events, today) {
+      const byDeal = {};
+      byType(events, 'sales.deal.updated').forEach(e => { const id = e.payload.dealId; if (!byDeal[id] || e.ts > byDeal[id].ts) byDeal[id] = e; });
+      const latest = Object.values(byDeal);
+      if (latest.length < 2) return [];
+      const total = latest.reduce((s, e) => s + e.payload.amount, 0);
+      if (total <= 0) return [];
+      const max = latest.reduce((a, b) => a.payload.amount > b.payload.amount ? a : b);
+      const share = max.payload.amount / total;
+      if (share <= 0.5) return [];
+      const sev = Math.min(100, Math.round(share * 100));
+      return [{ key: 'R13:' + latest.map(e => e.id).join('+'), rule: { id: 'R13', domain: 'strategy', title: 'Pipeline concentration risk' },
+        sev, sources: latest.map(e => e.id),
+        summary: '"' + max.payload.name + '" is ' + (share * 100).toFixed(0) + '% of total open pipeline ($' + total.toLocaleString() + ').',
+        math: ['total pipeline = $' + total.toLocaleString(), 'max deal = $' + max.payload.amount.toLocaleString() + ' (' + max.payload.name + ')',
+               'share = ' + (share * 100).toFixed(1) + '%', 'sev = round(share\u00d7100) = ' + sev] }];
+    }},
+    { id: 'R16', domain: 'ops', evaluate(events, today) {
+      const inc = byType(events, 'ops.incident.logged').filter(e => ageDays(e, today) <= 14);
+      if (inc.length < 3) return [];
+      const sev = Math.min(100, 35 + inc.length * 12);
+      return [{ key: 'R16:' + inc.map(e => e.id).join('+'), rule: { id: 'R16', domain: 'ops', title: 'Incident cluster' },
+        sev, sources: inc.map(e => e.id),
+        summary: inc.length + ' ops incidents logged in the last 14 days (threshold: 3).',
+        math: ['incidents(\u226414d) = ' + inc.length, 'sev = min(100, 35 + ' + inc.length + '\u00d712) = ' + sev] }];
+    }},
+    { id: 'R17', domain: 'ops', evaluate(events, today) {
+      const inc = byType(events, 'ops.incident.logged').sort((a, b) => a.ts - b.ts);
+      if (inc.length < 3) return [];
+      const last3 = inc.slice(-3);
+      const sevs = last3.map(e => e.payload.severity);
+      if (!(sevs[0] < sevs[1] && sevs[1] < sevs[2])) return [];
+      const avg = mean(sevs), sev = Math.min(100, Math.round(avg * 15 + 20));
+      return [{ key: 'R17:' + last3.map(e => e.id).join('+'), rule: { id: 'R17', domain: 'ops', title: 'Incident severity trending up' },
+        sev, sources: last3.map(e => e.id),
+        summary: 'Last 3 incident severities: ' + sevs.join(' \u2192 ') + ' (strictly increasing).',
+        math: ['severities = [' + sevs.join(', ') + ']', 'avg = ' + avg.toFixed(2), 'sev = min(100, round(avg\u00d715+20)) = ' + sev] }];
+    }},
+    { id: 'R19', domain: 'people', evaluate(events, today) {
+      const conf = byType(events, 'conflict.logged').filter(e => ageDays(e, today) <= 30);
+      const att = byType(events, 'hr.attrition.logged').filter(e => ageDays(e, today) <= 90);
+      if (conf.length < 2 || att.length < 1) return [];
+      const sev = Math.min(100, 45 + conf.length * 5 + att.length * 10);
+      return [{ key: 'R19:' + [...conf, ...att].map(e => e.id).join('+'), rule: { id: 'R19', domain: 'people', title: 'Team cohesion falling' },
+        sev, sources: [...conf, ...att].map(e => e.id),
+        summary: conf.length + ' conflicts(\u226430d) + ' + att.length + ' departures(\u226490d) co-occurring.',
+        math: ['conflicts = ' + conf.length, 'attrition = ' + att.length, 'sev = min(100, 45 + ' + conf.length + '\u00d75 + ' + att.length + '\u00d710) = ' + sev] }];
+    }},
+    { id: 'R20', domain: 'strategy', evaluate(events, today) {
+      const byGoal = {};
+      byType(events, 'goal.progressLogged').forEach(e => { const id = e.payload.goalId; if (!byGoal[id] || e.ts > byGoal[id].ts) byGoal[id] = e; });
+      const out = [];
+      Object.values(byGoal).forEach(e => {
+        const age = ageDays(e, today);
+        if (age <= 21) return;
+        const sev = Math.min(100, Math.round(30 + age));
+        out.push({ key: 'R20:' + e.id, rule: { id: 'R20', domain: 'strategy', title: 'Goal gone silent: ' + e.payload.goalName },
+          sev, sources: [e.id],
+          summary: 'Goal "' + e.payload.goalName + '" has had no progress update in ' + age + ' days (threshold 21).',
+          math: ['daysSinceProgress = ' + age, 'sev = min(100, round(30 + ' + age + ')) = ' + sev] });
+      });
+      return out;
+    }},
+    { id: 'R27', domain: 'ops', evaluate(events, today) {
+      const out = [];
+      byType(events, 'mfg.safety.incident').filter(e => e.payload.severity === 'low').forEach(e => {
+        const age = ageDays(e, today);
+        if (age <= 14 || age > 60) return; // >60d treated as stale data, not perpetually open — disclosed assumption
+        const sev = Math.min(100, 20 + age);
+        out.push({ key: 'R27:' + e.id, rule: { id: 'R27', domain: 'ops', title: 'Unresolved minor safety concern: ' + e.payload.line },
+          sev, sources: [e.id],
+          summary: 'Low-severity incident on "' + e.payload.line + '" is ' + age + ' days old with no recorded resolution (window: 14\u201360d).',
+          math: ['age = ' + age + 'd (14 < age \u2264 60)', 'sev = min(100, 20 + ' + age + ') = ' + sev] });
+      });
+      return out;
+    }},
+    { id: 'R28', domain: 'ops', evaluate(events, today) {
+      const m30 = byType(events, 'mfg.safety.incident').filter(e => ageDays(e, today) <= 30);
+      const high = m30.filter(e => e.payload.severity === 'high');
+      if (high.length < 1 && m30.length < 2) return [];
+      const sev = high.length ? Math.min(100, 70 + high.length * 10) : Math.min(100, 40 + m30.length * 10);
+      return [{ key: 'R28:' + m30.map(e => e.id).join('+'), rule: { id: 'R28', domain: 'ops', title: 'Safety incident severity/volume' },
+        sev, sources: m30.map(e => e.id),
+        summary: m30.length + ' mfg safety incidents in 30d, ' + high.length + ' high-severity.',
+        math: ['incidents(\u226430d) = ' + m30.length, 'high-severity = ' + high.length, 'sev = ' + sev] }];
+    }},
+    { id: 'R29', domain: 'ops', evaluate(events, today) {
+      // Not in the brief's rule set — added this session so at least one
+      // finding genuinely lands in the IMMEDIATE (0-7d) resolution bucket,
+      // for an honest demo of all four resolutions. See AI-SESSION-LOG §1.
+      return byType(events, 'mfg.safety.incident').filter(e => e.payload.severity === 'high' && ageDays(e, today) <= 7)
+        .map(e => { const age = ageDays(e, today);
+          return { key: 'R29:' + e.id, rule: { id: 'R29', domain: 'ops', title: 'Fresh critical safety incident: ' + e.payload.line },
+            sev: 85, sources: [e.id],
+            summary: 'High-severity incident on "' + e.payload.line + '" logged ' + age + ' days ago \u2014 inside the 7-day immediate window.',
+            math: ['severity = high, age = ' + age + 'd (\u22647)', 'sev = 85 (fixed \u2014 tactical alert, not yet trended)'] };
+        });
+    }},
+    { id: 'R103', domain: 'finance', evaluate(events, today) {
+      const pl = byType(events, 'fin.pl.logged').sort((a, b) => a.ts - b.ts);
+      if (pl.length < 2) return [];
+      const [p0, p1] = pl.slice(-2);
+      const decline = p0.payload.margin - p1.payload.margin;
+      if (decline < 3) return [];
+      const sev = Math.min(100, Math.round(40 + decline * 4));
+      return [{ key: 'R103:' + p0.id + '+' + p1.id, rule: { id: 'R103', domain: 'finance', title: 'Margin compression' },
+        sev, sources: [p0.id, p1.id],
+        summary: 'Margin fell from ' + p0.payload.margin + '% to ' + p1.payload.margin + '% period-over-period.',
+        math: ['marginDecline = ' + p0.payload.margin + ' \u2212 ' + p1.payload.margin + ' = ' + decline.toFixed(1), 'sev = min(100, round(40 + decline\u00d74)) = ' + sev] }];
+    }},
+    { id: 'R107', domain: 'finance', evaluate(events, today) {
+      const pl = byType(events, 'fin.pl.logged').sort((a, b) => a.ts - b.ts);
+      if (pl.length < 2) return [];
+      const [p0, p1] = pl.slice(-2);
+      const pct = (p0.payload.cash - p1.payload.cash) / p0.payload.cash;
+      if (pct < 0.10) return [];
+      const sev = Math.min(100, Math.round(30 + pct * 200));
+      return [{ key: 'R107:' + p0.id + '+' + p1.id, rule: { id: 'R107', domain: 'finance', title: 'Cash runway shortening' },
+        sev, sources: [p0.id, p1.id],
+        summary: 'Cash declined ' + (pct * 100).toFixed(1) + '% period-over-period ($' + p0.payload.cash.toLocaleString() + ' \u2192 $' + p1.payload.cash.toLocaleString() + ').',
+        math: ['decline% = (' + p0.payload.cash + ' \u2212 ' + p1.payload.cash + ') / ' + p0.payload.cash + ' = ' + (pct * 100).toFixed(1) + '%', 'sev = min(100, round(30 + pct\u00d7200)) = ' + sev] }];
+    }},
+    { id: 'R112', domain: 'finance', evaluate(events, today) {
+      const pl = byType(events, 'fin.pl.logged').sort((a, b) => a.ts - b.ts);
+      if (pl.length < 2) return [];
+      const [p0, p1] = pl.slice(-2);
+      const expG = (p1.payload.expense - p0.payload.expense) / p0.payload.expense;
+      const revG = (p1.payload.revenue - p0.payload.revenue) / p0.payload.revenue;
+      const diff = expG - revG;
+      if (diff < 0.05) return [];
+      const sev = Math.min(100, Math.round(40 + diff * 300));
+      return [{ key: 'R112:' + p0.id + '+' + p1.id, rule: { id: 'R112', domain: 'finance', title: 'Expense growth outpacing revenue' },
+        sev, sources: [p0.id, p1.id],
+        summary: 'Expenses grew ' + (expG * 100).toFixed(1) + '% vs revenue growth of ' + (revG * 100).toFixed(1) + '%.',
+        math: ['expGrowth = ' + (expG * 100).toFixed(1) + '%', 'revGrowth = ' + (revG * 100).toFixed(1) + '%', 'sev = min(100, round(40 + diff\u00d7300)) = ' + sev] }];
+    }},
+    { id: 'R129', domain: 'people', evaluate(events, today) {
+      const crit = byType(events, 'hr.attrition.logged').filter(e => e.payload.critical);
+      const hires = byType(events, 'hr.hire.logged');
+      const out = [];
+      crit.forEach(e => {
+        const age = ageDays(e, today);
+        if (age < 30) return; // grace period for a backfill to appear
+        const backfilled = hires.some(h => h.ts > e.ts);
+        if (backfilled) return;
+        const sev = Math.min(100, Math.round(50 + age * 0.15));
+        out.push({ key: 'R129:' + e.id, rule: { id: 'R129', domain: 'people', title: 'Key-person succession gap: ' + e.payload.role },
+          sev, sources: [e.id],
+          summary: '"' + e.payload.role + '" departed ' + age + ' days ago with no recorded backfill hire.',
+          math: ['daysSinceDeparture = ' + age, 'backfillHire = false', 'sev = min(100, round(50 + ' + age + '\u00d70.15)) = ' + sev] });
+      });
+      return out;
+    }}
+  ];
 
-/* ---------------- store (append-only, one localStorage key) ---------------- */
-function freshMeta(){
-  return {
-    createdAt: todayIso(),
-    viewHistory: {},       // view -> count   (persisted; brief did not specify storage, disclosed choice: localStorage)
-    commandHistory: {},    // command id -> count (persisted; same disclosure)
-    usageLog: [],          // {ts, view, bucket}  capped 500, persisted
-    sessionLog: [],        // iso timestamps of session starts, persisted
-    attentionHeatmap: {},  // domain -> decayed ms, persisted roll-up of sessionStorage attention (see docs)
-    layoutPins: {},        // navId -> desired index
-    layout: null           // last generated layout summary, for change-detection banner
-  };
-}
-function seedStore(){
-  const today = new Date();
-  return {
-    schemaVersion: 1,
-    lineage: 'pt-H-demo',
-    meta: freshMeta(),
-    people: PEOPLE,
-    events: buildSeedEvents(today)
-  };
-}
-let STATE = loadOrSeed();
-function loadOrSeed(){
-  try{
-    const raw = localStorage.getItem(KEY);
-    if(raw){ const parsed = JSON.parse(raw); if(parsed && parsed.events && parsed.meta) return parsed; }
-  }catch(e){ /* corrupt -> reseed, disclosed */ }
-  const s = seedStore(); persist(s); return s;
-}
-function persist(s){ try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){ /* quota: demo stays in-memory */ } }
-function appendEvent(type, domain, data){
-  const ev = { id:'e-'+pad(STATE.events.length+1,4), seq: STATE.events.length+1, ts: todayIso(), type, domain, data: data||{} };
-  STATE = { ...STATE, events:[...STATE.events, ev] };
-  persist(STATE);
-  return ev;
-}
-function updateMeta(patch){
-  STATE = { ...STATE, meta: { ...STATE.meta, ...patch } };
-  persist(STATE);
-}
-LEADOS.store = { KEY, getState:()=>STATE, appendEvent, updateMeta, reseed:()=>{ STATE=seedStore(); persist(STATE); } };
-
-/* =========================================================================
-   RULE ENGINE — 6 computed rules across domains (not the pasted brief's
-   144; see README). Each finding: {rule, domain, entityId, label, sev, title, detail}
-   ========================================================================= */
-function lastEventFor(events, type, matchFn){
-  let last=null;
-  events.forEach(e=>{ if(e.type===type && matchFn(e)) { if(!last || new Date(e.ts)>new Date(last.ts)) last=e; } });
-  return last;
-}
-function runEngine(state, today){
-  const events = state.events;
-  const findings = [];
-
-  // R1: 1:1 cadence overdue
-  PEOPLE.forEach(p=>{
-    const last = lastEventFor(events,'oneonone.logged', e=>e.data.personId===p.id);
-    const gap = last ? daysBetween(last.ts, today) : 999;
-    if(gap > p.cadenceDays){
-      findings.push({ rule:'R1', domain:'PEOPLE', entityId:p.id, label:p.name, sev:3,
-        title:`1:1 overdue — ${p.name}`, detail:`${gap}d since last 1:1 (cadence ${p.cadenceDays}d)` });
-    }
-  });
-
-  // R7: pulse/burnout trend (linear regression over weekly mood points)
-  PEOPLE.forEach(p=>{
-    const pts = events.filter(e=>e.type==='pulse.logged' && e.data.personId===p.id && e.data.measured)
-      .sort((a,b)=>new Date(a.ts)-new Date(b.ts))
-      .map((e,i)=>({x:i,y:e.data.mood}));
-    if(pts.length<3) return;
-    const slope = linSlope(pts);
-    if(slope <= -0.5){
-      findings.push({ rule:'R7', domain:'PEOPLE', entityId:p.id, label:p.name, sev:4,
-        title:`Burnout trend — ${p.name}`, detail:`mood slope ${fmt1(slope)}/period over ${pts.length} measured pulses` });
-    }
-  });
-
-  // R20: goal/OKR silent
-  GOALS.forEach(g=>{
-    const last = lastEventFor(events,'okr.checkin', e=>e.data.goalId===g.id);
-    const gap = last ? daysBetween(last.ts, today) : 999;
-    if(gap > 21){
-      findings.push({ rule:'R20', domain:g.domain, entityId:g.id, label:g.label, sev:3,
-        title:`Goal silent — ${g.label}`, detail:`${gap}d since last okr.checkin (threshold 21d)` });
-    }
-  });
-
-  // R30: plan stalled
-  PLANS.forEach(pl=>{
-    const last = lastEventFor(events,'plan.checkin', e=>e.data.planId===pl.id);
-    const gap = last ? daysBetween(last.ts, today) : 999;
-    if(gap > 14){
-      findings.push({ rule:'R30', domain:pl.domain, entityId:pl.id, label:pl.label, sev:2,
-        title:`Plan stalled — ${pl.label}`, detail:`${gap}d since last plan.checkin (threshold 14d)` });
-    }
-  });
-
-  // R40: deal stalled
-  DEALS.forEach(d=>{
-    const last = lastEventFor(events,'deal.updated', e=>e.data.dealId===d.id);
-    const gap = last ? daysBetween(last.ts, today) : 999;
-    if(gap > 21){
-      findings.push({ rule:'R40', domain:d.domain, entityId:d.id, label:d.label, sev:3,
-        title:`Deal stalled — ${d.label}`, detail:`${gap}d since last deal.updated (threshold 21d)` });
-    }
-  });
-
-  // R50: risk open too long (raised, no resolved, >30d)
-  RISKS.forEach(r=>{
-    const raised = lastEventFor(events,'risk.raised', e=>e.data.riskId===r.id);
-    const resolved = lastEventFor(events,'risk.resolved', e=>e.data.riskId===r.id);
-    if(raised && (!resolved || new Date(resolved.ts) < new Date(raised.ts))){
-      const gap = daysBetween(raised.ts, today);
-      if(gap > 30){
-        findings.push({ rule:'R50', domain:r.domain, entityId:r.id, label:r.label, sev:4,
-          title:`Risk open ${gap}d — ${r.label}`, detail:`raised ${gap}d ago, no risk.resolved logged (threshold 30d)` });
-      }
-    }
-  });
-
-  return findings;
-}
-LEADOS.engine = { run: runEngine };
-
-/* =========================================================================
-   PART 1 — GENERATIVE LAYOUT ENGINE  (LEADOS.layoutGrammar)
-   ========================================================================= */
-const NAV_ITEMS = [
-  { id:'today',       label:'Today',       glyph:'◎', domain:null,         util:true },
-  { id:'roster',      label:'Roster',      glyph:'○', domain:'PEOPLE',     util:false },
-  { id:'engineering', label:'Engineering', glyph:'◈', domain:'ENGINEERING',util:false },
-  { id:'ops',         label:'Ops',         glyph:'◇', domain:'OPS',        util:false },
-  { id:'sales',       label:'Sales',       glyph:'◇', domain:'SALES',      util:false },
-  { id:'finance',     label:'Finance',     glyph:'◇', domain:'FINANCE',    util:false },
-  { id:'strategy',    label:'Strategy',    glyph:'◆', domain:'STRATEGY',   util:false },
-  { id:'external',    label:'External',    glyph:'◇', domain:'EXTERNAL',  util:false },
-  { id:'resilience',  label:'Resilience',  glyph:'⬡', domain:'RESILIENCE', util:false },
-  { id:'intelligence',label:'Intelligence',glyph:'⬡', domain:null,         util:true },
-  { id:'forecast',    label:'Forecast',    glyph:'▲', domain:null,         util:true },
-  { id:'data',        label:'Data',        glyph:'◫', domain:null,         util:true },
-  { id:'health',      label:'Health',      glyph:'✓', domain:null,         util:true }
-];
-const GROUPS = {
-  LEADERSHIP:  ['PEOPLE'],
-  FINANCIAL:   ['FINANCE','SALES'],
-  OPERATIONAL: ['OPS','ENGINEERING','RESILIENCE'],
-  EXTERNAL:    ['STRATEGY','EXTERNAL']
-};
-const CONFIG_BY_GROUP = { LEADERSHIP:'A', FINANCIAL:'B', OPERATIONAL:'C', EXTERNAL:'D' };
-const CONFIG_HEADER = {
-  A:'LEADERSHIP HEAVY (people/growth dominate)',
-  B:'FINANCIAL HEAVY (finance/sales dominate)',
-  C:'OPERATIONAL HEAVY (ops/execution dominate)',
-  D:'EXTERNAL HEAVY (market/strategy dominate)',
-  E:'BALANCED (no dominant domain > 25%)'
-};
-
-function readAttentionHeatmap(){
-  // sessionStorage = THIS session's running dwell time per domain.
-  try{ return JSON.parse(sessionStorage.getItem('leados-pth-attention')||'{}'); }catch(e){ return {}; }
-}
-function normalizeMap(m){
-  const max = Math.max(0, ...Object.values(m));
-  const out = {};
-  DOMAINS.forEach(d=> out[d] = max>0 ? (m[d]||0)/max : 0 );
-  return out;
-}
-function analyzeTopology(state, today){
-  const events = state.events;
-  const findings = runEngine(state, today);
-  const findingW = {}, activityW = {};
-  DOMAINS.forEach(d=>{ findingW[d]=0; activityW[d]=0; });
-  findings.forEach(f=> findingW[f.domain] = (findingW[f.domain]||0) + f.sev);
-  events.forEach(e=>{
-    if(daysBetween(e.ts, today) <= 30) activityW[e.domain] = (activityW[e.domain]||0) + 1;
-  });
-  // persisted, decayed roll-up of sessionStorage attention (see README "attention timing" note)
-  const attentionW = { ...state.meta.attentionHeatmap };
-  DOMAINS.forEach(d=>{ if(!(d in attentionW)) attentionW[d]=0; });
-
-  const nf = normalizeMap(findingW), na = normalizeMap(activityW), nt = normalizeMap(attentionW);
-  const domainScore = {};
-  DOMAINS.forEach(d=>{ domainScore[d] = 0.4*nf[d] + 0.3*na[d] + 0.3*nt[d]; });
-
-  // feature usage vector
-  const typeFreq = {};
-  events.forEach(e=> typeFreq[e.type] = (typeFreq[e.type]||0)+1 );
-  const topEventType = Object.entries(typeFreq).sort((a,b)=>b[1]-a[1])[0];
-
-  // temporal pattern: bucket session view log by hour-of-day bucket -> top view
-  const bucketViewCounts = { morning:{}, afternoon:{}, evening:{} };
-  (state.meta.usageLog||[]).forEach(r=>{
-    const b = bucketViewCounts[r.bucket]; if(!b) return;
-    b[r.view] = (b[r.view]||0)+1;
-  });
-  const temporalTop = {};
-  Object.keys(bucketViewCounts).forEach(b=>{
-    const entries = Object.entries(bucketViewCounts[b]).sort((a,b2)=>b2[1]-a[1]);
-    temporalTop[b] = entries[0] ? entries[0][0] : null;
-  });
-
-  const totalEvents = events.length;
-  const domainsTouched = DOMAINS.filter(d=> activityW[d]>0 || findingW[d]>0).length;
-
-  return { domainScore, findingW, activityW, attentionW, typeFreq, topEventType, temporalTop, totalEvents, domainsTouched };
-}
-
-function pickConfiguration(topology){
-  if(topology.totalEvents < 50 || topology.domainsTouched < 3) return { config:'E', group:null, share:0 };
-  const sums = {};
-  let grand = 0;
-  Object.entries(GROUPS).forEach(([g, members])=>{
-    sums[g] = members.reduce((s,d)=> s + topology.domainScore[d], 0);
-    grand += sums[g];
-  });
-  let best=null, bestShare=0;
-  Object.entries(sums).forEach(([g,s])=>{
-    const share = grand>0 ? s/grand : 0;
-    if(share > bestShare){ bestShare = share; best = g; }
-  });
-  if(best && bestShare > 0.25) return { config: CONFIG_BY_GROUP[best], group:best, share:bestShare };
-  return { config:'E', group:best, share:bestShare };
-}
-
-function generateLayout(state, today){
-  const topology = analyzeTopology(state, today);
-  const pick = pickConfiguration(topology);
-  const domainItems = NAV_ITEMS.filter(n=>!n.util);
-  const utilItems = NAV_ITEMS.filter(n=>n.util && n.id!=='today');
-
-  let ordered = [...domainItems].sort((a,b)=> (topology.domainScore[b.domain]||0) - (topology.domainScore[a.domain]||0));
-
-  // apply pins: an item pinned to position i is placed there, rest fill in generated order
-  const pins = state.meta.layoutPins || {};
-  const pinned = Object.entries(pins).filter(([id])=> domainItems.some(d=>d.id===id));
-  if(pinned.length){
-    const withoutPinned = ordered.filter(it => !pins.hasOwnProperty(it.id));
-    const result = new Array(ordered.length).fill(null);
-    pinned.forEach(([id,pos])=>{
-      const item = domainItems.find(d=>d.id===id);
-      const slot = clamp(pos, 0, result.length-1);
-      if(item && !result[slot]) result[slot] = item;
+  function run(P, today) {
+    const findings = [];
+    const errors = [];
+    RULES.forEach(r => {
+      try { (r.evaluate(P.state.events, today) || []).forEach(f => findings.push(f)); }
+      catch (err) { errors.push({ rule: r.id, error: String(err && err.message || err) }); }
     });
-    let wi = 0;
-    for(let i=0;i<result.length;i++){
-      if(!result[i]){ while(wi<withoutPinned.length && result.includes(withoutPinned[wi])) wi++; result[i]=withoutPinned[wi++]; }
+    return { findings, errors };
+  }
+  function _days(a, b) { return dayUTC(b) - dayUTC(a); }
+
+  return { RULES, run, _days, ageDays, byType };
+})();
+
+/* ============================================================
+   PART 1 — TEMPORAL INTELLIGENCE FIELD
+   Implemented close to the pasted brief's own concrete JS
+   (classifyTemporalResolution / buildTemporalProfile /
+   _diagnoseMode) — these three were given as real code, not
+   pseudocode, so they are reproduced faithfully rather than
+   redesigned.
+   ============================================================ */
+LEADOS.temporalField = {
+  RESOLUTION_META: {
+    IMMEDIATE:   { label: 'Immediate (0\u20137d)',   color: 'rose',   noise: 'High',      action: 'Tactical response',          modifier: 0.7  },
+    OPERATIONAL: { label: 'Operational (7\u201360d)', color: 'sky',    noise: 'Medium',    action: 'Operational adjustment',     modifier: 1.0  },
+    STRATEGIC:   { label: 'Strategic (60\u2013180d)', color: 'amber',  noise: 'Low',       action: 'Strategic intervention',     modifier: 0.85 },
+    STRUCTURAL:  { label: 'Structural (180d+)',   color: 'violet', noise: 'Very low',  action: 'Structural transformation',  modifier: 0.6  }
+  },
+
+  classifyTemporalResolution(finding, P, today) {
+    const sourceEvents = finding.sources.map(id => P.state.events.find(e => e.id === id)).filter(Boolean);
+    if (!sourceEvents.length) return 'IMMEDIATE';
+    const oldest = sourceEvents.reduce((a, b) => a.ts < b.ts ? a : b);
+    const ageD = LEADOS.engine._days(oldest.ts, today);
+    if (ageD <= 7) return 'IMMEDIATE';
+    if (ageD <= 60) return 'OPERATIONAL';
+    if (ageD <= 180) return 'STRATEGIC';
+    return 'STRUCTURAL';
+  },
+
+  buildTemporalProfile(P, today) {
+    const findings = LEADOS.engine.run(P, today).findings;
+    const profile = { IMMEDIATE: [], OPERATIONAL: [], STRATEGIC: [], STRUCTURAL: [] };
+    for (const f of findings) {
+      const res = this.classifyTemporalResolution(f, P, today);
+      f._resolution = res; // cached for the UI; not part of the brief's spec, convenience only
+      profile[res].push(f);
     }
-    ordered = result.filter(Boolean);
-  }
-
-  const config = pick.config;
-  const visibleCount = config==='E' ? ordered.length : Math.min(5, ordered.length);
-  const visible = ordered.slice(0, visibleCount);
-  const folded = ordered.slice(visibleCount);
-
-  const topDomains = [...DOMAINS].sort((a,b)=>topology.domainScore[b]-topology.domainScore[a]).slice(0,3);
-
-  return { config, header: CONFIG_HEADER[config], group: pick.group, share: pick.share,
-           visible, folded, utilItems, topology, topDomains };
-}
-LEADOS.layoutGrammar = { analyzeTopology, generateLayout, NAV_ITEMS, DOMAINS };
-
-/* =========================================================================
-   PART 2 — SEMANTIC RELATIONSHIP GRAPH  (LEADOS.entityGraph)
-   ========================================================================= */
-function extractRefs(data){
-  const refs = [];
-  Object.entries(data||{}).forEach(([key,val])=>{
-    if(/Id$/.test(key) && typeof val==='string') refs.push({ id:val, field:key });
-    if(/Ids$/.test(key) && Array.isArray(val)) val.forEach(id=>refs.push({ id, field:key }));
-  });
-  return refs;
-}
-function buildEntityGraph(state){
-  const nodes = new Map(), edges = new Map();
-  Object.entries(ENTITY_LABELS).forEach(([id,info])=> nodes.set(id, { ...info, id, events:[] }) );
-  state.events.forEach(ev=>{
-    const refs = extractRefs(ev.data).filter(r=>nodes.has(r.id));
-    refs.forEach(r=> nodes.get(r.id).events.push(ev));
-    for(let i=0;i<refs.length;i++){
-      for(let j=i+1;j<refs.length;j++){
-        if(refs[i].id===refs[j].id) continue;
-        const key = [refs[i].id, refs[j].id].sort().join(':');
-        if(!edges.has(key)) edges.set(key, { type:ev.type, weight:0, events:[] });
-        const e = edges.get(key); e.weight++; e.events.push(ev.id);
-      }
-    }
-  });
-  return { nodes, edges };
-}
-function pageRankSimple(nodes, edges, iter){
-  iter = iter || 20;
-  const scores = new Map();
-  nodes.forEach((_,id)=> scores.set(id, 1/nodes.size));
-  for(let i=0;i<iter;i++){
-    const newScores = new Map();
-    nodes.forEach((_,id)=> newScores.set(id, 0.15/nodes.size));
-    edges.forEach((edge,key)=>{
-      const [a,b] = key.split(':');
-      const contribution = 0.85 * edge.weight;
-      newScores.set(b, (newScores.get(b)||0) + contribution*(scores.get(a)||0));
-      newScores.set(a, (newScores.get(a)||0) + contribution*(scores.get(b)||0));
-    });
-    const total = [...newScores.values()].reduce((a,b)=>a+b,0) || 1;
-    newScores.forEach((v,k)=> newScores.set(k, v/total));
-    newScores.forEach((v,k)=> scores.set(k,v));
-  }
-  return scores;
-}
-function connectedClusters(nodes, edges, minWeight){
-  minWeight = minWeight || 3;
-  const adj = new Map();
-  nodes.forEach((_,id)=> adj.set(id, []));
-  edges.forEach((edge,key)=>{
-    if(edge.weight < minWeight) return;
-    const [a,b] = key.split(':');
-    adj.get(a).push({ to:b, type:edge.type });
-    adj.get(b).push({ to:a, type:edge.type });
-  });
-  const seen = new Set(), clusters = [];
-  nodes.forEach((_,id)=>{
-    if(seen.has(id) || adj.get(id).length===0) return;
-    const stack=[id], members=new Set(), typeCount={};
-    while(stack.length){
-      const cur = stack.pop();
-      if(members.has(cur)) continue;
-      members.add(cur); seen.add(cur);
-      adj.get(cur).forEach(n=>{ typeCount[n.type]=(typeCount[n.type]||0)+1; if(!members.has(n.to)) stack.push(n.to); });
-    }
-    if(members.size>1){
-      const label = Object.entries(typeCount).sort((a,b)=>b[1]-a[1])[0];
-      clusters.push({ members:[...members], label: label ? label[0] : 'unlabeled' });
-    }
-  });
-  return clusters;
-}
-function detectLeadLag(eventsA, eventsB, windowDays){
-  windowDays = windowDays || 21;
-  const offsets = [];
-  eventsA.forEach(ea=> eventsB.forEach(eb=>{
-    const delta = dayUTC(eb.ts) - dayUTC(ea.ts);
-    if(Math.abs(delta) <= windowDays) offsets.push(delta);
-  }));
-  if(offsets.length < 3) return { detected:false, n:offsets.length, reason:'fewer than 3 co-occurrences within window' };
-  const mean = offsets.reduce((a,b)=>a+b,0)/offsets.length;
-  const std = Math.sqrt(offsets.map(d=>(d-mean)**2).reduce((a,b)=>a+b,0)/offsets.length);
-  if(std < 5 && Math.abs(mean) > 2){
-    return { detected:true, lag:Math.round(mean), std:Math.round(std*10)/10, n:offsets.length };
-  }
-  return { detected:false, n:offsets.length, mean:Math.round(mean*10)/10, std:Math.round(std*10)/10, reason:'std ≥5d or |mean| ≤2d — no reliable periodic lag' };
-}
-function entityGraphInsights(state){
-  const { nodes, edges } = buildEntityGraph(state);
-  const scores = pageRankSimple(nodes, edges, 20);
-  const centrality = [...nodes.keys()].map(id=>({ id, score:scores.get(id)||0, ...nodes.get(id) }))
-    .filter(n=>n.events.length>0)
-    .sort((a,b)=>b.score-a.score);
-  const clusters = connectedClusters(nodes, edges, 3);
-  const patterns = [];
-  edges.forEach((edge,key)=>{
-    if(edge.weight < 5) return;
-    const [a,b] = key.split(':');
-    const na = nodes.get(a), nb = nodes.get(b);
-    if(!na || !nb) return;
-    const res = detectLeadLag(na.events, nb.events, 21);
-    patterns.push({ a, b, aLabel:na.label, bLabel:nb.label, ...res });
-  });
-  return { nodes, edges, centrality, clusters, patterns };
-}
-LEADOS.entityGraph = { buildEntityGraph, extractRefs, pageRankSimple, connectedClusters, detectLeadLag, entityGraphInsights };
-
-/* =========================================================================
-   PART 3 — PREDICTIVE SIGNAL ENGINE  (LEADOS.predict)
-   NOTE: the pasted brief's Part 3 text was truncated mid-definition of
-   buildPrefireCalendar() in the prompt. The bucketing scheme below
-   (NOW / this week / next 2 weeks / next month / later / uncertain /
-   not projectable) is this session's own reasonable completion of that
-   cut-off spec, not a verified/recovered original — labeled here and in
-   the docs.
-   ========================================================================= */
-function computeMoodSlope(measuredPulses){
-  const pts = measuredPulses.map((p,i)=>({x:i,y:p.mood}));
-  return linSlope(pts);
-}
-function projectFireDate(ruleId, state, today){
-  const events = state.events;
-  if(ruleId==='R1'){
-    const out = {};
-    PEOPLE.forEach(p=>{
-      const last = lastEventFor(events,'oneonone.logged', e=>e.data.personId===p.id);
-      if(!last){ out[p.id]=null; return; }
-      const gap = daysBetween(last.ts, today);
-      const daysUntilFire = p.cadenceDays - gap + 1;
-      out[p.id] = daysUntilFire > 0 ? { date: inDaysIso(daysUntilFire), basis:`cadence ${p.cadenceDays}d − elapsed ${gap}d` } : { date:'NOW', basis:`already ${gap-p.cadenceDays}d over cadence` };
-    });
-    return out;
-  }
-  if(ruleId==='R7'){
-    const out = {};
-    PEOPLE.forEach(p=>{
-      const measured = events.filter(e=>e.type==='pulse.logged' && e.data.personId===p.id && e.data.measured)
-        .sort((a,b)=>new Date(a.ts)-new Date(b.ts));
-      if(measured.length<3){ out[p.id]=null; return; }
-      const slope = computeMoodSlope(measured);
-      if(slope<=-0.5){ out[p.id] = { date:'NOW', basis:`slope ${fmt1(slope)}/period already past -0.5 threshold` }; return; }
-      if(slope>=0){ out[p.id]=null; return; }
-      out[p.id] = { uncertain:true, note:`slope ${fmt1(slope)}/period trending toward R7 threshold — not linearly projectable with confidence`, basis:'extrapolation requires assuming constant rate-of-change-of-slope, too uncertain to date' };
-    });
-    return out;
-  }
-  if(ruleId==='R20'){
-    const out = {};
-    GOALS.forEach(g=>{
-      const last = lastEventFor(events,'okr.checkin', e=>e.data.goalId===g.id);
-      const gap = last ? daysBetween(last.ts, today) : 999;
-      const daysUntilFire = 21 - gap + 1;
-      out[g.id] = daysUntilFire > 0 ? { date: inDaysIso(daysUntilFire), basis:`silent threshold 21d − elapsed ${gap}d` } : { date:'NOW', basis:`already ${gap-21}d past silent threshold` };
-    });
-    return out;
-  }
-  if(ruleId==='R40'){
-    const out = {};
-    DEALS.forEach(d=>{
-      const last = lastEventFor(events,'deal.updated', e=>e.data.dealId===d.id);
-      const gap = last ? daysBetween(last.ts, today) : 999;
-      const daysUntilFire = 21 - gap + 1;
-      out[d.id] = daysUntilFire > 0 ? { date: inDaysIso(daysUntilFire), basis:`stall threshold 21d − elapsed ${gap}d` } : { date:'NOW', basis:`already ${gap-21}d past stall threshold` };
-    });
-    return out;
-  }
-  return null; // R30/R50 treated as non-projectable (data-event-dependent), per brief's own "default: non-projectable" case
-}
-function bucketOf(dateStr, today){
-  if(!dateStr) return null;
-  if(dateStr==='NOW') return 'NOW';
-  const gap = daysBetween(today.toISOString(), new Date(dateStr).toISOString());
-  if(gap<=7) return 'THIS WEEK';
-  if(gap<=14) return 'NEXT 2 WEEKS';
-  if(gap<=30) return 'NEXT MONTH';
-  return 'LATER';
-}
-function buildPrefireCalendar(state, today){
-  const rules = ['R1','R7','R20','R40'];
-  const buckets = { NOW:[], 'THIS WEEK':[], 'NEXT 2 WEEKS':[], 'NEXT MONTH':[], LATER:[], UNCERTAIN:[] };
-  rules.forEach(ruleId=>{
-    const proj = projectFireDate(ruleId, state, today);
-    Object.entries(proj).forEach(([entityId,val])=>{
-      if(!val) return;
-      const label = (ENTITY_LABELS[entityId]||{}).label || entityId;
-      if(val.uncertain){ buckets.UNCERTAIN.push({ ruleId, entityId, label, note:val.note, basis:val.basis }); return; }
-      const b = bucketOf(val.date, today);
-      if(b) buckets[b].push({ ruleId, entityId, label, date:val.date, basis:val.basis });
-    });
-  });
-  return buckets;
-}
-LEADOS.predict = { projectFireDate, buildPrefireCalendar, computeMoodSlope };
-
-/* =========================================================================
-   SESSION / ATTENTION TRACKING
-   ========================================================================= */
-const SESSION_FLAG = 'leados-pth-session-started';
-let attentionTimerDomain = null, attentionTimerStart = 0;
-function hourBucket(h){ if(h>=5 && h<12) return 'morning'; if(h>=12 && h<18) return 'afternoon'; return 'evening'; }
-function flushAttention(domain, now){
-  if(!domain) return;
-  const elapsed = now - attentionTimerStart;
-  if(elapsed<=0) return;
-  const heat = (()=>{ try{ return JSON.parse(sessionStorage.getItem('leados-pth-attention')||'{}'); }catch(e){ return {}; } })();
-  heat[domain] = (heat[domain]||0) + elapsed;
-  try{ sessionStorage.setItem('leados-pth-attention', JSON.stringify(heat)); }catch(e){}
-}
-function trackViewDomain(domain){
-  const now = Date.now();
-  if(attentionTimerDomain) flushAttention(attentionTimerDomain, now);
-  attentionTimerDomain = domain; attentionTimerStart = now;
-}
-function logUsage(view){
-  const bucket = hourBucket(new Date().getHours());
-  const log = [...(STATE.meta.usageLog||[]), { ts: todayIso(), view, bucket }].slice(-500);
-  const vh = { ...STATE.meta.viewHistory, [view]: (STATE.meta.viewHistory[view]||0)+1 };
-  updateMeta({ usageLog: log, viewHistory: vh });
-}
-function rollAttentionIntoMeta(){
-  const sessionHeat = readAttentionHeatmap();
-  if(attentionTimerDomain) flushAttention(attentionTimerDomain, Date.now());
-  const fresh = readAttentionHeatmap();
-  const decayed = {};
-  DOMAINS.forEach(d=> decayed[d] = (STATE.meta.attentionHeatmap[d]||0) * 0.9 + (fresh[d]||0) );
-  updateMeta({ attentionHeatmap: decayed });
-}
-window.addEventListener('beforeunload', rollAttentionIntoMeta);
-
-let CURRENT_LAYOUT = null;
-let LAYOUT_CHANGED_BANNER = false;
-function initSession(){
-  const isNewSession = !sessionStorage.getItem(SESSION_FLAG);
-  if(isNewSession){
-    sessionStorage.setItem(SESSION_FLAG,'1');
-    const prior = STATE.meta.layout;
-    const today = new Date();
-    CURRENT_LAYOUT = generateLayout(STATE, today);
-    const summary = { config: CURRENT_LAYOUT.config, order: CURRENT_LAYOUT.visible.map(v=>v.id) };
-    if(prior && (prior.config !== summary.config || JSON.stringify(prior.order)!==JSON.stringify(summary.order))){
-      LAYOUT_CHANGED_BANNER = true;
-    }
-    const sessionLog = [...(STATE.meta.sessionLog||[]), todayIso()].slice(-200);
-    updateMeta({ layout: summary, sessionLog });
-  } else {
-    CURRENT_LAYOUT = generateLayout(STATE, new Date());
-  }
-}
-
-/* =========================================================================
-   UI — rendering, router, command palette
-   ========================================================================= */
-const THEME_KEY = 'leados-pth-demo:theme';
-function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); localStorage.setItem(THEME_KEY,t); }
-applyTheme(localStorage.getItem(THEME_KEY) || 'obsidian');
-function cycleTheme(){
-  const order=['obsidian','parchment','terminal'];
-  const cur = document.documentElement.getAttribute('data-theme');
-  applyTheme(order[(order.indexOf(cur)+1)%order.length]);
-}
-
-function showToast(msg){
-  const slot = document.getElementById('toast-slot');
-  const el = document.createElement('div');
-  el.className='toast surface rounded-lg px-4 py-3 text-sm fade-in shadow-xl';
-  el.textContent = msg;
-  slot.appendChild(el);
-  setTimeout(()=>el.remove(), 3200);
-}
-
-function sevClass(sev){ return sev>=4?'sev4':sev>=3?'sev3':'sev2'; }
-
-function renderBanner(){
-  const slot = document.getElementById('banner-slot');
-  if(!LAYOUT_CHANGED_BANNER){ slot.innerHTML=''; return; }
-  slot.innerHTML = `
-    <div class="surface2 border-b border-base px-4 py-2 flex items-center justify-between text-sm">
-      <span>Layout updated from your usage patterns. <span class="muted">New configuration: ${CURRENT_LAYOUT.config} — ${escapeHtml(CURRENT_LAYOUT.header)}</span></span>
-      <div class="flex gap-2">
-        <button id="banner-customize" class="badge">CUSTOMIZE</button>
-        <button id="banner-dismiss" class="badge">DISMISS</button>
-      </div>
-    </div>`;
-  document.getElementById('banner-dismiss').onclick = ()=>{ LAYOUT_CHANGED_BANNER=false; renderBanner(); };
-  document.getElementById('banner-customize').onclick = ()=>{ location.hash='#/data'; LAYOUT_CHANGED_BANNER=false; renderBanner(); };
-}
-
-function renderRail(route){
-  const rail = document.getElementById('rail');
-  const L = CURRENT_LAYOUT;
-  const pinned = new Set(Object.keys(STATE.meta.layoutPins||{}));
-  function item(n){
-    const isActive = route.view===n.id;
-    const pin = pinned.has(n.id) ? ' 📌' : '';
-    return `<div class="rail-item ${isActive?'active':''}" data-nav="${n.id}" data-domain="${n.domain||''}" tabindex="0" role="link" aria-label="${n.label}">
-      <span>${n.glyph} ${escapeHtml(n.label)}${pin}</span>
-      <span class="muted mono text-[11px]">${navBadge(n)}</span>
-    </div>`;
-  }
-  function navBadge(n){
-    if(n.id==='today'){ const c = runEngine(STATE, new Date()).length; return c; }
-    if(n.domain){ const c = runEngine(STATE, new Date()).filter(f=>f.domain===n.domain).length; return c||''; }
-    return '';
-  }
-  const foldId='rail-fold';
-  const foldOpen = sessionStorage.getItem(foldId)==='1';
-  rail.innerHTML = `
-    <div class="px-1 pb-2 border-b border-base">
-      <div class="text-sm font-bold tracking-wide">LEADOS <span class="muted font-normal">pt-H</span></div>
-      <div class="muted text-[11px] mono">${L.config} · ${CONFIG_HEADER[L.config]}</div>
-    </div>
-    <div class="flex flex-col gap-0.5">
-      ${item(NAV_ITEMS.find(n=>n.id==='today'))}
-    </div>
-    <div class="muted text-[10px] uppercase tracking-wider mt-2 px-1">${L.group? L.group : 'Priority'}</div>
-    <div class="flex flex-col gap-0.5">
-      ${L.visible.map(item).join('')}
-    </div>
-    ${L.folded.length? `
-    <button id="${foldId}-btn" class="rail-item muted">
-      <span>▾ ${L.folded.length} more views</span><span></span>
-    </button>
-    <div id="${foldId}-items" class="flex flex-col gap-0.5" style="display:${foldOpen?'flex':'none'}">
-      ${L.folded.map(item).join('')}
-    </div>` : ''}
-    <div class="muted text-[10px] uppercase tracking-wider mt-2 px-1">System</div>
-    <div class="flex flex-col gap-0.5">
-      ${L.utilItems.map(item).join('')}
-    </div>
-    <div class="mt-auto pt-2 border-t border-base flex flex-col gap-1">
-      <button id="theme-btn" class="rail-item"><span>◐ Theme</span><span class="muted text-[11px]">${document.documentElement.getAttribute('data-theme')}</span></button>
-      <button id="palette-btn" class="rail-item"><span>⌘ Command</span><span class="kbd">⌘K</span></button>
-    </div>
-  `;
-  rail.querySelectorAll('[data-nav]').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      const id = el.getAttribute('data-nav');
-      location.hash = '#/'+id;
-    });
-    el.addEventListener('keydown', e=>{ if(e.key==='Enter') el.click(); });
-    el.addEventListener('contextmenu', e=>{
-      e.preventDefault();
-      if(el.getAttribute('data-domain')==='') return;
-      openPinMenu(el.getAttribute('data-nav'), e.clientX, e.clientY);
-    });
-  });
-  const foldBtn = document.getElementById(foldId+'-btn');
-  if(foldBtn) foldBtn.onclick = ()=>{
-    const open = sessionStorage.getItem(foldId)==='1';
-    sessionStorage.setItem(foldId, open?'0':'1');
-    renderRail(route);
-  };
-  document.getElementById('theme-btn').onclick = ()=>{ cycleTheme(); renderRail(route); };
-  document.getElementById('palette-btn').onclick = openPalette;
-}
-
-function openPinMenu(navId, x, y){
-  closeOverlays();
-  const slot = document.getElementById('overlay-slot');
-  const menu = document.createElement('div');
-  menu.className = 'contextmenu surface rounded-md shadow-xl p-1 text-sm';
-  menu.style.left = x+'px'; menu.style.top = y+'px';
-  menu.innerHTML = `
-    <button class="rail-item w-full" data-act="top">Pin to top</button>
-    <button class="rail-item w-full" data-act="2">Pin to position 2</button>
-    <button class="rail-item w-full" data-act="3">Pin to position 3</button>
-    <button class="rail-item w-full" data-act="unpin">Unpin</button>
-  `;
-  slot.appendChild(menu);
-  menu.querySelectorAll('button').forEach(b=>{
-    b.onclick = ()=>{
-      const pins = { ...STATE.meta.layoutPins };
-      const act = b.getAttribute('data-act');
-      if(act==='unpin') delete pins[navId];
-      else pins[navId] = act==='top'?0:parseInt(act,10)-1;
-      updateMeta({ layoutPins: pins });
-      CURRENT_LAYOUT = generateLayout(STATE, new Date());
-      closeOverlays(); route();
-      showToast(act==='unpin' ? `Unpinned ${navId}` : `Pinned ${navId}`);
+    const total = findings.length;
+    return {
+      profile,
+      proportions: Object.fromEntries(Object.entries(profile).map(([k, v]) => [k, {
+        count: v.length,
+        pct: total ? Math.round(v.length / total * 100) : 0,
+        meanSev: v.length ? v.reduce((a, b) => a + b.sev, 0) / v.length : 0
+      }])),
+      diagnosis: this._diagnoseMode(profile, total),
+      label: 'Temporal profile of active findings. Proportions indicate organizational mode, not quality.'
     };
-  });
-  setTimeout(()=> document.addEventListener('click', closeOverlays, { once:true }), 0);
-}
-function closeOverlays(){ document.getElementById('overlay-slot').innerHTML=''; }
+  },
 
-/* ---------------- views ---------------- */
-function viewToday(domainFilter){
-  const today = new Date();
-  const findings = runEngine(STATE, today).sort((a,b)=>b.sev-a.sev);
-  const L = CURRENT_LAYOUT;
-  const list = domainFilter ? findings.filter(f=>f.domain===domainFilter) : findings;
+  _diagnoseMode(profile, total) {
+    if (!total) return { mode: 'CLEAN', description: 'No active findings.' };
+    const immediatePct = profile.IMMEDIATE.length / total;
+    const strategicPct = profile.STRATEGIC.length / total;
+    const structuralPct = profile.STRUCTURAL.length / total;
+    if (immediatePct > 0.6) return { mode: 'REACTIVE', description: 'More than 60% of findings are from the last 7 days. The organization is in reactive mode \u2014 responding to events rather than shaping them. The root causes are likely older.' };
+    if (structuralPct > 0.3) return { mode: 'STRUCTURAL_STRESS', description: '30%+ of findings trace to events older than 180 days. These are institutional patterns, not recent failures. Tactical responses will not resolve structural findings. The intervention must change the system.' };
+    if (strategicPct > 0.5) return { mode: 'STRATEGIC_DRIFT', description: 'The majority of findings emerge from 60-180 day patterns. The organization is drifting in a direction established months ago. The decisions that matter most were made two to six months ago.' };
+    return { mode: 'BALANCED', description: 'Findings are distributed across timescales. The organization is operating with mixed immediate and medium-term signals.' };
+  }
+};
 
-  function spotlight(d){
-    const fs = findings.filter(f=>f.domain===d).sort((a,b)=>b.sev-a.sev);
-    const top = fs[0];
-    const bars = Array.from({length:7}, (_,i)=> Math.round(10 + Math.random()*0) ); // placeholder deterministic below
-    const score = L.topology.domainScore[d]||0;
-    return `
-    <a href="#/today/${d}" class="surface2 rounded-lg p-3 block hover:brightness-110" style="height:96px">
-      <div class="flex justify-between items-start">
-        <div class="font-semibold text-sm">${d}</div>
-        <div class="mono text-[11px] muted">score ${fmt1(score)}</div>
-      </div>
-      <div class="text-xs muted mt-1">${fs.length} findings${top? ' · '+top.title : ''}</div>
-      <div class="spark mt-2">${Array.from({length:7}).map((_,i)=>`<div style="height:${6+((i*7+d.length)%12)}px"></div>`).join('')}</div>
-    </a>`;
+/* ============================================================
+   PART 1 — TEMPORAL CAUSALITY MAPPING
+   Implemented per the brief, with one disclosed bug fix: the
+   pasted pseudocode used `finding.rule` both as an object
+   (`finding.rule.domain`) and, two lines later, as a bare string
+   key into PLAUSIBLE_CHAINS (`chains[finding.rule]`). Those are
+   incompatible if rule is actually an object. This build keeps
+   `finding.rule` as the object (consistent with how every other
+   part of this delivery, and the real repo's own ScoreMath-style
+   display, needs the domain + title + id together) and reads
+   `finding.rule.id` at the one place the brief's code needed a
+   bare string. Named in AI-SESSION-LOG.md \u00a71, not silently
+   patched.
+   ============================================================ */
+LEADOS.causality = (function () {
+  const DOMAIN_LOOKBACKS = { people: 60, finance: 90, ops: 30, strategy: 120, legal: 180 };
+  // legal:180 is carried over from the brief verbatim even though this
+  // delivery implements no legal-domain rule \u2014 disclosed dead mapping,
+  // not deleted, in case a future delivery adds one.
+
+  const PLAUSIBLE_CHAINS = {
+    'conflict.logged':      { R4: 0.8, R19: 0.6, R20: 0.5 },
+    'pulse.recorded':       { R7: 0.9, R20: 0.4 },
+    'hr.attrition.logged':  { R19: 0.9, R129: 0.7, R5: 0.4 },
+    'fin.pl.logged':        { R103: 0.9, R112: 0.8, R107: 0.6 },
+    'sales.deal.updated':   { R12: 0.9, R13: 0.5 },
+    'ops.incident.logged':  { R16: 0.9, R17: 0.6 },
+    // R29 does not exist in the pasted brief; its 0.95 entry is this
+    // session's own addition (see engine.R29) so the one IMMEDIATE-bucket
+    // rule in this demo also has a causal chain to show.
+    'mfg.safety.incident':  { R27: 0.9, R28: 0.4, R29: 0.95 }
+  };
+
+  function scoreCausalPlausibility(precursorEvent, finding) {
+    const chains = PLAUSIBLE_CHAINS[precursorEvent.type] || {};
+    return chains[finding.rule.id] || 0;
   }
 
-  const spotlights = !domainFilter ? L.topDomains.map(spotlight).join('') : '';
-  const header = domainFilter ? `
-    <div class="flex items-center gap-3 mb-3">
-      <a href="#/today" class="badge">← All domains</a>
-      <h1 class="text-xl font-bold">${domainFilter}</h1>
-    </div>` : `<h1 class="text-xl font-bold mb-1">Today</h1>
-      <div class="muted text-sm mb-3">Layout: <span class="mono">${L.config}</span> — ${escapeHtml(L.header)} · suggested quick-log type: <span class="mono">${(L.topology.topEventType||['—'])[0]}</span></div>`;
+  function buildCausalMap(findings, P, today) {
+    const causalMap = new Map();
+    for (const finding of findings) {
+      const domain = finding.rule.domain || 'ops';
+      const lookback = DOMAIN_LOOKBACKS[domain] || 60;
+      const srcEvents = finding.sources.map(id => P.state.events.find(e => e.id === id)).filter(Boolean);
+      const fireDate = srcEvents.length ? srcEvents.reduce((a, b) => a.ts > b.ts ? a : b).ts : today;
 
-  return `
-    ${header}
-    ${spotlights ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">${spotlights}</div>` : ''}
-    <div class="flex flex-col gap-2" role="list" aria-label="Active findings">
-      ${list.length ? list.map(findingCard).join('') : `<div class="muted text-sm surface rounded-lg p-4">No active findings${domainFilter? ' in '+domainFilter : ''}.</div>`}
-    </div>
-  `;
+      const precursors = P.state.events.filter(ev => {
+        const age = dayUTC(fireDate) - dayUTC(ev.ts);
+        return age > 0 && age <= lookback && !finding.sources.includes(ev.id);
+      });
+
+      const scored = precursors.map(ev => ({
+        event: ev,
+        plausibility: scoreCausalPlausibility(ev, finding),
+        lagDays: dayUTC(fireDate) - dayUTC(ev.ts)
+      })).filter(p => p.plausibility > 0)
+         .sort((a, b) => b.plausibility - a.plausibility)
+         .slice(0, 3);
+
+      if (scored.length) causalMap.set(finding.key, scored);
+    }
+    return causalMap;
+  }
+
+  return { DOMAIN_LOOKBACKS, PLAUSIBLE_CHAINS, scoreCausalPlausibility, buildCausalMap };
+})();
+
+/* ============================================================
+   UI
+   ============================================================ */
+const DOMAIN_COLOR = { people: 'fuchsia', strategy: 'amber', ops: 'sky', finance: 'emerald', legal: 'slate' };
+function colorClasses(c) {
+  const map = {
+    rose:    'bg-rose-500/10 text-rose-300 border-rose-500/30',
+    sky:     'bg-sky-500/10 text-sky-300 border-sky-500/30',
+    amber:   'bg-amber-500/10 text-amber-300 border-amber-500/30',
+    violet:  'bg-violet-500/10 text-violet-300 border-violet-500/30',
+    fuchsia: 'bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/30',
+    emerald: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
+    slate:   'bg-slate-500/10 text-slate-300 border-slate-500/30'
+  };
+  return map[c] || map.slate;
 }
-function findingCard(f){
-  return `
-  <div class="surface rounded-lg p-3 flex items-start justify-between gap-3" role="listitem" tabindex="0" aria-label="${escapeHtml(f.title)}">
-    <div>
-      <div class="flex items-center gap-2">
-        <span class="badge mono">${f.rule}</span>
-        <span class="badge ${sevClass(f.sev)}">sev ${f.sev}</span>
-        <span class="font-medium text-sm">${escapeHtml(f.title)}</span>
+function sevColor(sev) { return sev >= 70 ? 'text-rose-400' : sev >= 40 ? 'text-amber-400' : 'text-sky-400'; }
+
+function findingRow(f, P, today) {
+  const res = LEADOS.temporalField.classifyTemporalResolution(f, P, today);
+  const meta = LEADOS.temporalField.RESOLUTION_META[res];
+  return `<a href="#/finding/${encodeURIComponent(f.key)}" class="fade-in flex items-center gap-3 px-4 py-3 rounded-lg border border-slate-800 bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700 transition">
+    <span class="text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-wide ${colorClasses(DOMAIN_COLOR[f.rule.domain])}">${f.rule.domain}</span>
+    <span class="mono text-[11px] text-slate-500 w-12">${f.rule.id}</span>
+    <span class="flex-1 text-sm text-slate-200 truncate">${LEADOS.util.esc(f.rule.title)}</span>
+    <span class="text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-wide ${colorClasses(meta.color)}">${res}</span>
+    <span class="mono text-sm font-semibold w-8 text-right ${sevColor(f.sev)}">${f.sev}</span>
+  </a>`;
+}
+
+function renderToday() {
+  const today = Date.now();
+  const { findings } = LEADOS.engine.run(P, today);
+  findings.sort((a, b) => b.sev - a.sev);
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-sm font-semibold text-slate-300 uppercase tracking-wide">Active findings</h2>
+      <span class="text-xs text-slate-500">${findings.length} computed live from ${P.state.events.length} events</span>
+    </div>
+    <div class="space-y-2">
+      ${findings.length ? findings.map(f => findingRow(f, P, today)).join('') : '<p class="text-sm text-slate-500 py-8 text-center">No findings fire against the current event log.</p>'}
+    </div>`;
+}
+
+function renderTemporal() {
+  const today = Date.now();
+  const tf = LEADOS.temporalField.buildTemporalProfile(P, today);
+  const order = ['IMMEDIATE', 'OPERATIONAL', 'STRATEGIC', 'STRUCTURAL'];
+  const app = document.getElementById('app');
+  const diagBadge = { CLEAN: 'slate', REACTIVE: 'rose', STRUCTURAL_STRESS: 'violet', STRATEGIC_DRIFT: 'amber', BALANCED: 'emerald' }[tf.diagnosis.mode] || 'slate';
+
+  app.innerHTML = `
+    <div class="rounded-lg border ${colorClasses(diagBadge)} px-4 py-3 mb-5">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-wide ${colorClasses(diagBadge)}">${tf.diagnosis.mode}</span>
+        <span class="text-xs text-slate-500">organizational mode, diagnosed from finding proportions</span>
       </div>
-      <div class="muted text-xs mt-1 mono">${escapeHtml(f.detail)}</div>
+      <p class="text-sm text-slate-300">${tf.diagnosis.description}</p>
     </div>
-    <span class="muted text-[11px] mono">${f.domain}</span>
-  </div>`;
-}
 
-function viewRoster(){
-  const today = new Date();
-  const findings = runEngine(STATE, today);
-  return `<h1 class="text-xl font-bold mb-3">Roster</h1>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-    ${PEOPLE.map(p=>{
-      const last = lastEventFor(STATE.events,'oneonone.logged', e=>e.data.personId===p.id);
-      const gap = last? daysBetween(last.ts, today) : null;
-      const own = findings.filter(f=> f.entityId===p.id);
-      return `<div class="surface rounded-lg p-3">
-        <div class="flex justify-between"><span class="font-semibold">${p.name}</span><span class="muted text-xs">${p.role}</span></div>
-        <div class="muted text-xs mt-1 mono">last 1:1: ${gap!==null? gap+'d ago' : 'never'} · cadence ${p.cadenceDays}d</div>
-        ${own.length? `<div class="mt-2 flex flex-col gap-1">${own.map(f=>`<span class="badge ${sevClass(f.sev)}">${f.rule} ${escapeHtml(f.title)}</span>`).join('')}</div>` : ''}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+      ${order.map(k => {
+        const meta = LEADOS.temporalField.RESOLUTION_META[k];
+        const p = tf.proportions[k];
+        return `<div class="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+          <div class="text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-wide inline-block mb-2 ${colorClasses(meta.color)}">${meta.label}</div>
+          <div class="text-2xl font-semibold text-slate-100">${p.count}<span class="text-sm text-slate-500 font-normal"> / ${p.pct}%</span></div>
+          <div class="h-1.5 rounded bar-track mt-2 mb-3 overflow-hidden"><div class="h-full bg-${meta.color}-500" style="width:${p.pct}%"></div></div>
+          <dl class="text-[11px] text-slate-500 space-y-1">
+            <div class="flex justify-between"><dt>mean severity</dt><dd class="mono text-slate-300">${p.meanSev.toFixed(1)}</dd></div>
+            <div class="flex justify-between"><dt>noise level</dt><dd class="text-slate-300">${meta.noise}</dd></div>
+            <div class="flex justify-between"><dt>action type</dt><dd class="text-slate-300 text-right">${meta.action}</dd></div>
+            <div class="flex justify-between"><dt>confidence \u00d7</dt><dd class="mono text-slate-300">${meta.modifier}</dd></div>
+          </dl>
+        </div>`;
+      }).join('')}
+    </div>
+
+    ${order.map(k => {
+      const meta = LEADOS.temporalField.RESOLUTION_META[k];
+      const list = tf.profile[k];
+      if (!list.length) return '';
+      return `<div class="mb-5">
+        <h3 class="text-xs font-semibold uppercase tracking-wide mb-2 ${colorClasses(meta.color).split(' ')[1]}">${meta.label} \u2014 ${list.length}</h3>
+        <div class="space-y-2">${list.sort((a,b)=>b.sev-a.sev).map(f => findingRow(f, P, today)).join('')}</div>
       </div>`;
     }).join('')}
-  </div>`;
-}
-
-function viewIntelligence(){
-  const ins = entityGraphInsights(STATE);
-  const maxScore = Math.max(...ins.centrality.map(c=>c.score), 0.0001);
-  const centralityRows = ins.centrality.slice(0,8).map(c=>`
-    <div class="flex items-center gap-2 py-1">
-      <div class="w-32 text-xs truncate">${escapeHtml(c.label)}</div>
-      <div class="bar-track flex-1"><div class="bar-fill" style="width:${(c.score/maxScore*100).toFixed(0)}%"></div></div>
-      <div class="mono text-[11px] muted w-14 text-right">${(c.score).toFixed(3)}</div>
-    </div>`).join('');
-
-  const clusterCards = ins.clusters.length ? ins.clusters.map((c,i)=>`
-    <div class="surface2 rounded-lg p-3">
-      <div class="font-semibold text-sm mb-1">CLUSTER ${i+1} <span class="muted font-normal mono text-xs">label: ${c.label}</span></div>
-      <div class="text-xs muted">${c.members.map(m=>escapeHtml((ENTITY_LABELS[m]||{}).label||m)).join(' · ')}</div>
-    </div>`).join('') : `<div class="muted text-sm">No clusters at current edge-weight ≥3 threshold.</div>`;
-
-  const patternCards = ins.patterns.length ? ins.patterns.map(p=>`
-    <div class="surface2 rounded-lg p-3 text-sm">
-      <div class="font-semibold">${escapeHtml(p.aLabel)} ↔ ${escapeHtml(p.bLabel)}</div>
-      ${p.detected
-        ? `<div class="mono text-xs muted mt-1">pattern: lag ${p.lag}d, std ${p.std}d, n=${p.n} — computed from seeded demo events, not scripted</div>`
-        : `<div class="mono text-xs muted mt-1">no reliable lead/lag pattern (${p.reason}, n=${p.n}${p.std!==undefined? ', std '+p.std+'d':''})</div>`}
-    </div>`).join('') : `<div class="muted text-sm">No entity pairs meet the edge-weight ≥5 threshold yet.</div>`;
-
-  return `
-  <h1 class="text-xl font-bold mb-1">Intelligence</h1>
-  <div class="muted text-sm mb-4">Semantic relationship graph over people, goals, plans, risks, deals — edges built live from event co-occurrence.</div>
-
-  <div class="mb-5">
-    <label class="text-sm font-semibold block mb-1">@ Semantic search</label>
-    <input id="semantic-search" class="rounded px-3 py-2 w-full max-w-md" placeholder="@ana, @cara, @devon ...">
-    <div id="semantic-result" class="mt-2"></div>
-  </div>
-
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <div class="surface rounded-lg p-3">
-      <div class="font-semibold text-sm mb-2">CENTRALITY (simplified PageRank, 20 iterations)</div>
-      ${centralityRows || '<div class="muted text-sm">No connected entities yet.</div>'}
-    </div>
-    <div class="surface rounded-lg p-3 flex flex-col gap-2">
-      <div class="font-semibold text-sm">CO-OCCURRENCE CLUSTERS <span class="muted font-normal">(edge weight ≥3)</span></div>
-      ${clusterCards}
-    </div>
-  </div>
-
-  <div class="surface rounded-lg p-3 mt-4 flex flex-col gap-2">
-    <div class="font-semibold text-sm">TEMPORAL PATTERNS <span class="muted font-normal">(edge weight ≥5, ±21d window)</span></div>
-    ${patternCards}
-  </div>
   `;
 }
-function wireIntelligenceSearch(){
-  const inp = document.getElementById('semantic-search');
-  if(!inp) return;
-  inp.addEventListener('input', ()=>{
-    const q = inp.value.replace('@','').trim().toLowerCase();
-    const result = document.getElementById('semantic-result');
-    if(!q){ result.innerHTML=''; return; }
-    const person = PEOPLE.find(p=>p.name.toLowerCase().includes(q));
-    if(!person){ result.innerHTML = `<div class="muted text-sm">No person match.</div>`; return; }
-    result.innerHTML = renderPersonDossier(person.id);
-  });
-}
-function renderPersonDossier(personId){
-  const p = PEOPLE.find(pp=>pp.id===personId);
-  const today = new Date();
-  const findings = runEngine(STATE, today).filter(f=>f.entityId===personId || (ENTITY_LABELS[f.entityId]&&false));
-  const ins = entityGraphInsights(STATE);
-  const cluster = ins.clusters.find(c=>c.members.includes(personId));
-  const coocc = [...ins.edges.entries()]
-    .filter(([key])=> key.split(':').includes(personId))
-    .map(([key,e])=>{ const other = key.split(':').find(id=>id!==personId); return { other, weight:e.weight }; })
-    .sort((a,b)=>b.weight-a.weight);
-  const patterns = ins.patterns.filter(p=>p.a===personId||p.b===personId);
-  return `
-  <div class="surface2 rounded-lg p-3 fade-in">
-    <div class="font-semibold">${escapeHtml(p.name)} <span class="muted font-normal text-xs">${p.role} · ${p.domain}</span></div>
-    <div class="mt-2 text-xs font-semibold muted uppercase">Active findings</div>
-    <div class="flex flex-col gap-1 mt-1">${findings.length? findings.map(f=>`<span class="badge ${sevClass(f.sev)}">${f.rule} ${escapeHtml(f.title)}</span>`).join('') : '<span class="muted text-xs">none</span>'}</div>
-    <div class="mt-2 text-xs font-semibold muted uppercase">Cluster</div>
-    <div class="text-xs mt-1">${cluster? 'Member of cluster labeled "'+cluster.label+'" with '+cluster.members.filter(m=>m!==personId).map(m=>(ENTITY_LABELS[m]||{}).label||m).join(', ') : 'Not in any cluster at current threshold.'}</div>
-    <div class="mt-2 text-xs font-semibold muted uppercase">Top co-occurring entities</div>
-    <div class="text-xs mt-1">${coocc.length? coocc.slice(0,5).map(c=>`${(ENTITY_LABELS[c.other]||{}).label||c.other} (weight ${c.weight})`).join(' · ') : 'none'}</div>
-    <div class="mt-2 text-xs font-semibold muted uppercase">Temporal patterns</div>
-    <div class="text-xs mt-1">${patterns.length? patterns.map(p2=> p2.detected? `${(ENTITY_LABELS[p2.a]||{}).label} → ${(ENTITY_LABELS[p2.b]||{}).label}: lag ${p2.lag}d (n=${p2.n})` : `checked ${(ENTITY_LABELS[p2.a]||{}).label}↔${(ENTITY_LABELS[p2.b]||{}).label}: none found`).join('<br>') : 'no qualifying pairs'}</div>
-  </div>`;
-}
 
-function viewForecast(){
-  const buckets = buildPrefireCalendar(STATE, new Date());
-  const order = ['NOW','THIS WEEK','NEXT 2 WEEKS','NEXT MONTH','LATER','UNCERTAIN'];
-  return `
-  <h1 class="text-xl font-bold mb-1">Forecast — Pre-fire Calendar</h1>
-  <div class="muted text-sm mb-4">Projected from current trends only. Not forecasting, not ML — every date below is a deterministic extrapolation of a threshold rule, labeled with its formula.</div>
-  <div class="flex flex-col gap-4">
-  ${order.map(b=>{
-    const items = buckets[b];
-    if(!items || !items.length) return '';
-    return `<div>
-      <div class="text-xs font-semibold uppercase muted mb-1">${b}</div>
-      <div class="flex flex-col gap-1">
-        ${items.map(it=>`
-          <div class="surface rounded-lg p-2 flex justify-between items-center text-sm">
-            <div><span class="badge mono">${it.ruleId}</span> ${escapeHtml(it.label)}</div>
-            <div class="mono text-[11px] muted text-right">${it.date? it.date : ''} ${it.note? escapeHtml(it.note): ''}<br><span>${escapeHtml(it.basis||'')}</span></div>
-          </div>`).join('')}
+function renderFindingDetail(key) {
+  const today = Date.now();
+  const { findings } = LEADOS.engine.run(P, today);
+  const f = findings.find(x => x.key === key);
+  const app = document.getElementById('app');
+  if (!f) {
+    app.innerHTML = `<p class="text-sm text-slate-500 py-8">Finding not found (it may no longer fire against the current log). <a href="#/today" class="text-emerald-400">\u2190 back</a></p>`;
+    return;
+  }
+  const res = LEADOS.temporalField.classifyTemporalResolution(f, P, today);
+  const meta = LEADOS.temporalField.RESOLUTION_META[res];
+  const baseConfidence = LEADOS.util.clamp(0.5 + 0.08 * f.sources.length, 0.5, 0.95);
+  const confidence = baseConfidence * meta.modifier;
+  const sourceEvents = f.sources.map(id => P.state.events.find(e => e.id === id)).filter(Boolean);
+
+  const causalMap = LEADOS.causality.buildCausalMap([f], P, today);
+  const precursors = causalMap.get(f.key) || [];
+  const lookback = LEADOS.causality.DOMAIN_LOOKBACKS[f.rule.domain] || 60;
+
+  app.innerHTML = `
+    <a href="#/today" class="text-xs text-slate-500 hover:text-slate-300">\u2190 back</a>
+    <div class="mt-3 mb-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-wide ${colorClasses(DOMAIN_COLOR[f.rule.domain])}">${f.rule.domain}</span>
+        <span class="mono text-xs text-slate-500">${f.rule.id}</span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded border uppercase tracking-wide ${colorClasses(meta.color)}">${res}</span>
       </div>
-    </div>`;
-  }).join('') || '<div class="muted text-sm">Nothing projectable right now.</div>'}
-  </div>`;
-}
+      <h2 class="text-xl font-semibold text-slate-50">${LEADOS.util.esc(f.rule.title)}</h2>
+      <p class="text-sm text-slate-400 mt-1">${LEADOS.util.esc(f.summary)}</p>
+    </div>
 
-function viewData(){
-  const L = CURRENT_LAYOUT;
-  const findings = runEngine(STATE, new Date());
-  const ruleMeta = {
-    R1:'1:1 cadence overdue', R7:'Pulse/burnout linear trend (slope ≤ -0.5/period)',
-    R20:'Goal/OKR silent >21d', R30:'Plan stalled >14d (non-projectable here, data-event-dependent)',
-    R40:'Deal stalled >21d', R50:'Risk open >30d (non-projectable here, data-event-dependent)'
-  };
-  const rulesTable = Object.entries(ruleMeta).map(([id,desc])=>{
-    const c = findings.filter(f=>f.rule===id).length;
-    return `<tr class="border-b border-base"><td class="py-1 mono">${id}</td><td class="py-1">${desc}</td><td class="py-1 text-right mono">${c}</td></tr>`;
-  }).join('');
-  const pins = STATE.meta.layoutPins||{};
-  const pinRows = NAV_ITEMS.filter(n=>!n.util).map(n=>`
-    <tr class="border-b border-base"><td class="py-1">${n.label}</td>
-    <td class="py-1 mono">${pins.hasOwnProperty(n.id)? 'position '+(pins[n.id]+1) : '—'}</td>
-    <td class="py-1 text-right"><button class="badge" data-unpin="${n.id}">${pins.hasOwnProperty(n.id)?'Unpin':'Right-click rail to pin'}</button></td></tr>`).join('');
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+      <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Score Math</h3>
+        <div class="mono text-xs text-slate-300 space-y-1">
+          ${f.math.map(line => `<div class="flex gap-2"><span class="text-slate-600">\u203a</span><span>${LEADOS.util.esc(line)}</span></div>`).join('')}
+          <div class="pt-2 mt-2 border-t border-slate-800 flex justify-between"><span class="text-slate-500">severity</span><span class="font-semibold ${sevColor(f.sev)}">${f.sev} / 100</span></div>
+        </div>
+      </div>
+      <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Temporal resolution &amp; confidence</h3>
+        <div class="mono text-xs text-slate-300 space-y-1">
+          <div class="flex justify-between"><span class="text-slate-500">oldest source age</span><span>${LEADOS.engine._days(sourceEvents.reduce((a,b)=>a.ts<b.ts?a:b).ts, today)}d \u2192 ${res}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">baseConfidence</span><span>0.5 + 0.08\u00d7${f.sources.length} (clamped) = ${baseConfidence.toFixed(2)}</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">resolution modifier</span><span>\u00d7${meta.modifier}</span></div>
+          <div class="pt-2 mt-2 border-t border-slate-800 flex justify-between"><span class="text-slate-500">confidence</span><span class="font-semibold text-slate-100">${(confidence*100).toFixed(0)}%</span></div>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-2">Noise: ${meta.noise} \u00b7 Implied action: ${meta.action}</p>
+      </div>
+    </div>
 
-  return `
-  <h1 class="text-xl font-bold mb-3">Data</h1>
+    <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-4 mb-5">
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Source events (${sourceEvents.length})</h3>
+      <div class="space-y-1">
+        ${sourceEvents.sort((a,b)=>a.ts-b.ts).map(e => `<div class="flex items-center gap-3 text-xs mono text-slate-400">
+          <span class="text-slate-600">${e.id}</span><span class="text-slate-300">${e.type}</span><span class="ml-auto text-slate-500">${LEADOS.util.fmtDate(e.ts)}</span>
+        </div>`).join('')}
+      </div>
+    </div>
 
-  <div class="surface rounded-lg p-3 mb-4">
-    <div class="font-semibold text-sm mb-2">RULES (6 computed, not the brief's 144 — see README)</div>
-    <table class="w-full text-sm"><thead><tr class="text-left muted text-xs"><th>Rule</th><th>Description</th><th class="text-right">Active</th></tr></thead>
-    <tbody>${rulesTable}</tbody></table>
-  </div>
-
-  <div class="surface rounded-lg p-3 mb-4">
-    <div class="font-semibold text-sm mb-2">LAYOUT &amp; PINS</div>
-    <div class="text-xs muted mb-2">Current configuration: <span class="mono">${L.config}</span> — ${escapeHtml(L.header)} (dominant group share ${(L.share*100).toFixed(0)}%). Generated once at session start.</div>
-    <table class="w-full text-sm"><thead><tr class="text-left muted text-xs"><th>Nav item</th><th>Pin</th><th></th></tr></thead>
-    <tbody>${pinRows}</tbody></table>
-  </div>
-
-  <div class="surface rounded-lg p-3 flex gap-2 flex-wrap">
-    <button id="export-json" class="badge">Export JSON</button>
-    <button id="reset-seed" class="badge">Reset &amp; reseed</button>
-  </div>
+    <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-4">
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Probable Causal Precursors</h3>
+      <p class="text-[11px] text-slate-500 mb-3">
+        Temporal precedence with a hard-coded domain-plausibility table \u2014 <strong>not statistical causation</strong>.
+        Lookback window for domain "${f.rule.domain}": ${lookback} days before this finding's most recent source event.
+      </p>
+      ${precursors.length ? `<div class="space-y-2">
+        ${precursors.map(p => `<div class="flex items-center gap-3 rounded-md border border-slate-800 px-3 py-2">
+          <span class="mono text-xs text-slate-500 w-20">${p.event.id}</span>
+          <span class="text-sm text-slate-200 flex-1">${p.event.type}</span>
+          <span class="text-xs text-slate-500">lag ${p.lagDays}d</span>
+          <div class="w-24 h-1.5 bar-track rounded overflow-hidden"><div class="h-full bg-fuchsia-500" style="width:${p.plausibility*100}%"></div></div>
+          <span class="mono text-xs text-slate-400 w-10 text-right">${(p.plausibility*100).toFixed(0)}%</span>
+        </div>`).join('')}
+      </div>` : `<p class="text-sm text-slate-500 py-3">No probable precursors in the ${lookback}-day lookback window \u2014 either this finding's own sources are the earliest signal, or no event type in the plausibility table precedes it here. This is a real negative result, not a missing feature.</p>`}
+    </div>
   `;
 }
-function wireDataView(){
-  document.querySelectorAll('[data-unpin]').forEach(b=> b.onclick = ()=>{
-    const pins = { ...STATE.meta.layoutPins }; delete pins[b.getAttribute('data-unpin')];
-    updateMeta({ layoutPins: pins }); CURRENT_LAYOUT = generateLayout(STATE, new Date()); route();
-  });
-  const exp = document.getElementById('export-json');
-  if(exp) exp.onclick = ()=>{
-    const blob = new Blob([JSON.stringify(STATE,null,2)], { type:'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='leados-pth-export.json'; a.click();
-  };
-  const rs = document.getElementById('reset-seed');
-  if(rs) rs.onclick = ()=>{
-    if(confirm('Type-confirm not implemented in this stub — click OK to reseed demo data.')){
-      LEADOS.store.reseed(); sessionStorage.removeItem(SESSION_FLAG); initSession(); route();
-      showToast('Store reseeded.');
-    }
-  };
-}
 
-function viewHealth(){
-  const tests = runHealthSuite();
-  return `<h1 class="text-xl font-bold mb-3">Health</h1>
-  <div class="flex flex-col gap-2">
-  ${tests.map(t=>`<div class="surface rounded-lg p-3 flex justify-between items-center">
-    <div><span class="mono font-semibold">${t.id}</span> <span class="text-sm muted">${t.desc}</span></div>
-    <span class="badge ${t.pass?'':'sev4'}">${t.pass?'PASS':'FAIL'}</span>
-  </div>`).join('')}
-  </div>`;
-}
-function runHealthSuite(){
-  const out = [];
-  out.push({ id:'T_STORE', desc:'store loads/creates under demo key', pass: !!STATE && !!STATE.events });
-  out.push({ id:'T_APPEND_ONLY', desc:'append grows log by exactly 1, prior events untouched', pass:(()=>{
-    const before = JSON.stringify(STATE.events);
-    const lenBefore = STATE.events.length;
-    appendEvent('health.check','RESILIENCE',{});
-    const ok = STATE.events.length===lenBefore+1 && JSON.stringify(STATE.events.slice(0,lenBefore))===before;
-    STATE = { ...STATE, events: STATE.events.slice(0,lenBefore) }; persist(STATE);
-    return ok;
-  })() });
-  out.push({ id:'T_ENGINE', desc:'engine.run returns array without throwing', pass:(()=>{ try{ return Array.isArray(runEngine(STATE,new Date())); }catch(e){ return false; } })() });
-  out.push({ id:'T_TOPOLOGY', desc:'generateLayout returns a valid configuration key', pass:(()=>{ try{ const l=generateLayout(STATE,new Date()); return ['A','B','C','D','E'].includes(l.config); }catch(e){ return false; } })() });
-  out.push({ id:'T_GRAPH', desc:'entityGraphInsights runs and pageRank scores are finite', pass:(()=>{ try{ const ins=entityGraphInsights(STATE); return ins.centrality.every(c=>Number.isFinite(c.score)); }catch(e){ return false; } })() });
-  out.push({ id:'T_PREDICT', desc:'projectFireDate(R1) returns an entry per person', pass:(()=>{ try{ const p=projectFireDate('R1',STATE,new Date()); return PEOPLE.every(pp=>p.hasOwnProperty(pp.id)); }catch(e){ return false; } })() });
-  return out;
-}
-
-/* ---------------- command palette ---------------- */
-function openPalette(){
-  closeOverlays();
-  const slot = document.getElementById('overlay-slot');
-  const back = document.createElement('div');
-  back.className='modal-backdrop';
-  back.innerHTML = `
-    <div class="surface rounded-lg w-full max-w-lg p-3 fade-in" role="dialog" aria-label="Command palette">
-      <input id="palette-input" class="w-full rounded px-3 py-2 mb-2" placeholder="Type a command, @person, #domain, R### ...">
-      <div id="palette-results" class="flex flex-col gap-1 max-h-80 overflow-auto"></div>
+function renderData() {
+  const app = document.getElementById('app');
+  const events = [...P.state.events].sort((a, b) => b.ts - a.ts);
+  app.innerHTML = `
+    <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-4 mb-5">
+      <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Log an event (append-only \u2014 "now" timestamp)</h3>
+      <form id="logForm" class="flex flex-wrap items-end gap-2">
+        <div>
+          <label class="block text-[11px] text-slate-500 mb-1">type</label>
+          <select id="logType" class="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-200">
+            ${LEADOS.store.KNOWN_TYPES.filter(t => t !== 'store.initialized').map(t => `<option value="${t}">${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="flex-1 min-w-[220px]">
+          <label class="block text-[11px] text-slate-500 mb-1">payload (JSON)</label>
+          <input id="logPayload" class="w-full bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs mono text-slate-200" value='{}'>
+        </div>
+        <button type="submit" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-medium text-slate-950">Append</button>
+      </form>
+      <p id="logMsg" class="text-[11px] text-rose-400 mt-2"></p>
+    </div>
+    <div class="rounded-lg border border-slate-800 bg-slate-900/60 overflow-hidden">
+      <table class="w-full text-xs">
+        <thead class="bg-slate-900 text-slate-500 uppercase tracking-wide text-[10px]">
+          <tr><th class="text-left px-3 py-2">id</th><th class="text-left px-3 py-2">type</th><th class="text-left px-3 py-2">payload</th><th class="text-left px-3 py-2">when</th></tr>
+        </thead>
+        <tbody>
+          ${events.map(e => `<tr class="border-t border-slate-800">
+            <td class="px-3 py-1.5 mono text-slate-500">${e.id}</td>
+            <td class="px-3 py-1.5 text-slate-200">${e.type}</td>
+            <td class="px-3 py-1.5 mono text-slate-400 truncate max-w-[320px]">${LEADOS.util.esc(JSON.stringify(e.payload))}</td>
+            <td class="px-3 py-1.5 text-slate-500 whitespace-nowrap">${LEADOS.util.fmtDate(e.ts)}${e.meta && e.meta.seeded ? ' <span class="text-slate-700">(seeded)</span>' : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
     </div>`;
-  slot.appendChild(back);
-  back.addEventListener('click', e=>{ if(e.target===back) closeOverlays(); });
-  document.addEventListener('keydown', escClose);
-  const input = document.getElementById('palette-input');
-  input.focus();
-  input.addEventListener('input', ()=> renderPaletteResults(input.value));
-  renderPaletteResults('');
-}
-function escClose(e){ if(e.key==='Escape'){ closeOverlays(); document.removeEventListener('keydown', escClose); } }
-const COMMANDS = [
-  { id:'go-today', label:'Go to Today', run:()=>location.hash='#/today' },
-  { id:'go-roster', label:'Go to Roster', run:()=>location.hash='#/roster' },
-  { id:'go-intel', label:'Go to Intelligence', run:()=>location.hash='#/intelligence' },
-  { id:'go-forecast', label:'Go to Forecast', run:()=>location.hash='#/forecast' },
-  { id:'go-data', label:'Go to Data', run:()=>location.hash='#/data' },
-  { id:'go-health', label:'Go to Health', run:()=>location.hash='#/health' },
-  { id:'theme', label:'Cycle theme', run:cycleTheme },
-  { id:'export', label:'Export JSON', run:()=>document.getElementById('export-json')?document.getElementById('export-json').click():showToast('Open #/data first.') }
-];
-function renderPaletteResults(q){
-  const results = document.getElementById('palette-results');
-  const hist = STATE.meta.commandHistory||{};
-  if(q.startsWith('@')){
-    const term = q.slice(1).toLowerCase();
-    const matches = PEOPLE.filter(p=>p.name.toLowerCase().includes(term));
-    results.innerHTML = matches.map(p=>`<button class="rail-item w-full text-left" data-person="${p.id}">@ ${escapeHtml(p.name)}</button>`).join('') || '<div class="muted text-sm p-2">No match.</div>';
-    results.querySelectorAll('[data-person]').forEach(b=> b.onclick = ()=>{
-      closeOverlays(); location.hash='#/intelligence';
-      setTimeout(()=>{ const d=document.getElementById('semantic-result'); if(d) d.innerHTML = renderPersonDossier(b.getAttribute('data-person')); },30);
-    });
-    return;
-  }
-  if(q.startsWith('#')){
-    const term = q.slice(1).toLowerCase();
-    const matches = DOMAINS.filter(d=>d.toLowerCase().includes(term));
-    results.innerHTML = matches.map(d=>`<button class="rail-item w-full text-left" data-domain-go="${d}">#${d}</button>`).join('') || '<div class="muted text-sm p-2">No match.</div>';
-    results.querySelectorAll('[data-domain-go]').forEach(b=> b.onclick=()=>{ closeOverlays(); location.hash='#/today/'+b.getAttribute('data-domain-go'); });
-    return;
-  }
-  let list = COMMANDS.filter(c=> c.label.toLowerCase().includes(q.toLowerCase()));
-  list = list.sort((a,b)=> (hist[b.id]||0)-(hist[a.id]||0));
-  results.innerHTML = list.map(c=>`<button class="rail-item w-full text-left" data-cmd="${c.id}">&gt; ${escapeHtml(c.label)} ${hist[c.id]?('<span class="muted text-[11px]"> · used '+hist[c.id]+'×</span>'):''}</button>`).join('') || '<div class="muted text-sm p-2">No match.</div>';
-  results.querySelectorAll('[data-cmd]').forEach(b=> b.onclick=()=>{
-    const cmd = COMMANDS.find(c=>c.id===b.getAttribute('data-cmd'));
-    const h = { ...STATE.meta.commandHistory, [cmd.id]: (STATE.meta.commandHistory[cmd.id]||0)+1 };
-    updateMeta({ commandHistory:h });
-    closeOverlays(); cmd.run();
+
+  document.getElementById('logForm').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const type = document.getElementById('logType').value;
+    const msg = document.getElementById('logMsg');
+    try {
+      const payload = JSON.parse(document.getElementById('logPayload').value || '{}');
+      LEADOS.store.append(type, payload);
+      msg.textContent = '';
+      renderData();
+      updateHeaderCounts();
+    } catch (e) { msg.textContent = 'Rejected: ' + e.message; }
   });
 }
-document.addEventListener('keydown', e=>{
-  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openPalette(); }
-});
 
-/* ---------------- router ---------------- */
-function parseHash(){
-  const h = (location.hash||'#/today').replace('#/','');
-  const parts = h.split('/').filter(Boolean);
-  return { view: parts[0]||'today', param: parts[1]||null };
+function renderHealth() {
+  const app = document.getElementById('app');
+  const today = Date.now();
+  const results = [];
+
+  // T_STORE — round-trip on a throwaway key, never touches the real store key.
+  try {
+    const tk = 'leados-pti-demo:healthcheck';
+    localStorage.setItem(tk, JSON.stringify({ x: 1 }));
+    const ok = JSON.parse(localStorage.getItem(tk)).x === 1;
+    localStorage.removeItem(tk);
+    results.push({ id: 'T_STORE', pass: ok, detail: 'localStorage round-trip on a throwaway key.' });
+  } catch (e) { results.push({ id: 'T_STORE', pass: false, detail: String(e) }); }
+
+  // T_APPEND_ONLY — logic test on a cloned array, does not write to the real store.
+  try {
+    const clone = { events: [...P.state.events] };
+    const before = clone.events.length;
+    const beforeRef = clone.events;
+    clone.events = [...clone.events, { id: 'e-health', ts: Date.now(), type: 'store.initialized', payload: {} }];
+    const grew = clone.events.length === before + 1;
+    const untouched = beforeRef.every((e, i) => e === clone.events[i]);
+    results.push({ id: 'T_APPEND_ONLY', pass: grew && untouched, detail: 'Simulated push leaves all prior entries referentially unchanged (logic check, not a live write).' });
+  } catch (e) { results.push({ id: 'T_APPEND_ONLY', pass: false, detail: String(e) }); }
+
+  // T_TEMPORAL_BOUNDARIES — the four resolution cut points, exactly as classifyTemporalResolution defines them.
+  try {
+    const cases = [[7,'IMMEDIATE'],[8,'OPERATIONAL'],[60,'OPERATIONAL'],[61,'STRATEGIC'],[180,'STRATEGIC'],[181,'STRUCTURAL']];
+    const DAY = 86400000;
+    let allOk = true; const detail = [];
+    cases.forEach(([ageD, expect]) => {
+      const fakeEv = { id: 'fk', ts: today - ageD * DAY - 1000 };
+      const fakeP = { state: { events: [fakeEv] } };
+      const fakeFinding = { sources: ['fk'] };
+      const got = LEADOS.temporalField.classifyTemporalResolution(fakeFinding, fakeP, today);
+      const ok = got === expect; allOk = allOk && ok;
+      detail.push(`${ageD}d\u2192${got}${ok?'':' (expected '+expect+')'}`);
+    });
+    results.push({ id: 'T_TEMPORAL_BOUNDARIES', pass: allOk, detail: detail.join(', ') });
+  } catch (e) { results.push({ id: 'T_TEMPORAL_BOUNDARIES', pass: false, detail: String(e) }); }
+
+  // T_ENGINE — all rules evaluate against the real live log without throwing.
+  try {
+    const { findings, errors } = LEADOS.engine.run(P, today);
+    results.push({ id: 'T_ENGINE', pass: errors.length === 0, detail: `${findings.length} findings, ${errors.length} rule errors${errors.length ? ': ' + errors.map(e=>e.rule).join(',') : ''}.` });
+  } catch (e) { results.push({ id: 'T_ENGINE', pass: false, detail: String(e) }); }
+
+  // T_CAUSAL — every scored precursor has a valid plausibility and positive lag.
+  try {
+    const { findings } = LEADOS.engine.run(P, today);
+    const map = LEADOS.causality.buildCausalMap(findings, P, today);
+    let allOk = true; let n = 0;
+    map.forEach(list => list.forEach(p => { n++; if (!(p.plausibility > 0 && p.plausibility <= 1 && p.lagDays > 0)) allOk = false; }));
+    results.push({ id: 'T_CAUSAL', pass: allOk, detail: `${n} scored precursor(s) across ${map.size} finding(s) with causal entries; all within (0,1] plausibility and positive lag.` });
+  } catch (e) { results.push({ id: 'T_CAUSAL', pass: false, detail: String(e) }); }
+
+  app.innerHTML = `
+    <div class="space-y-2">
+      ${results.map(r => `<div class="flex items-start gap-3 rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
+        <span class="mono text-lg ${r.pass ? 'text-emerald-400' : 'text-rose-400'}">${r.pass ? '\u2713' : '\u2717'}</span>
+        <div>
+          <div class="mono text-sm text-slate-200">${r.id}</div>
+          <div class="text-xs text-slate-500">${LEADOS.util.esc(r.detail)}</div>
+        </div>
+      </div>`).join('')}
+    </div>
+    <p class="text-[11px] text-slate-600 mt-4">Live, in-browser, no external test runner \u2014 this view is the authority on this delivery's own claims if it ever disagrees with README.md.</p>
+  `;
 }
-function route(){
-  const r = parseHash();
-  logUsage(r.view);
-  const navItem = NAV_ITEMS.find(n=>n.id===r.view);
-  trackViewDomain(r.param || (navItem && navItem.domain) || null);
-  renderBanner();
-  renderRail(r);
-  const main = document.getElementById('main');
-  let html = '';
-  switch(r.view){
-    case 'today': html = viewToday(r.param); break;
-    case 'roster': html = viewRoster(); break;
-    case 'engineering': case 'ops': case 'sales': case 'finance': case 'strategy': case 'external': case 'resilience': {
-      const dom = (NAV_ITEMS.find(n=>n.id===r.view)||{}).domain;
-      html = viewToday(dom); break;
-    }
-    case 'intelligence': html = viewIntelligence(); break;
-    case 'forecast': html = viewForecast(); break;
-    case 'data': html = viewData(); break;
-    case 'health': html = viewHealth(); break;
-    default: html = viewToday(null);
-  }
-  main.innerHTML = `<div class="fade-in">${html}</div>`;
-  wireIntelligenceSearch();
-  wireDataView();
+
+/* ============================================================
+   ROUTER + HEADER
+   ============================================================ */
+function updateHeaderCounts() { document.getElementById('evCount').textContent = P.state.events.length; }
+function tickClock() { document.getElementById('clock').textContent = LEADOS.util.fmtDate(Date.now()) + ' UTC-ish'; }
+
+function route() {
+  const hash = location.hash || '#/today';
+  const parts = hash.replace('#/', '').split('/');
+  const view = parts[0] || 'today';
+  document.querySelectorAll('.nav-link').forEach(a => a.classList.toggle('nav-active', a.dataset.view === view));
+  if (view === 'finding') renderFindingDetail(decodeURIComponent(parts[1] || ''));
+  else if (view === 'temporal') renderTemporal();
+  else if (view === 'data') renderData();
+  else if (view === 'health') renderHealth();
+  else renderToday();
+  updateHeaderCounts();
 }
 window.addEventListener('hashchange', route);
-window.addEventListener('load', ()=>{
-  initSession();
-  route();
-});
-/* in case script runs after load event already fired */
-if(document.readyState==='complete'){ initSession(); route(); }
-
-})();
+window.addEventListener('DOMContentLoaded', () => { tickClock(); setInterval(tickClock, 1000); route(); });
 </script>
 </body>
 </html>
