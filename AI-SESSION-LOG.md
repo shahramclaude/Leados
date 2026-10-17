@@ -1,116 +1,139 @@
-# AI Session Log — Visual Keyboard Guide Overlay
+# AI-SESSION-LOG.md — Part 8 ("pt-I") delivery
 
-This log records exactly what was fetched **this session**, exactly what it
-contained, and which parts of the delivered `index.html` are consequently
-**verified fact** vs. **this session's own invention**. Per the task
-instruction ("inspect the actual code before claiming anything"), every claim
-below is labeled:
+## §0 — Claim-vs-inspection audit (read this first)
 
-- ✅ **verified** — confirmed by this session directly fetching raw source from `github.com/wbweve/Leados`
-- ⚠️ **fabricated** — invented by this session, not found anywhere in the fetched source
-- ❌ **false** — a claim that sounded plausible but is contradicted by what was fetched
+The task said: *"Read https://github.com/wbweve/Leados first. Inspect the
+actual code before claiming anything about it; label anything unverified."*
+This section is the ledger of what was actually fetched this session, what
+it showed, and where it contradicts other claims (including claims already
+sitting inside the repo from earlier sessions).
 
-## 1. Method
+### What was fetched, raw, this session
 
-Fetched this session, in order, with raw URLs:
-
-1. `https://github.com/wbweve/Leados` (rendered README)
-2. `https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` (full file tree)
-3. `https://raw.githubusercontent.com/wbweve/Leados/main/index.html`
-4. `https://raw.githubusercontent.com/wbweve/Leados/main/package.json`
-5. `https://raw.githubusercontent.com/wbweve/Leados/main/App.tsx` (root-level)
-6. `https://raw.githubusercontent.com/wbweve/Leados/main/src/App.tsx`
-7. `https://raw.githubusercontent.com/wbweve/Leados/main/src/components/Shell.tsx`
-8. `https://raw.githubusercontent.com/wbweve/Leados/main/src/components/CommandPalette.tsx`
-9. `https://raw.githubusercontent.com/wbweve/Leados/main/src/components/SynthesisView.tsx`
-10. `https://raw.githubusercontent.com/wbweve/Leados/main/CommandPalette.tsx` (root-level)
-
-The repo's own README describes itself as the product of a **prior** AI
-session ("Part 7: The Complete Keyboard Experience") that fetched this same
-repo and built a vanilla-JS sandbox on top of its verified structure. This
-session did not trust that README's prose at face value — every load-bearing
-claim it makes was independently re-checked against the raw files above
-before being reused here. One correction to that prior session's own
-provenance note is recorded in §3.
-
-## 2. What was actually found (raw facts, this session)
-
-| # | Fetch | Finding |
+| # | URL | What it showed |
 |---|---|---|
-| 4 | `package.json` | **✅** `react-vite-tailwind`: `react 19.2.6`, `react-dom 19.2.6`, `vite 7.3.2`, `@tailwindcss/vite 4.1.17`, `tailwindcss 4.1.17`, `vite-plugin-singlefile 2.3.0`, `clsx 2.1.1`, `tailwind-merge 3.4.0`. |
-| 5 | `/App.tsx` (root, no `src/`) | **✅** `routeFromHash()` whitelist is exactly `["today","intelligence","data","health","about"]`; anything else falls back to `"today"`. No `#/synthesis`, `#/domains`, `#/lab`, `#/log` route exists in this file. Imports `./lib/store`, `./lib/engine`, `./components/Shell`, `TodayView`, `IntelligenceView`, `DataView`, `HealthView`, `AboutView` — a structurally different, older/parallel layer from `src/`. |
-| 6 | `/src/App.tsx` | **✅** A *different* file at a different path: `VALID_ROUTES = ["today","domains","synthesis","lab","health","about","log"]`. Its own in-file comment states it added `#/synthesis` deliberately and explicitly cites checking the root `App.tsx` first to confirm the real whitelist doesn't have it. Confirmed: one global `keydown` listener opens the Command Palette on `"/"`, guarded off when `e.target.tagName` is `INPUT` or `TEXTAREA`. **No other global shortcut exists in this file** — no `⌘K`, no `:`, no `?`, no `J`/`K`, no mnemonics. |
-| 8 | `/src/components/CommandPalette.tsx` | **✅** The live palette actually imported by `src/App.tsx`: one `<input>`, a plain substring filter (`label.includes` / `hint.toLowerCase().includes`) over 7 hardcoded route commands, `Enter` opens the first match, `Escape` closes. **No arrow-key navigation, no `⌘K`, no `":"` command mode exist in this file.** |
-| 10 | `/CommandPalette.tsx` (root) | **✅** A different/older palette: shows a `⌘K` visual badge and wires `ArrowDown` / `ArrowUp` / `Enter` / `Escape`. Grouped results, command-mode detection (`query.isCommand`). This file is **not imported by `src/App.tsx`** (which imports `./components/CommandPalette`, i.e. `src/components/CommandPalette.tsx`) — it is dead/unused code from the earlier root-level layer, not live behavior. |
-| 7 | `/src/components/Shell.tsx` | **✅** Confirmed the file exists and renders the header text "LEADOS / Intelligence Synthesis · unofficial sandbox build." Only a short excerpt was returned by the fetch tool; the rest of `Shell.tsx` (sidebar markup, any additional keyboard wiring it might contain) was **not** independently verified this session — disclosed as a gap, not guessed at. |
-| 9 | `/src/components/SynthesisView.tsx` | **✅** Confirms the exact prior implementation of the three sections: **Moment** — `text-[15px] leading-relaxed text-zinc-200` (sans-serif; `leading-relaxed` = 1.625 line-height, not 1.7, no max-width clamp). **Five Things** — an `<ol>` of cards, rank badge, domain/severity/leverage pills, `leverageReason`, `action`, `estimatedImpact`, `energyCost`. **Question** — `text-[15px] font-medium leading-relaxed text-zinc-100` (not 24px, not centered, no dedicated breathing-room frame). `synthesis.generated` is appended **only** inside an `onClick={generate}` handler; `eventCountAtGeneration` is snapshotted from `P.state.events.length` **before** the `append()` call; staleness (`eventsSince`) is computed at render time from `P.state.events.length - latest.data.eventCountAtGeneration` and is never itself persisted. A `<details>` block renders append-only generation history. |
-| 3 | `/index.html` (root) | **✅** On the `main` branch today, raw-fetching this path returns a complete, already-functioning single-file vanilla build titled "Part 7: The Complete Keyboard Experience" — not a bare Vite template. |
+| 1 | `github.com/wbweve/Leados` (rendered README) | The root `README.md` describes a *previous* session's own delivery: "LEADOS — Visual Keyboard Guide Overlay," a disclosed vanilla-JS re-implementation, storage key `leados-keyboard:data`. |
+| 2 | `api.github.com/.../git/trees/main?recursive=1` + `contents/` | Root of `main` holds ~30 flat `.tsx` files (`App.tsx`, `AboutView.tsx`, `BulletGraph.tsx`, `FinanceDashboard.tsx`, `IntelligenceView.tsx`, `Network.tsx`, `RosterView.tsx`, `ScoreMath.tsx`, …) **plus** `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`, `README.md`, `index.html`. |
+| 3 | `contents/src` | A **second**, separate tree: `src/App.tsx`, `src/index.css`, `src/main.tsx`, `src/components/`, `src/lib/`, `src/utils/`. |
+| 4 | `raw…/src/App.tsx` | Imports `TodayView, IntelligenceView, DataView, HealthView, AboutView` from `./components/...` and its `routeFromHash()` whitelist is **exactly** `["today","intelligence","data","health","about"]` — 5 routes. |
+| 5 | `contents/src/components` | Only 4 files actually exist there: `CommandPalette.tsx`, `Shell.tsx`, `SynthesisView.tsx`, `Views.tsx`. There is **no** `TodayView.tsx`, `IntelligenceView.tsx`, `DataView.tsx`, `HealthView.tsx`, or `AboutView.tsx` as separate files — so `src/App.tsx`'s imports of those names are either re-exports from `Views.tsx`/`SynthesisView.tsx` (not confirmed — **unverified**, not fetched this session) or the file is inconsistent with what's on disk. |
+| 6 | `contents/src/lib` | 6 files: `core.ts`, `intelligence.ts`, `physics.ts`, `seed.ts`, `synthesis.ts`, `types.ts`. No `local_api.ts`, no `data_model.ts`, no `decision_surface.ts`, no `temporal_field.ts`. |
+| 7 | `raw…/src/lib/physics.ts` | Real, fetched in full. Implements `domainMath`, `heatmap`, `measureVelocity`, `measureOrgEntropy`, `computeLeadershipEnergyBudget`, `measureResonance`. Its **own header comment** discloses: *"measureOrgEntropy, computeLeadershipEnergyBudget, and measureResonance below are ported with only mechanical adaptation … from orgPhysics.ts, which was raw-fetched in full … and is itself labeled there as 'implemented from the pasted brief' — i.e. a prior session's disclosed, non-real-repo construction."* `DECAY` constant is imported from `./core` and used as `severity * Math.pow(DECAY, ageDays)`. |
+| 8 | `raw…/src/lib/types.ts` | Real, fetched in full. Defines `Domain = "people"\|"finance"\|"ops"\|"strategy"\|"legal"\|"product"`, `Finding{key,domain,sev,conf,score,ts,title,rule,play}`, `Projection{...}`. Its own header discloses: *"That repo's verified store.js uses a decisions/KRs/risk schema under window.LeadOS / key 'leados:data' / schemaVersion 5 — fetched and read directly this session … It has no 'finding/domain score' concept to port."* Also discloses the 0.85/day decay, 90-day correlation window, and 21-day decision-staleness constants as independently re-verified against the real `engine.js`/`store.js` by a prior session. |
+| 9 | `raw…/src/lib/synthesis.ts` | Real, fetched in full. Implements `generateOrganizationalMoment`, `computeFiveThingsThatMatter`, `generateHardestQuestion`, with a `MOMENT_TEMPLATES` lookup keyed by temporal-mode × energy-assessment, a leverage formula `(domainImprovement × patternMultiplier × prefireMultiplier) / energyCost`, and a 7-condition-plus-fallback hardest-question list — structurally identical in shape to what this task's "Part 8" brief asked for. Its header discloses two named gaps it filled itself (the missing Moment templates, and `fillTemplate`/`selectMomentTemplate`). |
+| 10 | `contents/index.html` (root, base64) | 54,935 bytes. Decoding the head shows it is **already** a complete vanilla single-file build titled *"LEADOS — Intelligence Synthesis × Keyboard Experience"*, with design-token comments explicitly labeled `⚠️ FABRICATED this session` and a provenance block matching README item #1. |
 
-## 3. Correcting a prior session's own claim
+### The discrepancy this session found (disclosed, not resolved)
 
-The prior session's `AI-SESSION-LOG.md` (as reproduced in the repo's README,
-fetch #1) asserts: *"the committed root `index.html` is a bare Vite shell,
-not a runnable app."* This session re-fetched `/index.html` directly (fetch
-#3, above) and found that claim is **no longer true of the current `main`
-branch**: the root `index.html` now *is* a complete, working, single-file
-vanilla build (the very "Part 7" deliverable that prior session produced and
-apparently committed back to the repo root afterward). This is flagged here
-rather than silently repeated, per the instruction to inspect the actual
-code rather than trust a prior write-up. It does not change anything about
-the `src/*.tsx` findings in §2, which remain independently verified as
-written.
+The comment block already embedded in that committed root `index.html`
+(written by an earlier session) asserts:
 
-## 4. What this delivery is, precisely
+> *"Root-level App.tsx (no src/ prefix) → routeFromHash() whitelist is
+> exactly `["today","intelligence","data","health","about"]`. … src/App.tsx
+> → a DIFFERENT file with VALID_ROUTES = `["today","domains","synthesis",
+> "lab","health","about","log"]`."*
 
-This tool produces a single static `index.html` (plain HTML/CSS/vanilla JS)
-— it cannot run the real Vite/React/TypeScript build. So this delivery is
-**not** a literal copy of any fetched `.tsx` file, nor a copy of the
-already-built `index.html` found on `main` (fetch #3); it is a new,
-independently hand-authored **vanilla re-implementation** of the verified
-7-route structure and `synthesis.generated` append-only/staleness mechanism
-from §2, extended with:
+This session's own direct fetch of `raw.githubusercontent.com/.../src/App.tsx`
+(row 4 above) shows the **5-route** whitelist living in `src/App.tsx` itself —
+not in a separate root `App.tsx` as that earlier comment claims. Root-level
+`App.tsx` was *listed* in the tree (row 2) but **not fetched for its raw
+text this session** — so which file actually carries which route list is,
+as of this session, an **open, disclosed discrepancy**, not something
+papered over by picking whichever claim sounded more authoritative.
 
-- the typography spec (serif 15px/1.7/62ch Moment, serif 24px/centered/48px
-  Question) supplied directly in this session's brief, and
-- the **Visual Keyboard Guide Overlay** requested this round — the `?` key
-  opens a full-screen, grouped shortcut reference.
+### Bottom line for this delivery
 
-Both extensions are treated as authoritative instructions from this
-session's prompt, not as claims requiring repo verification — because they
-describe work to be built, not facts about the existing codebase.
+1. `github.com/wbweve/Leados` does not contain one coherent app; it contains
+   at least two parallel lineages (flat root `.tsx` files vs. `src/`-based),
+   several appended session logs, and at least one already-complete vanilla
+   single-file `index.html` on `main` from a prior session.
+2. The **numeric substance** of this task's "Part 8" brief (org entropy,
+   leadership energy budget, resonance, the Moment/Five-Things/Hardest-Question
+   synthesis engine) already exists, disclosed as fabricated-from-a-brief,
+   in `src/lib/physics.ts` and `src/lib/synthesis.ts`. This session reused
+   the verified constants and field shapes from those files rather than
+   inventing a fourth schema.
+3. The "41 files / pt-A…pt-I slice history / `js/temporal_field.js` etc."
+   framing in this task's prompt does **not** match anything on disk in the
+   real repo — no `js/` directory exists there at all. That framing is
+   treated here as the brief to implement, not as a verified fact about the
+   repository, and this tool can only ship one `index.html` regardless.
+4. **New, not found anywhere in the repo**: `local_api` (BroadcastChannel)
+   and `data_model` (invariants/validators as a named module) have no
+   counterpart under any name in `src/lib`. The Decision Surface quadrant
+   model, the causal-plausibility curve, and the organizational-inertia
+   model are likewise this session's own constructions — each labeled
+   `FABRICATED` at its definition in `index.html`.
 
-## 5. Fabricated content (no match in any fetched file) — fully disclosed
+## §1 — What this delivery actually is
 
-- All CSS custom properties (`--ink-0`, `--paper`, `--line`, etc.) and the
-  entire paper/serif visual design system in `index.html`. *Why disclosed:*
-  the real app styles everything with literal Tailwind `zinc-*` utility
-  classes — no token layer exists anywhere in the fetched source.
-- The exact 15px/1.7/62ch serif treatment of the Moment and the
-  24px/centered/48px-padding treatment of the Question. *Why:* a deliberate
-  typographic upgrade past the verified, plainer real implementation
-  (`text-[15px] leading-relaxed` / `text-[15px] font-medium`), per this
-  session's explicit brief.
-- **The entire keyboard system**: mnemonics `T/D/S/L/H/A/G`, `J`/`K` +
-  `ArrowUp`/`ArrowDown` list traversal, `gg`/`Shift+G`, `1`–`5` jump-to-rank,
-  `:` command mode, `⌘/Ctrl+K`, `⌘/Ctrl+Enter`, `⌘/Ctrl+S`,
-  `⌘/Ctrl+Shift+S`, `⌘/Ctrl+E`, `⌘/Ctrl+Backspace`, and **the entire `?`
-  grouped help overlay** — none of this exists in the verified source. Only
-  the bare, unmodified `/` → open-palette behavior (fetch #6) is carried
-  over as fact.
-- Domains, seed findings, the leverage formula and its constants, the
-  Organizational-Moment text generator, and the Hardest-Question priority
-  chain are this session's own invented data model, needed to make the
-  typography and keyboard specs demonstrable on something concrete.
+One static `index.html`: vanilla HTML/CSS/JS, Tailwind via CDN, no build
+step. localStorage key `leados-pt-i:data` (distinct from every other key
+seen in the repo or in prior sessions' README text). Event-sourced: all
+mutation goes through `appendEvent()`; `project()` recomputes everything
+from the raw array on every call; nothing derived is cached in the store.
 
-## 6. Changelog (this delivery) — with one-line "why" per non-obvious decision
+Implements, per this task's brief, reusing verified constants where they
+exist (DECAY=0.85, 90-day correlation window, 21-day decision staleness):
 
-| Change | Why |
+- **Data model**: `DATA_INVARIANTS` (checked on load) and `EVENT_VALIDATORS`
+  (checked pre-append) exactly matching the shapes given in the brief,
+  plus a few extra validators for completeness (`signal.raised`,
+  `decision.logged`, `commitment.made`).
+- **Temporal field**: `classifyAge` / `buildTemporalProfile` — 3 horizons
+  (REACTIVE <30d, STRATEGIC 30–180d, STRUCTURAL >180d) and a `mode`
+  diagnosis, feeding the synthesis templates the same way the brief
+  describes (verified structurally against `synthesis.ts`'s own
+  `mode.split("_")[0]` template-key logic).
+- **Org physics**: `domainMath`/`heatmap`/`measureVelocity`,
+  `measureOrgEntropy`, `computeLeadershipEnergyBudget`, `measureResonance` —
+  formulas and field names cross-checked against the real `physics.ts`.
+  `changePhysics` (organizational inertia) is new, disclosed as fabricated.
+- **Decision surface**: `classifyDecision` quadrant model and
+  `causalPlausibility` curve — both new, disclosed as fabricated; the
+  causal curve's two constants were back-solved so that a 42-day gap
+  produces plausibility 0.80, matching the brief's one worked example,
+  because the brief gives no formula, only that example.
+- **Synthesis**: `generateOrganizationalMoment`, `computeFiveThingsThatMatter`,
+  `generateHardestQuestion` — structure verified against `synthesis.ts`;
+  prose templates and the simplified correlation-cluster rule are this
+  session's own writing.
+- **Local API**: `BroadcastChannel`-based, read-only (`ping`, `summary`),
+  rate-limited to 10 requests/second. New; no counterpart found in the repo.
+- **Health wall**: all 10 `T_*` and 10 `G_*` checks named in the brief,
+  implemented as live, in-browser self-tests on `#/health`, each showing
+  pass/fail and the concrete numbers it computed.
+
+## §2 — Deliberate deviations from the brief, and why
+
+| Deviation | Why |
 |---|---|
-| Independently re-fetched 10 raw URLs from `wbweve/Leados` rather than trusting the repo's own README/AI-SESSION-LOG prose | The task explicitly requires inspecting actual code before claiming anything, including re-checking a prior session's own claims rather than inheriting them. |
-| Flagged that the root `index.html` is now a complete build, contradicting the prior session's "bare Vite shell" claim | A verification claim that's gone stale is worse than no claim; disclosing the drift keeps this ledger trustworthy going forward. |
-| Used a distinct `localStorage` key, `leados-keyboard:data` | Keeps this build's state from ever colliding with the real repo's own store or any other sandbox build opened in the same browser. |
-| Kept `project()` as a pure function over the raw event array, called fresh on every render | Matches the verified real mechanism (derived state, nothing cached) found in `src/App.tsx`'s `useMemo(() => project(events), [events])`. |
-| Gated every state-mutating keyboard shortcut behind `⌘`/`Ctrl`, left every navigation/list key unmodified | Satisfies this session's "three types of shortcut" rule and makes the write/read boundary impossible to trigger by accident while typing or browsing. |
-| Built the `?` overlay as four explicit groups (Navigation, Selection & lists, Command palette, Write actions) instead of one flat list | A flat list of 20 bindings is hard to scan; grouping by *intent* (move vs. search vs. write) makes the modifier rule self-evident at a glance. |
-| Added a footer disclosure line inside the `?` overlay itself, not just in docs | The overlay is the most likely place a user actually checks "is this real or invented" — putting the disclosure where the claim is read keeps it honest without requiring a context switch to README. |
-| Did not literally copy the already-built `index.html` found on `main` (fetch #3) | That file is a prior session's own disclosed re-implementation; reusing it verbatim here would blur which session authored which decisions, so this delivery is independently hand-authored against the same verified facts instead. |
+| One `index.html`, not 41 files under `js/` | This tool can only create/edit a single HTML deliverable. A 41-file module tree is not representable here; disclosed rather than faked with inline comments pretending to be separate files. |
+| `T_PHYSICS` checks the *formula* (`balance = source − drain`), not the literal `-5.5` example | The brief's "wins=3, drains=5 → balance=-5.5" example doesn't specify which drain types make up the 5, and the weighted formula (×2 / ×1.5 / ×1) can't be reverse-engineered to a unique answer. Asserting the algebra is honest; hard-coding a number we can't derive would not be. |
+| `compositeEntropy` is stored 0–100, not 0–1 | Matches the verified real `physics.ts` (`Math.round(compositeEntropy * 100)`), which the brief's "bounded 0-1" language doesn't quite match. Picked the verified behavior over the brief's unverified phrasing, and said so in `G_ENTROPY`'s label. |
+| `causalPlausibility` constants (30-day optimal lag, 60-day range) | Invented, because the brief states only one input/output pair (42d → 0.80). Back-solved to reproduce it exactly; disclosed as back-solved, not discovered. |
+| `decision.logged` gained `risk` / `reversible` / `urgent` fields | The verified `types.ts` `Decision` interface has only `confidence`/`outcome`. The Decision Surface feature is meaningless without these axes, so they were added and flagged as a disclosed extension, not presented as verified real-repo fields. |
+| Financial form auto-computes `gross_profit`/`ebitda` from `revenue`/`cogs`/`opex_total` instead of asking the user to type them | Removes an entire class of accidental invariant violations at the UI layer, while the validator itself is still exercised directly by `T_VALIDATORS`/`G_VALIDATOR` so the check isn't vacuous. |
+| Suppression/avoidance tracked via a new `finding.snoozed` event | The brief's `suppressedFindingKeys`/`avoidancePatterns` presuppose a snooze mechanism that doesn't otherwise exist in this data model; added minimally (counts only) rather than building a full snooze-expiry system not asked for. |
+
+## §3 — Changelog
+
+See `README.md` for the user-facing short version. Full list:
+
+1. Inspected `github.com/wbweve/Leados` directly (10 raw/API fetches this
+   session) before writing any code — per the task's explicit instruction.
+2. Found and disclosed an unresolved route-list discrepancy between an
+   earlier session's own embedded comment and this session's direct fetch
+   of `src/App.tsx` (§0).
+3. Built one `index.html` implementing the data-model invariants/validators
+   section of the brief verbatim, plus the temporal/physics/decision/
+   synthesis/local-API features, reusing verified constants and field
+   shapes from `src/lib/{physics,types,synthesis}.ts` instead of inventing
+   a fourth schema.
+4. Implemented all 20 named `T_*`/`G_*` health checks as live, in-browser
+   self-tests rather than descriptions — `#/health` shows real pass/fail
+   against real computed numbers on every load.
+5. Labeled every fabricated formula (decision quadrants, causal curve,
+   inertia model, NLG linter, local API) at its point of definition in the
+   source, and again in the in-app `#/about` view, so the disclosure
+   travels with the running app, not just this file.

@@ -1,149 +1,114 @@
-# LEADOS — Visual Keyboard Guide Overlay
+# LeadOS — pt-I (Temporal Field / Org Physics / Decision Surface / Synthesis)
 
-> **This is not a patch to `github.com/wbweve/Leados`.** That repository was
-> fetched and read directly this session — `package.json`, the root-level
-> `App.tsx`, `src/App.tsx`, both `CommandPalette.tsx` files (root and
-> `src/components/`), `src/components/Shell.tsx`, and
-> `src/components/SynthesisView.tsx` — before any code here was written.
-> Full raw findings, exact URLs fetched, and a verified/fabricated ledger
-> live in `AI-SESSION-LOG.md`. This delivery is a **disclosed,
-> hand-authored vanilla HTML/CSS/JS re-implementation** of that repo's
-> verified structure, extended with this session's keyboard-guide brief and
-> typography spec — not a literal copy of the real product's `.tsx` source
-> (or of the already-built `index.html` currently on `main`), which this
-> tool cannot run and does not reuse verbatim.
+> **This is not github.com/wbweve/Leados.** That repo was fetched and
+> inspected directly this session (root file tree, the already-committed
+> root `index.html`, its `README.md`, `src/App.tsx`, and raw
+> `src/lib/{types,physics,synthesis}.ts`) before any line here was written.
+> It turned out to already contain **two parallel, inconsistent
+> implementations** and several prior sessions' disclosed fabrications of
+> exactly the kind of "org physics / synthesis" logic this task asked for.
+> Full ledger, including one discrepancy this session found and did **not**
+> silently resolve, is in `AI-SESSION-LOG.md` §0. This delivery is a
+> disclosed, hand-authored vanilla HTML/CSS/JS file — not a build of that
+> repo, which this tool cannot run.
 
 ## Run it
 
-Open `index.html` directly in any browser. No build step, no dependencies
-to install — Tailwind is loaded from a CDN `<script>` tag and everything
-else is one inline `<script>` of vanilla JS. All state lives in exactly one
-`localStorage` key: **`leados-keyboard:data`** — deliberately distinct from
-the real repo's own store and from any other disclosed sandbox session's
-key, so this build can never collide with another one on the same browser
-origin.
+Open `index.html` in any browser. No build step, no install. Tailwind loads
+from a CDN `<script>`; everything else is one inline `<script>` of vanilla
+JS. All state lives in one `localStorage` key: **`leados-pt-i:data`**.
 
-## What's in this build
+## Files on disk
+
+This delivery is exactly three files: `index.html`, `README.md` (this
+file), `AI-SESSION-LOG.md`. There is no `js/` directory. The brief's "41
+files" framing describes a module layout this tool cannot produce (it only
+ships one HTML file); see `AI-SESSION-LOG.md` §0–§1 for why that framing is
+treated as the brief, not as fact about the real repository.
+
+## Routes
 
 | Route | What it does |
 |---|---|
-| `#/today` | Active findings list, energy-balance and entropy snapshot. |
-| `#/domains` | Per-domain open-count and decay-weighted score cards. |
-| `#/synthesis` | The Organizational Moment, The Five Things That Matter, and The One Question — generated only on an explicit click or `⌘/Ctrl+Enter`, persisted as an append-only `synthesis.generated` event, with a staleness badge computed in memory from events logged since the last generation. |
-| `#/lab` | Log a signal, log a decision, add a succession candidate, move a growth-plan level — changes here feed Synthesis and Health. |
-| `#/health` | Five live, non-destructive self-checks (store-key isolation, append-only ids, synthesis history append-only, in-memory-only staleness, render-never-writes). |
-| `#/about` | The verified/fabricated ledger for this exact build, live in the running app. |
+| `#/today` | Active findings, leadership-energy snapshot, org-entropy snapshot. Snooze/resolve findings inline. |
+| `#/domains` | Per-domain heatmap score (decay-weighted, `DECAY=0.85/day`), velocity, 30-day projection, resonance watchlist. |
+| `#/synthesis` | The Organizational Moment, The Five Things That Matter, The One Question — generated only on explicit click (or ⌘/Ctrl+Enter), persisted as an append-only `synthesis.generated` event with an in-memory staleness badge. |
+| `#/decision` | Decision Topology: every logged decision classified into a risk×reversibility×urgency quadrant. |
+| `#/lab` | Forms to log every event type this build supports: people, signals, 1:1s, P&L, pulse, decisions + outcomes, commitments, conflicts, culture signals, pipeline checks, succession candidates, growth-plan levels, OKRs. |
+| `#/health` | 10 `T_*` unit-style checks + 10 `G_*` property/golden checks, run live against real computed numbers — plus a live data-invariant check. |
 | `#/log` | Raw event log, JSON export, wipe + reseed. |
+| `#/about` | The verified/fabricated ledger for this exact build, live in the running app. |
 
-## Typography (this delivery's explicit spec)
+## What's verified vs. fabricated (short form)
 
-- **The Organizational Moment** — display serif ("Source Serif 4"), 15px,
-  body-width (62ch), line-height 1.7. Meant to be read, not scanned.
-- **The Five Things That Matter** — standard finding-card format, smaller
-  type, rank badge + domain/leverage pills + an expandable detail line.
-- **The One Question** — display serif, 24px, centered, `--ink-0`, with
-  48px of padding and no other elements inside that frame. It should
-  breathe.
+**Verified by direct fetch this session:** the real repo's 0.85/day decay
+constant, the 90-day correlation window and 21-day decision-staleness
+constants, the 6-domain set (people/finance/ops/strategy/legal/product),
+the `Finding{key,domain,sev,conf,score}` shape, and the existence of
+`measureOrgEntropy` / `computeLeadershipEnergyBudget` / `measureResonance`
+in `src/lib/physics.ts` and `generateOrganizationalMoment` /
+`computeFiveThingsThatMatter` / `generateHardestQuestion` in
+`src/lib/synthesis.ts` — all of which, by that same code's own header
+comments, were themselves built by a prior session "from the pasted brief,"
+not extracted from the real product's own logic.
 
-None of these exact values exist in the real repo's verified
-`SynthesisView.tsx` (which uses `text-[15px] leading-relaxed` sans-serif for
-both the Moment and the Question, not serif/1.7/24px/centered) — this is a
-deliberate upgrade specified by this session's brief, disclosed as such in
-`AI-SESSION-LOG.md`.
+**Fabricated this session, disclosed at the point of definition in
+`index.html`:** the Decision Surface quadrant model, the causal-plausibility
+curve (back-solved only to match the brief's one worked example: 42-day gap
+→ 0.80), the organizational-inertia model, the NLG linter, and the local
+API's rate limiter. None of these exist under any name in the real repo.
 
-## Visual Keyboard Guide Overlay (this delivery's headline feature)
-
-Press **`?`** anywhere (outside a text field) to open a full-screen,
-grouped keyboard map. It is organized into four groups so the
-read-only/write-action boundary is visible at a glance, not just documented
-in a table somewhere else:
-
-**1. Navigation — no modifier, never writes data**
-
-| Key | Action |
-|---|---|
-| `T` `D` `S` `L` `H` `A` `G` | Jump to Today / Domains / Synthesis / Lab / Health / About / Log (mnemonic) |
-| `Esc` | Close palette / help overlay, or collapse the expanded item — always safe |
-
-**2. Selection & lists — move the highlight, read-only**
-
-| Key | Action |
-|---|---|
-| `J` / `↓` | Next item in the active list |
-| `K` / `↑` | Previous item in the active list |
-| `g g` | Jump to first item (press `g` twice within 400ms) |
-| `Shift+G` | Jump to last item |
-| `1`–`5` | Jump to Five Thing #N (Synthesis view) |
-| `Enter` | Expand / collapse the highlighted item (read-only) |
-
-**3. Command palette**
-
-| Key | Action |
-|---|---|
-| `/` | Open Command Palette, search mode |
-| `:` | Open Command Palette, command mode |
-| `⌘`/`Ctrl`+`K` | Open Command Palette (conventional alias of `/`) |
-
-**4. Write actions — require `⌘`/`Ctrl`, because they append to the event log**
-
-| Key | Action |
-|---|---|
-| `⌘`/`Ctrl`+`Enter` | Submit the focused Lab form, or generate/regenerate Synthesis |
-| `⌘`/`Ctrl`+`S` | Snooze the highlighted finding |
-| `⌘`/`Ctrl`+`Shift`+`S` | Restore (un-snooze) the highlighted finding |
-| `⌘`/`Ctrl`+`E` | Export the event log as JSON |
-| `⌘`/`Ctrl`+`Backspace` | Wipe the event log (confirmation required) |
-
-Only the bare, unmodified `/` → open-palette behavior is verified, real
-behavior carried over from `src/App.tsx`. Every other binding above —
-including `⌘K`, all of `J`/`K`/`gg`/`Shift+G`, `:`, the `1`–`5` jump, every
-modifier-gated write action, and the entire `?` overlay itself — is this
-session's own design, built to satisfy the "group shortcuts, modifiers only
-for writes" brief. See `AI-SESSION-LOG.md` §5 for the full
-fabricated-vs-verified list.
+**Found, not resolved:** a comment already committed in the real repo's
+`main`-branch `index.html` attributes a 7-route whitelist to `src/App.tsx`;
+this session's own direct fetch of that same file shows a 5-route
+whitelist instead. Left open and disclosed rather than guessed at — see
+`AI-SESSION-LOG.md` §0.
 
 ## The non-negotiables, as applied here
 
-- All state in `localStorage` under one key, `leados-keyboard:data`.
-- The event log is append-only; `project()` recomputes findings and domain
-  scores from the raw event array on every call — nothing derived is
-  cached in the store itself.
+- All state in `localStorage` under one key, `leados-pt-i:data`.
+- The event log is append-only; `project()` recomputes findings, domain
+  scores, open goals/decisions/commitments from the raw event array on
+  every call — nothing derived is cached in the store itself.
 - `synthesis.generated` payloads are persisted as new log entries, never
   edited — the one disclosed exception to "nothing derived persists,"
-  carried over faithfully from the verified real `SynthesisView.tsx`
-  mechanism (`eventCountAtGeneration` snapshotted *before* the append).
-- Synthesis is only ever generated by an explicit click or `⌘/Ctrl+Enter`;
-  rendering, re-rendering, or navigating away and back never appends a new
-  synthesis event — checked live in `#/health`.
-- Every write action in the keyboard handler sits behind an
-  `if (mod && ...)` branch; every navigation/traversal key returns before
-  reaching any `append(...)` call. `#/health`'s "Rendering never writes an
-  event" check is the authority if this document and the running app ever
-  disagree.
+  with `eventCountAtGeneration` snapshotted *before* the append so the
+  staleness badge is correct.
+- Synthesis is only ever generated by an explicit click or ⌘/Ctrl+Enter;
+  rendering or navigating never appends a synthesis event.
+- Every event validator runs before append, not after; a rejected event
+  never reaches the log (see `EVENT_VALIDATORS` / `appendEvent`).
+- Every number shown anywhere in the app is computed from the visible
+  event log via a named function in `index.html` — nothing is hard-coded
+  display text standing in for a computation.
 
 ## Changelog (this delivery)
 
-See `AI-SESSION-LOG.md` §6 for the full table with one-line "why" per
-non-obvious decision. Short version:
+See `AI-SESSION-LOG.md` §3 for the full table. Short version:
 
-- Re-verified the real repo directly this session (package.json, both
-  `App.tsx` files, both `CommandPalette.tsx` files, `Shell.tsx`,
-  `SynthesisView.tsx`) rather than trusting the repo's own inherited
-  README/session-log prose.
-- Caught and disclosed that a prior session's claim — "the committed root
-  `index.html` is a bare Vite shell" — is no longer true of the current
-  `main` branch, which now holds a complete prior build at that path.
-- Re-implemented the verified 7-route structure and the verified
-  `synthesis.generated` append-only/staleness mechanism faithfully, in
-  vanilla JS, independently hand-authored (not copied from the prior
-  session's own `index.html`), because this tool cannot run the real
-  Vite/React build.
-- Implemented the Moment/Question typography spec exactly as given —
-  display serif 15px/1.7 body-width for the Moment, 24px centered/48px
-  breathing room for the Question — as a disclosed upgrade past the
-  plainer, verified real implementation.
-- Built the **Visual Keyboard Guide Overlay**: the `?` key opens a
-  full-screen reference grouped into Navigation / Selection & lists /
-  Command palette / Write actions, with an inline disclosure footer, so the
-  read-vs-write modifier rule and the verified-vs-fabricated boundary are
-  both visible at the moment a user is most likely to check them.
+- Directly fetched and read the real repo (file tree, root `index.html`,
+  `src/App.tsx`, `src/lib/{types,physics,synthesis}.ts`) rather than trusting
+  any prior session's README/log prose — per this task's explicit
+  instruction to inspect before claiming.
+- Found and disclosed (not silently fixed) a route-list discrepancy between
+  an earlier session's own embedded claim and this session's direct fetch.
+- Implemented the full data-model section of the brief (`DATA_INVARIANTS`,
+  `EVENT_VALIDATORS`) verbatim against the given field names and
+  thresholds — *why*: that section of the brief was fully specified, so
+  there was nothing to interpret.
+- Implemented Temporal Field / Org Physics / Synthesis reusing the real
+  repo's own verified constants (0.85 decay, 90d correlation, 21d
+  staleness) instead of inventing new ones — *why*: keeps this build
+  consistent with the one part of the repo's numeric behavior that was
+  independently confirmed, rather than adding a fourth, incompatible set
+  of magic numbers.
+- Built Decision Surface, the causal-plausibility curve, the inertia model,
+  the NLG linter, and the local API from scratch, each labeled
+  `FABRICATED` at its definition — *why*: none of these exist in the real
+  repo under any name, and the brief itself specifies formulas for some
+  (causal curve) only via a single worked example, not a derivation.
+- Implemented all 20 named `T_*`/`G_*` checks as live, running self-tests
+  on `#/health` rather than as a document describing what checks *would*
+  do — *why*: a health wall that only describes itself in prose isn't
+  verifiable by the person using the app; one that runs and shows PASS/FAIL
+  against real numbers is.
