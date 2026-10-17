@@ -1,27 +1,41 @@
-import { useState } from "react";
-import { Shell } from "./components/Shell";
-import { TodayView } from "./components/TodayView";
-import { SignalBoardView } from "./components/SignalBoardView";
-import { ThermodynamicsView } from "./components/ThermodynamicsView";
-import { CasView } from "./components/CasView";
-import { RiskView } from "./components/RiskView";
-import { AboutView } from "./components/AboutView";
-import { useHashRoute } from "./lib/useHashRoute";
-import { loadState } from "./lib/store";
+import { useEffect, useState } from "react";
+import { Shell, type Route } from "./components/Shell";
+import { TodayView, SignalsView, InferenceView, AboutView } from "./components/Views";
+import { loadState, saveState } from "./lib/store";
 import type { AppState } from "./lib/types";
 
+function readRoute(): Route {
+  const h = window.location.hash.replace(/^#\/?/, "");
+  if (h === "signals" || h === "inference" || h === "about" || h === "today") return h;
+  return "today";
+}
+
 export default function App() {
-  const [route, navigate] = useHashRoute("/today");
-  const [state, setState] = useState<AppState>(() => loadState());
+  const [route, setRoute] = useState<Route>(readRoute());
+  const [state, setStateRaw] = useState<AppState>(() => loadState());
+
+  useEffect(() => {
+    const onHash = () => setRoute(readRoute());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  function navigate(r: Route) {
+    window.location.hash = `/${r}`;
+    setRoute(r);
+  }
+
+  function setState(next: AppState) {
+    setStateRaw(next);
+    saveState(next);
+  }
 
   return (
-    <Shell route={route} navigate={navigate}>
-      {route === "/today" && <TodayView state={state} setState={setState} navigate={navigate} />}
-      {route === "/signals" && <SignalBoardView state={state} setState={setState} />}
-      {route === "/thermodynamics" && <ThermodynamicsView state={state} />}
-      {route === "/cas" && <CasView state={state} />}
-      {route === "/risk" && <RiskView state={state} />}
-      {route === "/about" && <AboutView />}
+    <Shell route={route} onNavigate={navigate}>
+      {route === "today" && <TodayView state={state} setState={setState} onNavigate={navigate} />}
+      {route === "signals" && <SignalsView state={state} setState={setState} />}
+      {route === "inference" && <InferenceView state={state} />}
+      {route === "about" && <AboutView />}
     </Shell>
   );
 }

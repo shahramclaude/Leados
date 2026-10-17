@@ -1,29 +1,30 @@
 // src/lib/engine.ts
-// Converts active Signal Board toggles into Finding objects. Original,
-// disclosed-fabricated — the whole point of the Signal Board is that a
-// human drives every input directly, so every downstream number (entropy,
-// feedback loops, risk register) is reproducible and auditable rather than
-// hidden behind an opaque generator.
-import { RULES_BY_ID } from "./rules";
+// Signal Board -> Finding[] projection, plus the one metric the pasted
+// brief's inference patterns reference (crisisCount). Original to this
+// delivery; disclosed-fabricated math (see AI-SESSION-LOG.md).
 import type { AppState, Finding } from "./types";
+import { RULES } from "./rules";
 
-export function buildFindings(state: AppState): Finding[] {
+export function computeFindings(state: AppState): Finding[] {
   const findings: Finding[] = [];
-  for (const sig of Object.values(state.signals)) {
-    if (!sig.active) continue;
-    const rule = RULES_BY_ID[sig.ruleId];
-    if (!rule) continue;
-    findings.push({
-      key: sig.personId ? `${sig.ruleId}:${sig.personId}` : sig.ruleId,
-      ruleId: sig.ruleId,
-      title: rule.title,
-      category: rule.category,
-      sev: sig.sev,
-      score: sig.sev * 20,
-      personId: sig.personId,
-      ts: sig.lastToggledAt || Date.now(),
-      polarity: rule.polarity,
-    });
+  for (const rule of RULES) {
+    const entry = state.signals[rule.id];
+    if (!entry || !entry.active) continue;
+    if (rule.counter) {
+      const n = Math.max(1, entry.occurrences ?? 1);
+      for (let i = 0; i < n; i++) findings.push({ rule: rule.id, severity: rule.severity });
+    } else {
+      findings.push({ rule: rule.id, severity: rule.severity });
+    }
   }
-  return findings.sort((a, b) => b.sev - a.sev || b.ts - a.ts);
+  return findings;
+}
+
+export function countActive(findings: Finding[], ruleId: string): number {
+  return findings.filter((f) => f.rule === ruleId).length;
+}
+
+export function computeMetricValue(metric: "crisisCount", state: AppState): number {
+  if (metric === "crisisCount") return state.crisisCount;
+  return 0;
 }

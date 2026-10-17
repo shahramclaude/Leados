@@ -1,83 +1,85 @@
 // src/lib/types.ts
-// Original type layer for this sandbox build. Not copied from any verified
-// file in github.com/wbweve/Leados (see AI-SESSION-LOG.md).
+// Shared types for the pt-M "Inference Chain Engine" sandbox.
+// Original to this delivery — see AI-SESSION-LOG.md for what was verified
+// against github.com/wbweve/Leados vs. what is fresh code written only to
+// make the pasted pt-M "Part 1" brief runnable.
 
-export type Category =
-  | "STRATEGIC"
-  | "OPERATIONAL"
-  | "FINANCIAL"
-  | "PEOPLE"
-  | "GOVERNANCE"
-  | "MARKET"
-  | "REPUTATIONAL"
-  | "RESILIENCE";
+export type Category = "People" | "Revenue" | "Engineering" | "Crisis" | "Strategy";
 
-export const CATEGORIES: Category[] = [
-  "STRATEGIC",
-  "OPERATIONAL",
-  "FINANCIAL",
-  "PEOPLE",
-  "GOVERNANCE",
-  "MARKET",
-  "REPUTATIONAL",
-  "RESILIENCE",
-];
-
-export interface Person {
-  id: string;
+export interface Rule {
+  id: string; // e.g. "R1" — IDs reused from the pasted brief so its named
+              // scenarios (R1, R3, R10, R19, R73, R104...) are explorable.
   name: string;
-  role: string;
-}
-
-export interface RuleDef {
-  id: string; // "R1".."R100", bare IDs, non-contiguous by design
-  title: string;
   category: Category;
-  sev: 1 | 2 | 3 | 4 | 5;
-  personLinkable?: boolean;
-  polarity?: "positive"; // marks a small number of intentionally "healthy signal" rules
+  severity: number; // 1..5, fabricated-but-disclosed scale
+  description: string;
+  /** If true, this rule accumulates occurrences (e.g. "missed 1:1s count")
+   *  instead of being a plain on/off toggle. */
+  counter?: boolean;
+  counterLabel?: string;
 }
 
-export interface ToggleLogEntry {
-  ruleId: string;
+export interface SignalEntry {
   active: boolean;
-  ts: number; // epoch ms
+  occurrences?: number;
 }
 
-export interface SignalState {
-  ruleId: string;
-  active: boolean;
-  sev: 1 | 2 | 3 | 4 | 5;
-  personId?: string;
-  lastToggledAt: number;
-}
+export type SignalState = Record<string, SignalEntry>;
 
-export interface OrgEvent {
-  id: string;
-  ts: number; // epoch ms
-  type: string; // event type, substrate for Shannon entropy
-  category: Category;
-  personId?: string;
-  direction?: "in" | "out"; // used for bottleneck ("information in") detection
+export interface Finding {
+  rule: string;
+  severity: number;
 }
 
 export interface AppState {
-  version: number;
-  signals: Record<string, SignalState>;
-  toggleLog: ToggleLogEntry[];
-  people: Person[];
-  runwayMonths: number;
-  events: OrgEvent[];
+  signals: SignalState;
+  crisisCount: number;
+  /** ISO date strings (YYYY-MM-DD), one per historical attrition event,
+   *  used only by the temporal inference pattern (INF-005). */
+  attritionLog: string[];
 }
 
-export interface Finding {
-  key: string; // ruleId, or ruleId:personId when linked
-  ruleId: string;
+export interface ForwardConclusion {
+  id: string;
+  severity: number;
   title: string;
-  category: Category;
-  sev: 1 | 2 | 3 | 4 | 5;
-  score: number;
-  personId?: string;
-  ts: number;
-  polarity?: "positive";
+  body: string;
+  confidence: number;
+  confLabel: string;
+  intervention: string;
+}
+
+export interface ForwardPattern {
+  id: string;
+  name: string;
+  pattern: "FORWARD";
+  premiseLabels: string[];
+  premises: Array<
+    | { type: "FINDING"; rule: string; op: "active" | "inactive"; threshold?: number }
+    | { type: "METRIC"; metric: "crisisCount"; op: "gte" | "lte"; value: number }
+  >;
+  conclusion: ForwardConclusion;
+}
+
+export interface Hypothesis {
+  name: string;
+  evidenceFor: Array<{ rule: string; op: "active" }>;
+  evidenceAgainst: Array<{ rule: string; op: "inactive" }>;
+  explanation: string;
+  intervention: string;
+}
+
+export interface ScoredHypothesis extends Hypothesis {
+  forScore: number;
+  againstScore: number;
+  netScore: number;
+}
+
+export interface BackwardPattern {
+  id: string;
+  name: string;
+  pattern: "BACKWARD";
+  observation: { rule: string };
+  hypotheses: Hypothesis[];
+  label: string;
 }
