@@ -1,167 +1,165 @@
-# LeadOS — Sensory, Memory &amp; Long-Term Knowledge Base (single-file)
+# LeadOS — Organizational Genome (Part 5, single-file)
 
 A leadership-cockpit UI shipped as one self-contained `index.html`
-(Tailwind via CDN, vanilla JS). It implements an append-only finding/
-decision event log, a findings "Today" view, a domain heatmap, a
-decisions log with a quadrant classifier, a **haptics module**, a
-**Web Audio sound module**, a **working-memory (session) module**, and
-now a **long-term memory module** (episodic + semantic recall) with a
-**leverage-based comparison mode** that answers "which should I address
-first?" using more than raw severity.
+(Tailwind via CDN, vanilla JS). This part implements `LEADOS.genome` — a
+module that identifies recurring, invariant behavioral patterns ("the
+organizational genome") from an append-only leadership event log, and
+classifies them into one of five disclosed archetypes (or "developing
+pattern" if the data doesn't yet support one).
 
-> **Provenance note — read this before trusting any claim about
-> `github.com/wbweve/Leados`:** this build was made after directly
-> fetching that repo's live `main` branch three separate ways (GitHub
-> REST API repo metadata, a recursive git-tree listing, and two
-> independent fetches of `index.html` — raw file + Contents API blob).
-> Those two independent `index.html` fetches **agree with each other**
-> and show a 37,575-byte vanilla JS app — but **contradict** that same
-> repo's own `README.md`, which claims `main`'s `index.html` is a
-> 14-line Vite/React stub, and contradict a *third*, older claim (inside
-> that repo's own `AI-SESSION-LOG.md`) of an 86,898-byte file with
-> different named constants. None of the three descriptions is treated
-> as ground truth here beyond what this session verified directly. Full
-> ledger in `AI-SESSION-LOG.md` and the in-app **Provenance / About**
-> route.
+> **Provenance note — read before trusting any claim about
+> `github.com/wbweve/Leados`:** this build does **not** copy, fork, or
+> continue that repository's code. This session verified, directly, via
+> the GitHub REST Contents API (decoding the base64 blob itself, after
+> discovering that fetching the raw file through an HTML-rendering path
+> silently strips `<script>` content and makes any app look like an empty
+> stub), that `wbweve/Leados`'s own `main` branch `index.html` is a real,
+> 56,046-byte vanilla-JS app implementing a *different* Part 5
+> ("long-term memory + leverage comparison") over a simpler
+> findings/decisions-only schema with no people roster, plans, or
+> delegations. That number itself disagrees with three other claims found
+> inside that same repo's own `README.md` and `AI-SESSION-LOG.md`
+> (37,575 B; 86,898 B; "a 14-line stub") — a four-way contradiction, none
+> of which is treated as ground truth here. Full ledger in
+> `AI-SESSION-LOG.md`. This sandbox had no pre-existing files before this
+> session, so this build is an **original** implementation of the
+> user-supplied genome spec, not a continuation of any prior "Part 1–4."
 
 ## Run it
 
-Open `index.html` in a browser. No build step, no server, no npm —
-that file is the whole app.
+Open `index.html` in a browser. No build step, no server, no npm — that
+file is the whole app. On first load it seeds ~120 days of fabricated
+demo events (5 direct reports, decisions, 1:1s, feedback, plans,
+delegations, metrics, crises, reflections) so every view has data; use
+**"wipe & reseed demo log"** in the sidebar to regenerate it.
 
-## Durable vs. session vs. unpersisted state
+## Data model
 
-| Layer | Storage | Contents |
-|---|---|---|
-| Durable | `localStorage['leados:events']` | append-only event log: findings created/snoozed/dismissed/resolved, decisions logged, and (new) `finding.effort_logged` — the user's effort estimate for leverage scoring, persisted rather than kept as throwaway UI state. Every view recomputes from this via `LEADOS.core.project()` — nothing derived is stored. |
-| Durable, user prefs | `localStorage['leados:haptics']`, `localStorage['leados:audio']` | haptics/audio opt-in flags, both default **off**. |
-| Session (working memory) | `sessionStorage`, keys under `LEADOS.memory.session.KEYS` | current route/focus, nav history (last 10), the 2-item compare pair. `FAMILIARITY`/`FATIGUE`/`DRAFT`/`SCROLL`/`FILTERS`/`PANEL`/`SEARCH`/`ATTENTION` keys are declared per the Part 4 spec but still have no UI surface — unchanged from the prior part, disclosed again here rather than silently implied as finished. |
-| Session, audio restraint | `sessionStorage['leados:audio:played']` | which of the 6 distinct sounds have played this session (≤3 distinct/session cap, enforced). |
-| **Derived, recomputed on demand (new)** | n/a — pure functions over the event log | `LEADOS.memory.longTerm.recallEpisodes()` / `.recallSemanticPatterns()`. Nothing here is stored separately; it's long-term memory in the sense that the *event log itself* is the long-term memory, and this module is the query layer over it. |
+Everything is one durable, append-only event log in
+`localStorage['leados:events']`. Nothing derived is ever stored — every
+view recomputes from the log via `LEADOS.core.project(events, today)`,
+which builds:
+
+| Field | Meaning |
+|---|---|
+| `P.directs` | people added via `direct.added` events |
+| `P.decisionById` / `P.openDecisions` | decisions (`decision.logged` / `strategy.decision`), closed by `decision.resolved`, enriched by `decision.premortem` / `decision.calibration` |
+| `P.openPlans` | development plans (`plan.created` / `plan.completed`) |
+| `P.delegationsOpenByPerson` | delegations (`delegation.created` / `delegation.completed`), grouped by person |
+| `P.openGoals` | goals (`goal.set` / `goal.completed`) |
+| `P.state.events` | the full, time-sorted raw log |
+
+This schema is **original to this build** — it exists specifically to
+match the shape the pasted "Organizational Genome" spec assumes
+(`P.directs`, `P.decisionById`, etc.), since no such schema was verifiable
+in `wbweve/Leados` and this sandbox had no prior build to inherit one
+from.
 
 ## Routes
 
 | Route | What it does |
 |---|---|
-| `#/today` | Open findings, newest-severity-first. Snooze / Dismiss / Resolve / add-to-Compare actions, each firing a sensory event. |
-| `#/domains` | Per-domain heat = sum of severities of open findings in that domain (original to this build, disclosed as not an upstream formula). |
-| `#/decisions` | Log a decision (domain, impact, reversibility, note, optional person for the people domain); classified into an original, disclosed quadrant; decisions >21 days old flagged stale. |
-| `#/compare` | **Upgraded this part.** Leverage-based recommendation between the two findings held in working memory — see "Leverage scoring" below, not a plain severity diff anymore. |
-| `#/memory` | **New.** The Memory Palace: episodic recall (filterable event history with "what was happening at the time" context and concurrent-event chips) and semantic recall (domain activity, temporal pattern, resolution rates, recurring themes, most-mentioned people). |
-| `#/sensory` | Live test bed for every haptic pattern and every synthesized sound, with the session's 3-sound restraint budget readout. |
-| `#/log` | Raw event log, JSON export, wipe + reseed. |
-| `#/about` | The full verified / contradicted / adapted ledger for `github.com/wbweve/Leados` and for this build. |
+| `#/today` | Dashboard counts + a generic "Quick Log" form covering every event type in the model. |
+| `#/people` | Per-direct engagement table (1:1s, conflicts, feedback, open plans/delegations, last interaction) from `LEADOS.knowledge.buildPersonalPatterns`. |
+| `#/decisions` | Decision list (type, domain, premortem flag, status) + quick-log. |
+| `#/self` | **The Organizational Genome view.** Archetype card, trait bars, signal resonance, org entropy, temporal profile, team engagement. See below. |
+| `#/log` | Raw event log (JSON export, wipe + reseed). |
+| `#/about` | The full verified / contradicted / adapted ledger for `github.com/wbweve/Leados`, condensed from `AI-SESSION-LOG.md`. |
 
-## The sensory system
+## The Organizational Genome (`LEADOS.genome`)
 
-- **Haptics** (`LEADOS.haptics`): Web Vibration API, secondary
-  confirmation channel only, never the sole carrier of information. Off
-  by default. 3-second fatigue guard enforced in code.
-- **Audio** (`LEADOS.audio`): pure Web Audio synthesis — no files, no
-  CDN. Off by default. Session-scoped cap of 3 distinct sounds enforced
-  in code.
+`identify(P, today)` is implemented **verbatim** from the pasted spec —
+`_computeTrait` and `_generateGenomeProfile` included, unmodified. No
+adaptation was needed because the supporting data model was built from
+scratch to already match what this code expects (see "Data model" above).
 
-## The long-term memory system (new this part)
+Nine traits are scored from ratios against disclosed thresholds (decisive,
+deliberate, high_feedback, conflict_avoidant, developer, delegation_heavy,
+metric_driven, crisis_experienced, self_aware), and combined into one of
+five archetypes — **Operating Executive**, **Developmental Leader**,
+**Analytical Leader**, **Harmony Seeker**, **Crisis Forged** — or
+**Developing Pattern** as the honest default when the data doesn't yet
+support a classification.
 
-`LEADOS.memory.longTerm` is an **adaptation**, not a verbatim port, of
-the pasted spec. The spec assumed a people-roster + goals-engine +
-playbook data model (`P.peopleById`, `LEADOS.engine.run`, findings with
-IDs like "R103"/"R14", `LEADOS.knowledge.crystallizePlaybookEffectiveness`)
-that does not exist in this build or in anything verifiable upstream.
-Instead, this module keeps the spec's two-layer shape and computes it
-against the real, simpler event log:
+### Supporting formulas the spec calls but never defines (original, disclosed)
 
-- **Episodic** (`recallEpisodes`): query by type/domain/keyword/date
-  range; each result includes the organizational context *at the time*
-  (open findings count, top finding, decisions logged so far — computed
-  by re-running `LEADOS.core.project()` frozen at that event's
-  timestamp) and nearby concurrent events (±3 days).
-- **Semantic** (`recallSemanticPatterns`): domain activity, a temporal
-  "peak hour" pattern (labeled illustrative-only, since seed timestamps
-  are synthetic), resolution rates per domain, recurring keyword themes
-  (replacing the unavailable `buildPersonalPatterns`), and most-mentioned
-  people (replacing `peopleFrequency` — adapted to a free-text `person`
-  tag on decisions, since there's no people roster here).
+The spec references `LEADOS.knowledge.buildPersonalPatterns`,
+`LEADOS.orgPhysics.measureResonance`, `LEADOS.orgPhysics.measureOrgEntropy`,
+and `LEADOS.temporalField.buildTemporalProfile` without supplying their
+logic. This build fills each in, originally:
 
-## Leverage-based comparison mode (upgraded this part)
+- **`buildPersonalPatterns`** — per-direct counts of 1:1s, conflicts,
+  feedback, open plans/delegations, and last interaction timestamp. (In
+  the pasted spec this is computed but its result is never read again —
+  implemented here as a real function anyway, and surfaced in the
+  Genome view's "Team Engagement" panel, rather than left as dead code.)
+- **`measureResonance(type)`** — recency-weighted frequency: each event of
+  that type contributes `0.5^(ageDays/30)` (30-day half-life), summed and
+  normalized per week of org history. Answers "how alive is this signal
+  *right now*," not just a lifetime count.
+- **`measureOrgEntropy`** — normalized Shannon entropy of the event-type
+  distribution over the trailing 90 days (0 = one repetitive behavior
+  dominates; 1 = maximally varied behavior mix).
+- **`buildTemporalProfile`** — hour-of-day / day-of-week histograms plus
+  inter-event gap mean/stdev. **Labeled illustrative-only in the UI**,
+  because this build's event timestamps are synthetic/back-dated seed
+  data, not real usage telemetry — showing it unlabeled would imply a
+  behavioral signal that doesn't exist yet.
 
-The brief states the goal — "not by severity alone... but by leverage,
-time required, and downstream impact" — but, like the earlier
-cut-off Part 4 compare spec, does not supply an executable formula.
-This build's disclosed fill-in:
+### The `#/self` view
 
-```
-score = (severity × 2  +  domainClusterSize × 1.5  +  log2(ageDays + 1)) / effort
-```
-
-- `domainClusterSize` = other open findings sharing the same domain
-  (a downstream-impact proxy: fixing a symptom of a wider cluster
-  matters more).
-- `log2(ageDays + 1)` = time-in-system with diminishing returns.
-- `effort` = Low(1) / Medium(3) / High(5), set per finding directly in
-  the Compare view and persisted as a `finding.effort_logged` event
-  (so "time required" is a real, durable input, not a hidden constant).
-
-The Compare view shows the full breakdown per finding and a plain-language
-verdict naming the dominant factor (severity, cluster size, age, or
-effort-efficiency) — or says "too close to call" when scores are within
-12% of each other, rather than forcing a false-precision answer.
+The pasted spec's "### Genome View (in #/self)" section was only a
+heading — no body was supplied. The view shipped here (archetype card,
+trait bars, resonance panel, entropy gauge, temporal histogram, team
+engagement table) is therefore **original**, and says so directly on the
+page, rather than being presented as if it were spec-derived.
 
 ## What's verified vs. contradicted vs. fabricated/adapted here
 
-**Verified, directly, this session:** the repo `wbweve/Leados` is real
-and public (id `1413944295`, created 2026-10-11, pushed 2026-10-17T12:29:04Z);
-its root git tree has dozens of files, not three; two independent direct
-fetches of `main`'s `index.html` (raw file + Contents API blob) agree
-with each other and show a 37,575-byte vanilla JS app.
+**Verified, directly, this session:** `wbweve/Leados` is real and public;
+its root tree has ~30 `.tsx` files plus several markdown logs; its real,
+Contents-API-fetched `index.html` is 56,046 bytes and is a genuine
+vanilla-JS app implementing a different Part 5 over a simpler schema.
 
-**Contradicted this session:** that same repo's own `README.md` claims
-`main`'s `index.html` is a 14-line Vite/React stub — directly contradicted
-by this session's own fetches of that file. A third, older claim (in the
-repo's own `AI-SESSION-LOG.md`) describes yet a different, 86,898-byte
-version with different constants. All three cannot be simultaneously
-true; this build reuses none of them as fact, only what it fetched
-itself. See `AI-SESSION-LOG.md` §1 for the full ledger, including the
-likely (but unconfirmed) explanation: the repo kept being overwritten
-between sessions.
+**Contradicted this session:** that repo's own `README.md` and
+`AI-SESSION-LOG.md` give two other, mutually different byte-count/content
+claims for the same file (37,575 B; 86,898 B), and the README also relays
+a third claim ("14-line stub") — none reconciled, all disclosed, full
+ledger in `AI-SESSION-LOG.md`.
 
-**Fabricated/adapted, disclosed at point of use:** all seed
-findings/decisions, the domain-heat formula, decision-quadrant
-thresholds, the long-term-memory module's adaptation to a simpler schema,
-and the leverage-compare formula.
+**Fabricated/adapted, disclosed here:** all seed people/events, the
+genome's four supporting formulas (resonance, entropy, temporal profile,
+personal patterns), and the entire `#/self` view layout.
 
 ## Changelog (this part)
 
-- **Independently re-verified the upstream repo from scratch (repo
-  metadata, tree, two separate `index.html` fetches) rather than reusing
-  any previous session's "verified" claims** — *why*: this repo's own
-  history shows prior sessions' claims about it are not stable ground
-  truth; only a fresh, first-hand fetch counts as verification for this
-  task's standard.
-- **Disclosed a three-way contradiction about `index.html`'s actual
-  content** (14-line stub per README vs. 86,898 bytes per an older log
-  vs. 37,575 bytes per this session's own two fetches) **instead of
-  picking one story** — *why*: picking the most "convenient" of three
-  mutually exclusive claims would itself be an unverified assertion.
-- **Adapted the Long-Term Memory spec to this build's real, simpler
-  event schema instead of fabricating a people-roster/goals-engine/
-  playbook subsystem to run the pasted code verbatim** — *why*: the
-  alternative would mean inventing a much larger surface of unlabeled,
-  made-up behavior just to look spec-compliant.
-- **Persisted effort estimates as a durable event
-  (`finding.effort_logged`) instead of ephemeral UI state** — *why*:
-  consistent with this build's core invariant that nothing derived is
-  stored and everything replays from the append-only log; it also means
-  effort estimates become part of long-term memory, recallable later.
-- **Showed the leverage score's full arithmetic breakdown in the UI**
-  — *why*: an unexplained "trust me" recommendation score would be the
-  opposite of the verification-first standard this whole task is
-  built around.
-- **Added a "too close to call" branch (within 12% leverage-score
-  margin) instead of always naming a confident winner** — *why*: forcing
-  a false-precision verdict when the inputs don't really distinguish the
-  two findings would be a fabricated certainty, not a disclosed one.
-- **Labeled the temporal "peak hour" panel as illustrative-only** —
-  *why*: it's computed over synthetic, back-dated seed timestamps, not
-  real usage data, and presenting it unlabeled would imply a behavioral
-  signal that doesn't exist yet.
+- **Verified the upstream repo via the GitHub Contents API (base64 JSON)
+  instead of trusting an HTML/text fetch of the same file** — *why*: the
+  first fetch method returned a near-empty fragment that would have
+  (wrongly) "confirmed" the repo's own stub claim; it turned out to be a
+  tooling artifact (script/style stripping), not evidence about the file.
+- **Reported a four-way contradiction on `index.html`'s true size instead
+  of picking a winner** — *why*: this session's own number is only
+  verified-by-this-session, not objectively final; presenting it as the
+  one true answer would repeat the same overconfidence this whole task is
+  designed to catch.
+- **Built an original data model (directs/decisions/plans/delegations/
+  goals) instead of forcing the spec onto the real, incompatible upstream
+  schema** — *why*: the verified upstream schema has no roster, plans, or
+  delegations at all; adapting would have meant deleting most of the
+  user's actual request, and there was no pre-existing local codebase
+  forcing a simpler schema here.
+- **Implemented `genome.identify`/`_computeTrait`/`_generateGenomeProfile`
+  verbatim** — *why*: once the data model matches, the spec's trait logic
+  is fully executable as written; changing it would be an undisclosed,
+  unrequested deviation.
+- **Implemented the four undefined helper functions originally and
+  labeled them as such, in-code and in the UI** — *why*: the spec calls
+  them but defines none of them; an unlabeled invented formula would read
+  as if it were part of the user's spec.
+- **Labeled the temporal profile illustrative-only** — *why*: its inputs
+  are synthetic seed timestamps, not real behavioral data.
+- **Built the `#/self` view from scratch, with an in-page disclosure
+  banner** — *why*: the spec's own heading for that section had no body;
+  silently filling it in without disclosure would misattribute an
+  original design decision to the spec.
