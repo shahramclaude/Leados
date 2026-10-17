@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>LeadOS CLI (pt-M, original companion)</title>
+<style>
+  body { background:#0a0a0a; color:#00ff88; font-family:ui-monospace,Menlo,Consolas,monospace; padding:20px; }
+  #output { white-space:pre-wrap; margin-bottom:20px; min-height:300px; }
+  #input-row { display:flex; gap:8px; }
+  #cmd { flex:1; background:#0a0a0a; border:1px solid #00ff88; color:#00ff88; font-family:inherit; font-size:14px; padding:8px; }
+  .warn { color:#ffaa00; }
+</style>
+</head>
+<body>
+<div id="output">LeadOS CLI (pt-M) — original companion file, connects to index.html via BroadcastChannel("leados-protocol-v1").
+Type 'help' for commands. index.html must be open in another tab on the SAME ORIGIN.
+<span class="warn">Known limitation (disclosed): if both files are opened as local file:// documents, most browsers
+give each file its own opaque origin, so BroadcastChannel messages may silently never arrive. Serve both
+files from one local HTTP server (e.g. `python3 -m http.server`) for this to work reliably.</span>
+
+&gt;</div>
+<div id="input-row">
+  <span>leados&gt;</span>
+  <input id="cmd" type="text" autofocus placeholder="ping">
+</div>
+<script>
+const channel = new BroadcastChannel('leados-protocol-v1');
+const pending = new Map();
+let idCounter = 0;
+
+function call(command, params, write) {
+  const id = ++idCounter;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    channel.postMessage({ requestId: id, command, params, write: !!write });
+    setTimeout(() => {
+      if (pending.has(id)) { pending.delete(id); reject(new Error('Timeout — is index.html open on the same origin?')); }
+    }, 3000);
+  });
+}
+
+channel.onmessage = (e) => {
+  const { requestId, result, error } = e.data || {};
+  const p = pending.get(requestId);
+  if (!p) return;
+  pending.delete(requestId);
+  if (error) p.reject(new Error(error)); else p.resolve(result);
+};
+
+const COMMANDS = {
+  ping: () => call('ping'),
+  status: () => call('status'),
+  findings: () => call('findings'),
+  digest: () => call('digest'),
+  calendar: () => call('calendar'),
+  inference: () => call('inference'),
+  risk: () => call('risk-register'),
+  science: (args) => { if (!args[0]) throw new Error('Usage: science [methodName]'); return call('science', { method: args[0] }); },
+  'log-1on1': (args) => {
+    if (!args[0]) throw new Error('Usage: log-1on1 [personId] [note...]');
+    return call('log-event', { type: 'oneonone.logged', data: { personId: args[0], note: args.slice(1).join(' ') }, source: 'leados-cli' }, true);
+  },
+  help: () => ({ commands: Object.keys(COMMANDS), note: 'write commands (log-1on1) are queued for confirmation inside index.html, never applied directly — see index.html Protocol & CLI tab.' })
+};
+
+document.getElementById('cmd').addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter') return;
+  const raw = e.target.value.trim();
+  e.target.value = '';
+  const out = document.getElementById('output');
+  out.textContent += '\n> ' + raw + '\n';
+  const [c, ...args] = raw.split(' ');
+  const handler = COMMANDS[c];
+  if (!handler) { out.textContent += 'Unknown command: ' + c + '. Type "help".\n'; return; }
+  try { out.textContent += JSON.stringify(await handler(args), null, 2) + '\n'; }
+  catch (err) { out.textContent += 'ERROR: ' + err.message + '\n'; }
+  out.scrollTop = out.scrollHeight;
+});
+</script>
+</body>
+</html>
