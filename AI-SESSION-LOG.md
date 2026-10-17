@@ -1,143 +1,182 @@
-# AI Session Log — LeadOS (Sensory & Memory build)
+# AI Session Log — LeadOS, Part 5 (Long-Term Memory + Leverage Compare)
 
-Written in the spirit the task demands: inspect real code before
-claiming anything about it, and label every claim **verified**,
-**contradicted/unverifiable**, or **fabricated/disclosed**.
+Written in the spirit the task demands: inspect real code before claiming
+anything about it, and label every claim **verified**, **contradicted /
+unverifiable**, or **fabricated / adapted, disclosed**.
 
 ## §0 — What was actually fetched, and how, this session
 
 1. `web_fetch` on `https://github.com/wbweve/Leados` (markdown render)
-   — returned the repo page, whose body is the current `README.md`,
-   rendered with GitHub's anchor decorations.
-2. `web_fetch` on `https://raw.githubusercontent.com/wbweve/Leados/main/README.md`
-   — returned the same file as plain markdown.
-3. `web_fetch` on `https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md`
-   — returned that file's content (truncated by this session's own
-   fetch-length limit partway through §2; everything quoted from it
-   below is from the portion actually received).
-4. `web_fetch` on `https://raw.githubusercontent.com/wbweve/Leados/main/index.html`,
-   first in `text` format (returned almost nothing but the page
-   `<title>`), then re-fetched in `html` format, which returned the
-   **full, short, literal file**: a 14-line Vite/React entry stub.
-5. `web_fetch` on `https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1`
-   — returned a large JSON tree; this session's own fetch tool
-   truncated the response mid-array (cut off inside the
-   `ScoreMath.tsx` blob entry). Everything listed below is from the
+   — returned the repo's current `README.md`, rendered with GitHub's
+   anchor decorations.
+2. `web_fetch` on `https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1`
+   — returned a large JSON tree; truncated mid-array (cut off inside the
+   `ScoreMath.tsx` blob entry). Everything reported below is from the
    portion actually received; the tree was **not** confirmed complete.
+3. `web_fetch` on `https://raw.githubusercontent.com/wbweve/Leados/main/index.html`
+   (text format) — returned the file's text content. This is a large
+   vanilla-JS single-file app (`LEADOS.core` / `.haptics` / `.audio` /
+   `.memory.session`, routes today/domains/decisions/compare/sensory/log/about),
+   **not** a short stub.
+4. `web_fetch` on `https://api.github.com/repos/wbweve/Leados/contents/index.html`
+   — returned Contents-API metadata: `size: 37575` bytes, plus a base64
+   blob. Decoding the start of that blob shows `<!DOCTYPE html>`,
+   `<title>LeadOS — Sensory & Memory Build</title>`, and the same
+   `LEADOS.core` structure as #3. **Two independent fetch methods agree
+   with each other.**
+5. `web_fetch` on `https://api.github.com/repos/wbweve/Leados/contents/AI-SESSION-LOG.md`
+   — returned that file's own content (base64), itself an older session's
+   ledger claiming a *different*, 86,898-byte version of `index.html`
+   with constants `DOMAINS`, `DECAY=0.85`, `CORRELATION_WINDOW_DAYS=90`,
+   `DECISION_MAX_OPEN_DAYS=21`.
 6. `web_fetch` on `https://api.github.com/repos/wbweve/Leados` — returned
-   real repo metadata (id, owner, timestamps, language, size).
-7. `web_fetch` on `https://api.github.com/search/code?q=haptics+repo:wbweve/Leados`
-   — **errored** (tool could not fetch/returned a server error). No
-   result obtained; treated as unknown, not as "no matches."
+   real repo metadata directly from GitHub's REST API (not from any
+   README's prose): id `1413944295`, owner `wbweve`, default branch
+   `main`, language `JavaScript`, `created_at: 2026-10-11T04:59:03Z`,
+   `pushed_at: 2026-10-17T12:29:04Z`, `size: 7276` (KB, whole repo incl.
+   git history, not just `index.html`).
+7. `web_fetch` on `https://raw.githubusercontent.com/wbweve/Leados/main/README.md`
+   (raw, plain text) — returned text **identical in substance** to #1's
+   rendered version, ruling out "GitHub markdown rendering artifact" as
+   an explanation for its content.
 
-This session used only `raw.githubusercontent.com` and the GitHub REST
-API, no third-party mirrors. Unlike the upstream repo's own narrative
-(see §1), this session's main point of friction was its *own* tooling
-truncating one large JSON response — disclosed here rather than
-smoothed over.
+No GitHub code-search, no third-party mirrors, no assumptions from
+training data about what this repo "probably" contains.
 
 ## §1 — Verified vs. contradicted claims about github.com/wbweve/Leados
 
 **Verified, directly, this session:**
-- The repo is real, public: id `1413944295`, owner `wbweve`, default
-  branch `main`, language `JavaScript`, `created_at: 2026-10-11T04:59:03Z`,
-  `pushed_at: 2026-10-17T12:03:16Z`, `size: 7276` (KB, per the GitHub
-  API's `size` field).
-- The raw `main`-branch `index.html`, fetched directly, is exactly:
-  a `<!doctype html>` document, a `<title>LeadOS — pt-J Living
-  Interface (React Rebuild)</title>`, `<div id="root"></div>`, and
-  `<script type="module" src="/src/main.tsx"></script>`. Nothing else.
-  No inline `<script>` logic, no `DOMAINS`/`DECAY`/storage-key
-  constants anywhere in that file to grep.
-- The repo's root git tree (the portion fetched before truncation)
-  contains dozens of flat `.tsx` files at the repository root —
-  `AboutView.tsx`, `App.tsx`, `BulletGraph.tsx`, `BundleModal.tsx`,
-  `BundlesView.tsx`, `CalibrationCurve.tsx`, `Catalog.tsx`,
-  `ChartFrame.tsx`, `CohortGrid.tsx`, `CommandPalette.tsx`,
-  `ContractView.tsx`, `DataView.tsx`, `DataWidgets.tsx`,
-  `DomainViews.tsx`, `FinanceDashboard.tsx`, `GanttText.tsx`,
-  `HealthView.tsx`, `Heatmap.tsx`, `Histogram.tsx`,
-  `IntelligenceDashboard.tsx`, `IntelligenceView.tsx`, `LineChart.tsx`,
-  `MaintenanceView.tsx`, `MiscViews.tsx`, `Network.tsx`,
-  `OverlayPanels.tsx`, `PeopleDashboard.tsx`, `PlaybooksView.tsx`,
-  `ProvenanceView.tsx`, `Radar.tsx`, `RosterView.tsx`, `ScoreMath.tsx`
-  (fetch cut off here) — plus `README.md`, `AI-SESSION-LOG.md`,
-  `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md` at root. This alone
-  confirms "far more than three files" without needing the rest of the
-  tree.
+- The repo is real and public (id `1413944295`), owned by `wbweve`,
+  default branch `main`, language `JavaScript`, created 2026-10-11,
+  **last pushed 2026-10-17T12:29:04Z** — 26 minutes later than a
+  `12:03:16Z` push timestamp an older log (fetched via #5) cites for its
+  own observations, which is a plausible, non-malicious explanation for
+  why file contents differ session to session: the repo kept changing.
+- The root git tree contains dozens of flat `.tsx` files at root
+  (`App.tsx`, `AboutView.tsx`, `HealthView.tsx`, `FinanceDashboard.tsx`,
+  `Heatmap.tsx`, `IntelligenceView.tsx`, …) plus `README.md`,
+  `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`
+  — confirms "far more than three files," independently reproduced
+  across at least two sessions' fetches now.
+- **This session's own two independent fetches of `main`'s `index.html`
+  agree with each other**: it is currently a 37,575-byte, self-contained
+  vanilla JS app titled "LeadOS — Sensory & Memory Build," implementing
+  an append-only event log, haptics, Web Audio, session memory, and the
+  same seven routes this build also uses conceptually.
 
-**Contradicted / not reproducible this session:**
-- The upstream repo's own `AI-SESSION-LOG.md` states, as a "verified,
-  this session" claim: *"`raw.githubusercontent.com/.../index.html` →
-  86,898 bytes, complete"* containing *"a single external `<script>`
-  tag (the Tailwind v4 CDN browser build) plus exactly one large inline
-  `<script>` block"* with grep-confirmed constants `DOMAINS`,
-  `DECAY=0.85`, `CORRELATION_WINDOW_DAYS=90`,
-  `DECISION_MAX_OPEN_DAYS=21`, and three storage-key strings. **This
-  session's own direct fetch of `main` HEAD shows none of this** — the
-  file there is the 14-line stub described above. This session cannot
-  tell whether the upstream file was changed after that log entry was
-  written, or whether the log entry was inaccurate even when written;
-  either way, it is not corroborated by this session and is not reused
-  as fact.
-- The upstream repo's own `README.md`, fetched this session, is itself
-  titled *"LeadOS pt-J — React/Vite/Tailwind rebuild"* and contains a
-  "Provenance note" claiming an **earlier** AI session inspected this
-  same repo, found the same "three files" vs. 106-entry-tree
-  contradiction, and built a React/Vite reimplementation in response.
-  This is a self-referential loop: the repo's current README is itself
-  the artifact of a prior run of what looks like the same kind of task
-  this session was given. This session treats that prior README/log as
-  **prose about a previous, different build**, not as ground truth
-  about what currently exists at `main` HEAD — which this session
-  checked directly and found to be the minimal stub above.
-- This session's own tree fetch was truncated before reaching the end
-  of the root-level listing, so it can neither confirm nor deny the
-  upstream README's claim of a nested `src/App.tsx` /
-  `src/components/*` / `src/lib/*` structure coexisting with the flat
-  root-level `.tsx` files actually observed. Logged as **unverified due
-  to this session's own tool limitation**, not asserted either way.
-- A GitHub code-search request for "haptics" in the repo returned a
-  tool-level error, not a zero-result response. Whether anything
-  resembling this task's Part 3/Part 4 specs already exists upstream is
-  **unknown**, not "confirmed absent."
-- Blob size of `README.md` via the Git Trees API is `7954` bytes. The
-  markdown-rendered fetch of the same logical file, earlier in this
-  session, visually corresponded to roughly 12.9k characters. Most
-  likely explanation: GitHub's HTML→Markdown render adds link-anchor
-  decoration (`[](#section-slug)` per heading) that inflates character
-  count without changing the underlying file — flagged rather than
-  silently assumed, since this session did not diff the two fetches
-  byte-for-byte.
+**Contradicted this session (not silently reconciled):**
+- The repo's own `README.md` — fetched twice, by two different methods,
+  with matching content — contains a "provenance note" claiming `main`'s
+  `index.html` is a **14-line Vite/React stub** with no inline logic.
+  This directly contradicts what this session actually received from
+  that same file path, twice, independently (see "Verified" above).
+  Two explanations are possible: (a) the file was overwritten again
+  between that README being committed and this session's fetch — the
+  repo's `pushed_at` does show later activity than an older session's
+  citation, so this is plausible; or (b) the README's claim was never
+  accurate to begin with. This session cannot distinguish (a) from (b)
+  and does not claim to.
+- A **third**, older description (inside the repo's own
+  `AI-SESSION-LOG.md`, fetched via the Contents API) claims yet another
+  version of `index.html`: 86,898 bytes, with named constants `DECAY=0.85`,
+  `CORRELATION_WINDOW_DAYS=90`, `DECISION_MAX_OPEN_DAYS=21`. None of
+  those constant names appear in the 37,575-byte version fetched this
+  session. Three non-matching descriptions of one file path now exist
+  across different sessions' logs; this build is built from what *this*
+  session fetched, not from any of the three competing prior claims.
+- The repo simultaneously contains ~30 React/TSX component files and a
+  self-contained vanilla `index.html` that itself claims to be "the
+  whole app, no build step." Both cannot fully describe the same
+  deployed product; which one (if either) is actually served is
+  unverified from file contents alone.
+- A recursive pattern is visible across the repo's own `README.md` and
+  log files: each appears to be the output of an *earlier* AI session
+  given a similar task to this one, inspecting the repo, finding
+  contradictions, and then building its own version — which then
+  becomes new, equally unverified "prior claims" for the *next* session
+  to find contradictory. This session treats all of that prior material
+  as prose about previous, possibly-stale builds, never as ground truth
+  about what currently exists.
 
-## §2 — What this session built, and why
+**Unverified / could not check this session:**
+- Whether a `src/components/`, `src/lib/` structure exists, as an older
+  README reportedly describes — this session's own tree fetch truncated
+  before reaching deep enough to confirm or deny; not re-attempted with
+  pagination this session.
+- Whether any sensory/memory/long-term-memory module already exists
+  inside the `.tsx` component files — this session did not open any
+  individual `.tsx` file (only the tree listing and `index.html`/
+  `README.md`/`AI-SESSION-LOG.md` at root), so this is unknown, not
+  assumed absent.
 
-Given the above, this session did not port, diff against, or claim
-fidelity to any upstream internals, because the one piece of upstream
-code specifically named in the task (`index.html`) does not currently
-contain anything substantive to port. This session also did not use
-React/Vite, because its own execution environment's tool contract
-requires a single static `index.html` (Tailwind CDN + inline vanilla
-JS) — a structural constraint, not a preference.
+## §2 — The Part 5 spec itself: what matched the verified schema, what didn't
 
-| Decision | Why |
-|---|---|
-| Did not reuse any "verified upstream constant" (`DOMAINS`, `DECAY=0.85`, etc.) | Those constants were verified **in a previous build's log**, not by this session against current `main` HEAD, where they are absent. Reusing them would misattribute them as verified. |
-| Implemented `LEADOS.core` as an original append-only event log + pure `project()` | Matches the general "nothing derived persists, recompute on read" architecture described across this task's parts, in code this session wrote and can run, rather than asserting it mirrors unseen upstream code. |
-| Implemented `LEADOS.haptics` and `LEADOS.audio` essentially verbatim from this task's own Part 3 text | That text is the actual, in-hand specification for *this* deliverable — unlike the upstream repo, it was directly readable in full, so verbatim reuse is honest here. |
-| Added a 3s haptic fatigue guard and a 3-sound/session audio cap | The Part 3 text *describes* these as governing principles but the literal pasted code does not enforce them; enforcing them turns stated intent into checkable behavior. |
-| Implemented `LEADOS.memory.session` verbatim (keys + helpers) from Part 4, wired only `FOCUS`/`HISTORY`/`COMPARE` into UI | Part 4's text was also cut off mid-specification for the comparison-mode *behavior*; wiring only what was actually specified avoids inventing unlabeled behavior for keys (`FATIGUE`, `ATTENTION`, etc.) that have no defined feature yet. |
-| Built an original Compare diff view, explicitly labeled as a fill-in | Shipping a dead/empty route for a feature the user can clearly see referenced in the nav felt worse than shipping a small, clearly-disclosed original implementation. |
-| Added an in-app `#/about` route mirroring this log | So the provenance ledger is visible to anyone using the app, not just anyone reading this file. |
+The pasted "Long-Term Memory" spec (`LEADOS.memory.longTerm`) assumes:
+- `P.state.events`, `P.peopleById`, `P.openGoals` — a people-roster and
+  goals data model.
+- `LEADOS.engine.run(P, date)` — a findings-generation engine producing
+  objects like "R103" (severity 4) and "R14" (severity 3).
+- `LEADOS.knowledge.buildPersonalPatterns` / `.crystallizePlaybookEffectiveness`
+  — a playbook-effectiveness knowledge layer.
 
-## §3 — Open items for a future session
+None of this exists in the verified-upstream `index.html` fetched this
+session (which has only findings + decisions, no people roster, no
+engine, no playbooks), nor in the simpler Part 3/4 build this session
+produced for the earlier parts of this same task. Rather than inventing
+a fictional roster/engine/playbook layer just to run the pasted code
+verbatim — which would mean fabricating a much larger surface area and
+presenting it as if it were spec-compliant — this session **adapted**
+the spec's actual intent (episodic recall with "what was happening at
+the time" context; semantic recall as domain/temporal/resolution/theme
+patterns) onto the real, smaller event schema. Every adapted function is
+marked `// ADAPTED` in `index.html` and listed in the in-app
+Provenance/About view and in `README.md`.
 
-- Confirm or refute the nested `src/` structure claim (requires a tree
-  fetch that isn't truncated, or paginated `contents` API calls).
-- Retry the code-search query (or fetch individual files by name) to
-  check whether upstream already has sensory/memory modules under
-  different names, before building more Part 5/6-style features.
-- If a future upstream `main` HEAD ever does contain a substantive
-  vanilla `index.html` again, re-verify constants directly against that
-  file before reusing them, rather than trusting any README/log's
-  description of it.
+The comparison-mode upgrade ("leverage, time required, and downstream
+impact, not severity alone") is a description of a *goal*, not an
+executable formula — the same gap this build's own earlier Part 4
+Compare view already disclosed for the original cut-off spec. This
+session filled that gap with an original, fully-disclosed formula (see
+`LEADOS.leverage` in `index.html`), rather than silently picking an
+arbitrary tie-break and calling it "per spec."
+
+## §3 — Decisions made and why (changelog with reasoning)
+
+- **Verified the repo myself via three independent mechanisms (repo
+  metadata endpoint, recursive tree, two separate fetches of
+  `index.html`) before writing or reusing a single claim** — *why*: the
+  task explicitly requires inspecting real code, and this repo's own
+  README/log files have already been shown (by themselves, recursively)
+  to be unreliable as "fact," so first-hand verification was the only
+  option.
+- **Reported the three-way contradiction on `index.html`'s actual
+  content instead of picking whichever story was most convenient** —
+  *why*: laundering any one of the three conflicting claims as "the
+  verified upstream file" would be exactly the kind of unverified
+  assertion this task is designed to catch.
+- **Did not invent a people-roster/goals-engine/playbook subsystem to
+  make the pasted Part 5 code run verbatim** — *why*: doing so would
+  require fabricating a far larger, unlabeled surface area; adapting the
+  spec's intent to the real schema, with every adaptation marked, keeps
+  the fabrication surface small and disclosed.
+- **Persisted effort estimates (used by the new leverage formula) as a
+  durable `finding.effort_logged` event, not as transient UI state** —
+  *why*: this build's entire philosophy (inherited from the verified
+  real upstream structure) is "nothing derived is stored, everything
+  replays from the append-only log" — a throwaway UI slider would have
+  broken that invariant for no reason.
+- **Gave the leverage formula a visible, per-finding breakdown table
+  instead of just a single hidden score** — *why*: a recommendation
+  engine that can't show its work is unauditable, which conflicts with
+  this whole task's emphasis on verifiability over assertion.
+- **Added a `person` free-text field to decisions (people domain only),
+  rather than building a real roster** — *why*: it's the smallest
+  possible adaptation that gives the semantic "most-mentioned people"
+  panel something real to compute over, without fabricating a roster
+  entity type the spec's host app doesn't have here either.
+- **Kept "temporal pattern" (peak logging hour) in the semantic panel
+  but labeled it illustrative-only** — *why*: all seed timestamps are
+  synthetic / back-dated from `Date.now()`, so a "peak hour" computed
+  over them reflects when this build happened to run its seed script,
+  not real behavioral data — showing it unlabeled would imply a signal
+  that doesn't exist yet.

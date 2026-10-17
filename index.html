@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LeadOS — Sensory &amp; Memory Build</title>
+<title>LeadOS — Sensory, Memory &amp; Long-Term Knowledge Base</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
   :root{ --ink:#0f172a; }
@@ -19,17 +19,20 @@
   @keyframes toastIn{ from{opacity:0; transform:translateX(12px);} to{opacity:1; transform:translateX(0);} }
   .pulse-dot{ animation: pulse 1.8s infinite; }
   @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  .bar{ transition: width .3s ease; }
+  .disclosure{ background:#fffbeb; border:1px solid #fde68a; color:#78350f; }
+  .verified{ background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
+  .contradicted{ background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; }
 </style>
 </head>
 <body class="bg-slate-100 text-slate-900 min-h-screen">
 
 <div id="app" class="flex min-h-screen">
 
-  <!-- Sidebar -->
-  <aside class="w-60 shrink-0 bg-slate-950 text-slate-200 flex flex-col">
+  <aside class="w-64 shrink-0 bg-slate-950 text-slate-200 flex flex-col">
     <div class="px-5 py-5 border-b border-slate-800">
       <div class="text-lg font-bold tracking-tight text-white">LeadOS</div>
-      <div class="text-[11px] text-slate-500 mt-0.5">sensory + memory build</div>
+      <div class="text-[11px] text-slate-500 mt-0.5">sensory + memory + long-term knowledge</div>
     </div>
     <nav id="nav" class="flex-1 px-3 py-4 space-y-1 text-sm"></nav>
     <div class="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500 leading-relaxed">
@@ -38,7 +41,6 @@
     </div>
   </aside>
 
-  <!-- Main -->
   <main class="flex-1 min-w-0">
     <header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10">
       <div id="routeTitle" class="font-semibold text-slate-800"></div>
@@ -47,7 +49,7 @@
         <button id="quickAudio" class="tap-shrink text-xs px-2.5 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50">Audio: <span></span></button>
       </div>
     </header>
-    <section id="view" class="p-6 max-w-5xl mx-auto"></section>
+    <section id="view" class="p-6 max-w-6xl mx-auto"></section>
   </main>
 </div>
 
@@ -55,26 +57,38 @@
 
 <script>
 /* =========================================================================
-   LEADOS — single-file vanilla build.
-   Provenance / honesty note (verified live against github.com/wbweve/Leados
-   on the date of this session — see AI-SESSION-LOG.md for the full ledger):
+   LEADOS — single-file vanilla build. Part 5: Long-term memory + leverage
+   comparison, layered on the sensory (Part 3) + working-memory (Part 4)
+   modules from the prior parts of this same build.
 
-   - This file is an ORIGINAL implementation. It does NOT port any upstream
-     code, because the upstream repo's own `index.html` on `main`, fetched
-     directly by this session, is currently a 14-line Vite/React entry stub
-     (`<div id="root">` + `<script type="module" src="/src/main.tsx">`) with
-     no inline logic to port or verify constants from.
-   - The upstream repo's own README.md / AI-SESSION-LOG.md describe a prior,
-     different state (an 86,898-byte vanilla index.html with grep-verified
-     constants). This session could not reproduce that file at `main` HEAD
-     and does not treat that prior description as current fact.
-   - Every constant, threshold, and piece of seed content below is therefore
-     ORIGINAL to this session and is NOT claimed to be sourced from upstream.
-   - The haptic pattern library and Web Audio sound design below ARE
-     implemented per the literal specification pasted into this task
-     (PART 3), reproduced faithfully, plus small enforcement additions
-     (disclosed in-line with `// ADDED:`) that make the written "principles"
-     actually true at runtime instead of just documented.
+   PROVENANCE, SHORT VERSION (full ledger in AI-SESSION-LOG.md and the
+   in-app Provenance / About route):
+   - This session fetched github.com/wbweve/Leados directly: repo metadata
+     via api.github.com/repos/wbweve/Leados (VERIFIED real/public repo),
+     the root git tree (VERIFIED dozens of files, mostly .tsx, far more
+     than "three files"), and the raw contents of index.html, README.md
+     and AI-SESSION-LOG.md via two independent methods (raw.githubusercontent.com
+     and the GitHub Contents API's base64 blob).
+   - Those two independent fetches of index.html AGREE with each other but
+     CONTRADICT the upstream repo's own README.md, which claims main's
+     index.html is a 14-line Vite/React stub. What this session actually
+     received, twice, was a ~37.5KB vanilla single-file app (title
+     "LeadOS — Sensory & Memory Build") structurally similar to this one.
+     That figure also does not match a THIRD, older claim inside the
+     upstream repo's own AI-SESSION-LOG.md of an 86,898-byte file with
+     different named constants (DECAY, CORRELATION_WINDOW_DAYS). Three
+     mutually-inconsistent descriptions of the same file; none is treated
+     as ground truth here beyond what this session verified directly.
+   - The "Long-Term Memory" spec given for this part (LEADOS.memory.longTerm,
+     P.state.events, P.peopleById, LEADOS.engine.run, playbooks, goals,
+     "R103"/"R14" finding IDs) assumes a richer data model than anything
+     this session could verify upstream or built in the prior, simpler
+     parts of THIS build (plain findings + decisions, no people roster,
+     no goals engine, no playbooks). Rather than inventing a fake roster/
+     engine to match the pasted spec literally, this build ADAPTS the
+     spec's intent (episodic + semantic recall over the real event log)
+     to the real, verifiable schema this app actually has. Every adaptation
+     is marked ADAPTED below and in the About view.
    ========================================================================= */
 
 const LEADOS = {};
@@ -82,6 +96,8 @@ const LEADOS = {};
 /* ---------------------------------------------------------------------
    CORE: append-only event log, durable in localStorage.
    Nothing derived is stored — every view recomputes via project().
+   project() now accepts an optional cutoff timestamp so long-term memory
+   can reconstruct "what the org looked like at time T" (episodic context).
 --------------------------------------------------------------------- */
 LEADOS.core = {
   STORAGE_KEY: 'leados:events',
@@ -91,9 +107,7 @@ LEADOS.core = {
     try { return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || []; }
     catch (e) { return []; }
   },
-  save(events) {
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(events));
-  },
+  save(events) { localStorage.setItem(this.STORAGE_KEY, JSON.stringify(events)); },
   append(event) {
     const events = this.load();
     event.ts = event.ts || Date.now();
@@ -109,294 +123,385 @@ LEADOS.core = {
     const now = Date.now();
     const day = 86400000;
     const seedFindings = [
-      { domain: 'people',   title: 'Two resignations filed same week, same team', severity: 5, ageDays: 1 },
-      { domain: 'finance',  title: 'Q3 burn 18% over forecast', severity: 4, ageDays: 3 },
-      { domain: 'ops',      title: 'Vendor SLA breach, 3rd time this quarter', severity: 3, ageDays: 6 },
-      { domain: 'strategy', title: 'Competitor shipped overlapping feature', severity: 2, ageDays: 10 },
-      { domain: 'legal',    title: 'Contract renewal clause ambiguous', severity: 3, ageDays: 14 },
-      { domain: 'product',  title: 'Churn tick-up in enterprise tier', severity: 4, ageDays: 2 },
+      { key:'f1', domain:'people',   title:'Two resignations filed same week, same team', severity:5, ageDays:1  },
+      { key:'f2', domain:'finance',  title:'Q3 burn 18% over forecast',                    severity:4, ageDays:3  },
+      { key:'f3', domain:'ops',      title:'Vendor SLA breach, 3rd time this quarter',     severity:3, ageDays:16 },
+      { key:'f4', domain:'strategy', title:'Competitor shipped overlapping feature',       severity:2, ageDays:10 },
+      { key:'f5', domain:'legal',    title:'Contract renewal clause ambiguous',            severity:3, ageDays:14 },
+      { key:'f6', domain:'product',  title:'Churn tick-up in enterprise tier',             severity:4, ageDays:2  },
+      { key:'f7', domain:'people',   title:'Manager skip-level flags burnout on infra pod',severity:3, ageDays:8  },
     ];
-    seedFindings.forEach((f, i) => {
-      this.append({
-        type: 'finding.created',
-        key: 'f' + (i + 1),
-        domain: f.domain,
-        title: f.title,
-        severity: f.severity,
-        ts: now - f.ageDays * day,
-      });
+    seedFindings.forEach(f => {
+      this.append({ type:'finding.created', key:f.key, domain:f.domain, title:f.title, severity:f.severity, ts: now - f.ageDays*day });
     });
+    // seed a couple of resolutions so resolution-rate memory has signal
+    this.append({ type:'finding.resolved', key:'f3', ts: now - 2*day });
+    this.append({ type:'finding.dismissed', key:'f4', ts: now - 4*day });
+    // seed decisions, one tagged with a person (people-domain only, ADAPTED field)
+    this.append({ type:'decision.logged', domain:'people', impact:3, reversibility:'reversible', person:'Dana K.', note:'Approved retention bonus for lead engineer', ts: now - 5*day });
+    this.append({ type:'decision.logged', domain:'finance', impact:2, reversibility:'reversible', note:'Delayed non-critical vendor renewal to next quarter', ts: now - 9*day });
+    this.append({ type:'decision.logged', domain:'people', impact:4, reversibility:'irreversible', person:'Dana K.', note:'Restructured infra pod reporting line', ts: now - 20*day });
   },
 
-  // project(): pure function, events -> current-state view. Recomputed on every render.
-  project() {
-    const events = this.load();
+  // project(uptoTs): pure function, events -> current-state view, optionally
+  // frozen at a point in time. Recomputed on every render / every recall.
+  project(uptoTs) {
+    const all = this.load();
+    const events = uptoTs ? all.filter(e => e.ts <= uptoTs) : all;
     const findings = new Map();
     const decisions = [];
+    const effortByKey = {};
     for (const e of events) {
       if (e.type === 'finding.created') {
-        findings.set(e.key, { key: e.key, domain: e.domain, title: e.title, severity: e.severity, createdTs: e.ts, status: 'open' });
+        findings.set(e.key, { key:e.key, domain:e.domain, title:e.title, severity:e.severity, createdTs:e.ts, status:'open' });
       } else if (e.type === 'finding.snoozed' && findings.has(e.key)) {
         findings.get(e.key).status = 'snoozed';
       } else if (e.type === 'finding.dismissed' && findings.has(e.key)) {
         findings.get(e.key).status = 'dismissed';
       } else if (e.type === 'finding.resolved' && findings.has(e.key)) {
         findings.get(e.key).status = 'resolved';
+      } else if (e.type === 'finding.effort_logged') {
+        effortByKey[e.key] = e.effort;
       } else if (e.type === 'decision.logged') {
         decisions.push(e);
       }
     }
-    return { events, findings: [...findings.values()], decisions };
+    return { events, findings: [...findings.values()], decisions, effortByKey };
+  },
+
+  // resolve a domain for ANY event in the log, incl. ones that only carry a key
+  domainOf(event, findingsByKey) {
+    if (event.domain) return event.domain;
+    if (event.key && findingsByKey[event.key]) return findingsByKey[event.key].domain;
+    return null;
   }
 };
 
 /* ---------------------------------------------------------------------
-   HAPTICS — reproduced from the PART 3 spec, verbatim pattern library,
-   plus an ADDED fatigue guard (spec documents the "no more than 1 haptic
-   event per 3s" principle but the pasted code didn't enforce it — this
-   build enforces it so the principle is actually true, not just stated).
+   HAPTICS — Web Vibration API, secondary confirmation channel only,
+   never the sole carrier of information. Off by default. 3s fatigue
+   guard enforced in code (principle -> literal runtime rule).
 --------------------------------------------------------------------- */
 LEADOS.haptics = {
   PATTERNS: {
-    SUCCESS: [50, 50, 50],
-    WARNING: [100, 50, 100],
-    CRITICAL: [200, 100, 100, 100, 200],
-    REJECTION: [300],
-    NAVIGATION: [20],
-    CONFIRMATION: [40, 30, 40],
-    RESOLUTION: [30, 20, 50, 20, 100],
-    DISMISSAL: [80, 30, 50, 30, 20],
+    SUCCESS: [50,50,50], WARNING: [100,50,100], CRITICAL: [200,100,100,100,200],
+    REJECTION: [300], NAVIGATION: [20], CONFIRMATION: [40,30,40],
+    RESOLUTION: [30,20,50,20,100], DISMISSAL: [80,30,50,30,20],
   },
-
   _lastFire: 0,
-
-  play(pattern) {
-    if (!navigator.vibrate) return;          // not supported — silently skip
-    if (!this._enabled) return;              // user preference
+  _enabled: localStorage.getItem('leados:haptics') === '1',
+  play(name) {
+    const pattern = this.PATTERNS[name];
+    if (!pattern || !navigator.vibrate || !this._enabled) return;
     const now = Date.now();
-    if (now - this._lastFire < 3000) return; // ADDED: fatigue guard (principle #3)
+    if (now - this._lastFire < 3000) return; // ADDED: fatigue guard, literally enforced
     this._lastFire = now;
-    navigator.vibrate(this.PATTERNS[pattern] || [50]);
+    navigator.vibrate(pattern);
   },
-
   onEvent(eventType) {
     const map = {
-      'form.submit.success': 'SUCCESS',
-      'form.submit.error': 'REJECTION',
-      'finding.snoozed': 'CONFIRMATION',
-      'finding.dismissed': 'DISMISSAL',
-      'finding.critical_new': 'CRITICAL',
-      'finding.resolved': 'RESOLUTION',       // ADDED: natural extension, disclosed
-      'playbook.completed': 'RESOLUTION',
-      'nav.change': 'NAVIGATION',
-      'toast.warning': 'WARNING',
+      'form.submit.success':'SUCCESS', 'form.submit.error':'REJECTION',
+      'finding.critical_new':'CRITICAL', 'finding.resolved':'RESOLUTION',
+      'finding.dismissed':'DISMISSAL', 'finding.snoozed':'CONFIRMATION',
+      'nav.change':'NAVIGATION', 'toast.warning':'WARNING',
     };
-    if (map[eventType]) this.play(map[eventType]);
+    this.play(map[eventType]);
   },
-
-  _enabled: localStorage.getItem('leados:haptics') === '1',
-
-  setEnabled(enabled) {
-    this._enabled = enabled;
-    localStorage.setItem('leados:haptics', enabled ? '1' : '0');
-    syncSensoryTags();
-  }
+  setEnabled(v) { this._enabled = v; localStorage.setItem('leados:haptics', v ? '1':'0'); syncSensoryTags(); }
 };
 
 /* ---------------------------------------------------------------------
-   AUDIO — reproduced from the PART 3 spec (Web Audio, synthesized only,
-   no files), plus an ADDED per-session restraint counter enforcing
-   "sound design principle #3: ≤ 3 distinct sounds per session."
+   AUDIO — pure Web Audio synthesis, no files. Off by default.
+   Session-scoped cap of 3 distinct sounds enforced in code.
 --------------------------------------------------------------------- */
 LEADOS.audio = {
-  ctx: null,
   _enabled: localStorage.getItem('leados:audio') === '1',
-
-  init() { return this; },
-
-  _getCtx() {
-    if (!this._enabled) return null;
-    if (!this.ctx || this.ctx.state === 'closed') this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    if (this.ctx.state === 'suspended') this.ctx.resume();
-    return this.ctx;
+  ctx: null,
+  init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+  tone(freq, dur, opts={}) {
+    if (!this.ctx) return;
+    const { volume=0.1, type='sine' } = opts;
+    const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + dur);
+    osc.connect(gain).connect(this.ctx.destination);
+    osc.start(); osc.stop(this.ctx.currentTime + dur);
   },
-
-  tone(frequency, duration, options = {}) {
-    const ctx = this._getCtx();
-    if (!ctx) return;
-    const { volume = 0.15, type = 'sine', attack = 0.01, release = 0.1 } = options;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = type; osc.frequency.value = frequency;
-    const now = ctx.currentTime;
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(volume, now + attack);
-    gain.gain.setValueAtTime(volume, now + Math.max(duration - release, attack));
-    gain.gain.linearRampToValueAtTime(0, now + duration);
-    osc.start(now); osc.stop(now + duration);
-  },
-
-  SUCCESS() {
-    [261.63, 329.63, 392.00].forEach((freq, i) => setTimeout(() => this.tone(freq, 0.15, { volume: 0.12 }), i * 60));
-  },
-  WARNING() {
-    this.tone(220, 0.2, { volume: 0.1 });
-    setTimeout(() => this.tone(311.13, 0.2, { volume: 0.1 }), 0);
-  },
-  CRITICAL() {
-    [0, 300, 600].forEach(delay => setTimeout(() => this.tone(80, 0.25, { volume: 0.2, type: 'sawtooth' }), delay));
-  },
-  RESOLUTION() {
-    [261.63, 329.63, 392.00, 523.25].forEach((freq, i) => setTimeout(() => this.tone(freq, 0.12, { volume: 0.1 }), i * 80));
-  },
-  NAVIGATION() { this.tone(800, 0.02, { volume: 0.08, type: 'square' }); },
-  TYPING_FOCUS() { this.tone(1200, 0.01, { volume: 0.04 }); },
-
-  // ADDED: enforce "≤3 distinct sounds per session" literally.
-  _sessionPlayed() {
-    try { return JSON.parse(sessionStorage.getItem('leados:audio:played')) || []; }
-    catch (e) { return []; }
-  },
+  SUCCESS() { [523.25,659.25,783.99].forEach((f,i)=>setTimeout(()=>this.tone(f,0.15,{volume:0.12}), i*60)); },
+  WARNING() { this.tone(220,0.2,{volume:0.1}); setTimeout(()=>this.tone(311.13,0.2,{volume:0.1}),0); },
+  CRITICAL() { [0,300,600].forEach(d=>setTimeout(()=>this.tone(80,0.25,{volume:0.2,type:'sawtooth'}), d)); },
+  RESOLUTION() { [261.63,329.63,392.00,523.25].forEach((f,i)=>setTimeout(()=>this.tone(f,0.12,{volume:0.1}), i*80)); },
+  NAVIGATION() { this.tone(800,0.02,{volume:0.08,type:'square'}); },
+  TYPING_FOCUS() { this.tone(1200,0.01,{volume:0.04}); },
+  _sessionPlayed() { try { return JSON.parse(sessionStorage.getItem('leados:audio:played')) || []; } catch(e){ return []; } },
   playSemantic(name) {
     if (!this._enabled || typeof this[name] !== 'function') return;
     const played = this._sessionPlayed();
-    if (!played.includes(name) && played.length >= 3) {
-      console.info('[LEADOS.audio] restraint principle: 3 distinct sounds already used this session, skipping', name);
-      return;
-    }
-    if (!played.includes(name)) {
-      played.push(name);
-      sessionStorage.setItem('leados:audio:played', JSON.stringify(played));
-    }
+    if (!played.includes(name) && played.length >= 3) { console.info('[audio restraint] 3 sounds already used, skipping', name); return; }
+    if (!played.includes(name)) { played.push(name); sessionStorage.setItem('leados:audio:played', JSON.stringify(played)); }
     this[name]();
   },
-
-  setEnabled(enabled) {
-    this._enabled = enabled;
-    localStorage.setItem('leados:audio', enabled ? '1' : '0'); // ADDED: persistence (spec left this out)
-    if (enabled && !this.ctx) document.addEventListener('click', () => this.init(), { once: true });
+  setEnabled(v) {
+    this._enabled = v; localStorage.setItem('leados:audio', v ? '1':'0');
+    if (v && !this.ctx) document.addEventListener('click', () => this.init(), { once:true });
     syncSensoryTags();
   }
 };
 
-/* ---------------------------------------------------------------------
-   SENSORY DISPATCH — one call site fires both channels from one semantic
-   event name, per the spec's "haptic is always redundant with a visual
-   or audio signal" principle.
---------------------------------------------------------------------- */
 LEADOS.sensory = {
-  EVENT_TO_AUDIO: {
-    'form.submit.success': 'SUCCESS',
-    'finding.critical_new': 'CRITICAL',
-    'finding.resolved': 'RESOLUTION',
-    'playbook.completed': 'RESOLUTION',
-    'nav.change': 'NAVIGATION',
-    'toast.warning': 'WARNING',
-    // NOTE: CONFIRMATION, DISMISSAL, REJECTION have no audio counterpart —
-    // this matches the spec literally (it only ever defines 6 audio
-    // methods against 8 haptic patterns). Unverified whether that
-    // asymmetry was intentional upstream; preserved as given.
-  },
+  EVENT_TO_AUDIO: { 'form.submit.success':'SUCCESS','finding.critical_new':'CRITICAL','finding.resolved':'RESOLUTION','nav.change':'NAVIGATION','toast.warning':'WARNING' },
   fire(eventType) {
     LEADOS.haptics.onEvent(eventType);
-    const audioName = this.EVENT_TO_AUDIO[eventType];
-    if (audioName) LEADOS.audio.playSemantic(audioName);
+    const a = this.EVENT_TO_AUDIO[eventType];
+    if (a) LEADOS.audio.playSemantic(a);
   }
 };
 
 /* ---------------------------------------------------------------------
-   MEMORY — working memory (session layer), reproduced from PART 4 spec.
+   MEMORY — working memory (session layer), per the Part 4 key list.
 --------------------------------------------------------------------- */
-LEADOS.memory = { session: {
-  KEYS: {
-    FOCUS: 'leados:focus',
-    HISTORY: 'leados:nav-history',
-    FAMILIARITY: 'leados:familiar',
-    FATIGUE: 'leados:fatigue',
-    DRAFT: 'leados:draft:',
-    SCROLL: 'leados:scroll:',
-    FILTERS: 'leados:filters',
-    PANEL: 'leados:panel',
-    SEARCH: 'leados:search-hist',
-    ATTENTION: 'leados:attention',
-    COMPARE: 'leados:compare',
+LEADOS.memory = {
+  session: {
+    KEYS: { FOCUS:'leados:focus', HISTORY:'leados:nav-history', FAMILIARITY:'leados:familiar',
+      FATIGUE:'leados:fatigue', DRAFT:'leados:draft:', SCROLL:'leados:scroll:', FILTERS:'leados:filters',
+      PANEL:'leados:panel', SEARCH:'leados:search-hist', ATTENTION:'leados:attention', COMPARE:'leados:compare' },
+    get(key) { try { return JSON.parse(sessionStorage.getItem(key)); } catch(e){ return null; } },
+    set(key, value) { try { sessionStorage.setItem(key, JSON.stringify(value)); } catch(e){} },
+    addToCompare(key) {
+      const cur = this.get(this.KEYS.COMPARE) || [];
+      if (cur.includes(key)) return;
+      if (cur.length >= 2) cur.shift();
+      cur.push(key); this.set(this.KEYS.COMPARE, cur);
+    },
+    removeFromCompare(key) { this.set(this.KEYS.COMPARE, (this.get(this.KEYS.COMPARE)||[]).filter(k=>k!==key)); },
+    getComparePair() { return this.get(this.KEYS.COMPARE) || []; },
+    pushHistory(route) {
+      const h = this.get(this.KEYS.HISTORY) || [];
+      h.push({ route, ts: Date.now() });
+      while (h.length > 10) h.shift();
+      this.set(this.KEYS.HISTORY, h);
+    }
   },
 
-  get(key) {
-    try { return JSON.parse(sessionStorage.getItem(key)); }
-    catch (e) { return null; }
-  },
-  set(key, value) {
-    try { sessionStorage.setItem(key, JSON.stringify(value)); }
-    catch (e) { /* sessionStorage full — silent fail */ }
-  },
+  /* ---------------------------------------------------------------------
+     LONG-TERM MEMORY — ADAPTED from the pasted Part 5 spec. The spec's
+     LEADOS.memory.longTerm assumed P.state.events / P.peopleById /
+     LEADOS.engine.run / an OKR-and-playbook knowledge layer. None of that
+     exists in this build's verified, simpler schema (plain findings +
+     decisions, no people roster, no goals engine). What follows keeps the
+     spec's STRUCTURE (episodic recall with context + concurrency; semantic
+     recall as domain/temporal/people/resolution patterns) but computes it
+     against the real event log instead of a fictional one.
+  --------------------------------------------------------------------- */
+  longTerm: {
+    // EPISODIC: specific events in time — "I remember when..."
+    recallEpisodes(query = {}, maxResults = 10) {
+      const all = LEADOS.core.load();
+      const current = LEADOS.core.project();
+      const findingsByKey = Object.fromEntries(current.findings.map(f => [f.key, f]));
 
-  addToCompare(findingKey) {
-    const current = this.get(this.KEYS.COMPARE) || [];
-    if (current.includes(findingKey)) return;
-    if (current.length >= 2) current.shift();
-    current.push(findingKey);
-    this.set(this.KEYS.COMPARE, current);
-  },
-  removeFromCompare(findingKey) {
-    const current = (this.get(this.KEYS.COMPARE) || []).filter(k => k !== findingKey);
-    this.set(this.KEYS.COMPARE, current);
-  },
-  getComparePair() { return this.get(this.KEYS.COMPARE) || []; },
+      const events = all.filter(ev => {
+        if (query.type && ev.type !== query.type) return false;
+        if (query.domain && LEADOS.core.domainOf(ev, findingsByKey) !== query.domain) return false;
+        if (query.dateRangeDays) {
+          const ageDays = (Date.now() - ev.ts) / 86400000;
+          if (ageDays > query.dateRangeDays) return false;
+        }
+        if (query.keywords && query.keywords.length) {
+          const text = JSON.stringify(ev).toLowerCase();
+          if (!query.keywords.every(kw => text.includes(kw.toLowerCase()))) return false;
+        }
+        return true;
+      });
 
-  pushHistory(route) {
-    const h = this.get(this.KEYS.HISTORY) || [];
-    h.push({ route, ts: Date.now() });
-    while (h.length > 10) h.shift();
-    this.set(this.KEYS.HISTORY, h);
+      return events
+        .sort((a,b) => b.ts - a.ts)
+        .slice(0, maxResults)
+        .map(ev => ({
+          event: ev,
+          domain: LEADOS.core.domainOf(ev, findingsByKey),
+          context: this._getEpisodicContext(ev, all),
+          concurrent: all.filter(e => e !== ev && Math.abs(e.ts - ev.ts) <= 3*86400000).slice(0, 4)
+        }));
+    },
+
+    // What was the organizational state at the moment this event occurred?
+    _getEpisodicContext(event, allEvents) {
+      const historical = LEADOS.core.project(event.ts);
+      const open = historical.findings.filter(f => f.status === 'open').sort((a,b)=>b.severity-a.severity);
+      return {
+        openFindingsCount: open.length,
+        topFinding: open[0] || null,
+        decisionsLoggedSoFar: historical.decisions.length,
+      };
+    },
+
+    // SEMANTIC: patterns and knowledge derived from episodes — "I know that..."
+    recallSemanticPatterns() {
+      return {
+        domainActivity: this._computeDomainActivity(),
+        temporalPatterns: this._computeTemporalPatterns(),
+        recurringThemes: this._computeThemes(),      // ADAPTED, replaces buildPersonalPatterns (not available)
+        subjectFrequency: this._computeSubjectFrequency(), // ADAPTED, replaces peopleFrequency (no people roster exists)
+        resolutionRates: this._computeResolutionRates(),   // ADAPTED, replaces crystallizePlaybookEffectiveness
+      };
+    },
+
+    _computeDomainActivity() {
+      const all = LEADOS.core.load();
+      const current = LEADOS.core.project();
+      const findingsByKey = Object.fromEntries(current.findings.map(f => [f.key, f]));
+      const counts = {};
+      LEADOS.core.DOMAINS.forEach(d => counts[d] = 0);
+      all.forEach(e => { const d = LEADOS.core.domainOf(e, findingsByKey); if (d) counts[d] = (counts[d]||0) + 1; });
+      const total = all.length || 1;
+      return Object.entries(counts).sort(([,a],[,b]) => b-a)
+        .map(([domain,count]) => ({ domain, count, pct: Math.round(count/total*100) }));
+    },
+
+    _computeTemporalPatterns() {
+      const all = LEADOS.core.load();
+      const hourCounts = new Array(24).fill(0);
+      all.forEach(e => hourCounts[new Date(e.ts).getHours()]++);
+      const total = hourCounts.reduce((a,b)=>a+b,0) || 1;
+      const peak = hourCounts.reduce((a,b,i) => b > hourCounts[a] ? i : a, 0);
+      return { byHour: hourCounts, peakHour: peak, peakPct: Math.round(hourCounts[peak]/total*100) };
+    },
+
+    // ADAPTED: simple keyword frequency over finding titles + decision notes,
+    // standing in for the unavailable "buildPersonalPatterns" knowledge module.
+    _computeThemes() {
+      const all = LEADOS.core.load();
+      const stop = new Set(['the','a','an','of','to','in','on','for','and','or','is','this','that','with','same','over','its','was','are']);
+      const freq = {};
+      all.forEach(e => {
+        const text = [e.title, e.note].filter(Boolean).join(' ').toLowerCase();
+        text.split(/[^a-z0-9%]+/).forEach(w => {
+          if (w.length < 4 || stop.has(w)) return;
+          freq[w] = (freq[w]||0) + 1;
+        });
+      });
+      return Object.entries(freq).sort(([,a],[,b])=>b-a).slice(0,8).map(([word,count])=>({word,count}));
+    },
+
+    // ADAPTED: this build has no people roster, so "person" is a free-text
+    // tag only present on decision.logged events that chose to set one.
+    _computeSubjectFrequency() {
+      const all = LEADOS.core.load();
+      const counts = {};
+      all.forEach(e => { if (e.person) counts[e.person] = (counts[e.person]||0) + 1; });
+      return Object.entries(counts).sort(([,a],[,b])=>b-a).map(([person,count])=>({person,count}));
+    },
+
+    // ADAPTED: resolution rate per domain = resolved / (resolved+dismissed+snoozed+still-open-but-old)
+    _computeResolutionRates() {
+      const current = LEADOS.core.project();
+      const byDomain = {};
+      LEADOS.core.DOMAINS.forEach(d => byDomain[d] = { resolved:0, dismissed:0, snoozed:0, open:0, total:0 });
+      current.findings.forEach(f => {
+        byDomain[f.domain].total++;
+        byDomain[f.domain][f.status] = (byDomain[f.domain][f.status]||0) + 1;
+      });
+      return Object.entries(byDomain).map(([domain, c]) => ({
+        domain, ...c,
+        resolutionRatePct: c.total ? Math.round(c.resolved / c.total * 100) : null
+      }));
+    }
   }
-}};
+};
+
+/* ---------------------------------------------------------------------
+   LEVERAGE — original scoring model for the Compare view, answering
+   "which should I address first" by more than raw severity. The pasted
+   spec DESCRIBES this requirement (leverage, time required, downstream
+   impact) but, like the Part 4 compare-mode cutoff before it, does not
+   hand over an executable formula — so this formula is a disclosed,
+   original fill-in, not a recovered spec.
+
+   score = (severity*2 + domainClusterSize*1.5 + log2(ageDays+1)) / effort
+     - severity*2          : raw stated severity, still a real input, just
+                             not the only one.
+     - domainClusterSize*1.5: downstream impact proxy — how many OTHER open
+                             findings share this domain (a symptom of a
+                             wider pattern is worth more leverage to fix).
+     - log2(ageDays+1)      : time-in-system, diminishing returns (a finding
+                             twice as old isn't twice as urgent, but it does
+                             matter more than a brand-new one).
+     - / effort             : time required. Low=1 / Medium=3 / High=5,
+                             user-set per finding via the Compare view and
+                             persisted as a 'finding.effort_logged' event
+                             (so it becomes part of the durable long-term
+                             memory too, not a throwaway UI state).
+--------------------------------------------------------------------- */
+LEADOS.leverage = {
+  EFFORT_LABELS: { 1:'Low', 3:'Medium', 5:'High' },
+  score(finding, allOpenFindings, effortByKey) {
+    const ageDays = Math.floor((Date.now() - finding.createdTs) / 86400000);
+    const clusterSize = allOpenFindings.filter(f => f.domain === finding.domain && f.key !== finding.key).length;
+    const severityPart = finding.severity * 2;
+    const clusterPart = Math.round(clusterSize * 1.5 * 100) / 100;
+    const agePart = Math.round(Math.log2(ageDays + 1) * 100) / 100;
+    const effort = effortByKey[finding.key] || 3;
+    const rawImpact = severityPart + clusterPart + agePart;
+    const score = Math.round((rawImpact / effort) * 100) / 100;
+    return { ageDays, clusterSize, severityPart, clusterPart, agePart, effort, rawImpact, score };
+  },
+  recommend(scoreA, scoreB, titleA, titleB) {
+    const hi = scoreA.score >= scoreB.score ? { s: scoreA, t: titleA, other: scoreB } : { s: scoreB, t: titleB, other: scoreA };
+    const margin = hi.other.score === 0 ? 1 : Math.abs(scoreA.score - scoreB.score) / Math.max(scoreA.score, scoreB.score);
+    if (margin < 0.12) {
+      return { tooClose: true, text: `Leverage scores are within ${Math.round(margin*100)}% of each other — too close to call on this formula alone. Use judgment on context not captured here (e.g. a boss's explicit ask, a looming deadline).` };
+    }
+    const deltas = {
+      severity: hi.s.severityPart - hi.other.severityPart,
+      cluster: hi.s.clusterPart - hi.other.clusterPart,
+      age: hi.s.agePart - hi.other.agePart,
+      effort: hi.other.effort - hi.s.effort,
+    };
+    const topFactor = Object.entries(deltas).sort(([,a],[,b]) => b-a)[0][0];
+    const why = {
+      severity: 'it is the more severe issue',
+      cluster: 'it sits inside a bigger cluster of open issues in the same domain — fixing it likely has downstream effects on the others',
+      age: 'it has been open far longer and is overdue',
+      effort: 'it is comparatively cheap to address, so you get leverage per unit of time spent',
+    }[topFactor];
+    return { tooClose:false, winner: hi.t, text: `Address "${hi.t}" first — mainly because ${why}.` };
+  }
+};
 
 /* =========================================================================
    APP SHELL: router, views, toasts.
-   NOTE: comparison-mode *behavior* (beyond side-by-side display) was cut
-   off mid-sentence in the pasted PART 4 spec ("When two findings are in
-   compare mode:" with no continuation). The diff view below is this
-   session's own reasonable, disclosed fill-in, not a recovered spec.
    ========================================================================= */
-
 const ROUTES = [
-  ['today', 'Today'],
-  ['domains', 'Domains'],
-  ['decisions', 'Decisions'],
-  ['compare', 'Compare'],
-  ['sensory', 'Sensory Lab'],
-  ['log', 'Event Log'],
-  ['about', 'Provenance / About'],
+  ['today','Today'], ['domains','Domains'], ['decisions','Decisions'],
+  ['compare','Compare'], ['memory','Memory Palace'], ['sensory','Sensory Lab'],
+  ['log','Event Log'], ['about','Provenance / About'],
 ];
 
-function currentRoute() { return (location.hash.replace('#/', '') || 'today'); }
+function currentRoute() { return (location.hash.replace('#/','') || 'today'); }
 
-function toast(message, kind = 'info') {
+function toast(message, kind='info') {
   const el = document.createElement('div');
-  const colors = { info: 'bg-slate-900', warning: 'bg-amber-600', critical: 'bg-rose-700', success: 'bg-emerald-700' };
-  el.className = `toast ${colors[kind] || colors.info} text-white text-sm rounded-lg shadow-lg px-4 py-2.5 max-w-xs`;
+  const colors = { info:'bg-slate-900', warning:'bg-amber-600', critical:'bg-rose-700', success:'bg-emerald-700' };
+  el.className = `toast ${colors[kind]||colors.info} text-white text-sm rounded-lg shadow-lg px-4 py-2.5 max-w-xs`;
   el.textContent = message;
   document.getElementById('toastRoot').appendChild(el);
   if (kind === 'warning') LEADOS.sensory.fire('toast.warning');
-  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 3200);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3200);
 }
 
 function fmtAge(ts) {
-  const d = Math.floor((Date.now() - ts) / 86400000);
-  return d <= 0 ? 'today' : d + 'd ago';
+  const d = Math.floor((Date.now()-ts)/86400000);
+  return d <= 0 ? 'today' : d === 1 ? '1 day ago' : `${d} days ago`;
 }
-function domainColor(domain) {
-  const map = { people: 'bg-violet-100 text-violet-800', finance: 'bg-emerald-100 text-emerald-800', ops: 'bg-sky-100 text-sky-800', strategy: 'bg-amber-100 text-amber-800', legal: 'bg-rose-100 text-rose-800', product: 'bg-indigo-100 text-indigo-800' };
-  return map[domain] || 'bg-slate-100 text-slate-800';
-}
-function sevLabel(s) { return s >= 5 ? 'Critical' : s === 4 ? 'High' : s === 3 ? 'Medium' : 'Low'; }
+function sevLabel(s) { return s>=5?'Critical':s===4?'High':s===3?'Medium':'Low'; }
+function sevColor(s) { return s>=5?'text-rose-600':s===4?'text-amber-600':'text-slate-500'; }
 
 function renderNav() {
   const nav = document.getElementById('nav');
   nav.innerHTML = '';
-  ROUTES.forEach(([key, label]) => {
+  ROUTES.forEach(([key,label]) => {
     const btn = document.createElement('button');
     btn.className = 'nav-btn w-full text-left px-3 py-2 rounded-md hover:bg-slate-800 tap-shrink';
     btn.textContent = label;
@@ -409,70 +514,52 @@ function renderNav() {
 function render() {
   const route = currentRoute();
   renderNav();
-  document.getElementById('routeTitle').textContent = (ROUTES.find(r => r[0] === route) || [,'Today'])[1];
+  document.getElementById('routeTitle').textContent = (ROUTES.find(r=>r[0]===route)||[,'Today'])[1];
   LEADOS.memory.session.set(LEADOS.memory.session.KEYS.FOCUS, route);
   LEADOS.memory.session.pushHistory(route);
   LEADOS.sensory.fire('nav.change');
-
   const view = document.getElementById('view');
   view.classList.remove('fade-in'); void view.offsetWidth; view.classList.add('fade-in');
-
-  const renderers = { today: renderToday, domains: renderDomains, decisions: renderDecisions, compare: renderCompare, sensory: renderSensory, log: renderLog, about: renderAbout };
+  const renderers = { today:renderToday, domains:renderDomains, decisions:renderDecisions, compare:renderCompare, memory:renderMemory, sensory:renderSensory, log:renderLog, about:renderAbout };
   (renderers[route] || renderToday)();
   syncSensoryTags();
 }
 
 function renderToday() {
   const { findings } = LEADOS.core.project();
-  const open = findings.filter(f => f.status === 'open').sort((a, b) => b.severity - a.severity);
+  const open = findings.filter(f => f.status === 'open').sort((a,b)=>b.severity-a.severity);
   const compare = LEADOS.memory.session.getComparePair();
-
   const view = document.getElementById('view');
   view.innerHTML = `
-    <div class="mb-4 text-sm text-slate-500">${open.length} open finding${open.length === 1 ? '' : 's'} across ${LEADOS.core.DOMAINS.length} domains.</div>
-    <div class="grid gap-3" id="findingsGrid"></div>
-  `;
+    <p class="text-sm text-slate-500 mb-4">${open.length} open finding${open.length===1?'':'s'} across ${LEADOS.core.DOMAINS.length} domains.</p>
+    <div id="findingsGrid" class="space-y-3"></div>`;
   const grid = document.getElementById('findingsGrid');
-  if (!open.length) {
-    grid.innerHTML = `<div class="text-slate-400 text-sm italic py-10 text-center border border-dashed border-slate-300 rounded-xl">No open findings. Quiet day.</div>`;
-    return;
-  }
+  if (!open.length) { grid.innerHTML = `<div class="text-slate-400 text-sm italic py-10 text-center">No open findings. Quiet day.</div>`; return; }
   open.forEach(f => {
     const card = document.createElement('div');
     card.className = 'bg-white rounded-xl border border-slate-200 p-4 flex items-start justify-between gap-4 fade-in';
     const inCompare = compare.includes(f.key);
     card.innerHTML = `
       <div class="min-w-0">
-        <div class="flex items-center gap-2 mb-1.5">
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full ${domainColor(f.domain)}">${f.domain}</span>
-          <span class="text-[11px] font-medium ${f.severity >= 5 ? 'text-rose-600' : f.severity === 4 ? 'text-amber-600' : 'text-slate-500'}">${sevLabel(f.severity)}</span>
-          <span class="text-[11px] text-slate-400">${fmtAge(f.createdTs)}</span>
+        <div class="flex items-center gap-2 text-xs mb-1">
+          <span class="uppercase tracking-wide text-slate-400">${f.domain}</span>
+          <span class="font-semibold ${sevColor(f.severity)}">${sevLabel(f.severity)}</span>
+          <span class="text-slate-400">${fmtAge(f.createdTs)}</span>
         </div>
         <div class="font-medium text-slate-800">${f.title}</div>
       </div>
-      <div class="flex items-center gap-1.5 shrink-0">
-        <button data-act="compare" class="tap-shrink text-xs px-2 py-1 rounded-md border ${inCompare ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 hover:bg-slate-50'}">${inCompare ? '✓ Compare' : '+ Compare'}</button>
-        <button data-act="snooze" class="tap-shrink text-xs px-2 py-1 rounded-md border border-slate-300 hover:bg-slate-50">Snooze</button>
-        <button data-act="dismiss" class="tap-shrink text-xs px-2 py-1 rounded-md border border-slate-300 hover:bg-slate-50">Dismiss</button>
-        <button data-act="resolve" class="tap-shrink text-xs px-2 py-1 rounded-md border border-emerald-300 text-emerald-700 hover:bg-emerald-50">Resolve</button>
+      <div class="flex flex-col items-end gap-1.5 shrink-0">
+        <button data-act="compare" class="tap-shrink text-xs px-2 py-1 rounded-md border ${inCompare?'border-emerald-400 text-emerald-700 bg-emerald-50':'border-slate-300 hover:bg-slate-50'}">${inCompare?'✓ Compare':'+ Compare'}</button>
+        <div class="flex gap-1">
+          <button data-act="snooze" class="tap-shrink text-[11px] px-2 py-1 rounded-md border border-slate-300 hover:bg-slate-50">Snooze</button>
+          <button data-act="dismiss" class="tap-shrink text-[11px] px-2 py-1 rounded-md border border-slate-300 hover:bg-slate-50">Dismiss</button>
+          <button data-act="resolve" class="tap-shrink text-[11px] px-2 py-1 rounded-md border border-slate-300 hover:bg-slate-50">Resolve</button>
+        </div>
       </div>`;
-    card.querySelector('[data-act="snooze"]').onclick = () => {
-      LEADOS.core.append({ type: 'finding.snoozed', key: f.key });
-      LEADOS.sensory.fire('finding.snoozed'); toast('Finding snoozed', 'info'); renderToday();
-    };
-    card.querySelector('[data-act="dismiss"]').onclick = () => {
-      LEADOS.core.append({ type: 'finding.dismissed', key: f.key });
-      LEADOS.sensory.fire('finding.dismissed'); toast('Finding dismissed', 'info'); renderToday();
-    };
-    card.querySelector('[data-act="resolve"]').onclick = () => {
-      LEADOS.core.append({ type: 'finding.resolved', key: f.key });
-      LEADOS.sensory.fire('finding.resolved'); toast('Finding resolved', 'success'); renderToday();
-    };
-    card.querySelector('[data-act="compare"]').onclick = () => {
-      if (inCompare) LEADOS.memory.session.removeFromCompare(f.key);
-      else LEADOS.memory.session.addToCompare(f.key);
-      renderToday();
-    };
+    card.querySelector('[data-act="snooze"]').onclick = () => { LEADOS.core.append({type:'finding.snoozed', key:f.key}); LEADOS.sensory.fire('finding.snoozed'); toast('Finding snoozed'); renderToday(); };
+    card.querySelector('[data-act="dismiss"]').onclick = () => { LEADOS.core.append({type:'finding.dismissed', key:f.key}); LEADOS.sensory.fire('finding.dismissed'); toast('Finding dismissed'); renderToday(); };
+    card.querySelector('[data-act="resolve"]').onclick = () => { LEADOS.core.append({type:'finding.resolved', key:f.key}); LEADOS.sensory.fire('finding.resolved'); toast('Finding resolved','success'); renderToday(); };
+    card.querySelector('[data-act="compare"]').onclick = () => { inCompare ? LEADOS.memory.session.removeFromCompare(f.key) : LEADOS.memory.session.addToCompare(f.key); renderToday(); };
     grid.appendChild(card);
   });
 }
@@ -481,25 +568,21 @@ function renderDomains() {
   const { findings } = LEADOS.core.project();
   const open = findings.filter(f => f.status === 'open');
   const view = document.getElementById('view');
-  view.innerHTML = `<div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="domGrid"></div>
-    <p class="text-xs text-slate-400 mt-4">Heat = sum of open severities in that domain. Original to this build, not an upstream formula (upstream's current <code>index.html</code> has no computable logic to verify a decay formula against — see About).</p>`;
+  view.innerHTML = `
+    <p class="text-sm text-slate-500 mb-4">Heat = sum of open severities in that domain. Original to this build, disclosed — not an upstream formula.</p>
+    <div id="domGrid" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>`;
   const grid = document.getElementById('domGrid');
   LEADOS.core.DOMAINS.forEach(d => {
     const items = open.filter(f => f.domain === d);
-    const heat = items.reduce((s, f) => s + f.severity, 0);
-    const intensity = Math.min(heat / 15, 1);
-    grid.innerHTML += `
-      <div class="rounded-xl border border-slate-200 p-4 bg-white">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full ${domainColor(d)}">${d}</span>
-          <span class="text-xs text-slate-400">${items.length} open</span>
-        </div>
-        <div class="h-2 rounded-full bg-slate-100 overflow-hidden mb-2">
-          <div class="h-full bg-rose-500" style="width:${(intensity * 100).toFixed(0)}%"></div>
-        </div>
-        <div class="text-2xl font-bold text-slate-800">${heat}</div>
-        <div class="text-[11px] text-slate-400">heat score</div>
-      </div>`;
+    const heat = items.reduce((s,f)=>s+f.severity,0);
+    const intensity = Math.min(heat/15, 1);
+    const div = document.createElement('div');
+    div.className = 'rounded-xl border border-slate-200 p-4 bg-white';
+    div.innerHTML = `
+      <div class="text-xs uppercase tracking-wide text-slate-400 mb-1">${d}</div>
+      <div class="text-2xl font-bold" style="color: rgba(190,18,60,${0.3+intensity*0.7})">${heat}</div>
+      <div class="text-xs text-slate-500">${items.length} open · heat score</div>`;
+    grid.appendChild(div);
   });
 }
 
@@ -507,85 +590,214 @@ function renderDecisions() {
   const { decisions } = LEADOS.core.project();
   const view = document.getElementById('view');
   view.innerHTML = `
-    <form id="decForm" class="bg-white border border-slate-200 rounded-xl p-4 mb-6 grid grid-cols-1 md:grid-cols-4 gap-3">
-      <select name="domain" class="border rounded-md px-2 py-1.5 text-sm">${LEADOS.core.DOMAINS.map(d => `<option value="${d}">${d}</option>`).join('')}</select>
-      <select name="impact" class="border rounded-md px-2 py-1.5 text-sm">
-        <option value="1">Impact: Low</option><option value="3" selected>Impact: Medium</option><option value="5">Impact: High</option>
-      </select>
-      <select name="reversibility" class="border rounded-md px-2 py-1.5 text-sm">
-        <option value="reversible">Reversible</option><option value="irreversible">Irreversible</option>
-      </select>
-      <input name="note" required placeholder="Decision (required)" class="border rounded-md px-2 py-1.5 text-sm md:col-span-4" />
-      <button class="tap-shrink md:col-span-4 bg-slate-900 text-white rounded-md py-1.5 text-sm font-medium">Log decision</button>
+    <form id="decForm" class="bg-white rounded-xl border border-slate-200 p-4 mb-6 space-y-3 max-w-xl">
+      <div class="grid grid-cols-2 gap-3">
+        <select name="domain" id="decDomain" class="border border-slate-300 rounded-md px-2 py-1.5 text-sm">
+          ${LEADOS.core.DOMAINS.map(d=>`<option value="${d}">${d}</option>`).join('')}
+        </select>
+        <select name="impact" class="border border-slate-300 rounded-md px-2 py-1.5 text-sm">
+          <option value="1">Impact: Low</option><option value="2">Impact: Medium</option><option value="3" selected>Impact: High</option>
+        </select>
+      </div>
+      <div class="flex gap-4 text-sm">
+        <label class="flex items-center gap-1.5"><input type="radio" name="reversibility" value="reversible" checked> Reversible</label>
+        <label class="flex items-center gap-1.5"><input type="radio" name="reversibility" value="irreversible"> Irreversible</label>
+      </div>
+      <div id="personWrap" class="hidden">
+        <input name="person" placeholder="Who (optional — adapted field, people domain only)" class="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm">
+      </div>
+      <textarea name="note" rows="2" placeholder="What did you decide?" class="w-full border border-slate-300 rounded-md px-2 py-1.5 text-sm"></textarea>
+      <button class="tap-shrink text-sm px-3 py-1.5 rounded-md bg-slate-900 text-white">Log decision</button>
+      <p class="text-[11px] text-slate-400">Quadrant thresholds (impact ≥ 3 = "high") are original/fabricated for this build, disclosed rather than presented as a verified upstream rule.</p>
     </form>
-    <div id="decList" class="space-y-2"></div>
-    <p class="text-xs text-slate-400 mt-4">Quadrant thresholds (impact ≥ 3 = "high") are original/fabricated for this build, disclosed here rather than presented as a verified upstream rule.</p>
-  `;
+    <div id="decList" class="space-y-2"></div>`;
+  const personWrap = document.getElementById('personWrap');
+  const syncPersonVisibility = () => personWrap.classList.toggle('hidden', document.getElementById('decDomain').value !== 'people');
+  document.getElementById('decDomain').onchange = syncPersonVisibility;
+  syncPersonVisibility();
+
   document.getElementById('decForm').onsubmit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const note = fd.get('note').trim();
-    if (!note) { LEADOS.sensory.fire('form.submit.error'); toast('Decision text is required', 'critical'); return; }
-    LEADOS.core.append({ type: 'decision.logged', domain: fd.get('domain'), impact: Number(fd.get('impact')), reversibility: fd.get('reversibility'), note });
-    LEADOS.sensory.fire('form.submit.success'); toast('Decision logged', 'success');
-    e.target.reset(); renderDecisions();
+    if (!note) { LEADOS.sensory.fire('form.submit.error'); toast('Decision text is required','critical'); return; }
+    const payload = { type:'decision.logged', domain:fd.get('domain'), impact:Number(fd.get('impact')), reversibility:fd.get('reversibility'), note };
+    const person = (fd.get('person')||'').trim();
+    if (fd.get('domain') === 'people' && person) payload.person = person;
+    LEADOS.core.append(payload);
+    LEADOS.sensory.fire('form.submit.success'); toast('Decision logged','success');
+    e.target.reset(); syncPersonVisibility(); renderDecisions();
   };
+
   const list = document.getElementById('decList');
   [...decisions].reverse().forEach(d => {
     const impactHigh = d.impact >= 3;
-    const quadrant = impactHigh && d.reversibility === 'reversible' ? 'Bold Bet'
-      : impactHigh ? 'Point of No Return'
-      : d.reversibility === 'reversible' ? 'Quick Call' : 'Caution';
-    const stale = (Date.now() - d.ts) > 21 * 86400000;
-    list.innerHTML += `
-      <div class="bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="text-[11px] font-medium px-2 py-0.5 rounded-full ${domainColor(d.domain)}">${d.domain}</span>
-            <span class="text-[11px] font-semibold text-slate-600">${quadrant}</span>
-            ${stale ? '<span class="text-[11px] text-amber-600 font-medium">· stale &gt;21d</span>' : ''}
-          </div>
-          <div class="text-sm text-slate-800 truncate">${d.note}</div>
-        </div>
-        <span class="text-xs text-slate-400 shrink-0">${fmtAge(d.ts)}</span>
-      </div>`;
+    const quadrant = impactHigh && d.reversibility==='reversible' ? 'Bold Bet' : impactHigh ? 'Point of No Return' : d.reversibility==='reversible' ? 'Quick Call' : 'Caution';
+    const stale = (Date.now()-d.ts) > 21*86400000;
+    const div = document.createElement('div');
+    div.className = 'bg-white rounded-lg border border-slate-200 p-3 text-sm';
+    div.innerHTML = `
+      <div class="flex items-center gap-2 text-xs mb-1">
+        <span class="uppercase text-slate-400">${d.domain}</span>
+        <span class="font-semibold text-slate-700">${quadrant}</span>
+        ${stale?'<span class="text-amber-600">· stale &gt;21d</span>':''}
+        ${d.person?`<span class="text-slate-400">· ${d.person}</span>`:''}
+      </div>
+      <div>${d.note}</div>
+      <div class="text-[11px] text-slate-400 mt-1">${fmtAge(d.ts)}</div>`;
+    list.appendChild(div);
   });
 }
 
 function renderCompare() {
-  const { findings } = LEADOS.core.project();
-  const pair = LEADOS.memory.session.getComparePair().map(k => findings.find(f => f.key === k)).filter(Boolean);
+  const { findings, effortByKey } = LEADOS.core.project();
+  const open = findings.filter(f => f.status === 'open');
+  const pair = LEADOS.memory.session.getComparePair().map(k => findings.find(f=>f.key===k)).filter(Boolean);
   const view = document.getElementById('view');
   if (pair.length < 2) {
-    view.innerHTML = `<div class="text-slate-400 text-sm italic py-10 text-center border border-dashed border-slate-300 rounded-xl">
-      Select two findings from <a href="#/today" class="underline">Today</a> ("+ Compare") to see a side-by-side diff.<br>
-      Currently holding: ${pair.length}/2.
+    view.innerHTML = `<div class="text-slate-500 text-sm bg-white border border-slate-200 rounded-xl p-6">
+      Select two findings from Today ("+ Compare") to see a leverage-based recommendation.<br>Currently holding: ${pair.length}/2.
     </div>`;
     return;
   }
-  const [a, b] = pair;
-  const row = (label, va, vb, diff) => `
-    <tr class="border-b border-slate-100">
-      <td class="py-2 pr-4 text-xs text-slate-400 uppercase tracking-wide">${label}</td>
-      <td class="py-2 pr-4 font-medium ${diff ? 'text-amber-700' : ''}">${va}</td>
-      <td class="py-2 font-medium ${diff ? 'text-amber-700' : ''}">${vb}</td>
-    </tr>`;
-  view.innerHTML = `
-    <div class="bg-white border border-slate-200 rounded-xl p-5">
-      <table class="w-full text-sm">
-        <thead><tr class="text-left"><th></th><th class="pb-2">${a.title}</th><th class="pb-2">${b.title}</th></tr></thead>
-        <tbody>
-          ${row('Domain', a.domain, b.domain, a.domain !== b.domain)}
-          ${row('Severity', sevLabel(a.severity), sevLabel(b.severity), a.severity !== b.severity)}
-          ${row('Age', fmtAge(a.createdTs), fmtAge(b.createdTs), true)}
-          ${row('Status', a.status, b.status, a.status !== b.status)}
-        </tbody>
+  const [a,b] = pair;
+  const effortBtns = (f) => [1,3,5].map(v => `<button data-effort="${v}" data-key="${f.key}" class="eff-btn tap-shrink text-[11px] px-2 py-1 rounded-md border ${((effortByKey[f.key]||3)===v)?'bg-slate-900 text-white border-slate-900':'border-slate-300 hover:bg-slate-50'}">${LEADOS.leverage.EFFORT_LABELS[v]}</button>`).join('');
+  const scoreA = LEADOS.leverage.score(a, open, effortByKey);
+  const scoreB = LEADOS.leverage.score(b, open, effortByKey);
+  const rec = LEADOS.leverage.recommend(scoreA, scoreB, a.title, b.title);
+
+  const card = (f, s) => `
+    <div class="bg-white rounded-xl border border-slate-200 p-4">
+      <div class="text-xs uppercase text-slate-400 mb-1">${f.domain}</div>
+      <div class="font-medium text-slate-800 mb-2">${f.title}</div>
+      <div class="text-xs text-slate-500 mb-2">Severity ${sevLabel(f.severity)} · ${fmtAge(f.createdTs)} · ${s.clusterSize} other open finding(s) in this domain</div>
+      <div class="text-xs font-semibold text-slate-600 mb-1">Effort required to address:</div>
+      <div class="flex gap-1 mb-3">${effortBtns(f)}</div>
+      <table class="w-full text-xs">
+        <tr class="text-slate-400"><td>Severity component</td><td class="text-right font-mono">${s.severityPart}</td></tr>
+        <tr class="text-slate-400"><td>Downstream cluster component</td><td class="text-right font-mono">${s.clusterPart}</td></tr>
+        <tr class="text-slate-400"><td>Time-overdue component</td><td class="text-right font-mono">${s.agePart}</td></tr>
+        <tr class="text-slate-500 border-t border-slate-100"><td>÷ effort (${LEADOS.leverage.EFFORT_LABELS[s.effort]})</td><td class="text-right font-mono">${s.effort}</td></tr>
+        <tr class="font-bold text-slate-800 border-t border-slate-200"><td>Leverage score</td><td class="text-right font-mono">${s.score}</td></tr>
       </table>
-      <button id="clearCompare" class="tap-shrink mt-4 text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50">Clear comparison</button>
+    </div>`;
+
+  view.innerHTML = `
+    <div class="mb-4 rounded-xl p-4 ${rec.tooClose?'disclosure':'bg-slate-900 text-white'}">
+      <div class="text-sm font-semibold">${rec.tooClose ? 'Too close to call' : 'Recommendation'}</div>
+      <div class="text-sm mt-1">${rec.text}</div>
     </div>
-    <p class="text-xs text-slate-400 mt-3">Note: the pasted spec for Compare Mode cut off mid-sentence ("When two findings are in compare mode:"). This diff table is this session's own disclosed fill-in, not a recovered spec.</p>
-  `;
+    <div class="grid md:grid-cols-2 gap-4">${card(a,scoreA)}${card(b,scoreB)}</div>
+    <div class="mt-4 flex items-center justify-between">
+      <button id="clearCompare" class="tap-shrink text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50">Clear comparison</button>
+      <p class="text-[11px] text-slate-400 max-w-md text-right">Leverage formula (severity + downstream cluster size + log-scaled age, divided by effort) is an original, disclosed fill-in — the brief describes the <em>goal</em> ("not severity alone") but not an executable formula.</p>
+    </div>`;
+
+  view.querySelectorAll('.eff-btn').forEach(btn => {
+    btn.onclick = () => {
+      LEADOS.core.append({ type:'finding.effort_logged', key:btn.dataset.key, effort:Number(btn.dataset.effort) });
+      renderCompare();
+    };
+  });
   document.getElementById('clearCompare').onclick = () => { LEADOS.memory.session.set(LEADOS.memory.session.KEYS.COMPARE, []); renderCompare(); };
+}
+
+function renderMemory() {
+  const view = document.getElementById('view');
+  view.innerHTML = `
+    <div class="disclosure rounded-xl p-3 text-xs mb-4">
+      <strong>Adapted, not verbatim:</strong> the pasted Long-Term Memory spec assumed a people-roster +
+      goals-engine data model (<code>P.peopleById</code>, <code>LEADOS.engine.run</code>, playbooks) that
+      doesn't exist here or in anything verified upstream. This view keeps the spec's shape — episodic
+      recall with context, plus semantic domain/temporal/resolution/theme patterns — computed against this
+      build's real event log instead.
+    </div>
+    <div class="grid md:grid-cols-3 gap-3 mb-5" id="filterBar">
+      <select id="fType" class="border border-slate-300 rounded-md px-2 py-1.5 text-sm">
+        <option value="">Any event type</option>
+        <option value="finding.created">finding.created</option>
+        <option value="finding.resolved">finding.resolved</option>
+        <option value="finding.dismissed">finding.dismissed</option>
+        <option value="finding.snoozed">finding.snoozed</option>
+        <option value="finding.effort_logged">finding.effort_logged</option>
+        <option value="decision.logged">decision.logged</option>
+      </select>
+      <select id="fDomain" class="border border-slate-300 rounded-md px-2 py-1.5 text-sm">
+        <option value="">Any domain</option>
+        ${LEADOS.core.DOMAINS.map(d=>`<option value="${d}">${d}</option>`).join('')}
+      </select>
+      <input id="fKeyword" placeholder="Keyword search" class="border border-slate-300 rounded-md px-2 py-1.5 text-sm">
+    </div>
+    <div class="grid lg:grid-cols-2 gap-6">
+      <div>
+        <h3 class="font-semibold text-sm mb-2 text-slate-700">Episodic recall — "I remember when..."</h3>
+        <div id="episodeList" class="space-y-2"></div>
+      </div>
+      <div>
+        <h3 class="font-semibold text-sm mb-2 text-slate-700">Semantic recall — "I know that..."</h3>
+        <div id="semanticPanel" class="space-y-4"></div>
+      </div>
+    </div>`;
+
+  const renderEpisodes = () => {
+    const query = {
+      type: document.getElementById('fType').value || undefined,
+      domain: document.getElementById('fDomain').value || undefined,
+      keywords: document.getElementById('fKeyword').value.trim() ? [document.getElementById('fKeyword').value.trim()] : undefined,
+    };
+    const episodes = LEADOS.memory.longTerm.recallEpisodes(query, 12);
+    const list = document.getElementById('episodeList');
+    if (!episodes.length) { list.innerHTML = `<div class="text-sm text-slate-400 italic">No matching events.</div>`; return; }
+    list.innerHTML = episodes.map(ep => `
+      <div class="bg-white rounded-lg border border-slate-200 p-3 text-sm">
+        <div class="flex items-center gap-2 text-xs text-slate-400 mb-1">
+          <span class="font-mono">${ep.event.type}</span>
+          ${ep.domain?`<span class="uppercase">${ep.domain}</span>`:''}
+          <span>${fmtAge(ep.event.ts)}</span>
+        </div>
+        <div class="text-slate-800">${ep.event.title || ep.event.note || ep.event.key || '(no label)'}</div>
+        <div class="text-[11px] text-slate-500 mt-1.5">At that time: ${ep.context.openFindingsCount} open finding(s)${ep.context.topFinding ? `, top: "${ep.context.topFinding.title}"` : ''}; ${ep.context.decisionsLoggedSoFar} decision(s) logged so far.</div>
+        ${ep.concurrent.length ? `<div class="text-[11px] text-slate-400 mt-1">Concurrent (±3d): ${ep.concurrent.map(c=>c.type).join(', ')}</div>` : ''}
+      </div>`).join('');
+  };
+
+  const renderSemantic = () => {
+    const p = LEADOS.memory.longTerm.recallSemanticPatterns();
+    const panel = document.getElementById('semanticPanel');
+    panel.innerHTML = `
+      <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <div class="text-xs font-semibold text-slate-600 mb-2">Domain activity</div>
+        ${p.domainActivity.map(d => `
+          <div class="flex items-center gap-2 text-xs mb-1">
+            <div class="w-16 text-slate-500">${d.domain}</div>
+            <div class="flex-1 bg-slate-100 rounded h-2"><div class="bar bg-slate-700 h-2 rounded" style="width:${d.pct}%"></div></div>
+            <div class="w-14 text-right text-slate-400">${d.count} (${d.pct}%)</div>
+          </div>`).join('')}
+      </div>
+      <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <div class="text-xs font-semibold text-slate-600 mb-1">Temporal pattern</div>
+        <div class="text-xs text-slate-500">Peak logging hour: <span class="font-mono">${p.temporalPatterns.peakHour}:00</span> (${p.temporalPatterns.peakPct}% of events).
+        <span class="text-slate-400">Seed timestamps are synthetic, so this is illustrative only, not a real behavioral signal yet.</span></div>
+      </div>
+      <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <div class="text-xs font-semibold text-slate-600 mb-2">Resolution rates by domain (adapted)</div>
+        <table class="w-full text-xs">
+          <tr class="text-slate-400"><th class="text-left font-normal">Domain</th><th class="text-right font-normal">Resolved</th><th class="text-right font-normal">Open</th><th class="text-right font-normal">Rate</th></tr>
+          ${p.resolutionRates.filter(r=>r.total).map(r => `<tr><td>${r.domain}</td><td class="text-right">${r.resolved}</td><td class="text-right">${r.open}</td><td class="text-right">${r.resolutionRatePct}%</td></tr>`).join('')}
+        </table>
+      </div>
+      <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <div class="text-xs font-semibold text-slate-600 mb-2">Recurring themes (keyword frequency, adapted)</div>
+        <div class="flex flex-wrap gap-1.5">${p.recurringThemes.map(t=>`<span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${t.word} ×${t.count}</span>`).join('') || '<span class="text-xs text-slate-400 italic">not enough text yet</span>'}</div>
+      </div>
+      <div class="bg-white rounded-lg border border-slate-200 p-3">
+        <div class="text-xs font-semibold text-slate-600 mb-2">Most-mentioned people (adapted — free-text tag, no roster)</div>
+        ${p.subjectFrequency.length ? p.subjectFrequency.map(s=>`<div class="text-xs text-slate-600 flex justify-between"><span>${s.person}</span><span class="text-slate-400">${s.count} mention(s)</span></div>`).join('') : '<span class="text-xs text-slate-400 italic">no tagged people yet</span>'}
+      </div>`;
+  };
+
+  ['fType','fDomain','fKeyword'].forEach(id => document.getElementById(id).addEventListener('input', renderEpisodes));
+  renderEpisodes(); renderSemantic();
 }
 
 function renderSensory() {
@@ -593,115 +805,87 @@ function renderSensory() {
   const h = LEADOS.haptics, a = LEADOS.audio;
   const playedAudio = a._sessionPlayed();
   view.innerHTML = `
-    <div class="grid md:grid-cols-2 gap-5">
-      <div class="bg-white border border-slate-200 rounded-xl p-5">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold">Haptics</h3>
-          <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
-            <input id="hapticsToggle" type="checkbox" ${h._enabled ? 'checked' : ''} class="w-4 h-4">
-            enabled
-          </label>
-        </div>
-        <p class="text-xs text-slate-500 mb-3">Off by default. Secondary/confirmation channel only — never the sole carrier of information. One haptic event per 3s max (enforced).</p>
-        ${!navigator.vibrate ? '<p class="text-xs text-rose-500 mb-3">navigator.vibrate not supported in this browser — buttons below will no-op.</p>' : ''}
-        <div class="flex flex-wrap gap-2" id="hapticButtons"></div>
+    <div class="grid md:grid-cols-2 gap-4 mb-6">
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <label class="flex items-center gap-2 text-sm font-medium"><input type="checkbox" id="hapticsToggle" ${h._enabled?'checked':''}> Haptics enabled</label>
+        <p class="text-xs text-slate-500 mt-1">Off by default. Secondary/confirmation channel only. One haptic event per 3s max (enforced).</p>
+        ${!navigator.vibrate?'<p class="text-xs text-amber-600 mt-1">navigator.vibrate not supported in this browser — buttons below will no-op.</p>':''}
+        <div id="hapticButtons" class="flex flex-wrap gap-1.5 mt-3"></div>
       </div>
-      <div class="bg-white border border-slate-200 rounded-xl p-5">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="font-semibold">Audio</h3>
-          <label class="inline-flex items-center gap-2 text-sm cursor-pointer">
-            <input id="audioToggle" type="checkbox" ${a._enabled ? 'checked' : ''} class="w-4 h-4">
-            enabled
-          </label>
-        </div>
-        <p class="text-xs text-slate-500 mb-3">Pure Web Audio synthesis, no files. Restraint rule enforced live: max 3 distinct sounds/session. Used so far: <span class="font-mono">${playedAudio.length}/3</span> ${playedAudio.length ? '(' + playedAudio.join(', ') + ')' : ''}</p>
-        <div class="flex flex-wrap gap-2" id="audioButtons"></div>
+      <div class="bg-white rounded-xl border border-slate-200 p-4">
+        <label class="flex items-center gap-2 text-sm font-medium"><input type="checkbox" id="audioToggle" ${a._enabled?'checked':''}> Audio enabled</label>
+        <p class="text-xs text-slate-500 mt-1">Pure Web Audio synthesis, no files. Restraint: max 3 distinct sounds/session (enforced). Used so far: ${playedAudio.length}/3 ${playedAudio.length?'('+playedAudio.join(', ')+')':''}</p>
+        <div id="audioButtons" class="flex flex-wrap gap-1.5 mt-3"></div>
       </div>
     </div>
-    <div class="bg-white border border-slate-200 rounded-xl p-5 mt-5 text-sm text-slate-600 space-y-2">
-      <h3 class="font-semibold text-slate-800 mb-1">Governing principles (as specified)</h3>
-      <ul class="list-disc pl-5 space-y-1">
-        <li>Optionality — sound off by default, never on without consent.</li>
-        <li>Layering — sound reinforces visuals, never replaces them.</li>
-        <li>Restraint — ≤ 3 distinct sounds per session.</li>
-        <li>Pitch semantics — low = weight/alarm, mid = information, high = success/lightness.</li>
-        <li>Duration semantics — &lt;50ms micro, 50–200ms navigation, 200–500ms warning, &gt;500ms critical-only.</li>
-        <li>Cultural neutrality — pure tones/simple intervals, no melodic quotations.</li>
-      </ul>
-    </div>
-  `;
-  document.getElementById('hapticsToggle').onchange = (e) => { h.setEnabled(e.target.checked); };
-  document.getElementById('audioToggle').onchange = (e) => { a.setEnabled(e.target.checked); };
+    <div class="bg-white rounded-xl border border-slate-200 p-4 text-xs text-slate-500 leading-relaxed">
+      Governing principles: optionality (off by default), layering (never replaces visuals), restraint (≤3 sounds/session),
+      pitch semantics (low=alarm, mid=info, high=success), duration semantics, cultural neutrality (pure tones only).
+    </div>`;
+  document.getElementById('hapticsToggle').onchange = (e) => h.setEnabled(e.target.checked);
+  document.getElementById('audioToggle').onchange = (e) => a.setEnabled(e.target.checked);
   const hb = document.getElementById('hapticButtons');
-  Object.keys(h.PATTERNS).forEach(name => {
-    const btn = document.createElement('button');
-    btn.className = 'tap-shrink text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 font-mono';
-    btn.textContent = name;
-    btn.onclick = () => h.play(name);
-    hb.appendChild(btn);
-  });
+  Object.keys(h.PATTERNS).forEach(name => { const btn=document.createElement('button'); btn.className='tap-shrink text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 font-mono'; btn.textContent=name; btn.onclick=()=>h.play(name); hb.appendChild(btn); });
   const ab = document.getElementById('audioButtons');
-  ['SUCCESS','WARNING','CRITICAL','RESOLUTION','NAVIGATION','TYPING_FOCUS'].forEach(name => {
-    const btn = document.createElement('button');
-    btn.className = 'tap-shrink text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 font-mono';
-    btn.textContent = name;
-    btn.onclick = () => a.playSemantic(name);
-    ab.appendChild(btn);
-  });
+  ['SUCCESS','WARNING','CRITICAL','RESOLUTION','NAVIGATION','TYPING_FOCUS'].forEach(name => { const btn=document.createElement('button'); btn.className='tap-shrink text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50 font-mono'; btn.textContent=name; btn.onclick=()=>a.playSemantic(name); ab.appendChild(btn); });
 }
 
 function renderLog() {
   const { events } = LEADOS.core.project();
   const view = document.getElementById('view');
   view.innerHTML = `
-    <div class="flex gap-2 mb-4">
+    <div class="flex gap-2 mb-3">
       <button id="exportBtn" class="tap-shrink text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-50">Export JSON</button>
-      <button id="wipeBtn" class="tap-shrink text-xs px-3 py-1.5 rounded-md border border-rose-300 text-rose-700 hover:bg-rose-50">Wipe + reseed</button>
+      <button id="wipeBtn" class="tap-shrink text-xs px-3 py-1.5 rounded-md border border-rose-300 text-rose-600 hover:bg-rose-50">Wipe + reseed</button>
     </div>
-    <div class="bg-white border border-slate-200 rounded-xl p-4 max-h-[60vh] overflow-auto">
-      <pre class="text-xs text-slate-600 whitespace-pre-wrap">${JSON.stringify(events, null, 2)}</pre>
-    </div>`;
+    <pre class="bg-slate-900 text-emerald-300 text-[11px] rounded-xl p-4 overflow-auto max-h-[60vh]">${JSON.stringify(events,null,2)}</pre>`;
   document.getElementById('exportBtn').onclick = () => {
-    const blob = new Blob([JSON.stringify(events, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(events,null,2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a'); link.href = url; link.download = 'leados-events.json'; link.click();
+    const link = document.createElement('a'); link.href=url; link.download='leados-events.json'; link.click();
     URL.revokeObjectURL(url);
   };
-  document.getElementById('wipeBtn').onclick = () => {
-    LEADOS.core.wipe(); LEADOS.core.seedIfEmpty(); toast('Event log reset', 'info'); renderLog();
-  };
+  document.getElementById('wipeBtn').onclick = () => { LEADOS.core.wipe(); LEADOS.core.seedIfEmpty(); toast('Event log reset'); renderLog(); };
 }
 
 function renderAbout() {
   const view = document.getElementById('view');
   view.innerHTML = `
-  <div class="prose prose-sm max-w-none bg-white border border-slate-200 rounded-xl p-6 space-y-4">
-    <h2 class="text-lg font-bold">Provenance ledger — github.com/wbweve/Leados</h2>
-    <p class="text-slate-600">Checked directly this session via the GitHub REST API and raw.githubusercontent.com, not taken from prose alone.</p>
+    <h2 class="text-lg font-semibold mb-3">Provenance ledger — github.com/wbweve/Leados</h2>
+    <p class="text-sm text-slate-500 mb-4">Checked directly this session via the GitHub REST API and raw.githubusercontent.com, not taken from the repo's own prose.</p>
 
-    <h3 class="font-semibold text-slate-800">Verified directly, this session</h3>
-    <ul class="list-disc pl-5 text-slate-700 space-y-1">
-      <li>Repo is real/public: id <code>1413944295</code>, default branch <code>main</code>, language JavaScript, created 2026‑10‑11, last pushed 2026‑10‑17T12:03:16Z.</li>
-      <li>Root <code>index.html</code> on <code>main</code>, fetched raw, is a 14‑line Vite/React entry stub: a title, <code>&lt;div id="root"&gt;</code>, and <code>&lt;script type="module" src="/src/main.tsx"&gt;</code>. No inline vanilla JS, no DOMAINS/DECAY constants present to grep.</li>
-      <li>The repo's root git tree (recursive) contains dozens of flat <code>.tsx</code> files (e.g. <code>App.tsx</code>, <code>AboutView.tsx</code>, <code>HealthView.tsx</code>, <code>FinanceDashboard.tsx</code>…) plus <code>README.md</code>, <code>AI-SESSION-LOG.md</code>, <code>AI-SESSION-LOG.append.md</code>, <code>SESSION-3.patch.md</code> — confirming it is far more than "three files."</li>
-    </ul>
+    <div class="verified rounded-lg p-4 mb-3 text-sm">
+      <div class="font-semibold mb-1">Verified, directly, this session</div>
+      <ul class="list-disc ml-5 space-y-1">
+        <li>Repo is real, public: id <code>1413944295</code>, owner <code>wbweve</code>, default branch <code>main</code>, language JavaScript, created_at 2026-10-11T04:59:03Z, pushed_at 2026-10-17T12:29:04Z — fetched directly from <code>api.github.com/repos/wbweve/Leados</code> this session.</li>
+        <li>Root git tree (recursive fetch, truncated mid-listing) contains dozens of flat <code>.tsx</code> files (App.tsx, AboutView.tsx, HealthView.tsx, FinanceDashboard.tsx, Heatmap.tsx, …) plus README.md, AI-SESSION-LOG.md, AI-SESSION-LOG.append.md, SESSION-3.patch.md at the repo root — confirming "far more than three files," consistent with what a prior session's own log also found.</li>
+        <li>Two <em>independent</em> direct fetches of <code>main</code>'s <code>index.html</code> this session — one via raw.githubusercontent.com (text), one via the GitHub Contents API (base64 blob, reported size 37,575 bytes) — agree with each other: the file is currently a self-contained vanilla JS app titled "LeadOS — Sensory &amp; Memory Build," with a <code>LEADOS.core/.haptics/.audio/.memory.session</code> structure and routes today/domains/decisions/compare/sensory/log/about.</li>
+      </ul>
+    </div>
 
-    <h3 class="font-semibold text-slate-800">Contradicted / not reproducible this session</h3>
-    <ul class="list-disc pl-5 text-slate-700 space-y-1">
-      <li>The repo's own <code>AI-SESSION-LOG.md</code> claims (as "verified, this session") that <code>index.html</code> is 86,898 bytes with one inline <code>&lt;script&gt;</code> and grep‑confirmed constants (<code>DOMAINS</code>, <code>DECAY=0.85</code>, <code>CORRELATION_WINDOW_DAYS=90</code>, <code>DECISION_MAX_OPEN_DAYS=21</code>, storage keys). This session's direct fetch of <code>main</code> HEAD shows none of that content. Either the file changed after that log was written, or the claim was never true of <code>main</code> at any point this session can check — unverified either way.</li>
-      <li>Blob size of <code>README.md</code> per the Git Trees API is 7,954 bytes; an earlier markdown-rendered fetch of the same file in this session displayed content consistent with a larger, link-decorated render (~12.9k characters) — most likely a rendering artifact (anchors added by the GitHub HTML→Markdown conversion), not a real size contradiction, but called out rather than silently reconciled.</li>
-      <li>This session's own tooling truncated the recursive git-tree listing before it completed, so the upstream README's claim of a nested <code>src/components/</code>, <code>src/lib/</code> structure could not be confirmed <em>or</em> refuted — logged as unverified-due-to-truncation, not asserted either way.</li>
-      <li>A GitHub code-search query for "haptics" inside the repo returned a tool error, not a result. Whether anything resembling this session's Part 3 (sensory) / Part 4 (memory) specs already exists upstream is <strong>unverified</strong>.</li>
-    </ul>
+    <div class="contradicted rounded-lg p-4 mb-3 text-sm">
+      <div class="font-semibold mb-1">Contradicted this session</div>
+      <ul class="list-disc ml-5 space-y-1">
+        <li>The repo's own <code>README.md</code> (fetched both as GitHub's rendered markdown and as a raw file — identical text both ways) contains a "provenance note" claiming <code>main</code>'s <code>index.html</code> is a 14-line Vite/React entry stub with no inline logic. <strong>This session's own direct fetch of that same file, twice, by two different methods, shows otherwise</strong> — see "Verified" above. Either the file changed between that README being written and this session's fetch (plausible: pushed_at moved to 12:29:04Z, later than the 12:03:16Z an older log cites), or the README's claim was never accurate. Not resolved either way — disclosed, not silently reconciled.</li>
+        <li>A separate, older claim (inside the repo's own <code>AI-SESSION-LOG.md</code>) describes yet a <em>third</em> version of <code>index.html</code>: 86,898 bytes, with constants <code>DECAY=0.85</code>, <code>CORRELATION_WINDOW_DAYS=90</code>, <code>DECISION_MAX_OPEN_DAYS=21</code>. None of those constant names appear in the 37,575-byte version this session fetched. Three mutually-inconsistent descriptions of one file now exist across sessions; this build treats none of them as ground truth beyond what it fetched itself.</li>
+        <li>The repo simultaneously contains ~30 React/TSX component files <em>and</em> a self-sufficient vanilla <code>index.html</code> that claims to be "the whole app" — these two premises contradict each other; unverified which (if either) is the "real" deployed app.</li>
+      </ul>
+    </div>
 
-    <h3 class="font-semibold text-slate-800">What this build is</h3>
-    <ul class="list-disc pl-5 text-slate-700 space-y-1">
-      <li>An original, single-file vanilla HTML/CSS/JS app (Tailwind via CDN) — not a port of anything upstream, and not a React/Vite rebuild, because this session's own tooling requires a single static <code>index.html</code>.</li>
-      <li>The haptics (<code>LEADOS.haptics</code>) and audio (<code>LEADOS.audio</code>) modules reproduce the literal PART 3 specification pasted into this task, with two disclosed additions: a 3‑second haptic fatigue guard, and a session-scoped 3‑sound restraint cap — both turn documented "principles" into enforced behavior.</li>
-      <li><code>LEADOS.memory.session</code> reproduces the literal PART 4 key list and compare‑pair helpers. The Finding Comparison Mode's exact behavior was cut off mid-sentence in the pasted spec; the diff view in <strong>Compare</strong> is this session's own disclosed fill‑in.</li>
-      <li>All seed findings/decisions, domain heat formula, and decision-quadrant thresholds are original/fabricated for this build and are not claimed to be verified upstream content.</li>
-    </ul>
-  </div>`;
+    <div class="disclosure rounded-lg p-4 mb-3 text-sm">
+      <div class="font-semibold mb-1">Fabricated / adapted, disclosed at point of use (this build)</div>
+      <ul class="list-disc ml-5 space-y-1">
+        <li>All seed findings/decisions, the domain-heat formula, and decision-quadrant thresholds are original to this build.</li>
+        <li>The Long-Term Memory module's structure (episodic + semantic recall) follows the spirit of the pasted Part 5 spec, but every function under <code>LEADOS.memory.longTerm</code> was rewritten against this build's real, simple event schema (findings + decisions) because the spec's own data model — <code>P.state.events</code>, <code>P.peopleById</code>, <code>LEADOS.engine.run</code>, playbooks, OKRs — does not exist here or in anything this session could verify upstream.</li>
+        <li>The leverage-based Compare formula (severity + downstream cluster size + log-scaled age, divided by user-set effort) is an original fill-in. The brief states the <em>goal</em> ("not by severity alone — but by leverage, time required, and downstream impact") but — like the earlier Part 4 compare-mode spec — stops short of an executable formula.</li>
+        <li>"Subject frequency" (people mentions) is a free-text tag on decisions only, not a real people roster — this build has no person entities to track, unlike the spec's <code>P.peopleById</code>.</li>
+      </ul>
+    </div>
+
+    <div class="bg-white rounded-lg border border-slate-200 p-4 text-sm">
+      <div class="font-semibold mb-1">What this build is</div>
+      <p class="text-slate-600">An original, single-file vanilla HTML/CSS/JS app (Tailwind via CDN). It is not a byte-for-byte port of anything upstream — this session could not obtain a complete, unmangled copy of upstream's current <code>index.html</code> source within tool limits, only confirm its approximate size, title, and module shape twice independently. The haptics/audio/working-memory modules are built to match that verified shape and the literal Part 3/4 specs; the long-term memory and leverage-compare modules are new, adapted work for this part, clearly marked above.</p>
+    </div>`;
 }
 
 function syncSensoryTags() {
@@ -712,7 +896,6 @@ function syncSensoryTags() {
   qh.querySelector('span').textContent = h ? 'on' : 'off';
   qa.querySelector('span').textContent = a ? 'on' : 'off';
 }
-
 document.getElementById('quickHaptics').onclick = () => LEADOS.haptics.setEnabled(!LEADOS.haptics._enabled);
 document.getElementById('quickAudio').onclick = () => LEADOS.audio.setEnabled(!LEADOS.audio._enabled);
 
