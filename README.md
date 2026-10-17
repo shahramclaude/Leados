@@ -1,89 +1,117 @@
-# LEADOS — single-file sandbox rebuild
+# LEADOS — Compound Intelligence Engine (Part 2)
 
-A standalone `index.html` (vanilla HTML/CSS/JS + Tailwind via CDN, no build
-step, no network calls after load) implementing the functional ideas
-described in `github.com/wbweve/Leados`'s README: a toggleable Signal Board,
-an information-theory "Thermodynamics" panel, a small Complex Adaptive
-Systems (CAS) engine, an 8-category Risk Register, and — new in this
-delivery — a Leadership Scorecard (Resilience / Execution / Culture, star
-ratings).
+A single-file HTML/CSS/vanilla-JS demo implementing this task's pasted
+`LEADOS.compound` module: a function that detects "compound intelligence
+effects" when pairs of organizational maturity dimensions are both high,
+plus one "ultimate" effect when all twelve dimensions clear a lower bar.
 
-> **Provenance — read before assuming this ports or continues
-> `github.com/wbweve/Leados`:** that repo was inspected directly this
-> session (GitHub REST API file listings + raw-file fetches of `README.md`,
-> `AI-SESSION-LOG.md`, root `index.html` title, `package.json`, `src/App.tsx`,
-> and the `src/lib` directory listing). Full call-by-call ledger in
-> [`AI-SESSION-LOG.md`](./AI-SESSION-LOG.md) and in-app at **About /
-> Provenance**. Short version:
+> **Provenance — read before assuming this continues `github.com/wbweve/Leados`:**
+> That repo was inspected directly this session (GitHub REST/Contents API,
+> raw fetches of its root `index.html`, `README.md`, `package.json`, and its
+> own `AI-SESSION-LOG.md`). Full ledger in `AI-SESSION-LOG.md` and in-app at
+> **Provenance & Session Log**. Short version:
 >
-> - The real repo genuinely mixes **two deliveries**: ~30+ loose files at
->   root (mostly `.tsx`, plus several `.md` session logs and a root
->   `index.html`) and a separate, structured `src/` Vite+React+TypeScript
->   app. **[VERIFIED]**
-> - `src/App.tsx`, read in full, really does import and route to
->   `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`,
->   `RiskView`, `AboutView` — matching the current README's own page table.
->   **[VERIFIED]**
-> - `src/lib/casEngine.ts` exists (6,628 bytes). **[VERIFIED]** — this
->   directly **contradicts** the repo's own on-disk `AI-SESSION-LOG.md`,
->   which claims no CAS-engine file exists anywhere in `src/lib`. That log
->   is stale relative to the current tree. **[CONTRADICTION, DISCLOSED]**
-> - The actual line-by-line contents of `casEngine.ts`, `infoTheory.ts`,
->   `riskIntelligence.ts` were **not** read this session — only filenames
->   and byte sizes were confirmed. Whether they work as the README claims is
->   **[UNVERIFIED]** here.
-> - A web-search cache turned up a *different*, older-looking README (flat
->   14-file vanilla-JS project) than what's live on `raw.githubusercontent.com`
->   right now. Treated as **[UNVERIFIED / LIKELY STALE]**, not used as fact.
+> - **Verified directly, this session:** the real repo's root `index.html`
+>   (on `main`, right now) is a 7-line Vite dev shell (`<div id="root">` +
+>   `<script src="/src/main.tsx">`) — nothing more.
+> - **This contradicts** a claim inside that repo's *own* `AI-SESSION-LOG.md`
+>   (written by an earlier session), which describes that same file as a
+>   54,081-byte hand-authored vanilla-JS demo full of rule IDs and a
+>   `identifyAttractors()` function. That claim does not match what's on
+>   `main` now. Flagged, not resolved.
+> - **Not re-verified this session:** the same log's claims about a live
+>   `src/lib/infoTheory.ts`/`Thermodynamics.tsx` chain, orphaned
+>   `core.ts`/`intelligence.ts`/`physics.ts`, and the absence of any CAS/risk
+>   engine. Relayed as "reported, not re-checked," not as fact.
+> - **Not found anywhere actually fetched this session:** any file, export,
+>   or string matching this task's pasted `LEADOS.compound` spec. It is
+>   treated as an **unverified specification supplied by the task prompt**,
+>   implemented fresh here — not ported, forked, or copied from the repo.
 >
-> **This app does not fork, copy, or continue that repo's code.** It's a
-> fresh, original build satisfying the same *functional ideas*, built for
-> this tool environment, which only supports a single hand-authored
-> `index.html` (no Vite/React build pipeline) — disclosed explicitly rather
-> than implied away.
+> This sandbox began with no files at all (no prior `index.html`/`README.md`
+> existed here before this delivery), so nothing below claims continuity
+> with any other session's history or storage key.
 
 ## Run it
 
-Open `index.html` in any browser. No install, no build, no server. State
-persists in `localStorage` under `leados-vanilla:v1`.
+Open `index.html` in any browser. No build step, no dependencies beyond the
+Tailwind CDN script already in the `<head>`. Zero other network calls at
+runtime.
 
-## Pages (tab-based, no routing library)
+State (the 12 maturity-dimension slider values) lives in `localStorage`
+under `leados-compound:v1`. Use the **Reset to 3** preset to clear it back
+to a neutral profile.
 
-| Tab | What it does |
-|---|---|
-| Today | Overall risk score, active-finding count, entropy %, CAS loop/bifurcation counts, a Scorecard preview, scenario presets, and an in-browser self-test runner. |
-| Signals | The Signal Board: 30 synthetic rule IDs across 8 categories, each toggleable with severity, optional person link, and a "recur x3" control for the attractor detector; plus a runway (months) slider. |
-| Thermodynamics | Shannon entropy over a deterministic synthetic event log, a discretized mutual-information proxy between any two roster members, signal-to-noise ratio, and information bottlenecks (&lt;30% of mean activity). |
-| CAS | Feedback loops (same person, two linked risk categories active), bifurcation points (runway &lt; 6 months, or any category's cumulative severity ≥ 10), and attractors (a rule recurring ≥3 times). |
-| Risk | The 8-category Risk Register (always shows all 8, even at zero) and cross-category amplification flags. |
-| Scorecard | RESILIENCE / EXECUTION / CULTURE star ratings. Resilience and Execution are computed live from the CAS/Risk panels; Culture is a disclosed manual input (see "why" below). |
-| About / Provenance | The full verified-vs-unverified ledger from inspecting the real repo. |
+## What's in the app
 
-## Leadership Scorecard — how each score is produced
+| Area | What it does |
+|------|--------------|
+| **Compound Engine tab** | 12 sliders (0–5), one per maturity dimension, plus presets (`Max synergy`, `Mixed profile`, `Low maturity`, `Reset`). Runs `LEADOS.compound.identifyCompoundEffects()` on every change and renders each triggered effect as a card (name, paired dimensions, description, evidence, leverage), a running compound score, and the overall label string. |
+| **Provenance & Session Log tab** | The verified-vs-unverified-vs-contradicted breakdown from inspecting the real GitHub repo, in the app itself (not just this README). |
 
-- **RESILIENCE** = `5 − (active feedback loops + active bifurcations)`, clamped to 1–5. Computed live from the CAS engine.
-- **EXECUTION** = `5 − floor(EXECUTION-category cumulative severity / 5)`, clamped to 1–5. Computed live from the Risk Register.
-- **CULTURE** = a manual 1–5 slider, **not computed**. *Why:* the one disclosed gap I could directly verify in the real repo's current README is that "cultural bifurcation" depends on an undefined `scoreCulture()` that was never found anywhere. Inventing a culture-scoring formula here and presenting it as derived would misattribute provenance to that gap. A manual, clearly-labeled input was judged more honest than a fabricated metric.
-- The app's **default demo data** was hand-chosen (one Avery signal in PEOPLE + one in EXECUTION → exactly one feedback loop; EXECUTION severity totalling 7 → one star off; culture slider left at its own default of 3) so that, on first load, the live formulas reproduce exactly RESILIENCE ★★★★☆ (4), EXECUTION ★★★★☆ (4), CULTURE ★★★☆☆ (3) — the ratings supplied in this task's prompt — without hardcoding the star counts themselves.
+## What's original, what's ported, what's invented-for-completeness
 
-## What's original vs. modeled vs. a disclosed gap
+- **Ported as-given, functionally unchanged:** `LEADOS.compound` — same
+  effect names, thresholds (`>= 4` for pairs, `>= 3` for all twelve), same
+  descriptive copy, same `{ effects, compoundScore, label }` return shape,
+  taken directly from this task's pasted "Part 2" code block.
+- **Verified directly from that pasted code (not the repo):** the function
+  signature accepts `P` and `today` but never reads either — both are wired
+  through in the UI for signature fidelity only (a JSON textarea for `P`, a
+  date input for `today`), and this is called out in-app.
+- **Invented for completeness, clearly flagged:** two of the twelve
+  dimension keys — `OPERATIONAL_EXCELLENCE` and `GOVERNANCE_MATURITY`. The
+  pasted spec's five pairwise effects only name 10 distinct dimensions, but
+  its own `ORGANIZATIONAL_CONSCIOUSNESS` effect requires "all 12." The two
+  extra keys exist solely to make that check reachable in the demo; they are
+  marked with `*` and a tooltip in the UI and documented here so they are
+  never mistaken for part of the original spec.
+- **Original to this delivery:** all HTML/CSS/UI, the slider-based
+  maturity-profile input, presets, card rendering, color coding, the
+  Provenance tab content, and the `localStorage` persistence layer.
 
-- **Original, built from scratch (no verified source exists to copy):** the entire 30-rule catalog, the 8-category Risk Register logic, the CAS feedback-loop/bifurcation/attractor detectors, the Scorecard, the synthetic 5-person roster, the seeded deterministic event-log generator, and all UI.
-- **Modeled on the *functional idea*, not the code, of a verified real-repo pattern:** the Thermodynamics panel's metric set (Shannon entropy, mutual information, SNR, bottlenecks) mirrors what the real repo's README claims its `infoTheory.ts`/`Thermodynamics.tsx` pair computes — standard 1948 Shannon formulas, reimplemented independently; the real file's internals were never read this session.
-- **A gap, left as a gap:** no `scoreCulture()`-equivalent is computed. See Scorecard section above.
+## Project structure
+
+```
+index.html            — everything: markup, Tailwind (CDN), LEADOS.compound, app glue
+AI-SESSION-LOG.md      — full ledger of what was fetched/verified/contradicted this session
+README.md              — this file
+```
+
+Single-file by design (per this task's required stack: Tailwind CDN + inline
+`<script>`), unlike the real repo's React+Vite build — there is no build
+step here to reconcile, so the "open one file" property is literal, not the
+product of a bundler.
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` via GitHub's REST API and raw-file fetches before writing any code** — *why*: the task requires checking actual code/state, not trusting a README's self-description (which, per this inspection, is itself already internally inconsistent with the repo's own session log — see AI-SESSION-LOG.md §2, F5).
-- **Found and disclosed a real contradiction inside the target repo** (its on-disk `AI-SESSION-LOG.md` says no CAS engine file exists; `src/lib/casEngine.ts` actually exists, 6,628 bytes) — *why disclosed prominently*: a half-right/stale claim is more misleading than an obviously-wrong one, and the task explicitly asked for inspection over assumption.
-- **Flagged a web-search cache result as likely-stale rather than treating it as current fact** — *why*: it described a structurally different project (flat vanilla-JS "pt-3") than the live raw README fetched the same session; presenting both as equally true would hide a real discrepancy instead of surfacing it.
-- **Built as a single hand-authored `index.html` (vanilla JS), not a port of the real repo's React/Vite `src/` app** — *why*: this tool environment only supports a single-file delivery; claiming a build pipeline here would misstate the environment, the same reasoning the inspected repo's own README uses for its own environment constraints.
-- **Left CULTURE as a manual slider instead of computing it** — *why*: the only scoring-gap I could directly verify in the real repo's README text was the undefined `scoreCulture()`; computing a number under that name here would imply false provenance.
-- **Tuned default demo signals (not hardcoded stars) to reproduce RESILIENCE 4 / EXECUTION 4 / CULTURE 3 on first load** — *why*: makes the requested scorecard numbers an observable consequence of the app's own formulas, so they stay honest if the user edits any signal afterward, rather than being a static image of those exact numbers.
-- **Named the storage key `leados-vanilla:v1`** — *why*: distinct from any key used in the real repo's own `src/` app (unverified what key that app uses, since `store.ts` contents weren't read this session) or in prior pasted-brief lineages; avoids implying shared state continuity that doesn't exist.
-
-## Files in this delivery
-
-- `index.html` — the full app.
-- `README.md` — this file.
-- `AI-SESSION-LOG.md` — call-by-call ledger of what was fetched/verified from the real repo this session.
+- **Inspected `github.com/wbweve/Leados` first** — via GitHub's REST/Contents
+  API and raw fetches of its root `index.html`, `README.md`, `package.json`,
+  and `AI-SESSION-LOG.md`, before writing any code — *why*: the task
+  requires inspecting actual code, not trusting a README's self-framing.
+- **Found and disclosed a direct contradiction**: the repo's own prior
+  session log claims the root `index.html` is a 54KB hand-authored demo;
+  direct fetch shows it's a 7-line Vite shell — *why disclosed prominently*:
+  a repo whose own provenance chain already contradicts itself needs that
+  surfaced before anything else it says is used as a foundation.
+  "`src/`-internal" claims (info-theory chain, orphaned modules, no
+  CAS/risk engine) as explicitly second-hand — *why*: budget for this
+  session didn't include re-fetching `src/main.tsx`/`src/App.tsx`/`src/lib`;
+  rather than silently inheriting those claims as fact, they're labeled
+  by source.
+- **Treated the task's pasted `LEADOS.compound` block as an unverified
+  external spec, not repo fact** — *why*: no matching string/module was
+  found anywhere actually fetched this session.
+- **Built a single-file vanilla HTML/CSS/JS app instead of React+Vite** —
+  *why*: this task's required delivery format is one `index.html` using the
+  Tailwind CDN script; the real repo's own stack (React+Vite+Tailwind) is
+  not reproducible under that constraint, so the compound-logic spec was
+  ported into plain JS instead, preserving its behavior exactly.
+- **Added two invented dimension keys, clearly flagged with `*` in the UI
+  and in this README** — *why*: the pasted spec's "all 12 dimensions" check
+  is unreachable with only the 10 named dimensions; inventing two minimally,
+  and disclosing it, was preferred over silently hardcoding `12` as `10` or
+  hiding the discrepancy.
+- **New storage key `leados-compound:v1`** — *why*: this sandbox had no
+  prior files or state; claiming continuity with any other session's key
+  would misstate history that doesn't exist here.
