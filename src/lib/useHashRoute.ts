@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 
-export function useHashRoute(defaultRoute: string): [string, (r: string) => void] {
-  const read = () => (window.location.hash ? window.location.hash.slice(1) : defaultRoute);
-  const [route, setRoute] = useState(read);
+export function useHashRoute(defaultRoute = "/today"): [string, (route: string) => void] {
+  const [route, setRoute] = useState<string>(() => window.location.hash.replace(/^#/, "") || defaultRoute);
 
   useEffect(() => {
-    const onHashChange = () => setRoute(read());
+    const onHashChange = () => setRoute(window.location.hash.replace(/^#/, "") || defaultRoute);
     window.addEventListener("hashchange", onHashChange);
-    if (!window.location.hash) window.location.hash = defaultRoute;
     return () => window.removeEventListener("hashchange", onHashChange);
-  }, []);
+  }, [defaultRoute]);
 
-  const navigate = (r: string) => {
-    window.location.hash = r;
+  const navigate = (next: string) => {
+    window.location.hash = next;
   };
 
   return [route, navigate];

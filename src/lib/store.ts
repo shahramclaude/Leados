@@ -1,86 +1,91 @@
-// store.ts — localStorage persistence + state mutation helpers.
-// ORIGINAL to this session. Storage key 'leados-ptn:v1' is new: this
-// workspace began from the default Vite scaffold (verified this session —
-// see AI-SESSION-LOG.md) with no prior App.tsx beyond the placeholder, so no
-// earlier session's key is continued here.
+// localStorage-backed app state. New key for this workspace — there is no prior
+// session state in this sandbox to be compatible with (verified: this project
+// started from the default Vite/React/Tailwind scaffold, see AI-SESSION-LOG.md).
 
-import { AppState, AppEvent, Person, EventType, DEFAULT_SETTINGS, STORAGE_KEY, Settings } from './types';
+import type { AppState, FeedbackRecord, IncidentRecord, Severity, SignalBoard } from "./types";
+import { RULES } from "./rules";
 
-function uid(prefix: string): string {
-  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+export const STORAGE_KEY = "leados-sandbox:v2";
+
+function defaultSignalBoard(): SignalBoard {
+  const board: SignalBoard = {};
+  for (const r of RULES) {
+    board[r.id] = { active: false, severity: r.baseSeverity, recurrence: 0 };
+  }
+  return board;
 }
 
-export function emptyState(): AppState {
+export function defaultState(): AppState {
   return {
-    people: [],
-    events: [],
-    audit: [{ ts: new Date().toISOString(), action: 'session.started' }],
-    settings: { ...DEFAULT_SETTINGS },
-    dismissed: [],
-    sessionStartedAt: new Date().toISOString(),
+    signalBoard: defaultSignalBoard(),
+    runwayMonths: 12,
+    feedback: [],
+    incidents: [],
+    autonomousLog: [],
+    autonomousTick: 0,
+    onboarding: {
+      completed: false,
+      step: 0,
+      baseline: { teamSize: 12, managerSpan: 6, teamAgeMonths: 10, runwayMonths: 12 },
+    },
   };
 }
 
 export function loadState(): AppState {
+  if (typeof window === "undefined") return defaultState();
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return emptyState();
-    const parsed = JSON.parse(raw);
-    // defensive merge so older/missing fields never crash the app
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultState();
+    const parsed = JSON.parse(raw) as Partial<AppState>;
+    const base = defaultState();
+    // Shallow-merge so new fields introduced after a user already has state
+    // still get sane defaults instead of throwing.
     return {
-      people: parsed.people ?? [],
-      events: parsed.events ?? [],
-      audit: parsed.audit ?? [],
-      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
-      dismissed: parsed.dismissed ?? [],
-      sessionStartedAt: parsed.sessionStartedAt ?? new Date().toISOString(),
+      ...base,
+      ...parsed,
+      signalBoard: { ...base.signalBoard, ...(parsed.signalBoard ?? {}) },
+      onboarding: { ...base.onboarding, ...(parsed.onboarding ?? {}) },
     };
   } catch {
-    return emptyState();
+    return defaultState();
   }
 }
 
 export function saveState(state: AppState) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 export function resetState(): AppState {
-  localStorage.removeItem(STORAGE_KEY);
-  return emptyState();
+  const fresh = defaultState();
+  saveState(fresh);
+  return fresh;
 }
 
-export function addPerson(state: AppState, name: string, role: string, reportsTo: string | null): AppState {
-  const person: Person = { id: uid('p'), name, role, reportsTo: reportsTo || null };
-  const audit = [...state.audit, { ts: new Date().toISOString(), action: 'person.added', ref: name }];
-  return { ...state, people: [...state.people, person], audit };
+export function toggleRule(state: AppState, ruleId: string, severity?: Severity): AppState {
+  const current = state.signalBoard[ruleId];
+  if (!current) return state;
+  const nextActive = !current.active;
+  const next: SignalBoard = {
+    ...state.signalBoard,
+    [ruleId]: {
+      ...current,
+      active: nextActive,
+      severity: severity ?? current.severity,
+      recurrence: nextActive ? current.recurrence + 1 : current.recurrence,
+    },
+  };
+  return { ...state, signalBoard: next };
 }
 
-export function appendEvent(
-  state: AppState,
-  type: EventType,
-  data: Record<string, any>,
-  personId?: string
-): AppState {
-  const event: AppEvent = { id: uid('e'), ts: new Date().toISOString(), type, personId, data };
-  const audit = [...state.audit, { ts: event.ts, action: `event:${type}`, ref: event.id }];
-  return { ...state, events: [...state.events, event], audit };
+export function setRunway(state: AppState, months: number): AppState {
+  return { ...state, runwayMonths: months };
 }
 
-export function updateSettings(state: AppState, patch: Partial<Settings>): AppState {
-  const settings = { ...state.settings, ...patch };
-  const audit = [
-    ...state.audit,
-    { ts: new Date().toISOString(), action: 'settings.updated', ref: JSON.stringify(patch) },
-  ];
-  return { ...state, settings, audit };
+export function addFeedback(state: AppState, record: FeedbackRecord): AppState {
+  return { ...state, feedback: [...state.feedback, record] };
 }
 
-export function dismissFinding(state: AppState, key: string, mode: 'snooze' | 'dismiss'): AppState {
-  const dismissed = [...state.dismissed, { key, ts: new Date().toISOString(), mode }];
-  const audit = [...state.audit, { ts: new Date().toISOString(), action: `finding.${mode}`, ref: key }];
-  return { ...state, dismissed, audit };
-}
-
-export function markPlaybookCompleted(state: AppState, playId: string, personId?: string): AppState {
-  return appendEvent(state, 'playbook.completed', { playId }, personId);
+export function addIncident(state: AppState, record: IncidentRecord): AppState {
+  return { ...state, incidents: [...state.incidents, record] };
 }

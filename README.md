@@ -1,151 +1,188 @@
-# LeadOS pt-N — Self-Documenting, Self-Remembering, Self-Improving Sandbox
+# Leados Sandbox — Inference, Autonomous Monitoring & Leadership Science
 
-A React + Vite + Tailwind app implementing the four modules described in this
-task's pasted "pt-N — Final Unification Architecture" brief — a
-self-documenting system, an institutional memory system, a self-improving
-system, and adaptive onboarding — wired against a small, original leadership
-event-log engine.
+A React + Vite + Tailwind app implementing ten requested leadership-intelligence
+modules — inference, autonomous monitoring, leadership science, rule
+calibration, response protocols, decision trees, docs export, institutional
+memory, self-improvement, and onboarding — over one shared, toggleable
+**Signal Board** of 144 synthetic rule IDs across 8 categories.
 
-> **Provenance — read before assuming this continues `github.com/wbweve/Leados`
-> or any prior "pt-K"/"pt-L"/"pt-M" session:** `github.com/wbweve/Leados` was
-> inspected directly this session (GitHub's tree/contents REST API, the
-> repo's own `AI-SESSION-LOG.md`, and direct reads of `src/lib/genome.ts` and
-> `src/lib/memory.ts`) before writing any code. Full ledger in
-> `AI-SESSION-LOG.md` and in-app at **Provenance / About**. Short version:
+> **Provenance — read before assuming this continues any other session or repo:**
+> `github.com/wbweve/Leados` was fetched and read directly this session (its
+> README, via GitHub). It is a **different codebase**: a Thermodynamics / CAS
+> engine / Risk Register app, not the inference/autonomous/leadership-science
+> stack requested here. Its own README already documents that a prior
+> "58/62-file, 144-rule, T_L_*/G_L_* test suite" brief could **not** be
+> verified anywhere in that repo and was treated as an unverified external
+> spec, not fact.
 >
-> * The real repo is **two different deliveries in one place**: loose
->   root-level files (including a hand-authored single-file `index.html`
->   demo) plus a separate, live Vite+React+TypeScript app under `src/`.
-> * **Verified directly, this session:** `src/lib/genome.ts` and
->   `src/lib/memory.ts` exist, are small, and are *explicitly disclosed by
->   their own header comments* as original reinterpretations of an earlier
->   pasted brief's ideas — with call shapes (`identify(plans, directs)`,
->   `splitLayers(allEvents, sessionStartedAt)`) that do **not** match this
->   task's pt-N brief's imagined `LEADOS.genome.identify(P, today)` /
->   `LEADOS.memory.longTerm._computeDomainActivity(P)`.
-> * **Not found anywhere in the real repo, this session:** any file or
->   export named `docs.ts`, `institutionalMemory.ts`, `selfImprove.ts`,
->   `onboarding.ts`, `calibrateRules.ts`, or `knowledge.ts` — confirmed via a
->   direct listing of all 23 files in `src/lib`.
-> * Other facts about the repo (a live info-theory module, a broken
->   `intelligence.ts` import, no CAS engine or risk register) are **carried
->   forward from the repo's own prior session log**, read in full this
->   session, and are flagged as such rather than re-claimed as this
->   session's own byte-for-byte verification.
+> This workspace is a **separate, fresh sandbox**: it started from the default
+> Vite/React/Tailwind scaffold (verified by reading `src/App.tsx` before
+> writing any code — it was the placeholder "Ready to build" screen). There is
+> no `js/` directory, no prior rule catalog, and no prior file count in this
+> workspace's history.
 >
-> **This app does not fork, copy, or continue any of that history.** It is a
-> fresh build, in this task's own tool environment (React + Vite + Tailwind,
-> single `src/App.tsx` entry point, built with `npm run build`), implementing
-> only the *functional ideas* in the pasted pt-N brief — original code
-> throughout, against an original and much smaller data model.
+> The task prompt's closing line — *"Total files: 72. Total rules: 144. The
+> contract holds."* — describes a state this sandbox did not have. Per the
+> same standard the external repo applied to its own pasted briefs, that line
+> is treated here as an **unverified claim about a different session**, not as
+> a build spec to silently reproduce. What's independently true of **this**
+> delivery, and how to check it, is in `AI-SESSION-LOG.md` and in-app at
+> **About / Provenance**. Short version: **144 rules — true, and asserted by a
+> runtime self-test. 72 files — not reproduced; this delivery uses ~35 source
+> files**, because a Vite/TypeScript app wires features together as imported
+> modules, and padding to a specific file count with code nothing imports is
+> the exact "orphaned file" problem the external repo's own README flagged in
+> its `core.ts`/`intelligence.ts`.
 
 ## Run it
 
-`npm install && npm run build`, then open `dist/index.html`. `vite-plugin-singlefile`
-inlines all JS/CSS into that one HTML file (verified this session by grepping
-the build output — only inert XML/SVG namespace strings and a React-docs link
-baked into minified error text were found, zero runtime network calls), so
-the "open one file, zero network calls" property holds here too, produced by
-a build step rather than hand-authored.
+`npm install && npm run build`, then open `dist/index.html`. The Vite config
+(`vite-plugin-singlefile`, already present in this scaffold) inlines all JS/CSS
+into that one file — verified by grepping the build output for external URLs:
+none found beyond inert XML/SVG namespace strings and a baked-in React error
+docs link in minified error text. Zero runtime network calls.
 
 For development: `npm run dev`.
 
-State lives in `localStorage` under `leados-ptn:v1`. Use **Reset all data**
-on the Today tab to clear it, or **Load sample data** to populate a small
-synthetic roster + event log for exploring every tab immediately.
+State lives in `localStorage` under `leados-sandbox:v2`. Use **Reset synthetic
+data** (Today view) to clear it.
 
-## Tabs
+## Pages (hash routes)
 
-| Tab | What it does |
-|---|---|
-| **Today** | Onboarding banner (auto-detected stage + next action), quick-capture form for 9 event types, and the live findings list (explain / run playbook / snooze / dismiss per finding). |
-| **Roster** | Add people; prerequisite for every cadence/decision/crisis rule. |
-| **Docs (self-generated)** | **Part 1.** A user guide generated live from your own data (your event counts, your top finding, your most-logged event types, the installed rule catalog) plus a human-readable changelog derived directly from the audit trail. |
-| **Institutional Memory** | **Part 2.** Learnings extracted from `decision.outcome.lessons`, `crisis.postmortem.action_items`, and `reflection.logged.patterns`; a behavioral "genome" ratio heuristic; a quarterly learning timeline; and a successor-ready "transferable wisdom" filter that excludes personal-voice reflections. |
-| **Self-Improve** | **Part 3.** Proposals computed from your own usage: cadence-threshold recalibration (actual average 1:1 interval vs. configured setting), unlogged event-type coverage gaps, a crude playbook-effectiveness proxy, and domain-neglect detection. Every proposal requires an explicit "Approve & apply" click — nothing changes automatically. |
-| **Provenance / About** | The full verification ledger, in-app. |
+| Route                  | Module                        | What it does |
+| ----------------------| ------------------------------ | ------------ |
+| `#/today`              | —                               | Overview: active findings, active signal count, runway slider, self-test pass count, reset. |
+| `#/signals`            | —                               | The Signal Board: 144 rules across 8 categories, toggle + severity + person link + recurrence counter. |
+| `#/inference`          | `inference.ts`                  | Forward-chaining engine: active signals → one finding per category, plus a cross-category "overload + eroding trust" amplification. |
+| `#/autonomous`         | `autonomous.ts`                 | Starts/stops a client-side timer that re-runs inference every 5s and logs new/escalated findings per tick. |
+| `#/leadership-science` | `leadershipScience.ts`          | Tuckman-stage estimate, psychological-safety risk index, span-of-control table, Dunbar load tier — all disclosed as original heuristics named after public concepts, not validated instruments. |
+| `#/protocol`           | `protocol.ts`                   | Response playbook lookup by category + severity. |
+| `#/decision-trees`     | `decisionTrees.ts`              | Interactive yes/no decision tree per category, ending in a concrete recommendation. |
+| `#/memory`             | `institutionalMemory.ts`        | Persisted incident log + similarity matching against current findings. |
+| `#/self-improve`       | `selfImprove.ts`, `calibrateRules.ts` | Confirm/false-positive voting on triggered rules; calibration weight + recalibration suggestions. |
+| `#/docs`               | `docs.ts`                       | Exports the current session as Markdown or JSON, downloadable, no network call. |
+| `#/onboarding`         | `onboarding.ts`                 | 4-step baseline wizard (team size, manager span, team age, runway) feeding Leadership Science. |
+| `#/about`              | —                                | Full provenance ledger + a live, re-runnable self-test panel. |
 
-## The rule engine (original, disclosed-fabricated)
+## Module name mapping (requested `js/*.js` → actual files in this project)
 
-Five rules, each producing a `Finding { rule, title, sev, conf, score, sources, basis, play? }`
-with `score = sev × confidenceFactor`:
+This is a TypeScript/Vite project with a single `src/App.tsx` entry point, not
+a plain-script site, so the ten requested modules are implemented as
+`src/lib/*.ts` files — each one's file header states its requested `js/*.js`
+name explicitly, and each is actually `import`ed by a view component (verified
+by `npm run build` succeeding and by the self-test suite exercising each
+module's exported functions):
 
-- **R1** — Overdue 1:1 (`oneonone.logged` older than `settings.cadenceDays`)
-- **R2** — Overdue skip-level (`skip.logged` older than `settings.skipDays`) — **no playbook wired**, a disclosed gap mirroring the "no playbook" pattern the pt-N brief itself describes for its own R9
-- **R3** — Decision open past threshold (`decision.made` with no matching `decision.outcome`)
-- **R4** — Crisis without postmortem (`crisis.logged` with no matching `crisis.postmortem`)
-- **R5** — Goal without owner (`goal.set` with no `data.owner`)
-
-This is intentionally small. It exists only to give the four pt-N modules
-real data to generate documentation, memory, and proposals from — it is not
-a claim about the real repo's rule catalog (unverified — see provenance
-section) or a reproduction of the pt-N brief's own imagined "9+ rule"
-catalog.
+```
+js/inference.js             -> src/lib/inference.ts
+js/autonomous.js            -> src/lib/autonomous.ts
+js/leadership_science.js    -> src/lib/leadershipScience.ts
+js/calibrate_rules.js       -> src/lib/calibrateRules.ts
+js/protocol.js              -> src/lib/protocol.ts
+js/decision_trees.js        -> src/lib/decisionTrees.ts
+js/docs.js                  -> src/lib/docs.ts
+js/institutional_memory.js  -> src/lib/institutionalMemory.ts
+js/selfImprove.js           -> src/lib/selfImprove.ts
+js/onboarding.js            -> src/lib/onboarding.ts
+```
 
 ## Project structure
 
 ```
 src/
   lib/
-    types.ts               — shared types (Person, AppEvent, Finding, Settings, ...)
-    store.ts                — localStorage persistence + state mutations
-    seed.ts                   — synthetic roster + synthetic event log (demo data)
-    engine.ts                   — 5-rule findings engine (original, disclosed)
-    docs.ts                        — Part 1: self-documenting system
-    institutionalMemory.ts            — Part 2: institutional memory + genome heuristic
-    selfImprove.ts                       — Part 3: self-improvement proposals
-    onboarding.ts                           — Part 4: adaptive onboarding stage model
+    types.ts               — shared types (Category, Rule, Finding, AppState, ...)
+    rules.ts                — 144-rule catalog, 8 categories x 18 (original, deterministic generator + 6 anchor rules)
+    seed.ts                   — synthetic 12-person roster (seeded LCG, no Math.random)
+    store.ts                   — localStorage persistence + state mutations
+    AppContext.tsx               — React context wrapping store.ts for all views
+    inference.ts                  — Signal Board -> Finding[] forward-chaining engine
+    autonomous.ts                  — client-timer monitor loop over inference.ts
+    leadershipScience.ts             — Tuckman/psych-safety/span-of-control/Dunbar heuristics
+    calibrateRules.ts                 — feedback -> per-rule calibration weight (EMA)
+    protocol.ts                        — category+severity -> response playbook
+    decisionTrees.ts                    — yes/no decision trees per category
+    docs.ts                              — Markdown/JSON export + file download
+    institutionalMemory.ts                — incident log + similarity search
+    selfImprove.ts                         — feedback-loop summary over calibrateRules + memory
+    onboarding.ts                           — 4-step baseline wizard data/validation
+    selfTest.ts                              — original runtime self-tests (11 checks)
+    useHashRoute.ts                           — tiny hash router
   components/
-    Shell.tsx, ui.tsx                        — nav shell + shared UI primitives
-    OnboardingBanner.tsx, TodayView.tsx,
-    RosterView.tsx, DocsView.tsx,
-    MemoryView.tsx, ImproveView.tsx,
-    AboutView.tsx                              — per-tab views
-  App.tsx                                        — composition root (entry point)
+    Shell.tsx, ui.tsx                         — nav shell + shared UI primitives
+  views/
+    TodayView, SignalBoardView, InferenceView, AutonomousView,
+    LeadershipScienceView, ProtocolView, DecisionTreesView, MemoryView,
+    SelfImproveView, DocsView, OnboardingView, AboutView
+  App.tsx                                      — route composition (entry point)
 ```
+
+## What's verified, what's original, what's a disclosed approximation
+
+* **Verified this session, about the external repo:** `github.com/wbweve/Leados`'s
+  own README (fetched via `web_fetch`) states its info-theory layer is real
+  and wired in, its CAS/risk-register layer and a "pt-L" 58/62-file/144-rule
+  brief were not found anywhere in that repo, and six specific rule IDs
+  (R1/R4/R7/R17/R73/R88) were reused there only as scenario anchors inside an
+  otherwise original 50-rule catalog.
+* **Original to this delivery:** the entire 144-rule catalog and its 6 anchor
+  rules (`R1`/`R2` burnout-loop, `R19` velocity-death-spiral, `R37`
+  austerity-trap, `R55`/`R56` trust-collapse — renumbered from the external
+  repo's R1/R4/R7/R17/R73/R88 so the IDs fit this catalog's own deterministic
+  per-category numbering without collisions), all ten requested modules, the
+  roster/event generator, the self-test suite, and all UI.
+* **Modeled on public, named concepts but not a validated instrument:**
+  `leadershipScience.ts`'s Tuckman-stage/psychological-safety/span-of-control/
+  Dunbar functions. Disclosed in the file header and in-app.
+  "5-9 direct reports is healthy span of control" and "Dunbar layers at
+  ~5/15/50/150" are widely cited rules of thumb, not pinned to one verified
+  source here.
+* **A disclosed limitation, not a hidden one:** the "autonomous" monitor is a
+  browser `setInterval` loop that runs only while its page is mounted and the
+  tab is open — not a background/server process.
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` first** — via GitHub's tree/contents
-  REST API, the repo's own `AI-SESSION-LOG.md`, and direct raw-file reads of
-  `src/lib/genome.ts` and `src/lib/memory.ts` — before writing any code.
-  *Why:* the task requires inspecting actual code, not trusting the pasted
-  pt-N brief's own framing at face value.
-- **Declared the pasted "pt-N" brief an unverified specification, not repo
-  fact**, after confirming no file/export named `docs.ts`,
-  `institutionalMemory.ts`, `selfImprove.ts`, `onboarding.ts`,
-  `calibrateRules.ts`, or `knowledge.ts` exists in the real repo's `src/lib`,
-  and that the two filenames that do exist and sound related (`genome.ts`,
-  `memory.ts`) have different, smaller, explicitly-original signatures.
-  *Why:* half-right claims are more dangerous than fully-wrong ones; this
-  README and the in-app Provenance tab spell out exactly which parts are
-  verified, carried-forward, or original.
-- **Built a small original 5-rule engine instead of trying to reconstruct
-  the pt-N brief's implied 9+ rule catalog verbatim.** *Why:* the brief's
-  rule catalog was never defined anywhere in scope (not in the real repo, not
-  fully in the brief itself beyond R1/R3/R4/R5/R9 being referenced
-  implicitly) — inventing a large matching catalog would misattribute
-  invented work to an external spec.
-- **Left R2 (skip-level) without a playbook** — *why:* mirrors the brief's
-  own disclosed "no playbook for R9" pattern; resolving gaps by pointing at
-  real action (log the event) rather than fabricating a playbook just to
-  look complete.
-- **Modeled the "genome" behavioral heuristic on `src/lib/genome.ts`'s
-  verified ratio-and-confidence idea, but reimplemented independently with a
-  different signature** — *why:* the idea (ratio of two self-tagged
-  behaviors, gated by sample size) is simple enough to be worth reusing
-  conceptually; the real file's exact signature doesn't fit this app's event
-  schema, so copying it would create a false sense of continuity.
-- **Used a crude playbook-effectiveness proxy (current findings vs.
-  completions) instead of a true longitudinal resolution-rate** — *why:*
-  this build keeps no historical finding snapshots; claiming a resolution
-  *rate over time* without that history would be fabricated precision.
-- **Used a new storage key (`leados-ptn:v1`)** — *why:* this workspace began
-  from the default Vite scaffold with no prior app state; reusing another
-  session's key would assert a shared history that does not exist here.
-- **Built as a React+Vite+Tailwind app (this task's required stack) instead
-  of a hand-authored single HTML file** — *why:* this environment's entry
-  point is `src/App.tsx`. The build still inlines everything into one
-  `dist/index.html` with zero runtime network calls (verified by grepping
-  the build output), so the end-user property the brief cares about ("open
-  one file") holds anyway.
+* **Fetched and read `github.com/wbweve/Leados`'s README before writing any
+  code** — _why_: the task requires inspecting actual code/claims before
+  trusting them, and the prompt's "Total files: 72. Total rules: 144. The
+  contract holds." line reads exactly like the kind of pasted-brief claim that
+  repo's own README already teaches not to accept at face value.
+* **Confirmed this sandbox started from the default scaffold, with no `js/`
+  directory and no prior Leados state, before building anything** — _why_:
+  establishes the actual starting point so the delivery's changelog doesn't
+  imply false continuity with another session.
+* **Implemented all ten requested modules as real, imported `src/lib/*.ts`
+  files instead of inert `js/*.js` files** — _why_: this environment's entry
+  point is `src/App.tsx` in a TypeScript/Vite project; dropping plain `.js`
+  files next to it would leave them unimported dead code, the same failure
+  mode flagged in the external repo's own `core.ts`/`intelligence.ts`.
+* **Generated the 144-rule catalog deterministically from phrase banks (8
+  categories × 18 rules) instead of hand-writing 144 one-off strings or using
+  `Math.random()`** — _why_: keeps every rule inspectable and reproducible in
+  source, and makes the "144" claim independently checkable by a unit test
+  rather than asserted by comment.
+* **Caught and fixed a real calibration bug via direct execution, not
+  inspection alone**: an EMA-based calibration test (`CALIBRATE-001/002`)
+  initially failed because 3 "confirmed" votes only reached weight 0.829
+  against an 0.85 escalation threshold — fixed by using 4 votes in the test
+  (weight 0.880) rather than loosening the threshold, since 0.85 was the
+  deliberate "needs sustained confirmation" bar — _why disclosed_: this is the
+  concrete evidence that modules here were actually run (via `npx tsx`), not
+  just read for plausibility.
+* **Renumbered the six "anchor" rule IDs to `R1/R2/R19/R37/R55/R56`** instead
+  of reusing the external repo's `R1/R4/R7/R17/R73/R88` verbatim — _why_: this
+  catalog's ID space is sequential per-category (`CATEGORIES` order ×
+  `RULES_PER_CATEGORY=18`), so those exact numbers don't fall inside the
+  categories they'd need to anchor; reusing them as strings without fixing the
+  numbering would have produced ID collisions (caught by `RULES-003` before
+  shipping).
+* **Used a new `localStorage` key (`leados-sandbox:v2`)** — _why_: no prior
+  session's key exists in this workspace to be compatible with; `v2` (not
+  `v1`) leaves room to distinguish this schema (which adds onboarding,
+  feedback, incidents, autonomous log) from any earlier scaffold state without
+  a silent migration.
+* **Left out Thermodynamics/CAS/Risk-Register pages from the external repo**
+  — _why_: those belong to a different codebase (`github.com/wbweve/Leados`'s
+  own `src/`), not to this task's ten requested modules; including them here
+  would misstate which app they came from.
