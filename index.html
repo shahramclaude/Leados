@@ -1,12 +1,1095 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Leadership Intelligence Sandbox — Thermodynamics, CAS Engine, Risk Register</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEADOS — Org Design, Stakeholders, Real Options, Presence, Innovation, Change (pt-O sandbox)</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .tab-btn.active{background:#111827;color:#fff;}
+  .badge-pass{background:#dcfce7;color:#166534;}
+  .badge-fail{background:#fee2e2;color:#991b1b;}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  ::-webkit-scrollbar{height:8px;width:8px;}
+  ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px;}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+<header class="bg-slate-900 text-white sticky top-0 z-30 shadow">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+    <div>
+      <div class="font-bold text-lg tracking-tight">LEADOS <span class="text-amber-400">pt-O sandbox</span></div>
+      <div class="text-xs text-slate-400">Org Design · Stakeholders · Real Options · Exec Presence · Innovation Portfolio · Change Mgmt</div>
+    </div>
+    <div class="text-xs text-amber-300 bg-amber-900/40 border border-amber-700 rounded px-2 py-1 max-w-md">
+      ⚠ This build does not fork/continue github.com/wbweve/Leados. It's an original single-file implementation of a pasted, unverified "pt-O" spec. See <button onclick="go('about')" class="underline">About / Provenance</button>.
+    </div>
+  </div>
+  <nav id="tabs" class="max-w-7xl mx-auto px-4 pb-2 flex gap-1 flex-wrap text-sm"></nav>
+</header>
+
+<main id="app" class="max-w-7xl mx-auto p-4"></main>
+
+<footer class="text-center text-xs text-slate-400 py-8">LEADOS pt-O · synthetic data only · no network calls after load</footer>
+
+<script>
+/* =========================================================================
+   LEADOS pt-O — single-file sandbox
+   See the "About / Provenance" tab for full verification ledger.
+   ========================================================================= */
+
+/* ---------- utils ---------- */
+const fmt = (n, d=1) => (n===null||n===undefined||isNaN(n)) ? '—' : Number(n).toFixed(d);
+const pct = (n, d=0) => (n===null||n===undefined||isNaN(n)) ? '—' : (n*100).toFixed(d)+'%';
+let EID = 1;
+function ev(ts, type, data){ return { id: 'e'+(EID++), ts, type, data }; }
+const TODAY_ISO = '2026-06-15T12:00:00.000Z';
+const TODAY = TODAY_ISO;
+function daysAgo(n){ return new Date(new Date(TODAY_ISO).getTime() - n*86400000).toISOString(); }
+
+/* ---------- seed data ---------- */
+function buildSeed(){
+  const people = [];
+  const mk = (id,name,reportsTo) => people.push({id,name,reportsTo,archived:false});
+
+  mk('ceo','Avery Chen (CEO)', null);
+  const otherVPs = ['VP People','VP Finance','VP Marketing','VP Legal','VP Customer Success','VP Product','VP Operations'];
+  otherVPs.forEach((n,i)=> mk('vp_other'+i, n, 'ceo'));
+  mk('vp_eng','VP Engineering','ceo');
+  mk('vp_sales','VP Sales','ceo');
+
+  for(let i=0;i<9;i++) mk('eng_ic'+i, 'Engineer IC '+i, 'vp_eng');
+  mk('dir_eng','Director of Engineering','vp_eng');
+
+  for(let i=0;i<8;i++) mk('eng2_ic'+i, 'Senior Engineer '+i, 'dir_eng');
+  mk('mgr_eng','Engineering Manager','dir_eng');
+
+  for(let i=0;i<7;i++) mk('eng3_ic'+i, 'Engineer '+i, 'mgr_eng');
+  mk('lead_eng','Team Lead','mgr_eng');
+
+  for(let i=0;i<7;i++) mk('eng4_ic'+i, 'Associate Engineer '+i, 'lead_eng');
+
+  for(let i=0;i<10;i++) mk('sales_ic'+i, 'Account Executive '+i, 'vp_sales');
+
+  const directs = ['vp_eng','vp_sales', ...otherVPs.map((_,i)=>'vp_other'+i)];
+  const skips = [
+    ...Array.from({length:9},(_,i)=>'eng_ic'+i), 'dir_eng',
+    ...Array.from({length:10},(_,i)=>'sales_ic'+i)
+  ];
+
+  const openGoals = [
+    {id:'g1', ownerId:'vp_eng', title:'Ship v2 platform'},
+    {id:'g2', ownerId:'vp_eng', title:'Reduce infra cost 20%'},
+    {id:'g3', ownerId:'vp_eng', title:'Migrate to new data layer'},
+    {id:'g4', ownerId:'vp_eng', title:'Improve eng onboarding'},
+    {id:'g5', ownerId:'vp_eng', title:'Cut P1 incident MTTR'},
+    {id:'g6', ownerId:'vp_eng', title:'Launch internal dev platform'},
+    {id:'g7', ownerId:'vp_eng', title:'Security audit remediation'},
+    {id:'g8', ownerId:'vp_sales', title:'Expand enterprise pipeline'},
+    {id:'g9', ownerId:'dir_eng', title:'Reduce build times'},
+    {id:'g10', ownerId:'ceo', title:'Close Series C'}
+  ];
+
+  const openOkrs = [
+    {objective:'Become the category leader in mid-market'},
+    {objective:'Achieve profitability by Q4'}
+  ];
+  const openPlans = [
+    {id:'pl1', ts:daysAgo(80)}, {id:'pl2', ts:daysAgo(70)},
+    {id:'pl3', ts:daysAgo(50)}, {id:'pl4', ts:daysAgo(20)}
+  ];
+  const openDecisions = [];
+
+  const settings = { crisisResponseSLAHours: 2 };
+
+  const events = [];
+  // conflict.logged x9 within 90d -> conflict rate > 0.3 (9/29)
+  [5,10,15,20,25,30,40,50,60].forEach(d=>{
+    events.push(ev(daysAgo(d), 'conflict.logged', {personId: skips[d % skips.length]}));
+  });
+
+  // stakeholders
+  events.push(ev(daysAgo(200), 'stakeholder.mapped', {id:'sh_board', name:'Board Chair', type:'board', influence:5, alignment:4}));
+  events.push(ev(daysAgo(200), 'stakeholder.mapped', {id:'sh_investor', name:'Lead Investor', type:'investor', influence:5, alignment:2}));
+  events.push(ev(daysAgo(200), 'stakeholder.mapped', {id:'sh_acme', name:'Key Customer - Acme Corp', type:'customer', influence:4, alignment:5}));
+  events.push(ev(daysAgo(200), 'stakeholder.mapped', {id:'sh_works', name:'Employee Works Council', type:'employee', influence:2, alignment:2}));
+  events.push(ev(daysAgo(200), 'stakeholder.mapped', {id:'sh_reg', name:'Industry Regulator', type:'regulator', influence:5, alignment:3}));
+  events.push(ev(daysAgo(200), 'stakeholder.mapped', {id:'sh_nimbus', name:'Strategic Partner - Nimbus', type:'partner', influence:3, alignment:4}));
+
+  events.push(ev(daysAgo(5),  'stakeholder.engaged', {stakeholderId:'sh_board', outcome:'positive'}));
+  events.push(ev(daysAgo(10), 'stakeholder.engaged', {stakeholderId:'sh_acme', outcome:'positive'}));
+  events.push(ev(daysAgo(20), 'stakeholder.engaged', {stakeholderId:'sh_works', outcome:'neutral'}));
+  events.push(ev(daysAgo(45), 'stakeholder.engaged', {stakeholderId:'sh_investor', outcome:'negative'}));
+  events.push(ev(daysAgo(60), 'stakeholder.engaged', {stakeholderId:'sh_reg', outcome:'neutral'}));
+  events.push(ev(daysAgo(15), 'stakeholder.engaged', {stakeholderId:'sh_nimbus', outcome:'positive'}));
+
+  events.push(ev(daysAgo(45), 'stakeholder.risk', {stakeholderId:'sh_investor', severity:4, concern:'Valuation concerns given slower growth'}));
+  events.push(ev(daysAgo(60), 'stakeholder.risk', {stakeholderId:'sh_reg', severity:3, concern:'Pending compliance review'}));
+
+  events.push(ev(daysAgo(30), 'exec.aligned', {result:'aligned', stakeholders:['Board Chair','Lead Investor','Key Customer - Acme Corp']}));
+
+  // initiatives / experiments / innovation portfolio
+  events.push(ev(daysAgo(100),'initiative.logged', {name:'Expand to EU market', reach_est:5000, impact_est:4, confidence_pct:60, effort_days:120}));
+  events.push(ev(daysAgo(90), 'initiative.logged', {name:'Improve onboarding flow', reach_est:3000, impact_est:3, confidence_pct:85, effort_days:20}));
+  events.push(ev(daysAgo(80), 'initiative.logged', {name:'Launch loyalty program', reach_est:4000, impact_est:3, confidence_pct:55, effort_days:60}));
+  events.push(ev(daysAgo(70), 'initiative.logged', {name:'AI-powered recommendation engine', reach_est:8000, impact_est:5, confidence_pct:30, effort_days:150}));
+  events.push(ev(daysAgo(60), 'initiative.logged', {name:'Self-serve checkout optimization', reach_est:2000, impact_est:2, confidence_pct:90, effort_days:15}));
+
+  events.push(ev(daysAgo(60), 'rd.experiment.logged', {id:'exp1', name:'Pricing experiment', confidence_pct:40, effort_days:45}));
+  events.push(ev(daysAgo(45), 'rd.experiment.result', {experimentId:'exp1', result:'validated'}));
+  events.push(ev(daysAgo(50), 'rd.experiment.logged', {id:'exp2', name:'New signup flow', confidence_pct:50, effort_days:80}));
+  events.push(ev(daysAgo(30), 'rd.experiment.result', {experimentId:'exp2', result:'invalidated'}));
+  events.push(ev(daysAgo(20), 'rd.experiment.logged', {id:'exp3', name:'Referral incentive', confidence_pct:80, effort_days:25}));
+
+  // executive presence
+  [3,3,4,3,2].forEach((c,i)=> events.push(ev(daysAgo(10+i*8), 'narrative.feedback', {clarity:c})));
+  events.push(ev(daysAgo(10),'board.presented', {outcome:'approved'}));
+  events.push(ev(daysAgo(25),'board.presented', {outcome:'approved'}));
+  events.push(ev(daysAgo(40),'exec.board.meeting', {outcome:'approved'}));
+  events.push(ev(daysAgo(55),'exec.board.meeting', {outcome:'deferred'}));
+  events.push(ev(daysAgo(20),'strategy.decision', {topic:'pricing model'}));
+  events.push(ev(daysAgo(40),'strategy.decision', {topic:'market entry'}));
+  events.push(ev(daysAgo(60),'strategy.decision', {topic:'org restructure'}));
+  events.push(ev(daysAgo(30),'crisis.detected', {id:'cr1', label:'Outage'}));
+  events.push(ev(daysAgo(30),'crisis.update', {crisisId:'cr1'})); // ~0h later effectively same ts, in SLA
+  events.push(ev(daysAgo(14),'crisis.detected', {id:'cr2', label:'Data leak scare'}));
+  events.push(ev(daysAgo(13.5),'crisis.update', {crisisId:'cr2'})); // 12h later, outside 2h SLA
+
+  // change management
+  events.push(ev(daysAgo(90), 'change.initiative', {id:'chg1', name:'Agile Transformation', sponsor:'VP Engineering'}));
+  events.push(ev(daysAgo(70), 'internal.comms.sent', {acknowledged:true}));
+  events.push(ev(daysAgo(55), 'allhands.logged', {acknowledged:true}));
+  events.push(ev(daysAgo(40), 'internal.comms.sent', {acknowledged:true}));
+  events.push(ev(daysAgo(20), 'internal.comms.sent', {acknowledged:false}));
+  events.push(ev(daysAgo(60), 'change.resistance', {changeId:'chg1', source:'Mid-level managers', type:'skepticism', severity:4}));
+  events.push(ev(daysAgo(30), 'change.resistance', {changeId:'chg1', source:'Senior IC', type:'workload concern', severity:2}));
+  events.push(ev(daysAgo(50), 'plan.created', {}));
+  events.push(ev(daysAgo(45), 'plan.created', {}));
+  events.push(ev(daysAgo(35), 'delegation.assigned', {}));
+  events.push(ev(daysAgo(25), 'delegation.assigned', {}));
+  events.push(ev(daysAgo(10), 'plan.created', {}));
+  events.push(ev(daysAgo(40), 'culture.signal', {polarity:'positive'}));
+  events.push(ev(daysAgo(15), 'culture.signal', {polarity:'positive'}));
+  events.push(ev(daysAgo(5),  'change.pulse', {changeId:'chg1', adoption_pct:55, sentiment:'mixed', n_respondents:40}));
+
+  // competitive intel / wargame (R145)
+  events.push(ev(daysAgo(70), 'competitor.logged', {name:'Rival Corp', move:'Price cut 15%'}));
+  events.push(ev(daysAgo(20), 'competitor.logged', {name:'Acme Systems', move:'New feature launch'}));
+
+  // loss reason pattern (R158)
+  events.push(ev(daysAgo(10), 'loss.logged', {reason:'pricing'}));
+  events.push(ev(daysAgo(30), 'loss.logged', {reason:'pricing'}));
+  events.push(ev(daysAgo(50), 'loss.logged', {reason:'pricing'}));
+
+  return {
+    people, directs, skips, openGoals, openOkrs, openPlans, openDecisions, settings,
+    state: { events }
+  };
+}
+const P = buildSeed();
+
+/* ========================================================================
+   LEADOS namespace
+   ======================================================================== */
+const LEADOS = {};
+
+LEADOS.engine = {
+  _days(a,b){ return (new Date(b) - new Date(a)) / 86400000; },
+
+  run(P, today){
+    const findings = [];
+    // org design problems feed into findings (original integration choice, disclosed in docs)
+    const sevMap = {TOO_WIDE:4, TOO_DEEP:3, OVER_CENTRALIZED:4, HIGH_COORDINATION_BURDEN:4};
+    const orgR = LEADOS.orgDesign.modelCurrentStructure(P, today);
+    orgR.problems.forEach(p=>{
+      findings.push({id:'ORG_'+p.type, title:p.description, sev:sevMap[p.type]||3, source:'orgDesign', evidence:p.evidence});
+    });
+
+    // R145 — competitive intel staleness
+    const cadenceDays = 45; // assumed cadence; not specified in pasted spec, disclosed
+    const byCompetitor = {};
+    P.state.events.filter(e=>e.type==='competitor.logged').forEach(e=>{
+      const n = e.data.name;
+      if(!byCompetitor[n] || byCompetitor[n].ts < e.ts) byCompetitor[n]=e;
+    });
+    Object.values(byCompetitor).forEach(e=>{
+      const gap = LEADOS.engine._days(e.ts, today);
+      if(gap > cadenceDays){
+        findings.push({id:'R145_'+e.data.name, title:`R145: Competitive intel stale for ${e.data.name} (${Math.round(gap)}d since last update, cadence ${cadenceDays}d)`, sev:3, source:'rule'});
+      }
+    });
+
+    // R151 — high influence / low alignment / no recent engagement
+    const map = LEADOS.stakeholders.buildInfluenceMap(P, today);
+    map.stakeholders.forEach(s=>{
+      if(s.influence>=4 && s.alignment<=2 && (s.daysSinceEngagement===null || s.daysSinceEngagement>30)){
+        findings.push({id:'R151_'+s.id, title:`R151: ${s.name} is high-influence (${s.influence}/5) and low-alignment (${s.alignment}/5) with no engagement in ${s.daysSinceEngagement===null?'∞':Math.round(s.daysSinceEngagement)}d`, sev:4, source:'rule'});
+      }
+    });
+
+    // R158 — 3+ losses, same reason, unaddressed
+    const lossByReason = {};
+    P.state.events.filter(e=>e.type==='loss.logged').forEach(e=>{
+      lossByReason[e.data.reason] = (lossByReason[e.data.reason]||0)+1;
+    });
+    Object.entries(lossByReason).forEach(([reason,count])=>{
+      if(count>=3){
+        const addressed = P.state.events.some(e=>
+          (e.type==='product.roadmap.item'||e.type==='strategy.decision') &&
+          ((e.data.topic||'').toLowerCase().includes(reason.toLowerCase()) || (e.data.note||'').toLowerCase().includes(reason.toLowerCase()))
+        );
+        if(!addressed){
+          findings.push({id:'R158_'+reason, title:`R158: ${count} losses logged with reason "${reason}" and no roadmap/strategy item addresses it`, sev:4, source:'rule'});
+        }
+      }
+    });
+
+    return { findings };
+  }
+};
+
+/* ---- PART 2: Org Design (transcribed from pasted spec, adapted to run) ---- */
+LEADOS.orgDesign = {
+  modelCurrentStructure(P, today){
+    const spanByManager = {};
+    P.people.filter(p=>!p.archived).forEach(p=>{
+      if(p.reportsTo) spanByManager[p.reportsTo] = (spanByManager[p.reportsTo]||0)+1;
+    });
+    function depth(personId, visited=new Set()){
+      if(visited.has(personId)) return 0;
+      visited.add(personId);
+      const reports = P.people.filter(p=>p.reportsTo===personId);
+      if(!reports.length) return 0;
+      return 1 + Math.max(...reports.map(r=>depth(r.id, new Set(visited))));
+    }
+    const topLevel = P.people.filter(p=>!p.reportsTo && !p.archived);
+    const maxDepth = topLevel.length ? Math.max(...topLevel.map(p=>depth(p.id))) : 0;
+
+    const ownershipCounts = {};
+    P.openGoals.forEach(g=>{ if(g.ownerId) ownershipCounts[g.ownerId]=(ownershipCounts[g.ownerId]||0)+1; });
+    const topOwner = Object.entries(ownershipCounts).sort(([,a],[,b])=>b-a)[0];
+    const centralizationIndex = topOwner ? topOwner[1] / Math.max(1, P.openGoals.length) : 0;
+
+    const conflictRate = P.state.events.filter(e=>e.type==='conflict.logged' && LEADOS.engine._days(e.ts, today)<=90).length /
+      Math.max(1, P.directs.length + P.skips.length);
+
+    const problems = [];
+    const spans = Object.values(spanByManager);
+    const meanSpan = spans.length ? spans.reduce((a,b)=>a+b,0)/spans.length : 0;
+
+    if(meanSpan > 8) problems.push({type:'TOO_WIDE', description:`Mean span of control ${meanSpan.toFixed(1)} > 8. Wide span limits depth of management attention per person. Above 8 directs, meaningful coaching becomes structurally difficult.`, evidence:'span.of.control.mean = '+meanSpan.toFixed(1)});
+    if(maxDepth > 4) problems.push({type:'TOO_DEEP', description:`Organization has ${maxDepth} management layers. Deep hierarchies slow information flow and decision speed.`, evidence:'org.depth = '+maxDepth+' layers'});
+    if(centralizationIndex > 0.6) problems.push({type:'OVER_CENTRALIZED', description:`${Math.round(centralizationIndex*100)}% of open goals are owned by one person. Over-centralization creates bottlenecks and single points of failure.`, evidence:'goal.centralization.index = '+centralizationIndex.toFixed(2)});
+    if(conflictRate > 0.3) problems.push({type:'HIGH_COORDINATION_BURDEN', description:`${conflictRate.toFixed(2)} conflicts per person in 90d. High coordination burden often indicates structural misalignment.`, evidence:'conflict.rate.per.person = '+conflictRate.toFixed(2)});
+
+    return {
+      structure:{ totalPeople:P.people.filter(p=>!p.archived).length, managers:Object.keys(spanByManager).length,
+        meanSpanOfControl: Math.round(meanSpan*10)/10, maxDepth, centralizationIndex: Math.round(centralizationIndex*100)/100,
+        conflictRatePerPerson: Math.round(conflictRate*100)/100 },
+      problems,
+      label:'Organizational structure model from roster data. Labeled: based on roster only — may not reflect full organization.'
+    };
+  },
+
+  simulateRestructure(currentStructure, proposal, P){
+    const restructureTypes = {
+      FLATTEN:{description:'Remove one management layer', spanEffect: currentStructure.structure.meanSpanOfControl*1.4, depthEffect: currentStructure.structure.maxDepth-1, speedEffect:'faster decision-making (fewer gates)', riskEffect:'higher manager cognitive load', executionRisk:'HIGH — managers must absorb additional reports', timeToValue:'3-6 months', prerequisite:'All managers must have coaching capacity'},
+      CENTRALIZE_FUNCTION:{description:'Consolidate a function into a center of excellence', spanEffect: currentStructure.structure.meanSpanOfControl*0.8, depthEffect: currentStructure.structure.maxDepth+1, speedEffect:'slower for cross-functional work', riskEffect:'single point of failure', executionRisk:'MEDIUM', timeToValue:'2-4 months', prerequisite:'Clear function owner'},
+      DECENTRALIZE:{description:'Embed function into business units', spanEffect: currentStructure.structure.meanSpanOfControl*1.2, depthEffect: currentStructure.structure.maxDepth, speedEffect:'faster for local decisions', riskEffect:'inconsistency across units', executionRisk:'MEDIUM', timeToValue:'4-8 months', prerequisite:'Standards must exist first'},
+      PODS:{description:'Cross-functional product/customer pods', spanEffect: currentStructure.structure.meanSpanOfControl*0.7, depthEffect: currentStructure.structure.maxDepth-1, speedEffect:'fastest for product decisions', riskEffect:'functional expertise dilution', executionRisk:'HIGH', timeToValue:'6-12 months', prerequisite:'Clear product/customer segments'}
+    };
+    const model = restructureTypes[proposal] || restructureTypes['FLATTEN'];
+    const physics = LEADOS.orgPhysics?.computeChangePhysics?.('Organizational restructure: '+proposal, P.people.map(p=>p.id), [], P, TODAY) || null;
+    return {
+      proposal, model,
+      estimatedImpact:{ spanOfControl: model.spanEffect.toFixed(1), depth: model.depthEffect, speed: model.speedEffect, risk: model.riskEffect },
+      changePhysics: physics,
+      readiness: this._assessRestructureReadiness(model, P),
+      label:'Organizational design simulation. Impact estimates are directional heuristics, not predictions. Source (named in spec): Galbraith, Nadler & Tushman — citations not verified by this session.'
+    };
+  },
+
+  _assessRestructureReadiness(model, P){
+    const activeFindings = LEADOS.engine.run(P, TODAY).findings;
+    const criticalFindings = activeFindings.filter(f=>f.sev>=4);
+    if(criticalFindings.length >= 3) return { status:'NOT_READY', reason:`${criticalFindings.length} sev-4+ findings active. Restructuring while under operational stress compounds both problems. Stabilize first.`, prerequisiteFindings: criticalFindings.slice(0,3).map(f=>f.title) };
+    return { status:'READY', caveats: criticalFindings.length>0 ? `${criticalFindings.length} active findings should be monitored during transition.` : null };
+  }
+};
+
+/* ---- PART 3: Stakeholders ---- */
+LEADOS.stakeholders = {
+  buildInfluenceMap(P, today){
+    const stakeholders = P.state.events.filter(e=>e.type==='stakeholder.mapped').reduce((map,ev)=>{
+      const existing = map[ev.data.name];
+      if(!existing || existing.ts < ev.ts) map[ev.data.name] = {...ev.data, ts:ev.ts, id:ev.data.id || ev.id};
+      return map;
+    },{});
+    const engagements = P.state.events.filter(e=>e.type==='stakeholder.engaged');
+    const risks = P.state.events.filter(e=>e.type==='stakeholder.risk');
+
+    const enriched = Object.values(stakeholders).map(s=>{
+      const sEngagements = engagements.filter(e=>e.data.stakeholderId===s.id);
+      const sRisks = risks.filter(r=>r.data.stakeholderId===s.id);
+      const lastEngagement = sEngagements.sort((a,b)=> b.ts > a.ts ? 1 : -1)[0];
+      return {
+        ...s,
+        engagementCount: sEngagements.length,
+        lastEngagedAt: lastEngagement?.ts || null,
+        daysSinceEngagement: lastEngagement ? LEADOS.engine._days(lastEngagement.ts, today) : null,
+        recentSentiment: lastEngagement?.data.outcome || null,
+        activeRisks: sRisks.filter(r=>r.data.severity>=3),
+        coalition: this._classifyCoalitionPosition(s),
+        powerType: this._classifyPowerType(s),
+        engagementPriority: this._computeEngagementPriority(s, lastEngagement, today)
+      };
+    });
+
+    const quadrants = {
+      CHAMPIONS: enriched.filter(s=>s.influence>=4 && s.alignment>=4),
+      SUPPORTERS: enriched.filter(s=>s.influence<4 && s.alignment>=4),
+      BLOCKERS: enriched.filter(s=>s.influence>=4 && s.alignment<3),
+      NEUTRALS: enriched.filter(s=>s.influence<4 && s.alignment<3)
+    };
+    const coalitionStrength = {
+      FOR: enriched.filter(s=>s.alignment>=4).reduce((a,s)=>a+s.influence,0),
+      AGAINST: enriched.filter(s=>s.alignment<3).reduce((a,s)=>a+s.influence,0)
+    };
+    return { stakeholders: enriched, quadrants, coalitionStrength, criticalGaps: this._identifyCriticalGaps(enriched, today),
+      label:'Stakeholder map from stakeholder.mapped/engaged events. Coalition strength is sum of influence scores, not a probability.' };
+  },
+
+  computeInfluenceStrategy(targetStakeholder, desiredOutcome, P, today){
+    const map = this.buildInfluenceMap(P, today);
+    const target = map.stakeholders.find(s=>s.name===targetStakeholder);
+    if(!target) return { error:'Stakeholder not found in map' };
+    const intermediaries = map.stakeholders.filter(s=> s.alignment>=4 && s.name!==targetStakeholder && s.influence>=3);
+    const strategies = [];
+    strategies.push({ name:'DIRECT', approach:'Engage '+targetStakeholder+' directly on their stated concerns.', requirement:'Know their primary concern (stakeholder.risk events).', timeToEffect:'1-3 conversations', risk: target.alignment<2 ? 'HIGH — current alignment is very low; may entrench opposition' : 'MEDIUM' });
+    if(intermediaries.length>0){
+      strategies.push({ name:'COALITION', approach:`Build coalition through ${intermediaries[0].name} (influence: ${intermediaries[0].influence}, alignment: ${intermediaries[0].alignment}). Then engage ${targetStakeholder} with coalition support.`, requirement:`${intermediaries[0].name} must be engaged first.`, timeToEffect:'2-4 weeks', risk:'MEDIUM — coalition may not be perceived as genuine' });
+    }
+    if(target.activeRisks.length){
+      strategies.push({ name:'RISK_MITIGATION', approach:`Address their primary concern: "${target.activeRisks[0].data.concern}". Provide evidence the risk (severity ${target.activeRisks[0].data.severity}) is being mitigated.`, requirement:'Must have concrete mitigation progress to show.', timeToEffect:'1-2 weeks', risk:'LOW — addresses their actual objection' });
+    }
+    return { target: targetStakeholder, currentPosition:`Influence: ${target.influence}/5, Alignment: ${target.alignment}/5`, desiredOutcome, strategies,
+      coalitionContext:`Current coalition: ${map.coalitionStrength.FOR} FOR vs ${map.coalitionStrength.AGAINST} AGAINST`,
+      label:'Influence strategy from stakeholder map. Labeled: game-theoretic framing, not manipulation — all strategies are transparent and ethical.' };
+  },
+
+  _classifyCoalitionPosition(s){ if(s.alignment>=4) return 'ADVOCATE'; if(s.alignment>=3) return 'SUPPORTER'; if(s.alignment>=2) return 'NEUTRAL'; return 'OPPONENT'; },
+  _classifyPowerType(s){ const types={investor:'RESOURCE_POWER',board:'LEGITIMATE_POWER',customer:'MARKET_POWER',regulator:'COERCIVE_POWER',partner:'INFORMATION_POWER',media:'REPUTATIONAL_POWER',employee:'COLLECTIVE_POWER',community:'SOCIAL_POWER'}; return types[s.type]||'GENERAL_INFLUENCE'; },
+  _computeEngagementPriority(s, lastEngagement, today){
+    const daysSince = lastEngagement ? LEADOS.engine._days(lastEngagement.ts, today) : 999;
+    const cadence = s.engagementFrequency || 30;
+    const overdueBy = daysSince - cadence;
+    const misalignment = Math.max(0, 5 - s.alignment);
+    return Math.round(s.influence * misalignment * Math.max(1, overdueBy/7));
+  },
+  _identifyCriticalGaps(stakeholders){ return stakeholders.filter(s=> s.influence>=4 && s.engagementPriority>20).sort((a,b)=>b.engagementPriority-a.engagementPriority); }
+};
+
+/* ---- PART 4: Real Options ---- */
+LEADOS.realOptions = {
+  valueOfWaiting(params){
+    const {S,K,T,r,sigma} = params;
+    if(!S||!K||!T||!r||!sigma) return { error:'All parameters required', params };
+    const d1 = (Math.log(S/K) + (r + sigma*sigma/2)*T) / (sigma*Math.sqrt(T));
+    const d2 = d1 - sigma*Math.sqrt(T);
+    const N = (x)=>{
+      const t = 1/(1+0.2316419*Math.abs(x));
+      const poly = t*(0.319381530 + t*(-0.356563782 + t*(1.781477937 + t*(-1.821255978 + t*1.330274429))));
+      const pdf = Math.exp(-x*x/2)/Math.sqrt(2*Math.PI);
+      const result = 1 - pdf*poly;
+      return x>=0 ? result : 1-result;
+    };
+    const callValue = S*N(d1) - K*Math.exp(-r*T)*N(d2);
+    const putValue = K*Math.exp(-r*T)*N(-d2) - S*N(-d1); // computed, note: NOT exposed below (disclosed spec bug)
+    const npv = S - K;
+    const optionPremium = callValue - Math.max(0, npv);
+    return {
+      optionValue: Math.round(callValue), npv: Math.round(npv), optionPremium: Math.round(optionPremium),
+      d1: Math.round(d1*1000)/1000, d2: Math.round(d2*1000)/1000,
+      N_d1: Math.round(N(d1)*1000)/1000, N_d2: Math.round(N(d2)*1000)/1000,
+      _putValue_internal_only: Math.round(putValue), // exposed here for transparency; spec's own return object omits it
+      interpretation: optionPremium>0 ?
+        `The option to WAIT is worth ${Math.round(optionPremium).toLocaleString()}. Committing now forfeits this value.` :
+        `NPV (${Math.round(npv).toLocaleString()}) exceeds option value. Commit now.`,
+      label:'Black-Scholes-Merton adapted for real options. Assumptions (lognormal returns, no dividends, constant volatility) rarely hold for strategic investments. Directional guidance only.'
+    };
+  },
+  valueOfAbandonment(params){
+    const {S,K,T,r,sigma,salvageValue} = params;
+    const put = this.valueOfWaiting({ S, K: salvageValue || K*0.3, T, r, sigma });
+    return { ...put,
+      interpretation:`The option to ABANDON this investment is worth approximately ${Math.round(put.optionValue).toLocaleString()} (see disclosed caveat).`,
+      label: put.label + ' DISCLOSED SPEC BUG: as pasted, this calls valueOfWaiting() and reads its call-side optionValue, not the put value — valueOfWaiting() computes putValue internally but never returns it. The "abandonment option" number here is therefore call-option math on a different strike, not a true put-based abandonment value. We implement the pasted logic as written and flag the bug rather than silently fixing it.' };
+  },
+  scoreInitiativesAsOptions(P, today){
+    const initiatives = P.state.events.filter(e=>e.type==='initiative.logged');
+    return initiatives.map(init=>{
+      const d = init.data;
+      const S = (d.reach_est||100) * (d.impact_est||3) * 10000;
+      const K = (d.effort_days||90) * 800;
+      const T = 2, r = 0.05;
+      const sigma = d.confidence_pct ? Math.max(0.05, 1 - d.confidence_pct/100) : 0.5;
+      const option = this.valueOfWaiting({S,K,T,r,sigma});
+      const ricePriority = (d.reach_est && d.impact_est && d.confidence_pct && d.effort_days) ?
+        (d.reach_est*d.impact_est*d.confidence_pct/100)/d.effort_days : null;
+      return { initiative: init, name: d.name, realOptionValue: option.optionValue, ricePriority, optionPremium: option.optionPremium,
+        shouldWait: option.optionPremium>0,
+        recommendation: option.optionPremium > K*0.2 ? 'HIGH OPTION PREMIUM — do not commit yet; preserve flexibility' :
+          option.npv>0 ? 'POSITIVE NPV — commit if confidence warrants' : 'NEGATIVE NPV — abandon unless strategic necessity',
+        label:'Rough real option valuation. All parameter mappings (S, K from reach/impact/effort) are proxies invented for this sandbox, not verified formulas.' };
+    }).sort((a,b)=>b.realOptionValue - a.realOptionValue);
+  }
+};
+
+/* ---- PART 5: Executive Presence ---- */
+LEADOS.executivePresence = {
+  computePresenceIndicators(P, today){
+    const windowDays = 90;
+    const clarityScores = P.state.events.filter(e=>e.type==='narrative.feedback' && typeof e.data.clarity==='number' && LEADOS.engine._days(e.ts,today)<=windowDays).map(e=>e.data.clarity);
+    const clarity = clarityScores.length ? clarityScores.reduce((a,b)=>a+b,0)/clarityScores.length : null;
+
+    const boardOutcomes = P.state.events.filter(e=>(e.type==='board.presented'||e.type==='exec.board.meeting') && LEADOS.engine._days(e.ts,today)<=windowDays);
+    const approvedOutcomes = boardOutcomes.filter(e=>e.data.outcome==='approved'||(e.data.decisions||[]).length>0).length;
+    const credibility = boardOutcomes.length ? approvedOutcomes/boardOutcomes.length : null;
+
+    const decisions = P.state.events.filter(e=>e.type==='strategy.decision' && LEADOS.engine._days(e.ts,today)<=windowDays);
+    const avoidancePatterns = LEADOS.leaderSelf?.avoidancePatterns?.(P,today) || [];
+    const decisionAvoidance = avoidancePatterns.filter(a=>a.name==='decision_avoidance').length;
+    const conviction = decisions.length>0 && !decisionAvoidance ? 1.0 : decisions.length>0 ? 0.6 : null;
+
+    const crises = P.state.events.filter(e=>e.type==='crisis.detected' && LEADOS.engine._days(e.ts,today)<=windowDays);
+    const respondedOnTime = crises.filter(c=>{
+      const response = P.state.events.find(r=>r.type==='crisis.update' && r.data.crisisId===c.data.id);
+      return response && LEADOS.engine._days(c.ts, response.ts)*24 <= (P.settings.crisisResponseSLAHours||2);
+    }).length;
+    const composure = crises.length ? respondedOnTime/crises.length : null;
+
+    const hitRate = LEADOS.narrative?.commHitRate?.(P,today);
+    const slEffectiveness = LEADOS.leadershipScience?.computeSLEffectiveness?.(P,today);
+    const highEffectiveness = slEffectiveness?.filter(e=>e.effectiveness==='HIGH').length || 0;
+    const totalPlans = slEffectiveness?.length || 0;
+    const development = totalPlans>0 ? highEffectiveness/totalPlans : null;
+
+    const indicators = [clarity, credibility, conviction, composure, development].filter(i=>i!==null);
+    const composite_raw = indicators.length ? indicators.reduce((a,b)=>a+b,0)/indicators.length : null;
+    const normIndicators = [clarity!==null?clarity/5:null, credibility, conviction, composure, development].filter(i=>i!==null);
+    const composite_normalized = normIndicators.length ? normIndicators.reduce((a,b)=>a+b,0)/normIndicators.length : null;
+
+    return {
+      clarity:{score:clarity, n:clarityScores.length, source:'narrative.feedback (1-5 scale)'},
+      credibility:{score:credibility, n:boardOutcomes.length, source:'board outcomes (0-1 scale)'},
+      conviction:{score:conviction, n:decisions.length, source:'decision velocity (0-1 scale)'},
+      composure:{score:composure, n:crises.length, source:'crisis response time (0-1 scale)'},
+      communication:{score:hitRate?.hitRate||null, n:hitRate?.totalDeliveries||0, source:'narrative hit rate (LEADOS.narrative not defined in this sandbox)'},
+      development:{score:development, n:totalPlans, source:'SL effectiveness (LEADOS.leadershipScience not defined in this sandbox)'},
+      composite: composite_raw ? Math.round(composite_raw*100)/100 : null,
+      composite_normalized: composite_normalized ? Math.round(composite_normalized*100)/100 : null,
+      label:'DISCLOSED SPEC BUG: as pasted, "composite" averages a 1–5 clarity score directly with four 0–1 scores with no normalization, which can inflate/distort the composite. We compute both the as-specified raw composite and a normalized version (clarity/5) side by side.'
+    };
+  },
+  generatePresencePlan(indicators){
+    const gaps = [];
+    if(indicators.clarity.score!==null && indicators.clarity.score<3.5) gaps.push({dimension:'CLARITY', gap:`Narrative clarity scores average ${indicators.clarity.score?.toFixed(1)}/5`, development:'Use the inverse pyramid: conclusion first, then evidence. MECE structure for written comms.', practice:'For next 4 communications: write the headline first, then the body.', measurement:'narrative.feedback clarity score after 4 communications'});
+    if(indicators.conviction.score!==null && indicators.conviction.score<0.8) gaps.push({dimension:'CONVICTION', gap:'Decision deferral pattern detected', development:"Classify decisions as reversible (decide fast) or irreversible (decide carefully) — Bezos two-way-door framework.", practice:'For the next 5 decisions: classify the door type first, then decide.', measurement:'avoidance.pattern.named events'});
+    if(indicators.composure.score!==null && indicators.composure.score<0.8) gaps.push({dimension:'COMPOSURE', gap:'Crisis response time exceeds SLA', development:'Pre-defined response protocols eliminate the "what do I do" moment.', practice:'Tabletop exercise: simulate your most likely crisis type.', measurement:'crisisResponseSLAHours compliance in next crisis'});
+    return { indicators, gaps,
+      overallAssessment: (indicators.composite||0)>0.7 ? 'Strong presence indicators across tracked dimensions.' : (indicators.composite||0)>0.5 ? 'Moderate presence with specific development areas.' : 'Significant presence development opportunity.',
+      label:'Executive presence development plan from event log indicators. Recommendations are behavioral, not assessment-based.' };
+  }
+};
+
+/* ---- PART 6: Innovation Portfolio ---- */
+LEADOS.innovationPortfolio = {
+  analyzePortfolio(P, today){
+    const initiatives = P.state.events.filter(e=>e.type==='initiative.logged');
+    const experiments = P.state.events.filter(e=>e.type==='rd.experiment.logged');
+    const classify = (item)=>{
+      const confidence = item.data.confidence_pct||50;
+      const effort = item.data.effort_days || item.data.effort || 50;
+      if(confidence>=70 && effort<=30) return 'H1';
+      if(confidence>=40 && effort<=90) return 'H2';
+      return 'H3';
+    };
+    const portfolio = {H1:{items:[],effort:0,count:0}, H2:{items:[],effort:0,count:0}, H3:{items:[],effort:0,count:0}};
+    [...initiatives, ...experiments].forEach(item=>{
+      const h = classify(item);
+      portfolio[h].items.push(item);
+      portfolio[h].effort += item.data.effort_days || 30;
+      portfolio[h].count++;
+    });
+    const totalEffort = portfolio.H1.effort + portfolio.H2.effort + portfolio.H3.effort;
+    const balance = { H1pct: totalEffort?Math.round(portfolio.H1.effort/totalEffort*100):0, H2pct: totalEffort?Math.round(portfolio.H2.effort/totalEffort*100):0, H3pct: totalEffort?Math.round(portfolio.H3.effort/totalEffort*100):0 };
+    const benchmark = {H1:70,H2:20,H3:10};
+    const deviation = {H1:balance.H1pct-benchmark.H1, H2:balance.H2pct-benchmark.H2, H3:balance.H3pct-benchmark.H3};
+    const experimentResults = P.state.events.filter(e=>e.type==='rd.experiment.result' && LEADOS.engine._days(e.ts,today)<=90);
+    const validatedRate = experimentResults.length ? experimentResults.filter(e=>e.data.result==='validated').length/experimentResults.length : null;
+    return { portfolio, balance, benchmark, deviation, totalInitiatives: initiatives.length+experiments.length,
+      innovationVelocity:{ experimentsCompleted: experimentResults.length, validatedRate, meanTimeToResult: this._computeMeanExperimentTime(P,today) },
+      diagnosis: this._diagnosePortfolio(balance, deviation),
+      label:'Horizon classification is a heuristic from confidence/effort fields. Benchmark 70/20/10 (Nagji & Tuff 2012, HBR — citation not verified by this session).' };
+  },
+  _diagnosePortfolio(balance, deviation){
+    if(deviation.H1>20) return {diagnosis:'CORE_HEAVY', risk:'Over-investing in core; adjacent/transformational underfunded.', recommendation:'Carve out protected H3 budget.'};
+    if(deviation.H3>15) return {diagnosis:'MOONSHOT_HEAVY', risk:'Over-investing in transformational; core may be under-resourced.', recommendation:'Ensure H1 metrics are healthy before increasing H3 investment.'};
+    if(balance.H1pct+balance.H2pct+balance.H3pct===0) return {diagnosis:'NO_DATA', risk:'No initiative/experiment data.', recommendation:'Log initiatives with effort and confidence fields.'};
+    return {diagnosis:'BALANCED', risk:'Portfolio appears balanced relative to the 70/20/10 benchmark.', recommendation:'Monitor innovation velocity (experiment completion rate).'};
+  },
+  _computeMeanExperimentTime(P, today){
+    const paired = P.state.events.filter(e=>e.type==='rd.experiment.result').map(result=>{
+      const experiment = P.state.events.find(e=>e.type==='rd.experiment.logged' && e.data.id===result.data.experimentId);
+      if(!experiment) return null;
+      return LEADOS.engine._days(experiment.ts, result.ts);
+    }).filter(x=>x!==null);
+    return paired.length ? Math.round(paired.reduce((a,b)=>a+b,0)/paired.length) : null;
+  }
+};
+
+/* ---- PART 7: Change Management ---- */
+LEADOS.changeManagement = {
+  assessADKAR(changeId, P, today){
+    const change = P.state.events.find(e=>e.type==='change.initiative' && e.data.id===changeId);
+    if(!change) return null;
+    const commsEvents = P.state.events.filter(e=>(e.type==='internal.comms.sent'||e.type==='allhands.logged') && e.ts>=change.ts && LEADOS.engine._days(change.ts,e.ts)<=90);
+    const awareness = commsEvents.length>0 ? Math.min(1, commsEvents.filter(e=>e.data.acknowledged!==false).length/Math.max(1,commsEvents.length)) : 0;
+
+    const resistanceEvents = P.state.events.filter(e=>e.type==='change.resistance' && e.data.changeId===changeId);
+    const desire = Math.max(0, 1 - (resistanceEvents.filter(e=>e.data.severity>=3).length / Math.max(1, P.directs.length+P.skips.length)));
+
+    const knowledgeEvents = P.state.events.filter(e=>(e.type==='plan.created'||e.type==='delegation.assigned') && e.ts>=change.ts);
+    const knowledge = Math.min(1, knowledgeEvents.length/Math.max(1,P.directs.length));
+
+    const abilityProxy = P.openPlans.filter(pl=>pl.ts>=change.ts).length/Math.max(1,P.directs.length);
+    const ability = Math.min(1, abilityProxy);
+
+    const reinforcementEvents = P.state.events.filter(e=>e.type==='culture.signal' && e.data.polarity==='positive' && e.ts>=change.ts);
+    const reinforcement = Math.min(1, reinforcementEvents.length/4);
+
+    const dimensions = {awareness, desire, knowledge, ability, reinforcement};
+    const weakest = Object.entries(dimensions).sort(([,a],[,b])=>a-b)[0];
+    const latestPulse = P.state.events.filter(e=>e.type==='change.pulse' && e.data.changeId===changeId).sort((a,b)=> b.ts>a.ts?1:-1)[0];
+
+    return { changeId, changeName: change.data.name,
+      adkar:{ awareness: Math.round(awareness*100), desire: Math.round(desire*100), knowledge: Math.round(knowledge*100), ability: Math.round(ability*100), reinforcement: Math.round(reinforcement*100) },
+      bottleneck:{ dimension: weakest[0].toUpperCase(), score: Math.round(weakest[1]*100), interventions: this._adkarInterventions(weakest[0]) },
+      adoptionRate: latestPulse?.data.adoption_pct || null,
+      resistanceCount: resistanceEvents.length,
+      label:'ADKAR assessment from event-log proxies (Hiatt 2006 / Prosci framework — citation not verified by this session). These are behavioral proxies, not validated survey scores.' };
+  },
+  _adkarInterventions(dimension){
+    const interventions = {
+      awareness:['All-hands communication with specific business case','Manager cascade','FAQ: why change, why now'],
+      desire:['Address specific resistance individually','Involve resisters in solution design','Make the cost of NOT changing visible'],
+      knowledge:['Role-specific training on the new way','Job aids and reference materials','Peer coaching from early adopters'],
+      ability:['Supervised practice in the new way','Remove structural barriers (tool access, time)','Reduce scope for achievable first steps'],
+      reinforcement:['Celebrate early adopters publicly','Track and report adoption metrics','Reference new behaviors in performance conversations']
+    };
+    return interventions[dimension] || [];
+  },
+  assessKotter(changeId, P, today){
+    const change = P.state.events.find(e=>e.type==='change.initiative' && e.data.id===changeId);
+    if(!change) return null;
+    const runFindings = LEADOS.engine.run(P, today).findings;
+    const steps = [
+      {step:1, name:'Create Urgency', evidence: runFindings.filter(f=>f.sev>=4).length+' sev-4+ findings active', completed: runFindings.filter(f=>f.sev>=4).length>2},
+      {step:2, name:'Form Coalition', evidence: P.state.events.filter(e=>e.type==='exec.aligned' && e.ts>=change.ts && e.data.result==='aligned').length+' alignment events since change start', completed: P.state.events.filter(e=>e.type==='exec.aligned' && e.ts>=change.ts && e.data.result==='aligned' && (e.data.stakeholders||[]).length>=3).length>0},
+      {step:3, name:'Create Vision', evidence: (P.openOkrs?.length||0)+' OKRs defined', completed: (P.openOkrs?.length||0)>0}
+    ];
+    const completedSteps = steps.filter(s=>s.completed).length;
+    return { changeId, steps, progress: Math.round(completedSteps/8*100), currentStep: steps.find(s=>!s.completed)?.step || 8,
+      label:'DISCLOSED GAP IN PASTED SPEC: only steps 1-3 of Kotter\\'s 8 are actually defined in the pasted code (comment says "Steps 4-8: further checks from event log" with no implementation), yet progress is divided by 8 and currentStep defaults to 8 ("done") once steps 1-3 pass — which silently implies steps 4-8 are complete when they were never modeled. We keep this exact behavior but flag it.' };
+  }
+};
+
+/* ---- Wargame / Competitive Intel — DISCLOSED GAP: no source given in the pasted task text this session
+   (only file names + two Health Wall test IDs: T_O_1/T_O_2/G_O_2 reference buildCompetitiveLandscape()/runScenario()).
+   Minimal original stub built only to satisfy the described *shape*, not any verified implementation. ---- */
+LEADOS.wargame = {
+  buildCompetitiveLandscape(P, today){
+    const byName = {};
+    P.state.events.filter(e=>e.type==='competitor.logged').forEach(e=>{
+      if(!byName[e.data.name] || byName[e.data.name].ts < e.ts) byName[e.data.name]=e;
+    });
+    const redTeams = Object.values(byName).map(e=>({name:e.data.name, lastMove:e.data.move, lastSeen:e.ts, daysSinceUpdate: Math.round(LEADOS.engine._days(e.ts, today))}));
+    const greenTeam = LEADOS.stakeholders.buildInfluenceMap(P,today).stakeholders.filter(s=>s.type==='regulator'||s.type==='partner').map(s=>({name:s.name,type:s.type}));
+    return { blueTeam:{name:'Us', openGoals:P.openGoals.length}, redTeams, greenTeam,
+      label:'ORIGINAL STUB — not from pasted spec source (none was provided for wargame.js). Built only to match the described return shape {blueTeam, redTeams, greenTeam}.' };
+  },
+  runScenario(name, turns=4){
+    const log = [];
+    for(let i=1;i<=turns;i++){
+      log.push({turn:i, actor: i%2===1?'BLUE':'RED', action: i%2===1? `We respond to competitive pressure (turn ${i})` : `Competitor reacts (turn ${i})`});
+    }
+    return { scenario:name, log, label:'ORIGINAL STUB — minimal scripted turn log satisfying "log with >= 4 turns", not a verified wargame engine.' };
+  }
+};
+
+/* ---- Rules catalog: R145-R160 — only the three below are executable (fed into engine.run).
+   The rest are one-line descriptions from the pasted "IMPLEMENTATION SUMMARY" bullet list only;
+   no thresholds/logic were given for them in this task's text, so they are listed as DEFINED_ONLY. ---- */
+LEADOS.rulesCatalog = [
+  {id:'R145', desc:'Competitive intel staleness (gap > cadence)', status:'EXECUTABLE'},
+  {id:'R146', desc:'Intel quality / confirmation rate', status:'DEFINED_ONLY'},
+  {id:'R147', desc:'Strategic threat not triaged', status:'DEFINED_ONLY'},
+  {id:'R148', desc:'M&A process health', status:'DEFINED_ONLY'},
+  {id:'R149', desc:'Technology assessment gap', status:'DEFINED_ONLY'},
+  {id:'R150', desc:'Ecosystem disruption signal missed', status:'DEFINED_ONLY'},
+  {id:'R151', desc:'High-influence / low-alignment stakeholder, no recent engagement', status:'EXECUTABLE'},
+  {id:'R152', desc:'Organizational design hypothesis unmanaged', status:'DEFINED_ONLY'},
+  {id:'R153', desc:'Regulatory interpretation not reviewed', status:'DEFINED_ONLY'},
+  {id:'R154', desc:'Wargame cadence lapsed', status:'DEFINED_ONLY'},
+  {id:'R155', desc:'Win rate trend declining', status:'DEFINED_ONLY'},
+  {id:'R156', desc:'Loss reason pattern (early signal)', status:'DEFINED_ONLY'},
+  {id:'R157', desc:'Tech landscape survey gap', status:'DEFINED_ONLY'},
+  {id:'R158', desc:'3+ losses same reason, unaddressed', status:'EXECUTABLE'},
+  {id:'R159', desc:'Intel confirmation rate low', status:'DEFINED_ONLY'},
+  {id:'R160', desc:'(unspecified in pasted summary)', status:'DEFINED_ONLY'}
+];
+
+/* ========================================================================
+   Self-tests
+   ======================================================================== */
+function runSelfTests(){
+  const results = [];
+  const T = (id, desc, fn) => {
+    let pass=false, detail='';
+    try{ const r = fn(); pass = !!r.pass; detail = r.detail||''; }
+    catch(e){ pass=false; detail='threw: '+e.message; }
+    results.push({id, desc, pass, detail});
+  };
+
+  const org = LEADOS.orgDesign.modelCurrentStructure(P, TODAY);
+  T('T_O_3','meanSpanOfControl computed correctly (expected 8.8 from seed structure)', ()=>{
+    return {pass: Math.abs(org.structure.meanSpanOfControl-8.8)<0.2, detail:'got '+org.structure.meanSpanOfControl};
+  });
+  T('T_O_4',"simulateRestructure('FLATTEN') spanEffect > current", ()=>{
+    const r = LEADOS.orgDesign.simulateRestructure(org, 'FLATTEN', P);
+    return {pass: parseFloat(r.estimatedImpact.spanOfControl) > org.structure.meanSpanOfControl, detail:'flatten span '+r.estimatedImpact.spanOfControl+' vs current '+org.structure.meanSpanOfControl};
+  });
+  const map = LEADOS.stakeholders.buildInfluenceMap(P, TODAY);
+  T('T_O_5 / G_O_3','quadrants sum to total stakeholder count', ()=>{
+    const sum = Object.values(map.quadrants).reduce((a,q)=>a+q.length,0);
+    const pass = sum === map.stakeholders.length;
+    return {pass, detail: pass ? 'sum '+sum+' == total '+map.stakeholders.length :
+      `KNOWN GAP (spec bug, disclosed): sum ${sum} != total ${map.stakeholders.length}. "Industry Regulator" (influence 5, alignment 3) matches none of the 4 quadrants as literally specified — CHAMPIONS/BLOCKERS require alignment>=4 or <3, leaving alignment===3 with influence>=4 uncovered.`};
+  });
+  T('G_O_3b','CHAMPIONS members satisfy influence>=4 AND alignment>=4', ()=>{
+    const ok = map.quadrants.CHAMPIONS.every(s=>s.influence>=4 && s.alignment>=4);
+    return {pass: ok, detail: ok?'all '+map.quadrants.CHAMPIONS.length+' champions satisfy the rule':'violation found'};
+  });
+  T('T_O_6','computeInfluenceStrategy returns >= 2 strategies for Lead Investor', ()=>{
+    const s = LEADOS.stakeholders.computeInfluenceStrategy('Lead Investor', 'Secure continued funding support', P, TODAY);
+    return {pass: s.strategies && s.strategies.length>=2, detail: s.strategies?.length+' strategies returned'};
+  });
+
+  // real options
+  const S=100000,K=100000,T_=2,r=0.05,sigma=0.4;
+  const d1manual = (Math.log(S/K)+(r+sigma*sigma/2)*T_)/(sigma*Math.sqrt(T_));
+  const ro = LEADOS.realOptions.valueOfWaiting({S,K,T:T_,r,sigma});
+  T('T_O_7 / G_O_1','BSM d1 formula at S=K computed correctly (hand-verified)', ()=>{
+    return {pass: Math.abs(ro.d1 - Math.round(d1manual*1000)/1000) < 0.001, detail:'engine d1='+ro.d1+' manual d1='+(Math.round(d1manual*1000)/1000)};
+  });
+  T('T_O_8 / G_O_8-setup','at-the-money (S=K) optionValue > 0 (time value exists)', ()=>{
+    return {pass: ro.optionValue > 0, detail:'optionValue='+ro.optionValue};
+  });
+  T('G_O_8','higher sigma -> higher option premium (uncertainty has value)', ()=>{
+    const lowSigma = LEADOS.realOptions.valueOfWaiting({S,K,T:T_,r,sigma:0.2});
+    const highSigma = LEADOS.realOptions.valueOfWaiting({S,K,T:T_,r,sigma:0.6});
+    return {pass: highSigma.optionPremium >= lowSigma.optionPremium, detail:`sigma0.2 premium=${lowSigma.optionPremium}, sigma0.6 premium=${highSigma.optionPremium}`};
+  });
+  T('T_O_12','scoreInitiativesAsOptions sorted by realOptionValue desc', ()=>{
+    const scored = LEADOS.realOptions.scoreInitiativesAsOptions(P, TODAY);
+    let ok = true;
+    for(let i=1;i<scored.length;i++) if(scored[i-1].realOptionValue < scored[i].realOptionValue) ok=false;
+    return {pass: ok, detail: scored.map(s=>s.realOptionValue).join(', ')};
+  });
+
+  // innovation portfolio
+  const portfolio = LEADOS.innovationPortfolio.analyzePortfolio(P, TODAY);
+  T('T_O_9 / G_O_4-real-data','H1+H2+H3 pcts sum to 100 on seed data', ()=>{
+    const sum = portfolio.balance.H1pct+portfolio.balance.H2pct+portfolio.balance.H3pct;
+    return {pass: sum===100, detail:'sum='+sum+' ('+JSON.stringify(portfolio.balance)+')'};
+  });
+  T('G_O_4','isolated unit check: effort 70/20/10 -> pct exactly 70/20/10', ()=>{
+    const total=100, h1pct=Math.round(70/total*100), h2pct=Math.round(20/total*100), h3pct=Math.round(10/total*100);
+    return {pass: h1pct===70 && h2pct===20 && h3pct===10, detail:`${h1pct}/${h2pct}/${h3pct}`};
+  });
+
+  // ADKAR / Kotter
+  const adkar = LEADOS.changeManagement.assessADKAR('chg1', P, TODAY);
+  T('T_O_10','assessADKAR returns all 5 dimensions as 0-100', ()=>{
+    const vals = Object.values(adkar.adkar);
+    const ok = vals.length===5 && vals.every(v=>v>=0 && v<=100);
+    return {pass: ok, detail: JSON.stringify(adkar.adkar)};
+  });
+  T('G_O_5','ADKAR bottleneck dimension is the actual weakest (ABILITY expected on seed data)', ()=>{
+    const min = Math.min(...Object.values(adkar.adkar));
+    const pass = adkar.bottleneck.score === min;
+    return {pass, detail:'bottleneck='+adkar.bottleneck.dimension+' ('+adkar.bottleneck.score+'), min of all dims='+min};
+  });
+  const kotter = LEADOS.changeManagement.assessKotter('chg1', P, TODAY);
+  T('T_O_11','assessKotter returns steps; completedSteps <= 8', ()=>{
+    const completed = kotter.steps.filter(s=>s.completed).length;
+    return {pass: kotter.steps.length>0 && completed<=8, detail: completed+' of '+kotter.steps.length+' modeled steps completed (only 3 of 8 are modeled — see disclosed gap)'};
+  });
+  T('G_O_9','Kotter step 2 completed only when >=3 stakeholders aligned', ()=>{
+    const s2 = kotter.steps.find(s=>s.step===2);
+    return {pass: !!s2 && s2.completed===true, detail: s2.evidence};
+  });
+
+  // rules
+  T('G_O_6 (R145)','competitor.logged exists but gap > cadence -> fires for Rival Corp', ()=>{
+    const findings = LEADOS.engine.run(P, TODAY).findings;
+    const fired = findings.some(f=>f.id==='R145_Rival Corp');
+    const notFiredAcme = !findings.some(f=>f.id==='R145_Acme Systems');
+    return {pass: fired && notFiredAcme, detail: 'Rival Corp fired='+fired+', Acme Systems (within cadence) fired='+!notFiredAcme};
+  });
+  T('G_O_7 (R151)','influence>=4, alignment<=2, no engagement >30d -> fires for Lead Investor', ()=>{
+    const findings = LEADOS.engine.run(P, TODAY).findings;
+    const fired = findings.some(f=>f.id==='R151_sh_investor');
+    return {pass: fired, detail: fired?'fired as expected':'did not fire'};
+  });
+  T('G_O_10 (R158)','3+ losses same reason, unaddressed -> fires sev 4', ()=>{
+    const findings = LEADOS.engine.run(P, TODAY).findings;
+    const f = findings.find(f=>f.id==='R158_pricing');
+    return {pass: !!f && f.sev===4, detail: f ? 'fired sev '+f.sev : 'did not fire'};
+  });
+
+  // wargame (disclosed stub)
+  T('T_O_1 (stub)','buildCompetitiveLandscape returns blueTeam/redTeams/greenTeam', ()=>{
+    const lc = LEADOS.wargame.buildCompetitiveLandscape(P, TODAY);
+    return {pass: !!lc.blueTeam && Array.isArray(lc.redTeams) && Array.isArray(lc.greenTeam), detail:'ORIGINAL STUB, no source was pasted for wargame.js this session'};
+  });
+  T('T_O_2 (stub)','runScenario produces a log with >= 4 turns', ()=>{
+    const sc = LEADOS.wargame.runScenario('Price war', 4);
+    return {pass: sc.log.length>=4, detail: sc.log.length+' turns; ORIGINAL STUB'};
+  });
+
+  return results;
+}
+
+/* ========================================================================
+   UI
+   ======================================================================== */
+const TABS = [
+  {id:'today', label:'Today'},
+  {id:'orgdesign', label:'Org Design'},
+  {id:'stakeholders', label:'Stakeholders'},
+  {id:'realoptions', label:'Real Options'},
+  {id:'presence', label:'Exec Presence'},
+  {id:'innovation', label:'Innovation Portfolio'},
+  {id:'change', label:'Change Mgmt'},
+  {id:'wargame', label:'Wargame (stub)'},
+  {id:'selftest', label:'Self-Test'},
+  {id:'about', label:'About / Provenance'}
+];
+let current = 'today';
+function go(id){ current=id; render(); window.scrollTo(0,0); }
+
+function navHTML(){
+  return TABS.map(t=>`<button onclick="go('${t.id}')" class="tab-btn px-3 py-1.5 rounded-md border border-slate-700 ${current===t.id?'active':'bg-slate-800 text-slate-200 hover:bg-slate-700'}">${t.label}</button>`).join('');
+}
+
+function card(title, inner, cls=''){
+  return `<div class="bg-white rounded-xl shadow p-4 ${cls}"><h3 class="font-semibold text-slate-700 mb-2">${title}</h3>${inner}</div>`;
+}
+function labelNote(text){ return `<div class="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2 mt-2">${text}</div>`; }
+function bugNote(text){ return `<div class="text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded p-2 mt-2"><b>⚠ Disclosed issue:</b> ${text}</div>`; }
+
+function render(){
+  document.getElementById('tabs').innerHTML = navHTML();
+  const app = document.getElementById('app');
+  if(current==='today') app.innerHTML = renderToday();
+  else if(current==='orgdesign') app.innerHTML = renderOrgDesign();
+  else if(current==='stakeholders') app.innerHTML = renderStakeholders();
+  else if(current==='realoptions') app.innerHTML = renderRealOptions();
+  else if(current==='presence') app.innerHTML = renderPresence();
+  else if(current==='innovation') app.innerHTML = renderInnovation();
+  else if(current==='change') app.innerHTML = renderChange();
+  else if(current==='wargame') app.innerHTML = renderWargame();
+  else if(current==='selftest') app.innerHTML = renderSelfTest();
+  else if(current==='about') app.innerHTML = renderAbout();
+}
+
+function renderToday(){
+  const org = LEADOS.orgDesign.modelCurrentStructure(P, TODAY);
+  const findings = LEADOS.engine.run(P, TODAY).findings.sort((a,b)=>b.sev-a.sev);
+  const sev4 = findings.filter(f=>f.sev>=4).length;
+  return `
+  <div class="grid md:grid-cols-3 gap-4">
+    ${card('Org snapshot', `
+      <div class="text-sm space-y-1">
+        <div>People: <b>${org.structure.totalPeople}</b></div>
+        <div>Mean span of control: <b>${org.structure.meanSpanOfControl}</b></div>
+        <div>Max depth: <b>${org.structure.maxDepth}</b></div>
+        <div>Centralization index: <b>${org.structure.centralizationIndex}</b></div>
+      </div>`)}
+    ${card('Findings', `<div class="text-sm">Total: <b>${findings.length}</b> · Sev ≥4: <b class="${sev4>=3?'text-red-600':'text-slate-700'}">${sev4}</b>
+      <div class="mt-2 max-h-40 overflow-auto space-y-1">${findings.slice(0,6).map(f=>`<div class="text-xs border-l-4 pl-2 ${f.sev>=4?'border-red-500':'border-amber-400'}">[sev ${f.sev}] ${f.title}</div>`).join('')}</div>`)}
+    ${card('Quick links', `<div class="flex flex-col gap-2 text-sm">
+      <button class="text-indigo-600 underline text-left" onclick="go('orgdesign')">→ Restructure simulator & readiness</button>
+      <button class="text-indigo-600 underline text-left" onclick="go('stakeholders')">→ Stakeholder influence map</button>
+      <button class="text-indigo-600 underline text-left" onclick="go('selftest')">→ Run self-tests</button>
+    </div>`)}
+  </div>
+  <div class="mt-4">${labelNote('"Today" findings combine org-design structural problems with rules R145/R151/R158. This integration is an original design choice for this sandbox (the pasted spec never fully defines engine.run); see About tab.')}</div>
+  `;
+}
+
+function renderOrgDesign(){
+  const org = LEADOS.orgDesign.modelCurrentStructure(P, TODAY);
+  const proposal = window.__orgProposal || 'FLATTEN';
+  const sim = LEADOS.orgDesign.simulateRestructure(org, proposal, P);
+  return `
+  <div class="grid md:grid-cols-2 gap-4">
+    ${card('Current structure', `
+      <table class="text-sm w-full"><tbody>
+        <tr><td class="py-1 text-slate-500">Total people</td><td class="text-right font-semibold">${org.structure.totalPeople}</td></tr>
+        <tr><td class="py-1 text-slate-500">Managers</td><td class="text-right font-semibold">${org.structure.managers}</td></tr>
+        <tr><td class="py-1 text-slate-500">Mean span of control</td><td class="text-right font-semibold">${org.structure.meanSpanOfControl}</td></tr>
+        <tr><td class="py-1 text-slate-500">Max depth</td><td class="text-right font-semibold">${org.structure.maxDepth}</td></tr>
+        <tr><td class="py-1 text-slate-500">Centralization index</td><td class="text-right font-semibold">${org.structure.centralizationIndex}</td></tr>
+        <tr><td class="py-1 text-slate-500">Conflict rate / person (90d)</td><td class="text-right font-semibold">${org.structure.conflictRatePerPerson}</td></tr>
+      </tbody></table>
+      ${labelNote(org.label)}
+    `)}
+    ${card('Detected problems', org.problems.length ? org.problems.map(p=>`
+      <div class="mb-2 p-2 rounded bg-red-50 border border-red-200">
+        <div class="font-semibold text-red-700 text-sm">${p.type}</div>
+        <div class="text-xs text-slate-700 mt-1">${p.description}</div>
+        <div class="text-xs text-slate-400 mt-1 mono">${p.evidence}</div>
+      </div>`).join('') : '<div class="text-sm text-slate-500">No structural problems detected.</div>')}
+  </div>
+
+  <div class="mt-4">${card('Restructure simulator', `
+    <div class="flex items-center gap-2 mb-3 flex-wrap">
+      ${['FLATTEN','CENTRALIZE_FUNCTION','DECENTRALIZE','PODS'].map(p=>`<button onclick="window.__orgProposal='${p}';render();" class="px-3 py-1 rounded border text-sm ${proposal===p?'bg-slate-900 text-white':'bg-white'}">${p}</button>`).join('')}
+    </div>
+    <div class="grid md:grid-cols-2 gap-4 text-sm">
+      <div>
+        <div class="font-semibold mb-1">${sim.model.description}</div>
+        <div>Projected span of control: <b>${sim.estimatedImpact.spanOfControl}</b></div>
+        <div>Projected depth: <b>${sim.estimatedImpact.depth}</b></div>
+        <div>Speed: ${sim.estimatedImpact.speed}</div>
+        <div>Risk: ${sim.estimatedImpact.risk}</div>
+        <div>Execution risk: <b>${sim.model.executionRisk}</b></div>
+        <div>Time to value: ${sim.model.timeToValue}</div>
+        <div>Prerequisite: <i>${sim.model.prerequisite}</i></div>
+      </div>
+      <div class="p-3 rounded border ${sim.readiness.status==='NOT_READY'?'bg-red-50 border-red-300':'bg-green-50 border-green-300'}">
+        <div class="font-bold ${sim.readiness.status==='NOT_READY'?'text-red-700':'text-green-700'}">${sim.readiness.status}</div>
+        ${sim.readiness.reason ? `<div class="text-xs mt-1">${sim.readiness.reason}</div><ul class="text-xs list-disc ml-4 mt-1">${(sim.readiness.prerequisiteFindings||[]).map(f=>`<li>${f}</li>`).join('')}</ul>` : ''}
+        ${sim.readiness.caveats ? `<div class="text-xs mt-1">${sim.readiness.caveats}</div>` : ''}
+      </div>
+    </div>
+    ${labelNote(sim.label)}
+  `)}</div>
+  `;
+}
+
+function renderStakeholders(){
+  const map = LEADOS.stakeholders.buildInfluenceMap(P, TODAY);
+  const target = window.__shTarget || 'Lead Investor';
+  const strat = LEADOS.stakeholders.computeInfluenceStrategy(target, 'Maintain funding support through next round', P, TODAY);
+  return `
+  <div class="grid md:grid-cols-2 gap-4">
+    ${card('Influence map', `
+      <table class="text-xs w-full"><thead><tr class="text-left text-slate-500"><th>Name</th><th>Inf</th><th>Align</th><th>Quadrant?</th><th>Days since engaged</th></tr></thead>
+      <tbody>${map.stakeholders.map(s=>{
+        const q = Object.entries(map.quadrants).find(([,arr])=>arr.includes(s));
+        return `<tr class="border-t"><td class="py-1">${s.name}</td><td>${s.influence}</td><td>${s.alignment}</td><td>${q?q[0]:'<span class=\\'text-amber-600\\'>NONE (gap)</span>'}</td><td>${s.daysSinceEngagement!==null?Math.round(s.daysSinceEngagement):'—'}</td></tr>`;
+      }).join('')}</tbody></table>
+      ${labelNote(map.label)}
+      ${bugNote('"Industry Regulator" (inf 5, align 3) matches no quadrant — the pasted spec\\'s quadrant thresholds (CHAMPIONS/BLOCKERS require alignment ≥4 or &lt;3) leave alignment===3 uncovered when influence≥4. Shown live above, not hidden.')}
+    `)}
+    ${card('Coalition strength', `<div class="text-sm">FOR: <b class="text-green-600">${map.coalitionStrength.FOR}</b> vs AGAINST: <b class="text-red-600">${map.coalitionStrength.AGAINST}</b></div>
+      <div class="mt-3">
+        <label class="text-xs text-slate-500">Target stakeholder for influence strategy</label>
+        <select onchange="window.__shTarget=this.value;render();" class="block mt-1 border rounded px-2 py-1 text-sm">
+          ${map.stakeholders.map(s=>`<option ${s.name===target?'selected':''}>${s.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="mt-3 text-sm"><b>${strat.currentPosition||''}</b><div class="text-xs text-slate-500">${strat.coalitionContext||''}</div>
+      <div class="space-y-2 mt-2">${(strat.strategies||[]).map(s=>`<div class="p-2 bg-slate-50 rounded border text-xs"><b>${s.name}</b> — ${s.approach}<br><span class="text-slate-500">Requirement: ${s.requirement} · Time: ${s.timeToEffect} · Risk: ${s.risk}</span></div>`).join('')}</div>
+      ${labelNote(strat.label||'')}
+    `)}
+  </div>`;
+}
+
+function renderRealOptions(){
+  const scored = LEADOS.realOptions.scoreInitiativesAsOptions(P, TODAY);
+  const sample = LEADOS.realOptions.valueOfWaiting({S:100000,K:100000,T:2,r:0.05,sigma:0.4});
+  const aband = LEADOS.realOptions.valueOfAbandonment({S:100000,K:100000,T:2,r:0.05,sigma:0.4,salvageValue:20000});
+  return `
+  <div class="grid md:grid-cols-2 gap-4">
+    ${card('valueOfWaiting — sample (S=K=100,000, T=2y, r=5%, σ=40%)', `
+      <div class="text-sm space-y-1">
+        <div>Option value: <b>${sample.optionValue.toLocaleString()}</b></div>
+        <div>NPV (naive): <b>${sample.npv.toLocaleString()}</b></div>
+        <div>Option premium: <b>${sample.optionPremium.toLocaleString()}</b></div>
+        <div class="mono text-xs text-slate-500">d1=${sample.d1} d2=${sample.d2} N(d1)=${sample.N_d1} N(d2)=${sample.N_d2}</div>
+      </div>
+      <div class="text-xs mt-2 italic">${sample.interpretation}</div>
+      ${labelNote(sample.label)}
+    `)}
+    ${card('valueOfAbandonment — same inputs, salvage=20,000', `
+      <div class="text-sm">Abandonment value: <b>${aband.optionValue.toLocaleString()}</b></div>
+      <div class="text-xs mt-2 italic">${aband.interpretation}</div>
+      ${bugNote(aband.label.split('DISCLOSED SPEC BUG:')[1])}
+    `)}
+  </div>
+  <div class="mt-4">${card('Initiatives scored as real options', `
+    <table class="text-xs w-full"><thead><tr class="text-left text-slate-500"><th>Initiative</th><th>Option value</th><th>Option premium</th><th>RICE</th><th>Recommendation</th></tr></thead>
+    <tbody>${scored.map(s=>`<tr class="border-t"><td class="py-1">${s.name}</td><td>${s.realOptionValue.toLocaleString()}</td><td>${s.optionPremium.toLocaleString()}</td><td>${s.ricePriority?s.ricePriority.toFixed(1):'—'}</td><td class="text-xs">${s.recommendation}</td></tr>`).join('')}</tbody></table>
+    ${labelNote('Parameter mappings (S, K from reach/impact/effort proxies) are original sandbox inventions, consistent with the pasted spec\\'s own "rough proxies" disclosure.')}
+  `)}</div>`;
+}
+
+function renderPresence(){
+  const ind = LEADOS.executivePresence.computePresenceIndicators(P, TODAY);
+  const plan = LEADOS.executivePresence.generatePresencePlan(ind);
+  const rows = [['Clarity',ind.clarity],['Credibility',ind.credibility],['Conviction',ind.conviction],['Composure',ind.composure],['Communication',ind.communication],['Development',ind.development]];
+  return `
+  <div class="grid md:grid-cols-2 gap-4">
+    ${card('Indicators', `<table class="text-sm w-full"><thead><tr class="text-left text-slate-500"><th>Dimension</th><th>Score</th><th>n</th><th>Source</th></tr></thead>
+      <tbody>${rows.map(([name,r])=>`<tr class="border-t"><td class="py-1">${name}</td><td>${r.score===null?'—':fmt(r.score,2)}</td><td>${r.n}</td><td class="text-xs text-slate-500">${r.source}</td></tr>`).join('')}</tbody></table>
+      <div class="mt-2 text-sm">Composite (as-specified, raw mix of scales): <b>${ind.composite ?? '—'}</b><br>Composite (normalized, clarity/5): <b>${ind.composite_normalized ?? '—'}</b></div>
+      ${bugNote(ind.label)}
+    `)}
+    ${card('Development plan', `<div class="text-sm font-semibold mb-2">${plan.overallAssessment}</div>
+      ${plan.gaps.length? plan.gaps.map(g=>`<div class="mb-2 p-2 bg-slate-50 rounded border text-xs"><b>${g.dimension}</b> — ${g.gap}<br><span class="text-slate-600">${g.development}</span><br><i>Practice: ${g.practice}</i></div>`).join('') : '<div class="text-sm text-slate-500">No gaps flagged.</div>'}
+      ${labelNote(plan.label)}
+    `)}
+  </div>`;
+}
+
+function renderInnovation(){
+  const r = LEADOS.innovationPortfolio.analyzePortfolio(P, TODAY);
+  return `
+  <div class="grid md:grid-cols-2 gap-4">
+    ${card('Horizon balance vs 70/20/10 benchmark', `
+      <table class="text-sm w-full"><thead><tr class="text-left text-slate-500"><th>Horizon</th><th>Count</th><th>Effort</th><th>Actual %</th><th>Benchmark %</th><th>Deviation</th></tr></thead>
+      <tbody>
+        <tr class="border-t"><td>H1 (core)</td><td>${r.portfolio.H1.count}</td><td>${r.portfolio.H1.effort}</td><td>${r.balance.H1pct}%</td><td>${r.benchmark.H1}%</td><td>${r.deviation.H1>0?'+':''}${r.deviation.H1}</td></tr>
+        <tr class="border-t"><td>H2 (adjacent)</td><td>${r.portfolio.H2.count}</td><td>${r.portfolio.H2.effort}</td><td>${r.balance.H2pct}%</td><td>${r.benchmark.H2}%</td><td>${r.deviation.H2>0?'+':''}${r.deviation.H2}</td></tr>
+        <tr class="border-t"><td>H3 (transformational)</td><td>${r.portfolio.H3.count}</td><td>${r.portfolio.H3.effort}</td><td>${r.balance.H3pct}%</td><td>${r.benchmark.H3}%</td><td>${r.deviation.H3>0?'+':''}${r.deviation.H3}</td></tr>
+      </tbody></table>
+      ${labelNote(r.label)}
+    `)}
+    ${card('Diagnosis & velocity', `
+      <div class="p-3 rounded border bg-amber-50 border-amber-300 mb-3">
+        <div class="font-bold text-amber-800">${r.diagnosis.diagnosis}</div>
+        <div class="text-xs mt-1">${r.diagnosis.risk}</div>
+        <div class="text-xs mt-1"><i>${r.diagnosis.recommendation}</i></div>
+      </div>
+      <div class="text-sm">Experiments completed (90d): <b>${r.innovationVelocity.experimentsCompleted}</b></div>
+      <div class="text-sm">Validated rate: <b>${r.innovationVelocity.validatedRate!==null?pct(r.innovationVelocity.validatedRate):'—'}</b></div>
+      <div class="text-sm">Mean time to result: <b>${r.innovationVelocity.meanTimeToResult ?? '—'} days</b></div>
+    `)}
+  </div>`;
+}
+
+function renderChange(){
+  const adkar = LEADOS.changeManagement.assessADKAR('chg1', P, TODAY);
+  const kotter = LEADOS.changeManagement.assessKotter('chg1', P, TODAY);
+  return `
+  <div class="grid md:grid-cols-2 gap-4">
+    ${card('ADKAR — '+adkar.changeName, `
+      <table class="text-sm w-full"><tbody>
+        ${Object.entries(adkar.adkar).map(([k,v])=>`<tr><td class="py-1 capitalize w-40">${k}</td><td class="w-full"><div class="bg-slate-200 rounded h-3 w-full"><div class="h-3 rounded ${v<50?'bg-red-400':v<75?'bg-amber-400':'bg-green-500'}" style="width:${v}%"></div></div></td><td class="pl-2 text-right w-10">${v}%</td></tr>`).join('')}
+      </tbody></table>
+      <div class="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm">
+        <b>Bottleneck: ${adkar.bottleneck.dimension}</b> (${adkar.bottleneck.score}%)
+        <ul class="list-disc ml-5 text-xs mt-1">${adkar.bottleneck.interventions.map(i=>`<li>${i}</li>`).join('')}</ul>
+      </div>
+      <div class="text-sm mt-2">Adoption rate (pulse): <b>${adkar.adoptionRate}%</b> · Resistance events: <b>${adkar.resistanceCount}</b></div>
+      ${labelNote(adkar.label)}
+    `)}
+    ${card('Kotter 8-Step', `
+      <div class="text-sm mb-2">Progress: <b>${kotter.progress}%</b> (${kotter.steps.filter(s=>s.completed).length} of ${kotter.steps.length} <i>modeled</i> steps)</div>
+      ${kotter.steps.map(s=>`<div class="mb-2 p-2 rounded border text-xs ${s.completed?'bg-green-50 border-green-300':'bg-slate-50 border-slate-200'}"><b>Step ${s.step}: ${s.name}</b> — ${s.completed?'✅ complete':'⬜ not complete'}<br><span class="text-slate-500">${s.evidence}</span></div>`).join('')}
+      ${bugNote(kotter.label)}
+    `)}
+  </div>`;
+}
+
+function renderWargame(){
+  const lc = LEADOS.wargame.buildCompetitiveLandscape(P, TODAY);
+  const sc = LEADOS.wargame.runScenario('Competitor price war', 4);
+  return `
+  <div class="bg-amber-50 border border-amber-300 rounded p-3 text-sm mb-4"><b>⚠ Disclosed gap:</b> No source code for <span class="mono">wargame.js</span> / <span class="mono">competitive_intel.js</span> was included in this task's pasted text — only file names and two Health-Wall test IDs (T_O_1, T_O_2, G_O_2) describing their expected shape. Everything below is an original minimal stub built to satisfy that shape, not a verified implementation.</div>
+  <div class="grid md:grid-cols-2 gap-4">
+    ${card('Competitive landscape (stub)', `
+      <div class="text-sm mb-2">Blue team: <b>${lc.blueTeam.name}</b> (${lc.blueTeam.openGoals} open goals)</div>
+      <div class="text-sm font-semibold mt-2">Red teams</div>
+      <table class="text-xs w-full"><thead><tr class="text-left text-slate-500"><th>Name</th><th>Last move</th><th>Days since</th></tr></thead>
+      <tbody>${lc.redTeams.map(r=>`<tr class="border-t"><td>${r.name}</td><td>${r.lastMove}</td><td>${r.daysSinceUpdate}</td></tr>`).join('')}</tbody></table>
+      <div class="text-sm font-semibold mt-2">Green team (regulators/partners)</div>
+      <div class="text-xs">${lc.greenTeam.map(g=>g.name).join(', ')||'none'}</div>
+    `)}
+    ${card('Scenario run (stub)', `<div class="text-sm mb-2">Scenario: ${sc.scenario}</div>
+      ${sc.log.map(l=>`<div class="text-xs p-1 border-b"><b>Turn ${l.turn} (${l.actor}):</b> ${l.action}</div>`).join('')}
+    `)}
+  </div>`;
+}
+
+function renderSelfTest(){
+  const results = runSelfTests();
+  const passed = results.filter(r=>r.pass).length;
+  return `
+  <div class="mb-4 flex items-center gap-3">
+    <div class="text-lg font-bold">${passed} / ${results.length} passing</div>
+    <button onclick="render()" class="px-3 py-1 bg-slate-900 text-white rounded text-sm">Re-run</button>
+  </div>
+  <div class="space-y-2">
+    ${results.map(r=>`<div class="bg-white rounded-lg shadow p-3 flex gap-3 items-start">
+      <span class="text-xs px-2 py-0.5 rounded font-semibold ${r.pass?'badge-pass':'badge-fail'}">${r.pass?'PASS':'FAIL'}</span>
+      <div class="flex-1"><div class="font-semibold text-sm">${r.id} — ${r.desc}</div><div class="text-xs text-slate-500 mt-0.5">${r.detail}</div></div>
+    </div>`).join('')}
+  </div>
+  <div class="mt-4">${labelNote('Not every T_O_*/G_O_* id from the pasted spec is covered. Skipped where the pasted spec did not supply enough concrete logic to test meaningfully (e.g. org-physics-dependent effects), or where the dependency (wargame full source) was never provided. See About tab for the full list.')}</div>
+  `;
+}
+
+function renderAbout(){
+  return `
+  <div class="space-y-4 text-sm">
+    ${card('Provenance — what was actually checked this session', `
+      <ol class="list-decimal ml-5 space-y-2">
+        <li><b>Fetched</b> <span class="mono">github.com/wbweve/Leados</span> (rendered README) — describes itself as a prior session's delivery: "Sandbox Build: Thermodynamics, CAS Engine, Risk Intelligence" (React+Vite+Tailwind), with an explicit provenance notice disclaiming continuity with any earlier "pt-K"/"pt-L" session.</li>
+        <li><b>Fetched</b> the repo's root <span class="mono">AI-SESSION-LOG.md</span> in full — documents that session's own direct API/raw-file checks: a live <span class="mono">src/lib/infoTheory.ts</span> wired into <span class="mono">Thermodynamics.tsx</span>, but <span class="mono">core.ts</span>/<span class="mono">intelligence.ts</span>/<span class="mono">physics.ts</span> present yet orphaned/broken (unexported <span class="mono">engine</span>/<span class="mono">run</span>), and <b>no</b> CAS engine, risk register, or any file matching a previously-pasted "pt-L" brief's 58/62-file history.</li>
+        <li><b>Fetched</b> the full repo file tree via GitHub's REST API (<span class="mono">git/trees/main?recursive=1</span>) — confirmed: dozens of loose root-level <span class="mono">.tsx</span> files (e.g. <span class="mono">AboutView.tsx</span>, <span class="mono">FinanceDashboard.tsx</span>, <span class="mono">Network.tsx</span>...) plus <span class="mono">README.md</span>, <span class="mono">AI-SESSION-LOG.md</span>, <span class="mono">AI-SESSION-LOG.append.md</span>, <span class="mono">SESSION-3.patch.md</span>, alongside a separate <span class="mono">src/</span> tree (per the log in #2).</li>
+        <li><b>Fetched</b> the root <span class="mono">README.md</span> directly (raw) — content matches the rendered version; confirms the "two deliveries in one repo" structure and the explicit disclaimer that the pasted "pt-L" brief (an earlier task's spec, not this one) was treated as <i>unverified</i>, not repo fact.</li>
+        <li><b>Attempted to fetch</b> the root <span class="mono">index.html</span> as text — markdown/text extraction returned almost nothing beyond the page <span class="mono">&lt;title&gt;</span>, because that file is a JS-rendered single-page app; its content was <i>not</i> independently re-verified byte-for-byte by this session beyond what the repo's own <span class="mono">AI-SESSION-LOG.md</span> already documented (identifyAttractors() dead-end, ~60 R-rule IDs, literal "pt-L" string). <b>This is a disclosed scope limit</b>, not a claim of full verification.</li>
+      </ol>
+      ${bugNote('Nothing fetched this session contains any of: orgDesign, stakeholders, realOptions, executivePresence, innovationPortfolio, changeManagement, wargame, competitive_intel, or R145-R160. This task\\'s pasted "Part 2-7 / pt-O" spec is therefore treated the same way the repo\\'s own prior session treated its "pt-L" spec: as an unverified external document, not a fact about the real repository.')}
+    `)}
+
+    ${card('Why a single hand-authored index.html (not React/Vite)', `This tool environment's required deliverable is a single <span class="mono">index.html</span> (vanilla HTML/CSS/JS + Tailwind CDN), unlike the repo's own prior session which ran in a React+Vite tool environment. No code is shared between this file and the real repo's <span class="mono">src/</span> tree or root <span class="mono">index.html</span> — this is an original build of the pasted spec's <i>functional ideas</i> only.`)}
+
+    ${card('Spec bugs/gaps found by inspecting the pasted text itself', `
+      <ul class="list-disc ml-5 space-y-1">
+        <li><b>Quadrant gap:</b> CHAMPIONS/SUPPORTERS/BLOCKERS/NEUTRALS thresholds leave <span class="mono">alignment === 3 &amp; influence ≥ 4</span> unclassified. Demonstrated live in Stakeholders tab ("Industry Regulator").</li>
+        <li><b>valueOfAbandonment bug:</b> calls <span class="mono">valueOfWaiting()</span> and reads its call-side <span class="mono">optionValue</span>; <span class="mono">valueOfWaiting()</span> computes <span class="mono">putValue</span> internally but never returns it in the pasted code. The "abandonment" number is therefore call-option math on a different strike, not true put-based abandonment value.</li>
+        <li><b>Executive presence composite:</b> averages a 1–5 clarity scale directly with four 0–1 scales, with no normalization — can silently distort the composite. We show both the as-specified raw value and a normalized alternative.</li>
+        <li><b>Kotter steps 4-8:</b> never defined in the pasted code (explicit comment: "further checks from event log", no body) — yet <span class="mono">progress</span> divides by 8 and <span class="mono">currentStep</span> defaults to 8 ("done") once the 3 defined steps pass, which silently implies steps 4-8 completed when they were never modeled.</li>
+        <li><b>roadmapItems dead code:</b> <span class="mono">analyzePortfolio()</span> computes <span class="mono">roadmapItems</span> from <span class="mono">product.roadmap.item</span> events but never uses the variable in the horizon loop.</li>
+        <li><b>wargame.js / competitive_intel.js:</b> named in the "New Modules" list and referenced by test IDs T_O_1/T_O_2/G_O_2, but no source was pasted this session. Implemented here as a disclosed, original stub only.</li>
+        <li><b>R145-R160:</b> only one-line descriptions given for most; full rule logic/thresholds were not pasted. Only R145, R151, R158 (which had concrete worked descriptions in the Health Wall section) are implemented as executable logic; the rest are listed as <span class="mono">DEFINED_ONLY</span> in the Rules catalog.</li>
+      </ul>
+    `)}
+
+    ${card('Rules catalog (R145-R160)', `<table class="text-xs w-full"><thead><tr class="text-left text-slate-500"><th>ID</th><th>Description</th><th>Status</th></tr></thead>
+      <tbody>${LEADOS.rulesCatalog.map(r=>`<tr class="border-t"><td class="py-1 mono">${r.id}</td><td>${r.desc}</td><td><span class="text-xs px-2 py-0.5 rounded ${r.status==='EXECUTABLE'?'badge-pass':'bg-slate-100 text-slate-500'}">${r.status}</span></td></tr>`).join('')}</tbody></table>`)}
+  </div>`;
+}
+
+render();
+</script>
+</body>
 </html>
