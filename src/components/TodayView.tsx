@@ -1,107 +1,206 @@
-import { useMemo, useState } from "react";
-import type { AppState } from "../lib/types";
-import { buildFindings } from "../lib/engine";
-import { buildRiskRegister, detectCrossRiskAmplification } from "../lib/riskIntelligence";
-import { shannonEntropy } from "../lib/infoTheory";
-import { identifyFeedbackLoops, identifyBifurcationPoints, identifyAttractors } from "../lib/casEngine";
-import { runSelfTests, type TestResult } from "../lib/selfTest";
-import { resetState } from "../lib/store";
-import { Card, Label, Stat, Badge } from "./ui";
+import { useState } from 'react';
+import { AppState, EventType, Finding } from '../lib/types';
+import { PLAYBOOKS } from '../lib/engine';
+import { generateFindingExplanation } from '../lib/docs';
+import { recallRelevant } from '../lib/institutionalMemory';
+import { Card, Button, Pill, Label, inputCls, SectionHeading } from './ui';
 
-export function TodayView({ state, setState, navigate }: { state: AppState; setState: (s: AppState) => void; navigate: (r: string) => void }) {
-  const findings = useMemo(() => buildFindings(state), [state]);
-  const register = useMemo(() => buildRiskRegister(findings), [findings]);
-  const amps = useMemo(() => detectCrossRiskAmplification(register), [register]);
-  const entropy = useMemo(() => shannonEntropy(state.events), [state.events]);
-  const loops = useMemo(() => identifyFeedbackLoops(findings), [findings]);
-  const bifurcations = useMemo(() => identifyBifurcationPoints(findings, state.runwayMonths), [findings, state.runwayMonths]);
-  const attractors = useMemo(() => identifyAttractors(state), [state]);
-  const [tests, setTests] = useState<TestResult[] | null>(null);
+const CAPTURE_TYPES: { id: EventType; label: string }[] = [
+  { id: 'oneonone.logged', label: '1:1 logged' },
+  { id: 'skip.logged', label: 'Skip-level logged' },
+  { id: 'decision.made', label: 'Decision made' },
+  { id: 'decision.outcome', label: 'Decision outcome' },
+  { id: 'crisis.logged', label: 'Crisis logged' },
+  { id: 'crisis.postmortem', label: 'Crisis postmortem' },
+  { id: 'goal.set', label: 'Goal set' },
+  { id: 'feedback.logged', label: 'Feedback logged' },
+  { id: 'reflection.logged', label: 'Reflection logged' },
+];
 
-  const riskTone = register.overallRisk === 0 ? "emerald" : register.overallRisk < 35 ? "slate" : register.overallRisk < 70 ? "amber" : "rose";
+const sevTone = (sev: number) => (sev >= 4 ? 'rose' : sev >= 3 ? 'amber' : 'slate') as 'rose' | 'amber' | 'slate';
+
+export function TodayView({
+  state,
+  findings,
+  today,
+  onCapture,
+  onCompletePlaybook,
+  onDismiss,
+  onSeed,
+  onReset,
+}: {
+  state: AppState;
+  findings: Finding[];
+  today: string;
+  onCapture: (type: EventType, data: Record<string, any>, personId?: string) => void;
+  onCompletePlaybook: (playId: string, personId?: string) => void;
+  onDismiss: (key: string, mode: 'snooze' | 'dismiss') => void;
+  onSeed: () => void;
+  onReset: () => void;
+}) {
+  const [type, setType] = useState<EventType>('oneonone.logged');
+  const [personId, setPersonId] = useState<string>(state.people[0]?.id ?? '');
+  const [note, setNote] = useState('');
+  const [title, setTitle] = useState('');
+  const [owner, setOwner] = useState('');
+  const [style, setStyle] = useState<'' | 'plan' | 'direct'>('');
+  const [explainKey, setExplainKey] = useState<string | null>(null);
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const data: Record<string, any> = {};
+    if (note) data.note = note;
+    if (title) data.title = title;
+    if (owner) data.owner = owner;
+    if (style) data.style = style;
+    if (type === 'crisis.logged') data.what = note || title;
+    if (type === 'crisis.postmortem') {
+      data.what_happened = note;
+      data.action_items = [];
+      data.what_went_well = [];
+    }
+    if (type === 'reflection.logged') data.patterns = note ? [note] : [];
+    onCapture(type, data, personId || undefined);
+    setNote('');
+    setTitle('');
+    setOwner('');
+    setStyle('');
+  }
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold text-white">Overview</h1>
-        <p className="mt-1 max-w-3xl text-sm text-slate-400">
-          A single-page leadership intelligence sandbox: toggle synthetic risk signals, then watch information-theory,
-          complex-adaptive-systems, and risk-register math recompute live from that one source of truth. Built fresh for
-          this session — see <button className="underline" onClick={() => navigate("/about")}>About / Provenance</button> for
-          exactly what was verified against the real GitHub repo vs. what is original here.
-        </p>
-      </div>
+      <SectionHeading
+        eyebrow="Part 4 — adaptive onboarding is in the banner above the fold"
+        title="Today"
+        desc="Quick capture writes an event; the engine re-evaluates every rule against your updated log immediately."
+      />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card title="Overall Risk" subtitle="Mean of 8 category scores, 0-100">
-          <Stat label="Score" value={String(register.overallRisk)} />
-          <div className="mt-3"><Badge tone={riskTone as any}>{register.overallRisk === 0 ? "CLEAR" : register.overallRisk < 35 ? "WATCH" : register.overallRisk < 70 ? "ELEVATED" : "CRITICAL"}</Badge></div>
-        </Card>
-        <Card title="Active Findings" subtitle="From the Signal Board">
-          <Stat label="Count" value={String(findings.length)} />
-        </Card>
-        <Card title="Event Entropy" subtitle="Shannon H, normalized">
-          <Stat label="H / Hmax" value={`${(entropy.normalized * 100).toFixed(0)}%`} />
-        </Card>
-        <Card title="CAS Signals" subtitle="Loops / bifurcations / attractors">
-          <Stat label="Count" value={`${loops.length} / ${bifurcations.length} / ${attractors.length}`} />
-        </Card>
-      </div>
-
-      {amps.length > 0 && (
-        <Card title="Cross-Category Amplification" subtitle="Risk categories compounding each other right now">
-          <ul className="space-y-2">
-            {amps.map((a) => (
-              <li key={a.id} className="rounded-lg border border-rose-900/50 bg-rose-950/20 p-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <Badge tone="rose">{a.label}</Badge>
-                  <span className="text-xs text-slate-500">sev {a.sev}</span>
-                </div>
-                <p className="mt-1 text-xs text-slate-400">{a.detail}</p>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      <Card title="Quick Presets" subtitle="Jump-start a scenario on the Signal Board, then explore the other tabs">
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => navigate("/signals")} className="rounded-md bg-indigo-500/15 px-3 py-1.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30 hover:bg-indigo-500/25">
-            Go to Signal Board →
-          </button>
-          <button
-            onClick={() => {
-              if (confirm("Reset all synthetic data and signal toggles?")) setState(resetState());
-            }}
-            className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700"
-          >
-            Reset synthetic data
-          </button>
+      <Card>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-900">Quick capture</h3>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onSeed}>Load sample data</Button>
+            <Button variant="danger" onClick={onReset}>Reset all data</Button>
+          </div>
         </div>
+        <form onSubmit={submit} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <Label>Event type</Label>
+            <select className={inputCls} value={type} onChange={(e) => setType(e.target.value as EventType)}>
+              {CAPTURE_TYPES.map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <Label>Person (optional)</Label>
+            <select className={inputCls} value={personId} onChange={(e) => setPersonId(e.target.value)}>
+              <option value="">— none —</option>
+              {state.people.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+          {(type === 'decision.made' || type === 'goal.set') && (
+            <div>
+              <Label>Title</Label>
+              <input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Freeze hiring for Q3" />
+            </div>
+          )}
+          {type === 'goal.set' && (
+            <div>
+              <Label>Owner (person id, optional)</Label>
+              <select className={inputCls} value={owner} onChange={(e) => setOwner(e.target.value)}>
+                <option value="">— no owner —</option>
+                {state.people.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {(type === 'decision.made' || type === 'oneonone.logged') && (
+            <div>
+              <Label>Style (for genome heuristic, optional)</Label>
+              <select className={inputCls} value={style} onChange={(e) => setStyle(e.target.value as any)}>
+                <option value="">— unspecified —</option>
+                <option value="plan">plan</option>
+                <option value="direct">direct</option>
+              </select>
+            </div>
+          )}
+          <div className="sm:col-span-2 lg:col-span-4">
+            <Label>Note / lessons / patterns</Label>
+            <input className={inputCls} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Free text — stored in data.note / data.lessons / data.patterns depending on type" />
+          </div>
+          <div>
+            <Button type="submit">Log event</Button>
+          </div>
+        </form>
       </Card>
 
-      <Card title="Self-Tests" subtitle="Original runtime checks of this build's own math (not the unverified 'T_L/G_L' suite referenced in the task prompt)">
-        <button onClick={() => setTests(runSelfTests())} className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700">
-          Run self-tests
-        </button>
-        {tests && (
-          <ul className="mt-4 space-y-1.5">
-            {tests.map((t) => (
-              <li key={t.id} className="flex items-start gap-2 text-xs">
-                <span className={t.pass ? "text-emerald-400" : "text-rose-400"}>{t.pass ? "✓" : "✗"}</span>
-                <span className="text-slate-400">
-                  <span className="font-mono text-slate-300">{t.id}</span> — {t.detail}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {tests && (
-          <Label>
-            {tests.filter((t) => t.pass).length}/{tests.length} passing.
-          </Label>
-        )}
-      </Card>
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-slate-900">
+          Active findings ({findings.length})
+        </h3>
+        <div className="space-y-3">
+          {findings.length === 0 && (
+            <Card className="text-sm text-slate-500">No active findings. Every installed rule is currently passing against your logged data.</Card>
+          )}
+          {findings.map((f) => {
+            const explanation = explainKey === f.key ? generateFindingExplanation(f, state) : null;
+            const memories = recallRelevant({ findingRule: f.rule, personId: f.personId }, state, today);
+            return (
+              <Card key={f.key}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Pill tone={sevTone(f.sev)}>sev {f.sev}</Pill>
+                      <Pill>{f.rule}</Pill>
+                      <Pill tone="slate">conf {f.conf}</Pill>
+                      <Pill tone="slate">score {f.score}</Pill>
+                    </div>
+                    <p className="text-sm font-medium text-slate-900">{f.title}</p>
+                    <ul className="list-disc space-y-0.5 pl-4 text-xs text-slate-500">
+                      {f.basis.map((b, i) => <li key={i}>{b}</li>)}
+                    </ul>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="ghost" onClick={() => setExplainKey(explainKey === f.key ? null : f.key)}>
+                      {explainKey === f.key ? 'Hide explanation' : 'Explain'}
+                    </Button>
+                    {f.play && (
+                      <Button onClick={() => onCompletePlaybook(f.play as string, f.personId)}>
+                        Run playbook: {PLAYBOOKS[f.play]}
+                      </Button>
+                    )}
+                    <Button variant="ghost" onClick={() => onDismiss(f.key, 'snooze')}>Snooze 3d</Button>
+                    <Button variant="ghost" onClick={() => onDismiss(f.key, 'dismiss')}>Dismiss</Button>
+                  </div>
+                </div>
+                {explanation && (
+                  <div className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                    <p><span className="font-semibold text-slate-800">Rule:</span> {explanation.headline}</p>
+                    <p><span className="font-semibold text-slate-800">Your case:</span> {explanation.yourCase}</p>
+                    {explanation.sourceData.length > 0 && (
+                      <div>
+                        <p className="font-semibold text-slate-800">Source data:</p>
+                        <ul className="list-disc pl-4">{explanation.sourceData.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                      </div>
+                    )}
+                    <p><span className="font-semibold text-slate-800">Resolution:</span> {explanation.resolution}</p>
+                    {memories.length > 0 && (
+                      <div>
+                        <p className="font-semibold text-slate-800">Relevant institutional memory:</p>
+                        <ul className="list-disc pl-4">{memories.map((m) => <li key={m.id}>{m.lesson}</li>)}</ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

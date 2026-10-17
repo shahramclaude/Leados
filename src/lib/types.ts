@@ -1,85 +1,110 @@
-// src/lib/types.ts
-// Shared types for the pt-M "Inference Chain Engine" sandbox.
-// Original to this delivery — see AI-SESSION-LOG.md for what was verified
-// against github.com/wbweve/Leados vs. what is fresh code written only to
-// make the pasted pt-M "Part 1" brief runnable.
+// types.ts — shared data model for this build.
+// ORIGINAL to this session. Not copied from wbweve/Leados: that repo's own
+// src/lib/types.ts was not fetched byte-for-byte this session (out of scope,
+// disclosed in AI-SESSION-LOG.md). Shape below is designed from scratch to
+// support the four pt-N modules (docs, institutionalMemory, selfImprove,
+// onboarding) against a small original rule engine — it does not claim to
+// match any verified prior schema.
 
-export type Category = "People" | "Revenue" | "Engineering" | "Crisis" | "Strategy";
+export type EventType =
+  | 'oneonone.logged'
+  | 'skip.logged'
+  | 'decision.made'
+  | 'decision.outcome'
+  | 'crisis.logged'
+  | 'crisis.postmortem'
+  | 'reflection.logged'
+  | 'goal.set'
+  | 'feedback.logged'
+  | 'playbook.completed';
 
-export interface Rule {
-  id: string; // e.g. "R1" — IDs reused from the pasted brief so its named
-              // scenarios (R1, R3, R10, R19, R73, R104...) are explorable.
+export const KNOWN_EVENT_TYPES: EventType[] = [
+  'oneonone.logged',
+  'skip.logged',
+  'decision.made',
+  'decision.outcome',
+  'crisis.logged',
+  'crisis.postmortem',
+  'reflection.logged',
+  'goal.set',
+  'feedback.logged',
+  'playbook.completed',
+];
+
+export interface Person {
+  id: string;
   name: string;
-  category: Category;
-  severity: number; // 1..5, fabricated-but-disclosed scale
-  description: string;
-  /** If true, this rule accumulates occurrences (e.g. "missed 1:1s count")
-   *  instead of being a plain on/off toggle. */
-  counter?: boolean;
-  counterLabel?: string;
+  role: string;
+  reportsTo?: string | null;
 }
 
-export interface SignalEntry {
-  active: boolean;
-  occurrences?: number;
+export interface AppEvent {
+  id: string;
+  ts: string; // ISO timestamp
+  type: EventType;
+  personId?: string;
+  data: Record<string, any>;
 }
 
-export type SignalState = Record<string, SignalEntry>;
+export interface AuditEntry {
+  ts: string;
+  action: string;
+  ref?: string;
+}
 
-export interface Finding {
-  rule: string;
-  severity: number;
+export interface Settings {
+  cadenceDays: number; // target days between 1:1s
+  skipDays: number; // target days between skip-levels
+  decisionMaxOpenDays: number; // days before an open decision is "stale"
+  crisisPostmortemDays: number; // days before an unreviewed crisis is flagged
+}
+
+export interface DismissEntry {
+  key: string;
+  ts: string;
+  mode: 'snooze' | 'dismiss';
 }
 
 export interface AppState {
-  signals: SignalState;
-  crisisCount: number;
-  /** ISO date strings (YYYY-MM-DD), one per historical attrition event,
-   *  used only by the temporal inference pattern (INF-005). */
-  attritionLog: string[];
+  people: Person[];
+  events: AppEvent[];
+  audit: AuditEntry[];
+  settings: Settings;
+  dismissed: DismissEntry[];
+  sessionStartedAt: string;
 }
 
-export interface ForwardConclusion {
+export type Confidence = 'low' | 'med' | 'high';
+
+export const CONF_FACTOR: Record<Confidence, number> = { low: 0.5, med: 0.75, high: 1 };
+
+export interface RuleDef {
   id: string;
-  severity: number;
   title: string;
-  body: string;
-  confidence: number;
-  confLabel: string;
-  intervention: string;
+  domain: 'cadence' | 'decisions' | 'crisis' | 'goals';
+  params: string; // human-readable description of firing condition
+  playbook?: string; // playbook id, absent = disclosed no-playbook rule
+  baseSev: number;
 }
 
-export interface ForwardPattern {
-  id: string;
-  name: string;
-  pattern: "FORWARD";
-  premiseLabels: string[];
-  premises: Array<
-    | { type: "FINDING"; rule: string; op: "active" | "inactive"; threshold?: number }
-    | { type: "METRIC"; metric: "crisisCount"; op: "gte" | "lte"; value: number }
-  >;
-  conclusion: ForwardConclusion;
+export interface Finding {
+  key: string;
+  rule: string;
+  title: string;
+  sev: number;
+  conf: Confidence;
+  score: number;
+  sources: string[]; // event ids
+  basis: string[]; // human-readable evidence strings
+  play?: string;
+  personId?: string;
 }
 
-export interface Hypothesis {
-  name: string;
-  evidenceFor: Array<{ rule: string; op: "active" }>;
-  evidenceAgainst: Array<{ rule: string; op: "inactive" }>;
-  explanation: string;
-  intervention: string;
-}
+export const DEFAULT_SETTINGS: Settings = {
+  cadenceDays: 14,
+  skipDays: 60,
+  decisionMaxOpenDays: 21,
+  crisisPostmortemDays: 14,
+};
 
-export interface ScoredHypothesis extends Hypothesis {
-  forScore: number;
-  againstScore: number;
-  netScore: number;
-}
-
-export interface BackwardPattern {
-  id: string;
-  name: string;
-  pattern: "BACKWARD";
-  observation: { rule: string };
-  hypotheses: Hypothesis[];
-  label: string;
-}
+export const STORAGE_KEY = 'leados-ptn:v1';

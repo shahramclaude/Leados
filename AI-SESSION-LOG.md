@@ -1,112 +1,112 @@
-# AI Session Log — LeadOS pt-M (Leadership Science · Self-Calibration · Protocol · Decision Trees)
+# AI Session Log — LeadOS pt-N (Self-Documenting / Self-Improving Sandbox)
 
-This log records what was actually checked against `github.com/wbweve/Leados` this
-session, via which calls, what was found, and which parts of this delivery are
-verified-pattern, original, or disclosed simplifications/corrections of the task's
-pasted "Part 3–6 / pt-M" brief.
+This log records what was actually checked against `github.com/wbweve/Leados`
+this session, via which calls, what was found, and which parts of this
+delivery are verified-pattern, original, or disclosed gaps — per the task
+instruction to inspect actual code before claiming anything about it.
 
 ## 1. What was fetched, and how (this session)
 
 | # | Call | Purpose / result |
 |---|------|-------------------|
-| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered README) | Initial orientation only — treated as a claim to verify, not fact. The README itself already documents a prior session's inspection, describing a mixed React+Vite+Tailwind delivery and explicitly flagging an earlier pasted "pt-L" brief as unverified. |
-| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive file tree. Confirmed: dozens of loose root-level `.tsx`/`.md` files (e.g. `App.tsx`, `AboutView.tsx`, `IntelligenceView.tsx`, `README.md`, `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`) exist directly at repo root — **not** nested under `src/` as the rendered README's prose structure diagram implies. This is a verified discrepancy between the README's stated structure and the actual tree. |
-| 3 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/` | Root directory listing via the Contents API — corroborates #2: confirmed flat root-level `.tsx` files. |
-| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/index.html` | Confirmed a root-level, single-file HTML demo exists (title: "LEADOS Sandbox — CAS Engine, Risk Intelligence & Thermodynamics"). Not read byte-for-byte this session beyond the title; deeper byte-level claims about it are therefore **not** made here (see §4, scope limit). |
-| 5 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read the repo's own prior session log directly, in full. It documents, with its own call-by-call ledger, that a previous session verified: (a) a real, live `src/lib/infoTheory.ts` → `src/components/Thermodynamics.tsx` → `IntelligenceView.tsx` → `App.tsx` render chain; (b) `src/lib/core.ts`, `intelligence.ts`, and `physics.ts` exist but are orphaned/broken (`intelligence.ts` imports `{ engine, run }` from `./core`, which does not export them); (c) **no file, export, or identifier resembling a CAS engine, risk register, inference engine, leadership-science library, self-calibration module, universal protocol, or decision-tree engine was found anywhere in `src/lib`'s 23-file listing or in any file whose contents were fetched.** |
+| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered README) | Initial orientation — treated as a claim to verify. The README itself documents a **prior session's** provenance investigation (a "Thermodynamics + CAS Engine + Risk Intelligence" delivery) and already distinguishes verified vs. fabricated modules in that delivery. Read as repo history, not as this session's own finding. |
+| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive file tree. Confirmed: a real repo with dozens of loose root-level `.tsx`/`.md` files (`App.tsx`, `AboutView.tsx`, `RosterView.tsx`, `ProvenanceView.tsx`, `README.md`, `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`, etc.) alongside a separate `src/` tree — consistent with the README's own "two deliveries in one repo" claim. |
+| 3 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read the repo's own prior session log directly, in full. It documents, with its own call-by-call ledger: a live, wired `src/lib/infoTheory.ts` → `Thermodynamics.tsx` chain reached from `App.tsx`; a broken `src/lib/intelligence.ts` (imports `{ engine, run }` from `./core`, which `core.ts` does not export, per that session's own direct read of both files); no CAS engine or risk register anywhere found; and a full enumeration of `src/lib`'s 23 files by name. |
+| 4 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/src/lib` | Directory listing, this session, independently. Confirms the prior log's file-name enumeration, including `genome.ts` and `memory.ts` — names that are *also* referenced (with very different imagined call shapes) by this task's pasted "pt-N" brief (`LEADOS.genome.identify(P, today)`, `LEADOS.memory.longTerm._computeDomainActivity(P)`). No file named `docs.ts`, `institutionalMemory.ts`, `selfImprove.ts`, `onboarding.ts`, `calibrateRules.ts`, or `knowledge.ts` appears anywhere in this listing. |
+| 5 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/src/lib/genome.ts` | **Verified directly, this session, in full.** A small, explicitly disclosed, original "behavioral-ratio heuristic." Exports `identify(plans: number, directs: number): GenomeProfile`. Its own header comment states it was reconstructed only from a trait *name* and threshold idea in an earlier pasted brief ("pt-K"), since no `genome.js` source was found in the real tree to copy from. **This call shape (`identify(plans, directs)`) does not match the pt-N brief's imagined `LEADOS.genome.identify(P, today)`.** |
+| 6 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/src/lib/memory.ts` | **Verified directly, this session, in full.** Exports `computeTemporalPatterns(events)` and `splitLayers(allEvents, sessionStartedAt)` — a two-layer session/localStorage split. Its own header comment discloses it as an "original, from-scratch reinterpretation" of a "multi-layer memory architecture" phrase in an earlier pasted brief, since no such file existed in the real tree. **No `longTerm._computeDomainActivity` or equivalent exists in this file.** |
 
 No commit history, pull requests, issues, or GitHub code search were used this
-session. No code from the real repo was executed. This is a read-only,
-API/raw-file-based inspection, scoped to the calls listed above.
+session. No code from the real repo was executed. `src/lib/core.ts`,
+`intelligence.ts`, `infoTheory.ts`, `casEngine.ts`, `riskIntelligence.ts`,
+`Thermodynamics.tsx`, and every root-level loose file were **not** re-fetched
+this session — their status above is carried forward from the repo's own
+prior `AI-SESSION-LOG.md` (call #3), which documents first-hand how each was
+checked in an earlier session. This is a disclosed scope limit, not a
+re-verification.
 
-## 2. Verified facts (first-hand, this session)
+## 2. Verified facts (first-hand this session, or re-confirmed from the repo's own prior log)
 
-- **V1.** `github.com/wbweve/Leados` mixes two structurally different deliveries at once: ~60 loose root-level files (including a standalone vanilla-JS `index.html`) and a separate `src/` Vite+React+TypeScript app. (Calls #2, #3, #4)
-- **V2.** The repo's own prior `AI-SESSION-LOG.md` (read in full, raw, this session) independently documents a real, live, wired information-theory module (`src/lib/infoTheory.ts`), and independently documents that `core.ts`/`intelligence.ts`/`physics.ts` are present but broken/orphaned. (Call #5)
-- **V3.** That same log states, as a first-hand finding from its own session, that **no CAS engine, risk register, or equivalent module was found anywhere in the real repo** — and by direct extension, nothing resembling this task's pasted "Part 3–6" modules (`leadershipScience`, `calibrateRules`, `protocol`, `decisionTrees`, `inference.js`, `autonomous.js`) was found there either. (Call #5)
-- **V4.** Therefore, this task's pasted "Part 3–6 / pt-M" implementation brief is treated here as an **UNVERIFIED EXTERNAL SPECIFICATION** supplied by the task prompt, not as a fact about `github.com/wbweve/Leados`'s actual contents — the same treatment the repo's own prior sessions already gave the earlier "pt-L" brief.
-- **V5 (scope limit, disclosed).** This session did not fetch `src/` subdirectories directly, nor read the root `index.html`'s full body, nor read any `.tsx` component file byte-for-byte. Those claims are inherited from the repo's own prior session log (call #5), which did read them directly, rather than re-verified independently here. Flagged as a gap, not glossed over.
+- **V1.** The repo contains two structurally different deliveries: loose root-level files and a separate live `src/` Vite+React+TypeScript app. (Calls #1, #2)
+- **V2.** `src/lib/genome.ts` and `src/lib/memory.ts` are real, small, and *explicitly disclosed as original* by their own header comments — not validated instruments, not matches for the pt-N brief's imagined call shapes. (Calls #4, #5, #6)
+- **V3.** No file or export named `docs.ts`, `institutionalMemory.ts`, `selfImprove.ts`, `onboarding.ts`, `calibrateRules.ts`, or `knowledge.ts` exists anywhere in the `src/lib` listing fetched this session. (Call #4)
+- **V4 (carried forward, not re-verified this session).** A live, wired Shannon-entropy/mutual-information module exists (`infoTheory.ts` → `Thermodynamics.tsx`, reached from `App.tsx`); `intelligence.ts`'s import from `core.ts` is broken; no CAS engine or risk register exists anywhere in the tree. Source: the repo's own prior `AI-SESSION-LOG.md`, read in full this session (call #3).
+- **V5 (scope limit, disclosed).** This session did not re-fetch `core.ts`, `intelligence.ts`, `infoTheory.ts`, `App.tsx`, `Thermodynamics.tsx`, the root `index.html`, or any loose root-level file. Their described status is repo history (per V4), not this session's own byte-for-byte check.
 
 ## 3. Conclusion drawn from the above
 
-The pasted pt-M brief's six leadership-science methods, its two self-calibration
-functions, its BroadcastChannel protocol + CLI companion, and its three decision
-trees do not exist, in any form, in the real repository as of this session's and
-the inherited prior session's inspection. Nothing in this delivery is presented
-as a copy, port, or continuation of `github.com/wbweve/Leados`'s code. It is an
-**original, fresh implementation of the brief's described behavior**, built in
-this task's own tool environment.
+The task's pasted "pt-N — Final Unification Architecture" brief describes
+`LEADOS.docs`, `LEADOS.institutionalMemory`, `LEADOS.selfImprove`, and
+`LEADOS.onboarding` as if they already exist inside a large, pre-existing
+`LEADOS` object with a working `engine.run(P, today)`, a multi-rule catalog,
+decisions, playbooks, and a genome/memory/knowledge layer with specific call
+shapes (e.g. `LEADOS.genome.identify(P, today)`,
+`LEADOS.knowledge.crystallizePlaybookEffectiveness(P, today)`,
+`LEADOS.memory.longTerm._computeDomainActivity(P)`). **None of those exact
+shapes were found anywhere in `wbweve/Leados`** during this session's
+inspection. The two filenames that *do* exist and sound related
+(`genome.ts`, `memory.ts`) have different, much smaller, explicitly-original
+signatures that do not match the brief's imagined API.
 
-## 4. Environment constraint that shaped this delivery
+Per this lineage's own established convention (visible in the repo's prior
+session log for its own pasted briefs), **the pt-N brief is treated here as
+an unverified specification of behavior to build toward — not as a
+description of existing code to port.** Nothing in this delivery is
+presented as a copy, port, or continuation of `github.com/wbweve/Leados`'s
+code, or of any other session's sandbox (none of which is accessible from
+this workspace — see §4).
 
-This task's tool environment supports only a hand-authored single `index.html`
-(plus arbitrary sibling files such as `.md` or a companion `.html`), with no
-npm/Vite/React build step available. This is incompatible with continuing the
-real repo's live `src/` Vite+React+TypeScript app. **Disclosed explicitly:**
-this delivery instead follows the closer real precedent — the repo's own
-root-level, hand-authored, vanilla-JS `index.html` demo pattern — and extends
-it with original code implementing the pt-M brief's ideas.
+## 4. Environment / starting point
 
-## 5. Fidelity check on the pasted "pt-M" brief's own pseudocode
+This task's tool environment requires a React + Vite + Tailwind app with
+`src/App.tsx` as the entry point, built via `npm run build`. This workspace
+began from the **default Vite scaffold** — verified directly by reading
+`src/App.tsx`, `index.html`, `src/index.css`, and `package.json` before
+writing any code. The scaffold rendered a generic "Ready to build" placeholder
+card and had no prior LeadOS code, state, or storage key. Storage key used
+here: `leados-ptn:v1` — new, not a continuation of `leados-sandbox:v1` (the
+key disclosed by a previous pt-L-era session's README) or of any other key.
+
+`vite-plugin-singlefile` (already present in `package.json`, not added this
+session) inlines the built JS/CSS into one `dist/index.html`. Verified this
+session by grepping the build output for `https?://` strings: only inert
+XML/SVG namespace URIs and a React-docs link baked into minified error text
+were found — zero runtime network calls, confirmed by direct inspection of
+`dist/index.html` after `npm run build`.
+
+## 5. What is original, what is modeled on a verified pattern, what is a disclosed gap
+
+- **Modeled on a verified real-repo pattern, reimplemented independently:** the "genome" trait heuristic in `src/lib/institutionalMemory.ts` (`identifyGenome`). The real `src/lib/genome.ts` (read in full, call #5) uses the same idea — a plans/directs ratio with a sample-size-gated confidence label — but a different signature (`identify(plans, directs)` vs. this file's `identifyGenome(state)`) and different thresholds. Not copied; independently written from the same disclosed idea.
+- **Built from scratch, because no verified source exists anywhere in the real repo:** `src/lib/docs.ts`, `src/lib/institutionalMemory.ts` (apart from the genome note above), `src/lib/selfImprove.ts`, `src/lib/onboarding.ts`, `src/lib/engine.ts` (a small 5-rule findings engine), `src/lib/store.ts`, `src/lib/seed.ts`, `src/lib/types.ts`. These satisfy the *described behavior* in the pasted pt-N brief, not any verified prior implementation.
+- **A gap, left as a gap:** true longitudinal playbook-effectiveness measurement (before/after resolution rate over time) is not implemented — this build has no historical finding-snapshot store, so `selfImprove.ts`'s `PLAYBOOK_REVIEW` proposal uses a disclosed crude proxy (completions vs. currently-active findings citing that playbook) instead.
+- **A gap, left as a gap:** rule R2 (overdue skip-level) has no playbook wired, mirroring the "no playbook for R9" pattern the pt-N brief itself describes — resolved directly by logging the missing event, not invented to look complete.
+- **All UI** (`Shell`, `ui.tsx`, and the six tab views), the 5-rule catalog, the synthetic seed roster/event generator, and the onboarding stage model: **original to this delivery.**
+- **Storage key `leados-ptn:v1`:** new key, for the reasons in §4.
+
+## 6. Fidelity check applied to the pasted brief's own text
 
 Per the task's instruction to inspect actual code before claiming anything
-about it, this was also applied to the **pasted brief's own text**, not only to
-the GitHub repo:
+about it, this standard was applied to the **brief itself**, not only to the
+GitHub repo:
 
-- `decisionTrees.TREES['initiative-kill']`'s middle node defines the key
-  `question` **twice** in the same object literal (`question: '...negative
-  signals?'` immediately followed by `type: 'JUDGMENT_REQUIRED', question:
-  '...strategic justification required...'`). In plain JavaScript this is not
-  a syntax error — the second assignment silently overwrites the first. Fixed
-  here as a single, intentional `JUDGMENT_REQUIRED` node with one question.
-- `leadershipScience.assessVUCA`'s `volatility` calculation reads
-  `return volatility = velocities.length ? ... : 0` — assigning into a `const
-  volatility` **from inside its own initializer**, which throws a
-  `ReferenceError: Cannot access 'volatility' before initialization` if
-  executed as written. It also calls `LEADOS.temporalField?.buildTemporalProfile?.()`,
-  `LEADOS.correlate.correlate()`, and a bare `backwardChain()` function, none
-  of which are defined anywhere in the pasted brief or found in the real repo.
-  **Fixed here** with original, disclosed proxy formulas (variance of finding
-  severities for volatility; distinct finding-domain count for complexity;
-  proportion of non-"high"-confidence findings for uncertainty; proportion of
-  backward-chain hypotheses with partial, non-unanimous evidence for
-  ambiguity) — each labeled in its own output as a correction, not a port.
-- `conflictEscalation`'s and `initiativeKill`'s per-tree `navigate()` methods
-  were left unspecified in the brief (`"/* same structure as
-  pip-decision.navigate */"`). Rather than duplicating `pip-decision`'s logic
-  three times, this delivery implements one shared, generic `navigateTree()`
-  walker used by all three trees.
-- The brief's `T_M_*`/`G_M_*` test IDs (e.g. `T_M_9`, `G_M_7`) could not be
-  verified anywhere — no such file or string was found in the real repo, and
-  the brief supplies only one-line descriptions, not executable bodies.
-  Rather than claiming to "pass" tests under names whose real bodies are
-  unknown, this build ships an originally-named console self-check
-  (`selfTestPtM()`, IDs `pt-M-01`…`pt-M-12`) that exercises this file's own
-  logic and prints pass/fail to the browser console on load.
-
-## 6. Original work in this delivery (not claimed as verified spec or repo code)
-
-- `index.html` — single-file app: store, synthetic seed generator (deterministic
-  PRNG, seed 42), minimal original rules engine (`R1`, `R3`, `R4`, `R6`, `R38`,
-  `R73`, `R79` — a small illustrative subset, not a port of any "58/62-file,
-  144-rule" catalog, which was never found anywhere in the real repo), original
-  simplified forward/backward inference, the six `leadershipScience` methods,
-  the two `calibrateRules` functions plus `pearsonCorrelation`, the
-  `protocol`/`workQueue` BroadcastChannel layer, and the three `decisionTrees`.
-- `leados-cli.html` — original companion CLI, following the structural idea of
-  the brief's pasted CLI (command → `BroadcastChannel` round trip → JSON
-  response) but with its own command set matched to what is actually
-  implemented in `index.html`, and an explicit, disclosed caveat about
-  `file://` origin isolation that the pasted brief did not mention.
-- `README.md` — original, describing this delivery only.
-- Storage key `leados-pt-m:v1` — new key; this workspace began empty (no prior
-  `index.html`), so no continuity with any other session's key is claimed or
-  implied.
+- The brief writes every example as if `LEADOS.engine.run(P, today)`,
+  `P.state.events`, `P.people`, `P.decisionById`, `P.peopleById`, and
+  `LEADOS.calibrateRules.runCalibrationReport` already exist and behave
+  exactly as described. No such object, nor any of those exact property
+  paths, was found in `wbweve/Leados` during this session's inspection (§1–2).
+- Rather than inventing matching names/shapes purely to make the two line up
+  cosmetically, this delivery uses its own original schema
+  (`AppState { people, events, audit, settings, dismissed }`) and documents
+  the mismatch explicitly here and in the in-app **Provenance / About** tab.
+- The brief's self-improvement proposals (`RULE_THRESHOLD`, `COVERAGE_GAP`,
+  `PLAYBOOK_REVIEW`, `DOMAIN_NEGLECT`) are implemented as functionally
+  equivalent, original analyses over this build's own event log — not ports
+  of unverified logic.
 
 ## 7. Scope note
 
-Only this task's own pasted "Part 3–6 / pt-M" text was in scope as an input
-spec this session. Parts 1–2 of whatever series this belongs to were not
-pasted into this conversation and are therefore not reimplemented, assumed, or
-referenced here beyond what the repo's own prior session log (call #5)
-independently documents about the real repo's unrelated `src/` app.
+Only this task's pasted "pt-N" text was in scope as an input spec this
+session. Earlier parts of this series ("pt-K", "pt-L") were not pasted into
+this conversation and are referenced only insofar as the real repo's own
+fetched files/logs mention them — treated as repo history, not re-verified
+by this session.

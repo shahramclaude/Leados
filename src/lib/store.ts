@@ -1,16 +1,24 @@
-// src/lib/store.ts
-// localStorage persistence for this sandbox. New key ("leados-ptm:v1")
-// because this workspace started from the default scaffold with no prior
-// state — it does not claim continuity with any other session's save data.
-import type { AppState } from "./types";
-import { RULES } from "./rules";
+// store.ts — localStorage persistence + state mutation helpers.
+// ORIGINAL to this session. Storage key 'leados-ptn:v1' is new: this
+// workspace began from the default Vite scaffold (verified this session —
+// see AI-SESSION-LOG.md) with no prior App.tsx beyond the placeholder, so no
+// earlier session's key is continued here.
 
-const STORAGE_KEY = "leados-ptm:v1";
+import { AppState, AppEvent, Person, EventType, DEFAULT_SETTINGS, STORAGE_KEY, Settings } from './types';
 
-function emptyState(): AppState {
-  const signals: AppState["signals"] = {};
-  for (const r of RULES) signals[r.id] = { active: false, occurrences: r.counter ? 1 : undefined };
-  return { signals, crisisCount: 0, attritionLog: [] };
+function uid(prefix: string): string {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function emptyState(): AppState {
+  return {
+    people: [],
+    events: [],
+    audit: [{ ts: new Date().toISOString(), action: 'session.started' }],
+    settings: { ...DEFAULT_SETTINGS },
+    dismissed: [],
+    sessionStartedAt: new Date().toISOString(),
+  };
 }
 
 export function loadState(): AppState {
@@ -18,13 +26,14 @@ export function loadState(): AppState {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return emptyState();
     const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.signals) return emptyState();
-    // additive-field defaulting for any rules added after a save was made
-    const base = emptyState();
+    // defensive merge so older/missing fields never crash the app
     return {
-      signals: { ...base.signals, ...parsed.signals },
-      crisisCount: typeof parsed.crisisCount === "number" ? parsed.crisisCount : 0,
-      attritionLog: Array.isArray(parsed.attritionLog) ? parsed.attritionLog : [],
+      people: parsed.people ?? [],
+      events: parsed.events ?? [],
+      audit: parsed.audit ?? [],
+      settings: { ...DEFAULT_SETTINGS, ...(parsed.settings ?? {}) },
+      dismissed: parsed.dismissed ?? [],
+      sessionStartedAt: parsed.sessionStartedAt ?? new Date().toISOString(),
     };
   } catch {
     return emptyState();
@@ -32,59 +41,46 @@ export function loadState(): AppState {
 }
 
 export function saveState(state: AppState) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* ignore quota errors in sandbox */
-  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 export function resetState(): AppState {
-  const s = emptyState();
-  saveState(s);
-  return s;
+  localStorage.removeItem(STORAGE_KEY);
+  return emptyState();
 }
 
-/** A hand-picked preset that satisfies all three forward-chain patterns and
- * the backward-chain observation, so a reviewer can see every inference
- * fire without manually toggling 17 rules. Clearly a demo convenience, not
- * a "real" scenario. */
-export function applyDemoPreset(): AppState {
-  const s = emptyState();
-  const on = (id: string, occurrences?: number) => {
-    s.signals[id] = { active: true, occurrences };
-  };
-  // INF-001 Leadership Absence Cascade
-  on("R1", 3);
-  on("R3");
-  on("R10");
-  // INF-002 Revenue Model Validity Collapse
-  on("R104");
-  on("R109");
-  on("R87");
-  // INF-003 Organizational Immune Response Failure
-  on("R133");
-  on("R128");
-  s.crisisCount = 2;
-  // INF-004 Velocity Decline Root Cause (capacity-reduction hypothesis wins)
-  on("R73");
-  on("R81");
-  on("R19");
-  // INF-005 Departure Cascade — seed history below via seedAttritionHistory()
-  return s;
+export function addPerson(state: AppState, name: string, role: string, reportsTo: string | null): AppState {
+  const person: Person = { id: uid('p'), name, role, reportsTo: reportsTo || null };
+  const audit = [...state.audit, { ts: new Date().toISOString(), action: 'person.added', ref: name }];
+  return { ...state, people: [...state.people, person], audit };
 }
 
-/** Deterministic synthetic attrition history used only to demonstrate
- * INF-005 (temporal inference). Four past departures, three of which were
- * followed by another within 60 days — i.e. cascadeRate = 2/3 > 0.5, enough
- * to cross the pattern's own disclosed threshold. Dates are relative to
- * "today" so the demo works whenever it's opened. */
-export function seedAttritionHistory(): string[] {
-  const today = new Date();
-  const d = (daysAgo: number) => {
-    const t = new Date(today);
-    t.setDate(t.getDate() - daysAgo);
-    return t.toISOString().slice(0, 10);
-  };
-  return [d(260), d(230), d(140), d(95)].sort();
+export function appendEvent(
+  state: AppState,
+  type: EventType,
+  data: Record<string, any>,
+  personId?: string
+): AppState {
+  const event: AppEvent = { id: uid('e'), ts: new Date().toISOString(), type, personId, data };
+  const audit = [...state.audit, { ts: event.ts, action: `event:${type}`, ref: event.id }];
+  return { ...state, events: [...state.events, event], audit };
+}
+
+export function updateSettings(state: AppState, patch: Partial<Settings>): AppState {
+  const settings = { ...state.settings, ...patch };
+  const audit = [
+    ...state.audit,
+    { ts: new Date().toISOString(), action: 'settings.updated', ref: JSON.stringify(patch) },
+  ];
+  return { ...state, settings, audit };
+}
+
+export function dismissFinding(state: AppState, key: string, mode: 'snooze' | 'dismiss'): AppState {
+  const dismissed = [...state.dismissed, { key, ts: new Date().toISOString(), mode }];
+  const audit = [...state.audit, { ts: new Date().toISOString(), action: `finding.${mode}`, ref: key }];
+  return { ...state, dismissed, audit };
+}
+
+export function markPlaybookCompleted(state: AppState, playId: string, personId?: string): AppState {
+  return appendEvent(state, 'playbook.completed', { playId }, personId);
 }

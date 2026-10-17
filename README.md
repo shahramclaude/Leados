@@ -1,143 +1,151 @@
-# LeadOS pt-M — Leadership Science, Self-Calibration, Universal Protocol, Decision Trees
+# LeadOS pt-N — Self-Documenting, Self-Remembering, Self-Improving Sandbox
 
-A single-file HTML/CSS/JS app implementing the *functional ideas* from this
-task's pasted "Part 3–6" brief: a leadership-science library, self-calibrating
-rule thresholds, a BroadcastChannel-based local integration protocol (+ CLI
-companion), and automated leadership decision trees — all running over a
-small synthetic event log, entirely client-side.
+A React + Vite + Tailwind app implementing the four modules described in this
+task's pasted "pt-N — Final Unification Architecture" brief — a
+self-documenting system, an institutional memory system, a self-improving
+system, and adaptive onboarding — wired against a small, original leadership
+event-log engine.
 
 > **Provenance — read before assuming this continues `github.com/wbweve/Leados`
-> or any prior "pt-K"/"pt-L" delivery:** `github.com/wbweve/Leados` was
-> inspected directly this session (GitHub's REST API file tree, the repo's own
-> raw `AI-SESSION-LOG.md`, and its root `index.html` metadata) before any code
-> was written. Full ledger in `AI-SESSION-LOG.md`. Short version:
+> or any prior "pt-K"/"pt-L"/"pt-M" session:** `github.com/wbweve/Leados` was
+> inspected directly this session (GitHub's tree/contents REST API, the
+> repo's own `AI-SESSION-LOG.md`, and direct reads of `src/lib/genome.ts` and
+> `src/lib/memory.ts`) before writing any code. Full ledger in
+> `AI-SESSION-LOG.md` and in-app at **Provenance / About**. Short version:
 >
-> - The real repo mixes two deliveries: loose root-level files (including a
->   vanilla-JS `index.html` demo) and a separate, live `src/` Vite+React+TS app.
-> - The repo's own prior session log confirms a real, wired `infoTheory.ts` →
->   `Thermodynamics.tsx` chain — but **explicitly states that no CAS engine,
->   risk register, or equivalent module exists anywhere in the repo.**
-> - **Nothing resembling this task's pasted "Part 3–6" modules** (leadership
->   science library, self-calibration, universal protocol, decision trees,
->   `inference.js`, `autonomous.js`) was found anywhere, by this session or the
->   inherited prior one. That brief is therefore treated here as an
->   **unverified specification**, not repo fact — the same convention the real
->   repo's own prior sessions already used for the earlier "pt-L" brief.
+> * The real repo is **two different deliveries in one place**: loose
+>   root-level files (including a hand-authored single-file `index.html`
+>   demo) plus a separate, live Vite+React+TypeScript app under `src/`.
+> * **Verified directly, this session:** `src/lib/genome.ts` and
+>   `src/lib/memory.ts` exist, are small, and are *explicitly disclosed by
+>   their own header comments* as original reinterpretations of an earlier
+>   pasted brief's ideas — with call shapes (`identify(plans, directs)`,
+>   `splitLayers(allEvents, sessionStartedAt)`) that do **not** match this
+>   task's pt-N brief's imagined `LEADOS.genome.identify(P, today)` /
+>   `LEADOS.memory.longTerm._computeDomainActivity(P)`.
+> * **Not found anywhere in the real repo, this session:** any file or
+>   export named `docs.ts`, `institutionalMemory.ts`, `selfImprove.ts`,
+>   `onboarding.ts`, `calibrateRules.ts`, or `knowledge.ts` — confirmed via a
+>   direct listing of all 23 files in `src/lib`.
+> * Other facts about the repo (a live info-theory module, a broken
+>   `intelligence.ts` import, no CAS engine or risk register) are **carried
+>   forward from the repo's own prior session log**, read in full this
+>   session, and are flagged as such rather than re-claimed as this
+>   session's own byte-for-byte verification.
 >
-> **This app does not fork, copy, or continue that unverified history.** It is
-> a fresh, original build in this task's own tool environment (a single
-> hand-authored `index.html`, no build step), implementing only the
-> *functional ideas* in the pasted brief.
+> **This app does not fork, copy, or continue any of that history.** It is a
+> fresh build, in this task's own tool environment (React + Vite + Tailwind,
+> single `src/App.tsx` entry point, built with `npm run build`), implementing
+> only the *functional ideas* in the pasted pt-N brief — original code
+> throughout, against an original and much smaller data model.
 
 ## Run it
 
-Just open `index.html` in a browser. No build step, no dependencies beyond the
-Tailwind CDN script already in the `<head>`. State lives in `localStorage`
-under `leados-pt-m:v1`. Click **"Regenerate synthetic data"** to rebuild the
-seeded roster/event log, or **"Reset store"** to wipe it (it will reseed on
-next load).
+`npm install && npm run build`, then open `dist/index.html`. `vite-plugin-singlefile`
+inlines all JS/CSS into that one HTML file (verified this session by grepping
+the build output — only inert XML/SVG namespace strings and a React-docs link
+baked into minified error text were found, zero runtime network calls), so
+the "open one file, zero network calls" property holds here too, produced by
+a build step rather than hand-authored.
 
-For the CLI companion (`leados-cli.html`) to actually talk to `index.html` via
-`BroadcastChannel`, serve both files from the same local origin, e.g.:
+For development: `npm run dev`.
 
-```
-python3 -m http.server 8000
-# then open http://localhost:8000/index.html and http://localhost:8000/leados-cli.html
-```
-
-Opening both as local `file://` documents may not work — most browsers give
-each `file://` document its own opaque origin, which `BroadcastChannel`
-requires to match. This limitation is disclosed in-app (Protocol & CLI tab)
-and was **not** mentioned in the pasted brief.
+State lives in `localStorage` under `leados-ptn:v1`. Use **Reset all data**
+on the Today tab to clear it, or **Load sample data** to populate a small
+synthetic roster + event log for exploring every tab immediately.
 
 ## Tabs
 
 | Tab | What it does |
 |---|---|
-| Dashboard | Roster/event counts and currently active findings from the original minimal rules engine. |
-| Roster & Events | View the synthetic roster and event log; manually append new events. |
-| Leadership Science | Runs each of the six `LEADOS.leadershipScience` methods live against the current data. |
-| Self-Calibration | Runs `LEADOS.calibrateRules.runCalibrationReport()` (R1 cadence threshold, R4 feedback-imbalance threshold). |
-| Decision Trees | Navigates `pip-decision`, `conflict-escalation`, or `initiative-kill` for a chosen person/pair/initiative. |
-| Protocol & CLI | Shows `BroadcastChannel` protocol status; lets you run any READ command locally (bypassing the channel, for convenience); shows the write-command work queue. |
-| Provenance / About | The verified-vs-unverified ledger above, plus the full changelog with "why" for each non-obvious decision. |
+| **Today** | Onboarding banner (auto-detected stage + next action), quick-capture form for 9 event types, and the live findings list (explain / run playbook / snooze / dismiss per finding). |
+| **Roster** | Add people; prerequisite for every cadence/decision/crisis rule. |
+| **Docs (self-generated)** | **Part 1.** A user guide generated live from your own data (your event counts, your top finding, your most-logged event types, the installed rule catalog) plus a human-readable changelog derived directly from the audit trail. |
+| **Institutional Memory** | **Part 2.** Learnings extracted from `decision.outcome.lessons`, `crisis.postmortem.action_items`, and `reflection.logged.patterns`; a behavioral "genome" ratio heuristic; a quarterly learning timeline; and a successor-ready "transferable wisdom" filter that excludes personal-voice reflections. |
+| **Self-Improve** | **Part 3.** Proposals computed from your own usage: cadence-threshold recalibration (actual average 1:1 interval vs. configured setting), unlogged event-type coverage gaps, a crude playbook-effectiveness proxy, and domain-neglect detection. Every proposal requires an explicit "Approve & apply" click — nothing changes automatically. |
+| **Provenance / About** | The full verification ledger, in-app. |
 
-## What's original, what's a fix, what's a disclosed gap
+## The rule engine (original, disclosed-fabricated)
 
-- **Original, built from scratch** because no equivalent was found anywhere in
-  the real repo: the whole leadership-science library, the self-calibration
-  functions, the protocol/work-queue layer, the decision trees, the synthetic
-  roster/event generator (deterministic PRNG, seed 42), and the minimal
-  illustrative rules engine (`R1`, `R3`, `R4`, `R6`, `R38`, `R73`, `R79` — a
-  small set invented for this delivery, **not** a port of any "58/62-file,
-  144-rule" catalog, which was never found anywhere in the real repo).
-- **Bugs found in the pasted brief's own pseudocode, fixed rather than copied
-  verbatim:** a duplicate object key in the `initiative-kill` tree (silently
-  drops the first `question` string); a self-referential `const volatility =
-  volatility ? ... : 0` in `assessVUCA` that throws `ReferenceError` if run as
-  written; calls to undefined globals (`LEADOS.correlate`, bare
-  `backwardChain()`, `LEADOS.temporalField`). See `AI-SESSION-LOG.md` §5 for
-  the full fidelity check.
-- **A disclosed simplification:** `conflict-escalation.navigate` and
-  `initiative-kill.navigate` were left as "same structure as
-  pip-decision.navigate" in the brief with no body. This delivery uses one
-  shared, generic tree-walker (`navigateTree()`) for all three trees instead
-  of duplicating logic three times.
-- **A disclosed limitation, not glossed over:** the Universal Protocol's
-  `BroadcastChannel` transport requires same-origin tabs; it will not reliably
-  connect two `file://`-opened documents. Serve over HTTP for the CLI to work.
-- **Not implemented, disclosed as a gap:** `request-synthesis` (protocol write
-  command) and the fuller `autonomous.js`/`ambient.js`/`predict.js` workflow
-  modules referenced by the brief's `status`/`digest`/`calendar` protocol
-  commands are present here only as small, honestly-labeled stand-ins, not
-  full reimplementations — inventing elaborate behavior for modules whose
-  real specification was never verifiable anywhere would overstate this
-  delivery's scope.
+Five rules, each producing a `Finding { rule, title, sev, conf, score, sources, basis, play? }`
+with `score = sev × confidenceFactor`:
+
+- **R1** — Overdue 1:1 (`oneonone.logged` older than `settings.cadenceDays`)
+- **R2** — Overdue skip-level (`skip.logged` older than `settings.skipDays`) — **no playbook wired**, a disclosed gap mirroring the "no playbook" pattern the pt-N brief itself describes for its own R9
+- **R3** — Decision open past threshold (`decision.made` with no matching `decision.outcome`)
+- **R4** — Crisis without postmortem (`crisis.logged` with no matching `crisis.postmortem`)
+- **R5** — Goal without owner (`goal.set` with no `data.owner`)
+
+This is intentionally small. It exists only to give the four pt-N modules
+real data to generate documentation, memory, and proposals from — it is not
+a claim about the real repo's rule catalog (unverified — see provenance
+section) or a reproduction of the pt-N brief's own imagined "9+ rule"
+catalog.
 
 ## Project structure
 
 ```
-index.html        — the entire app (store, synthetic data, rules engine, inference,
-                     leadershipScience, calibrateRules, protocol, decisionTrees, UI)
-leados-cli.html    — standalone companion CLI, talks to index.html via BroadcastChannel
-AI-SESSION-LOG.md  — full first-hand research ledger for this session
-README.md          — this file
+src/
+  lib/
+    types.ts               — shared types (Person, AppEvent, Finding, Settings, ...)
+    store.ts                — localStorage persistence + state mutations
+    seed.ts                   — synthetic roster + synthetic event log (demo data)
+    engine.ts                   — 5-rule findings engine (original, disclosed)
+    docs.ts                        — Part 1: self-documenting system
+    institutionalMemory.ts            — Part 2: institutional memory + genome heuristic
+    selfImprove.ts                       — Part 3: self-improvement proposals
+    onboarding.ts                           — Part 4: adaptive onboarding stage model
+  components/
+    Shell.tsx, ui.tsx                        — nav shell + shared UI primitives
+    OnboardingBanner.tsx, TodayView.tsx,
+    RosterView.tsx, DocsView.tsx,
+    MemoryView.tsx, ImproveView.tsx,
+    AboutView.tsx                              — per-tab views
+  App.tsx                                        — composition root (entry point)
 ```
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` first (GitHub REST API tree, the
-  repo's own raw `AI-SESSION-LOG.md`, root `index.html` metadata) before
-  writing any code** — *why*: the task requires verifying actual code, not
-  trusting the pasted "pt-M" brief or any README's self-framing at face value.
-- **Declared the pasted "Part 3–6 / pt-M" brief an unverified specification,
-  not repo fact** — *why*: no module, export, or test ID it names was found
-  anywhere in the real repo, by this session or the prior session whose log
-  this session read directly; the repo's own precedent for an earlier
-  unverified brief ("pt-L") was to label it the same way.
-- **Built one hand-authored `index.html` instead of a React/Vite app** —
-  *why*: this tool environment only supports a single static HTML file; the
-  real repo's own root-level vanilla-JS `index.html` is the closer precedent
-  here, not its unrelated `src/` app.
-- **Fixed a duplicate-key bug in `initiative-kill` and a self-referential
-  undeclared-variable bug in `assessVUCA`, instead of reproducing either** —
-  *why*: shipping known-broken pseudocode silently would be worse than
-  disclosing and correcting it.
-- **Replaced undefined-global calls (`LEADOS.correlate`, `backwardChain()`,
-  `LEADOS.temporalField`) with original, labeled proxy formulas** — *why*:
-  those modules don't exist in the brief or the repo; silent invented
-  stand-ins would misattribute original work to an external spec.
-- **Unified three decision trees under one generic `navigateTree()` walker**
-  — *why*: the brief itself left two of the three `navigate()` bodies
-  unspecified ("same structure as..."); a shared walker is the direct fix.
-- **Generated deterministic synthetic data (seed 42) covering every branch of
-  every tree and all four Radical Candor quadrants** — *why*: lets every code
-  path in Parts 3–6 be demoed immediately without requiring manual data entry.
-- **Disclosed the `BroadcastChannel` + `file://` origin limitation explicitly,
-  in-app and in this README** — *why*: the brief asserted "zero network, same
-  browser" without this caveat; it doesn't hold for two separately-opened
-  local files in most browsers.
-- **Did not claim to pass any `T_M_*`/`G_M_*` test ID; shipped an
-  originally-named console self-check (`pt-M-01`…`pt-M-12`) instead** —
-  *why*: those test bodies were never verifiable anywhere; claiming to satisfy
-  them by name would misstate provenance.
+- **Inspected `github.com/wbweve/Leados` first** — via GitHub's tree/contents
+  REST API, the repo's own `AI-SESSION-LOG.md`, and direct raw-file reads of
+  `src/lib/genome.ts` and `src/lib/memory.ts` — before writing any code.
+  *Why:* the task requires inspecting actual code, not trusting the pasted
+  pt-N brief's own framing at face value.
+- **Declared the pasted "pt-N" brief an unverified specification, not repo
+  fact**, after confirming no file/export named `docs.ts`,
+  `institutionalMemory.ts`, `selfImprove.ts`, `onboarding.ts`,
+  `calibrateRules.ts`, or `knowledge.ts` exists in the real repo's `src/lib`,
+  and that the two filenames that do exist and sound related (`genome.ts`,
+  `memory.ts`) have different, smaller, explicitly-original signatures.
+  *Why:* half-right claims are more dangerous than fully-wrong ones; this
+  README and the in-app Provenance tab spell out exactly which parts are
+  verified, carried-forward, or original.
+- **Built a small original 5-rule engine instead of trying to reconstruct
+  the pt-N brief's implied 9+ rule catalog verbatim.** *Why:* the brief's
+  rule catalog was never defined anywhere in scope (not in the real repo, not
+  fully in the brief itself beyond R1/R3/R4/R5/R9 being referenced
+  implicitly) — inventing a large matching catalog would misattribute
+  invented work to an external spec.
+- **Left R2 (skip-level) without a playbook** — *why:* mirrors the brief's
+  own disclosed "no playbook for R9" pattern; resolving gaps by pointing at
+  real action (log the event) rather than fabricating a playbook just to
+  look complete.
+- **Modeled the "genome" behavioral heuristic on `src/lib/genome.ts`'s
+  verified ratio-and-confidence idea, but reimplemented independently with a
+  different signature** — *why:* the idea (ratio of two self-tagged
+  behaviors, gated by sample size) is simple enough to be worth reusing
+  conceptually; the real file's exact signature doesn't fit this app's event
+  schema, so copying it would create a false sense of continuity.
+- **Used a crude playbook-effectiveness proxy (current findings vs.
+  completions) instead of a true longitudinal resolution-rate** — *why:*
+  this build keeps no historical finding snapshots; claiming a resolution
+  *rate over time* without that history would be fabricated precision.
+- **Used a new storage key (`leados-ptn:v1`)** — *why:* this workspace began
+  from the default Vite scaffold with no prior app state; reusing another
+  session's key would assert a shared history that does not exist here.
+- **Built as a React+Vite+Tailwind app (this task's required stack) instead
+  of a hand-authored single HTML file** — *why:* this environment's entry
+  point is `src/App.tsx`. The build still inlines everything into one
+  `dist/index.html` with zero runtime network calls (verified by grepping
+  the build output), so the end-user property the brief cares about ("open
+  one file") holds anyway.
