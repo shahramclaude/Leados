@@ -1,72 +1,73 @@
-// Shared types for the LEADOS-style sandbox.
-// Original to this delivery — see AI-SESSION-LOG.md for what was verified
-// against github.com/wbweve/Leados before any of this was written.
+// Original to this delivery. Not copied from github.com/wbweve/Leados
+// (verified absent there — see AI-SESSION-LOG.md).
 
-export const CATEGORIES = [
-  "People",
-  "Finance",
-  "Delivery",
-  "Strategy",
-  "Legal",
-  "Product",
-  "Culture",
-  "Security",
-] as const;
-export type Category = (typeof CATEGORIES)[number];
+export type DimensionKey =
+  | "PEOPLE_SYSTEMS"
+  | "FINANCIAL_INTELLIGENCE"
+  | "OPERATIONAL_MATURITY"
+  | "STRATEGIC_CLARITY"
+  | "GOVERNANCE_MATURITY"
+  | "ANALYTICAL_MATURITY"
+  | "RESILIENCE_MATURITY"
+  | "CULTURE_MATURITY"
+  | "SELF_AWARENESS_MATURITY"
+  | "INNOVATION_MATURITY"
+  | "EXECUTION_MATURITY"
+  | "MARKET_INTELLIGENCE";
 
-export type Severity = 1 | 2 | 3 | 4; // 1 low ... 4 critical
-
-export interface Rule {
-  id: string; // e.g. "R7"
-  category: Category;
-  label: string;
-  description: string;
-  defaultSeverity: Severity;
-}
-
-export interface Person {
+export interface OrgEvent {
   id: string;
-  name: string;
-  role: string;
-}
-
-export interface Finding {
-  ruleId: string;
-  category: Category;
-  label: string;
-  severity: Severity;
+  type: string;
+  ts: number; // days since epoch-ish counter, synthetic
   personId?: string;
-  recurrence: number; // how many times "simulated recurrence" was triggered
-  ts: number;
+  data?: Record<string, unknown>;
 }
 
-export interface EventLogEntry {
-  id: string;
-  ts: number;
-  personId: string;
-  type: string; // synthetic event type, e.g. "commit", "message", "meeting", "review"
+export interface DimensionDef {
+  key: DimensionKey;
+  name: string;
+  short: string;
+  levels: [string, string, string, string, string]; // level1..level5 labels
+  score: (events: OrgEvent[]) => number;
+}
+
+export interface DimensionResult {
+  key: DimensionKey;
+  name: string;
+  score: number;
+  maxScore: 5;
+  label: string;
+  nextLevel: string;
+  gap: number;
+}
+
+export interface PatternResult {
+  name:
+    | "ADVANCED_LEADER"
+    | "BALANCED_PRACTITIONER"
+    | "SPECIALIST"
+    | "EMERGING_PRACTITIONER"
+    | "BEGINNING";
+  description: string;
+}
+
+export interface MaturityProfile {
+  dimensions: Record<DimensionKey, DimensionResult>;
+  meanMaturity: number;
+  variance: number;
+  pattern: PatternResult;
+  priorityGaps: { key: DimensionKey; name: string; score: number; gap: number }[];
+}
+
+export interface EventCatalogItem {
+  type: string;
+  label: string;
+  dimensions: DimensionKey[];
+  hint: string;
 }
 
 export interface AppState {
-  activeRuleIds: string[]; // which of the 50 rules are toggled on
-  severityOverrides: Record<string, Severity>;
-  personLinks: Record<string, string>; // ruleId -> personId
-  recurrence: Record<string, number>; // ruleId -> simulated recurrence count
-  runwayMonths: number;
-  events: EventLogEntry[];
-  roster: Person[];
+  events: OrgEvent[];
+  orgName: string;
+  presetApplied: string | null;
 }
-
-export const SEVERITY_LABEL: Record<Severity, string> = {
-  1: "Low",
-  2: "Medium",
-  3: "High",
-  4: "Critical",
-};
-
-export const SEVERITY_WEIGHT: Record<Severity, number> = {
-  1: 1,
-  2: 2,
-  3: 4,
-  4: 8,
-};

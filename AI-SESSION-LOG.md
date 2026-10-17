@@ -1,160 +1,72 @@
-# AI Session Log — LEADOS pt-O sandbox (Org Design, Stakeholders, Real Options, Exec Presence, Innovation Portfolio, Change Management)
+# AI Session Log — LeadOS pt-P, Part 1 (Organizational Life Stage Intelligence)
 
 This log records what was actually checked against `github.com/wbweve/Leados` this
 session, via which calls, what was found, and what in this delivery is
-verified-pattern, original, or a disclosed gap/limitation.
+original, verified-pattern, or a disclosed gap. It is written before any claim
+about the real repo is made elsewhere in this delivery.
 
 ## 1. What was fetched, and how (this session)
 
 | # | Call | Purpose / result |
 |---|------|-------------------|
-| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered README) | Initial orientation, treated as a claim to verify. Rendered README describes a **prior session's own delivery**: "LEADOS — Sandbox Build: Thermodynamics, CAS Engine, Risk Intelligence" (React+Vite+Tailwind), with its own provenance block disclaiming continuity with any earlier "pt-K"/"pt-L" session's pasted brief. |
-| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive file tree via GitHub's REST API. Confirmed: the repo root contains dozens of loose `.tsx` files (`AboutView.tsx`, `App.tsx`, `BulletGraph.tsx`, `BundleModal.tsx`, `BundlesView.tsx`, `CalibrationCurve.tsx`, `Catalog.tsx`, `ChartFrame.tsx`, `CohortGrid.tsx`, `CommandPalette.tsx`, `ContractView.tsx`, `DataView.tsx`, `DataWidgets.tsx`, `DomainViews.tsx`, `FinanceDashboard.tsx`, `GanttText.tsx`, `HealthView.tsx`, `Heatmap.tsx`, `Histogram.tsx`, `IntelligenceDashboard.tsx`, `IntelligenceView.tsx`, `LineChart.tsx`, `MaintenanceView.tsx`, `MiscViews.tsx`, `Network.tsx`, `OverlayPanels.tsx`, `PeopleDashboard.tsx`, `PlaybooksView.tsx`, `ProvenanceView.tsx`, `Radar.tsx`, `RosterView.tsx`, `ScoreMath.tsx`, ...) plus `README.md`, `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`. (Listing was truncated by the API response at ~30 entries; not every file was individually confirmed, see §4 scope limits.) |
-| 3 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read in full. This is the **real repo's own log from its prior session**. It documents, first-hand from that session: a live `src/lib/infoTheory.ts` wired into `Thermodynamics.tsx` (verified real), `src/lib/core.ts`/`intelligence.ts`/`physics.ts` present but orphaned (not imported by live `App.tsx`; `intelligence.ts` imports `{engine, run}` from `./core`, which `core.ts` does not export), and **no** CAS engine, risk register, or match for a previously-pasted "pt-L" brief's 58/62-file, 144-rule history anywhere in `src/lib` or any file that prior session fetched. |
-| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/index.html` (raw, as text/markdown) | Returned almost no content beyond the page `<title>` ("LEADOS Sandbox — CAS Engine, Risk Intelligence & Thermodynamics"), because this is a client-rendered single-page app — plain-text/markdown extraction cannot see JS-rendered content. **Disclosed scope limit**: this session did not independently re-verify this file's full internal content byte-for-byte; it relies on the repo's own `AI-SESSION-LOG.md` (call #3's source document), which that prior session reported already contained direct confirmation of `identifyAttractors()` (disclosed dead-end), ~60 distinct `R`-rule-ID strings, and the literal string `"pt-L"` used skeptically. |
-| 5 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/README.md` (raw, as text) | Read in full. Confirms the rendered version from call #1 byte-for-byte (same provenance block, same "Run it" / "Pages" / "Project structure" / "Changelog" sections). No new information beyond call #1, used as independent confirmation that the rendered GitHub page isn't being altered by GitHub's own rendering layer. |
+| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered README) | Initial orientation — treated as a claim to verify, not fact. Describes a prior "pt-L" session's CAS/Thermodynamics/Risk sandbox delivery and its own provenance ledger. |
+| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Partial tree (response truncated by fetch-size limits before completing). Confirmed two deliveries exist: loose root files + a separate `src/` tree. |
+| 3 | `bash curl https://api.github.com/repos/wbweve/Leados/contents/` , `.../contents/src`, `.../contents/src/lib`, `.../contents/src/components` | Full, untruncated directory listings via `curl` (sandbox has outbound network access). Counted **~90 root-level files**, `src/lib` = **28 files**, `src/components` = **24 files**. |
+| 4 | `bash curl` of `src/App.tsx` (raw) | **Verified directly:** imports exactly `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`, `useHashRoute`, and `loadState` from `./lib/store`. |
+| 5 | `bash curl` loop downloading the raw content of all 28 `src/lib/*` files, all 24 `src/components/*` files, `src/App.tsx`, `src/main.tsx`, `src/index.css` into one local buffer, then `grep -i` for `lifeStage`, `computeMaturityProfile`, `PEOPLE_SYSTEMS`, `maturityProfile`, `DIMENSIONS` | **Zero matches anywhere in the live `src/` app.** |
+| 6 | Same loop repeated for all ~90 root-level loose files plus the root `index.html` | **Zero matches anywhere in the root-level files either.** |
+| 7 | `bash curl` of the root `index.html` directly | **Verified directly:** as of this session, the root `index.html` is the stock 12-line Vite template (`<div id="root">` + `<script src="/src/main.tsx">`), 352 bytes — not the ~54KB hand-authored single-file demo a prior session's own log (read in call #9) describes. The hand-authored demo has evidently been replaced since that log was written. |
+| 8 | `grep` of the raw import lines across all fetched `src/components/*.tsx` files | **Verified directly:** components such as `AccessibilityView.tsx`, `AestheticsView.tsx`, `CommandPalette.tsx`, `DecisionsView.tsx`, `DomainsView.tsx`, `EnergyView.tsx`, `EventLogView.tsx`, `HealthView.tsx`, `IntelligenceView.tsx`, `LogView.tsx`, `MemoryGenomeView.tsx`, `PeopleView.tsx`, `SynthesisView.tsx`, `Thermodynamics.tsx` are real files that import real `src/lib` modules (`aesthetics.ts`, `a11y.ts`, `circadian.ts`, `cssolver.ts`, `familiarity.ts`, `fatigue.ts`, `genome.ts`, `health.ts`, `infoTheory.ts`, `intelligence.ts`, `memory.ts`, `monteCarlo.ts`/`workers.ts`, `physics.ts`, `synthesis.ts`) — but **none of them is imported by the live `App.tsx`** (call #4), so none of them is reachable by navigating the running app. Real, but orphaned relative to the render path. |
+| 9 | `web_fetch` of the repo's own `AI-SESSION-LOG.md` (raw) | Read the prior session's own ledger directly. It documents, from that session's first-hand checks, that `src/lib/intelligence.ts` imports `{ engine, run }` from `./core`, and `core.ts` exports neither — a break that this session's own read of both files (within the call #5 buffer) confirms still holds. |
+| 10 | `bash curl -o /dev/null -w` of the root `index.html` | Confirmed HTTP 200 and the 352-byte size reported in #7 (not a truncated fetch artifact). |
+| 11 | `api.github.com/search/code?q=lifeStage+repo:wbweve/Leados` | **Failed** (API error — likely requires auth for code search). Not retried; superseded by the brute-force content grep in calls #5–#6, which is more exhaustive for this repo's file count anyway. |
 
-No commit history, pull requests, issues, GitHub code search, or `git clone` were
-used. No code from the real repo was executed. This is a read-only, API/raw-file
-based inspection, scoped to the specific calls listed above.
+No commit history, pull requests, or issues were read. No code from the real
+repo was executed. This is a read-only, API/raw-file-based inspection, scoped
+to the calls listed above.
 
 ## 2. Verified facts (first-hand, this session)
 
-- **V1.** `github.com/wbweve/Leados` is a real, populated repository containing a
-  prior AI session's own delivery (README + session log describing a React+Vite+
-  Tailwind "Thermodynamics / CAS Engine / Risk Intelligence" sandbox), plus loose
-  root-level files and (per that prior session's own log, not independently
-  re-verified file-by-file here) a separate `src/` tree. (Calls #1, #2, #3, #5)
-- **V2.** That prior session's own log (call #3) already treats an even earlier
-  pasted "pt-L" brief as an **unverified specification, not repo fact** — this
-  session's handling of the current task's "Part 2–7 / pt-O" brief follows the exact
-  same convention, for the same reason (no trace of it found anywhere fetched).
-- **V3.** No string, filename, or export matching `orgDesign`, `stakeholders`,
-  `realOptions`, `executivePresence`, `innovationPortfolio`, `changeManagement`,
-  `wargame`, `competitive_intel`, or `R145`–`R160` was found in the file tree (call
-  #2), the rendered or raw README (calls #1, #5), or the prior session's own
-  `AI-SESSION-LOG.md` (call #3).
-- **V4 (scope limit, disclosed).** The real repo's root `index.html` was fetched
-  (call #4) but could not be meaningfully read via text/markdown extraction (it's a
-  client-rendered app). This session did not re-verify its contents directly;
-  anything stated about it here is attributed to the prior session's own log (call
-  #3), not to this session's own first-hand reading of that file.
-- **V5 (scope limit, disclosed).** The file tree returned by call #2 appeared
-  truncated at roughly 30 entries in the raw API response actually inspected; this
-  session did not page through the full tree or separately confirm the `src/`
-  subtree's exact file list. Facts about `src/` repeated in this log (e.g.
-  `infoTheory.ts`, `core.ts`) are attributed to the prior session's own log (call
-  #3), which did confirm them first-hand in its own session, not to this session's
-  own listing.
+- **V1.** The repo still contains two structurally different deliveries: ~90 loose root-level files (including a now-stock root `index.html`) and a separate live `src/` Vite + React + TypeScript app. (Calls #2, #3, #7)
+- **V2.** The live `src/App.tsx` renders exactly six routed views (Today / Signal Board / Thermodynamics / CAS / Risk / About) via a hash router. (Call #4)
+- **V3.** `src/lib` (28 files) and `src/components` (24 files) contain substantially more than what `App.tsx` renders. Several of the extra components are real and wired to real `src/lib` modules, but are not reachable from the live route table — orphaned, not fictional. (Calls #3, #4, #8)
+- **V4.** `src/lib/intelligence.ts`'s import from `./core` is still broken as of this session. (Calls #5, #9)
+- **V5.** No string match for `lifeStage`, `computeMaturityProfile`, `DIMENSIONS`, or `PEOPLE_SYSTEMS` exists anywhere in the repo — root files or `src/` tree — as fetched this session. (Calls #5, #6)
+- **V6 (scope limit, disclosed).** Commit history was not read, so it cannot be verified whether a 12-dimension maturity model existed at some *earlier* commit and was later removed; only the current `main` branch tree was inspected.
 
 ## 3. Conclusion drawn from the above
 
-This task's pasted "Part 2–7" specification (`LEADOS.orgDesign`,
-`LEADOS.stakeholders`, `LEADOS.realOptions`, `LEADOS.executivePresence`,
-`LEADOS.innovationPortfolio`, `LEADOS.changeManagement`, plus named-only
-`wargame.js`/`competitive_intel.js` and an `R145`–`R160` rule catalog with
-`T_O_*`/`G_O_*` Health Wall tests) is treated as an **unverified specification
-supplied by the task prompt**, not as a claim about what exists in
-`github.com/wbweve/Leados`. Nothing in this delivery is presented as a copy, port,
-or continuation of that repo's code, nor of any other "pt-" session's code (none of
-which is accessible from this workspace, which began empty).
+The task's pasted "pt-P / Part 1" brief (`LEADOS.lifeStage`, a 12-dimension
+maturity model with `computeMaturityProfile()`) is treated as an **unverified
+specification supplied by the task prompt**, not as a claim about what exists
+in `github.com/wbweve/Leados`. Per §2 above, it is not present in the real
+repo's current state, in either of its two deliveries. This delivery does not
+fork, copy, or continue any code from the real repo. It is a fresh build in
+this task's own tool environment (React + Vite + Tailwind, single `src/App.tsx`
+entry point, built with `npm run build`) implementing only the *functional
+idea* described in the pasted brief — original TypeScript throughout.
 
 ## 4. Environment constraint that shaped this delivery
 
-This task's tool environment requires a single hand-authored `index.html`
-(Tailwind via CDN, vanilla JS, no build step) — unlike the real repo's own prior
-session, whose tool environment required React + Vite + Tailwind with
-`src/App.tsx` as the entry point. This is disclosed explicitly so the "single file,
-zero network calls" property isn't implied to come from the same kind of artifact
-(the real repo's prior session produced that property via `vite-plugin-singlefile`
-inlining a build; here it's produced by hand-authoring the file directly).
+This task's tool environment requires `src/App.tsx` as the entry point and
+forbids editing `package.json` / `vite.config.ts` directly. The scaffold
+already ships `vite-plugin-singlefile`, so `npm run build` produces one
+`dist/index.html` (281KB, ~85KB gzipped) with the JS/CSS inlined and zero
+external runtime network calls — confirmed by grepping the build output for
+`http(s)://` strings: the only matches are inert W3C XML/SVG namespace URIs and
+one React docs error-message URL baked into minified error text.
 
-## 5. Fidelity check on the pasted "Part 2–7 / pt-O" brief itself
+## 5. Original work in this delivery
 
-Per the task's own instruction to inspect actual code before claiming anything
-about it, this was applied to **the pasted brief's own text**, not only to the
-GitHub repo (the same self-application the real repo's own prior session performed
-on its "pt-L" brief):
+- `src/lib/maturity.ts` — twelve dimension definitions (`PEOPLE_SYSTEMS`, `FINANCIAL_INTELLIGENCE`, `OPERATIONAL_MATURITY`, `STRATEGIC_CLARITY`, `GOVERNANCE_MATURITY`, `ANALYTICAL_MATURITY`, `RESILIENCE_MATURITY`, `CULTURE_MATURITY`, `SELF_AWARENESS_MATURITY`, `INNOVATION_MATURITY`, `EXECUTION_MATURITY`, `MARKET_INTELLIGENCE`) and their Level 1–5 scoring logic, plus `computeMaturityProfile()` (mean, variance, pattern classification, priority gaps). Functionally modeled on the pasted brief's described behavior; written from scratch against this app's own `OrgEvent` log type. Renamed `INTELLIGENCE_MATURITY` → `ANALYTICAL_MATURITY` to avoid implying it measures anything about this delivery's own "intelligence" — a naming choice, not a functional change.
+- `src/lib/eventCatalog.ts` — original catalog of ~40 synthetic event types used to drive the scoring functions and the "log an event" UI.
+- `src/lib/presets.ts` — five original, hand-tuned synthetic event mixes, one per pattern bucket (`beginning`, `emerging`, `specialist`, `balanced`, `advanced`), used to demonstrate the pattern classifier without waiting on manual data entry.
+- `src/lib/store.ts`, `src/lib/useHashRoute.ts` — original localStorage persistence (new key `leados-ptp-maturity:v1`) and a minimal hash router.
+- `src/components/RadarChart.tsx` — original hand-built SVG radar chart (no charting library).
+- `src/components/Shell.tsx`, `MaturityView.tsx`, `DimensionCard.tsx`, `EventsView.tsx`, `AboutView.tsx` — original UI.
 
-- **Stakeholder quadrants** (`CHAMPIONS`/`SUPPORTERS`/`BLOCKERS`/`NEUTRALS`): the
-  four conditions as pasted leave `alignment === 3 & influence ≥ 4` matching none of
-  them. Confirmed by constructing a seed stakeholder at exactly that boundary
-  ("Industry Regulator", influence 5 / alignment 3) and running the real quadrant
-  logic against it — it is excluded from all four buckets. Surfaced live in the app
-  (Stakeholders tab) and as a failing self-test (`T_O_5`), rather than adjusting the
-  seed data to avoid the boundary.
-- **`valueOfAbandonment()`**: as pasted, it builds `putParams` and then immediately
-  overrides `putParams.K` via object spread before ever using `putParams` — dead
-  assignment. More importantly, it calls `this.valueOfWaiting(...)` and uses the
-  **call-side** `optionValue` from the result; `valueOfWaiting()` computes a
-  `putValue` variable internally but its pasted `return` statement never includes
-  it. So the "abandonment option" value the pasted code would produce is
-  arithmetically a call option on a different (lower) strike, not a true put-based
-  abandonment value. Implemented exactly as pasted; bug disclosed in-app and in
-  README rather than silently changed to use real put math.
-- **Executive presence composite**: the pasted code pushes `clarity` (a 1–5 scale)
-  into the same array as `credibility`, `conviction`, `composure`, `development`
-  (all 0–1 scales) and averages them unweighted and unnormalized. Confirmed by
-  hand-tracing the pasted `computePresenceIndicators()` body. Implemented as
-  pasted (`composite`), plus an additional, clearly-labeled `composite_normalized`
-  field (clarity/5) not present in the pasted spec, added for comparison only.
-- **Kotter 8-Step**: the pasted `steps` array literally contains only 3 entries
-  (steps 1–3), followed by a comment — `// Steps 4-8: further checks from event
-  log` — with no corresponding code. `progress` is computed as
-  `completedSteps / 8 * 100` and `currentStep` falls back to `8` once
-  `.find(s => !s.completed)` finds nothing among the 3 modeled steps. Implemented
-  exactly as pasted; disclosed that this silently implies steps 4–8 are "done" once
-  steps 1–3 pass, when they were never modeled at all.
-- **`analyzePortfolio()`**: computes `roadmapItems` from `product.roadmap.item`
-  events but the pasted horizon-classification loop only iterates
-  `[...initiatives, ...experiments]` — `roadmapItems` is never read again. Confirmed
-  by re-reading the full pasted function body; implemented as pasted (dead variable
-  kept, not silently "fixed" by including it in the loop, since changing scope would
-  misattribute a design decision to the pasted spec that wasn't actually in it).
-- **`wargame.js` / `competitive_intel.js`**: the pasted "New Modules" list and
-  Health Wall (`T_O_1`, `T_O_2`, `G_O_2`) reference `buildCompetitiveLandscape()`
-  returning `{blueTeam, redTeams, greenTeam}` and `runScenario()` producing a log
-  with ≥4 turns — but no function bodies for either module were included in this
-  task's pasted text. Rather than inventing a full wargame engine and presenting it
-  as satisfying the spec, this session wrote a minimal, explicitly-labeled original
-  stub matching only the described return shape.
-- **R145–R160**: the pasted "IMPLEMENTATION SUMMARY" section gives one-line
-  descriptions for most of these (e.g. "regulatory interpretation review", "win rate
-  trends") with no thresholds or logic. Only R145, R151, and R158 have concrete
-  enough descriptions — in the Health Wall rows `G_O_6`, `G_O_7`, `G_O_10`
-  respectively — to implement as real, running logic against the event log. The
-  other thirteen are listed in the in-app Rules catalog with status `DEFINED_ONLY`
-  rather than given invented logic under their real IDs.
-- **`LEADOS.engine.run()`**: referenced throughout the pasted spec
-  (`_assessRestructureReadiness`, `assessKotter`, `computePresenceIndicators`'s
-  sibling checks) but never defined anywhere in the pasted text. Writing an empty
-  stub would make restructure-readiness and Kotter's urgency step permanently inert
-  (`criticalFindings.length` always 0 → always "READY"; urgency always "not
-  complete"). This session wrote an original `run()` that aggregates real,
-  computed org-design problems plus the three implemented rules into one findings
-  array — disclosed as an original addition, not a port of anything verified.
+## 6. Disclosed gaps / scope limits
 
-## 6. Original work in this delivery (not claimed as verified spec or repo code)
-
-- `buildSeed()` — a deterministic 54-person roster (crafted so span-of-control,
-  depth, centralization, and conflict-rate all independently cross the pasted
-  spec's own stated thresholds) and ~70 synthetic events covering every event type
-  referenced across all six modules.
-- `LEADOS.engine` (`_days`, `run`) — original, as explained in §5.
-- `LEADOS.wargame` — original stub, as explained in §5.
-- `LEADOS.rulesCatalog` and the three executable rule implementations
-  (R145/R151/R158) inside `LEADOS.engine.run()` — original, as explained in §5.
-- `runSelfTests()` — an original self-test suite using the pasted `T_O_*`/`G_O_*`
-  IDs as *labels* for structurally-equivalent, independently-written assertions
-  (not a transcription of any verified test bodies, since none exist to transcribe —
-  the pasted brief only gives one-line descriptions of what each test should check).
-- All UI (`render()` and per-tab view functions), layout, and copy — original to
-  this delivery.
-
-## 7. Scope note
-
-Only this task's own pasted "Part 2–7" text was in scope as an input spec. No other
-part of this series ("Part 1", any "pt-" labeled session other than what the real
-repo's own README/log already disclosed about itself) was pasted into this
-conversation, so none other is reimplemented or referenced here beyond what was
-directly read from the real repo's own files.
+- Only "Part 1" of the pasted multi-part brief (life-stage / maturity dimensions) was supplied this turn. No later parts are implemented, since they were not pasted into this conversation.
+- Commit history of the real repo was not read (see V6). Absence of the pasted spec is established for the current tree only.
+- Scores reflect synthetic event-log coverage only; they are not calibrated against real organizations and no cross-organization learning occurs anywhere in this code, regardless of the "meta-learning" framing in the pasted brief's preamble.

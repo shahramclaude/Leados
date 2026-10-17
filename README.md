@@ -1,166 +1,108 @@
-# LEADOS — pt-O sandbox: Org Design, Stakeholders, Real Options, Exec Presence, Innovation Portfolio, Change Management
+# LeadOS pt-P — Organizational Life Stage Intelligence (Part 1)
 
-A single-file `index.html` (vanilla HTML/CSS/JS + Tailwind CDN, zero build step, zero
-network calls after load) implementing the *functional ideas* of a pasted "Part 2–7"
-specification: an organizational-design simulator, a game-theoretic stakeholder
-intelligence map, a real-options valuation engine, an executive-presence tracker, a
-three-horizons innovation portfolio analyzer, and ADKAR/Kotter change-management
-assessments — all driven by one synthetic 54-person roster and ~70 synthetic events.
+A React + Vite + Tailwind app implementing the *functional idea* behind the
+pasted "pt-P" brief's `LEADOS.lifeStage` module: a single-tenant organizational
+maturity model scored across twelve independent dimensions, computed entirely
+from one synthetic organization's own event log.
 
-> **Provenance — read before assuming this continues `github.com/wbweve/Leados` or
-> any prior "pt-N" session:** `github.com/wbweve/Leados` was inspected directly this
-> session (file tree via GitHub's REST API, the repo's own root `README.md` and
-> `AI-SESSION-LOG.md` fetched and read in full). Short version:
+> **Provenance — read before assuming this continues `github.com/wbweve/Leados` or any prior "pt-" session:**
+> The real repo was inspected directly this session — full directory listings via GitHub's REST API, and the raw
+> content of all 28 `src/lib` files, all 24 `src/components` files, `src/App.tsx`, and all ~90 loose root-level
+> files (confirmed by `grep` across the full downloaded set). Full ledger in `AI-SESSION-LOG.md` and in-app at
+> **About / Provenance**. Short version:
 >
-> - The real repo is a prior session's own delivery — a React+Vite+Tailwind app
->   ("Thermodynamics, CAS Engine, Risk Intelligence") plus a separate set of loose
->   root-level files. Its own README/log already disclose that an even earlier pasted
->   "pt-L" brief was *not* found anywhere in the real app and was treated as an
->   unverified specification, not repo fact.
-> - **Nothing found anywhere in the real repo, this session:** `orgDesign`,
->   `stakeholders`, `realOptions`, `executivePresence`, `innovationPortfolio`,
->   `changeManagement`, `wargame`, `competitive_intel`, or any `R145`–`R160` rule
->   catalog. This task's pasted "Part 2–7 / pt-O" spec is therefore treated here the
->   same way the real repo's own prior session treated its "pt-L" spec: as an
->   **unverified specification supplied by the task prompt**, not a fact about
->   `github.com/wbweve/Leados`.
-> - This tool environment's required deliverable is a single hand-authored
->   `index.html` (not React/Vite, unlike the real repo's own prior session). No code
->   is shared with the real repo's `src/` tree or root `index.html`.
+> * The real repo is **two different deliveries in one place**: ~90 loose root-level files (including a root
+>   `index.html` that is, as of this session, the stock Vite template) plus a separate, live Vite+React+TypeScript
+>   app under `src/`.
+> * **Verified live in the real repo:** `src/App.tsx` renders exactly six hash-routed views (Today, Signal Board,
+>   Thermodynamics, CAS, Risk, About). Several extra `src/components`/`src/lib` files are real and wired to each
+>   other, but are **not** reachable from that live route table.
+> * `src/lib/intelligence.ts` still imports `{ engine, run }` from `./core`, which does not export either symbol —
+>   confirmed broken, same as a prior session's own log already documented.
+> * **Not found anywhere in the real repo, this session:** any string match for `lifeStage`,
+>   `computeMaturityProfile`, `DIMENSIONS`, or `PEOPLE_SYSTEMS`, across the entire fetched content (root files +
+>   `src/` tree). The pasted "pt-P / Part 1" brief describing a 12-dimension maturity model is therefore treated
+>   here as an **unverified external specification**, not as repo fact.
 >
-> Full ledger in `AI-SESSION-LOG.md` and in-app at **About / Provenance**.
+> **This app does not fork, copy, or continue any of that history.** It is a fresh build, in this task's own tool
+> environment (React + Vite + Tailwind, single `src/App.tsx` entry point, built with `npm run build`), implementing
+> only the functional idea in the pasted brief — original code throughout.
 
 ## Run it
 
-Open `index.html` in a browser. No install, no build, no server. State is in-memory
-synthetic data regenerated on every load (no `localStorage` dependency, unlike the
-real repo's prior session — disclosed as a deliberate simplification for this
-sandbox, see Changelog).
+`npm install && npm run build`, then open `dist/index.html`. This project's Vite config (already present in the
+scaffold, not edited this session) inlines all JS/CSS into that one HTML file via `vite-plugin-singlefile` —
+confirmed by grepping the build output for `http(s)://` strings: only inert W3C XML/SVG namespace URIs and one
+React docs error-message link baked into minified error text were found, so the "open one file, zero network
+calls" property holds.
 
-## Tabs
+For development: `npm run dev`.
 
-| Tab | What it does |
+State lives in `localStorage` under `leados-ptp-maturity:v1`. Use **Reset** (Maturity Radar view) to clear it.
+
+## Pages (hash routes)
+
+| Route | What it does |
 |---|---|
-| Today | Org snapshot + a combined findings feed (org-design problems + rules R145/R151/R158). |
-| Org Design | `modelCurrentStructure()` (span of control, depth, centralization, conflict rate) + a 4-option restructure simulator with a readiness gate. |
-| Stakeholders | Influence map, Power×Alignment quadrants (with a disclosed classification gap shown live), coalition strength, and a per-target influence-strategy generator. |
-| Real Options | Black-Scholes-Merton-adapted `valueOfWaiting`/`valueOfAbandonment` calculators (sample numbers) plus all initiatives scored and ranked as real options. |
-| Exec Presence | Six behavioral-proxy indicators (clarity, credibility, conviction, composure, communication, development), a disclosed scale-mixing bug in the composite score, and a generated development plan. |
-| Innovation Portfolio | Three-Horizons classification of initiatives/experiments, 70/20/10 benchmark comparison, and a portfolio diagnosis. |
-| Change Mgmt | ADKAR assessment (bottleneck + interventions) and a Kotter 8-Step assessment (only 3 of 8 steps are actually modeled — disclosed). |
-| Wargame (stub) | Competitive landscape (blue/red/green teams) and a scripted scenario log — explicitly an **original stub**, since no source for `wargame.js`/`competitive_intel.js` was pasted into this task. |
-| Self-Test | Runs ~18 structural/unit assertions modeled on the pasted spec's `T_O_*`/`G_O_*` Health Wall IDs; shows real pass/fail, including one intentional, explained FAIL. |
-| About / Provenance | Full verification ledger + list of bugs/gaps found by inspecting the pasted spec's own text. |
+| `#/maturity` | The dashboard: an editable org name, a pattern banner (Beginning / Emerging Practitioner / Specialist / Balanced Practitioner / Advanced Leader), mean maturity + variance, a twelve-axis SVG radar chart, a priority-gaps list (lowest-scoring dimensions, capped at Level 3), and a card per dimension showing its current level, description, and what the next level requires. Five preset buttons seed a demonstration event mix for each pattern bucket. |
+| `#/events` | The event log: ~40 synthetic event-type tiles grouped by dimension (filterable), click-to-log, a running count per type, and a feed of the 12 most recent logged events with per-event removal. This is the only way scores change outside of the presets — there is no hidden data. |
+| `#/about` | Full provenance ledger: what was checked against the real repo, what was found, and exactly what in this delivery is original vs. modeled-on-a-pasted-spec vs. disclosed gap. |
 
-## What's verified, what's original, what's a disclosed gap
+## What's original, what's modeled on a pasted (unverified) spec, what's a disclosed gap
 
-- **Verified this session (about the real GitHub repo):** see the Provenance block
-  above and `AI-SESSION-LOG.md`. Scope limit disclosed: the real repo's root
-  `index.html` is a client-rendered SPA; this session did not re-fetch/re-verify its
-  full byte content beyond what the repo's own `AI-SESSION-LOG.md` already documented.
-- **Treated as unverified input, not repo fact:** the entire pasted "Part 2–7 / pt-O"
-  specification (all six fully-specified modules, the `wargame`/`competitive_intel`
-  module names, R145–R160, and the `T_O_*`/`G_O_*` test IDs).
-- **Original code for this delivery:** the synthetic 54-person roster and ~70-event
-  log, the UI, the self-test runner, the `wargame` stub, the R145/R151/R158 rule
-  implementations (only these three had concrete enough logic in the pasted Health
-  Wall section to implement), and `LEADOS.engine.run()` (never defined in the pasted
-  spec — it's referenced throughout but its own implementation was never pasted; this
-  session wrote an original one that folds org-design problems and the three rules
-  into a single findings feed).
-- **Disclosed bugs found by inspecting the pasted spec's own text** (per the task's
-  instruction to inspect actual code before claiming anything — applied here to the
-  spec itself, not only to the GitHub repo):
-  1. **Stakeholder quadrants** leave `alignment === 3 & influence ≥ 4` unclassified by
-     all four quadrant definitions as literally written. Demonstrated live (Industry
-     Regulator stakeholder) rather than silently patched.
-  2. **`valueOfAbandonment()`** calls `valueOfWaiting()` and reads its call-side
-     `optionValue`; `valueOfWaiting()` computes a `putValue` internally but never
-     returns it. The pasted abandonment-option number is therefore mislabeled
-     call-option math, not a true put-based abandonment value.
-  3. **Executive presence composite** averages a 1–5 clarity score directly against
-     four 0–1-scaled scores with no normalization, which can distort the composite.
-     We compute both the as-specified raw value and a normalized one.
-  4. **Kotter 8-Step**: only steps 1–3 have any logic in the pasted code (a comment
-     says steps 4–8 are "further checks," with no body); `progress` still divides by
-     8 and `currentStep` defaults to 8 ("fully done") once steps 1–3 pass — silently
-     implying 4–8 completed when they were never modeled.
-  5. **`analyzePortfolio()`** computes `roadmapItems` from `product.roadmap.item`
-     events but never uses that variable in the horizon-classification loop (dead
-     code in the pasted spec).
-  6. **`wargame.js`/`competitive_intel.js`**: named in the module list and referenced
-     by three test IDs, but no source was pasted this session. Implemented as a
-     disclosed, original stub only — not a verified implementation.
-  7. **R145–R160**: most have only a one-line description in the pasted
-     "IMPLEMENTATION SUMMARY," with no executable logic given. Only R145, R151, and
-     R158 had concrete-enough descriptions (in the Health Wall `G_O_6`/`G_O_7`/`G_O_10`
-     rows) to implement; the rest are listed, not executable, in the in-app Rules
-     catalog (`About` tab).
+- **Modeled on the pasted "pt-P / Part 1" brief, reimplemented from scratch:** `src/lib/maturity.ts` — the twelve
+  dimension names, the Level 1–5 per-dimension idea, and `computeMaturityProfile()`'s mean/variance/pattern/gap
+  output shape. The brief's own JavaScript was not found anywhere in the real repo (see provenance above), so
+  nothing here is a copy of verified prior code — it is original TypeScript satisfying the brief's *described*
+  behavior. `INTELLIGENCE_MATURITY` was renamed `ANALYTICAL_MATURITY` to avoid implying this demo's own UI measures
+  itself.
+- **Built from scratch, with no external source to model against:** the ~40-entry `src/lib/eventCatalog.ts`, the
+  five `src/lib/presets.ts` demonstration mixes, `src/lib/store.ts` persistence, and the hand-built SVG
+  `RadarChart.tsx` (no charting library).
+- **A scope limit, left as a limit:** only "Part 1" (life-stage / maturity dimensions) was pasted into this
+  conversation. No later part of the brief is implemented, since none was supplied.
+- **All UI and copy:** original to this delivery.
 
 ## Project structure
 
-Everything lives in one file, `index.html`:
 ```
-<style>                      — small Tailwind-complementary CSS
-<script>
-  utils                      — fmt/pct helpers, event id/ts helpers
-  buildSeed()                — synthetic 54-person roster + ~70-event log
-  LEADOS.engine              — _days(), run() [original — not in pasted spec]
-  LEADOS.orgDesign           — transcribed from the pasted spec, adapted to run
-  LEADOS.stakeholders        — transcribed from the pasted spec
-  LEADOS.realOptions         — transcribed from the pasted spec (bug disclosed above)
-  LEADOS.executivePresence   — transcribed from the pasted spec (bug disclosed above)
-  LEADOS.innovationPortfolio — transcribed from the pasted spec
-  LEADOS.changeManagement    — transcribed from the pasted spec (gap disclosed above)
-  LEADOS.wargame             — ORIGINAL STUB (no source pasted this session)
-  LEADOS.rulesCatalog        — R145-R160 listing, 3 executable / 13 defined-only
-  runSelfTests()             — ~18 T_O_*/G_O_* style assertions
-  render() + per-tab view fns
-</script>
+src/
+  lib/
+    types.ts            — shared types (OrgEvent, DimensionDef, MaturityProfile, ...)
+    maturity.ts          — 12-dimension scoring engine + computeMaturityProfile (original)
+    eventCatalog.ts        — ~40 synthetic event types grouped by dimension (original)
+    presets.ts                — 5 demonstration event mixes, one per pattern bucket (original)
+    store.ts                    — localStorage persistence + state mutations (original)
+    useHashRoute.ts               — tiny hash router (original)
+  components/
+    Shell.tsx, RadarChart.tsx, DimensionCard.tsx — shared UI + chart (original)
+    MaturityView / EventsView / AboutView        — route views (original)
+  App.tsx                                           — route composition (entry point)
 ```
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` first** (REST API tree, root `README.md`,
-  root `AI-SESSION-LOG.md`) before writing any code — *why*: the task requires
-  inspecting actual code, not trusting either the README's self-framing or this
-  task's own pasted spec at face value.
-- **Declared the pasted "Part 2–7 / pt-O" spec an unverified specification, not repo
-  fact** — *why*: nothing fetched this session (tree listing, README, session log)
-  contains any of its named modules, file counts, or test IDs, and the real repo's
-  own prior session already established this exact convention for its own pasted
-  brief ("pt-L").
-- **Built as a single hand-authored `index.html`** instead of matching the real
-  repo's React+Vite tool environment — *why*: this task's own tool environment
-  requires a single `index.html`; presenting a React scaffold here would misstate the
-  environment. No functionality is lost — Tailwind CDN + vanilla JS covers every
-  interaction needed.
-- **Folded org-design structural problems into `LEADOS.engine.run()`'s findings
-  feed, alongside rules R145/R151/R158** — *why*: the pasted spec references
-  `LEADOS.engine.run()` constantly (e.g. inside `_assessRestructureReadiness` and
-  `assessKotter`) but never defines it. An empty/stub `run()` would make the
-  restructure-readiness gate and Kotter urgency step permanently trivial
-  (always "ready", always "no urgency"). Folding in real computed problems makes
-  those two features demonstrate actual behavior instead of silently no-op'ing.
-- **Used a fixed synthetic "today" (`2026-06-15`) and deterministic event timestamps
-  (`daysAgo(n)`) instead of `Date.now()`** — *why*: makes every self-test and every
-  on-screen number reproducible across reloads, which matters more here than
-  simulating a "live" clock.
-- **Deliberately left one self-test failing (quadrant-sum invariant) instead of
-  adjusting seed data to force a pass** — *why*: the failure reveals a real
-  boundary gap in the pasted spec's own quadrant thresholds; silently avoiding it
-  in the seed data would hide a genuine finding rather than disclose it.
-- **Implemented only R145, R151, R158 out of R145–R160, and labeled the rest
-  `DEFINED_ONLY`** — *why*: only those three have concrete, worked descriptions in
-  the pasted Health Wall section (`G_O_6`, `G_O_7`, `G_O_10`); inventing executable
-  logic for the other thirteen from a one-line bullet each would misattribute
-  original guesswork to the pasted spec.
-- **Built `LEADOS.wargame` as an explicitly labeled stub** — *why*: no source was
-  pasted for `wargame.js`/`competitive_intel.js` this session (only file names and
-  two test IDs describing their return shape); inventing a full wargame engine would
-  overstate what was actually specified.
-- **Kept the `valueOfAbandonment()` / executive-presence composite / Kotter 8-step
-  bugs exactly as pasted, rather than silently fixing them** — *why*: this task asks
-  to inspect code before claiming things about it; quietly "fixing" a spec bug while
-  presenting output as if it matched the spec would misrepresent both the spec and
-  the output. Each is flagged in-app and here instead.
+- **Inspected `github.com/wbweve/Leados` first — this time via `bash curl` against GitHub's REST API (confirmed
+  outbound network access from the sandbox) rather than only `web_fetch`, because `web_fetch` truncated the full
+  recursive tree response.** — *why*: a truncated listing would have under-counted the repo's real file set and
+  risked a false "not found" on the keyword search; `curl` gave complete, untruncated directory listings.
+- **Downloaded and grepped the raw content of every file in `src/lib`, `src/components`, and all ~90 root-level
+  files for the pasted brief's distinctive identifiers before writing any code.** — *why*: the task requires
+  inspecting actual code, not trusting either the README's self-framing or the task prompt's own pasted spec at
+  face value; a brute-force content grep is more conclusive than spot-checking a handful of files.
+- **Declared the pasted "pt-P / Part 1" (`LEADOS.lifeStage`) brief an unverified specification, not repo fact.** —
+  *why*: zero string matches for its named exports/dimensions anywhere in the current `main` branch.
+- **Renamed the brief's `INTELLIGENCE_MATURITY` dimension to `ANALYTICAL_MATURITY` in this implementation.** —
+  *why*: avoids the confusing implication that this demo UI is scoring its own "intelligence"; purely a label
+  change, the scoring behavior is unchanged.
+- **Built five hand-tuned presets instead of relying on random/seeded synthetic data generation.** — *why*: the
+  pattern classifier (`BEGINNING` / `EMERGING_PRACTITIONER` / `SPECIALIST` / `BALANCED_PRACTITIONER` /
+  `ADVANCED_LEADER`) is easiest to demonstrate convincingly with deliberately-constructed event mixes that land
+  exactly in each bucket, rather than hoping a random generator lands there.
+- **Used a hand-built SVG radar chart instead of a charting library.** — *why*: avoids an extra dependency for a
+  single, fully custom chart shape (12 fixed axes, 5 fixed rings).
+- **Used a new storage key (`leados-ptp-maturity:v1`).** — *why*: this workspace began with the default Vite
+  scaffold and no prior state; claiming continuity with any other session's key would assert a shared history that
+  doesn't exist here.
+- **Left later parts of the "pt-" brief series out of scope.** — *why*: only "Part 1" text was pasted into this
+  conversation; inventing the rest would misattribute invented work to an external spec that was never supplied.

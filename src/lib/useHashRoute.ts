@@ -1,23 +1,20 @@
-// Tiny hash router. Original, minimal, no dependency.
-import { useCallback, useEffect, useState } from "react";
+// Original, minimal hash router for this delivery.
+import { useEffect, useState, useCallback } from "react";
 
-function currentHash(fallback: string) {
-  const h = window.location.hash.replace(/^#/, "");
-  return h || fallback;
-}
-
-export function useHashRoute(fallback: string): [string, (next: string) => void] {
-  const [route, setRoute] = useState(() => currentHash(fallback));
+export function useHashRoute(defaultRoute: string): [string, (r: string) => void] {
+  const read = () => (window.location.hash ? window.location.hash.slice(1) : defaultRoute);
+  const [route, setRoute] = useState(read);
 
   useEffect(() => {
-    const onHashChange = () => setRoute(currentHash(fallback));
+    const onHashChange = () => setRoute(read());
     window.addEventListener("hashchange", onHashChange);
-    if (!window.location.hash) window.location.hash = fallback;
+    if (!window.location.hash) window.location.hash = `#${defaultRoute}`;
     return () => window.removeEventListener("hashchange", onHashChange);
-  }, [fallback]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const navigate = useCallback((next: string) => {
-    window.location.hash = next;
+  const navigate = useCallback((r: string) => {
+    window.location.hash = `#${r}`;
   }, []);
 
   return [route, navigate];

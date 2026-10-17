@@ -1,34 +1,43 @@
 import type { ReactNode } from "react";
+import { cn } from "../utils/cn";
 
-const NAV: { route: string; label: string }[] = [
-  { route: "/today", label: "Today" },
-  { route: "/signals", label: "Signal Board" },
-  { route: "/thermodynamics", label: "Thermodynamics" },
-  { route: "/cas", label: "CAS Engine" },
-  { route: "/risk", label: "Risk Register" },
+const NAV = [
+  { route: "/maturity", label: "Maturity Radar" },
+  { route: "/events", label: "Event Log" },
   { route: "/about", label: "About / Provenance" },
 ];
 
-export function Shell({ route, navigate, children }: { route: string; navigate: (r: string) => void; children: ReactNode }) {
+export function Shell({
+  route,
+  navigate,
+  children,
+}: {
+  route: string;
+  navigate: (r: string) => void;
+  children: ReactNode;
+}) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200">
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-10">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-6 py-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-sky-500 text-sm font-bold text-white">L</div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600 font-bold text-white shadow-lg shadow-indigo-900/40">
+              L
+            </div>
             <div>
-              <div className="text-sm font-semibold text-white leading-tight">Leadership Intelligence Sandbox</div>
-              <div className="text-[11px] text-slate-500 leading-tight">Thermodynamics · CAS Engine · Risk Register</div>
+              <p className="text-sm font-semibold tracking-tight text-white">LeadOS · pt-P</p>
+              <p className="text-xs text-slate-400">Organizational Life Stage Intelligence</p>
             </div>
           </div>
-          <nav className="flex flex-wrap gap-1">
+          <nav className="ml-auto flex gap-1 rounded-xl bg-slate-900 p-1">
             {NAV.map((n) => (
               <button
                 key={n.route}
                 onClick={() => navigate(n.route)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                  route === n.route ? "bg-indigo-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                }`}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  route === n.route ? "bg-violet-600 text-white shadow" : "text-slate-400 hover:text-white"
+                )}
               >
                 {n.label}
               </button>
@@ -37,12 +46,9 @@ export function Shell({ route, navigate, children }: { route: string; navigate: 
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
-      <footer className="mx-auto max-w-6xl px-6 pb-8 pt-4 text-[11px] text-slate-600">
-        All data is synthetic and generated in-browser. Nothing here describes real people. See{" "}
-        <button className="underline underline-offset-2 hover:text-slate-400" onClick={() => navigate("/about")}>
-          About / Provenance
-        </button>{" "}
-        for what in this build is verified, original, or a disclosed gap.
+      <footer className="mx-auto max-w-6xl px-6 pb-10 pt-4 text-xs text-slate-500">
+        Single-tenant synthetic event log. Scores reflect logging coverage in this demo, not validated
+        organizational science. See <span className="text-slate-300">About / Provenance</span> for what is verified vs. original vs. unverified.
       </footer>
     </div>
   );
