@@ -1,101 +1,105 @@
+import type { ReactNode } from "react";
+import { Card, Badge } from "./Card";
+
 export function AboutView() {
   return (
-    <div className="space-y-6 text-sm leading-relaxed">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-100">About this build</h1>
-        <p className="text-slate-500">
-          Verified / unverified / fabricated ledger for this specific delivery. See{" "}
-          <code className="text-indigo-300">AI-SESSION-LOG.md</code> for the full research trail.
+    <div className="space-y-6">
+      <Card title="Provenance — github.com/wbweve/Leados">
+        <p className="mb-3 text-sm text-slate-600">
+          This session fetched the live repository (rendered README, repo metadata API, and a recursive Git Trees
+          API call) before writing any code. Full ledger also lives in <code>AI-SESSION-LOG.md</code>. Nothing below
+          is assumed from training data about this specific repo — only from what was fetched this session.
         </p>
+
+        <div className="space-y-3 text-sm">
+          <Row kind="verified">
+            <code>wbweve/Leados</code> is a real, public repo (id 1413944295, created 2026‑10‑11, last pushed
+            2026‑10‑17T13:10:48Z), confirmed via the GitHub REST repo-metadata API.
+          </Row>
+          <Row kind="verified">
+            A recursive Git Trees API call against <code>main</code> returned <strong>117 entries</strong> at query
+            time, including a root <code>index.html</code> (66,718 bytes, sha <code>22850d1b…</code>) that decodes
+            (Contents API, base64) to a real, self-contained vanilla‑JS/Tailwind‑CDN app titled "LeadOS —
+            Accessibility Intelligence &amp; Worker Architecture · Parts 7–8", with an embedded "PROVENANCE" comment
+            block.
+          </Row>
+          <Row kind="verified">
+            The same tree <em>also</em> contains a full, separate Vite+React+TypeScript project at the repo root
+            (<code>package.json</code>, <code>vite.config.ts</code>, <code>tsconfig.json</code>,
+            <code> src/main.tsx</code>, <code>src/App.tsx</code>, <code>src/components/*</code>,{" "}
+            <code>src/lib/*</code>) <em>plus</em> ~45 loose, duplicate-looking <code>.ts</code>/<code>.tsx</code>/
+            <code>.js</code> files directly at the repo root (e.g. both a root <code>App.tsx</code> and a separate{" "}
+            <code>src/App.tsx</code>; both <code>health.ts</code> <em>and</em> a 175KB <code>health.js</code>{" "}
+            <em>and</em> <code>src/lib/health.ts</code>).
+          </Row>
+          <Row kind="contradicted">
+            That structure does not match a single coherent "one index.html, vanilla JS" project — it looks like at
+            least two incompatible lineages (an earlier React/Vite build, referenced in-repo as a renamed
+            "LeadCore application", and a later standalone-HTML build) committed on top of each other without
+            cleanup. This was <strong>not fully reconciled</strong> — not every commit was diffed — so treat this as
+            an observed inconsistency, not a resolved history.
+          </Row>
+          <Row kind="contradicted">
+            No file named anything like <code>js/circadian.js</code>, <code>js/fatigue.js</code>,{" "}
+            <code>js/sensory.js</code>, <code>js/memory_arch.js</code>, <code>js/genome.js</code>,{" "}
+            <code>js/monte_carlo.js</code>, <code>js/a11y_intel.js</code>, <code>js/worker-engine.js</code>, or{" "}
+            <code>js/workers.js</code> — nor any <code>js/</code> directory at all — exists anywhere in the 117
+            fetched tree entries. The "pt‑K" module list supplied in this task's prompt describes a file layout this
+            session could not find in the real repository at query time. It is treated here as an{" "}
+            <strong>unverified specification</strong>, not a description of existing code.
+          </Row>
+          <Row kind="disclosure">
+            GitHub's repo-metadata <code>size</code> field (7,442 KB) is a cached, approximate figure for the whole
+            repo and was not reconciled byte-for-byte against the sum of individual blob sizes — stated here as a
+            platform-reported number, not an independently re-derived one.
+          </Row>
+        </div>
+      </Card>
+
+      <Card title="What this build actually is">
+        <div className="space-y-3 text-sm">
+          <Row kind="disclosure">
+            This task's execution environment requires a React + Vite + Tailwind app with{" "}
+            <code>src/App.tsx</code> as the entry point, built with <code>npm run build</code>. That directly
+            conflicts with the pasted brief's "vanilla JS, no framework, no build step, open index.html" framing —
+            this build cannot and does not claim to satisfy that framing literally. One real point of convergence:
+            this project's Vite config includes <code>vite-plugin-singlefile</code>, so <code>npm run build</code>{" "}
+            still produces one self-contained <code>dist/index.html</code> with JS/CSS inlined — closer in spirit,
+            though a build step is still required.
+          </Row>
+          <Row kind="original">
+            Every module under <code>src/lib/</code> (circadian, fatigue, sensory, memory, genome, monteCarlo,
+            workers, a11y) and every view under <code>src/components/</code> is an original implementation written
+            this session, reconstructed only from the short description in the pasted brief (trait names, threshold
+            numbers, event-type names) — not copied from <code>wbweve/Leados</code>, since no matching source for
+            any of those modules was found there.
+          </Row>
+          <Row kind="disclosure">
+            Biological/psychological framing (circadian phases, decision fatigue) is explicitly labeled as{" "}
+            <strong>heuristic guidance</strong> based on commonly-cited, non-personalized generalizations — not a
+            specific cited study, not a diagnosis, and not a validated psychometric instrument. The "organizational
+            genome" is a two-counter behavioral ratio over self-logged data in this browser only.
+          </Row>
+          <Row kind="original">
+            The Monte Carlo engine uses a seeded <code>mulberry32</code> PRNG specifically so identical seeds
+            reproduce identical results, run inside a real Web Worker built from a Blob URL (not a separate file,
+            to stay compatible with the single-file build), with a timeout-based fallback to the main thread if the
+            worker fails or doesn't respond — exercised live via the "simulate worker failure" button on the
+            Decisions tab.
+          </Row>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function Row({ kind, children }: { kind: "verified" | "contradicted" | "original" | "disclosure"; children: ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <div className="shrink-0 pt-0.5">
+        <Badge kind={kind}>{kind}</Badge>
       </div>
-
-      <section className="rounded-lg border border-emerald-900 bg-emerald-950/20 p-4">
-        <h2 className="font-semibold text-emerald-300 mb-2">Verified this session (by direct inspection)</h2>
-        <ul className="list-disc list-inside space-y-1 text-slate-300">
-          <li>
-            <code>github.com/wbweve/Leados</code> is a real, public repo (confirmed via the GitHub REST
-            API: id 1413944295, default branch <code>main</code>, 106 files in the tree at HEAD).
-          </li>
-          <li>
-            Its root <code>index.html</code> (86,898 bytes) is a hand-authored, single-file vanilla
-            HTML/CSS/JS document loading Tailwind from a CDN <code>&lt;script&gt;</code>, confirmed by
-            downloading the raw file directly with <code>curl</code> and grepping it &mdash; not by trusting
-            the repo's own README description of itself.
-          </li>
-          <li>
-            Constants <code>DOMAINS</code>, <code>DECAY=0.85</code>, <code>CORRELATION_WINDOW_DAYS=90</code>,{" "}
-            <code>DECISION_MAX_OPEN_DAYS=21</code>, and the storage keys{" "}
-            <code>leados-pt-j:data</code> / <code>leados-pt-j:familiarity</code> /{" "}
-            <code>leados-pt-j:familiarity-notified</code> were found verbatim in that downloaded file.
-          </li>
-          <li>
-            The repo also contains a <em>separate, parallel</em> Vite + React + TypeScript project at
-            its root (<code>src/</code>, <code>package.json</code>, <code>vite.config.ts</code>, and ~70
-            additional root-level <code>.tsx</code>/<code>.ts</code>/<code>.js</code> files such as{" "}
-            <code>FinanceDashboard.tsx</code>, <code>engine.js</code>, <code>health.js</code>,{" "}
-            <code>ui.js</code>). This is directly visible in the repo's git tree and is even disclosed in
-            the root <code>index.html</code>'s own header comment.
-          </li>
-        </ul>
-      </section>
-
-      <section className="rounded-lg border border-amber-900 bg-amber-950/20 p-4">
-        <h2 className="font-semibold text-amber-300 mb-2">Contradicted / unverifiable claims found in the repo's own files</h2>
-        <ul className="list-disc list-inside space-y-1 text-slate-300">
-          <li>
-            The repo's <code>README.md</code> states "Files on disk: Exactly three files: index.html,
-            README.md, AI-SESSION-LOG.md." The actual repository tree has 106 entries, including an
-            entire second application. The "three files" claim is only true if read narrowly as "files
-            belonging to this one delivery," which the README does not say &mdash; this is flagged as
-            misleading, not corrected silently.
-          </li>
-          <li>
-            The README and the <code>index.html</code> header comment both narrate an elaborate story
-            about fetching three independent raw mirrors, a "~5,700-token truncation," a second
-            fetch-tool corruption that "stripped every &lt; / &gt; character," and functions marked{" "}
-            <code>RECONSTRUCTED</code> as a result. This session fetched the same file once, directly,
-            via <code>curl</code>, and received the complete 86,898-byte file with no truncation and no
-            corruption. The mirror/corruption narrative is therefore <strong>unverified</strong> by this
-            session &mdash; it may describe something that happened in a different tool/session, or it may
-            be in-universe narrative framing. Either way, it is not independently confirmed here.
-          </li>
-          <li>
-            Commit metadata shows GitHub-signed ("verified": true) commits from user <code>wbweve</code>,
-            all titled "Add files via upload," roughly every 10&ndash;30 minutes across Oct 16&ndash;17,
-            2026. This confirms <em>how</em> the repo was built (repeated manual uploads, consistent with
-            an iterative AI-assisted workflow) but is not evidence about the correctness of any claim
-            made inside the uploaded files.
-          </li>
-        </ul>
-      </section>
-
-      <section className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-        <h2 className="font-semibold text-slate-200 mb-2">What this rebuild actually is</h2>
-        <p className="text-slate-400">
-          This app is an original React + TypeScript + Tailwind implementation built for this sandbox.
-          It reuses the small set of constants verified above, and re-implements &mdash; from the
-          user-supplied feature summary, not from reading the upstream project's internal algorithms
-          line-by-line &mdash; the ideas of an append-only event log with pure projection, a golden-ratio
-          spacing scale, a density/Miller's-Law heuristic, time-of-day chromatic adaptation, a
-          four-tier familiarity system backed by <code>sessionStorage</code>, a small bounded layout
-          solver, and a live, computed health-check wall. The upstream repo's 8-module/49-file/
-          vanilla-JS/no-build-step architecture described in the pasted implementation summary was{" "}
-          <strong>not</strong> reproduced file-for-file here: this sandbox is contractually a
-          React/Vite/Tailwind project (see <code>AI-SESSION-LOG.md</code> for why), and <code>vite-plugin-singlefile</code>{" "}
-          is used so that <code>npm run build</code> still produces one self-contained{" "}
-          <code>dist/index.html</code>, in the spirit of "open index.html, that is the install."
-        </p>
-      </section>
-
-      <section className="rounded-lg border border-rose-900 bg-rose-950/20 p-4">
-        <h2 className="font-semibold text-rose-300 mb-2">Fabricated, disclosed at point of use</h2>
-        <ul className="list-disc list-inside space-y-1 text-slate-300">
-          <li>The "257 bits per finding" constant and the resulting bits-per-pixel figure.</li>
-          <li>Per-card "confidence" percentages shown on NOVEL-tier finding cards.</li>
-          <li>The decision quadrant classification rule (impact &times; reversibility thresholds).</li>
-          <li>All seed/demo finding and decision content.</li>
-        </ul>
-      </section>
+      <div className="text-slate-700">{children}</div>
     </div>
   );
 }

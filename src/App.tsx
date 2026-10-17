@@ -1,112 +1,106 @@
 import { useEffect, useMemo, useState } from "react";
 import { Shell, type Route } from "./components/Shell";
 import { TodayView } from "./components/TodayView";
-import { DomainsView } from "./components/DomainsView";
 import { DecisionsView } from "./components/DecisionsView";
-import { AestheticsView } from "./components/AestheticsView";
-import { HealthView } from "./components/HealthView";
+import { EnergyView } from "./components/EnergyView";
+import { MemoryGenomeView } from "./components/MemoryGenomeView";
+import { AccessibilityView } from "./components/AccessibilityView";
 import { LogView } from "./components/LogView";
 import { AboutView } from "./components/AboutView";
-import {
-  appendEvent,
-  loadState,
-  nextId,
-  project,
-  seedIfEmpty,
-  type DomainKey,
-  type StoreState,
-} from "./lib/core";
-import { resetFamiliarity } from "./lib/familiarity";
-import { chromaticAdaptation, type DensityMode } from "./lib/aesthetics";
+import { appendEvent, loadEvents, wipeEvents } from "./lib/storage";
+import { getProfileForDate } from "./lib/circadian";
+import { DECISION_WEIGHTS, clampScore } from "./lib/fatigue";
+import { workerStatus } from "./lib/workers";
+import type { AppEvent, Decision, DecisionType, MonteCarloResult } from "./lib/types";
 
-function routeFromHash(): Route {
-  const h = window.location.hash.replace("#/", "") as Route;
-  const valid: Route[] = ["today", "domains", "decisions", "aesthetics", "health", "log", "about"];
-  return valid.includes(h) ? h : "today";
-}
+const SESSION_STARTED_AT = new Date().toISOString();
 
 export default function App() {
-  const [route, setRoute] = useState<Route>(routeFromHash());
-  const [state, setState] = useState<StoreState>(() => seedIfEmpty(loadState()));
+  const [route, setRoute] = useState<Route>("today");
+  const [events, setEvents] = useState<AppEvent[]>(() => loadEvents());
+  const [sessionFatigue, setSessionFatigue] = useState(0);
+  const [wStatus, setWStatus] = useState(workerStatus());
+  const [dyslexiaFriendly, setDyslexiaFriendly] = useState(false);
+  const [cognitiveReduction, setCognitiveReduction] = useState(false);
 
   useEffect(() => {
-    const onHash = () => setRoute(routeFromHash());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
+    const id = setInterval(() => setWStatus(workerStatus()), 1500);
+    return () => clearInterval(id);
   }, []);
 
-  // Time-of-day chromatic adaptation filter applied to the whole app, recomputed on load only.
   useEffect(() => {
-    const chroma = chromaticAdaptation();
-    document.body.style.filter = chroma.filterCss;
-  }, []);
+    document.documentElement.dataset.dyslexiaFriendly = String(dyslexiaFriendly);
+  }, [dyslexiaFriendly]);
+  useEffect(() => {
+    document.documentElement.dataset.cognitiveReduction = String(cognitiveReduction);
+  }, [cognitiveReduction]);
 
-  const projection = useMemo(() => project(state), [state]);
+  const plans = useMemo(
+    () => events.filter((e) => e.type === "decision.logged" && (e.payload as { style?: string }).style === "plan").length,
+    [events]
+  );
+  const directs = useMemo(
+    () => events.filter((e) => e.type === "decision.logged" && (e.payload as { style?: string }).style === "direct").length,
+    [events]
+  );
 
-  function navigate(r: Route) {
-    window.location.hash = `/${r}`;
-    setRoute(r);
+  function record(type: Parameters<typeof appendEvent>[0], payload: Record<string, unknown>) {
+    const evt = appendEvent(type, payload);
+    setEvents((prev) => [...prev, evt]);
   }
 
-  function handleLogDecision(d: { domain: DomainKey; title: string; impact: number; reversibility: number }) {
-    setState((prev) => {
-      const id = nextId(prev, "ev");
-      const decisionId = nextId(prev, "dec");
-      return appendEvent(prev, {
-        id,
-        type: "decision.logged",
-        ts: Date.now(),
-        domain: d.domain,
-        decisionId,
-        title: d.title,
-        impact: d.impact,
-        reversibility: d.reversibility,
-      });
+  function handleLogStyle(style: "plan" | "direct") {
+    record("decision.logged", { style, note: `quick-tagged ${style}` });
+  }
+
+  function handleRecordDecisionType(type: DecisionType) {
+    const weight = DECISION_WEIGHTS[type];
+    setSessionFatigue((f) => clampScore(f + weight));
+    record("decision.logged", { decisionType: type, weight });
+  }
+
+  function handleLogEnergy(level: number, note: string) {
+    const phase = getProfileForDate().phase;
+    record("bio.energy.logged", { level, phase, note: note || undefined });
+  }
+
+  function handleRunSimulation(decision: Decision, result: MonteCarloResult) {
+    record("simulation.run", {
+      decisionId: decision.id,
+      title: decision.title,
+      decisionType: decision.type,
+      iterations: result.iterations,
+      seed: result.seed,
+      results: { mean: result.mean, p10: result.p10, p90: result.p90 },
+      computedVia: result.computedVia,
     });
-  }
-
-  function handleDensityChange(mode: DensityMode) {
-    setState((prev) => {
-      const next = { ...prev, meta: { ...prev.meta, densityMode: mode } };
-      localStorage.setItem("leados-pt-j:data", JSON.stringify(next));
-      return next;
-    });
-  }
-
-  function handleResetFamiliarity() {
-    resetFamiliarity();
-    setState((prev) => ({ ...prev }));
-  }
-
-  function handleExport() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "leados-pt-j-export.json";
-    a.click();
   }
 
   function handleWipe() {
-    if (!window.confirm("Wipe all local data and reseed?")) return;
-    localStorage.removeItem("leados-pt-j:data");
-    const fresh = seedIfEmpty(loadState());
-    setState(fresh);
+    wipeEvents();
+    setEvents([]);
+    setSessionFatigue(0);
   }
 
   return (
-    <Shell
-      route={route}
-      onNavigate={navigate}
-      densityMode={state.meta.densityMode}
-      onDensityChange={handleDensityChange}
-      onResetFamiliarity={handleResetFamiliarity}
-    >
-      {route === "today" && <TodayView findings={projection.findings} />}
-      {route === "domains" && <DomainsView scores={projection.domainScores} />}
-      {route === "decisions" && <DecisionsView decisions={projection.decisions} onLog={handleLogDecision} />}
-      {route === "aesthetics" && <AestheticsView densityMode={state.meta.densityMode} />}
-      {route === "health" && <HealthView />}
-      {route === "log" && <LogView events={state.events} onExport={handleExport} onWipe={handleWipe} />}
+    <Shell route={route} onNavigate={setRoute} eventCount={events.length} workerStatus={wStatus}>
+      {route === "today" && <TodayView events={events} onLogStyle={handleLogStyle} />}
+      {route === "decisions" && <DecisionsView onRun={handleRunSimulation} />}
+      {route === "energy" && (
+        <EnergyView sessionFatigue={sessionFatigue} onRecordDecision={handleRecordDecisionType} onLogEnergy={handleLogEnergy} />
+      )}
+      {route === "memory" && (
+        <MemoryGenomeView events={events} sessionStartedAt={SESSION_STARTED_AT} plans={plans} directs={directs} />
+      )}
+      {route === "accessibility" && (
+        <AccessibilityView
+          dyslexiaFriendly={dyslexiaFriendly}
+          setDyslexiaFriendly={setDyslexiaFriendly}
+          cognitiveReduction={cognitiveReduction}
+          setCognitiveReduction={setCognitiveReduction}
+        />
+      )}
+      {route === "log" && <LogView events={events} onWipe={handleWipe} />}
       {route === "about" && <AboutView />}
     </Shell>
   );
