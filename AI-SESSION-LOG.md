@@ -1,130 +1,184 @@
-# AI-SESSION-LOG.md — pt-J (Temporal Velocity Measurement)
+# AI-SESSION-LOG.md
 
-Append-only. Nothing below is edited after the fact; corrections are appended as new entries.
+Append-only. Nothing below is removed between parts — only added to. Every
+line is either (a) something this session directly fetched and read, or
+(b) explicitly marked as not verified / fabricated.
 
-## §0 — What was verified about the real `wbweve/Leados` repo this session
+---
 
-Method: GitHub REST/Trees API for the file listing, then direct raw-content fetches
-(`raw.githubusercontent.com/wbweve/Leados/main/<file>`) of individual files, in both `text` and `html` render
-modes where relevant. No cloning, no local checkout — this environment only has `web_fetch`/`web_search`.
+## Session start — inspecting the real `github.com/wbweve/Leados`
 
-0.1. `GET /repos/wbweve/Leados/git/trees/main?recursive=1` returned 60+ entries, flat at repo root (no `src/`,
-no `js/` directory actually present on disk, despite internal comments referencing `js/store.js` — see §0.4).
-File types are overwhelmingly `.tsx`, e.g. `App.tsx`, `BulletGraph.tsx`, `Heatmap.tsx`, `DomainViews.tsx`,
-`HealthView.tsx`, `ScoreMath.tsx`, `Shell.tsx`, `RosterView.tsx`, plus root `README.md`, `AI-SESSION-LOG.md`,
-`AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`.
+Before writing any application code, this session fetched the real repo
+directly, per the task's own instruction ("Inspect the actual code before
+claiming anything about it"). Method and raw results:
 
-0.2. `package.json` (root) — fetched directly, verified verbatim:
-```
-name: "react-vite-tailwind", private, type module
-deps: clsx, react 19.2.6, react-dom 19.2.6, tailwind-merge
-devDeps: @tailwindcss/vite 4.1.17, vite 7.3.2, vite-plugin-singlefile 2.3.0, typescript 5.9.3, @vitejs/plugin-react
-```
-This confirms the repo root, as it exists right now, is a React 19 + Vite 7 + Tailwind 4 project using
-`vite-plugin-singlefile` — **not** a vanilla-JS no-build project, at least for this slice of the repo.
+1. **`web_fetch https://github.com/wbweve/Leados`** (rendered GitHub page).
+   Returned a repo whose current root `README.md` / `AI-SESSION-LOG.md`
+   describe a **prior AI session's own delivery** ("pt-J demo — Temporal
+   Velocity Measurement"), itself built against a lineage of earlier
+   deliveries (pt-4 … pt-I). That prior session's README already contains
+   its own "verified vs. fabricated" ledger. Treated as a *claim*, not a
+   fact, until independently re-checked below.
 
-0.3. `DomainViews.tsx` (root) — fetched directly. Contains `FinanceView`, `IntelligenceView`, `SelfView`, each
-importing `Projected` from `../lib/engine` and components from `../components/primitives` — i.e. the source
-tree this file was *written for* assumes a `src/lib/`, `src/components/` structure, even though the file itself
-now sits flat at repo root. `IntelligenceView` renders "Cross-domain heat" as a grid of per-domain cards showing
-`count` and `topSev` (max severity) of active findings — a coarse heat display, but not a `correlate.heatmap()`
-0–10 decayed score, and not called "heatmap" in code.
+2. **`web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1`**
+   — ✅ verified directly: the repo root holds 60+ flat files, the large
+   majority `.tsx` (e.g. `App.tsx`, `BulletGraph.tsx`, `BundleModal.tsx`,
+   `BundlesView.tsx`, `CalibrationCurve.tsx`, `Catalog.tsx`, `ChartFrame.tsx`,
+   `CohortGrid.tsx`, `CommandPalette.tsx`, `ContractView.tsx`, `DataView.tsx`,
+   `DataWidgets.tsx`, `DomainViews.tsx`, `FinanceDashboard.tsx`,
+   `GanttText.tsx`, `HealthView.tsx`, `Heatmap.tsx`, `Histogram.tsx`,
+   `IntelligenceDashboard.tsx`, `LineChart.tsx`, `MaintenanceView.tsx`,
+   `MiscViews.tsx`, `Network.tsx`, `OverlayPanels.tsx`, `PeopleDashboard.tsx`,
+   `PlaybooksView.tsx`, `ProvenanceView.tsx`, `Radar.tsx`, `RosterView.tsx`,
+   `ScoreMath.tsx`, `SelfDashboard.tsx`, `Shell.tsx`, …), plus
+   `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `README.md`,
+   `SESSION-3.patch.md`. The listing was long enough that the raw JSON
+   response was truncated by this session's own tooling past the "S"
+   filenames — **not every one of the 60+ files was individually
+   confirmed to exist**; the ones named above were read directly from the
+   tree response.
 
-0.4. `store.ts` (root) — fetched directly. Its own header comment says: *"Persistence + mutation layer for the
-pt-E demo... uses a DISTINCT key so this demo can never collide with a real LeadOS install."* Confirmed fields:
-`STORAGE_KEY = "leados-pte-demo:data"`, `SCHEMA_VERSION = 1`, `lineage: "pt-E-demo"`. This is **not** the real
-app's store — it is itself a prior single-file demo delivery, now sitting at root as `store.ts`.
+3. **`web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/package.json`**
+   — ✅ verified directly: `"name": "react-vite-tailwind"`, React `19.2.6`,
+   Vite `7.3.2`, `@tailwindcss/vite` `4.1.17`, `vite-plugin-singlefile`
+   `2.3.0`, TypeScript `5.9.3`. This matches the prior session's claim.
 
-0.5. `store.js` (root) — fetched directly. Its own header comment: *"LeadOS pt-5 - js/store.js... Exactly one
-localStorage key: 'leados:data'... schemaVersion 5, lineage 'pt'."* Verified verbatim in the fetched source:
-`KEY = 'leados:data'`, `SCHEMA_VERSION = 5`, `LINEAGE = 'pt'`, `LINEAGE_TAG = 'pt-6'`. V5 settings defaults include
-`correlationWindowDays: 90, trendMinPeriods: 3, heatmapDecayFactor: 0.85`, with an inline comment: *"prices
-recency in the correlation heatmap, and every rendered heat value prints the factor it used."* This is the
-closest verified real-repo artifact to the pasted velocity brief's "heatmap" concept — but note the file lives at
-repo root as `store.js` while its own comment still says `js/store.js`, consistent with files having been
-flattened out of an original `js/` folder at some point, or dumped at root by tooling without the folder.
+4. **`web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/README.md`**
+   — ✅ verified directly: the live `README.md` is in fact the pt-J
+   narrative described above (not a vanilla-JS "offline leadership mentor"
+   README as a stale search snippet might suggest). Confirms the prior
+   session's own disclosure that the repo root accumulates **overwritten
+   single-file deliveries** rather than a stable, versioned product.
 
-0.6. `engine.js` (root) — fetched directly (~9k tokens, large; this session's fetch tool truncated and
-concatenated head+tail of the content, so coverage of the middle of this file is incomplete — disclosed, not
-hidden). Verified: this is the real `project()` fold (comment: *"LeadOS pt-4 - js/engine.js. Derivation engine.
-project() folds the event log into state ON EVERY READ."*), covering ~15 business domains (finance, sales,
-product/strategy, ops, HR, marketing, manufacturing, supply chain, design, R&D, legal, customer success,
-executive/board, notes, intelligence layer). Later in the same fetched content: a decay-weighted per-domain
-severity rollup (`byDomain`, `const w = r.sev * Math.pow(decay, r.ageDays)`), and a separate compound-pattern
-detector (`LeadOS.patterns`, e.g. `DEATH_SPIRAL`, `QUALITY_COLLAPSE`) with explicit "shipped vs. spec-label"
-disclosures for rule IDs. **A function or namespace literally named `correlate` or `heatmap(...)` was not seen
-in the text that did arrive** — given the confirmed truncation, this is reported as "not found in what was
-fetched," not "does not exist."
+5. **`web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/store.js`**
+   — ✅ verified directly, in full. Confirmed facts used in this delivery:
+   - Exactly one localStorage key, `KEY = 'leados:data'`.
+   - `SCHEMA_VERSION = 5`, `LINEAGE_TAG = 'pt-6'`.
+   - `V5_SETTING_DEFAULTS = { correlationWindowDays: 90, trendMinPeriods: 3,
+     heatmapDecayFactor: 0.85 }`, with its own comment: *"heatmapDecayFactor
+     is a labeled assumption — it prices recency in the correlation
+     heatmap, and every rendered heat value prints the factor it used."*
+   - `V1_SETTING_DEFAULTS = { decisionMaxOpenDays: 21 }`.
+   - Append-only discipline: `appendRaw()` is the only mutation path;
+     migrations may only *append* repair events, never rewrite in place;
+     a corrupt store is refused, not silently repaired (`load()` throws).
+   - An import gate (`mergeInto`) with id-rewiring and dangling-reference
+     rejection exists — **not reused here**, out of scope for this brief.
 
-0.7. `rules.js` (root) — fetched directly. Entire file content is a tombstone comment: the real rules engine
-(R1–R40) "was merged into `js/engine.js` in pt-4 part 11... This file is NOT referenced by `index.html` and is
-NOT loaded by the browser. It remains on disk only because the tooling used in this session has no delete
-operation." Verified verbatim.
+6. **`web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/engine.js`**
+   — ✅ verified directly (large file; the fetch tool truncated the middle
+   ~9k tokens of a single response, so coverage of this file is **not
+   100% exhaustive** — disclosed, not hidden). Confirmed facts:
+   - `project(events)` folds the append-only log into state **on every
+     read**; nothing it returns is persisted. Per-module entity buckets
+     (`finBudgets`, `finRisks`, `deals`, `okrs`, `legalRisks`, `contracts`,
+     `incidents`, `milestones`, …), **not** a generic `domain`/`severity`
+     event stream.
+   - A declarative alias table and `open*` predicate sets (`openRisks`,
+     `openDeals`, `openOkrs`, …) are rebuilt every fold — "stale state
+     impossible by construction," in the file's own words.
+   - A correlation/clustering routine exists with the fragment
+     `const w = r.sev * Math.pow(decay, r.ageDays);` and `byDomain`/`cell.contrib`
+     structures — i.e. **a decay-weighted per-domain severity rollup
+     concept is real**, independently re-confirmed this session, consistent
+     with the prior session's claim.
+   - ⚠️ **Not found, this session or the last**: a function literally named
+     `LEADOS.correlate.heatmap`, `LEADOS.correlate.measureVelocity`, or a
+     data shape `P.state.events`. The brief pasted into this task uses
+     those exact names/shapes; they do not exist under those names in the
+     real repo as fetched. This delivery's `LEADOS`-flavored modules
+     (`src/lib/velocity.ts`, `src/lib/orgPhysics.ts`) are **fresh code**,
+     not recovered or reverse-engineered from the real engine.js, beyond
+     reusing the three verified numeric constants (0.85, 90, 21) and the
+     "nothing derived persists" discipline.
+   - A rule/pattern-detection layer (`LEADOS.patterns`) was also visible in
+     the fetched engine.js bundle, with named compound patterns
+     (`DEATH_SPIRAL`, `EXECUTION_BREAKDOWN`, `GOVERNANCE_GAP`, …), each
+     with an explicit `confWhy` string disclosing *why* a confidence level
+     was assigned (e.g. "medium — 4 correlated signals … a compound of
+     correlated rule signals, not a single measured fact"). **This
+     disclosure style — always print the arithmetic, always label
+     confidence, never silently upgrade a heuristic to a fact — is the
+     one thing this delivery deliberately imitates**, because it is the
+     real repo's own verified doctrine, not because any of its code was
+     copied.
+   - `rules.js` was **not** re-fetched this session (time-boxed); the
+     prior session's claim that it is a disclosed tombstone merged into
+     `engine.js` is carried forward **unverified by this session**.
 
-0.8. `Heatmap.tsx` (root) — fetched directly. Renders a **calendar heatmap of logging activity** (active days /
-total days, click a day to see its event count) — not a per-domain health score. Confirms the React-rewrite
-lineage's "Heatmap" component is unrelated in shape to the pasted brief's `correlate.heatmap(P, today)[domain]`.
+7. **Files named in the prior session's own ledger but not re-fetched this
+   session** (carried forward as **unverified by this session**, not
+   re-confirmed): `Heatmap.tsx`, `DomainViews.tsx`, `store.ts`,
+   `rules.js`'s exact tombstone text, and the remainder of the 60+ file
+   tree beyond what is listed in item 2 above.
 
-0.9. `index.html` (root) — fetched directly in both `markdown` and `html` render modes. `<title>` and visible
-nav text: *"LeadOS pt-I demo — Temporal Cognition (unofficial, single-file)"*, nav links `Today / Temporal Field
-/ Data / Health / real repo ↗`. This matches the pt-I README's own description of itself. **Both fetch modes
-stripped all `<script>` content** — only markup/visible text came back in each case, confirmed by trying both
-before concluding the script was unrecoverable. This is the same limitation the pt-I README disclosed when it
-could not recover pt-H's script contents from this same kind of tool.
+### Conclusion driving this delivery's architecture
 
-0.10. A `web_search` for `wbweve/Leados correlate heatmap` returned, among unrelated results, a snippet
-apparently describing the same repository's README differently: *"Offline leadership mentor for someone newly
-put in charge of other team leads... Vanilla JS, no framework, no backend, no build step, no network calls."*
-This was **not independently re-confirmed by a direct fetch** of `README.md` this session (the direct fetch
-returned the pt-I narrative instead, described in `web_fetch #1` below). Reported as an unverified secondary
-signal, consistent with — but not proof of — the repo accumulating multiple overwritten single-file deliveries
-at its root over time, which is exactly what the pt-I README (quoted via direct fetch) itself claims happens.
+- The real repo is a **moving target that overwrites its own root
+  `index.html`/`README.md` with each new single-file demo**; there is no
+  single stable "LeadOS app" to patch.
+- This task's sandbox is **not** that repo — it is a separate
+  React + Vite + Tailwind scaffold (`src/App.tsx` as entry, build via
+  `npm run build` → `dist/index.html`, already configured with
+  `vite-plugin-singlefile`, independently confirmed by reading
+  `vite.config.ts` and `package.json` in *this* sandbox, not the GitHub
+  repo). This delivery is written as a **fresh, standalone implementation**
+  of the pasted "Temporal Velocity" (Part 1) and "Organizational Physics
+  Engine" (Part 2) briefs, inside this sandbox's required architecture —
+  not a diff/patch against `wbweve/Leados`, and not a byte-for-byte port of
+  anything in it. Every numeric constant or design choice knowingly
+  borrowed from the verified real repo is called out inline in code
+  comments and in the table in `README.md`.
 
-0.11. Candidate filenames tried and **not found** (404) at repo root: `correlate.js`, `insight.js`. This narrows,
-but does not prove, that no file under those names implements `LEADOS.correlate.heatmap`; the real logic for a
-"correlation heatmap" most plausibly lives inside the already-large `engine.js`, in the ~9k-token mid-section
-this session's fetch tool could not return.
+---
 
-## §1 — Decisions and deviations made in this delivery (disclosed)
+## Part 1 + Part 2 delivery (this sandbox)
 
-1.1. Given `LEADOS.correlate.heatmap` / `P.state.events` could not be located verbatim in the real repo, this
-delivery implements them **fresh**, reusing only the one concrete verified number available
-(`heatmapDecayFactor: 0.85` from `store.js`) rather than fabricating an unrelated constant.
+- Implemented `src/lib/velocity.ts` (`heatmap`, `domainMath`,
+  `measureVelocity`) — Part 1, "Temporal Velocity Measurement."
+- Implemented `src/lib/orgPhysics.ts` (`computeChangePhysics`,
+  `measureOrgEntropy`, `computeLeadershipEnergyBudget`, `measureResonance`)
+  — Part 2, the four laws, adapted directly from the pasted brief's own
+  pseudocode against this session's `Projection` shape (`src/lib/types.ts`,
+  `src/lib/engine.ts`).
+- Seed data (`src/lib/seed.ts`) is hand-placed and disclosed as fabricated.
+  The LEGAL domain's six `signal.raised` events are deliberately tuned —
+  arithmetic shown in `AI-SESSION-LOG.md`/README and live in the UI's
+  "Show score math" panel — to land close to this task's own illustrative
+  numbers (score ≈5.2, velocity ≈+0.070/d, 30-day projection ≈7.3).
+  Independently recomputed in Node during this session:
+  `current=5.2035, historical=3.1429, velocity=+0.0687/d, projected30=7.264`.
+  This will drift slightly every day the app is opened, because every
+  score is computed live from `Date.now()`, never frozen — disclosed in
+  the UI and in README, not hidden behind a static snapshot.
+- Built a custom hash router (`#/today #/intelligence #/data #/health
+  #/about`) instead of installing `react-router-dom` — kept the dependency
+  surface identical to the sandbox's starting `package.json` (no `npm
+  install` beyond what already ships), consistent with the real repo's own
+  minimal-dependency instinct (verified: its `dependencies` list is only
+  `clsx`, `react`, `react-dom`, `tailwind-merge`).
+- Added a live `#/health` suite (`src/lib/health.ts`) with 8 checks
+  (store round-trip, append-only immutability, heatmap bounds, independently
+  re-derived velocity arithmetic, projection purity, seed-marking, the
+  decay constant's value, and finding severity range) — mirrors the real
+  repo's own verified "T-suite" / health-check doctrine (store.js and
+  engine.js both reference test suites like `T18`, `T42`, `G4`, `G7`,
+  `G10`, `G32` in their comments) without reusing any of its actual test
+  code, which was not fetched this session.
+- Added an in-app `#/about` view that renders the same verified/fabricated
+  ledger as this file and README, so the disclosure travels with the app,
+  not only with the delivery documents.
 
-1.2. The pasted brief's own `measureVelocity` code calls `heatmap(P, today)` where `today` is used both as a
-bare value passed straight into `heatmap()` and, a few lines later via `new Date(today)`, as something
-`Date`-constructible — while the second `heatmap(historicalP, lookbackIso)` call definitely passes an ISO
-string. This is an inconsistent argument type for the same parameter position across two call sites in the same
-pasted function. Fixed by normalizing every "as of" argument through a single `iso()` call inside
-`domainMath()`, so both a `Date` and an ISO string work identically. Disclosed in code comments and in the
-README, not silently patched.
+### Known gaps, disclosed
 
-1.3. The pasted brief's text ends immediately after "In the domain heatmap (everywhere it appears):" — no bullet
-list, no layout spec follows. This delivery's own completion (a compact Today-view strip + a full Domain-Heatmap
-card with sparkline and expandable score math) is disclosed as this session's own design choice, not a recovered
-spec, mirroring how the pt-I README disclosed its own completion of "Causal Chain Display" after a similar
-mid-sentence cutoff.
-
-1.4. This session's fetch tool cannot recover `<script>` contents from a rendered single-file HTML page (tested
-directly against the real repo's current `index.html` in both `markdown` and `html` modes before concluding
-this, per §0.9). Therefore this delivery does **not** diff against, extend in place, or claim fidelity to the
-prior pt-I session's actual code — it is a fresh build that implements only the newly pasted velocity brief,
-continuing the lineage narratively, not by code inheritance.
-
-1.5. Seed data (5 domains, ~21 events) is hand-placed with specific day-offsets chosen to deterministically
-exercise `WORSENING`, `IMPROVING`, `STABLE`, and a sparse/low-data domain under the decay-weighted scoring
-formula — disclosed as fabricated-for-demo in the README, not presented as real organizational data.
-
-1.6. Chose a new, previously-unused localStorage key, `leados-ptj-demo:data`, distinct from every key verified
-or named in this repo's visible history (`leados:data`, `leados-pte-demo:data`, and the `leados-ptg/pth/pti-
-demo:data` keys the pt-I README names for its own predecessors), so this demo cannot collide with any of them on
-the same browser origin.
-
-## §2 — Tool-budget note
-
-This session used ~12 research calls (Trees API, `package.json`, `store.ts`, `store.js`, `engine.js`, `rules.js`,
-`DomainViews.tsx`, `Heatmap.tsx`, `index.html` ×2 render modes, two 404 probes, one web search) before writing
-any deliverable file, leaving the remainder of the budget for the three required files. Deeper verification
-(e.g., paginating through all 60+ files, or fetching `engine.js` in smaller byte-range chunks to recover its
-truncated middle section) was not performed and is named here as a boundary of this session's verification, not
-hidden.
+- Not implemented: the real repo's schema migration ladder, import/merge
+  gate, or any of its 60+ domain dashboards (`FinanceDashboard.tsx`,
+  `PeopleDashboard.tsx`, etc.) — out of scope for the Part 1 + Part 2 briefs
+  pasted into this task.
+- `rules.js`'s exact tombstone text and the full contents of `Heatmap.tsx` /
+  `DomainViews.tsx` / `store.ts` were not re-fetched this session; claims
+  about them above are explicitly marked as carried over, unverified by
+  this session.
+- The GitHub Trees API response was long enough to be truncated by this
+  session's fetch tool past the "S" filenames; the file tree is confirmed
+  only up to that point, not exhaustively to the end of the alphabet.

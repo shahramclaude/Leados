@@ -1,292 +1,91 @@
-// Persistence + mutation layer for the pt-E demo.
-// Reuses, as a doctrine (not literal code), the real repo's verified pattern
-// of "exactly one localStorage key, append-only events, nothing derived is
-// persisted" (js/store.js header, verified this session) — but uses a
-// DISTINCT key so this demo can never collide with a real LeadOS install
-// served from the same origin.
+import type { LeadosEvent } from "./types";
 
-import type { AuditEntry, LeadEvent, Meta, Store } from "../types";
-import { buildSeedEvents, PEOPLE } from "../data/seed";
-import { DEFAULT_SETTINGS } from "../data/catalog";
-import { iso, uid } from "./utils";
+/**
+ * LEADOS.store — append-only event log in one localStorage key.
+ *
+ * DISCLOSURE: the real repo's store.js (verified raw-fetch this session)
+ * uses KEY='leados:data', schemaVersion 5, and a migration ladder (v1→v5).
+ * This sandbox is a fresh schema (v1) with its own, deliberately distinct
+ * key so it can never collide with that repo's key or with any prior
+ * pt-letter demo key on the same origin. No migration ladder is
+ * implemented here — disclosed scope cut, not a hidden omission.
+ */
 
-export const STORAGE_KEY = "leados-pte-demo:data";
-export const SCHEMA_VERSION = 1; // this demo's own schema line — not the real repo's (verified real schemaVersion is 5)
+export const STORAGE_KEY = "leados-orgphysics-sandbox:data";
+export const SCHEMA_VERSION = 1;
 
-type Listener = () => void;
-const listeners = new Set<Listener>();
-let current: Store = loadOrSeed();
-let lastUndo: { event: LeadEvent; expiresAt: number } | null = null;
-
-function freshMeta(): Meta {
-  return {
-    createdAt: iso(new Date()),
-    mutedRules: [],
-    snoozed: {},
-    dismissed: {},
-    settings: { ...DEFAULT_SETTINGS },
-    audit: [],
-    auditSeq: 0,
-    lastEventSeq: 0,
-    theme: "light",
-  };
+interface RawStore {
+  schemaVersion: number;
+  meta: { createdAt: string };
+  events: LeadosEvent[];
 }
 
-function seedStore(): Store {
-  const today = new Date();
-  const events = buildSeedEvents(today);
-  const meta = freshMeta();
-  meta.lastEventSeq = events.length;
-  // Pre-mute R50 so the global-mute capability has a concrete example (per
-  // brief's own worked example: "R50 ... becomes noise once mapped").
-  meta.mutedRules.push({ rule: "R50", reason: "muted on seed load from demo bootstrap", ts: iso(today) });
-  const store: Store = {
-    schemaVersion: SCHEMA_VERSION,
-    lineage: "pt-E-demo",
-    meta,
-    people: PEOPLE,
-    events,
-  };
-  // seed a plausible audit trail for the past 30 days so Audit Intelligence has data
-  store.meta.audit = synthesizeAuditLog(events);
-  store.meta.auditSeq = store.meta.audit.length;
-  return store;
+let seq = 0;
+function nextId(): string {
+  seq += 1;
+  return "e-" + String(Date.now()).slice(-6) + "-" + String(seq).padStart(4, "0");
 }
 
-function synthesizeAuditLog(events: LeadEvent[]): AuditEntry[] {
-  let seq = 0;
-  const out: AuditEntry[] = events.map((e) => ({
-    seq: ++seq,
-    ts: e.ts,
-    action: "event:" + e.type,
-    detail: { eventId: e.id, domain: e.domain },
-  }));
-  return out;
-}
-
-function loadOrSeed(): Store {
+function readRaw(key: string): RawStore | null {
+  const text = localStorage.getItem(key);
+  if (!text) return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Store;
-      if (parsed && parsed.events && parsed.meta) return parsed;
-    }
+    return JSON.parse(text);
   } catch {
-    /* corrupt/unavailable storage -> fall through to reseed */
-  }
-  const s = seedStore();
-  persist(s);
-  return s;
-}
-
-function persist(s: Store) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {
-    /* quota or unavailable — demo stays in-memory only for this tab */
+    // The wall does not silently rewrite a corrupt store — it refuses.
+    throw new Error("LEADOS: store at " + key + " is corrupt and was left untouched.");
   }
 }
 
-function notify() {
-  listeners.forEach((l) => l());
+function writeRaw(key: string, raw: RawStore) {
+  localStorage.setItem(key, JSON.stringify(raw));
 }
 
-export function subscribe(fn: Listener): () => void {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
+function genesis(): RawStore {
+  return { schemaVersion: SCHEMA_VERSION, meta: { createdAt: new Date().toISOString() }, events: [] };
 }
 
-export function getStore(): Store {
-  return current;
-}
-
-function commit(next: Store) {
-  current = next;
-  persist(current);
-  notify();
-}
-
-function pushAudit(s: Store, action: string, detail: Record<string, unknown>): Store {
-  const entry: AuditEntry = { seq: s.meta.auditSeq + 1, ts: iso(new Date()), action, detail };
-  const audit = [...s.meta.audit, entry].slice(-2000);
-  return { ...s, meta: { ...s.meta, audit, auditSeq: entry.seq } };
-}
-
-export function appendEvent(input: {
-  type: string;
-  domain: string;
-  data: Record<string, unknown>;
-  personId?: string;
-  imported?: boolean;
-}): LeadEvent {
-  const s = current;
-  const event: LeadEvent = {
-    id: uid("e"),
-    seq: s.meta.lastEventSeq + 1,
-    type: input.type,
-    domain: input.domain,
-    ts: iso(new Date()),
-    personId: input.personId,
-    data: input.data,
-    imported: input.imported,
-  };
-  let next: Store = {
-    ...s,
-    events: [...s.events, event],
-    meta: { ...s.meta, lastEventSeq: event.seq },
-  };
-  next = pushAudit(next, "event:" + input.type, { eventId: event.id, domain: input.domain });
-  commit(next);
-  lastUndo = { event, expiresAt: Date.now() + 60_000 };
-  return event;
-}
-
-export function canUndo(): boolean {
-  return !!lastUndo && lastUndo.expiresAt > Date.now();
-}
-
-export function undoLast(): boolean {
-  if (!canUndo() || !lastUndo) return false;
-  const id = lastUndo.event.id;
-  let next: Store = { ...current, events: current.events.filter((e) => e.id !== id) };
-  next = pushAudit(next, "event.undone", { eventId: id });
-  commit(next);
-  lastUndo = null;
-  return true;
-}
-
-export function muteRule(rule: string, reason: string) {
-  const s = current;
-  if (s.meta.mutedRules.some((m) => m.rule === rule)) return;
-  let next: Store = {
-    ...s,
-    meta: { ...s.meta, mutedRules: [...s.meta.mutedRules, { rule, reason, ts: iso(new Date()) }] },
-  };
-  next = pushAudit(next, "rule.muted", { rule, reason });
-  commit(next);
-}
-
-export function unmuteRule(rule: string) {
-  const s = current;
-  let next: Store = { ...s, meta: { ...s.meta, mutedRules: s.meta.mutedRules.filter((m) => m.rule !== rule) } };
-  next = pushAudit(next, "rule.unmuted", { rule });
-  commit(next);
-}
-
-export function snoozeFinding(key: string, days: number) {
-  const s = current;
-  const until = iso(new Date(Date.now() + days * 86400000));
-  let next: Store = { ...s, meta: { ...s.meta, snoozed: { ...s.meta.snoozed, [key]: { until } } } };
-  next = pushAudit(next, "finding.snoozed", { key, until });
-  commit(next);
-}
-
-export function dismissFinding(key: string) {
-  const s = current;
-  let next: Store = { ...s, meta: { ...s.meta, dismissed: { ...s.meta.dismissed, [key]: { ts: iso(new Date()) } } } };
-  next = pushAudit(next, "finding.dismissed", { key });
-  commit(next);
-}
-
-export function logPlaybookCompleted(playbookId: string, key?: string) {
-  const s = current;
-  let next: Store = pushAudit(s, "playbook.completed", { playbookId, key });
-  commit(next);
-}
-
-export function updateSetting(key: string, value: number) {
-  const s = current;
-  let next: Store = { ...s, meta: { ...s.meta, settings: { ...s.meta.settings, [key]: value } } };
-  next = pushAudit(next, "settings.changed", { key, value });
-  commit(next);
-}
-
-export function setTheme(theme: "light" | "dark") {
-  const s = current;
-  let next: Store = { ...s, meta: { ...s.meta, theme } };
-  next = pushAudit(next, "theme.changed", { theme });
-  commit(next);
-}
-
-export function resetAndReseed() {
-  let next = seedStore();
-  next = pushAudit(next, "store.purged", {});
-  commit(next);
-}
-
-export function exportStore(P: { findings: { key: string; sev: number }[] }): string {
-  const s = current;
-  const top = [...P.findings].sort((a, b) => b.sev - a.sev)[0];
-  const payload = {
-    ...s,
-    _export: {
-      exportedAt: iso(new Date()),
-      schemaVersion: SCHEMA_VERSION,
-      lineage: s.lineage,
-      eventCount: s.events.length,
-      peopleCount: s.people.length,
-      activeFindingsAtExport: P.findings.length,
-      topFindingAtExport: top ? top.key : null,
-      exportedBy: "LeadOS pt-E demo · src/lib/store.ts",
-      note:
-        "Full store export. Import with importInto() to merge into another instance of this demo. The _export block is metadata only and is stripped by importInto().",
-    },
-  };
-  return JSON.stringify(payload, null, 2);
-}
-
-export function exportFiltered(filter: string): string {
-  const s = current;
-  const isDomain = (filter as any) && DOMAIN_SET.has(filter);
-  const events = s.events.filter((e) => (isDomain ? e.domain === filter : e.type === filter));
-  const payload = {
-    schemaVersion: SCHEMA_VERSION,
-    lineage: s.lineage,
-    meta: freshMeta(),
-    people: s.people,
-    events,
-    _export: {
-      exportedAt: iso(new Date()),
-      schemaVersion: SCHEMA_VERSION,
-      eventCount: events.length,
-      _filtered: true,
-      filter,
-      exportedBy: "LeadOS pt-E demo · src/lib/store.ts",
-    },
-  };
-  let next = pushAudit(current, "store.exported.filtered", { filter, count: events.length });
-  commit(next);
-  return JSON.stringify(payload, null, 2);
-}
-
-const DOMAIN_SET = new Set(["finance", "people", "ops", "strategy", "rd", "compliance", "manufacturing"]);
-
-export function importInto(text: string): { addedEvents: number; before: number; after: number } {
-  const s = current;
-  const before = s.events.length;
-  let incoming: Store;
-  try {
-    incoming = JSON.parse(text);
-  } catch {
-    throw new Error("Import failed: not valid JSON.");
+export function load(key: string = STORAGE_KEY): LeadosEvent[] {
+  let raw = readRaw(key);
+  if (!raw) {
+    raw = genesis();
+    writeRaw(key, raw);
   }
-  if (!incoming || !Array.isArray(incoming.events)) throw new Error("Import failed: no events[] array found.");
-  const existingIds = new Set(s.events.map((e) => e.id));
-  const incomingEvents = (incoming.events as LeadEvent[]).map((e) => ({ ...e, imported: true }));
-  const toAdd = incomingEvents.filter((e) => !existingIds.has(e.id));
-  let maxSeq = s.meta.lastEventSeq;
-  const normalized = toAdd.map((e) => ({ ...e, seq: ++maxSeq }));
-  let next: Store = {
-    ...s,
-    events: [...s.events, ...normalized],
-    meta: { ...s.meta, lastEventSeq: maxSeq },
-  };
-  const after = next.events.length;
-  next = pushAudit(next, "store.imported", { addedEvents: normalized.length, before, after });
-  commit(next);
-  return { addedEvents: normalized.length, before, after };
+  return raw.events;
 }
 
-export function markItemAccessed(sessionAccessed: Set<string>, id: string) {
-  sessionAccessed.add(id);
+/** The only public write path for "now" events — always stamps real time. */
+export function append(type: string, data: any, meta?: Record<string, any>, key: string = STORAGE_KEY): LeadosEvent {
+  const raw = readRaw(key) || genesis();
+  const ev: LeadosEvent = { id: nextId(), ts: new Date().toISOString(), type, data, meta };
+  raw.events.push(ev);
+  writeRaw(key, raw);
+  return ev;
+}
+
+/**
+ * Seed-only backdating path. Every event produced here is marked
+ * meta.seeded = true so the Health suite (T6) and the Data view can prove
+ * no ordinary append path can silently rewrite history.
+ */
+export function appendAt(type: string, data: any, ts: string, key: string = STORAGE_KEY): LeadosEvent {
+  const raw = readRaw(key) || genesis();
+  const ev: LeadosEvent = { id: nextId(), ts, type, data, meta: { seeded: true } };
+  raw.events.push(ev);
+  writeRaw(key, raw);
+  return ev;
+}
+
+export function reset(key: string = STORAGE_KEY) {
+  localStorage.removeItem(key);
+}
+
+export function hasData(key: string = STORAGE_KEY): boolean {
+  const raw = readRaw(key);
+  return !!raw && raw.events.length > 0;
+}
+
+export function rawBytes(key: string = STORAGE_KEY): number {
+  const t = localStorage.getItem(key);
+  return t ? t.length : 0;
 }

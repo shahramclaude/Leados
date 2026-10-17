@@ -1,83 +1,66 @@
 import type { ReactNode } from "react";
-import type { Store } from "../types";
-import { Badge, KeyCap } from "./primitives";
-import { navigate } from "../lib/router";
 import { cn } from "../utils/cn";
 
-const NAV: { label: string; hash: string; path: string }[] = [
-  { label: "Today", hash: "#/today", path: "today" },
-  { label: "Roster", hash: "#/roster", path: "roster" },
-  { label: "Playbooks", hash: "#/playbooks", path: "playbooks" },
-  { label: "Finance", hash: "#/finance", path: "finance" },
-  { label: "Intelligence", hash: "#/intelligence", path: "intelligence" },
-  { label: "Self", hash: "#/self", path: "self" },
-  { label: "Health", hash: "#/health", path: "health" },
-  { label: "Data", hash: "#/data", path: "data" },
+export type Route = "today" | "intelligence" | "data" | "health" | "about";
+
+const NAV: { id: Route; label: string; hint: string }[] = [
+  { id: "today", label: "Today", hint: "Snapshot" },
+  { id: "intelligence", label: "Intelligence", hint: "Velocity · Physics · Resonance" },
+  { id: "data", label: "Data", hint: "Event log" },
+  { id: "health", label: "Health", hint: "Self-tests" },
+  { id: "about", label: "About", hint: "Verified vs. fabricated" },
 ];
 
-export function Shell({
-  currentPath,
-  onOpenSearch,
-  storeState,
-  children,
-  focusMode,
-}: {
-  currentPath: string;
-  onOpenSearch: () => void;
-  storeState: Store;
-  children: ReactNode;
-  focusMode: boolean;
-}) {
-  const mutedCount = storeState.meta.mutedRules.length;
-
+export function Shell({ route, onNavigate, children }: { route: Route; onNavigate: (r: Route) => void; children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-bold text-white">L</div>
-            <span className="font-semibold text-slate-900">LeadOS <span className="text-violet-600">pt-E</span></span>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="flex min-h-screen">
+        <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-800 bg-slate-900 text-slate-200 sm:flex">
+          <div className="px-5 py-6">
+            <div className="text-lg font-bold tracking-tight text-white">LEADOS</div>
+            <div className="text-xs text-slate-400">Organizational Physics Engine</div>
           </div>
-          {!focusMode && (
-            <nav className="hidden flex-1 items-center gap-1 overflow-x-auto md:flex">
-              {NAV.map((n) => (
-                <button
-                  key={n.hash}
-                  onClick={() => navigate(n.hash)}
-                  className={cn(
-                    "rounded-lg px-2.5 py-1.5 text-sm font-medium whitespace-nowrap",
-                    currentPath === n.path ? "bg-violet-100 text-violet-800" : "text-slate-600 hover:bg-slate-100"
-                  )}
-                >
-                  {n.label}
-                </button>
-              ))}
-            </nav>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            {mutedCount > 0 && (
-              <Badge tone="amber">{mutedCount} rule{mutedCount > 1 ? "s" : ""} globally muted</Badge>
-            )}
-            <button
-              onClick={onOpenSearch}
-              className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-500 hover:border-violet-300"
+          <nav className="flex-1 space-y-1 px-3">
+            {NAV.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => onNavigate(n.id)}
+                className={cn(
+                  "block w-full rounded-lg px-3 py-2 text-left text-sm transition",
+                  route === n.id ? "bg-indigo-600 text-white shadow-sm" : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                )}
+              >
+                <div className="font-medium">{n.label}</div>
+                <div className={cn("text-[11px]", route === n.id ? "text-indigo-100" : "text-slate-500")}>{n.hint}</div>
+              </button>
+            ))}
+          </nav>
+          <div className="border-t border-slate-800 px-5 py-4 text-[11px] leading-relaxed text-slate-500">
+            Everything here is computed live from an append-only local event log. No network calls, no server. Labeled
+            heuristics throughout — see <span className="text-slate-300">About</span>.
+          </div>
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:hidden">
+            <div className="text-base font-bold">LEADOS</div>
+            <select
+              value={route}
+              onChange={(e) => onNavigate(e.target.value as Route)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-sm"
             >
-              Search
-              <KeyCap>⌘K</KeyCap>
-            </button>
-          </div>
+              {NAV.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label}
+                </option>
+              ))}
+            </select>
+          </header>
+          <main className="flex-1 px-4 py-6 sm:px-8 sm:py-8">
+            <div className="mx-auto max-w-6xl">{children}</div>
+          </main>
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
-      <footer className="mx-auto max-w-6xl px-4 py-8 text-xs text-slate-400">
-        <p>
-          URLs are local navigation only — they do not expose your data. Deep links (#/today, #/roster/[id], #/trace/[eventId]…)
-          only resolve in this browser, on this device: all state lives in <code>localStorage</code>.
-        </p>
-        <p className="mt-1">
-          This is a fabricated demo built for the pt-E brief. It does not read or write a real LeadOS install. See AI-SESSION-LOG.md and README.md for verified vs. fabricated claims.
-        </p>
-      </footer>
+      </div>
     </div>
   );
 }
