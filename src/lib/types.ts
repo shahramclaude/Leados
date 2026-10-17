@@ -1,96 +1,55 @@
-// Shared types for the Leados sandbox build (original to this workspace).
+// Core data model for LeadOS pt-O.
+//
+// PROVENANCE NOTE (read this before assuming any of this is "the real LeadOS"):
+// This shape is an ORIGINAL implementation written to satisfy the behavior
+// described in the task's pasted "pt-O" wargaming spec. It is not copied from
+// github.com/wbweve/Leados. See AI-SESSION-LOG.md / the in-app "About" page
+// for exactly what was and was not verified against that repo this session.
 
-export type Category =
-  | "Workload & Burnout"
-  | "Velocity & Delivery"
-  | "Financial & Austerity"
-  | "Trust & Psychological Safety"
-  | "Communication & Information Flow"
-  | "Culture & Alignment"
-  | "Succession & Continuity"
-  | "Compliance & Governance";
-
-export type Severity = "low" | "medium" | "high";
-
-export interface Rule {
-  id: string; // "R1".."R144"
-  category: Category;
-  title: string;
-  description: string;
-  baseSeverity: Severity;
-  anchor?: string; // human label for hand-designated anchor rules
+export interface LeadEvent {
+  id: string;
+  ts: string; // ISO-8601 timestamp
+  type: string; // e.g. "competitor.logged", "wargame.scenario"
+  data: Record<string, any>;
 }
 
 export interface Person {
   id: string;
   name: string;
   role: string;
-  directReports: number;
-  tenureMonths: number;
+  archived?: boolean;
 }
 
-export interface SignalState {
-  active: boolean;
-  severity: Severity;
-  personId?: string;
-  recurrence: number; // times this rule has re-triggered (for attractor/pattern detection)
+export interface Deal {
+  id: string;
+  name: string;
+  value: number;
+  stage: string;
 }
 
-export type SignalBoard = Record<string, SignalState>; // ruleId -> state
+export interface Okr {
+  id: string;
+  objective: string;
+}
+
+export interface Projection {
+  people: Person[];
+  openOkrs: Okr[];
+  openDeals: Deal[];
+  state: { events: LeadEvent[] };
+}
 
 export interface Finding {
   id: string;
-  ruleIds: string[];
-  category: Category;
-  severity: Severity;
   title: string;
-  narrative: string;
-  amplified: boolean;
-}
-
-export type FeedbackOutcome = "confirmed" | "false_positive";
-
-export interface FeedbackRecord {
-  ruleId: string;
-  outcome: FeedbackOutcome;
-  at: number;
-}
-
-export interface IncidentRecord {
-  id: string;
-  at: number;
-  findingId: string;
-  category: Category;
-  severity: Severity;
-  ruleIds: string[];
-  note: string;
-}
-
-export interface AutonomousLogEntry {
-  tick: number;
-  at: number;
-  newFindings: number;
-  escalations: number;
-  summary: string;
-}
-
-export interface OnboardingState {
-  completed: boolean;
-  step: number;
-  baseline: {
-    teamSize: number;
-    managerSpan: number;
-    teamAgeMonths: number;
-    runwayMonths: number;
-  };
+  sev: 1 | 2 | 3 | 4 | 5;
+  domain: string;
+  detail: string;
 }
 
 export interface AppState {
-  signalBoard: SignalBoard;
-  runwayMonths: number;
-  feedback: FeedbackRecord[];
-  incidents: IncidentRecord[];
-  autonomousLog: AutonomousLogEntry[];
-  autonomousTick: number;
-  onboarding: OnboardingState;
+  events: LeadEvent[];
+  people: Person[];
+  openOkrs: Okr[];
+  openDeals: Deal[];
 }

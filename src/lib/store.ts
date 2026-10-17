@@ -1,91 +1,59 @@
-// localStorage-backed app state. New key for this workspace — there is no prior
-// session state in this sandbox to be compatible with (verified: this project
-// started from the default Vite/React/Tailwind scaffold, see AI-SESSION-LOG.md).
+import type { AppState, LeadEvent, Projection } from "./types";
+import { buildSeedState } from "./seedData";
+import { uid } from "./format";
 
-import type { AppState, FeedbackRecord, IncidentRecord, Severity, SignalBoard } from "./types";
-import { RULES } from "./rules";
-
-export const STORAGE_KEY = "leados-sandbox:v2";
-
-function defaultSignalBoard(): SignalBoard {
-  const board: SignalBoard = {};
-  for (const r of RULES) {
-    board[r.id] = { active: false, severity: r.baseSeverity, recurrence: 0 };
-  }
-  return board;
-}
-
-export function defaultState(): AppState {
-  return {
-    signalBoard: defaultSignalBoard(),
-    runwayMonths: 12,
-    feedback: [],
-    incidents: [],
-    autonomousLog: [],
-    autonomousTick: 0,
-    onboarding: {
-      completed: false,
-      step: 0,
-      baseline: { teamSize: 12, managerSpan: 6, teamAgeMonths: 10, runwayMonths: 12 },
-    },
-  };
-}
+export const STORAGE_KEY = "leados-pt-o:v1";
 
 export function loadState(): AppState {
-  if (typeof window === "undefined") return defaultState();
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return defaultState();
-    const parsed = JSON.parse(raw) as Partial<AppState>;
-    const base = defaultState();
-    // Shallow-merge so new fields introduced after a user already has state
-    // still get sane defaults instead of throwing.
-    return {
-      ...base,
-      ...parsed,
-      signalBoard: { ...base.signalBoard, ...(parsed.signalBoard ?? {}) },
-      onboarding: { ...base.onboarding, ...(parsed.onboarding ?? {}) },
-    };
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as AppState;
   } catch {
-    return defaultState();
+    // fall through to seed
   }
+  const seeded = buildSeedState();
+  saveState(seeded);
+  return seeded;
 }
 
 export function saveState(state: AppState) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore quota errors in sandbox
+  }
 }
 
-export function resetState(): AppState {
-  const fresh = defaultState();
-  saveState(fresh);
-  return fresh;
+export function resetToSeed(): AppState {
+  const seeded = buildSeedState();
+  saveState(seeded);
+  return seeded;
 }
 
-export function toggleRule(state: AppState, ruleId: string, severity?: Severity): AppState {
-  const current = state.signalBoard[ruleId];
-  if (!current) return state;
-  const nextActive = !current.active;
-  const next: SignalBoard = {
-    ...state.signalBoard,
-    [ruleId]: {
-      ...current,
-      active: nextActive,
-      severity: severity ?? current.severity,
-      recurrence: nextActive ? current.recurrence + 1 : current.recurrence,
-    },
+export function wipeAll(): AppState {
+  const empty: AppState = { events: [], people: [], openOkrs: [], openDeals: [] };
+  saveState(empty);
+  return empty;
+}
+
+export function appendEvent(state: AppState, type: string, data: Record<string, any>, ts?: string): AppState {
+  const ev: LeadEvent = { id: uid(), ts: ts || new Date().toISOString(), type, data };
+  const next = { ...state, events: [...state.events, ev].sort((a, b) => (a.ts > b.ts ? 1 : -1)) };
+  saveState(next);
+  return next;
+}
+
+export function deleteEvent(state: AppState, id: string): AppState {
+  const next = { ...state, events: state.events.filter((e) => e.id !== id) };
+  saveState(next);
+  return next;
+}
+
+export function toProjection(state: AppState): Projection {
+  return {
+    people: state.people,
+    openOkrs: state.openOkrs,
+    openDeals: state.openDeals,
+    state: { events: state.events },
   };
-  return { ...state, signalBoard: next };
-}
-
-export function setRunway(state: AppState, months: number): AppState {
-  return { ...state, runwayMonths: months };
-}
-
-export function addFeedback(state: AppState, record: FeedbackRecord): AppState {
-  return { ...state, feedback: [...state.feedback, record] };
-}
-
-export function addIncident(state: AppState, record: IncidentRecord): AppState {
-  return { ...state, incidents: [...state.incidents, record] };
 }

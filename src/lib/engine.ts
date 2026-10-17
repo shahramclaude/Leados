@@ -1,221 +1,115 @@
-// engine.ts — original, small, disclosed-fabricated findings engine.
-// Not a port of anything verified in wbweve/Leados. That repo's own
-// src/lib/engine.ts was read in a PRIOR session (per that repo's own
-// AI-SESSION-LOG.md, fetched this session) and described as "a small,
-// explicitly disclosed-fabricated 6-rule findings engine" — this file does
-// not copy that one's rule bodies (not fetched this session), it follows
-// the same *disclosure convention*: a small rule set, openly original,
-// scored by severity x confidence-factor.
+// Original, disclosed-fabricated findings engine for LeadOS pt-O.
+//
+// This is NOT a port of any rule engine found in github.com/wbweve/Leados.
+// The real repo's own `src/lib/engine.ts` (verified this session, see
+// AI-SESSION-LOG.md) is a separate, 6-rule, differently-scoped module tied
+// to that repo's own synthetic rule catalog. This file is written from
+// scratch to give the pt-O wargaming engine something real to call for
+// `LEADOS.engine.run(P, today)` / `LEADOS.engine._days(...)`, matching the
+// call signatures used in the task's pasted pt-O spec.
+import type { Finding, Projection } from "./types";
+import { daysBetween } from "./format";
 
-import { AppState, AppEvent, Finding, RuleDef, CONF_FACTOR, DismissEntry } from './types';
-
-export const RULES: RuleDef[] = [
-  {
-    id: 'R1',
-    title: 'Overdue 1:1',
-    domain: 'cadence',
-    params: 'days since last oneonone.logged for a person > settings.cadenceDays',
-    playbook: 'schedule_1on1',
-    baseSev: 2,
-  },
-  {
-    id: 'R2',
-    title: 'Overdue skip-level',
-    domain: 'cadence',
-    params: 'days since last skip.logged for a person > settings.skipDays',
-    baseSev: 2,
-    // disclosed: no playbook wired for R2 (mirrors the "no playbook" pattern
-    // the pasted pt-N brief describes for its own R9) — resolve it directly
-    // by logging a skip.logged event instead.
-  },
-  {
-    id: 'R3',
-    title: 'Decision open past threshold',
-    domain: 'decisions',
-    params: 'decision.made with no matching decision.outcome within settings.decisionMaxOpenDays',
-    playbook: 'close_decision_loop',
-    baseSev: 3,
-  },
-  {
-    id: 'R4',
-    title: 'Crisis without postmortem',
-    domain: 'crisis',
-    params: 'crisis.logged with no matching crisis.postmortem within settings.crisisPostmortemDays',
-    playbook: 'run_postmortem',
-    baseSev: 4,
-  },
-  {
-    id: 'R5',
-    title: 'Goal without owner',
-    domain: 'goals',
-    params: 'goal.set with no data.owner',
-    playbook: 'assign_goal_owner',
-    baseSev: 2,
-  },
-];
-
-export const PLAYBOOKS: Record<string, string> = {
-  schedule_1on1: 'Schedule a 1:1',
-  close_decision_loop: 'Log the decision outcome',
-  run_postmortem: 'Run a postmortem',
-  assign_goal_owner: 'Assign a goal owner',
-};
-
-export function daysBetween(aISO: string, bISO: string): number {
-  return Math.round((new Date(bISO).getTime() - new Date(aISO).getTime()) / 86400000);
+export function days(ts: string, today: string): number {
+  return daysBetween(ts, today);
 }
 
-function latestByPerson(events: AppEvent[], type: string, personId: string): AppEvent | undefined {
-  return events
-    .filter((e) => e.type === type && e.personId === personId)
-    .sort((a, b) => (a.ts < b.ts ? 1 : -1))[0];
+function latestMetricValue(P: Projection, metric: string): number | null {
+  const ev = P.state.events
+    .filter((e) => e.type === "fin.kpi.logged" && e.data.metric === metric)
+    .sort((a, b) => (a.ts > b.ts ? -1 : 1))[0];
+  return ev ? ev.data.value : null;
 }
 
-export function run(state: AppState, todayISO: string): Finding[] {
+export function run(P: Projection, today: string): { findings: Finding[] } {
   const findings: Finding[] = [];
-  const { people, events, settings } = state;
+  const within = (ts: string, n: number) => days(ts, today) <= n;
 
-  // R1 — overdue 1:1
-  for (const p of people) {
-    const last = latestByPerson(events, 'oneonone.logged', p.id);
-    const priorCount = events.filter((e) => e.type === 'oneonone.logged' && e.personId === p.id).length;
-    const days = last ? daysBetween(last.ts, todayISO) : Infinity;
-    if (days > settings.cadenceDays) {
-      const conf = priorCount >= 3 ? 'high' : priorCount >= 1 ? 'med' : 'low';
-      const sev = 2 + (days > settings.cadenceDays * 2 ? 1 : 0);
-      findings.push(
-        makeFinding('R1', `Overdue 1:1 with ${p.name}`, sev, conf, last ? [last.id] : [], [
-          last
-            ? `Last 1:1 with ${p.name} was ${days} days ago (threshold ${settings.cadenceDays}).`
-            : `No 1:1 has ever been logged with ${p.name}.`,
-        ], 'schedule_1on1', p.id)
-      );
+  // R-RUNWAY
+  const runwayEv = P.state.events.filter((e) => e.type === "fin.runway.logged").sort((a, b) => (a.ts > b.ts ? -1 : 1))[0];
+  const runway = runwayEv?.data.months as number | undefined;
+  if (runway !== undefined && runway < 6) {
+    findings.push({ id: "R-RUNWAY", title: `Runway critical (${runway.toFixed(1)} months)`, sev: 5, domain: "finance", detail: "Logged runway below 6 months." });
+  } else if (runway !== undefined && runway < 10) {
+    findings.push({ id: "R-RUNWAY-W", title: `Runway tightening (${runway.toFixed(1)} months)`, sev: 3, domain: "finance", detail: "Logged runway below 10 months." });
+  }
+
+  // R-ATTRITION
+  const attrition90 = P.state.events.filter((e) => e.type === "hr.attrition.logged" && within(e.ts, 90)).length;
+  if (attrition90 >= 2) {
+    findings.push({ id: "R-ATTRITION", title: `Elevated attrition (${attrition90} in 90d)`, sev: attrition90 >= 3 ? 4 : 3, domain: "people", detail: "Multiple hr.attrition.logged events in the last 90 days." });
+  }
+
+  // R-INCIDENTS
+  const incidents90 = P.state.events.filter((e) => e.type === "ops.incident.logged" && within(e.ts, 90)).length;
+  if (incidents90 >= 3) {
+    findings.push({ id: "R-INCIDENTS", title: `Operational incident rate elevated (${incidents90} in 90d)`, sev: incidents90 >= 5 ? 4 : 3, domain: "operations", detail: "ops.incident.logged frequency above baseline heuristic (3/90d)." });
+  }
+
+  // R-CHURN
+  const churnEv = P.state.events.filter((e) => e.type === "cs.churn.logged").sort((a, b) => (a.ts > b.ts ? -1 : 1))[0];
+  if (churnEv && churnEv.data.total) {
+    const rate = churnEv.data.churned / churnEv.data.total;
+    if (rate > 0.05) {
+      findings.push({ id: "R-CHURN", title: `Churn rate ${(rate * 100).toFixed(1)}%`, sev: rate > 0.1 ? 5 : 4, domain: "customer", detail: "Latest cs.churn.logged above 5% heuristic threshold." });
     }
   }
 
-  // R2 — overdue skip-level
-  for (const p of people) {
-    const last = latestByPerson(events, 'skip.logged', p.id);
-    const days = last ? daysBetween(last.ts, todayISO) : Infinity;
-    if (days > settings.skipDays) {
-      findings.push(
-        makeFinding(
-          'R2',
-          `Overdue skip-level with ${p.name}`,
-          2,
-          last ? 'med' : 'low',
-          last ? [last.id] : [],
-          [
-            last
-              ? `Last skip-level with ${p.name} was ${days} days ago (threshold ${settings.skipDays}).`
-              : `No skip-level has ever been logged with ${p.name}.`,
-          ],
-          undefined,
-          p.id
-        )
-      );
+  // R-AT-RISK-ACCOUNTS
+  const atRisk = P.state.events.filter((e) => e.type === "cs.health.logged" && e.data.score <= 2 && within(e.ts, 30)).length;
+  if (atRisk >= 2) {
+    findings.push({ id: "R-ATRISK", title: `${atRisk} accounts at-risk (health ≤2, last 30d)`, sev: atRisk >= 3 ? 4 : 3, domain: "customer", detail: "cs.health.logged score ≤2 within 30 days." });
+  }
+
+  // R-WINRATE
+  const wins = P.state.events.filter((e) => e.type === "sales.deal.closed" && e.data.result === "won" && within(e.ts, 90)).length;
+  const losses = P.state.events.filter((e) => e.type === "sales.deal.closed" && e.data.result === "lost" && within(e.ts, 90)).length;
+  if (wins + losses >= 3) {
+    const winRate = wins / (wins + losses);
+    if (winRate < 0.4) {
+      findings.push({ id: "R-WINRATE", title: `Win rate ${(winRate * 100).toFixed(0)}% (last 90d)`, sev: winRate < 0.25 ? 4 : 3, domain: "gtm", detail: "sales.deal.closed win rate below 40% heuristic." });
     }
   }
 
-  // R3 — stale open decisions
-  const decisionsMade = events.filter((e) => e.type === 'decision.made');
-  const outcomes = events.filter((e) => e.type === 'decision.outcome');
-  for (const d of decisionsMade) {
-    const outcome = outcomes.find((o) => o.data.decisionId === d.id);
-    const days = daysBetween(d.ts, todayISO);
-    if (!outcome && days > settings.decisionMaxOpenDays) {
-      findings.push(
-        makeFinding(
-          'R3',
-          `Decision open ${days}d: "${d.data.title || 'untitled'}"`,
-          3,
-          'high',
-          [d.id],
-          [`Decision "${d.data.title}" was made ${days} days ago with no logged outcome (threshold ${settings.decisionMaxOpenDays}).`],
-          'close_decision_loop',
-          d.personId
-        )
-      );
-    }
+  // R-TECHDEBT
+  const resolvedIds = new Set(P.state.events.filter((e) => e.type === "rd.tech.debt.resolved").map((e) => e.data.debtId));
+  const openDebt = P.state.events.filter((e) => e.type === "rd.tech.debt.logged" && !resolvedIds.has(e.id));
+  const debtScore = openDebt.reduce((a, e) => a + (e.data.severity || 3) * (e.data.effort || 3), 0);
+  if (debtScore >= 20) {
+    findings.push({ id: "R-TECHDEBT", title: `Tech debt load score ${debtScore}`, sev: debtScore >= 35 ? 4 : 3, domain: "engineering", detail: "Sum of severity×effort across unresolved rd.tech.debt.logged events." });
   }
 
-  // R4 — crisis without postmortem
-  const crises = events.filter((e) => e.type === 'crisis.logged');
-  const postmortems = events.filter((e) => e.type === 'crisis.postmortem');
-  for (const c of crises) {
-    const pm = postmortems.find((p) => p.data.crisisId === c.id);
-    const days = daysBetween(c.ts, todayISO);
-    if (!pm && days > settings.crisisPostmortemDays) {
-      findings.push(
-        makeFinding(
-          'R4',
-          `Crisis without postmortem (${days}d old)`,
-          4,
-          'high',
-          [c.id],
-          [`"${c.data.what || 'Unlabeled crisis'}" happened ${days} days ago with no postmortem logged (threshold ${settings.crisisPostmortemDays}).`],
-          'run_postmortem',
-          c.personId
-        )
-      );
-    }
+  // R-UNANSWERED-COMPETITOR
+  const competitorActions = P.state.events.filter((e) => e.type === "competitor.logged");
+  const responded = new Set(P.state.events.filter((e) => e.type === "competitor.response").map((e) => e.data.competitorId));
+  const unanswered = competitorActions.filter((a) => a.data.response_needed && !responded.has(a.id) && within(a.ts, 45));
+  if (unanswered.length >= 2) {
+    findings.push({ id: "R-COMPUNANSWERED", title: `${unanswered.length} competitor moves flagged response-needed, unanswered`, sev: unanswered.length >= 4 ? 4 : 3, domain: "competitive", detail: "competitor.logged with response_needed=true and no matching competitor.response within 45 days." });
   }
 
-  // R5 — goal without owner
-  const goals = events.filter((e) => e.type === 'goal.set');
-  for (const g of goals) {
-    if (!g.data.owner) {
-      findings.push(
-        makeFinding(
-          'R5',
-          `Goal without owner: "${g.data.title || 'untitled'}"`,
-          2,
-          'high',
-          [g.id],
-          [`Goal "${g.data.title}" has no data.owner set.`],
-          'assign_goal_owner',
-          undefined
-        )
-      );
-    }
+  // R-STAKEHOLDER-RISK
+  const stakeholderRisks = P.state.events.filter((e) => e.type === "stakeholder.risk" && (e.data.severity || 0) >= 4);
+  if (stakeholderRisks.length > 0) {
+    findings.push({ id: "R-STAKERISK", title: `${stakeholderRisks.length} high-severity stakeholder risk(s) logged`, sev: 4, domain: "stakeholder", detail: "stakeholder.risk events with severity ≥4." });
   }
 
-  return findings.sort((a, b) => b.score - a.score);
+  // R-MA-DEALBREAKER
+  const dealbreakers = P.state.events.filter((e) => e.type === "ma.diligence.item" && e.data.dealBreaker);
+  if (dealbreakers.length > 0) {
+    findings.push({ id: "R-MADEALBREAKER", title: `${dealbreakers.length} M&A diligence deal-breaker finding(s) open`, sev: 5, domain: "m&a", detail: "ma.diligence.item with dealBreaker=true." });
+  }
+
+  // R-PAIN
+  const unresolvedPains = P.state.events.filter(
+    (e) => e.type === "customer.pain" && !P.state.events.some((r) => r.type === "customer.pain.resolved" && r.data.painId === e.id)
+  );
+  const hotPain = unresolvedPains.filter((e) => (e.data.severity || 1) >= 4);
+  if (hotPain.length > 0) {
+    findings.push({ id: "R-PAIN", title: `${hotPain.length} high-severity unresolved customer pain point(s)`, sev: 3, domain: "customer", detail: "customer.pain severity ≥4 without matching customer.pain.resolved." });
+  }
+
+  findings.sort((a, b) => b.sev - a.sev);
+  return { findings };
 }
 
-function makeFinding(
-  rule: string,
-  title: string,
-  sev: number,
-  conf: Finding['conf'],
-  sources: string[],
-  basis: string[],
-  play: string | undefined,
-  personId: string | undefined
-): Finding {
-  const score = Math.round(sev * CONF_FACTOR[conf] * 10) / 10;
-  return {
-    key: `${rule}:${personId || 'org'}:${sources.join(',')}`,
-    rule,
-    title,
-    sev,
-    conf,
-    score,
-    sources,
-    basis,
-    play,
-    personId,
-  };
-}
-
-export function filterActive(findings: Finding[], dismissed: DismissEntry[], todayISO: string): Finding[] {
-  const SNOOZE_DAYS = 3;
-  return findings.filter((f) => {
-    const entries = dismissed.filter((d) => d.key === f.key);
-    for (const d of entries) {
-      if (d.mode === 'dismiss') return false;
-      if (d.mode === 'snooze' && daysBetween(d.ts, todayISO) < SNOOZE_DAYS) return false;
-    }
-    return true;
-  });
-}
+export const metric = { latestMetricValue };
