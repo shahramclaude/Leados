@@ -3,37 +3,76 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LeadOS — Monte Carlo Decision Engine</title>
+<title>LeadOS — Accessibility Intelligence &amp; Worker Architecture · Parts 7–8</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
-  :root{ --ink:#0f172a; }
+  :root{
+    --ink:#0f172a;
+    --border-width:1px;
+    --letter-spacing-body:normal;
+    --line-height-body:normal;
+    --word-spacing:normal;
+    --font-body:ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --text-align:left;
+    --dur-fast:120ms;
+    --dur-normal:200ms;
+    --dur-slow:350ms;
+    --btn-padding:6px 14px;
+  }
   html{ scroll-behavior:smooth; }
-  body{ font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .fade-in{ animation: fadeIn .2s ease-out; }
+  body{
+    font-family:var(--font-body);
+    letter-spacing:var(--letter-spacing-body);
+    line-height:var(--line-height-body);
+    word-spacing:var(--word-spacing);
+    text-align:var(--text-align);
+  }
+  .fade-in{ animation:fadeIn var(--dur-normal) ease-out; }
   @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
-  .tap-shrink:active{ transform: scale(.97); }
+  .tap-shrink:active{ transform:scale(.97); transition:transform var(--dur-fast) ease; }
   ::-webkit-scrollbar{ width:8px; height:8px; }
   ::-webkit-scrollbar-thumb{ background:#cbd5e1; border-radius:4px; }
   .nav-btn.active{ background:#0f172a; color:#fff; }
-  .bar-fill{ transition:width .4s ease; }
-  .disclosure{ background:#fffbeb; border:1px solid #fde68a; color:#78350f; }
+  .bar-fill{ transition:width var(--dur-slow) ease; }
+  .hist-bar{ transition:height var(--dur-slow) ease; }
+  .mono{ font-variant-numeric:tabular-nums; }
+  .card{ border:var(--border-width) solid #e2e8f0; }
+  .btn{ padding:var(--btn-padding); transition:background var(--dur-fast) ease; }
+  .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+            clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  .skip-link{ position:absolute; left:-9999px; top:0; background:#0f172a; color:#fff; padding:10px 16px;
+              z-index:100; border-radius:0 0 6px 0; }
+  .skip-link:focus{ left:0; }
   .verified{ background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
   .contradicted{ background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; }
-  .adapted{ background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
-  .hist-bar{ transition: height .35s ease; }
-  .mono{ font-variant-numeric: tabular-nums; }
+  .disclosed{ background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
+  .disclosure{ background:#fffbeb; border:1px solid #fde68a; color:#78350f; }
+  .domain-badge{ display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; }
+
+  /* ---- data-* profile effects (LEADOS.a11y.apply) ---- */
+  [data-high-contrast="true"] .card{ border-width:2px; }
+  [data-high-contrast="true"] .domain-badge{ border:1px solid currentColor; }
+  [data-monochrome-domains="true"] .domain-badge{ filter:grayscale(1) !important; }
+  [data-hide-nudges="true"] [data-severity="1"]{ display:none !important; }
+  [data-screen-reader="true"] .decorative{ display:none !important; }
+  [data-reduced-data="true"] .chart-heavy{ display:none !important; }
+  [data-reduced-data="true"] .table-fallback{ display:block !important; }
+  .table-fallback{ display:none; }
+  [data-theme="dark"]{ color-scheme:dark; }
 </style>
 </head>
 <body class="bg-slate-100 text-slate-900 min-h-screen">
+
+<a href="#main" class="skip-link">Skip to main content</a>
 
 <div id="app" class="flex min-h-screen">
 
   <aside class="w-64 shrink-0 bg-slate-950 text-slate-200 flex flex-col">
     <div class="px-5 py-5 border-b border-slate-800">
       <div class="text-lg font-bold tracking-tight text-white">LeadOS</div>
-      <div class="text-[11px] text-slate-500 mt-0.5">monte carlo decision engine · part 6</div>
+      <div class="text-[11px] text-slate-500 mt-0.5">a11y intelligence + worker architecture · parts 7–8</div>
     </div>
-    <nav id="nav" class="flex-1 px-3 py-4 space-y-1 text-sm"></nav>
+    <nav id="nav" aria-label="Primary" class="flex-1 px-3 py-4 space-y-1 text-sm"></nav>
     <div class="px-4 py-3 border-t border-slate-800 text-[11px] text-slate-500 leading-relaxed">
       n=<span id="eventCountTag">0</span> events<br>
       <button id="reseedBtn" class="underline hover:text-slate-300 mt-1">wipe &amp; reseed demo log</button>
@@ -43,666 +82,1183 @@
   <main class="flex-1 min-w-0">
     <header class="h-14 bg-white border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-10">
       <div id="routeTitle" class="font-semibold text-slate-800"></div>
-      <div class="text-xs text-slate-400">today: <span id="todayTag" class="font-mono"></span></div>
+      <div class="text-xs text-slate-400">worker: <span id="workerStatusTag" class="font-mono"></span></div>
     </header>
-    <section id="view" class="p-6 max-w-6xl mx-auto"></section>
+    <section id="main" tabindex="-1" class="p-6 max-w-6xl mx-auto"></section>
   </main>
 </div>
 
 <div id="toastRoot" class="fixed bottom-5 right-5 flex flex-col gap-2 z-50"></div>
 
+<!-- Visible debug mirror of the (normally sr-only) live regions — demo aid only, disclosed in README -->
+<div id="liveDebug" class="fixed bottom-5 left-5 max-w-sm text-xs bg-white border border-slate-300 rounded-lg shadow p-3 hidden">
+  <div class="font-semibold text-slate-700 mb-1">Live region mirror (sighted demo aid)</div>
+  <div id="liveDebugList" class="space-y-1 text-slate-600"></div>
+</div>
+
 <script>
-/* =====================================================================================
-   LEADOS — single-file vanilla build. "Part 6: The Monte Carlo Simulation Engine."
+/* ============================================================================
+   PROVENANCE — READ BEFORE TRUSTING ANY CLAIM ABOUT github.com/wbweve/Leados
+   (full ledger duplicated in AI-SESSION-LOG.md and the in-app #/about route)
 
-   PROVENANCE, SHORT VERSION (full ledger below in the #/about route and in
-   AI-SESSION-LOG.md):
-   - This sandbox had NO pre-existing index.html / README.md / AI-SESSION-LOG.md before
-     this session (verified directly: file-read attempts on all three failed). There is
-     no local "Part 1-5" build here to extend, so this file is an ORIGINAL, standalone
-     implementation built only far enough to host LEADOS.monteCarlo as specified.
-   - github.com/wbweve/Leados was inspected directly this session via the GitHub REST
-     Contents API (base64 blob, decoded here — not the HTML-rendering fetch path, which
-     is documented upstream to silently strip <script> tags). VERIFIED, this session:
-     the repo is real/public; its main-branch index.html decodes to a genuine HTML
-     document (Tailwind CDN, inline <style>, div#app, LS_KEY='leados:events', a
-     LEADOS.genome "Organizational Genome · part 5" build) and is CURRENTLY 47,831
-     bytes (sha ddd41f4969a71278d5f7b4ccd5a39cf5a44bd628) per the Contents API at the
-     moment this session queried it.
-   - CONTRADICTED: that same repo's own README.md and an in-file provenance comment
-     inside that same index.html both assert the file is 56,046 bytes — a number that
-     does not match the 47,831 bytes this session just measured for the same path on
-     the same branch. The repo's commit history shows index.html was overwritten by
-     roughly ten "Add files via upload" commits within one ~2.5-hour window on
-     2026-10-17 (most recent 12:51:05Z), which plausibly explains the drift (the
-     56,046-byte figure was likely accurate for an earlier commit, then superseded) —
-     but this session did not fetch every intermediate commit to confirm that specific
-     reconciliation, so it is labeled a plausible explanation, not a verified one.
-   - This build does not copy, fork, or continue wbweve/Leados' own code: that repo
-     implements a different Part 5 ("long-term memory + leverage comparison") over a
-     simpler findings/decisions schema with no scenario-probability structure at all,
-     per its own README (itself only partially cross-checked here, not byte-verified
-     beyond the file's existence and opening structure).
-   - The data model below (decisions-with-scenarios) is ORIGINAL to this build — built
-     from scratch to match what the user-supplied LEADOS.monteCarlo spec assumes
-     (scenarios: [{name, probability, outcome_value, cost_if_true}]).
-   - LEADOS.monteCarlo._prng / .simulate / ._buildHistogram / ._interpret are
-     implemented VERBATIM from the pasted spec, with exactly one disclosed, additive
-     change: a 4th optional `breakeven` parameter on `simulate()` that fills the
-     spec's own `probAboveBreakeven: null, // computed if breakeven provided` line —
-     the spec named this field and said when it should be computed but supplied no
-     computation path, so filling it (only when the caller passes a breakeven value,
-     otherwise it stays null exactly as written) is the honest completion of an
-     acknowledged gap, not an undisclosed deviation. No other line of the given
-     module was altered.
-   - The spec's "### Monte Carlo Visualization" section was a heading followed by
-     "In the decision-scenario playbook, after running the simulation:" and no body —
-     identical in kind to Part 5's empty "Genome View" heading. The visualization
-     shipped here (stat cards, percentile strip, histogram bars, breakeven readout,
-     disclosure banner) is therefore ORIGINAL, and says so in-page.
-   ===================================================================================== */
+   - This sandbox had NO pre-existing index.html / README.md / AI-SESSION-LOG.md
+     before this session (verified directly: three read attempts, three failures).
+     There is no local "Part 1–6" build here to extend, so this file is an
+     ORIGINAL, standalone implementation of the Part 7 (a11y) + Part 8 (workers)
+     specs pasted into this session's prompt.
 
-const LEADOS = {};
-const LS_KEY = 'leados:events';
-const uid = (p) => p + '_' + Math.random().toString(36).slice(2, 9);
-const todayISO = () => new Date().toISOString();
-const fmtDate = (iso) => new Date(iso).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
-const fmtDateTime = (iso) => new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-const clamp01 = (x) => Math.max(0, Math.min(1, x));
-const fmtNum = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
-const fmtPct = (x) => Math.round(x * 100) + '%';
+   - github.com/wbweve/Leados was inspected directly this session via the GitHub
+     REST Contents API (base64 blob, decoded — not the HTML-render fetch path,
+     which is documented upstream to silently strip <script> content):
+       VERIFIED, this session, right now: the repo is real/public/actively
+       committed; its main-branch index.html decodes to a genuine HTML/JS app
+       (Tailwind CDN, inline <style>, div#app, LS_KEY='leados:events', title
+       "LeadOS — Monte Carlo Decision Engine", a reseed button, "part 6" label)
+       — i.e. a DIFFERENT app (Part 6, Monte Carlo) than what this file builds
+       (Parts 7–8, accessibility + workers). It currently reports
+       sha 162c0a7006a44ade2c5647ec3f370fc4cd801a88, size 36754 bytes.
+     CONTRADICTED: that 36754-byte figure matches NEITHER of two earlier
+       figures claimed elsewhere for "the same file" (56,046 bytes per an
+       older README/in-file comment, and 47,831 bytes per a more recent one).
+       The repo's commit history shows index.html overwritten by roughly ten
+       "Add files via upload" commits within single short windows (e.g. a
+       ~2.5h span on 2026-10-17), and the file's own commit log traces back to
+       an even earlier "LeadCore application" rename (2026-10-11, unverified
+       beyond the commit message text). The most defensible conclusion: this
+       path is a frequently-overwritten moving target, and any single
+       byte-count/sha claim about it is a snapshot valid only at the instant
+       it was queried — not a stable fact about "the repo."
+     Because the upstream file implements an unrelated app with no
+     accessibility-profile or worker spec in it at all, there is nothing to
+     copy, fork, port, or contradict from it for Parts 7–8 specifically; this
+     build's a11y/worker code is 100% sourced from the spec pasted into THIS
+     prompt.
 
-function toast(msg){
-  const root = document.getElementById('toastRoot');
-  const el = document.createElement('div');
-  el.className = 'fade-in bg-slate-900 text-white text-xs px-3 py-2 rounded shadow-lg';
-  el.textContent = msg;
-  root.appendChild(el);
-  setTimeout(() => el.remove(), 2600);
-}
+   - Two gaps in the pasted Part 7/8 spec, disclosed before they're used below:
+       1) LEADOS.a11y.apply() branches on highContrast/forcedColors,
+          reducedData, and screenReader — but detect() also returns
+          reducedMotion and darkMode, which apply() never does anything with.
+          Shipping detected-but-never-applied flags seemed worse than a small,
+          disclosed addition, so this build adds two extra branches (reduced
+          motion → zeroes --dur-* vars; dark mode → sets data-theme) clearly
+          marked "ADDED" in code, separate from the verbatim spec.
+       2) applyCognitiveReduction() calls LEADOS.ui.densityManager.set(...),
+          a module never defined anywhere in the spec. Rather than silently
+          dropping the call or letting it throw, this build adds a minimal,
+          disclosed LEADOS.ui.densityManager stub.
+       3) "### Worker Performance Architecture" in the Part 8 spec is a
+          heading followed by "Computation timing (all operations):" and
+          nothing else — the same empty-heading pattern this project's own
+          prior README flagged for a "Genome View" section and a "Monte Carlo
+          Visualization" section. The timing-comparison UI under #/workers
+          here is therefore ORIGINAL, not from the spec.
+       4) The spec's worker runs from a separate file, 'js/worker-engine.js'.
+          This task requires a single index.html, so the worker is instead
+          built from an in-page string and loaded via Blob + createObjectURL.
+          This is a packaging change only — the postMessage protocol, the
+          "pure functions only, no DOM/localStorage" rule, and the id-based
+          promise matching are all implemented exactly as specified.
+       5) The worker's method switch references 'correlate', 'search.buildIndex',
+          and 'synthesis.generate' — none of those modules (LEADOS.correlate /
+          LEADOS.search / LEADOS.synthesis) were specified in any part given to
+          this session. Rather than fabricate them, both the worker and the
+          main-thread fallback return a structured
+          { notImplemented:true, reason:'...' } object for those methods. They
+          are NOT wired into any button in the UI, to avoid implying they work.
+       6) The Part 7/8 spec assumes a pre-existing "144 rules" engine and an
+          events/decisions schema from earlier parts not given to this session.
+          Since there is no local prior build, this file reconstructs a small,
+          ORIGINAL decision+scenario event schema (named/shaped the same way
+          the Part-6 README, read this session, describes it) and an
+          ORIGINAL, clearly small (7-rule, not 144-rule) illustrative engine,
+          so LEADOS.workers has real work to offload. Labeled accordingly
+          everywhere in-app (#/about) rather than presented as "the" 144 rules.
+   ============================================================================ */
 
-/* ---------------------------------------------------------------------------
-   Event log (append-only, localStorage). ORIGINAL schema for this build.
---------------------------------------------------------------------------- */
-LEADOS.store = {
-  load(){
+(function(){
+  "use strict";
+
+  const LS_KEY = 'leados:a11y-worker-events'; // original to this build — see note #6 above
+
+  // ---------------------------------------------------------------------
+  // Minimal event log (original schema — reconstructed shape, not copied)
+  // ---------------------------------------------------------------------
+  function loadEvents(){
     try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; }
     catch(e){ return []; }
-  },
-  save(events){ localStorage.setItem(LS_KEY, JSON.stringify(events)); },
-  append(event){
-    const events = this.load();
-    events.push({ id: uid('ev'), ts: todayISO(), ...event });
-    this.save(events);
-    return events;
-  },
-  wipeAndReseed(){
-    localStorage.removeItem(LS_KEY);
-    this.save(LEADOS.seed.demoEvents());
   }
-};
+  function saveEvents(events){ localStorage.setItem(LS_KEY, JSON.stringify(events)); }
+  function uid(){ return Math.random().toString(36).slice(2,10); }
+  function todayISO(){ return new Date().toISOString().slice(0,10); }
+  function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
 
-/* ---------------------------------------------------------------------------
-   Demo seed data — fabricated, disclosed. Gives every view something to show
-   and gives the Monte Carlo engine realistic scenario sets to run on.
---------------------------------------------------------------------------- */
-LEADOS.seed = {
-  demoEvents(){
-    const now = Date.now();
-    const daysAgo = (d) => new Date(now - d*86400000).toISOString();
-    return [
-      { id: uid('ev'), ts: daysAgo(40), type: 'decision.logged', decisionId: 'dec_apac', title: 'Expand into APAC market this fiscal year',
-        domain: 'strategy', breakeven: 0,
+  function seedDemo(){
+    const t = todayISO();
+    const mk = (daysAgo)=>{ const d=new Date(); d.setDate(d.getDate()-daysAgo); return d.toISOString().slice(0,10); };
+    const events = [
+      { id: uid(), type:'decision.logged', at: mk(34), title:'APAC market expansion',
+        breakeven: 150000,
         scenarios: [
-          { name: 'Strong demand, fast traction', probability: 0.30, outcome_value: 520000 },
-          { name: 'Moderate demand, slow ramp',   probability: 0.45, outcome_value: 110000 },
-          { name: 'Weak demand, we pull out early', probability: 0.25, outcome_value: -90000 }
-        ] },
-      { id: uid('ev'), ts: daysAgo(25), type: 'decision.logged', decisionId: 'dec_vp', title: 'Hire VP of Sales now vs. wait two quarters',
-        domain: 'org design', breakeven: 50000,
+          { name:'Strong uptake', probability:0.35, outcome_value: 420000, cost_if_true: 180000 },
+          { name:'Moderate uptake', probability:0.45, outcome_value: 210000, cost_if_true: 180000 },
+          { name:'Weak uptake', probability:0.20, outcome_value: 60000,  cost_if_true: 180000 }
+        ]
+      },
+      { id: uid(), type:'decision.logged', at: mk(9), title:'Hire VP of Sales',
+        breakeven: null,
         scenarios: [
-          { name: 'Great hire, ramps fast', probability: 0.35, outcome_value: 300000 },
-          { name: 'Average hire, normal ramp', probability: 0.40, outcome_value: 80000 },
-          { name: 'Mis-hire, costly restart', probability: 0.25, outcome_value: -150000 }
-        ] },
-      { id: uid('ev'), ts: daysAgo(10), type: 'decision.logged', decisionId: 'dec_vendor', title: 'Switch core infra vendor',
-        domain: 'operations', breakeven: null,
+          { name:'Hits plan', probability:0.3, outcome_value: 500000, cost_if_true: 260000 }
+        ]
+      },
+      { id: uid(), type:'decision.logged', at: mk(2), title:'Switch infrastructure vendor',
+        breakeven: 0,
         scenarios: [
-          { name: 'Smooth migration, lower run-rate cost', probability: 0.5, outcome_value: 60000 },
-          { name: 'Rocky migration, offsetting savings', probability: 0.3, outcome_value: 5000 },
-          { name: 'Failed migration, rollback costs', probability: 0.2, outcome_value: -70000 }
-        ] },
-      { id: uid('ev'), ts: daysAgo(5), type: 'decision.resolved', decisionId: 'dec_vendor', actualOutcomeNote: 'Migration completed on schedule; early signs point to the smooth-migration scenario.' }
+          { name:'Smooth migration', probability:0.5, outcome_value: 90000, cost_if_true: 40000 },
+          { name:'Rocky migration',  probability:0.5, outcome_value: -20000, cost_if_true: 40000 }
+        ]
+      }
     ];
+    saveEvents(events);
+    return events;
   }
-};
 
-/* ---------------------------------------------------------------------------
-   Projection — recomputes all derived state from the raw event log.
-   P.decisionById / P.openDecisions / P.closedDecisions — ORIGINAL to this build.
---------------------------------------------------------------------------- */
-LEADOS.core = {
-  project(events){
-    const decisionById = {};
-    events.filter(e => e.type === 'decision.logged').forEach(e => {
-      decisionById[e.decisionId] = {
-        id: e.decisionId, title: e.title, domain: e.domain,
-        breakeven: (e.breakeven === undefined ? null : e.breakeven),
-        scenarios: e.scenarios || [], loggedAt: e.ts,
-        resolved: false, resolutionNote: null
+  // ---------------------------------------------------------------------
+  // LEADOS namespace
+  // ---------------------------------------------------------------------
+  const LEADOS = window.LEADOS = {};
+
+  LEADOS.events = {
+    project(state){
+      const events = (state && state.events) || [];
+      const decisionById = {};
+      events.filter(e=>e.type==='decision.logged').forEach(e=>{ decisionById[e.id] = Object.assign({}, e, {resolved:false}); });
+      events.filter(e=>e.type==='decision.resolved').forEach(e=>{
+        if (decisionById[e.decisionId]) decisionById[e.decisionId].resolved = true;
+      });
+      const allDecisions = Object.values(decisionById).sort((a,b)=> new Date(b.at)-new Date(a.at));
+      return {
+        allDecisions,
+        openDecisions: allDecisions.filter(d=>!d.resolved),
+        closedDecisions: allDecisions.filter(d=>d.resolved),
+        decisionById,
+        state: { events }
       };
-    });
-    events.filter(e => e.type === 'decision.resolved').forEach(e => {
-      if (decisionById[e.decisionId]) {
-        decisionById[e.decisionId].resolved = true;
-        decisionById[e.decisionId].resolutionNote = e.actualOutcomeNote || null;
-      }
-    });
-    const all = Object.values(decisionById).sort((a,b) => new Date(b.loggedAt) - new Date(a.loggedAt));
-    return {
-      decisionById,
-      allDecisions: all,
-      openDecisions: all.filter(d => !d.resolved),
-      closedDecisions: all.filter(d => d.resolved),
-      state: { events: events.slice().sort((a,b) => new Date(a.ts) - new Date(b.ts)) }
-    };
-  }
-};
-
-/* ---------------------------------------------------------------------------
-   LEADOS.monteCarlo — implemented VERBATIM from the user-supplied spec.
-   The only addition is the disclosed `breakeven` parameter described above.
---------------------------------------------------------------------------- */
-LEADOS.monteCarlo = {
-
-  // Seeded pseudo-random number generator (reproducible runs)
-  // Mulberry32 algorithm — fast, good statistical properties
-  _prng(seed) {
-    let t = seed + 0x6D2B79F5;
-    return function() {
-      t = Math.imul(t ^ t >>> 15, t | 1);
-      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-      return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-  },
-
-  // Run a Monte Carlo simulation on a decision's scenarios
-  // scenarios: [{name, probability, outcome_value, cost_if_true}]
-  // iterations: number of simulation runs (default 10,000)
-  // breakeven: ORIGINAL ADDITION (disclosed above) — optional, fills the
-  //            spec's own `probAboveBreakeven: null` placeholder when passed.
-  simulate(scenarios, iterations = 10000, seed = 42, breakeven = null) {
-    const rand = this._prng(seed);
-
-    // Validate: probabilities should sum to ~1.0
-    const probSum = scenarios.reduce((a, b) => a + b.probability, 0);
-    const normalizedScenarios = scenarios.map(s => ({
-      ...s,
-      probability: s.probability / probSum // normalize
-    }));
-
-    // Run iterations
-    const outcomes = [];
-    for (let i = 0; i < iterations; i++) {
-      // Draw a random scenario based on probabilities
-      let cumProb = 0;
-      const r = rand();
-      let selectedScenario = normalizedScenarios[normalizedScenarios.length - 1];
-
-      for (const scenario of normalizedScenarios) {
-        cumProb += scenario.probability;
-        if (r < cumProb) {
-          selectedScenario = scenario;
-          break;
-        }
-      }
-
-      // Add noise: ±20% variation around the scenario's outcome value
-      const noise = 1 + (rand() - 0.5) * 0.4;
-      outcomes.push(selectedScenario.outcome_value * noise);
     }
+  };
 
-    // Compute distribution statistics
-    outcomes.sort((a, b) => a - b);
+  // ---------------------------------------------------------------------
+  // LEADOS.monteCarlo — RECONSTRUCTED to match this session's reading of the
+  // upstream Part-6 README's description (seeded Mulberry32 PRNG, ±20% noise
+  // per iteration, percentile/histogram/interpretation output, optional
+  // breakeven probability). No Part-6 source file existed in this sandbox to
+  // copy from — this is original code written to satisfy that description,
+  // not a verbatim carry-over. Not financial modeling or actuarial science.
+  // ---------------------------------------------------------------------
+  LEADOS.monteCarlo = {
+    _prng(seed){
+      let a = seed >>> 0;
+      return function(){
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    },
+    simulate(scenarios, iterations=1000, seed=42, breakeven=null){
+      if (!scenarios || !scenarios.length) {
+        return { error: 'No scenarios supplied' };
+      }
+      const rand = this._prng(seed);
+      const outcomes = [];
+      const totalProb = scenarios.reduce((s,x)=>s+x.probability,0) || 1;
+      for (let i=0;i<iterations;i++){
+        const r = rand() * totalProb;
+        let cum = 0, chosen = scenarios[scenarios.length-1];
+        for (const s of scenarios){ cum += s.probability; if (r <= cum){ chosen = s; break; } }
+        const noise = 1 + (rand()*0.4 - 0.2); // ±20% noise — disclosed assumption
+        const value = (chosen.outcome_value - (chosen.cost_if_true||0)) * noise;
+        outcomes.push(value);
+      }
+      outcomes.sort((a,b)=>a-b);
+      const n = outcomes.length;
+      const mean = outcomes.reduce((a,b)=>a+b,0)/n;
+      const variance = outcomes.reduce((a,b)=>a+Math.pow(b-mean,2),0)/n;
+      const std = Math.sqrt(variance);
+      const pct = p => outcomes[Math.min(n-1, Math.max(0, Math.floor(p*n)))];
+      const probPositive = outcomes.filter(v=>v>0).length/n;
+      const probAboveBreakeven = (breakeven===null || breakeven===undefined) ? null
+        : outcomes.filter(v=>v>breakeven).length/n;
+      const result = {
+        n, mean, median: pct(0.5), std,
+        worst: outcomes[0], p10: pct(0.10), p25: pct(0.25), p75: pct(0.75), p90: pct(0.90), best: outcomes[n-1],
+        probPositive, probAboveBreakeven,
+        histogram: this._buildHistogram(outcomes),
+        seed, iterations
+      };
+      result.interpretation = this._interpret(result);
+      result.label = 'Sensitivity simulation driven entirely by your own probability estimates — not a financial forecast or actuarial model.';
+      return result;
+    },
+    _buildHistogram(outcomes, buckets=10){
+      const min = outcomes[0], max = outcomes[outcomes.length-1];
+      const span = (max-min) || 1;
+      const counts = new Array(buckets).fill(0);
+      outcomes.forEach(v=>{
+        let idx = Math.floor(((v-min)/span)*buckets);
+        if (idx>=buckets) idx = buckets-1;
+        if (idx<0) idx = 0;
+        counts[idx]++;
+      });
+      return counts.map((c,i)=>({ from: min+ (span*i/buckets), to: min+(span*(i+1)/buckets), count:c }));
+    },
+    _interpret(r){
+      if (r.probPositive >= 0.8) return 'Most simulated outcomes are positive — this decision looks favorable under your stated scenarios.';
+      if (r.probPositive <= 0.2) return 'Most simulated outcomes are negative — revisit assumptions before committing.';
+      return 'Outcomes are mixed; the spread between P10 and P90 suggests real uncertainty worth narrowing before committing.';
+    }
+  };
 
-    const n = outcomes.length;
-    const mean = outcomes.reduce((a, b) => a + b, 0) / n;
-    const variance = outcomes.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / n;
-    const stdDev = Math.sqrt(variance);
+  // ---------------------------------------------------------------------
+  // LEADOS.engine — ORIGINAL, illustrative 7-rule subset (NOT the "144
+  // rules" referenced by the Part 7/8 spec — those were never supplied to
+  // this session). Exists only so LEADOS.workers has real work to offload.
+  // ---------------------------------------------------------------------
+  LEADOS.engine = {
+    rules: [
+      { id:'STALE_DECISION', domain:'decisions', severity:2,
+        test:(d,today)=> daysBetween(d.at,today) > 21,
+        title:(d)=>`"${d.title}" has been open ${daysBetween(d.at, todayISO())} days without resolution` },
+      { id:'LOW_CONFIDENCE', domain:'decisions', severity:1,
+        test:(d)=> Math.max(...d.scenarios.map(s=>s.probability)) < 0.4,
+        title:(d)=>`"${d.title}" has no dominant scenario (top probability < 40%)` },
+      { id:'NEGATIVE_EXPECTED_VALUE', domain:'decisions', severity:3,
+        test:(d)=> d.scenarios.reduce((s,x)=>s + x.probability*(x.outcome_value-(x.cost_if_true||0)),0) < 0,
+        title:(d)=>`"${d.title}" has a negative probability-weighted expected value` },
+      { id:'WIDE_SPREAD', domain:'decisions', severity:2,
+        test:(d)=>{
+          const vals = d.scenarios.map(s=>s.outcome_value-(s.cost_if_true||0));
+          const spread = Math.max(...vals)-Math.min(...vals);
+          const meanAbs = Math.abs(vals.reduce((a,b)=>a+b,0)/vals.length)||1;
+          return spread > meanAbs*3;
+        },
+        title:(d)=>`"${d.title}" has a very wide outcome spread across scenarios` },
+      { id:'PROB_SUM_OFF', domain:'data', severity:3,
+        test:(d)=> Math.abs(d.scenarios.reduce((s,x)=>s+x.probability,0) - 1) > 0.02,
+        title:(d)=>`"${d.title}"'s scenario probabilities do not sum to 100%` },
+      { id:'SINGLE_SCENARIO', domain:'decisions', severity:1,
+        test:(d)=> d.scenarios.length <= 1,
+        title:(d)=>`"${d.title}" has only one scenario logged — consider adding alternatives` },
+      { id:'NO_BREAKEVEN', domain:'decisions', severity:1,
+        test:(d)=> d.breakeven===null || d.breakeven===undefined,
+        title:(d)=>`"${d.title}" has no breakeven value set` }
+    ],
+    run(P, today){
+      const findings = [];
+      P.openDecisions.forEach(d=>{
+        this.rules.forEach(rule=>{
+          try{
+            if (rule.test(d, today)) {
+              findings.push({ id: uid(), ruleId: rule.id, decisionId: d.id, domain: rule.domain,
+                               severity: rule.severity, title: rule.title(d) });
+            }
+          } catch(e){ /* a malformed decision shouldn't crash the whole engine run */ }
+        });
+      });
+      return findings;
+    }
+  };
 
-    const percentile = (p) => outcomes[Math.floor(p * n)];
+  // ---------------------------------------------------------------------
+  // LEADOS.ui.densityManager — minimal disclosed stub (see provenance note #2)
+  // ---------------------------------------------------------------------
+  LEADOS.ui = {
+    densityManager: {
+      _level: 'COMPACT',
+      set(level){ this._level = level; document.documentElement.setAttribute('data-density', level.toLowerCase()); }
+    }
+  };
 
-    return {
-      iterations,
-      mean: Math.round(mean),
-      median: Math.round(percentile(0.5)),
-      stdDev: Math.round(stdDev),
-      p10: Math.round(percentile(0.10)),  // 10th percentile (bad case)
-      p25: Math.round(percentile(0.25)),  // 25th percentile
-      p75: Math.round(percentile(0.75)),  // 75th percentile
-      p90: Math.round(percentile(0.90)),  // 90th percentile (good case)
-      worstCase: Math.round(outcomes[0]),
-      bestCase: Math.round(outcomes[n - 1]),
+  // ---------------------------------------------------------------------
+  // LEADOS.a11y — implemented from the Part 7 spec. Verbatim sections are
+  // marked; the two additions (reducedMotion/darkMode handling) are marked
+  // "ADDED" per provenance note #1.
+  // ---------------------------------------------------------------------
+  LEADOS.a11y = {
+    _screenReaderDetected: false,
 
-      // Probability of exceeding key thresholds
-      probPositive: outcomes.filter(v => v > 0).length / n,
-      probAboveBreakeven: (breakeven === null || breakeven === undefined)
-        ? null
-        : outcomes.filter(v => v > breakeven).length / n, // computed because breakeven was provided
+    detect(){
+      return {
+        reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        highContrast: window.matchMedia('(prefers-contrast: more)').matches,
+        forcedColors: window.matchMedia('(forced-colors: active)').matches,
+        darkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
+        reducedData: window.matchMedia('(prefers-reduced-data: reduce)').matches,
+        screenReader: this._screenReaderDetected || null
+      };
+    },
 
-      // Distribution histogram (10 buckets)
-      histogram: this._buildHistogram(outcomes, 10),
+    apply(profile){
+      if (profile.highContrast || profile.forcedColors) {
+        document.documentElement.style.setProperty('--border-width', '2px');
+        document.documentElement.setAttribute('data-high-contrast', 'true');
+      } else {
+        document.documentElement.style.removeProperty('--border-width');
+        document.documentElement.removeAttribute('data-high-contrast');
+      }
 
-      label: `Monte Carlo simulation: ${iterations.toLocaleString()} iterations. ` +
-             `Seed: ${seed} (reproducible). ` +
-             `±20% noise applied per iteration (labeled assumption). ` +
-             `Your probability estimates drive all results — ` +
-             `garbage in, garbage out.`,
+      if (profile.reducedData) {
+        document.documentElement.setAttribute('data-reduced-data', 'true');
+      } else {
+        document.documentElement.removeAttribute('data-reduced-data');
+      }
 
-      interpretation: this._interpret(outcomes, scenarios)
-    };
-  },
+      if (profile.screenReader) {
+        document.documentElement.setAttribute('data-screen-reader', 'true');
+        this._setupLiveRegions();
+      } else {
+        document.documentElement.removeAttribute('data-screen-reader');
+      }
 
-  _buildHistogram(outcomes, buckets) {
-    const min = outcomes[0], max = outcomes[outcomes.length - 1];
-    const bucketWidth = (max - min) / buckets;
-    const counts = new Array(buckets).fill(0);
+      // ADDED — not in the pasted spec's apply(), see provenance note #1
+      if (profile.reducedMotion) {
+        document.documentElement.style.setProperty('--dur-fast','0ms');
+        document.documentElement.style.setProperty('--dur-normal','0ms');
+        document.documentElement.style.setProperty('--dur-slow','0ms');
+      } else if (!document.documentElement.hasAttribute('data-cognitive-reduction')) {
+        document.documentElement.style.removeProperty('--dur-fast');
+        document.documentElement.style.removeProperty('--dur-normal');
+        document.documentElement.style.removeProperty('--dur-slow');
+      }
+      document.documentElement.setAttribute('data-theme', profile.darkMode ? 'dark' : 'light'); // ADDED
+    },
 
-    outcomes.forEach(v => {
-      const bucket = Math.min(buckets - 1, Math.floor((v - min) / bucketWidth));
-      counts[bucket]++;
-    });
+    _liveRegions: {},
+    _setupLiveRegions(){
+      if (!document.getElementById('ar-polite')) {
+        const polite = document.createElement('div');
+        polite.id = 'ar-polite';
+        polite.setAttribute('role','status');
+        polite.setAttribute('aria-live','polite');
+        polite.setAttribute('aria-atomic','false');
+        polite.className = 'sr-only';
+        document.body.appendChild(polite);
+        this._liveRegions.polite = polite;
+      }
+      if (!document.getElementById('ar-assertive')) {
+        const assertive = document.createElement('div');
+        assertive.id = 'ar-assertive';
+        assertive.setAttribute('role','alert');
+        assertive.setAttribute('aria-live','assertive');
+        assertive.setAttribute('aria-atomic','true');
+        assertive.className = 'sr-only';
+        document.body.appendChild(assertive);
+        this._liveRegions.assertive = assertive;
+      }
+    },
 
-    return counts.map((count, i) => ({
-      from: min + i * bucketWidth,
-      to: min + (i + 1) * bucketWidth,
-      count,
-      pct: Math.round(count / outcomes.length * 100)
-    }));
-  },
+    announce(message, priority='polite'){
+      this._setupLiveRegions(); // ADDED guard: spec only builds regions when screenReader=true;
+                                 // this build also lets the manual demo buttons work pre-detection.
+      const region = this._liveRegions[priority];
+      if (!region) return;
+      region.textContent = '';
+      requestAnimationFrame(()=>{
+        region.textContent = message;
+      });
+      window.dispatchEvent(new CustomEvent('leados:announce', { detail:{ message, priority, at: Date.now() } })); // ADDED, for the sighted live-region mirror
+    },
 
-  _interpret(outcomes, scenarios) {
-    const n = outcomes.length;
-    const probPositive = outcomes.filter(v => v > 0).length / n;
+    applyDyslexiaFriendly(){
+      document.documentElement.style.setProperty('--letter-spacing-body','0.05em');
+      document.documentElement.style.setProperty('--line-height-body','1.8');
+      document.documentElement.style.setProperty('--word-spacing','0.1em');
+      document.documentElement.style.setProperty('--font-body','Arial, Helvetica, "Liberation Sans", sans-serif');
+      document.documentElement.style.setProperty('--text-align','left');
+    },
 
-    if (probPositive > 0.85) return 'Strong positive expected value. ' +
-      'Under your probability estimates, this decision produces positive ' +
-      'outcomes in ' + Math.round(probPositive * 100) + '% of simulations.';
+    applyCognitiveReduction(){
+      document.documentElement.setAttribute('data-cognitive-reduction','true');
+      document.documentElement.style.setProperty('--dur-fast','0ms');
+      document.documentElement.style.setProperty('--dur-normal','0ms');
+      document.documentElement.style.setProperty('--dur-slow','0ms');
+      LEADOS.ui.densityManager.set('COMFORTABLE');
+      document.documentElement.setAttribute('data-monochrome-domains','true');
+      document.documentElement.setAttribute('data-hide-nudges','true');
+      document.documentElement.style.setProperty('--btn-padding','10px 20px');
+    },
 
-    if (probPositive < 0.4) return 'Negative expected value under your estimates. ' +
-      'This decision produces negative outcomes in ' +
-      Math.round((1 - probPositive) * 100) + '% of simulations. ' +
-      'Consider whether your probability estimates are calibrated.';
+    reset(){
+      document.documentElement.removeAttribute('data-cognitive-reduction');
+      document.documentElement.removeAttribute('data-monochrome-domains');
+      document.documentElement.removeAttribute('data-hide-nudges');
+      ['--border-width','--letter-spacing-body','--line-height-body','--word-spacing','--font-body',
+       '--text-align','--dur-fast','--dur-normal','--dur-slow','--btn-padding'].forEach(p=>{
+        document.documentElement.style.removeProperty(p);
+      });
+      document.documentElement.removeAttribute('data-high-contrast');
+      document.documentElement.removeAttribute('data-reduced-data');
+      document.documentElement.removeAttribute('data-screen-reader');
+    }
+  };
 
-    return 'Mixed expected value. The decision is sensitive to which scenario occurs. ' +
-      'Focus on what changes the probability of your best scenario.';
+  // ---------------------------------------------------------------------
+  // LEADOS.focus — implemented verbatim from the Part 7 spec.
+  // ---------------------------------------------------------------------
+  LEADOS.focus = {
+    _history: [],
+    _traps: [],
+
+    moveTo(element, { record = true, scroll = true } = {}){
+      if (!element || !element.focus) return;
+      if (record && document.activeElement) this._history.push(document.activeElement);
+      element.focus({ preventScroll: !scroll });
+      if (LEADOS.a11y._liveRegions.polite) {
+        const label = element.getAttribute('aria-label') ||
+          (element.getAttribute('aria-labelledby') && document.getElementById(element.getAttribute('aria-labelledby'))?.textContent) ||
+          element.textContent?.trim().slice(0,50);
+        if (label) LEADOS.a11y.announce(`Focused: ${label}`);
+      }
+    },
+
+    returnToPrevious(){
+      const prev = this._history.pop();
+      if (prev && document.contains(prev)) prev.focus({ preventScroll:false });
+      else this._focusFirstFocusable(document.querySelector('#main'));
+    },
+
+    trap(container){
+      const focusable = this._getFocusable(container);
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length-1];
+      const handler = (e)=>{
+        if (e.key !== 'Tab') return;
+        if (e.shiftKey) { if (document.activeElement===first){ last.focus(); e.preventDefault(); } }
+        else { if (document.activeElement===last){ first.focus(); e.preventDefault(); } }
+      };
+      container.addEventListener('keydown', handler);
+      first.focus();
+      const trap = { container, handler, release: ()=>{
+        container.removeEventListener('keydown', handler);
+        this._traps = this._traps.filter(t=>t!==trap);
+      }};
+      this._traps.push(trap);
+      return trap;
+    },
+
+    _getFocusable(container){
+      return [...container.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )].filter(el=>!el.closest('[aria-hidden="true"]') && !el.closest('[hidden]'));
+    },
+
+    _focusFirstFocusable(container){
+      const first = this._getFocusable(container || document.body)[0];
+      if (first) first.focus();
+    }
+  };
+
+  // ---------------------------------------------------------------------
+  // LEADOS.workers — adapted from the Part 8 spec. Packaging change only:
+  // the worker body is inlined via Blob instead of 'js/worker-engine.js'
+  // (single-file delivery constraint — see provenance note #4). Protocol,
+  // timeout/fallback behavior, and the pure-function-copy rule are intact.
+  // ---------------------------------------------------------------------
+  const WORKER_SRC = `
+self.onmessage = function(e){
+  var data = e.data, id = data.id, method = data.method, payload = data.payload;
+  try {
+    var result;
+    if (method === 'project') {
+      result = project(payload.state);
+    } else if (method === 'engine.run') {
+      var P = project(payload.state);
+      result = engineRun(P, payload.today);
+    } else if (method === 'montecarlo') {
+      result = monteCarlo(payload.scenarios, payload.iterations, payload.seed, payload.breakeven);
+    } else if (method === 'search.buildIndex' || method === 'temporal.profile' || method === 'synthesis.generate' || method === 'correlate') {
+      result = { notImplemented: true, reason: 'No spec for ' + method + ' was supplied to this session (see AI-SESSION-LOG.md).' };
+    } else {
+      result = { notImplemented: true, reason: 'Unknown method: ' + method };
+    }
+    self.postMessage({ id: id, result: result, error: null });
+  } catch (err) {
+    self.postMessage({ id: id, result: null, error: err.message });
   }
 };
 
-/* ---------------------------------------------------------------------------
-   Routing + rendering
---------------------------------------------------------------------------- */
-const ROUTES = [
-  { path: '#/today', label: 'Today' },
-  { path: '#/decisions', label: 'Decisions & Monte Carlo' },
-  { path: '#/log', label: 'Event Log' },
-  { path: '#/about', label: 'About / Provenance' }
+function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
+
+function project(state){
+  var events = (state && state.events) || [];
+  var decisionById = {};
+  events.filter(function(e){return e.type==='decision.logged';}).forEach(function(e){
+    decisionById[e.id] = Object.assign({}, e, {resolved:false});
+  });
+  events.filter(function(e){return e.type==='decision.resolved';}).forEach(function(e){
+    if (decisionById[e.decisionId]) decisionById[e.decisionId].resolved = true;
+  });
+  var allDecisions = Object.values(decisionById).sort(function(a,b){ return new Date(b.at)-new Date(a.at); });
+  return {
+    allDecisions: allDecisions,
+    openDecisions: allDecisions.filter(function(d){return !d.resolved;}),
+    closedDecisions: allDecisions.filter(function(d){return d.resolved;}),
+    decisionById: decisionById,
+    state: { events: events }
+  };
+}
+
+function mulberry32(seed){
+  var a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function buildHistogram(outcomes, buckets){
+  buckets = buckets || 10;
+  var min = outcomes[0], max = outcomes[outcomes.length-1];
+  var span = (max-min) || 1;
+  var counts = new Array(buckets).fill(0);
+  outcomes.forEach(function(v){
+    var idx = Math.floor(((v-min)/span)*buckets);
+    if (idx>=buckets) idx = buckets-1;
+    if (idx<0) idx = 0;
+    counts[idx]++;
+  });
+  return counts.map(function(c,i){ return { from: min+(span*i/buckets), to: min+(span*(i+1)/buckets), count:c }; });
+}
+
+function interpretMC(r){
+  if (r.probPositive >= 0.8) return 'Most simulated outcomes are positive — this decision looks favorable under your stated scenarios.';
+  if (r.probPositive <= 0.2) return 'Most simulated outcomes are negative — revisit assumptions before committing.';
+  return 'Outcomes are mixed; the spread between P10 and P90 suggests real uncertainty worth narrowing before committing.';
+}
+
+function monteCarlo(scenarios, iterations, seed, breakeven){
+  iterations = iterations || 1000; seed = (seed===undefined?42:seed);
+  if (!scenarios || !scenarios.length) return { error: 'No scenarios supplied' };
+  var rand = mulberry32(seed);
+  var outcomes = [];
+  var totalProb = scenarios.reduce(function(s,x){return s+x.probability;},0) || 1;
+  for (var i=0;i<iterations;i++){
+    var r = rand() * totalProb;
+    var cum = 0, chosen = scenarios[scenarios.length-1];
+    for (var j=0;j<scenarios.length;j++){ cum += scenarios[j].probability; if (r <= cum){ chosen = scenarios[j]; break; } }
+    var noise = 1 + (rand()*0.4 - 0.2);
+    outcomes.push((chosen.outcome_value - (chosen.cost_if_true||0)) * noise);
+  }
+  outcomes.sort(function(a,b){return a-b;});
+  var n = outcomes.length;
+  var mean = outcomes.reduce(function(a,b){return a+b;},0)/n;
+  var variance = outcomes.reduce(function(a,b){return a+Math.pow(b-mean,2);},0)/n;
+  var std = Math.sqrt(variance);
+  function pct(p){ return outcomes[Math.min(n-1, Math.max(0, Math.floor(p*n)))]; }
+  var probPositive = outcomes.filter(function(v){return v>0;}).length/n;
+  var probAboveBreakeven = (breakeven===null||breakeven===undefined) ? null : outcomes.filter(function(v){return v>breakeven;}).length/n;
+  var result = {
+    n: n, mean: mean, median: pct(0.5), std: std,
+    worst: outcomes[0], p10: pct(0.10), p25: pct(0.25), p75: pct(0.75), p90: pct(0.90), best: outcomes[n-1],
+    probPositive: probPositive, probAboveBreakeven: probAboveBreakeven,
+    histogram: buildHistogram(outcomes), seed: seed, iterations: iterations
+  };
+  result.interpretation = interpretMC(result);
+  result.label = 'Sensitivity simulation driven entirely by your own probability estimates — not a financial forecast or actuarial model.';
+  return result;
+}
+
+var RULES = [
+  { id:'STALE_DECISION', domain:'decisions', severity:2, test:function(d,today){ return daysBetween(d.at,today) > 21; },
+    title:function(d,today){ return '"'+d.title+'" has been open '+daysBetween(d.at,today)+' days without resolution'; } },
+  { id:'LOW_CONFIDENCE', domain:'decisions', severity:1, test:function(d){ return Math.max.apply(null,d.scenarios.map(function(s){return s.probability;})) < 0.4; },
+    title:function(d){ return '"'+d.title+'" has no dominant scenario (top probability < 40%)'; } },
+  { id:'NEGATIVE_EXPECTED_VALUE', domain:'decisions', severity:3,
+    test:function(d){ return d.scenarios.reduce(function(s,x){ return s + x.probability*(x.outcome_value-(x.cost_if_true||0)); },0) < 0; },
+    title:function(d){ return '"'+d.title+'" has a negative probability-weighted expected value'; } },
+  { id:'WIDE_SPREAD', domain:'decisions', severity:2,
+    test:function(d){
+      var vals = d.scenarios.map(function(s){ return s.outcome_value-(s.cost_if_true||0); });
+      var spread = Math.max.apply(null,vals)-Math.min.apply(null,vals);
+      var meanAbs = Math.abs(vals.reduce(function(a,b){return a+b;},0)/vals.length)||1;
+      return spread > meanAbs*3;
+    },
+    title:function(d){ return '"'+d.title+'" has a very wide outcome spread across scenarios'; } },
+  { id:'PROB_SUM_OFF', domain:'data', severity:3,
+    test:function(d){ return Math.abs(d.scenarios.reduce(function(s,x){return s+x.probability;},0) - 1) > 0.02; },
+    title:function(d){ return '"'+d.title+'"\\'s scenario probabilities do not sum to 100%'; } },
+  { id:'SINGLE_SCENARIO', domain:'decisions', severity:1, test:function(d){ return d.scenarios.length <= 1; },
+    title:function(d){ return '"'+d.title+'" has only one scenario logged — consider adding alternatives'; } },
+  { id:'NO_BREAKEVEN', domain:'decisions', severity:1, test:function(d){ return d.breakeven===null || d.breakeven===undefined; },
+    title:function(d){ return '"'+d.title+'" has no breakeven value set'; } }
 ];
 
-function buildNav(){
-  const nav = document.getElementById('nav');
-  nav.innerHTML = '';
-  ROUTES.forEach(r => {
-    const btn = document.createElement('button');
-    btn.textContent = r.label;
-    btn.className = 'nav-btn w-full text-left px-3 py-2 rounded-md hover:bg-slate-800 transition tap-shrink';
-    btn.onclick = () => { location.hash = r.path; };
-    btn.dataset.path = r.path;
-    nav.appendChild(btn);
+function engineRun(P, today){
+  var findings = [];
+  P.openDecisions.forEach(function(d){
+    RULES.forEach(function(rule){
+      try{
+        if (rule.test(d, today)) {
+          findings.push({ id: Math.random().toString(36).slice(2,10), ruleId: rule.id, decisionId: d.id,
+                           domain: rule.domain, severity: rule.severity, title: rule.title(d, today) });
+        }
+      } catch(e){}
+    });
   });
+  return findings;
 }
+`;
 
-function setActiveNav(path){
-  document.querySelectorAll('.nav-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.path === path);
-  });
-  const found = ROUTES.find(r => r.path === path);
-  document.getElementById('routeTitle').textContent = found ? found.label : '';
-}
+  LEADOS.workers = {
+    _worker: null,
+    _pending: new Map(),
+    _idCounter: 0,
+    _blobUrl: null,
 
-function getP(){
-  return LEADOS.core.project(LEADOS.store.load());
-}
+    init(){
+      if (!window.Worker) { this._worker = null; return; }
+      try {
+        const blob = new Blob([WORKER_SRC], { type:'application/javascript' });
+        this._blobUrl = URL.createObjectURL(blob);
+        this._worker = new Worker(this._blobUrl);
+        this._worker.onmessage = (e)=>{
+          const { id, result, error } = e.data;
+          const entry = this._pending.get(id);
+          if (!entry) return;
+          this._pending.delete(id);
+          if (error) entry.reject(new Error(error));
+          else entry.resolve(result);
+        };
+        this._worker.onerror = ()=>{ /* leave pending to time out and fall back */ };
+      } catch(e){ this._worker = null; }
+    },
 
-function refreshChrome(){
-  document.getElementById('eventCountTag').textContent = LEADOS.store.load().length;
-  document.getElementById('todayTag').textContent = fmtDate(todayISO());
-}
+    terminate(){
+      if (this._worker) { this._worker.terminate(); this._worker = null; }
+      if (this._blobUrl) { URL.revokeObjectURL(this._blobUrl); this._blobUrl = null; }
+    },
 
-function router(){
-  let path = location.hash || '#/today';
-  if (!ROUTES.find(r => r.path === path)) path = '#/today';
-  setActiveNav(path);
-  refreshChrome();
-  const view = document.getElementById('view');
-  view.className = 'p-6 max-w-6xl mx-auto fade-in';
-  const P = getP();
-  if (path === '#/today') view.innerHTML = renderToday(P);
-  else if (path === '#/decisions') { view.innerHTML = renderDecisions(P); wireDecisionsView(); }
-  else if (path === '#/log') { view.innerHTML = renderLog(P); wireLogView(); }
-  else if (path === '#/about') view.innerHTML = renderAbout();
-}
+    async compute(method, payload, mainThreadFallback){
+      if (!this._worker) return { usedWorker:false, result: mainThreadFallback() };
+      const id = ++this._idCounter;
+      return new Promise((resolve)=>{
+        this._pending.set(id, {
+          resolve: (result)=> resolve({ usedWorker:true, result }),
+          reject: ()=> resolve({ usedWorker:false, result: mainThreadFallback() })
+        });
+        const timeout = setTimeout(()=>{
+          if (this._pending.has(id)) {
+            this._pending.delete(id);
+            resolve({ usedWorker:false, result: mainThreadFallback(), timedOut:true });
+          }
+        }, 5000);
+        this._worker.postMessage({ id, method, payload });
+      });
+    },
 
-/* ---------------- Today ---------------- */
-function renderToday(P){
-  const simmed = P.allDecisions.length;
-  return `
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <div class="text-xs text-slate-400 uppercase tracking-wide">Open decisions</div>
-        <div class="text-3xl font-bold mt-1">${P.openDecisions.length}</div>
-      </div>
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <div class="text-xs text-slate-400 uppercase tracking-wide">Resolved decisions</div>
-        <div class="text-3xl font-bold mt-1">${P.closedDecisions.length}</div>
-      </div>
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <div class="text-xs text-slate-400 uppercase tracking-wide">Total decisions logged</div>
-        <div class="text-3xl font-bold mt-1">${simmed}</div>
-      </div>
-    </div>
-    <div class="bg-white rounded-xl border border-slate-200 p-6">
-      <h2 class="font-semibold text-slate-800 mb-2">What this build is</h2>
-      <p class="text-sm text-slate-600 leading-relaxed">LeadOS is an append-only event log of decisions, each carrying a
-      set of leader-estimated probabilistic scenarios. Go to <b>Decisions &amp; Monte Carlo</b> to log a decision with
-      scenarios and run <code>LEADOS.monteCarlo.simulate()</code> against it — a seeded, reproducible pseudo-random
-      simulation that turns your own probability estimates into a visible distribution of outcomes.</p>
-      <p class="text-sm text-slate-600 leading-relaxed mt-3">This is a <b>decision support tool</b>, not a financial
-      model and not actuarial science. See <b>About / Provenance</b> for exactly what in this file is verified,
-      original, or disclosed as an assumption.</p>
-    </div>`;
-}
+    async runEngine(state, today){
+      return this.compute('engine.run', { state, today }, ()=>{
+        const P = LEADOS.events.project(state);
+        return LEADOS.engine.run(P, today);
+      });
+    },
 
-/* ---------------- Decisions & Monte Carlo ---------------- */
-function scenarioRowHTML(i){
-  return `
-    <div class="scenario-row grid grid-cols-12 gap-2 items-center" data-row="${i}">
-      <input class="sc-name col-span-5 border border-slate-300 rounded px-2 py-1 text-sm" placeholder="Scenario name" />
-      <input class="sc-prob col-span-2 border border-slate-300 rounded px-2 py-1 text-sm" type="number" step="0.01" min="0" max="1" placeholder="prob (0-1)" />
-      <input class="sc-val col-span-3 border border-slate-300 rounded px-2 py-1 text-sm" type="number" placeholder="outcome value" />
-      <input class="sc-cost col-span-1 border border-slate-300 rounded px-2 py-1 text-sm" type="number" placeholder="cost" />
-      <button type="button" class="removeRowBtn col-span-1 text-red-500 hover:text-red-700 text-sm">✕</button>
-    </div>`;
-}
+    async runMonteCarlo(scenarios, iterations, seed, breakeven){
+      return this.compute('montecarlo', { scenarios, iterations, seed, breakeven }, ()=>{
+        return LEADOS.monteCarlo.simulate(scenarios, iterations, seed, breakeven);
+      });
+    },
 
-function renderDecisions(P){
-  const list = P.allDecisions.map(d => renderDecisionCard(d)).join('') ||
-    `<div class="text-sm text-slate-400">No decisions logged yet.</div>`;
-
-  return `
-  <div class="mb-6 bg-white rounded-xl border border-slate-200 p-6">
-    <h2 class="font-semibold text-slate-800 mb-3">Log a new decision</h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-      <input id="newTitle" class="border border-slate-300 rounded px-3 py-2 text-sm md:col-span-2" placeholder="Decision title" />
-      <input id="newDomain" class="border border-slate-300 rounded px-3 py-2 text-sm" placeholder="Domain (e.g. strategy)" />
-    </div>
-    <div class="mb-2 text-xs text-slate-500">Scenarios — probabilities don't need to sum to exactly 1 (they're normalized automatically).</div>
-    <div id="scenarioRows" class="space-y-2 mb-2">${scenarioRowHTML(0)}${scenarioRowHTML(1)}</div>
-    <button id="addRowBtn" type="button" class="text-xs text-blue-600 hover:underline mb-4">+ add scenario</button>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-      <input id="newBreakeven" class="border border-slate-300 rounded px-3 py-2 text-sm" type="number" placeholder="Breakeven value (optional)" />
-    </div>
-    <button id="saveDecisionBtn" class="bg-slate-900 text-white text-sm px-4 py-2 rounded hover:bg-slate-700 tap-shrink">Save decision</button>
-  </div>
-
-  <div class="disclosure rounded-lg px-4 py-3 text-xs leading-relaxed mb-6">
-    <b>Not a financial model. Not actuarial science.</b> This is a decision-support tool that makes the probability
-    distribution of outcomes visible, using the leader's own probability estimates. ±20% noise per iteration and the
-    seeded RNG are both labeled assumptions, not predictions.
-  </div>
-
-  <div class="space-y-4">${list}</div>`;
-}
-
-function renderDecisionCard(d){
-  const scenarioRows = d.scenarios.map(s => `
-    <tr class="border-t border-slate-100">
-      <td class="py-1.5 pr-2">${s.name}</td>
-      <td class="py-1.5 pr-2 text-right mono">${fmtPct(s.probability)}</td>
-      <td class="py-1.5 pr-2 text-right mono">${fmtNum(s.outcome_value)}</td>
-      <td class="py-1.5 text-right mono">${s.cost_if_true !== undefined && s.cost_if_true !== null ? fmtNum(s.cost_if_true) : '—'}</td>
-    </tr>`).join('');
-
-  return `
-  <div class="bg-white rounded-xl border border-slate-200 p-6 decision-card" data-id="${d.id}">
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <div class="font-semibold text-slate-800">${d.title}</div>
-        <div class="text-xs text-slate-400 mt-0.5">${d.domain || 'uncategorized'} · logged ${fmtDate(d.loggedAt)} ·
-          ${d.resolved ? '<span class="text-emerald-600 font-medium">resolved</span>' : '<span class="text-amber-600 font-medium">open</span>'}
-        </div>
-        ${d.resolutionNote ? `<div class="text-xs text-slate-500 mt-1 italic">${d.resolutionNote}</div>` : ''}
-      </div>
-      <div class="text-xs text-slate-400">${d.breakeven !== null ? 'breakeven: ' + fmtNum(d.breakeven) : 'no breakeven set'}</div>
-    </div>
-
-    <table class="w-full text-xs mt-4">
-      <thead>
-        <tr class="text-slate-400 text-left">
-          <th class="py-1 font-medium">Scenario</th>
-          <th class="py-1 font-medium text-right">Probability</th>
-          <th class="py-1 font-medium text-right">Outcome value</th>
-          <th class="py-1 font-medium text-right">Cost if true</th>
-        </tr>
-      </thead>
-      <tbody>${scenarioRows}</tbody>
-    </table>
-
-    <div class="mt-4 flex items-center gap-3 flex-wrap">
-      <label class="text-xs text-slate-500">iterations</label>
-      <input class="iterInput border border-slate-300 rounded px-2 py-1 text-xs w-24" type="number" value="10000" min="100" step="100" />
-      <label class="text-xs text-slate-500">seed</label>
-      <input class="seedInput border border-slate-300 rounded px-2 py-1 text-xs w-20" type="number" value="42" />
-      <button class="runSimBtn bg-indigo-600 text-white text-xs px-3 py-1.5 rounded hover:bg-indigo-500 tap-shrink">Run Monte Carlo</button>
-    </div>
-
-    <div class="mcResult mt-4"></div>
-  </div>`;
-}
-
-function histogramHTML(hist){
-  const maxPct = Math.max(...hist.map(b => b.pct), 1);
-  const bars = hist.map(b => `
-    <div class="flex flex-col items-center gap-1" style="width:${100/hist.length}%">
-      <div class="hist-bar w-full bg-indigo-400 rounded-t" style="height:${Math.max(4, (b.pct/maxPct)*100)}px"></div>
-      <div class="text-[9px] text-slate-400 mono">${b.pct}%</div>
-    </div>`).join('');
-  return `<div class="flex items-end gap-1 h-28 mt-2">${bars}</div>
-    <div class="flex justify-between text-[10px] text-slate-400 mt-1">
-      <span>${fmtNum(hist[0].from)}</span><span>${fmtNum(hist[hist.length-1].to)}</span>
-    </div>`;
-}
-
-function mcResultHTML(res, breakeven){
-  return `
-    <div class="border-t border-slate-100 pt-4">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-        <div class="bg-slate-50 rounded-lg p-3"><div class="text-[10px] text-slate-400 uppercase">Mean</div><div class="font-semibold mono">${fmtNum(res.mean)}</div></div>
-        <div class="bg-slate-50 rounded-lg p-3"><div class="text-[10px] text-slate-400 uppercase">Median</div><div class="font-semibold mono">${fmtNum(res.median)}</div></div>
-        <div class="bg-slate-50 rounded-lg p-3"><div class="text-[10px] text-slate-400 uppercase">Std Dev</div><div class="font-semibold mono">${fmtNum(res.stdDev)}</div></div>
-        <div class="bg-slate-50 rounded-lg p-3"><div class="text-[10px] text-slate-400 uppercase">P(outcome &gt; 0)</div><div class="font-semibold mono">${fmtPct(res.probPositive)}</div></div>
-      </div>
-
-      <div class="grid grid-cols-5 gap-2 text-center mt-3 text-xs">
-        <div><div class="text-slate-400">Worst</div><div class="mono font-medium text-red-600">${fmtNum(res.worstCase)}</div></div>
-        <div><div class="text-slate-400">P10</div><div class="mono font-medium">${fmtNum(res.p10)}</div></div>
-        <div><div class="text-slate-400">P25</div><div class="mono font-medium">${fmtNum(res.p25)}</div></div>
-        <div><div class="text-slate-400">P75</div><div class="mono font-medium">${fmtNum(res.p75)}</div></div>
-        <div><div class="text-slate-400">P90</div><div class="mono font-medium">${fmtNum(res.p90)}</div></div>
-      </div>
-      <div class="text-center text-xs mt-1"><span class="text-slate-400">Best:</span> <span class="mono font-medium text-emerald-600">${fmtNum(res.bestCase)}</span></div>
-
-      ${res.probAboveBreakeven !== null ? `
-      <div class="mt-3 bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-xs text-indigo-900">
-        <b>P(outcome &gt; breakeven of ${fmtNum(breakeven)})</b> = ${fmtPct(res.probAboveBreakeven)}
-      </div>` : ''}
-
-      <div class="mt-4">
-        <div class="text-xs text-slate-500 mb-1">Distribution histogram (${res.iterations.toLocaleString()} iterations, 10 buckets)</div>
-        ${histogramHTML(res.histogram)}
-      </div>
-
-      <div class="mt-4 bg-slate-50 rounded-lg p-3 text-xs text-slate-700">${res.interpretation}</div>
-      <div class="mt-2 text-[10px] text-slate-400 leading-relaxed">${res.label}</div>
-    </div>`;
-}
-
-function wireDecisionsView(){
-  document.getElementById('addRowBtn').onclick = () => {
-    const rows = document.getElementById('scenarioRows');
-    const idx = rows.children.length;
-    rows.insertAdjacentHTML('beforeend', scenarioRowHTML(idx));
-  };
-  document.getElementById('scenarioRows').addEventListener('click', (e) => {
-    if (e.target.classList.contains('removeRowBtn')) {
-      e.target.closest('.scenario-row').remove();
+    // Declared per spec but not wired to any UI control — see provenance note #5
+    async buildSearchIndex(state, today){
+      return this.compute('search.buildIndex', { state, today }, ()=>({ notImplemented:true, reason:'No LEADOS.search spec supplied to this session.' }));
+    },
+    async generateSynthesis(state, today){
+      return this.compute('synthesis.generate', { state, today }, ()=>({ notImplemented:true, reason:'No LEADOS.synthesis spec supplied to this session.' }));
     }
-  });
-  document.getElementById('saveDecisionBtn').onclick = () => {
-    const title = document.getElementById('newTitle').value.trim();
-    const domain = document.getElementById('newDomain').value.trim();
-    const breakevenRaw = document.getElementById('newBreakeven').value;
-    const breakeven = breakevenRaw === '' ? null : Number(breakevenRaw);
-    const scenarios = [...document.querySelectorAll('.scenario-row')].map(row => ({
-      name: row.querySelector('.sc-name').value.trim() || 'Unnamed scenario',
-      probability: Number(row.querySelector('.sc-prob').value || 0),
-      outcome_value: Number(row.querySelector('.sc-val').value || 0),
-      cost_if_true: row.querySelector('.sc-cost').value === '' ? null : Number(row.querySelector('.sc-cost').value)
-    })).filter(s => s.probability > 0);
-
-    if (!title) { toast('Title required'); return; }
-    if (scenarios.length < 2) { toast('Add at least 2 scenarios with probability > 0'); return; }
-
-    LEADOS.store.append({ type: 'decision.logged', decisionId: uid('dec'), title, domain, breakeven, scenarios });
-    toast('Decision logged');
-    router();
   };
 
-  document.querySelectorAll('.decision-card').forEach(card => {
-    const id = card.dataset.id;
-    card.querySelector('.runSimBtn').onclick = () => {
-      const P = getP();
-      const d = P.decisionById[id];
-      const iterations = Math.max(100, Number(card.querySelector('.iterInput').value || 10000));
-      const seed = Number(card.querySelector('.seedInput').value || 42);
-      const res = LEADOS.monteCarlo.simulate(d.scenarios, iterations, seed, d.breakeven);
-      card.querySelector('.mcResult').innerHTML = mcResultHTML(res, d.breakeven);
+  // ---------------------------------------------------------------------
+  // App shell / router (original UI, built to host the above)
+  // ---------------------------------------------------------------------
+  const ROUTES = [
+    ['#/today','Today'],
+    ['#/decisions','Decisions (Monte Carlo)'],
+    ['#/findings','Findings (engine)'],
+    ['#/accessibility','Accessibility'],
+    ['#/workers','Worker diagnostics'],
+    ['#/log','Event log'],
+    ['#/about','Provenance / About']
+  ];
+
+  function toast(msg){
+    const root = document.getElementById('toastRoot');
+    const el = document.createElement('div');
+    el.className = 'fade-in bg-slate-900 text-white text-sm px-4 py-2 rounded-lg shadow';
+    el.textContent = msg;
+    root.appendChild(el);
+    setTimeout(()=>el.remove(), 2600);
+  }
+
+  function renderNav(){
+    const nav = document.getElementById('nav');
+    nav.innerHTML = '';
+    ROUTES.forEach(([href,label])=>{
+      const a = document.createElement('a');
+      a.href = href;
+      a.className = 'nav-btn tap-shrink block rounded-lg px-3 py-2 hover:bg-slate-800';
+      a.textContent = label;
+      if (location.hash === href || (!location.hash && href==='#/today')) a.classList.add('active');
+      nav.appendChild(a);
+    });
+  }
+
+  function fmtMoney(v){
+    const sign = v<0 ? '-' : '';
+    return sign + '$' + Math.abs(Math.round(v)).toLocaleString();
+  }
+  function sevLabel(s){ return s===1?'nudge':s===2?'watch':'risk'; }
+  function sevClass(s){ return s===1?'bg-slate-100 text-slate-600':s===2?'bg-amber-100 text-amber-800':'bg-rose-100 text-rose-800'; }
+  function domainBadge(domain){
+    const colors = { decisions:'bg-indigo-100 text-indigo-800', data:'bg-sky-100 text-sky-800' };
+    return `<span class="domain-badge ${colors[domain]||'bg-slate-100 text-slate-700'}">${domain}</span>`;
+  }
+
+  // ---- views ----
+  function viewToday(P){
+    const findingsNote = P.openDecisions.length
+      ? `Run the engine from <a class="underline" href="#/findings">Findings</a> to see rule hits.`
+      : 'No open decisions yet.';
+    return `
+      <div class="fade-in space-y-6">
+        <div class="disclosure rounded-lg p-4 text-sm">
+          This build implements <b>LEADOS.a11y</b> (adaptive accessibility profiles, live regions, focus
+          management) and <b>LEADOS.workers</b> (Monte Carlo + a small illustrative rule engine offloaded to a
+          Web Worker, with timeout-based main-thread fallback). See <a class="underline" href="#/about">#/about</a>
+          for exactly what is verbatim-from-spec, adapted, or original.
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+          <div class="card bg-white rounded-xl p-4">
+            <div class="text-xs text-slate-400">open decisions</div>
+            <div class="text-2xl font-bold mono">${P.openDecisions.length}</div>
+          </div>
+          <div class="card bg-white rounded-xl p-4">
+            <div class="text-xs text-slate-400">closed decisions</div>
+            <div class="text-2xl font-bold mono">${P.closedDecisions.length}</div>
+          </div>
+          <div class="card bg-white rounded-xl p-4">
+            <div class="text-xs text-slate-400">worker support</div>
+            <div class="text-2xl font-bold mono">${window.Worker ? 'yes' : 'no'}</div>
+          </div>
+        </div>
+        <div class="card bg-white rounded-xl p-4 text-sm text-slate-600">${findingsNote}</div>
+      </div>`;
+  }
+
+  function scenarioRowsHtml(idx){
+    return `
+      <div class="grid grid-cols-5 gap-2 scenario-row" data-idx="${idx}">
+        <input class="s-name card rounded px-2 py-1 text-sm col-span-2" placeholder="scenario name" value="Scenario ${idx+1}">
+        <input class="s-prob card rounded px-2 py-1 text-sm" type="number" step="0.05" min="0" max="1" placeholder="prob" value="0.5">
+        <input class="s-outcome card rounded px-2 py-1 text-sm" type="number" placeholder="outcome value" value="100000">
+        <input class="s-cost card rounded px-2 py-1 text-sm" type="number" placeholder="cost if true" value="40000">
+      </div>`;
+  }
+
+  function viewDecisions(P){
+    const rows = P.openDecisions.map(d=>{
+      const ev = d.scenarios.reduce((s,x)=>s+x.probability*(x.outcome_value-(x.cost_if_true||0)),0);
+      return `<tr class="border-t border-slate-100">
+        <td class="py-2 pr-4">${d.title}</td>
+        <td class="py-2 pr-4 text-slate-400">${d.at}</td>
+        <td class="py-2 pr-4 mono">${fmtMoney(ev)}</td>
+        <td class="py-2 pr-4">${d.breakeven!=null ? fmtMoney(d.breakeven) : '<span class="text-slate-400">none</span>'}</td>
+        <td class="py-2"><button class="btn run-mc tap-shrink bg-slate-900 text-white rounded-lg text-xs" data-id="${d.id}">Run Monte Carlo</button></td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div class="fade-in space-y-6">
+        <div class="card bg-white rounded-xl p-4">
+          <div class="font-semibold mb-3">Log a decision with scenarios</div>
+          <input id="newTitle" class="card rounded px-2 py-1 text-sm w-full mb-2" placeholder="Decision title">
+          <div class="flex items-center gap-2 mb-2">
+            <label class="text-xs text-slate-500">breakeven (optional)</label>
+            <input id="newBreakeven" type="number" class="card rounded px-2 py-1 text-sm w-40" placeholder="e.g. 150000">
+          </div>
+          <div id="scenarioRows" class="space-y-2">${scenarioRowsHtml(0)}${scenarioRowsHtml(1)}</div>
+          <div class="flex gap-2 mt-2">
+            <button id="addScenario" class="btn tap-shrink bg-slate-100 rounded-lg text-xs">+ scenario</button>
+            <button id="logDecision" class="btn tap-shrink bg-slate-900 text-white rounded-lg text-xs">Log decision</button>
+          </div>
+        </div>
+
+        <div class="card bg-white rounded-xl p-4 overflow-x-auto">
+          <div class="font-semibold mb-3">Open decisions</div>
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs text-slate-400">
+              <th class="pb-2">title</th><th class="pb-2">logged</th><th class="pb-2">expected value</th>
+              <th class="pb-2">breakeven</th><th class="pb-2"></th>
+            </tr></thead>
+            <tbody>${rows || `<tr><td class="py-3 text-slate-400" colspan="5">No open decisions. Log one above.</td></tr>`}</tbody>
+          </table>
+        </div>
+
+        <div id="mcResult"></div>
+      </div>`;
+  }
+
+  function renderMonteCarloResult(d, timing, r){
+    if (r.error) return `<div class="card bg-white rounded-xl p-4 text-rose-700 text-sm">${r.error}</div>`;
+    const hist = r.histogram;
+    const maxCount = Math.max(...hist.map(h=>h.count), 1);
+    const reducedData = document.documentElement.dataset.reducedData === 'true';
+    return `
+      <div class="fade-in card bg-white rounded-xl p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold">Monte Carlo — "${d.title}"</div>
+          <div class="text-xs text-slate-400 mono">${timing.usedWorker ? 'computed in worker' : 'computed on main thread (fallback)'} · ${timing.ms.toFixed(1)}ms · n=${r.iterations}</div>
+        </div>
+        <div class="grid grid-cols-4 gap-3 text-sm">
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-400">mean</div><div class="mono font-semibold">${fmtMoney(r.mean)}</div></div>
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-400">median</div><div class="mono font-semibold">${fmtMoney(r.median)}</div></div>
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-400">std dev</div><div class="mono font-semibold">${fmtMoney(r.std)}</div></div>
+          <div class="bg-slate-50 rounded-lg p-3"><div class="text-xs text-slate-400">P(outcome &gt; 0)</div><div class="mono font-semibold">${(r.probPositive*100).toFixed(0)}%</div></div>
+        </div>
+        <div class="flex justify-between text-xs mono text-slate-500 border-t border-slate-100 pt-3">
+          <span>worst ${fmtMoney(r.worst)}</span><span>P10 ${fmtMoney(r.p10)}</span><span>P25 ${fmtMoney(r.p25)}</span>
+          <span>P75 ${fmtMoney(r.p75)}</span><span>P90 ${fmtMoney(r.p90)}</span><span>best ${fmtMoney(r.best)}</span>
+        </div>
+        ${r.probAboveBreakeven!==null ? `<div class="text-sm">P(outcome &gt; breakeven): <b>${(r.probAboveBreakeven*100).toFixed(0)}%</b></div>` : ''}
+        <div class="chart-heavy flex items-end gap-1 h-24">
+          ${hist.map(h=>`<div class="hist-bar bg-indigo-400 flex-1 rounded-t" style="height:${(h.count/maxCount*100)}%" title="${fmtMoney(h.from)} – ${fmtMoney(h.to)}: ${h.count}"></div>`).join('')}
+        </div>
+        <table class="table-fallback w-full text-xs mono">
+          <tbody>${hist.map(h=>`<tr><td class="pr-3 py-0.5">${fmtMoney(h.from)}–${fmtMoney(h.to)}</td><td>${h.count}</td></tr>`).join('')}</tbody>
+        </table>
+        ${reducedData ? '<div class="text-xs text-slate-400">Reduced-data mode: histogram chart hidden, showing table instead.</div>' : ''}
+        <div class="disclosure rounded-lg p-3 text-xs">${r.interpretation}<br><span class="opacity-75">${r.label}</span></div>
+      </div>`;
+  }
+
+  function viewFindings(P, lastFindings, lastTiming){
+    const rows = (lastFindings||[]).map(f=>`
+      <tr class="border-t border-slate-100" data-severity="${f.severity}">
+        <td class="py-2 pr-3">${domainBadge(f.domain)}</td>
+        <td class="py-2 pr-3"><span class="text-[11px] px-2 py-0.5 rounded-full ${sevClass(f.severity)}">${sevLabel(f.severity)}</span></td>
+        <td class="py-2">${f.title}</td>
+      </tr>`).join('');
+    return `
+      <div class="fade-in space-y-4">
+        <div class="disclosure rounded-lg p-4 text-sm">
+          This is an <b>original, 7-rule illustrative engine</b> — not the "144 rules" referenced by the pasted
+          spec, which were never supplied to this session. It exists to demonstrate the worker-offload
+          architecture end to end.
+        </div>
+        <div class="card bg-white rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="font-semibold">Engine run</div>
+            <button id="runEngineBtn" class="btn tap-shrink bg-slate-900 text-white rounded-lg text-xs">Run engine (worker)</button>
+          </div>
+          ${lastTiming ? `<div class="text-xs text-slate-400 mono mb-3">${lastTiming.usedWorker?'computed in worker':'computed on main thread (fallback)'} · ${lastTiming.ms.toFixed(1)}ms · ${lastFindings.length} findings over ${P.openDecisions.length} open decisions</div>` : ''}
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs text-slate-400"><th class="pb-2">domain</th><th class="pb-2">severity</th><th class="pb-2">finding</th></tr></thead>
+            <tbody>${rows || `<tr><td class="py-3 text-slate-400" colspan="3">Click "Run engine" to evaluate open decisions.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  function viewAccessibility(){
+    const profile = LEADOS.a11y.detect();
+    const row = (k,v)=>`<tr class="border-t border-slate-100"><td class="py-1.5 pr-4 text-slate-500">${k}</td><td class="py-1.5 mono">${v===null?'unknown':String(v)}</td></tr>`;
+    return `
+      <div class="fade-in space-y-6">
+        <div class="card bg-white rounded-xl p-4">
+          <div class="font-semibold mb-2">Auto-detected profile (live, OS/browser media queries)</div>
+          <table class="text-sm w-full max-w-md">
+            ${row('reducedMotion', profile.reducedMotion)}
+            ${row('highContrast', profile.highContrast)}
+            ${row('forcedColors', profile.forcedColors)}
+            ${row('darkMode', profile.darkMode)}
+            ${row('reducedData', profile.reducedData)}
+            ${row('screenReader (self-reported — see disclosure)', profile.screenReader)}
+          </table>
+          <label class="flex items-center gap-2 text-sm mt-3">
+            <input type="checkbox" id="srSelfReport"> I use a screen reader (manual, since reliable JS auto-detection isn't possible)
+          </label>
+        </div>
+
+        <div class="card bg-white rounded-xl p-4 space-y-2">
+          <div class="font-semibold mb-1">Manual accessibility modes</div>
+          <div class="flex flex-wrap gap-2">
+            <button id="btnDyslexia" class="btn tap-shrink bg-slate-900 text-white rounded-lg text-xs">Apply dyslexia-friendly mode</button>
+            <button id="btnCognitive" class="btn tap-shrink bg-slate-900 text-white rounded-lg text-xs">Apply cognitive-reduction mode</button>
+            <button id="btnResetA11y" class="btn tap-shrink bg-slate-100 rounded-lg text-xs">Reset to defaults</button>
+          </div>
+          <p class="text-xs text-slate-400">Dyslexia-friendly and cognitive-reduction are manual-only per spec — "too complex and personal to infer."</p>
+        </div>
+
+        <div class="card bg-white rounded-xl p-4 space-y-2">
+          <div class="font-semibold mb-1">Live region / announcer test</div>
+          <div class="flex gap-2">
+            <button id="btnAnnouncePolite" class="btn tap-shrink bg-slate-100 rounded-lg text-xs">Announce (polite)</button>
+            <button id="btnAnnounceAssertive" class="btn tap-shrink bg-rose-100 text-rose-800 rounded-lg text-xs">Announce (assertive)</button>
+            <label class="flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" id="toggleLiveDebug"> show sighted mirror</label>
+          </div>
+        </div>
+
+        <div class="card bg-white rounded-xl p-4 space-y-2">
+          <div class="font-semibold mb-1">Focus management demo</div>
+          <button id="btnOpenModal" class="btn tap-shrink bg-slate-900 text-white rounded-lg text-xs">Open focus-trapped modal</button>
+        </div>
+      </div>
+
+      <div id="modalRoot"></div>`;
+  }
+
+  function viewWorkers(logEntries){
+    const rows = logEntries.slice().reverse().map(e=>`
+      <tr class="border-t border-slate-100">
+        <td class="py-1.5 pr-3 mono text-xs">${e.method}</td>
+        <td class="py-1.5 pr-3 text-xs">${e.usedWorker?'<span class="text-emerald-700">worker</span>':'<span class="text-amber-700">fallback</span>'}${e.timedOut?' (timeout)':''}</td>
+        <td class="py-1.5 mono text-xs">${e.ms.toFixed(1)}ms</td>
+      </tr>`).join('');
+    return `
+      <div class="fade-in space-y-6">
+        <div class="disclosure rounded-lg p-4 text-sm">
+          The "Worker Performance Architecture" sub-heading in the pasted Part 8 spec had no body (same empty-heading
+          pattern noted elsewhere in this project's history) — this timing table is original.
+        </div>
+        <div class="card bg-white rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <div class="font-semibold">Worker status</div>
+            <div class="text-sm text-slate-500 mono">${LEADOS.workers._worker ? 'active' : 'not running (main-thread fallback mode)'}</div>
+          </div>
+          <div class="flex gap-2">
+            <button id="btnTerminateWorker" class="btn tap-shrink bg-slate-100 rounded-lg text-xs">Terminate (simulate failure)</button>
+            <button id="btnRestartWorker" class="btn tap-shrink bg-slate-900 text-white rounded-lg text-xs">(Re)start worker</button>
+          </div>
+        </div>
+        <div class="card bg-white rounded-xl p-4">
+          <div class="font-semibold mb-2">Not implemented (disclosed, not wired to UI)</div>
+          <p class="text-sm text-slate-500">correlate · search.buildIndex · temporal.profile · synthesis.generate — no spec was
+          supplied for these in the parts given to this session. The worker returns a structured
+          <code class="mono">{notImplemented:true, reason}</code> for them rather than throwing or fabricating output.</p>
+        </div>
+        <div class="card bg-white rounded-xl p-4">
+          <div class="font-semibold mb-2">Computation log</div>
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs text-slate-400"><th class="pb-2">method</th><th class="pb-2">path</th><th class="pb-2">time</th></tr></thead>
+            <tbody>${rows || `<tr><td class="py-3 text-slate-400" colspan="3">Run a Monte Carlo or engine computation to populate this log.</td></tr>`}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  function viewLog(events){
+    return `
+      <div class="fade-in space-y-4">
+        <div class="flex gap-2">
+          <button id="exportBtn" class="btn tap-shrink bg-slate-100 rounded-lg text-xs">Export JSON</button>
+        </div>
+        <pre class="card bg-white rounded-xl p-4 text-xs overflow-auto max-h-[70vh]">${JSON.stringify(events,null,2).replace(/</g,'&lt;')}</pre>
+      </div>`;
+  }
+
+  function viewAbout(){
+    return `
+      <div class="fade-in space-y-4 text-sm leading-relaxed">
+        <div class="verified rounded-lg p-4">
+          <b>Verified, directly, this session:</b> github.com/wbweve/Leados is real, public, and actively committed
+          (traced back through "Add files via upload" / "Update index.html" / rename-from-"LeadCore" commits).
+          Its current main-branch <code>index.html</code> (queried via the GitHub Contents API, base64-decoded)
+          is a genuine, different app — "LeadOS — Monte Carlo Decision Engine" (Part 6), LS_KEY
+          <code>leados:events</code> — currently sha <code>162c0a7006a44ade2c5647ec3f370fc4cd801a88</code>, 36754 bytes.
+        </div>
+        <div class="contradicted rounded-lg p-4">
+          <b>Contradicted this session:</b> that 36754-byte figure matches neither of two earlier figures claimed
+          elsewhere for "the same file" (56,046 and 47,831 bytes). Given ~10 same-day overwrite commits in the repo's
+          history, the most defensible read is that this path is a frequently-overwritten moving target — any single
+          byte-count/sha claim about it is a snapshot valid only at query time, not a stable fact. This was not
+          resolved further (not every intermediate commit was diffed).
+        </div>
+        <div class="disclosed rounded-lg p-4">
+          <b>Original / disclosed in this build:</b> the event + decision/scenario schema, demo seed data, all UI,
+          the 7-rule illustrative engine (not "144 rules" — never supplied), the Monte Carlo functions
+          (reconstructed from this session's reading of the upstream README's description, not copied — no Part 6
+          source existed locally), the Blob-based worker packaging, the two added LEADOS.a11y branches
+          (reducedMotion, darkMode), and the LEADOS.ui.densityManager stub. LEADOS.a11y and LEADOS.focus are
+          implemented verbatim from the spec pasted into this session's prompt; LEADOS.workers is adapted only in
+          how the worker file is packaged (Blob vs. external file).
+        </div>
+        <div>This sandbox had <b>no pre-existing files</b> before this session (verified: three failed reads of
+        index.html / README.md / AI-SESSION-LOG.md). Full ledger in AI-SESSION-LOG.md.</div>
+      </div>`;
+  }
+
+  // ---------------------------------------------------------------------
+  // Wiring
+  // ---------------------------------------------------------------------
+  let workerLog = [];
+  let lastFindings = [], lastFindingsTiming = null;
+
+  async function timed(promiseFn){
+    const t0 = performance.now();
+    const out = await promiseFn();
+    const ms = performance.now() - t0;
+    return Object.assign({}, out, { ms });
+  }
+
+  function currentState(){ return { events: loadEvents() }; }
+
+  function router(){
+    renderNav();
+    const hash = location.hash || '#/today';
+    const titleEl = document.getElementById('routeTitle');
+    const view = document.getElementById('main');
+    const state = currentState();
+    const P = LEADOS.events.project(state);
+    document.getElementById('eventCountTag').textContent = state.events.length;
+    document.getElementById('workerStatusTag').textContent = LEADOS.workers._worker ? 'running' : 'fallback';
+
+    if (hash === '#/today') { titleEl.textContent='Today'; view.innerHTML = viewToday(P); }
+    else if (hash === '#/decisions') { titleEl.textContent='Decisions'; view.innerHTML = viewDecisions(P); wireDecisions(); }
+    else if (hash === '#/findings') { titleEl.textContent='Findings'; view.innerHTML = viewFindings(P, lastFindings, lastFindingsTiming); wireFindings(); }
+    else if (hash === '#/accessibility') { titleEl.textContent='Accessibility'; view.innerHTML = viewAccessibility(); wireAccessibility(); }
+    else if (hash === '#/workers') { titleEl.textContent='Worker diagnostics'; view.innerHTML = viewWorkers(workerLog); wireWorkersView(); }
+    else if (hash === '#/log') { titleEl.textContent='Event log'; view.innerHTML = viewLog(state.events); wireLog(state); }
+    else if (hash === '#/about') { titleEl.textContent='Provenance / About'; view.innerHTML = viewAbout(); }
+    else { titleEl.textContent='Not found'; view.innerHTML = '<div class="p-6 text-slate-400">Unknown route.</div>'; }
+  }
+
+  function wireDecisions(){
+    document.getElementById('addScenario').onclick = ()=>{
+      const container = document.getElementById('scenarioRows');
+      const idx = container.children.length;
+      container.insertAdjacentHTML('beforeend', scenarioRowsHtml(idx));
     };
+    document.getElementById('logDecision').onclick = ()=>{
+      const title = document.getElementById('newTitle').value.trim();
+      if (!title) { toast('Enter a title first'); return; }
+      const breakevenRaw = document.getElementById('newBreakeven').value;
+      const scenarios = [...document.querySelectorAll('.scenario-row')].map(row=>({
+        name: row.querySelector('.s-name').value || 'Scenario',
+        probability: parseFloat(row.querySelector('.s-prob').value)||0,
+        outcome_value: parseFloat(row.querySelector('.s-outcome').value)||0,
+        cost_if_true: parseFloat(row.querySelector('.s-cost').value)||0
+      }));
+      const events = loadEvents();
+      events.push({ id: uid(), type:'decision.logged', at: todayISO(), title,
+                    breakeven: breakevenRaw===''?null:parseFloat(breakevenRaw), scenarios });
+      saveEvents(events);
+      toast('Decision logged');
+      router();
+    };
+    document.querySelectorAll('.run-mc').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const state = currentState();
+        const P = LEADOS.events.project(state);
+        const d = P.decisionById[btn.dataset.id];
+        if (!d) return;
+        btn.textContent = 'Running…';
+        const out = await timed(()=>LEADOS.workers.runMonteCarlo(d.scenarios, 2000, 42, d.breakeven));
+        workerLog.push({ method:'montecarlo', usedWorker: out.usedWorker, timedOut: out.timedOut, ms: out.ms });
+        document.getElementById('mcResult').innerHTML = renderMonteCarloResult(d, out, out.result);
+        LEADOS.a11y.announce(`Monte Carlo complete for ${d.title}. ${out.result.interpretation||''}`);
+        btn.textContent = 'Run Monte Carlo';
+      };
+    });
+  }
+
+  function wireFindings(){
+    document.getElementById('runEngineBtn').onclick = async ()=>{
+      const state = currentState();
+      const out = await timed(()=>LEADOS.workers.runEngine(state, todayISO()));
+      workerLog.push({ method:'engine.run', usedWorker: out.usedWorker, timedOut: out.timedOut, ms: out.ms });
+      lastFindings = out.result;
+      lastFindingsTiming = out;
+      LEADOS.a11y.announce(`Engine run complete. ${lastFindings.length} findings.`);
+      router();
+      location.hash = '#/findings';
+    };
+  }
+
+  function wireAccessibility(){
+    document.getElementById('srSelfReport').onchange = (e)=>{
+      LEADOS.a11y._screenReaderDetected = e.target.checked;
+      LEADOS.a11y.apply(LEADOS.a11y.detect());
+      router();
+    };
+    document.getElementById('btnDyslexia').onclick = ()=>{ LEADOS.a11y.applyDyslexiaFriendly(); toast('Dyslexia-friendly mode applied'); };
+    document.getElementById('btnCognitive').onclick = ()=>{ LEADOS.a11y.applyCognitiveReduction(); toast('Cognitive-reduction mode applied'); router(); };
+    document.getElementById('btnResetA11y').onclick = ()=>{ LEADOS.a11y.reset(); toast('Reset to defaults'); router(); };
+    document.getElementById('btnAnnouncePolite').onclick = ()=> LEADOS.a11y.announce('Polite update: finding list refreshed.', 'polite');
+    document.getElementById('btnAnnounceAssertive').onclick = ()=> LEADOS.a11y.announce('Assertive alert: a critical risk finding was detected.', 'assertive');
+    document.getElementById('toggleLiveDebug').onchange = (e)=>{ document.getElementById('liveDebug').classList.toggle('hidden', !e.target.checked); };
+    document.getElementById('btnOpenModal').onclick = ()=>{
+      const root = document.getElementById('modalRoot');
+      root.innerHTML = `
+        <div class="fixed inset-0 bg-black/40 flex items-center justify-center z-40" id="modalOverlay">
+          <div class="bg-white rounded-xl p-6 w-96 card" role="dialog" aria-modal="true" aria-labelledby="modalTitle" id="modalBox">
+            <div id="modalTitle" class="font-semibold mb-2">Focus-trapped modal</div>
+            <p class="text-sm text-slate-500 mb-4">Tab/Shift+Tab stays inside this dialog. Closing returns focus to the button that opened it.</p>
+            <input class="card rounded px-2 py-1 text-sm w-full mb-3" placeholder="Try tabbing through me">
+            <div class="flex justify-end gap-2">
+              <button id="modalCancel" class="btn tap-shrink bg-slate-100 rounded-lg text-xs">Cancel</button>
+              <button id="modalOk" class="btn tap-shrink bg-slate-900 text-white rounded-lg text-xs">OK</button>
+            </div>
+          </div>
+        </div>`;
+      const box = document.getElementById('modalBox');
+      const trapHandle = LEADOS.focus.trap(box);
+      const close = ()=>{ trapHandle.release(); root.innerHTML=''; LEADOS.focus.returnToPrevious(); };
+      document.getElementById('modalCancel').onclick = close;
+      document.getElementById('modalOk').onclick = close;
+      document.getElementById('modalOverlay').addEventListener('keydown', (e)=>{ if (e.key==='Escape') close(); });
+    };
+  }
+
+  function wireWorkersView(){
+    document.getElementById('btnTerminateWorker').onclick = ()=>{ LEADOS.workers.terminate(); toast('Worker terminated — next run falls back to main thread'); router(); };
+    document.getElementById('btnRestartWorker').onclick = ()=>{ LEADOS.workers.init(); toast('Worker (re)started'); router(); };
+  }
+
+  function wireLog(state){
+    document.getElementById('exportBtn').onclick = ()=>{
+      const blob = new Blob([JSON.stringify(state.events,null,2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = 'leados-events.json'; a.click();
+    };
+  }
+
+  document.getElementById('reseedBtn').onclick = ()=>{ seedDemo(); lastFindings=[]; lastFindingsTiming=null; toast('Demo log reseeded'); router(); };
+
+  // Live region mirror UI (sighted demo aid)
+  window.addEventListener('leados:announce', (e)=>{
+    const list = document.getElementById('liveDebugList');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.innerHTML = `<b>[${e.detail.priority}]</b> ${e.detail.message}`;
+    list.prepend(row);
+    while (list.children.length > 5) list.removeChild(list.lastChild);
   });
-}
 
-/* ---------------- Log ---------------- */
-function renderLog(P){
-  const rows = P.state.events.slice().reverse().map(e => `
-    <tr class="border-t border-slate-100 align-top">
-      <td class="py-1.5 pr-3 text-xs text-slate-400 whitespace-nowrap">${fmtDateTime(e.ts)}</td>
-      <td class="py-1.5 pr-3 text-xs font-medium">${e.type}</td>
-      <td class="py-1.5 text-xs text-slate-500 font-mono break-all">${JSON.stringify(e)}</td>
-    </tr>`).join('');
+  // React to live OS-level preference changes
+  ['(prefers-reduced-motion: reduce)','(prefers-contrast: more)','(forced-colors: active)',
+   '(prefers-color-scheme: dark)','(prefers-reduced-data: reduce)'].forEach(q=>{
+    window.matchMedia(q).addEventListener('change', ()=>{ LEADOS.a11y.apply(LEADOS.a11y.detect()); if (location.hash==='#/accessibility') router(); });
+  });
 
-  return `
-  <div class="bg-white rounded-xl border border-slate-200 p-6">
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="font-semibold text-slate-800">Raw event log (${P.state.events.length} events)</h2>
-      <div class="flex gap-2">
-        <button id="exportBtn" class="text-xs bg-slate-900 text-white px-3 py-1.5 rounded hover:bg-slate-700">Export JSON</button>
-        <button id="wipeBtn" class="text-xs bg-red-600 text-white px-3 py-1.5 rounded hover:bg-red-500">Wipe &amp; reseed</button>
-      </div>
-    </div>
-    <div class="overflow-auto max-h-[70vh]">
-      <table class="w-full"><tbody>${rows || '<tr><td class="text-xs text-slate-400 py-4">No events.</td></tr>'}</tbody></table>
-    </div>
-  </div>`;
-}
-
-function wireLogView(){
-  document.getElementById('exportBtn').onclick = () => {
-    const blob = new Blob([JSON.stringify(LEADOS.store.load(), null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'leados-events.json';
-    a.click();
-  };
-  document.getElementById('wipeBtn').onclick = () => {
-    LEADOS.store.wipeAndReseed();
-    toast('Log wiped and reseeded');
+  window.addEventListener('hashchange', router);
+  window.addEventListener('DOMContentLoaded', ()=>{
+    if (!loadEvents().length) seedDemo();
+    LEADOS.workers.init();
+    LEADOS.a11y.apply(LEADOS.a11y.detect());
     router();
-  };
-}
-
-/* ---------------- About / Provenance ---------------- */
-function renderAbout(){
-  return `
-  <div class="space-y-4">
-    <div class="bg-white rounded-xl border border-slate-200 p-6">
-      <h2 class="font-semibold text-slate-800 mb-2">Provenance ledger — github.com/wbweve/Leados</h2>
-      <p class="text-xs text-slate-500 mb-4">Everything below was checked directly this session via the GitHub REST
-      Contents API (base64 blob, decoded here), not via an HTML-rendering fetch — the latter was documented upstream
-      to silently strip &lt;script&gt; content, which would make any real app look like an empty stub.</p>
-
-      <div class="verified rounded-lg px-4 py-3 text-xs leading-relaxed mb-3">
-        <b>Verified, directly, this session:</b> wbweve/Leados is real and public, with signed commits. Its main-branch
-        index.html decodes to a genuine HTML document — Tailwind CDN script, inline &lt;style&gt;, div#app,
-        <code>LS_KEY = 'leados:events'</code>, a "LeadOS — Organizational Genome · part 5" build — and is currently
-        <b>47,831 bytes</b> (sha <code>ddd41f4969a71278d5f7b4ccd5a39cf5a44bd628</code>) per the Contents API at the
-        moment this session queried it.
-      </div>
-
-      <div class="contradicted rounded-lg px-4 py-3 text-xs leading-relaxed mb-3">
-        <b>Contradicted this session:</b> that same repo's own README.md and an in-file provenance comment inside
-        that same index.html both assert the file is <b>56,046 bytes</b> — disagreeing with the 47,831 bytes just
-        measured for the same path/branch. The repo's commit history shows index.html was overwritten by roughly ten
-        "Add files via upload" commits within one ~2.5-hour window on 2026-10-17 (most recent 12:51:05Z), which
-        plausibly explains the drift as later edits superseding an earlier, accurate figure — but no intermediate
-        commit was fetched to confirm that specific reconciliation, so it is labeled <i>plausible, not verified</i>.
-      </div>
-
-      <div class="adapted rounded-lg px-4 py-3 text-xs leading-relaxed">
-        <b>Not reused, by necessity:</b> wbweve/Leados' own README describes a different Part 5 ("long-term memory +
-        leverage comparison") over a simpler findings/decisions schema with no scenario-probability structure — there
-        is nothing in that schema for a probability-weighted Monte Carlo engine to run against. This sandbox also had
-        no pre-existing local files before this session (verified: reads of index.html / README.md /
-        AI-SESSION-LOG.md all failed). So this build is an <b>original</b>, standalone implementation, not a copy,
-        fork, or continuation of either that repo or any prior local "Part 1–5."
-      </div>
-    </div>
-
-    <div class="bg-white rounded-xl border border-slate-200 p-6">
-      <h2 class="font-semibold text-slate-800 mb-2">What's original vs. verbatim in this file</h2>
-      <ul class="text-xs text-slate-600 space-y-2 list-disc pl-5">
-        <li><b>LEADOS.monteCarlo._prng / .simulate / ._buildHistogram / ._interpret</b> — implemented verbatim from
-          the user-supplied spec, unmodified except for one disclosed additive change: a 4th optional
-          <code>breakeven</code> parameter on <code>simulate()</code> that fills the spec's own
-          <code>probAboveBreakeven: null, // computed if breakeven provided</code> line.</li>
-        <li><b>Event log, decision schema, and projection (LEADOS.core.project)</b> — original, built from scratch to
-          match the shape the Monte Carlo spec assumes (<code>scenarios: [{name, probability, outcome_value,
-          cost_if_true}]</code>).</li>
-        <li><b>The decision-scenario playbook UI and Monte Carlo visualization</b> (stat cards, percentile strip,
-          histogram bars, breakeven readout) — original. The pasted spec's "### Monte Carlo Visualization" section
-          was a heading with no supplied body, the same pattern as Part 5's empty "Genome View" heading.</li>
-        <li><b>Seed demo data</b> (3 example decisions with scenarios) — fabricated, disclosed, exists only so the
-          view isn't empty on first load.</li>
-      </ul>
-    </div>
-  </div>`;
-}
-
-/* ---------------- Init ---------------- */
-buildNav();
-if (LEADOS.store.load().length === 0) LEADOS.store.save(LEADOS.seed.demoEvents());
-document.getElementById('reseedBtn').onclick = () => { LEADOS.store.wipeAndReseed(); toast('Log wiped and reseeded'); router(); };
-window.addEventListener('hashchange', router);
-router();
+  });
+})();
 </script>
 </body>
 </html>
