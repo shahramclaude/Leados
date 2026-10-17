@@ -1,64 +1,107 @@
-// src/lib/store.ts
-//
-// Append-only localStorage persistence for the event log. ORIGINAL to this
-// sandbox session. Storage key is namespaced "leados-pt-l" to mark this as
-// a fresh, standalone delivery for this part of the series (see
-// AI-SESSION-LOG.md on why this does not continue any prior sandbox state).
+// src/lib/store.ts — localStorage persistence + state mutations.
+// New storage key for this sandbox build (not continuing any other
+// session's key — this workspace had no prior app state).
+import { PEOPLE, buildSeedEvents } from "./seed";
+import { RULE_CATALOG } from "./rules";
+import type { AppState, SignalState } from "./types";
 
-import type { OrgEvent, Person, Projection } from "./types";
-import { ROSTER, generateSeedEvents, DEMO_SEED } from "./seed";
+export const STORAGE_KEY = "leados-sandbox:v1";
 
-const STORAGE_KEY = "leados-pt-l:events";
+function defaultSignals(): Record<string, SignalState> {
+  const out: Record<string, SignalState> = {};
+  for (const r of RULE_CATALOG) {
+    out[r.id] = { ruleId: r.id, active: false, sev: r.sev, lastToggledAt: 0 };
+  }
+  return out;
+}
 
-export function loadEvents(): OrgEvent[] {
+export function defaultState(): AppState {
+  return {
+    version: 1,
+    signals: defaultSignals(),
+    toggleLog: [],
+    people: PEOPLE,
+    runwayMonths: 14,
+    events: buildSeedEvents(),
+  };
+}
+
+export function loadState(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const seeded = generateSeedEvents(DEMO_SEED);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-      return seeded;
-    }
+    if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) throw new Error("bad shape");
-    return parsed;
+    if (!parsed || !parsed.signals || !Array.isArray(parsed.events)) return defaultState();
+    // additive-field defaulting for any rules added after a user's last save
+    for (const r of RULE_CATALOG) {
+      if (!parsed.signals[r.id]) {
+        parsed.signals[r.id] = { ruleId: r.id, active: false, sev: r.sev, lastToggledAt: 0 };
+      }
+    }
+    if (!Array.isArray(parsed.toggleLog)) parsed.toggleLog = [];
+    if (typeof parsed.runwayMonths !== "number") parsed.runwayMonths = 14;
+    return parsed as AppState;
   } catch {
-    const seeded = generateSeedEvents(DEMO_SEED);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-    return seeded;
+    return defaultState();
   }
 }
 
-export function saveEvents(events: OrgEvent[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+export function saveState(state: AppState) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-export function appendEvent(events: OrgEvent[], type: string, data: Record<string, any>, ts?: string): OrgEvent[] {
-  const id = `ev_u_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-  const next = [...events, { id, type, ts: ts || new Date().toISOString().slice(0, 10), data }];
-  saveEvents(next);
+export function toggleSignal(state: AppState, ruleId: string, personId?: string): AppState {
+  const cur = state.signals[ruleId];
+  const active = !cur.active;
+  const next: AppState = {
+    ...state,
+    signals: {
+      ...state.signals,
+      [ruleId]: { ...cur, active, personId: active ? personId : cur.personId, lastToggledAt: Date.now() },
+    },
+    toggleLog: [...state.toggleLog, { ruleId, active, ts: Date.now() }],
+  };
+  saveState(next);
   return next;
 }
 
-export function resetToSeed(): OrgEvent[] {
-  const seeded = generateSeedEvents(DEMO_SEED);
-  saveEvents(seeded);
-  return seeded;
+export function setSeverity(state: AppState, ruleId: string, sev: 1 | 2 | 3 | 4 | 5): AppState {
+  const next: AppState = { ...state, signals: { ...state.signals, [ruleId]: { ...state.signals[ruleId], sev } } };
+  saveState(next);
+  return next;
 }
 
-export function wipeEvents(): OrgEvent[] {
-  saveEvents([]);
-  return [];
+export function setPersonLink(state: AppState, ruleId: string, personId: string): AppState {
+  const next: AppState = { ...state, signals: { ...state.signals, [ruleId]: { ...state.signals[ruleId], personId } } };
+  saveState(next);
+  return next;
 }
 
-export function buildProjection(events: OrgEvent[]): Projection {
-  const self = ROSTER.find((p) => p.level === "self")!;
-  const directs = ROSTER.filter((p) => p.level === "direct");
-  const skips = ROSTER.filter((p) => p.level === "skip");
-  return { self, directs, skips, state: { events } };
+export function setRunway(state: AppState, months: number): AppState {
+  const next: AppState = { ...state, runwayMonths: months };
+  saveState(next);
+  return next;
 }
 
-export function personById(id: string): Person | undefined {
-  return ROSTER.find((p) => p.id === id);
+export function applyPreset(state: AppState, ruleIds: string[], personId?: string): AppState {
+  let next = state;
+  for (const id of ruleIds) {
+    if (!next.signals[id].active) next = toggleSignal(next, id, personId);
+  }
+  return next;
 }
 
-export { ROSTER };
+export function resetState(): AppState {
+  const next = defaultState();
+  saveState(next);
+  return next;
+}
+
+export function simulateRecurrence(state: AppState, ruleId: string, cycles = 3): AppState {
+  let next = state;
+  for (let i = 0; i < cycles; i++) {
+    next = toggleSignal(next, ruleId); // on
+    next = toggleSignal(next, ruleId); // off
+  }
+  return next;
+}

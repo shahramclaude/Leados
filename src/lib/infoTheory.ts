@@ -1,73 +1,117 @@
 // src/lib/infoTheory.ts
+// Shannon entropy / mutual information / signal-to-noise / information
+// bottlenecks, applied to the synthetic event log (src/lib/seed.ts) and the
+// active findings (src/lib/engine.ts).
 //
-// LEADOS.infoTheory — Shannon information theory applied to the LeadOS
-// event log. This is this session's own TypeScript implementation of the
-// pt-L brief's pasted `LEADOS.infoTheory` module (shannonEntropy,
-// mutualInformation, identifyBottlenecks, signalToNoise), adapted to the
-// data model in ./types.ts and ./engine.ts.
-//
-// PROVENANCE: the pasted brief's JS was treated as a SPECIFICATION, not as
-// code known to exist in github.com/wbweve/Leados — a direct inspection of
-// that repository (GitHub REST Contents/Trees API, this session) found no
-// file, export, or string match for "infoTheory", "shannonEntropy",
-// "mutualInformation", "LEADOS.infoTheory" anywhere in it (88 files
-// enumerated at repo root + src/, including every src/lib/*.ts file).
-// See AI-SESSION-LOG.md for the full verification ledger.
-//
-// SCIENTIFIC BASIS (disclosed, as requested):
-//  - Shannon entropy H = -Σ p(x)·log2(p(x)) is a real, standard measure of
-//    the unpredictability of a categorical distribution (Shannon, 1948).
-//  - Applying it to "organizational event type mix" is an ANALOGY, not a
-//    validated organizational-science instrument. No peer-reviewed study
-//    is cited or implied for the "too rigid / too chaotic" interpretation
-//    bands shown in the UI — those bands are this delivery's own
-//    illustrative heuristic, clearly labeled as such.
-//  - "Mutual information" here is computed over coarse weekly bins of
-//    event-type co-occurrence between two people's event streams. This is
-//    NOT the rigorous channel-capacity mutual information of information
-//    theory proper; it is a bounded, disclosed approximation, and the
-//    code says so in its own output label (matching the original brief's
-//    own disclosure).
-//  - "Signal-to-noise ratio" reuses the engineering SNR formula (ratio,
-//    then 10·log10 for decibels) as a labeled metaphor for
-//    findings-coverage of the log, not an actual physical signal.
+// PROVENANCE: this is an ORIGINAL implementation written for this sandbox.
+// A file with the same purpose (src/lib/infoTheory.ts, wired into a live
+// "Thermodynamics" view) was independently confirmed to exist in the real
+// wbweve/Leados repo this session — see AI-SESSION-LOG.md §2, V6-V8 — but
+// its internals were not copied; this is a fresh implementation of the
+// same disclosed, standard formulas (Shannon 1948), not a port.
+import type { Finding, OrgEvent, Person } from "./types";
 
-import type { Finding, OrgEvent, Projection } from "./types";
-import { engine } from "./engine";
-
-export interface ShannonResult {
+export interface EntropyResult {
   H: number;
   Hmax: number;
   normalized: number;
   richness: number;
-  dominantType?: string;
-  n: number;
-  label: string;
+  dominantType: string | null;
 }
 
-export interface MutualInfoResult {
+/** H = −Σ p(x)·log2 p(x) over the distribution of event types. */
+export function shannonEntropy(events: OrgEvent[]): EntropyResult {
+  if (events.length === 0) return { H: 0, Hmax: 0, normalized: 0, richness: 0, dominantType: null };
+  const counts = new Map<string, number>();
+  for (const e of events) counts.set(e.type, (counts.get(e.type) || 0) + 1);
+  const n = events.length;
+  let H = 0;
+  let dominant: [string, number] = ["", -1];
+  for (const [type, c] of counts) {
+    const p = c / n;
+    H -= p * Math.log2(p);
+    if (c > dominant[1]) dominant = [type, c];
+  }
+  const richness = counts.size;
+  const Hmax = richness > 1 ? Math.log2(richness) : 0;
+  return {
+    H,
+    Hmax,
+    normalized: Hmax > 0 ? H / Hmax : 0,
+    richness,
+    dominantType: dominant[0] || null,
+  };
+}
+
+export interface MIResult {
   MI: number;
-  normalized: number;
   HX: number;
   HY: number;
-  HXY: number;
+  normalized: number;
   weeksCompared: number;
   label: string;
 }
 
-export interface Bottleneck {
-  person: { id: string; name: string; role: string };
-  informationIn: number;
-  percentOfMean: number;
+/** I(X;Y) = H(X) + H(Y) − H(X,Y), binned weekly over a rolling window. */
+export function mutualInformation(streamX: OrgEvent[], streamY: OrgEvent[], today: Date, windowDays = 90): MIResult {
+  const weeks = Math.ceil(windowDays / 7);
+  const end = today.getTime();
+  const start = end - windowDays * 86400000;
+  const binsX: boolean[] = new Array(weeks).fill(false);
+  const binsY: boolean[] = new Array(weeks).fill(false);
+  const bin = (ts: number) => Math.floor((ts - start) / (7 * 86400000));
+
+  for (const e of streamX) {
+    if (e.ts < start || e.ts > end) continue;
+    const b = bin(e.ts);
+    if (b >= 0 && b < weeks) binsX[b] = true;
+  }
+  for (const e of streamY) {
+    if (e.ts < start || e.ts > end) continue;
+    const b = bin(e.ts);
+    if (b >= 0 && b < weeks) binsY[b] = true;
+  }
+
+  if (streamX.length === 0 || streamY.length === 0) {
+    return { MI: 0, HX: 0, HY: 0, normalized: 0, weeksCompared: weeks, label: "One or both streams have no events in this window: mutual information is 0 by definition (no joint variation to measure)." };
+  }
+
+  const H = (bins: boolean[]) => {
+    const p1 = bins.filter(Boolean).length / bins.length;
+    if (p1 === 0 || p1 === 1) return 0;
+    return -(p1 * Math.log2(p1) + (1 - p1) * Math.log2(1 - p1));
+  };
+  const HX = H(binsX);
+  const HY = H(binsY);
+
+  const joint = new Map<string, number>();
+  for (let i = 0; i < weeks; i++) {
+    const key = `${binsX[i] ? 1 : 0},${binsY[i] ? 1 : 0}`;
+    joint.set(key, (joint.get(key) || 0) + 1);
+  }
+  let HXY = 0;
+  for (const c of joint.values()) {
+    const p = c / weeks;
+    HXY -= p * Math.log2(p);
+  }
+  const MI = Math.max(0, HX + HY - HXY);
+  const maxMI = Math.min(HX, HY) || 1;
+  return {
+    MI,
+    HX,
+    HY,
+    normalized: maxMI > 0 ? MI / maxMI : 0,
+    weeksCompared: weeks,
+    label:
+      MI < 0.05
+        ? "Near-zero: these two people's logged activity shows no detectable weekly co-occurrence pattern."
+        : MI > 0.4
+        ? "High: these two people's activity weeks are strongly coupled — could be healthy collaboration or unhealthy dependency; this metric cannot distinguish the two."
+        : "Moderate coupling between these two people's logged activity weeks.",
+  };
 }
 
-export interface BottleneckResult {
-  bottlenecks: Bottleneck[];
-  overallEntropy: ShannonResult;
-  label: string;
-}
-
-export interface SignalToNoiseResult {
+export interface SNRResult {
   signalCount: number;
   noiseCount: number;
   snr: number;
@@ -76,183 +120,56 @@ export interface SignalToNoiseResult {
   label: string;
 }
 
-function typeCounts(events: OrgEvent[]): Record<string, number> {
-  const counts: Record<string, number> = {};
-  events.forEach((e) => {
-    counts[e.type] = (counts[e.type] || 0) + 1;
-  });
-  return counts;
+/** Signal = events that fall within ±2 days of an active finding in the same category (and same person, if the finding is person-linked). Noise = everything else logged. */
+export function signalToNoise(events: OrgEvent[], findings: Finding[]): SNRResult {
+  const windowMs = 2 * 86400000;
+  let signalCount = 0;
+  for (const e of events) {
+    const isSignal = findings.some((f) => {
+      if (f.category !== e.category) return false;
+      if (f.personId && e.personId && f.personId !== e.personId) return false;
+      return Math.abs(e.ts - f.ts) <= windowMs;
+    });
+    if (isSignal) signalCount++;
+  }
+  const noiseCount = events.length - signalCount;
+  const snr = noiseCount === 0 ? signalCount : signalCount / Math.max(1, noiseCount);
+  const snrDb = signalCount > 0 && noiseCount > 0 ? 10 * Math.log10(signalCount / noiseCount) : signalCount > 0 ? Infinity : -Infinity;
+  return {
+    signalCount,
+    noiseCount,
+    snr,
+    snrDb: Number.isFinite(snrDb) ? snrDb : snrDb > 0 ? 99 : -99,
+    interpretation:
+      findings.length === 0
+        ? "No active findings: every logged event is classified as noise by definition (there is no signal to match against)."
+        : snr < 0.3
+        ? "Low SNR: most logged activity is not explained by anything currently flagged as a finding."
+        : snr > 1
+        ? "High SNR: most logged activity sits near an active finding — either good focus or a sign the log itself is finding-driven."
+        : "Moderate SNR.",
+    label: `${signalCount} + ${noiseCount} = ${events.length} total events (always reconciles exactly).`,
+  };
 }
 
-export const infoTheory = {
-  /** H = -Σ p(x)·log2(p(x)) over the event-type distribution. */
-  shannonEntropy(events: OrgEvent[]): ShannonResult {
-    const n = events.length;
-    if (!n) {
-      return { H: 0, Hmax: 0, normalized: 0, richness: 0, dominantType: undefined, n: 0, label: "No events to measure." };
-    }
-    const counts = typeCounts(events);
-    const types = Object.keys(counts);
-    let H = 0;
-    for (const c of Object.values(counts)) {
-      const p = c / n;
-      if (p > 0) H -= p * Math.log2(p);
-    }
-    const Hmax = types.length > 1 ? Math.log2(types.length) : 0;
-    const normalized = Hmax > 0 ? H / Hmax : 0;
-    const dominantType = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    return {
-      H,
-      Hmax,
-      normalized,
-      richness: types.length,
-      dominantType,
-      n,
-      label:
-        `Shannon entropy H=${H.toFixed(2)} bits of max ${Hmax.toFixed(2)}. ` +
-        `Normalized: ${(normalized * 100).toFixed(0)}%. ` +
-        `Based on ${n} events, ${types.length} distinct types.`,
-    };
-  },
+export interface BottleneckResult {
+  bottlenecks: { person: Person; informationIn: number; percentOfMean: number }[];
+  label: string;
+}
 
-  /**
-   * Heuristic mutual information between two event streams, binned by week
-   * and restricted to the trailing `windowDays`. Measures event-type
-   * co-occurrence across weeks, NOT causal information flow — disclosed in
-   * the label, matching the original brief's own caveat.
-   */
-  mutualInformation(streamX: OrgEvent[], streamY: OrgEvent[], today: string | Date, windowDays = 90): MutualInfoResult {
-    const todayIso = engine.iso(today);
-    const inWindow = (e: OrgEvent) => {
-      const age = engine._days(e.ts, todayIso);
-      return age >= 0 && age <= windowDays;
-    };
-    const X = streamX.filter(inWindow);
-    const Y = streamY.filter(inWindow);
-
-    const binByWeek = (events: OrgEvent[]) => {
-      const bins: Record<string, string[]> = {};
-      events.forEach((e) => {
-        const week = Math.floor(engine._days(e.ts, todayIso) / 7);
-        const key = String(week);
-        (bins[key] = bins[key] || []).push(e.type);
-      });
-      return bins;
-    };
-
-    const binsX = binByWeek(X);
-    const binsY = binByWeek(Y);
-    const allWeeks = new Set([...Object.keys(binsX), ...Object.keys(binsY)]);
-
-    const joint: Record<string, number> = {};
-    allWeeks.forEach((week) => {
-      const tx = (binsX[week] || ["none"]).sort().join(",");
-      const ty = (binsY[week] || ["none"]).sort().join(",");
-      const key = tx + "|" + ty;
-      joint[key] = (joint[key] || 0) + 1;
-    });
-
-    const n = Math.max(1, allWeeks.size);
-    const HX = this.shannonEntropy(X).H;
-    const HY = this.shannonEntropy(Y).H;
-
-    let HXY = 0;
-    for (const c of Object.values(joint)) {
-      const p = c / n;
-      if (p > 0) HXY -= p * Math.log2(p);
-    }
-
-    const MI = Math.max(0, HX + HY - HXY);
-    const denom = Math.max(HX, HY);
-    const normalized = denom > 0 ? Math.min(1, MI / denom) : 0;
-
-    return {
-      MI,
-      normalized,
-      HX,
-      HY,
-      HXY,
-      weeksCompared: allWeeks.size,
-      label:
-        `Mutual information: ${MI.toFixed(2)} bits over ${allWeeks.size} weeks (trailing ${windowDays}d). ` +
-        `Normalized: ${(normalized * 100).toFixed(0)}% of max. ` +
-        `Labeled: measures event-type co-occurrence between the two streams, not causal information flow.`,
-    };
-  },
-
-  /**
-   * Flags people whose "information in" (events that reference them,
-   * directly or as a collaboration-edge target) is far below the roster
-   * mean. Low information-in may mean genuine isolation, OR simply that
-   * other tools (not this log) capture their activity — both are
-   * disclosed, the function cannot distinguish them from this data alone.
-   */
-  identifyBottlenecks(P: Projection, _today: string | Date): BottleneckResult {
-    const flow: Record<string, { in: number; out: number }> = {};
-    const touch = (id: string) => (flow[id] = flow[id] || { in: 0, out: 0 });
-
-    P.state.events.forEach((ev) => {
-      const d = ev.data || {};
-      if (d.personId) touch(d.personId).in++;
-      if (ev.type === "org.network.edge") {
-        if (d.fromId) touch(d.fromId).out++;
-        if (d.toId) touch(d.toId).in++;
-      }
-    });
-
-    const roster = [...P.directs, ...P.skips];
-    const flowValues = Object.values(flow);
-    const meanIn = flowValues.length ? flowValues.reduce((a, b) => a + b.in, 0) / flowValues.length : 0;
-
-    const bottlenecks: Bottleneck[] = roster
-      .filter((p) => (flow[p.id]?.in || 0) < meanIn * 0.3)
-      .map((p) => ({
-        person: { id: p.id, name: p.name, role: p.role },
-        informationIn: flow[p.id]?.in || 0,
-        percentOfMean: meanIn > 0 ? Math.round(((flow[p.id]?.in || 0) / meanIn) * 100) : 0,
-      }))
-      .sort((a, b) => a.percentOfMean - b.percentOfMean);
-
-    return {
-      bottlenecks,
-      overallEntropy: this.shannonEntropy(P.state.events),
-      label:
-        "Information bottleneck analysis from event-reference frequency. " +
-        "Low information-in means few events reference this person. " +
-        "This could indicate genuine isolation OR simply that other tools capture their data (not in this log).",
-    };
-  },
-
-  /** Signal: events referenced as a finding's source. Noise: everything else. */
-  signalToNoise(P: Projection, today: string | Date): SignalToNoiseResult {
-    const result = engine.run(P, today);
-    const findingSourceIds = new Set<string>(result.findings.flatMap((f: Finding) => f.sources));
-    const signalCount = P.state.events.filter((e) => findingSourceIds.has(e.id)).length;
-    const noiseCount = P.state.events.length - signalCount;
-    const snr = signalCount / Math.max(1, noiseCount);
-    const snrDb = 10 * Math.log10(Math.max(snr, 1e-9));
-
-    const interpretation =
-      snr > 2
-        ? "High signal ratio: most logged events produce actionable findings."
-        : snr > 0.5
-        ? "Balanced signal/noise: a mix of actionable and contextual events."
-        : "Low signal ratio: most logged events are not producing findings. " +
-          "This may indicate over-logging (fine) or miscalibrated rules (check thresholds).";
-
-    return {
-      signalCount,
-      noiseCount,
-      snr,
-      snrDb,
-      interpretation,
-      label:
-        `Signal: ${signalCount} events referenced by active findings. ` +
-        `Noise: ${noiseCount} events not referenced. ` +
-        `SNR: ${snr.toFixed(2)} (${snrDb.toFixed(1)} dB). ` +
-        `Labeled: "noise" events are not wasted — they build historical context.`,
-    };
-  },
-};
-
-export const LEADOS = { engine, infoTheory };
+/** Flags people whose "information in" event count is under 30% of the roster mean. */
+export function identifyBottlenecks(events: OrgEvent[], people: Person[]): BottleneckResult {
+  const inCounts = people.map((p) => ({
+    person: p,
+    informationIn: events.filter((e) => e.personId === p.id && e.direction === "in").length,
+  }));
+  const mean = inCounts.reduce((a, b) => a + b.informationIn, 0) / (people.length || 1);
+  const threshold = mean * 0.3;
+  const bottlenecks = inCounts
+    .filter((x) => x.informationIn < threshold)
+    .map((x) => ({ ...x, percentOfMean: mean > 0 ? Math.round((x.informationIn / mean) * 100) : 0 }));
+  return {
+    bottlenecks,
+    label: `Threshold: 30% of mean (mean = ${mean.toFixed(1)} inbound events/person). Disclosed: this 30% cutoff is an illustrative convention, not a validated organizational-science threshold.`,
+  };
+}

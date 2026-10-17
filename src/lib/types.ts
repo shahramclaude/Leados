@@ -1,48 +1,83 @@
 // src/lib/types.ts
-//
-// Data model for this delivery's event log + org roster.
-// ORIGINAL to this sandbox session (pt-L). Not copied from, or a port of,
-// anything found in github.com/wbweve/Leados — see AI-SESSION-LOG.md.
+// Original type layer for this sandbox build. Not copied from any verified
+// file in github.com/wbweve/Leados (see AI-SESSION-LOG.md).
 
-export type Level = "self" | "direct" | "skip";
+export type Category =
+  | "STRATEGIC"
+  | "OPERATIONAL"
+  | "FINANCIAL"
+  | "PEOPLE"
+  | "GOVERNANCE"
+  | "MARKET"
+  | "REPUTATIONAL"
+  | "RESILIENCE";
+
+export const CATEGORIES: Category[] = [
+  "STRATEGIC",
+  "OPERATIONAL",
+  "FINANCIAL",
+  "PEOPLE",
+  "GOVERNANCE",
+  "MARKET",
+  "REPUTATIONAL",
+  "RESILIENCE",
+];
 
 export interface Person {
   id: string;
   name: string;
   role: string;
-  team: string;
-  level: Level;
+}
+
+export interface RuleDef {
+  id: string; // "R1".."R100", bare IDs, non-contiguous by design
+  title: string;
+  category: Category;
+  sev: 1 | 2 | 3 | 4 | 5;
+  personLinkable?: boolean;
+  polarity?: "positive"; // marks a small number of intentionally "healthy signal" rules
+}
+
+export interface ToggleLogEntry {
+  ruleId: string;
+  active: boolean;
+  ts: number; // epoch ms
+}
+
+export interface SignalState {
+  ruleId: string;
+  active: boolean;
+  sev: 1 | 2 | 3 | 4 | 5;
+  personId?: string;
+  lastToggledAt: number;
 }
 
 export interface OrgEvent {
   id: string;
-  type: string;
-  ts: string; // ISO date string, e.g. "2026-01-15"
-  data: Record<string, any>;
+  ts: number; // epoch ms
+  type: string; // event type, substrate for Shannon entropy
+  category: Category;
+  personId?: string;
+  direction?: "in" | "out"; // used for bottleneck ("information in") detection
 }
 
-export interface ProjectionState {
+export interface AppState {
+  version: number;
+  signals: Record<string, SignalState>;
+  toggleLog: ToggleLogEntry[];
+  people: Person[];
+  runwayMonths: number;
   events: OrgEvent[];
 }
 
-export interface Projection {
-  self: Person;
-  directs: Person[];
-  skips: Person[];
-  state: ProjectionState;
-}
-
 export interface Finding {
-  key: string;
-  rule: string;
-  domain: string;
-  sev: number; // 1 (low) .. 4 (critical)
-  ts: string;
+  key: string; // ruleId, or ruleId:personId when linked
+  ruleId: string;
   title: string;
-  detail: string;
-  sources: string[]; // event ids this finding was derived from
-}
-
-export interface EngineResult {
-  findings: Finding[];
+  category: Category;
+  sev: 1 | 2 | 3 | 4 | 5;
+  score: number;
+  personId?: string;
+  ts: number;
+  polarity?: "positive";
 }

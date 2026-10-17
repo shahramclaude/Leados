@@ -1,102 +1,107 @@
-import { useMemo } from "react";
-import type { Projection } from "../lib/types";
-import { infoTheory } from "../lib/infoTheory";
-import { engine } from "../lib/engine";
-import { Card, Label } from "./ui";
+import { useMemo, useState } from "react";
+import type { AppState } from "../lib/types";
+import { buildFindings } from "../lib/engine";
+import { buildRiskRegister, detectCrossRiskAmplification } from "../lib/riskIntelligence";
+import { shannonEntropy } from "../lib/infoTheory";
+import { identifyFeedbackLoops, identifyBifurcationPoints, identifyAttractors } from "../lib/casEngine";
+import { runSelfTests, type TestResult } from "../lib/selfTest";
+import { resetState } from "../lib/store";
+import { Card, Label, Stat, Badge } from "./ui";
 
-export function TodayView({
-  P,
-  today,
-  onQuickLog,
-}: {
-  P: Projection;
-  today: Date;
-  onQuickLog: (type: string, data: Record<string, any>) => void;
-}) {
-  const entropy = useMemo(() => infoTheory.shannonEntropy(P.state.events), [P]);
-  const findings = useMemo(() => engine.run(P, today).findings, [P, today]);
-  const topFindings = findings.slice(0, 3);
+export function TodayView({ state, setState, navigate }: { state: AppState; setState: (s: AppState) => void; navigate: (r: string) => void }) {
+  const findings = useMemo(() => buildFindings(state), [state]);
+  const register = useMemo(() => buildRiskRegister(findings), [findings]);
+  const amps = useMemo(() => detectCrossRiskAmplification(register), [register]);
+  const entropy = useMemo(() => shannonEntropy(state.events), [state.events]);
+  const loops = useMemo(() => identifyFeedbackLoops(findings), [findings]);
+  const bifurcations = useMemo(() => identifyBifurcationPoints(findings, state.runwayMonths), [findings, state.runwayMonths]);
+  const attractors = useMemo(() => identifyAttractors(state), [state]);
+  const [tests, setTests] = useState<TestResult[] | null>(null);
+
+  const riskTone = register.overallRisk === 0 ? "emerald" : register.overallRisk < 35 ? "slate" : register.overallRisk < 70 ? "amber" : "rose";
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Today</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          {today.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })} ·{" "}
-          {P.state.events.length} events logged
+        <h1 className="text-2xl font-semibold text-white">Overview</h1>
+        <p className="mt-1 max-w-3xl text-sm text-slate-400">
+          A single-page leadership intelligence sandbox: toggle synthetic risk signals, then watch information-theory,
+          complex-adaptive-systems, and risk-register math recompute live from that one source of truth. Built fresh for
+          this session — see <button className="underline" onClick={() => navigate("/about")}>About / Provenance</button> for
+          exactly what was verified against the real GitHub repo vs. what is original here.
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card title="Event-type entropy" subtitle="Shannon H, normalized">
-          <div className="text-3xl font-mono text-white">{(entropy.normalized * 100).toFixed(0)}%</div>
-          <Label>See Intelligence → Thermodynamics for the full breakdown.</Label>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card title="Overall Risk" subtitle="Mean of 8 category scores, 0-100">
+          <Stat label="Score" value={String(register.overallRisk)} />
+          <div className="mt-3"><Badge tone={riskTone as any}>{register.overallRisk === 0 ? "CLEAR" : register.overallRisk < 35 ? "WATCH" : register.overallRisk < 70 ? "ELEVATED" : "CRITICAL"}</Badge></div>
         </Card>
-        <Card title="Active findings" subtitle="from LEADOS.engine">
-          <div className="text-3xl font-mono text-white">{findings.length}</div>
-          <Label>Six disclosed-fabricated rules; see Intelligence tab.</Label>
+        <Card title="Active Findings" subtitle="From the Signal Board">
+          <Stat label="Count" value={String(findings.length)} />
         </Card>
-        <Card title="Roster" subtitle="direct + skip-level">
-          <div className="text-3xl font-mono text-white">{P.directs.length + P.skips.length}</div>
-          <Label>{P.directs.length} direct reports, {P.skips.length} skip-level.</Label>
+        <Card title="Event Entropy" subtitle="Shannon H, normalized">
+          <Stat label="H / Hmax" value={`${(entropy.normalized * 100).toFixed(0)}%`} />
+        </Card>
+        <Card title="CAS Signals" subtitle="Loops / bifurcations / attractors">
+          <Stat label="Count" value={`${loops.length} / ${bifurcations.length} / ${attractors.length}`} />
         </Card>
       </div>
 
-      <Card title="Top findings">
-        {topFindings.length === 0 ? (
-          <p className="text-sm text-slate-400">Nothing urgent right now.</p>
-        ) : (
+      {amps.length > 0 && (
+        <Card title="Cross-Category Amplification" subtitle="Risk categories compounding each other right now">
           <ul className="space-y-2">
-            {topFindings.map((f) => (
-              <li key={f.key} className="flex items-center justify-between rounded-lg bg-slate-800/50 px-3 py-2 text-sm">
-                <span className="text-slate-200">{f.title}</span>
-                <span className="text-xs text-slate-500">{f.rule}</span>
+            {amps.map((a) => (
+              <li key={a.id} className="rounded-lg border border-rose-900/50 bg-rose-950/20 p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <Badge tone="rose">{a.label}</Badge>
+                  <span className="text-xs text-slate-500">sev {a.sev}</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-400">{a.detail}</p>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <Card title="Quick Presets" subtitle="Jump-start a scenario on the Signal Board, then explore the other tabs">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => navigate("/signals")} className="rounded-md bg-indigo-500/15 px-3 py-1.5 text-xs font-medium text-indigo-300 ring-1 ring-indigo-500/30 hover:bg-indigo-500/25">
+            Go to Signal Board →
+          </button>
+          <button
+            onClick={() => {
+              if (confirm("Reset all synthetic data and signal toggles?")) setState(resetState());
+            }}
+            className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700"
+          >
+            Reset synthetic data
+          </button>
+        </div>
+      </Card>
+
+      <Card title="Self-Tests" subtitle="Original runtime checks of this build's own math (not the unverified 'T_L/G_L' suite referenced in the task prompt)">
+        <button onClick={() => setTests(runSelfTests())} className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-700">
+          Run self-tests
+        </button>
+        {tests && (
+          <ul className="mt-4 space-y-1.5">
+            {tests.map((t) => (
+              <li key={t.id} className="flex items-start gap-2 text-xs">
+                <span className={t.pass ? "text-emerald-400" : "text-rose-400"}>{t.pass ? "✓" : "✗"}</span>
+                <span className="text-slate-400">
+                  <span className="font-mono text-slate-300">{t.id}</span> — {t.detail}
+                </span>
               </li>
             ))}
           </ul>
         )}
-      </Card>
-
-      <Card title="Quick log" subtitle="Add an event to the log — changes entropy / findings immediately">
-        <div className="flex flex-wrap gap-2">
-          <QuickButton
-            label="Log 1:1 (random direct)"
-            onClick={() => {
-              const p = P.directs[Math.floor(Math.random() * P.directs.length)];
-              if (p) onQuickLog("oneOnOne.held", { personId: p.id, domain: "people" });
-            }}
-          />
-          <QuickButton
-            label="Raise a signal"
-            onClick={() => onQuickLog("signal.raised", { title: "Ad-hoc signal logged from Today view", domain: "ops", severity: 2 })}
-          />
-          <QuickButton
-            label="Log a decision"
-            onClick={() =>
-              onQuickLog("decision.logged", { decisionId: `dec_u_${Date.now()}`, title: "Ad-hoc decision", domain: "ops" })
-            }
-          />
-          <QuickButton
-            label="Log collaboration edge"
-            onClick={() => {
-              const a = P.directs[Math.floor(Math.random() * P.directs.length)];
-              const b = P.skips[Math.floor(Math.random() * P.skips.length)];
-              if (a && b) onQuickLog("org.network.edge", { fromId: a.id, toId: b.id });
-            }}
-          />
-        </div>
+        {tests && (
+          <Label>
+            {tests.filter((t) => t.pass).length}/{tests.length} passing.
+          </Label>
+        )}
       </Card>
     </div>
-  );
-}
-
-function QuickButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-xs text-slate-200 transition hover:border-orange-500/40 hover:bg-slate-800"
-    >
-      {label}
-    </button>
   );
 }
