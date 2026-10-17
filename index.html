@@ -1,12 +1,932 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LeadOS pt-M — Inference Chain Engine</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LEADOS — Autonomous Workflow Engine (sandbox, Part 2)</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  ::-webkit-scrollbar{ width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb{ background:#334155; border-radius:6px; }
+  .sev-5{ background:#7f1d1d; color:#fecaca; border:1px solid #991b1b; }
+  .sev-4{ background:#7c2d12; color:#fed7aa; border:1px solid #9a3412; }
+  .sev-3{ background:#713f12; color:#fde68a; border:1px solid #854d0e; }
+  .sev-2{ background:#1e3a8a; color:#bfdbfe; border:1px solid #1e40af; }
+  .sev-1{ background:#1e293b; color:#cbd5e1; border:1px solid #334155; }
+  .pill{ display:inline-flex; align-items:center; gap:.3rem; padding:.15rem .55rem; border-radius:9999px; font-size:.72rem; font-weight:600; letter-spacing:.02em; }
+  .card{ background:#0f172a; border:1px solid #1e293b; border-radius:.9rem; }
+  textarea.draft{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .nav-link.active{ color:#fff; border-bottom:2px solid #38bdf8; }
+  .fade-in{ animation: fadein .25s ease; }
+  @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+<div id="app" class="min-h-screen flex flex-col">
+  <header class="border-b border-slate-800 bg-slate-950/90 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-4">
+      <div>
+        <div class="text-lg font-bold tracking-tight">LEADOS <span class="text-sky-400">· autonomous</span></div>
+        <div class="text-[11px] text-slate-500 -mt-0.5">Sandbox · Part 2 — bounded autonomous workflow engine</div>
+      </div>
+      <nav id="nav" class="flex gap-4 text-sm text-slate-400 ml-2 flex-wrap"></nav>
+      <div class="ml-auto flex items-center gap-2 text-xs">
+        <label class="text-slate-500">Simulated today</label>
+        <input id="simTodayInput" type="date" class="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100" />
+        <button onclick="LApp.jumpToMonday()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">Next Monday</button>
+        <button onclick="LApp.advanceDays(1)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">+1d</button>
+        <button onclick="LApp.advanceDays(7)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">+7d</button>
+        <button onclick="LApp.resetAll()" class="px-2 py-1 rounded bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-300">Reset data</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="view" class="max-w-6xl w-full mx-auto px-4 py-6 flex-1"></main>
+
+  <footer class="border-t border-slate-800 text-center text-[11px] text-slate-600 py-4">
+    All automated output on this screen is clearly labeled. Nothing here was sent, decided, or committed without your explicit confirmation.
+  </footer>
+</div>
+
+<div id="modal-root"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* =========================================================================
+     PROVENANCE NOTE (also see About tab / AI-SESSION-LOG.md)
+     This file is an ORIGINAL, fresh build. It does not copy, fork, or port
+     any file from github.com/wbweve/Leados. The real repo (inspected live
+     this session via its GitHub page, GitHub's tree API, and raw file
+     fetches) is a React+Vite+TypeScript app with a *different* module set
+     than the one referenced in this task's pasted brief; see About tab for
+     exactly what was verified vs. not found. The "Part 1" plumbing below
+     (store/engine/playbooks/etc.) is a minimal original foundation, built
+     only so the pasted "Part 2: Autonomous Workflow Engine" spec has real
+     data and real UI to operate on — it is NOT a claim that this is what
+     Part 1 "actually" contained in any prior, inaccessible session.
+     ========================================================================= */
+
+  const STORAGE_KEY = 'leados:autonomous-sandbox:v1';
+  const CATEGORIES = ['PEOPLE','CULTURE','FINANCIAL','OPERATIONAL','STRATEGIC','CUSTOMER','COMPLIANCE','TECHNICAL'];
+
+  function uid(prefix){ return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7); }
+  function iso(d){ return d.toISOString().slice(0,10); }
+  function addDaysISO(base, n){ const d = new Date(base+'T00:00:00'); d.setDate(d.getDate()+n); return iso(d); }
+
+  function defaultState(){
+    const todayISO = iso(new Date());
+    const people = [
+      {id:'p1', name:'Mara Chen',  role:'VP Engineering',     flightRisk:true},
+      {id:'p2', name:'Theo Reyes', role:'VP Sales',           flightRisk:false},
+      {id:'p3', name:'Priya Nair', role:'Director, Product',  flightRisk:false},
+      {id:'p4', name:'Sam Okafor', role:'Director, People Ops', flightRisk:false},
+      {id:'p5', name:'Lina Voss',  role:'CFO',                flightRisk:false}
+    ];
+    const events = [
+      {id:uid('ev'), type:'lead.oneonone',     ts:addDaysISO(todayISO,-40), data:{personId:'p1'}},
+      {id:uid('ev'), type:'lead.oneonone',     ts:addDaysISO(todayISO,-10), data:{personId:'p2'}},
+      {id:uid('ev'), type:'lead.oneonone',     ts:addDaysISO(todayISO,-6),  data:{personId:'p3'}},
+      {id:uid('ev'), type:'lead.oneonone',     ts:addDaysISO(todayISO,-12), data:{personId:'p4'}},
+      {id:uid('ev'), type:'lead.oneonone',     ts:addDaysISO(todayISO,-55), data:{personId:'p5'}},
+      {id:uid('ev'), type:'lead.skiplevel',    ts:addDaysISO(todayISO,-70), data:{personId:'p1'}},
+      {id:uid('ev'), type:'lead.teamreview',   ts:addDaysISO(todayISO,-20), data:{team:'Engineering'}},
+      {id:uid('ev'), type:'exec.board.meeting',ts:addDaysISO(todayISO,10),  data:{date:addDaysISO(todayISO,10)}}
+    ];
+    const commitments = [
+      {id:uid('cm'), title:'Send revised eng org chart to board', owner:'Mara Chen',  by_date:addDaysISO(todayISO,1),  stakes:4, status:'open'},
+      {id:uid('cm'), title:'Close Q3 comp review',                owner:'Sam Okafor', by_date:addDaysISO(todayISO,-3), stakes:5, status:'open'},
+      {id:uid('cm'), title:'Finalize vendor contract redline',    owner:'Theo Reyes', by_date:addDaysISO(todayISO,6),  stakes:2, status:'open'}
+    ];
+    return {
+      people, events, commitments,
+      financials: { runwayMonths: 5.5 },
+      flags: { trustCollapseSignal: false },
+      meta: {
+        settings: { cadences: { oneOnOne:14, skipLevel:30, teamReview:14, perfReview:90, okrCheckin:14 } },
+        workQueue: [],
+        auditLog: [],
+        simToday: todayISO
+      }
+    };
+  }
+
+  const LEADOS = window.LEADOS = {};
+
+  // ---------------------------------------------------------------------
+  // LEADOS.store — Part 1 foundation (original, minimal)
+  // ---------------------------------------------------------------------
+  LEADOS.store = {
+    _state: null,
+    state(){ if(!this._state) this.load(); return this._state; },
+    load(){
+      const raw = localStorage.getItem(STORAGE_KEY);
+      this._state = raw ? JSON.parse(raw) : defaultState();
+      if(!raw) this.save();
+    },
+    save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(this._state)); },
+    reset(){ this._state = defaultState(); this.save(); },
+    mint(prefix){ return uid(prefix); },
+    auditLive(action, detail){
+      const s = this.state();
+      if(!s.meta.auditLog) s.meta.auditLog = [];
+      s.meta.auditLog.unshift({ id: uid('audit'), ts: new Date().toISOString(), action, detail: detail || '' });
+      if(s.meta.auditLog.length > 200) s.meta.auditLog.length = 200;
+      this.save();
+    }
+  };
+
+  // ---------------------------------------------------------------------
+  // LEADOS.engine — tiny disclosed-synthetic findings engine (original)
+  // ---------------------------------------------------------------------
+  LEADOS.engine = {
+    _days(a, b){
+      const da = new Date(a+'T00:00:00'), db = new Date(b+'T00:00:00');
+      return Math.round((db - da) / 86400000);
+    },
+    run(P, today){
+      const findings = [];
+      const cad = P.meta.settings.cadences;
+      const lastEventFor = (type, personId) => {
+        const evs = P.events.filter(e => e.type === type && (!personId || e.data.personId === personId))
+                             .sort((a,b) => a.ts < b.ts ? 1 : -1);
+        return evs[0];
+      };
+      P.people.forEach(p => {
+        const last = lastEventFor('lead.oneonone', p.id);
+        const since = last ? this._days(last.ts, today) : 9999;
+        if (since > cad.oneOnOne) {
+          const overBy = since - cad.oneOnOne;
+          findings.push({ key:'R1-'+p.id, rule:'R1', sev: overBy>14?5:overBy>7?4:3,
+            title:`Overdue 1:1 with ${p.name} (${since}d since last)`, category:'PEOPLE', personId:p.id });
+        }
+      });
+      P.people.forEach(p => {
+        const last = lastEventFor('lead.skiplevel', p.id);
+        const since = last ? this._days(last.ts, today) : 9999;
+        if (since > cad.skipLevel) {
+          const overBy = since - cad.skipLevel;
+          findings.push({ key:'R8-'+p.id, rule:'R8', sev: overBy>30?5:overBy>14?4:3,
+            title:`Overdue skip-level with ${p.name} (${since}d since last)`, category:'PEOPLE', personId:p.id });
+        }
+      });
+      {
+        const last = lastEventFor('lead.teamreview');
+        const since = last ? this._days(last.ts, today) : 9999;
+        if (since > cad.teamReview) {
+          findings.push({ key:'R10-team', rule:'R10', sev: (since-cad.teamReview)>14?4:3,
+            title:`Overdue team review (${since}d since last)`, category:'OPERATIONAL' });
+        }
+      }
+      {
+        const last = lastEventFor('lead.okrcheckin');
+        const since = last ? this._days(last.ts, today) : 9999;
+        if (since > cad.okrCheckin) {
+          findings.push({ key:'R39-okr', rule:'R39', sev:3,
+            title:`Overdue OKR check-in (${last? since+'d since last':'never logged'})`, category:'STRATEGIC' });
+        }
+      }
+      {
+        const last = lastEventFor('lead.perfreview');
+        const since = last ? this._days(last.ts, today) : 9999;
+        if (since > cad.perfReview) {
+          findings.push({ key:'R86-perf', rule:'R86', sev:3,
+            title:`Overdue performance review cycle (${last? since+'d since last':'never logged'})`, category:'PEOPLE' });
+        }
+      }
+      P.people.filter(p => p.flightRisk).forEach(p => {
+        findings.push({ key:'R30-'+p.id, rule:'R30', sev:4,
+          title:`Elevated attrition risk signal: ${p.name}`, category:'PEOPLE', personId:p.id });
+      });
+      if (P.financials.runwayMonths < 6) {
+        findings.push({ key:'R106-runway', rule:'R106', sev:5,
+          title:`Runway critical: ${P.financials.runwayMonths} months remaining`, category:'FINANCIAL' });
+      }
+      if (P.flags.trustCollapseSignal) {
+        findings.push({ key:'R88-trust', rule:'R88', sev:5,
+          title:`Trust collapse signal detected in leadership team`, category:'CULTURE' });
+      }
+      return { findings };
+    }
+  };
+
+  LEADOS.ambient = {
+    buildDigest(P, today){
+      const { findings } = LEADOS.engine.run(P, today);
+      return {
+        date: today,
+        totalFindings: findings.length,
+        bySeverity: [1,2,3,4,5].map(s => ({ sev:s, count: findings.filter(f=>f.sev===s).length })),
+        top: findings.slice().sort((a,b) => b.sev - a.sev).slice(0,5)
+      };
+    }
+  };
+
+  LEADOS.predict = {
+    buildPrefireCalendar(P, today){
+      const cad = P.meta.settings.cadences;
+      const items = [];
+      P.people.forEach(p => {
+        const evs = P.events.filter(e => e.type==='lead.oneonone' && e.data.personId===p.id).sort((a,b)=>a.ts<b.ts?1:-1);
+        const base = evs[0] ? evs[0].ts : today;
+        items.push({ type:'1:1', personId:p.id, personName:p.name, dueDate: addDaysISO(base, cad.oneOnOne) });
+      });
+      return items.sort((a,b) => a.dueDate < b.dueDate ? -1 : 1);
+    }
+  };
+
+  LEADOS.decisions = {
+    commitmentLedger(P, today){
+      return { open: P.commitments.filter(c => c.status === 'open') };
+    }
+  };
+
+  LEADOS.playbooks = {
+    byId: {
+      'one-on-one-reset':  { name:'1:1 Reset', prefill(ctx,P){ return {
+        subject:`Re-establish 1:1 cadence with ${ctx.personName||'—'}`,
+        body:`DRAFT — not sent.\n\nHi ${ctx.personName||''},\n\nI'd like to get our 1:1s back on a regular cadence. Proposing a recurring slot starting this week. Anything urgent you want to flag before then?\n\n— drafted by LEADOS, unreviewed` }; } },
+      'skiplevel-reset':   { name:'Skip-level Reset', prefill(ctx,P){ return {
+        subject:`Schedule skip-level with ${ctx.personName||'—'}`,
+        body:`DRAFT — not sent.\n\nPlanning a skip-level conversation with ${ctx.personName||''} to check in directly on team health and blockers.\n\n— drafted by LEADOS, unreviewed` }; } },
+      'attrition-response':{ name:'Attrition Risk Response', prefill(ctx,P){ return {
+        subject:`Retention conversation: ${ctx.personName||'—'}`,
+        body:`DRAFT — not sent.\n\nFlagging an elevated retention risk signal for ${ctx.personName||''}. Proposed next step: a direct, non-performance-review conversation this week.\n\n— drafted by LEADOS, unreviewed` }; } },
+      'financial-alert':   { name:'Financial Runway Alert', prefill(ctx,P){ return {
+        subject:'Runway alert — action needed',
+        body:`DRAFT — not sent.\n\nRunway is currently at ${P.financials.runwayMonths} months. Recommend reviewing burn and scenario plans at the next leadership sync.\n\n— drafted by LEADOS, unreviewed` }; } },
+      'trust-rebuild':     { name:'Trust Rebuild', prefill(ctx,P){ return {
+        subject:'Leadership trust check-in',
+        body:`DRAFT — not sent.\n\nA trust-collapse signal was detected. Proposing a direct, structured conversation with the leadership team this week, not a group email.\n\n— drafted by LEADOS, unreviewed` }; } },
+      'commitment-review': { name:'Commitment Review', prefill(ctx,P){ return {
+        subject:'Commitment accountability review',
+        body:`DRAFT — not sent.\n\nReviewing open commitments that are due or overdue. See Work Queue for the live list.\n\n— drafted by LEADOS, unreviewed` }; } },
+      'board-narrative':   { name:'Board Narrative', prefill(ctx,P){ return {
+        subject:'Board narrative draft',
+        body: (ctx.narrative || LEADOS.narrative.buildBoardNarrative(P, LApp.getSimToday())) } ; } }
+    },
+    forFinding(f, P){
+      const map = { R1:'one-on-one-reset', R8:'skiplevel-reset', R30:'attrition-response', R106:'financial-alert', R88:'trust-rebuild' };
+      const playId = map[f.rule];
+      if(!playId) return null;
+      const person = f.personId ? P.people.find(p=>p.id===f.personId) : null;
+      return { playId, ctx: { personName: person ? person.name : null, finding: f } };
+    }
+  };
+
+  LEADOS.riskIntelligence = {
+    buildRiskRegister(P, today){
+      const { findings } = LEADOS.engine.run(P, today);
+      return CATEGORIES.map(cat => {
+        const items = findings.filter(f => f.category === cat);
+        return { category: cat, count: items.length, maxSev: items.length ? Math.max(...items.map(f=>f.sev)) : 0, items };
+      });
+    }
+  };
+
+  LEADOS.nlg = {
+    generateOrganizationalMoment(P, today){
+      const { findings } = LEADOS.engine.run(P, today);
+      const crit = findings.filter(f => f.sev >= 5).length;
+      if (crit > 0) return `${crit} critical-severity signal(s) active — the organization is under acute strain in at least one dimension.`;
+      if (findings.length > 3) return `Multiple moderate signals are accumulating; no single crisis, but cadence discipline is slipping.`;
+      return `Signals are within normal range this cycle; maintenance posture is appropriate.`;
+    }
+  };
+
+  // Presence flags / minimal stubs — disclosed: full modules not built in this sandbox
+  LEADOS.synthesis = {};
+  LEADOS.decisionSurface = {};
+  LEADOS.automation = { runMaintenance(){ return []; } };
+
+  LEADOS.narrative = {
+    buildBoardNarrative(P, today){
+      const digest = LEADOS.ambient.buildDigest(P, today);
+      const lines = digest.top.map(f => `• [${f.rule}] ${f.title}`);
+      return `DRAFT BOARD NARRATIVE — ${today}\n\nTop items this cycle:\n${lines.join('\n') || '• No active findings.'}\n\nThis draft was auto-assembled from current findings data. Review and edit before presenting. — drafted by LEADOS, unreviewed`;
+    }
+  };
+
+  function generateBoardAlert(f, P, today){
+    return {
+      subject: `[Draft] Board alert — ${f.rule}: ${f.title}`,
+      body: `DRAFT — not sent.\n\nA ${f.sev>=5?'critical':'high'}-severity signal was detected:\n\n${f.title}\n\nRecommend reviewing before the next board touchpoint.\n\n— drafted by LEADOS, unreviewed`,
+      generatedAt: today
+    };
+  }
+  function computeResponseDeadline(f, today){
+    const days = f.sev>=5 ? 1 : f.sev===4 ? 2 : 3;
+    return addDaysISO(today, days);
+  }
+  function computeFiveThingsThatMatter(P, today){
+    const { findings } = LEADOS.engine.run(P, today);
+    return findings.slice().sort((a,b)=>b.sev-a.sev).slice(0,5).map(f => ({ rule:f.rule, title:f.title, sev:f.sev }));
+  }
+  function detectCadenceDrift(P, today){
+    const cad = P.meta.settings.cadences;
+    const drifts = [];
+    const ones = P.events.filter(e => e.type==='lead.oneonone').map(e=>e.ts).sort();
+    if (ones.length >= 2) {
+      const gaps = [];
+      for (let i=1;i<ones.length;i++) gaps.push(LEADOS.engine._days(ones[i-1], ones[i]));
+      const avg = Math.round(gaps.reduce((a,b)=>a+b,0)/gaps.length);
+      if (Math.abs(avg - cad.oneOnOne) >= 5) {
+        drifts.push({ setting:'cadences.oneOnOne', current: cad.oneOnOne, suggested: avg, actual: avg });
+      }
+    }
+    return drifts;
+  }
+
+  // =======================================================================
+  // LEADOS.autonomous — PART 2, implemented from the task's pasted spec.
+  // Two disclosed, minimal fixes applied (see AI-SESSION-LOG.md §"Part 2"):
+  //   (1) runWorkflows() now accepts & forwards an optional `newFindings`
+  //       argument, because WF-003's execute(P, today, newFindings) needs a
+  //       3rd argument the originally pasted runWorkflows() never passed.
+  //   (2) TEMPORAL workflows with a MONDAY_* schedule are only executed when
+  //       the simulated date actually is a Monday — otherwise "schedule"
+  //       would be inert decoration. BOARD_MEETING_MINUS_14_DAYS is left to
+  //       execute()'s own date-window check, exactly as pasted.
+  // =======================================================================
+  LEADOS.autonomous = {
+    WORKFLOWS: [
+      {
+        id: 'WF-001', name: 'Weekly Digest Generation', trigger: 'TEMPORAL', schedule: 'MONDAY_07:00_LOCAL',
+        description: 'Generates the weekly leadership briefing automatically',
+        execute(P, today){
+          const digest = LEADOS.ambient.buildDigest(P, today);
+          const calendar = LEADOS.predict.buildPrefireCalendar(P, today);
+          const leverage = LEADOS.decisionSurface ? computeFiveThingsThatMatter(P, today) : [];
+          return {
+            type: 'WEEKLY_BRIEFING',
+            content: { digest, calendar, leverage },
+            status: 'READY_FOR_REVIEW',
+            label: 'Auto-generated Monday briefing. Review before acting on.',
+            actions: [
+              { label: 'Accept and open Today', action: 'navigate:/today' },
+              { label: 'Regenerate', action: 'regenerate' },
+              { label: 'Dismiss', action: 'dismiss' }
+            ]
+          };
+        }
+      },
+      {
+        id: 'WF-002', name: 'Cadence Monitoring + Preparation', trigger: 'CONTINUOUS', checkEvery: 'SESSION_START',
+        description: 'Monitors all cadences and prepares playbook pre-fills before they are needed',
+        execute(P, today){
+          const findings = LEADOS.engine.run(P, today).findings;
+          const cadenceFindings = findings.filter(f => ['R1','R8','R10','R39','R86','R117','R118'].includes(f.rule));
+          const prefills = {};
+          for (const f of cadenceFindings.slice(0,10)) {
+            const ref = LEADOS.playbooks.forFinding(f, P);
+            if (ref) {
+              const play = LEADOS.playbooks.byId[ref.playId];
+              if (play && play.prefill) prefills[f.key] = play.prefill(ref.ctx, P);
+            }
+          }
+          sessionStorage.setItem('leados:prefill-cache', JSON.stringify({ prefills, generatedAt: today, findingCount: cadenceFindings.length }));
+          return {
+            type: 'PREFILL_CACHE', status: 'CACHED', count: Object.keys(prefills).length,
+            label: `${Object.keys(prefills).length} playbook forms pre-computed for instant opening.`
+          };
+        }
+      },
+      {
+        id: 'WF-003', name: 'Automated Finding Triage', trigger: 'ON_NEW_FINDING',
+        description: 'When new sev-5 findings appear, automatically prepares the response',
+        execute(P, today, newFindings){
+          const critical = (newFindings || []).filter(f => f.sev >= 5);
+          if (!critical.length) return null;
+          const workProducts = critical.map(f => {
+            const ref = LEADOS.playbooks.forFinding(f, P);
+            const play = ref ? LEADOS.playbooks.byId[ref.playId] : null;
+            const prefill = play && play.prefill ? play.prefill(ref.ctx, P) : null;
+            const boardDraft = (f.rule === 'R88' || f.rule === 'R30' || f.rule === 'R106') ? generateBoardAlert(f, P, today) : null;
+            return { finding: f, playbook: ref ? ref.playId : null, prefill, boardDraft, responseTimeRemaining: computeResponseDeadline(f, today) };
+          });
+          return {
+            type: 'CRITICAL_TRIAGE', workProducts, status: 'READY_FOR_RESPONSE',
+            label: 'Auto-prepared response packages for new critical findings. No events written. All actions require your confirmation.',
+            actions: workProducts.map(wp => ({
+              label: `Respond to ${wp.finding.rule}: ${wp.finding.title.slice(0,40)}…`,
+              action: `open-playbook:${wp.playbook}:${wp.finding.key}`
+            }))
+          };
+        }
+      },
+      {
+        id: 'WF-004', name: 'Commitment Watch', trigger: 'CONTINUOUS', checkEvery: '24_HOURS',
+        description: 'Monitors all commitments and prepares accountability reviews',
+        execute(P, today){
+          const ledger = LEADOS.decisions ? LEADOS.decisions.commitmentLedger(P, today) : null;
+          if (!ledger) return null;
+          const dueToday = ledger.open.filter(c => { const d = LEADOS.engine._days(today, c.by_date); return d <= 1 && d >= 0; });
+          const overdueHighStakes = ledger.open.filter(c => { const d = LEADOS.engine._days(c.by_date, today); return d > 0 && (c.stakes||3) >= 4; });
+          if (!dueToday.length && !overdueHighStakes.length) return null;
+          return {
+            type: 'COMMITMENT_ALERT', dueToday, overdueHighStakes, status: 'REQUIRES_ATTENTION',
+            label: `${dueToday.length} commitments due today. ${overdueHighStakes.length} high-stakes commitments overdue.`,
+            actions: [ { label:'Open commitment review', action:'open-playbook:commitment-review' } ]
+          };
+        }
+      },
+      {
+        id: 'WF-005', name: 'Pre-Board Preparation Protocol', trigger: 'TEMPORAL', schedule: 'BOARD_MEETING_MINUS_14_DAYS',
+        description: 'Automatically prepares board materials 2 weeks before each board meeting',
+        execute(P, today){
+          const upcomingBoard = P.events.filter(e => e.type === 'exec.board.meeting').find(e => {
+            const days = LEADOS.engine._days(today, (e.data && e.data.date) || e.ts);
+            return days > 0 && days <= 14;
+          });
+          if (!upcomingBoard) return null;
+          const narrative = LEADOS.narrative ? LEADOS.narrative.buildBoardNarrative(P, today) : null;
+          const risks = LEADOS.riskIntelligence ? LEADOS.riskIntelligence.buildRiskRegister(P, today) : null;
+          const synthesis = LEADOS.synthesis ? { moment: LEADOS.nlg && LEADOS.nlg.generateOrganizationalMoment(P, today), fiveThings: computeFiveThingsThatMatter(P, today) } : null;
+          return {
+            type: 'BOARD_PREP_PACKAGE',
+            boardDate: upcomingBoard.data ? upcomingBoard.data.date : upcomingBoard.ts,
+            daysUntil: LEADOS.engine._days(today, (upcomingBoard.data && upcomingBoard.data.date) || upcomingBoard.ts),
+            narrative, riskRegister: risks, synthesis, status: 'DRAFT_READY',
+            label: 'Auto-generated board preparation package. All content is from your data. Review before presenting.',
+            actions: [
+              { label: 'Open board-narrative playbook with this draft', action: 'open-playbook:board-narrative' },
+              { label: 'Review full risk register', action: 'navigate:/risk' }
+            ]
+          };
+        }
+      },
+      {
+        id: 'WF-006', name: 'Self-Calibrating Settings', trigger: 'WEEKLY',
+        description: 'Automatically suggests settings adjustments based on false positive patterns',
+        execute(P, today){
+          LEADOS.automation ? LEADOS.automation.runMaintenance(P, today) : [];
+          const cadenceDrift = detectCadenceDrift(P, today);
+          if (!cadenceDrift.length) return null;
+          return {
+            type: 'SETTINGS_CALIBRATION', drifts: cadenceDrift, status: 'SUGGESTIONS_READY',
+            label: 'Weekly settings calibration check. ' + cadenceDrift.length + ' setting(s) may be miscalibrated.',
+            actions: cadenceDrift.map(d => ({
+              label: `Adjust ${d.setting} from ${d.current}d to ${d.suggested}d (your actual cadence: ~${d.actual}d)`,
+              action: `update-setting:${d.setting}:${d.suggested}`
+            }))
+          };
+        }
+      }
+    ],
+
+    runWorkflows(P, today, triggers, newFindings){
+      triggers = triggers || ['SESSION_START','CONTINUOUS'];
+      const results = [];
+      for (const workflow of this.WORKFLOWS) {
+        if (!triggers.includes(workflow.trigger) && !triggers.includes('ALL')) continue;
+        if (workflow.trigger === 'TEMPORAL' && workflow.schedule && workflow.schedule.indexOf('MONDAY') === 0) {
+          const dow = new Date(today+'T00:00:00').getDay();
+          if (dow !== 1) continue; // disclosed schedule gate, see header comment
+        }
+        try {
+          const result = workflow.execute(P, today, newFindings);
+          if (result) {
+            results.push({ workflowId: workflow.id, workflowName: workflow.name, ...result });
+            LEADOS.store.auditLive('workflow.executed:' + workflow.id, result.status + ' · ' + (result.label||'').slice(0,80));
+          }
+        } catch (e) {
+          LEADOS.store.auditLive('workflow.error:' + workflow.id, e.message);
+        }
+      }
+      return results;
+    }
+  };
+
+  // ---------------------------------------------------------------------
+  // LEADOS.workQueue — pasted spec, verbatim behavior
+  // ---------------------------------------------------------------------
+  LEADOS.workQueue = {
+    add(item){
+      const state = LEADOS.store.state();
+      if (!state.meta.workQueue) state.meta.workQueue = [];
+      state.meta.workQueue.push({ id: LEADOS.store.mint('wq'), ...item, addedAt: new Date().toISOString(), status: 'PENDING_REVIEW' });
+      if (state.meta.workQueue.length > 20) state.meta.workQueue = state.meta.workQueue.slice(-20);
+      LEADOS.store.save();
+    },
+    accept(id, action){
+      const state = LEADOS.store.state();
+      const item = (state.meta.workQueue || []).find(w => w.id === id);
+      if (!item) return;
+      item.status = 'ACCEPTED'; item.acceptedAt = new Date().toISOString(); item.action = action;
+      LEADOS.store.auditLive('workqueue.accepted:' + item.type, 'action: ' + action);
+      LEADOS.store.save();
+    },
+    dismiss(id){
+      const state = LEADOS.store.state();
+      const item = (state.meta.workQueue || []).find(w => w.id === id);
+      if (item) { item.status = 'DISMISSED'; LEADOS.store.auditLive('workqueue.dismissed:' + item.type, item.id); LEADOS.store.save(); }
+    },
+    pending(){
+      return (LEADOS.store.state().meta.workQueue || []).filter(w => w.status === 'PENDING_REVIEW')
+        .sort((a,b) => b.addedAt < a.addedAt ? -1 : 1);
+    },
+    history(){
+      return (LEADOS.store.state().meta.workQueue || []).filter(w => w.status !== 'PENDING_REVIEW')
+        .sort((a,b) => b.addedAt < a.addedAt ? -1 : 1).slice(0,10);
+    }
+  };
+
+  // =======================================================================
+  // UI layer — original, hand-authored for this sandbox
+  // =======================================================================
+  const LApp = window.LApp = {};
+  const ROUTES = ['/today','/findings','/risk','/settings','/about'];
+
+  LApp.getSimToday = () => LEADOS.store.state().meta.simToday;
+  LApp.setSimToday = (d) => { LEADOS.store.state().meta.simToday = d; LEADOS.store.save(); render(); };
+  LApp.advanceDays = (n) => LApp.setSimToday(addDaysISO(LApp.getSimToday(), n));
+  LApp.jumpToMonday = () => {
+    let d = LApp.getSimToday();
+    for (let i=0;i<8;i++){ if (new Date(d+'T00:00:00').getDay() === 1) break; d = addDaysISO(d,1); }
+    LApp.setSimToday(d);
+  };
+  LApp.resetAll = () => { if(confirm('Reset all synthetic data and the work queue? This cannot be undone.')){ LEADOS.store.reset(); render(); } };
+
+  function sevPill(sev){ return `<span class="pill sev-${sev}">SEV ${sev}</span>`; }
+
+  function pushResultsToQueue(results){
+    const q = LEADOS.workQueue;
+    const existing = q.pending();
+    const today = LApp.getSimToday();
+    results.forEach(r => {
+      const dup = existing.find(e => e.workflowId === r.workflowId && (e.addedAt||'').slice(0,10) === today);
+      if (dup) return;
+      q.add(r);
+    });
+  }
+
+  function runEligible(triggerSet, newFindings){
+    const P = LEADOS.store.state();
+    const today = LApp.getSimToday();
+    const results = LEADOS.autonomous.runWorkflows(P, today, triggerSet, newFindings);
+    pushResultsToQueue(results);
+    render();
+    return results;
+  }
+
+  LApp.runSessionStart = () => {
+    const n = runEligible(['SESSION_START','CONTINUOUS']).length;
+    toast(n ? `${n} workflow(s) produced output — see Work Queue.` : 'No workflow produced new output this run.');
+  };
+  LApp.runWeekly = () => {
+    const n = runEligible(['TEMPORAL','WEEKLY']).length;
+    toast(n ? `${n} workflow(s) produced output — see Work Queue.` : 'No TEMPORAL/WEEKLY workflow fired (check the date — WF-001 needs a Monday).');
+  };
+  LApp.simulateCriticalFinding = () => {
+    const pool = [
+      { key:'R88-sim-'+Date.now(), rule:'R88', sev:5, title:'Simulated: trust collapse signal spiking in leadership thread', category:'CULTURE' },
+      { key:'R30-sim-'+Date.now(), rule:'R30', sev:5, title:'Simulated: key engineer flight-risk signal just crossed threshold', category:'PEOPLE', personId:'p1' },
+      { key:'R106-sim-'+Date.now(), rule:'R106', sev:5, title:'Simulated: runway recalculated below 4 months', category:'FINANCIAL' }
+    ];
+    const f = pool[Math.floor(Math.random()*pool.length)];
+    const n = runEligible(['ON_NEW_FINDING'], [f]).length;
+    toast(n ? 'WF-003 prepared a response package — see Work Queue.' : 'No critical finding generated this time, try again.');
+  };
+
+  function applySettingPath(path, rawVal){
+    const s = LEADOS.store.state();
+    const parts = path.split('.');
+    let obj = s.meta.settings;
+    for (let i=0;i<parts.length-1;i++) obj = obj[parts[i]];
+    const num = Number(rawVal);
+    obj[parts[parts.length-1]] = isNaN(num) ? rawVal : num;
+    LEADOS.store.auditLive('setting.updated:' + path, 'new value: ' + rawVal);
+    LEADOS.store.save();
+  }
+
+  function findWorkProduct(item, findingKey){
+    if (item.workProducts) return item.workProducts.find(wp => wp.finding && wp.finding.key === findingKey);
+    return null;
+  }
+
+  function doAction(actionStr, item){
+    const verb = actionStr.split(':')[0];
+    if (verb === 'navigate') {
+      location.hash = '#' + actionStr.split(':').slice(1).join(':');
+      return;
+    }
+    if (verb === 'open-playbook') {
+      const parts = actionStr.split(':');
+      const playId = parts[1], findingKey = parts[2];
+      const play = LEADOS.playbooks.byId[playId];
+      let draft;
+      const wp = findingKey ? findWorkProduct(item, findingKey) : null;
+      if (wp && wp.prefill) draft = wp.prefill;
+      else if (playId === 'board-narrative') draft = { subject:'Board narrative draft', body: (item && item.narrative) || LEADOS.narrative.buildBoardNarrative(LEADOS.store.state(), LApp.getSimToday()) };
+      else if (play && play.prefill) draft = play.prefill({}, LEADOS.store.state());
+      else draft = { subject:'(no draft available)', body:'No playbook template matched this item.' };
+      showDraftModal(play ? play.name : playId, draft);
+      return;
+    }
+    if (verb === 'update-setting') {
+      const parts = actionStr.split(':');
+      applySettingPath(parts[1], parts[2]);
+      toast('Setting updated: ' + parts[1] + ' → ' + parts[2]);
+      return;
+    }
+    // 'regenerate' and 'dismiss' handled by caller before doAction is invoked
+  }
+
+  LApp.onWorkItemAction = (itemId, actionStr) => {
+    const P = LEADOS.store.state();
+    const item = (P.meta.workQueue || []).find(w => w.id === itemId);
+    if (!item) return;
+    if (actionStr === 'dismiss') { LEADOS.workQueue.dismiss(itemId); render(); return; }
+    if (actionStr === 'regenerate') {
+      const wf = LEADOS.autonomous.WORKFLOWS.find(w => w.id === item.workflowId);
+      if (!wf) return;
+      const result = wf.execute(P, LApp.getSimToday());
+      LEADOS.workQueue.dismiss(itemId);
+      if (result) LEADOS.workQueue.add({ workflowId: wf.id, workflowName: wf.name, ...result });
+      LEADOS.store.auditLive('workflow.regenerated:' + wf.id, 'manual regenerate requested');
+      render();
+      return;
+    }
+    LEADOS.workQueue.accept(itemId, actionStr);
+    doAction(actionStr, item);
+    render();
+  };
+
+  function showDraftModal(title, draft){
+    const root = document.getElementById('modal-root');
+    root.innerHTML = `
+      <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 fade-in" onclick="if(event.target===this) LApp.closeModal()">
+        <div class="card w-full max-w-xl p-5">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm font-semibold text-sky-400">AUTO-DRAFTED · ${title}</div>
+            <button onclick="LApp.closeModal()" class="text-slate-500 hover:text-slate-200">✕</button>
+          </div>
+          <div class="text-[11px] text-amber-400 mb-3 border border-amber-900 bg-amber-950/40 rounded px-2 py-1">
+            Not sent. Not saved as a decision. Review and edit before using.
+          </div>
+          <div class="text-xs text-slate-400 mb-1">Subject</div>
+          <input class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 mb-3 text-sm" value="${(draft.subject||'').replace(/"/g,'&quot;')}" readonly />
+          <div class="text-xs text-slate-400 mb-1">Body</div>
+          <textarea class="draft w-full bg-slate-900 border border-slate-700 rounded px-2 py-2 text-xs h-48" readonly>${draft.body||''}</textarea>
+          <div class="flex justify-end gap-2 mt-4">
+            <button onclick="LApp.closeModal()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm">Close</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  LApp.closeModal = () => { document.getElementById('modal-root').innerHTML = ''; };
+
+  let toastTimer = null;
+  function toast(msg){
+    let t = document.getElementById('toast');
+    if (!t) { t = document.createElement('div'); t.id='toast'; document.body.appendChild(t); }
+    t.className = 'fixed bottom-5 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-600 text-sm px-4 py-2 rounded-lg shadow-lg z-50 fade-in';
+    t.textContent = msg;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{ t.remove(); }, 3200);
+  }
+
+  // ---------------------- Views ----------------------
+  function renderNav(){
+    const cur = location.hash.replace('#','') || '/today';
+    const labels = { '/today':'Today', '/findings':'Findings', '/risk':'Risk Register', '/settings':'Settings', '/about':'About / Provenance' };
+    document.getElementById('nav').innerHTML = ROUTES.map(r =>
+      `<a href="#${r}" class="nav-link pb-1 ${cur===r?'active text-white':''}">${labels[r]}</a>`).join('');
+  }
+
+  function renderBoundaries(){
+    return `
+    <div class="card p-4 mb-5">
+      <div class="text-sm font-semibold mb-2">Non-negotiable boundaries</div>
+      <ol class="text-xs text-slate-400 list-decimal list-inside space-y-1">
+        <li>Never appends events without explicit user confirmation</li>
+        <li>Never makes decisions — it prepares them</li>
+        <li>Never sends communications — it drafts them</li>
+        <li>Never overrides a user's previous decision</li>
+        <li>All automated work products are labeled as such</li>
+        <li>Every autonomous action is auditable and reversible</li>
+      </ol>
+    </div>`;
+  }
+
+  function workItemCard(item){
+    const actions = item.actions || [];
+    let body = '';
+    if (item.type === 'WEEKLY_BRIEFING') {
+      body = `<div class="text-xs text-slate-400">Findings: ${item.content.digest.totalFindings} · Pre-fire calendar items: ${item.content.calendar.length} · Leverage points: ${item.content.leverage.length}</div>`;
+    } else if (item.type === 'PREFILL_CACHE') {
+      body = `<div class="text-xs text-slate-400">${item.count} playbook form(s) cached for instant opening.</div>`;
+    } else if (item.type === 'CRITICAL_TRIAGE') {
+      body = `<div class="text-xs text-slate-400 space-y-1">${item.workProducts.map(wp=>`<div>${sevPill(wp.finding.sev)} <span class="text-slate-300">${wp.finding.rule}</span> — ${wp.finding.title} <span class="text-slate-500">(respond by ${wp.responseTimeRemaining})</span></div>`).join('')}</div>`;
+    } else if (item.type === 'COMMITMENT_ALERT') {
+      body = `<div class="text-xs text-slate-400">Due today: ${item.dueToday.length} · Overdue high-stakes: ${item.overdueHighStakes.length}</div>`;
+    } else if (item.type === 'BOARD_PREP_PACKAGE') {
+      body = `<div class="text-xs text-slate-400">Board meeting in ${item.daysUntil} day(s) (${item.boardDate}). Narrative + risk register drafted.</div>`;
+    } else if (item.type === 'SETTINGS_CALIBRATION') {
+      body = `<div class="text-xs text-slate-400">${item.drifts.length} drift(s) detected vs. configured cadence.</div>`;
+    }
+    return `
+      <div class="card p-4 fade-in">
+        <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+          <div class="text-sm font-semibold">${item.workflowName} <span class="text-slate-500 font-normal">(${item.workflowId})</span></div>
+          <span class="pill bg-slate-800 text-sky-300 border border-sky-900">${item.status}</span>
+        </div>
+        <div class="text-xs text-amber-400 mb-2">${item.label}</div>
+        ${body}
+        <div class="flex flex-wrap gap-2 mt-3">
+          ${actions.map(a => `<button onclick="LApp.onWorkItemAction('${item.id}', ${JSON.stringify(a.action)})" class="text-xs px-2.5 py-1.5 rounded bg-sky-950 hover:bg-sky-900 border border-sky-800 text-sky-300">${a.label}</button>`).join('')}
+          ${actions.length===0 ? `<button onclick="LApp.onWorkItemAction('${item.id}','dismiss')" class="text-xs px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">Dismiss</button>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function renderToday(){
+    const P = LEADOS.store.state();
+    const today = LApp.getSimToday();
+    const digest = LEADOS.ambient.buildDigest(P, today);
+    const pending = LEADOS.workQueue.pending();
+    const history = LEADOS.workQueue.history();
+    const audit = (P.meta.auditLog||[]).slice(0,12);
+
+    document.getElementById('view').innerHTML = `
+      <div class="grid md:grid-cols-4 gap-4 mb-6">
+        <div class="card p-4"><div class="text-xs text-slate-500">Active findings</div><div class="text-2xl font-bold">${digest.totalFindings}</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Critical (sev 5)</div><div class="text-2xl font-bold text-rose-400">${digest.bySeverity.find(b=>b.sev===5).count}</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Open commitments</div><div class="text-2xl font-bold">${P.commitments.filter(c=>c.status==='open').length}</div></div>
+        <div class="card p-4"><div class="text-xs text-slate-500">Runway</div><div class="text-2xl font-bold">${P.financials.runwayMonths}mo</div></div>
+      </div>
+
+      ${renderBoundaries()}
+
+      <div class="card p-4 mb-6">
+        <div class="text-sm font-semibold mb-3">Run workflows (manual trigger — stands in for a real scheduler)</div>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="LApp.runSessionStart()" class="text-xs px-3 py-2 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">Run session-start check (WF-002, WF-004)</button>
+          <button onclick="LApp.runWeekly()" class="text-xs px-3 py-2 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700">Run weekly/temporal check (WF-001 if Monday, WF-005, WF-006)</button>
+          <button onclick="LApp.simulateCriticalFinding()" class="text-xs px-3 py-2 rounded bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-300">Simulate incoming critical finding (WF-003)</button>
+        </div>
+        <div class="text-[11px] text-slate-500 mt-2">Simulated date: <strong class="text-slate-300">${today}</strong> (${new Date(today+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'})}). WF-001 only fires on a Monday — use "Next Monday" above.</div>
+      </div>
+
+      <div class="mb-3 flex items-center justify-between">
+        <div class="text-base font-semibold">Autonomous Work Queue</div>
+        <div class="text-xs text-slate-500">${pending.length} pending review</div>
+      </div>
+      <div class="space-y-3 mb-8">
+        ${pending.length ? pending.map(workItemCard).join('') : `<div class="card p-4 text-sm text-slate-500">No pending autonomous work. Run a workflow above to generate some.</div>`}
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card p-4">
+          <div class="text-sm font-semibold mb-2">Recent queue history</div>
+          <div class="space-y-1 text-xs text-slate-400">
+            ${history.length ? history.map(h=>`<div>• <span class="text-slate-300">${h.workflowName}</span> — ${h.status.toLowerCase()} ${h.action?('('+h.action+')'):''}</div>`).join('') : '<div class="text-slate-600">Nothing yet.</div>'}
+          </div>
+        </div>
+        <div class="card p-4">
+          <div class="text-sm font-semibold mb-2">Audit trail</div>
+          <div class="space-y-1 text-xs text-slate-400 max-h-48 overflow-y-auto">
+            ${audit.length ? audit.map(a=>`<div>• <span class="text-slate-500">${new Date(a.ts).toLocaleTimeString()}</span> ${a.action} <span class="text-slate-600">${a.detail}</span></div>`).join('') : '<div class="text-slate-600">No audit entries yet.</div>'}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderFindings(){
+    const P = LEADOS.store.state();
+    const today = LApp.getSimToday();
+    const { findings } = LEADOS.engine.run(P, today);
+    document.getElementById('view').innerHTML = `
+      <div class="text-base font-semibold mb-3">Findings (live, rule-based, synthetic data)</div>
+      <div class="space-y-2">
+        ${findings.length ? findings.sort((a,b)=>b.sev-a.sev).map(f => {
+          const ref = LEADOS.playbooks.forFinding(f, P);
+          return `<div class="card p-3 flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center gap-3">
+              ${sevPill(f.sev)}
+              <div>
+                <div class="text-sm">${f.title}</div>
+                <div class="text-[11px] text-slate-500">${f.rule} · ${f.category}</div>
+              </div>
+            </div>
+            ${ref ? `<button onclick='LApp.openPlaybookFor(${JSON.stringify(f.key)})' class="text-xs px-2.5 py-1.5 rounded bg-sky-950 hover:bg-sky-900 border border-sky-800 text-sky-300">Draft response</button>` : ''}
+          </div>`;
+        }).join('') : '<div class="card p-4 text-sm text-slate-500">No findings right now.</div>'}
+      </div>
+    `;
+  }
+  LApp.openPlaybookFor = (findingKey) => {
+    const P = LEADOS.store.state();
+    const { findings } = LEADOS.engine.run(P, LApp.getSimToday());
+    const f = findings.find(x => x.key === findingKey);
+    if (!f) return;
+    const ref = LEADOS.playbooks.forFinding(f, P);
+    const play = LEADOS.playbooks.byId[ref.playId];
+    showDraftModal(play.name, play.prefill(ref.ctx, P));
+  };
+
+  function renderRisk(){
+    const P = LEADOS.store.state();
+    const register = LEADOS.riskIntelligence.buildRiskRegister(P, LApp.getSimToday());
+    document.getElementById('view').innerHTML = `
+      <div class="text-base font-semibold mb-3">Risk Register (8 categories, always shown)</div>
+      <div class="grid md:grid-cols-2 gap-3">
+        ${register.map(r => `
+          <div class="card p-4">
+            <div class="flex items-center justify-between mb-1">
+              <div class="text-sm font-semibold">${r.category}</div>
+              ${r.maxSev ? sevPill(r.maxSev) : '<span class="pill bg-slate-800 text-slate-500 border border-slate-700">clear</span>'}
+            </div>
+            <div class="text-xs text-slate-500">${r.count} active finding(s)</div>
+            ${r.items.map(i=>`<div class="text-xs text-slate-400 mt-1">• ${i.title}</div>`).join('')}
+          </div>`).join('')}
+      </div>
+    `;
+  }
+
+  function renderSettings(){
+    const P = LEADOS.store.state();
+    const cad = P.meta.settings.cadences;
+    document.getElementById('view').innerHTML = `
+      <div class="text-base font-semibold mb-3">Settings (synthetic data + cadences)</div>
+      <div class="card p-4 mb-4">
+        <div class="text-sm font-semibold mb-2">Cadences (days)</div>
+        <div class="grid md:grid-cols-3 gap-3">
+          ${Object.keys(cad).map(k => `
+            <label class="text-xs text-slate-400">${k}
+              <input type="number" value="${cad[k]}" onchange="LApp.setCadence('${k}', this.value)" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100" />
+            </label>`).join('')}
+        </div>
+      </div>
+      <div class="card p-4 mb-4">
+        <div class="text-sm font-semibold mb-2">Financial / signal flags</div>
+        <label class="text-xs text-slate-400 block mb-2">Runway (months)
+          <input type="number" step="0.1" value="${P.financials.runwayMonths}" onchange="LApp.setRunway(this.value)" class="w-full mt-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-100" />
+        </label>
+        <label class="text-xs text-slate-400 flex items-center gap-2">
+          <input type="checkbox" ${P.flags.trustCollapseSignal?'checked':''} onchange="LApp.setFlag('trustCollapseSignal', this.checked)" />
+          Trust collapse signal active (R88)
+        </label>
+      </div>
+      <div class="card p-4">
+        <div class="text-sm font-semibold mb-2">People</div>
+        <div class="space-y-1">
+          ${P.people.map(p => `<label class="text-xs text-slate-400 flex items-center gap-2">
+            <input type="checkbox" ${p.flightRisk?'checked':''} onchange="LApp.setFlightRisk('${p.id}', this.checked)" />
+            ${p.name} — ${p.role} <span class="text-slate-600">(flight risk)</span>
+          </label>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+  LApp.setCadence = (k, v) => { applySettingPath('cadences.'+k, v); render(); };
+  LApp.setRunway = (v) => { const P=LEADOS.store.state(); P.financials.runwayMonths = Number(v); LEADOS.store.auditLive('setting.updated:financials.runwayMonths', v); LEADOS.store.save(); render(); };
+  LApp.setFlag = (k, v) => { const P=LEADOS.store.state(); P.flags[k]=v; LEADOS.store.auditLive('setting.updated:flags.'+k, String(v)); LEADOS.store.save(); render(); };
+  LApp.setFlightRisk = (id, v) => { const P=LEADOS.store.state(); const p=P.people.find(x=>x.id===id); if(p){p.flightRisk=v; LEADOS.store.auditLive('setting.updated:person.flightRisk', id+'='+v); LEADOS.store.save(); render();} };
+
+  function renderAbout(){
+    document.getElementById('view').innerHTML = `
+      <div class="text-base font-semibold mb-3">About / Provenance</div>
+      <div class="card p-4 mb-4 text-sm space-y-3 text-slate-300">
+        <p><strong>What this file is:</strong> an original, hand-authored single-file build created for this task. It implements this task's own "Part 2: Autonomous Workflow Engine" specification (WF-001 … WF-006, the work-queue system) on top of a minimal, original "Part 1" foundation (store/engine/playbooks/etc.) built only so the spec has real data and UI to run against.</p>
+        <p><strong>What was verified, first-hand, about <code>github.com/wbweve/Leados</code> this session:</strong></p>
+        <ul class="list-disc list-inside text-slate-400 space-y-1">
+          <li>Fetched the repo's rendered GitHub page directly. Its own README states the repo is a <strong>React + Vite + TypeScript</strong> app (entry point <code>src/App.tsx</code>), built with <code>npm run build</code> — not a hand-authored vanilla single <code>index.html</code>.</li>
+          <li>Fetched the repo's file tree via GitHub's REST API (recursive). Confirmed dozens of loose root-level <code>.tsx</code>/<code>.md</code> files (e.g. <code>App.tsx</code>, <code>AboutView.tsx</code>, <code>PlaybooksView.tsx</code>, <code>MaintenanceView.tsx</code>, <code>AI-SESSION-LOG.md</code>, <code>SESSION-3.patch.md</code>) alongside the README's described <code>src/</code> tree.</li>
+          <li>Fetched the repo's own <code>AI-SESSION-LOG.md</code> directly. It is itself a prior session's self-report; it documents that session finding a real, wired <code>infoTheory.ts</code> module, but <strong>no CAS engine, no risk-register file, and no trace of this task's own pasted "pt-L" module list</strong> (58–62 files, 144 rules, <code>T_L_*</code>/<code>G_L_*</code> tests) anywhere in the repo — that log explicitly treats such pasted briefs as <em>unverified specifications</em>, not repo fact.</li>
+          <li>Fetched the repo's root <code>index.html</code> directly. It returned only a page title via text-extraction (no readable body text), consistent with it being a built/bundled single-file artifact rather than hand-authored source — <strong>this detail is weaker evidence and should be treated as inconclusive</strong>, not confirmed structure.</li>
+          <li><strong>Attempted and failed to verify:</strong> whether anything resembling this task's pasted "<code>LEADOS.autonomous</code> / workflow engine / work queue" code exists anywhere in the real repo. GitHub code search required sign-in and was not accessible from this session. <strong>Labeled unverified</strong> — absence is inferred only from the file-tree listing and the repo's own session log, not from reading every byte of every file.</li>
+        </ul>
+        <p><strong>Conclusion applied to this delivery:</strong> this task's pasted "Part 2" workflow-engine code is treated as an <em>unverified external specification</em> to implement faithfully and originally — not as a claim that it already exists, in this or any form, in <code>github.com/wbweve/Leados</code>. Two small, disclosed fixes were made to the pasted spec to make it run (see <code>AI-SESSION-LOG.md</code>).</p>
+      </div>
+    `;
+  }
+
+  function render(){
+    const hash = location.hash.replace('#','') || '/today';
+    renderNav();
+    document.getElementById('simTodayInput').value = LApp.getSimToday();
+    if (hash === '/findings') renderFindings();
+    else if (hash === '/risk') renderRisk();
+    else if (hash === '/settings') renderSettings();
+    else if (hash === '/about') renderAbout();
+    else renderToday();
+  }
+
+  document.getElementById('simTodayInput').addEventListener('change', (e) => LApp.setSimToday(e.target.value));
+  window.addEventListener('hashchange', render);
+  window.addEventListener('DOMContentLoaded', () => {
+    LEADOS.store.load();
+    render();
+  });
+  // In case DOMContentLoaded already fired by the time this executes:
+  if (document.readyState !== 'loading') { LEADOS.store.load(); render(); }
+
+})();
+</script>
+</body>
 </html>

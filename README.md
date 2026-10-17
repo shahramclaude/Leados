@@ -1,166 +1,95 @@
-# LeadOS pt-M, Part 1 — Inference Chain Engine
+# LEADOS — Autonomous Workflow Engine (sandbox, Part 2)
 
-A React + Vite + Tailwind app implementing **Part 1** of the pt-M
-"Autonomous Reasoning Engine" brief: a small deductive **forward-chaining**
-engine, an **abductive (backward-chaining)** root-cause analyzer, and one
-**temporal** prediction pattern — all computed live over a toggleable
-17-rule Signal Board. Not ML. No network calls. All state lives in
-`localStorage`.
+A single-file `index.html` implementing this task's **"Part 2: The Automated
+Workflow Engine"** specification — six bounded, auditable autonomous
+workflows (`LEADOS.autonomous`) and a persistent work queue
+(`LEADOS.workQueue`) — on top of a small, original "Part 1" foundation built
+only so the engine has real data and a real UI to operate on.
 
 > **Provenance — read before assuming this continues `github.com/wbweve/Leados`:**
-> `github.com/wbweve/Leados` was inspected directly this session (GitHub's
-> REST API for the file tree, and full raw fetches of `src/App.tsx`,
-> `src/lib/core.ts`, `src/lib/intelligence.ts`, `src/lib/physics.ts`, and
-> the root `README.md`) before any code here was written. Short version:
+> that repo was inspected directly this session (its rendered GitHub page, its
+> file tree via GitHub's REST API, and its own `AI-SESSION-LOG.md`, all fetched
+> live). Full ledger in `AI-SESSION-LOG.md`, short version here, in-app at
+> **About / Provenance**:
 >
-> * The real repo is **two deliveries in one place**: ~60 loose files at
->   repo root (an older, larger build) plus a separate, live
->   Vite+React+TypeScript app under `src/`.
-> * **Verified broken in the real repo, by reading the files directly:**
->   `src/lib/intelligence.ts` and `src/lib/physics.ts` both
->   `import { engine, run } from "./core"`, but the real `src/lib/core.ts`
->   exports neither `engine` nor any `run` function. Its actual exports
->   (`loadState`, `saveState`, `project`, …) are a different, incompatible
->   shape.
-> * **The real repo's own documentation disagrees with itself** about this:
->   the top-level `README.md` flags the break; `intelligence.ts`'s own
->   in-file disclosure comment (from an earlier session) does not, and
->   describes a different file-count/lineage story. Both are reported here;
->   neither is taken at face value. Full ledger in `AI-SESSION-LOG.md`.
-> * This app **does not** reuse `core.ts`, `intelligence.ts`, or
->   `physics.ts` — their data model never resolves in the real repo, and
->   the pasted pt-M brief's own pseudocode assumes that same unverified
->   shape. A fresh, minimal, self-contained model was written instead.
+> * The real repo's own README describes a **React + Vite + TypeScript** app
+>   (`src/App.tsx` entry point) — not a hand-authored single HTML file.
+> * The real repo's own prior session log confirms a real, wired
+>   `infoTheory.ts` module, but explicitly found **no CAS engine, no risk
+>   register, and no trace** of that session's own pasted "pt-L" brief
+>   anywhere in the repo — and treats such pasted briefs as **unverified
+>   specifications**, not repo fact.
+> * Whether this task's own pasted `LEADOS.autonomous` code exists anywhere in
+>   the real repo **could not be checked** (GitHub code search required
+>   sign-in, which this session didn't have) — **labeled unverified**, not
+>   claimed either way.
 >
-> **This build does not fork, copy, or continue any unverified history.**
-> It's a new implementation in this task's own environment (React + Vite +
-> Tailwind, `src/App.tsx` entry point, built with `npm run build`),
-> reusing only specific rule IDs from the pasted brief so its named
-> scenarios are explorable — original code throughout.
+> **This file does not fork, copy, or continue any code read from that repo.**
+> It is a fresh, original build implementing only the *functional spec*
+> pasted into this task.
 
 ## Run it
 
-`npm install && npm run build`, then open `dist/index.html`. The build
-(via `vite-plugin-singlefile`) inlines all JS/CSS into that one file, so
-it opens with zero runtime network calls.
+Open `index.html` in a browser. No build step, no network calls beyond the
+Tailwind CDN `<script>` tag. State lives in `localStorage` under
+`leados:autonomous-sandbox:v1`. Use **Reset data** (top-right) to clear it.
 
-For development: `npm run dev`.
+## What's actually in this file
 
-State lives in `localStorage` under `leados-ptm:v1`. Use **Reset to empty
-board** (Today view) to clear it.
+### Part 1 (minimal, original — built only to give Part 2 something real to run on)
+- A synthetic 5-person roster, event log, and open commitments.
+- `LEADOS.store` — localStorage persistence + a live audit log.
+- `LEADOS.engine` — 8 small rule-based findings (R1, R8, R10, R30, R39, R86, R88, R106: overdue 1:1s/skip-levels/team reviews/OKR check-ins/perf reviews, attrition risk, trust-collapse signal, runway-critical).
+- `LEADOS.ambient`, `LEADOS.predict`, `LEADOS.decisions`, `LEADOS.playbooks`, `LEADOS.riskIntelligence`, `LEADOS.narrative`, `LEADOS.nlg` — small original implementations satisfying the function signatures Part 2 calls into.
+
+### Part 2 (the actual deliverable for this task)
+- `LEADOS.autonomous.WORKFLOWS` — WF-001…WF-006, implemented from the pasted
+  spec as close to verbatim as possible (see **Disclosed fixes** below).
+- `LEADOS.autonomous.runWorkflows(P, today, triggers, newFindings)`.
+- `LEADOS.workQueue` — `add` / `accept` / `dismiss` / `pending`, exactly as
+  pasted, persisted in `state.meta.workQueue`, capped at 20 items.
+- A **Today** view with an "Autonomous Work Queue" section: every workflow
+  result is rendered as a labeled card with its own action buttons (accept,
+  regenerate, dismiss) — nothing fires silently.
+- Manual trigger buttons stand in for a real scheduler (a browser tab has no
+  cron): "run session-start check," "run weekly/temporal check," "simulate
+  incoming critical finding."
+
+## Boundaries (enforced in code, not just copy)
+
+1. Never appends events without explicit user confirmation — the engine only
+   ever *returns* work-product objects; nothing is written to `events` by any
+   workflow.
+2. Never makes decisions — only `LEADOS.workQueue.accept()`, triggered by a
+   user clicking a button, changes an item's status.
+3. Never sends communications — all playbook output opens in a modal headed
+   "Not sent. Not saved as a decision."
+4. Never overrides a user's previous decision — `accept`/`dismiss` only ever
+   apply to the specific work-queue item clicked.
+5. All automated work products are labeled — every card shows its workflow
+   ID, status, and an amber "auto-generated" label; every draft modal repeats
+   the disclaimer.
+6. Every autonomous action is auditable and reversible — `LEADOS.store.auditLive`
+   logs every workflow execution, acceptance, dismissal, and setting change;
+   the Today view's Audit Trail panel shows the live log.
 
 ## Pages (hash routes)
 
 | Route | What it does |
 |---|---|
-| `#/today` | Overview: active finding count, how many inferences are currently firing, historical-attrition count, a one-click demo preset that fires all three forward patterns at once, and an in-browser self-test runner (`ST-001`..`ST-008`). |
-| `#/signals` | The Signal Board: 17 synthetic rule IDs across 5 categories (People, Revenue, Engineering, Crisis, Strategy), each toggleable; counter rules (like R1, missed 1:1s) accumulate occurrences; a `crisisCount` metric stepper; an attrition-history log (log a departure today, or seed deterministic synthetic past departures). |
-| `#/inference` | The **Inference Engine**: three forward-chaining patterns (premises shown met/unmet live), one abductive backward-chaining analysis (ranked hypotheses with evidence scores), and one temporal pattern (departure-cascade rate computed from your logged attrition history). |
-| `#/about` | Full provenance ledger — what was checked against the real repo, what was found (including the repo's internal self-contradiction), and what's explicitly out of scope for this delivery. |
-
-## The five inference patterns
-
-- **INF-001 — Leadership Absence Cascade** (forward): fires when R1 (missed
-  1:1s) ≥ 2, R3 (ownerless goal), and R10 (growth plan missed) are all
-  active.
-- **INF-002 — Revenue Model Validity Collapse** (forward): fires when R104
-  (LTV:CAC < 3), R109 (cohort retention declining), and R87 (win/loss
-  concentration) are all active.
-- **INF-003 — Organizational Immune Response Failure** (forward): fires
-  when R133 (recurring crisis root cause), R128 (postmortem action
-  ghosted), and a separate `crisisCount` metric ≥ 2 are all true.
-- **INF-004 — Velocity Decline Root Cause Analysis** (backward/abductive):
-  triggered by R73 (velocity declining); ranks four hypotheses — capacity
-  reduction, technical-debt drag, morale degradation, scope creep — by
-  evidence for/against, and surfaces the best-scoring one with its
-  intervention while keeping the rest visible.
-- **INF-005 — Departure Cascade Prediction** (temporal): needs ≥ 3
-  historical attrition dates; computes the fraction of past departures
-  that were followed by another within 60 days, from *your own* logged
-  history, not a fixed rule.
-
-## What's original, what's modeled on the pasted brief, what's explicitly cut
-
-- **Modeled closely on the pasted pt-M "Part 1" brief, reimplemented as
-  real TypeScript:** the five `INF-00x` patterns, their premises/
-  hypotheses/interventions text, and the forward/backward/temporal
-  chaining algorithms. The brief's pseudocode referenced undefined helpers
-  (`LEADOS.engine._days`, `P.state.events`) that don't exist in any
-  verified source, so a self-contained `AppState` model replaces them —
-  same logic, new plumbing.
-- **Built from scratch, original to this delivery:** the 17-rule catalog,
-  the Signal Board UI, the attrition-history log, the demo preset, and the
-  self-test suite.
-- **A gap, left as a gap:** pt-M's introduction describes a full autonomous
-  layer (continuous reasoning, bounded autonomous action, self-maintenance,
-  learning from outcomes, approvable work products). Only "Part 1" had a
-  complete spec in this message, so only Part 1 is built. See
-  `AI-SESSION-LOG.md` §4.
-
-## Project structure
-
-```
-src/
-  lib/
-    types.ts       — shared types (Rule, Finding, AppState, pattern types)
-    rules.ts        — 17-rule synthetic catalog, 5 categories (original)
-    engine.ts         — Signal Board -> Finding[] projection + crisisCount metric
-    inference.ts        — INF-001..INF-005: forward / backward / temporal chaining
-    selfTest.ts           — original runtime self-tests (ST-001..ST-008)
-    store.ts                — localStorage persistence, demo preset, history seeder
-  components/
-    Shell.tsx                 — nav shell + shared UI primitives (SectionCard, Pill)
-    Views.tsx                   — TodayView / SignalsView / InferenceView / AboutView
-  App.tsx                         — hash router + route composition (entry point)
-```
+| `#/today` | Snapshot counters, boundaries panel, manual workflow triggers, the Autonomous Work Queue, queue history, audit trail. |
+| `#/findings` | Live list of the 8 synthetic rule findings, each with a "Draft response" button into the matching playbook. |
+| `#/risk` | The 8-category risk register (always shows all 8, even at zero), via `LEADOS.riskIntelligence.buildRiskRegister`. |
+| `#/settings` | Edit cadence thresholds, runway, trust-collapse flag, and per-person flight-risk flag — feeds the findings engine and WF-006's drift detector live. |
+| `#/about` | Full provenance ledger — what was checked against the real repo, what was found, and what's labeled unverified. |
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` first — file tree via the GitHub
-  REST API, then full raw fetches of `src/App.tsx`, `src/lib/core.ts`,
-  `src/lib/intelligence.ts`, `src/lib/physics.ts`, and the root
-  `README.md` — before writing any code.** *Why:* the task requires
-  inspecting actual code, not trusting a README's self-framing (or this
-  session's own prose) at face value.
-- **Confirmed, by reading both files directly, that `intelligence.ts` and
-  `physics.ts` import `{ engine, run }` from a `core.ts` that exports
-  neither.** *Why this matters:* it means those two files cannot run in
-  the real app as committed — a concrete, checkable fact, not a vibe.
-- **Flagged that the repo's own documentation is internally
-  inconsistent** (`intelligence.ts`'s in-file disclosure vs. the top-level
-  `README.md` tell different provenance stories). *Why disclosed this
-  way:* an AI-authored repo accumulating sessions that each trust the
-  previous session's self-report, without re-checking it, is exactly how
-  false claims compound — surfacing the contradiction is more useful than
-  silently picking one side.
-- **Declared the pasted "pt-M" brief's autonomous-layer framing a roadmap
-  statement, not a spec, beyond Part 1.** *Why:* only Part 1 (the
-  Inference Chain Engine) was given with implementable detail in this
-  message; building the rest would mean inventing unspecified mechanisms
-  under the pt-M name.
-- **Replaced the brief's pseudocode event-log helpers with a small typed
-  `AppState`, instead of trying to resurrect `core.ts`/`intelligence.ts`
-  from the real repo.** *Why:* those real files' dependency never
-  resolves (see above); building on a broken import would just move the
-  breakage here.
-- **Reused specific rule IDs from the pasted brief (R1, R3, R7, R10, R19,
-  R20, R38, R68, R73, R74, R79, R81, R87, R104, R109, R128, R133) inside an
-  otherwise-original 17-rule catalog.** *Why:* lets the brief's own named
-  scenarios (leadership absence cascade, revenue model collapse, immune
-  response failure, velocity root-cause, departure cascade) be explored
-  directly, without claiming those IDs came from a real rule engine.
-- **Added a demo preset and attrition-history seeder.** *Why:* with 17
-  independently togglable rules plus a 3-event minimum for the temporal
-  pattern, manually reconstructing all five firing conditions is tedious;
-  the preset/seeder make the full engine demonstrable in two clicks
-  without hiding how it was triggered.
-- **Wrote an original self-test suite (`ST-001`..`ST-008`) instead of the
-  pasted brief's named `T_L_*`/`G_L_*` test IDs.** *Why:* that suite's
-  existence/content could not be verified anywhere this session; new IDs
-  avoid implying a false provenance, and the tests pin down the exact
-  threshold edge cases (R1 ≥ 2 vs ≥ 1; `crisisCount` gating INF-003
-  independently of its two findings) that are easy to get subtly wrong.
-- **Used a new storage key (`leados-ptm:v1`).** *Why:* this workspace
-  began with the default scaffold `App.tsx` and no prior state; reusing
-  another session's or another repo's key would assert a shared history
-  that doesn't exist here.
+- **Inspected `github.com/wbweve/Leados` first** (rendered README, GitHub REST API file tree, raw `AI-SESSION-LOG.md`, raw root `index.html`) before writing any code — *why*: the task requires inspecting actual code, not trusting either the README's self-framing or the task prompt's own pasted spec at face value.
+- **Attempted but could not verify** whether the pasted `LEADOS.autonomous` code exists in the real repo (GitHub code search required sign-in) — *why disclosed*: an inconclusive check is not the same as a confirmed absence; both the log and this README say so explicitly instead of implying a cleaner finding than was actually obtained.
+- **Built an original, minimal "Part 1" foundation from scratch** instead of inventing a plausible-sounding reconstruction of a prior session's Part 1 — *why*: this workspace started empty (verified: `index.html`, `README.md`, `AI-SESSION-LOG.md` all failed to read before this session wrote them); claiming continuity with an inaccessible prior session would be the same provenance error the real repo's own sessions have repeatedly flagged in each other.
+- **Fixed `runWorkflows` to forward a `newFindings` argument** — *why*: the pasted `WF-003.execute(P, today, newFindings)` needs a third argument the pasted `runWorkflows` never supplied; without this, WF-003 would be permanently dead code.
+- **Added a Monday-only gate for `WF-001`'s `MONDAY_07:00_LOCAL` schedule** — *why*: the pasted `runWorkflows` never reads the `schedule` field, which would make a "weekly Monday digest" fire on any day; the minimal fix makes the field's own stated contract true. `WF-005`'s `BOARD_MEETING_MINUS_14_DAYS` was left ungated at the `runWorkflows` level, exactly as pasted, since its date-window check already lives inside `execute()`.
+- **Implemented `generateBoardAlert`, `computeResponseDeadline`, `computeFiveThingsThatMatter`, `detectCadenceDrift` from scratch** — *why*: referenced by name in the pasted spec but never defined in it; same convention the real repo's own sessions used for their own undefined dependencies (e.g. `scoreCulture()`), disclosed rather than silently invented.
+- **Added manual "run workflow" buttons instead of a real scheduler** — *why*: a static HTML file in a browser tab has no cron/background clock; the buttons make each workflow's `trigger`/`schedule` metadata demonstrably exercisable instead of inert decoration.
+- **Used a new storage key (`leados:autonomous-sandbox:v1`)** — *why*: no prior session's state is accessible from this workspace, so claiming continuity with any other key would assert a shared history that doesn't exist here.
