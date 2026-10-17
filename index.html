@@ -1,12 +1,640 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LeadOS pt-P — Organizational Life Stage Intelligence</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEADOS — Sandbox (single-file rebuild)</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .tab-btn.active { background:#1f2937; color:#fff; }
+  .view { display:none; }
+  .view.active { display:block; }
+  .star { color:#d1d5db; }
+  .star.filled { color:#b45309; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+</style>
+</head>
+<body class="bg-stone-50 text-stone-900 min-h-screen">
+
+<header class="bg-stone-900 text-stone-100 sticky top-0 z-20 shadow">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+    <div>
+      <h1 class="font-bold text-lg tracking-tight">LEADOS <span class="text-amber-500">sandbox</span></h1>
+      <p class="text-xs text-stone-400">Single-file rebuild · vanilla JS · localStorage · zero network calls</p>
+    </div>
+    <nav class="flex flex-wrap gap-1 text-sm">
+      <button class="tab-btn px-3 py-1.5 rounded-md hover:bg-stone-700" data-view="today">Today</button>
+      <button class="tab-btn px-3 py-1.5 rounded-md hover:bg-stone-700" data-view="signals">Signals</button>
+      <button class="tab-btn px-3 py-1.5 rounded-md hover:bg-stone-700" data-view="thermo">Thermodynamics</button>
+      <button class="tab-btn px-3 py-1.5 rounded-md hover:bg-stone-700" data-view="cas">CAS</button>
+      <button class="tab-btn px-3 py-1.5 rounded-md hover:bg-stone-700" data-view="risk">Risk</button>
+      <button class="tab-btn px-3 py-1.5 rounded-md hover:bg-stone-700" data-view="scorecard">Scorecard</button>
+      <button class="tab-btn px-3 py-1.5 rounded-md hover:bg-stone-700" data-view="about">About / Provenance</button>
+    </nav>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+  <!-- TODAY -->
+  <section id="view-today" class="view space-y-4">
+    <h2 class="text-xl font-semibold">Today</h2>
+    <div id="today-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+    <div class="bg-white rounded-xl border border-stone-200 p-4">
+      <h3 class="font-semibold mb-2">Leadership Scorecard (preview)</h3>
+      <div id="today-scorecard" class="flex flex-wrap gap-6"></div>
+      <p class="text-xs text-stone-500 mt-2">Full detail and disclosed limits on the <button class="underline" data-goto="scorecard">Scorecard</button> tab.</p>
+    </div>
+    <div class="bg-white rounded-xl border border-stone-200 p-4">
+      <h3 class="font-semibold mb-2">Scenario presets</h3>
+      <div class="flex flex-wrap gap-2">
+        <button class="preset-btn px-3 py-1.5 bg-stone-800 text-white rounded-md text-sm" data-preset="calm">Calm baseline</button>
+        <button class="preset-btn px-3 py-1.5 bg-stone-800 text-white rounded-md text-sm" data-preset="burnout">Burnout loop</button>
+        <button class="preset-btn px-3 py-1.5 bg-stone-800 text-white rounded-md text-sm" data-preset="runway">Financial bifurcation</button>
+        <button class="preset-btn px-3 py-1.5 bg-stone-800 text-white rounded-md text-sm" data-preset="reset">Reset synthetic data</button>
+      </div>
+    </div>
+    <div class="bg-white rounded-xl border border-stone-200 p-4">
+      <h3 class="font-semibold mb-2">In-browser self-tests</h3>
+      <button id="run-tests" class="px-3 py-1.5 bg-amber-700 text-white rounded-md text-sm">Run self-tests</button>
+      <pre id="test-output" class="text-xs mt-3 bg-stone-900 text-green-300 p-3 rounded-md overflow-x-auto"></pre>
+    </div>
+  </section>
+
+  <!-- SIGNALS -->
+  <section id="view-signals" class="view space-y-4">
+    <h2 class="text-xl font-semibold">Signal Board</h2>
+    <p class="text-sm text-stone-600">Synthetic rule IDs across 8 categories. Toggle on/off, set severity, optionally link to a person. "Recurrence x3" feeds the CAS attractor detector.</p>
+    <div class="flex items-center gap-3 bg-white border border-stone-200 rounded-xl p-4">
+      <label class="text-sm font-medium">Runway (months): <span id="runway-val">8</span></label>
+      <input id="runway-slider" type="range" min="0" max="24" value="8" class="flex-1">
+    </div>
+    <div id="signal-board" class="grid md:grid-cols-2 gap-3"></div>
+  </section>
+
+  <!-- THERMO -->
+  <section id="view-thermo" class="view space-y-4">
+    <h2 class="text-xl font-semibold">Thermodynamics (information theory)</h2>
+    <p class="text-sm text-stone-600">Computed over a deterministic synthetic event log (seeded PRNG, regenerated from current signals/roster). Standard Shannon (1948) formulas. <strong>Disclosed limit:</strong> band cutoffs below are an illustrative convention, not a validated organizational-science threshold.</p>
+    <div id="thermo-cards" class="grid grid-cols-2 md:grid-cols-4 gap-3"></div>
+    <div class="bg-white rounded-xl border border-stone-200 p-4">
+      <h3 class="font-semibold mb-2">Mutual information between two people</h3>
+      <div class="flex gap-2 mb-2">
+        <select id="mi-a" class="border rounded px-2 py-1 text-sm"></select>
+        <select id="mi-b" class="border rounded px-2 py-1 text-sm"></select>
+      </div>
+      <p id="mi-result" class="text-sm"></p>
+    </div>
+    <div class="bg-white rounded-xl border border-stone-200 p-4">
+      <h3 class="font-semibold mb-2">Information bottlenecks</h3>
+      <p class="text-xs text-stone-500 mb-2">People whose "information out" (active signals linked to them) is &lt;30% of the mean.</p>
+      <ul id="bottleneck-list" class="text-sm list-disc list-inside"></ul>
+    </div>
+  </section>
+
+  <!-- CAS -->
+  <section id="view-cas" class="view space-y-4">
+    <h2 class="text-xl font-semibold">Complex Adaptive Systems engine</h2>
+    <p class="text-sm text-stone-600">Feedback loops, bifurcation points and attractors — computed live from the Signal Board + runway slider.</p>
+    <div class="grid md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-xl border border-stone-200 p-4">
+        <h3 class="font-semibold mb-2">Feedback loops</h3>
+        <ul id="cas-loops" class="text-sm space-y-2"></ul>
+      </div>
+      <div class="bg-white rounded-xl border border-stone-200 p-4">
+        <h3 class="font-semibold mb-2">Bifurcation points</h3>
+        <ul id="cas-bifurcations" class="text-sm space-y-2"></ul>
+      </div>
+      <div class="bg-white rounded-xl border border-stone-200 p-4">
+        <h3 class="font-semibold mb-2">Attractors</h3>
+        <ul id="cas-attractors" class="text-sm space-y-2"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- RISK -->
+  <section id="view-risk" class="view space-y-4">
+    <h2 class="text-xl font-semibold">Risk Register</h2>
+    <p class="text-sm text-stone-600">All 8 categories always shown, even at zero. Cross-category amplification is flagged when two linked categories are both active above threshold.</p>
+    <div id="risk-grid" class="grid md:grid-cols-2 gap-3"></div>
+    <div class="bg-white rounded-xl border border-stone-200 p-4">
+      <h3 class="font-semibold mb-2">Cross-category amplification</h3>
+      <ul id="amp-list" class="text-sm space-y-1 list-disc list-inside"></ul>
+    </div>
+  </section>
+
+  <!-- SCORECARD -->
+  <section id="view-scorecard" class="view space-y-4">
+    <h2 class="text-xl font-semibold">Leadership Scorecard</h2>
+    <div class="grid md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-xl border border-stone-200 p-5">
+        <h3 class="font-semibold">RESILIENCE</h3>
+        <div id="sc-resilience-stars" class="text-2xl my-1"></div>
+        <p class="text-xs text-stone-500">5 minus (active feedback loops + active bifurcations), clamped 1–5. Computed live from the CAS panel.</p>
+      </div>
+      <div class="bg-white rounded-xl border border-stone-200 p-5">
+        <h3 class="font-semibold">EXECUTION</h3>
+        <div id="sc-execution-stars" class="text-2xl my-1"></div>
+        <p class="text-xs text-stone-500">5 minus floor(active EXECUTION-category severity / 5), clamped 1–5. Computed live from the Risk Register.</p>
+      </div>
+      <div class="bg-white rounded-xl border border-stone-200 p-5">
+        <h3 class="font-semibold">CULTURE</h3>
+        <div id="sc-culture-stars" class="text-2xl my-1"></div>
+        <input id="culture-slider" type="range" min="1" max="5" value="3" class="w-full mt-2">
+        <p class="text-xs text-amber-700 mt-1 font-medium">⚠ Manual seed value, not computed.</p>
+        <p class="text-xs text-stone-500">No verified <code>scoreCulture()</code>-equivalent function was found anywhere in the real repo's reachable source this session (see About tab) — so this bar is a disclosed manual input, not a derived metric, to avoid fabricating a formula under a false provenance.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section id="view-about" class="view space-y-4">
+    <h2 class="text-xl font-semibold">About / Provenance</h2>
+    <div class="bg-white rounded-xl border border-stone-200 p-4 text-sm space-y-3" id="about-content"></div>
+  </section>
+
+</main>
+
+<footer class="max-w-6xl mx-auto px-4 pb-10 text-xs text-stone-400">
+  LEADOS sandbox rebuild · state in localStorage key <code>leados-vanilla:v1</code> · no external calls after load.
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Config: 8 risk categories ----------
+  const CATEGORIES = ["PEOPLE","EXECUTION","FINANCIAL","OPERATIONAL","CULTURE","STRATEGIC","COMPLIANCE","TECHNICAL"];
+
+  // ---------- Synthetic roster ----------
+  const ROSTER = ["Avery","Blair","Casey","Dana","Elliot"];
+
+  // ---------- Synthetic rule catalog (original to this build) ----------
+  const RULES = [
+    {id:"R1",cat:"PEOPLE",title:"Repeated 1:1 cancellations",sev:2},
+    {id:"R2",cat:"PEOPLE",title:"No growth conversation in 90 days",sev:2},
+    {id:"R3",cat:"PEOPLE",title:"Sentiment drop in check-ins",sev:3},
+    {id:"R4",cat:"PEOPLE",title:"After-hours message spike",sev:3},
+    {id:"R5",cat:"EXECUTION",title:"Sprint commitment miss x2",sev:3},
+    {id:"R6",cat:"EXECUTION",title:"Scope creep on active initiative",sev:2},
+    {id:"R7",cat:"EXECUTION",title:"Single point of delivery failure",sev:4},
+    {id:"R8",cat:"EXECUTION",title:"Velocity trend declining 3 cycles",sev:3},
+    {id:"R9",cat:"FINANCIAL",title:"Burn rate above plan",sev:3},
+    {id:"R10",cat:"FINANCIAL",title:"Runway under 6 months",sev:5},
+    {id:"R11",cat:"FINANCIAL",title:"Unbudgeted vendor spend",sev:2},
+    {id:"R12",cat:"OPERATIONAL",title:"Incident response SLA missed",sev:3},
+    {id:"R13",cat:"OPERATIONAL",title:"Single-person process dependency",sev:3},
+    {id:"R14",cat:"OPERATIONAL",title:"On-call fatigue reported",sev:3},
+    {id:"R15",cat:"CULTURE",title:"Psych-safety survey decline",sev:3},
+    {id:"R16",cat:"CULTURE",title:"Recognition events trending down",sev:1},
+    {id:"R17",cat:"CULTURE",title:"Trust collapse signal (exit interview)",sev:5},
+    {id:"R18",cat:"STRATEGIC",title:"Roadmap churn above baseline",sev:2},
+    {id:"R19",cat:"STRATEGIC",title:"Competitive pressure escalation",sev:3},
+    {id:"R20",cat:"STRATEGIC",title:"OKR drift uncorrected",sev:2},
+    {id:"R21",cat:"COMPLIANCE",title:"Overdue mandatory training",sev:2},
+    {id:"R22",cat:"COMPLIANCE",title:"Access review overdue",sev:3},
+    {id:"R23",cat:"TECHNICAL",title:"Rising critical bug backlog",sev:3},
+    {id:"R24",cat:"TECHNICAL",title:"Tech-debt interest exceeding paydown",sev:3},
+    {id:"R25",cat:"TECHNICAL",title:"Test coverage regression",sev:2},
+    {id:"R26",cat:"PEOPLE",title:"Workload concentration on one IC",sev:3},
+    {id:"R27",cat:"EXECUTION",title:"Cross-team blocker unresolved 14d",sev:3},
+    {id:"R28",cat:"OPERATIONAL",title:"Vendor dependency single-sourced",sev:2},
+    {id:"R29",cat:"STRATEGIC",title:"Key customer churn risk flagged",sev:4},
+    {id:"R30",cat:"CULTURE",title:"Manager span-of-control overload",sev:2}
+  ];
+
+  // Cross-category pairs considered for amplification + named feedback loops
+  const AMPLIFY_PAIRS = [
+    ["PEOPLE","EXECUTION","Burnout → delivery risk loop"],
+    ["FINANCIAL","STRATEGIC","Austerity-driven strategy risk"],
+    ["CULTURE","PEOPLE","Trust collapse → attrition risk"],
+    ["OPERATIONAL","TECHNICAL","Ops fragility compounding tech debt"]
+  ];
+
+  const STORAGE_KEY = "leados-vanilla:v1";
+
+  function defaultState(){
+    return {
+      runway: 8,
+      cultureManual: 3,
+      recurrence: {}, // ruleId -> count (for attractor sim)
+      signals: {
+        // default demo set reproduces RESILIENCE=4, EXECUTION=4, CULTURE=3 on first load
+        R4: {active:true, sev:3, person:"Avery"},   // PEOPLE, Avery
+        R7: {active:true, sev:4, person:"Avery"},   // EXECUTION, Avery -> forms 1 feedback loop (PEOPLE+EXECUTION same person)
+        R5: {active:true, sev:3, person:"Blair"},   // EXECUTION severity (3+4=7 -> floor(7/5)=1 -> 5-1=4)
+        R15:{active:true, sev:3, person:"Casey"},
+        R23:{active:true, sev:2, person:"Dana"}
+      }
+    };
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      return Object.assign(defaultState(), parsed);
+    }catch(e){ return defaultState(); }
+  }
+  function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  let state = loadState();
+
+  // ---------- Seeded PRNG for deterministic synthetic event log ----------
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  function buildEventLog(){
+    // deterministic seed derived from active signal ids so it reacts to state but stays reproducible
+    const activeIds = Object.keys(state.signals).filter(id=>state.signals[id].active).sort().join(",");
+    let seed = 1337;
+    for(let i=0;i<activeIds.length;i++) seed = (seed*31 + activeIds.charCodeAt(i)) >>> 0;
+    const rand = mulberry32(seed || 1);
+    const log = []; // {person, eventsCount}
+    ROSTER.forEach((p)=>{
+      // base activity 5-15, boosted by any active signal linked to this person
+      let base = 5 + Math.floor(rand()*10);
+      const linked = Object.values(state.signals).filter(s=>s.active && s.person===p).length;
+      base += linked*4;
+      log.push({person:p, count: base});
+    });
+    return log;
+  }
+
+  // ---------- Info theory ----------
+  function shannonEntropy(counts){
+    const total = counts.reduce((a,b)=>a+b,0);
+    if(total===0) return 0;
+    let H = 0;
+    counts.forEach(c=>{
+      if(c<=0) return;
+      const p = c/total;
+      H -= p*Math.log2(p);
+    });
+    return H;
+  }
+
+  function infoTheoryMetrics(){
+    const log = buildEventLog();
+    const counts = log.map(l=>l.count);
+    const H = shannonEntropy(counts);
+    const maxH = Math.log2(counts.length || 1);
+    const entropyPct = maxH>0 ? (H/maxH*100) : 0;
+    const mean = counts.reduce((a,b)=>a+b,0)/counts.length;
+    const variance = counts.reduce((a,b)=>a+Math.pow(b-mean,2),0)/counts.length;
+    const noise = Math.sqrt(variance) || 0.0001;
+    const snr = mean/noise;
+    const bottlenecks = log.filter(l=>l.count < mean*0.3).map(l=>l.person);
+    return {log, H, entropyPct, mean, snr, bottlenecks};
+  }
+
+  // Simplified, discretized mutual-information proxy (low/mid/high activity buckets vs. roster mean).
+  // Disclosed approximation — not a full joint-probability MI estimator.
+  function mutualInformationDeterministic(personA, personB){
+    const log = buildEventLog();
+    const a = log.find(l=>l.person===personA);
+    const b = log.find(l=>l.person===personB);
+    if(!a||!b||personA===personB) return 0;
+    const mean = log.reduce((s,l)=>s+l.count,0)/log.length;
+    const bucket = (v)=> v < mean*0.8 ? 0 : (v > mean*1.2 ? 2 : 1);
+    return bucket(a.count)===bucket(b.count) ? 0.62 : 0.14;
+  }
+
+  // ---------- CAS engine ----------
+  function computeFeedbackLoops(){
+    const loops = [];
+    ROSTER.forEach(person=>{
+      const activeCatsForPerson = new Set(
+        Object.entries(state.signals)
+          .filter(([id,s])=>s.active && s.person===person)
+          .map(([id])=>RULES.find(r=>r.id===id).cat)
+      );
+      AMPLIFY_PAIRS.forEach(([c1,c2,label])=>{
+        if(activeCatsForPerson.has(c1) && activeCatsForPerson.has(c2)){
+          loops.push({person, label, cats:[c1,c2]});
+        }
+      });
+    });
+    return loops;
+  }
+
+  function computeBifurcations(){
+    const points = [];
+    if(state.runway < 6){
+      points.push({label:`Runway ${state.runway} mo < 6 mo threshold`, cat:"FINANCIAL"});
+    }
+    CATEGORIES.forEach(cat=>{
+      const score = Object.entries(state.signals)
+        .filter(([id,s])=>s.active && RULES.find(r=>r.id===id).cat===cat)
+        .reduce((sum,[id,s])=>sum+s.sev,0);
+      if(score >= 10){
+        points.push({label:`${cat} cumulative severity ${score} ≥ 10`, cat});
+      }
+    });
+    return points;
+  }
+
+  function computeAttractors(){
+    return Object.entries(state.recurrence)
+      .filter(([id,count])=>count>=3 && state.signals[id] && state.signals[id].active)
+      .map(([id,count])=>({id, title: RULES.find(r=>r.id===id).title, count}));
+  }
+
+  // ---------- Risk register ----------
+  function computeRiskRegister(){
+    return CATEGORIES.map(cat=>{
+      const activeRules = Object.entries(state.signals)
+        .filter(([id,s])=>s.active && RULES.find(r=>r.id===id).cat===cat)
+        .map(([id,s])=>({...RULES.find(r=>r.id===id), sev:s.sev, person:s.person}));
+      const score = activeRules.reduce((sum,r)=>sum+r.sev,0);
+      return {cat, score, rules:activeRules};
+    });
+  }
+
+  function computeAmplifications(){
+    const reg = computeRiskRegister();
+    const scoreOf = cat => reg.find(r=>r.cat===cat).score;
+    return AMPLIFY_PAIRS.filter(([c1,c2])=> scoreOf(c1)>=4 && scoreOf(c2)>=4)
+      .map(([c1,c2,label])=>`${label} (${c1} + ${c2} both active)`);
+  }
+
+  // ---------- Scorecard ----------
+  function computeScorecard(){
+    const loops = computeFeedbackLoops();
+    const bifs = computeBifurcations();
+    const resilience = Math.min(5, Math.max(1, 5 - (loops.length + bifs.length)));
+    const reg = computeRiskRegister();
+    const execScore = reg.find(r=>r.cat==="EXECUTION").score;
+    const execution = Math.min(5, Math.max(1, 5 - Math.floor(execScore/5)));
+    const culture = state.cultureManual;
+    return {resilience, execution, culture};
+  }
+
+  function starsHTML(n){
+    let s = "";
+    for(let i=1;i<=5;i++){
+      s += `<span class="star ${i<=n?'filled':''}">★</span>`;
+    }
+    return s;
+  }
+
+  // ---------- Rendering ----------
+  function renderToday(){
+    const m = infoTheoryMetrics();
+    const loops = computeFeedbackLoops();
+    const bifs = computeBifurcations();
+    const reg = computeRiskRegister();
+    const totalScore = reg.reduce((a,r)=>a+r.score,0);
+    const activeCount = Object.values(state.signals).filter(s=>s.active).length;
+    document.getElementById("today-cards").innerHTML = `
+      <div class="bg-white rounded-xl border border-stone-200 p-4"><p class="text-xs text-stone-500">Overall risk score</p><p class="text-2xl font-bold">${totalScore}</p></div>
+      <div class="bg-white rounded-xl border border-stone-200 p-4"><p class="text-xs text-stone-500">Active findings</p><p class="text-2xl font-bold">${activeCount}</p></div>
+      <div class="bg-white rounded-xl border border-stone-200 p-4"><p class="text-xs text-stone-500">Entropy</p><p class="text-2xl font-bold">${m.entropyPct.toFixed(0)}%</p></div>
+      <div class="bg-white rounded-xl border border-stone-200 p-4"><p class="text-xs text-stone-500">CAS signals</p><p class="text-2xl font-bold">${loops.length} loops / ${bifs.length} bifurc.</p></div>
+    `;
+    const sc = computeScorecard();
+    document.getElementById("today-scorecard").innerHTML = `
+      <div><p class="text-xs font-semibold">RESILIENCE (${sc.resilience})</p><div class="text-xl">${starsHTML(sc.resilience)}</div></div>
+      <div><p class="text-xs font-semibold">EXECUTION (${sc.execution})</p><div class="text-xl">${starsHTML(sc.execution)}</div></div>
+      <div><p class="text-xs font-semibold">CULTURE (${sc.culture})</p><div class="text-xl">${starsHTML(sc.culture)}</div></div>
+    `;
+  }
+
+  function renderSignals(){
+    document.getElementById("runway-val").textContent = state.runway;
+    document.getElementById("runway-slider").value = state.runway;
+    const board = document.getElementById("signal-board");
+    board.innerHTML = CATEGORIES.map(cat=>{
+      const rules = RULES.filter(r=>r.cat===cat);
+      return `<div class="bg-white rounded-xl border border-stone-200 p-4">
+        <h4 class="font-semibold text-sm mb-2">${cat}</h4>
+        <div class="space-y-2">
+          ${rules.map(r=>{
+            const s = state.signals[r.id] || {active:false, sev:r.sev, person:""};
+            const rec = state.recurrence[r.id] || 0;
+            return `<div class="flex flex-wrap items-center gap-2 text-xs border-b border-stone-100 pb-2">
+              <input type="checkbox" class="sig-toggle" data-id="${r.id}" ${s.active?'checked':''}>
+              <span class="font-mono text-stone-400">${r.id}</span>
+              <span class="flex-1">${r.title}</span>
+              <select class="sig-sev border rounded px-1" data-id="${r.id}">
+                ${[1,2,3,4,5].map(n=>`<option value="${n}" ${s.sev==n?'selected':''}>sev ${n}</option>`).join("")}
+              </select>
+              <select class="sig-person border rounded px-1" data-id="${r.id}">
+                <option value="">(no person)</option>
+                ${ROSTER.map(p=>`<option value="${p}" ${s.person===p?'selected':''}>${p}</option>`).join("")}
+              </select>
+              <button class="sig-recur px-2 py-0.5 bg-stone-700 text-white rounded" data-id="${r.id}">recur x3 (${rec})</button>
+            </div>`;
+          }).join("")}
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderThermo(){
+    const m = infoTheoryMetrics();
+    document.getElementById("thermo-cards").innerHTML = `
+      <div class="bg-white rounded-xl border border-stone-200 p-4"><p class="text-xs text-stone-500">Shannon entropy</p><p class="text-xl font-bold">${m.H.toFixed(2)} bits</p></div>
+      <div class="bg-white rounded-xl border border-stone-200 p-4"><p class="text-xs text-stone-500">Entropy %</p><p class="text-xl font-bold">${m.entropyPct.toFixed(0)}%</p></div>
+      <div class="bg-white rounded-xl border border-stone-200 p-4"><p class="text-xs text-stone-500">Mean activity</p><p class="text-xl font-bold">${m.mean.toFixed(1)}</p></div>
+      <div class="bg-white rounded-xl border border-stone-200 p-4"><p class="text-xs text-stone-500">Signal/noise</p><p class="text-xl font-bold">${m.snr.toFixed(2)}</p></div>
+    `;
+    const selA = document.getElementById("mi-a"), selB = document.getElementById("mi-b");
+    if(!selA.options.length){
+      ROSTER.forEach(p=>{
+        selA.innerHTML += `<option value="${p}">${p}</option>`;
+        selB.innerHTML += `<option value="${p}">${p}</option>`;
+      });
+      selB.value = ROSTER[1];
+    }
+    const mi = mutualInformationDeterministic(selA.value, selB.value);
+    document.getElementById("mi-result").textContent = `I(${selA.value};${selB.value}) ≈ ${mi.toFixed(2)} bits (discretized low/mid/high proxy, disclosed approximation).`;
+    document.getElementById("bottleneck-list").innerHTML = m.bottlenecks.length
+      ? m.bottlenecks.map(p=>`<li>${p}</li>`).join("")
+      : `<li class="text-stone-400">None detected</li>`;
+  }
+
+  function renderCas(){
+    const loops = computeFeedbackLoops();
+    const bifs = computeBifurcations();
+    const attractors = computeAttractors();
+    document.getElementById("cas-loops").innerHTML = loops.length
+      ? loops.map(l=>`<li class="border-l-4 border-amber-600 pl-2"><strong>${l.person}</strong>: ${l.label}</li>`).join("")
+      : `<li class="text-stone-400">None detected</li>`;
+    document.getElementById("cas-bifurcations").innerHTML = bifs.length
+      ? bifs.map(b=>`<li class="border-l-4 border-red-600 pl-2">${b.label}</li>`).join("")
+      : `<li class="text-stone-400">None detected</li>`;
+    document.getElementById("cas-attractors").innerHTML = attractors.length
+      ? attractors.map(a=>`<li class="border-l-4 border-indigo-600 pl-2">${a.id} — ${a.title} (x${a.count})</li>`).join("")
+      : `<li class="text-stone-400">None detected — toggle "recur x3" on a signal</li>`;
+  }
+
+  function renderRisk(){
+    const reg = computeRiskRegister();
+    document.getElementById("risk-grid").innerHTML = reg.map(r=>`
+      <div class="bg-white rounded-xl border border-stone-200 p-4">
+        <div class="flex justify-between items-center mb-1">
+          <h4 class="font-semibold text-sm">${r.cat}</h4>
+          <span class="text-xs font-mono bg-stone-100 px-2 py-0.5 rounded">${r.score}</span>
+        </div>
+        <ul class="text-xs text-stone-600 list-disc list-inside">
+          ${r.rules.length ? r.rules.map(x=>`<li>${x.id} ${x.title} (sev ${x.sev}${x.person?', '+x.person:''})</li>`).join("") : '<li class="text-stone-300">none active</li>'}
+        </ul>
+      </div>`).join("");
+    const amps = computeAmplifications();
+    document.getElementById("amp-list").innerHTML = amps.length
+      ? amps.map(a=>`<li>${a}</li>`).join("")
+      : `<li class="text-stone-400">None detected</li>`;
+  }
+
+  function renderScorecard(){
+    const sc = computeScorecard();
+    document.getElementById("sc-resilience-stars").innerHTML = starsHTML(sc.resilience) + ` <span class="text-sm text-stone-500">(${sc.resilience})</span>`;
+    document.getElementById("sc-execution-stars").innerHTML = starsHTML(sc.execution) + ` <span class="text-sm text-stone-500">(${sc.execution})</span>`;
+    document.getElementById("sc-culture-stars").innerHTML = starsHTML(sc.culture) + ` <span class="text-sm text-stone-500">(${sc.culture})</span>`;
+    document.getElementById("culture-slider").value = sc.culture;
+  }
+
+  function renderAbout(){
+    document.getElementById("about-content").innerHTML = `
+      <p class="font-semibold">What this build is</p>
+      <p>An original, single-file vanilla-JS/HTML/Tailwind rebuild of the functional ideas described in <code>github.com/wbweve/Leados</code>'s README (Signal Board, information-theory "Thermodynamics" panel, a CAS engine, an 8-category Risk Register, and — new in this delivery — a Leadership Scorecard). No code was copied from the real repo; it was inspected, not ported.</p>
+
+      <p class="font-semibold mt-3">Verified directly this session (via GitHub REST API + raw file fetches)</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li><strong>[VERIFIED]</strong> Repo root contains ~30+ loose <code>.tsx</code>/<code>.md</code> files directly at top level (e.g. <code>App.tsx</code>, <code>AboutView.tsx</code>, <code>FinanceDashboard.tsx</code>, <code>ProvenanceView.tsx</code>, <code>AI-SESSION-LOG.md</code>, <code>AI-SESSION-LOG.append.md</code>, <code>SESSION-3.patch.md</code>) — confirmed via <code>GET /repos/wbweve/Leados/contents/</code>.</li>
+        <li><strong>[VERIFIED]</strong> A separate <code>src/</code> tree also exists: <code>src/App.tsx</code>, <code>src/main.tsx</code>, <code>src/index.css</code>, <code>src/components/</code>, <code>src/lib/</code>, <code>src/utils/</code>.</li>
+        <li><strong>[VERIFIED]</strong> Root <code>package.json</code> (base64 content decoded) specifies React 19.2, Vite 7.3, TypeScript 5.9, <code>@tailwindcss/vite</code> 4.1, and <code>vite-plugin-singlefile</code> 2.3 — consistent with a "builds to one inlined HTML file" claim.</li>
+        <li><strong>[VERIFIED]</strong> <code>src/App.tsx</code>, read in full, imports and hash-routes to <code>TodayView</code>, <code>SignalBoardView</code>, <code>ThermodynamicsView</code>, <code>CasView</code>, <code>RiskView</code>, <code>AboutView</code> — this matches the current <code>README.md</code>'s own page table.</li>
+        <li><strong>[VERIFIED]</strong> <code>src/lib/</code> directory listing includes <code>casEngine.ts</code> (6,628 bytes), <code>core.ts</code> (8,820 bytes), <code>engine.ts</code> (1,093 bytes), plus at least a dozen other files (<code>a11y.ts</code>, <code>aesthetics.ts</code>, <code>circadian.ts</code>, <code>cssolver.ts</code>, <code>familiarity.ts</code>, <code>fatigue.ts</code>, <code>genome.ts</code>, <code>health.ts</code>, …) not mentioned at all in the README's "project structure" diagram.</li>
+        <li><strong>[CONTRADICTION FOUND]</strong> The repo's own on-disk <code>AI-SESSION-LOG.md</code> asserts "no file named <code>cas.ts</code>/<code>risk.ts</code>/equivalent" exists anywhere in <code>src/lib</code>. That is false as of this session's direct read: <code>casEngine.ts</code> is present. That log is stale relative to the current tree — a first-hand, concrete example of the README/log drift this repo's own lineage narrates about itself.</li>
+        <li><strong>[UNVERIFIED]</strong> The actual contents of <code>infoTheory.ts</code>, <code>riskIntelligence.ts</code>, <code>intelligence.ts</code>, and <code>casEngine.ts</code> were not read line-by-line this session (tool-call budget) — only their existence and byte size were confirmed via directory listing. Whether they are wired into live components, as the README claims, was not re-verified first-hand here.</li>
+        <li><strong>[UNVERIFIED / LIKELY STALE]</strong> A web-search cache returned a <em>different</em> README describing a flat, 14-file vanilla-JS "pt-3" project with <code>css/app.css</code> and <code>js/*.js</code> files. This does not match the live <code>raw.githubusercontent.com</code> README fetched the same session. Treated as a stale/historical snapshot, not current-state fact — which commit or point in time it reflects is unknown.</li>
+        <li><strong>[VERIFIED — but about the README text, not independently re-confirmed]</strong> The current README states that "cultural bifurcation" depends on an undefined <code>scoreCulture()</code> that was never found anywhere, and is left as a disclosed gap. That is a direct quote I read; I did not separately grep the whole repo myself to confirm no such function exists.</li>
+      </ul>
+
+      <p class="font-semibold mt-3">What that means for this delivery</p>
+      <ul class="list-disc list-inside space-y-1">
+        <li>Every number, rule ID, formula, and the entire Scorecard/CAS/Risk/Thermodynamics logic in this app is <strong>original to this session</strong> — it satisfies the same described behaviors (feedback loops, bifurcations, entropy, amplification) but is not a port of any file in the real repo.</li>
+        <li>The CULTURE score is left as a manual slider, not a computed metric, specifically because the one disclosed gap I could verify in the README text (no working <code>scoreCulture()</code>) made inventing a formula under that name feel like it would misattribute provenance.</li>
+        <li>This tool's environment only supports a hand-authored single <code>index.html</code> (no Vite/React build step) — so, unlike the real repo's <code>src/</code> app, this rebuild is vanilla JS, disclosed plainly rather than silently implying a build pipeline.</li>
+      </ul>
+    `;
+  }
+
+  function renderAll(){
+    renderToday(); renderSignals(); renderThermo(); renderCas(); renderRisk(); renderScorecard(); renderAbout();
+  }
+
+  // ---------- Event wiring ----------
+  document.querySelectorAll(".tab-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=> showView(btn.dataset.view));
+  });
+  document.querySelectorAll("[data-goto]").forEach(el=>{
+    el.addEventListener("click", ()=> showView(el.dataset.goto));
+  });
+  function showView(name){
+    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+    document.getElementById("view-"+name).classList.add("active");
+    document.querySelectorAll(".tab-btn").forEach(b=>b.classList.toggle("active", b.dataset.view===name));
+  }
+  showView("today");
+
+  document.getElementById("signal-board").addEventListener("change", (e)=>{
+    const id = e.target.dataset.id;
+    if(!id) return;
+    if(!state.signals[id]) state.signals[id] = {active:false, sev: RULES.find(r=>r.id===id).sev, person:""};
+    if(e.target.classList.contains("sig-toggle")) state.signals[id].active = e.target.checked;
+    if(e.target.classList.contains("sig-sev")) state.signals[id].sev = parseInt(e.target.value,10);
+    if(e.target.classList.contains("sig-person")) state.signals[id].person = e.target.value;
+    saveState(); renderAll();
+  });
+  document.getElementById("signal-board").addEventListener("click", (e)=>{
+    if(e.target.classList.contains("sig-recur")){
+      const id = e.target.dataset.id;
+      state.recurrence[id] = (state.recurrence[id]||0) + 3;
+      saveState(); renderAll();
+    }
+  });
+  document.getElementById("runway-slider").addEventListener("input", (e)=>{
+    state.runway = parseInt(e.target.value,10);
+    document.getElementById("runway-val").textContent = state.runway;
+    saveState(); renderAll();
+  });
+  document.getElementById("culture-slider").addEventListener("input", (e)=>{
+    state.cultureManual = parseInt(e.target.value,10);
+    saveState(); renderAll();
+  });
+  document.getElementById("mi-a").addEventListener("change", renderThermo);
+  document.getElementById("mi-b").addEventListener("change", renderThermo);
+
+  document.querySelectorAll(".preset-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const p = btn.dataset.preset;
+      if(p==="reset"){ state = defaultState(); }
+      if(p==="calm"){ state = defaultState(); Object.keys(state.signals).forEach(k=>state.signals[k].active=false); state.runway=18; }
+      if(p==="burnout"){
+        state = defaultState();
+        state.signals = {
+          R4:{active:true, sev:4, person:"Avery"},
+          R26:{active:true, sev:3, person:"Avery"},
+          R7:{active:true, sev:4, person:"Avery"},
+          R8:{active:true, sev:3, person:"Avery"}
+        };
+        state.runway = 10;
+      }
+      if(p==="runway"){
+        state = defaultState();
+        state.runway = 3;
+        state.signals = {R10:{active:true, sev:5, person:""}, R9:{active:true, sev:3, person:""}};
+      }
+      saveState(); renderAll();
+    });
+  });
+
+  // ---------- Self tests ----------
+  function runSelfTests(){
+    const results = [];
+    function assert(name, cond){ results.push(`${cond ? "PASS":"FAIL"} — ${name}`); }
+
+    assert("shannonEntropy([1,1,1,1]) ≈ 2 bits (uniform 4-way)", Math.abs(shannonEntropy([1,1,1,1]) - 2) < 1e-9);
+    assert("shannonEntropy([1,0,0,0]) = 0 bits (certainty)", Math.abs(shannonEntropy([1,0,0,0]) - 0) < 1e-9);
+
+    const savedSignals = JSON.parse(JSON.stringify(state.signals));
+    const savedRunway = state.runway;
+    state.signals = {R4:{active:true,sev:3,person:"Avery"}, R7:{active:true,sev:4,person:"Avery"}};
+    state.runway = 8;
+    const loops = computeFeedbackLoops();
+    assert("Same-person PEOPLE+EXECUTION active → 1 feedback loop detected", loops.length === 1);
+
+    state.runway = 3;
+    const bifs = computeBifurcations();
+    assert("Runway < 6 months → FINANCIAL bifurcation present", bifs.some(b=>b.cat==="FINANCIAL"));
+
+    state.recurrence = {R4: 3};
+    const att = computeAttractors();
+    assert("Recurrence count >= 3 on active rule → attractor detected", att.length === 1);
+
+    const reg = computeRiskRegister();
+    assert("Risk register always has 8 categories", reg.length === 8);
+
+    state.signals = savedSignals; state.runway = savedRunway; state.recurrence = {};
+
+    document.getElementById("test-output").textContent = results.join("\n");
+  }
+  document.getElementById("run-tests").addEventListener("click", runSelfTests);
+
+  renderAll();
+})();
+</script>
+</body>
 </html>

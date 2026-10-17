@@ -1,72 +1,47 @@
-# AI Session Log — LeadOS pt-P, Part 1 (Organizational Life Stage Intelligence)
+# AI Session Log — LEADOS single-file rebuild
 
-This log records what was actually checked against `github.com/wbweve/Leados` this
-session, via which calls, what was found, and what in this delivery is
-original, verified-pattern, or a disclosed gap. It is written before any claim
-about the real repo is made elsewhere in this delivery.
+This log records exactly what was fetched from `github.com/wbweve/Leados` this
+session, via which calls, what was found, and what is verified vs. unverified
+in the delivered `index.html`. Written from this session's own tool calls
+only — nothing here is copied from the repo's own internal session logs
+(those are quoted separately, explicitly, where relevant).
 
-## 1. What was fetched, and how (this session)
+## 1. Calls made this session, in order
 
-| # | Call | Purpose / result |
-|---|------|-------------------|
-| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered README) | Initial orientation — treated as a claim to verify, not fact. Describes a prior "pt-L" session's CAS/Thermodynamics/Risk sandbox delivery and its own provenance ledger. |
-| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Partial tree (response truncated by fetch-size limits before completing). Confirmed two deliveries exist: loose root files + a separate `src/` tree. |
-| 3 | `bash curl https://api.github.com/repos/wbweve/Leados/contents/` , `.../contents/src`, `.../contents/src/lib`, `.../contents/src/components` | Full, untruncated directory listings via `curl` (sandbox has outbound network access). Counted **~90 root-level files**, `src/lib` = **28 files**, `src/components` = **24 files**. |
-| 4 | `bash curl` of `src/App.tsx` (raw) | **Verified directly:** imports exactly `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`, `useHashRoute`, and `loadState` from `./lib/store`. |
-| 5 | `bash curl` loop downloading the raw content of all 28 `src/lib/*` files, all 24 `src/components/*` files, `src/App.tsx`, `src/main.tsx`, `src/index.css` into one local buffer, then `grep -i` for `lifeStage`, `computeMaturityProfile`, `PEOPLE_SYSTEMS`, `maturityProfile`, `DIMENSIONS` | **Zero matches anywhere in the live `src/` app.** |
-| 6 | Same loop repeated for all ~90 root-level loose files plus the root `index.html` | **Zero matches anywhere in the root-level files either.** |
-| 7 | `bash curl` of the root `index.html` directly | **Verified directly:** as of this session, the root `index.html` is the stock 12-line Vite template (`<div id="root">` + `<script src="/src/main.tsx">`), 352 bytes — not the ~54KB hand-authored single-file demo a prior session's own log (read in call #9) describes. The hand-authored demo has evidently been replaced since that log was written. |
-| 8 | `grep` of the raw import lines across all fetched `src/components/*.tsx` files | **Verified directly:** components such as `AccessibilityView.tsx`, `AestheticsView.tsx`, `CommandPalette.tsx`, `DecisionsView.tsx`, `DomainsView.tsx`, `EnergyView.tsx`, `EventLogView.tsx`, `HealthView.tsx`, `IntelligenceView.tsx`, `LogView.tsx`, `MemoryGenomeView.tsx`, `PeopleView.tsx`, `SynthesisView.tsx`, `Thermodynamics.tsx` are real files that import real `src/lib` modules (`aesthetics.ts`, `a11y.ts`, `circadian.ts`, `cssolver.ts`, `familiarity.ts`, `fatigue.ts`, `genome.ts`, `health.ts`, `infoTheory.ts`, `intelligence.ts`, `memory.ts`, `monteCarlo.ts`/`workers.ts`, `physics.ts`, `synthesis.ts`) — but **none of them is imported by the live `App.tsx`** (call #4), so none of them is reachable by navigating the running app. Real, but orphaned relative to the render path. |
-| 9 | `web_fetch` of the repo's own `AI-SESSION-LOG.md` (raw) | Read the prior session's own ledger directly. It documents, from that session's first-hand checks, that `src/lib/intelligence.ts` imports `{ engine, run }` from `./core`, and `core.ts` exports neither — a break that this session's own read of both files (within the call #5 buffer) confirms still holds. |
-| 10 | `bash curl -o /dev/null -w` of the root `index.html` | Confirmed HTTP 200 and the 352-byte size reported in #7 (not a truncated fetch artifact). |
-| 11 | `api.github.com/search/code?q=lifeStage+repo:wbweve/Leados` | **Failed** (API error — likely requires auth for code search). Not retried; superseded by the brute-force content grep in calls #5–#6, which is more exhaustive for this repo's file count anyway. |
+| # | Call | Result |
+|---|------|--------|
+| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered) | Returned the repo's current README, rendered. Self-describes as a React+Vite+Tailwind app with a provenance note about a "pt-K/pt-L" lineage. Treated as a claim, not fact, pending direct checks below. |
+| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive git tree (truncated by response size, but first ~35 entries captured). **Confirmed:** dozens of loose `.tsx`/`.md` files sitting directly at repo root (`AboutView.tsx`, `App.tsx`, `BulletGraph.tsx`, `BundleModal.tsx`, `BundlesView.tsx`, `CalibrationCurve.tsx`, `Catalog.tsx`, `ChartFrame.tsx`, `CohortGrid.tsx`, `CommandPalette.tsx`, `ContractView.tsx`, `DataView.tsx`, `DataWidgets.tsx`, `DomainViews.tsx`, `FinanceDashboard.tsx`, `GanttText.tsx`, `HealthView.tsx`, `Heatmap.tsx`, `Histogram.tsx`, `IntelligenceDashboard.tsx`, `IntelligenceView.tsx`, `LineChart.tsx`, `MaintenanceView.tsx`, `MiscViews.tsx`, `Network.tsx`, `OverlayPanels.tsx`, `PeopleDashboard.tsx`, `PlaybooksView.tsx`, `ProvenanceView.tsx`, `Radar.tsx`, `RosterView.tsx`, `ScoreMath.tsx`, `SESSION-3.patch.md`, plus `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `README.md`). |
+| 3 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read the repo's own on-disk session log in full. It claims (its own §2, V4): "No file, export, or identifier resembling a CAS engine... was found in the `src/lib` listing." |
+| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/README.md` | Read current README in full. Matches call #1's rendered content. Describes `src/lib/{types,rules,seed,store,engine,infoTheory,casEngine,riskIntelligence,selfTest,useHashRoute}.ts` and six route components. |
+| 5 | `web_search "site:github.com wbweve/Leados tree main src"` | Returned a **cached snippet describing a different README** — a flat, 14-entry, vanilla-JS "pt-3 growth slice" project (`css/app.css`, `js/store.js`, `js/events.js`, `js/engine.js`, `js/playbooks.js`, `js/ui.js`, `js/health.js`). This does not match calls #1/#4. **Flagged as stale/unverified** — likely a cached crawl of an earlier commit; exact commit/date unknown. Not used as a fact anywhere in the delivered app except to disclose the discrepancy itself. |
+| 6 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/` | Root directory listing (paginated/truncated by size, first ~10 entries captured in full: `AI-SESSION-LOG.append.md`, `AI-SESSION-LOG.md`, `AboutView.tsx`, `App.tsx`, `BulletGraph.tsx`, `BundleModal.tsx`, `BundlesView.tsx`, `CalibrationCurve.tsx`, `Catalog.tsx`, `ChartFrame.tsx`, `CohortGrid.tsx`...). Confirms call #2. |
+| 7 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/index.html` (root) | Confirmed the root `index.html` exists and its `<title>` is "LEADOS Sandbox — CAS Engine, Risk Intelligence & Thermodynamics." Did not read the rest of this file's body this session (budget). |
+| 8 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/src` | Confirmed `src/` contains `App.tsx` (1,195 bytes), `components/` (dir), `index.css` (23 bytes), `lib/` (dir), `main.tsx` (230 bytes), `utils/` (dir). |
+| 9 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/package.json` | Base64 content decoded. Root `package.json`: `{"name":"react-vite-tailwind","private":true,"type":"module","scripts":{"dev":"vite","build":"vite build","preview":"vite preview"},"dependencies":{"clsx":"2.1.1","react":"19.2.6","react-dom":"19.2.6","tailwind-merge":"3.4.0"},"devDependencies":{"@tailwindcss/vite":"4.1.17","@types/node":"22.19.17","@types/react":"19.2.7","@types/react-dom":"19.2.3","@vitejs/plugin-react":"5.1.1","tailwindcss":"4.1.17","typescript":"5.9.3","vite":"7.3.2","vite-plugin-singlefile":"2.3.0"}}`. Confirms a genuine Vite+React+TS+Tailwind+singlefile toolchain is configured at root. |
+| 10 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/src/lib` | Listing (truncated by size, ~10 of what the repo's own log claims is 23+ files captured): `a11y.ts` (910 B), `aesthetics.ts` (4,923 B), `casEngine.ts` (6,628 B), `circadian.ts` (2,906 B), `core.ts` (8,820 B), `cssolver.ts` (1,050 B), `engine.ts` (1,093 B), `familiarity.ts` (2,908 B), `fatigue.ts` (1,495 B), `genome.ts` (1,572 B), `health.ts` (3,598 B, listing cut off after this). **`casEngine.ts` exists** — contradicts call #3's log. |
+| 11 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/src/App.tsx` | Read in full (1,195 bytes). Imports: `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView` (all from `./components/*`), `useHashRoute` (`./lib/useHashRoute`), `loadState` (`./lib/store`), `AppState` type (`./lib/types`). Routes `/today`, `/signals`, `/thermodynamics`, `/cas`, `/risk`, `/about`. **This matches the current README's page table and project-structure section exactly.** |
 
-No commit history, pull requests, or issues were read. No code from the real
-repo was executed. This is a read-only, API/raw-file-based inspection, scoped
-to the calls listed above.
+No commit history, issues, pull requests, or code execution were used. All reads were via GitHub's public REST/raw endpoints. This is a read-only inspection.
 
 ## 2. Verified facts (first-hand, this session)
 
-- **V1.** The repo still contains two structurally different deliveries: ~90 loose root-level files (including a now-stock root `index.html`) and a separate live `src/` Vite + React + TypeScript app. (Calls #2, #3, #7)
-- **V2.** The live `src/App.tsx` renders exactly six routed views (Today / Signal Board / Thermodynamics / CAS / Risk / About) via a hash router. (Call #4)
-- **V3.** `src/lib` (28 files) and `src/components` (24 files) contain substantially more than what `App.tsx` renders. Several of the extra components are real and wired to real `src/lib` modules, but are not reachable from the live route table — orphaned, not fictional. (Calls #3, #4, #8)
-- **V4.** `src/lib/intelligence.ts`'s import from `./core` is still broken as of this session. (Calls #5, #9)
-- **V5.** No string match for `lifeStage`, `computeMaturityProfile`, `DIMENSIONS`, or `PEOPLE_SYSTEMS` exists anywhere in the repo — root files or `src/` tree — as fetched this session. (Calls #5, #6)
-- **V6 (scope limit, disclosed).** Commit history was not read, so it cannot be verified whether a 12-dimension maturity model existed at some *earlier* commit and was later removed; only the current `main` branch tree was inspected.
+- **F1.** The repo mixes two deliveries at once: ~30+ loose files at root (many `.tsx`, several `.md` logs, a root `index.html`), and a separate, structured `src/` Vite+React+TS tree. (Calls #2, #6, #7, #8)
+- **F2.** Root `package.json` is a real Vite 7 + React 19 + TypeScript 5.9 + Tailwind v4 + `vite-plugin-singlefile` config. (Call #9)
+- **F3.** `src/App.tsx` genuinely imports and hash-routes to the six components the current README describes (`TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`). (Call #11)
+- **F4.** `src/lib/casEngine.ts` exists (6,628 bytes) as of this session. (Call #10)
+- **F5. Contradiction, disclosed:** The repo's own on-disk `AI-SESSION-LOG.md` (call #3) states no CAS-engine-equivalent file exists in `src/lib`. F4 directly contradicts that. The log predates the current tree; it was not regenerated when `casEngine.ts` was added. This is first-hand evidence of the README/log "drift" this repo's lineage repeatedly narrates about itself — found independently here, not asserted on the repo's own say-so.
+- **F6. Scope limit, disclosed.** The actual *contents* of `casEngine.ts`, `infoTheory.ts`, `riskIntelligence.ts`, and `intelligence.ts` were not read line-by-line this session — only filenames and byte sizes (call #10). Whether they are correctly wired into live components, and whether they behave as the README describes, was **not** independently re-verified here; it rests on the README's own (unverified-by-me) description.
+- **F7. Unverified, flagged stale.** A `web_search` cache (call #5) returned a structurally different README (flat vanilla-JS "pt-3" project) than the one fetched live from `raw.githubusercontent.com` the same session (calls #1, #4). No attempt was made to resolve which commit the cached version reflects — it is excluded from any claim made in the delivered app beyond noting the discrepancy.
+- **F8.** The current README states "cultural bifurcation" depends on an undefined `scoreCulture()` never found anywhere, and discloses this as a gap. This is a direct read of that text (call #4); it was not independently re-confirmed by grepping the whole repo myself.
 
-## 3. Conclusion drawn from the above
+## 3. How this shaped the delivery
 
-The task's pasted "pt-P / Part 1" brief (`LEADOS.lifeStage`, a 12-dimension
-maturity model with `computeMaturityProfile()`) is treated as an **unverified
-specification supplied by the task prompt**, not as a claim about what exists
-in `github.com/wbweve/Leados`. Per §2 above, it is not present in the real
-repo's current state, in either of its two deliveries. This delivery does not
-fork, copy, or continue any code from the real repo. It is a fresh build in
-this task's own tool environment (React + Vite + Tailwind, single `src/App.tsx`
-entry point, built with `npm run build`) implementing only the *functional
-idea* described in the pasted brief — original TypeScript throughout.
+- Nothing in `index.html` is a copy or port of any file in `github.com/wbweve/Leados`. Rule IDs, categories, formulas, roster names, and UI are original to this session.
+- The CULTURE score in the Scorecard is a manual slider, not a computed metric — directly because of F8: inventing a `scoreCulture()`-style formula and presenting it as derived would misattribute provenance to an unverified gap.
+- This tool environment requires a single hand-authored `index.html` (no Vite/React/build step), unlike the real repo's `src/` app (F2, F3). That is disclosed plainly in the README and in-app About tab rather than silently implied to work the same way.
+- The scorecard's default demo state (RESILIENCE ★★★★☆, EXECUTION ★★★★☆, CULTURE ★★★☆☆) was hand-tuned to reproduce the exact ratings supplied in this task's prompt, using the app's own live formulas (not hardcoded star counts) — see README changelog for the specific default signal values chosen to produce that result.
 
-## 4. Environment constraint that shaped this delivery
+## 4. Scope note
 
-This task's tool environment requires `src/App.tsx` as the entry point and
-forbids editing `package.json` / `vite.config.ts` directly. The scaffold
-already ships `vite-plugin-singlefile`, so `npm run build` produces one
-`dist/index.html` (281KB, ~85KB gzipped) with the JS/CSS inlined and zero
-external runtime network calls — confirmed by grepping the build output for
-`http(s)://` strings: the only matches are inert W3C XML/SVG namespace URIs and
-one React docs error-message URL baked into minified error text.
-
-## 5. Original work in this delivery
-
-- `src/lib/maturity.ts` — twelve dimension definitions (`PEOPLE_SYSTEMS`, `FINANCIAL_INTELLIGENCE`, `OPERATIONAL_MATURITY`, `STRATEGIC_CLARITY`, `GOVERNANCE_MATURITY`, `ANALYTICAL_MATURITY`, `RESILIENCE_MATURITY`, `CULTURE_MATURITY`, `SELF_AWARENESS_MATURITY`, `INNOVATION_MATURITY`, `EXECUTION_MATURITY`, `MARKET_INTELLIGENCE`) and their Level 1–5 scoring logic, plus `computeMaturityProfile()` (mean, variance, pattern classification, priority gaps). Functionally modeled on the pasted brief's described behavior; written from scratch against this app's own `OrgEvent` log type. Renamed `INTELLIGENCE_MATURITY` → `ANALYTICAL_MATURITY` to avoid implying it measures anything about this delivery's own "intelligence" — a naming choice, not a functional change.
-- `src/lib/eventCatalog.ts` — original catalog of ~40 synthetic event types used to drive the scoring functions and the "log an event" UI.
-- `src/lib/presets.ts` — five original, hand-tuned synthetic event mixes, one per pattern bucket (`beginning`, `emerging`, `specialist`, `balanced`, `advanced`), used to demonstrate the pattern classifier without waiting on manual data entry.
-- `src/lib/store.ts`, `src/lib/useHashRoute.ts` — original localStorage persistence (new key `leados-ptp-maturity:v1`) and a minimal hash router.
-- `src/components/RadarChart.tsx` — original hand-built SVG radar chart (no charting library).
-- `src/components/Shell.tsx`, `MaturityView.tsx`, `DimensionCard.tsx`, `EventsView.tsx`, `AboutView.tsx` — original UI.
-
-## 6. Disclosed gaps / scope limits
-
-- Only "Part 1" of the pasted multi-part brief (life-stage / maturity dimensions) was supplied this turn. No later parts are implemented, since they were not pasted into this conversation.
-- Commit history of the real repo was not read (see V6). Absence of the pasted spec is established for the current tree only.
-- Scores reflect synthetic event-log coverage only; they are not calibrated against real organizations and no cross-organization learning occurs anywhere in this code, regardless of the "meta-learning" framing in the pasted brief's preamble.
+Only this session's own tool calls are described above. No other prior "pt-" session, patch file, or append-log belonging to the real repo was treated as authoritative input to this delivery — each was either read and cited explicitly (calls #3, #4) or explicitly excluded as unverified (call #5).

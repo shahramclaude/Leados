@@ -1,108 +1,89 @@
-# LeadOS pt-P — Organizational Life Stage Intelligence (Part 1)
+# LEADOS — single-file sandbox rebuild
 
-A React + Vite + Tailwind app implementing the *functional idea* behind the
-pasted "pt-P" brief's `LEADOS.lifeStage` module: a single-tenant organizational
-maturity model scored across twelve independent dimensions, computed entirely
-from one synthetic organization's own event log.
+A standalone `index.html` (vanilla HTML/CSS/JS + Tailwind via CDN, no build
+step, no network calls after load) implementing the functional ideas
+described in `github.com/wbweve/Leados`'s README: a toggleable Signal Board,
+an information-theory "Thermodynamics" panel, a small Complex Adaptive
+Systems (CAS) engine, an 8-category Risk Register, and — new in this
+delivery — a Leadership Scorecard (Resilience / Execution / Culture, star
+ratings).
 
-> **Provenance — read before assuming this continues `github.com/wbweve/Leados` or any prior "pt-" session:**
-> The real repo was inspected directly this session — full directory listings via GitHub's REST API, and the raw
-> content of all 28 `src/lib` files, all 24 `src/components` files, `src/App.tsx`, and all ~90 loose root-level
-> files (confirmed by `grep` across the full downloaded set). Full ledger in `AI-SESSION-LOG.md` and in-app at
-> **About / Provenance**. Short version:
+> **Provenance — read before assuming this ports or continues
+> `github.com/wbweve/Leados`:** that repo was inspected directly this
+> session (GitHub REST API file listings + raw-file fetches of `README.md`,
+> `AI-SESSION-LOG.md`, root `index.html` title, `package.json`, `src/App.tsx`,
+> and the `src/lib` directory listing). Full call-by-call ledger in
+> [`AI-SESSION-LOG.md`](./AI-SESSION-LOG.md) and in-app at **About /
+> Provenance**. Short version:
 >
-> * The real repo is **two different deliveries in one place**: ~90 loose root-level files (including a root
->   `index.html` that is, as of this session, the stock Vite template) plus a separate, live Vite+React+TypeScript
->   app under `src/`.
-> * **Verified live in the real repo:** `src/App.tsx` renders exactly six hash-routed views (Today, Signal Board,
->   Thermodynamics, CAS, Risk, About). Several extra `src/components`/`src/lib` files are real and wired to each
->   other, but are **not** reachable from that live route table.
-> * `src/lib/intelligence.ts` still imports `{ engine, run }` from `./core`, which does not export either symbol —
->   confirmed broken, same as a prior session's own log already documented.
-> * **Not found anywhere in the real repo, this session:** any string match for `lifeStage`,
->   `computeMaturityProfile`, `DIMENSIONS`, or `PEOPLE_SYSTEMS`, across the entire fetched content (root files +
->   `src/` tree). The pasted "pt-P / Part 1" brief describing a 12-dimension maturity model is therefore treated
->   here as an **unverified external specification**, not as repo fact.
+> - The real repo genuinely mixes **two deliveries**: ~30+ loose files at
+>   root (mostly `.tsx`, plus several `.md` session logs and a root
+>   `index.html`) and a separate, structured `src/` Vite+React+TypeScript
+>   app. **[VERIFIED]**
+> - `src/App.tsx`, read in full, really does import and route to
+>   `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`,
+>   `RiskView`, `AboutView` — matching the current README's own page table.
+>   **[VERIFIED]**
+> - `src/lib/casEngine.ts` exists (6,628 bytes). **[VERIFIED]** — this
+>   directly **contradicts** the repo's own on-disk `AI-SESSION-LOG.md`,
+>   which claims no CAS-engine file exists anywhere in `src/lib`. That log
+>   is stale relative to the current tree. **[CONTRADICTION, DISCLOSED]**
+> - The actual line-by-line contents of `casEngine.ts`, `infoTheory.ts`,
+>   `riskIntelligence.ts` were **not** read this session — only filenames
+>   and byte sizes were confirmed. Whether they work as the README claims is
+>   **[UNVERIFIED]** here.
+> - A web-search cache turned up a *different*, older-looking README (flat
+>   14-file vanilla-JS project) than what's live on `raw.githubusercontent.com`
+>   right now. Treated as **[UNVERIFIED / LIKELY STALE]**, not used as fact.
 >
-> **This app does not fork, copy, or continue any of that history.** It is a fresh build, in this task's own tool
-> environment (React + Vite + Tailwind, single `src/App.tsx` entry point, built with `npm run build`), implementing
-> only the functional idea in the pasted brief — original code throughout.
+> **This app does not fork, copy, or continue that repo's code.** It's a
+> fresh, original build satisfying the same *functional ideas*, built for
+> this tool environment, which only supports a single hand-authored
+> `index.html` (no Vite/React build pipeline) — disclosed explicitly rather
+> than implied away.
 
 ## Run it
 
-`npm install && npm run build`, then open `dist/index.html`. This project's Vite config (already present in the
-scaffold, not edited this session) inlines all JS/CSS into that one HTML file via `vite-plugin-singlefile` —
-confirmed by grepping the build output for `http(s)://` strings: only inert W3C XML/SVG namespace URIs and one
-React docs error-message link baked into minified error text were found, so the "open one file, zero network
-calls" property holds.
+Open `index.html` in any browser. No install, no build, no server. State
+persists in `localStorage` under `leados-vanilla:v1`.
 
-For development: `npm run dev`.
+## Pages (tab-based, no routing library)
 
-State lives in `localStorage` under `leados-ptp-maturity:v1`. Use **Reset** (Maturity Radar view) to clear it.
-
-## Pages (hash routes)
-
-| Route | What it does |
+| Tab | What it does |
 |---|---|
-| `#/maturity` | The dashboard: an editable org name, a pattern banner (Beginning / Emerging Practitioner / Specialist / Balanced Practitioner / Advanced Leader), mean maturity + variance, a twelve-axis SVG radar chart, a priority-gaps list (lowest-scoring dimensions, capped at Level 3), and a card per dimension showing its current level, description, and what the next level requires. Five preset buttons seed a demonstration event mix for each pattern bucket. |
-| `#/events` | The event log: ~40 synthetic event-type tiles grouped by dimension (filterable), click-to-log, a running count per type, and a feed of the 12 most recent logged events with per-event removal. This is the only way scores change outside of the presets — there is no hidden data. |
-| `#/about` | Full provenance ledger: what was checked against the real repo, what was found, and exactly what in this delivery is original vs. modeled-on-a-pasted-spec vs. disclosed gap. |
+| Today | Overall risk score, active-finding count, entropy %, CAS loop/bifurcation counts, a Scorecard preview, scenario presets, and an in-browser self-test runner. |
+| Signals | The Signal Board: 30 synthetic rule IDs across 8 categories, each toggleable with severity, optional person link, and a "recur x3" control for the attractor detector; plus a runway (months) slider. |
+| Thermodynamics | Shannon entropy over a deterministic synthetic event log, a discretized mutual-information proxy between any two roster members, signal-to-noise ratio, and information bottlenecks (&lt;30% of mean activity). |
+| CAS | Feedback loops (same person, two linked risk categories active), bifurcation points (runway &lt; 6 months, or any category's cumulative severity ≥ 10), and attractors (a rule recurring ≥3 times). |
+| Risk | The 8-category Risk Register (always shows all 8, even at zero) and cross-category amplification flags. |
+| Scorecard | RESILIENCE / EXECUTION / CULTURE star ratings. Resilience and Execution are computed live from the CAS/Risk panels; Culture is a disclosed manual input (see "why" below). |
+| About / Provenance | The full verified-vs-unverified ledger from inspecting the real repo. |
 
-## What's original, what's modeled on a pasted (unverified) spec, what's a disclosed gap
+## Leadership Scorecard — how each score is produced
 
-- **Modeled on the pasted "pt-P / Part 1" brief, reimplemented from scratch:** `src/lib/maturity.ts` — the twelve
-  dimension names, the Level 1–5 per-dimension idea, and `computeMaturityProfile()`'s mean/variance/pattern/gap
-  output shape. The brief's own JavaScript was not found anywhere in the real repo (see provenance above), so
-  nothing here is a copy of verified prior code — it is original TypeScript satisfying the brief's *described*
-  behavior. `INTELLIGENCE_MATURITY` was renamed `ANALYTICAL_MATURITY` to avoid implying this demo's own UI measures
-  itself.
-- **Built from scratch, with no external source to model against:** the ~40-entry `src/lib/eventCatalog.ts`, the
-  five `src/lib/presets.ts` demonstration mixes, `src/lib/store.ts` persistence, and the hand-built SVG
-  `RadarChart.tsx` (no charting library).
-- **A scope limit, left as a limit:** only "Part 1" (life-stage / maturity dimensions) was pasted into this
-  conversation. No later part of the brief is implemented, since none was supplied.
-- **All UI and copy:** original to this delivery.
+- **RESILIENCE** = `5 − (active feedback loops + active bifurcations)`, clamped to 1–5. Computed live from the CAS engine.
+- **EXECUTION** = `5 − floor(EXECUTION-category cumulative severity / 5)`, clamped to 1–5. Computed live from the Risk Register.
+- **CULTURE** = a manual 1–5 slider, **not computed**. *Why:* the one disclosed gap I could directly verify in the real repo's current README is that "cultural bifurcation" depends on an undefined `scoreCulture()` that was never found anywhere. Inventing a culture-scoring formula here and presenting it as derived would misattribute provenance to that gap. A manual, clearly-labeled input was judged more honest than a fabricated metric.
+- The app's **default demo data** was hand-chosen (one Avery signal in PEOPLE + one in EXECUTION → exactly one feedback loop; EXECUTION severity totalling 7 → one star off; culture slider left at its own default of 3) so that, on first load, the live formulas reproduce exactly RESILIENCE ★★★★☆ (4), EXECUTION ★★★★☆ (4), CULTURE ★★★☆☆ (3) — the ratings supplied in this task's prompt — without hardcoding the star counts themselves.
 
-## Project structure
+## What's original vs. modeled vs. a disclosed gap
 
-```
-src/
-  lib/
-    types.ts            — shared types (OrgEvent, DimensionDef, MaturityProfile, ...)
-    maturity.ts          — 12-dimension scoring engine + computeMaturityProfile (original)
-    eventCatalog.ts        — ~40 synthetic event types grouped by dimension (original)
-    presets.ts                — 5 demonstration event mixes, one per pattern bucket (original)
-    store.ts                    — localStorage persistence + state mutations (original)
-    useHashRoute.ts               — tiny hash router (original)
-  components/
-    Shell.tsx, RadarChart.tsx, DimensionCard.tsx — shared UI + chart (original)
-    MaturityView / EventsView / AboutView        — route views (original)
-  App.tsx                                           — route composition (entry point)
-```
+- **Original, built from scratch (no verified source exists to copy):** the entire 30-rule catalog, the 8-category Risk Register logic, the CAS feedback-loop/bifurcation/attractor detectors, the Scorecard, the synthetic 5-person roster, the seeded deterministic event-log generator, and all UI.
+- **Modeled on the *functional idea*, not the code, of a verified real-repo pattern:** the Thermodynamics panel's metric set (Shannon entropy, mutual information, SNR, bottlenecks) mirrors what the real repo's README claims its `infoTheory.ts`/`Thermodynamics.tsx` pair computes — standard 1948 Shannon formulas, reimplemented independently; the real file's internals were never read this session.
+- **A gap, left as a gap:** no `scoreCulture()`-equivalent is computed. See Scorecard section above.
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` first — this time via `bash curl` against GitHub's REST API (confirmed
-  outbound network access from the sandbox) rather than only `web_fetch`, because `web_fetch` truncated the full
-  recursive tree response.** — *why*: a truncated listing would have under-counted the repo's real file set and
-  risked a false "not found" on the keyword search; `curl` gave complete, untruncated directory listings.
-- **Downloaded and grepped the raw content of every file in `src/lib`, `src/components`, and all ~90 root-level
-  files for the pasted brief's distinctive identifiers before writing any code.** — *why*: the task requires
-  inspecting actual code, not trusting either the README's self-framing or the task prompt's own pasted spec at
-  face value; a brute-force content grep is more conclusive than spot-checking a handful of files.
-- **Declared the pasted "pt-P / Part 1" (`LEADOS.lifeStage`) brief an unverified specification, not repo fact.** —
-  *why*: zero string matches for its named exports/dimensions anywhere in the current `main` branch.
-- **Renamed the brief's `INTELLIGENCE_MATURITY` dimension to `ANALYTICAL_MATURITY` in this implementation.** —
-  *why*: avoids the confusing implication that this demo UI is scoring its own "intelligence"; purely a label
-  change, the scoring behavior is unchanged.
-- **Built five hand-tuned presets instead of relying on random/seeded synthetic data generation.** — *why*: the
-  pattern classifier (`BEGINNING` / `EMERGING_PRACTITIONER` / `SPECIALIST` / `BALANCED_PRACTITIONER` /
-  `ADVANCED_LEADER`) is easiest to demonstrate convincingly with deliberately-constructed event mixes that land
-  exactly in each bucket, rather than hoping a random generator lands there.
-- **Used a hand-built SVG radar chart instead of a charting library.** — *why*: avoids an extra dependency for a
-  single, fully custom chart shape (12 fixed axes, 5 fixed rings).
-- **Used a new storage key (`leados-ptp-maturity:v1`).** — *why*: this workspace began with the default Vite
-  scaffold and no prior state; claiming continuity with any other session's key would assert a shared history that
-  doesn't exist here.
-- **Left later parts of the "pt-" brief series out of scope.** — *why*: only "Part 1" text was pasted into this
-  conversation; inventing the rest would misattribute invented work to an external spec that was never supplied.
+- **Inspected `github.com/wbweve/Leados` via GitHub's REST API and raw-file fetches before writing any code** — *why*: the task requires checking actual code/state, not trusting a README's self-description (which, per this inspection, is itself already internally inconsistent with the repo's own session log — see AI-SESSION-LOG.md §2, F5).
+- **Found and disclosed a real contradiction inside the target repo** (its on-disk `AI-SESSION-LOG.md` says no CAS engine file exists; `src/lib/casEngine.ts` actually exists, 6,628 bytes) — *why disclosed prominently*: a half-right/stale claim is more misleading than an obviously-wrong one, and the task explicitly asked for inspection over assumption.
+- **Flagged a web-search cache result as likely-stale rather than treating it as current fact** — *why*: it described a structurally different project (flat vanilla-JS "pt-3") than the live raw README fetched the same session; presenting both as equally true would hide a real discrepancy instead of surfacing it.
+- **Built as a single hand-authored `index.html` (vanilla JS), not a port of the real repo's React/Vite `src/` app** — *why*: this tool environment only supports a single-file delivery; claiming a build pipeline here would misstate the environment, the same reasoning the inspected repo's own README uses for its own environment constraints.
+- **Left CULTURE as a manual slider instead of computing it** — *why*: the only scoring-gap I could directly verify in the real repo's README text was the undefined `scoreCulture()`; computing a number under that name here would imply false provenance.
+- **Tuned default demo signals (not hardcoded stars) to reproduce RESILIENCE 4 / EXECUTION 4 / CULTURE 3 on first load** — *why*: makes the requested scorecard numbers an observable consequence of the app's own formulas, so they stay honest if the user edits any signal afterward, rather than being a static image of those exact numbers.
+- **Named the storage key `leados-vanilla:v1`** — *why*: distinct from any key used in the real repo's own `src/` app (unverified what key that app uses, since `store.ts` contents weren't read this session) or in prior pasted-brief lineages; avoids implying shared state continuity that doesn't exist.
+
+## Files in this delivery
+
+- `index.html` — the full app.
+- `README.md` — this file.
+- `AI-SESSION-LOG.md` — call-by-call ledger of what was fetched/verified from the real repo this session.
