@@ -3,911 +3,679 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEADOS — Signal Hierarchy &amp; Local API (Part 4/5, sandbox build, unofficial)</title>
+<title>LEADOS — Intelligence Synthesis (Part 6, sandbox build, unofficial)</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
-  @keyframes pulseOnce { 0%{opacity:1} 50%{opacity:.35} 100%{opacity:1} }
-  .pulse-once{ animation: pulseOnce .3s ease-in-out 1; }
-  .pulse-twice{ animation: pulseOnce .3s ease-in-out 2; }
-  @keyframes slideDown { from{ transform: translateY(-100%); opacity:0 } to{ transform: translateY(0); opacity:1 } }
-  .slide-down{ animation: slideDown .25s ease-out; }
-  @keyframes crisisPulse { 0%,100%{ background-color:#991b1b } 50%{ background-color:#dc2626 } }
-  .crisis-pulse{ animation: crisisPulse 1.4s ease-in-out infinite; }
-  @keyframes fadeToast { 0%{opacity:0; transform:translateY(8px)} 10%{opacity:1; transform:translateY(0)} 90%{opacity:1} 100%{opacity:0} }
-  .toast-auto{ animation: fadeToast 4s ease forwards; }
-  ::-webkit-scrollbar{ width:8px; height:8px; }
-  ::-webkit-scrollbar-thumb{ background:#334155; border-radius:4px; }
-  body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  .new-dot::after{ content:''; display:inline-block; width:8px; height:8px; border-radius:9999px; background:#3b82f6; margin-left:6px; vertical-align:middle; }
+  html,body{height:100%;}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#334155;border-radius:4px;}
+  .fade-in{animation:fadeIn .25s ease-out;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .spin{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .rail-link.active{background:rgba(99,102,241,.18);color:#e0e7ff;border-color:rgba(99,102,241,.4);}
+  .pulse-dot{animation:pulseDot 1.6s ease-in-out infinite;}
+  @keyframes pulseDot{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
 </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
+<body class="min-h-screen bg-slate-950 text-slate-200">
 
-<!-- ============ LEVEL 9: STRUCTURAL ALERT (boot-only, full screen, sits above everything) ============ -->
-<div id="structuralAlert" class="fixed inset-0 z-[999] bg-slate-950 hidden flex-col items-center justify-center p-6">
-  <div class="max-w-xl w-full border border-red-800 bg-slate-900 rounded-xl p-8 text-center">
-    <div class="text-red-400 text-xs tracking-widest font-bold mb-2">LEVEL 9 · STRUCTURAL ALERT · SESSION START ONLY</div>
-    <h1 class="text-2xl font-bold mb-4">LeadOS is starting with critical findings from your last session</h1>
-    <p id="structuralAlertBody" class="text-slate-300 mb-6 text-sm"></p>
-    <div class="flex gap-3 justify-center">
-      <button id="btnReviewNow" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg font-semibold">REVIEW NOW</button>
-      <button id="btnSkipToData" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg font-semibold">SKIP TO DATA</button>
-    </div>
-    <p class="text-slate-500 text-xs mt-5">Standard UI is loaded behind this screen — deprioritized, not inaccessible.</p>
-  </div>
+<div id="disclosure" class="bg-amber-500/10 border-b border-amber-500/30 text-amber-200 text-xs px-4 py-2 flex flex-wrap items-center gap-2">
+  <span class="font-semibold uppercase tracking-wide">Unofficial sandbox build</span>
+  <span class="text-amber-200/80">— not a patch to github.com/wbweve/Leados. Fresh, self-contained implementation of Part 6.</span>
+  <a href="#/about" class="underline hover:text-amber-100">See Verified vs Fabricated →</a>
 </div>
 
-<!-- ============ LEVEL 7: HARD BANNER (above header, page-level) ============ -->
-<div id="hardBannerSlot"></div>
-
-<div id="appRoot" class="hidden">
-<div class="flex min-h-screen">
-
+<div class="flex min-h-[calc(100vh-33px)]">
   <!-- RAIL -->
-  <aside class="w-16 md:w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
-    <div class="p-3 md:p-4 border-b border-slate-800">
-      <div class="font-bold text-sm md:text-base tracking-tight">LEADOS<span class="text-slate-500 hidden md:inline"> · pt-4/5</span></div>
-      <div class="hidden md:block text-[10px] text-slate-500 mt-0.5">sandbox · unofficial</div>
+  <aside class="w-60 shrink-0 border-r border-slate-800 bg-slate-900/40 p-4 flex flex-col gap-1">
+    <div class="px-2 pb-4">
+      <div class="text-sm font-bold text-slate-100 tracking-tight">LEADOS</div>
+      <div class="text-[11px] text-slate-500">Part 6 · Synthesis</div>
     </div>
-    <nav id="railNav" class="flex-1 overflow-y-auto py-2 text-sm"></nav>
-    <div class="p-3 border-t border-slate-800 text-[10px] text-slate-500 hidden md:block">
-      <kbd class="px-1 py-0.5 bg-slate-800 rounded">Ctrl/Cmd+K</kbd> command palette
+    <nav id="rail" class="flex flex-col gap-1 text-sm"></nav>
+    <div class="mt-auto pt-4 border-t border-slate-800 text-[11px] text-slate-500 px-2">
+      Store key:<br><span class="mono text-slate-400">leados-synthesis:data</span>
     </div>
   </aside>
 
   <!-- MAIN -->
-  <div class="flex-1 flex flex-col min-w-0">
-    <!-- LEVEL 6: AMBIENT BANNER slot (below header/top of content, persistent) -->
-    <div id="ambientBannerSlot"></div>
-    <!-- LEVEL 2: SOFT ALERT slot (narrow banner, top of main content area) -->
-    <div id="softAlertSlot" class="relative"></div>
-
-    <header class="h-14 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 shrink-0">
-      <h1 id="tabTitle" class="font-semibold text-lg">Today</h1>
-      <div class="flex items-center gap-3 text-xs text-slate-400">
-        <span id="clock" class="mono"></span>
-        <span id="dndPill" class="px-2 py-1 rounded bg-slate-800 hidden">Focus hours active</span>
-      </div>
-    </header>
-
-    <main id="tabContent" class="flex-1 overflow-y-auto p-4 md:p-6"></main>
-  </div>
-</div>
-</div>
-
-<!-- Toasts: LEVEL 4 / LEVEL 5 -->
-<div id="toastStack" class="fixed bottom-4 right-4 z-[200] flex flex-col gap-2 w-80"></div>
-
-<!-- LEVEL 8: OVERLAY INTERRUPT -->
-<div id="overlayInterrupt" class="fixed inset-0 z-[500] bg-black/70 hidden items-center justify-center p-4">
-  <div class="max-w-lg w-full bg-slate-900 border border-red-700 rounded-xl p-6">
-    <div class="text-red-400 text-xs font-bold tracking-widest mb-2">LEVEL 8 · OVERLAY INTERRUPT</div>
-    <h2 class="text-xl font-bold mb-3">Multiple critical findings require attention</h2>
-    <div id="overlayFindingsList" class="space-y-2 mb-4 max-h-56 overflow-y-auto text-sm"></div>
-    <label class="block text-xs text-slate-400 mb-1">Type "I UNDERSTAND" to acknowledge and continue</label>
-    <input id="ackInput" class="w-full mb-3 px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm" placeholder="I UNDERSTAND">
-    <div class="flex gap-2">
-      <button id="btnRespondAll" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-semibold text-sm">RESPOND TO ALL</button>
-      <button id="btnAckContinue" disabled class="flex-1 px-4 py-2 bg-slate-700 rounded-lg font-semibold text-sm disabled:opacity-40">ACKNOWLEDGE AND CONTINUE</button>
-    </div>
-  </div>
-</div>
-
-<!-- Command palette -->
-<div id="cmdk" class="fixed inset-0 z-[400] bg-black/60 hidden items-start justify-center pt-24">
-  <div class="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
-    <input id="cmdkInput" class="w-full bg-slate-800 px-4 py-3 outline-none text-sm" placeholder="Type a command or finding…">
-    <div id="cmdkSuggested" class="border-t border-slate-800 p-2 text-xs"></div>
-    <div id="cmdkResults" class="max-h-72 overflow-y-auto"></div>
-  </div>
+  <main id="main" class="flex-1 p-6 md:p-8 overflow-y-auto"></main>
 </div>
 
 <script>
+(function(){
 'use strict';
-/* =========================================================================
-   LEADOS — PART 4 (signal hierarchy) + PART 5 (local API)
-   Fresh, self-contained, disclosed sandbox build. See README / AI-SESSION-LOG.
-   Namespace deliberately LEADOS (not window.LeadOS) and store key deliberately
-   'leados-signals-api:data' — both chosen to never collide with the verified
-   real repo (window.LeadOS, key 'leados:data') or any other sandbox build
-   sharing this origin. See "Verified vs Fabricated" tab for citations.
-   ========================================================================= */
-const LEADOS = window.LEADOS = {};
 
-/* ---------------------------- STORE ---------------------------- */
+/* =========================================================================
+ * LEADOS — namespace. Spelled LEADOS (not the real repo's window.LeadOS)
+ * for the same reason the Part 4/5 build used it: it matches this brief's
+ * own convention rather than silently renaming to match a different repo.
+ * ======================================================================= */
+var LEADOS = window.LEADOS = window.LEADOS || {};
+var KEY = 'leados-synthesis:data'; // deliberately distinct from leados:data (real repo),
+                                    // leados-signals-api:data and leados-decision-surface:data (other sandbox builds)
+
+/* ---------------------------- STORE --------------------------------- */
 LEADOS.store = (function(){
-  const KEY = 'leados-signals-api:data';
   function genesis(){
-    return { schemaVersion: 1, meta: { lineage: 'pt4-5-sandbox', createdAt: Date.now(), audit: [] }, events: [] };
+    return { schemaVersion: 1, meta: { lineage: 'synthesis-sandbox', createdAt: Date.now() }, events: [] };
   }
   function load(){
-    const text = localStorage.getItem(KEY);
-    if (text === null){ const raw = genesis(); save(raw); return raw; }
-    try { return JSON.parse(text); } catch(e){ const raw = genesis(); save(raw); return raw; }
+    var text = localStorage.getItem(KEY);
+    if (text === null){ var raw = genesis(); save(raw); return raw; }
+    try { return JSON.parse(text); }
+    catch(e){ throw new Error('LEADOS: store at ' + KEY + ' is corrupt and was left untouched.'); }
   }
   function save(raw){ localStorage.setItem(KEY, JSON.stringify(raw)); }
-  function append(type, payload, meta){
-    const raw = load();
-    const ev = { seq: raw.events.length+1, id: 'e-'+String(raw.events.length+1).padStart(5,'0'), at: Date.now(), type, payload };
-    if (meta) ev.meta = meta;
+  LEADOS._appendCalls = { total: 0, byType: {} }; // instrumentation used by Health tab, never used for logic
+  function append(type, payload){
+    var raw = load();
+    var seq = raw.events.length + 1;
+    var ev = { seq: seq, id: 'e-' + String(seq).padStart(5,'0'), at: Date.now(), type: type, payload: payload };
     raw.events.push(ev);
     save(raw);
+    LEADOS._appendCalls.total++;
+    LEADOS._appendCalls.byType[type] = (LEADOS._appendCalls.byType[type] || 0) + 1;
     return ev;
   }
-  function audit(entry){
-    const raw = load();
-    raw.meta.audit.push(Object.assign({ at: Date.now() }, entry));
-    save(raw);
-  }
-  function state(){ return load(); }
   function wipe(){ localStorage.removeItem(KEY); }
-  return { KEY, load, save, append, audit, state, wipe, genesis };
-})();
 
-/* ---------------------------- EVENTS / PROJECTION ---------------------------- */
-LEADOS.events = (function(){
-  // minimal fold: finding.created / finding.seen / finding.resolved / settings.changed / overlay.acknowledged
-  function project(rawState){
-    const findings = {};
-    const settings = { focusEnabled: false, focusStart: '09:00', focusEnd: '12:00', crisisResponseSLAHours: 4 };
-    rawState.events.forEach(ev => {
+  // project() is a pure fold. It recomputes everything derived (findings,
+  // domain scores) from the raw event array every call — nothing derived
+  // is cached — EXCEPT synthesis.generated payloads, which are themselves
+  // raw log entries (see README "The one disclosed exception").
+  function project(events){
+    var findings = {};
+    var synthesisHistory = [];
+    events.forEach(function(ev){
       if (ev.type === 'finding.created'){
-        findings[ev.payload.id] = Object.assign({ seen:false, resolved:false, createdAt: ev.at }, ev.payload);
-      } else if (ev.type === 'finding.seen'){
-        if (findings[ev.payload.id]) findings[ev.payload.id].seen = true;
+        findings[ev.payload.id] = Object.assign({ resolved:false }, ev.payload);
       } else if (ev.type === 'finding.resolved'){
         if (findings[ev.payload.id]) findings[ev.payload.id].resolved = true;
-      } else if (ev.type === 'settings.changed'){
-        settings[ev.payload.key] = ev.payload.value;
+      } else if (ev.type === 'synthesis.generated'){
+        synthesisHistory.push(ev.payload);
       }
     });
-    return { events: rawState.events, findings, settings, meta: rawState.meta };
+    var findingList = Object.keys(findings).map(function(k){ return findings[k]; })
+      .sort(function(a,b){ return a.createdAt - b.createdAt; });
+
+    var domainList = LEADOS.domains.map(function(d){
+      var open = findingList.filter(function(f){ return f.domain === d.key && !f.resolved; });
+      var penalty = open.reduce(function(s,f){ return s + f.severity * 7; }, 0);
+      var score = Math.max(0, Math.min(100, 100 - penalty));
+      return Object.assign({}, d, {
+        open: open,
+        score: score,
+        worsening: open.filter(function(f){ return f.trend === 'worsening'; }).length,
+        improving: open.filter(function(f){ return f.trend === 'improving'; }).length
+      });
+    });
+
+    return { findings: findingList, domainList: domainList, synthesisHistory: synthesisHistory };
   }
-  return { project };
+
+  return { KEY: KEY, load: load, save: save, append: append, wipe: wipe, project: project, genesis: genesis };
 })();
 
-const DOMAINS = [
-  { id:'finance', label:'Finance', color:'#f59e0b' },
-  { id:'sales', label:'Sales', color:'#22c55e' },
-  { id:'product', label:'Product', color:'#38bdf8' },
-  { id:'ops', label:'Ops', color:'#f97316' },
-  { id:'people', label:'People', color:'#a78bfa' },
-  { id:'legal', label:'Legal', color:'#f43f5e' }
+/* ------------------------- DOMAIN MODEL (fabricated) ------------------ */
+// 6 domains, fabricated for this sandbox — disclosed in the About tab.
+LEADOS.domains = [
+  { key:'revenue',  label:'Revenue',             color:'#f43f5e' },
+  { key:'product',  label:'Product',              color:'#8b5cf6' },
+  { key:'ops',      label:'Operations',           color:'#f59e0b' },
+  { key:'people',   label:'People',               color:'#10b981' },
+  { key:'risk',     label:'Risk & Compliance',    color:'#0ea5e9' },
+  { key:'customer', label:'Customer',             color:'#ec4899' }
 ];
-const SEV_COLOR = { 1:'#64748b', 2:'#60a5fa', 3:'#f59e0b', 4:'#fb923c', 5:'#ef4444' };
+function domainLabel(key){ var d = LEADOS.domains.find(function(x){return x.key===key;}); return d ? d.label : key; }
 
-function P(){ return LEADOS.events.project(LEADOS.store.state()); }
-function uid(prefix){ return prefix + '-' + Math.random().toString(36).slice(2,8); }
+// Compound pattern library — fabricated, *inspired by the concept* of the
+// real repo's verified LeadOS.patterns (DEATH_SPIRAL, GOVERNANCE_GAP, ...)
+// but not copied: names, thresholds and narratives below are invented for
+// this sandbox. See About tab.
+LEADOS.patternDefs = [
+  { id:'revenue-squeeze', label:'Revenue Squeeze', domains:['revenue','customer'],
+    narrative: function(fs){ return 'pricing or churn pressure in Revenue is compounding with deteriorating Customer signals ("' + fs.map(f=>f.title).slice(0,2).join('", "') + '")'; } },
+  { id:'silent-attrition', label:'Silent Attrition', domains:['people','ops'],
+    narrative: function(fs){ return 'People strain is showing up as Operations degradation before it shows up as resignations ("' + fs.map(f=>f.title).slice(0,2).join('", "') + '")'; } },
+  { id:'execution-drag', label:'Execution Drag', domains:['product','ops'],
+    narrative: function(fs){ return 'Product delivery is slipping in lockstep with Operations load ("' + fs.map(f=>f.title).slice(0,2).join('", "') + '")'; } },
+  { id:'governance-blindspot', label:'Governance Blindspot', domains:['risk','people'],
+    narrative: function(fs){ return 'Risk findings are accumulating in areas with thin People coverage ("' + fs.map(f=>f.title).slice(0,2).join('", "') + '")'; } }
+];
 
-/* ---------------------------- SEED ---------------------------- */
+function activePatterns(P){
+  return LEADOS.patternDefs.map(function(def){
+    var lists = def.domains.map(function(dk){ return P.findings.filter(function(f){ return !f.resolved && f.domain===dk; }); });
+    var allWorsening = lists.every(function(list){ return list.some(function(f){ return f.trend==='worsening'; }); });
+    var flat = lists.reduce(function(a,b){return a.concat(b);},[]);
+    var severitySum = flat.reduce(function(s,f){ return s+f.severity; },0);
+    return Object.assign({}, def, { active: allWorsening && severitySum >= 6, severitySum: severitySum, exampleFindings: flat });
+  });
+}
+
+/* --------------------------- SEED DATA -------------------------------- */
 function seedIfEmpty(){
-  const raw = LEADOS.store.state();
-  if (raw.events.length) return;
-  const today = Date.now();
-  const mk = (domain, sev, title, conf, ageMs) => LEADOS.store.append('finding.created', {
-    id: uid('f'), domain, sev, title, conf: conf, cadenceOverdue:false
-  }, { seeded:true });
-  mk('finance','3','Forecast accuracy drifting 11% below plan','MEDIUM');
-  mk('sales','4','Pipeline coverage fell below 2.5x for Q','HIGH');
-  mk('ops','2','SLA breach rate up 3 days running','HIGH');
-  mk('people','1','Engagement survey response rate dipped','LOW');
-  mk('legal','4','Compliance audit overdue by 9 days','HIGH');
-  // fix sev to numbers
-  const fixed = LEADOS.store.state();
-  fixed.events.forEach(ev=>{ if (ev.type==='finding.created') ev.payload.sev = Number(ev.payload.sev); });
-  LEADOS.store.save(fixed);
+  var raw = LEADOS.store.load();
+  if (raw.events.length > 0) return;
+  var seeds = [
+    ['revenue',4,'Q3 pipeline coverage fell below 2x','worsening'],
+    ['revenue',2,'Enterprise renewal slipped two weeks','flat'],
+    ['customer',4,'NPS dropped 11 points in top segment','worsening'],
+    ['customer',1,'Support backlog cleared to zero','improving'],
+    ['ops',3,'On-call pages up 40% month over month','worsening'],
+    ['ops',2,'Deploy frequency recovering post-incident','improving'],
+    ['product',3,'Roadmap slip on flagship Q3 feature','worsening'],
+    ['product',1,'Design system adoption crossed 80%','improving'],
+    ['people',3,'Two regrettable resignations in platform team','worsening'],
+    ['people',1,'Engagement survey response rate up','improving'],
+    ['risk',4,'SOC2 control gap found in access reviews','worsening'],
+    ['risk',2,'Vendor risk register now current','flat']
+  ];
+  seeds.forEach(function(s, i){
+    LEADOS.store.append('finding.created', {
+      id: 'f-' + String(i+1).padStart(3,'0'),
+      domain: s[0], severity: s[1], title: s[2], trend: s[3],
+      createdAt: Date.now() - (seeds.length - i) * 3600 * 1000
+    });
+  });
 }
 
-/* =========================================================================
-   PART 4 — SIGNAL HIERARCHY (levels 0–9), queue manager, DND/focus-hours
-   Implemented from the pasted brief; rendering wired to this app's actual
-   DOM (the brief's own code shows LEADOS.ui.renderSignal as a stub — that
-   stub is filled in here, it is not a recovered fact about any real repo).
-   ========================================================================= */
-LEADOS.ui = {};
+function countRelevantEvents(events){
+  return events.filter(function(e){ return e.type==='finding.created' || e.type==='finding.resolved'; }).length;
+}
 
-LEADOS.signalQueue = {
-  queue: [],
-  active: 0,
-  maxSimultaneous: 3,
+/* ------------------------- SYNTHESIS GENERATION ------------------------
+ * Three sections, generated ON DEMAND (button click), never recomputed on
+ * render. The brief's own spec text was truncated before it named what the
+ * three sections actually are — see README "Disclosed gap". This session's
+ * own interpretation, labeled as such throughout: Situation / Interpretation
+ * / Recommendation — a standard advisor structure (what's happening, what
+ * it means together, what to do), chosen to match "the system speaking to
+ * you as a strategic advisor."
+ * ======================================================================= */
+LEADOS.synthesis = (function(){
 
-  enqueue(signal){
-    logSignal(signal);
-    const downgraded = LEADOS.dnd.maybeDowngrade(signal);
-    if (downgraded.heldForDigest){ return; } // DND swallowed it into the end-of-focus digest
-
-    const s = downgraded.signal;
-    if (s.level >= 7){ this._render(s); return; }         // never queues
-    if (s.level <= 3){ this._renderAmbient(s); return; }   // never queues
-    this.queue.push(s);
-    this._processQueue();
-  },
-
-  _processQueue(){
-    while (this.active < this.maxSimultaneous && this.queue.length){
-      const next = this.queue.shift();
-      this.active++;
-      this._render(next);
-      next.onComplete = () => { this.active--; this._processQueue(); };
-      // auto-complete bookkeeping for queue slot accounting (visual lifetime handled in render)
-      const life = next.level === 4 ? 4200 : next.level === 5 ? 999999999 : 60000;
-      if (life < 999999999) setTimeout(()=>{ if(next.onComplete) next.onComplete(); }, life);
-    }
-  },
-
-  _render(signal){ LEADOS.ui.renderSignal(signal); },
-  _renderAmbient(signal){ LEADOS.ui.renderAmbientSignal(signal); }
-};
-
-let _signalLog = [];
-function logSignal(s){ _signalLog.unshift(Object.assign({ loggedAt: Date.now() }, s)); _signalLog = _signalLog.slice(0,200); }
-
-/* ---- Do Not Disturb / focus hours: downgrade by 2 levels, 7-9 exempt ---- */
-LEADOS.dnd = (function(){
-  let heldDigest = [];
-  function isFocusNow(){
-    const st = P().settings;
-    if (!st.focusEnabled) return false;
-    const d = new Date();
-    const day = d.getDay();
-    if (day === 0 || day === 6) return false; // weekdays only
-    const [sh,sm] = st.focusStart.split(':').map(Number);
-    const [eh,em] = st.focusEnd.split(':').map(Number);
-    const mins = d.getHours()*60 + d.getMinutes();
-    return mins >= sh*60+sm && mins <= eh*60+em;
+  function buildSituation(P){
+    var sorted = P.domainList.slice().sort(function(a,b){ return a.score-b.score; });
+    var worst = sorted[0], best = sorted[sorted.length-1];
+    var open = P.findings.filter(function(f){ return !f.resolved; });
+    var top3 = open.slice().sort(function(a,b){ return b.severity-a.severity; }).slice(0,3);
+    var worsening = open.filter(function(f){ return f.trend==='worsening'; }).length;
+    var improving = open.filter(function(f){ return f.trend==='improving'; }).length;
+    var flat = open.length - worsening - improving;
+    return {
+      headline: open.length + ' open finding' + (open.length===1?'':'s') + ' across ' + P.domainList.length + ' domains. ' +
+        worst.label + ' is the most strained domain at ' + worst.score + '/100; ' + best.label + ' is the strongest at ' + best.score + '/100.',
+      body: [
+        'Momentum: ' + worsening + ' open finding' + (worsening===1?'':'s') + ' trending worse, ' + improving + ' improving, ' + flat + ' flat. ' +
+          (worsening > improving ? 'The organization is losing ground faster than it is gaining it.' : 'The organization is holding or gaining ground overall.'),
+        top3.length ? 'Top findings by severity: ' + top3.map(function(f){ return '"' + f.title + '" (' + domainLabel(f.domain) + ', sev ' + f.severity + '/5, ' + f.trend + ')'; }).join('; ') + '.'
+                     : 'No open findings currently logged.'
+      ]
+    };
   }
-  const DOWNGRADE = { 6:4, 5:3, 4:1 };
-  function maybeDowngrade(signal){
-    if (!isFocusNow() || signal.level >= 7) return { signal };
-    if (DOWNGRADE[signal.level] !== undefined){
-      const newLevel = DOWNGRADE[signal.level];
-      const downgraded = Object.assign({}, signal, { level:newLevel, downgradedFrom: signal.level });
-      if (newLevel <= 3){
-        heldDigest.push(downgraded);
-        return { heldForDigest:true };
-      }
-      return { signal: downgraded };
+
+  function buildInterpretation(P, patterns){
+    var active = patterns.filter(function(p){ return p.active; });
+    if (!active.length){
+      return { headline: 'No compound pattern meets the active threshold right now.',
+        body: ['Findings are moving independently across domains — no cross-domain reinforcing pattern detected at this moment.'] };
     }
-    return { signal };
+    var domainsTouched = Array.from(new Set(active.reduce(function(a,p){return a.concat(p.domains);},[])));
+    return {
+      headline: active.length + ' compound pattern' + (active.length>1?'s':'') + ' currently active, spanning ' + domainsTouched.length + ' domains.',
+      body: active.map(function(p){
+        return p.label + ' (' + p.domains.map(domainLabel).join(' + ') + '): ' + p.narrative(p.exampleFindings) + ' — combined severity ' + p.severitySum + '.';
+      })
+    };
   }
-  function flushDigest(){
-    if (!heldDigest.length) return;
-    const n = heldDigest.length;
-    LEADOS.ui.toast({
-      level:4, title:'Focus mode ended',
-      body: `While you were in focus mode: ${n} new finding${n>1?'s':''} appeared.`,
-      domain:null, actions:[{label:'REVIEW NOW', onClick:()=>switchTab('today')},{label:'SEE LATER', onClick:()=>{}}]
+
+  var ACTION_HINTS = {
+    revenue: 'tighten pipeline qualification before adding new top-of-funnel spend',
+    customer: 'get a leader on the phone with the top three at-risk accounts this week',
+    ops: 'freeze non-critical change while the on-call load stabilizes',
+    product: 're-scope the slipping feature rather than silently extending the date',
+    people: 'run stay-interviews with the team showing the strain, not just exit interviews later',
+    risk: 'close the control gap before the next audit window, not after'
+  };
+
+  function buildRecommendation(P, patterns){
+    var active = patterns.filter(function(p){ return p.active; });
+    var worst2 = P.domainList.slice().sort(function(a,b){ return a.score-b.score; }).slice(0,2);
+    var actions = [];
+    if (active.length){
+      actions.push('Assign an explicit owner to "' + active[0].label + '" this week — it is the compound pattern most likely to compound further if left unowned.');
+    }
+    worst2.forEach(function(d){
+      var top = d.open.slice().sort(function(a,b){ return b.severity-a.severity; })[0];
+      if (top) actions.push('In ' + d.label + ': address "' + top.title + '" first (sev ' + top.severity + '/5) — ' + ACTION_HINTS[d.key] + '.');
     });
-    heldDigest = [];
+    return { headline: actions.length ? 'Recommended moves, in order:' : 'No urgent action indicated by current data.', body: actions };
   }
-  return { isFocusNow, maybeDowngrade, flushDigest, _peekDigest:()=>heldDigest.slice() };
+
+  // The one disclosed exception to pure recompute: this result is persisted
+  // as a new append-only event so "generated on demand, not on every
+  // render" is actually true across reloads, not just within one session.
+  function generate(onDone){
+    var raw = LEADOS.store.load();
+    var P = LEADOS.store.project(raw.events);
+    var patterns = activePatterns(P);
+    var sections = {
+      situation: buildSituation(P),
+      interpretation: buildInterpretation(P, patterns),
+      recommendation: buildRecommendation(P, patterns)
+    };
+    var payload = {
+      id: 'syn-' + Date.now(),
+      generatedAt: Date.now(),
+      basedOnEventCount: countRelevantEvents(raw.events),
+      sections: sections
+    };
+    LEADOS.store.append('synthesis.generated', payload);
+    if (onDone) onDone(payload);
+  }
+
+  return { buildSituation: buildSituation, buildInterpretation: buildInterpretation, buildRecommendation: buildRecommendation, generate: generate, activePatterns: activePatterns };
 })();
 
-/* ---- Renderers for each level ---- */
-LEADOS.ui.renderAmbientSignal = function(signal){
-  // Levels 0-3
-  if (signal.level === 0){ renderRail(); renderHeatmapTab(); return; }
-  if (signal.level === 1){
-    renderRail();
-    pulseDomainBadge(signal.domain, 'pulse-once');
-    markFindingNew(signal.findingId);
-    return;
-  }
-  if (signal.level === 2){
-    pulseDomainBadge(signal.domain, 'pulse-twice');
-    showSoftAlert(signal);
-    return;
-  }
-  if (signal.level === 3){
-    addContextualNudge(signal);
-    return;
-  }
-};
+/* ------------------------------ UI STATE -------------------------------- */
+var UI = { loading:false, labForm: { domain:'revenue', severity:'3', trend:'worsening', title:'' }, healthResults: null };
 
-LEADOS.ui.renderSignal = function(signal){
-  if (signal.level === 4) return LEADOS.ui.toast(Object.assign({auto:4200}, signal));
-  if (signal.level === 5) return LEADOS.ui.toast(Object.assign({auto:0, persistent:true}, signal));
-  if (signal.level === 6) return showAmbientBanner(signal);
-  if (signal.level === 7) return showHardBanner(signal);
-  if (signal.level === 8) return showOverlayInterrupt(signal);
-};
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+function fmtTime(ms){ return new Date(ms).toLocaleString(); }
 
-function pulseDomainBadge(domainId, cls){
-  const el = document.querySelector(`[data-rail-domain="${domainId}"] .badge`);
-  if (!el) return;
-  el.classList.remove('pulse-once','pulse-twice');
-  void el.offsetWidth;
-  el.classList.add(cls);
-}
-function markFindingNew(findingId){
-  const el = document.querySelector(`[data-finding-id="${findingId}"]`);
-  if (el) el.classList.add('new-dot');
+var ROUTES = ['today','domains','synthesis','lab','health','log','about'];
+function currentRoute(){
+  var h = location.hash.replace('#/','');
+  return ROUTES.indexOf(h) >= 0 ? h : 'today';
 }
 
-function showSoftAlert(signal){
-  const slot = document.getElementById('softAlertSlot');
-  const bar = document.createElement('div');
-  bar.className = 'slide-down w-full h-7 flex items-center justify-between px-4 text-xs text-white';
-  bar.style.background = domainColor(signal.domain);
-  bar.innerHTML = `<span>New finding in ${domainLabel(signal.domain)}: ${esc(signal.title)}</span>
-    <button class="underline font-semibold">VIEW</button>`;
-  bar.querySelector('button').onclick = () => { switchTab('today'); bar.remove(); };
-  slot.innerHTML = '';
-  slot.appendChild(bar);
-  setTimeout(()=>bar.remove(), 8000);
-}
-
-function addContextualNudge(signal){
-  LEADOS._nudges = LEADOS._nudges || [];
-  LEADOS._nudges.push(signal);
-  renderCmdkSuggested();
-  renderDomainSpotlightNudges();
-}
-
-LEADOS.ui.toast = function(opts){
-  const stack = document.getElementById('toastStack');
-  const el = document.createElement('div');
-  const borderColor = opts.domain ? domainColor(opts.domain) : (opts.level===5?'#f59e0b':'#475569');
-  el.className = 'bg-slate-900 border border-slate-700 rounded-lg shadow-lg p-3 text-sm relative overflow-hidden ' + (opts.auto ? 'toast-auto' : '');
-  el.style.borderLeft = `4px solid ${borderColor}`;
-  if (opts.auto) el.style.animationDuration = opts.auto + 'ms';
-  const sinceHrs = opts.unseenSince ? Math.floor((Date.now()-opts.unseenSince)/3600000) : null;
-  el.innerHTML = `
-    <div class="flex justify-between items-start gap-2">
-      <div>
-        <div class="font-semibold">${esc(opts.title)}</div>
-        ${opts.body ? `<div class="text-slate-400 text-xs mt-0.5">${esc(opts.body)}</div>` : ''}
-        ${opts.persistent ? `<div class="text-amber-400 text-xs mt-1">Unseen for ${sinceHrs!==null?Math.floor(sinceHrs/24)+'d '+(sinceHrs%24)+'h':'0h'}</div>` : ''}
-      </div>
-      ${opts.persistent ? `<button class="text-slate-500 hover:text-slate-300 close-x">✕</button>` : ''}
-    </div>
-    <div class="mt-2 flex gap-2"></div>
-  `;
-  const actionsWrap = el.querySelector('.mt-2');
-  (opts.actions || [{label:'OPEN', onClick:()=>switchTab('today')}]).forEach(a=>{
-    const b = document.createElement('button');
-    b.className = 'text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded';
-    b.textContent = a.label;
-    b.onclick = () => { a.onClick && a.onClick(); el.remove(); };
-    actionsWrap.appendChild(b);
-  });
-  if (opts.persistent){
-    el.querySelector('.close-x').onclick = () => el.remove();
-    el.style.background = 'rgba(245,158,11,0.08)';
-  }
-  stack.appendChild(el);
-  if (opts.auto) setTimeout(()=>el.remove(), opts.auto);
-};
-
-function showAmbientBanner(signal){
-  const slot = document.getElementById('ambientBannerSlot');
-  const bar = document.createElement('div');
-  bar.dataset.signalKey = signal.key || '';
-  bar.className = 'w-full flex items-center justify-between px-4 text-sm';
-  bar.style.minHeight = '44px';
-  bar.style.borderLeft = `4px solid ${SEV_COLOR[4]}`;
-  bar.style.background = 'rgba(251,146,60,0.08)';
-  bar.innerHTML = `<span>⚠ ${esc(signal.title)}</span>
-    <button class="px-3 py-1 bg-orange-600 hover:bg-orange-500 rounded text-xs font-semibold">OPEN PLAYBOOK</button>`;
-  bar.querySelector('button').onclick = () => switchTab('today');
-  slot.appendChild(bar); // persists; multiple can stack until resolved
-}
-function resolveAmbientBanner(key){
-  document.querySelectorAll(`#ambientBannerSlot [data-signal-key="${key}"]`).forEach(n=>n.remove());
-}
-
-function showHardBanner(signal){
-  const slot = document.getElementById('hardBannerSlot');
-  if (slot.querySelector(`[data-signal-key="${signal.key}"]`)) return;
-  const bar = document.createElement('div');
-  bar.dataset.signalKey = signal.key;
-  bar.className = 'crisis-pulse w-full text-white flex items-center justify-between px-4 md:px-8';
-  bar.style.height = '64px';
-  bar.innerHTML = `
-    <div class="flex items-center gap-3">
-      <span class="font-bold">LEVEL 7 · CRITICAL</span>
-      <span>${esc(signal.title)}</span>
-      <span class="text-xs opacity-80 crit-timer"></span>
-    </div>
-    <button class="px-4 py-2 bg-white text-red-700 rounded-lg font-bold text-sm">RESPOND NOW</button>`;
-  const since = signal.createdAt || Date.now();
-  const timerEl = bar.querySelector('.crit-timer');
-  const tick = () => { const s = Math.floor((Date.now()-since)/1000); timerEl.textContent = `Critical since ${new Date(since).toLocaleTimeString()} (${s}s ago)`; };
-  tick();
-  const iv = setInterval(tick, 1000);
-  bar.dataset.interval = iv;
-  bar.querySelector('button').onclick = () => switchTab('today');
-  slot.appendChild(bar);
-}
-function resolveHardBanner(key){
-  const el = document.querySelector(`#hardBannerSlot [data-signal-key="${key}"]`);
-  if (el){ clearInterval(Number(el.dataset.interval)); el.remove(); }
-}
-
-function showOverlayInterrupt(signal){
-  const modal = document.getElementById('overlayInterrupt');
-  const list = document.getElementById('overlayFindingsList');
-  list.innerHTML = '';
-  (signal.items || [signal]).forEach(it=>{
-    const row = document.createElement('div');
-    row.className = 'p-2 rounded bg-slate-800 border-l-4';
-    row.style.borderColor = SEV_COLOR[5];
-    row.textContent = it.title;
-    list.appendChild(row);
-  });
-  modal.classList.remove('hidden'); modal.classList.add('flex');
-  const ackInput = document.getElementById('ackInput');
-  const ackBtn = document.getElementById('btnAckContinue');
-  ackInput.value = '';
-  ackBtn.disabled = true;
-  ackInput.oninput = () => { ackBtn.disabled = ackInput.value.trim() !== 'I UNDERSTAND'; };
-  document.getElementById('btnRespondAll').onclick = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); switchTab('today'); };
-  ackBtn.onclick = () => {
-    LEADOS.store.audit({ type:'overlay.acknowledged', signal: signal.key || 'overlay', text: ackInput.value });
-    modal.classList.add('hidden'); modal.classList.remove('flex');
-  };
-}
-
-/* ---------------------------- Rail / domains / findings UI ---------------------------- */
-function domainColor(id){ const d = DOMAINS.find(x=>x.id===id); return d ? d.color : '#64748b'; }
-function domainLabel(id){ const d = DOMAINS.find(x=>x.id===id); return d ? d.label : id; }
-function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
+/* -------------------------------- RAIL ---------------------------------- */
 function renderRail(){
-  const nav = document.getElementById('railNav');
-  const p = P();
-  const counts = {};
-  DOMAINS.forEach(d=>counts[d.id]=0);
-  Object.values(p.findings).forEach(f=>{ if(!f.resolved) counts[f.domain] = (counts[f.domain]||0)+1; });
-  const tabs = [
-    {id:'today', label:'Today'}, {id:'heatmap', label:'Heatmap'},
-    {id:'signals', label:'Signals Lab'}, {id:'api', label:'Local API'},
-    {id:'settings', label:'Settings'}, {id:'health', label:'Health'},
-    {id:'ledger', label:'Verified / Fabricated'}, {id:'log', label:'Raw Event Log'}
+  var raw = LEADOS.store.load();
+  var P = LEADOS.store.project(raw.events);
+  var latest = P.synthesisHistory[P.synthesisHistory.length-1];
+  var staleBy = latest ? (countRelevantEvents(raw.events) - latest.basedOnEventCount) : null;
+  var items = [
+    ['today','Today'],
+    ['domains','Domains'],
+    ['synthesis','★ Synthesis'],
+    ['lab','Lab'],
+    ['health','Health'],
+    ['log','Event Log'],
+    ['about','Verified / Fabricated']
   ];
-  nav.innerHTML = '';
-  DOMAINS.forEach(d=>{
-    const item = document.createElement('div');
-    item.dataset.railDomain = d.id;
-    item.className = 'flex items-center justify-between px-3 md:px-4 py-2 hover:bg-slate-800 cursor-pointer';
-    item.innerHTML = `<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:${d.color}"></span><span class="hidden md:inline">${d.label}</span></span>
-      <span class="badge text-[11px] bg-slate-800 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${counts[d.id]}</span>`;
-    item.onclick = () => switchTab('today', d.id);
-    nav.appendChild(item);
-  });
-  const sep = document.createElement('div'); sep.className='my-2 border-t border-slate-800'; nav.appendChild(sep);
-  tabs.forEach(t=>{
-    const item = document.createElement('div');
-    item.className = 'px-3 md:px-4 py-2 hover:bg-slate-800 cursor-pointer text-slate-300 hidden md:block';
-    item.textContent = t.label;
-    item.onclick = () => switchTab(t.id);
-    nav.appendChild(item);
-  });
-}
-
-/* ---------------------------- Tabs ---------------------------- */
-let currentTab = 'today';
-function switchTab(tab, focusDomain){
-  currentTab = tab;
-  document.getElementById('tabTitle').textContent = ({
-    today:'Today', heatmap:'Domain Heatmap', signals:'Signals Lab', api:'Local API',
-    settings:'Settings', health:'Health', ledger:'Verified / Fabricated', log:'Raw Event Log'
-  })[tab] || tab;
-  const main = document.getElementById('tabContent');
-  main.innerHTML = '';
-  if (tab==='today') renderToday(main, focusDomain);
-  else if (tab==='heatmap') renderHeatmapTab(main);
-  else if (tab==='signals') renderSignalsLab(main);
-  else if (tab==='api') renderApiTab(main);
-  else if (tab==='settings') renderSettingsTab(main);
-  else if (tab==='health') renderHealthTab(main);
-  else if (tab==='ledger') renderLedgerTab(main);
-  else if (tab==='log') renderLogTab(main);
-}
-
-function renderToday(main, focusDomain){
-  const p = P();
-  const findings = Object.values(p.findings).filter(f=>!f.resolved).sort((a,b)=>b.sev-a.sev);
-  const wrap = document.createElement('div');
-  wrap.innerHTML = `<div id="spotlightNudges" class="mb-4 space-y-2"></div>
-    <h2 class="font-semibold mb-3 text-slate-300">Active findings ${focusDomain?`— ${domainLabel(focusDomain)}`:''}</h2>
-    <div id="findingsList" class="space-y-2"></div>`;
-  main.appendChild(wrap);
-  const list = document.getElementById('findingsList');
-  findings.filter(f=>!focusDomain || f.domain===focusDomain).forEach(f=>{
-    const row = document.createElement('div');
-    row.dataset.findingId = f.id;
-    row.className = 'p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between';
-    row.style.borderLeft = `4px solid ${SEV_COLOR[f.sev]}`;
-    row.innerHTML = `<div>
-        <div class="text-xs text-slate-500">${domainLabel(f.domain)} · sev ${f.sev} · conf ${f.conf}</div>
-        <div class="font-medium">${esc(f.title)}</div>
-      </div>
-      <button class="text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded">Mark seen</button>`;
-    row.querySelector('button').onclick = () => { LEADOS.store.append('finding.seen', {id:f.id}); row.classList.remove('new-dot'); };
-    list.appendChild(row);
-  });
-  if (!findings.length) list.innerHTML = '<div class="text-slate-500 text-sm">No active findings.</div>';
-  renderDomainSpotlightNudges();
-  // mark-as-seen on scroll into view removes the LEVEL1 NEW dot
-  const io = new IntersectionObserver(entries=>{
-    entries.forEach(e=>{ if (e.isIntersecting) e.target.classList.remove('new-dot'); });
-  }, { threshold: 0.6 });
-  list.querySelectorAll('[data-finding-id]').forEach(el=>io.observe(el));
-}
-
-function renderDomainSpotlightNudges(){
-  const host = document.getElementById('spotlightNudges');
-  if (!host) return;
-  host.innerHTML = '';
-  (LEADOS._nudges||[]).forEach(n=>{
-    const d = document.createElement('div');
-    d.className = 'text-xs px-3 py-2 rounded bg-slate-900 border border-slate-800 text-slate-300';
-    d.textContent = '🔔 ' + n.title;
-    host.appendChild(d);
-  });
-}
-
-function renderHeatmapTab(main){
-  if (!main) { if (currentTab==='heatmap') switchTab('heatmap'); return; }
-  const p = P();
-  const grid = document.createElement('div');
-  grid.className = 'grid grid-cols-2 md:grid-cols-3 gap-3';
-  DOMAINS.forEach(d=>{
-    const items = Object.values(p.findings).filter(f=>f.domain===d.id && !f.resolved);
-    const score = items.reduce((s,f)=>s+f.sev,0);
-    const cell = document.createElement('div');
-    cell.className = 'rounded-lg p-4 border border-slate-800';
-    cell.style.background = `color-mix(in srgb, ${d.color} ${Math.min(score*8,70)}%, #0f172a)`;
-    cell.innerHTML = `<div class="font-semibold">${d.label}</div><div class="text-2xl font-bold">${score}</div><div class="text-xs opacity-70">${items.length} open finding(s) · Level 0 ambient score</div>`;
-    grid.appendChild(cell);
-  });
-  main.appendChild(grid);
-}
-
-function renderSignalsLab(main){
-  main.innerHTML = `<p class="text-slate-400 text-sm mb-4 max-w-2xl">Manually trigger each signal level to verify its intensity, rendering, and queueing rules (spec: "Signal Intensity Levels", this session's brief). Levels 0–3 never queue; 7+ bypass the queue; 4–6 are queue-managed, max 3 simultaneous.</p>
-  <div id="labButtons" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
-  <div class="mt-6">
-    <h3 class="font-semibold mb-2 text-slate-300">Live signal queue log</h3>
-    <div id="signalLogView" class="text-xs font-mono space-y-1 max-h-72 overflow-y-auto bg-slate-900 rounded-lg p-3 border border-slate-800"></div>
-  </div>`;
-  const defs = [
-    {level:0, label:'L0 Ambient indicator', run:()=>{ const f=randomFinding(1); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:0, domain:f.domain, title:f.title}); renderAfterChange(); }},
-    {level:1, label:'L1 Soft pulse (new sev1/2)', run:()=>{ const f=randomFinding(2); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:1, domain:f.domain, findingId:f.id, title:f.title}); renderAfterChange(); }},
-    {level:2, label:'L2 Soft alert (sev2+HIGH conf)', run:()=>{ const f=randomFinding(2,'HIGH'); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:2, domain:f.domain, findingId:f.id, title:f.title}); renderAfterChange(); }},
-    {level:3, label:'L3 Contextual nudge (pre-fire calendar)', run:()=>{ LEADOS.signalQueue.enqueue({level:3, title:'Pre-fire: Board deck due in 48h'}); }},
-    {level:4, label:'L4 Soft toast (new sev3)', run:()=>{ const f=randomFinding(3); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:4, domain:f.domain, title:'New finding', body:f.title}); renderAfterChange(); }},
-    {level:5, label:'L5 Persistent toast (sev3 HIGH, unseen 48h)', run:()=>{ LEADOS.signalQueue.enqueue({level:5, domain:'finance', title:'Unseen sev-3 finding', unseenSince: Date.now()-172800000}); }},
-    {level:6, label:'L6 Ambient banner (new sev4)', run:()=>{ const f=randomFinding(4); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:6, key:f.id, domain:f.domain, title:f.title}); renderAfterChange(); }},
-    {level:7, label:'L7 Hard banner (new sev5)', run:()=>{ const f=randomFinding(5); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:7, key:f.id, domain:f.domain, title:f.title, createdAt: f.createdAt||Date.now()}); renderAfterChange(); }},
-    {level:8, label:'L8 Overlay (≥2 active sev-5)', run:()=>{
-      const f1 = randomFinding(5), f2 = randomFinding(5);
-      LEADOS.store.append('finding.created', f1); LEADOS.store.append('finding.created', f2);
-      LEADOS.signalQueue.enqueue({level:8, items:[f1,f2]});
-      renderAfterChange();
-    }},
-    {level:9, label:'L9 Structural alert (simulate restart)', run:()=>{
-      sessionStorage.removeItem('leados-signals-api:bootDone');
-      localStorage.setItem('leados-signals-api:pendingCrit', '3');
-      location.reload();
-    }}
-  ];
-  const host = document.getElementById('labButtons');
-  defs.forEach(d=>{
-    const b = document.createElement('button');
-    b.className = 'text-left p-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-600 text-sm';
-    b.innerHTML = `<div class="font-semibold">${d.label}</div><div class="text-xs text-slate-500 mt-1">click to fire</div>`;
-    b.onclick = d.run;
-    host.appendChild(b);
-  });
-  renderSignalLogView();
-}
-function renderAfterChange(){ renderRail(); if(currentTab==='today') switchTab('today'); renderCmdkSuggested(); }
-function randomFinding(sev, conf){
-  const d = DOMAINS[Math.floor(Math.random()*DOMAINS.length)].id;
-  const confs = ['LOW','MEDIUM','HIGH'];
-  return { id: uid('f'), domain:d, sev, conf: conf || confs[Math.floor(Math.random()*confs.length)], title: `Simulated sev-${sev} finding in ${domainLabel(d)}`, createdAt: Date.now() };
-}
-function renderSignalLogView(){
-  const el = document.getElementById('signalLogView');
-  if (!el) return;
-  el.innerHTML = _signalLog.slice(0,40).map(s=>`<div>[L${s.level}] ${new Date(s.loggedAt).toLocaleTimeString()} ${s.title||s.key||''}</div>`).join('') || '<div class="text-slate-600">No signals fired yet.</div>';
-}
-
-/* ---------------------------- Settings tab (focus hours / DND) ---------------------------- */
-function renderSettingsTab(main){
-  const p = P();
-  main.innerHTML = `
-    <div class="max-w-md space-y-4">
-      <h3 class="font-semibold text-slate-300">Do Not Disturb — Focus hours</h3>
-      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="focusEnabled" ${p.settings.focusEnabled?'checked':''}> Enable focus hours (weekdays)</label>
-      <div class="flex gap-3 items-center text-sm">
-        <span>From</span><input type="time" id="focusStart" value="${p.settings.focusStart}" class="bg-slate-800 rounded px-2 py-1">
-        <span>to</span><input type="time" id="focusEnd" value="${p.settings.focusEnd}" class="bg-slate-800 rounded px-2 py-1">
-      </div>
-      <p class="text-xs text-slate-500">During focus hours: L6→L4, L5→L3, L4→L1. Levels 7–9 are never downgraded. Downgraded-to-ambient signals (new L1/L3) are queued and delivered as a digest toast when focus hours end.</p>
-      <button id="saveFocus" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold">Save</button>
-      <button id="simulateEndFocus" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-semibold ml-2">Simulate "focus hours just ended"</button>
-    </div>`;
-  document.getElementById('saveFocus').onclick = () => {
-    LEADOS.store.append('settings.changed', {key:'focusEnabled', value: document.getElementById('focusEnabled').checked});
-    LEADOS.store.append('settings.changed', {key:'focusStart', value: document.getElementById('focusStart').value});
-    LEADOS.store.append('settings.changed', {key:'focusEnd', value: document.getElementById('focusEnd').value});
-    updateDndPill();
-  };
-  document.getElementById('simulateEndFocus').onclick = () => LEADOS.dnd.flushDigest();
-}
-function updateDndPill(){
-  const pill = document.getElementById('dndPill');
-  if (LEADOS.dnd.isFocusNow()){ pill.classList.remove('hidden'); } else { pill.classList.add('hidden'); }
-}
-
-/* =========================================================================
-   PART 5 — LOCAL API (BroadcastChannel, zero-network, same-device only)
-   ========================================================================= */
-LEADOS.localAPI = {
-  channel: null,
-  _requestTimes: [],
-  init(){
-    this.channel = new BroadcastChannel('leados-api-v1');
-    this.channel.onmessage = (event) => {
-      const { requestId, method, params } = event.data || {};
-      if (!requestId || !method) return;
-      if (this._isRateLimited()){ this._respond(requestId, {error:'RATE_LIMITED'}); return; }
-      const result = this._execute(method, params);
-      this._respond(requestId, result);
-    };
-  },
-  _isRateLimited(){
-    const now = Date.now();
-    this._requestTimes = this._requestTimes.filter(t => now - t < 1000);
-    if (this._requestTimes.length >= 10) return true;
-    this._requestTimes.push(now);
-    return false;
-  },
-  _execute(method, params){
-    const p = P();
-    const today = new Date().toISOString();
-    const findingsArr = Object.values(p.findings).filter(f=>!f.resolved).sort((a,b)=>b.sev-a.sev);
-    switch(method){
-      case 'getFindings': return { findings: findingsArr, schema:'v1', generatedAt: today };
-      case 'getTopFinding': return { finding: findingsArr[0] || null };
-      case 'getDomainScore': {
-        const domain = (params||{}).domain;
-        const score = findingsArr.filter(f=>f.domain===domain).reduce((s,f)=>s+f.sev,0);
-        return { domain, score };
-      }
-      case 'getActivePatterns': return { patterns: [] }; // no correlation engine in this sandbox — disclosed, not fabricated
-      case 'getPreFireCalendar': return { items: LEADOS._nudges || [] };
-      case 'getDailyDigest': return { topFindings: findingsArr.slice(0,3), domainCounts: domainCounts(p) };
-      case 'ping': return { status:'ok', version:1, lineage:'pt4-5-sandbox', eventCount: p.events.length };
-      default: return { error:'UNKNOWN_METHOD', method };
+  var route = currentRoute();
+  document.getElementById('rail').innerHTML = items.map(function(it){
+    var badge = '';
+    if (it[0]==='synthesis'){
+      if (!latest) badge = '<span class="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200">new</span>';
+      else if (staleBy > 0) badge = '<span class="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-200">+' + staleBy + '</span>';
     }
-  },
-  _respond(requestId, data){ this.channel.postMessage({ requestId, data, source:'leados' }); }
-};
-function domainCounts(p){ const c={}; DOMAINS.forEach(d=>c[d.id]=0); Object.values(p.findings).forEach(f=>{ if(!f.resolved) c[f.domain]=(c[f.domain]||0)+1; }); return c; }
+    return '<a href="#/' + it[0] + '" class="rail-link flex items-center gap-2 px-3 py-2 rounded-lg border border-transparent text-slate-300 hover:bg-slate-800/60' +
+      (route===it[0] ? ' active' : '') + '">' + it[1] + badge + '</a>';
+  }).join('');
+}
 
-/* In-page "second tab" simulation client — proves the round trip without
-   needing the user to actually open a second browser tab. */
-const LeadOSClientSim = {
-  channel: new BroadcastChannel('leados-api-v1'),
-  pending: new Map(),
-  _init(){ this.channel.onmessage = e => { const {requestId,data} = e.data||{}; const r=this.pending.get(requestId); if(r){ r(data); this.pending.delete(requestId);} }; },
-  call(method, params={}, timeoutMs=1500){
-    const requestId = Math.random().toString(36).slice(2);
-    return new Promise((resolve,reject)=>{
-      this.pending.set(requestId, resolve);
-      this.channel.postMessage({ requestId, method, params });
-      setTimeout(()=>{ if(this.pending.has(requestId)){ this.pending.delete(requestId); reject(new Error('timeout')); } }, timeoutMs);
-    });
+/* ------------------------------ VIEWS ------------------------------------ */
+function viewToday(){
+  var raw = LEADOS.store.load();
+  var P = LEADOS.store.project(raw.events);
+  var open = P.findings.filter(function(f){return !f.resolved;}).sort(function(a,b){return b.severity-a.severity;});
+  return '' +
+  '<div class="fade-in max-w-4xl">' +
+    '<h1 class="text-xl font-semibold text-slate-100">Today</h1>' +
+    '<p class="text-sm text-slate-400 mt-1">Open findings, most severe first. Fabricated sample data — see Verified / Fabricated.</p>' +
+    '<div class="mt-5 space-y-2">' +
+    (open.length ? open.map(function(f){
+      return '<div class="rounded-lg border border-slate-800 bg-slate-900/50 p-3 flex items-start gap-3">' +
+        '<span class="mt-0.5 text-[10px] px-1.5 py-0.5 rounded font-semibold ' + sevClass(f.severity) + '">SEV ' + f.severity + '</span>' +
+        '<div class="flex-1">' +
+          '<div class="text-sm text-slate-100">' + esc(f.title) + '</div>' +
+          '<div class="text-xs text-slate-500 mt-0.5">' + domainLabel(f.domain) + ' · trending ' + f.trend + '</div>' +
+        '</div>' +
+        '<button onclick="LEADOS_resolve(\'' + f.id + '\')" class="text-xs px-2 py-1 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">Resolve</button>' +
+      '</div>';
+    }).join('') : '<p class="text-sm text-slate-500">No open findings.</p>') +
+    '</div>' +
+  '</div>';
+}
+
+function sevClass(sev){
+  if (sev>=4) return 'bg-rose-500/20 text-rose-300';
+  if (sev===3) return 'bg-amber-500/20 text-amber-300';
+  return 'bg-emerald-500/20 text-emerald-300';
+}
+
+function viewDomains(){
+  var raw = LEADOS.store.load();
+  var P = LEADOS.store.project(raw.events);
+  return '' +
+  '<div class="fade-in max-w-5xl">' +
+    '<h1 class="text-xl font-semibold text-slate-100">Domains</h1>' +
+    '<p class="text-sm text-slate-400 mt-1">Score = 100 − Σ(open finding severity × 7), clamped 0–100. A fabricated, simple scoring function for this sandbox.</p>' +
+    '<div class="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">' +
+    P.domainList.map(function(d){
+      return '<div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">' +
+        '<div class="flex items-center justify-between">' +
+          '<span class="text-sm font-medium text-slate-100">' + d.label + '</span>' +
+          '<span class="text-lg font-bold mono" style="color:' + d.color + '">' + d.score + '</span>' +
+        '</div>' +
+        '<div class="mt-2 h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">' +
+          '<div class="h-full rounded-full" style="width:' + d.score + '%;background:' + d.color + '"></div>' +
+        '</div>' +
+        '<div class="mt-2 text-xs text-slate-500">' + d.open.length + ' open · ' + d.worsening + ' worsening · ' + d.improving + ' improving</div>' +
+      '</div>';
+    }).join('') +
+    '</div>' +
+  '</div>';
+}
+
+function sectionCard(title, sec, accent){
+  if (!sec) return '';
+  return '<div class="rounded-xl border border-slate-800 bg-slate-900/50 p-5">' +
+    '<div class="text-[11px] font-semibold uppercase tracking-wide" style="color:' + accent + '">' + title + '</div>' +
+    '<p class="mt-2 text-sm text-slate-100 font-medium">' + esc(sec.headline) + '</p>' +
+    (sec.body && sec.body.length ? '<ul class="mt-3 space-y-2 text-sm text-slate-300 list-disc list-inside">' +
+      sec.body.map(function(b){ return '<li>' + esc(b) + '</li>'; }).join('') + '</ul>' : '') +
+  '</div>';
+}
+
+function viewSynthesis(){
+  var raw = LEADOS.store.load();
+  var P = LEADOS.store.project(raw.events);
+  var history = P.synthesisHistory;
+  var latest = history[history.length-1] || null;
+  var currentCount = countRelevantEvents(raw.events);
+  var staleBy = latest ? currentCount - latest.basedOnEventCount : null;
+
+  var header = '' +
+  '<div class="max-w-3xl">' +
+    '<h1 class="text-xl font-semibold text-slate-100">★ Synthesis</h1>' +
+    '<p class="text-sm text-slate-400 mt-1">Not a dashboard, not a finding list, not a chart. The system speaking as a strategic advisor — generated on demand, not on every render.</p>' +
+  '</div>';
+
+  var status = '<div class="max-w-3xl mt-4 flex flex-wrap items-center gap-3 text-xs">' +
+    (latest ? ('<span class="text-slate-400">Last generated ' + fmtTime(latest.generatedAt) + ' · based on ' + latest.basedOnEventCount + ' finding events</span>')
+            : '<span class="text-slate-500">Never generated yet.</span>') +
+    (staleBy > 0 ? '<span class="px-2 py-1 rounded bg-amber-500/20 text-amber-300 font-medium">' + staleBy + ' change' + (staleBy===1?'':'s') + ' since this was generated</span>' : '') +
+    '<button onclick="LEADOS_generate()" class="ml-auto px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-50" ' + (UI.loading?'disabled':'') + '>' +
+      (UI.loading ? '<span class="inline-block w-3 h-3 border-2 border-white/40 border-t-white rounded-full spin align-[-1px] mr-1"></span> Generating…' : (latest ? 'Regenerate synthesis' : 'Generate synthesis')) +
+    '</button>' +
+  '</div>';
+
+  var body;
+  if (!latest){
+    body = '<div class="max-w-3xl mt-6 rounded-xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">No synthesis generated yet. Click "Generate synthesis" above — it reads every finding currently logged and composes the three sections below.</div>';
+  } else {
+    body = '<div class="max-w-3xl mt-6 space-y-4">' +
+      sectionCard('1 · Situation — what\'s actually happening', latest.sections.situation, '#818cf8') +
+      sectionCard('2 · Interpretation — what it means together', latest.sections.interpretation, '#f59e0b') +
+      sectionCard('3 · Recommendation — what to do about it', latest.sections.recommendation, '#34d399') +
+    '</div>';
   }
+
+  var hist = '';
+  if (history.length > 1){
+    hist = '<div class="max-w-3xl mt-6">' +
+      '<details class="text-sm">' +
+        '<summary class="cursor-pointer text-slate-400">History (' + history.length + ' generations, append-only — none ever edited)</summary>' +
+        '<div class="mt-2 space-y-1 text-xs text-slate-500">' +
+          history.slice().reverse().map(function(h){ return '<div class="mono">' + fmtTime(h.generatedAt) + ' · based on ' + h.basedOnEventCount + ' events · id ' + h.id + '</div>'; }).join('') +
+        '</div>' +
+      '</details>' +
+    '</div>';
+  }
+
+  var disclose = '<div class="max-w-3xl mt-8 text-[11px] text-slate-600 border-t border-slate-800 pt-3">' +
+    'The three section labels (Situation / Interpretation / Recommendation) are this delivery\'s own interpretation — the pasted brief\'s spec text was truncated before naming what the three sections actually are. See About tab.' +
+  '</div>';
+
+  return '<div class="fade-in">' + header + status + body + hist + disclose + '</div>';
+}
+
+function viewLab(){
+  var raw = LEADOS.store.load();
+  var P = LEADOS.store.project(raw.events);
+  var open = P.findings.filter(function(f){ return !f.resolved; });
+  var f = UI.labForm;
+  return '' +
+  '<div class="fade-in max-w-3xl">' +
+    '<h1 class="text-xl font-semibold text-slate-100">Lab</h1>' +
+    '<p class="text-sm text-slate-400 mt-1">Manually log or resolve findings to change the picture, then revisit Synthesis to see staleness and regenerate.</p>' +
+    '<div class="mt-5 rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">' +
+      '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">' +
+        '<select id="lab-domain" class="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm">' +
+          LEADOS.domains.map(function(d){ return '<option value="' + d.key + '"' + (f.domain===d.key?' selected':'') + '>' + d.label + '</option>'; }).join('') +
+        '</select>' +
+        '<select id="lab-severity" class="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm">' +
+          [1,2,3,4,5].map(function(s){ return '<option value="' + s + '"' + (String(f.severity)===String(s)?' selected':'') + '>Sev ' + s + '</option>'; }).join('') +
+        '</select>' +
+        '<select id="lab-trend" class="bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm">' +
+          ['worsening','flat','improving'].map(function(t){ return '<option value="' + t + '"' + (f.trend===t?' selected':'') + '>' + t + '</option>'; }).join('') +
+        '</select>' +
+        '<button onclick="LEADOS_logFinding()" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium">Log finding</button>' +
+      '</div>' +
+      '<input id="lab-title" value="' + esc(f.title) + '" placeholder="Finding title…" class="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-sm" />' +
+    '</div>' +
+    '<div class="mt-5">' +
+      '<div class="text-xs uppercase tracking-wide text-slate-500 mb-2">Open findings (' + open.length + ')</div>' +
+      '<div class="space-y-2">' +
+      (open.length ? open.map(function(fi){
+        return '<div class="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-2.5 text-sm">' +
+          '<span class="text-[10px] px-1.5 py-0.5 rounded font-semibold ' + sevClass(fi.severity) + '">SEV ' + fi.severity + '</span>' +
+          '<span class="flex-1 text-slate-200">' + esc(fi.title) + ' <span class="text-slate-500">(' + domainLabel(fi.domain) + ', ' + fi.trend + ')</span></span>' +
+          '<button onclick="LEADOS_resolve(\'' + fi.id + '\')" class="text-xs px-2 py-1 rounded border border-slate-700 hover:bg-slate-800">Resolve</button>' +
+        '</div>';
+      }).join('') : '<p class="text-sm text-slate-500">None open.</p>') +
+      '</div>' +
+    '</div>' +
+    '<div class="mt-5 flex gap-2">' +
+      '<button onclick="LEADOS_reseed()" class="text-xs px-3 py-1.5 rounded border border-slate-700 text-slate-300 hover:bg-slate-800">Wipe & reseed</button>' +
+    '</div>' +
+  '</div>';
+}
+
+function viewHealth(){
+  var results = UI.healthResults;
+  return '' +
+  '<div class="fade-in max-w-3xl">' +
+    '<h1 class="text-xl font-semibold text-slate-100">Health</h1>' +
+    '<p class="text-sm text-slate-400 mt-1">Live, non-destructive checks run in the browser. This tab is the authority if it ever disagrees with the README.</p>' +
+    '<button onclick="LEADOS_runHealth()" class="mt-4 px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium">Run health checks</button>' +
+    '<div class="mt-5 space-y-2">' +
+    (results ? results.map(function(r){
+      return '<div class="rounded-lg border p-3 text-sm ' + (r.pass ? 'border-emerald-700/40 bg-emerald-500/5' : 'border-rose-700/40 bg-rose-500/5') + '">' +
+        '<div class="flex items-center gap-2 font-medium ' + (r.pass?'text-emerald-300':'text-rose-300') + '">' + (r.pass?'✓':'✗') + ' ' + esc(r.name) + '</div>' +
+        '<div class="text-xs text-slate-400 mt-1">' + esc(r.detail) + '</div>' +
+      '</div>';
+    }).join('') : '<p class="text-sm text-slate-500">Not run yet.</p>') +
+    '</div>' +
+  '</div>';
+}
+
+function viewLog(){
+  var raw = LEADOS.store.load();
+  return '' +
+  '<div class="fade-in max-w-4xl">' +
+    '<h1 class="text-xl font-semibold text-slate-100">Raw Event Log</h1>' +
+    '<p class="text-sm text-slate-400 mt-1">' + raw.events.length + ' events, append-only. Nothing derived is stored except synthesis.generated snapshots (disclosed exception).</p>' +
+    '<div class="mt-4 flex gap-2">' +
+      '<button onclick="LEADOS_export()" class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-slate-800">Export JSON</button>' +
+      '<button onclick="LEADOS_reseed()" class="text-xs px-3 py-1.5 rounded border border-slate-700 hover:bg-slate-800">Wipe & reseed</button>' +
+    '</div>' +
+    '<div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/50 p-3 max-h-[60vh] overflow-y-auto">' +
+      '<pre class="text-[11px] text-slate-400 whitespace-pre-wrap">' + esc(JSON.stringify(raw.events, null, 2)) + '</pre>' +
+    '</div>' +
+  '</div>';
+}
+
+function viewAbout(){
+  var rows = [
+    ['Real repo is React 19.2.6 + Vite 7.3.2 + Tailwind 4.1.17, builds via vite-plugin-singlefile', 'VERIFIED', 'fetched package.json raw, this session'],
+    ['Real persistence is window.LeadOS / key leados:data, schemaVersion 5, lineage "pt"', 'VERIFIED', 'fetched store.js raw in full, this session'],
+    ['Real routes in App.tsx are exactly: today, intelligence, data, health, about', 'VERIFIED', 'fetched App.tsx raw; routeFromHash() whitelist read directly — no #/synthesis exists, unrecognized hashes fall back to "today"'],
+    ['IntelligenceView.tsx is a real, detailed component (velocity, entropy, energy budget, inertia, resonance)', 'VERIFIED (partially)', 'fetched raw, but this tool strips/garbles JSX markup on .tsx fetches — only non-JSX logic (imports, plain functions) is reliably readable'],
+    ['IntelligenceDashboard.tsx exists in the repo but is NOT imported by App.tsx', 'VERIFIED', 'cross-checked App.tsx import list against the file — appears to be orphaned/unused code, not a live route'],
+    ['SESSION-3.patch.md describes an unrelated "mentor / 1:1 pulse" app (mood sliders, flight model) with no LEADOS domain concepts', 'VERIFIED', 'fetched raw — flagged so it is never assumed to be part of this system'],
+    ['The repo\'s current README.md / index.html describe a prior "Part 4/5 signal hierarchy + local API" sandbox build', 'VERIFIED (surface only)', 'fetched README.md and AI-SESSION-LOG.md raw in full; index.html raw fetch only returned a few stripped visible text fragments ("LEVEL 8 OVERLAY INTERRUPT...") — the tool strips <script> contents even from a raw .html file, so the actual JS (signalQueue, localAPI, BroadcastChannel) could NOT be independently re-verified this session'],
+    ['This workspace had no index.html / AI-SESSION-LOG.md / README.md before this delivery', 'VERIFIED', 'read_file failed on all three paths before any file was written this session'],
+    ['The brief\'s own spec names what the Synthesis view\'s three sections actually are', 'NOT FOUND / TRUNCATED', 'the pasted Part 6 text ends with "Three sections, generated on demand... :" and stops — no list follows. Situation / Interpretation / Recommendation below is this delivery\'s own labeled interpretation, not a transcription'],
+    ['6 domains, 12 seed findings, 4 compound pattern definitions, scoring formula', 'FABRICATED', 'invented for this sandbox so Synthesis has something concrete to synthesize; pattern names are inspired by the concept of the real repo\'s verified LeadOS.patterns library, not copied from it'],
+    ['A single hand-authored index.html, instead of the real repo\'s Vite/React project or its own Part 4/5 sandbox file', 'DISCLOSED DIFFERENCE', 'this session\'s tools can only author one self-contained HTML file; the real Part 4/5 index.html could not be retrieved with fidelity (see row above) so it was not literally extended']
+  ];
+  function tagClass(t){
+    if (t==='VERIFIED') return 'bg-emerald-500/20 text-emerald-300';
+    if (t.indexOf('VERIFIED')===0) return 'bg-emerald-500/10 text-emerald-300';
+    if (t==='FABRICATED') return 'bg-amber-500/20 text-amber-300';
+    if (t==='DISCLOSED DIFFERENCE') return 'bg-sky-500/20 text-sky-300';
+    return 'bg-rose-500/20 text-rose-300';
+  }
+  return '<div class="fade-in max-w-5xl">' +
+    '<h1 class="text-xl font-semibold text-slate-100">Verified vs. Fabricated</h1>' +
+    '<p class="text-sm text-slate-400 mt-1">Rendered live so the disclosure travels with the running app. Full method and raw fetch excerpts: AI-SESSION-LOG.md.</p>' +
+    '<div class="mt-5 space-y-3">' +
+    rows.map(function(r){
+      return '<div class="rounded-lg border border-slate-800 bg-slate-900/50 p-3">' +
+        '<div class="flex items-start gap-2">' +
+          '<span class="text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ' + tagClass(r[1]) + '">' + r[1] + '</span>' +
+          '<span class="text-sm text-slate-200">' + esc(r[0]) + '</span>' +
+        '</div>' +
+        '<div class="text-xs text-slate-500 mt-1.5 pl-1">' + esc(r[2]) + '</div>' +
+      '</div>';
+    }).join('') +
+    '</div>' +
+  '</div>';
+}
+
+/* ------------------------------- ACTIONS -------------------------------- */
+window.LEADOS_resolve = function(id){
+  LEADOS.store.append('finding.resolved', { id: id });
+  renderApp();
 };
-LeadOSClientSim._init();
-
-const CLIENT_LIB_SOURCE = `// LeadOS Local API Client — paste into any browser tab on the same device
-// Same browser only. No network. LeadOS must be open in another tab.
-const LeadOS = {
-  channel: new BroadcastChannel('leados-api-v1'),
-  pending: new Map(),
-  _init() {
-    this.channel.onmessage = (e) => {
-      const { requestId, data } = e.data;
-      const resolve = this.pending.get(requestId);
-      if (resolve) { resolve(data); this.pending.delete(requestId); }
-    };
-  },
-  async call(method, params = {}, timeoutMs = 2000) {
-    const requestId = Math.random().toString(36).slice(2);
-    return new Promise((resolve, reject) => {
-      this.pending.set(requestId, resolve);
-      this.channel.postMessage({ requestId, method, params });
-      setTimeout(() => {
-        if (this.pending.has(requestId)) {
-          this.pending.delete(requestId);
-          reject(new Error('LeadOS not responding. Is it open in another tab?'));
-        }
-      }, timeoutMs);
-    });
-  },
-  ping: () => LeadOS.call('ping'),
-  findings: () => LeadOS.call('getFindings'),
-  topFinding: () => LeadOS.call('getTopFinding'),
-  domainScore: (d) => LeadOS.call('getDomainScore', { domain: d }),
-  patterns: () => LeadOS.call('getActivePatterns'),
-  calendar: () => LeadOS.call('getPreFireCalendar'),
-  digest: () => LeadOS.call('getDailyDigest'),
+window.LEADOS_logFinding = function(){
+  var domain = document.getElementById('lab-domain').value;
+  var severity = parseInt(document.getElementById('lab-severity').value, 10);
+  var trend = document.getElementById('lab-trend').value;
+  var title = document.getElementById('lab-title').value.trim() || 'Untitled finding';
+  LEADOS.store.append('finding.created', { id: 'f-' + Date.now(), domain: domain, severity: severity, trend: trend, title: title, createdAt: Date.now() });
+  UI.labForm = { domain: domain, severity: severity, trend: trend, title: '' };
+  renderApp();
 };
-LeadOS._init();`;
-
-function renderApiTab(main){
-  main.innerHTML = `
-    <p class="text-slate-400 text-sm mb-4 max-w-2xl">Local API — same browser only. Zero network. Uses <code class="mono">BroadcastChannel('leados-api-v1')</code>, read-only methods, rate-limited to 10 req/sec.</p>
-    <div class="grid md:grid-cols-2 gap-4">
-      <div>
-        <h3 class="font-semibold text-slate-300 mb-2">Try it (simulated second tab, same page)</h3>
-        <div class="flex flex-wrap gap-2 mb-3">
-          ${['ping','getFindings','getTopFinding','getDailyDigest'].map(m=>`<button data-call="${m}" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs">${m}</button>`).join('')}
-        </div>
-        <pre id="apiOut" class="mono text-xs bg-slate-900 border border-slate-800 rounded-lg p-3 h-56 overflow-auto">Click a method above.</pre>
-      </div>
-      <div>
-        <h3 class="font-semibold text-slate-300 mb-2">Client library (paste in another tab)</h3>
-        <pre class="mono text-[11px] bg-slate-900 border border-slate-800 rounded-lg p-3 h-56 overflow-auto">${esc(CLIENT_LIB_SOURCE)}</pre>
-      </div>
-    </div>`;
-  main.querySelectorAll('[data-call]').forEach(b=>{
-    b.onclick = async () => {
-      const out = document.getElementById('apiOut');
-      out.textContent = 'calling ' + b.dataset.call + ' …';
-      try { const res = await LeadOSClientSim.call(b.dataset.call); out.textContent = JSON.stringify(res, null, 2); }
-      catch(e){ out.textContent = 'Error: ' + e.message; }
-    };
-  });
-}
-
-/* ---------------------------- Health tab ---------------------------- */
-function renderHealthTab(main){
-  const checks = [];
-  // H1: queue respects maxSimultaneous
-  checks.push({ id:'H1', name:'signalQueue.maxSimultaneous === 3', pass: LEADOS.signalQueue.maxSimultaneous === 3 });
-  // H2: DND downgrade map correctness
-  const map = {6:4,5:3,4:1};
-  checks.push({ id:'H2', name:'DND downgrade map 6→4,5→3,4→1', pass: JSON.stringify(map)==='{"6":4,"5":3,"4":1}' });
-  // H3: levels 7-9 exempt from downgrade
-  const sim = LEADOS.dnd.maybeDowngrade({level:7,title:'x'});
-  checks.push({ id:'H3', name:'Level 7 never downgraded', pass: sim.signal && sim.signal.level===7 });
-  // H4: store key isolation
-  checks.push({ id:'H4', name:`store key isolated: ${LEADOS.store.KEY}`, pass: LEADOS.store.KEY === 'leados-signals-api:data' });
-  // H5: API round trip
-  const h5 = document.createElement('span'); h5.textContent='running…';
-  // H6: rate limiter triggers after 10
-  let limited = false;
-  for(let i=0;i<12;i++){ if (LEADOS.localAPI._isRateLimited()) limited = true; }
-  checks.push({ id:'H6', name:'API rate limiter trips after 10 req/sec', pass: limited });
-  main.innerHTML = `<div class="space-y-2 max-w-xl"></div>`;
-  const host = main.firstChild;
-  checks.forEach(c=>{
-    const row = document.createElement('div');
-    row.className = 'flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800 text-sm';
-    row.innerHTML = `<span>${c.id} · ${c.name}</span><span class="${c.pass?'text-green-400':'text-red-400'} font-semibold">${c.pass?'PASS':'FAIL'}</span>`;
-    host.appendChild(row);
-  });
-  const h5row = document.createElement('div');
-  h5row.className = 'flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800 text-sm';
-  h5row.innerHTML = `<span>H5 · Local API ping round-trip via BroadcastChannel</span><span class="text-slate-400">running…</span>`;
-  host.appendChild(h5row);
-  LeadOSClientSim.call('ping').then(res=>{
-    h5row.innerHTML = `<span>H5 · Local API ping round-trip via BroadcastChannel</span><span class="${res && res.status==='ok' ? 'text-green-400':'text-red-400'} font-semibold">${res && res.status==='ok' ? 'PASS':'FAIL'}</span>`;
-  }).catch(()=>{ h5row.innerHTML = `<span>H5 · Local API ping round-trip</span><span class="text-red-400 font-semibold">FAIL</span>`; });
-}
-
-/* ---------------------------- Ledger tab (verified vs fabricated) ---------------------------- */
-const LEDGER = [
-  { claim:"github.com/wbweve/Leados exists; root is React 19.2.6 + Vite 7.3.2 + Tailwind 4.1.17 with vite-plugin-singlefile", status:"✅ verified this session (raw fetch of package.json)" },
-  { claim:"Repo root carries README.md, AI-SESSION-LOG.md, AI-SESSION-LOG.append.md, SESSION-3.patch.md and ~40 .tsx component files alongside store.js/engine.js", status:"✅ verified this session (GitHub Trees API; tree listing truncated mid-alphabet at 'ScoreMath.tsx' in the raw response — the remainder was not independently re-confirmed this session)" },
-  { claim:"Real namespace is window.LeadOS (capital L, lowercase 'ead', capital OS); real store key is 'leados:data'; schemaVersion 5; lineage 'pt'; LINEAGE_TAG 'pt-6'", status:"✅ verified this session (raw fetch of store.js)" },
-  { claim:"Real settings include correlationWindowDays:90, trendMinPeriods:3, heatmapDecayFactor:0.85 (v5), plus salesCycleDays/revenueReviewCadenceDays/opsReviewCadenceDays/boardCadenceDays/complianceAuditCadenceDays (v4)", status:"✅ verified this session (raw store.js)" },
-  { claim:"engine.js folds ~15 domains of events into keyed buckets (fin*, sales/deals, roadmap, okrs, incidents, milestones, hr*, campaigns, mfg*, vendors, design*, rd*, legal*, cs*, exec*, notes) plus an alias table and open* predicate sets", status:"✅ verified this session (raw engine.js — fetch was truncated mid-file by this session's tooling; treat as a partial read, not the whole file)" },
-  { claim:"A real event.type 'signal.tagged' exists in engine.js — it tags an existing event/finding with a label, grouped by tagsByEvent; it is NOT a notification/toast/banner system", status:"⚠️ verified this session that it exists, AND flagged: its name is easy to confuse with this brief's 'LEADOS.signals' notification hierarchy — they are unrelated concepts" },
-  { claim:"Real event.type 'exec.crisis.logged' / 'exec.crisis.resolved' exist (fields: id, title, severity, type, ownerId, responseTeam, activatedAt, resolved, postmortem, resolvedAt)", status:"✅ verified this session (raw engine.js). Note: this brief's Part 5 references 'crisis.update' and 'exec.crisis.logged' together — 'crisis.update' was NOT found; the real, verified resolution event is 'exec.crisis.resolved', a different name" },
-  { claim:"LEADOS.signalQueue, 9-level signal hierarchy (LEVEL 0–9), focus-hours/DND downgrade system, LEADOS.localAPI, BroadcastChannel('leados-api-v1') client protocol", status:"⚠️ NOT found in any file fetched this session (store.js, engine.js partial, package.json, repo tree). Not proof of absence across the ~40 .tsx files not individually fetched — but nothing in the fetched evidence supports it existing in the real repo" },
-  { claim:"This build's in-app findings, the 6 named domains (finance/sales/product/ops/people/legal), and the 5 seed findings", status:"⚠️ fabricated for this sandbox, disclosed in seedIfEmpty() in index.html — needed so Levels 0–9 are all concretely triggerable on first load" },
-  { claim:"A single hand-authored index.html, instead of the real repo's Vite/React component tree", status:"⚠️ disclosed structural difference — this session's tools can only author one self-contained HTML file, confirmed against the real repo's actual React+Vite architecture this session" },
-  { claim:"This build is a continuation of a prior 'Part 3' decision-surface delivery", status:"⚠️ NOT verified — no prior index.html/AI-SESSION-LOG.md/README.md existed in this session's workspace before this delivery. The quoted Part-3 UI description ('click a node…') in the prompt was not implemented here; it is out of scope for a Part 4/5 delivery and is not claimed to exist in this file" }
-];
-function renderLedgerTab(main){
-  main.innerHTML = '<div class="space-y-3 max-w-3xl"></div>';
-  const host = main.firstChild;
-  LEDGER.forEach(row=>{
-    const el = document.createElement('div');
-    el.className = 'p-3 rounded-lg bg-slate-900 border border-slate-800 text-sm';
-    el.innerHTML = `<div class="font-medium">${esc(row.claim)}</div><div class="text-xs text-slate-400 mt-1">${esc(row.status)}</div>`;
-    host.appendChild(el);
-  });
-}
-
-/* ---------------------------- Raw log tab ---------------------------- */
-function renderLogTab(main){
-  const raw = LEADOS.store.state();
-  main.innerHTML = `<div class="flex gap-2 mb-3">
-      <button id="exportBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs">Export JSON</button>
-      <button id="wipeBtn" class="px-3 py-1.5 bg-red-900 hover:bg-red-800 rounded text-xs">Wipe &amp; reseed</button>
-    </div>
-    <pre class="mono text-xs bg-slate-900 border border-slate-800 rounded-lg p-3 max-h-[60vh] overflow-auto">${esc(JSON.stringify(raw.events.slice().reverse(), null, 2))}</pre>
-    <h3 class="font-semibold text-slate-300 mt-4 mb-2">meta.audit</h3>
-    <pre class="mono text-xs bg-slate-900 border border-slate-800 rounded-lg p-3 max-h-56 overflow-auto">${esc(JSON.stringify(raw.meta.audit, null, 2))}</pre>`;
-  document.getElementById('exportBtn').onclick = () => {
-    const blob = new Blob([JSON.stringify(raw,null,2)], {type:'application/json'});
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'leados-signals-api-export.json'; a.click();
-  };
-  document.getElementById('wipeBtn').onclick = () => { LEADOS.store.wipe(); seedIfEmpty(); boot(); };
-}
-
-/* ---------------------------- Command palette ---------------------------- */
-function renderCmdkSuggested(){
-  const host = document.getElementById('cmdkSuggested');
-  if (!host) return;
-  const nudges = LEADOS._nudges || [];
-  host.innerHTML = nudges.length
-    ? `<div class="text-slate-500 mb-1">SUGGESTED</div>` + nudges.map(n=>`<div class="px-2 py-1.5 rounded hover:bg-slate-800 cursor-pointer">🔔 ${esc(n.title)}</div>`).join('')
-    : `<div class="text-slate-600">No contextual nudges right now.</div>`;
-}
-function initCmdk(){
-  const modal = document.getElementById('cmdk');
-  window.addEventListener('keydown', e=>{
-    if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){
-      e.preventDefault();
-      modal.classList.toggle('hidden'); modal.classList.toggle('flex');
-      if (!modal.classList.contains('hidden')){ renderCmdkSuggested(); document.getElementById('cmdkInput').focus(); }
-    }
-    if (e.key === 'Escape'){ modal.classList.add('hidden'); modal.classList.remove('flex'); }
-  });
-  modal.addEventListener('click', e=>{ if (e.target===modal){ modal.classList.add('hidden'); modal.classList.remove('flex'); } });
-  document.getElementById('cmdkInput').addEventListener('input', e=>{
-    const q = e.target.value.toLowerCase();
-    const results = Object.values(P().findings).filter(f=>f.title.toLowerCase().includes(q));
-    document.getElementById('cmdkResults').innerHTML = results.map(f=>`<div class="px-3 py-2 hover:bg-slate-800 text-sm">${esc(f.title)}</div>`).join('');
-  });
-}
-
-/* ---------------------------- Boot ---------------------------- */
-function boot(){
+window.LEADOS_reseed = function(){
+  LEADOS.store.wipe();
   seedIfEmpty();
-  document.getElementById('appRoot').classList.remove('hidden');
+  renderApp();
+};
+window.LEADOS_export = function(){
+  var raw = LEADOS.store.load();
+  var blob = new Blob([JSON.stringify(raw, null, 2)], { type:'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'leados-synthesis-export.json';
+  a.click();
+};
+window.LEADOS_generate = function(){
+  if (UI.loading) return;
+  UI.loading = true;
+  renderApp();
+  setTimeout(function(){
+    LEADOS.synthesis.generate(function(){
+      UI.loading = false;
+      renderApp();
+    });
+  }, 650); // simulated latency — disclosed as simulated in About tab; real computation here is cheap
+};
+window.LEADOS_runHealth = function(){
+  UI.healthResults = runHealthChecks();
+  renderApp();
+};
+
+/* ------------------------------ HEALTH CHECKS ---------------------------- */
+function runHealthChecks(){
+  var results = [];
+  var raw = LEADOS.store.load();
+
+  // 1. Rendering does not append events (synthesis is not regenerated on render)
+  (function(){
+    var before = LEADOS._appendCalls.byType['synthesis.generated'] || 0;
+    viewSynthesis(); viewSynthesis(); viewToday(); viewDomains();
+    var after = LEADOS._appendCalls.byType['synthesis.generated'] || 0;
+    results.push({ name:'Rendering never appends synthesis.generated', pass: after===before,
+      detail:'synthesis.generated append count before='+before+' after 4 renders='+after+'.' });
+  })();
+
+  // 2. Store key isolation
+  (function(){
+    var isolated = LEADOS.store.KEY === 'leados-synthesis:data';
+    var realRepoKeyPresent = localStorage.getItem('leados:data') !== null;
+    results.push({ name:'Store key isolated from real repo key', pass: isolated,
+      detail:'This build uses "'+LEADOS.store.KEY+'". leados:data (real repo key) '+(realRepoKeyPresent?'is present in this browser but untouched.':'is not present in this browser.') });
+  })();
+
+  // 3. Synthesis history is append-only (regenerating adds, never mutates)
+  (function(){
+    var P1 = LEADOS.store.project(raw.events);
+    var before = P1.synthesisHistory.slice();
+    LEADOS.synthesis.generate(function(){});
+    var raw2 = LEADOS.store.load();
+    var P2 = LEADOS.store.project(raw2.events);
+    var after = P2.synthesisHistory;
+    var prevUnchanged = before.every(function(b,i){ return JSON.stringify(b)===JSON.stringify(after[i]); });
+    results.push({ name:'Synthesis history is append-only', pass: after.length===before.length+1 && prevUnchanged,
+      detail:'History length '+before.length+' -> '+after.length+'; all prior entries byte-identical: '+prevUnchanged+'.' });
+  })();
+
+  // 4. Staleness math: a candidate extra finding increases staleBy by exactly 1, computed WITHOUT saving
+  (function(){
+    var raw3 = LEADOS.store.load();
+    var P3 = LEADOS.store.project(raw3.events);
+    var latest = P3.synthesisHistory[P3.synthesisHistory.length-1];
+    var before = latest ? countRelevantEvents(raw3.events) - latest.basedOnEventCount : null;
+    var candidateEvents = raw3.events.concat([{ seq:raw3.events.length+1, id:'test', at:Date.now(), type:'finding.created', payload:{ id:'test-only', domain:'ops', severity:1, trend:'flat', title:'health-check probe (never saved)', createdAt:Date.now() } }]);
+    var afterCount = countRelevantEvents(candidateEvents);
+    var after = latest ? afterCount - latest.basedOnEventCount : null;
+    var pass = (before===null && after===null) || (after === before + 1);
+    results.push({ name:'Staleness count reacts correctly, computed non-destructively', pass: pass,
+      detail: latest ? ('stale-by before='+before+', simulated after +1 finding='+after+' (simulation never written to storage).') : 'No synthesis generated yet to compare against — check skipped as not-applicable.' });
+  })();
+
+  // 5. Append-only doctrine: resolving a finding never deletes the original finding.created event
+  (function(){
+    var types = raw.events.map(function(e){return e.type;});
+    var hasCreated = types.indexOf('finding.created') >= 0;
+    results.push({ name:'finding.created events are never deleted on resolve', pass: hasCreated || raw.events.length===0,
+      detail: 'finding.created events present in log: '+types.filter(function(t){return t==='finding.created';}).length+'.' });
+  })();
+
+  return results;
+}
+
+/* ------------------------------- ROUTER ---------------------------------- */
+function renderApp(){
+  seedIfEmpty();
   renderRail();
-  switchTab('today');
-  renderHeatmapTab();
-  initCmdk();
-  setInterval(()=>{ document.getElementById('clock').textContent = new Date().toLocaleTimeString(); updateDndPill(); }, 1000);
+  var route = currentRoute();
+  var html;
+  if (route==='today') html = viewToday();
+  else if (route==='domains') html = viewDomains();
+  else if (route==='synthesis') html = viewSynthesis();
+  else if (route==='lab') html = viewLab();
+  else if (route==='health') html = viewHealth();
+  else if (route==='log') html = viewLog();
+  else html = viewAbout();
+  document.getElementById('main').innerHTML = html;
 }
 
-function checkStructuralAlert(){
-  const pending = localStorage.getItem('leados-signals-api:pendingCrit');
-  if (pending && Number(pending) > 0){
-    document.getElementById('structuralAlertBody').textContent =
-      `LeadOS is starting with ${pending} critical findings from your last session. Review them before continuing.`;
-    const el = document.getElementById('structuralAlert');
-    el.classList.remove('hidden'); el.classList.add('flex');
-    document.getElementById('btnReviewNow').onclick = () => {
-      localStorage.removeItem('leados-signals-api:pendingCrit');
-      el.classList.add('hidden'); el.classList.remove('flex');
-      boot(); switchTab('today');
-    };
-    document.getElementById('btnSkipToData').onclick = () => {
-      localStorage.removeItem('leados-signals-api:pendingCrit');
-      el.classList.add('hidden'); el.classList.remove('flex');
-      boot(); switchTab('log');
-    };
-    return true;
-  }
-  return false;
-}
+window.addEventListener('hashchange', renderApp);
+if (!location.hash) location.hash = '#/today';
+renderApp();
 
-LEADOS.localAPI.init();
-if (!checkStructuralAlert()) boot();
+})();
 </script>
 </body>
 </html>

@@ -1,145 +1,130 @@
-# AI Session Log — LEADOS Part 4 (Signal Hierarchy) + Part 5 (Local API)
+# AI Session Log — LEADOS Part 6 ("The Complete Intelligence Synthesis Surface")
 
 This log records exactly what was fetched, exactly what it said, and exactly
-what was *not* checked, before any line of `index.html` was written. The rule
-followed: inspect actual code before claiming anything about it; anything not
-directly fetched this session is labeled unverified.
+what was *not* checked, before any line of `index.html` was written. Rule
+followed: inspect actual code before claiming anything about it; anything
+not directly fetched/read this session is labeled unverified.
 
-## 1. Method
+## 1. Method, in order
 
-Three direct fetches against the real `github.com/wbweve/Leados` repository,
-in this order:
+1. `GET https://github.com/wbweve/Leados` (rendered README)
+2. `GET https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` (raw)
+3. `GET https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` (file tree)
+4. `GET .../IntelligenceView.tsx`, `.../IntelligenceDashboard.tsx`, `.../App.tsx` (raw, format=markdown)
+5. `GET .../App.tsx` again with format=text, to cross-check the first fetch
+6. `GET .../SESSION-3.patch.md`, `.../README.md` (raw)
+7. `GET .../package.json`, `.../store.js` (raw, independently re-verified rather than trusted from the prior session's log text)
+8. `GET .../index.html` (raw, format=text) — to check whether the real Part 4/5 sandbox file could be read and literally extended
+9. `read_file index.html`, `AI-SESSION-LOG.md`, `README.md` on this local workspace, before writing anything — all three failed with "does not exist"
 
-1. `GET https://github.com/wbweve/Leados` (rendered page / README)
-2. `GET https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` (file tree)
-3. `GET https://raw.githubusercontent.com/wbweve/Leados/main/store.js` (raw source)
-4. `GET https://raw.githubusercontent.com/wbweve/Leados/main/engine.js` (raw source)
-5. `GET https://raw.githubusercontent.com/wbweve/Leados/main/package.json` (raw source)
+## 2. Raw findings (this session, verbatim facts)
 
-A web search for `signalQueue`, `BroadcastChannel`, `localAPI` scoped to the
-repo was also run; it returned no repo-specific hits (only generic
-BroadcastChannel documentation unrelated to this repo), which is weak
-negative evidence at best and is treated that way below, not as proof.
+**package.json** — real repo is `react-vite-tailwind`, React `19.2.6`, Vite `7.3.2`,
+`@tailwindcss/vite` `4.1.17`, `vite-plugin-singlefile` `2.3.0`, TypeScript `5.9.3`.
+Confirmed independently (not just trusted from the prior AI-SESSION-LOG.md text).
 
-## 2. Raw findings (verbatim facts, this session)
+**store.js** (raw, full) — confirmed independently: real namespace `window.LeadOS`,
+key `'leados:data'`, `schemaVersion 5`, `lineage 'pt'`, `LINEAGE_TAG 'pt-6'`,
+migrations `1>2 … 4>5`, settings defaults through `V5_SETTING_DEFAULTS`
+(`correlationWindowDays: 90, trendMinPeriods: 3, heatmapDecayFactor: 0.85`).
+Plain IIFE vanilla JS, not TypeScript/React.
 
-**package.json** — real, fetched directly:
-- `name: "react-vite-tailwind"`, `type: "module"`
-- deps: `react@19.2.6`, `react-dom@19.2.6`, `clsx@2.1.1`, `tailwind-merge@3.4.0`
-- devDeps: `vite@7.3.2`, `@vitejs/plugin-react@5.1.1`, `tailwindcss@4.1.17`,
-  `@tailwindcss/vite@4.1.17`, `typescript@5.9.3`, `vite-plugin-singlefile@2.3.0`
-- **Conclusion:** the real repo is a React 19 + Vite 7 + Tailwind 4 project
-  that builds to a single file via `vite-plugin-singlefile`. It is **not**
-  a hand-written `index.html` — that is this delivery's own, disclosed,
-  structural departure.
+**App.tsx** (raw) — **this is the single most load-bearing fact for Part 6.**
+`routeFromHash()` reads `["today","intelligence","data","health","about"]` as
+the *only* valid routes; anything else — including `"synthesis"` — falls back
+to `"today"`. This is plain, non-JSX TypeScript logic, so it survived the
+fetch tool's JSX-stripping (see §3) intact and is treated as solidly verified:
+**`#/synthesis` does not exist in the real repo**, confirmed directly rather
+than inferred from a filename list.
 
-**Repo file tree** (GitHub Trees API, recursive) — confirmed to contain, among
-others: `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`,
-`README.md`, `store.js`, `engine.js`, and roughly 30+ `.tsx` files (`App.tsx`,
-`CommandPalette.tsx`, `DataView.tsx`, `HealthView.tsx`, `IntelligenceView.tsx`,
-`Heatmap.tsx`, `Network.tsx`, `ScoreMath.tsx`, etc.).
-**Caveat:** the raw tool response was truncated mid-alphabet, at
-`ScoreMath.tsx`. The remainder of the tree (alphabetically after `Score*`,
-e.g. any `SettingsView.tsx`, `ToastView.tsx`, `TodayView.tsx` that may exist)
-was **not** re-fetched or confirmed this session. Absence of
-`signals.js`/`api.js`/`notifications.js`-style filenames in the *visible*
-portion of the tree is not proof those concepts don't exist elsewhere in the
-~40-file tree.
+**IntelligenceView.tsx** (raw, partially reliable — see §3) — a real, detailed
+component: domain velocity table, an "ALARM" callout for the fastest-accelerating
+domain, and sections labeled "Part 1 — Temporal Velocity," "Part 2 · Law 1/2/3"
+covering organizational inertia, entropy, and a leadership energy budget. None
+of this is a "synthesis" surface; it is a metrics/physics view, structurally
+and conceptually different from what Part 6's brief describes.
 
-**store.js** (raw, fetched in full) — confirmed:
-- Real namespace is `window.LeadOS` (capital L, lowercase "ead", capital OS) —
-  **not** `LEADOS` as this session's brief writes it throughout.
-- Real persistence key is `'leados:data'` (not `leados-decision-surface:data`,
-  not `leados-signals-api:data` — both of those are this delivery's own,
-  deliberately distinct keys; see §4).
-- `schemaVersion: 5`, `lineage: 'pt'`, `LINEAGE_TAG: 'pt-6'`.
-- Confirmed settings and their real defaults: `decisionMaxOpenDays: 21` (v1),
-  `krCheckInCadenceDays: 7` (v2), `riskReviewCadenceDays: 7` (v3),
-  `salesCycleDays: 90, revenueReviewCadenceDays: 30, opsReviewCadenceDays: 14,
-  boardCadenceDays: 90, complianceAuditCadenceDays: 180` (v4),
-  `correlationWindowDays: 90, trendMinPeriods: 3, heatmapDecayFactor: 0.85` (v5).
-- Real event-log doctrine confirmed in code: append-only, migrations may only
-  *append* repair events, every repair counted in `meta.migrationRepairs`, a
-  corrupt store is refused rather than silently rewritten, and there is a
-  real `mergeInto()` import gate with id-rewiring and dangling-reference
-  detection.
-- **No** mention anywhere in this file of signals/toasts/banners/notification
-  levels, `BroadcastChannel`, or a local API.
+**IntelligenceDashboard.tsx** (raw) — a *second*, different "intelligence" file
+exists in the repo, importing `../viz`, `../viz/sampleData`, and CSS custom
+properties (`--ink-1`, `--sev-1`, etc.) not seen anywhere in `IntelligenceView.tsx`
+or `App.tsx`. **App.tsx does not import `IntelligenceDashboard`** — cross-checked
+against its full import list. Conclusion: this file is either orphaned/unused
+code or wired in from somewhere not fetched this session (e.g. a different
+entry point). Treated as **unverified whether it is live**, not claimed either way.
 
-**engine.js** (raw, fetched — the fetch tool itself reported the response as
-truncated, roughly 9,000 tokens were cut from the middle; treat this as a
-**partial read**, not a full-file read):
-- Confirmed real event types folded by the engine across ~15 domains,
-  including (verbatim, as fetched): `fin.budget.set`, `fin.risk.logged`,
-  `sales.deal.logged`, `product.roadmap.item`, `strategy.okr.set`,
-  `ops.incident.logged`, `hr.pip.started`, `mktg.campaign.logged`,
-  `mfg.quality.logged`, `supply.vendor.logged`, `design.review.logged`,
-  `rd.experiment.logged`, `legal.contract.logged`, `cs.escalation.logged`,
-  `exec.board.meeting`, **`exec.crisis.logged`**, **`exec.crisis.resolved`**,
-  `note.added`, and the pt-5 intelligence-layer events `insight.acknowledged`,
-  `benchmark.set`, `cadence.review`, and **`signal.tagged`**.
-- `signal.tagged` is real. It is a label/tag on an existing event
-  (`{ eventId, tag/label, ... }`, grouped into `tagsByEvent`). **It has
-  nothing to do with** the 9-level notification hierarchy
-  (`LEADOS.signals` / toasts / banners / overlays) this session's brief
-  calls "signals." The shared word is a coincidence worth flagging so the
-  two are never conflated.
-- `exec.crisis.logged` / `exec.crisis.resolved` are real, with fields `id,
-  title, severity, type, ownerId, responseTeam, activatedAt, resolved,
-  postmortem, resolvedAt`. This session's Part 5 brief refers to a
-  `crisis.update` event in its LEVEL 8 trigger prose
-  ("`exec.crisis.logged` with no `crisis.update`…") — **`crisis.update` was
-  not found**; the real, verified resolution event has a different name,
-  `exec.crisis.resolved`. Disclosed, not silently renamed to match.
-- Also confirmed real: a full `LeadOS.patterns` compound-pattern library
-  (`DEATH_SPIRAL`, `EXECUTION_BREAKDOWN`, `REVENUE_AT_RISK`,
-  `GOVERNANCE_GAP`, `INNOVATION_STALL`, `QUALITY_COLLAPSE`,
-  `LEADERSHIP_VACUUM`, `CASHFLOW_WARNING`) with disclosed "heritage label vs.
-  shipped meaning" notes baked into the real code itself (e.g. R1 is labeled
-  "1:1 cadence" by a prior brief but is *shipped* as revenue-review cadence).
-  This is the real repo doing its own version of the disclosure this log is
-  doing — noted because it's a strong signal the real project already has a
-  rigorous verified/fabricated culture, independent of this session.
-- **Not found** anywhere in the fetched (partial) content: `LEADOS.signals`,
-  a signal-intensity/level system, `signalQueue`, focus-hours/DND logic, or
-  `LEADOS.localAPI` / `BroadcastChannel`.
+**SESSION-3.patch.md** (raw) — describes an entirely different application:
+a manager "1:1 / mentor" tool with mood-pulse sliders, a "flight model," an
+8-driver model, person pages, and `oo-finish` modal actions. **No LEADOS domain
+concepts (fin/sales/ops/etc.) appear in it at all.** Flagged explicitly so this
+unrelated file is never assumed to be part of "the system" Part 6 extends.
 
-## 3. What this session explicitly did NOT verify
+**README.md** (raw) = the already-rendered Part 4/5 disclosure document
+(signal hierarchy + local API), confirming the repo's current state is that
+prior delivery, not anything resembling Part 6.
 
-- The ~30+ `.tsx` component files were **not** individually fetched. Claims
-  about UI components (command palette behavior, a "Today" view, a heatmap
-  component, a Health view) are inferred only from filenames in the tree
-  listing, not from reading their code. Anything in this delivery that
-  resembles those names (rail badges, command palette, heatmap tab, Health
-  tab) is this delivery's **own** implementation, not a transcription of the
-  real `.tsx` files.
-- `README.md` and `AI-SESSION-LOG.md` already present in the real repo were
-  **not** fetched as raw text this session (only the rendered GitHub page,
-  which GitHub renders from the repo's own `README.md`, was fetched). Their
-  exact byte-for-byte content is therefore not independently confirmed here,
-  though the rendered page content is consistent with the raw `store.js`
-  facts that were independently confirmed.
-- The real repo's `App.tsx`/`CommandPalette.tsx`/`HealthView.tsx` were not
-  read, so no claim is made about how the real app actually renders
-  notifications or routes — because, per §2, no notification system was
-  found in the two files that were read in full/partial.
+**index.html** (raw, format=text) — returned only a handful of literal visible
+text fragments (`"LEVEL 8 · OVERLAY INTERRUPT"`, `"Type \"I UNDERSTAND\"..."`)
+plus the `<title>` tag. **The actual JavaScript source (signalQueue,
+localAPI, BroadcastChannel implementation) could not be retrieved** — see §3.
 
-## 4. Decisions made for this delivery, and why
+## 3. Tool limitations discovered this session (new, not previously documented)
+
+- `web_fetch` against `.tsx`/`.html` sources — in both `markdown` and `text`
+  formats — performs HTML/JSX-aware text extraction: `<script>` contents and
+  JSX element markup are stripped, leaving only plain-text nodes and
+  non-JSX logic (plain functions, imports, array literals) intact. This was
+  confirmed by fetching `App.tsx` twice (once per format) and getting
+  materially the same stripped result both times, and by fetching the real
+  Part 4/5 `index.html` and getting back only a few literal UI strings
+  instead of the ~250KB of JS the prior session's own log said that file
+  contains.
+- **Consequence:** this session could *not* independently re-verify the
+  Part 4/5 build's actual `LEADOS.signalQueue` / `LEADOS.localAPI` code, nor
+  read `IntelligenceView.tsx`'s JSX return block, nor literally copy and
+  extend the real repo's `index.html`. Every claim above about those files
+  is scoped to what survived that stripping (plain-text nodes, imports,
+  non-JSX function bodies) — labeled accordingly, not presented as a full read.
+
+## 4. What this session explicitly did NOT verify
+
+- The ~15+ `.tsx` files not fetched at all (BulletGraph, BundleModal,
+  CommandPalette, DataWidgets, Heatmap, Network, ScoreMath, and everything
+  alphabetically after it, which the tree fetch did not reach).
+- Whether `IntelligenceDashboard.tsx` is live anywhere (e.g. a second route,
+  a storybook, a different build target) — only that `App.tsx` doesn't import it.
+- The real Part 4/5 `index.html`'s actual JavaScript, beyond the few literal
+  strings the fetch tool happened to surface (§3).
+- Whether this local tool workspace is meant to be a continuation of any
+  prior Part 1–5 delivery at all: `read_file` failed for `index.html`,
+  `AI-SESSION-LOG.md`, and `README.md` here before this session wrote anything,
+  so there is no local Part 1–5 artifact to extend, regardless of what exists
+  on GitHub.
+
+## 5. The Part 6 brief itself is incomplete, and that is disclosed, not patched over
+
+The pasted brief states: *"Three sections, generated on demand... :"* and then
+the message ends — no list of what the three sections are follows. Rather
+than guessing silently and presenting a guess as the brief's intent, this
+session:
+- names the gap explicitly (here, in the README, and in-app on the Synthesis
+  view itself),
+- picks one well-motivated, labeled interpretation (**Situation / Interpretation
+  / Recommendation** — "what's happening / what it means together / what to
+  do"), consistent with the brief's own framing ("the system speaking to you
+  as a strategic advisor"),
+- and keeps that interpretation clearly attributed to this delivery, not to
+  the original brief, everywhere it appears.
+
+## 6. Decisions made for this delivery, and why
 
 | Decision | Why |
 |---|---|
-| Namespace `LEADOS` (as the pasted brief writes it), not `window.LeadOS` | The brief's own pasted code (`LEADOS.signals`, `LEADOS.localAPI`) uses this spelling throughout; reimplementing under a different name than the brief specifies would silently rewrite the brief. The capitalization mismatch against the real repo is disclosed here and in-app, not hidden. |
-| Store key `leados-signals-api:data` | Distinct from the real repo's verified `leados:data`, and from `leados-decision-surface:data` mentioned in the fetched README text for a different (Part 3) sandbox build — chosen so this build can never collide with either on the same browser origin. |
-| Built a fresh, minimal `LEADOS.store` / `LEADOS.events.project` instead of porting the real `engine.js` fold | This workspace started with no files at all — there was no prior Part 1–3 implementation to extend here. The real engine's fold is domain-specific (finance/sales/ops/etc. entity shapes) and was only partially read; porting it from a truncated fetch would risk fabricating the untruncated half. A small, fully-authored, fully-disclosed fold was built instead. |
-| Implemented `LEADOS.signalQueue` and `LEADOS.localAPI` near-verbatim from the pasted brief | The brief supplies working reference code for both; the only changes made were (a) wiring the stubbed `LEADOS.ui.renderSignal` / `renderAmbientSignal` calls to real DOM rendering, since the brief itself leaves those as a one-line delegation, and (b) minor queue-lifetime bookkeeping needed to make `active`/`onComplete` meaningful in a real UI instead of a pseudocode sketch. |
-| Decision Surface / Part 3 content was **not** rebuilt | Only Parts 4 and 5 were pasted in full this turn; the Part 3 brief text (exact quadrant math, scenario-matrix rules, premortem spec) was not provided in this conversation, so reconstructing it would mean guessing at logic that was shown working in a previous, different session. Rebuilding it from memory of the fetched README's *description* of Part 3 — rather than its actual verified source — would risk presenting a guess as a recovered fact. The ledger tab states this gap explicitly rather than silently shipping a stub pretending to be a port. |
-| Added an in-app "Signals Lab" (manual trigger buttons for all 10 levels, incl. simulated restart for Level 9) | The brief's own spec requires each level to be independently checkable by trigger condition; without live data feeds (no real finance/ops backend in this sandbox), the only honest way to make every level reachable on demand is a manual lab, not a fabricated autonomous feed. |
-| Local API "client" demonstrated via a second `BroadcastChannel('leados-api-v1')` instance inside the same page, rather than requiring the user to open a literal second tab | Proves the exact wire protocol end-to-end (same channel name, same request/response shape as the pasted client library) without relying on the grading/review environment supporting multiple tabs against the same `file://` or sandboxed origin. The real, unmodified client library is still shown verbatim in the API tab for actual cross-tab use. |
-| Health tab checks structural facts (queue size constant, downgrade map, key isolation, rate-limiter behavior, live API ping round-trip) rather than re-asserting the ledger | Keeps the "nothing claimed without being checkable" discipline live in the running app, consistent with the verified repo's own `LeadOS.patterns` self-disclosure style (§2), without reusing any of the real repo's actual test code, none of which was fetched this session. |
-
-## 5. Verified vs. fabricated — condensed ledger
-
-See the in-app "Verified / Fabricated" tab for the live version of this
-table; it is kept in sync with this document by hand in this delivery
-(no shared source file exists to enforce it automatically in a
-single-HTML build).
+| Built a fresh, standalone `index.html` rather than literally extending the real repo's Part 4/5 file | That file's actual JS could not be retrieved with fidelity through this session's tools (§3); porting from a handful of stripped text fragments would mean fabricating the other 99% and presenting it as a patch. |
+| Kept the `LEADOS` (not `window.LeadOS`) namespace | Matches this brief's own implied convention and the prior Part 4/5 delivery's precedent, not the real repo's verified namespace; the mismatch is named, not silently fixed. |
+| New, third distinct localStorage key `leados-synthesis:data` | Avoids any collision with the real repo's `leados:data`, or the other sandbox builds' `leados-signals-api:data` / `leados-decision-surface:data`. |
+| Kept the real repo's verified event-sourcing doctrine (append-only log, `project()` recomputes derived state every call) | It is the one architectural pattern independently confirmed twice (`store.js` this session, consistent with the prior session's read) as the real repo's actual discipline — worth adopting even though this delivery's data model is otherwise fabricated. |
+| Persisted `synthesis.generated` as its own append-only event, as a named, disclosed *exception* to "nothing derived is ever persisted" | The brief requires the synthesis to be cached ("generated on demand... not on every render," "computationally expensive and conceptually significant") — that is only true across reloads if the result is actually stored. Making it an immutable, timestamped log entry (never edited, only superseded) keeps it compatible with append-only doctrine instead of silently violating it. |
+| 6 fabricated domains, 12 seed findings, 4 fabricated compound-pattern definitions | Needed concrete data for the synthesis to compute something real from, rather than returning templated lorem ipsum; pattern *names* are inspired by the concept of the real repo's verified `LeadOS.patterns` library but are not copies of its actual members or thresholds. |
+| Synthesis sections are template strings built from live computed numbers (top findings, domain scores, active-pattern math), not randomized text | So "generated" is literally true — the content changes when the Lab tab is used to add/resolve findings — while still being honestly labeled as running on fabricated sample data. |
+| Health tab's staleness check mutates a copied events array in memory, never calls `store.append` | Keeps the "live, non-destructive checks" promise literally true, rather than writing and then trying to undo a probe event in an append-only store (which isn't actually possible without leaving a trace). |
+| Rail shows a small badge on "★ Synthesis" ("new" / "+N") instead of auto-regenerating | Mirrors the brief's own instruction not to generate on every render; a badge informs without forcing recomputation. |
