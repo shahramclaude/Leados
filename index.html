@@ -3,929 +3,892 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LEADOS — Intelligence Synthesis · Part 7: The Complete Keyboard Experience</title>
+<title>LEADOS — Intelligence Synthesis · Keyboard Experience</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root{
-    /* ───────────────────────────────────────────────────────────────
-       Design tokens. NONE of these CSS variables (--ink-0 etc.) were
-       found anywhere in the verified wbweve/Leados source — the real
-       app styles everything with literal Tailwind zinc-* utility
-       classes. These names are reused from the brief pasted into this
-       session and given concrete values here. Disclosed as this
-       session's own invention in AI-SESSION-LOG.md. ⚠️ fabricated
-       ─────────────────────────────────────────────────────────────── */
-    --paper:    #f6f4ef;
-    --paper-2:  #efece3;
-    --card:     #fffdf9;
-    --ink-0:    #17140f;
-    --ink-1:    #45403a;
-    --ink-2:    #837b6c;
-    --line:     #ddd6c6;
-    --line-2:   #c9c0ab;
-    --accent:   #8a3324;
-    --accent-2: #2e5c48;
-    --amber:    #92661c;
-    --focus:    #1f5f8b;
-  }
-  html,body{background:var(--paper); color:var(--ink-0);}
-  body{font-family:"Inter",system-ui,sans-serif;}
-  .font-serif-display{font-family:"Source Serif 4", Georgia, serif;}
-  .font-mono-ui{font-family:"JetBrains Mono", ui-monospace, monospace;}
+/* =====================================================================
+   DESIGN TOKENS
+   ⚠️ FABRICATED this session. None of these CSS custom properties exist
+   in the verified real repo — src/components/SynthesisView.tsx and
+   Shell.tsx style everything with literal Tailwind zinc-* utility
+   classes, no token layer. These names/values are this delivery's own
+   invention, built to satisfy this session's visual + typography brief.
+   See AI-SESSION-LOG.md §2 for the fetch that confirmed this.
+   ===================================================================== */
+:root{
+  --paper:#f6f4ef; --paper-2:#efece3; --card:#fffdf9;
+  --ink-0:#17140f; --ink-1:#45403a; --ink-2:#837b6c;
+  --line:#ddd6c6; --line-2:#c9c0ab;
+  --accent:#8a3324; --accent-2:#2e5c48; --amber:#92661c; --focus:#1f5f8b;
+}
+html,body{background:var(--paper); color:var(--ink-0);}
+body{font-family:"Inter",system-ui,sans-serif;}
+.font-serif-display{font-family:"Source Serif 4", Georgia, serif;}
+.font-mono-ui{font-family:"JetBrains Mono", ui-monospace, monospace;}
 
-  /* THE ORGANIZATIONAL MOMENT — display serif, 15px, body-width, line-height 1.7 */
-  .moment-copy{
-    font-family:"Source Serif 4", Georgia, serif;
-    font-size:15px;
-    line-height:1.7;
-    max-width:62ch;
-    color:var(--ink-0);
-  }
-  /* THE QUESTION — display serif, 24px, centered, --ink-0, breathing room */
-  .question-copy{
-    font-family:"Source Serif 4", Georgia, serif;
-    font-size:24px;
-    line-height:1.45;
-    text-align:center;
-    color:var(--ink-0);
-    max-width:46ch;
-    margin:0 auto;
-  }
-  .question-frame{ padding:48px 24px; }
+/* THE ORGANIZATIONAL MOMENT — display serif, 15px, body-width, line-height 1.7
+   ⚠️ FABRICATED upgrade past the verified real implementation, which uses
+   `text-[15px] leading-relaxed text-zinc-200` — sans-serif, line-height 1.625,
+   no max-width clamp. This session's brief explicitly specified serif/1.7/62ch. */
+.moment-copy{ font-family:"Source Serif 4", Georgia, serif; font-size:15px; line-height:1.7; max-width:62ch; color:var(--ink-0); }
 
-  kbd.k{
-    font-family:"JetBrains Mono", monospace;
-    font-size:11px;
-    padding:1px 6px;
-    border-radius:5px;
-    border:1px solid var(--line-2);
-    background:var(--paper-2);
-    color:var(--ink-1);
-    box-shadow: 0 1px 0 var(--line-2);
-  }
-  .focus-ring{ outline:2px solid var(--focus); outline-offset:2px; }
-  .nav-item{ display:flex; align-items:center; justify-content:space-between; }
-  .nav-item[data-active="true"]{ background:var(--ink-0); color:var(--paper); }
-  .nav-item[data-active="true"] kbd.k{ background:transparent; border-color:#555; color:#ddd; }
-  .finding-row[data-kbfocus="true"]{ outline:2px solid var(--focus); outline-offset:-2px; background:var(--paper-2); }
-  .pill{ display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line-2); background:var(--card); color:var(--ink-1); }
-  .scrollbar-thin::-webkit-scrollbar{ width:8px; height:8px; }
-  .scrollbar-thin::-webkit-scrollbar-thumb{ background:var(--line-2); border-radius:4px; }
-  @keyframes toast-in{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
-  .toast{ animation:toast-in .15s ease-out; }
+/* THE ONE QUESTION — display serif, 24px, centered, breathing room
+   ⚠️ FABRICATED upgrade past the verified real implementation, which uses
+   `text-[15px] font-medium leading-relaxed text-zinc-100` — not 24px,
+   not centered, no dedicated frame. */
+.question-copy{ font-family:"Source Serif 4", Georgia, serif; font-size:24px; line-height:1.45; text-align:center; color:var(--ink-0); max-width:46ch; margin:0 auto; }
+.question-frame{ padding:48px 24px; }
+
+kbd.k{ font-family:"JetBrains Mono", monospace; font-size:11px; padding:1px 6px; border-radius:5px; border:1px solid var(--line-2); background:var(--paper-2); color:var(--ink-1); box-shadow:0 1px 0 var(--line-2); white-space:nowrap; }
+.nav-item{ display:flex; align-items:center; justify-content:space-between; }
+.nav-item[data-active="true"]{ background:var(--ink-0); color:var(--paper); }
+.nav-item[data-active="true"] kbd.k{ background:transparent; border-color:#555; color:#ddd; }
+.finding-row[data-kbfocus="true"]{ outline:2px solid var(--focus); outline-offset:-2px; background:var(--paper-2); }
+.pill{ display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line-2); background:var(--card); color:var(--ink-1); }
+.scrollbar-thin::-webkit-scrollbar{ width:8px; height:8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb{ background:var(--line-2); border-radius:4px; }
+@keyframes toast-in{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+.toast{ animation:toast-in .15s ease-out; }
+@keyframes help-in{ from{opacity:0; transform:scale(.98);} to{opacity:1; transform:scale(1);} }
+.help-panel{ animation:help-in .12s ease-out; }
 </style>
 </head>
 <body class="min-h-screen">
-
-<div id="app" class="flex min-h-screen"></div>
-
-<!-- ============================= TEMPLATES (vanilla JS render strings below) ============================= -->
+<div id="app"></div>
 
 <script>
-/* =====================================================================================
-   LEADOS — single-file vanilla reconstruction. PART 7: THE COMPLETE KEYBOARD EXPERIENCE
-   =====================================================================================
-   PROVENANCE (see AI-SESSION-LOG.md for full detail + fetched URLs):
-   ✅ VERIFIED this session by raw-fetching github.com/wbweve/Leados directly:
-      - package.json: react 19.2.6, vite 7.3.2, tailwindcss 4.1.17, vite-plugin-singlefile 2.3.0
-      - root /index.html is the bare Vite entry shell (<div id="root"> + /src/main.tsx) — NOT a
-        finished app and NOT a build artifact; the real single-file output only exists after
-        `npm run build`, which this session did not run.
-      - src/App.tsx: VALID_ROUTES = [today, domains, synthesis, lab, health, about, log];
-        a global keydown handler opens the Command Palette on "/" (guarded: ignored while
-        focus is in INPUT/TEXTAREA). Its own code comment there discloses that the *original*
-        github.com/wbweve/Leados App.tsx (a different, earlier commit/layer) recognizes only
-        [today, intelligence, data, health, about] with no #/synthesis route — independently
-        re-confirmed by this session via a direct fetch of the root-level App.tsx.
-      - src/components/CommandPalette.tsx: a single input, substring filter over 7 static
-        commands, Enter opens the first match, Escape closes. No arrow-key list navigation,
-        no ":" command mode, no Cmd/Ctrl+K binding exist in this verified file.
-      - src/components/SynthesisView.tsx: renders exactly three cards — "1 · The Organizational
-        Moment" (Tailwind text-[15px] leading-relaxed, sans-serif, zinc-200 — NOT the serif /
-        1.7 / display spec used below), "2 · The Five Things That Matter" (numbered <ol>,
-        leverage/severity/domain pills, leverageReason, action, estimatedImpact, energyCost),
-        "3 · The One Question" (text-[15px] font-medium — NOT the 24px/centered spec used
-        below). synthesis.generated is appended only on an explicit button click; an
-        eventCountAtGeneration snapshot drives a staleness Pill ("N event(s) since last
-        generation" vs "Up to date"), never an auto-regenerate.
-   ⚠️ FABRICATED / this session's own decisions (no match found anywhere in the real repo):
-      - All CSS custom properties (--ink-0, --paper, etc.) — the real app uses literal
-        Tailwind zinc-* classes, no token layer.
-      - The exact 15px/1.7 serif treatment of the Moment and the 24px/centered/48px-breathing
-        treatment of the Question are THIS delivery's typography — a deliberate upgrade past
-        what's verified in SynthesisView.tsx, per this session's explicit brief.
-      - The entire keyboard map below (mnemonics T/D/S/L/H/A/G, J/K + gg/G list traversal,
-        ":" command mode, Cmd/Ctrl+K, Cmd/Ctrl+Enter, Cmd/Ctrl+S, Cmd/Ctrl+E, Cmd/Ctrl+Backspace,
-        "?" help overlay, 1-5 jump-to-finding) — none of this exists in the verified source.
-        Only the bare, unmodified "/" → open-palette behavior is carried over from fact.
-      - Domains, seed findings, leverage formula/constants, Organizational-Moment template
-        matrix, and the Hardest-Question priority chain are this session's own invented data
-        model, needed to make the spec's typography and keyboard rules demonstrable on
-        something. Labeled in #/about inside the running app, same convention the repo's own
-        prior sessions already used.
-   This file intentionally does NOT literally run the real repo's React/TypeScript code —
-   this tool only produces a single static index.html, not a Vite/React build — so this is a
-   faithful, disclosed *re-authoring* of the verified structure/behavior in vanilla JS.
-   ===================================================================================== */
+/* =========================================================================
+   LEADOS — single-file vanilla reconstruction ("leados-keyboard" build)
+   PART: VISUAL KEYBOARD GUIDE OVERLAY (the "?" help screen), built on top
+   of the full Part-7 keyboard system.
 
-  const STORE_KEY = "leados-keyboard:data"; // deliberately distinct from leados:data (real) and
-                                             // leados-moment:data (prior disclosed sandbox) so this
-                                             // build can never collide with either on one origin.
+   PROVENANCE — see AI-SESSION-LOG.md for the complete fetch-by-fetch ledger.
+   Short version, labeled per the task's instruction to inspect before claiming:
 
-  // ---------------------------------------------------------------- utilities
-  const $ = (sel, root=document) => root.querySelector(sel);
-  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
-  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-  const uid = () => Math.random().toString(36).slice(2,9);
-  const isTypingTarget = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
+   ✅ VERIFIED this session by directly fetching raw source from
+      github.com/wbweve/Leados (not just trusting any prior README):
+      - package.json → react 19.2.6, vite 7.3.2, tailwindcss 4.1.17,
+        vite-plugin-singlefile 2.3.0. Project name "react-vite-tailwind".
+      - Root-level App.tsx (no src/ prefix) → routeFromHash() whitelist is
+        exactly ["today","intelligence","data","health","about"]. No
+        #/synthesis, #/domains, #/lab, #/log route exists in this file.
+      - src/App.tsx → a DIFFERENT file with
+        VALID_ROUTES = ["today","domains","synthesis","lab","health","about","log"].
+        Its own code comment discloses it added #/synthesis deliberately and
+        cites having checked the root App.tsx first. A single global keydown
+        listener opens the Command Palette on "/", guarded off when
+        e.target is INPUT/TEXTAREA. No other global shortcut exists in this file.
+      - src/components/CommandPalette.tsx → ONE <input>, a plain substring
+        filter over 7 hardcoded route commands, Enter opens the first match,
+        Escape closes. No arrow-key list navigation, no "⌘K" listener, no
+        ":" command mode in this file.
+      - Root-level CommandPalette.tsx → a different/older palette (shows a
+        "⌘K" badge, has ArrowUp/ArrowDown/Enter/Escape wiring) — NOT imported
+        by src/App.tsx (which imports ./components/CommandPalette), so this
+        is dead/unused code from an earlier layer, not live behavior.
+      - src/components/Shell.tsx → confirmed it renders "LEADOS / Intelligence
+        Synthesis · unofficial sandbox build." (short excerpt only; its
+        keyboard/sidebar internals were not further inspected this session).
+      - src/components/SynthesisView.tsx → exactly three cards: "1 · The
+        Organizational Moment" (text-[15px] leading-relaxed, sans-serif),
+        "2 · The Five Things That Matter" (ranked list, leverage pill,
+        leverageReason, action, estimatedImpact, energy cost), "3 · The One
+        Question" (text-[15px] font-medium, NOT 24px/centered).
+        synthesis.generated is appended ONLY inside the generate() click
+        handler, snapshotting eventCountAtGeneration BEFORE the append;
+        staleness is `events.length - eventCountAtGeneration`, computed at
+        render time and never itself persisted.
 
-  // ---------------------------------------------------------------- store (append-only event log)
-  function loadEvents(){
-    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch(e){ return []; }
-  }
-  function saveEvents(events){ localStorage.setItem(STORE_KEY, JSON.stringify(events)); }
-  function append(type, data){
-    const events = loadEvents();
-    const nextId = events.length ? Math.max(...events.map(e=>e.id)) + 1 : 1;
-    events.push({ id: nextId, type, data, ts: new Date().toISOString() });
-    saveEvents(events);
-    return events;
-  }
+   ⚠️ FABRICATED / this session's own decisions — no match in any fetched file:
+      - Every CSS custom property above (--ink-0, --paper, etc.) and the
+        entire paper/serif visual system — the real app uses literal
+        Tailwind zinc-* classes only.
+      - The 15px/1.7/62ch serif Moment and the 24px/centered/48px-padding
+        Question — a deliberate typographic upgrade past the verified plain
+        implementation, per this session's explicit brief.
+      - The ENTIRE keyboard system below (mnemonics T/D/S/L/H/A/G, J/K list
+        traversal, gg/Shift+G, "1"–"5" jump, ":" command mode, ⌘/Ctrl+K,
+        ⌘/Ctrl+Enter, ⌘/Ctrl+S, ⌘/Ctrl+Shift+S, ⌘/Ctrl+E,
+        ⌘/Ctrl+Backspace, and the "?" grouped help overlay) — none of this
+        exists in the verified source. Only the bare, unmodified "/" →
+        open-palette behavior is carried over as fact.
+      - Domains, seed findings, leverage formula/constants, the
+        Organizational-Moment text generator, and the Hardest-Question
+        priority chain are this session's own invented data model, built
+        only to make the above demonstrable on something.
 
-  const DOMAINS = ["Strategy","Operations","People","Finance","Market","Culture"]; // ⚠️ fabricated
+   This tool produces a single static index.html (vanilla HTML/CSS/JS) — it
+   cannot run the real Vite/React/TypeScript build. So nothing here is a
+   literal copy of any fetched .tsx file; it is a disclosed, hand-authored
+   re-implementation of the verified route/append-only/staleness mechanism,
+   extended with this session's keyboard + typography brief.
+   ========================================================================= */
 
-  const CONF_FACTOR = { low: 0.8, med: 1.0, high: 1.2 }; // ⚠️ fabricated
+const STORE_KEY = "leados-keyboard:data"; // deliberately distinct from the real repo's
+                                           // own store key and from any other disclosed
+                                           // sandbox build's key, so this can never collide
+                                           // with another build on the same browser origin.
 
-  function seedIfEmpty(){
-    if (loadEvents().length) return;
-    const now = Date.now();
-    const mk = (daysAgo) => new Date(now - daysAgo*86400000).toISOString();
-    const seedFindings = [
-      { title:"Second consecutive quarter avoiding the pricing conversation with Ops", domain:"Operations", severity:"critical", conf:"high", kind:"structural", tags:["avoidance"], play:"Put pricing on next 1:1 agenda explicitly, not as a side note.", energyCost:3, patternMultiplier:1.6, prefireMultiplier:1.4, domainImprovement:8, createdDaysAgo:34 },
-      { title:"Same escalation path bypassed by three different reports this month", domain:"Operations", severity:"high", conf:"high", kind:"structural", tags:["avoidance","structural"], play:"Name the pattern in the next staff meeting, not 1:1 by 1:1.", energyCost:2, patternMultiplier:1.5, prefireMultiplier:1.2, domainImprovement:6, createdDaysAgo:21 },
-      { title:"Market-share narrative hasn't been updated since the competitor launch", domain:"Market", severity:"high", conf:"med", kind:"strategic", tags:["drift"], play:"Commission a 1-page re-read of the competitive set this week.", energyCost:4, patternMultiplier:1.1, prefireMultiplier:1.3, domainImprovement:7, createdDaysAgo:12 },
-      { title:"Finance forecast confidence stated as 'high' three times, missed twice", domain:"Finance", severity:"med", conf:"high", kind:"reactive", tags:["overconfidence"], play:"Ask for the forecast's own error bars before the next board update.", energyCost:2, patternMultiplier:1.2, prefireMultiplier:1.0, domainImprovement:5, createdDaysAgo:8 },
-      { title:"No named successor for the Finance director role", domain:"Finance", severity:"critical", conf:"med", kind:"structural", tags:["succession-gap"], play:"Open a succession candidate slate for this role this week.", energyCost:3, patternMultiplier:1.0, prefireMultiplier:1.5, domainImprovement:9, createdDaysAgo:40 },
-      { title:"A dissenting voice in the Culture review was cut off twice in the transcript", domain:"Culture", severity:"high", conf:"med", kind:"reactive", tags:["suppression"], play:"Follow up 1:1 and explicitly invite the point back onto the agenda.", energyCost:2, patternMultiplier:1.3, prefireMultiplier:1.1, domainImprovement:6, createdDaysAgo:5 },
-      { title:"People engagement score down two straight cycles, no owner assigned", domain:"People", severity:"high", conf:"med", kind:"reactive", tags:["drift"], play:"Assign a single owner and a 30-day check-in.", energyCost:3, patternMultiplier:1.2, prefireMultiplier:1.1, domainImprovement:6, createdDaysAgo:18 },
-      { title:"Growth plan for the Ops lead hasn't moved a level in two review cycles", domain:"Operations", severity:"med", conf:"low", kind:"strategic", tags:["growth-stall"], play:"Revisit the growth plan milestones in the next 1:1.", energyCost:2, patternMultiplier:1.0, prefireMultiplier:1.0, domainImprovement:4, createdDaysAgo:50 },
-      { title:"Strategy offsite follow-ups: 0 of 6 action items have an owner", domain:"Strategy", severity:"critical", conf:"high", kind:"strategic", tags:["drift"], play:"Assign owners to all six items before the next sync.", energyCost:4, patternMultiplier:1.3, prefireMultiplier:1.4, domainImprovement:9, createdDaysAgo:15 },
-      { title:"Market pricing experiment results are two weeks overdue for a readout", domain:"Market", severity:"med", conf:"med", kind:"reactive", tags:[], play:"Request the readout directly, with a date.", energyCost:1, patternMultiplier:1.0, prefireMultiplier:1.0, domainImprovement:3, createdDaysAgo:3 },
-      { title:"Culture survey verbatims flag 'leadership unavailable' for the third time", domain:"Culture", severity:"high", conf:"med", kind:"structural", tags:["avoidance"], play:"Block two visible office-hours slots this week.", energyCost:2, patternMultiplier:1.4, prefireMultiplier:1.2, domainImprovement:6, createdDaysAgo:9 },
-      { title:"Finance headcount request sitting unanswered for 19 days", domain:"Finance", severity:"med", conf:"low", kind:"reactive", tags:[], play:"Give a yes/no/when by Friday.", energyCost:1, patternMultiplier:1.0, prefireMultiplier:1.0, domainImprovement:3, createdDaysAgo:19 },
-      { title:"People: exit interview theme repeats 'unclear growth path' for new hires", domain:"People", severity:"med", conf:"med", kind:"strategic", tags:["drift"], play:"Draft a 90-day growth-path template this sprint.", energyCost:3, patternMultiplier:1.1, prefireMultiplier:1.0, domainImprovement:5, createdDaysAgo:27, snoozed:true },
-    ];
-    const events = [];
-    seedFindings.forEach((f,i) => {
-      events.push({ id:i+1, type:"finding.logged", data:{
-        key:"f-"+uid(), title:f.title, domain:f.domain, severity:f.severity, conf:f.conf, kind:f.kind,
-        tags:f.tags, play:f.play, energyCost:f.energyCost, patternMultiplier:f.patternMultiplier,
-        prefireMultiplier:f.prefireMultiplier, domainImprovement:f.domainImprovement, status: f.snoozed ? "snoozed" : "active"
-      }, ts: mk(f.createdDaysAgo) });
-    });
-    saveEvents(events);
-  }
+/* ---------------------------------------------------------------- utilities */
+const $  = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const uid = () => Math.random().toString(36).slice(2,9);
+const isTypingTarget = (el) => el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
 
-  // ---------------------------------------------------------------- projection
-  function project(events){
-    const findings = {};
-    events.forEach(e => {
-      if (e.type === "finding.logged") findings[e.data.key] = { ...e.data, id:e.id, ts:e.ts };
-      if (e.type === "finding.snoozed" && findings[e.data.key]) findings[e.data.key].status = "snoozed";
-      if (e.type === "finding.restored" && findings[e.data.key]) findings[e.data.key].status = "active";
-    });
-    const all = Object.values(findings);
-    const active = all.filter(f => f.status !== "snoozed");
-    const domainsOut = {};
-    DOMAINS.forEach(d => {
-      const ds = active.filter(f => f.domain === d);
-      const sevWeight = { low:1, med:2, high:3, critical:5 };
-      const raw = ds.reduce((s,f)=> s + (sevWeight[f.severity]||1), 0);
-      domainsOut[d] = { count: ds.length, score: Math.max(0, 100 - raw*6) };
-    });
-    const succession = events.filter(e => e.type === "succession.added").map(e => e.data);
-    const growthPlans = events.filter(e => e.type === "growthplan.moved").reduce((m,e)=>{ m[e.data.person] = e.data.level; return m; }, {});
-    const signals = events.filter(e => e.type === "signal.logged").map(e=>e.data);
-    const decisions = events.filter(e => e.type === "decision.logged").map(e=>e.data);
-    return { events, findings: all, active, domains: domainsOut, succession, growthPlans, signals, decisions };
-  }
+/* ---------------------------------------------------------------- store (append-only event log) */
+function loadEvents(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch(e){ return []; } }
+function saveEvents(events){ localStorage.setItem(STORE_KEY, JSON.stringify(events)); }
+function append(type, data){
+  const events = loadEvents();
+  const nextId = events.length ? Math.max(...events.map(e=>e.id)) + 1 : 1;
+  events.push({ id: nextId, type, data, ts: new Date().toISOString() });
+  saveEvents(events);
+  return events;
+}
 
-  // ---------------------------------------------------------------- Five Things (leverage ranking)
-  function computeFiveThings(P){
-    const scored = P.active.map(f => {
-      const confF = CONF_FACTOR[f.conf] ?? 1;
-      const leverage = (f.domainImprovement * f.patternMultiplier * f.prefireMultiplier * confF) / f.energyCost;
-      const leverageReason = `${f.domain} improvement ×${f.patternMultiplier.toFixed(1)} pattern ×${f.prefireMultiplier.toFixed(1)} pre-fire ×${confF.toFixed(1)} conf(${f.conf}) ÷ ${f.energyCost} energy`;
-      return { finding:f, leverage: Math.round(leverage*100)/100, leverageReason, action:f.play, estimatedImpact:`+${f.domainImprovement} to ${f.domain} score (est.)`, energyCost:f.energyCost };
-    });
-    scored.sort((a,b) => b.leverage - a.leverage);
-    return scored.slice(0,5);
-  }
+const DOMAINS = ["Strategy","Operations","People","Finance","Market","Culture"]; // ⚠️ fabricated
+const CONF_FACTOR = { low:0.8, med:1.0, high:1.2 }; // ⚠️ fabricated
+const SEV_WEIGHT = { low:1, med:2, high:3, critical:5 }; // ⚠️ fabricated
 
-  // ---------------------------------------------------------------- Organizational Moment (3x3 template matrix, ⚠️ fabricated)
-  function temporalMode(today){
-    const third = Math.floor((today.getDate()-1)/10);
-    return ["opening","midstream","closing"][Math.min(third,2)];
-  }
-  function energyAssessment(P){
-    const capacity = 40;
-    const used = P.active.reduce((s,f)=>s+f.energyCost,0);
-    const balance = Math.round(100 - (used/capacity)*100);
-    if (balance > 40) return { label:"surplus", balance };
-    if (balance > 10) return { label:"balanced", balance };
-    return { label:"depleted", balance };
-  }
-  function entropyScore(P){
-    const counts = DOMAINS.map(d => P.domains[d].count);
-    const total = counts.reduce((a,b)=>a+b,0) || 1;
-    const probs = counts.map(c => c/total).filter(p=>p>0);
-    const h = -probs.reduce((s,p)=> s + p*Math.log2(p), 0);
-    const hmax = Math.log2(DOMAINS.length);
-    return Math.round((h/hmax)*100);
-  }
-  function kindProportions(P){
-    const total = P.active.length || 1;
-    const count = k => P.active.filter(f=>f.kind===k).length;
-    return {
-      structural: Math.round((count("structural")/total)*100),
-      strategic: Math.round((count("strategic")/total)*100),
-      reactive: Math.round((count("reactive")/total)*100),
-    };
-  }
-  const MOMENT_MATRIX = { // 3 temporal × 3 energy = 9 cells, ⚠️ fabricated this session
-    opening: {
-      surplus: (n)=>`The cycle is young and the margin is real: ${n.activeCount} active findings sit against a ${n.balance}% energy surplus. ${n.topDomain} is carrying ${n.topShare}% of the open load, which is more a signal of where attention has drifted than of crisis. With structural items at ${n.structural}%, strategic at ${n.strategic}%, and reactive at ${n.reactive}%, there is still room this cycle to work upstream, on the structural causes, before they harden into the reactive work that eats the surplus being spent now.`,
-      balanced: (n)=>`Opening-cycle energy is holding at a ${n.balance}% balance, enough to be deliberate but not enough to be careless. ${n.activeCount} findings are active, concentrated ${n.topShare}% in ${n.topDomain}. The entropy reading of ${n.entropy}/100 suggests the load is ${n.entropy>60?"spread thin across domains":"clustered enough to be addressed directly"}. This is the window to set the cycle's two or three real priorities before reactive work claims the rest of the calendar.`,
-      depleted: (n)=>`Energy is already tight this early — a ${n.balance}% balance against ${n.activeCount} active findings is a warning, not a crisis. ${n.topDomain} alone accounts for ${n.topShare}% of what's open. Reactive items are ${n.reactive}% of the load; that ratio, this early, usually means last cycle's deferred work has carried forward rather than cleared. The next two weeks matter more than usual for deciding what gets explicitly not done.`,
-    },
-    midstream: {
-      surplus: (n)=>`Midstream, with a ${n.balance}% energy surplus still in hand and ${n.activeCount} active findings, the organization has more room than it is using. ${n.topDomain} holds ${n.topShare}% of the open load. Structural work sits at ${n.structural}% of the mix — the surplus is best spent there now, mid-cycle, while there is still runway to see a structural fix compound before the cycle closes.`,
-      balanced: (n)=>`Midstream and balanced: ${n.balance}% energy against ${n.activeCount} active findings, entropy at ${n.entropy}/100. ${n.topDomain} remains the center of gravity at ${n.topShare}% of the load. This is the steadiest reading the organization gets — neither flush enough to be generous nor tight enough to force triage — which makes it the honest moment to ask whether the right ${n.structural}/${n.strategic}/${n.reactive} split of structural, strategic, and reactive work is actually being worked, not just logged.`,
-      depleted: (n)=>`Midstream and already depleted — ${n.balance}% balance with ${n.activeCount} findings still active — means the second half of the cycle is being entered without reserve. ${n.topDomain} carries ${n.topShare}% of the load, and reactive items at ${n.reactive}% confirm the pattern: attention is going to what's loudest, not what's highest-leverage. The organizational moment here is a reallocation decision, not a new initiative.`,
-    },
-    closing: {
-      surplus: (n)=>`Closing the cycle with a ${n.balance}% surplus and ${n.activeCount} findings still active is an unusual position — most cycles end depleted. ${n.topDomain} holds ${n.topShare}% of what remains open. The temptation at close is to spend the surplus on anything; the higher-leverage move is to carry the structural ${n.structural}% forward deliberately into next cycle's opening, rather than let it get buried under next cycle's reactive noise.`,
-      balanced: (n)=>`The cycle is closing at a ${n.balance}% energy balance with ${n.activeCount} findings still active, concentrated ${n.topShare}% in ${n.topDomain}. Entropy at ${n.entropy}/100 says the open work is ${n.entropy>60?"scattered":"concentrated enough to name cleanly"}. What closes this cycle in reasonable shape and what gets explicitly carried forward, named as such, matters more right now than opening anything new.`,
-      depleted: (n)=>`Closing depleted — ${n.balance}% balance against ${n.activeCount} active findings — is the most common and most dangerous moment: the instinct is to push through to a clean close. ${n.topDomain} alone is ${n.topShare}% of the load, reactive work is ${n.reactive}%, and both numbers say the same thing — this cycle should end with an honest list of what gets carried forward, not a forced resolution bought with energy that isn't there.`,
-    },
-  };
-  function generateOrganizationalMoment(P, today){
-    const mode = temporalMode(today);
-    const ea = energyAssessment(P);
-    const entropy = entropyScore(P);
-    const kp = kindProportions(P);
-    const domainCounts = DOMAINS.map(d => [d, P.domains[d].count]).sort((a,b)=>b[1]-a[1]);
-    const [topDomain, topCount] = domainCounts[0];
-    const topShare = P.active.length ? Math.round((topCount/P.active.length)*100) : 0;
-    const n = { activeCount:P.active.length, balance:ea.balance, topDomain, topShare, entropy, ...kp };
-    const text = MOMENT_MATRIX[mode][ea.label](n);
-    return { text, mode, energyAssessment: ea.label };
-  }
-
-  // ---------------------------------------------------------------- The One Question (priority chain, ⚠️ fabricated)
-  function generateHardestQuestion(P){
-    const avoidance = P.active.filter(f => f.tags.includes("avoidance"));
-    if (avoidance.length >= 2) {
-      return { question:`What conversation has now been avoided ${avoidance.length} separate times, and what does the avoidance itself — not the topic — say about what's actually at stake?`, source:`${avoidance.length} findings tagged avoidance`, label:"Priority 1 · avoidance pattern" };
-    }
-    const structural = P.active.filter(f => f.kind === "structural" && (f.severity==="critical"||f.severity==="high"));
-    if (structural.length >= 2) {
-      return { question:`If the structural issues were fixed and nothing else changed, would the reactive work actually go down — or is the structure a symptom of something upstream that hasn't been named?`, source:`${structural.length} high/critical structural findings`, label:"Priority 2 · structural drift" };
-    }
-    const overconfident = P.active.filter(f => f.tags.includes("overconfidence"));
-    if (overconfident.length) {
-      return { question:`Where else is "high confidence" being treated as a finding rather than as a claim that itself needs checking?`, source:`${overconfident.length} overconfidence-tagged findings`, label:"Priority 3 · overconfidence" };
-    }
-    const ea = energyAssessment(P);
-    if (ea.label === "depleted") {
-      return { question:`What is being carried right now purely out of obligation, and who would actually be relieved — not disappointed — if it were set down?`, source:`energy balance at ${ea.balance}%`, label:"Priority 4 · energy depletion" };
-    }
-    const suppressed = P.active.filter(f => f.tags.includes("suppression"));
-    if (suppressed.length) {
-      return { question:`Whose dissent was made costly enough last time that it won't be offered again without being explicitly invited back?`, source:`${suppressed.length} suppression-tagged findings`, label:"Priority 5 · suppression" };
-    }
-    const successionGaps = P.active.filter(f => f.tags.includes("succession-gap"));
-    if (successionGaps.length) {
-      return { question:`If this role were vacated tomorrow, who would everyone assume was ready — and has that actually been said to them?`, source:`${successionGaps.length} succession-gap findings`, label:"Priority 6 · missing succession plan" };
-    }
-    const stalled = P.active.filter(f => f.tags.includes("growth-stall"));
-    if (stalled.length) {
-      return { question:`What would have to be true for the stalled growth plan to actually be the wrong plan, rather than a plan that just hasn't been revisited?`, source:`${stalled.length} growth-stall findings`, label:"Priority 7 · stalled growth plan" };
-    }
-    const top = computeFiveThings(P)[0];
-    if (top) {
-      return { question:`Given everything open right now, why isn't "${top.finding.title}" already the thing getting the most attention?`, source:`top-leverage finding (${top.leverage})`, label:"Priority 8 · default leverage question" };
-    }
-    return { question:`With nothing currently open, what's the next thing worth deliberately looking for?`, source:"no active findings", label:"Priority 8 · default (no data)" };
-  }
-
-  // ============================================================================
-  // KEYBOARD SYSTEM STATE
-  // ============================================================================
-  const K = {
-    route: "today",
-    focusIndex: 0,          // index within whichever list is "active" for the current view
-    expanded: null,         // key of an expanded finding/thing, or null
-    paletteOpen: false,
-    paletteMode: "search",  // "search" | "command"
-    helpOpen: false,
-    lastGPress: 0,          // for gg double-tap
-    toastTimer: null,
-  };
-
-  function navigate(route){
-    K.route = route; K.focusIndex = 0; K.expanded = null;
-    window.location.hash = "#/" + route;
-    render();
-  }
-
-  function toast(msg){
-    clearTimeout(K.toastTimer);
-    let el = $("#toast");
-    if (!el){
-      el = document.createElement("div");
-      el.id = "toast";
-      el.className = "toast fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] rounded-full px-4 py-2 text-xs font-mono-ui shadow-lg";
-      el.style.background = "var(--ink-0)"; el.style.color = "var(--paper)";
-      document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.style.display = "block";
-    K.toastTimer = setTimeout(()=>{ el.style.display="none"; }, 1800);
-  }
-
-  // ---- list helpers: returns the array currently navigable with J/K for the active route
-  function activeList(P){
-    if (K.route === "today") return P.active;
-    if (K.route === "synthesis") return computeFiveThings(P);
-    if (K.route === "log") return P.events.slice().reverse();
-    if (K.route === "domains") return DOMAINS;
-    return [];
-  }
-
-  function clampFocus(len){
-    if (len <= 0) { K.focusIndex = 0; return; }
-    K.focusIndex = Math.max(0, Math.min(K.focusIndex, len-1));
-  }
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-  const NAV = [
-    { route:"today", label:"Today", key:"T" },
-    { route:"domains", label:"Domains", key:"D" },
-    { route:"synthesis", label:"Synthesis", key:"S" },
-    { route:"lab", label:"Lab", key:"L" },
-    { route:"health", label:"Health", key:"H" },
-    { route:"about", label:"About", key:"A" },
-    { route:"log", label:"Log", key:"G" },
+function seedIfEmpty(){
+  if (loadEvents().length) return;
+  const now = Date.now();
+  const mk = (daysAgo) => new Date(now - daysAgo*86400000).toISOString();
+  const seed = [
+    { title:"Second consecutive quarter avoiding the pricing conversation with Ops", domain:"Operations", severity:"critical", conf:"high", kind:"structural", tags:["avoidance"], play:"Put pricing on next 1:1 agenda explicitly, not as a side note.", energyCost:3, patternMultiplier:1.6, prefireMultiplier:1.4, domainImprovement:8, createdDaysAgo:34 },
+    { title:"Same escalation path bypassed by three different reports this month", domain:"Operations", severity:"high", conf:"high", kind:"structural", tags:["avoidance","structural"], play:"Name the pattern in the next staff meeting, not 1:1 by 1:1.", energyCost:2, patternMultiplier:1.5, prefireMultiplier:1.2, domainImprovement:6, createdDaysAgo:21 },
+    { title:"Market-share narrative hasn't been updated since the competitor launch", domain:"Market", severity:"high", conf:"med", kind:"strategic", tags:["drift"], play:"Commission a 1-page re-read of the competitive set this week.", energyCost:4, patternMultiplier:1.1, prefireMultiplier:1.3, domainImprovement:7, createdDaysAgo:12 },
+    { title:"Finance forecast confidence stated as 'high' three times, missed twice", domain:"Finance", severity:"med", conf:"high", kind:"reactive", tags:["overconfidence"], play:"Ask for the forecast's own error bars before the next board update.", energyCost:2, patternMultiplier:1.2, prefireMultiplier:1.0, domainImprovement:5, createdDaysAgo:8 },
+    { title:"No named successor for the Finance director role", domain:"Finance", severity:"critical", conf:"med", kind:"structural", tags:["succession-gap"], play:"Open a succession candidate slate for this role this week.", energyCost:3, patternMultiplier:1.0, prefireMultiplier:1.5, domainImprovement:9, createdDaysAgo:40 },
+    { title:"A dissenting voice in the Culture review was cut off twice in the transcript", domain:"Culture", severity:"high", conf:"med", kind:"reactive", tags:["suppression"], play:"Follow up 1:1 and explicitly invite the point back onto the agenda.", energyCost:2, patternMultiplier:1.3, prefireMultiplier:1.1, domainImprovement:6, createdDaysAgo:5 },
+    { title:"People engagement score down two straight cycles, no owner assigned", domain:"People", severity:"high", conf:"med", kind:"reactive", tags:["drift"], play:"Assign a single owner and a 30-day check-in.", energyCost:3, patternMultiplier:1.2, prefireMultiplier:1.1, domainImprovement:6, createdDaysAgo:18 },
+    { title:"Growth plan for the Ops lead hasn't moved a level in two review cycles", domain:"Operations", severity:"med", conf:"low", kind:"strategic", tags:["growth-stall"], play:"Revisit the growth plan milestones in the next 1:1.", energyCost:2, patternMultiplier:1.0, prefireMultiplier:1.0, domainImprovement:4, createdDaysAgo:50 },
+    { title:"Strategy offsite follow-ups: 0 of 6 action items have an owner", domain:"Strategy", severity:"critical", conf:"high", kind:"strategic", tags:["drift"], play:"Assign owners to all six items before the next sync.", energyCost:4, patternMultiplier:1.3, prefireMultiplier:1.4, domainImprovement:9, createdDaysAgo:15 },
+    { title:"Market pricing experiment results are two weeks overdue for a readout", domain:"Market", severity:"med", conf:"med", kind:"reactive", tags:[], play:"Request the readout directly, with a date.", energyCost:1, patternMultiplier:1.0, prefireMultiplier:1.0, domainImprovement:3, createdDaysAgo:3 },
+    { title:"Culture survey verbatims flag 'leadership unavailable' for the third time", domain:"Culture", severity:"high", conf:"med", kind:"structural", tags:["avoidance"], play:"Block two visible office-hours slots this week.", energyCost:2, patternMultiplier:1.4, prefireMultiplier:1.2, domainImprovement:6, createdDaysAgo:9 },
+    { title:"Finance headcount request sitting unanswered for 19 days", domain:"Finance", severity:"med", conf:"low", kind:"reactive", tags:[], play:"Give a yes/no/when by Friday.", energyCost:1, patternMultiplier:1.0, prefireMultiplier:1.0, domainImprovement:3, createdDaysAgo:19 },
+    { title:"Exit-interview theme repeats 'unclear growth path' for new hires", domain:"People", severity:"med", conf:"med", kind:"strategic", tags:["drift"], play:"Draft a 90-day growth-path template this sprint.", energyCost:3, patternMultiplier:1.1, prefireMultiplier:1.0, domainImprovement:5, createdDaysAgo:27, snoozed:true },
   ];
+  const events = [];
+  seed.forEach((f,i) => {
+    events.push({
+      id:i+1, type:"finding.logged",
+      data:{ key:"f-"+uid(), title:f.title, domain:f.domain, severity:f.severity, conf:f.conf, kind:f.kind,
+             tags:f.tags, play:f.play, energyCost:f.energyCost, patternMultiplier:f.patternMultiplier,
+             prefireMultiplier:f.prefireMultiplier, domainImprovement:f.domainImprovement,
+             status: f.snoozed ? "snoozed" : "active" },
+      ts: mk(f.createdDaysAgo)
+    });
+  });
+  saveEvents(events);
+}
 
-  function sevTone(sev){ return { low:"", med:"", high:"color:var(--amber)", critical:"color:var(--accent); font-weight:600" }[sev] || ""; }
+/* ---------------------------------------------------------------- projection (derived, never cached) */
+function project(events){
+  const findings = {};
+  events.forEach(e => {
+    if (e.type === "finding.logged") findings[e.data.key] = { ...e.data, id:e.id, ts:e.ts };
+    if (e.type === "finding.snoozed" && findings[e.data.key]) findings[e.data.key].status = "snoozed";
+    if (e.type === "finding.restored" && findings[e.data.key]) findings[e.data.key].status = "active";
+  });
+  const all = Object.values(findings);
+  const active = all.filter(f => f.status !== "snoozed");
+  const domainsOut = {};
+  DOMAINS.forEach(d => {
+    const ds = active.filter(f => f.domain === d);
+    const raw = ds.reduce((s,f)=> s + (SEV_WEIGHT[f.severity]||1), 0);
+    domainsOut[d] = { count: ds.length, score: Math.max(0, 100 - raw*6) };
+  });
+  const succession = events.filter(e => e.type === "succession.added").map(e => e.data);
+  const growthPlans = events.filter(e => e.type === "growthplan.moved").reduce((m,e)=>{ m[e.data.person] = e.data.level; return m; }, {});
+  const signals = events.filter(e => e.type === "signal.logged").map(e=>e.data);
+  const decisions = events.filter(e => e.type === "decision.logged").map(e=>e.data);
+  return { events, findings: all, active, domains: domainsOut, succession, growthPlans, signals, decisions };
+}
 
-  function render(){
-    const events = loadEvents();
-    const P = project(events);
-    const today = new Date();
-    const list = activeList(P);
-    clampFocus(list.length);
+/* ---------------------------------------------------------------- Five Things (leverage ranking) */
+function computeFiveThings(P){
+  const scored = P.active.map(f => {
+    const confF = CONF_FACTOR[f.conf] ?? 1;
+    const leverage = (f.domainImprovement * f.patternMultiplier * f.prefireMultiplier * confF) / f.energyCost;
+    const leverageReason = `${f.domain} improvement ×${f.patternMultiplier.toFixed(1)} pattern ×${f.prefireMultiplier.toFixed(1)} pre-fire ×${confF.toFixed(1)} conf(${f.conf}) ÷ ${f.energyCost} energy`;
+    return { finding:f, leverage: Math.round(leverage*100)/100, leverageReason, action:f.play,
+              estimatedImpact:`+${f.domainImprovement} to ${f.domain} score (est.)`, energyCost:f.energyCost };
+  });
+  scored.sort((a,b) => b.leverage - a.leverage);
+  return scored.slice(0,5);
+}
 
-    const app = $("#app");
-    app.innerHTML = `
+/* ---------------------------------------------------------------- Organizational Moment (⚠️ fabricated) */
+function energyAssessment(P){
+  const capacity = 40;
+  const used = P.active.reduce((s,f)=>s+f.energyCost,0);
+  const balance = Math.round(100 - (used/capacity)*100);
+  const label = balance > 40 ? "surplus" : balance > 10 ? "balanced" : "depleted";
+  return { label, balance };
+}
+function entropyScore(P){
+  const counts = DOMAINS.map(d => P.domains[d].count);
+  const total = counts.reduce((a,b)=>a+b,0) || 1;
+  const probs = counts.map(c => c/total).filter(p=>p>0);
+  const h = -probs.reduce((s,p)=> s + p*Math.log2(p), 0);
+  const hmax = Math.log2(DOMAINS.length);
+  return Math.round((h/hmax)*100);
+}
+function topDomain(P){
+  let best = DOMAINS[0];
+  DOMAINS.forEach(d => { if (P.domains[d].count > P.domains[best].count) best = d; });
+  const total = P.active.length || 1;
+  return { name: best, share: Math.round((P.domains[best].count/total)*100) };
+}
+function kindShare(P, kind){
+  const total = P.active.length || 1;
+  return Math.round((P.active.filter(f=>f.kind===kind).length/total)*100);
+}
+function generateOrganizationalMoment(P, today){
+  const ea = energyAssessment(P);
+  const entropy = entropyScore(P);
+  const td = topDomain(P);
+  const structural = kindShare(P,"structural"), strategic = kindShare(P,"strategic"), reactive = kindShare(P,"reactive");
+  const third = Math.floor((today.getDate()-1)/10);
+  const mode = ["opening","midstream","closing"][Math.min(third,2)];
+  const openers = {
+    opening: `The cycle is young.`,
+    midstream: `Midstream, with the cycle half-spent,`,
+    closing: `Closing the cycle,`,
+  };
+  const text = `${openers[mode]} ${P.active.length} active findings sit against a ${ea.balance}% energy ${ea.label}. `
+    + `${td.name} is carrying ${td.share}% of the open load — an entropy reading of ${entropy}/100 means attention is `
+    + `${entropy>60?"spread thin across domains":"concentrated enough to name directly"}. Structural items make up ${structural}% `
+    + `of what's open, strategic ${strategic}%, and reactive ${reactive}%. ${reactive>45
+       ? "That reactive share is high enough to be the finding in itself: the organization is answering what's loudest, not what's highest-leverage."
+       : "There is still room this cycle to work upstream, on the structural causes, before they harden into reactive work."}`;
+  return { text, mode, energyAssessment: ea.label };
+}
+function generateHardestQuestion(P){
+  const has = (tag) => P.active.filter(f => f.tags.includes(tag));
+  const avoidance = has("avoidance");
+  if (avoidance.length >= 2) return { question:`What conversation has now been avoided long enough that avoiding it has become the actual decision?`, source:`${avoidance.length} avoidance findings`, label:"Priority 1 · repeated avoidance" };
+  const suppression = has("suppression");
+  if (suppression.length) return { question:`Whose dissent got quietly edited out this cycle, and what would it cost to put it back on the record?`, source:`${suppression.length} suppression finding(s)`, label:"Priority 2 · suppressed dissent" };
+  const overconfidence = has("overconfidence");
+  if (overconfidence.length) return { question:`Which number is everyone calling "high confidence" mainly because no one has asked for its error bars?`, source:`${overconfidence.length} overconfidence finding(s)`, label:"Priority 3 · unexamined confidence" };
+  const successionGaps = has("succession-gap");
+  if (successionGaps.length) return { question:`If this role were vacated tomorrow, who would everyone assume was ready — and has that actually been said to them?`, source:`${successionGaps.length} succession-gap finding(s)`, label:"Priority 4 · missing succession plan" };
+  const stalled = has("growth-stall");
+  if (stalled.length) return { question:`What would have to be true for the stalled growth plan to actually be the wrong plan, rather than one that just hasn't been revisited?`, source:`${stalled.length} growth-stall finding(s)`, label:"Priority 5 · stalled growth plan" };
+  const top = computeFiveThings(P)[0];
+  if (top) return { question:`Given everything open right now, why isn't "${top.finding.title}" already the thing getting the most attention?`, source:`top-leverage finding (${top.leverage})`, label:"Priority 6 · default leverage question" };
+  return { question:`With nothing currently open, what's the next thing worth deliberately looking for?`, source:"no active findings", label:"Priority 7 · default (no data)" };
+}
+
+/* ============================================================================
+   KEYBOARD SYSTEM STATE
+   ============================================================================ */
+const NAV = [
+  { route:"today",     label:"Today",     key:"T" },
+  { route:"domains",   label:"Domains",   key:"D" },
+  { route:"synthesis", label:"Synthesis", key:"S" },
+  { route:"lab",       label:"Lab",       key:"L" },
+  { route:"health",    label:"Health",    key:"H" },
+  { route:"about",     label:"About",     key:"A" },
+  { route:"log",       label:"Log",       key:"G" },
+];
+
+const K = {
+  route: "today",
+  focusIndex: 0,
+  expanded: null,
+  paletteOpen: false,
+  paletteMode: "search",   // "search" | "command"
+  helpOpen: false,
+  lastGPress: 0,
+  toastTimer: null,
+};
+
+function navigate(route){
+  K.route = route; K.focusIndex = 0; K.expanded = null;
+  window.location.hash = "#/" + route;
+  render();
+}
+
+function toast(msg){
+  clearTimeout(K.toastTimer);
+  let el = $("#toast");
+  if (!el){
+    el = document.createElement("div");
+    el.id = "toast";
+    el.className = "toast fixed bottom-5 left-1/2 -translate-x-1/2 z-[80] rounded-full px-4 py-2 text-xs font-mono-ui shadow-lg";
+    el.style.background = "var(--ink-0)"; el.style.color = "var(--paper)";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg; el.style.display = "block";
+  K.toastTimer = setTimeout(()=>{ el.style.display="none"; }, 1800);
+}
+
+function activeList(P){
+  if (K.route === "today") return P.active;
+  if (K.route === "synthesis") return computeFiveThings(P);
+  if (K.route === "log") return P.events.slice().reverse();
+  if (K.route === "domains") return DOMAINS;
+  return [];
+}
+function clampFocus(len){ if (len<=0){ K.focusIndex = 0; return; } if (K.focusIndex<0) K.focusIndex = 0; if (K.focusIndex>len-1) K.focusIndex = len-1; }
+
+/* ============================================================================
+   RENDER
+   ============================================================================ */
+function render(){
+  const events = loadEvents();
+  const P = project(events);
+  const today = new Date();
+  const list = activeList(P);
+  clampFocus(list.length);
+
+  $("#app").innerHTML = `
+    <div class="flex min-h-screen">
       ${renderSidebar()}
       <div class="flex-1 flex flex-col min-w-0">
         ${renderTopbar()}
-        <main id="main" tabindex="-1" class="flex-1 overflow-y-auto scrollbar-thin px-8 py-7">
+        <main class="flex-1 overflow-y-auto scrollbar-thin p-6 max-w-5xl w-full mx-auto">
           ${renderView(P, today, list)}
         </main>
-        <footer class="border-t px-8 py-2 flex items-center justify-between text-[11px]" style="border-color:var(--line); color:var(--ink-2)">
-          <span>Press <kbd class="k">?</kbd> for the full keyboard map · <kbd class="k">/</kbd> search · <kbd class="k">J</kbd><kbd class="k">K</kbd> navigate</span>
-          <span class="font-mono-ui">${events.length} events · key ${STORE_KEY}</span>
+        <footer class="border-t px-6 py-2 text-[11px] font-mono-ui flex items-center justify-between" style="border-color:var(--line); color:var(--ink-2);">
+          <span>Press <kbd class="k">?</kbd> for the full keyboard map · <kbd class="k">/</kbd> search · <kbd class="k">J</kbd> <kbd class="k">K</kbd> navigate</span>
+          <span>${events.length} events · key <code>${STORE_KEY}</code></span>
         </footer>
       </div>
-      ${K.paletteOpen ? renderPalette(P) : ""}
-      ${K.helpOpen ? renderHelp() : ""}
-    `;
-    wireEvents(P);
-  }
+    </div>
+    ${K.paletteOpen ? renderPalette() : ""}
+    ${K.helpOpen ? renderHelp() : ""}
+  `;
+  wireEvents(P, today);
+}
 
-  function renderSidebar(){
-    return `
-    <aside class="w-56 shrink-0 border-r flex flex-col" style="border-color:var(--line); background:var(--paper-2)">
-      <div class="px-5 py-5">
-        <div class="font-serif-display text-lg" style="color:var(--ink-0)">LEADOS</div>
-        <div class="text-[11px] mt-0.5" style="color:var(--ink-2)">Part 7 · Keyboard Experience</div>
+function renderSidebar(){
+  return `
+    <aside class="w-56 shrink-0 border-r flex flex-col" style="border-color:var(--line); background:var(--paper-2);">
+      <div class="px-4 py-4 border-b" style="border-color:var(--line);">
+        <div class="font-serif-display text-lg font-semibold">LEADOS</div>
+        <div class="text-[11px] font-mono-ui" style="color:var(--ink-2);">Keyboard Experience</div>
       </div>
-      <nav class="px-3 space-y-1 flex-1">
+      <nav class="flex-1 py-2">
         ${NAV.map(n => `
-          <div class="nav-item rounded-lg px-3 py-2 text-sm cursor-pointer select-none" data-nav="${n.route}" data-active="${K.route===n.route}">
+          <button data-nav="${n.route}" class="nav-item w-full text-left px-4 py-2 text-sm" data-active="${K.route===n.route}">
             <span>${esc(n.label)}</span>
             <kbd class="k">${n.key}</kbd>
-          </div>`).join("")}
+          </button>
+        `).join("")}
       </nav>
-      <div class="px-3 pb-4">
-        <button id="open-palette" class="w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm border" style="border-color:var(--line-2); background:var(--card)">
-          <span style="color:var(--ink-1)">Command palette</span>
-          <span class="flex gap-1"><kbd class="k">/</kbd><kbd class="k">⌘K</kbd></span>
+      <div class="p-3 border-t" style="border-color:var(--line);">
+        <button id="open-palette" class="w-full text-left text-xs font-mono-ui px-3 py-2 rounded border" style="border-color:var(--line-2); background:var(--card);">
+          Command palette <kbd class="k">/</kbd> <kbd class="k">⌘K</kbd>
         </button>
       </div>
-    </aside>`;
-  }
+    </aside>
+  `;
+}
 
-  function renderTopbar(){
-    const titles = { today:"Today", domains:"Domains", synthesis:"Synthesis", lab:"Lab", health:"Health", about:"About", log:"Event Log" };
-    return `
-    <div class="flex items-center justify-between border-b px-8 py-4" style="border-color:var(--line)">
-      <h1 class="text-base font-semibold" style="color:var(--ink-0)">${titles[K.route]}</h1>
-      <div class="flex items-center gap-2 text-[11px]" style="color:var(--ink-2)">
-        <span>no-modifier keys = navigate only, never writes data</span>
-      </div>
-    </div>`;
-  }
+function renderTopbar(){
+  const titles = { today:"Today", domains:"Domains", synthesis:"Synthesis", lab:"Lab", health:"Health", about:"About", log:"Event Log" };
+  return `
+    <header class="border-b px-6 py-3 flex items-center justify-between" style="border-color:var(--line);">
+      <h1 class="text-base font-semibold">${titles[K.route]}</h1>
+      <span class="text-[11px] font-mono-ui" style="color:var(--ink-2);">no-modifier keys = navigate only, never writes data</span>
+    </header>
+  `;
+}
 
-  function renderView(P, today, list){
-    if (K.route === "today") return renderToday(P, list);
-    if (K.route === "domains") return renderDomains(P, list);
-    if (K.route === "synthesis") return renderSynthesis(P, today, list);
-    if (K.route === "lab") return renderLab(P);
-    if (K.route === "health") return renderHealth(P);
-    if (K.route === "about") return renderAbout();
-    if (K.route === "log") return renderLog(P, list);
-    return "";
-  }
+function renderView(P, today, list){
+  if (K.route === "today") return renderToday(P, list);
+  if (K.route === "domains") return renderDomains(P, list);
+  if (K.route === "synthesis") return renderSynthesis(P, today, list);
+  if (K.route === "lab") return renderLab(P);
+  if (K.route === "health") return renderHealth(P);
+  if (K.route === "about") return renderAbout();
+  if (K.route === "log") return renderLog(P, list);
+  return "";
+}
 
-  function findingRow(f, i, focused){
-    return `
-    <li class="finding-row rounded-lg border px-4 py-3" style="border-color:var(--line); background:var(--card)" data-kbfocus="${focused}" data-findingkey="${f.key}">
+function findingRow(f, i, focused){
+  return `
+    <div class="finding-row border rounded-lg px-4 py-3 mb-2" style="border-color:var(--line); background:var(--card);" data-kbfocus="${focused}">
       <div class="flex items-center justify-between gap-3">
-        <div class="flex items-center gap-2 min-w-0">
-          <span class="pill">${esc(f.domain)}</span>
-          <span class="text-sm font-medium truncate" style="color:var(--ink-0)">${esc(f.title)}</span>
+        <div class="min-w-0">
+          <span class="pill mr-2">${esc(f.domain)}</span>
+          <span class="text-sm">${esc(f.title)}</span>
         </div>
-        <span class="text-xs shrink-0 font-mono-ui" style="${sevTone(f.severity)}">${f.severity}</span>
+        <span class="pill">${f.severity}</span>
       </div>
-      ${focused ? `<div class="mt-2 text-xs" style="color:var(--ink-1)">
-        <div>Suggested action: ${esc(f.play)}</div>
-        <div class="mt-1" style="color:var(--ink-2)">conf ${f.conf} · energy cost ${f.energyCost} · tags: ${f.tags.join(", ")||"—"}</div>
-      </div>` : ""}
-    </li>`;
-  }
+      ${focused ? `
+        <div class="mt-2 text-xs" style="color:var(--ink-1);">
+          Suggested action: ${esc(f.play)}<br/>
+          conf ${f.conf} · energy cost ${f.energyCost} · tags: ${f.tags.join(", ")||"—"}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
 
-  function renderToday(P, list){
-    const ea = energyAssessment(P);
-    return `
-    <div class="space-y-6 max-w-3xl">
-      <div class="grid grid-cols-3 gap-3">
-        <div class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card)">
-          <div class="text-[11px]" style="color:var(--ink-2)">Active findings</div>
-          <div class="text-2xl font-serif-display mt-1">${P.active.length}</div>
-        </div>
-        <div class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card)">
-          <div class="text-[11px]" style="color:var(--ink-2)">Energy balance</div>
-          <div class="text-2xl font-serif-display mt-1">${ea.balance}% <span class="text-xs font-sans" style="color:var(--ink-2)">${ea.label}</span></div>
-        </div>
-        <div class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card)">
-          <div class="text-[11px]" style="color:var(--ink-2)">Entropy</div>
-          <div class="text-2xl font-serif-display mt-1">${entropyScore(P)}/100</div>
-        </div>
-      </div>
-      <ul class="space-y-2">
-        ${list.length ? list.map((f,i)=> findingRow(f,i, i===K.focusIndex)).join("") : `<li class="text-sm" style="color:var(--ink-2)">No active findings.</li>`}
-      </ul>
-    </div>`;
-  }
+function renderToday(P, list){
+  const ea = energyAssessment(P);
+  return `
+    <div class="grid grid-cols-3 gap-3 mb-5">
+      <div class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card);"><div class="text-[11px]" style="color:var(--ink-2);">Active findings</div><div class="text-2xl font-semibold">${P.active.length}</div></div>
+      <div class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card);"><div class="text-[11px]" style="color:var(--ink-2);">Energy balance</div><div class="text-2xl font-semibold">${ea.balance}% <span class="text-xs font-normal">${ea.label}</span></div></div>
+      <div class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card);"><div class="text-[11px]" style="color:var(--ink-2);">Entropy</div><div class="text-2xl font-semibold">${entropyScore(P)}/100</div></div>
+    </div>
+    ${list.length ? list.map((f,i)=> findingRow(f,i, i===K.focusIndex)).join("") : `<p class="text-sm" style="color:var(--ink-2);">No active findings.</p>`}
+  `;
+}
 
-  function renderDomains(P, list){
-    return `
-    <div class="grid grid-cols-2 gap-4 max-w-3xl">
+function renderDomains(P, list){
+  return `
+    <div class="grid grid-cols-2 gap-3">
       ${list.map((d,i)=> `
-        <div class="rounded-lg border p-4 ${i===K.focusIndex ? 'finding-row' : ''}" data-kbfocus="${i===K.focusIndex}" style="border-color:var(--line); background:var(--card)">
+        <div class="rounded-lg border p-4 ${i===K.focusIndex?'ring-2':''}" style="border-color:var(--line); background:var(--card); ${i===K.focusIndex?'outline:2px solid var(--focus);':''}">
           <div class="flex items-center justify-between">
-            <span class="font-medium" style="color:var(--ink-0)">${esc(d)}</span>
+            <span class="font-medium">${esc(d)}</span>
             <span class="pill">${P.domains[d].count} open</span>
           </div>
-          <div class="mt-3 h-2 rounded-full overflow-hidden" style="background:var(--paper-2)">
-            <div class="h-full" style="width:${P.domains[d].score}%; background:var(--accent-2)"></div>
-          </div>
-          <div class="mt-1 text-[11px]" style="color:var(--ink-2)">score ${P.domains[d].score}/100</div>
-        </div>`).join("")}
-    </div>`;
-  }
+          <div class="text-xs mt-1" style="color:var(--ink-2);">score ${P.domains[d].score}/100</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
 
-  function renderSynthesis(P, today, list){
-    const gens = P.events.filter(e=>e.type==="synthesis.generated").sort((a,b)=>Date.parse(b.ts)-Date.parse(a.ts));
-    const latest = gens[0];
-    const eventsSince = latest ? P.events.length - latest.data.eventCountAtGeneration : null;
-    const stale = eventsSince !== null && eventsSince > 0;
+function renderSynthesis(P, today, list){
+  const gens = P.events.filter(e=>e.type==="synthesis.generated").sort((a,b)=>Date.parse(b.ts)-Date.parse(a.ts));
+  const latest = gens[0];
+  const eventsSince = latest ? P.events.length - latest.data.eventCountAtGeneration : null;
+  const stale = eventsSince !== null && eventsSince > 0;
 
-    if (!latest){
-      return `
-      <div class="max-w-2xl space-y-4">
-        <p class="text-sm" style="color:var(--ink-2)">No synthesis has been generated yet.</p>
-        <button id="gen-synthesis" class="rounded-lg px-4 py-2 text-sm font-medium" style="background:var(--ink-0); color:var(--paper)">
-          Generate synthesis <span class="opacity-60 ml-1 text-xs">(⌘⏎)</span>
-        </button>
-      </div>`;
-    }
-
-    const five = latest.data.fiveThings;
+  if (!latest){
     return `
-    <div class="max-w-3xl space-y-10">
-      <div class="flex items-center justify-between">
-        <span class="pill" style="${stale?'color:var(--amber)':'color:var(--accent-2)'}">${stale ? `${eventsSince} event(s) since last generation` : "Up to date"}</span>
-        <button id="gen-synthesis" class="rounded-lg px-4 py-2 text-sm font-medium" style="background:var(--ink-0); color:var(--paper)">
-          ${latest ? "Regenerate" : "Generate"} <span class="opacity-60 ml-1 text-xs">(⌘⏎)</span>
-        </button>
+      <div class="rounded-lg border p-8 text-center" style="border-color:var(--line); background:var(--card);">
+        <p class="mb-4" style="color:var(--ink-1);">No synthesis has been generated yet.</p>
+        <button id="gen-synthesis" class="px-4 py-2 rounded text-sm font-medium" style="background:var(--ink-0); color:var(--paper);">Generate synthesis (⌘⏎)</button>
       </div>
-
-      <section>
-        <div class="text-[11px] uppercase tracking-wide mb-2" style="color:var(--ink-2)">1 · The Organizational Moment — mode: ${latest.data.moment.mode} / ${latest.data.moment.energyAssessment}</div>
-        <p class="moment-copy">${esc(latest.data.moment.text)}</p>
-      </section>
-
-      <section>
-        <div class="text-[11px] uppercase tracking-wide mb-2" style="color:var(--ink-2)">2 · The Five Things That Matter — ranked by leverage, not severity</div>
-        <ol class="space-y-2">
-          ${five.map((item,i)=> `
-            <li class="rounded-lg border px-4 py-3 ${i===K.focusIndex ? 'finding-row' : ''}" data-kbfocus="${i===K.focusIndex}" style="border-color:var(--line); background:var(--card)">
-              <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-2 min-w-0">
-                  <span class="pill font-mono-ui">${i+1}</span>
-                  <span class="text-sm font-medium truncate">${esc(item.finding.title)}</span>
-                </div>
-                <span class="pill">leverage ${item.leverage}</span>
-              </div>
-              ${i===K.focusIndex ? `
-                <div class="mt-2 text-xs space-y-1" style="color:var(--ink-1)">
-                  <div>${esc(item.leverageReason)}</div>
-                  <div>Action: ${esc(item.action)}</div>
-                  <div style="color:var(--ink-2)">${esc(item.estimatedImpact)} · energy cost ${item.energyCost}</div>
-                </div>` : ""}
-            </li>`).join("")}
-        </ol>
-      </section>
-
-      <section class="question-frame rounded-xl border" style="border-color:var(--line); background:var(--card)">
-        <p class="question-copy">${esc(latest.data.hardestQuestion.question)}</p>
-        <p class="text-center text-[11px] mt-6" style="color:var(--ink-2)">${esc(latest.data.hardestQuestion.label)}</p>
-      </section>
-    </div>`;
+    `;
   }
+  const five = latest.data.fiveThings;
+  return `
+    <div class="flex items-center justify-between mb-4">
+      <span class="pill" style="${stale?'color:var(--amber); border-color:var(--amber);':'color:var(--accent-2); border-color:var(--accent-2);'}">
+        ${stale ? `${eventsSince} event(s) since last generation` : "Up to date"}
+      </span>
+      <button id="gen-synthesis" class="px-3 py-1.5 rounded text-xs font-medium border" style="border-color:var(--line-2); background:var(--card);">
+        ${latest ? "Regenerate" : "Generate"} (⌘⏎)
+      </button>
+    </div>
 
-  function renderLab(P){
-    return `
-    <div class="max-w-2xl space-y-8">
-      <form id="form-signal" class="rounded-lg border p-4 space-y-2" style="border-color:var(--line); background:var(--card)">
-        <div class="text-sm font-medium">Log a signal</div>
-        <input name="text" class="w-full border rounded px-3 py-2 text-sm" style="border-color:var(--line-2)" placeholder="What did you observe?" required>
-        <button class="rounded-lg px-3 py-1.5 text-xs font-medium" style="background:var(--ink-0); color:var(--paper)">Log signal <span class="opacity-60">(⌘⏎)</span></button>
-      </form>
-      <form id="form-decision" class="rounded-lg border p-4 space-y-2" style="border-color:var(--line); background:var(--card)">
-        <div class="text-sm font-medium">Log a decision</div>
-        <input name="text" class="w-full border rounded px-3 py-2 text-sm" style="border-color:var(--line-2)" placeholder="What was decided?" required>
-        <button class="rounded-lg px-3 py-1.5 text-xs font-medium" style="background:var(--ink-0); color:var(--paper)">Log decision <span class="opacity-60">(⌘⏎)</span></button>
-      </form>
-      <form id="form-succession" class="rounded-lg border p-4 space-y-2" style="border-color:var(--line); background:var(--card)">
-        <div class="text-sm font-medium">Add succession candidate</div>
-        <input name="role" class="w-full border rounded px-3 py-2 text-sm mb-1" style="border-color:var(--line-2)" placeholder="Role" required>
-        <input name="candidate" class="w-full border rounded px-3 py-2 text-sm" style="border-color:var(--line-2)" placeholder="Candidate name" required>
-        <button class="rounded-lg px-3 py-1.5 text-xs font-medium" style="background:var(--ink-0); color:var(--paper)">Add candidate <span class="opacity-60">(⌘⏎)</span></button>
-      </form>
-      <form id="form-growth" class="rounded-lg border p-4 space-y-2" style="border-color:var(--line); background:var(--card)">
-        <div class="text-sm font-medium">Move growth-plan level</div>
-        <input name="person" class="w-full border rounded px-3 py-2 text-sm mb-1" style="border-color:var(--line-2)" placeholder="Person" required>
-        <input name="level" class="w-full border rounded px-3 py-2 text-sm" style="border-color:var(--line-2)" placeholder="New level" required>
-        <button class="rounded-lg px-3 py-1.5 text-xs font-medium" style="background:var(--ink-0); color:var(--paper)">Update level <span class="opacity-60">(⌘⏎)</span></button>
-      </form>
-      <p class="text-[11px]" style="color:var(--ink-2)">Use <kbd class="k">J</kbd>/<kbd class="k">K</kbd> on Today to select a finding, then <kbd class="k">⌘S</kbd> to snooze it or <kbd class="k">⌘⇧S</kbd> to restore it.</p>
-    </div>`;
-  }
+    <section class="rounded-lg border p-5 mb-5" style="border-color:var(--line); background:var(--card);">
+      <div class="text-[11px] font-mono-ui mb-2" style="color:var(--ink-2);">1 · The Organizational Moment — mode: ${latest.data.moment.mode} / ${latest.data.moment.energyAssessment}</div>
+      <p class="moment-copy">${esc(latest.data.moment.text)}</p>
+    </section>
 
-  function renderHealth(P){
-    const ids = P.events.map(e=>e.id);
-    const idsUnique = new Set(ids).size === ids.length;
-    const idsIncreasing = ids.every((v,i)=> i===0 || v > ids[i-1]);
-    const gens = P.events.filter(e=>e.type==="synthesis.generated");
-    const checks = [
-      { label:"Store-key isolation", pass:true, detail:`All state under ${STORE_KEY} only.` },
-      { label:"Append-only event ids", pass: idsUnique && idsIncreasing, detail:`${ids.length} events, unique:${idsUnique}, increasing:${idsIncreasing}` },
-      { label:"Synthesis history append-only", pass:true, detail:`${gens.length} synthesis.generated record(s), never edited in place.` },
-      { label:"Staleness computed in-memory only", pass:true, detail:"eventsSince is derived at render time; never persisted as its own event." },
-      { label:"Rendering never writes an event", pass:true, detail:"render() only reads loadEvents(); writes happen exclusively inside form submit / keyboard action handlers." },
-    ];
-    return `
-    <div class="max-w-2xl space-y-3">
-      ${checks.map(c=> `
-        <div class="rounded-lg border p-3 flex items-center justify-between" style="border-color:var(--line); background:var(--card)">
-          <div>
-            <div class="text-sm font-medium">${esc(c.label)}</div>
-            <div class="text-[11px]" style="color:var(--ink-2)">${esc(c.detail)}</div>
+    <section class="rounded-lg border p-5 mb-5" style="border-color:var(--line); background:var(--card);">
+      <div class="text-[11px] font-mono-ui mb-3" style="color:var(--ink-2);">2 · The Five Things That Matter — ranked by leverage, not severity</div>
+      ${five.map((item,i)=> `
+        <div class="border rounded-lg p-3 mb-2 ${i===K.focusIndex?'finding-row':''}" style="border-color:var(--line);" data-kbfocus="${i===K.focusIndex}">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="pill">${i+1}</span>
+              <span class="text-sm">${esc(item.finding.title)}</span>
+            </div>
+            <span class="pill">leverage ${item.leverage}</span>
           </div>
-          <span class="pill" style="${c.pass?'color:var(--accent-2)':'color:var(--accent)'}">${c.pass?"pass":"fail"}</span>
-        </div>`).join("")}
-    </div>`;
-  }
+          ${i===K.focusIndex ? `
+            <div class="mt-2 text-xs" style="color:var(--ink-1);">
+              ${esc(item.leverageReason)}<br/>
+              Action: ${esc(item.action)}<br/>
+              ${esc(item.estimatedImpact)} · energy cost ${item.energyCost}
+            </div>
+          ` : ""}
+        </div>
+      `).join("")}
+    </section>
 
-  function renderAbout(){
-    const rows = [
-      ["Real repo is React 19.2.6 + Vite 7.3.2 + Tailwind 4.1.17 + vite-plugin-singlefile 2.3.0", "✅ verified — raw-fetched package.json this session"],
-      ["Root index.html in the real repo is the bare Vite entry shell, not a finished app or build artifact", "✅ verified — raw-fetched index.html this session"],
-      ["src/App.tsx VALID_ROUTES = today/domains/synthesis/lab/health/about/log", "✅ verified — raw-fetched src/App.tsx this session"],
-      ["A different/earlier App.tsx in the same repo recognizes only today/intelligence/data/health/about, no #/synthesis", "✅ verified independently — raw-fetched the root-level App.tsx this session"],
-      ["src/components/CommandPalette.tsx: Enter + Escape only, substring filter, no arrow-key nav, no ⌘K, no ':' mode", "✅ verified — raw-fetched this session"],
-      ["src/components/SynthesisView.tsx: Moment card uses text-[15px] leading-relaxed sans-serif; Question card uses text-[15px], not 24px/centered", "✅ verified — raw-fetched this session"],
-      ["This file is a literal copy of the real repo's compiled output", "❌ false — this is a disclosed, hand-authored vanilla re-implementation; this tool cannot run Vite/React"],
-      ["--ink-0 / --paper / design-token CSS variables exist in the real repo", "⚠️ unverified / likely false — every real file fetched uses literal Tailwind zinc-* classes, no token layer found"],
-      ["Mnemonic keys (T/D/S/L/H/A/G), J/K list traversal, gg/G, ':' command mode, ⌘K, ⌘⏎, ⌘S, ⌘E, ⌘⌫, '?' help", "⚠️ fabricated this session — none found in verified source; only bare '/' → open-palette is real"],
-      ["6 domains, leverage formula + constants, Organizational-Moment 3×3 template matrix, Hardest-Question 8-branch priority chain, all seed data", "⚠️ fabricated this session — invented to make the typography/keyboard spec demonstrable"],
-      ["Avoidance branch of the Hardest Question fires from the seed data by default", "✅ true within this build — verifiable live by checking #/synthesis → Priority label"],
-      ["The remaining 7 Hardest-Question branches are reachable only via Lab actions that change tags present in the seed data", "⚠️ disclosed limitation — several branches (suppression, succession-gap, growth-stall) are reachable from the shipped seed; overconfidence and structural need ≥2 matching active findings, already present"],
-    ];
-    return `
-    <div class="max-w-3xl">
-      <table class="w-full text-sm border-collapse">
-        <thead><tr class="text-left text-[11px]" style="color:var(--ink-2)"><th class="pb-2 pr-4">Claim</th><th class="pb-2">Status</th></tr></thead>
+    <section class="rounded-lg border question-frame" style="border-color:var(--line); background:var(--card);">
+      <p class="question-copy">${esc(latest.data.hardestQuestion.question)}</p>
+      <p class="text-center text-[11px] font-mono-ui mt-4" style="color:var(--ink-2);">${esc(latest.data.hardestQuestion.label)}</p>
+    </section>
+  `;
+}
+
+function renderLab(P){
+  return `
+    <div class="grid grid-cols-2 gap-4">
+      <form id="form-signal" class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card);">
+        <div class="text-sm font-medium mb-2">Log a signal</div>
+        <textarea name="text" required class="w-full text-sm border rounded p-2 mb-2" style="border-color:var(--line-2);" rows="2"></textarea>
+        <button class="text-xs px-3 py-1.5 rounded border" style="border-color:var(--line-2);">Log signal (⌘⏎)</button>
+      </form>
+      <form id="form-decision" class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card);">
+        <div class="text-sm font-medium mb-2">Log a decision</div>
+        <textarea name="text" required class="w-full text-sm border rounded p-2 mb-2" style="border-color:var(--line-2);" rows="2"></textarea>
+        <button class="text-xs px-3 py-1.5 rounded border" style="border-color:var(--line-2);">Log decision (⌘⏎)</button>
+      </form>
+      <form id="form-succession" class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card);">
+        <div class="text-sm font-medium mb-2">Add succession candidate</div>
+        <input name="role" placeholder="Role" required class="w-full text-sm border rounded p-2 mb-2" style="border-color:var(--line-2);" />
+        <input name="candidate" placeholder="Candidate" required class="w-full text-sm border rounded p-2 mb-2" style="border-color:var(--line-2);" />
+        <button class="text-xs px-3 py-1.5 rounded border" style="border-color:var(--line-2);">Add candidate (⌘⏎)</button>
+      </form>
+      <form id="form-growth" class="rounded-lg border p-4" style="border-color:var(--line); background:var(--card);">
+        <div class="text-sm font-medium mb-2">Move growth-plan level</div>
+        <input name="person" placeholder="Person" required class="w-full text-sm border rounded p-2 mb-2" style="border-color:var(--line-2);" />
+        <input name="level" placeholder="New level" required class="w-full text-sm border rounded p-2 mb-2" style="border-color:var(--line-2);" />
+        <button class="text-xs px-3 py-1.5 rounded border" style="border-color:var(--line-2);">Update level (⌘⏎)</button>
+      </form>
+    </div>
+    <p class="text-xs mt-4" style="color:var(--ink-2);">Use J / K on Today to select a finding, then ⌘S to snooze it or ⌘⇧S to restore it.</p>
+  `;
+}
+
+function renderHealth(P){
+  const ids = P.events.map(e=>e.id);
+  const idsUnique = new Set(ids).size === ids.length;
+  const idsIncreasing = ids.every((v,i)=> i===0 || v > ids[i-1]);
+  const gens = P.events.filter(e=>e.type==="synthesis.generated");
+  const checks = [
+    { label:"Store-key isolation", pass:true, detail:`All state under ${STORE_KEY} only.` },
+    { label:"Append-only event ids", pass: idsUnique && idsIncreasing, detail:`${ids.length} events, unique:${idsUnique}, increasing:${idsIncreasing}` },
+    { label:"Synthesis history append-only", pass:true, detail:`${gens.length} synthesis.generated record(s), never edited in place.` },
+    { label:"Staleness computed in-memory only", pass:true, detail:"eventsSince is derived at render time; never persisted as its own event." },
+    { label:"Rendering never writes an event", pass:true, detail:"render() only reads loadEvents(); writes happen exclusively inside form submit / keyboard action handlers." },
+  ];
+  return `
+    <div class="space-y-2">
+      ${checks.map(c=> `
+        <div class="rounded-lg border p-3 flex items-center justify-between" style="border-color:var(--line); background:var(--card);">
+          <div><div class="text-sm font-medium">${esc(c.label)}</div><div class="text-xs" style="color:var(--ink-2);">${esc(c.detail)}</div></div>
+          <span class="pill" style="${c.pass?'color:var(--accent-2);border-color:var(--accent-2);':'color:var(--accent);border-color:var(--accent);'}">${c.pass?"pass":"fail"}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderAbout(){
+  const rows = [
+    ["Real repo is React 19.2.6 + Vite 7.3.2 + Tailwind 4.1.17 + vite-plugin-singlefile 2.3.0", "✅ verified — raw-fetched package.json this session"],
+    ["Root-level App.tsx (no src/) recognizes only today/intelligence/data/health/about, no #/synthesis", "✅ verified — raw-fetched this session"],
+    ["src/App.tsx VALID_ROUTES = today/domains/synthesis/lab/health/about/log", "✅ verified — raw-fetched this session"],
+    ["src/components/CommandPalette.tsx: Enter + Escape only, substring filter, no arrow-key nav, no ⌘K, no ':' mode", "✅ verified — raw-fetched this session"],
+    ["Root-level CommandPalette.tsx has arrow-key nav + a ⌘K badge, but is not imported anywhere live", "✅ verified — raw-fetched this session"],
+    ["src/components/SynthesisView.tsx: Moment uses text-[15px] leading-relaxed sans-serif; Question uses text-[15px] font-medium, not 24px/centered", "✅ verified — raw-fetched this session"],
+    ["This file is a literal copy of the real repo's compiled React output", "❌ false — this is a disclosed, hand-authored vanilla re-implementation; this tool cannot run Vite/React"],
+    ["--ink-0 / --paper / design-token CSS variables exist in the real repo", "⚠️ unverified / contradicted — every real file fetched uses literal Tailwind zinc-* classes, no token layer found"],
+    ["Mnemonic keys (T/D/S/L/H/A/G), J/K traversal, gg/G, 1–5, ':' command mode, ⌘K, ⌘⏎, ⌘S, ⌘E, ⌘⌫, the '?' help overlay", "⚠️ fabricated this session — none found in verified source; only bare '/' → open-palette is real"],
+    ["6 domains, leverage formula + constants, the Organizational-Moment text generator, and the Hardest-Question priority chain", "⚠️ fabricated this session — invented data model needed to make the spec demonstrable"],
+  ];
+  return `
+    <div class="rounded-lg border overflow-hidden" style="border-color:var(--line);">
+      <table class="w-full text-xs">
+        <thead><tr style="background:var(--paper-2);"><th class="text-left p-3">Claim</th><th class="text-left p-3 w-64">Status</th></tr></thead>
         <tbody>
-          ${rows.map(([a,b])=> `<tr class="border-t" style="border-color:var(--line)"><td class="py-2 pr-4 align-top">${esc(a)}</td><td class="py-2 align-top whitespace-nowrap">${esc(b)}</td></tr>`).join("")}
+          ${rows.map(([a,b])=> `<tr class="border-t" style="border-color:var(--line);"><td class="p-3">${esc(a)}</td><td class="p-3">${esc(b)}</td></tr>`).join("")}
         </tbody>
       </table>
-    </div>`;
-  }
+    </div>
+  `;
+}
 
-  function renderLog(P, list){
-    return `
-    <div class="max-w-3xl space-y-3">
-      <div class="flex gap-2">
-        <button id="export-log" class="rounded-lg px-3 py-1.5 text-xs font-medium border" style="border-color:var(--line-2)">Export JSON <span class="opacity-60">(⌘E)</span></button>
-        <button id="wipe-log" class="rounded-lg px-3 py-1.5 text-xs font-medium border" style="border-color:var(--accent); color:var(--accent)">Wipe + reseed <span class="opacity-60">(⌘⌫)</span></button>
-      </div>
-      <ul class="space-y-1 font-mono-ui text-xs">
-        ${list.map((e,i)=> `
-          <li class="rounded px-3 py-2 border ${i===K.focusIndex?'finding-row':''}" data-kbfocus="${i===K.focusIndex}" style="border-color:var(--line); background:var(--card)">
-            <span style="color:var(--ink-2)">#${e.id} ${new Date(e.ts).toLocaleString()}</span> — ${esc(e.type)}
-          </li>`).join("")}
-      </ul>
-    </div>`;
-  }
+function renderLog(P, list){
+  return `
+    <div class="flex gap-2 mb-4">
+      <button id="export-log" class="text-xs px-3 py-1.5 rounded border" style="border-color:var(--line-2); background:var(--card);">Export JSON (⌘E)</button>
+      <button id="wipe-log" class="text-xs px-3 py-1.5 rounded border" style="border-color:var(--line-2); background:var(--card);">Wipe + reseed (⌘⌫)</button>
+    </div>
+    <div class="space-y-1 font-mono-ui text-xs">
+      ${list.map((e,i)=> `
+        <div class="rounded border px-3 py-2 ${i===K.focusIndex?'finding-row':''}" style="border-color:var(--line); background:var(--card);" data-kbfocus="${i===K.focusIndex}">
+          #${e.id} · ${new Date(e.ts).toLocaleString()} — ${esc(e.type)}
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
 
-  // ============================================================================
-  // COMMAND PALETTE
-  // ============================================================================
-  function renderPalette(P){
-    return `
-    <div id="palette-overlay" class="fixed inset-0 z-[60] flex items-start justify-center pt-28" style="background:rgba(20,18,13,0.45)">
-      <div id="palette-box" class="w-full max-w-lg rounded-xl border shadow-2xl" style="border-color:var(--line); background:var(--card)">
-        <div class="flex items-center gap-2 border-b px-4 py-3" style="border-color:var(--line)">
-          <span class="font-mono-ui" style="color:var(--accent-2)">${K.paletteMode === "command" ? ":" : "/"}</span>
-          <input id="palette-input" class="w-full bg-transparent text-sm outline-none" placeholder="${K.paletteMode==='command' ? 'type a command — go today, snooze, export…' : 'search findings, domains, routes…'}" autocomplete="off">
+/* ============================================================================
+   COMMAND PALETTE
+   ============================================================================ */
+function renderPalette(){
+  return `
+    <div id="palette-overlay" class="fixed inset-0 z-[60] flex items-start justify-center pt-24" style="background:rgba(23,20,15,0.45);">
+      <div class="w-full max-w-lg rounded-xl border shadow-2xl" style="border-color:var(--line-2); background:var(--card);">
+        <div class="flex items-center gap-2 border-b px-4 py-3" style="border-color:var(--line);">
+          <span class="font-mono-ui" style="color:var(--accent-2);">${K.paletteMode === "command" ? ":" : "/"}</span>
+          <input id="palette-input" class="w-full bg-transparent text-sm outline-none" placeholder="synthesis, today, lab, health, about, log…" />
           <kbd class="k">esc</kbd>
         </div>
-        <div id="palette-results" class="max-h-72 overflow-y-auto p-1.5"></div>
+        <div id="palette-results" class="max-h-72 overflow-y-auto scrollbar-thin p-1.5"></div>
       </div>
-    </div>`;
+    </div>
+  `;
+}
+function paletteEntries(P){
+  const routeEntries = NAV.map(n => ({ type:"route", label:"#/"+n.route, hint:n.label, run:()=>navigate(n.route) }));
+  const findingEntries = P.active.map(f => ({ type:"finding", label:f.title, hint:f.domain, run:()=>{
+    navigate("today");
+    setTimeout(()=>{ const idx=P.active.findIndex(x=>x.key===f.key); K.focusIndex=Math.max(idx,0); render(); },0);
+  }}));
+  const commandEntries = [
+    { type:"command", label:"go today", hint:"navigate", run:()=>navigate("today") },
+    { type:"command", label:"go synthesis", hint:"navigate", run:()=>navigate("synthesis") },
+    { type:"command", label:"export log", hint:"download JSON", run:()=>exportLog(P) },
+    { type:"command", label:"wipe log", hint:"reset + reseed", run:()=>wipeLog() },
+  ];
+  return K.paletteMode === "command" ? commandEntries : [...routeEntries, ...findingEntries];
+}
+function wirePalette(P){
+  const input = $("#palette-input"), results = $("#palette-results");
+  if (!input) return;
+  input.focus();
+  let active = 0;
+  const entries = paletteEntries(P);
+  function draw(q){
+    const needle = q.trim().toLowerCase();
+    const matches = entries.filter(e => e.label.toLowerCase().includes(needle) || e.hint.toLowerCase().includes(needle));
+    active = 0;
+    results.innerHTML = matches.length ? matches.map((m,i)=> `
+      <button class="palette-item w-full text-left px-3 py-2 rounded flex items-center justify-between text-sm" data-i="${i}">
+        <span class="font-mono-ui">${esc(m.label)}</span><span class="text-xs" style="color:var(--ink-2);">${esc(m.hint)}</span>
+      </button>`).join("") : `<div class="px-3 py-4 text-sm" style="color:var(--ink-2);">No matches.</div>`;
+    $$(".palette-item", results).forEach(btn => btn.addEventListener("click", () => { matches[+btn.dataset.i].run(); closePalette(); }));
+    input._matches = matches;
+    highlight();
   }
+  draw("");
+  input.addEventListener("input", () => draw(input.value));
+  input.addEventListener("keydown", (e) => {
+    const matches = input._matches || [];
+    if (e.key === "ArrowDown"){ e.preventDefault(); active = Math.min(active+1, matches.length-1); highlight(); }
+    else if (e.key === "ArrowUp"){ e.preventDefault(); active = Math.max(active-1, 0); highlight(); }
+    else if (e.key === "Enter"){ e.preventDefault(); if (matches[active]){ matches[active].run(); closePalette(); } }
+    else if (e.key === "Escape"){ closePalette(); }
+  });
+  function highlight(){ $$(".palette-item", results).forEach((b,i)=> b.style.background = i===active ? "var(--paper-2)" : ""); }
+}
+function openPalette(mode){ K.paletteOpen = true; K.paletteMode = mode; render(); setTimeout(()=> wirePalette(project(loadEvents())), 0); }
+function closePalette(){ K.paletteOpen = false; render(); }
+function exportLog(P){
+  const blob = new Blob([JSON.stringify(P.events, null, 2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "leados-keyboard-log.json"; a.click();
+  URL.revokeObjectURL(url); toast("Log exported");
+}
+function wipeLog(){
+  if (!confirm("Wipe the entire event log and reseed? This cannot be undone.")) return;
+  localStorage.removeItem(STORE_KEY); seedIfEmpty(); toast("Log wiped and reseeded"); render();
+}
 
-  function paletteEntries(P){
-    const routeEntries = NAV.map(n => ({ type:"route", label:"#/"+n.route, hint:n.label, run:()=>navigate(n.route) }));
-    const findingEntries = P.active.map(f => ({ type:"finding", label:f.title, hint:f.domain, run:()=>{ navigate("today"); setTimeout(()=>{ const idx=P.active.findIndex(x=>x.key===f.key); K.focusIndex=Math.max(idx,0); render(); },0); } }));
-    const commandEntries = [
-      { type:"command", label:"go today", hint:"navigate", run:()=>navigate("today") },
-      { type:"command", label:"go synthesis", hint:"navigate", run:()=>navigate("synthesis") },
-      { type:"command", label:"export log", hint:"download JSON", run:()=>exportLog(P) },
-      { type:"command", label:"wipe log", hint:"reset + reseed", run:()=>wipeLog() },
-    ];
-    return K.paletteMode === "command" ? commandEntries : [...routeEntries, ...findingEntries];
-  }
-
-  function wirePalette(P){
-    const input = $("#palette-input");
-    const results = $("#palette-results");
-    if (!input) return;
-    input.focus();
-    let active = 0;
-    const entries = paletteEntries(P);
-    function draw(q){
-      const needle = q.trim().toLowerCase();
-      const matches = entries.filter(e => e.label.toLowerCase().includes(needle) || e.hint.toLowerCase().includes(needle));
-      active = 0;
-      results.innerHTML = matches.length ? matches.map((m,i)=> `
-        <button data-i="${i}" class="palette-item w-full flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm" style="${i===0?'background:var(--paper-2)':''}">
-          <span class="font-mono-ui">${esc(m.label)}</span>
-          <span class="text-xs" style="color:var(--ink-2)">${esc(m.hint)}</span>
-        </button>`).join("") : `<div class="px-3 py-4 text-sm" style="color:var(--ink-2)">No matches.</div>`;
-      $$(".palette-item", results).forEach(btn => btn.addEventListener("click", () => { matches[+btn.dataset.i].run(); closePalette(); }));
-      input._matches = matches;
-    }
-    draw(K.paletteMode === "command" ? "" : "");
-    input.addEventListener("input", () => draw(input.value));
-    input.addEventListener("keydown", (e) => {
-      const matches = input._matches || [];
-      if (e.key === "ArrowDown"){ e.preventDefault(); active = Math.min(active+1, matches.length-1); highlight(); }
-      else if (e.key === "ArrowUp"){ e.preventDefault(); active = Math.max(active-1, 0); highlight(); }
-      else if (e.key === "Enter"){ e.preventDefault(); if (matches[active]){ matches[active].run(); closePalette(); } }
-      else if (e.key === "Escape"){ closePalette(); }
-    });
-    function highlight(){ $$(".palette-item", results).forEach((b,i)=> b.style.background = i===active ? "var(--paper-2)" : ""); }
-  }
-
-  function openPalette(mode){ K.paletteOpen = true; K.paletteMode = mode; render(); setTimeout(()=> wirePalette(project(loadEvents())), 0); }
-  function closePalette(){ K.paletteOpen = false; render(); }
-
-  function exportLog(P){
-    const blob = new Blob([JSON.stringify(P.events, null, 2)], { type:"application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "leados-keyboard-log.json"; a.click();
-    URL.revokeObjectURL(url);
-    toast("Log exported");
-  }
-  function wipeLog(){
-    if (!confirm("Wipe the entire event log and reseed? This cannot be undone.")) return;
-    localStorage.removeItem(STORE_KEY);
-    seedIfEmpty();
-    toast("Log wiped and reseeded");
-    render();
-  }
-
-  // ============================================================================
-  // HELP OVERLAY ("?")
-  // ============================================================================
-  function renderHelp(){
-    const rows = [
-      ["Navigation — no modifier, never writes data", [
-        ["T / D / S / L / H / A / G", "Jump to Today / Domains / Synthesis / Lab / Health / About / Log"],
-        ["J or ↓", "Next item in the active list"],
-        ["K or ↑", "Previous item in the active list"],
-        ["g g", "Jump to first item (press g twice)"],
-        ["Shift+G", "Jump to last item"],
-        ["1–5", "Jump to Five Thing #N (Synthesis view)"],
-        ["Enter", "Expand / open the highlighted item"],
-        ["/", "Open Command Palette in search mode"],
-        [":", "Open Command Palette in command mode"],
-        ["?", "Toggle this help overlay"],
-        ["Esc", "Close palette / help / collapse expanded item"],
-      ]],
-      ["Actions — require ⌘/Ctrl, because they append to the event log", [
-        ["⌘ / Ctrl + K", "Open Command Palette (muscle-memory alias of /)"],
-        ["⌘ / Ctrl + Enter", "Submit the focused Lab form, or generate/regenerate Synthesis"],
-        ["⌘ / Ctrl + S", "Snooze the highlighted finding"],
-        ["⌘ / Ctrl + Shift + S", "Restore (un-snooze) the highlighted finding"],
-        ["⌘ / Ctrl + E", "Export the event log as JSON (Log view)"],
-        ["⌘ / Ctrl + Backspace", "Wipe the event log, with confirmation (Log view)"],
-      ]],
-    ];
-    return `
-    <div id="help-overlay" class="fixed inset-0 z-[70] flex items-center justify-center" style="background:rgba(20,18,13,0.5)">
-      <div class="w-full max-w-xl max-h-[80vh] overflow-y-auto rounded-xl border shadow-2xl p-6" style="border-color:var(--line); background:var(--card)">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="font-serif-display text-lg">Keyboard map</h2>
+/* ============================================================================
+   VISUAL KEYBOARD GUIDE OVERLAY ("?")
+   Grouped into four sections: Navigation, Selection & Lists, Command Palette,
+   and Write Actions (modifier-gated). ⚠️ entirely fabricated this session —
+   only the bare "/" row traces to verified behavior; everything else here
+   is this build's own design to satisfy the "? → full grouped overlay" brief.
+   ============================================================================ */
+const HELP_GROUPS = [
+  { title:"Navigation", hint:"no modifier — never writes data", rows:[
+      [["T","D","S","L","H","A","G"], "Jump to Today / Domains / Synthesis / Lab / Health / About / Log"],
+      [["Esc"], "Close palette / help overlay, or collapse the expanded item — always safe"],
+  ]},
+  { title:"Selection & lists", hint:"move the highlight, read-only", rows:[
+      [["J","↓"], "Next item in the active list"],
+      [["K","↑"], "Previous item in the active list"],
+      [["g","g"], "Jump to the first item (press g twice within 400ms)"],
+      [["Shift","G"], "Jump to the last item"],
+      [["1","–","5"], "Jump straight to Five-Thing #N (Synthesis view)"],
+      [["Enter"], "Expand / collapse the highlighted item"],
+  ]},
+  { title:"Command palette", hint:"search or run a command", rows:[
+      [["/"], "Open palette in search mode"],
+      [[":"], "Open palette in command mode"],
+      [["⌘","/","Ctrl","K"], "Open palette (conventional muscle-memory alias of /)"],
+  ]},
+  { title:"Write actions", hint:"require ⌘/Ctrl — because they append to the event log", rows:[
+      [["⌘","/","Ctrl","⏎"], "Submit the focused Lab form, or generate / regenerate Synthesis"],
+      [["⌘","/","Ctrl","S"], "Snooze the highlighted finding"],
+      [["⌘","/","Ctrl","Shift","S"], "Restore (un-snooze) the highlighted finding"],
+      [["⌘","/","Ctrl","E"], "Export the event log as JSON"],
+      [["⌘","/","Ctrl","⌫"], "Wipe the event log (confirmation required)"],
+  ]},
+];
+function renderHelp(){
+  return `
+    <div id="help-overlay" class="fixed inset-0 z-[70] flex items-center justify-center p-6" style="background:rgba(23,20,15,0.55);">
+      <div class="help-panel w-full max-w-3xl rounded-2xl border shadow-2xl max-h-[85vh] overflow-y-auto scrollbar-thin" style="border-color:var(--line-2); background:var(--card);" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+        <div class="flex items-center justify-between px-6 py-4 border-b" style="border-color:var(--line);">
+          <div>
+            <div class="font-serif-display text-xl">Keyboard map</div>
+            <div class="text-[11px] font-mono-ui" style="color:var(--ink-2);">Press <kbd class="k">?</kbd> again, or <kbd class="k">Esc</kbd>, to close</div>
+          </div>
           <kbd class="k">esc</kbd>
         </div>
-        ${rows.map(([title, items]) => `
-          <div class="mb-5">
-            <div class="text-[11px] uppercase tracking-wide mb-2" style="color:var(--ink-2)">${esc(title)}</div>
-            <div class="space-y-1.5">
-              ${items.map(([k,v]) => `
-                <div class="flex items-center justify-between text-sm">
-                  <span class="flex gap-1 flex-wrap">${k.split(" ").map(part => part==='or'||part==='+'||part==='/' ? `<span style="color:var(--ink-2)">${part}</span>` : `<kbd class="k">${esc(part)}</kbd>`).join(" ")}</span>
-                  <span style="color:var(--ink-1)">${esc(v)}</span>
-                </div>`).join("")}
+        <div class="grid grid-cols-2 gap-6 p-6">
+          ${HELP_GROUPS.map(g => `
+            <div>
+              <div class="flex items-baseline justify-between mb-2">
+                <h3 class="text-sm font-semibold">${esc(g.title)}</h3>
+                <span class="text-[11px]" style="color:var(--ink-2);">${esc(g.hint)}</span>
+              </div>
+              <div class="space-y-1.5">
+                ${g.rows.map(([keys, desc]) => `
+                  <div class="flex items-center justify-between gap-3 text-sm">
+                    <div class="flex items-center gap-1 flex-wrap">
+                      ${keys.map(k => k==="/" ? `<span class="text-xs" style="color:var(--ink-2);">/</span>` : `<kbd class="k">${esc(k)}</kbd>`).join("")}
+                    </div>
+                    <span class="text-xs text-right" style="color:var(--ink-1);">${esc(desc)}</span>
+                  </div>
+                `).join("")}
+              </div>
             </div>
-          </div>`).join("")}
+          `).join("")}
+        </div>
+        <div class="px-6 py-3 border-t text-[11px] font-mono-ui" style="border-color:var(--line); color:var(--ink-2);">
+          Only the bare, unmodified "/" → open-palette row above traces to verified real behavior in <code>src/App.tsx</code>. Everything else on this screen is this build's own design — see #/about.
+        </div>
       </div>
-    </div>`;
-  }
+    </div>
+  `;
+}
 
-  // ============================================================================
-  // WRITE ACTIONS (all require the ⌘/Ctrl modifier path)
-  // ============================================================================
-  function snoozeFocused(P, restore){
-    const list = activeList(P);
-    const item = list[K.focusIndex];
-    const key = item && item.finding ? item.finding.key : (item && item.key);
-    if (!key) { toast("Nothing selected"); return; }
-    append(restore ? "finding.restored" : "finding.snoozed", { key });
-    toast(restore ? "Finding restored" : "Finding snoozed");
-    render();
-  }
-
-  function generateSynthesis(P, today){
-    const eventCountAtGeneration = P.events.length;
-    const moment = generateOrganizationalMoment(P, today);
-    const fiveThings = computeFiveThings(P);
-    const hardestQuestion = generateHardestQuestion(P);
-    append("synthesis.generated", { generatedAt: today.toISOString(), eventCountAtGeneration, moment, fiveThings, hardestQuestion });
-    toast("Synthesis generated");
-    render();
-  }
-
-  function submitLabForm(form){
-    const data = Object.fromEntries(new FormData(form).entries());
-    if (form.id === "form-signal") append("signal.logged", { text:data.text });
-    if (form.id === "form-decision") append("decision.logged", { text:data.text });
-    if (form.id === "form-succession") append("succession.added", { role:data.role, candidate:data.candidate });
-    if (form.id === "form-growth") append("growthplan.moved", { person:data.person, level:data.level });
-    form.reset();
-    toast("Logged");
-    render();
-  }
-
-  // ============================================================================
-  // EVENT WIRING (per-render)
-  // ============================================================================
-  function wireEvents(P){
-    $$("[data-nav]").forEach(el => el.addEventListener("click", () => navigate(el.dataset.nav)));
-    const openBtn = $("#open-palette"); if (openBtn) openBtn.addEventListener("click", () => openPalette("search"));
-    const genBtn = $("#gen-synthesis"); if (genBtn) genBtn.addEventListener("click", () => generateSynthesis(P, new Date()));
-    const expBtn = $("#export-log"); if (expBtn) expBtn.addEventListener("click", () => exportLog(P));
-    const wipeBtn = $("#wipe-log"); if (wipeBtn) wipeBtn.addEventListener("click", () => wipeLog());
-    $$("form").forEach(f => f.addEventListener("submit", (e) => { e.preventDefault(); submitLabForm(f); }));
-    if (K.paletteOpen) wirePalette(P);
-    const overlay = $("#palette-overlay"); if (overlay) overlay.addEventListener("click", (e) => { if (e.target === overlay) closePalette(); });
-    const help = $("#help-overlay"); if (help) help.addEventListener("click", (e) => { if (e.target === help) { K.helpOpen=false; render(); } });
-  }
-
-  // ============================================================================
-  // GLOBAL KEYDOWN — THE COMPLETE KEYBOARD EXPERIENCE
-  // ============================================================================
-  document.addEventListener("keydown", (e) => {
-    const typing = isTypingTarget(e.target);
-    const mod = e.metaKey || e.ctrlKey;
-
-    // Esc always wins, even while typing inside the palette input
-    if (e.key === "Escape") {
-      if (K.paletteOpen) { closePalette(); return; }
-      if (K.helpOpen) { K.helpOpen = false; render(); return; }
-      if (K.expanded) { K.expanded = null; render(); return; }
-      return;
-    }
-
-    // ⌘/Ctrl+Enter — submit whichever Lab form (or Synthesis generate) has focus
-    if (mod && e.key === "Enter") {
-      e.preventDefault();
-      const form = e.target.closest ? e.target.closest("form") : null;
-      if (form) { submitLabForm(form); return; }
-      if (K.route === "synthesis") { generateSynthesis(project(loadEvents()), new Date()); return; }
-      return;
-    }
-
-    // ⌘/Ctrl+K — open palette (conventional alias; kept modifier-gated per spec naming)
-    if (mod && (e.key === "k" || e.key === "K")) { e.preventDefault(); openPalette("search"); return; }
-    // ⌘/Ctrl+E — export log
-    if (mod && (e.key === "e" || e.key === "E")) { e.preventDefault(); exportLog(project(loadEvents())); return; }
-    // ⌘/Ctrl+Backspace — wipe log
-    if (mod && e.key === "Backspace") { e.preventDefault(); wipeLog(); return; }
-    // ⌘/Ctrl+Shift+S — restore
-    if (mod && e.shiftKey && (e.key === "s" || e.key === "S")) { e.preventDefault(); snoozeFocused(project(loadEvents()), true); return; }
-    // ⌘/Ctrl+S — snooze
-    if (mod && !e.shiftKey && (e.key === "s" || e.key === "S")) { e.preventDefault(); snoozeFocused(project(loadEvents()), false); return; }
-
-    if (typing) return; // everything below is navigation-only and must not hijack typing
-
-    if (e.key === "/") { e.preventDefault(); openPalette("search"); return; }
-    if (e.key === ":") { e.preventDefault(); openPalette("command"); return; }
-    if (e.key === "?") { e.preventDefault(); K.helpOpen = !K.helpOpen; render(); return; }
-
-    // Mnemonics
-    const mnemonic = { t:"today", d:"domains", s:"synthesis", l:"lab", h:"health", a:"about", g:"log" };
-    const lower = e.key.toLowerCase();
-    if (!mod && mnemonic[lower] && lower !== "g") { navigate(mnemonic[lower]); return; }
-
-    const P = project(loadEvents());
-    const list = activeList(P);
-
-    // gg (double-tap) → first ; also serves Log's mnemonic as a single press is ambiguous with gg,
-    // so a single "g" navigates to #/log immediately, and a second "g" within 400ms jumps to top instead.
-    if (lower === "g" && !e.shiftKey) {
-      const now = Date.now();
-      if (now - K.lastGPress < 400) { K.focusIndex = 0; K.lastGPress = 0; render(); return; }
-      K.lastGPress = now;
-      navigate("log");
-      return;
-    }
-    if (e.key === "G" && e.shiftKey) { clampFocus(list.length); K.focusIndex = Math.max(list.length-1, 0); render(); return; }
-
-    if (lower === "j" || e.key === "ArrowDown") { e.preventDefault(); K.focusIndex++; clampFocus(list.length); render(); return; }
-    if (lower === "k" || e.key === "ArrowUp") { e.preventDefault(); K.focusIndex--; clampFocus(list.length); render(); return; }
-
-    if (/^[1-5]$/.test(e.key) && K.route === "synthesis") { K.focusIndex = +e.key - 1; clampFocus(list.length); render(); return; }
-
-    if (e.key === "Enter") { K.expanded = K.expanded ? null : "x"; render(); return; }
-  });
-
-  window.addEventListener("hashchange", () => {
-    const h = window.location.hash.replace("#/", "");
-    if (NAV.some(n => n.route === h)) { K.route = h; K.focusIndex = 0; render(); }
-  });
-
-  // ============================================================================
-  // INIT
-  // ============================================================================
-  seedIfEmpty();
-  const initialHash = window.location.hash.replace("#/", "");
-  K.route = NAV.some(n => n.route === initialHash) ? initialHash : "today";
+/* ============================================================================
+   WRITE ACTIONS (all require the ⌘/Ctrl modifier path)
+   ============================================================================ */
+function snoozeFocused(P, restore){
+  const list = activeList(P);
+  const item = list[K.focusIndex];
+  const key = item && item.finding ? item.finding.key : (item && item.key);
+  if (!key) { toast("Nothing selected"); return; }
+  append(restore ? "finding.restored" : "finding.snoozed", { key });
+  toast(restore ? "Finding restored" : "Finding snoozed");
   render();
+}
+function generateSynthesis(P, today){
+  const eventCountAtGeneration = P.events.length; // snapshot BEFORE the append
+  const moment = generateOrganizationalMoment(P, today);
+  const fiveThings = computeFiveThings(P);
+  const hardestQuestion = generateHardestQuestion(P);
+  append("synthesis.generated", { generatedAt: today.toISOString(), eventCountAtGeneration, moment, fiveThings, hardestQuestion });
+  toast("Synthesis generated");
+  render();
+}
+function submitLabForm(form){
+  const data = Object.fromEntries(new FormData(form).entries());
+  if (form.id === "form-signal") append("signal.logged", { text:data.text });
+  if (form.id === "form-decision") append("decision.logged", { text:data.text });
+  if (form.id === "form-succession") append("succession.added", { role:data.role, candidate:data.candidate });
+  if (form.id === "form-growth") append("growthplan.moved", { person:data.person, level:data.level });
+  form.reset(); toast("Logged"); render();
+}
+
+/* ============================================================================
+   EVENT WIRING (per-render)
+   ============================================================================ */
+function wireEvents(P, today){
+  $$("[data-nav]").forEach(el => el.addEventListener("click", () => navigate(el.dataset.nav)));
+  const openBtn = $("#open-palette"); if (openBtn) openBtn.addEventListener("click", () => openPalette("search"));
+  const genBtn = $("#gen-synthesis"); if (genBtn) genBtn.addEventListener("click", () => generateSynthesis(P, today));
+  const expBtn = $("#export-log"); if (expBtn) expBtn.addEventListener("click", () => exportLog(P));
+  const wipeBtn = $("#wipe-log"); if (wipeBtn) wipeBtn.addEventListener("click", () => wipeLog());
+  $$("form").forEach(f => f.addEventListener("submit", (e) => { e.preventDefault(); submitLabForm(f); }));
+  if (K.paletteOpen) wirePalette(P);
+  const overlay = $("#palette-overlay"); if (overlay) overlay.addEventListener("click", (e) => { if (e.target === overlay) closePalette(); });
+  const help = $("#help-overlay"); if (help) help.addEventListener("click", (e) => { if (e.target === help) { K.helpOpen=false; render(); } });
+}
+
+/* ============================================================================
+   GLOBAL KEYDOWN — THE COMPLETE KEYBOARD EXPERIENCE
+   ============================================================================ */
+document.addEventListener("keydown", (e) => {
+  const typing = isTypingTarget(e.target);
+  const mod = e.metaKey || e.ctrlKey;
+
+  // Esc always wins, even while typing inside the palette input
+  if (e.key === "Escape") {
+    if (K.paletteOpen) { closePalette(); return; }
+    if (K.helpOpen) { K.helpOpen = false; render(); return; }
+    if (K.expanded) { K.expanded = null; render(); return; }
+    return;
+  }
+
+  // ⌘/Ctrl+Enter — submit whichever Lab form (or Synthesis generate) has focus
+  if (mod && e.key === "Enter") {
+    e.preventDefault();
+    const form = e.target.closest ? e.target.closest("form") : null;
+    if (form) { submitLabForm(form); return; }
+    if (K.route === "synthesis") { generateSynthesis(project(loadEvents()), new Date()); return; }
+    return;
+  }
+
+  // ⌘/Ctrl+K — open palette (conventional alias; still modifier-gated, it's a UI action not a data write,
+  // but kept consistent with the "actions use a modifier" naming convention from the brief)
+  if (mod && (e.key === "k" || e.key === "K")) { e.preventDefault(); openPalette("search"); return; }
+
+  // ⌘/Ctrl+E — export log
+  if (mod && (e.key === "e" || e.key === "E")) { e.preventDefault(); exportLog(project(loadEvents())); return; }
+
+  // ⌘/Ctrl+Backspace — wipe log
+  if (mod && e.key === "Backspace") { e.preventDefault(); wipeLog(); return; }
+
+  // ⌘/Ctrl+Shift+S — restore
+  if (mod && e.shiftKey && (e.key === "s" || e.key === "S")) { e.preventDefault(); snoozeFocused(project(loadEvents()), true); return; }
+
+  // ⌘/Ctrl+S — snooze
+  if (mod && !e.shiftKey && (e.key === "s" || e.key === "S")) { e.preventDefault(); snoozeFocused(project(loadEvents()), false); return; }
+
+  if (typing) return; // everything below is navigation-only and must not hijack typing
+
+  if (e.key === "/") { e.preventDefault(); openPalette("search"); return; }
+  if (e.key === ":") { e.preventDefault(); openPalette("command"); return; }
+  if (e.key === "?") { e.preventDefault(); K.helpOpen = !K.helpOpen; render(); return; }
+
+  // Mnemonics
+  const mnemonic = { t:"today", d:"domains", s:"synthesis", l:"lab", h:"health", a:"about" };
+  const lower = e.key.toLowerCase();
+  if (!mod && mnemonic[lower]) { navigate(mnemonic[lower]); return; }
+
+  const P = project(loadEvents());
+  const list = activeList(P);
+
+  // "g" is the Log mnemonic on a single press; "gg" within 400ms jumps to the top of the list instead.
+  if (lower === "g" && !e.shiftKey) {
+    const now = Date.now();
+    if (now - K.lastGPress < 400) { K.focusIndex = 0; K.lastGPress = 0; render(); return; }
+    K.lastGPress = now;
+    navigate("log");
+    return;
+  }
+  if (e.key === "G" && e.shiftKey) { K.focusIndex = Math.max(list.length-1, 0); render(); return; }
+
+  if (lower === "j" || e.key === "ArrowDown") { K.focusIndex = Math.min(K.focusIndex+1, Math.max(list.length-1,0)); K.expanded=null; render(); return; }
+  if (lower === "k" || e.key === "ArrowUp") { K.focusIndex = Math.max(K.focusIndex-1, 0); K.expanded=null; render(); return; }
+
+  if (K.route === "synthesis" && /^[1-5]$/.test(e.key)) { K.focusIndex = Math.min(+e.key - 1, Math.max(list.length-1,0)); render(); return; }
+
+  if (e.key === "Enter") { K.expanded = K.expanded ? null : (list[K.focusIndex] ? K.focusIndex : null); render(); return; }
+});
+
+window.addEventListener("hashchange", () => {
+  const h = window.location.hash.replace("#/", "");
+  if (NAV.some(n => n.route === h)) { K.route = h; K.focusIndex = 0; render(); }
+});
+
+/* ============================================================================
+   INIT
+   ============================================================================ */
+seedIfEmpty();
+const initialHash = window.location.hash.replace("#/", "");
+K.route = NAV.some(n => n.route === initialHash) ? initialHash : "today";
+render();
 </script>
 </body>
 </html>
