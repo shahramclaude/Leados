@@ -1,11 +1,5 @@
-// src/lib/riskIntelligence.ts — unified 8-category risk register.
-//
-// PROVENANCE: same note as casEngine.ts. The pasted "pt-L" brief claims a
-// `js/risk_intelligence.js` module already exists; no such file, export, or
-// string (`riskIntelligence`, `buildRiskRegister`, `_detectCrossRiskAmplification`,
-// `AUSTERITY_TRAP`, `TRUST_COLLAPSE`) was found anywhere in the real repo
-// this session. Original implementation, built to satisfy the brief's
-// *described behavior*, not a port of unverified code.
+// Unified 8-category risk register + cross-category amplification.
+// Original implementation for this delivery.
 import { CATEGORIES } from "./types";
 import type { Category, Finding } from "./types";
 
@@ -14,83 +8,89 @@ export type RiskStatus = "CLEAR" | "WATCH" | "ELEVATED" | "CRITICAL";
 export interface CategoryRisk {
   category: Category;
   status: RiskStatus;
-  score: number; // 0-100
+  score: number; // 0-100, derived from severity-weighted finding count
   findingCount: number;
-  maxSev: number;
+  maxSeverity: number;
 }
 
 function statusFor(score: number): RiskStatus {
   if (score === 0) return "CLEAR";
-  if (score < 35) return "WATCH";
-  if (score < 70) return "ELEVATED";
+  if (score < 25) return "WATCH";
+  if (score < 60) return "ELEVATED";
   return "CRITICAL";
-}
-
-export interface RiskRegister {
-  categories: CategoryRisk[];
-  overallRisk: number;
-}
-
-/** Builds one risk row per category (all 8 always represented, even with 0 findings). */
-export function buildRiskRegister(findings: Finding[]): RiskRegister {
-  const real = findings.filter((f) => f.polarity !== "positive");
-  const categories: CategoryRisk[] = CATEGORIES.map((category) => {
-    const inCat = real.filter((f) => f.category === category);
-    const maxSev = inCat.reduce((m, f) => Math.max(m, f.sev), 0);
-    // score: weighted by count and severity, capped at 100
-    const score = Math.min(100, inCat.reduce((s, f) => s + f.sev * 8, 0));
-    return { category, status: statusFor(score), score, findingCount: inCat.length, maxSev };
-  });
-  const overallRisk = Math.round(categories.reduce((s, c) => s + c.score, 0) / categories.length);
-  return { categories, overallRisk };
 }
 
 export interface Amplification {
   id: string;
   label: string;
   categories: Category[];
-  sev: number;
   detail: string;
 }
 
-/** Cross-category amplification: specific pairs of simultaneously-elevated
- * categories are worse together than the sum of their parts. */
-export function detectCrossRiskAmplification(register: RiskRegister): Amplification[] {
-  const active = (cat: Category) => {
-    const row = register.categories.find((c) => c.category === cat)!;
-    return row.status !== "CLEAR";
-  };
-  const out: Amplification[] = [];
-
-  if (active("FINANCIAL") && active("PEOPLE")) {
-    out.push({
-      id: "AUSTERITY_TRAP",
-      label: "Austerity trap",
-      categories: ["FINANCIAL", "PEOPLE"],
-      sev: 4,
-      detail: "Financial pressure and people risk are both active: cost cuts under runway pressure tend to raise attrition/burnout risk, which raises delivery risk, which raises financial pressure further.",
-    });
-  }
-
-  if (active("GOVERNANCE") && active("REPUTATIONAL")) {
-    out.push({
-      id: "TRUST_COLLAPSE",
-      label: "Trust collapse",
-      categories: ["GOVERNANCE", "REPUTATIONAL"],
-      sev: 5, // always severity 5 by definition when both are active
-      detail: "Governance and reputational risk compound: a compliance or governance failure that becomes public is categorically worse than either risk alone — always scored at maximum severity.",
-    });
-  }
-
-  if (active("STRATEGIC") && active("OPERATIONAL")) {
-    out.push({
-      id: "EXECUTION_STRATEGY_GAP",
-      label: "Execution–strategy gap",
-      categories: ["STRATEGIC", "OPERATIONAL"],
-      sev: 4,
-      detail: "Strategic uncertainty and operational friction together mean the organization can neither commit to a direction nor execute reliably on the current one.",
-    });
-  }
-
-  return out;
+export interface RiskRegister {
+  categories: CategoryRisk[];
+  amplifications: Amplification[];
+  overallScore: number;
 }
+
+export function buildRiskRegister(findings: Finding[]): RiskRegister {
+  const categories: CategoryRisk[] = CATEGORIES.map((category) => {
+    const inCat = findings.filter((f) => f.category === category);
+    const weighted = inCat.reduce((sum, f) => sum + Math.pow(2, f.severity - 1), 0); // 1,2,4,8
+    const score = Math.min(100, Math.round(weighted * 6));
+    return {
+      category,
+      status: statusFor(score),
+      score,
+      findingCount: inCat.length,
+      maxSeverity: inCat.reduce((m, f) => Math.max(m, f.severity), 0),
+    };
+  });
+
+  const amplifications: Amplification[] = [];
+  const has = (id: string) => findings.some((f) => f.ruleId === id);
+
+  if (has("R8") && has("R15")) {
+    amplifications.push({
+      id: "FIN_DELIVERY_AMP",
+      label: "Financial pressure amplifying delivery risk",
+      categories: ["Finance", "Delivery"],
+      detail: "Low runway (R8) combined with declining velocity (R15) compounds both categories' risk simultaneously.",
+    });
+  }
+  if (has("R7") && has("R40")) {
+    amplifications.push({
+      id: "PEOPLE_CULTURE_AMP",
+      label: "Burnout amplifying culture risk",
+      categories: ["People", "Culture"],
+      detail: "A burnout signal (R7) alongside a psychological-safety dip (R40) suggests one person's strain is becoming a team-level culture issue.",
+    });
+  }
+  if (has("R17") && has("R46")) {
+    amplifications.push({
+      id: "DELIVERY_SECURITY_AMP",
+      label: "Delivery instability amplifying security exposure",
+      categories: ["Delivery", "Security"],
+      detail: "Recurring incidents (R17) alongside an unpatched-CVE backlog (R46) suggest operational instability is widening the security attack surface.",
+    });
+  }
+  if (has("R34") && has("R38")) {
+    amplifications.push({
+      id: "PRODUCT_STRATEGY_AMP",
+      label: "Product signals amplifying strategic risk",
+      categories: ["Product", "Strategy"],
+      detail: "Churn uptick (R34) and NPS decline (R38) together suggest the current strategic bet may be losing market fit, not just a local product issue.",
+    });
+  }
+
+  const overallScore = Math.round(categories.reduce((s, c) => s + c.score, 0) / categories.length);
+
+  return { categories, amplifications, overallScore };
+}
+
+// Disclosed gap: "cultural bifurcation" scoring (a hypothetical scoreCulture()
+// helper) is intentionally not implemented here. No verified or specified
+// definition for it exists in anything inspected for this delivery — see
+// AI-SESSION-LOG.md and the in-app About / Provenance page. Inventing one
+// would misattribute invented behavior to a "verified" source.
+export const CULTURAL_BIFURCATION_IMPLEMENTED = false;

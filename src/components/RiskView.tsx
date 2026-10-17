@@ -1,12 +1,13 @@
 import { useMemo } from "react";
 import type { AppState } from "../lib/types";
 import { buildFindings } from "../lib/engine";
-import { buildRiskRegister, detectCrossRiskAmplification } from "../lib/riskIntelligence";
-import { Card, Label, Badge, Bar } from "./ui";
+import { buildRiskRegister } from "../lib/riskIntelligence";
+import type { RiskStatus } from "../lib/riskIntelligence";
+import { Card, Bar, Badge, Stat } from "./ui";
 
-const STATUS_TONE: Record<string, "slate" | "amber" | "rose" | "emerald"> = {
-  CLEAR: "emerald",
-  WATCH: "slate",
+const STATUS_TONE: Record<RiskStatus, "slate" | "sky" | "amber" | "rose"> = {
+  CLEAR: "slate",
+  WATCH: "sky",
   ELEVATED: "amber",
   CRITICAL: "rose",
 };
@@ -14,57 +15,54 @@ const STATUS_TONE: Record<string, "slate" | "amber" | "rose" | "emerald"> = {
 export function RiskView({ state }: { state: AppState }) {
   const findings = useMemo(() => buildFindings(state), [state]);
   const register = useMemo(() => buildRiskRegister(findings), [findings]);
-  const amps = useMemo(() => detectCrossRiskAmplification(register), [register]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Unified Risk Register</h1>
+        <h1 className="text-2xl font-semibold text-white">Risk Register</h1>
         <p className="mt-1 max-w-3xl text-xs text-slate-500">
-          8 fixed categories, always shown even at zero. Score = capped sum of (severity × 8) per category. Overall risk =
-          mean of the 8 category scores. Cross-category amplification is detected separately below.
+          All 8 categories are always shown, even at zero. Scores are a disclosed, simplified severity-weighted formula, not a calibrated
+          actuarial model.
         </p>
       </div>
 
-      <Card title="Overall Risk" subtitle="0 when every category is CLEAR, 100 when every category is saturated CRITICAL">
-        <div className="flex items-center gap-4">
-          <div className="text-4xl font-mono font-bold text-white">{register.overallRisk}</div>
-          <Badge tone={STATUS_TONE[register.overallRisk === 0 ? "CLEAR" : register.overallRisk < 35 ? "WATCH" : register.overallRisk < 70 ? "ELEVATED" : "CRITICAL"]}>
-            {register.overallRisk === 0 ? "CLEAR" : register.overallRisk < 35 ? "WATCH" : register.overallRisk < 70 ? "ELEVATED" : "CRITICAL"}
-          </Badge>
-        </div>
+      <Card>
+        <Stat label="Overall risk score" value={`${register.overallScore} / 100`} tone={register.overallScore > 50 ? "rose" : register.overallScore > 20 ? "amber" : "emerald"} />
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {register.categories.map((c) => (
-          <Card key={c.category} title={c.category} subtitle={`${c.findingCount} active finding(s), max severity ${c.maxSev}`} right={<Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>}>
-            <Bar value={c.score} max={100} color={c.status === "CLEAR" ? "from-emerald-400 to-emerald-600" : c.status === "WATCH" ? "from-slate-400 to-slate-600" : c.status === "ELEVATED" ? "from-amber-400 to-amber-600" : "from-rose-400 to-rose-600"} />
-            <Label>score {c.score}/100</Label>
+          <Card key={c.category} title={c.category}>
+            <div className="flex items-center justify-between">
+              <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
+              <span className="text-xs text-slate-500">{c.findingCount} findings</span>
+            </div>
+            <div className="mt-3">
+              <Bar value={c.score} max={100} tone={c.score > 60 ? "rose" : c.score > 25 ? "amber" : "emerald"} />
+            </div>
+            <div className="mt-1 text-right text-[11px] text-slate-500">{c.score}/100</div>
           </Card>
         ))}
       </div>
 
-      <Card title={`Cross-Category Amplification (${amps.length})`} subtitle="Pairs of simultaneously-elevated categories that are worse together than apart">
-        {amps.length === 0 ? (
-          <p className="text-sm text-slate-400">None detected right now.</p>
+      <Card title={`Cross-category amplifications (${register.amplifications.length})`} subtitle="Rule combinations that span two categories and compound each other's score.">
+        {register.amplifications.length === 0 ? (
+          <p className="text-xs text-slate-500">None detected with the current Signal Board state.</p>
         ) : (
-          <ul className="space-y-3">
-            {amps.map((a) => (
-              <li key={a.id} className="rounded-lg border border-rose-900/50 bg-rose-950/20 p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium text-slate-200">{a.label}</span>
-                  <Badge tone="rose">sev {a.sev}</Badge>
-                  <span className="text-[10px] text-slate-600">{a.categories.join(" + ")}</span>
+          <ul className="space-y-2">
+            {register.amplifications.map((a) => (
+              <li key={a.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs">
+                <div className="flex flex-wrap items-center gap-2 font-medium text-slate-200">
+                  {a.label}
+                  {a.categories.map((c) => (
+                    <Badge key={c} tone="amber">{c}</Badge>
+                  ))}
                 </div>
-                <p className="mt-1 text-xs text-slate-400">{a.detail}</p>
+                <p className="mt-1 text-slate-500">{a.detail}</p>
               </li>
             ))}
           </ul>
         )}
-        <Label>
-          Wired up: AUSTERITY_TRAP (FINANCIAL+PEOPLE), TRUST_COLLAPSE (GOVERNANCE+REPUTATIONAL, always severity 5 by
-          definition), EXECUTION_STRATEGY_GAP (STRATEGIC+OPERATIONAL).
-        </Label>
       </Card>
     </div>
   );

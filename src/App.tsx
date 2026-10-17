@@ -1,28 +1,37 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Shell } from "./components/Shell";
 import { TodayView } from "./components/TodayView";
-import { LandscapeView } from "./components/LandscapeView";
-import { WargameView } from "./components/WargameView";
-import { RegistersView } from "./components/RegistersView";
-import { IntelLogView } from "./components/IntelLogView";
-import { EventLogView } from "./components/EventLogView";
+import { SignalBoardView } from "./components/SignalBoardView";
+import { ThermodynamicsView } from "./components/ThermodynamicsView";
+import { CasView } from "./components/CasView";
+import { RiskView } from "./components/RiskView";
 import { AboutView } from "./components/AboutView";
 import { useHashRoute } from "./lib/useHashRoute";
-import { loadState } from "./lib/store";
+import { loadState, saveState } from "./lib/store";
 import type { AppState } from "./lib/types";
 
 export default function App() {
   const [route, navigate] = useHashRoute("/today");
-  const [state, setState] = useState<AppState>(() => loadState());
+  const [state, setStateRaw] = useState<AppState>(() => loadState());
+
+  const setState = (next: AppState) => {
+    setStateRaw(next);
+    saveState(next);
+  };
+
+  // Keep localStorage in sync if state is set elsewhere (defensive; setState above already persists).
+  useEffect(() => {
+    saveState(state);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <Shell route={route} navigate={navigate}>
-      {route === "/today" && <TodayView state={state} navigate={navigate} />}
-      {route === "/landscape" && <LandscapeView state={state} />}
-      {route === "/wargame" && <WargameView state={state} setState={setState} />}
-      {route === "/registers" && <RegistersView state={state} />}
-      {route === "/log" && <IntelLogView state={state} setState={setState} />}
-      {route === "/events" && <EventLogView state={state} setState={setState} />}
+      {route === "/today" && <TodayView state={state} setState={setState} navigate={navigate} />}
+      {route === "/signals" && <SignalBoardView state={state} setState={setState} />}
+      {route === "/thermodynamics" && <ThermodynamicsView state={state} />}
+      {route === "/cas" && <CasView state={state} />}
+      {route === "/risk" && <RiskView state={state} />}
       {route === "/about" && <AboutView />}
     </Shell>
   );

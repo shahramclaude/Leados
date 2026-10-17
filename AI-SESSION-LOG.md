@@ -1,143 +1,74 @@
-# AI Session Log — LeadOS pt-O (Organizational Wargaming Engine)
+# AI Session Log — Leadership Intelligence Sandbox
 
-This log records what was actually checked against `github.com/wbweve/Leados`
-this session, via which calls, what was found, and what in this delivery is
-a direct transcription of the pasted spec, original, or a disclosed gap.
+This log records exactly what was fetched/checked against
+`github.com/wbweve/Leados` this session, via which calls, what was found, and
+what in this delivery is verified-pattern, original, or a disclosed gap.
+Everything not in the "verified" tables below is explicitly labeled
+unverified in the README and in-app About page.
 
-## 1. What was fetched, and how (this session)
+## 1. What was fetched, and how (this session, in order)
 
 | # | Call | Purpose / result |
 |---|------|-------------------|
-| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered README) | Initial orientation — treated as a claim to verify, not a fact. Describes a "LEADOS Sandbox — Thermodynamics, CAS Engine, Risk Intelligence" delivery, itself containing a provenance note about a prior "pt-L" brief and the real repo's own split history (loose root files vs. a live `src/` app). |
-| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive file tree (148 entries, `truncated: false`, fetched twice — once inline, once piped through `node` for a clean readable listing via `bash`). Confirmed: ~90 loose root-level files (`App.tsx`, `engine.js` ~105KB, `health.js` ~175KB, `ui.js` ~97KB, `playbooks.js` ~60KB, `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`, etc.) alongside a separate `src/` tree (`src/App.tsx`, `src/components/*`, `src/lib/*`). |
-| 3 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/src/App.tsx` | **Verified directly:** imports and routes `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView` from `./components`, and `useHashRoute`/`loadState` from `./lib`. This is a Thermodynamics/CAS/Risk-Register build — not a wargaming build — confirming the README (call #1) describes the repo's *current* live app accurately. |
-| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | **Verified directly:** the repo's own log for the session that produced the current `src/` app. It documents that session's own inspection: a full tree fetch, a `src/lib` and `src/components` directory listing, and raw fetches of `src/App.tsx` (an *earlier* version, importing `IntelligenceView`/`PeopleView`/`EventLogView`), `IntelligenceView.tsx`, `Thermodynamics.tsx`, `engine.ts`, `core.ts`, `intelligence.ts`, and the (then 54,081-byte) root `index.html`. Its conclusions, verified first-hand by that session: a live `infoTheory.ts`→`Thermodynamics.tsx` chain is real; `core.ts`/`intelligence.ts`/`physics.ts` exist but are orphaned, with `intelligence.ts` importing `{ engine, run }` from `./core`, which `core.ts` does not export; and **no CAS engine, risk register, or wargaming-related file/export was found** in anything that session read. |
-| 5 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/index.html` | **Verified directly:** current root `index.html` renders the title "LEADOS Sandbox — CAS Engine, Risk Intelligence & Thermodynamics" — a small Vite-scaffold file, not the 54,081-byte hand-authored demo described in call #4's log. This shows the root `index.html` was overwritten between that logged session and now, consistent with each session rebuilding the Vite entry point rather than preserving the older vanilla-JS demo. |
-| 6 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/package.json` | **Verified directly:** `react-vite-tailwind` scaffold, React 19.2.6, Tailwind 4.1.17, `vite-plugin-singlefile` 2.3.0 — consistent with, not contradicting, the README's single-file-output claim. |
-| 7 | `bash: curl https://api.github.com/search/code?q=wargame+repo:wbweve/Leados` (+ `buildCompetitiveLandscape`, `redTeam`) | **Attempted** a full-text search for wargaming-specific identifiers across the whole repo. All three queries returned `{"message":"Requires authentication","status":"401"}` — GitHub's code-search API requires an authenticated token, unavailable in this sandbox. **Disclosed as a scope limit**: the "not found" conclusion below is therefore a filename-level check against the full 148-entry tree (call #2), not a full-text/byte-level search. |
+| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered page) | Initial orientation. Returned a README containing a self-described "provenance ledger" from what it claims is an earlier session. Treated as a **claim to verify**, not fact — especially since it is itself an AI-authored narrative about a chain of prior sessions ("pt-K"/"pt-L"). |
+| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive file tree (~90 entries). Confirmed: the repo mixes dozens of loose root-level `.tsx`/`.ts`/`.md` files with a separate `src/` Vite+React+TS tree. **Critically, this tree lists `src/lib/casEngine.ts` and `src/lib/riskIntelligence.ts`**, directly contradicting the fetched README's claim that no such files exist. |
+| 3 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/README.md` | Confirmed the rendered page's content is the actual, current `README.md` (not a rendering artifact) — same provenance-ledger text, word for word. |
+| 4 | `bash curl` of `src/App.tsx`, `src/lib/core.ts`, `src/lib/intelligence.ts`, `src/lib/casEngine.ts`, `src/lib/riskIntelligence.ts`, `src/lib/infoTheory.ts` (raw, in one batched call) | **Verified directly:** current `src/App.tsx` imports `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`, `useHashRoute`, `loadState`; routes `/today`, `/signals`, `/thermodynamics`, `/cas`, `/risk`, `/about`. `casEngine.ts` (6.6KB) and `riskIntelligence.ts` (3.7KB) are real, substantive files, each with their own in-file "PROVENANCE" comment asserting they were built because no prior source was found. `core.ts` exports `DOMAINS, DECAY, CORRELATION_WINDOW_DAYS, DECISION_MAX_OPEN_DAYS, STORAGE_KEY, loadState, saveState, appendEvent, seedIfEmpty, project` — no `engine`, no `run`. |
+| 5 | `bash curl` of root `index.html`, `src/lib/casEngine.ts` (head), `src/lib/riskIntelligence.ts` (head), `src/components/CasView.tsx` (head) | **Verified directly:** root `index.html` is a 12-line standard Vite entry (`<div id="root">` + `<script src="/src/main.tsx">`) — not a hand-authored single-file demo, contrary to the fetched README's looser description of "a single-file `index.html` demo." `CasView.tsx` imports `identifyFeedbackLoops, identifyBifurcationPoints, identifyAttractors` from `../lib/casEngine` and is a real, rendered view, not a stub. |
+| 6 | `bash curl` of `src/lib/intelligence.ts` (head), `src/components/IntelligenceView.tsx` (head), `AI-SESSION-LOG.md` (head) | **Verified directly:** `intelligence.ts` line 2 is `import { engine, run } from "./core";` — confirmed broken against call #4's export list. `src/components/IntelligenceView.tsx` (a different, older component from the currently-routed `ThermodynamicsView.tsx`) imports `engine` from `../lib/engine` (not `core.ts`), and is **not** imported by the current `src/App.tsx` (per call #4) — it appears to be a leftover from an earlier iteration of the app, now superseded by the `/thermodynamics`, `/cas`, `/risk` route set. The repo's own `AI-SESSION-LOG.md` head confirms it documents an *earlier* snapshot (describes routes `/intelligence`, components `PeopleView`/`EventLogView` that are no longer in the current `App.tsx`'s import list) — consistent with the repo having moved on since that log and the fetched README were written. |
+| 7 | `bash curl` of `src/components/ThermodynamicsView.tsx` (head), current `src/App.tsx` (re-fetched to reconfirm) | **Verified directly:** `ThermodynamicsView.tsx` imports `shannonEntropy, mutualInformation, signalToNoise, identifyBottlenecks` from `../lib/infoTheory` — a real, live information-theory layer, reachable from the current `App.tsx`'s `/thermodynamics` route. |
+| 8 | `read_file vite.config.ts`, `index.html` (this project's own scaffold) | Confirmed this task's own environment: `vite-plugin-singlefile` is already configured, so this delivery's build genuinely inlines everything into one `dist/index.html`. |
+| 9 | `npm run build` (this project) + `grep` of `dist/index.html` for `src=`/external URLs | **Verified directly:** build succeeds; `dist/` contains only `index.html`; no external `src=`/`href=` references found in the output beyond an inert dynamic-string template inside minified JS. |
 
-No commit history, pull requests, issues, git clone, or code execution of
-repo contents were used. This is a read-only, API/raw-file based inspection
-scoped to the calls listed above, run from this task's own sandbox (which
-began from the default empty-scaffold `src/App.tsx` — no prior session state
-exists in this workspace).
+No commit history, pull requests, issues, blame, or GitHub code search were
+used — only the current `main` tree, raw file contents, and this project's
+own build output. No code from the real repo was executed; nothing was
+copied into this project.
 
-## 2. Verified facts (first-hand, this session)
+## 2. The central finding: a false claim in the fetched README, corrected here
 
-- **V1.** The repo currently contains two structurally different deliveries
-  at once: ~90 loose root-level files from older sessions, and a separate,
-  structured `src/` Vite+React+TypeScript app. (Call #2)
-- **V2.** The live `src/App.tsx`, as of this session's read, routes to a
-  Thermodynamics / CAS / Risk-Register app (`TodayView`, `SignalBoardView`,
-  `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`) — not a wargaming
-  app. (Call #3)
-- **V3.** The repo's own `AI-SESSION-LOG.md`, which documents the session
-  that built the app found in V2, itself verified (at that earlier point)
-  that no CAS engine, risk register, or wargaming module existed anywhere it
-  checked, and built `casEngine.ts`/`riskIntelligence.ts` from scratch to
-  satisfy a *different* pasted brief's described behavior ("pt-L"-labeled in
-  that log). (Call #4)
-- **V4.** The root `index.html` and `package.json` are a current, small Vite
-  scaffold (React 19 + Tailwind 4 + `vite-plugin-singlefile`), not the
-  54,081-byte hand-authored demo an earlier logged session inspected — the
-  root file was evidently replaced by a later session's build. (Calls #4, #5, #6)
-- **V5 (scope limit, disclosed).** No file named `wargame*`,
-  `competitiveLandscape*`, `stakeholder*`, `ecosystem*`, `ma-target*`, or
-  similar exists among the 148 tree entries (call #2). This is a filename
-  check only — the GitHub code-search API that would allow a full-text
-  check across file contents returned `401 Requires authentication` in this
-  sandbox (call #7) and was not otherwise available. Absence of wargaming
-  logic inside files whose names don't suggest it (e.g. buried in one of the
-  large root-level `.js` bundles) cannot be ruled out from filenames alone,
-  and is not claimed here.
+The fetched `github.com/wbweve/Leados` README states (verbatim):
 
-## 3. Conclusion drawn from the above
+> "Not found anywhere in the real repo, this session: any CAS engine, any
+> risk register, any file named `cas.ts`/`risk.ts`/equivalent... That summary
+> is therefore treated here as an **unverified external spec**, not as repo
+> fact."
 
-The task's pasted "pt-O: Organizational Wargaming Engine" brief — with its
-`LEADOS.wargame` object, blue/red/green/white/yellow team model, and new
-event-type catalog — is treated as an **unverified specification supplied by
-the task prompt**, not as a claim about what exists in
-`github.com/wbweve/Leados`. No filename or, within the limits of call #7,
-no searchable evidence of a wargaming module was found there. This is
-consistent with the real repo's own prior sessions' documented practice of
-treating their own pasted briefs the same way.
+This session's own independent checks (table rows #2 and #4 above) show this
+is **false against the repository's current `main` branch**:
+`src/lib/casEngine.ts` and `src/lib/riskIntelligence.ts` both exist, are
+substantive (not stubs), and are imported by `src/components/CasView.tsx` /
+`RiskView.tsx`, which are in turn imported and routed to by the current
+`src/App.tsx`.
 
-Unlike the earlier "pt-L"-style brief referenced in the real repo's logs
-(which asserted mechanics in prose without code), **this pt-O brief supplied
-runnable JavaScript** for the wargame engine (`buildCompetitiveLandscape`,
-`runScenario`, the response-probability matrix, verdict generation). Given
-that, this delivery's `src/lib/wargame.ts` is a **mechanical TypeScript
-transcription** of that pasted code against this app's own event/store
-model — the most honest way to "implement" a spec that already included
-working code, without claiming the code came from anywhere other than the
-task prompt.
+**Why the discrepancy likely exists (unverified, since no commit history was
+checked):** the repo shows clear signs of multiple sequential AI sessions
+each adding files and writing their own README/session-log describing only
+what existed *at that point*, without necessarily being regenerated after
+later sessions added more code (e.g., `src/components/IntelligenceView.tsx`
+and `src/components/ThermodynamicsView.tsx` coexist, as do `Thermodynamics.tsx`
+under `src/components`, root-level loose `.tsx` files, and the `src/` tree —
+consistent with additive, non-destructive sessions over time). The practical
+lesson applied in this delivery: **a repo's own README/session-log should be
+treated as a timestamped claim, not current fact**, and re-checked against
+the live tree before being repeated.
 
-Nothing in this delivery is presented as a copy, port, or continuation of
-`github.com/wbweve/Leados`'s code, nor of any prior "pt-K"/"pt-L"/"pt-M"
-sandbox session's code (none of which is accessible from this workspace).
+## 3. What is original vs. modeled vs. a disclosed gap in this delivery
 
-## 4. Environment constraint that shaped this delivery
+| Module | Status | Basis |
+|---|---|---|
+| `src/lib/infoTheory.ts` | Modeled on a verified real-repo pattern, written fresh | Real repo's equivalent confirmed to exist and be live (table row #7); only the metric set (entropy, mutual info, SNR, bottlenecks) and standard Shannon-1948 formulas were reused, not any file contents. |
+| `src/lib/casEngine.ts` | Built from scratch, modeled on the real repo's module boundary (not its code) | Real repo's `casEngine.ts` confirmed to exist and be wired up (table rows #2, #4, #5), but its internal logic was not fetched/read for this delivery. Rule-combination logic here (burnout loop, velocity spiral, austerity trap, trust collapse) is original. |
+| `src/lib/riskIntelligence.ts` | Same as above | Real repo's file confirmed to exist (table rows #2, #4); internals not read. 8-category scoring and amplification rules here are original. |
+| "Cultural bifurcation" | Disclosed gap, not implemented | Depends on a hypothetical `scoreCulture()` not defined in anything checked this session. |
+| 50-rule catalog, roster/event generator, self-test suite, storage layer, all UI | Original to this delivery | No equivalent was sourced from the real repo; built fresh for this task's environment. |
 
-This task's tool environment requires a React + Vite + Tailwind app with
-`src/App.tsx` as the entry point, built via `npm run build`. The sandbox's
-own default scaffold already included `vite-plugin-singlefile` in
-`vite.config.ts` and `package.json` — this is this environment's own default,
-not something copied from the real repo, even though it happens to produce
-the same "open one `dist/index.html`, zero network calls" property. Verified
-by inspecting the build output (`dist/index.html`, 315KB, single file,
-inlined JS/CSS) after `npm run build`.
+## 4. Environment / build facts verified for this delivery specifically
 
-## 5. Fidelity check on the pasted "pt-O" brief itself
-
-- The brief's wargame engine code (`buildCompetitiveLandscape`,
-  `runScenario`, and all its private helpers) is transcribed in
-  `src/lib/wargame.ts` with signatures and logic preserved; only syntax was
-  adapted for TypeScript and for this app's `Projection`/event-log shape
-  (the brief assumed a `LEADOS.engine.run`/`LEADOS.engine._days` global that
-  this app provides via `src/lib/engine.ts`).
-- The brief's "New Event Types for Wargaming" table is implemented as a
-  form schema (`src/lib/eventSchema.ts`) covering all 19 new event types
-  listed (`wargame.*`, `intel.*`, `ma.*`, `reg.*`, `org.design.*`,
-  `tech.*`, `stakeholder.*`, `ecosystem.*`), plus the supporting event types
-  the wargame functions themselves read (`competitor.logged`,
-  `cs.health.logged`, `win.loss.logged`, `customer.pain`, `fin.kpi.logged`,
-  `fin.runway.logged`, `ops.incident.logged`, `hr.attrition.logged`,
-  `partnership.logged`).
-- The brief's closing section, **"Rules R145–R160 (Wargaming Domain)"**, is a
-  bare heading with no rule content anywhere in the pasted text. No rules
-  were invented to fill it, matching the disclosed-gap convention used by
-  the real repo's own prior sessions for their own undefined dependencies
-  (e.g. `scoreCulture()`, per that repo's own README).
-- The brief's narrative items not backed by supplied code or data shape —
-  real-options valuation, M&A target-scoring formulas, regulatory-legal
-  interpretation logic, organizational-design cost modeling — are
-  represented here only as structured logging/registers (`#/registers`,
-  `#/log`), not as computed algorithms, because the brief did not supply
-  algorithms for them.
-
-## 6. Original work in this delivery (not claimed as verified spec or repo code)
-
-- `src/lib/engine.ts` — an independent ~12-rule findings engine (runway,
-  attrition, incidents, churn, at-risk accounts, win rate, tech debt,
-  unanswered competitor moves, stakeholder risk, M&A deal-breakers,
-  unresolved customer pain). Different rule set, different scope, and
-  different rule IDs from both the real repo's own (separately verified,
-  6-rule) `engine.ts` and any "144-rule catalog" referenced in other
-  unverified pasted briefs — not a port of either.
-- `src/lib/seedData.ts` — an original, deterministic (seeded-PRNG) synthetic
-  dataset: a fictional 8-person roster, 3 fictional competitors, fictional
-  deals/customers/partnerships, and one illustrative example event per new
-  pt-O event type.
-- `src/lib/eventSchema.ts`, `src/lib/format.ts`, `src/lib/store.ts`,
-  `src/lib/useHashRoute.ts` — original TypeScript for this sandbox.
-- All UI (`Shell`, `ui.tsx`, and the seven route views, including the full
-  About/Provenance page text) — original to this delivery.
-- Storage key `leados-pt-o:v1` — new key; this workspace had no prior
-  `App.tsx` beyond the default scaffold, so no other session's key is
-  continued.
-
-## 7. Scope note
-
-Only this task's own pasted "pt-O" text (Part 1: the wargaming architecture)
-was in scope as an input spec. No other "pt-" part of this series was pasted
-into this conversation, so none other is reimplemented here.
+- Entry point: `src/App.tsx` (this task's required convention).
+- `npm run build` succeeds; output is `dist/index.html` only (264.6 KB,
+  ~80 KB gzip), via the pre-existing `vite-plugin-singlefile` config —
+  verified by inspecting `vite.config.ts` and grepping the build output.
+- State persists to `localStorage` under `leados-wargaming-sandbox:v1`,
+  a key unique to this delivery (no claimed continuity with any other
+  session's storage key).

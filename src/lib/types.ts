@@ -1,55 +1,72 @@
-// Core data model for LeadOS pt-O.
-//
-// PROVENANCE NOTE (read this before assuming any of this is "the real LeadOS"):
-// This shape is an ORIGINAL implementation written to satisfy the behavior
-// described in the task's pasted "pt-O" wargaming spec. It is not copied from
-// github.com/wbweve/Leados. See AI-SESSION-LOG.md / the in-app "About" page
-// for exactly what was and was not verified against that repo this session.
+// Shared types for the LEADOS-style sandbox.
+// Original to this delivery — see AI-SESSION-LOG.md for what was verified
+// against github.com/wbweve/Leados before any of this was written.
 
-export interface LeadEvent {
-  id: string;
-  ts: string; // ISO-8601 timestamp
-  type: string; // e.g. "competitor.logged", "wargame.scenario"
-  data: Record<string, any>;
+export const CATEGORIES = [
+  "People",
+  "Finance",
+  "Delivery",
+  "Strategy",
+  "Legal",
+  "Product",
+  "Culture",
+  "Security",
+] as const;
+export type Category = (typeof CATEGORIES)[number];
+
+export type Severity = 1 | 2 | 3 | 4; // 1 low ... 4 critical
+
+export interface Rule {
+  id: string; // e.g. "R7"
+  category: Category;
+  label: string;
+  description: string;
+  defaultSeverity: Severity;
 }
 
 export interface Person {
   id: string;
   name: string;
   role: string;
-  archived?: boolean;
-}
-
-export interface Deal {
-  id: string;
-  name: string;
-  value: number;
-  stage: string;
-}
-
-export interface Okr {
-  id: string;
-  objective: string;
-}
-
-export interface Projection {
-  people: Person[];
-  openOkrs: Okr[];
-  openDeals: Deal[];
-  state: { events: LeadEvent[] };
 }
 
 export interface Finding {
+  ruleId: string;
+  category: Category;
+  label: string;
+  severity: Severity;
+  personId?: string;
+  recurrence: number; // how many times "simulated recurrence" was triggered
+  ts: number;
+}
+
+export interface EventLogEntry {
   id: string;
-  title: string;
-  sev: 1 | 2 | 3 | 4 | 5;
-  domain: string;
-  detail: string;
+  ts: number;
+  personId: string;
+  type: string; // synthetic event type, e.g. "commit", "message", "meeting", "review"
 }
 
 export interface AppState {
-  events: LeadEvent[];
-  people: Person[];
-  openOkrs: Okr[];
-  openDeals: Deal[];
+  activeRuleIds: string[]; // which of the 50 rules are toggled on
+  severityOverrides: Record<string, Severity>;
+  personLinks: Record<string, string>; // ruleId -> personId
+  recurrence: Record<string, number>; // ruleId -> simulated recurrence count
+  runwayMonths: number;
+  events: EventLogEntry[];
+  roster: Person[];
 }
+
+export const SEVERITY_LABEL: Record<Severity, string> = {
+  1: "Low",
+  2: "Medium",
+  3: "High",
+  4: "Critical",
+};
+
+export const SEVERITY_WEIGHT: Record<Severity, number> = {
+  1: 1,
+  2: 2,
+  3: 4,
+  4: 8,
+};

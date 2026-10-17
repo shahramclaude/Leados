@@ -1,134 +1,115 @@
-import { Card, SectionTitle, Badge, DisclosureNote } from "./ui";
+import { Card, Badge } from "./ui";
 
 export function AboutView() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">About / Provenance</h1>
-        <p className="mt-1 max-w-3xl text-sm text-zinc-400">
-          What was actually checked against <code>github.com/wbweve/Leados</code> this session, what this app is, and
-          what is and isn't implemented from the pasted "pt-O" wargaming spec. Full detail also lives in{" "}
-          <code>AI-SESSION-LOG.md</code> in the project root.
+        <h1 className="text-2xl font-semibold text-white">About / Provenance</h1>
+        <p className="mt-1 max-w-3xl text-xs text-slate-500">
+          What was actually checked against <code className="text-slate-400">github.com/wbweve/Leados</code> before this app was written,
+          what was found, and exactly which parts of this delivery are original, modeled on a verified pattern, or a disclosed gap. Full
+          ledger in <code className="text-slate-400">AI-SESSION-LOG.md</code>.
         </p>
       </div>
 
-      <Card>
-        <SectionTitle>1. What this app is</SectionTitle>
-        <p className="text-sm leading-relaxed text-zinc-300">
-          This is a fresh React + Vite + Tailwind build, in this task's own sandbox (a scaffold with an empty{" "}
-          <code>src/App.tsx</code> and no prior Leados history), implementing the <em>functional ideas</em> in the
-          task's pasted "pt-O: Organizational Wargaming Engine" brief — a competitive wargaming simulator (blue/red/
-          green/white/yellow teams), plus logging and registers for the new event types the brief specifies
-          (stakeholders, ecosystem, M&A, regulatory, org design, tech disruption, intel signals). It does not fork,
-          copy, or continue <code>github.com/wbweve/Leados</code>'s code, nor any prior "pt-" session's code.
+      <Card title="This session's independent verification">
+        <p className="text-xs text-slate-400">
+          The repo's rendered README (fetched first) contains its own "provenance ledger" narrative, written by an earlier session, which
+          includes this claim:
+        </p>
+        <blockquote className="mt-2 border-l-2 border-slate-700 pl-3 text-xs italic text-slate-500">
+          "Not found anywhere in the real repo, this session: any CAS engine, any risk register, any file named cas.ts/risk.ts/equivalent…"
+        </blockquote>
+        <p className="mt-2 text-xs text-slate-400">
+          That claim was <Badge tone="rose">checked, not trusted</Badge> and found to be <strong>false against the repository's current
+          main branch</strong>, verified directly this session via GitHub's REST API and raw file fetches:
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-400">
+          <li><code className="text-slate-300">src/lib/casEngine.ts</code> exists (feedback loops, bifurcation points, attractors).</li>
+          <li><code className="text-slate-300">src/lib/riskIntelligence.ts</code> exists (8-category register, cross-category amplification).</li>
+          <li>
+            The live <code className="text-slate-300">src/App.tsx</code> imports <code className="text-slate-300">CasView</code> and{" "}
+            <code className="text-slate-300">RiskView</code> and routes to them at <code className="text-slate-300">/cas</code> and{" "}
+            <code className="text-slate-300">/risk</code>.
+          </li>
+        </ul>
+        <p className="mt-2 text-xs text-slate-500">
+          Most likely explanation (unverified — no commit history was inspected): the README describing their absence was written against
+          an earlier commit, and a later session added these files without updating that README. The repository's own prior session log
+          and README should therefore be read as a snapshot in time, not as current fact — exactly the caution this app's own provenance
+          claims below are trying to avoid repeating.
         </p>
       </Card>
 
-      <Card>
-        <SectionTitle>2. What was verified about github.com/wbweve/Leados this session</SectionTitle>
-        <p className="mb-3 text-sm text-zinc-400">
-          Checked via GitHub's REST API (recursive tree), raw-file fetches, and the rendered README — no cloning, no
-          code execution, no authenticated GitHub code search (that endpoint returned <code>401 Requires
-          authentication</code> when tried).
-        </p>
-        <ul className="space-y-2 text-sm text-zinc-300">
-          <Fact>
-            The repo currently holds <strong>two structurally different deliveries at once</strong>: ~90 loose
-            root-level files (older <code>.tsx</code>/<code>.js</code> artifacts, including large bundled-looking
-            files like <code>engine.js</code> ~105KB, <code>health.js</code> ~175KB, <code>ui.js</code> ~97KB, and a
-            root <code>AI-SESSION-LOG.append.md</code>), alongside a separate, structured <code>src/</code> Vite+React+
-            TypeScript app. Confirmed directly from the recursive tree listing (148 entries, not truncated).
-          </Fact>
-          <Fact>
-            The live <code>src/App.tsx</code> (fetched raw, read directly) imports and routes{" "}
-            <code>TodayView</code>, <code>SignalBoardView</code>, <code>ThermodynamicsView</code>, <code>CasView</code>,{" "}
-            <code>RiskView</code>, and <code>AboutView</code> — matching the current README's "Pages" table. This is
-            the repo's most recent delivery as of this session's read.
-          </Fact>
-          <Fact>
-            That same README documents its own predecessor finding (from the repo's own{" "}
-            <code>AI-SESSION-LOG.md</code>, fetched and read directly this session): an earlier session verified a
-            live <code>src/lib/infoTheory.ts</code> → <code>Thermodynamics.tsx</code> chain, found{" "}
-            <code>src/lib/core.ts</code>/<code>intelligence.ts</code>/<code>physics.ts</code> present but orphaned
-            (and one broken import — <code>intelligence.ts</code> imports <code>{"{ engine, run }"}</code> from{" "}
-            <code>./core</code>, which does not export them), and found{" "}
-            <strong>no CAS engine, no risk register file, and no "wargame" module anywhere</strong> in the files it
-            read.
-          </Fact>
-          <Fact>
-            Root <code>index.html</code> and <code>package.json</code> were fetched directly this session: the repo
-            now builds as a standard Vite scaffold (React 19, Tailwind 4, <code>vite-plugin-singlefile</code>) with
-            the title "LEADOS Sandbox — CAS Engine, Risk Intelligence & Thermodynamics" — consistent with, not
-            contradicting, the README's own account.
-          </Fact>
-          <Fact tone="amber">
-            <strong>Not found, by filename, anywhere in the 148-entry tree:</strong> any file named{" "}
-            <code>wargame*</code>, <code>competitiveLandscape*</code>, <code>stakeholder*</code>,{" "}
-            <code>ecosystem*</code>, <code>ma-target*</code>, or similar. This is a filename-level check, not a
-            byte-for-byte read of all 148 files — disclosed as a scope limit, not asserted as exhaustive proof of
-            absence.
-          </Fact>
+      <Card title="What was independently verified this session, directly">
+        <ul className="list-disc space-y-1.5 pl-5 text-xs text-slate-400">
+          <li>Full recursive file tree via <code className="text-slate-300">GET /repos/wbweve/Leados/git/trees/main?recursive=1</code>.</li>
+          <li>
+            Root <code className="text-slate-300">index.html</code> is a standard Vite entry point (12 lines, <code className="text-slate-300">&lt;div id="root"&gt;</code> +{" "}
+            <code className="text-slate-300">/src/main.tsx</code>), not a hand-authored single-file demo.
+          </li>
+          <li>
+            Current <code className="text-slate-300">src/App.tsx</code> imports <code className="text-slate-300">Shell</code>,{" "}
+            <code className="text-slate-300">TodayView</code>, <code className="text-slate-300">SignalBoardView</code>,{" "}
+            <code className="text-slate-300">ThermodynamicsView</code>, <code className="text-slate-300">CasView</code>,{" "}
+            <code className="text-slate-300">RiskView</code>, <code className="text-slate-300">AboutView</code>; routes <code className="text-slate-300">/today</code>,{" "}
+            <code className="text-slate-300">/signals</code>, <code className="text-slate-300">/thermodynamics</code>, <code className="text-slate-300">/cas</code>,{" "}
+            <code className="text-slate-300">/risk</code>, <code className="text-slate-300">/about</code>.
+          </li>
+          <li>
+            <code className="text-slate-300">src/lib/infoTheory.ts</code> exists and is imported by <code className="text-slate-300">ThermodynamicsView.tsx</code>, which calls{" "}
+            <code className="text-slate-300">shannonEntropy</code>, <code className="text-slate-300">mutualInformation</code>,{" "}
+            <code className="text-slate-300">signalToNoise</code>, <code className="text-slate-300">identifyBottlenecks</code> — a real, live information-theory layer.
+          </li>
+          <li>
+            <code className="text-slate-300">src/lib/core.ts</code> exports <code className="text-slate-300">DOMAINS, DECAY, CORRELATION_WINDOW_DAYS, DECISION_MAX_OPEN_DAYS, STORAGE_KEY, loadState, saveState, appendEvent, seedIfEmpty, project</code>.
+            It does <strong>not</strong> export <code className="text-slate-300">engine</code> or <code className="text-slate-300">run</code>.
+          </li>
+          <li>
+            <code className="text-slate-300">src/lib/intelligence.ts</code> contains <code className="text-slate-300">import {"{ engine, run }"} from "./core"</code> — confirmed broken
+            against the export list above. Neither <code className="text-slate-300">intelligence.ts</code> nor <code className="text-slate-300">physics.ts</code> is imported by the
+            current <code className="text-slate-300">src/App.tsx</code>: both are orphaned in the current tree.
+          </li>
+          <li>
+            The repo mixes dozens of loose root-level <code className="text-slate-300">.tsx</code>/<code className="text-slate-300">.ts</code> files (an older,
+            apparently superseded delivery) alongside a separate, currently-live <code className="text-slate-300">src/</code> Vite+React+TS app. This app was
+            compared only against the <code className="text-slate-300">src/</code> tree, since that is what <code className="text-slate-300">index.html</code> actually boots.
+          </li>
         </ul>
       </Card>
 
-      <Card>
-        <SectionTitle>3. The pasted "pt-O" brief itself</SectionTitle>
-        <p className="text-sm leading-relaxed text-zinc-300">
-          Per the same inspect-before-claiming standard, the pasted brief is treated as{" "}
-          <strong>an unverified specification supplied by the task prompt</strong>, not as a description of
-          <code> github.com/wbweve/Leados</code>. Unlike the earlier "pt-L"-style briefs referenced in that repo's own
-          session logs (which asserted behavior without code), this brief supplied runnable JavaScript for the
-          wargaming engine itself. <code>src/lib/wargame.ts</code> in this app is a mechanical TypeScript
-          transcription of that pasted code against this app's own event/store model — not a reimplementation from
-          some other verified source, and not a claim that the pasted code previously existed anywhere real.
-        </p>
-      </Card>
-
-      <Card>
-        <SectionTitle>4. Disclosed gaps</SectionTitle>
-        <ul className="list-inside list-disc space-y-1 text-sm text-zinc-300">
+      <Card title="What's original, modeled, or a disclosed gap in THIS delivery">
+        <ul className="list-disc space-y-1.5 pl-5 text-xs text-slate-400">
           <li>
-            The brief ends with a bare section heading, <code>Rules R145–R160 (Wargaming Domain)</code>, and supplies
-            no rule text underneath it. No rules were invented to fill that gap — the same convention used by the
-            real repo's own prior sessions for their own undefined dependencies.
+            <strong>Modeled on a verified real-repo pattern, reimplemented from scratch:</strong> <code className="text-slate-300">src/lib/infoTheory.ts</code> here
+            (Shannon entropy, mutual information, SNR, bottlenecks). The real repo's pair was confirmed to exist and render the same four
+            metrics; this file's internals were written fresh, not copied line-by-line, using the standard textbook formulas the metrics are named after.
           </li>
           <li>
-            The findings engine (<code>src/lib/engine.ts</code>) is original, disclosed-fabricated heuristics (~12
-            rules) written for this build. It is not a port of the real repo's own, separate 6-rule{" "}
-            <code>engine.ts</code>, and not the "144-rule catalog" referenced in other unverified pasted briefs.
+            <strong>Built from scratch, modeled on the real repo's module boundaries (not its code):</strong>{" "}
+            <code className="text-slate-300">src/lib/casEngine.ts</code> and <code className="text-slate-300">src/lib/riskIntelligence.ts</code> here. The real
+            repo's equivalents exist and are wired up, but their internals were not fetched line-by-line for this delivery — only their existence,
+            file names, and import graph were verified. The logic inside this app's versions (which rule IDs compose into which named loop) is original
+            to this delivery.
           </li>
-          <li>Real options valuation, M&A target-scoring math, and regulatory-interpretation legal analysis described narratively in the brief are represented here only as structured logging/registers, not as computed models — the brief did not supply algorithms for these, only event shapes.</li>
+          <li>
+            <strong>A gap, left as a gap:</strong> "cultural bifurcation" is not implemented. Its dependency, a hypothetical{" "}
+            <code className="text-slate-300">scoreCulture()</code>, is not defined anywhere this session verified — inventing one would misattribute
+            invented behavior to a "verified" source.
+          </li>
+          <li><strong>Original to this delivery:</strong> all UI, the 50-rule catalog, the synthetic roster/event generator, the self-test suite, and the storage layer.</li>
         </ul>
       </Card>
 
-      <Card>
-        <SectionTitle>5. Data policy</SectionTitle>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="emerald">Zero external data</Badge>
-          <Badge tone="sky">localStorage only</Badge>
-          <Badge tone="violet">Demo data is synthetic &amp; labeled</Badge>
-        </div>
-        <p className="mt-3 text-sm text-zinc-300">
-          All figures in this app are computed from the local event log (<code>localStorage</code> key{" "}
-          <code>leados-pt-o:v1</code>) seeded with an original, deterministic synthetic dataset on first load. Use
-          "Reset demo data" or "Wipe all" on the Event log page at any time.
+      <Card title="Build / environment note">
+        <p className="text-xs text-slate-400">
+          This task's tool environment requires a React + Vite + Tailwind app with a single <code className="text-slate-300">src/App.tsx</code> entry
+          point, built with <code className="text-slate-300">npm run build</code>. This project's <code className="text-slate-300">vite.config.ts</code>{" "}
+          includes the <code className="text-slate-300">vite-plugin-singlefile</code> plugin, so the build output is a single{" "}
+          <code className="text-slate-300">dist/index.html</code> with JS/CSS inlined — verified by running the build and inspecting the output file,
+          not assumed from the plugin's name alone.
         </p>
       </Card>
-
-      <DisclosureNote>
-        This page itself is original writing for this build, produced from the live tool calls made this session
-        (GitHub REST API tree listing, raw-file fetches of README.md, AI-SESSION-LOG.md, src/App.tsx, index.html, and
-        package.json). No other files in the real repo were fetched this session; conclusions about files not fetched
-        are explicitly scoped above.
-      </DisclosureNote>
     </div>
-  );
-}
-
-function Fact({ children, tone = "zinc" }: { children: React.ReactNode; tone?: "zinc" | "amber" }) {
-  return (
-    <li className={`rounded-lg border p-3 ${tone === "amber" ? "border-amber-900/50 bg-amber-950/10" : "border-zinc-800 bg-zinc-950/40"}`}>
-      {children}
-    </li>
   );
 }

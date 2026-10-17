@@ -1,155 +1,140 @@
-# LeadOS pt-O — Organizational Wargaming Engine (sandbox build)
+# Leadership Intelligence Sandbox
 
-A React + Vite + Tailwind app implementing the functional core of the task's
-pasted **"pt-O: Organizational Wargaming Engine"** brief: a blue/red/green
-competitive-landscape model and multi-turn wargame simulator, driven entirely
-by your own logged event data, plus logging/registers for the brief's new
-event types (stakeholders, ecosystem, M&A, regulatory, org design, technology
-disruption, strategic intelligence signals).
+A React + Vite + Tailwind app implementing three leadership-intelligence
+modules — Shannon-entropy "Thermodynamics", a Complex Adaptive Systems (CAS)
+engine, and a unified 8-category Risk Register — driven by one toggleable
+**Signal Board** of 50 synthetic rule IDs. All data is synthetic and
+generated in-browser; nothing describes real people.
 
-> **Provenance — read before assuming this continues `github.com/wbweve/Leados`
-> or any prior "pt-" session:** `github.com/wbweve/Leados` was inspected
-> directly this session (full recursive file tree via GitHub's REST API, the
-> rendered README, and raw fetches of `AI-SESSION-LOG.md`, `src/App.tsx`,
-> `index.html`, `package.json`). Full ledger in `AI-SESSION-LOG.md` and
-> in-app at **About / Provenance**. Short version:
+> **Provenance, read first.** `github.com/wbweve/Leados` was inspected
+> directly this session — GitHub's REST API for the full file tree, and raw
+> fetches of its README, `AI-SESSION-LOG.md`, root `index.html`, `src/App.tsx`,
+> `src/lib/core.ts`, `src/lib/intelligence.ts`, `src/lib/casEngine.ts`,
+> `src/lib/riskIntelligence.ts`, `src/components/CasView.tsx`, and
+> `src/components/ThermodynamicsView.tsx` — **before writing any code.**
 >
-> - The real repo currently holds **two different deliveries at once**: ~90
->   loose root-level files from older sessions (including large
->   bundle-like `.js` files) plus a separate, structured `src/`
->   Vite+React+TypeScript app that is the one actually wired to the root
->   `index.html` / `package.json` as of this session's read.
-> - **Verified, first-hand, this session:** the live `src/App.tsx` routes to
->   `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`,
->   `RiskView`, `AboutView` — a Thermodynamics/CAS/Risk-Register build, not a
->   wargaming build. The repo's own `AI-SESSION-LOG.md` (read directly) in
->   turn documents an **earlier** session's finding that a live
->   `infoTheory.ts` → `Thermodynamics.tsx` chain is real, that
->   `core.ts`/`intelligence.ts`/`physics.ts` are present but orphaned (with
->   one broken import), and that **no CAS engine, risk register, or
->   wargaming module existed in the files it read** at that time.
-> - **Not found anywhere in the real repo, this session:** any file named
->   `wargame*`, `competitiveLandscape*`, `stakeholder*`, `ecosystem*`,
->   `ma-target*`, or equivalent, by filename across the full 148-entry tree.
->   (GitHub's authenticated code-search API was attempted for a full-text
->   check and returned `401 Requires authentication` in this sandbox — a
->   disclosed scope limit, not a claim of exhaustive proof.)
+> That repo's own README contains a "provenance ledger" narrative, written by
+> an earlier session, claiming: *"Not found anywhere in the real repo, this
+> session: any CAS engine, any risk register, any file named
+> cas.ts/risk.ts/equivalent…"* **That claim was checked, not trusted, and
+> found to be false against the repository's current `main` branch:**
+> `src/lib/casEngine.ts` and `src/lib/riskIntelligence.ts` both exist, and the
+> live `src/App.tsx` imports and routes to `CasView` and `RiskView`. Most
+> likely explanation (unverified — no commit history was inspected): the
+> README was written against an earlier commit and never updated after a
+> later session added those files. Full ledger, including exactly what was
+> and wasn't independently verified, is in `AI-SESSION-LOG.md` and in-app at
+> **About / Provenance**.
 >
-> **This app does not fork, copy, or continue any of that history.** It is a
-> fresh build, in this task's own tool environment (React + Vite + Tailwind,
-> single `src/App.tsx` entry point, built with `npm run build`), implementing
-> the pasted pt-O brief's described behavior as original TypeScript — the
-> brief's own wargaming pseudocode is mechanically transcribed (not
-> reimplemented from any other source, and not claimed to have ever existed
-> in the real repo).
+> **This app does not fork, copy, or continue that repo's code or its
+> session lineage.** It is a fresh build in this task's own tool environment
+> (React + Vite + Tailwind, single `src/App.tsx` entry point, built with
+> `npm run build`), implementing the same *functional ideas* — original code
+> throughout, formulas aside (standard information theory, Shannon 1948).
 
 ## Run it
 
-`npm install && npm run build`, then open `dist/index.html`. The Vite config
-(`vite-plugin-singlefile`) inlines the built JS/CSS into that one HTML file,
-so it opens standalone with zero runtime network calls.
+`npm install && npm run build`, then open `dist/index.html`. This project's
+`vite.config.ts` includes the `vite-plugin-singlefile` plugin, which inlines
+all JS/CSS into that one HTML file — **verified** by running the build and
+grepping `dist/index.html` for external `src=`/`href=` references (none
+found; `dist/` contains only `index.html`). Zero runtime network calls.
 
 For development: `npm run dev`.
 
-State lives in `localStorage` under `leados-pt-o:v1`, seeded on first load
-with an **original, deterministic synthetic dataset** (fabricated company:
-fictional competitors, deals, people). Use **Reset demo data** or **Wipe
-all** on the Event log page to clear it.
+State lives in `localStorage` under `leados-wargaming-sandbox:v1`. Use
+**Reset synthetic data** (Today view) to clear it.
 
 ## Pages (hash routes)
 
-| Route         | What it does                                                                                                                                      |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#/today`     | Org snapshot: runway, headcount, win rate, pipeline, active rule-based findings, recent intelligence signals.                                        |
-| `#/landscape` | The competitive landscape: BLUE team (your org's capabilities), RED teams (one card per distinct `competitor.logged` name), GREEN team (customer base — satisfaction, churn, pains, win/loss reasons). |
-| `#/wargame`   | Scenario builder (trigger + your move) → 5-turn simulated wargame (situation → blue move → probabilistic red responses → green reaction → decision options) → verdict. Scenarios can be saved to the event log. |
-| `#/registers` | Tabbed registers over the manually-logged pt-O event types: stakeholders, ecosystem map, M&A targets, regulatory jurisdictions, org design scenarios, technology disruption watch, raw intel signals. |
-| `#/log`       | Generic intelligence logger — pick any of ~25 event types (grouped by domain) and fill a schema-driven form to append an event.                      |
-| `#/events`    | Raw, filterable, deletable event log. The single source of truth every other view reads from. Reset-to-demo / wipe-all live here.                   |
-| `#/about`     | Full provenance ledger — what was checked against the real repo, what was found, what's a disclosed gap.                                           |
+| Route | What it does |
+|---|---|
+| `#/today` | Overview: overall risk score, active finding count, entropy %, feedback-loop/bifurcation/attractor counts, cross-category amplifications, scenario presets, and an in-browser self-test runner. |
+| `#/signals` | The **Signal Board**: 50 synthetic rule IDs across 8 categories, each toggleable with severity and optional person-link; a runway slider; scenario preset buttons; a per-rule "simulate 3x recurrence" control for testing attractor detection. |
+| `#/thermodynamics` | Shannon entropy of the synthetic event log, mutual information between any two people's activity, information bottlenecks (<30% of mean event volume), and a signal-to-noise ratio. |
+| `#/cas` | Feedback loops (reinforcing/balancing), bifurcation points, and attractors, computed live from the Signal Board + runway slider. |
+| `#/risk` | The 8-category Risk Register (always shows all 8, even at zero) and cross-category amplification detection. |
+| `#/about` | Full provenance ledger — what was checked against the real repo, what was found (including the contradiction above), and exactly what in this delivery is original, modeled, or a disclosed gap. |
 
-## What's a direct transcription, what's original, what's a disclosed gap
+## What's original, what's modeled on a verified pattern, what's a disclosed gap
 
-- **Direct TypeScript transcription of the task's pasted pt-O brief:**
-  `src/lib/wargame.ts` (`buildCompetitiveLandscape`, `runScenario`, the
-  probable-response matrix, verdict/counter-option generation). The brief
-  supplied this as runnable JavaScript; it is reproduced here mechanically
-  against this app's own event/store model, not copied from
-  `github.com/wbweve/Leados` (nothing resembling it was found there).
-- **Original, written from scratch because the brief didn't supply it:**
-  `src/lib/engine.ts` (a ~12-rule findings engine — a different, smaller,
-  independently-authored set from both the real repo's own 6-rule engine and
-  any "144-rule catalog" referenced in other unverified pasted briefs),
-  `src/lib/eventSchema.ts` (form schemas for the brief's new event types),
-  `src/lib/seedData.ts` (synthetic demo dataset), and all UI.
-- **A gap, left as a gap:** the brief's own "Rules R145–R160 (Wargaming
-  Domain)" section heading has no rule text under it anywhere in the pasted
-  text. Nothing was invented to fill it. Real-options valuation, M&A
-  scoring, and regulatory-interpretation analysis are represented only as
-  structured logging (the brief gave event shapes, not algorithms for these).
+- **Modeled on a verified real-repo pattern, reimplemented from scratch:**
+  `src/lib/infoTheory.ts` (Shannon entropy, mutual information, SNR,
+  bottlenecks). The real repo's own `infoTheory.ts` was confirmed to exist
+  and be wired into a live `ThermodynamicsView.tsx`, rendering the same four
+  metrics. This file's *internals* were written fresh from the standard
+  textbook formulas, not copied line-by-line from the real file.
+- **Built from scratch, modeled on the real repo's module boundaries (not
+  its code):** `src/lib/casEngine.ts` (feedback loops, bifurcation points,
+  attractors) and `src/lib/riskIntelligence.ts` (8-category register,
+  cross-category amplification). The real repo's equivalents were confirmed
+  to exist and be wired up, but their internal logic was not fetched or read
+  for this delivery — only file names, exports used by components, and the
+  import graph were checked. The rule-combination logic here is original.
+- **A gap, left as a gap:** "cultural bifurcation" is not implemented. Its
+  dependency, a hypothetical `scoreCulture()`, is not defined anywhere
+  checked this session — inventing one would misattribute invented behavior
+  to a "verified" source.
+- **All UI, the 50-rule catalog, the synthetic roster/event generator, the
+  self-test suite, and the storage layer:** original to this delivery.
 
 ## Project structure
 
 ```
 src/
   lib/
-    types.ts         — shared types (LeadEvent, Projection, Finding, ...)
-    format.ts         — date/money/uid helpers
-    seedData.ts         — original synthetic demo dataset (deterministic PRNG)
-    store.ts              — localStorage persistence + event mutations
-    engine.ts               — original ~12-rule findings engine
-    wargame.ts                — transcription of the pasted pt-O wargame engine
-    eventSchema.ts              — form schema for the 25 loggable event types
-    useHashRoute.ts               — tiny hash router
+    types.ts            — shared types (Category, Finding, AppState, ...)
+    rules.ts             — 50-rule synthetic catalog, 8 categories (original)
+    seed.ts               — synthetic roster + deterministic synthetic event log
+    store.ts               — localStorage persistence
+    engine.ts                — Signal Board -> Finding[] (disclosed-fabricated)
+    infoTheory.ts              — Shannon entropy / mutual info / SNR / bottlenecks
+    casEngine.ts                 — feedback loops / bifurcations / attractors
+    riskIntelligence.ts            — 8-category register + cross-risk amplification
+    selfTest.ts                      — original runtime self-tests
+    useHashRoute.ts                   — tiny hash router
   components/
-    Shell.tsx, ui.tsx               — nav shell + shared UI primitives
-    TodayView / LandscapeView / WargameView / RegistersView /
-    IntelLogView / EventLogView / AboutView
-  App.tsx                                — route composition (entry point)
+    Shell.tsx, ui.tsx                  — nav shell + shared UI primitives
+    TodayView / SignalBoardView / ThermodynamicsView / CasView / RiskView / AboutView
+  App.tsx                                 — route composition (entry point)
 ```
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` first** (recursive tree via GitHub
-  REST API, rendered README, raw fetches of `AI-SESSION-LOG.md`,
-  `src/App.tsx`, `index.html`, `package.json`) before writing any code —
-  _why_: the task requires inspecting actual code, not trusting the pasted
-  pt-O brief's framing or a README's self-description at face value.
-- **Attempted GitHub's authenticated code-search API** for a full-text check
-  on terms like `wargame`/`buildCompetitiveLandscape`; it returned `401`
-  unauthenticated — _why disclosed_: absence-by-filename is weaker evidence
-  than absence-by-full-text-search, and the gap is labeled rather than
-  silently upgraded into a stronger claim.
-- **Declared the pasted "pt-O" brief an unverified specification, not repo
-  fact** — _why_: no filename match for its named modules was found in the
-  148-entry tree, and the real repo's own prior sessions already established
-  this exact convention for their own pasted briefs (confirmed by reading
-  their `AI-SESSION-LOG.md` directly).
-- **Transcribed the brief's wargame engine almost verbatim into
-  `wargame.ts`, instead of redesigning the mechanics** — _why_: the brief
-  supplied working pseudocode (unlike pure-prose briefs), so mechanical
-  transcription is more honest than inventing a different algorithm and
-  presenting it as equivalent.
-- **Wrote a new, independent ~12-rule findings engine (`engine.ts`) rather
-  than porting the real repo's 6-rule one or inventing a 144-rule system**
-  — _why_: neither the real repo's engine (different scope/rules) nor the
-  "144-rule" history from other unverified briefs could be verified as
-  applicable here; a small original set, clearly labeled, avoids
-  misattributing provenance either way.
-- **Left "Rules R145–R160" unimplemented** — _why_: the pasted brief names
-  the section but supplies no rule text; inventing rules would misattribute
-  original work to the brief.
-- **Built registers/logging UI for all ~25 new event types the brief
-  defines, even though the wargame engine itself only directly reads a
-  subset (competitor.logged, cs.*, win.loss.logged, etc.)** — _why_: the
-  brief frames these as the substrate for *future* wargame mechanics
-  (M&A, regulatory, org design, tech disruption); logging them now makes the
-  data model match the brief's schema even though the matching algorithms
-  were not supplied.
-- **Used a new storage key (`leados-pt-o:v1`)** — _why_: this sandbox began
-  from the default scaffold `App.tsx` with no prior state; reusing another
-  session's key would assert a shared history that doesn't exist here.
-- **Seeded with an original, deterministic (seeded-PRNG) synthetic dataset**
-  — _why_: the task's own "zero external data" principle applies to the demo
-  data too; nothing here is real market or competitor information, and a
-  deterministic seed keeps "Reset demo data" reproducible.
+- **Fetched `github.com/wbweve/Leados` (rendered README), then independently
+  re-verified every load-bearing claim in it via GitHub's REST API and raw
+  file fetches, before writing any app code** — *why*: the task requires
+  inspecting actual code, not trusting a fetched page's self-description,
+  especially one that itself describes a chain of prior AI sessions.
+- **Found and disclosed that the fetched README's central claim ("no CAS
+  engine, no risk register exist in the repo") is false against the repo's
+  current `main` branch** — *why disclosed prominently*: a confidently-worded
+  but wrong provenance claim is more dangerous than an obviously-uncertain
+  one; burying the correction would repeat the same failure mode being
+  corrected.
+- **Treated the repo's own `AI-SESSION-LOG.md` and `core.ts`/`intelligence.ts`
+  "PROVENANCE" code comments as repo-internal claims to spot-check, not as
+  settled fact** — *why*: those files are themselves prior AI output
+  asserting their own verification; only claims re-confirmed by this
+  session's own tool calls (listed in `AI-SESSION-LOG.md`) are presented here
+  as verified.
+- **Built as a React+Vite+Tailwind app with a single `src/App.tsx` entry
+  point, per this task's required environment** — *why*: this tool
+  environment's entry point is fixed; a hand-rolled single HTML file would
+  misstate the environment. `vite-plugin-singlefile` is used so the build
+  output still satisfies "open one file, zero network calls."
+- **Designed an original 50-rule catalog with four named scenario presets
+  (burnout loop, velocity death spiral, austerity trap, trust collapse)**
+  — *why*: these are generic, well-known systems-thinking/leadership concepts
+  used to give the CAS engine something concrete to detect, not IDs or names
+  taken from any external, unverified spec.
+- **Left "cultural bifurcation" unimplemented** — *why*: its dependency
+  (`scoreCulture()`) is undefined in every source checked; inventing it would
+  misattribute original work to a source that doesn't define it.
+- **Used a new storage key (`leados-wargaming-sandbox:v1`)** — *why*: this
+  workspace began from the default scaffold with no prior state; reusing
+  another session's key would falsely imply shared history.
+- **Wrote an original self-test suite (`selfTest.ts`) under its own test
+  IDs (`T1`...`T10`)** — *why*: no external test-suite naming convention was
+  verified anywhere, so inventing test bodies under someone else's IDs would
+  imply false provenance. These tests check this build's own math only.
