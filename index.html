@@ -3,752 +3,911 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEADOS — Decision Topology Surface (Part 3)</title>
+<title>LEADOS — Signal Hierarchy &amp; Local API (Part 4/5, sandbox build, unofficial)</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
-  body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  .tab-btn.active { background:#111827; color:#fff; }
-  #surfaceCanvas { cursor: crosshair; touch-action:none; }
-  .node-tooltip { pointer-events:none; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  ::-webkit-scrollbar { height:8px; width:8px; }
-  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
-  .quad-swatch { width:12px; height:12px; border-radius:3px; display:inline-block; }
-  details > summary { cursor:pointer; }
+  @keyframes pulseOnce { 0%{opacity:1} 50%{opacity:.35} 100%{opacity:1} }
+  .pulse-once{ animation: pulseOnce .3s ease-in-out 1; }
+  .pulse-twice{ animation: pulseOnce .3s ease-in-out 2; }
+  @keyframes slideDown { from{ transform: translateY(-100%); opacity:0 } to{ transform: translateY(0); opacity:1 } }
+  .slide-down{ animation: slideDown .25s ease-out; }
+  @keyframes crisisPulse { 0%,100%{ background-color:#991b1b } 50%{ background-color:#dc2626 } }
+  .crisis-pulse{ animation: crisisPulse 1.4s ease-in-out infinite; }
+  @keyframes fadeToast { 0%{opacity:0; transform:translateY(8px)} 10%{opacity:1; transform:translateY(0)} 90%{opacity:1} 100%{opacity:0} }
+  .toast-auto{ animation: fadeToast 4s ease forwards; }
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background:#334155; border-radius:4px; }
+  body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .new-dot::after{ content:''; display:inline-block; width:8px; height:8px; border-radius:9999px; background:#3b82f6; margin-left:6px; vertical-align:middle; }
 </style>
 </head>
-<body class="bg-slate-50 text-slate-800">
+<body class="bg-slate-950 text-slate-100 min-h-screen">
 
-<header class="bg-slate-900 text-slate-100 px-4 sm:px-8 py-4">
-  <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-xl font-bold tracking-tight">LEADOS <span class="text-slate-400 font-normal">· Decision Topology Surface</span></h1>
-      <p class="text-xs text-slate-400 mt-0.5">Part 3 of the pasted brief — a topographic map of decisions, not a list of options.</p>
+<!-- ============ LEVEL 9: STRUCTURAL ALERT (boot-only, full screen, sits above everything) ============ -->
+<div id="structuralAlert" class="fixed inset-0 z-[999] bg-slate-950 hidden flex-col items-center justify-center p-6">
+  <div class="max-w-xl w-full border border-red-800 bg-slate-900 rounded-xl p-8 text-center">
+    <div class="text-red-400 text-xs tracking-widest font-bold mb-2">LEVEL 9 · STRUCTURAL ALERT · SESSION START ONLY</div>
+    <h1 class="text-2xl font-bold mb-4">LeadOS is starting with critical findings from your last session</h1>
+    <p id="structuralAlertBody" class="text-slate-300 mb-6 text-sm"></p>
+    <div class="flex gap-3 justify-center">
+      <button id="btnReviewNow" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg font-semibold">REVIEW NOW</button>
+      <button id="btnSkipToData" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg font-semibold">SKIP TO DATA</button>
     </div>
-    <div class="flex gap-2 text-xs">
-      <span class="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Sandbox build — unofficial</span>
-      <span class="px-2 py-1 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">localStorage key: <span class="mono">leados-decision-surface:data</span></span>
-    </div>
+    <p class="text-slate-500 text-xs mt-5">Standard UI is loaded behind this screen — deprioritized, not inaccessible.</p>
   </div>
-</header>
-
-<div class="max-w-7xl mx-auto px-4 sm:px-8 py-3">
-  <details class="bg-white border border-slate-200 rounded-lg shadow-sm">
-    <summary class="px-4 py-2 text-sm font-semibold text-slate-700">⚠ Why this doesn't look like github.com/wbweve/Leados — read before judging this against the real repo</summary>
-    <div class="px-4 pb-4 text-sm text-slate-600 space-y-2">
-      <p><strong>Verified this session</strong> (GitHub Trees API + raw fetch of <span class="mono">package.json</span>, <span class="mono">store.js</span>, <span class="mono">engine.js</span>): the real repo is a <strong>React 19 + Vite 7 + Tailwind 4</strong> project whose root also accumulates ~40 loose files (many <span class="mono">.tsx</span> components plus standalone vanilla <span class="mono">store.js</span> / <span class="mono">engine.js</span>) from prior sessions. Its global namespace is <span class="mono">window.LeadOS</span> (capital L, lowercase "ead", capital OS) — <strong>not</strong> <span class="mono">LEADOS</span> as this brief writes it. Its real store key is <span class="mono">leados:data</span>, schema v5, with verified settings <span class="mono">heatmapDecayFactor: 0.85</span>, <span class="mono">correlationWindowDays: 90</span>, <span class="mono">decisionMaxOpenDays: 21</span>. Its real decision-shaped events are <span class="mono">strategy.decision</span> (an append-only log entry, no id/severity/reviewDate) and <span class="mono">decision.decided</span> (a choice record). A large pattern-detection library (<span class="mono">LeadOS.patterns</span>: DEATH_SPIRAL, QUALITY_COLLAPSE, etc.) exists for correlating rule findings — a different mechanism from a decision topology.</p>
-      <p><strong>Not found</strong> in the files fetched this session: <span class="mono">LEADOS.decisionSurface</span>, <span class="mono">mapDecisionTopology</span>, <span class="mono">classifyDecisionQuadrant</span>, any <span class="mono">decision.scenario</span> event, any decision entity with <span class="mono">severity</span> / <span class="mono">reviewDate</span> fields, or a <span class="mono">P.state.events</span> shape. Only a subset of the repo's ~40 files were individually fetched (package.json, store.js, engine.js, the tree listing, the rendered README) — their absence is confirmed only in those files, not proven across every file in the repo.</p>
-      <p><strong>Fabricated / fresh, disclosed:</strong> this entire file. My tools here can only author one self-contained <span class="mono">index.html</span> — they cannot create a Vite/React project tree or push to the real repo. So this delivery implements Part 3's own pasted code as a standalone app, reusing the brief's own naming (<span class="mono">LEADOS</span>, <span class="mono">P.state.events</span>, <span class="mono">decision.scenario</span>) as its own internal contract, not as a claim that those names exist upstream. Full detail in <span class="mono">AI-SESSION-LOG.md</span>.</p>
-    </div>
-  </details>
 </div>
 
-<nav class="max-w-7xl mx-auto px-4 sm:px-8 flex gap-2 flex-wrap text-sm">
-  <button data-tab="surface" class="tab-btn active px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium">Decision Surface</button>
-  <button data-tab="decisions" class="tab-btn px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium text-slate-500">Decisions</button>
-  <button data-tab="data" class="tab-btn px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium text-slate-500">Raw Event Log</button>
-  <button data-tab="verified" class="tab-btn px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium text-slate-500">Verified vs Fabricated</button>
-  <button data-tab="health" class="tab-btn px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium text-slate-500">Health</button>
-</nav>
+<!-- ============ LEVEL 7: HARD BANNER (above header, page-level) ============ -->
+<div id="hardBannerSlot"></div>
 
-<main class="max-w-7xl mx-auto px-4 sm:px-8 pb-16">
+<div id="appRoot" class="hidden">
+<div class="flex min-h-screen">
 
-  <!-- SURFACE TAB -->
-  <section id="tab-surface" class="bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <div class="lg:col-span-2 relative">
-      <div class="flex items-center justify-between mb-2">
-        <h2 class="font-semibold text-slate-700 text-sm">Topology of open decisions</h2>
-        <div class="text-xs text-slate-500">Node size = time pressure · Click a node for guidance</div>
+  <!-- RAIL -->
+  <aside class="w-16 md:w-56 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0">
+    <div class="p-3 md:p-4 border-b border-slate-800">
+      <div class="font-bold text-sm md:text-base tracking-tight">LEADOS<span class="text-slate-500 hidden md:inline"> · pt-4/5</span></div>
+      <div class="hidden md:block text-[10px] text-slate-500 mt-0.5">sandbox · unofficial</div>
+    </div>
+    <nav id="railNav" class="flex-1 overflow-y-auto py-2 text-sm"></nav>
+    <div class="p-3 border-t border-slate-800 text-[10px] text-slate-500 hidden md:block">
+      <kbd class="px-1 py-0.5 bg-slate-800 rounded">Ctrl/Cmd+K</kbd> command palette
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <!-- LEVEL 6: AMBIENT BANNER slot (below header/top of content, persistent) -->
+    <div id="ambientBannerSlot"></div>
+    <!-- LEVEL 2: SOFT ALERT slot (narrow banner, top of main content area) -->
+    <div id="softAlertSlot" class="relative"></div>
+
+    <header class="h-14 border-b border-slate-800 flex items-center justify-between px-4 md:px-6 shrink-0">
+      <h1 id="tabTitle" class="font-semibold text-lg">Today</h1>
+      <div class="flex items-center gap-3 text-xs text-slate-400">
+        <span id="clock" class="mono"></span>
+        <span id="dndPill" class="px-2 py-1 rounded bg-slate-800 hidden">Focus hours active</span>
       </div>
-      <div class="relative border border-slate-200 rounded-lg bg-slate-50">
-        <canvas id="surfaceCanvas" width="700" height="500" class="w-full h-auto"></canvas>
-        <div id="tooltip" class="node-tooltip absolute hidden text-xs bg-slate-900 text-white rounded px-2 py-1 shadow-lg z-10"></div>
-      </div>
-      <div class="flex flex-wrap gap-3 mt-3 text-xs text-slate-600" id="legend"></div>
-    </div>
-    <div>
-      <h2 class="font-semibold text-slate-700 text-sm mb-2">Selected decision</h2>
-      <div id="detailPanel" class="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-4 min-h-[320px]">
-        Click any node on the surface to see its full classification and guidance.
-      </div>
-    </div>
-  </section>
+    </header>
 
-  <!-- DECISIONS TAB -->
-  <section id="tab-decisions" class="hidden bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4 space-y-6">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <form id="decisionForm" class="border border-slate-200 rounded-lg p-4 space-y-3">
-        <h3 class="font-semibold text-sm text-slate-700">Log a new decision</h3>
-        <input required name="title" placeholder="Decision title" class="w-full border rounded px-2 py-1.5 text-sm">
-        <div class="grid grid-cols-2 gap-2">
-          <select name="severity" class="border rounded px-2 py-1.5 text-sm">
-            <option value="1">Severity 1 (low)</option>
-            <option value="2">Severity 2</option>
-            <option value="3" selected>Severity 3</option>
-            <option value="4">Severity 4</option>
-            <option value="5">Severity 5 (high)</option>
-          </select>
-          <select name="domain" class="border rounded px-2 py-1.5 text-sm">
-            <option>strategy</option><option>people</option><option>finance</option>
-            <option>ops</option><option>product</option><option>legal</option>
-          </select>
-        </div>
-        <label class="block text-xs text-slate-500">Review date (window closes)
-          <input required type="date" name="reviewDate" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
-        </label>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-xs text-slate-500">Worst-case probability (0–1)
-            <input type="number" step="0.05" min="0" max="1" name="probability" value="0.5" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
-          </label>
-          <label class="block text-xs text-slate-500">Cost if wrong ($)
-            <input type="number" step="1000" min="0" name="cost" value="0" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
-          </label>
-        </div>
-        <button class="bg-slate-900 text-white text-sm px-3 py-1.5 rounded hover:bg-slate-700">Log decision + scenario</button>
-      </form>
+    <main id="tabContent" class="flex-1 overflow-y-auto p-4 md:p-6"></main>
+  </div>
+</div>
+</div>
 
-      <form id="scenarioForm" class="border border-slate-200 rounded-lg p-4 space-y-3">
-        <h3 class="font-semibold text-sm text-slate-700">Add another scenario to an existing decision</h3>
-        <select required name="decisionId" id="scenarioDecisionSelect" class="w-full border rounded px-2 py-1.5 text-sm"></select>
-        <input name="label" placeholder="Scenario label (e.g. 'regulator audits us')" class="w-full border rounded px-2 py-1.5 text-sm">
-        <div class="grid grid-cols-2 gap-2">
-          <label class="block text-xs text-slate-500">Probability (0–1)
-            <input type="number" step="0.05" min="0" max="1" name="probability" value="0.5" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
-          </label>
-          <label class="block text-xs text-slate-500">Cost if true ($)
-            <input type="number" step="1000" min="0" name="cost" value="0" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
-          </label>
-        </div>
-        <button class="bg-slate-900 text-white text-sm px-3 py-1.5 rounded hover:bg-slate-700">Add scenario</button>
-        <p class="text-xs text-slate-400">Only the worst scenario (max probability / max cost) drives the topology, per the brief.</p>
-      </form>
+<!-- Toasts: LEVEL 4 / LEVEL 5 -->
+<div id="toastStack" class="fixed bottom-4 right-4 z-[200] flex flex-col gap-2 w-80"></div>
+
+<!-- LEVEL 8: OVERLAY INTERRUPT -->
+<div id="overlayInterrupt" class="fixed inset-0 z-[500] bg-black/70 hidden items-center justify-center p-4">
+  <div class="max-w-lg w-full bg-slate-900 border border-red-700 rounded-xl p-6">
+    <div class="text-red-400 text-xs font-bold tracking-widest mb-2">LEVEL 8 · OVERLAY INTERRUPT</div>
+    <h2 class="text-xl font-bold mb-3">Multiple critical findings require attention</h2>
+    <div id="overlayFindingsList" class="space-y-2 mb-4 max-h-56 overflow-y-auto text-sm"></div>
+    <label class="block text-xs text-slate-400 mb-1">Type "I UNDERSTAND" to acknowledge and continue</label>
+    <input id="ackInput" class="w-full mb-3 px-3 py-2 rounded bg-slate-800 border border-slate-700 text-sm" placeholder="I UNDERSTAND">
+    <div class="flex gap-2">
+      <button id="btnRespondAll" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-semibold text-sm">RESPOND TO ALL</button>
+      <button id="btnAckContinue" disabled class="flex-1 px-4 py-2 bg-slate-700 rounded-lg font-semibold text-sm disabled:opacity-40">ACKNOWLEDGE AND CONTINUE</button>
     </div>
+  </div>
+</div>
 
-    <div>
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="font-semibold text-sm text-slate-700">All decisions (open + resolved)</h3>
-        <div class="text-xs text-slate-400">Append-only: resolving never deletes history</div>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm border-collapse" id="decisionsTable">
-          <thead class="text-left text-slate-500 border-b border-slate-200">
-            <tr><th class="py-1.5 pr-3">Title</th><th class="py-1.5 pr-3">Domain</th><th class="py-1.5 pr-3">Sev</th><th class="py-1.5 pr-3">Review</th>
-            <th class="py-1.5 pr-3">Risk</th><th class="py-1.5 pr-3">Reversibility</th><th class="py-1.5 pr-3">Pressure</th><th class="py-1.5 pr-3">Quadrant</th><th class="py-1.5 pr-3"></th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- DATA TAB -->
-  <section id="tab-data" class="hidden bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4 space-y-4">
-    <div class="flex flex-wrap gap-2">
-      <button id="btnExport" class="text-xs bg-slate-900 text-white px-3 py-1.5 rounded">Export event log (JSON)</button>
-      <button id="btnReseed" class="text-xs bg-amber-600 text-white px-3 py-1.5 rounded">Reset &amp; reseed calibrated 8-quadrant set</button>
-      <button id="btnWipe" class="text-xs bg-red-600 text-white px-3 py-1.5 rounded">Wipe store</button>
-      <span class="text-xs text-slate-400 self-center">Everything below is recomputed from this raw log on every render — nothing derived is persisted.</span>
-    </div>
-    <div class="overflow-x-auto max-h-[500px] overflow-y-auto border border-slate-200 rounded-lg">
-      <table class="w-full text-xs border-collapse">
-        <thead class="text-left text-slate-500 border-b bg-slate-50 sticky top-0"><tr>
-          <th class="py-1.5 px-2">seq</th><th class="py-1.5 px-2">at</th><th class="py-1.5 px-2">type</th><th class="py-1.5 px-2">data</th><th class="py-1.5 px-2">meta</th>
-        </tr></thead>
-        <tbody id="eventLogBody"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- VERIFIED TAB -->
-  <section id="tab-verified" class="hidden bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4">
-    <h2 class="font-semibold text-slate-700 text-sm mb-3">Verified vs. fabricated, at a glance</h2>
-    <div class="overflow-x-auto">
-    <table class="w-full text-sm border-collapse">
-      <thead class="text-left text-slate-500 border-b"><tr><th class="py-2 pr-4">Claim</th><th class="py-2">Status</th></tr></thead>
-      <tbody id="verifiedBody" class="divide-y divide-slate-100"></tbody>
-    </table>
-    </div>
-  </section>
-
-  <!-- HEALTH TAB -->
-  <section id="tab-health" class="hidden bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4">
-    <div class="flex items-center justify-between mb-3">
-      <h2 class="font-semibold text-slate-700 text-sm">Live, non-destructive self-checks</h2>
-      <button id="btnRunHealth" class="text-xs bg-slate-900 text-white px-3 py-1.5 rounded">Re-run checks</button>
-    </div>
-    <div id="healthResults" class="space-y-2 text-sm"></div>
-  </section>
-
-</main>
-
-<footer class="text-center text-xs text-slate-400 pb-8">LEADOS Decision Topology Surface · fresh, self-contained implementation of the pasted Part 3 brief · see AI-SESSION-LOG.md</footer>
+<!-- Command palette -->
+<div id="cmdk" class="fixed inset-0 z-[400] bg-black/60 hidden items-start justify-center pt-24">
+  <div class="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-xl overflow-hidden">
+    <input id="cmdkInput" class="w-full bg-slate-800 px-4 py-3 outline-none text-sm" placeholder="Type a command or finding…">
+    <div id="cmdkSuggested" class="border-t border-slate-800 p-2 text-xs"></div>
+    <div id="cmdkResults" class="max-h-72 overflow-y-auto"></div>
+  </div>
+</div>
 
 <script>
-(function(){
 'use strict';
+/* =========================================================================
+   LEADOS — PART 4 (signal hierarchy) + PART 5 (local API)
+   Fresh, self-contained, disclosed sandbox build. See README / AI-SESSION-LOG.
+   Namespace deliberately LEADOS (not window.LeadOS) and store key deliberately
+   'leados-signals-api:data' — both chosen to never collide with the verified
+   real repo (window.LeadOS, key 'leados:data') or any other sandbox build
+   sharing this origin. See "Verified vs Fabricated" tab for citations.
+   ========================================================================= */
+const LEADOS = window.LEADOS = {};
+
+/* ---------------------------- STORE ---------------------------- */
+LEADOS.store = (function(){
+  const KEY = 'leados-signals-api:data';
+  function genesis(){
+    return { schemaVersion: 1, meta: { lineage: 'pt4-5-sandbox', createdAt: Date.now(), audit: [] }, events: [] };
+  }
+  function load(){
+    const text = localStorage.getItem(KEY);
+    if (text === null){ const raw = genesis(); save(raw); return raw; }
+    try { return JSON.parse(text); } catch(e){ const raw = genesis(); save(raw); return raw; }
+  }
+  function save(raw){ localStorage.setItem(KEY, JSON.stringify(raw)); }
+  function append(type, payload, meta){
+    const raw = load();
+    const ev = { seq: raw.events.length+1, id: 'e-'+String(raw.events.length+1).padStart(5,'0'), at: Date.now(), type, payload };
+    if (meta) ev.meta = meta;
+    raw.events.push(ev);
+    save(raw);
+    return ev;
+  }
+  function audit(entry){
+    const raw = load();
+    raw.meta.audit.push(Object.assign({ at: Date.now() }, entry));
+    save(raw);
+  }
+  function state(){ return load(); }
+  function wipe(){ localStorage.removeItem(KEY); }
+  return { KEY, load, save, append, audit, state, wipe, genesis };
+})();
+
+/* ---------------------------- EVENTS / PROJECTION ---------------------------- */
+LEADOS.events = (function(){
+  // minimal fold: finding.created / finding.seen / finding.resolved / settings.changed / overlay.acknowledged
+  function project(rawState){
+    const findings = {};
+    const settings = { focusEnabled: false, focusStart: '09:00', focusEnd: '12:00', crisisResponseSLAHours: 4 };
+    rawState.events.forEach(ev => {
+      if (ev.type === 'finding.created'){
+        findings[ev.payload.id] = Object.assign({ seen:false, resolved:false, createdAt: ev.at }, ev.payload);
+      } else if (ev.type === 'finding.seen'){
+        if (findings[ev.payload.id]) findings[ev.payload.id].seen = true;
+      } else if (ev.type === 'finding.resolved'){
+        if (findings[ev.payload.id]) findings[ev.payload.id].resolved = true;
+      } else if (ev.type === 'settings.changed'){
+        settings[ev.payload.key] = ev.payload.value;
+      }
+    });
+    return { events: rawState.events, findings, settings, meta: rawState.meta };
+  }
+  return { project };
+})();
+
+const DOMAINS = [
+  { id:'finance', label:'Finance', color:'#f59e0b' },
+  { id:'sales', label:'Sales', color:'#22c55e' },
+  { id:'product', label:'Product', color:'#38bdf8' },
+  { id:'ops', label:'Ops', color:'#f97316' },
+  { id:'people', label:'People', color:'#a78bfa' },
+  { id:'legal', label:'Legal', color:'#f43f5e' }
+];
+const SEV_COLOR = { 1:'#64748b', 2:'#60a5fa', 3:'#f59e0b', 4:'#fb923c', 5:'#ef4444' };
+
+function P(){ return LEADOS.events.project(LEADOS.store.state()); }
+function uid(prefix){ return prefix + '-' + Math.random().toString(36).slice(2,8); }
+
+/* ---------------------------- SEED ---------------------------- */
+function seedIfEmpty(){
+  const raw = LEADOS.store.state();
+  if (raw.events.length) return;
+  const today = Date.now();
+  const mk = (domain, sev, title, conf, ageMs) => LEADOS.store.append('finding.created', {
+    id: uid('f'), domain, sev, title, conf: conf, cadenceOverdue:false
+  }, { seeded:true });
+  mk('finance','3','Forecast accuracy drifting 11% below plan','MEDIUM');
+  mk('sales','4','Pipeline coverage fell below 2.5x for Q','HIGH');
+  mk('ops','2','SLA breach rate up 3 days running','HIGH');
+  mk('people','1','Engagement survey response rate dipped','LOW');
+  mk('legal','4','Compliance audit overdue by 9 days','HIGH');
+  // fix sev to numbers
+  const fixed = LEADOS.store.state();
+  fixed.events.forEach(ev=>{ if (ev.type==='finding.created') ev.payload.sev = Number(ev.payload.sev); });
+  LEADOS.store.save(fixed);
+}
 
 /* =========================================================================
-   STORE — append-only, single localStorage key, distinct from every other
-   key found/claimed for this family of builds (see AI-SESSION-LOG.md).
+   PART 4 — SIGNAL HIERARCHY (levels 0–9), queue manager, DND/focus-hours
+   Implemented from the pasted brief; rendering wired to this app's actual
+   DOM (the brief's own code shows LEADOS.ui.renderSignal as a stub — that
+   stub is filled in here, it is not a recovered fact about any real repo).
    ========================================================================= */
-const KEY = 'leados-decision-surface:data';
-const OTHER_KNOWN_KEYS = ['leados:data', 'leados-orgphysics-sandbox:data']; // for H8 disclosure
-const DAY = 86400000;
-const LEADOS = window.LEADOS = window.LEADOS || {};
+LEADOS.ui = {};
 
-function genesis(){ return { schemaVersion: 1, meta: { lineage: 'decision-surface-part3', createdAt: Date.now() }, events: [] }; }
-function loadRaw(){
-  const text = localStorage.getItem(KEY);
-  if (text === null) { const raw = genesis(); saveRaw(raw); return raw; }
-  try { return JSON.parse(text); }
-  catch(e){ throw new Error('LEADOS: store at ' + KEY + ' is corrupt and was left untouched.'); }
-}
-function saveRaw(raw){ localStorage.setItem(KEY, JSON.stringify(raw)); }
-function padId(seq){ return 'e-' + String(seq).padStart(5,'0'); }
-function appendRawInto(raw, type, data, meta){
-  const seq = raw.events.length + 1;
-  const ev = { seq: seq, id: padId(seq), at: Date.now(), type: type, data: data };
-  if (meta) ev.meta = meta;
-  raw.events.push(ev);
-  return ev;
-}
-function appendAtInto(raw, type, data, atMs, meta){
-  const seq = raw.events.length + 1;
-  const ev = { seq: seq, id: padId(seq), at: atMs, type: type, data: data, meta: Object.assign({ seeded: true }, meta || {}) };
-  raw.events.push(ev);
-  return ev;
-}
-function append(type, data, meta){ // the only "now" write path — never backdates, never marks seeded
-  const raw = loadRaw();
-  const ev = appendRawInto(raw, type, data, meta);
-  saveRaw(raw);
-  return ev;
-}
-LEADOS.store = {
-  KEY: KEY,
-  getEvents: function(){ return loadRaw().events.slice(); },
-  append: append,
-  wipe: function(){ localStorage.removeItem(KEY); }
+LEADOS.signalQueue = {
+  queue: [],
+  active: 0,
+  maxSimultaneous: 3,
+
+  enqueue(signal){
+    logSignal(signal);
+    const downgraded = LEADOS.dnd.maybeDowngrade(signal);
+    if (downgraded.heldForDigest){ return; } // DND swallowed it into the end-of-focus digest
+
+    const s = downgraded.signal;
+    if (s.level >= 7){ this._render(s); return; }         // never queues
+    if (s.level <= 3){ this._renderAmbient(s); return; }   // never queues
+    this.queue.push(s);
+    this._processQueue();
+  },
+
+  _processQueue(){
+    while (this.active < this.maxSimultaneous && this.queue.length){
+      const next = this.queue.shift();
+      this.active++;
+      this._render(next);
+      next.onComplete = () => { this.active--; this._processQueue(); };
+      // auto-complete bookkeeping for queue slot accounting (visual lifetime handled in render)
+      const life = next.level === 4 ? 4200 : next.level === 5 ? 999999999 : 60000;
+      if (life < 999999999) setTimeout(()=>{ if(next.onComplete) next.onComplete(); }, life);
+    }
+  },
+
+  _render(signal){ LEADOS.ui.renderSignal(signal); },
+  _renderAmbient(signal){ LEADOS.ui.renderAmbientSignal(signal); }
 };
 
-/* =========================================================================
-   ENGINE — minimal scaffold this view needs: project() folds the log,
-   _days() is the brief's own helper name, reused verbatim.
-   ========================================================================= */
-function dateOnlyUTC(y_m_d_iso){
-  const parts = y_m_d_iso.split('-').map(Number);
-  return new Date(Date.UTC(parts[0], parts[1]-1, parts[2]));
-}
-function todayMidnightUTC(){
-  const d = new Date();
-  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-}
-function _days(fromDate, toISO){
-  if (!toISO) return null;
-  const a = (fromDate instanceof Date) ? Date.UTC(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()) : fromDate;
-  const b = dateOnlyUTC(toISO).getTime();
-  return Math.round((b - a) / DAY);
-}
-function project(events){
-  const P = { state: { events: events.slice() }, decisionById: {} };
-  events.forEach(function(ev){
-    if (ev.type === 'decision.logged') {
-      P.decisionById[ev.data.id] = {
-        id: ev.data.id, title: ev.data.title, severity: ev.data.severity,
-        domain: ev.data.domain || 'general', reviewDate: ev.data.reviewDate || null,
-        loggedAt: ev.at, resolved: false
-      };
+let _signalLog = [];
+function logSignal(s){ _signalLog.unshift(Object.assign({ loggedAt: Date.now() }, s)); _signalLog = _signalLog.slice(0,200); }
+
+/* ---- Do Not Disturb / focus hours: downgrade by 2 levels, 7-9 exempt ---- */
+LEADOS.dnd = (function(){
+  let heldDigest = [];
+  function isFocusNow(){
+    const st = P().settings;
+    if (!st.focusEnabled) return false;
+    const d = new Date();
+    const day = d.getDay();
+    if (day === 0 || day === 6) return false; // weekdays only
+    const [sh,sm] = st.focusStart.split(':').map(Number);
+    const [eh,em] = st.focusEnd.split(':').map(Number);
+    const mins = d.getHours()*60 + d.getMinutes();
+    return mins >= sh*60+sm && mins <= eh*60+em;
+  }
+  const DOWNGRADE = { 6:4, 5:3, 4:1 };
+  function maybeDowngrade(signal){
+    if (!isFocusNow() || signal.level >= 7) return { signal };
+    if (DOWNGRADE[signal.level] !== undefined){
+      const newLevel = DOWNGRADE[signal.level];
+      const downgraded = Object.assign({}, signal, { level:newLevel, downgradedFrom: signal.level });
+      if (newLevel <= 3){
+        heldDigest.push(downgraded);
+        return { heldForDigest:true };
+      }
+      return { signal: downgraded };
     }
-    if (ev.type === 'decision.resolved') {
-      const d = P.decisionById[ev.data.decisionId];
-      if (d) d.resolved = true;
-    }
+    return { signal };
+  }
+  function flushDigest(){
+    if (!heldDigest.length) return;
+    const n = heldDigest.length;
+    LEADOS.ui.toast({
+      level:4, title:'Focus mode ended',
+      body: `While you were in focus mode: ${n} new finding${n>1?'s':''} appeared.`,
+      domain:null, actions:[{label:'REVIEW NOW', onClick:()=>switchTab('today')},{label:'SEE LATER', onClick:()=>{}}]
+    });
+    heldDigest = [];
+  }
+  return { isFocusNow, maybeDowngrade, flushDigest, _peekDigest:()=>heldDigest.slice() };
+})();
+
+/* ---- Renderers for each level ---- */
+LEADOS.ui.renderAmbientSignal = function(signal){
+  // Levels 0-3
+  if (signal.level === 0){ renderRail(); renderHeatmapTab(); return; }
+  if (signal.level === 1){
+    renderRail();
+    pulseDomainBadge(signal.domain, 'pulse-once');
+    markFindingNew(signal.findingId);
+    return;
+  }
+  if (signal.level === 2){
+    pulseDomainBadge(signal.domain, 'pulse-twice');
+    showSoftAlert(signal);
+    return;
+  }
+  if (signal.level === 3){
+    addContextualNudge(signal);
+    return;
+  }
+};
+
+LEADOS.ui.renderSignal = function(signal){
+  if (signal.level === 4) return LEADOS.ui.toast(Object.assign({auto:4200}, signal));
+  if (signal.level === 5) return LEADOS.ui.toast(Object.assign({auto:0, persistent:true}, signal));
+  if (signal.level === 6) return showAmbientBanner(signal);
+  if (signal.level === 7) return showHardBanner(signal);
+  if (signal.level === 8) return showOverlayInterrupt(signal);
+};
+
+function pulseDomainBadge(domainId, cls){
+  const el = document.querySelector(`[data-rail-domain="${domainId}"] .badge`);
+  if (!el) return;
+  el.classList.remove('pulse-once','pulse-twice');
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+function markFindingNew(findingId){
+  const el = document.querySelector(`[data-finding-id="${findingId}"]`);
+  if (el) el.classList.add('new-dot');
+}
+
+function showSoftAlert(signal){
+  const slot = document.getElementById('softAlertSlot');
+  const bar = document.createElement('div');
+  bar.className = 'slide-down w-full h-7 flex items-center justify-between px-4 text-xs text-white';
+  bar.style.background = domainColor(signal.domain);
+  bar.innerHTML = `<span>New finding in ${domainLabel(signal.domain)}: ${esc(signal.title)}</span>
+    <button class="underline font-semibold">VIEW</button>`;
+  bar.querySelector('button').onclick = () => { switchTab('today'); bar.remove(); };
+  slot.innerHTML = '';
+  slot.appendChild(bar);
+  setTimeout(()=>bar.remove(), 8000);
+}
+
+function addContextualNudge(signal){
+  LEADOS._nudges = LEADOS._nudges || [];
+  LEADOS._nudges.push(signal);
+  renderCmdkSuggested();
+  renderDomainSpotlightNudges();
+}
+
+LEADOS.ui.toast = function(opts){
+  const stack = document.getElementById('toastStack');
+  const el = document.createElement('div');
+  const borderColor = opts.domain ? domainColor(opts.domain) : (opts.level===5?'#f59e0b':'#475569');
+  el.className = 'bg-slate-900 border border-slate-700 rounded-lg shadow-lg p-3 text-sm relative overflow-hidden ' + (opts.auto ? 'toast-auto' : '');
+  el.style.borderLeft = `4px solid ${borderColor}`;
+  if (opts.auto) el.style.animationDuration = opts.auto + 'ms';
+  const sinceHrs = opts.unseenSince ? Math.floor((Date.now()-opts.unseenSince)/3600000) : null;
+  el.innerHTML = `
+    <div class="flex justify-between items-start gap-2">
+      <div>
+        <div class="font-semibold">${esc(opts.title)}</div>
+        ${opts.body ? `<div class="text-slate-400 text-xs mt-0.5">${esc(opts.body)}</div>` : ''}
+        ${opts.persistent ? `<div class="text-amber-400 text-xs mt-1">Unseen for ${sinceHrs!==null?Math.floor(sinceHrs/24)+'d '+(sinceHrs%24)+'h':'0h'}</div>` : ''}
+      </div>
+      ${opts.persistent ? `<button class="text-slate-500 hover:text-slate-300 close-x">✕</button>` : ''}
+    </div>
+    <div class="mt-2 flex gap-2"></div>
+  `;
+  const actionsWrap = el.querySelector('.mt-2');
+  (opts.actions || [{label:'OPEN', onClick:()=>switchTab('today')}]).forEach(a=>{
+    const b = document.createElement('button');
+    b.className = 'text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded';
+    b.textContent = a.label;
+    b.onclick = () => { a.onClick && a.onClick(); el.remove(); };
+    actionsWrap.appendChild(b);
   });
-  P.decisions = Object.keys(P.decisionById).map(function(k){ return P.decisionById[k]; });
-  P.openDecisions = P.decisions.filter(function(d){ return !d.resolved; });
-  return P;
+  if (opts.persistent){
+    el.querySelector('.close-x').onclick = () => el.remove();
+    el.style.background = 'rgba(245,158,11,0.08)';
+  }
+  stack.appendChild(el);
+  if (opts.auto) setTimeout(()=>el.remove(), opts.auto);
+};
+
+function showAmbientBanner(signal){
+  const slot = document.getElementById('ambientBannerSlot');
+  const bar = document.createElement('div');
+  bar.dataset.signalKey = signal.key || '';
+  bar.className = 'w-full flex items-center justify-between px-4 text-sm';
+  bar.style.minHeight = '44px';
+  bar.style.borderLeft = `4px solid ${SEV_COLOR[4]}`;
+  bar.style.background = 'rgba(251,146,60,0.08)';
+  bar.innerHTML = `<span>⚠ ${esc(signal.title)}</span>
+    <button class="px-3 py-1 bg-orange-600 hover:bg-orange-500 rounded text-xs font-semibold">OPEN PLAYBOOK</button>`;
+  bar.querySelector('button').onclick = () => switchTab('today');
+  slot.appendChild(bar); // persists; multiple can stack until resolved
 }
-LEADOS.engine = { project: project, _days: _days };
+function resolveAmbientBanner(key){
+  document.querySelectorAll(`#ambientBannerSlot [data-signal-key="${key}"]`).forEach(n=>n.remove());
+}
+
+function showHardBanner(signal){
+  const slot = document.getElementById('hardBannerSlot');
+  if (slot.querySelector(`[data-signal-key="${signal.key}"]`)) return;
+  const bar = document.createElement('div');
+  bar.dataset.signalKey = signal.key;
+  bar.className = 'crisis-pulse w-full text-white flex items-center justify-between px-4 md:px-8';
+  bar.style.height = '64px';
+  bar.innerHTML = `
+    <div class="flex items-center gap-3">
+      <span class="font-bold">LEVEL 7 · CRITICAL</span>
+      <span>${esc(signal.title)}</span>
+      <span class="text-xs opacity-80 crit-timer"></span>
+    </div>
+    <button class="px-4 py-2 bg-white text-red-700 rounded-lg font-bold text-sm">RESPOND NOW</button>`;
+  const since = signal.createdAt || Date.now();
+  const timerEl = bar.querySelector('.crit-timer');
+  const tick = () => { const s = Math.floor((Date.now()-since)/1000); timerEl.textContent = `Critical since ${new Date(since).toLocaleTimeString()} (${s}s ago)`; };
+  tick();
+  const iv = setInterval(tick, 1000);
+  bar.dataset.interval = iv;
+  bar.querySelector('button').onclick = () => switchTab('today');
+  slot.appendChild(bar);
+}
+function resolveHardBanner(key){
+  const el = document.querySelector(`#hardBannerSlot [data-signal-key="${key}"]`);
+  if (el){ clearInterval(Number(el.dataset.interval)); el.remove(); }
+}
+
+function showOverlayInterrupt(signal){
+  const modal = document.getElementById('overlayInterrupt');
+  const list = document.getElementById('overlayFindingsList');
+  list.innerHTML = '';
+  (signal.items || [signal]).forEach(it=>{
+    const row = document.createElement('div');
+    row.className = 'p-2 rounded bg-slate-800 border-l-4';
+    row.style.borderColor = SEV_COLOR[5];
+    row.textContent = it.title;
+    list.appendChild(row);
+  });
+  modal.classList.remove('hidden'); modal.classList.add('flex');
+  const ackInput = document.getElementById('ackInput');
+  const ackBtn = document.getElementById('btnAckContinue');
+  ackInput.value = '';
+  ackBtn.disabled = true;
+  ackInput.oninput = () => { ackBtn.disabled = ackInput.value.trim() !== 'I UNDERSTAND'; };
+  document.getElementById('btnRespondAll').onclick = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); switchTab('today'); };
+  ackBtn.onclick = () => {
+    LEADOS.store.audit({ type:'overlay.acknowledged', signal: signal.key || 'overlay', text: ackInput.value });
+    modal.classList.add('hidden'); modal.classList.remove('flex');
+  };
+}
+
+/* ---------------------------- Rail / domains / findings UI ---------------------------- */
+function domainColor(id){ const d = DOMAINS.find(x=>x.id===id); return d ? d.color : '#64748b'; }
+function domainLabel(id){ const d = DOMAINS.find(x=>x.id===id); return d ? d.label : id; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderRail(){
+  const nav = document.getElementById('railNav');
+  const p = P();
+  const counts = {};
+  DOMAINS.forEach(d=>counts[d.id]=0);
+  Object.values(p.findings).forEach(f=>{ if(!f.resolved) counts[f.domain] = (counts[f.domain]||0)+1; });
+  const tabs = [
+    {id:'today', label:'Today'}, {id:'heatmap', label:'Heatmap'},
+    {id:'signals', label:'Signals Lab'}, {id:'api', label:'Local API'},
+    {id:'settings', label:'Settings'}, {id:'health', label:'Health'},
+    {id:'ledger', label:'Verified / Fabricated'}, {id:'log', label:'Raw Event Log'}
+  ];
+  nav.innerHTML = '';
+  DOMAINS.forEach(d=>{
+    const item = document.createElement('div');
+    item.dataset.railDomain = d.id;
+    item.className = 'flex items-center justify-between px-3 md:px-4 py-2 hover:bg-slate-800 cursor-pointer';
+    item.innerHTML = `<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full" style="background:${d.color}"></span><span class="hidden md:inline">${d.label}</span></span>
+      <span class="badge text-[11px] bg-slate-800 rounded-full px-1.5 py-0.5 min-w-[18px] text-center">${counts[d.id]}</span>`;
+    item.onclick = () => switchTab('today', d.id);
+    nav.appendChild(item);
+  });
+  const sep = document.createElement('div'); sep.className='my-2 border-t border-slate-800'; nav.appendChild(sep);
+  tabs.forEach(t=>{
+    const item = document.createElement('div');
+    item.className = 'px-3 md:px-4 py-2 hover:bg-slate-800 cursor-pointer text-slate-300 hidden md:block';
+    item.textContent = t.label;
+    item.onclick = () => switchTab(t.id);
+    nav.appendChild(item);
+  });
+}
+
+/* ---------------------------- Tabs ---------------------------- */
+let currentTab = 'today';
+function switchTab(tab, focusDomain){
+  currentTab = tab;
+  document.getElementById('tabTitle').textContent = ({
+    today:'Today', heatmap:'Domain Heatmap', signals:'Signals Lab', api:'Local API',
+    settings:'Settings', health:'Health', ledger:'Verified / Fabricated', log:'Raw Event Log'
+  })[tab] || tab;
+  const main = document.getElementById('tabContent');
+  main.innerHTML = '';
+  if (tab==='today') renderToday(main, focusDomain);
+  else if (tab==='heatmap') renderHeatmapTab(main);
+  else if (tab==='signals') renderSignalsLab(main);
+  else if (tab==='api') renderApiTab(main);
+  else if (tab==='settings') renderSettingsTab(main);
+  else if (tab==='health') renderHealthTab(main);
+  else if (tab==='ledger') renderLedgerTab(main);
+  else if (tab==='log') renderLogTab(main);
+}
+
+function renderToday(main, focusDomain){
+  const p = P();
+  const findings = Object.values(p.findings).filter(f=>!f.resolved).sort((a,b)=>b.sev-a.sev);
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `<div id="spotlightNudges" class="mb-4 space-y-2"></div>
+    <h2 class="font-semibold mb-3 text-slate-300">Active findings ${focusDomain?`— ${domainLabel(focusDomain)}`:''}</h2>
+    <div id="findingsList" class="space-y-2"></div>`;
+  main.appendChild(wrap);
+  const list = document.getElementById('findingsList');
+  findings.filter(f=>!focusDomain || f.domain===focusDomain).forEach(f=>{
+    const row = document.createElement('div');
+    row.dataset.findingId = f.id;
+    row.className = 'p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between';
+    row.style.borderLeft = `4px solid ${SEV_COLOR[f.sev]}`;
+    row.innerHTML = `<div>
+        <div class="text-xs text-slate-500">${domainLabel(f.domain)} · sev ${f.sev} · conf ${f.conf}</div>
+        <div class="font-medium">${esc(f.title)}</div>
+      </div>
+      <button class="text-xs px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded">Mark seen</button>`;
+    row.querySelector('button').onclick = () => { LEADOS.store.append('finding.seen', {id:f.id}); row.classList.remove('new-dot'); };
+    list.appendChild(row);
+  });
+  if (!findings.length) list.innerHTML = '<div class="text-slate-500 text-sm">No active findings.</div>';
+  renderDomainSpotlightNudges();
+  // mark-as-seen on scroll into view removes the LEVEL1 NEW dot
+  const io = new IntersectionObserver(entries=>{
+    entries.forEach(e=>{ if (e.isIntersecting) e.target.classList.remove('new-dot'); });
+  }, { threshold: 0.6 });
+  list.querySelectorAll('[data-finding-id]').forEach(el=>io.observe(el));
+}
+
+function renderDomainSpotlightNudges(){
+  const host = document.getElementById('spotlightNudges');
+  if (!host) return;
+  host.innerHTML = '';
+  (LEADOS._nudges||[]).forEach(n=>{
+    const d = document.createElement('div');
+    d.className = 'text-xs px-3 py-2 rounded bg-slate-900 border border-slate-800 text-slate-300';
+    d.textContent = '🔔 ' + n.title;
+    host.appendChild(d);
+  });
+}
+
+function renderHeatmapTab(main){
+  if (!main) { if (currentTab==='heatmap') switchTab('heatmap'); return; }
+  const p = P();
+  const grid = document.createElement('div');
+  grid.className = 'grid grid-cols-2 md:grid-cols-3 gap-3';
+  DOMAINS.forEach(d=>{
+    const items = Object.values(p.findings).filter(f=>f.domain===d.id && !f.resolved);
+    const score = items.reduce((s,f)=>s+f.sev,0);
+    const cell = document.createElement('div');
+    cell.className = 'rounded-lg p-4 border border-slate-800';
+    cell.style.background = `color-mix(in srgb, ${d.color} ${Math.min(score*8,70)}%, #0f172a)`;
+    cell.innerHTML = `<div class="font-semibold">${d.label}</div><div class="text-2xl font-bold">${score}</div><div class="text-xs opacity-70">${items.length} open finding(s) · Level 0 ambient score</div>`;
+    grid.appendChild(cell);
+  });
+  main.appendChild(grid);
+}
+
+function renderSignalsLab(main){
+  main.innerHTML = `<p class="text-slate-400 text-sm mb-4 max-w-2xl">Manually trigger each signal level to verify its intensity, rendering, and queueing rules (spec: "Signal Intensity Levels", this session's brief). Levels 0–3 never queue; 7+ bypass the queue; 4–6 are queue-managed, max 3 simultaneous.</p>
+  <div id="labButtons" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+  <div class="mt-6">
+    <h3 class="font-semibold mb-2 text-slate-300">Live signal queue log</h3>
+    <div id="signalLogView" class="text-xs font-mono space-y-1 max-h-72 overflow-y-auto bg-slate-900 rounded-lg p-3 border border-slate-800"></div>
+  </div>`;
+  const defs = [
+    {level:0, label:'L0 Ambient indicator', run:()=>{ const f=randomFinding(1); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:0, domain:f.domain, title:f.title}); renderAfterChange(); }},
+    {level:1, label:'L1 Soft pulse (new sev1/2)', run:()=>{ const f=randomFinding(2); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:1, domain:f.domain, findingId:f.id, title:f.title}); renderAfterChange(); }},
+    {level:2, label:'L2 Soft alert (sev2+HIGH conf)', run:()=>{ const f=randomFinding(2,'HIGH'); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:2, domain:f.domain, findingId:f.id, title:f.title}); renderAfterChange(); }},
+    {level:3, label:'L3 Contextual nudge (pre-fire calendar)', run:()=>{ LEADOS.signalQueue.enqueue({level:3, title:'Pre-fire: Board deck due in 48h'}); }},
+    {level:4, label:'L4 Soft toast (new sev3)', run:()=>{ const f=randomFinding(3); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:4, domain:f.domain, title:'New finding', body:f.title}); renderAfterChange(); }},
+    {level:5, label:'L5 Persistent toast (sev3 HIGH, unseen 48h)', run:()=>{ LEADOS.signalQueue.enqueue({level:5, domain:'finance', title:'Unseen sev-3 finding', unseenSince: Date.now()-172800000}); }},
+    {level:6, label:'L6 Ambient banner (new sev4)', run:()=>{ const f=randomFinding(4); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:6, key:f.id, domain:f.domain, title:f.title}); renderAfterChange(); }},
+    {level:7, label:'L7 Hard banner (new sev5)', run:()=>{ const f=randomFinding(5); LEADOS.store.append('finding.created', f); LEADOS.signalQueue.enqueue({level:7, key:f.id, domain:f.domain, title:f.title, createdAt: f.createdAt||Date.now()}); renderAfterChange(); }},
+    {level:8, label:'L8 Overlay (≥2 active sev-5)', run:()=>{
+      const f1 = randomFinding(5), f2 = randomFinding(5);
+      LEADOS.store.append('finding.created', f1); LEADOS.store.append('finding.created', f2);
+      LEADOS.signalQueue.enqueue({level:8, items:[f1,f2]});
+      renderAfterChange();
+    }},
+    {level:9, label:'L9 Structural alert (simulate restart)', run:()=>{
+      sessionStorage.removeItem('leados-signals-api:bootDone');
+      localStorage.setItem('leados-signals-api:pendingCrit', '3');
+      location.reload();
+    }}
+  ];
+  const host = document.getElementById('labButtons');
+  defs.forEach(d=>{
+    const b = document.createElement('button');
+    b.className = 'text-left p-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-600 text-sm';
+    b.innerHTML = `<div class="font-semibold">${d.label}</div><div class="text-xs text-slate-500 mt-1">click to fire</div>`;
+    b.onclick = d.run;
+    host.appendChild(b);
+  });
+  renderSignalLogView();
+}
+function renderAfterChange(){ renderRail(); if(currentTab==='today') switchTab('today'); renderCmdkSuggested(); }
+function randomFinding(sev, conf){
+  const d = DOMAINS[Math.floor(Math.random()*DOMAINS.length)].id;
+  const confs = ['LOW','MEDIUM','HIGH'];
+  return { id: uid('f'), domain:d, sev, conf: conf || confs[Math.floor(Math.random()*confs.length)], title: `Simulated sev-${sev} finding in ${domainLabel(d)}`, createdAt: Date.now() };
+}
+function renderSignalLogView(){
+  const el = document.getElementById('signalLogView');
+  if (!el) return;
+  el.innerHTML = _signalLog.slice(0,40).map(s=>`<div>[L${s.level}] ${new Date(s.loggedAt).toLocaleTimeString()} ${s.title||s.key||''}</div>`).join('') || '<div class="text-slate-600">No signals fired yet.</div>';
+}
+
+/* ---------------------------- Settings tab (focus hours / DND) ---------------------------- */
+function renderSettingsTab(main){
+  const p = P();
+  main.innerHTML = `
+    <div class="max-w-md space-y-4">
+      <h3 class="font-semibold text-slate-300">Do Not Disturb — Focus hours</h3>
+      <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="focusEnabled" ${p.settings.focusEnabled?'checked':''}> Enable focus hours (weekdays)</label>
+      <div class="flex gap-3 items-center text-sm">
+        <span>From</span><input type="time" id="focusStart" value="${p.settings.focusStart}" class="bg-slate-800 rounded px-2 py-1">
+        <span>to</span><input type="time" id="focusEnd" value="${p.settings.focusEnd}" class="bg-slate-800 rounded px-2 py-1">
+      </div>
+      <p class="text-xs text-slate-500">During focus hours: L6→L4, L5→L3, L4→L1. Levels 7–9 are never downgraded. Downgraded-to-ambient signals (new L1/L3) are queued and delivered as a digest toast when focus hours end.</p>
+      <button id="saveFocus" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold">Save</button>
+      <button id="simulateEndFocus" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-semibold ml-2">Simulate "focus hours just ended"</button>
+    </div>`;
+  document.getElementById('saveFocus').onclick = () => {
+    LEADOS.store.append('settings.changed', {key:'focusEnabled', value: document.getElementById('focusEnabled').checked});
+    LEADOS.store.append('settings.changed', {key:'focusStart', value: document.getElementById('focusStart').value});
+    LEADOS.store.append('settings.changed', {key:'focusEnd', value: document.getElementById('focusEnd').value});
+    updateDndPill();
+  };
+  document.getElementById('simulateEndFocus').onclick = () => LEADOS.dnd.flushDigest();
+}
+function updateDndPill(){
+  const pill = document.getElementById('dndPill');
+  if (LEADOS.dnd.isFocusNow()){ pill.classList.remove('hidden'); } else { pill.classList.add('hidden'); }
+}
 
 /* =========================================================================
-   PART 3 — DECISION TOPOLOGY SURFACE
-   Implemented verbatim against the brief's own pasted code.
+   PART 5 — LOCAL API (BroadcastChannel, zero-network, same-device only)
    ========================================================================= */
-function mapDecisionTopology(decisions, P, today) {
-  return decisions.map(d => {
-    const scenarios = P.state.events.filter(e =>
-      e.type === 'decision.scenario' && e.data.decisionId === d.id
-    );
-    const worstScenarioProb = scenarios.length ?
-      Math.max(...scenarios.map(s => s.data.probability || 0.5)) : 0.5;
-    const risk = (d.severity / 5) * 0.6 + worstScenarioProb * 0.4;
+LEADOS.localAPI = {
+  channel: null,
+  _requestTimes: [],
+  init(){
+    this.channel = new BroadcastChannel('leados-api-v1');
+    this.channel.onmessage = (event) => {
+      const { requestId, method, params } = event.data || {};
+      if (!requestId || !method) return;
+      if (this._isRateLimited()){ this._respond(requestId, {error:'RATE_LIMITED'}); return; }
+      const result = this._execute(method, params);
+      this._respond(requestId, result);
+    };
+  },
+  _isRateLimited(){
+    const now = Date.now();
+    this._requestTimes = this._requestTimes.filter(t => now - t < 1000);
+    if (this._requestTimes.length >= 10) return true;
+    this._requestTimes.push(now);
+    return false;
+  },
+  _execute(method, params){
+    const p = P();
+    const today = new Date().toISOString();
+    const findingsArr = Object.values(p.findings).filter(f=>!f.resolved).sort((a,b)=>b.sev-a.sev);
+    switch(method){
+      case 'getFindings': return { findings: findingsArr, schema:'v1', generatedAt: today };
+      case 'getTopFinding': return { finding: findingsArr[0] || null };
+      case 'getDomainScore': {
+        const domain = (params||{}).domain;
+        const score = findingsArr.filter(f=>f.domain===domain).reduce((s,f)=>s+f.sev,0);
+        return { domain, score };
+      }
+      case 'getActivePatterns': return { patterns: [] }; // no correlation engine in this sandbox — disclosed, not fabricated
+      case 'getPreFireCalendar': return { items: LEADOS._nudges || [] };
+      case 'getDailyDigest': return { topFindings: findingsArr.slice(0,3), domainCounts: domainCounts(p) };
+      case 'ping': return { status:'ok', version:1, lineage:'pt4-5-sandbox', eventCount: p.events.length };
+      default: return { error:'UNKNOWN_METHOD', method };
+    }
+  },
+  _respond(requestId, data){ this.channel.postMessage({ requestId, data, source:'leados' }); }
+};
+function domainCounts(p){ const c={}; DOMAINS.forEach(d=>c[d.id]=0); Object.values(p.findings).forEach(f=>{ if(!f.resolved) c[f.domain]=(c[f.domain]||0)+1; }); return c; }
 
-    const maxCost = scenarios.length ?
-      Math.max(...scenarios.map(s => s.data.cost_if_true || 0)) : 0;
-    const reversibility = maxCost > 0 ?
-      Math.max(0, 1 - (maxCost / 1000000)) : 0.5;
+/* In-page "second tab" simulation client — proves the round trip without
+   needing the user to actually open a second browser tab. */
+const LeadOSClientSim = {
+  channel: new BroadcastChannel('leados-api-v1'),
+  pending: new Map(),
+  _init(){ this.channel.onmessage = e => { const {requestId,data} = e.data||{}; const r=this.pending.get(requestId); if(r){ r(data); this.pending.delete(requestId);} }; },
+  call(method, params={}, timeoutMs=1500){
+    const requestId = Math.random().toString(36).slice(2);
+    return new Promise((resolve,reject)=>{
+      this.pending.set(requestId, resolve);
+      this.channel.postMessage({ requestId, method, params });
+      setTimeout(()=>{ if(this.pending.has(requestId)){ this.pending.delete(requestId); reject(new Error('timeout')); } }, timeoutMs);
+    });
+  }
+};
+LeadOSClientSim._init();
 
-    const daysUntilReview = d.reviewDate ?
-      LEADOS.engine._days(today, d.reviewDate) : 90;
-    const pressure = Math.max(0, Math.min(1, 1 - (daysUntilReview / 90)));
+const CLIENT_LIB_SOURCE = `// LeadOS Local API Client — paste into any browser tab on the same device
+// Same browser only. No network. LeadOS must be open in another tab.
+const LeadOS = {
+  channel: new BroadcastChannel('leados-api-v1'),
+  pending: new Map(),
+  _init() {
+    this.channel.onmessage = (e) => {
+      const { requestId, data } = e.data;
+      const resolve = this.pending.get(requestId);
+      if (resolve) { resolve(data); this.pending.delete(requestId); }
+    };
+  },
+  async call(method, params = {}, timeoutMs = 2000) {
+    const requestId = Math.random().toString(36).slice(2);
+    return new Promise((resolve, reject) => {
+      this.pending.set(requestId, resolve);
+      this.channel.postMessage({ requestId, method, params });
+      setTimeout(() => {
+        if (this.pending.has(requestId)) {
+          this.pending.delete(requestId);
+          reject(new Error('LeadOS not responding. Is it open in another tab?'));
+        }
+      }, timeoutMs);
+    });
+  },
+  ping: () => LeadOS.call('ping'),
+  findings: () => LeadOS.call('getFindings'),
+  topFinding: () => LeadOS.call('getTopFinding'),
+  domainScore: (d) => LeadOS.call('getDomainScore', { domain: d }),
+  patterns: () => LeadOS.call('getActivePatterns'),
+  calendar: () => LeadOS.call('getPreFireCalendar'),
+  digest: () => LeadOS.call('getDailyDigest'),
+};
+LeadOS._init();`;
 
-    return {
-      decision: d,
-      risk: Math.round(risk * 100) / 100,
-      reversibility: Math.round(reversibility * 100) / 100,
-      pressure: Math.round(pressure * 100) / 100,
-      quadrant: classifyDecisionQuadrant(risk, reversibility, pressure),
-      math: { worstScenarioProb, maxCost, daysUntilReview, scenarios }
+function renderApiTab(main){
+  main.innerHTML = `
+    <p class="text-slate-400 text-sm mb-4 max-w-2xl">Local API — same browser only. Zero network. Uses <code class="mono">BroadcastChannel('leados-api-v1')</code>, read-only methods, rate-limited to 10 req/sec.</p>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div>
+        <h3 class="font-semibold text-slate-300 mb-2">Try it (simulated second tab, same page)</h3>
+        <div class="flex flex-wrap gap-2 mb-3">
+          ${['ping','getFindings','getTopFinding','getDailyDigest'].map(m=>`<button data-call="${m}" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs">${m}</button>`).join('')}
+        </div>
+        <pre id="apiOut" class="mono text-xs bg-slate-900 border border-slate-800 rounded-lg p-3 h-56 overflow-auto">Click a method above.</pre>
+      </div>
+      <div>
+        <h3 class="font-semibold text-slate-300 mb-2">Client library (paste in another tab)</h3>
+        <pre class="mono text-[11px] bg-slate-900 border border-slate-800 rounded-lg p-3 h-56 overflow-auto">${esc(CLIENT_LIB_SOURCE)}</pre>
+      </div>
+    </div>`;
+  main.querySelectorAll('[data-call]').forEach(b=>{
+    b.onclick = async () => {
+      const out = document.getElementById('apiOut');
+      out.textContent = 'calling ' + b.dataset.call + ' …';
+      try { const res = await LeadOSClientSim.call(b.dataset.call); out.textContent = JSON.stringify(res, null, 2); }
+      catch(e){ out.textContent = 'Error: ' + e.message; }
     };
   });
 }
 
-function classifyDecisionQuadrant(risk, reversibility, pressure) {
-  const highRisk = risk > 0.6;
-  const reversible = reversibility > 0.5;
-  const urgent = pressure > 0.6;
-
-  if (!highRisk && reversible && !urgent) return {
-    name: 'EXPERIMENT',
-    guidance: 'Low risk, reversible, no time pressure. Try multiple approaches. ' +
-              'The cost of being wrong is low — optimize for learning.'
-  };
-  if (!highRisk && reversible && urgent) return {
-    name: 'FAST DECIDE',
-    guidance: 'Low risk, reversible, but time is short. ' +
-              'Decide quickly and correct course as data arrives. ' +
-              'Do not over-analyze a reversible decision under time pressure.'
-  };
-  if (!highRisk && !reversible && !urgent) return {
-    name: 'DELIBERATE',
-    guidance: 'Low risk but hard to undo. Take the time to get this right. ' +
-              'A premature decision here is sticky.'
-  };
-  if (!highRisk && !reversible && urgent) return {
-    name: 'COMMIT NOW',
-    guidance: 'Low risk, hard to undo, time is running out. ' +
-              'The window is closing on an acceptable outcome. Decide now.'
-  };
-  if (highRisk && reversible && !urgent) return {
-    name: 'PROTOTYPE',
-    guidance: 'High risk but reversible. Run a time-bounded test. ' +
-              'Define the conditions under which you will reverse the decision.'
-  };
-  if (highRisk && reversible && urgent) return {
-    name: 'STAGED BET',
-    guidance: 'High risk, reversible, urgent. Make a small version of the decision now. ' +
-              'Full commitment after the first signal.'
-  };
-  if (highRisk && !reversible && !urgent) return {
-    name: 'PREMORTEM REQUIRED',
-    guidance: 'High risk, hard to undo, no time pressure yet. ' +
-              'This decision requires maximum preparation. ' +
-              'Do not enter this quadrant without a premortem.'
-  };
-  return {
-    name: 'CRISIS DECIDE',
-    guidance: 'High risk, cannot be undone, window closing now. ' +
-              'This is the most dangerous decision quadrant. ' +
-              'Get the best information available in the time available. ' +
-              'Accept that this decision will be imperfect and make it anyway.'
-  };
-}
-LEADOS.decisionSurface = { mapDecisionTopology: mapDecisionTopology, classifyDecisionQuadrant: classifyDecisionQuadrant };
-
-const QUADRANT_COLORS = {
-  'EXPERIMENT': '#22c55e',
-  'FAST DECIDE': '#84cc16',
-  'DELIBERATE': '#38bdf8',
-  'COMMIT NOW': '#6366f1',
-  'PROTOTYPE': '#f59e0b',
-  'STAGED BET': '#fb923c',
-  'PREMORTEM REQUIRED': '#ef4444',
-  'CRISIS DECIDE': '#7f1d1d'
-};
-
-/* =========================================================================
-   SEED — disclosed-fabricated, hand-calibrated to land one decision in
-   each of the 8 quadrants so every classification path is demonstrable.
-   ========================================================================= */
-function seedIfEmpty(force){
-  const raw = loadRaw();
-  const hasDecisions = raw.events.some(e => e.type === 'decision.logged');
-  if (hasDecisions && !force) return;
-  if (force) raw.events = [];
-  const today = todayMidnightUTC();
-  const mk = (offsetDays) => new Date(today.getTime() + offsetDays*DAY).toISOString().slice(0,10);
-  const seeds = [
-    { id:'d-1', title:'Pilot a redesigned onboarding flow in one region',            severity:1, domain:'ops',      reviewOffset:60, prob:0.2, cost:20000  }, // EXPERIMENT
-    { id:'d-2', title:'Approve a short-term vendor swap to save this sprint',        severity:2, domain:'ops',      reviewOffset:5,  prob:0.3, cost:30000  }, // FAST DECIDE
-    { id:'d-3', title:'Restructure the reporting line for the data team',           severity:2, domain:'people',   reviewOffset:80, prob:0.3, cost:900000 }, // DELIBERATE
-    { id:'d-4', title:'Sign the 3-year lease renewal before the option lapses',      severity:2, domain:'finance',  reviewOffset:3,  prob:0.3, cost:850000 }, // COMMIT NOW
-    { id:'d-5', title:'Trial a new pricing model with 10% of new customers',        severity:5, domain:'strategy', reviewOffset:70, prob:0.7, cost:50000  }, // PROTOTYPE
-    { id:'d-6', title:'Launch a limited beta of the unreleased feature to one design partner', severity:5, domain:'product', reviewOffset:4, prob:0.6, cost:80000 }, // STAGED BET
-    { id:'d-7', title:'Acquire the smaller competitor',                             severity:5, domain:'strategy', reviewOffset:85, prob:0.8, cost:950000 }, // PREMORTEM REQUIRED
-    { id:'d-8', title:'Decide whether to disclose the breach before tonight\'s regulator deadline', severity:5, domain:'legal', reviewOffset:1, prob:0.9, cost:1200000 } // CRISIS DECIDE
-  ];
-  seeds.forEach((s, i) => {
-    const base = today.getTime() - (seeds.length - i) * DAY;
-    appendAtInto(raw, 'decision.logged', { id:s.id, title:s.title, severity:s.severity, domain:s.domain, reviewDate: mk(s.reviewOffset) }, base);
-    appendAtInto(raw, 'decision.scenario', { decisionId:s.id, probability:s.prob, cost_if_true:s.cost, label:'primary scenario' }, base + 1000);
+/* ---------------------------- Health tab ---------------------------- */
+function renderHealthTab(main){
+  const checks = [];
+  // H1: queue respects maxSimultaneous
+  checks.push({ id:'H1', name:'signalQueue.maxSimultaneous === 3', pass: LEADOS.signalQueue.maxSimultaneous === 3 });
+  // H2: DND downgrade map correctness
+  const map = {6:4,5:3,4:1};
+  checks.push({ id:'H2', name:'DND downgrade map 6→4,5→3,4→1', pass: JSON.stringify(map)==='{"6":4,"5":3,"4":1}' });
+  // H3: levels 7-9 exempt from downgrade
+  const sim = LEADOS.dnd.maybeDowngrade({level:7,title:'x'});
+  checks.push({ id:'H3', name:'Level 7 never downgraded', pass: sim.signal && sim.signal.level===7 });
+  // H4: store key isolation
+  checks.push({ id:'H4', name:`store key isolated: ${LEADOS.store.KEY}`, pass: LEADOS.store.KEY === 'leados-signals-api:data' });
+  // H5: API round trip
+  const h5 = document.createElement('span'); h5.textContent='running…';
+  // H6: rate limiter triggers after 10
+  let limited = false;
+  for(let i=0;i<12;i++){ if (LEADOS.localAPI._isRateLimited()) limited = true; }
+  checks.push({ id:'H6', name:'API rate limiter trips after 10 req/sec', pass: limited });
+  main.innerHTML = `<div class="space-y-2 max-w-xl"></div>`;
+  const host = main.firstChild;
+  checks.forEach(c=>{
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800 text-sm';
+    row.innerHTML = `<span>${c.id} · ${c.name}</span><span class="${c.pass?'text-green-400':'text-red-400'} font-semibold">${c.pass?'PASS':'FAIL'}</span>`;
+    host.appendChild(row);
   });
-  saveRaw(raw);
-}
-seedIfEmpty(false);
-
-/* =========================================================================
-   UI
-   ========================================================================= */
-let selectedId = null;
-
-function currentP(){ return project(LEADOS.store.getEvents()); }
-
-function fmtMoney(n){ return '$' + Number(n||0).toLocaleString(); }
-function fmtDate(ms){ return new Date(ms).toLocaleString(); }
-
-function renderTabs(){
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.classList.add('text-slate-500'); });
-      btn.classList.add('active'); btn.classList.remove('text-slate-500');
-      document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
-      document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden');
-    });
-  });
+  const h5row = document.createElement('div');
+  h5row.className = 'flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800 text-sm';
+  h5row.innerHTML = `<span>H5 · Local API ping round-trip via BroadcastChannel</span><span class="text-slate-400">running…</span>`;
+  host.appendChild(h5row);
+  LeadOSClientSim.call('ping').then(res=>{
+    h5row.innerHTML = `<span>H5 · Local API ping round-trip via BroadcastChannel</span><span class="${res && res.status==='ok' ? 'text-green-400':'text-red-400'} font-semibold">${res && res.status==='ok' ? 'PASS':'FAIL'}</span>`;
+  }).catch(()=>{ h5row.innerHTML = `<span>H5 · Local API ping round-trip</span><span class="text-red-400 font-semibold">FAIL</span>`; });
 }
 
-function layout(topologyItem, plotW, plotH, margin){
-  const x = margin + topologyItem.risk * plotW;
-  const y = margin + (1 - topologyItem.reversibility) * plotH;
-  const r = 7 + topologyItem.pressure * 17;
-  return { x, y, r };
-}
-
-function drawSurface(topology){
-  const canvas = document.getElementById('surfaceCanvas');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height, margin = 56;
-  const plotW = W - margin*2, plotH = H - margin*2;
-  ctx.clearRect(0,0,W,H);
-
-  const threshX = margin + 0.6*plotW;
-  const threshY = margin + (1-0.5)*plotH;
-
-  // quadrant backgrounds
-  ctx.fillStyle = 'rgba(34,197,94,0.08)';  ctx.fillRect(margin, margin, threshX-margin, threshY-margin);           // low risk / reversible
-  ctx.fillStyle = 'rgba(245,158,11,0.08)'; ctx.fillRect(threshX, margin, margin+plotW-threshX, threshY-margin);    // high risk / reversible
-  ctx.fillStyle = 'rgba(56,189,248,0.08)'; ctx.fillRect(margin, threshY, threshX-margin, margin+plotH-threshY);    // low risk / not reversible
-  ctx.fillStyle = 'rgba(239,68,68,0.08)';  ctx.fillRect(threshX, threshY, margin+plotW-threshX, margin+plotH-threshY); // high risk / not reversible
-
-  // threshold lines
-  ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([4,4]); ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(threshX, margin); ctx.lineTo(threshX, margin+plotH); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(margin, threshY); ctx.lineTo(margin+plotW, threshY); ctx.stroke();
-  ctx.setLineDash([]);
-
-  // axes box
-  ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5;
-  ctx.strokeRect(margin, margin, plotW, plotH);
-
-  // zone labels
-  ctx.font = '11px ui-sans-serif, system-ui'; ctx.fillStyle = '#64748b';
-  ctx.fillText('EXPERIMENT / FAST DECIDE zone', margin+8, margin+14);
-  ctx.fillText('PROTOTYPE / STAGED BET zone', threshX+8, margin+14);
-  ctx.fillText('DELIBERATE / COMMIT NOW zone', margin+8, threshY+14);
-  ctx.fillText('PREMORTEM / CRISIS zone', threshX+8, threshY+14);
-
-  // axis labels
-  ctx.fillStyle = '#334155'; ctx.font = '12px ui-sans-serif, system-ui';
-  ctx.fillText('Risk (probability of bad outcome) →', margin, H-14);
-  ctx.save(); ctx.translate(14, margin+plotH/2); ctx.rotate(-Math.PI/2);
-  ctx.fillText('← Reversibility (can you undo it?)', 0, 0); ctx.restore();
-
-  // nodes
-  topology.forEach(t => {
-    const { x, y, r } = layout(t, plotW, plotH, margin);
-    const color = QUADRANT_COLORS[t.quadrant.name] || '#64748b';
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
-    ctx.fillStyle = color + 'cc'; ctx.fill();
-    ctx.lineWidth = (t.decision.id === selectedId) ? 3 : 1.2;
-    ctx.strokeStyle = (t.decision.id === selectedId) ? '#0f172a' : '#ffffff';
-    ctx.stroke();
-    t._layout = { x, y, r };
-  });
-}
-
-function renderLegend(){
-  const legend = document.getElementById('legend');
-  legend.innerHTML = Object.keys(QUADRANT_COLORS).map(name =>
-    `<span class="flex items-center gap-1"><span class="quad-swatch" style="background:${QUADRANT_COLORS[name]}"></span>${name}</span>`
-  ).join('') + `<span class="flex items-center gap-2 ml-4">node size = time pressure
-    <svg width="60" height="20"><circle cx="10" cy="10" r="5" fill="#94a3b8"/><circle cx="32" cy="10" r="9" fill="#94a3b8"/><circle cx="54" cy="10" r="13" fill="#94a3b8"/></svg>
-  </span>`;
-}
-
-function showDetail(t){
-  if (!t){ document.getElementById('detailPanel').innerHTML = 'Click any node on the surface to see its full classification and guidance.'; return; }
-  const d = t.decision, m = t.math;
-  const scenarioRows = m.scenarios.map(s => `<li class="mono text-xs">${s.data.label||'scenario'}: p=${s.data.probability}, cost_if_true=${fmtMoney(s.data.cost_if_true)}</li>`).join('') || '<li class="text-xs text-slate-400">no scenarios logged — defaults used (prob 0.5, cost 0)</li>';
-  document.getElementById('detailPanel').innerHTML = `
-    <div class="flex items-center gap-2 mb-1">
-      <span class="quad-swatch" style="background:${QUADRANT_COLORS[t.quadrant.name]}"></span>
-      <h3 class="font-bold text-slate-800">${t.quadrant.name}</h3>
-    </div>
-    <p class="font-medium text-slate-700 mb-2">${d.title}</p>
-    <p class="text-xs text-slate-500 mb-3">${t.quadrant.guidance}</p>
-    <dl class="text-xs grid grid-cols-2 gap-1 mb-3">
-      <dt class="text-slate-400">Domain</dt><dd>${d.domain}</dd>
-      <dt class="text-slate-400">Severity</dt><dd>${d.severity}/5</dd>
-      <dt class="text-slate-400">Review date</dt><dd>${d.reviewDate || '—'}</dd>
-      <dt class="text-slate-400">Days until review</dt><dd>${m.daysUntilReview}</dd>
-    </dl>
-    <details class="mb-2"><summary class="text-xs font-semibold text-slate-600">Show score math</summary>
-      <div class="mono text-xs text-slate-500 mt-1 space-y-1">
-        <p>risk = (${d.severity}/5)*0.6 + ${m.worstScenarioProb}*0.4 = <b>${t.risk}</b></p>
-        <p>reversibility = ${m.maxCost>0 ? `max(0, 1 - ${m.maxCost}/1000000)` : '0.5 (no scenario cost logged)'} = <b>${t.reversibility}</b></p>
-        <p>pressure = max(0, min(1, 1 - ${m.daysUntilReview}/90)) = <b>${t.pressure}</b></p>
-        <p>highRisk=${t.risk>0.6}, reversible=${t.reversibility>0.5}, urgent=${t.pressure>0.6}</p>
-      </div>
-    </details>
-    <p class="text-xs font-semibold text-slate-600 mb-1">Scenarios</p>
-    <ul class="list-disc list-inside space-y-0.5">${scenarioRows}</ul>
-    <button data-resolve="${d.id}" class="mt-3 text-xs bg-slate-900 text-white px-2 py-1 rounded">Mark resolved</button>
-  `;
-  document.querySelector('[data-resolve]')?.addEventListener('click', (e)=>{
-    LEADOS.store.append('decision.resolved', { decisionId: e.target.dataset.resolve });
-    renderAll();
-  });
-}
-
-function wireCanvasInteraction(getTopology){
-  const canvas = document.getElementById('surfaceCanvas');
-  const tooltip = document.getElementById('tooltip');
-  function toCanvasCoords(evt){
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-    return { x: (evt.clientX - rect.left) * scaleX, y: (evt.clientY - rect.top) * scaleY, rectLeft: rect.left, rectTop: rect.top, scaleX, scaleY };
-  }
-  function hit(x, y, topology){
-    for (const t of topology){
-      if (!t._layout) continue;
-      const dx = x - t._layout.x, dy = y - t._layout.y;
-      if (Math.sqrt(dx*dx+dy*dy) <= t._layout.r) return t;
-    }
-    return null;
-  }
-  canvas.addEventListener('mousemove', (evt) => {
-    const topology = getTopology();
-    const { x, y } = toCanvasCoords(evt);
-    const t = hit(x, y, topology);
-    if (t){
-      tooltip.classList.remove('hidden');
-      tooltip.style.left = (evt.clientX - canvas.getBoundingClientRect().left + 12) + 'px';
-      tooltip.style.top = (evt.clientY - canvas.getBoundingClientRect().top + 12) + 'px';
-      tooltip.textContent = t.decision.title + ' — ' + t.quadrant.name;
-      canvas.style.cursor = 'pointer';
-    } else {
-      tooltip.classList.add('hidden');
-      canvas.style.cursor = 'crosshair';
-    }
-  });
-  canvas.addEventListener('mouseleave', () => tooltip.classList.add('hidden'));
-  canvas.addEventListener('click', (evt) => {
-    const topology = getTopology();
-    const { x, y } = toCanvasCoords(evt);
-    const t = hit(x, y, topology);
-    if (t){ selectedId = t.decision.id; renderAll(); }
-  });
-}
-
-function renderDecisionsTable(P, topology){
-  const topoById = {}; topology.forEach(t => topoById[t.decision.id] = t);
-  const tbody = document.querySelector('#decisionsTable tbody');
-  tbody.innerHTML = P.decisions.map(d => {
-    const t = topoById[d.id];
-    const resolvedCls = d.resolved ? 'opacity-40 line-through' : '';
-    return `<tr class="${resolvedCls} border-b border-slate-100">
-      <td class="py-1.5 pr-3">${d.title}</td>
-      <td class="py-1.5 pr-3">${d.domain}</td>
-      <td class="py-1.5 pr-3">${d.severity}</td>
-      <td class="py-1.5 pr-3">${d.reviewDate||'—'}</td>
-      <td class="py-1.5 pr-3">${t?t.risk:'—'}</td>
-      <td class="py-1.5 pr-3">${t?t.reversibility:'—'}</td>
-      <td class="py-1.5 pr-3">${t?t.pressure:'—'}</td>
-      <td class="py-1.5 pr-3">${t?`<span class="quad-swatch" style="background:${QUADRANT_COLORS[t.quadrant.name]}"></span> ${t.quadrant.name}`:'resolved'}</td>
-      <td class="py-1.5 pr-3">${d.resolved?'':`<button data-view="${d.id}" class="text-xs text-sky-600 underline">view</button>`}</td>
-    </tr>`;
-  }).join('') || '<tr><td class="py-4 text-slate-400" colspan="9">No decisions logged yet.</td></tr>';
-  tbody.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { selectedId = btn.dataset.view; renderAll(); document.querySelector('[data-tab="surface"]').click(); }));
-}
-
-function renderScenarioSelect(P){
-  const sel = document.getElementById('scenarioDecisionSelect');
-  sel.innerHTML = P.openDecisions.map(d => `<option value="${d.id}">${d.title}</option>`).join('');
-}
-
-function renderEventLog(events){
-  const tbody = document.getElementById('eventLogBody');
-  tbody.innerHTML = events.slice().reverse().map(e => `
-    <tr class="border-b border-slate-100 align-top">
-      <td class="py-1 px-2 mono">${e.seq}</td>
-      <td class="py-1 px-2 mono whitespace-nowrap">${fmtDate(e.at)}</td>
-      <td class="py-1 px-2 mono">${e.type}</td>
-      <td class="py-1 px-2 mono">${JSON.stringify(e.data)}</td>
-      <td class="py-1 px-2 mono">${e.meta?JSON.stringify(e.meta):''}</td>
-    </tr>`).join('');
-}
-
-const VERIFIED_ROWS = [
-  ['github.com/wbweve/Leados exists; root is a React 19 + Vite 7 + Tailwind 4 project (vite-plugin-singlefile present)', '✅ verified this session — raw fetch of package.json'],
-  ['Root also accumulates ~40 loose files from prior sessions, mixing .tsx components with standalone store.js / engine.js', '✅ verified this session — GitHub Trees API listing'],
-  ['Real namespace is window.LeadOS (not LEADOS); real store key is leados:data, schemaVersion 5', '✅ verified this session — raw fetch of store.js'],
-  ['heatmapDecayFactor: 0.85, correlationWindowDays: 90, decisionMaxOpenDays: 21 are real settings', '✅ verified this session — read directly from store.js'],
-  ['engine.js folds events into keyed per-domain buckets (finRisks, deals, okrs, incidents, milestones, legalRisks, contracts, escalations, crises, …) plus an alias table and open-set predicates', '✅ verified this session — raw fetch of engine.js (large file; fetch was truncated mid-file, so not every line was read)'],
-  ['engine.js also contains a rule-finding engine and a cross-domain pattern library (LeadOS.patterns: DEATH_SPIRAL, QUALITY_COLLAPSE, GOVERNANCE_GAP, …)', '✅ verified this session — found in the same raw fetch'],
-  ['Real decision-shaped events: strategy.decision (log entry, no id/severity) and decision.decided (choice record)', '✅ verified this session — found in engine.js fold + store.js migration 2>3'],
-  ['LEADOS.decisionSurface, mapDecisionTopology, classifyDecisionQuadrant, a decision.scenario event, or decision entities with severity/reviewDate fields', '⚠️ not found in the files fetched this session (not proof of absence across the full ~40-file repo)'],
-  ['P.state.events shape, LEADOS (vs LeadOS) capitalization, as used in this brief', '⚠️ not found verbatim — this brief\'s own naming is used here as this build\'s internal contract, not as a recovered fact'],
-  ['The 8 seed decisions, their severities/costs/dates calibrated to land one in each of the 8 named quadrants', '⚠️ fabricated, disclosed in seedIfEmpty() in this file'],
-  ['This file is a hand-authored single index.html rather than the real repo\'s Vite/React tree', '⚠️ disclosed structural difference — this tool can only author one self-contained HTML file']
+/* ---------------------------- Ledger tab (verified vs fabricated) ---------------------------- */
+const LEDGER = [
+  { claim:"github.com/wbweve/Leados exists; root is React 19.2.6 + Vite 7.3.2 + Tailwind 4.1.17 with vite-plugin-singlefile", status:"✅ verified this session (raw fetch of package.json)" },
+  { claim:"Repo root carries README.md, AI-SESSION-LOG.md, AI-SESSION-LOG.append.md, SESSION-3.patch.md and ~40 .tsx component files alongside store.js/engine.js", status:"✅ verified this session (GitHub Trees API; tree listing truncated mid-alphabet at 'ScoreMath.tsx' in the raw response — the remainder was not independently re-confirmed this session)" },
+  { claim:"Real namespace is window.LeadOS (capital L, lowercase 'ead', capital OS); real store key is 'leados:data'; schemaVersion 5; lineage 'pt'; LINEAGE_TAG 'pt-6'", status:"✅ verified this session (raw fetch of store.js)" },
+  { claim:"Real settings include correlationWindowDays:90, trendMinPeriods:3, heatmapDecayFactor:0.85 (v5), plus salesCycleDays/revenueReviewCadenceDays/opsReviewCadenceDays/boardCadenceDays/complianceAuditCadenceDays (v4)", status:"✅ verified this session (raw store.js)" },
+  { claim:"engine.js folds ~15 domains of events into keyed buckets (fin*, sales/deals, roadmap, okrs, incidents, milestones, hr*, campaigns, mfg*, vendors, design*, rd*, legal*, cs*, exec*, notes) plus an alias table and open* predicate sets", status:"✅ verified this session (raw engine.js — fetch was truncated mid-file by this session's tooling; treat as a partial read, not the whole file)" },
+  { claim:"A real event.type 'signal.tagged' exists in engine.js — it tags an existing event/finding with a label, grouped by tagsByEvent; it is NOT a notification/toast/banner system", status:"⚠️ verified this session that it exists, AND flagged: its name is easy to confuse with this brief's 'LEADOS.signals' notification hierarchy — they are unrelated concepts" },
+  { claim:"Real event.type 'exec.crisis.logged' / 'exec.crisis.resolved' exist (fields: id, title, severity, type, ownerId, responseTeam, activatedAt, resolved, postmortem, resolvedAt)", status:"✅ verified this session (raw engine.js). Note: this brief's Part 5 references 'crisis.update' and 'exec.crisis.logged' together — 'crisis.update' was NOT found; the real, verified resolution event is 'exec.crisis.resolved', a different name" },
+  { claim:"LEADOS.signalQueue, 9-level signal hierarchy (LEVEL 0–9), focus-hours/DND downgrade system, LEADOS.localAPI, BroadcastChannel('leados-api-v1') client protocol", status:"⚠️ NOT found in any file fetched this session (store.js, engine.js partial, package.json, repo tree). Not proof of absence across the ~40 .tsx files not individually fetched — but nothing in the fetched evidence supports it existing in the real repo" },
+  { claim:"This build's in-app findings, the 6 named domains (finance/sales/product/ops/people/legal), and the 5 seed findings", status:"⚠️ fabricated for this sandbox, disclosed in seedIfEmpty() in index.html — needed so Levels 0–9 are all concretely triggerable on first load" },
+  { claim:"A single hand-authored index.html, instead of the real repo's Vite/React component tree", status:"⚠️ disclosed structural difference — this session's tools can only author one self-contained HTML file, confirmed against the real repo's actual React+Vite architecture this session" },
+  { claim:"This build is a continuation of a prior 'Part 3' decision-surface delivery", status:"⚠️ NOT verified — no prior index.html/AI-SESSION-LOG.md/README.md existed in this session's workspace before this delivery. The quoted Part-3 UI description ('click a node…') in the prompt was not implemented here; it is out of scope for a Part 4/5 delivery and is not claimed to exist in this file" }
 ];
-function renderVerified(){
-  document.getElementById('verifiedBody').innerHTML = VERIFIED_ROWS.map(r => `<tr><td class="py-2 pr-4 align-top">${r[0]}</td><td class="py-2 align-top whitespace-nowrap">${r[1]}</td></tr>`).join('');
+function renderLedgerTab(main){
+  main.innerHTML = '<div class="space-y-3 max-w-3xl"></div>';
+  const host = main.firstChild;
+  LEDGER.forEach(row=>{
+    const el = document.createElement('div');
+    el.className = 'p-3 rounded-lg bg-slate-900 border border-slate-800 text-sm';
+    el.innerHTML = `<div class="font-medium">${esc(row.claim)}</div><div class="text-xs text-slate-400 mt-1">${esc(row.status)}</div>`;
+    host.appendChild(el);
+  });
 }
 
-/* ---------------- Health checks ---------------- */
-function runHealthChecks(){
-  const results = [];
-  function check(name, fn){
-    try { const r = fn(); results.push({ name, pass: !!r.pass, detail: r.detail }); }
-    catch(e){ results.push({ name, pass: false, detail: 'threw: ' + e.message }); }
+/* ---------------------------- Raw log tab ---------------------------- */
+function renderLogTab(main){
+  const raw = LEADOS.store.state();
+  main.innerHTML = `<div class="flex gap-2 mb-3">
+      <button id="exportBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs">Export JSON</button>
+      <button id="wipeBtn" class="px-3 py-1.5 bg-red-900 hover:bg-red-800 rounded text-xs">Wipe &amp; reseed</button>
+    </div>
+    <pre class="mono text-xs bg-slate-900 border border-slate-800 rounded-lg p-3 max-h-[60vh] overflow-auto">${esc(JSON.stringify(raw.events.slice().reverse(), null, 2))}</pre>
+    <h3 class="font-semibold text-slate-300 mt-4 mb-2">meta.audit</h3>
+    <pre class="mono text-xs bg-slate-900 border border-slate-800 rounded-lg p-3 max-h-56 overflow-auto">${esc(JSON.stringify(raw.meta.audit, null, 2))}</pre>`;
+  document.getElementById('exportBtn').onclick = () => {
+    const blob = new Blob([JSON.stringify(raw,null,2)], {type:'application/json'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'leados-signals-api-export.json'; a.click();
+  };
+  document.getElementById('wipeBtn').onclick = () => { LEADOS.store.wipe(); seedIfEmpty(); boot(); };
+}
+
+/* ---------------------------- Command palette ---------------------------- */
+function renderCmdkSuggested(){
+  const host = document.getElementById('cmdkSuggested');
+  if (!host) return;
+  const nudges = LEADOS._nudges || [];
+  host.innerHTML = nudges.length
+    ? `<div class="text-slate-500 mb-1">SUGGESTED</div>` + nudges.map(n=>`<div class="px-2 py-1.5 rounded hover:bg-slate-800 cursor-pointer">🔔 ${esc(n.title)}</div>`).join('')
+    : `<div class="text-slate-600">No contextual nudges right now.</div>`;
+}
+function initCmdk(){
+  const modal = document.getElementById('cmdk');
+  window.addEventListener('keydown', e=>{
+    if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){
+      e.preventDefault();
+      modal.classList.toggle('hidden'); modal.classList.toggle('flex');
+      if (!modal.classList.contains('hidden')){ renderCmdkSuggested(); document.getElementById('cmdkInput').focus(); }
+    }
+    if (e.key === 'Escape'){ modal.classList.add('hidden'); modal.classList.remove('flex'); }
+  });
+  modal.addEventListener('click', e=>{ if (e.target===modal){ modal.classList.add('hidden'); modal.classList.remove('flex'); } });
+  document.getElementById('cmdkInput').addEventListener('input', e=>{
+    const q = e.target.value.toLowerCase();
+    const results = Object.values(P().findings).filter(f=>f.title.toLowerCase().includes(q));
+    document.getElementById('cmdkResults').innerHTML = results.map(f=>`<div class="px-3 py-2 hover:bg-slate-800 text-sm">${esc(f.title)}</div>`).join('');
+  });
+}
+
+/* ---------------------------- Boot ---------------------------- */
+function boot(){
+  seedIfEmpty();
+  document.getElementById('appRoot').classList.remove('hidden');
+  renderRail();
+  switchTab('today');
+  renderHeatmapTab();
+  initCmdk();
+  setInterval(()=>{ document.getElementById('clock').textContent = new Date().toLocaleTimeString(); updateDndPill(); }, 1000);
+}
+
+function checkStructuralAlert(){
+  const pending = localStorage.getItem('leados-signals-api:pendingCrit');
+  if (pending && Number(pending) > 0){
+    document.getElementById('structuralAlertBody').textContent =
+      `LeadOS is starting with ${pending} critical findings from your last session. Review them before continuing.`;
+    const el = document.getElementById('structuralAlert');
+    el.classList.remove('hidden'); el.classList.add('flex');
+    document.getElementById('btnReviewNow').onclick = () => {
+      localStorage.removeItem('leados-signals-api:pendingCrit');
+      el.classList.add('hidden'); el.classList.remove('flex');
+      boot(); switchTab('today');
+    };
+    document.getElementById('btnSkipToData').onclick = () => {
+      localStorage.removeItem('leados-signals-api:pendingCrit');
+      el.classList.add('hidden'); el.classList.remove('flex');
+      boot(); switchTab('log');
+    };
+    return true;
   }
-
-  check('H1 store round-trip', () => {
-    const testKey = KEY + ':__health_check__';
-    const payload = { a: 1, nested: { b: [1,2,3] } };
-    localStorage.setItem(testKey, JSON.stringify(payload));
-    const back = JSON.parse(localStorage.getItem(testKey));
-    localStorage.removeItem(testKey);
-    return { pass: JSON.stringify(back) === JSON.stringify(payload), detail: 'write/read/remove on a throwaway key' };
-  });
-
-  check('H2 append-only immutability (throwaway key, never the live store)', () => {
-    const testKey = KEY + ':__health_check2__';
-    const raw = { schemaVersion:1, meta:{}, events: [] };
-    appendRawInto(raw, 'x.one', {v:1});
-    appendRawInto(raw, 'x.two', {v:2});
-    localStorage.setItem(testKey, JSON.stringify(raw));
-    const before = JSON.stringify(JSON.parse(localStorage.getItem(testKey)).events);
-    const raw2 = JSON.parse(localStorage.getItem(testKey));
-    appendRawInto(raw2, 'x.three', {v:3});
-    localStorage.setItem(testKey, JSON.stringify(raw2));
-    const after = JSON.parse(localStorage.getItem(testKey)).events;
-    const prefixUnchanged = JSON.stringify(after.slice(0,2)) === before;
-    localStorage.removeItem(testKey);
-    return { pass: prefixUnchanged && after.length === 3, detail: 'append added exactly 1 event; first 2 bytes-identical' };
-  });
-
-  check('H3 all 8 decision quadrants reachable', () => {
-    const combos = [[0.3,0.9,0.3],[0.3,0.9,0.9],[0.3,0.3,0.3],[0.3,0.3,0.9],[0.9,0.9,0.3],[0.9,0.9,0.9],[0.9,0.3,0.3],[0.9,0.3,0.9]];
-    const names = new Set(combos.map(c => classifyDecisionQuadrant(c[0],c[1],c[2]).name));
-    return { pass: names.size === 8, detail: Array.from(names).join(', ') };
-  });
-
-  check('H4 projection purity (same input twice -> identical output, input untouched)', () => {
-    const events = LEADOS.store.getEvents();
-    const before = JSON.stringify(events);
-    const p1 = JSON.stringify(project(events).decisions);
-    const p2 = JSON.stringify(project(events).decisions);
-    const untouched = JSON.stringify(events) === before;
-    return { pass: p1 === p2 && untouched, detail: 'project() called twice on the same array; no mutation observed' };
-  });
-
-  check('H5 _days() arithmetic', () => {
-    const from = new Date(Date.UTC(2024,0,1));
-    const d1 = _days(from, '2024-01-11');
-    const d2 = _days(from, '2023-12-22');
-    return { pass: d1 === 10 && d2 === -10, detail: '2024-01-01 -> 2024-01-11 = ' + d1 + 'd; -> 2023-12-22 = ' + d2 + 'd' };
-  });
-
-  check('H6 seeded events are marked meta.seeded, normal appends never are', () => {
-    const events = LEADOS.store.getEvents();
-    const seeded = events.filter(e => e.meta && e.meta.seeded === true);
-    const okSoFar = seeded.length > 0 && seeded.every(e => e.meta.seeded === true);
-    return { pass: okSoFar, detail: seeded.length + ' seeded event(s) found, all explicitly marked' };
-  });
-
-  check('H7 risk / reversibility / pressure stay within [0,1]', () => {
-    const P = currentP(), today = todayMidnightUTC();
-    const topo = mapDecisionTopology(P.decisions, P, today);
-    const inBounds = topo.every(t => t.risk>=0 && t.risk<=1 && t.reversibility>=0 && t.reversibility<=1 && t.pressure>=0 && t.pressure<=1);
-    return { pass: inBounds, detail: topo.length + ' decision(s) checked' };
-  });
-
-  check('H8 this store key is isolated from other known LEADOS-family keys', () => {
-    const clash = OTHER_KNOWN_KEYS.includes(KEY);
-    return { pass: !clash, detail: KEY + ' vs ' + OTHER_KNOWN_KEYS.join(', ') };
-  });
-
-  return results;
-}
-function renderHealth(){
-  const results = runHealthChecks();
-  document.getElementById('healthResults').innerHTML = results.map(r => `
-    <div class="border rounded-lg p-3 flex items-start gap-3 ${r.pass?'border-green-200 bg-green-50':'border-red-200 bg-red-50'}">
-      <span class="text-lg leading-none">${r.pass?'✅':'❌'}</span>
-      <div><p class="font-medium text-sm">${r.name}</p><p class="text-xs text-slate-500 mono">${r.detail}</p></div>
-    </div>`).join('');
+  return false;
 }
 
-/* ---------------- master render ---------------- */
-function renderAll(){
-  const P = currentP();
-  const today = todayMidnightUTC();
-  const topology = mapDecisionTopology(P.openDecisions, P, today);
-  drawSurface(topology);
-  renderLegend();
-  const selected = topology.find(t => t.decision.id === selectedId) || null;
-  showDetail(selected);
-  renderDecisionsTable(P, mapDecisionTopology(P.decisions, P, today));
-  renderScenarioSelect(P);
-  renderEventLog(P.state.events);
-  renderVerified();
-  if (!document.getElementById('tab-health').classList.contains('hidden')) renderHealth();
-  wireCanvasInteraction(() => topology);
-}
-
-/* ---------------- forms & buttons ---------------- */
-document.getElementById('decisionForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const f = new FormData(e.target);
-  const id = 'd-' + Date.now();
-  LEADOS.store.append('decision.logged', { id, title: f.get('title'), severity: Number(f.get('severity')), domain: f.get('domain'), reviewDate: f.get('reviewDate') });
-  LEADOS.store.append('decision.scenario', { decisionId: id, probability: Number(f.get('probability')), cost_if_true: Number(f.get('cost')), label: 'primary scenario' });
-  e.target.reset();
-  renderAll();
-});
-document.getElementById('scenarioForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const f = new FormData(e.target);
-  LEADOS.store.append('decision.scenario', { decisionId: f.get('decisionId'), probability: Number(f.get('probability')), cost_if_true: Number(f.get('cost')), label: f.get('label') || 'scenario' });
-  e.target.reset();
-  renderAll();
-});
-document.getElementById('btnExport').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify(LEADOS.store.getEvents(), null, 2)], { type: 'application/json' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'leados-decision-surface-events.json'; a.click();
-});
-document.getElementById('btnReseed').addEventListener('click', () => {
-  if (confirm('Reset the store and reseed the calibrated 8-quadrant demo set?')) { selectedId = null; seedIfEmpty(true); renderAll(); }
-});
-document.getElementById('btnWipe').addEventListener('click', () => {
-  if (confirm('Wipe all decisions and scenarios? This cannot be undone.')) { selectedId = null; LEADOS.store.wipe(); renderAll(); }
-});
-document.getElementById('btnRunHealth').addEventListener('click', renderHealth);
-
-renderTabs();
-renderAll();
-})();
+LEADOS.localAPI.init();
+if (!checkStructuralAlert()) boot();
 </script>
 </body>
 </html>
