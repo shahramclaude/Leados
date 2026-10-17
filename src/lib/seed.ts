@@ -1,53 +1,51 @@
-// Deterministic synthetic roster + event log generator. Original to this
-// delivery. Deterministic (seeded PRNG) so the self-test suite can assert
-// exact numbers without flakiness.
-import type { EventLogEntry, Person } from "./types";
+import { mulberry32, seededInt } from "./prng";
+import type { AppState, Competitor, Initiative, LifeStageDimension, Stakeholder } from "./types";
+import { LIFE_STAGE_DIMENSIONS } from "./types";
 
-export const ROSTER: Person[] = [
-  { id: "p1", name: "Ana Reyes", role: "Staff Engineer" },
-  { id: "p2", name: "Ben Oduya", role: "Engineering Manager" },
-  { id: "p3", name: "Carmen Liu", role: "Product Manager" },
-  { id: "p4", name: "Dev Patel", role: "Designer" },
-  { id: "p5", name: "Elin Haas", role: "Finance Lead" },
-  { id: "p6", name: "Faisal Noor", role: "Support Lead" },
-];
+const SEED = 20251017;
 
-const EVENT_TYPES = ["commit", "message", "meeting", "review", "ticket"] as const;
+export function buildSeedState(): AppState {
+  const rng = mulberry32(SEED);
 
-// Small mulberry32 PRNG so the synthetic log is reproducible across runs.
-function mulberry32(seed: number) {
-  let a = seed;
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  const lifeStage = {} as Record<LifeStageDimension, number>;
+  LIFE_STAGE_DIMENSIONS.forEach(({ key }) => {
+    lifeStage[key] = seededInt(rng, 35, 85);
+  });
+
+  const stakeholders: Stakeholder[] = [
+    { id: "s1", name: "Dana Ruiz", role: "Board Chair", power: 95, interest: 70, stance: 20 },
+    { id: "s2", name: "Imani Okafor", role: "CFO", power: 80, interest: 90, stance: 10 },
+    { id: "s3", name: "Theo Lindqvist", role: "VP Engineering", power: 55, interest: 85, stance: 40 },
+    { id: "s4", name: "Priya Nair", role: "Lead Customer", power: 40, interest: 60, stance: -10 },
+    { id: "s5", name: "Marcus Webb", role: "Union Rep", power: 60, interest: 75, stance: -30 },
+    { id: "s6", name: "Elena Soto", role: "Lead Investor", power: 85, interest: 55, stance: 15 },
+  ];
+
+  const initiatives: Initiative[] = [
+    { id: "i1", name: "Core platform reliability", horizon: 1, investment: 400, riskScore: 20, expectedReturn: 650 },
+    { id: "i2", name: "Pricing & packaging overhaul", horizon: 1, investment: 150, riskScore: 35, expectedReturn: 300 },
+    { id: "i3", name: "Adjacent vertical expansion", horizon: 2, investment: 600, riskScore: 55, expectedReturn: 900 },
+    { id: "i4", name: "Partner ecosystem", horizon: 2, investment: 250, riskScore: 50, expectedReturn: 400 },
+    { id: "i5", name: "AI-native product bet", horizon: 3, investment: 500, riskScore: 80, expectedReturn: 2200 },
+    { id: "i6", name: "New category exploration", horizon: 3, investment: 120, riskScore: 85, expectedReturn: 600 },
+  ];
+
+  const competitors: Competitor[] = [
+    { id: "c1", name: "Meridian Corp", archetype: "incumbent", pricingAggression: 35, hiringVelocity: 30, productVelocity: 40, sentiment: 10 },
+    { id: "c2", name: "Northfork AI", archetype: "disruptor", pricingAggression: 70, hiringVelocity: 85, productVelocity: 90, sentiment: 55 },
+    { id: "c3", name: "Vantage Systems", archetype: "fast-follower", pricingAggression: 55, hiringVelocity: 50, productVelocity: 60, sentiment: 5 },
+    { id: "c4", name: "Harbor & Finch", archetype: "niche-player", pricingAggression: 20, hiringVelocity: 15, productVelocity: 35, sentiment: 30 },
+  ];
+
+  return {
+    lifeStage,
+    stakeholders,
+    initiatives,
+    competitors,
+    adkar: { awareness: 70, desire: 45, knowledge: 60, ability: 50, reinforcement: 35 },
+    realOptions: { pv: 1800, cost: 1200, years: 3, volatility: 0.45, riskFreeRate: 0.04 },
+    orgDesign: { headcount: 240, layers: 5, avgSpan: 7 },
+    executivePresence: { gravitas: 68, communication: 72, appearance: 64 },
+    wargame: { ourPosture: "collaborative", competitorArchetype: "disruptor", marketVolatility: 55 },
   };
-}
-
-export function generateEventLog(seed = 42, days = 21): EventLogEntry[] {
-  const rand = mulberry32(seed);
-  const events: EventLogEntry[] = [];
-  const now = Date.now();
-  const day = 86400000;
-  let id = 0;
-  for (let d = 0; d < days; d++) {
-    for (const person of ROSTER) {
-      // Each person gets a variable number of events per day, biased by role,
-      // so entropy / mutual-information calculations have real variety.
-      const base = person.role === "Finance Lead" ? 2 : 4;
-      const count = Math.floor(rand() * base) + 1;
-      for (let i = 0; i < count; i++) {
-        const type = EVENT_TYPES[Math.floor(rand() * EVENT_TYPES.length)];
-        events.push({
-          id: `ev_${id++}`,
-          ts: now - d * day - Math.floor(rand() * day),
-          personId: person.id,
-          type,
-        });
-      }
-    }
-  }
-  return events.sort((a, b) => a.ts - b.ts);
 }

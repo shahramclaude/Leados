@@ -1,20 +1,17 @@
-// Original, minimal hash router for this delivery.
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export function useHashRoute(defaultRoute: string): [string, (r: string) => void] {
-  const read = () => (window.location.hash ? window.location.hash.slice(1) : defaultRoute);
-  const [route, setRoute] = useState(read);
+  const [route, setRoute] = useState<string>(() => window.location.hash.replace("#", "") || defaultRoute);
 
   useEffect(() => {
-    const onHashChange = () => setRoute(read());
+    const onHashChange = () => setRoute(window.location.hash.replace("#", "") || defaultRoute);
     window.addEventListener("hashchange", onHashChange);
-    if (!window.location.hash) window.location.hash = `#${defaultRoute}`;
+    if (!window.location.hash) window.location.hash = defaultRoute;
     return () => window.removeEventListener("hashchange", onHashChange);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [defaultRoute]);
 
   const navigate = useCallback((r: string) => {
-    window.location.hash = `#${r}`;
+    window.location.hash = r;
   }, []);
 
   return [route, navigate];

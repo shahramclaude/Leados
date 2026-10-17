@@ -1,136 +1,106 @@
-import { useMemo, useState } from "react";
 import type { AppState } from "../lib/types";
-import { buildFindings } from "../lib/engine";
-import { shannonEntropy } from "../lib/infoTheory";
-import { identifyFeedbackLoops, identifyBifurcationPoints, identifyAttractors } from "../lib/casEngine";
-import { buildRiskRegister } from "../lib/riskIntelligence";
+import { Card, Stat, Badge, Bar } from "./ui";
+import { lifeStageSignal } from "../lib/lifeStage";
+import { stakeholderSignal } from "../lib/stakeholders";
+import { realOptionsSignal } from "../lib/realOptions";
+import { executivePresenceSignal } from "../lib/executivePresence";
+import { innovationPortfolioSignal } from "../lib/innovationPortfolio";
+import { changeManagementSignal } from "../lib/changeManagement";
+import { competitiveIntelSignal } from "../lib/competitiveIntel";
+import { orgDesignSignal } from "../lib/orgDesign";
+import { wargameSignal } from "../lib/wargame";
+import { detectCompoundEffects } from "../lib/compoundIntel";
 import { runSelfTests } from "../lib/selfTest";
-import { SCENARIO_PRESETS } from "../lib/rules";
-import { resetState } from "../lib/store";
-import { Card, Stat, Badge, Button } from "./ui";
+import { useMemo, useState } from "react";
 
-export function TodayView({ state, setState, navigate }: { state: AppState; setState: (s: AppState) => void; navigate: (r: string) => void }) {
-  const findings = useMemo(() => buildFindings(state), [state]);
-  const entropy = useMemo(() => shannonEntropy(state.events), [state.events]);
-  const loops = useMemo(() => identifyFeedbackLoops(findings), [findings]);
-  const bifurcations = useMemo(() => identifyBifurcationPoints(findings, state.runwayMonths), [findings, state.runwayMonths]);
-  const attractors = useMemo(() => identifyAttractors(findings), [findings]);
-  const register = useMemo(() => buildRiskRegister(findings), [findings]);
-  const [tests, setTests] = useState<ReturnType<typeof runSelfTests> | null>(null);
+export function TodayView({ state, navigate }: { state: AppState; navigate: (r: string) => void }) {
+  const [showTests, setShowTests] = useState(false);
+  const tests = useMemo(() => runSelfTests(), []);
+  const passCount = tests.filter((t) => t.pass).length;
 
-  function applyPreset(ruleIds: string[]) {
-    setState({ ...state, activeRuleIds: ruleIds });
-  }
+  const signals = useMemo(
+    () => [
+      { key: "lifeStage", label: "Life Stage Maturity", value: lifeStageSignal(state.lifeStage) },
+      { key: "stakeholders", label: "Stakeholder Alignment", value: stakeholderSignal(state.stakeholders) },
+      { key: "realOptions", label: "Strategic Optionality", value: realOptionsSignal(state.realOptions) },
+      { key: "execPresence", label: "Executive Presence", value: executivePresenceSignal(state.executivePresence) },
+      { key: "innovation", label: "Innovation Balance", value: innovationPortfolioSignal(state.initiatives) },
+      { key: "change", label: "Change Readiness", value: changeManagementSignal(state.adkar) },
+      { key: "competitive", label: "Competitive Position", value: competitiveIntelSignal(state.competitors) },
+      { key: "orgDesign", label: "Org Design Efficiency", value: orgDesignSignal(state.orgDesign) },
+      { key: "wargame", label: "Strategic Position", value: wargameSignal(state.wargame.ourPosture, state.wargame.competitorArchetype, state.wargame.marketVolatility) },
+    ],
+    [state]
+  );
+
+  const compound = useMemo(() => detectCompoundEffects(signals), [signals]);
+  const overallIndex = Math.round(signals.reduce((s, x) => s + x.value, 0) / signals.length);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Today</h1>
-        <p className="mt-1 max-w-3xl text-xs text-slate-500">
-          Overview computed live from the Signal Board. Toggle rules on the Signal Board page, or use a scenario preset below, to see every
-          number here update.
+        <h1 className="text-2xl font-semibold tracking-tight">Organizational Intelligence — Today</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          One board, nine intelligence dimensions, ten modules. All data below is synthetic and seeded — see{" "}
+          <button className="underline" onClick={() => navigate("/about")}>About / Provenance</button>.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-        <Card>
-          <Stat label="Overall risk score" value={`${register.overallScore}/100`} tone={register.overallScore > 50 ? "rose" : register.overallScore > 20 ? "amber" : "emerald"} />
-        </Card>
-        <Card>
-          <Stat label="Active findings" value={findings.length} tone={findings.length > 0 ? "amber" : "slate"} />
-        </Card>
-        <Card>
-          <Stat label="Event-log entropy" value={`${Math.round(entropy.normalized * 100)}%`} tone="sky" />
-        </Card>
-        <Card>
-          <Stat label="Feedback loops" value={loops.length} tone={loops.length > 0 ? "rose" : "slate"} />
-        </Card>
-        <Card>
-          <Stat label="Bifurcations" value={bifurcations.length} tone={bifurcations.length > 0 ? "amber" : "slate"} />
-        </Card>
-        <Card>
-          <Stat label="Attractors" value={attractors.length} tone={attractors.length > 0 ? "rose" : "slate"} />
-        </Card>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Card><Stat label="Composite Index" value={overallIndex} tone="indigo" /></Card>
+        <Card><Stat label="Compounding Pairs" value={compound.compoundingCount} tone="emerald" /></Card>
+        <Card><Stat label="Fragility Pairs" value={compound.fragilityCount} tone="rose" /></Card>
+        <Card><Stat label="Net Compound Index" value={compound.netCompoundIndex} tone={compound.netCompoundIndex >= 0 ? "emerald" : "rose"} /></Card>
       </div>
 
-      <Card title="Scenario presets" subtitle="Load a named combination of signals to see the engines react.">
-        <div className="flex flex-wrap gap-2">
-          {SCENARIO_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => applyPreset(p.ruleIds)}
-              title={p.description}
-              className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-left text-xs hover:border-indigo-500 hover:bg-slate-800"
-            >
-              <div className="font-medium text-slate-200">{p.label}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">{p.ruleIds.join(", ") || "none"}</div>
-            </button>
+      <Card title="Intelligence dimensions" subtitle="Each bar is produced by one module; click a module in the sidebar to inspect and edit its inputs.">
+        <div className="space-y-3">
+          {signals.map((s) => (
+            <div key={s.key}>
+              <div className="mb-1 flex items-center justify-between text-sm">
+                <span className="text-slate-600">{s.label}</span>
+                <span className="tabular-nums font-medium text-slate-800">{Math.round(s.value)}</span>
+              </div>
+              <Bar value={s.value} tone={s.value >= 65 ? "emerald" : s.value >= 40 ? "amber" : "rose"} />
+            </div>
           ))}
         </div>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Cross-category amplifications" subtitle="Detected from combinations of active rules across categories.">
-          {register.amplifications.length === 0 ? (
-            <p className="text-xs text-slate-500">None detected with the current Signal Board state.</p>
-          ) : (
-            <ul className="space-y-2">
-              {register.amplifications.map((a) => (
-                <li key={a.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs">
-                  <div className="flex items-center gap-2 font-medium text-slate-200">
-                    {a.label}
-                    {a.categories.map((c) => (
-                      <Badge key={c} tone="amber">{c}</Badge>
-                    ))}
-                  </div>
-                  <p className="mt-1 text-slate-500">{a.detail}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card title="In-browser self-test runner" subtitle="Checks this build's own math (entropy, mutual info, CAS thresholds, risk register) — not an external spec.">
-          <Button variant="primary" onClick={() => setTests(runSelfTests())}>
-            Run self-tests
-          </Button>
-          {tests && (
-            <div className="mt-3 space-y-1.5">
-              <div className="text-xs text-slate-400">
-                {tests.filter((t) => t.pass).length} / {tests.length} passed
+      <Card title="Top compound signals" subtitle="From compound_intel.js (pt-P) — strongest compounding and fragility interactions across all modules.">
+        <div className="space-y-2">
+          {compound.pairs.slice(0, 5).map((p, i) => (
+            <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 p-3 text-sm">
+              <div>
+                <div className="font-medium text-slate-700">{p.a} × {p.b}</div>
+                <div className="text-xs text-slate-500">{p.note}</div>
               </div>
-              <ul className="max-h-64 space-y-1 overflow-y-auto">
-                {tests.map((t) => (
-                  <li key={t.id} className="flex items-start gap-2 text-[11px]">
-                    <Badge tone={t.pass ? "emerald" : "rose"}>{t.pass ? "PASS" : "FAIL"}</Badge>
-                    <div>
-                      <div className="text-slate-300">{t.label}</div>
-                      <div className="text-slate-600">{t.detail}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge tone={p.type === "compounding" ? "emerald" : p.type === "fragility" ? "rose" : "slate"}>{p.type}</Badge>
+                <span className="tabular-nums text-xs text-slate-400">{p.effect > 0 ? "+" : ""}{p.effect}</span>
+              </div>
             </div>
-          )}
-        </Card>
-      </div>
-
-      <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-        <div>
-          <div className="text-xs font-medium text-slate-300">Reset synthetic data</div>
-          <div className="text-[11px] text-slate-600">Clears localStorage and regenerates a fresh synthetic roster, event log, and Signal Board.</div>
+          ))}
         </div>
-        <Button
-          variant="danger"
-          onClick={() => {
-            const fresh = resetState();
-            setState(fresh);
-            navigate("/today");
-          }}
-        >
-          Reset synthetic data
-        </Button>
-      </div>
+      </Card>
+
+      <Card title="Self-test runner" subtitle="Original test suite (OIP_01..OIP_13) checking this build's own math — not a reproduction of any externally-named test suite.">
+        <div className="flex items-center justify-between">
+          <Badge tone={passCount === tests.length ? "emerald" : "rose"}>{passCount}/{tests.length} passing</Badge>
+          <button onClick={() => setShowTests((v) => !v)} className="text-xs font-medium text-indigo-600 underline">
+            {showTests ? "Hide detail" : "Show detail"}
+          </button>
+        </div>
+        {showTests && (
+          <div className="mt-3 space-y-1 font-mono text-xs">
+            {tests.map((t) => (
+              <div key={t.id} className={t.pass ? "text-emerald-700" : "text-rose-700"}>
+                {t.pass ? "PASS" : "FAIL"} {t.id} — {t.detail}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

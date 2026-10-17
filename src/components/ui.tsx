@@ -2,73 +2,142 @@ import type { ReactNode } from "react";
 
 export function Card({ title, subtitle, children, className = "" }: { title?: string; subtitle?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-800 bg-slate-900/60 p-5 shadow-sm ${className}`}>
-      {title && <h2 className="text-sm font-semibold text-white">{title}</h2>}
-      {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
-      <div className={title || subtitle ? "mt-4" : ""}>{children}</div>
+    <div className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}>
+      {title && <h3 className="text-sm font-semibold text-slate-800">{title}</h3>}
+      {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      <div className={title ? "mt-3" : ""}>{children}</div>
     </div>
   );
 }
 
-export function Label({ children }: { children: ReactNode }) {
-  return <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{children}</div>;
-}
-
-export function Stat({ label, value, tone = "slate" }: { label: string; value: string | number; tone?: "slate" | "rose" | "emerald" | "amber" | "sky" }) {
-  const toneClass: Record<string, string> = {
-    slate: "text-slate-100",
-    rose: "text-rose-400",
-    emerald: "text-emerald-400",
-    amber: "text-amber-400",
-    sky: "text-sky-400",
+export function Stat({ label, value, tone = "slate" }: { label: string; value: ReactNode; tone?: "slate" | "emerald" | "rose" | "amber" | "indigo" }) {
+  const tones: Record<string, string> = {
+    slate: "text-slate-900",
+    emerald: "text-emerald-600",
+    rose: "text-rose-600",
+    amber: "text-amber-600",
+    indigo: "text-indigo-600",
   };
   return (
     <div>
-      <Label>{label}</Label>
-      <div className={`mt-1 text-2xl font-semibold ${toneClass[tone]}`}>{value}</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums ${tones[tone]}`}>{value}</div>
     </div>
   );
 }
 
-export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: "slate" | "rose" | "emerald" | "amber" | "sky" }) {
-  const toneClass: Record<string, string> = {
-    slate: "bg-slate-500/15 text-slate-300 ring-slate-500/30",
-    rose: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
-    emerald: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-    amber: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-    sky: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
+export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: "slate" | "emerald" | "rose" | "amber" | "indigo" | "violet" }) {
+  const tones: Record<string, string> = {
+    slate: "bg-slate-100 text-slate-600",
+    emerald: "bg-emerald-100 text-emerald-700",
+    rose: "bg-rose-100 text-rose-700",
+    amber: "bg-amber-100 text-amber-700",
+    indigo: "bg-indigo-100 text-indigo-700",
+    violet: "bg-violet-100 text-violet-700",
   };
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${toneClass[tone]}`}>{children}</span>;
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
 
-export function Bar({ value, max, tone = "sky" }: { value: number; max: number; tone?: "sky" | "rose" | "emerald" | "amber" }) {
-  const toneClass: Record<string, string> = {
-    sky: "bg-sky-500",
-    rose: "bg-rose-500",
+export function Bar({ value, max = 100, tone = "indigo" }: { value: number; max?: number; tone?: "indigo" | "emerald" | "rose" | "amber" }) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const tones: Record<string, string> = {
+    indigo: "bg-indigo-500",
     emerald: "bg-emerald-500",
+    rose: "bg-rose-500",
     amber: "bg-amber-500",
   };
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-      <div className={`h-full rounded-full ${toneClass[tone]}`} style={{ width: `${pct}%` }} />
+    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+      <div className={`h-full rounded-full ${tones[tone]}`} style={{ width: `${pct}%` }} />
     </div>
   );
 }
 
-export function Button({ children, onClick, variant = "default", disabled }: { children: ReactNode; onClick?: () => void; variant?: "default" | "primary" | "danger"; disabled?: boolean }) {
-  const variantClass: Record<string, string> = {
-    default: "bg-slate-800 text-slate-200 hover:bg-slate-700 ring-1 ring-inset ring-slate-700",
-    primary: "bg-indigo-600 text-white hover:bg-indigo-500",
-    danger: "bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 ring-1 ring-inset ring-rose-600/40",
-  };
+export function Slider({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  hint,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  hint?: string;
+}) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${variantClass[variant]}`}
-    >
-      {children}
-    </button>
+    <label className="block">
+      <div className="mb-1 flex items-center justify-between text-xs">
+        <span className="font-medium text-slate-600">{label}</span>
+        <span className="tabular-nums text-slate-400">{value}{hint}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-indigo-600"
+      />
+    </label>
+  );
+}
+
+export function RadarChart({ dims, size = 260 }: { dims: { label: string; score: number }[]; size?: number }) {
+  const center = size / 2;
+  const radius = size / 2 - 36;
+  const n = dims.length;
+
+  const points = dims.map((d, i) => {
+    const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+    const r = (d.score / 100) * radius;
+    return [center + r * Math.cos(angle), center + r * Math.sin(angle)] as const;
+  });
+
+  const gridLevels = [0.25, 0.5, 0.75, 1];
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {gridLevels.map((lvl) => (
+        <polygon
+          key={lvl}
+          points={dims
+            .map((_, i) => {
+              const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+              const r = lvl * radius;
+              return `${center + r * Math.cos(angle)},${center + r * Math.sin(angle)}`;
+            })
+            .join(" ")}
+          fill="none"
+          stroke="#e2e8f0"
+          strokeWidth={1}
+        />
+      ))}
+      {dims.map((d, i) => {
+        const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+        const x = center + radius * Math.cos(angle);
+        const y = center + radius * Math.sin(angle);
+        const lx = center + (radius + 24) * Math.cos(angle);
+        const ly = center + (radius + 24) * Math.sin(angle);
+        return (
+          <g key={d.label}>
+            <line x1={center} y1={center} x2={x} y2={y} stroke="#e2e8f0" strokeWidth={1} />
+            <text x={lx} y={ly} fontSize={9} textAnchor="middle" fill="#64748b">
+              {d.label}
+            </text>
+          </g>
+        );
+      })}
+      <polygon points={points.map((p) => p.join(",")).join(" ")} fill="#6366f1" fillOpacity={0.25} stroke="#6366f1" strokeWidth={2} />
+      {points.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={3} fill="#4f46e5" />
+      ))}
+    </svg>
   );
 }
