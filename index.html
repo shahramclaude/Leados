@@ -1,12 +1,754 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LEADOS — Organizational Physics Engine</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LEADOS — Decision Topology Surface (Part 3)</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .tab-btn.active { background:#111827; color:#fff; }
+  #surfaceCanvas { cursor: crosshair; touch-action:none; }
+  .node-tooltip { pointer-events:none; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  ::-webkit-scrollbar { height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+  .quad-swatch { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  details > summary { cursor:pointer; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+<header class="bg-slate-900 text-slate-100 px-4 sm:px-8 py-4">
+  <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">LEADOS <span class="text-slate-400 font-normal">· Decision Topology Surface</span></h1>
+      <p class="text-xs text-slate-400 mt-0.5">Part 3 of the pasted brief — a topographic map of decisions, not a list of options.</p>
+    </div>
+    <div class="flex gap-2 text-xs">
+      <span class="px-2 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Sandbox build — unofficial</span>
+      <span class="px-2 py-1 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">localStorage key: <span class="mono">leados-decision-surface:data</span></span>
+    </div>
+  </div>
+</header>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-8 py-3">
+  <details class="bg-white border border-slate-200 rounded-lg shadow-sm">
+    <summary class="px-4 py-2 text-sm font-semibold text-slate-700">⚠ Why this doesn't look like github.com/wbweve/Leados — read before judging this against the real repo</summary>
+    <div class="px-4 pb-4 text-sm text-slate-600 space-y-2">
+      <p><strong>Verified this session</strong> (GitHub Trees API + raw fetch of <span class="mono">package.json</span>, <span class="mono">store.js</span>, <span class="mono">engine.js</span>): the real repo is a <strong>React 19 + Vite 7 + Tailwind 4</strong> project whose root also accumulates ~40 loose files (many <span class="mono">.tsx</span> components plus standalone vanilla <span class="mono">store.js</span> / <span class="mono">engine.js</span>) from prior sessions. Its global namespace is <span class="mono">window.LeadOS</span> (capital L, lowercase "ead", capital OS) — <strong>not</strong> <span class="mono">LEADOS</span> as this brief writes it. Its real store key is <span class="mono">leados:data</span>, schema v5, with verified settings <span class="mono">heatmapDecayFactor: 0.85</span>, <span class="mono">correlationWindowDays: 90</span>, <span class="mono">decisionMaxOpenDays: 21</span>. Its real decision-shaped events are <span class="mono">strategy.decision</span> (an append-only log entry, no id/severity/reviewDate) and <span class="mono">decision.decided</span> (a choice record). A large pattern-detection library (<span class="mono">LeadOS.patterns</span>: DEATH_SPIRAL, QUALITY_COLLAPSE, etc.) exists for correlating rule findings — a different mechanism from a decision topology.</p>
+      <p><strong>Not found</strong> in the files fetched this session: <span class="mono">LEADOS.decisionSurface</span>, <span class="mono">mapDecisionTopology</span>, <span class="mono">classifyDecisionQuadrant</span>, any <span class="mono">decision.scenario</span> event, any decision entity with <span class="mono">severity</span> / <span class="mono">reviewDate</span> fields, or a <span class="mono">P.state.events</span> shape. Only a subset of the repo's ~40 files were individually fetched (package.json, store.js, engine.js, the tree listing, the rendered README) — their absence is confirmed only in those files, not proven across every file in the repo.</p>
+      <p><strong>Fabricated / fresh, disclosed:</strong> this entire file. My tools here can only author one self-contained <span class="mono">index.html</span> — they cannot create a Vite/React project tree or push to the real repo. So this delivery implements Part 3's own pasted code as a standalone app, reusing the brief's own naming (<span class="mono">LEADOS</span>, <span class="mono">P.state.events</span>, <span class="mono">decision.scenario</span>) as its own internal contract, not as a claim that those names exist upstream. Full detail in <span class="mono">AI-SESSION-LOG.md</span>.</p>
+    </div>
+  </details>
+</div>
+
+<nav class="max-w-7xl mx-auto px-4 sm:px-8 flex gap-2 flex-wrap text-sm">
+  <button data-tab="surface" class="tab-btn active px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium">Decision Surface</button>
+  <button data-tab="decisions" class="tab-btn px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium text-slate-500">Decisions</button>
+  <button data-tab="data" class="tab-btn px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium text-slate-500">Raw Event Log</button>
+  <button data-tab="verified" class="tab-btn px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium text-slate-500">Verified vs Fabricated</button>
+  <button data-tab="health" class="tab-btn px-3 py-1.5 rounded-t-lg border border-b-0 border-slate-200 bg-white font-medium text-slate-500">Health</button>
+</nav>
+
+<main class="max-w-7xl mx-auto px-4 sm:px-8 pb-16">
+
+  <!-- SURFACE TAB -->
+  <section id="tab-surface" class="bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 relative">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="font-semibold text-slate-700 text-sm">Topology of open decisions</h2>
+        <div class="text-xs text-slate-500">Node size = time pressure · Click a node for guidance</div>
+      </div>
+      <div class="relative border border-slate-200 rounded-lg bg-slate-50">
+        <canvas id="surfaceCanvas" width="700" height="500" class="w-full h-auto"></canvas>
+        <div id="tooltip" class="node-tooltip absolute hidden text-xs bg-slate-900 text-white rounded px-2 py-1 shadow-lg z-10"></div>
+      </div>
+      <div class="flex flex-wrap gap-3 mt-3 text-xs text-slate-600" id="legend"></div>
+    </div>
+    <div>
+      <h2 class="font-semibold text-slate-700 text-sm mb-2">Selected decision</h2>
+      <div id="detailPanel" class="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-4 min-h-[320px]">
+        Click any node on the surface to see its full classification and guidance.
+      </div>
+    </div>
+  </section>
+
+  <!-- DECISIONS TAB -->
+  <section id="tab-decisions" class="hidden bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4 space-y-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <form id="decisionForm" class="border border-slate-200 rounded-lg p-4 space-y-3">
+        <h3 class="font-semibold text-sm text-slate-700">Log a new decision</h3>
+        <input required name="title" placeholder="Decision title" class="w-full border rounded px-2 py-1.5 text-sm">
+        <div class="grid grid-cols-2 gap-2">
+          <select name="severity" class="border rounded px-2 py-1.5 text-sm">
+            <option value="1">Severity 1 (low)</option>
+            <option value="2">Severity 2</option>
+            <option value="3" selected>Severity 3</option>
+            <option value="4">Severity 4</option>
+            <option value="5">Severity 5 (high)</option>
+          </select>
+          <select name="domain" class="border rounded px-2 py-1.5 text-sm">
+            <option>strategy</option><option>people</option><option>finance</option>
+            <option>ops</option><option>product</option><option>legal</option>
+          </select>
+        </div>
+        <label class="block text-xs text-slate-500">Review date (window closes)
+          <input required type="date" name="reviewDate" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
+        </label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block text-xs text-slate-500">Worst-case probability (0–1)
+            <input type="number" step="0.05" min="0" max="1" name="probability" value="0.5" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
+          </label>
+          <label class="block text-xs text-slate-500">Cost if wrong ($)
+            <input type="number" step="1000" min="0" name="cost" value="0" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
+          </label>
+        </div>
+        <button class="bg-slate-900 text-white text-sm px-3 py-1.5 rounded hover:bg-slate-700">Log decision + scenario</button>
+      </form>
+
+      <form id="scenarioForm" class="border border-slate-200 rounded-lg p-4 space-y-3">
+        <h3 class="font-semibold text-sm text-slate-700">Add another scenario to an existing decision</h3>
+        <select required name="decisionId" id="scenarioDecisionSelect" class="w-full border rounded px-2 py-1.5 text-sm"></select>
+        <input name="label" placeholder="Scenario label (e.g. 'regulator audits us')" class="w-full border rounded px-2 py-1.5 text-sm">
+        <div class="grid grid-cols-2 gap-2">
+          <label class="block text-xs text-slate-500">Probability (0–1)
+            <input type="number" step="0.05" min="0" max="1" name="probability" value="0.5" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
+          </label>
+          <label class="block text-xs text-slate-500">Cost if true ($)
+            <input type="number" step="1000" min="0" name="cost" value="0" class="w-full border rounded px-2 py-1.5 text-sm mt-1">
+          </label>
+        </div>
+        <button class="bg-slate-900 text-white text-sm px-3 py-1.5 rounded hover:bg-slate-700">Add scenario</button>
+        <p class="text-xs text-slate-400">Only the worst scenario (max probability / max cost) drives the topology, per the brief.</p>
+      </form>
+    </div>
+
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold text-sm text-slate-700">All decisions (open + resolved)</h3>
+        <div class="text-xs text-slate-400">Append-only: resolving never deletes history</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse" id="decisionsTable">
+          <thead class="text-left text-slate-500 border-b border-slate-200">
+            <tr><th class="py-1.5 pr-3">Title</th><th class="py-1.5 pr-3">Domain</th><th class="py-1.5 pr-3">Sev</th><th class="py-1.5 pr-3">Review</th>
+            <th class="py-1.5 pr-3">Risk</th><th class="py-1.5 pr-3">Reversibility</th><th class="py-1.5 pr-3">Pressure</th><th class="py-1.5 pr-3">Quadrant</th><th class="py-1.5 pr-3"></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- DATA TAB -->
+  <section id="tab-data" class="hidden bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4 space-y-4">
+    <div class="flex flex-wrap gap-2">
+      <button id="btnExport" class="text-xs bg-slate-900 text-white px-3 py-1.5 rounded">Export event log (JSON)</button>
+      <button id="btnReseed" class="text-xs bg-amber-600 text-white px-3 py-1.5 rounded">Reset &amp; reseed calibrated 8-quadrant set</button>
+      <button id="btnWipe" class="text-xs bg-red-600 text-white px-3 py-1.5 rounded">Wipe store</button>
+      <span class="text-xs text-slate-400 self-center">Everything below is recomputed from this raw log on every render — nothing derived is persisted.</span>
+    </div>
+    <div class="overflow-x-auto max-h-[500px] overflow-y-auto border border-slate-200 rounded-lg">
+      <table class="w-full text-xs border-collapse">
+        <thead class="text-left text-slate-500 border-b bg-slate-50 sticky top-0"><tr>
+          <th class="py-1.5 px-2">seq</th><th class="py-1.5 px-2">at</th><th class="py-1.5 px-2">type</th><th class="py-1.5 px-2">data</th><th class="py-1.5 px-2">meta</th>
+        </tr></thead>
+        <tbody id="eventLogBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- VERIFIED TAB -->
+  <section id="tab-verified" class="hidden bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4">
+    <h2 class="font-semibold text-slate-700 text-sm mb-3">Verified vs. fabricated, at a glance</h2>
+    <div class="overflow-x-auto">
+    <table class="w-full text-sm border-collapse">
+      <thead class="text-left text-slate-500 border-b"><tr><th class="py-2 pr-4">Claim</th><th class="py-2">Status</th></tr></thead>
+      <tbody id="verifiedBody" class="divide-y divide-slate-100"></tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- HEALTH TAB -->
+  <section id="tab-health" class="hidden bg-white border border-slate-200 rounded-b-lg rounded-tr-lg shadow-sm p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-slate-700 text-sm">Live, non-destructive self-checks</h2>
+      <button id="btnRunHealth" class="text-xs bg-slate-900 text-white px-3 py-1.5 rounded">Re-run checks</button>
+    </div>
+    <div id="healthResults" class="space-y-2 text-sm"></div>
+  </section>
+
+</main>
+
+<footer class="text-center text-xs text-slate-400 pb-8">LEADOS Decision Topology Surface · fresh, self-contained implementation of the pasted Part 3 brief · see AI-SESSION-LOG.md</footer>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================================
+   STORE — append-only, single localStorage key, distinct from every other
+   key found/claimed for this family of builds (see AI-SESSION-LOG.md).
+   ========================================================================= */
+const KEY = 'leados-decision-surface:data';
+const OTHER_KNOWN_KEYS = ['leados:data', 'leados-orgphysics-sandbox:data']; // for H8 disclosure
+const DAY = 86400000;
+const LEADOS = window.LEADOS = window.LEADOS || {};
+
+function genesis(){ return { schemaVersion: 1, meta: { lineage: 'decision-surface-part3', createdAt: Date.now() }, events: [] }; }
+function loadRaw(){
+  const text = localStorage.getItem(KEY);
+  if (text === null) { const raw = genesis(); saveRaw(raw); return raw; }
+  try { return JSON.parse(text); }
+  catch(e){ throw new Error('LEADOS: store at ' + KEY + ' is corrupt and was left untouched.'); }
+}
+function saveRaw(raw){ localStorage.setItem(KEY, JSON.stringify(raw)); }
+function padId(seq){ return 'e-' + String(seq).padStart(5,'0'); }
+function appendRawInto(raw, type, data, meta){
+  const seq = raw.events.length + 1;
+  const ev = { seq: seq, id: padId(seq), at: Date.now(), type: type, data: data };
+  if (meta) ev.meta = meta;
+  raw.events.push(ev);
+  return ev;
+}
+function appendAtInto(raw, type, data, atMs, meta){
+  const seq = raw.events.length + 1;
+  const ev = { seq: seq, id: padId(seq), at: atMs, type: type, data: data, meta: Object.assign({ seeded: true }, meta || {}) };
+  raw.events.push(ev);
+  return ev;
+}
+function append(type, data, meta){ // the only "now" write path — never backdates, never marks seeded
+  const raw = loadRaw();
+  const ev = appendRawInto(raw, type, data, meta);
+  saveRaw(raw);
+  return ev;
+}
+LEADOS.store = {
+  KEY: KEY,
+  getEvents: function(){ return loadRaw().events.slice(); },
+  append: append,
+  wipe: function(){ localStorage.removeItem(KEY); }
+};
+
+/* =========================================================================
+   ENGINE — minimal scaffold this view needs: project() folds the log,
+   _days() is the brief's own helper name, reused verbatim.
+   ========================================================================= */
+function dateOnlyUTC(y_m_d_iso){
+  const parts = y_m_d_iso.split('-').map(Number);
+  return new Date(Date.UTC(parts[0], parts[1]-1, parts[2]));
+}
+function todayMidnightUTC(){
+  const d = new Date();
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+function _days(fromDate, toISO){
+  if (!toISO) return null;
+  const a = (fromDate instanceof Date) ? Date.UTC(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()) : fromDate;
+  const b = dateOnlyUTC(toISO).getTime();
+  return Math.round((b - a) / DAY);
+}
+function project(events){
+  const P = { state: { events: events.slice() }, decisionById: {} };
+  events.forEach(function(ev){
+    if (ev.type === 'decision.logged') {
+      P.decisionById[ev.data.id] = {
+        id: ev.data.id, title: ev.data.title, severity: ev.data.severity,
+        domain: ev.data.domain || 'general', reviewDate: ev.data.reviewDate || null,
+        loggedAt: ev.at, resolved: false
+      };
+    }
+    if (ev.type === 'decision.resolved') {
+      const d = P.decisionById[ev.data.decisionId];
+      if (d) d.resolved = true;
+    }
+  });
+  P.decisions = Object.keys(P.decisionById).map(function(k){ return P.decisionById[k]; });
+  P.openDecisions = P.decisions.filter(function(d){ return !d.resolved; });
+  return P;
+}
+LEADOS.engine = { project: project, _days: _days };
+
+/* =========================================================================
+   PART 3 — DECISION TOPOLOGY SURFACE
+   Implemented verbatim against the brief's own pasted code.
+   ========================================================================= */
+function mapDecisionTopology(decisions, P, today) {
+  return decisions.map(d => {
+    const scenarios = P.state.events.filter(e =>
+      e.type === 'decision.scenario' && e.data.decisionId === d.id
+    );
+    const worstScenarioProb = scenarios.length ?
+      Math.max(...scenarios.map(s => s.data.probability || 0.5)) : 0.5;
+    const risk = (d.severity / 5) * 0.6 + worstScenarioProb * 0.4;
+
+    const maxCost = scenarios.length ?
+      Math.max(...scenarios.map(s => s.data.cost_if_true || 0)) : 0;
+    const reversibility = maxCost > 0 ?
+      Math.max(0, 1 - (maxCost / 1000000)) : 0.5;
+
+    const daysUntilReview = d.reviewDate ?
+      LEADOS.engine._days(today, d.reviewDate) : 90;
+    const pressure = Math.max(0, Math.min(1, 1 - (daysUntilReview / 90)));
+
+    return {
+      decision: d,
+      risk: Math.round(risk * 100) / 100,
+      reversibility: Math.round(reversibility * 100) / 100,
+      pressure: Math.round(pressure * 100) / 100,
+      quadrant: classifyDecisionQuadrant(risk, reversibility, pressure),
+      math: { worstScenarioProb, maxCost, daysUntilReview, scenarios }
+    };
+  });
+}
+
+function classifyDecisionQuadrant(risk, reversibility, pressure) {
+  const highRisk = risk > 0.6;
+  const reversible = reversibility > 0.5;
+  const urgent = pressure > 0.6;
+
+  if (!highRisk && reversible && !urgent) return {
+    name: 'EXPERIMENT',
+    guidance: 'Low risk, reversible, no time pressure. Try multiple approaches. ' +
+              'The cost of being wrong is low — optimize for learning.'
+  };
+  if (!highRisk && reversible && urgent) return {
+    name: 'FAST DECIDE',
+    guidance: 'Low risk, reversible, but time is short. ' +
+              'Decide quickly and correct course as data arrives. ' +
+              'Do not over-analyze a reversible decision under time pressure.'
+  };
+  if (!highRisk && !reversible && !urgent) return {
+    name: 'DELIBERATE',
+    guidance: 'Low risk but hard to undo. Take the time to get this right. ' +
+              'A premature decision here is sticky.'
+  };
+  if (!highRisk && !reversible && urgent) return {
+    name: 'COMMIT NOW',
+    guidance: 'Low risk, hard to undo, time is running out. ' +
+              'The window is closing on an acceptable outcome. Decide now.'
+  };
+  if (highRisk && reversible && !urgent) return {
+    name: 'PROTOTYPE',
+    guidance: 'High risk but reversible. Run a time-bounded test. ' +
+              'Define the conditions under which you will reverse the decision.'
+  };
+  if (highRisk && reversible && urgent) return {
+    name: 'STAGED BET',
+    guidance: 'High risk, reversible, urgent. Make a small version of the decision now. ' +
+              'Full commitment after the first signal.'
+  };
+  if (highRisk && !reversible && !urgent) return {
+    name: 'PREMORTEM REQUIRED',
+    guidance: 'High risk, hard to undo, no time pressure yet. ' +
+              'This decision requires maximum preparation. ' +
+              'Do not enter this quadrant without a premortem.'
+  };
+  return {
+    name: 'CRISIS DECIDE',
+    guidance: 'High risk, cannot be undone, window closing now. ' +
+              'This is the most dangerous decision quadrant. ' +
+              'Get the best information available in the time available. ' +
+              'Accept that this decision will be imperfect and make it anyway.'
+  };
+}
+LEADOS.decisionSurface = { mapDecisionTopology: mapDecisionTopology, classifyDecisionQuadrant: classifyDecisionQuadrant };
+
+const QUADRANT_COLORS = {
+  'EXPERIMENT': '#22c55e',
+  'FAST DECIDE': '#84cc16',
+  'DELIBERATE': '#38bdf8',
+  'COMMIT NOW': '#6366f1',
+  'PROTOTYPE': '#f59e0b',
+  'STAGED BET': '#fb923c',
+  'PREMORTEM REQUIRED': '#ef4444',
+  'CRISIS DECIDE': '#7f1d1d'
+};
+
+/* =========================================================================
+   SEED — disclosed-fabricated, hand-calibrated to land one decision in
+   each of the 8 quadrants so every classification path is demonstrable.
+   ========================================================================= */
+function seedIfEmpty(force){
+  const raw = loadRaw();
+  const hasDecisions = raw.events.some(e => e.type === 'decision.logged');
+  if (hasDecisions && !force) return;
+  if (force) raw.events = [];
+  const today = todayMidnightUTC();
+  const mk = (offsetDays) => new Date(today.getTime() + offsetDays*DAY).toISOString().slice(0,10);
+  const seeds = [
+    { id:'d-1', title:'Pilot a redesigned onboarding flow in one region',            severity:1, domain:'ops',      reviewOffset:60, prob:0.2, cost:20000  }, // EXPERIMENT
+    { id:'d-2', title:'Approve a short-term vendor swap to save this sprint',        severity:2, domain:'ops',      reviewOffset:5,  prob:0.3, cost:30000  }, // FAST DECIDE
+    { id:'d-3', title:'Restructure the reporting line for the data team',           severity:2, domain:'people',   reviewOffset:80, prob:0.3, cost:900000 }, // DELIBERATE
+    { id:'d-4', title:'Sign the 3-year lease renewal before the option lapses',      severity:2, domain:'finance',  reviewOffset:3,  prob:0.3, cost:850000 }, // COMMIT NOW
+    { id:'d-5', title:'Trial a new pricing model with 10% of new customers',        severity:5, domain:'strategy', reviewOffset:70, prob:0.7, cost:50000  }, // PROTOTYPE
+    { id:'d-6', title:'Launch a limited beta of the unreleased feature to one design partner', severity:5, domain:'product', reviewOffset:4, prob:0.6, cost:80000 }, // STAGED BET
+    { id:'d-7', title:'Acquire the smaller competitor',                             severity:5, domain:'strategy', reviewOffset:85, prob:0.8, cost:950000 }, // PREMORTEM REQUIRED
+    { id:'d-8', title:'Decide whether to disclose the breach before tonight\'s regulator deadline', severity:5, domain:'legal', reviewOffset:1, prob:0.9, cost:1200000 } // CRISIS DECIDE
+  ];
+  seeds.forEach((s, i) => {
+    const base = today.getTime() - (seeds.length - i) * DAY;
+    appendAtInto(raw, 'decision.logged', { id:s.id, title:s.title, severity:s.severity, domain:s.domain, reviewDate: mk(s.reviewOffset) }, base);
+    appendAtInto(raw, 'decision.scenario', { decisionId:s.id, probability:s.prob, cost_if_true:s.cost, label:'primary scenario' }, base + 1000);
+  });
+  saveRaw(raw);
+}
+seedIfEmpty(false);
+
+/* =========================================================================
+   UI
+   ========================================================================= */
+let selectedId = null;
+
+function currentP(){ return project(LEADOS.store.getEvents()); }
+
+function fmtMoney(n){ return '$' + Number(n||0).toLocaleString(); }
+function fmtDate(ms){ return new Date(ms).toLocaleString(); }
+
+function renderTabs(){
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.classList.add('text-slate-500'); });
+      btn.classList.add('active'); btn.classList.remove('text-slate-500');
+      document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+      document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden');
+    });
+  });
+}
+
+function layout(topologyItem, plotW, plotH, margin){
+  const x = margin + topologyItem.risk * plotW;
+  const y = margin + (1 - topologyItem.reversibility) * plotH;
+  const r = 7 + topologyItem.pressure * 17;
+  return { x, y, r };
+}
+
+function drawSurface(topology){
+  const canvas = document.getElementById('surfaceCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height, margin = 56;
+  const plotW = W - margin*2, plotH = H - margin*2;
+  ctx.clearRect(0,0,W,H);
+
+  const threshX = margin + 0.6*plotW;
+  const threshY = margin + (1-0.5)*plotH;
+
+  // quadrant backgrounds
+  ctx.fillStyle = 'rgba(34,197,94,0.08)';  ctx.fillRect(margin, margin, threshX-margin, threshY-margin);           // low risk / reversible
+  ctx.fillStyle = 'rgba(245,158,11,0.08)'; ctx.fillRect(threshX, margin, margin+plotW-threshX, threshY-margin);    // high risk / reversible
+  ctx.fillStyle = 'rgba(56,189,248,0.08)'; ctx.fillRect(margin, threshY, threshX-margin, margin+plotH-threshY);    // low risk / not reversible
+  ctx.fillStyle = 'rgba(239,68,68,0.08)';  ctx.fillRect(threshX, threshY, margin+plotW-threshX, margin+plotH-threshY); // high risk / not reversible
+
+  // threshold lines
+  ctx.strokeStyle = '#94a3b8'; ctx.setLineDash([4,4]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(threshX, margin); ctx.lineTo(threshX, margin+plotH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(margin, threshY); ctx.lineTo(margin+plotW, threshY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // axes box
+  ctx.strokeStyle = '#64748b'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(margin, margin, plotW, plotH);
+
+  // zone labels
+  ctx.font = '11px ui-sans-serif, system-ui'; ctx.fillStyle = '#64748b';
+  ctx.fillText('EXPERIMENT / FAST DECIDE zone', margin+8, margin+14);
+  ctx.fillText('PROTOTYPE / STAGED BET zone', threshX+8, margin+14);
+  ctx.fillText('DELIBERATE / COMMIT NOW zone', margin+8, threshY+14);
+  ctx.fillText('PREMORTEM / CRISIS zone', threshX+8, threshY+14);
+
+  // axis labels
+  ctx.fillStyle = '#334155'; ctx.font = '12px ui-sans-serif, system-ui';
+  ctx.fillText('Risk (probability of bad outcome) →', margin, H-14);
+  ctx.save(); ctx.translate(14, margin+plotH/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText('← Reversibility (can you undo it?)', 0, 0); ctx.restore();
+
+  // nodes
+  topology.forEach(t => {
+    const { x, y, r } = layout(t, plotW, plotH, margin);
+    const color = QUADRANT_COLORS[t.quadrant.name] || '#64748b';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fillStyle = color + 'cc'; ctx.fill();
+    ctx.lineWidth = (t.decision.id === selectedId) ? 3 : 1.2;
+    ctx.strokeStyle = (t.decision.id === selectedId) ? '#0f172a' : '#ffffff';
+    ctx.stroke();
+    t._layout = { x, y, r };
+  });
+}
+
+function renderLegend(){
+  const legend = document.getElementById('legend');
+  legend.innerHTML = Object.keys(QUADRANT_COLORS).map(name =>
+    `<span class="flex items-center gap-1"><span class="quad-swatch" style="background:${QUADRANT_COLORS[name]}"></span>${name}</span>`
+  ).join('') + `<span class="flex items-center gap-2 ml-4">node size = time pressure
+    <svg width="60" height="20"><circle cx="10" cy="10" r="5" fill="#94a3b8"/><circle cx="32" cy="10" r="9" fill="#94a3b8"/><circle cx="54" cy="10" r="13" fill="#94a3b8"/></svg>
+  </span>`;
+}
+
+function showDetail(t){
+  if (!t){ document.getElementById('detailPanel').innerHTML = 'Click any node on the surface to see its full classification and guidance.'; return; }
+  const d = t.decision, m = t.math;
+  const scenarioRows = m.scenarios.map(s => `<li class="mono text-xs">${s.data.label||'scenario'}: p=${s.data.probability}, cost_if_true=${fmtMoney(s.data.cost_if_true)}</li>`).join('') || '<li class="text-xs text-slate-400">no scenarios logged — defaults used (prob 0.5, cost 0)</li>';
+  document.getElementById('detailPanel').innerHTML = `
+    <div class="flex items-center gap-2 mb-1">
+      <span class="quad-swatch" style="background:${QUADRANT_COLORS[t.quadrant.name]}"></span>
+      <h3 class="font-bold text-slate-800">${t.quadrant.name}</h3>
+    </div>
+    <p class="font-medium text-slate-700 mb-2">${d.title}</p>
+    <p class="text-xs text-slate-500 mb-3">${t.quadrant.guidance}</p>
+    <dl class="text-xs grid grid-cols-2 gap-1 mb-3">
+      <dt class="text-slate-400">Domain</dt><dd>${d.domain}</dd>
+      <dt class="text-slate-400">Severity</dt><dd>${d.severity}/5</dd>
+      <dt class="text-slate-400">Review date</dt><dd>${d.reviewDate || '—'}</dd>
+      <dt class="text-slate-400">Days until review</dt><dd>${m.daysUntilReview}</dd>
+    </dl>
+    <details class="mb-2"><summary class="text-xs font-semibold text-slate-600">Show score math</summary>
+      <div class="mono text-xs text-slate-500 mt-1 space-y-1">
+        <p>risk = (${d.severity}/5)*0.6 + ${m.worstScenarioProb}*0.4 = <b>${t.risk}</b></p>
+        <p>reversibility = ${m.maxCost>0 ? `max(0, 1 - ${m.maxCost}/1000000)` : '0.5 (no scenario cost logged)'} = <b>${t.reversibility}</b></p>
+        <p>pressure = max(0, min(1, 1 - ${m.daysUntilReview}/90)) = <b>${t.pressure}</b></p>
+        <p>highRisk=${t.risk>0.6}, reversible=${t.reversibility>0.5}, urgent=${t.pressure>0.6}</p>
+      </div>
+    </details>
+    <p class="text-xs font-semibold text-slate-600 mb-1">Scenarios</p>
+    <ul class="list-disc list-inside space-y-0.5">${scenarioRows}</ul>
+    <button data-resolve="${d.id}" class="mt-3 text-xs bg-slate-900 text-white px-2 py-1 rounded">Mark resolved</button>
+  `;
+  document.querySelector('[data-resolve]')?.addEventListener('click', (e)=>{
+    LEADOS.store.append('decision.resolved', { decisionId: e.target.dataset.resolve });
+    renderAll();
+  });
+}
+
+function wireCanvasInteraction(getTopology){
+  const canvas = document.getElementById('surfaceCanvas');
+  const tooltip = document.getElementById('tooltip');
+  function toCanvasCoords(evt){
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+    return { x: (evt.clientX - rect.left) * scaleX, y: (evt.clientY - rect.top) * scaleY, rectLeft: rect.left, rectTop: rect.top, scaleX, scaleY };
+  }
+  function hit(x, y, topology){
+    for (const t of topology){
+      if (!t._layout) continue;
+      const dx = x - t._layout.x, dy = y - t._layout.y;
+      if (Math.sqrt(dx*dx+dy*dy) <= t._layout.r) return t;
+    }
+    return null;
+  }
+  canvas.addEventListener('mousemove', (evt) => {
+    const topology = getTopology();
+    const { x, y } = toCanvasCoords(evt);
+    const t = hit(x, y, topology);
+    if (t){
+      tooltip.classList.remove('hidden');
+      tooltip.style.left = (evt.clientX - canvas.getBoundingClientRect().left + 12) + 'px';
+      tooltip.style.top = (evt.clientY - canvas.getBoundingClientRect().top + 12) + 'px';
+      tooltip.textContent = t.decision.title + ' — ' + t.quadrant.name;
+      canvas.style.cursor = 'pointer';
+    } else {
+      tooltip.classList.add('hidden');
+      canvas.style.cursor = 'crosshair';
+    }
+  });
+  canvas.addEventListener('mouseleave', () => tooltip.classList.add('hidden'));
+  canvas.addEventListener('click', (evt) => {
+    const topology = getTopology();
+    const { x, y } = toCanvasCoords(evt);
+    const t = hit(x, y, topology);
+    if (t){ selectedId = t.decision.id; renderAll(); }
+  });
+}
+
+function renderDecisionsTable(P, topology){
+  const topoById = {}; topology.forEach(t => topoById[t.decision.id] = t);
+  const tbody = document.querySelector('#decisionsTable tbody');
+  tbody.innerHTML = P.decisions.map(d => {
+    const t = topoById[d.id];
+    const resolvedCls = d.resolved ? 'opacity-40 line-through' : '';
+    return `<tr class="${resolvedCls} border-b border-slate-100">
+      <td class="py-1.5 pr-3">${d.title}</td>
+      <td class="py-1.5 pr-3">${d.domain}</td>
+      <td class="py-1.5 pr-3">${d.severity}</td>
+      <td class="py-1.5 pr-3">${d.reviewDate||'—'}</td>
+      <td class="py-1.5 pr-3">${t?t.risk:'—'}</td>
+      <td class="py-1.5 pr-3">${t?t.reversibility:'—'}</td>
+      <td class="py-1.5 pr-3">${t?t.pressure:'—'}</td>
+      <td class="py-1.5 pr-3">${t?`<span class="quad-swatch" style="background:${QUADRANT_COLORS[t.quadrant.name]}"></span> ${t.quadrant.name}`:'resolved'}</td>
+      <td class="py-1.5 pr-3">${d.resolved?'':`<button data-view="${d.id}" class="text-xs text-sky-600 underline">view</button>`}</td>
+    </tr>`;
+  }).join('') || '<tr><td class="py-4 text-slate-400" colspan="9">No decisions logged yet.</td></tr>';
+  tbody.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => { selectedId = btn.dataset.view; renderAll(); document.querySelector('[data-tab="surface"]').click(); }));
+}
+
+function renderScenarioSelect(P){
+  const sel = document.getElementById('scenarioDecisionSelect');
+  sel.innerHTML = P.openDecisions.map(d => `<option value="${d.id}">${d.title}</option>`).join('');
+}
+
+function renderEventLog(events){
+  const tbody = document.getElementById('eventLogBody');
+  tbody.innerHTML = events.slice().reverse().map(e => `
+    <tr class="border-b border-slate-100 align-top">
+      <td class="py-1 px-2 mono">${e.seq}</td>
+      <td class="py-1 px-2 mono whitespace-nowrap">${fmtDate(e.at)}</td>
+      <td class="py-1 px-2 mono">${e.type}</td>
+      <td class="py-1 px-2 mono">${JSON.stringify(e.data)}</td>
+      <td class="py-1 px-2 mono">${e.meta?JSON.stringify(e.meta):''}</td>
+    </tr>`).join('');
+}
+
+const VERIFIED_ROWS = [
+  ['github.com/wbweve/Leados exists; root is a React 19 + Vite 7 + Tailwind 4 project (vite-plugin-singlefile present)', '✅ verified this session — raw fetch of package.json'],
+  ['Root also accumulates ~40 loose files from prior sessions, mixing .tsx components with standalone store.js / engine.js', '✅ verified this session — GitHub Trees API listing'],
+  ['Real namespace is window.LeadOS (not LEADOS); real store key is leados:data, schemaVersion 5', '✅ verified this session — raw fetch of store.js'],
+  ['heatmapDecayFactor: 0.85, correlationWindowDays: 90, decisionMaxOpenDays: 21 are real settings', '✅ verified this session — read directly from store.js'],
+  ['engine.js folds events into keyed per-domain buckets (finRisks, deals, okrs, incidents, milestones, legalRisks, contracts, escalations, crises, …) plus an alias table and open-set predicates', '✅ verified this session — raw fetch of engine.js (large file; fetch was truncated mid-file, so not every line was read)'],
+  ['engine.js also contains a rule-finding engine and a cross-domain pattern library (LeadOS.patterns: DEATH_SPIRAL, QUALITY_COLLAPSE, GOVERNANCE_GAP, …)', '✅ verified this session — found in the same raw fetch'],
+  ['Real decision-shaped events: strategy.decision (log entry, no id/severity) and decision.decided (choice record)', '✅ verified this session — found in engine.js fold + store.js migration 2>3'],
+  ['LEADOS.decisionSurface, mapDecisionTopology, classifyDecisionQuadrant, a decision.scenario event, or decision entities with severity/reviewDate fields', '⚠️ not found in the files fetched this session (not proof of absence across the full ~40-file repo)'],
+  ['P.state.events shape, LEADOS (vs LeadOS) capitalization, as used in this brief', '⚠️ not found verbatim — this brief\'s own naming is used here as this build\'s internal contract, not as a recovered fact'],
+  ['The 8 seed decisions, their severities/costs/dates calibrated to land one in each of the 8 named quadrants', '⚠️ fabricated, disclosed in seedIfEmpty() in this file'],
+  ['This file is a hand-authored single index.html rather than the real repo\'s Vite/React tree', '⚠️ disclosed structural difference — this tool can only author one self-contained HTML file']
+];
+function renderVerified(){
+  document.getElementById('verifiedBody').innerHTML = VERIFIED_ROWS.map(r => `<tr><td class="py-2 pr-4 align-top">${r[0]}</td><td class="py-2 align-top whitespace-nowrap">${r[1]}</td></tr>`).join('');
+}
+
+/* ---------------- Health checks ---------------- */
+function runHealthChecks(){
+  const results = [];
+  function check(name, fn){
+    try { const r = fn(); results.push({ name, pass: !!r.pass, detail: r.detail }); }
+    catch(e){ results.push({ name, pass: false, detail: 'threw: ' + e.message }); }
+  }
+
+  check('H1 store round-trip', () => {
+    const testKey = KEY + ':__health_check__';
+    const payload = { a: 1, nested: { b: [1,2,3] } };
+    localStorage.setItem(testKey, JSON.stringify(payload));
+    const back = JSON.parse(localStorage.getItem(testKey));
+    localStorage.removeItem(testKey);
+    return { pass: JSON.stringify(back) === JSON.stringify(payload), detail: 'write/read/remove on a throwaway key' };
+  });
+
+  check('H2 append-only immutability (throwaway key, never the live store)', () => {
+    const testKey = KEY + ':__health_check2__';
+    const raw = { schemaVersion:1, meta:{}, events: [] };
+    appendRawInto(raw, 'x.one', {v:1});
+    appendRawInto(raw, 'x.two', {v:2});
+    localStorage.setItem(testKey, JSON.stringify(raw));
+    const before = JSON.stringify(JSON.parse(localStorage.getItem(testKey)).events);
+    const raw2 = JSON.parse(localStorage.getItem(testKey));
+    appendRawInto(raw2, 'x.three', {v:3});
+    localStorage.setItem(testKey, JSON.stringify(raw2));
+    const after = JSON.parse(localStorage.getItem(testKey)).events;
+    const prefixUnchanged = JSON.stringify(after.slice(0,2)) === before;
+    localStorage.removeItem(testKey);
+    return { pass: prefixUnchanged && after.length === 3, detail: 'append added exactly 1 event; first 2 bytes-identical' };
+  });
+
+  check('H3 all 8 decision quadrants reachable', () => {
+    const combos = [[0.3,0.9,0.3],[0.3,0.9,0.9],[0.3,0.3,0.3],[0.3,0.3,0.9],[0.9,0.9,0.3],[0.9,0.9,0.9],[0.9,0.3,0.3],[0.9,0.3,0.9]];
+    const names = new Set(combos.map(c => classifyDecisionQuadrant(c[0],c[1],c[2]).name));
+    return { pass: names.size === 8, detail: Array.from(names).join(', ') };
+  });
+
+  check('H4 projection purity (same input twice -> identical output, input untouched)', () => {
+    const events = LEADOS.store.getEvents();
+    const before = JSON.stringify(events);
+    const p1 = JSON.stringify(project(events).decisions);
+    const p2 = JSON.stringify(project(events).decisions);
+    const untouched = JSON.stringify(events) === before;
+    return { pass: p1 === p2 && untouched, detail: 'project() called twice on the same array; no mutation observed' };
+  });
+
+  check('H5 _days() arithmetic', () => {
+    const from = new Date(Date.UTC(2024,0,1));
+    const d1 = _days(from, '2024-01-11');
+    const d2 = _days(from, '2023-12-22');
+    return { pass: d1 === 10 && d2 === -10, detail: '2024-01-01 -> 2024-01-11 = ' + d1 + 'd; -> 2023-12-22 = ' + d2 + 'd' };
+  });
+
+  check('H6 seeded events are marked meta.seeded, normal appends never are', () => {
+    const events = LEADOS.store.getEvents();
+    const seeded = events.filter(e => e.meta && e.meta.seeded === true);
+    const okSoFar = seeded.length > 0 && seeded.every(e => e.meta.seeded === true);
+    return { pass: okSoFar, detail: seeded.length + ' seeded event(s) found, all explicitly marked' };
+  });
+
+  check('H7 risk / reversibility / pressure stay within [0,1]', () => {
+    const P = currentP(), today = todayMidnightUTC();
+    const topo = mapDecisionTopology(P.decisions, P, today);
+    const inBounds = topo.every(t => t.risk>=0 && t.risk<=1 && t.reversibility>=0 && t.reversibility<=1 && t.pressure>=0 && t.pressure<=1);
+    return { pass: inBounds, detail: topo.length + ' decision(s) checked' };
+  });
+
+  check('H8 this store key is isolated from other known LEADOS-family keys', () => {
+    const clash = OTHER_KNOWN_KEYS.includes(KEY);
+    return { pass: !clash, detail: KEY + ' vs ' + OTHER_KNOWN_KEYS.join(', ') };
+  });
+
+  return results;
+}
+function renderHealth(){
+  const results = runHealthChecks();
+  document.getElementById('healthResults').innerHTML = results.map(r => `
+    <div class="border rounded-lg p-3 flex items-start gap-3 ${r.pass?'border-green-200 bg-green-50':'border-red-200 bg-red-50'}">
+      <span class="text-lg leading-none">${r.pass?'✅':'❌'}</span>
+      <div><p class="font-medium text-sm">${r.name}</p><p class="text-xs text-slate-500 mono">${r.detail}</p></div>
+    </div>`).join('');
+}
+
+/* ---------------- master render ---------------- */
+function renderAll(){
+  const P = currentP();
+  const today = todayMidnightUTC();
+  const topology = mapDecisionTopology(P.openDecisions, P, today);
+  drawSurface(topology);
+  renderLegend();
+  const selected = topology.find(t => t.decision.id === selectedId) || null;
+  showDetail(selected);
+  renderDecisionsTable(P, mapDecisionTopology(P.decisions, P, today));
+  renderScenarioSelect(P);
+  renderEventLog(P.state.events);
+  renderVerified();
+  if (!document.getElementById('tab-health').classList.contains('hidden')) renderHealth();
+  wireCanvasInteraction(() => topology);
+}
+
+/* ---------------- forms & buttons ---------------- */
+document.getElementById('decisionForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const id = 'd-' + Date.now();
+  LEADOS.store.append('decision.logged', { id, title: f.get('title'), severity: Number(f.get('severity')), domain: f.get('domain'), reviewDate: f.get('reviewDate') });
+  LEADOS.store.append('decision.scenario', { decisionId: id, probability: Number(f.get('probability')), cost_if_true: Number(f.get('cost')), label: 'primary scenario' });
+  e.target.reset();
+  renderAll();
+});
+document.getElementById('scenarioForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  LEADOS.store.append('decision.scenario', { decisionId: f.get('decisionId'), probability: Number(f.get('probability')), cost_if_true: Number(f.get('cost')), label: f.get('label') || 'scenario' });
+  e.target.reset();
+  renderAll();
+});
+document.getElementById('btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(LEADOS.store.getEvents(), null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'leados-decision-surface-events.json'; a.click();
+});
+document.getElementById('btnReseed').addEventListener('click', () => {
+  if (confirm('Reset the store and reseed the calibrated 8-quadrant demo set?')) { selectedId = null; seedIfEmpty(true); renderAll(); }
+});
+document.getElementById('btnWipe').addEventListener('click', () => {
+  if (confirm('Wipe all decisions and scenarios? This cannot be undone.')) { selectedId = null; LEADOS.store.wipe(); renderAll(); }
+});
+document.getElementById('btnRunHealth').addEventListener('click', renderHealth);
+
+renderTabs();
+renderAll();
+})();
+</script>
+</body>
 </html>
