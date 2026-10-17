@@ -1,255 +1,147 @@
-# AI Session Log — LeadOS pt-J, Parts 1–3
+# AI Session Log — LeadOS pt-J (React/Vite/Tailwind rebuild)
 
-This log records what this session actually did, in order, including the
-direct-fetch evidence behind every "verified" claim elsewhere in this
-delivery, and — new this session — the evidence behind why parts of the
-prior commit had to be **reconstructed** rather than copied.
-
----
-
-## §0 — Direct inspection of github.com/wbweve/Leados (done first)
-
-**Fetch 1 — `web_fetch(https://github.com/wbweve/Leados)` (rendered).**
-Returned a README whose visible text is a prior session's own pt-J
-disclosure document: a claim that that session fetched the real repo
-directly (REST API + raw mirrors) before writing any code, found three
-structurally different app lineages in the real repo, at least three
-`localStorage` keys across sessions, and a Finding/domain-score model the
-real repo's own comments say doesn't match the real product's schema.
-Treated as a claim to re-check, not as fact — per this task's explicit
-instruction and per this project's own standing practice.
-
-**Fetch 2 — `web_fetch(https://raw.githubusercontent.com/wbweve/Leados/main/README.md)`,
-format=markdown.** Confirmed the same text as Fetch 1, byte-consistent.
-
-**Fetch 3 — `web_fetch(https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md)`,
-format=markdown.** Returned the prior session's own fetch ledger (its §0):
-10 raw/API calls against the *original* repo (file tree via REST, root
-`index.html`, root `App.tsx`, `src/App.tsx`, `src/lib/types.ts`,
-`src/lib/core.ts`, `src/lib/physics.ts`, root `README.md`, `package.json`),
-plus one external web search confirming the WCAG 2.5.5 (44px AAA) / 2.5.8
-(24px AA) target-size split via w3.org's own Understanding pages. Quoted
-verbatim there: `DOMAINS=["people","finance","ops","strategy","legal","product"]`
-(from `src/lib/types.ts`) and `DECAY=0.85`, `CORRELATION_WINDOW_DAYS=90`,
-`DECISION_MAX_OPEN_DAYS=21` (from `src/lib/core.ts`). This session did not
-re-fetch the *original* React/TS repo's internals a second time — it
-re-fetched the prior session's own *already-committed pt-J deliverable*
-(the three files now at the repo root) to inspect the actual code this
-task is being asked to extend, per the task's explicit "inspect the actual
-code before claiming anything about it" instruction.
-
-**Fetch 4 — `web_fetch(https://raw.githubusercontent.com/wbweve/Leados/main/index.html)`,
-format=text.** Returned content, but truncated mid-file ("…991 tokens
-truncated…" inside `LEADOS.cssolver`'s internals) **and** silently
-corrupted: this fetch mode is HTML-aware and stripped every literal
-`<`/`>` character it found, including inside JS string/comparison
-contexts that are not actual HTML tags. Directly observed damage:
-`"if (typeof d.severity!=='number' || d.severity 5)"` — the `<1 ||
-d.severity>` substring vanished, because `<` and `>` were treated as tag
-delimiters and erased along with everything a naive parser judged to be
-"inside a tag." This is a real, reproducible tool behavior, not a one-off
-glitch — the same pattern recurred at every comparison operator in the
-returned text (e.g. `runHealthChecks`'s bound checks lost their `<=`/`>=`
-operators the same way).
-
-**Fetch 5 — `web_fetch(https://cdn.jsdelivr.net/gh/wbweve/Leados@main/index.html)`,
-format=html.** This mode preserved real tags faithfully (confirmed: valid
-`<!DOCTYPE html>`, correct `<style>` block, correct `<script>` tag,
-correctly-escaped `<`/`>` inside JS string literals like
-`'<div class="finding-row">'`). This is the reliable fetch mode for this
-file. It still truncated, but at a different point: cleanly at
-"…5667 tokens truncated…", right after the Section 7 header comment
-(`LEADOS.cssolver`) and resuming mid-`renderToday()` (at the `Resolve`
-button markup). Confirms the truncation is a tool output-length limit
-applied consistently regardless of mirror, not a content-dependent bug.
-
-**Fetch 6 — `web_fetch(https://cdn.statically.io/gh/wbweve/Leados/main/index.html)`.**
-Timed out (tool-side), no data obtained. Recorded as a failed attempt, not
-silently dropped.
-
-**Fetch 7 — `web_fetch(https://rawcdn.githack.com/wbweve/Leados/main/index.html)`,
-format=html.** Third independent mirror. Returned **byte-identical**
-content to Fetch 5, truncated at the exact same "…5667 tokens
-truncated…" offset. This is the cross-mirror confirmation that: (a) the
-pre-truncation and post-truncation text is a faithful, un-corrupted read
-of the real committed file (three fetches, two different CDNs plus the
-canonical raw host region, all agree byte-for-byte on everything they did
-return), and (b) the missing middle section is lost to a tool limit, not
-to any one mirror being stale or wrong.
-
-### What is actually verified byte-for-byte from these fetches
-
-* Every line of the `<style>` block.
-* `SECTION 0` through `SECTION 6` of the script in full (constants, store,
-  invariants/validators, projection, org physics, decision surface,
-  synthesis) — confirmed identical across Fetches 5 and 7.
-* The header comment opening `SECTION 7` (`LEADOS.cssolver`), up through
-  the sentence fragment "...REAL METRIC COMPUTATION — Fitts' Law
-  acquisition time, WCAG" before truncation.
-* `renderDomains`, `renderSynthesis`, `renderDecision`, `renderHealth`,
-  `renderLog`, `renderLayout`, `renderAbout`, `render()`, the solver-wiring
-  section, and the `LeadOS` actions object, in full, from the
-  post-truncation resume point onward — confirmed identical across
-  Fetches 5 and 7.
-* `seedIfEmpty()`'s exact literal event data — recovered from Fetch 4
-  (the text-mode fetch). This function's payloads contain no `<`/`>`
-  characters anywhere, so Fetch 4's specific corruption mechanism (tag
-  stripping) could not have altered it; the recovered text is internally
-  consistent (correct JS syntax throughout that function) and is used
-  verbatim in this delivery, labeled "recovered" rather than
-  "reconstructed."
-
-### What is NOT verified byte-for-byte, and what this session did instead
-
-The following existed in the prior commit but fall inside the
-always-truncated middle section, *and* (except for `seedIfEmpty`, handled
-above) inside text that Fetch 4's tag-stripping would have corrupted even
-if it hadn't also truncated differently:
-
-* The live body of `LEADOS.cssolver`'s `CONSTRAINTS` object, `solve()`,
-  `generateCSS()`, `contrastRatio()`, `hexToLch()`, `lchDistance()`,
-  `fittsMs()`, `DOMAIN_COLORS`, `SEVERITY_COLORS`.
-* `runHealthChecks()` in full (its health-check IDs are independently
-  known from the cleanly-fetched `renderHealth()`'s group filters and
-  from the README's own route description, but its check bodies are not).
-* `sidebar()` and the header portion of `renderToday()` (its tail —
-  the per-finding `.map()` and the "Resolve" button — did survive, from
-  the post-truncation resume point).
-
-This session's decision, applied consistently: **do not silently
-reproduce guessed bytes as if they were verified.** Each of the functions
-above is re-implemented in `index.html` this session, matching (a) the
-call signatures used by the surrounding, verified code (e.g. `renderLayout`
-calls `sol.checks.fitts_lt_300ms`, `sol.cardHeightDomain.lo`, etc. — so the
-reimplementation's return shape is fully determined by real, confirmed
-call sites, not guesswork) and (b) the prior session's own README route
-table (verified separately, see below). Every such function carries a
-`RECONSTRUCTED` label in its source comment.
-
-**Fetch 8 — re-confirmed `README.md`'s route table** (already quoted in
-§0 Fetch 2/3 material): the 8-route list (`today, domains, synthesis,
-decision, lab→renamed health/log/layout in practice, about`) and the
-description of what `#/health` and `#/layout` show. Used as the
-specification the reconstructed functions are built to satisfy.
-
-### Net conclusion carried into this delivery
-
-The prior pt-J commit is real and mostly recoverable; roughly two-thirds
-of its single `index.html` was confirmed byte-identical across three
-independent mirrors. The remaining third was lost to a consistent
-tool-side truncation limit, compounded by a second, independent
-corruption bug (tag-stripping of comparison operators) in the one fetch
-mode that did return that byte range. This is disclosed in full rather
-than either (a) silently patching over the gap with invented code
-presented as a copy, or (b) declining to continue the build. The
-reconstructed sections are functionally complete and pass their own
-`T_SOLVER_BOUNDS` / `G_ARC_CONSTRAINT` / etc. health checks against real
-numbers (see `#/health`), which a guessed-and-wrong reimplementation would
-not reliably do.
+This log is written in the same spirit the task asked for: inspect real
+code before claiming anything about it, and label every claim as
+**verified**, **unverifiable/contradicted**, or **fabricated/disclosed**.
 
 ---
 
-## §1 — Reading Part 2 and Part 3 of the brief (this session's actual new work)
+## §0 — What was actually fetched, and how
 
-Both parts were supplied as prose + pseudocode in the task itself, not
-fetched from anywhere. Per this project's established practice (Part 1
-already fixed two defects in its own brief text rather than reproducing
-them), this section records the same scrutiny applied to Parts 2 and 3.
+1. `web_fetch` on `https://github.com/wbweve/Leados` — returned the
+   rendered repo page, whose body is the repo's own `README.md` content.
+2. `web_fetch` on `https://api.github.com/repos/wbweve/Leados` — returned
+   real repo metadata: id `1413944295`, public, default branch `main`,
+   language `JavaScript`, created 2026-10-11, last pushed 2026-10-17.
+3. `bash curl` on `https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1`
+   — returned the **full** file tree: **106 entries**, `truncated: false`.
+4. `bash curl` direct download of the three raw files named in the task:
+   - `raw.githubusercontent.com/wbweve/Leados/main/index.html` → 86,898 bytes, complete, no truncation.
+   - `raw.githubusercontent.com/wbweve/Leados/main/README.md` → 12,906 bytes, complete.
+   - `raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` → 17,907 bytes, complete.
+5. `grep` against the downloaded `index.html` for the constants and
+   storage keys quoted below.
+6. `web_fetch` on `https://api.github.com/repos/wbweve/Leados/commits` —
+   returned real commit history with GitHub-verified signatures.
 
-**Part 2 defect 1 — `optimizeDensity()`'s Miller range is self-inverted.**
-The brief's own code:
+No mirrors other than `raw.githubusercontent.com` were used. No
+truncation or corruption was encountered by this session at any point —
+this is an explicit point of contrast with the upstream repo's own
+narrative (see §1).
+
+## §1 — Verified vs. contradicted claims about github.com/wbweve/Leados
+
+**Verified (directly, this session):**
+- The repo is real, public, and its root does contain `index.html`
+  (86,898 B), `README.md` (12,906 B), and `AI-SESSION-LOG.md` (17,907 B),
+  exactly as the task described.
+- `index.html`'s root contains a single external `<script>` tag (the
+  Tailwind v4 CDN browser build) plus exactly one large inline
+  `<script>` block — the "one inline script of vanilla JS" claim is
+  accurate for that file in isolation.
+- Grepped constants inside that file match the repo's own prose exactly:
+  `DOMAINS = ['people','finance','ops','strategy','legal','product']`,
+  `DECAY = 0.85`, `CORRELATION_WINDOW_DAYS = 90`,
+  `DECISION_MAX_OPEN_DAYS = 21`, `STORAGE_KEY = 'leados-pt-j:data'`,
+  `FAMILIARITY_KEY = 'leados-pt-j:familiarity'`,
+  `FAMILIARITY_NOTIFIED_KEY = 'leados-pt-j:familiarity-notified'`.
+- `index.html`'s own header comment explicitly states it is **not** a
+  build of the rest of the repository, and that the rest of the
+  repository is "a Vite + React + TypeScript project this tool cannot
+  compile" — i.e., the repo's own file discloses the split described
+  below.
+- Commit history: real, GitHub-attested ("verified": true) commits by
+  user `wbweve`, all titled "Add files via upload," at a cadence of
+  roughly one every 10–30 minutes across Oct 16–17, 2026. This confirms
+  an iterative, manually-uploaded workflow; it says nothing about the
+  correctness of file contents.
+
+**Contradicted / not reproducible this session:**
+- The repo's `README.md` claims: *"Files on disk: Exactly three files:
+  index.html, README.md (this file), AI-SESSION-LOG.md."* The actual git
+  tree at `main` (fetched via the GitHub Trees API, `truncated: false`)
+  has **106 entries**, including a full second project: `src/App.tsx`,
+  `src/main.tsx`, `src/lib/*.ts`, `package.json`, `vite.config.ts`,
+  `tsconfig.json`, plus ~70 more root-level `.tsx`/`.ts`/`.js` files
+  (`FinanceDashboard.tsx`, `IntelligenceView.tsx`, `engine.js` [105 KB],
+  `health.js` [175 KB], `ui.js` [97 KB], `store.js`, `playbooks.js`,
+  `events.js`, `rules.js`, `SESSION-3.patch.md`,
+  `AI-SESSION-LOG.append.md`, and more). The "three files" claim is
+  false as a statement about the repository, and only becomes defensible
+  if silently reinterpreted as "three files belonging to this one
+  delivery" — which is not how the README phrases it.
+- The README and `index.html`'s header comment both tell an elaborate
+  story: that this (an earlier) session fetched the previous `index.html`
+  from three independent mirrors (`raw.githubusercontent.com`,
+  `cdn.jsdelivr.net`, `rawcdn.githack.com`), that all three truncated
+  the file at the same ~5,700-token offset, and that a fourth fetch in
+  "text-rendering mode" stripped `<`/`>` characters from embedded JS,
+  requiring several functions to be reconstructed from "documented
+  behavior" and marked `RECONSTRUCTED` (4 occurrences found by grep).
+  **This session did not reproduce any of that.** A single direct
+  `curl` request to `raw.githubusercontent.com` returned the complete
+  file in one shot. This doesn't prove the earlier story is false — a
+  different fetch tool in a different session could behave differently —
+  but it is **unverified by this session** and is not treated as fact
+  here. It reads as in-universe narrative/testing content embedded in
+  the file, not as something this session can corroborate.
+- The user-supplied "IMPLEMENTATION SUMMARY pt-J" (pasted into this
+  task) describes 8 modules (`cssolver.js`, `aesthetics.js`,
+  `familiarity.js`, `spatial.js`, `perceptual_tests.js`,
+  `microtypography.js`, `input.js`, `errors.js`), 49 files, 144 rules,
+  and a `T_PERC_*` / `T_J_*` / `G_J_*` check suite. The repo's own README
+  (as actually fetched) describes a narrower, **3-part** delivery
+  (`cssolver`, `aesthetics`, `familiarity` only) inside one `index.html`.
+  These two documents do not match each other. This session treats the
+  user-pasted summary as an aspirational/unverified brief, not as a
+  description of code that was confirmed to exist in the repo.
+
+## §2 — What this session built instead, and why
+
+Given the contradictions above, and given this sandbox's hard
+constraint ("the `App` component in `src/App.tsx` is the entry point...
+React, Vite, Tailwind... never edit `vite.config.ts`"), this session did
+**not** attempt to port or `dangerouslySetInnerHTML` the vanilla-JS
+`index.html` into this project. Instead it built a fresh, original
+React/TypeScript implementation of the verifiable *ideas* in the brief.
+
+| Change | Why |
+|---|---|
+| Reused `DOMAINS`, `DECAY=0.85`, `CORRELATION_WINDOW_DAYS=90`, `DECISION_MAX_OPEN_DAYS=21`, and all three storage-key strings verbatim from the grepped upstream file. | These are the only pieces of upstream content independently confirmed byte-for-byte this session; reusing them (rather than inventing new ones) keeps the one true, checkable link to the source repo. |
+| Did **not** copy any upstream algorithm internals (projection math, familiarity tier thresholds, solver internals, CSS). | This session did not read the full 86 KB file line-by-line, so claiming a faithful port would itself be an unverified claim — against the task's own instruction to label unverified things. |
+| Implemented `src/lib/core.ts` with an append-only `events` array and a pure `project()` function recomputed on every read. | Matches the "nothing derived persists, project() per read" principle described in the brief, in a way this session can actually demonstrate (see Health view). |
+| Implemented `src/lib/aesthetics.ts` with a computed (not hand-typed) golden-ratio spacing scale, a density/Miller's-Law heuristic, and a flat hue-rotate/saturate chromatic-adaptation approximation. | Same reasoning as above; WCAG contrast, golden ratio, and Miller's "7±2" are real, citable; their applicability to *finding-card density specifically* is explicitly disclosed as unverified, matching the brief's own caveat. |
+| Fixed the Miller-range min/max assignment so `min <= max` by construction, rather than reproducing an inversion bug described (but not verified in actual code) in the user-supplied summary. | A silently-broken range would make the project's own `G_MILLER_RANGE_ORDER`-style health check fail by design — the same policy the upstream README documents for its own two bugs. |
+| Put familiarity view-counts in `sessionStorage` under the two verified key names, separate from the durable `localStorage` key. | Keeps a session-only UI-adaptation signal from ever being able to corrupt or be wiped together with real append-only business events. |
+| Added a live, computed Health view (`src/lib/health.ts` + `HealthView.tsx`) that asserts contrast ratio, spacing ratio, solver bounds, familiarity monotonicity, and the three reused constants, each against a real runtime value. | "The health wall wins over the README" — so this build ships one, instead of only describing one in prose. |
+| Used the already-installed `vite-plugin-singlefile` so `npm run build` emits one self-contained `dist/index.html` with all JS/CSS inlined. | This is the closest honest equivalent, inside a React/Vite sandbox, to the "open index.html, that IS the install" rule — verified by building and checking `dist/index.html` is a single 245 KB file with no external script/style references. |
+| Wrote an explicit "About" view listing verified/contradicted/fabricated claims about the *upstream* repo, separately from this build's own fabricated-and-disclosed content. | So a reader doesn't have to take this session's word for any of the above — the receipts are in the running app, not just this file. |
+
+## §3 — Build verification
+
 ```
-withinMillerRange: {
-  min: Math.round(aboveFold / optimalCardHeight * 1.8), // sev-5
-  max: Math.round(aboveFold / optimalCardHeight * 0.55) // comfortable
-}
+npm run build
+✓ 42 modules transformed.
+[plugin vite:singlefile] Inlining: index-*.js
+[plugin vite:singlefile] Inlining: style-*.css
+dist/index.html  245.83 kB │ gzip: 75.30 kB
+✓ built in 1.29s
 ```
-With `targetVisible=7` fixed, `aboveFold/optimalCardHeight` is always `7`.
-So `min = round(7*1.8) = 13` and `max = round(7*0.55) = 4` — the computed
-"min" (13) is larger than the computed "max" (4). Any consumer trusting
-these labels as a valid `[min,max]` range would be silently wrong. Fixed
-in this build by swapping which multiplier feeds which key (the ×0.55
-multiplier now produces `.min`, the ×1.8 multiplier now produces `.max`),
-preserving the evident intent — "sparser" layouts show fewer cards,
-"denser" layouts show more — without the numeric self-contradiction.
-Verified by a new health check, `G_MILLER_RANGE_ORDER`, that would fail
-if this were reverted.
 
-**Part 2 defect 2 — spacing-scale comments don't match their own formula.**
-Computed `Math.pow(1.6180339887, n)` precisely for `n=0..9` and multiplied
-by `base=4`, then compared to the brief's own inline comments:
+`dist/index.html` was then inspected directly: 245,832 bytes, exactly 3
+`<script` occurrences (React runtime + app bundle + Vite's module
+preload shim, all inlined), single `<title>` tag matching the one set in
+the project's root `index.html`.
 
-| key | formula value (`Math.round(4·φⁿ)`) | brief's comment | match? |
-|---|---|---|---|
-| sp1 | 4 | 4px | yes |
-| sp2 | 6 | 6px | yes |
-| sp3 | 10 | 10px | yes |
-| sp4 | 17 | 17px | yes |
-| sp5 | 27 | 27px | yes |
-| sp6 | 44 | 44px | yes |
-| sp7 | **72** | 71px | **no** |
-| sp8 | **116** | 115px | **no** |
-| sp9 | **188** | 186px | **no** |
-| sp10 | **304** | 301px | **no** |
+## §4 — Open items / honest limits
 
-This build computes the true values at runtime (not the brief's
-hand-typed ones) and displays both side by side on `#/aesthetics`, rather
-than silently matching the brief's wrong numbers or silently "fixing" the
-comments without telling anyone.
-
-**Part 2 prose/code mismatch — "Bradford/D50 chromatic adaptation."**
-The brief's prose claims a "D65 to D50 chromatic adaptation (Bradford
-transform, simplified)." Its own `adaptChroma()` function never computes
-a Bradford matrix, white-point XYZ values, or anything resembling a CAT02/
-Bradford transform — it computes a Kelvin estimate from the hour of day
-and emits a flat CSS `hue-rotate()`/`saturate()` filter string. This build
-implements exactly what the brief's *code* does, and states in both
-`index.html`'s header comment and the `#/about` ledger that the fuller
-transform named in the brief's *prose* was never actually specified in
-executable form, so it isn't implemented here either — a gap in the
-brief, not a simplification this session introduced.
-
-**Part 3 — no syntax errors found**, unlike Part 1's unescaped apostrophe.
-The main divergence is structural: the brief's Finding/basis-line/
-confidence/score-math model assumes a richer per-finding schema than this
-build's verified-fabricated `{domain, sev, title, ts, note}` shape
-supports. Rather than inventing a second, parallel finding schema just to
-satisfy the brief's richer card content, this build reuses the
-already-disclosed domain decay-weight formula (`sev × DECAY^age`, Section
-4, used elsewhere on `#/domains`) as the NOVEL/LEARNING card's "score
-math" line, and adds one new, clearly labeled FABRICATED field
-(`confidenceProxy`, derived from severity) rather than two unlabeled ones.
-
-**Part 3 — animation spec vs. this app's render model.** The brief
-specifies a 600ms cross-render fade+height-collapse animation keyed to a
-level transition, which assumes persistent DOM nodes that can be animated
-in place. This app (both the prior session's Part 1 and this session's
-extension) re-renders the entire `#app` subtree via `innerHTML` replace on
-every store change — there is no persistent node to animate across
-renders. Implemented instead: a CSS keyframe fade-in on the freshly
-rendered (already-compact) card, plus a one-time, auto-dismissing toast
-positioned over the card's new location, satisfying the brief's harder
-requirement ("the adaptation is never silent") without overclaiming a true
-in-place morph. Disclosed as SIMPLIFIED in `index.html`'s Section 7C
-header comment, the README, and `#/about`.
-
----
-
-## §2 — Changelog, with "why" (full table)
-
-| # | Change | Why |
-|---|---|---|
-| 1 | Re-fetched the prior pt-J commit via three independent raw mirrors instead of one | A single fetch's truncation point or corruption would otherwise have been silently taken as the whole file; cross-mirroring is what surfaced both failure modes (truncation + tag-stripping) in the first place. |
-| 2 | Kept `STORAGE_KEY = 'leados-pt-j:data'` and all Part 1 non-negotiables unchanged | No schema break is required by Parts 2/3; changing the key would orphan any real session data and contradicts the project's own stated reason for picking a fourth, stable key in the first place. |
-| 3 | Added `st.meta.densityMode`, defaulted in `normalize()`, not routed through `appendEvent` | It's a UI preference, not a business event — consistent with how `idSeq`/`createdAt` are already treated as meta, not events. |
-| 4 | Re-implemented (not guessed at) the always-truncated middle third of the prior `index.html`, labeling every such function RECONSTRUCTED | Presenting a best-guess reconstruction as a verified copy would be exactly the kind of unlabeled claim this whole project's discipline exists to prevent. |
-| 5 | Recovered `seedIfEmpty()`'s literal event data from the text-mode fetch and used it verbatim | That function's payload strings contain no `<`/`>` characters, so the specific corruption mechanism observed elsewhere could not have altered them — recoverable, not merely reconstructed. |
-| 6 | Implemented `LEADOS.aesthetics` (Part 2) as real code wired into `#/today`'s body filter, `#/aesthetics`, and the debug monitor | A module that only describes itself in prose isn't checkable; `#/aesthetics` lets you see the spacing scale, density math, and chromatic filter computed from real numbers and watch them change on resize/density-mode change. |
-| 7 | Gave `LEADOS.aesthetics` a load+resize-only recompute cadence, distinct from `LEADOS.cssolver`'s load+resize+every-render cadence | Each module's own brief text specifies a different cadence; collapsing them into one cadence would silently erase a real distinction the brief draws between the two parts. |
-| 8 | Fixed the Miller-range min/max inversion in `optimizeDensity()` (swapped multipliers) rather than reproducing it | Same policy Part 1 already established for its own brief's bugs; reproducing a self-contradictory range would make the new `G_MILLER_RANGE_ORDER` health check fail by construction, and would hand downstream UI a meaningless bound. |
-| 9 | Displayed the brief's own wrong sp7–sp10 comments next to the correctly computed values on `#/aesthetics`, instead of silently using either one alone | Silently using the brief's numbers would ship a computational error; silently "fixing" the comment without saying so would hide that the brief itself contained an arithmetic mistake, which is exactly the kind of thing this project's disclosure discipline is supposed to surface. |
-| 10 | Implemented chromatic adaptation to match the brief's own `adaptChroma()` code (flat hue-rotate/saturate), not its prose's fuller Bradford/D50 claim | The brief's prose and its own code disagree; implementing the unwritten fuller version would be inventing new behavior under the brief's name, which is worse than disclosing the gap. |
-| 11 | Implemented `LEADOS.familiarity` (Part 3) with real `sessionStorage`-backed counts, a real cross-session signal derived from the actual event log, and four genuinely different card templates | Same "must be checkable, not just described" standard as item 6 — you can reset familiarity from the sidebar and watch a card visibly change tier across repeated views. |
-| 12 | Put familiarity counters in two new, isolated `sessionStorage` keys rather than the one durable `localStorage` key | The brief itself specifies session-scoped memory; mixing it into the append-only durable store would make "reset familiarity" and "wipe + reseed" (a real data-destructive action) accidentally overlap in scope. |
-| 13 | Substituted a CSS fade-in + one-time positioned toast for the brief's literal 600ms cross-render height-collapse animation | This app's render model (full `innerHTML` replace) has no persistent node to animate across renders; the substitute satisfies the brief's actual requirement ("never silent") without falsely claiming an unimplemented in-place DOM morph. |
-| 14 | Added `confidenceProxy()` as one new, explicitly labeled fabricated field instead of inventing a full parallel finding schema to match the brief's richer "basis/confidence/score" card model | Minimizes new unlabeled fabrication surface; reuses the already-disclosed domain decay-weight math wherever the brief's richer concept overlaps with something this build already computes for real. |
+- This session did not execute the upstream repo's own `index.html` in a
+  browser; all claims about it are static-file inspection (byte counts,
+  grep matches, structural reading), not runtime verification.
+- This session did not verify the PGP signatures on upstream commits
+  cryptographically; it only reports GitHub API's own `"verified": true`
+  attestation, which certifies "uploaded through GitHub's web UI," not
+  code correctness.
+- The React rebuild's health checks are self-referential (this app
+  checking its own constants) — they are a demonstration of the pattern,
+  not a third-party audit.

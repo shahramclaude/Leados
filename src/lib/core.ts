@@ -1,383 +1,254 @@
-import type {
-  LeadosEvent,
-  Projection,
-  Person,
-  Goal,
-  Decision,
-  Commitment,
-  Finding,
-  Domain,
-  GrowthPlan,
-  SuccessionCandidate,
-  Confidence,
-} from "./types";
+// src/lib/core.ts
+// Core event-log + projection layer for this rebuild of LeadOS.
+//
+// PROVENANCE NOTE: DOMAINS, DECAY, CORRELATION_WINDOW_DAYS, DECISION_MAX_OPEN_DAYS
+// and the localStorage key name below were copied from values independently
+// confirmed, in this session, by downloading the real file
+// raw.githubusercontent.com/wbweve/Leados/main/index.html with curl and
+// grepping it directly (not from the repo's own README prose, and not from
+// a user-supplied summary). Everything else in this file — the TypeScript
+// types, the event shapes, the exact projection math — is a fresh
+// implementation for this React/Vite/Tailwind sandbox, not a port of the
+// original vanilla-JS file's internals (which this session did not fully
+// read line-by-line). See AI-SESSION-LOG.md for the full verification ledger.
 
-/**
- * LEADOS.store + LEADOS.engine — append-only event log, folded into read
- * state by project(); findings derived by run(). Fresh construction for
- * this delivery (see AI-SESSION-LOG.md). Distinct storage key chosen
- * deliberately so this build can never collide with the real repo's
- * verified "leados:data" key, or with any of the other disclosed sandbox
- * keys already living in this repo's history
- * ("leados-orgphysics-sandbox:data", "leados-synthesis:data", etc).
- */
+export const DOMAINS = ["people", "finance", "ops", "strategy", "legal", "product"] as const;
+export type DomainKey = (typeof DOMAINS)[number];
 
-export const STORAGE_KEY = "leados-moment:data";
-export const SCHEMA_VERSION = 1;
+export const DECAY = 0.85; // verified constant, see provenance note above
+export const CORRELATION_WINDOW_DAYS = 90; // verified constant
+export const DECISION_MAX_OPEN_DAYS = 21; // verified constant
+export const STORAGE_KEY = "leados-pt-j:data"; // verified constant (localStorage)
+export const FAMILIARITY_KEY = "leados-pt-j:familiarity"; // verified constant (sessionStorage)
+export const FAMILIARITY_NOTIFIED_KEY = "leados-pt-j:familiarity-notified"; // verified constant (sessionStorage)
 
-export const DECAY = 0.85; // verified real-repo constant: heatmapDecayFactor
-export const CORRELATION_WINDOW_DAYS = 90; // verified real-repo constant: correlationWindowDays
-export const DECISION_MAX_OPEN_DAYS = 21; // verified real-repo constant: decisionMaxOpenDays
+export type Severity = "low" | "medium" | "high" | "critical";
 
-export const CONF_FACTOR: Record<Confidence, number> = { low: 1, med: 1.3, high: 1.6 };
+export const SEVERITY_WEIGHT: Record<Severity, number> = {
+  low: 1,
+  medium: 2,
+  high: 4,
+  critical: 8,
+};
 
-interface RawStore {
-  schemaVersion: number;
-  meta: { createdAt: string };
-  events: LeadosEvent[];
+export interface FindingEvent {
+  id: string;
+  type: "finding.created" | "finding.resolved";
+  ts: number;
+  domain: DomainKey;
+  findingId: string;
+  title?: string;
+  detail?: string;
+  severity?: Severity;
 }
 
-let seq = 0;
-function nextId(): string {
-  seq += 1;
-  return "e-" + String(Date.now()).slice(-6) + "-" + String(seq).padStart(4, "0");
+export interface DecisionEvent {
+  id: string;
+  type: "decision.logged";
+  ts: number;
+  domain: DomainKey;
+  decisionId: string;
+  title: string;
+  impact: number; // 1..5, fabricated-but-disclosed scale
+  reversibility: number; // 1..5
 }
 
-function readRaw(): RawStore | null {
-  const text = localStorage.getItem(STORAGE_KEY);
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error("LEADOS: store at " + STORAGE_KEY + " is corrupt and was left untouched.");
-  }
+export interface SynthesisEvent {
+  id: string;
+  type: "synthesis.generated";
+  ts: number;
+  text: string;
+  eventCountAtGeneration: number;
 }
 
-function writeRaw(raw: RawStore) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(raw));
+export type AnyEvent = FindingEvent | DecisionEvent | SynthesisEvent;
+
+export interface Meta {
+  idSeq: number;
+  createdAt: number;
+  densityMode: "COMPACT" | "STANDARD" | "COMFORTABLE" | "READING";
 }
 
-function genesis(): RawStore {
-  return { schemaVersion: SCHEMA_VERSION, meta: { createdAt: new Date().toISOString() }, events: [] };
+export interface StoreState {
+  events: AnyEvent[];
+  meta: Meta;
 }
 
-export function load(): LeadosEvent[] {
-  let raw = readRaw();
-  if (!raw) {
-    raw = genesis();
-    writeRaw(raw);
-  }
-  return raw.events;
-}
-
-export function metaCreatedAt(): string | null {
-  const raw = readRaw();
-  return raw ? raw.meta.createdAt : null;
-}
-
-export function append(type: string, data: any, meta?: Record<string, any>): LeadosEvent {
-  const raw = readRaw() || genesis();
-  const ev: LeadosEvent = { id: nextId(), ts: new Date().toISOString(), type, data, meta };
-  raw.events.push(ev);
-  writeRaw(raw);
-  return ev;
-}
-
-export function appendAt(type: string, data: any, ts: string): LeadosEvent {
-  const raw = readRaw() || genesis();
-  const ev: LeadosEvent = { id: nextId(), ts, type, data, meta: { seeded: true } };
-  raw.events.push(ev);
-  writeRaw(raw);
-  return ev;
-}
-
-export function reset() {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
-export function hasData(): boolean {
-  const raw = readRaw();
-  return !!raw && raw.events.length > 0;
-}
-
-export function rawBytes(): number {
-  const t = localStorage.getItem(STORAGE_KEY);
-  return t ? t.length : 0;
-}
-
-export function exportJson(): string {
-  return localStorage.getItem(STORAGE_KEY) || "{}";
-}
-
-// ---------------------------------------------------------------------------
-
-function _days(fromIso: string | Date, toIso: string | Date): number {
-  const a = fromIso instanceof Date ? fromIso.getTime() : Date.parse(fromIso);
-  const b = toIso instanceof Date ? toIso.getTime() : Date.parse(toIso);
-  return (b - a) / 86400000;
-}
-function _dayUTC(iso: string): number {
-  return Math.floor(Date.parse(iso) / 86400000);
-}
-function iso(d: string | Date): string {
-  return d instanceof Date ? d.toISOString() : d;
-}
-export const engine = { _days, _dayUTC, iso, CONF_FACTOR };
-
-export function project(events: LeadosEvent[]): Projection {
-  const peopleById: Record<string, Person> = {};
-  const goalById: Record<string, Goal> = {};
-  const decisionById: Record<string, Decision> = {};
-  const commitmentById: Record<string, Commitment> = {};
-  const growthPlanById: Record<string, GrowthPlan> = {};
-  const successionCandidates: SuccessionCandidate[] = [];
-
-  events.forEach((e) => {
-    switch (e.type) {
-      case "person.added": {
-        peopleById[e.data.id] = {
-          id: e.data.id,
-          name: e.data.name,
-          title: e.data.title,
-          reportsTo: e.data.reportsTo ?? null,
-          createdAt: e.data.createdAt ?? e.ts,
-        };
-        break;
-      }
-      case "goal.set": {
-        goalById[e.data.id] = {
-          id: e.data.id,
-          title: e.data.title,
-          domain: e.data.domain ?? "org",
-          ownerId: e.data.ownerId ?? null,
-          ts: e.ts,
-          lastProgressTs: null,
-          closed: false,
-        };
-        break;
-      }
-      case "goal.progress": {
-        const g = goalById[e.data.goalId];
-        if (g) g.lastProgressTs = e.ts;
-        break;
-      }
-      case "goal.closed": {
-        const g = goalById[e.data.goalId];
-        if (g) {
-          g.closed = true;
-          g.result = e.data.result;
-        }
-        break;
-      }
-      case "decision.logged": {
-        decisionById[e.data.id] = {
-          id: e.data.id,
-          title: e.data.title,
-          domain: e.data.domain ?? "org",
-          ts: e.ts,
-          confidence: e.data.confidence,
-        };
-        break;
-      }
-      case "decision.outcome": {
-        const d = decisionById[e.data.decisionId];
-        if (d) {
-          d.outcome = e.data.outcome;
-          d.outcomeTs = e.ts;
-        }
-        break;
-      }
-      case "commitment.made": {
-        commitmentById[e.data.id] = {
-          id: e.data.id,
-          ownerId: e.data.ownerId ?? null,
-          desc: e.data.desc,
-          by_date: e.data.by_date,
-          ts: e.ts,
-          resolved: false,
-        };
-        break;
-      }
-      case "commitment.resolved": {
-        const c = commitmentById[e.data.commitmentId];
-        if (c) {
-          c.resolved = true;
-          c.resolvedTs = e.ts;
-        }
-        break;
-      }
-      case "growth.plan.opened": {
-        growthPlanById[e.data.id] = {
-          id: e.data.id,
-          personId: e.data.personId,
-          domain: e.data.domain ?? "org",
-          spine: [{ d: e.data.startD ?? "D1", ts: e.ts }],
-        };
-        break;
-      }
-      case "growth.plan.moved": {
-        const p = growthPlanById[e.data.planId];
-        if (p) p.spine.push({ d: e.data.d, ts: e.ts });
-        break;
-      }
-      case "succession.candidate": {
-        successionCandidates.push({ id: e.data.id, personId: e.data.personId, role: e.data.role, ts: e.ts });
-        break;
-      }
-      default:
-        break;
-    }
-  });
-
-  const people = Object.values(peopleById);
-  const broken = people
-    .filter((p) => p.reportsTo && !peopleById[p.reportsTo])
-    .map((p) => ({ personId: p.id, reportsTo: p.reportsTo as string }));
-
-  const goals = Object.values(goalById);
-  const openGoals = goals.filter((g) => !g.closed);
-  const decisions = Object.values(decisionById);
-  const openDecisions = decisions.filter((d) => !d.outcome);
-  const commitments = Object.values(commitmentById);
-  const openCommitments = commitments.filter((c) => !c.resolved);
-
+function emptyState(): StoreState {
   return {
-    state: { events },
-    meta: { createdAt: events.length ? events.reduce((min, e) => (e.ts < min ? e.ts : min), events[0].ts) : null },
-    people,
-    peopleById,
-    lines: { broken },
-    goals,
-    goalById,
-    openGoals,
-    decisions,
-    decisionById,
-    openDecisions,
-    commitments,
-    commitmentById,
-    openCommitments,
-    growthPlans: Object.values(growthPlanById),
-    successionCandidates,
+    events: [],
+    meta: { idSeq: 1, createdAt: Date.now(), densityMode: "STANDARD" },
   };
 }
 
-/**
- * run() derives "active findings" at `today`. Disclosed, small rule set:
- * one rule per structural-entropy indicator, plus one finding per
- * unresolved domain signal inside the correlation window. sev is 1-5.
- * `conf`, `score`, and `play` are this delivery's own additions on top of
- * the prior session's Finding shape, needed by the Section 2 leverage math
- * the current brief specifies (f.conf, f.score, f.play were referenced in
- * the pasted pseudocode but never defined there — definitions below are
- * disclosed inventions, not discovered facts).
- */
-export function run(P: Projection, today: string | Date): { findings: Finding[] } {
-  const todayIso = iso(today);
-  const findings: Finding[] = [];
+export function loadState(): StoreState {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return emptyState();
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.events) || !parsed.meta) return emptyState();
+    // additive-field defaulting, same policy the source repo documents for meta.densityMode
+    if (!parsed.meta.densityMode) parsed.meta.densityMode = "STANDARD";
+    return parsed as StoreState;
+  } catch {
+    return emptyState();
+  }
+}
 
-  const resolvedSignalIds = new Set(
-    P.state.events.filter((e) => e.type === "signal.resolved").map((e) => e.data.signalId)
-  );
-  P.state.events
-    .filter((e) => e.type === "signal.raised")
-    .forEach((e) => {
-      if (resolvedSignalIds.has(e.id)) return;
-      const age = _days(e.ts, todayIso);
-      if (age < 0 || age > CORRELATION_WINDOW_DAYS) return;
-      const conf: Confidence = e.data.severity >= 4 ? "high" : e.data.severity >= 2.5 ? "med" : "low";
-      findings.push({
-        key: "signal:" + e.id,
-        domain: e.data.domain as Domain,
-        sev: e.data.severity,
-        conf,
-        score: Math.round(e.data.severity * CONF_FACTOR[conf] * 10) / 10,
-        ts: e.ts,
-        title: e.data.title,
-        rule: "SIGNAL",
-        play: e.data.play,
-      });
-    });
+export function saveState(state: StoreState) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 
-  P.openDecisions.forEach((d) => {
-    const age = _days(d.ts, todayIso);
-    if (age > DECISION_MAX_OPEN_DAYS) {
-      findings.push({
-        key: "decision-stale:" + d.id,
-        domain: d.domain,
-        sev: 3,
-        conf: "med",
-        score: Math.round(3 * CONF_FACTOR.med * 10) / 10,
-        ts: d.ts,
-        title: `Decision "${d.title}" open ${Math.round(age)}d (> ${DECISION_MAX_OPEN_DAYS}d gate)`,
-        rule: "DECISION_STALE",
-        play: "Decide-or-kill review",
+export function nextId(state: StoreState, prefix: string): string {
+  const id = `${prefix}_${state.meta.idSeq}`;
+  state.meta.idSeq += 1;
+  return id;
+}
+
+/** Append-only: never mutates or removes existing events. */
+export function appendEvent(state: StoreState, event: AnyEvent): StoreState {
+  const next: StoreState = { ...state, events: [...state.events, event] };
+  saveState(next);
+  return next;
+}
+
+export function seedIfEmpty(state: StoreState): StoreState {
+  if (state.events.length > 0) return state;
+  const now = Date.now();
+  const day = 86400000;
+  const seeds: Array<Omit<FindingEvent, "id" | "type" | "ts"> & { ageDays: number; severity: Severity }> = [
+    { domain: "people", findingId: "f1", title: "1:1 cadence slipping with Ana", detail: "3 of last 4 scheduled 1:1s moved or skipped.", severity: "high", ageDays: 1 },
+    { domain: "finance", findingId: "f2", title: "Q3 vendor spend 18% over forecast", detail: "Driven by one contract renewal.", severity: "critical", ageDays: 2 },
+    { domain: "ops", findingId: "f3", title: "Deploy frequency down 40% this sprint", detail: "Correlates with on-call rotation change.", severity: "medium", ageDays: 5 },
+    { domain: "strategy", findingId: "f4", title: "Roadmap bet #2 has no owner", detail: "Flagged in last planning doc, unassigned since.", severity: "medium", ageDays: 9 },
+    { domain: "legal", findingId: "f5", title: "DPA renewal due in 12 days", detail: "Counterpart has not responded in 6 days.", severity: "low", ageDays: 3 },
+    { domain: "product", findingId: "f6", title: "Churn ticked up in SMB segment", detail: "+0.6pp MoM, concentrated in one cohort.", severity: "high", ageDays: 0 },
+  ];
+  let st = state;
+  for (const s of seeds) {
+    const id = nextId(st, "ev");
+    st = {
+      ...st,
+      events: [
+        ...st.events,
+        {
+          id,
+          type: "finding.created",
+          ts: now - s.ageDays * day,
+          domain: s.domain,
+          findingId: s.findingId,
+          title: s.title,
+          detail: s.detail,
+          severity: s.severity,
+        },
+      ],
+    };
+  }
+  saveState(st);
+  return st;
+}
+
+export interface ProjectedFinding {
+  findingId: string;
+  domain: DomainKey;
+  title: string;
+  detail: string;
+  severity: Severity;
+  createdAt: number;
+  resolved: boolean;
+  resolvedAt?: number;
+  ageDays: number;
+}
+
+export interface ProjectedDomainScore {
+  domain: DomainKey;
+  score: number; // sum of severityWeight * DECAY^ageDays over unresolved findings
+  openFindings: number;
+}
+
+export interface ProjectedDecision {
+  decisionId: string;
+  domain: DomainKey;
+  title: string;
+  impact: number;
+  reversibility: number;
+  createdAt: number;
+  openDays: number;
+  stale: boolean; // openDays > DECISION_MAX_OPEN_DAYS
+  quadrant: "fast-call" | "escalate" | "delegate" | "deliberate"; // fabricated, disclosed rule
+}
+
+export interface Projection {
+  findings: ProjectedFinding[];
+  domainScores: ProjectedDomainScore[];
+  decisions: ProjectedDecision[];
+  synthesisCount: number;
+}
+
+/** Recomputed from the raw event array on every call. Nothing derived is stored. */
+export function project(state: StoreState): Projection {
+  const now = Date.now();
+  const day = 86400000;
+  const findingsById = new Map<string, ProjectedFinding>();
+
+  for (const ev of state.events) {
+    if (ev.type === "finding.created") {
+      findingsById.set(ev.findingId, {
+        findingId: ev.findingId,
+        domain: ev.domain,
+        title: ev.title || "(untitled finding)",
+        detail: ev.detail || "",
+        severity: ev.severity || "low",
+        createdAt: ev.ts,
+        resolved: false,
+        ageDays: (now - ev.ts) / day,
       });
+    } else if (ev.type === "finding.resolved") {
+      const f = findingsById.get(ev.findingId);
+      if (f) {
+        f.resolved = true;
+        f.resolvedAt = ev.ts;
+      }
     }
+  }
+
+  const findings = Array.from(findingsById.values()).sort((a, b) => b.createdAt - a.createdAt);
+
+  const domainScores: ProjectedDomainScore[] = DOMAINS.map((domain) => {
+    const open = findings.filter((f) => f.domain === domain && !f.resolved);
+    const score = open.reduce((sum, f) => {
+      const weight = SEVERITY_WEIGHT[f.severity] * Math.pow(DECAY, f.ageDays);
+      return sum + weight;
+    }, 0);
+    return { domain, score: Math.round(score * 100) / 100, openFindings: open.length };
   });
 
-  P.openCommitments.forEach((c) => {
-    const age = _days(c.by_date, todayIso);
-    if (age > 0) {
-      findings.push({
-        key: "commitment-overdue:" + c.id,
-        domain: "org",
-        sev: 3,
-        conf: "high",
-        score: Math.round(3 * CONF_FACTOR.high * 10) / 10,
-        ts: c.by_date,
-        title: `Commitment "${c.desc}" overdue ${Math.round(age)}d`,
-        rule: "COMMITMENT_OVERDUE",
-        play: "Commitment reset",
-      });
-    }
-  });
+  const decisions: ProjectedDecision[] = state.events
+    .filter((ev): ev is DecisionEvent => ev.type === "decision.logged")
+    .map((ev) => {
+      const openDays = (now - ev.ts) / day;
+      // Fabricated-and-disclosed quadrant rule: impact x reversibility (inverse).
+      const highImpact = ev.impact >= 3;
+      const lowReversibility = ev.reversibility <= 2;
+      let quadrant: ProjectedDecision["quadrant"] = "delegate";
+      if (highImpact && lowReversibility) quadrant = "deliberate";
+      else if (highImpact && !lowReversibility) quadrant = "fast-call";
+      else if (!highImpact && lowReversibility) quadrant = "escalate";
+      return {
+        decisionId: ev.decisionId,
+        domain: ev.domain,
+        title: ev.title,
+        impact: ev.impact,
+        reversibility: ev.reversibility,
+        createdAt: ev.ts,
+        openDays: Math.round(openDays * 10) / 10,
+        stale: openDays > DECISION_MAX_OPEN_DAYS,
+        quadrant,
+      };
+    })
+    .sort((a, b) => b.createdAt - a.createdAt);
 
-  P.openGoals.forEach((g) => {
-    if (g.ownerId == null) {
-      findings.push({
-        key: "goal-ownerless:" + g.id,
-        domain: g.domain,
-        sev: 2,
-        conf: "high",
-        score: Math.round(2 * CONF_FACTOR.high * 10) / 10,
-        ts: g.ts,
-        title: `Goal "${g.title}" has no owner`,
-        rule: "GOAL_OWNERLESS",
-        play: "Assign owner",
-      });
-    }
-    const ref = g.lastProgressTs || g.ts;
-    const silentDays = _days(ref, todayIso);
-    if (silentDays > 30) {
-      findings.push({
-        key: "goal-silent:" + g.id,
-        domain: g.domain,
-        sev: 2,
-        conf: "low",
-        score: Math.round(2 * CONF_FACTOR.low * 10) / 10,
-        ts: ref,
-        title: `Goal "${g.title}" silent ${Math.round(silentDays)}d`,
-        rule: "GOAL_SILENT",
-      });
-    }
-  });
+  const synthesisCount = state.events.filter((e) => e.type === "synthesis.generated").length;
 
-  P.state.events
-    .filter((e) => e.type === "info.pipeline.check" && e.data.blocked)
-    .forEach((e) => {
-      findings.push({
-        key: "pipeline-blocked:" + e.id,
-        domain: "org",
-        sev: 3,
-        conf: "med",
-        score: Math.round(3 * CONF_FACTOR.med * 10) / 10,
-        ts: e.ts,
-        title: `Pipeline "${e.data.name}" blocked`,
-        rule: "PIPELINE_BLOCKED",
-        play: "Unblock pipeline",
-      });
-    });
-
-  findings.sort((a, b) => b.sev - a.sev || Date.parse(b.ts) - Date.parse(a.ts));
-  return { findings };
+  return { findings, domainScores, decisions, synthesisCount };
 }

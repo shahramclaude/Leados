@@ -1,90 +1,92 @@
 import type { ReactNode } from "react";
-import type { Route } from "./CommandPalette";
+import type { DensityMode } from "../lib/aesthetics";
 
-const NAV: { route: Route; label: string }[] = [
-  { route: "today", label: "Today" },
-  { route: "domains", label: "Domains" },
-  { route: "synthesis", label: "Synthesis" },
-  { route: "lab", label: "Lab" },
-  { route: "health", label: "Health" },
-  { route: "about", label: "About" },
-  { route: "log", label: "Log" },
+export type Route =
+  | "today"
+  | "domains"
+  | "decisions"
+  | "aesthetics"
+  | "health"
+  | "log"
+  | "about";
+
+const ROUTES: { id: Route; label: string }[] = [
+  { id: "today", label: "Today" },
+  { id: "domains", label: "Domains" },
+  { id: "decisions", label: "Decisions" },
+  { id: "aesthetics", label: "Aesthetics" },
+  { id: "health", label: "Health" },
+  { id: "log", label: "Log" },
+  { id: "about", label: "About" },
 ];
 
 export function Shell({
   route,
-  navigate,
-  onOpenPalette,
+  onNavigate,
+  densityMode,
+  onDensityChange,
+  onResetFamiliarity,
   children,
 }: {
   route: Route;
-  navigate: (r: Route) => void;
-  onOpenPalette: () => void;
+  onNavigate: (r: Route) => void;
+  densityMode: DensityMode;
+  onDensityChange: (m: DensityMode) => void;
+  onResetFamiliarity: () => void;
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto flex max-w-6xl">
-        <aside className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col border-r border-zinc-800 px-4 py-6 sm:flex">
-          <div className="mb-8">
-            <div className="font-mono text-sm font-semibold tracking-tight text-emerald-400">LEADOS</div>
-            <div className="text-[11px] leading-tight text-zinc-500">Intelligence Synthesis · unofficial sandbox build</div>
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="flex min-h-screen">
+        <aside className="w-60 shrink-0 border-r border-slate-800 bg-slate-900/60 p-4 flex flex-col gap-6">
+          <div>
+            <div className="text-sm font-semibold tracking-wide text-indigo-300">LeadOS</div>
+            <div className="text-xs text-slate-500">pt-J rebuild &middot; React</div>
           </div>
           <nav className="flex flex-col gap-1">
-            {NAV.map((n) => (
+            {ROUTES.map((r) => (
               <button
-                key={n.route}
-                onClick={() => navigate(n.route)}
-                className={`rounded-md px-3 py-2 text-left text-sm transition ${
-                  route === n.route ? "bg-emerald-500/10 font-medium text-emerald-400" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                key={r.id}
+                onClick={() => onNavigate(r.id)}
+                className={`text-left rounded-md px-3 py-2 text-sm transition ${
+                  route === r.id
+                    ? "bg-indigo-500/20 text-indigo-200 font-medium"
+                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                 }`}
               >
-                #/{n.label.toLowerCase()}
+                #/{r.id}
               </button>
             ))}
           </nav>
-          <button
-            onClick={onOpenPalette}
-            className="mt-auto flex items-center justify-between rounded-md border border-zinc-800 px-3 py-2 text-left text-xs text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
-          >
-            <span>Command palette</span>
-            <kbd className="rounded border border-zinc-700 px-1 py-0.5 font-mono">/</kbd>
-          </button>
-        </aside>
-        <main className="min-w-0 flex-1 px-5 py-6 sm:px-8">
-          <div className="mb-4 flex items-center justify-between sm:hidden">
-            <div className="font-mono text-sm font-semibold text-emerald-400">LEADOS</div>
-            <button onClick={onOpenPalette} className="rounded border border-zinc-800 px-2 py-1 text-xs text-zinc-400">
-              / menu
+
+          <div className="mt-auto space-y-3 border-t border-slate-800 pt-4">
+            <div>
+              <label className="block text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                Density mode
+              </label>
+              <select
+                value={densityMode}
+                onChange={(e) => onDensityChange(e.target.value as DensityMode)}
+                className="w-full rounded-md bg-slate-800 border border-slate-700 text-sm px-2 py-1.5 text-slate-200"
+              >
+                <option value="COMPACT">COMPACT</option>
+                <option value="STANDARD">STANDARD</option>
+                <option value="COMFORTABLE">COMFORTABLE</option>
+                <option value="READING">READING</option>
+              </select>
+            </div>
+            <button
+              onClick={onResetFamiliarity}
+              className="w-full rounded-md border border-slate-700 px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:border-slate-500 transition"
+            >
+              Reset familiarity (session)
             </button>
           </div>
-          {children}
+        </aside>
+        <main className="flex-1 min-w-0 overflow-y-auto">
+          <div className="max-w-5xl mx-auto p-6 md:p-10">{children}</div>
         </main>
       </div>
     </div>
   );
-}
-
-export function Card({ title, right, children, className = "" }: { title?: string; right?: ReactNode; children: ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 ${className}`}>
-      {(title || right) && (
-        <div className="mb-3 flex items-center justify-between">
-          {title && <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">{title}</h3>}
-          {right}
-        </div>
-      )}
-      {children}
-    </div>
-  );
-}
-
-export function Pill({ children, tone = "zinc" }: { children: ReactNode; tone?: "zinc" | "emerald" | "amber" | "red" }) {
-  const tones: Record<string, string> = {
-    zinc: "bg-zinc-800 text-zinc-300",
-    emerald: "bg-emerald-500/15 text-emerald-400",
-    amber: "bg-amber-500/15 text-amber-400",
-    red: "bg-red-500/15 text-red-400",
-  };
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}>{children}</span>;
 }
