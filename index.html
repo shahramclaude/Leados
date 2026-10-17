@@ -1,1400 +1,1202 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="obsidian">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LeadOS pt-G demo — Adaptive Intelligence Interface (unofficial, single-file)</title>
+<title>LeadOS pt-H demo — Emergent Intelligence Architecture (unofficial, single-file)</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
-/* ============================================================
-   DESIGN TOKENS — 3 themes. Obsidian values copied verbatim from
-   the pt-G brief's own contrast table (verified against brief text).
-   Parchment / Terminal palettes are this session's own invention,
-   built to the same AA/AAA contrast discipline — UNVERIFIED against
-   any real repo asset, labeled here once instead of everywhere.
-   ============================================================ */
-:root, [data-theme="dark"]{
-  --surface-1:#141210; --surface-2:#1C1917; --surface-3:#262220; --surface-4:#2F2A27;
-  --ink-0:#F7F4EF; --ink-1:#D4CEC3; --ink-2:#9A9085; --ink-3:#5C564E; --ink-4:#3A352F;
-  --accent:#C23B2E;
-  --sev-5:#FF2D2D; --sev-4:#FF8A3D; --sev-3:#FFC53D; --sev-2:#7CC576; --sev-1:#5C564E;
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-mono: 'SFMono-Regular','Courier New', monospace;
-}
-[data-theme="light"]{
-  --surface-1:#FBF8F2; --surface-2:#F2EDE2; --surface-3:#E8E0D0; --surface-4:#DCD2BC;
-  --ink-0:#201D18; --ink-1:#3A352F; --ink-2:#6B6356; --ink-3:#8B8272; --ink-4:#C7BEA9;
-  --accent:#9C3426;
-  --sev-5:#B3261E; --sev-4:#B5590B; --sev-3:#8A6D00; --sev-2:#2E7D32; --sev-1:#8B8272;
-}
-[data-theme="terminal"]{
-  --surface-1:#0A0A0A; --surface-2:#0F0F0F; --surface-3:#141414; --surface-4:#1A1A1A;
-  --ink-0:#D8FFD8; --ink-1:#9FE89F; --ink-2:#5FAE5F; --ink-3:#3A7A3A; --ink-4:#1F4A1F;
-  --accent:#00FF66;
-  --sev-5:#FF3B3B; --sev-4:#FF9A3B; --sev-3:#FFD23B; --sev-2:#3BFF7A; --sev-1:#3A7A3A;
-  --font-body: var(--font-mono);
-}
-*{ box-sizing: border-box; }
-html,body{ height:100%; }
-body{
-  margin:0; background:var(--surface-1); color:var(--ink-0);
-  font-family:var(--font-body); font-size:14px; line-height:1.5;
-  transition: background 120ms, color 120ms;
-}
-.mono{ font-family:var(--font-mono); }
-a{ color:inherit; }
-
-/* Skip link */
-.skip-link{
-  position:absolute; left:-9999px; top:0; background:var(--accent); color:#fff;
-  padding:10px 16px; z-index:10000; border-radius:0 0 6px 0;
-}
-.skip-link:focus{ left:0; }
-
-/* Focus ring — inside, consistent */
-:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; border-radius:2px; }
-:focus:not(:focus-visible){ outline:none; }
-
-.sr-only{
-  position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
-  clip:rect(0,0,0,0); white-space:nowrap; border:0;
-}
-
-/* Layout */
-#rail{
-  width:224px; flex:none; background:var(--surface-2); border-right:1px solid var(--ink-4);
-  display:flex; flex-direction:column; padding:16px 8px; gap:2px; height:100vh; position:sticky; top:0;
-}
-#rail .brand{ padding:8px 10px 18px; font-weight:700; letter-spacing:.02em; }
-#rail .brand small{ display:block; font-weight:400; color:var(--ink-3); font-size:10px; margin-top:2px; }
-.nav-item{
-  display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:8px;
-  color:var(--ink-1); text-decoration:none; font-size:13px; cursor:pointer;
-}
-.nav-item:hover{ background:var(--surface-3); }
-.nav-item.active{ background:var(--surface-4); color:var(--ink-0); }
-.nav-badge{
-  margin-left:auto; background:var(--sev-4); color:#1a1a1a; font-size:10px; font-weight:700;
-  padding:1px 6px; border-radius:999px; font-family:var(--font-mono);
-}
-#rail .foot{ margin-top:auto; padding:10px; font-size:10px; color:var(--ink-3); font-family:var(--font-mono); }
-
-#main{ flex:1; min-width:0; }
-#topbar{
-  display:flex; align-items:center; gap:12px; padding:10px 20px; border-bottom:1px solid var(--ink-4);
-  position:sticky; top:0; background:var(--surface-1); z-index:50;
-}
-.kbtn{
-  font-family:var(--font-mono); font-size:11px; color:var(--ink-3); background:var(--surface-3);
-  border:1px solid var(--ink-4); padding:2px 6px; border-radius:4px;
-}
-#content{ max-width:880px; margin:0 auto; padding:24px 24px 80px; }
-.wide #content{ max-width:1120px; }
-
-h1{ font-size:22px; margin:0 0 4px; }
-h2{ font-size:16px; margin:28px 0 10px; }
-.page-sub{ color:var(--ink-2); font-size:13px; margin-bottom:18px; }
-
-/* Buttons */
-.btn{
-  font: 12px var(--font-body); padding:7px 12px; border-radius:7px; cursor:pointer;
-  border:1px solid var(--ink-4); background:var(--surface-3); color:var(--ink-0);
-}
-.btn:hover{ background:var(--surface-4); }
-.btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
-.btn.danger{ color:var(--sev-4); border-color:var(--sev-4); }
-.btn:disabled{ opacity:.45; cursor:not-allowed; }
-
-/* Finding card */
-.fin{
-  border:1px solid var(--ink-4); border-left-width:4px; border-radius:10px; background:var(--surface-2);
-  padding:14px 16px; margin-bottom:12px; cursor:pointer;
-}
-.fin[data-sev="5"]{ border-left-color:var(--sev-5); }
-.fin[data-sev="4"]{ border-left-color:var(--sev-4); }
-.fin[data-sev="3"]{ border-left-color:var(--sev-3); }
-.fin[data-sev="2"]{ border-left-color:var(--sev-2); }
-.fin.focused{ box-shadow:0 0 0 2px var(--accent) inset; }
-.fin-header{ display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:10px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
-.chip{ padding:1px 6px; border-radius:4px; background:var(--surface-3); border:1px solid var(--ink-4); }
-.fin-title{ font-size:14.5px; font-weight:600; margin:0 0 6px; color:var(--ink-0); }
-.fin-basis{ font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); margin:2px 0; }
-.fin-narrative{ font-size:12.5px; color:var(--ink-1); margin-top:8px; }
-.fin-source{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3); margin-top:2px; }
-.fin-act{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
-.fin-detail{ display:none; margin-top:12px; border-top:1px dashed var(--ink-4); padding-top:10px; }
-.fin.open .fin-detail{ display:block; }
-
-.score-math{
-  font-family:var(--font-mono); font-size:11.5px; background:var(--surface-3); border:1px solid var(--ink-4);
-  border-radius:8px; padding:10px 12px; white-space:pre-wrap; color:var(--ink-1);
-}
-
-/* metric card */
-.metric-card{ border:1px solid var(--ink-4); border-radius:10px; padding:14px 16px; background:var(--surface-2); margin-bottom:14px; }
-.metric-card .val{ font-size:24px; font-weight:700; font-family:var(--font-mono); }
-.metric-card .lbl{ font-size:11px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.06em; }
-.anomaly-toggle{ font-family:var(--font-mono); font-size:11px; color:var(--ink-2); cursor:pointer; margin-top:6px; display:inline-block; }
-.anomaly-body{ display:none; font-size:12px; color:var(--ink-1); margin-top:6px; }
-.anomaly-body.open{ display:block; }
-
-/* Settings */
-.setting-row{ display:flex; align-items:center; gap:14px; padding:10px 0; border-bottom:1px solid var(--ink-4); }
-.setting-row label{ flex:1; font-size:13px; }
-.setting-row input{
-  width:110px; padding:6px 8px; background:var(--surface-3); border:1px solid var(--ink-4); color:var(--ink-0);
-  border-radius:6px; font-family:var(--font-mono);
-}
-.setting-note{ font-family:var(--font-mono); font-size:11px; color:var(--ink-3); margin-top:-6px; margin-bottom:10px; }
-.impact-box{
-  font-family:var(--font-mono); font-size:11.5px; background:var(--surface-3); border:1px dashed var(--ink-4);
-  border-radius:8px; padding:10px 12px; margin:6px 0 16px; color:var(--ink-1);
-}
-.impact-box .created{ color: var(--sev-4); }
-.impact-box .resolved{ color: var(--sev-2); }
-
-table.rules{ width:100%; border-collapse:collapse; font-size:12.5px; }
-table.rules th, table.rules td{ text-align:left; padding:8px 10px; border-bottom:1px solid var(--ink-4); }
-table.rules th{ font-family:var(--font-mono); font-size:10px; text-transform:uppercase; color:var(--ink-3); }
-.status-pill{ font-family:var(--font-mono); font-size:10px; padding:2px 6px; border-radius:4px; }
-.status-ACTIVE{ background:rgba(124,197,118,.15); color:var(--sev-2); }
-.status-MUTED{ background:var(--surface-4); color:var(--ink-3); }
-.status-INACTIVE{ background:var(--surface-4); color:var(--ink-3); }
-.status-NODATA{ background:var(--surface-4); color:var(--ink-3); }
-
-/* Command palette */
-.cmd-overlay{
-  position:fixed; inset:0; z-index:9000; background:rgba(14,13,11,.75);
-  backdrop-filter: blur(8px) saturate(.8); -webkit-backdrop-filter: blur(8px) saturate(.8);
-  display:flex; align-items:flex-start; justify-content:center; padding-top:max(80px,15vh);
-  opacity:0; pointer-events:none; transition:opacity 160ms ease-out;
-}
-.cmd-overlay.open{ opacity:1; pointer-events:all; }
-.cmd-panel{
-  width:min(640px,calc(100vw - 48px)); background:var(--surface-4); border:1px solid var(--ink-4);
-  border-radius:12px; box-shadow:0 0 0 1px rgba(255,255,255,.06),0 24px 64px rgba(0,0,0,.7),0 8px 24px rgba(0,0,0,.4);
-  overflow:hidden; transform:scale(.96) translateY(-8px); transition:transform 180ms cubic-bezier(.34,1.56,.64,1);
-}
-.cmd-overlay.open .cmd-panel{ transform:scale(1) translateY(0); }
-.cmd-input-row{ display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--ink-4); }
-.cmd-input{ flex:1; background:transparent; border:none; outline:none; font-size:16px; color:var(--ink-0); }
-.cmd-input::placeholder{ color:var(--ink-3); }
-.cmd-results{ max-height:min(480px,60vh); overflow-y:auto; padding:8px 0; }
-.cmd-group-header{ font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); padding:10px 18px 4px; }
-.cmd-item{ display:flex; align-items:center; gap:12px; padding:9px 18px; cursor:pointer; }
-.cmd-item:hover, .cmd-item.focused{ background:var(--surface-3); }
-.cmd-item-icon{ width:18px; text-align:center; color:var(--ink-2); }
-.cmd-item-text{ flex:1; min-width:0; }
-.cmd-item-label{ font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.cmd-item-sub{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3); }
-.cmd-item[data-danger="true"] .cmd-item-label{ color:var(--sev-4); }
-.cmd-footer{ border-top:1px solid var(--ink-4); padding:8px 18px; display:flex; gap:16px; font-family:var(--font-mono); font-size:10px; color:var(--ink-3); }
-
-/* Modal */
-.modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:8000; display:flex; align-items:center; justify-content:center; }
-.modal-box{ width:min(480px,92vw); background:var(--surface-2); border:1px solid var(--ink-4); border-radius:12px; padding:20px; }
-.modal-box h3{ margin-top:0; }
-.modal-field{ margin-bottom:10px; }
-.modal-field label{ display:block; font-size:11px; color:var(--ink-3); margin-bottom:4px; font-family:var(--font-mono); }
-.modal-field input, .modal-field select{ width:100%; padding:8px 10px; background:var(--surface-3); border:1px solid var(--ink-4); color:var(--ink-0); border-radius:6px; }
-
-/* Toasts */
-#toast-root{ position:fixed; bottom:18px; right:18px; z-index:9500; display:flex; flex-direction:column; gap:8px; }
-.toast{ background:var(--surface-4); border:1px solid var(--ink-4); border-radius:8px; padding:10px 14px; font-size:12.5px; box-shadow:0 8px 20px rgba(0,0,0,.4); max-width:320px; }
-
-/* Health suite */
-.test-row{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--ink-4); font-family:var(--font-mono); font-size:12.5px; }
-.test-pass{ color:var(--sev-2); }
-.test-fail{ color:var(--sev-5); }
-
-/* print watermark */
-#print-watermark{ display:none; }
-
-@media print{
-  #rail, #topbar, .cmd-overlay, #toast-root, .fin-act, .btn{ display:none !important; }
-  #main{ margin-left:0 !important; }
-  body{ background:white !important; color:black !important; }
-  #print-watermark.active{
-    display:block; position:fixed; top:0; left:0; right:0; text-align:center;
-    font-family: 'Courier New', monospace; font-size:9pt; color:#888; padding:6px; border-bottom:1px solid #ccc;
-  }
-  .fin{ border-left-width:4pt !important; page-break-inside:avoid; }
-  .fin[data-sev="5"]{ border-left-color:black !important; background:repeating-linear-gradient(45deg,transparent,transparent 2pt,#f0f0f0 2pt,#f0f0f0 4pt) !important; }
-  .fin-detail{ display:block !important; }
-  .print-footer-flow{ display:block !important; text-align:center; font-family:'Courier New',monospace; font-size:8pt; color:#888; margin-top:24px; border-top:1px solid #ccc; padding-top:6px; }
-}
-.print-footer-flow{ display:none; }
+  :root[data-theme="obsidian"]{ --bg:#0b0d10; --surface:#14171a; --surface2:#1b1f23; --text:#e6e8ea; --muted:#8a9099; --accent:#5fb3ff; --border:#2a2f35; --sev2:#5fa8d3; --sev3:#d9a441; --sev4:#e2574c; --good:#52b788; }
+  :root[data-theme="parchment"]{ --bg:#f4ecd8; --surface:#fbf6ea; --surface2:#efe4c8; --text:#2b2316; --muted:#7a6f55; --accent:#8a5a2b; --border:#d8c9a0; --sev2:#5a7a9a; --sev3:#b5832a; --sev4:#a33327; --good:#3f7d52; }
+  :root[data-theme="terminal"]{ --bg:#030603; --surface:#061006; --surface2:#0a1a0a; --text:#39ff6a; --muted:#1f8f3f; --accent:#39ff6a; --border:#145225; --sev2:#39ff6a; --sev3:#e8e24a; --sev4:#ff5555; --good:#39ff6a; }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--text); font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; transition:background .15s,color .15s;}
+  [data-theme="terminal"] body, [data-theme="terminal"] *{font-family:"Courier New",monospace !important;}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  .surface{background:var(--surface); border:1px solid var(--border);}
+  .surface2{background:var(--surface2); border:1px solid var(--border);}
+  .muted{color:var(--muted);}
+  .accent{color:var(--accent);}
+  .border-base{border-color:var(--border);}
+  a,button{color:inherit;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:6px;}
+  .badge{display:inline-flex;align-items:center;gap:.25rem;padding:.1rem .45rem;border-radius:4px;font-size:.68rem;border:1px solid var(--border);}
+  .sev2{color:var(--sev2);border-color:var(--sev2);}
+  .sev3{color:var(--sev3);border-color:var(--sev3);}
+  .sev4{color:var(--sev4);border-color:var(--sev4);}
+  .rail-item{display:flex;align-items:center;justify-content:space-between;padding:.4rem .6rem;border-radius:6px;cursor:pointer;font-size:.82rem;}
+  .rail-item:hover{background:var(--surface2);}
+  .rail-item.active{background:var(--surface2); border-left:2px solid var(--accent); padding-left:calc(.6rem - 2px);}
+  .skip-link{position:absolute;left:-999px;top:0;background:var(--accent);color:#000;padding:.5rem 1rem;z-index:100;}
+  .skip-link:focus{left:0;}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;}
+  .spark{display:flex;align-items:flex-end;gap:2px;height:22px;}
+  .spark div{width:4px;background:var(--accent);opacity:.8;}
+  .fade-in{animation:fadein .15s ease-out;}
+  @keyframes fadein{from{opacity:0;transform:translateY(2px);}to{opacity:1;transform:translateY(0);}}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;display:flex;align-items:flex-start;justify-content:center;padding-top:8vh;}
+  .kbd{font-family:ui-monospace,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 .3rem;font-size:.7rem;}
+  .contextmenu{position:fixed;z-index:60;min-width:190px;}
+  .toast{position:fixed;bottom:16px;right:16px;z-index:70;max-width:340px;}
+  .bar-track{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;}
+  .bar-fill{height:100%;background:var(--accent);}
+  input,select,textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);}
 </style>
 </head>
-<body data-theme="dark">
+<body class="min-h-screen">
 <a href="#main" class="skip-link">Skip to main content</a>
-<div id="print-watermark">INTERNAL — From LeadOS local storage · Not for distribution</div>
 
-<div style="display:flex;">
-  <nav id="rail" role="navigation" aria-label="Main navigation"></nav>
-  <div id="main" style="flex:1; min-width:0;">
-    <div id="topbar">
-      <button class="btn" id="cmd-trigger" aria-haspopup="dialog">⌘K Command Palette</button>
-      <span class="mono" style="font-size:11px; color:var(--ink-3);">leados-ptg-demo · unofficial reinterpretation</span>
-      <div style="margin-left:auto; display:flex; gap:8px;">
-        <select id="theme-select" class="btn" aria-label="Theme">
-          <option value="dark">Obsidian (dark)</option>
-          <option value="light">Parchment (light)</option>
-          <option value="terminal">Terminal (mono)</option>
-        </select>
-      </div>
-    </div>
-    <main id="content-main" tabindex="-1" aria-live="polite" aria-label="LeadOS main content">
-      <div id="content"></div>
-    </main>
-  </div>
+<div id="banner-slot"></div>
+
+<div class="flex min-h-screen">
+  <nav id="rail" class="w-64 shrink-0 surface p-3 flex flex-col gap-3 min-h-screen" aria-label="Primary navigation"></nav>
+  <main id="main" class="flex-1 p-5 max-w-6xl" aria-live="polite"></main>
 </div>
 
-<div id="cmd-overlay" class="cmd-overlay" role="dialog" aria-modal="true" aria-label="Command palette">
-  <div class="cmd-panel">
-    <div class="cmd-input-row">
-      <span class="mono" style="color:var(--ink-3);">›</span>
-      <input id="cmd-input" class="cmd-input" placeholder="Search, > command, @person, #domain, R### …" autocomplete="off">
-      <span class="kbtn">Esc</span>
-    </div>
-    <div id="cmd-results" class="cmd-results"></div>
-    <div class="cmd-footer">
-      <span>↑↓ navigate</span><span>↵ select</span><span>esc close</span>
-    </div>
-  </div>
-</div>
-
-<div id="modal-root"></div>
-<div id="toast-root"></div>
+<div id="overlay-slot"></div>
+<div id="toast-slot"></div>
 
 <script>
-(function(){
 'use strict';
+(function(){
 
-/* ============================================================
-   UTILITIES
-   ============================================================ */
-function todayStr(){ return new Date().toISOString().slice(0,10); }
-function addDays(dateStr, n){ const d = new Date(dateStr); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
-function daysBetween(a,b){ return Math.round((new Date(b) - new Date(a)) / 86400000); }
-function round1(n){ return Math.round(n*10)/10; }
-function round2(n){ return Math.round(n*100)/100; }
-function uid(){ return 'e-' + Math.random().toString(36).slice(2,10); }
-function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function linreg(xs, ys){
-  const n = xs.length, mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+/* =========================================================================
+   LEADOS pt-H — single-file demo. window.LEADOS (not LeadOS: see docs).
+   Storage key leados-pth-demo:data (not leados:data: see docs).
+   ========================================================================= */
+const LEADOS = window.LEADOS = window.LEADOS || {};
+const KEY = 'leados-pth-demo:data';
+LEADOS.store = LEADOS.store || {};
+
+/* ---------------- utils ---------------- */
+function uid(p){ return p+'-'+Math.random().toString(36).slice(2,9); }
+function pad(n,w){ return String(n).padStart(w,'0'); }
+function dayUTC(ts){ return Math.floor(new Date(ts).getTime()/86400000); }
+function daysBetween(aTs,bTs){ return dayUTC(bTs)-dayUTC(aTs); }
+function todayIso(){ return new Date().toISOString(); }
+function isoDate(d){ return d.toISOString().slice(0,10); }
+function inDaysIso(n){ return isoDate(new Date(Date.now()+n*86400000)); }
+function inMonthsIso(n){ const d=new Date(); d.setMonth(d.getMonth()+Math.round(n)); return isoDate(d); }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function fmt1(n){ return (Math.round(n*10)/10).toFixed(1); }
+function linSlope(points){
+  const n=points.length; if(n<2) return 0;
+  const mx=points.reduce((s,p)=>s+p.x,0)/n, my=points.reduce((s,p)=>s+p.y,0)/n;
   let num=0, den=0;
-  for(let i=0;i<n;i++){ num += (xs[i]-mx)*(ys[i]-my); den += (xs[i]-mx)*(xs[i]-mx); }
-  const slope = den===0 ? 0 : num/den;
-  return { slope, intercept: my - slope*mx };
+  points.forEach(p=>{ num+=(p.x-mx)*(p.y-my); den+=(p.x-mx)*(p.x-mx); });
+  return den===0?0:num/den;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------------- seed data ---------------- */
+const DOMAINS = ['PEOPLE','ENGINEERING','OPS','SALES','FINANCE','STRATEGY','EXTERNAL','RESILIENCE'];
+const PEOPLE = [
+  { id:'p1', name:'Ana Ruiz',   role:'Eng Manager',      domain:'ENGINEERING', cadenceDays:14 },
+  { id:'p2', name:'Cara Smith', role:'Ops Lead',         domain:'OPS',         cadenceDays:14 },
+  { id:'p3', name:'Devon Lee',  role:'Sales Lead',       domain:'SALES',       cadenceDays:14 },
+  { id:'p4', name:'Priya Patel',role:'Finance Lead',     domain:'FINANCE',     cadenceDays:21 },
+  { id:'p5', name:'Sam Okafor', role:'Chief of Staff',   domain:'STRATEGY',    cadenceDays:21 },
+  { id:'p6', name:'Jun Park',   role:'Staff Engineer',   domain:'ENGINEERING', cadenceDays:14 }
+];
+const GOALS = [
+  { id:'g1', label:'Ship v2 platform',      domain:'ENGINEERING' },
+  { id:'g2', label:'Expand EMEA pipeline',  domain:'SALES' },
+  { id:'g3', label:'Improve NPS',           domain:'EXTERNAL' },
+  { id:'g4', label:'Reduce infra cost',     domain:'FINANCE' }
+];
+const PLANS = [
+  { id:'pl1', label:'Delegate release owners', domain:'ENGINEERING', owner:'p1' },
+  { id:'pl2', label:'SLA improvement plan',    domain:'OPS',         owner:'p2' },
+  { id:'pl3', label:'Pricing experiment',      domain:'SALES',       owner:'p3' }
+];
+const RISKS = [
+  { id:'r1', label:'Vendor outage risk',      domain:'RESILIENCE' },
+  { id:'r2', label:'Key-person dependency: Ana', domain:'RESILIENCE' }
+];
+const DEALS = [
+  { id:'d1', label:'Acme Corp renewal',   domain:'SALES', owner:'p3' },
+  { id:'d2', label:'Globex expansion',    domain:'SALES', owner:'p3' }
+];
+const ENTITY_LABELS = (()=>{
+  const m = {};
+  PEOPLE.forEach(p=>m[p.id]={label:p.name, type:'person', domain:p.domain});
+  GOALS.forEach(g=>m[g.id]={label:g.label, type:'goal', domain:g.domain});
+  PLANS.forEach(p=>m[p.id]={label:p.label, type:'plan', domain:p.domain});
+  RISKS.forEach(r=>m[r.id]={label:r.label, type:'risk', domain:r.domain});
+  DEALS.forEach(d=>m[d.id]={label:d.label, type:'deal', domain:d.domain});
+  return m;
+})();
+
+function buildSeedEvents(today){
+  const ev = []; let seq = 0;
+  function add(daysAgo,type,domain,data){
+    const ts = new Date(today.getTime()-daysAgo*86400000).toISOString();
+    ev.push({ seq:++seq, ts, type, domain, data: data||{} });
+  }
+  const cadence = { p1:14,p2:14,p3:14,p4:21,p5:21,p6:14 };
+  const lastGap = { p1:20,p2:9,p3:12,p4:6,p5:17,p6:11 }; // intentionally makes Ana (p1) overdue -> R1
+  Object.keys(cadence).forEach(pid=>{
+    let t = lastGap[pid];
+    while(t < 92){ add(t,'oneonone.logged','PEOPLE',{personId:pid}); t += cadence[pid]; }
+  });
+  const moods = {
+    p1:[4,4,3,3,2,2], p2:[3,3,4,4,4,4], p3:[4,4,4,3,4,4],
+    p4:[4,4,4,4,5,5], p5:[3,4,4,4,4,5], p6:[4,3,4,4,4,4]
+  };
+  Object.keys(moods).forEach(pid=>{
+    const arr = moods[pid], n = arr.length;
+    arr.forEach((m,i)=>{ const daysAgo=(n-1-i)*7+3; add(daysAgo,'pulse.logged','PEOPLE',{personId:pid, mood:m, measured:true}); });
+  });
+  [75,50,25,8].forEach(d=>add(d,'conflict.logged','PEOPLE',{personId:'p1', withPersonId:'p2'}));
+  for(let d=84; d>=0; d-=7) add(d,'sprint.review','ENGINEERING',{sprintId:'s'+d, velocity: 28+((d/7)%3)*3});
+  for(let d=88; d>=0; d-=11) add(d,'plan.checkin','ENGINEERING',{planId:'pl1', personId:'p1'});
+  for(let d=86; d>=0; d-=12) add(d,'plan.checkin','OPS',{planId:'pl2', personId:'p2'});
+  [88,70].forEach(d=>add(d,'plan.checkin','SALES',{planId:'pl3', personId:'p3'})); // stalled -> R30
+  for(let d=85; d>=0; d-=15) add(d,'okr.checkin','ENGINEERING',{goalId:'g1', ownerId:'p1'});
+  for(let d=80; d>=0; d-=14) add(d,'okr.checkin','SALES',{goalId:'g2', ownerId:'p3'});
+  [90,60].forEach(d=>add(d,'okr.checkin','EXTERNAL',{goalId:'g3', ownerId:'p5'})); // silent -> R20
+  for(let d=82; d>=0; d-=18) add(d,'okr.checkin','FINANCE',{goalId:'g4', ownerId:'p4'});
+  for(let d=84; d>=0; d-=10) add(d,'deal.updated','SALES',{dealId:'d1', ownerId:'p3'});
+  [88,60,35].forEach(d=>add(d,'deal.updated','SALES',{dealId:'d2', ownerId:'p3'})); // stalled -> R40
+  add(88,'risk.raised','RESILIENCE',{riskId:'r1', ownerId:'p2'});
+  add(45,'incident.logged','RESILIENCE',{riskId:'r1', ownerId:'p2'}); // still open -> R50
+  add(70,'risk.raised','RESILIENCE',{riskId:'r2', ownerId:'p1'});
+  add(60,'risk.resolved','RESILIENCE',{riskId:'r2', ownerId:'p1'});
+  for(let d=84; d>=0; d-=30) add(d,'finance.period.logged','FINANCE',{burnMultiple: 22-((84-d)/30)*2});
+
+  ev.sort((a,b)=> new Date(a.ts)-new Date(b.ts));
+  return ev.map((e,i)=>({ id:'e-'+pad(i+1,4), seq:i+1, ts:e.ts, type:e.type, domain:e.domain, data:e.data }));
 }
 
-/* ============================================================
-   LEADOS NAMESPACE
-   ============================================================ */
-const LEADOS = (window.LEADOS = window.LEADOS || {});
-
-/* ---------------- store.js-equivalent: append-only wall ---------------- */
-LEADOS.store = (function(){
-  const KEY = 'leados-ptg-demo:data';
-  const DEFAULT_SETTINGS = {
-    oneOnOneCadenceDays: 14,
-    pulseLoadThreshold: 8.0,
-    grossMarginFloorPct: 60,
-    ltvCacThreshold: 3.0
+/* ---------------- store (append-only, one localStorage key) ---------------- */
+function freshMeta(){
+  return {
+    createdAt: todayIso(),
+    viewHistory: {},       // view -> count   (persisted; brief did not specify storage, disclosed choice: localStorage)
+    commandHistory: {},    // command id -> count (persisted; same disclosure)
+    usageLog: [],          // {ts, view, bucket}  capped 500, persisted
+    sessionLog: [],        // iso timestamps of session starts, persisted
+    attentionHeatmap: {},  // domain -> decayed ms, persisted roll-up of sessionStorage attention (see docs)
+    layoutPins: {},        // navId -> desired index
+    layout: null           // last generated layout summary, for change-detection banner
   };
+}
+function seedStore(){
+  const today = new Date();
+  return {
+    schemaVersion: 1,
+    lineage: 'pt-H-demo',
+    meta: freshMeta(),
+    people: PEOPLE,
+    events: buildSeedEvents(today)
+  };
+}
+let STATE = loadOrSeed();
+function loadOrSeed(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(raw){ const parsed = JSON.parse(raw); if(parsed && parsed.events && parsed.meta) return parsed; }
+  }catch(e){ /* corrupt -> reseed, disclosed */ }
+  const s = seedStore(); persist(s); return s;
+}
+function persist(s){ try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){ /* quota: demo stays in-memory */ } }
+function appendEvent(type, domain, data){
+  const ev = { id:'e-'+pad(STATE.events.length+1,4), seq: STATE.events.length+1, ts: todayIso(), type, domain, data: data||{} };
+  STATE = { ...STATE, events:[...STATE.events, ev] };
+  persist(STATE);
+  return ev;
+}
+function updateMeta(patch){
+  STATE = { ...STATE, meta: { ...STATE.meta, ...patch } };
+  persist(STATE);
+}
+LEADOS.store = { KEY, getState:()=>STATE, appendEvent, updateMeta, reseed:()=>{ STATE=seedStore(); persist(STATE); } };
 
-  function genesis(){
-    return { schemaVersion: 1, meta: { lineage:'ptg-demo', createdAt: Date.now() }, events: [] };
-  }
-  function load(){
-    const text = localStorage.getItem(KEY);
-    if(text === null){ const raw = genesis(); save(raw); return raw; }
-    try { return JSON.parse(text); }
-    catch(e){ throw new Error('LEADOS: store at '+KEY+' is corrupt and was left untouched.'); }
-  }
-  function save(raw){ localStorage.setItem(KEY, JSON.stringify(raw)); }
-  // The only public write path — append-only, never rewrites prior events.
-  function append(type, data, meta){
-    const raw = load();
-    const ev = { id: uid(), ts: new Date().toISOString(), type, data };
-    if(meta) ev.meta = meta;
-    raw.events.push(ev);
-    save(raw);
-    return ev;
-  }
-  function state(){ return load(); }
-  function seed(){
-    const raw = load();
-    if(raw.events.some(e=>e.type==='seed.loaded')) return false; // one-time, ever
-    const t = todayStr();
-    const seedEvents = [
-      ['person.added', {id:'p1', name:'Ana Ruiz', role:'PM'}],
-      ['person.added', {id:'p2', name:'Bruno Serra', role:'Eng Lead'}],
-      ['person.added', {id:'p3', name:'Cara Lind', role:'Designer'}],
-      ['oneonone.logged', {personId:'p1', date: addDays(t,-20)}],
-      ['oneonone.logged', {personId:'p2', date: addDays(t,-10)}],
-      ['oneonone.logged', {personId:'p3', date: addDays(t,-35)}],
-      ['pulse.recorded', {personId:'p3', date: addDays(t,-40), load:9}],
-      ['pulse.recorded', {personId:'p3', date: addDays(t,-30), load:8}],
-      ['pulse.recorded', {personId:'p3', date: addDays(t,-20), load:9}],
-      ['pulse.recorded', {personId:'p3', date: addDays(t,-5), load:7}],
-      ['fin.pl.logged', {period:'Q1-2026', grossMarginPct:68.0}],
-      ['fin.pl.logged', {period:'Q2-2026', grossMarginPct:63.0}],
-      ['fin.pl.logged', {period:'Q3-2026', grossMarginPct:58.0}],
-      ['fin.unit.logged', {period:'Q3-2026', ltvCac:1.5, cacPaybackMonths:24, segment:'SMB'}],
-      ['cs.nps.logged', {period:'Q2-2026', score:41}],
-      ['cs.nps.logged', {period:'Q3-2026', score:28}],
-      ['sprint.review', {sprint:1, velocity:42}],
-      ['sprint.review', {sprint:2, velocity:39}],
-      ['sprint.review', {sprint:3, velocity:35}],
-      ['sprint.review', {sprint:4, velocity:32}],
-      ['seed.loaded', {ts: Date.now()}]
-    ];
-    seedEvents.forEach(([type,data])=>append(type,data,{seed:true}));
-    return true;
-  }
-  function purge(){ localStorage.removeItem(KEY); load(); }
-  return { KEY, DEFAULT_SETTINGS, load, save, append, state, seed, purge };
-})();
+/* =========================================================================
+   RULE ENGINE — 6 computed rules across domains (not the pasted brief's
+   144; see README). Each finding: {rule, domain, entityId, label, sev, title, detail}
+   ========================================================================= */
+function lastEventFor(events, type, matchFn){
+  let last=null;
+  events.forEach(e=>{ if(e.type===type && matchFn(e)) { if(!last || new Date(e.ts)>new Date(last.ts)) last=e; } });
+  return last;
+}
+function runEngine(state, today){
+  const events = state.events;
+  const findings = [];
 
-/* ---------------- events.js-equivalent: project() ---------------- */
-LEADOS.events = (function(){
-  function project(events){
-    const P = {
-      people: {}, finance:{ pl:[], unit:[] }, nps:[], sprints:[],
-      settings: Object.assign({}, LEADOS.store.DEFAULT_SETTINGS),
-      mutedRules: new Set(), snoozed:{}, dismissed: new Set(),
-      notes:[], decisions:[], risks:[]
-    };
-    (events||[]).forEach(ev=>{
-      const d = ev.data||{};
-      switch(ev.type){
-        case 'person.added': P.people[d.id] = { id:d.id, name:d.name, role:d.role, oneonones:[], pulses:[] }; break;
-        case 'oneonone.logged': if(P.people[d.personId]) P.people[d.personId].oneonones.push(d.date); break;
-        case 'pulse.recorded': if(P.people[d.personId]) P.people[d.personId].pulses.push({date:d.date, load:d.load}); break;
-        case 'fin.pl.logged': P.finance.pl.push({period:d.period, grossMarginPct:d.grossMarginPct}); break;
-        case 'fin.unit.logged': P.finance.unit.push({period:d.period, ltvCac:d.ltvCac, cacPaybackMonths:d.cacPaybackMonths, segment:d.segment}); break;
-        case 'cs.nps.logged': P.nps.push({period:d.period, score:d.score}); break;
-        case 'sprint.review': P.sprints.push({sprint:d.sprint, velocity:d.velocity}); break;
-        case 'settings.changed': P.settings[d.key] = d.value; break;
-        case 'rule.muted': P.mutedRules.add(d.ruleId); break;
-        case 'rule.unmuted': P.mutedRules.delete(d.ruleId); break;
-        case 'finding.snoozed': P.snoozed[d.key] = d.until; break;
-        case 'finding.dismissed': P.dismissed.add(d.key); break;
-        case 'note.added': P.notes.push(d.text); break;
-        case 'strategy.decision': P.decisions.push(d.text); break;
-        case 'fin.risk.logged': P.risks.push(d.text); break;
+  // R1: 1:1 cadence overdue
+  PEOPLE.forEach(p=>{
+    const last = lastEventFor(events,'oneonone.logged', e=>e.data.personId===p.id);
+    const gap = last ? daysBetween(last.ts, today) : 999;
+    if(gap > p.cadenceDays){
+      findings.push({ rule:'R1', domain:'PEOPLE', entityId:p.id, label:p.name, sev:3,
+        title:`1:1 overdue — ${p.name}`, detail:`${gap}d since last 1:1 (cadence ${p.cadenceDays}d)` });
+    }
+  });
+
+  // R7: pulse/burnout trend (linear regression over weekly mood points)
+  PEOPLE.forEach(p=>{
+    const pts = events.filter(e=>e.type==='pulse.logged' && e.data.personId===p.id && e.data.measured)
+      .sort((a,b)=>new Date(a.ts)-new Date(b.ts))
+      .map((e,i)=>({x:i,y:e.data.mood}));
+    if(pts.length<3) return;
+    const slope = linSlope(pts);
+    if(slope <= -0.5){
+      findings.push({ rule:'R7', domain:'PEOPLE', entityId:p.id, label:p.name, sev:4,
+        title:`Burnout trend — ${p.name}`, detail:`mood slope ${fmt1(slope)}/period over ${pts.length} measured pulses` });
+    }
+  });
+
+  // R20: goal/OKR silent
+  GOALS.forEach(g=>{
+    const last = lastEventFor(events,'okr.checkin', e=>e.data.goalId===g.id);
+    const gap = last ? daysBetween(last.ts, today) : 999;
+    if(gap > 21){
+      findings.push({ rule:'R20', domain:g.domain, entityId:g.id, label:g.label, sev:3,
+        title:`Goal silent — ${g.label}`, detail:`${gap}d since last okr.checkin (threshold 21d)` });
+    }
+  });
+
+  // R30: plan stalled
+  PLANS.forEach(pl=>{
+    const last = lastEventFor(events,'plan.checkin', e=>e.data.planId===pl.id);
+    const gap = last ? daysBetween(last.ts, today) : 999;
+    if(gap > 14){
+      findings.push({ rule:'R30', domain:pl.domain, entityId:pl.id, label:pl.label, sev:2,
+        title:`Plan stalled — ${pl.label}`, detail:`${gap}d since last plan.checkin (threshold 14d)` });
+    }
+  });
+
+  // R40: deal stalled
+  DEALS.forEach(d=>{
+    const last = lastEventFor(events,'deal.updated', e=>e.data.dealId===d.id);
+    const gap = last ? daysBetween(last.ts, today) : 999;
+    if(gap > 21){
+      findings.push({ rule:'R40', domain:d.domain, entityId:d.id, label:d.label, sev:3,
+        title:`Deal stalled — ${d.label}`, detail:`${gap}d since last deal.updated (threshold 21d)` });
+    }
+  });
+
+  // R50: risk open too long (raised, no resolved, >30d)
+  RISKS.forEach(r=>{
+    const raised = lastEventFor(events,'risk.raised', e=>e.data.riskId===r.id);
+    const resolved = lastEventFor(events,'risk.resolved', e=>e.data.riskId===r.id);
+    if(raised && (!resolved || new Date(resolved.ts) < new Date(raised.ts))){
+      const gap = daysBetween(raised.ts, today);
+      if(gap > 30){
+        findings.push({ rule:'R50', domain:r.domain, entityId:r.id, label:r.label, sev:4,
+          title:`Risk open ${gap}d — ${r.label}`, detail:`raised ${gap}d ago, no risk.resolved logged (threshold 30d)` });
       }
+    }
+  });
+
+  return findings;
+}
+LEADOS.engine = { run: runEngine };
+
+/* =========================================================================
+   PART 1 — GENERATIVE LAYOUT ENGINE  (LEADOS.layoutGrammar)
+   ========================================================================= */
+const NAV_ITEMS = [
+  { id:'today',       label:'Today',       glyph:'◎', domain:null,         util:true },
+  { id:'roster',      label:'Roster',      glyph:'○', domain:'PEOPLE',     util:false },
+  { id:'engineering', label:'Engineering', glyph:'◈', domain:'ENGINEERING',util:false },
+  { id:'ops',         label:'Ops',         glyph:'◇', domain:'OPS',        util:false },
+  { id:'sales',       label:'Sales',       glyph:'◇', domain:'SALES',      util:false },
+  { id:'finance',     label:'Finance',     glyph:'◇', domain:'FINANCE',    util:false },
+  { id:'strategy',    label:'Strategy',    glyph:'◆', domain:'STRATEGY',   util:false },
+  { id:'external',    label:'External',    glyph:'◇', domain:'EXTERNAL',  util:false },
+  { id:'resilience',  label:'Resilience',  glyph:'⬡', domain:'RESILIENCE', util:false },
+  { id:'intelligence',label:'Intelligence',glyph:'⬡', domain:null,         util:true },
+  { id:'forecast',    label:'Forecast',    glyph:'▲', domain:null,         util:true },
+  { id:'data',        label:'Data',        glyph:'◫', domain:null,         util:true },
+  { id:'health',      label:'Health',      glyph:'✓', domain:null,         util:true }
+];
+const GROUPS = {
+  LEADERSHIP:  ['PEOPLE'],
+  FINANCIAL:   ['FINANCE','SALES'],
+  OPERATIONAL: ['OPS','ENGINEERING','RESILIENCE'],
+  EXTERNAL:    ['STRATEGY','EXTERNAL']
+};
+const CONFIG_BY_GROUP = { LEADERSHIP:'A', FINANCIAL:'B', OPERATIONAL:'C', EXTERNAL:'D' };
+const CONFIG_HEADER = {
+  A:'LEADERSHIP HEAVY (people/growth dominate)',
+  B:'FINANCIAL HEAVY (finance/sales dominate)',
+  C:'OPERATIONAL HEAVY (ops/execution dominate)',
+  D:'EXTERNAL HEAVY (market/strategy dominate)',
+  E:'BALANCED (no dominant domain > 25%)'
+};
+
+function readAttentionHeatmap(){
+  // sessionStorage = THIS session's running dwell time per domain.
+  try{ return JSON.parse(sessionStorage.getItem('leados-pth-attention')||'{}'); }catch(e){ return {}; }
+}
+function normalizeMap(m){
+  const max = Math.max(0, ...Object.values(m));
+  const out = {};
+  DOMAINS.forEach(d=> out[d] = max>0 ? (m[d]||0)/max : 0 );
+  return out;
+}
+function analyzeTopology(state, today){
+  const events = state.events;
+  const findings = runEngine(state, today);
+  const findingW = {}, activityW = {};
+  DOMAINS.forEach(d=>{ findingW[d]=0; activityW[d]=0; });
+  findings.forEach(f=> findingW[f.domain] = (findingW[f.domain]||0) + f.sev);
+  events.forEach(e=>{
+    if(daysBetween(e.ts, today) <= 30) activityW[e.domain] = (activityW[e.domain]||0) + 1;
+  });
+  // persisted, decayed roll-up of sessionStorage attention (see README "attention timing" note)
+  const attentionW = { ...state.meta.attentionHeatmap };
+  DOMAINS.forEach(d=>{ if(!(d in attentionW)) attentionW[d]=0; });
+
+  const nf = normalizeMap(findingW), na = normalizeMap(activityW), nt = normalizeMap(attentionW);
+  const domainScore = {};
+  DOMAINS.forEach(d=>{ domainScore[d] = 0.4*nf[d] + 0.3*na[d] + 0.3*nt[d]; });
+
+  // feature usage vector
+  const typeFreq = {};
+  events.forEach(e=> typeFreq[e.type] = (typeFreq[e.type]||0)+1 );
+  const topEventType = Object.entries(typeFreq).sort((a,b)=>b[1]-a[1])[0];
+
+  // temporal pattern: bucket session view log by hour-of-day bucket -> top view
+  const bucketViewCounts = { morning:{}, afternoon:{}, evening:{} };
+  (state.meta.usageLog||[]).forEach(r=>{
+    const b = bucketViewCounts[r.bucket]; if(!b) return;
+    b[r.view] = (b[r.view]||0)+1;
+  });
+  const temporalTop = {};
+  Object.keys(bucketViewCounts).forEach(b=>{
+    const entries = Object.entries(bucketViewCounts[b]).sort((a,b2)=>b2[1]-a[1]);
+    temporalTop[b] = entries[0] ? entries[0][0] : null;
+  });
+
+  const totalEvents = events.length;
+  const domainsTouched = DOMAINS.filter(d=> activityW[d]>0 || findingW[d]>0).length;
+
+  return { domainScore, findingW, activityW, attentionW, typeFreq, topEventType, temporalTop, totalEvents, domainsTouched };
+}
+
+function pickConfiguration(topology){
+  if(topology.totalEvents < 50 || topology.domainsTouched < 3) return { config:'E', group:null, share:0 };
+  const sums = {};
+  let grand = 0;
+  Object.entries(GROUPS).forEach(([g, members])=>{
+    sums[g] = members.reduce((s,d)=> s + topology.domainScore[d], 0);
+    grand += sums[g];
+  });
+  let best=null, bestShare=0;
+  Object.entries(sums).forEach(([g,s])=>{
+    const share = grand>0 ? s/grand : 0;
+    if(share > bestShare){ bestShare = share; best = g; }
+  });
+  if(best && bestShare > 0.25) return { config: CONFIG_BY_GROUP[best], group:best, share:bestShare };
+  return { config:'E', group:best, share:bestShare };
+}
+
+function generateLayout(state, today){
+  const topology = analyzeTopology(state, today);
+  const pick = pickConfiguration(topology);
+  const domainItems = NAV_ITEMS.filter(n=>!n.util);
+  const utilItems = NAV_ITEMS.filter(n=>n.util && n.id!=='today');
+
+  let ordered = [...domainItems].sort((a,b)=> (topology.domainScore[b.domain]||0) - (topology.domainScore[a.domain]||0));
+
+  // apply pins: an item pinned to position i is placed there, rest fill in generated order
+  const pins = state.meta.layoutPins || {};
+  const pinned = Object.entries(pins).filter(([id])=> domainItems.some(d=>d.id===id));
+  if(pinned.length){
+    const withoutPinned = ordered.filter(it => !pins.hasOwnProperty(it.id));
+    const result = new Array(ordered.length).fill(null);
+    pinned.forEach(([id,pos])=>{
+      const item = domainItems.find(d=>d.id===id);
+      const slot = clamp(pos, 0, result.length-1);
+      if(item && !result[slot]) result[slot] = item;
     });
-    return P;
-  }
-  return { project };
-})();
-
-/* ---------------- engine.js-equivalent: 6 computed rules ---------------- */
-LEADOS.engine = (function(){
-  const CONF_MULT = { HIGH:1.0, MEDIUM:0.75, LOW:0.5 };
-
-  function eventIdsFor(events, type, pred){
-    return events.filter(e=>e.type===type && pred(e)).map(e=>e.id);
+    let wi = 0;
+    for(let i=0;i<result.length;i++){
+      if(!result[i]){ while(wi<withoutPinned.length && result.includes(withoutPinned[wi])) wi++; result[i]=withoutPinned[wi++]; }
+    }
+    ordered = result.filter(Boolean);
   }
 
-  function ruleR1(P, events, today){
-    const out = []; const cadence = P.settings.oneOnOneCadenceDays;
-    Object.values(P.people).forEach(person=>{
-      const dates = person.oneonones.slice().sort();
-      const last = dates[dates.length-1];
-      if(!last) return;
-      const gap = daysBetween(last, today);
-      if(gap > cadence){
-        const overage = gap - cadence;
-        const sev = overage > cadence ? 5 : overage > cadence/2 ? 4 : 3;
-        out.push({
-          key:'R1:'+person.id, rule:1, domain:'PEOPLE', sev, conf:'HIGH',
-          title:`1:1 with ${person.name} is overdue — ${gap}d since last (cadence ${cadence}d)`,
-          basis:[`Last 1:1: ${last} (${gap}d ago)`, `Cadence setting: ${cadence}d · Overage: ${overage}d`],
-          sourceLabel:`oneonone.logged, ${person.name}`,
-          sourceEventIds: eventIdsFor(events,'oneonone.logged', e=>e.data.personId===person.id),
-          multiplier: round2(gap/cadence),
-          playbook: 'pl-1on1-reset',
-          metric:{ name:'oneonone_gap', value:gap, context:{ personName:person.name, cadence } }
-        });
+  const config = pick.config;
+  const visibleCount = config==='E' ? ordered.length : Math.min(5, ordered.length);
+  const visible = ordered.slice(0, visibleCount);
+  const folded = ordered.slice(visibleCount);
+
+  const topDomains = [...DOMAINS].sort((a,b)=>topology.domainScore[b]-topology.domainScore[a]).slice(0,3);
+
+  return { config, header: CONFIG_HEADER[config], group: pick.group, share: pick.share,
+           visible, folded, utilItems, topology, topDomains };
+}
+LEADOS.layoutGrammar = { analyzeTopology, generateLayout, NAV_ITEMS, DOMAINS };
+
+/* =========================================================================
+   PART 2 — SEMANTIC RELATIONSHIP GRAPH  (LEADOS.entityGraph)
+   ========================================================================= */
+function extractRefs(data){
+  const refs = [];
+  Object.entries(data||{}).forEach(([key,val])=>{
+    if(/Id$/.test(key) && typeof val==='string') refs.push({ id:val, field:key });
+    if(/Ids$/.test(key) && Array.isArray(val)) val.forEach(id=>refs.push({ id, field:key }));
+  });
+  return refs;
+}
+function buildEntityGraph(state){
+  const nodes = new Map(), edges = new Map();
+  Object.entries(ENTITY_LABELS).forEach(([id,info])=> nodes.set(id, { ...info, id, events:[] }) );
+  state.events.forEach(ev=>{
+    const refs = extractRefs(ev.data).filter(r=>nodes.has(r.id));
+    refs.forEach(r=> nodes.get(r.id).events.push(ev));
+    for(let i=0;i<refs.length;i++){
+      for(let j=i+1;j<refs.length;j++){
+        if(refs[i].id===refs[j].id) continue;
+        const key = [refs[i].id, refs[j].id].sort().join(':');
+        if(!edges.has(key)) edges.set(key, { type:ev.type, weight:0, events:[] });
+        const e = edges.get(key); e.weight++; e.events.push(ev.id);
       }
+    }
+  });
+  return { nodes, edges };
+}
+function pageRankSimple(nodes, edges, iter){
+  iter = iter || 20;
+  const scores = new Map();
+  nodes.forEach((_,id)=> scores.set(id, 1/nodes.size));
+  for(let i=0;i<iter;i++){
+    const newScores = new Map();
+    nodes.forEach((_,id)=> newScores.set(id, 0.15/nodes.size));
+    edges.forEach((edge,key)=>{
+      const [a,b] = key.split(':');
+      const contribution = 0.85 * edge.weight;
+      newScores.set(b, (newScores.get(b)||0) + contribution*(scores.get(a)||0));
+      newScores.set(a, (newScores.get(a)||0) + contribution*(scores.get(b)||0));
+    });
+    const total = [...newScores.values()].reduce((a,b)=>a+b,0) || 1;
+    newScores.forEach((v,k)=> newScores.set(k, v/total));
+    newScores.forEach((v,k)=> scores.set(k,v));
+  }
+  return scores;
+}
+function connectedClusters(nodes, edges, minWeight){
+  minWeight = minWeight || 3;
+  const adj = new Map();
+  nodes.forEach((_,id)=> adj.set(id, []));
+  edges.forEach((edge,key)=>{
+    if(edge.weight < minWeight) return;
+    const [a,b] = key.split(':');
+    adj.get(a).push({ to:b, type:edge.type });
+    adj.get(b).push({ to:a, type:edge.type });
+  });
+  const seen = new Set(), clusters = [];
+  nodes.forEach((_,id)=>{
+    if(seen.has(id) || adj.get(id).length===0) return;
+    const stack=[id], members=new Set(), typeCount={};
+    while(stack.length){
+      const cur = stack.pop();
+      if(members.has(cur)) continue;
+      members.add(cur); seen.add(cur);
+      adj.get(cur).forEach(n=>{ typeCount[n.type]=(typeCount[n.type]||0)+1; if(!members.has(n.to)) stack.push(n.to); });
+    }
+    if(members.size>1){
+      const label = Object.entries(typeCount).sort((a,b)=>b[1]-a[1])[0];
+      clusters.push({ members:[...members], label: label ? label[0] : 'unlabeled' });
+    }
+  });
+  return clusters;
+}
+function detectLeadLag(eventsA, eventsB, windowDays){
+  windowDays = windowDays || 21;
+  const offsets = [];
+  eventsA.forEach(ea=> eventsB.forEach(eb=>{
+    const delta = dayUTC(eb.ts) - dayUTC(ea.ts);
+    if(Math.abs(delta) <= windowDays) offsets.push(delta);
+  }));
+  if(offsets.length < 3) return { detected:false, n:offsets.length, reason:'fewer than 3 co-occurrences within window' };
+  const mean = offsets.reduce((a,b)=>a+b,0)/offsets.length;
+  const std = Math.sqrt(offsets.map(d=>(d-mean)**2).reduce((a,b)=>a+b,0)/offsets.length);
+  if(std < 5 && Math.abs(mean) > 2){
+    return { detected:true, lag:Math.round(mean), std:Math.round(std*10)/10, n:offsets.length };
+  }
+  return { detected:false, n:offsets.length, mean:Math.round(mean*10)/10, std:Math.round(std*10)/10, reason:'std ≥5d or |mean| ≤2d — no reliable periodic lag' };
+}
+function entityGraphInsights(state){
+  const { nodes, edges } = buildEntityGraph(state);
+  const scores = pageRankSimple(nodes, edges, 20);
+  const centrality = [...nodes.keys()].map(id=>({ id, score:scores.get(id)||0, ...nodes.get(id) }))
+    .filter(n=>n.events.length>0)
+    .sort((a,b)=>b.score-a.score);
+  const clusters = connectedClusters(nodes, edges, 3);
+  const patterns = [];
+  edges.forEach((edge,key)=>{
+    if(edge.weight < 5) return;
+    const [a,b] = key.split(':');
+    const na = nodes.get(a), nb = nodes.get(b);
+    if(!na || !nb) return;
+    const res = detectLeadLag(na.events, nb.events, 21);
+    patterns.push({ a, b, aLabel:na.label, bLabel:nb.label, ...res });
+  });
+  return { nodes, edges, centrality, clusters, patterns };
+}
+LEADOS.entityGraph = { buildEntityGraph, extractRefs, pageRankSimple, connectedClusters, detectLeadLag, entityGraphInsights };
+
+/* =========================================================================
+   PART 3 — PREDICTIVE SIGNAL ENGINE  (LEADOS.predict)
+   NOTE: the pasted brief's Part 3 text was truncated mid-definition of
+   buildPrefireCalendar() in the prompt. The bucketing scheme below
+   (NOW / this week / next 2 weeks / next month / later / uncertain /
+   not projectable) is this session's own reasonable completion of that
+   cut-off spec, not a verified/recovered original — labeled here and in
+   the docs.
+   ========================================================================= */
+function computeMoodSlope(measuredPulses){
+  const pts = measuredPulses.map((p,i)=>({x:i,y:p.mood}));
+  return linSlope(pts);
+}
+function projectFireDate(ruleId, state, today){
+  const events = state.events;
+  if(ruleId==='R1'){
+    const out = {};
+    PEOPLE.forEach(p=>{
+      const last = lastEventFor(events,'oneonone.logged', e=>e.data.personId===p.id);
+      if(!last){ out[p.id]=null; return; }
+      const gap = daysBetween(last.ts, today);
+      const daysUntilFire = p.cadenceDays - gap + 1;
+      out[p.id] = daysUntilFire > 0 ? { date: inDaysIso(daysUntilFire), basis:`cadence ${p.cadenceDays}d − elapsed ${gap}d` } : { date:'NOW', basis:`already ${gap-p.cadenceDays}d over cadence` };
     });
     return out;
   }
-
-  function ruleR7(P, events, today){
-    const out = []; const threshold = P.settings.pulseLoadThreshold; const windowDays = 45;
-    Object.values(P.people).forEach(person=>{
-      const recent = person.pulses.filter(p=>daysBetween(p.date,today)<=windowDays);
-      if(recent.length < 2) return;
-      const mean = recent.reduce((s,p)=>s+p.load,0)/recent.length;
-      if(mean >= threshold){
-        const sev = mean >= threshold+1 ? 5 : 4;
-        out.push({
-          key:'R7:'+person.id, rule:7, domain:'PEOPLE', sev, conf:'MEDIUM',
-          title:`Sustained high load for ${person.name} — mean ${mean.toFixed(1)}/10 over ${recent.length} pulses`,
-          basis:[`Pulses (last ${windowDays}d): ${recent.map(p=>p.load).join(', ')}`, `R7 trigger threshold: ≥${threshold.toFixed(1)}/10`],
-          sourceLabel:`pulse.recorded, last ${windowDays}d`,
-          sourceEventIds: eventIdsFor(events,'pulse.recorded', e=>e.data.personId===person.id),
-          multiplier:1, playbook:null,
-          metric:{ name:'pulse_load', value:round1(mean), context:{ n:recent.length, windowDays, personName:person.name, threshold } }
-        });
-      }
+  if(ruleId==='R7'){
+    const out = {};
+    PEOPLE.forEach(p=>{
+      const measured = events.filter(e=>e.type==='pulse.logged' && e.data.personId===p.id && e.data.measured)
+        .sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+      if(measured.length<3){ out[p.id]=null; return; }
+      const slope = computeMoodSlope(measured);
+      if(slope<=-0.5){ out[p.id] = { date:'NOW', basis:`slope ${fmt1(slope)}/period already past -0.5 threshold` }; return; }
+      if(slope>=0){ out[p.id]=null; return; }
+      out[p.id] = { uncertain:true, note:`slope ${fmt1(slope)}/period trending toward R7 threshold — not linearly projectable with confidence`, basis:'extrapolation requires assuming constant rate-of-change-of-slope, too uncertain to date' };
     });
     return out;
   }
-
-  function ruleR103(P, events, today){
-    const pl = P.finance.pl.slice().sort((a,b)=>a.period.localeCompare(b.period));
-    if(pl.length < 1) return [];
-    const floor = P.settings.grossMarginFloorPct;
-    const latest = pl[pl.length-1];
-    if(latest.grossMarginPct >= floor) return [];
-    const last3 = pl.slice(-3);
-    const declining = last3.length>1 && last3.every((p,i)=> i===0 || p.grossMarginPct < last3[i-1].grossMarginPct);
-    const below = round1(floor - latest.grossMarginPct);
-    const totalDrop = last3.length>1 ? round1(last3[0].grossMarginPct - last3[last3.length-1].grossMarginPct) : 0;
-    const sev = below>5 ? 5 : 4;
-    return [{
-      key:'R103:'+latest.period, rule:103, domain:'FINANCE', sev, conf:'HIGH',
-      title:`Gross margin crossed the ${floor}% floor` + (declining ? ` — ${last3.length} consecutive periods declining` : ''),
-      basis:[ last3.map(p=>`${p.period}: ${p.grossMarginPct.toFixed(1)}%`).join(' → '),
-              `${below}pp below the ${floor}% floor` + (declining ? `, declined ${totalDrop}pp over ${last3.length} periods` : '') ],
-      sourceLabel:`fin.pl.logged, ${last3.length} periods`,
-      sourceEventIds: eventIdsFor(events,'fin.pl.logged', e=>last3.some(p=>p.period===e.data.period)),
-      multiplier:1, playbook:'pl-review',
-      metric:{ name:'gross_margin', value:latest.grossMarginPct, context:{ floor, periods:last3 } }
-    }];
-  }
-
-  function ruleR110(P, events, today){
-    const unit = P.finance.unit.slice().sort((a,b)=>a.period.localeCompare(b.period));
-    if(!unit.length) return [];
-    const latest = unit[unit.length-1];
-    const threshold = P.settings.ltvCacThreshold;
-    if(latest.ltvCac >= threshold) return [];
-    return [{
-      key:'R110:'+latest.period, rule:110, domain:'FINANCE', sev:4, conf:'HIGH',
-      title:`LTV:CAC of ${latest.ltvCac.toFixed(2)} is below the ${threshold.toFixed(1)} convention threshold (${latest.segment})`,
-      basis:[`CAC payback: ${latest.cacPaybackMonths} months`, `Segment: ${latest.segment} · Period: ${latest.period}`],
-      sourceLabel:`fin.unit.logged, ${latest.period}`,
-      sourceEventIds: eventIdsFor(events,'fin.unit.logged', e=>e.data.period===latest.period),
-      multiplier:1, playbook:'pl-unit-econ',
-      metric:{ name:'ltv_cac', value:latest.ltvCac, context:{ threshold, cacPaybackMonths:latest.cacPaybackMonths, segment:latest.segment, period:latest.period } }
-    }];
-  }
-
-  function ruleR120(P, events, today){
-    const nps = P.nps.slice().sort((a,b)=>a.period.localeCompare(b.period));
-    if(nps.length < 2) return [];
-    const last2 = nps.slice(-2);
-    const declining = last2[1].score < last2[0].score;
-    if(!declining || last2[1].score >= 30) return [];
-    const drop = last2[0].score - last2[1].score;
-    return [{
-      key:'R120:'+last2[1].period, rule:120, domain:'CS', sev: last2[1].score<20?5:4, conf:'HIGH',
-      title:`NPS declined to ${last2[1].score} in ${last2[1].period}, down from ${last2[0].score} in ${last2[0].period}`,
-      basis:[`${last2[0].period}: ${last2[0].score} → ${last2[1].period}: ${last2[1].score} (−${drop})`, `Two consecutive declining periods, latest below 30`],
-      sourceLabel:'cs.nps.logged, n=2 periods',
-      sourceEventIds: eventIdsFor(events,'cs.nps.logged', e=>last2.some(p=>p.period===e.data.period)),
-      multiplier:1, playbook:'pl-cs-save',
-      metric:{ name:'nps', value:last2[1].score, context:{ prior:last2[0].score, period:last2[1].period, priorPeriod:last2[0].period } }
-    }];
-  }
-
-  function ruleR130(P, events, today){
-    const sprints = P.sprints.slice().sort((a,b)=>a.sprint-b.sprint);
-    if(sprints.length < 3) return [];
-    const last = sprints.slice(-4);
-    const { slope } = linreg(last.map((s,i)=>i), last.map(s=>s.velocity));
-    if(slope >= 0) return [];
-    const latest = last[last.length-1];
-    const zero = latest.velocity>0 ? Math.ceil(latest.velocity/Math.abs(slope)) : 0;
-    return [{
-      key:'R130:'+latest.sprint, rule:130, domain:'DELIVERY', sev:3, conf:'MEDIUM',
-      title:`Sprint velocity declining — ${latest.velocity} pts, slope ${slope.toFixed(1)}/sprint`,
-      basis:[`Sprints: ${last.map(s=>s.velocity).join(', ')} (n=${last.length})`,
-             `Linear regression slope: ${slope.toFixed(2)} pts/sprint · Labeled: linear extrapolation`,
-             `At this rate: projected 0 points in ~${zero} sprints`],
-      sourceLabel:`sprint.review, n=${last.length}`,
-      sourceEventIds: eventIdsFor(events,'sprint.review', e=>last.some(s=>s.sprint===e.data.sprint)),
-      multiplier:1, playbook:'pl-sprint-reset',
-      metric:{ name:'velocity', value:latest.velocity, context:{ slope, n:last.length, zero } }
-    }];
-  }
-
-  const RULES = [
-    { id:1, fn:ruleR1, title:'1:1 cadence overdue (per person)', domain:'PEOPLE', setting:'oneOnOneCadenceDays' },
-    { id:7, fn:ruleR7, title:'Sustained pulse load trigger', domain:'PEOPLE', setting:'pulseLoadThreshold' },
-    { id:103, fn:ruleR103, title:'Gross margin floor breach + decline', domain:'FINANCE', setting:'grossMarginFloorPct' },
-    { id:110, fn:ruleR110, title:'LTV:CAC below convention threshold', domain:'FINANCE', setting:'ltvCacThreshold' },
-    { id:120, fn:ruleR120, title:'NPS decline, two consecutive periods', domain:'CS', setting:null },
-    { id:130, fn:ruleR130, title:'Sprint velocity decline (linear regression)', domain:'DELIVERY', setting:null }
-  ];
-
-  function run(state, today){
-    const P = LEADOS.events.project(state.events);
-    let findings = [];
-    RULES.forEach(r=>{
-      const raw = r.fn(P, state.events, today);
-      raw.forEach(f=>{ f.ruleMuted = P.mutedRules.has(r.id); });
-      findings.push(...raw);
+  if(ruleId==='R20'){
+    const out = {};
+    GOALS.forEach(g=>{
+      const last = lastEventFor(events,'okr.checkin', e=>e.data.goalId===g.id);
+      const gap = last ? daysBetween(last.ts, today) : 999;
+      const daysUntilFire = 21 - gap + 1;
+      out[g.id] = daysUntilFire > 0 ? { date: inDaysIso(daysUntilFire), basis:`silent threshold 21d − elapsed ${gap}d` } : { date:'NOW', basis:`already ${gap-21}d past silent threshold` };
     });
-    findings = findings.filter(f=>!f.ruleMuted);
-    findings = findings.filter(f=>!P.dismissed.has(f.key));
-    findings = findings.filter(f=>!(P.snoozed[f.key] && P.snoozed[f.key] > today));
-    findings.forEach(f=>{
-      const cm = CONF_MULT[f.conf];
-      f.base = round2(f.sev*cm);
-      f.score = round2(f.base*(f.multiplier||1));
+    return out;
+  }
+  if(ruleId==='R40'){
+    const out = {};
+    DEALS.forEach(d=>{
+      const last = lastEventFor(events,'deal.updated', e=>e.data.dealId===d.id);
+      const gap = last ? daysBetween(last.ts, today) : 999;
+      const daysUntilFire = 21 - gap + 1;
+      out[d.id] = daysUntilFire > 0 ? { date: inDaysIso(daysUntilFire), basis:`stall threshold 21d − elapsed ${gap}d` } : { date:'NOW', basis:`already ${gap-21}d past stall threshold` };
     });
-    findings.sort((a,b)=>b.score-a.score);
-    findings.forEach((f,i)=>f.rank=i+1);
-    return { findings, P };
+    return out;
   }
+  return null; // R30/R50 treated as non-projectable (data-event-dependent), per brief's own "default: non-projectable" case
+}
+function bucketOf(dateStr, today){
+  if(!dateStr) return null;
+  if(dateStr==='NOW') return 'NOW';
+  const gap = daysBetween(today.toISOString(), new Date(dateStr).toISOString());
+  if(gap<=7) return 'THIS WEEK';
+  if(gap<=14) return 'NEXT 2 WEEKS';
+  if(gap<=30) return 'NEXT MONTH';
+  return 'LATER';
+}
+function buildPrefireCalendar(state, today){
+  const rules = ['R1','R7','R20','R40'];
+  const buckets = { NOW:[], 'THIS WEEK':[], 'NEXT 2 WEEKS':[], 'NEXT MONTH':[], LATER:[], UNCERTAIN:[] };
+  rules.forEach(ruleId=>{
+    const proj = projectFireDate(ruleId, state, today);
+    Object.entries(proj).forEach(([entityId,val])=>{
+      if(!val) return;
+      const label = (ENTITY_LABELS[entityId]||{}).label || entityId;
+      if(val.uncertain){ buckets.UNCERTAIN.push({ ruleId, entityId, label, note:val.note, basis:val.basis }); return; }
+      const b = bucketOf(val.date, today);
+      if(b) buckets[b].push({ ruleId, entityId, label, date:val.date, basis:val.basis });
+    });
+  });
+  return buckets;
+}
+LEADOS.predict = { projectFireDate, buildPrefireCalendar, computeMoodSlope };
 
-  function ruleStatus(ruleId, state, P){
-    if(P.mutedRules.has(ruleId)) return 'MUTED';
-    const r = RULES.find(x=>x.id===ruleId);
-    const findingsNow = run(state, todayStr()).findings.filter(f=>f.rule===ruleId);
-    if(findingsNow.length) return 'ACTIVE';
-    // crude NO DATA vs INACTIVE heuristic based on whether underlying data exists at all
-    const P2 = LEADOS.events.project(state.events);
-    const hasData = {
-      1: Object.values(P2.people).some(p=>p.oneonones.length),
-      7: Object.values(P2.people).some(p=>p.pulses.length),
-      103: P2.finance.pl.length>0,
-      110: P2.finance.unit.length>0,
-      120: P2.nps.length>0,
-      130: P2.sprints.length>0
-    }[ruleId];
-    return hasData ? 'INACTIVE' : 'NO DATA';
-  }
+/* =========================================================================
+   SESSION / ATTENTION TRACKING
+   ========================================================================= */
+const SESSION_FLAG = 'leados-pth-session-started';
+let attentionTimerDomain = null, attentionTimerStart = 0;
+function hourBucket(h){ if(h>=5 && h<12) return 'morning'; if(h>=12 && h<18) return 'afternoon'; return 'evening'; }
+function flushAttention(domain, now){
+  if(!domain) return;
+  const elapsed = now - attentionTimerStart;
+  if(elapsed<=0) return;
+  const heat = (()=>{ try{ return JSON.parse(sessionStorage.getItem('leados-pth-attention')||'{}'); }catch(e){ return {}; } })();
+  heat[domain] = (heat[domain]||0) + elapsed;
+  try{ sessionStorage.setItem('leados-pth-attention', JSON.stringify(heat)); }catch(e){}
+}
+function trackViewDomain(domain){
+  const now = Date.now();
+  if(attentionTimerDomain) flushAttention(attentionTimerDomain, now);
+  attentionTimerDomain = domain; attentionTimerStart = now;
+}
+function logUsage(view){
+  const bucket = hourBucket(new Date().getHours());
+  const log = [...(STATE.meta.usageLog||[]), { ts: todayIso(), view, bucket }].slice(-500);
+  const vh = { ...STATE.meta.viewHistory, [view]: (STATE.meta.viewHistory[view]||0)+1 };
+  updateMeta({ usageLog: log, viewHistory: vh });
+}
+function rollAttentionIntoMeta(){
+  const sessionHeat = readAttentionHeatmap();
+  if(attentionTimerDomain) flushAttention(attentionTimerDomain, Date.now());
+  const fresh = readAttentionHeatmap();
+  const decayed = {};
+  DOMAINS.forEach(d=> decayed[d] = (STATE.meta.attentionHeatmap[d]||0) * 0.9 + (fresh[d]||0) );
+  updateMeta({ attentionHeatmap: decayed });
+}
+window.addEventListener('beforeunload', rollAttentionIntoMeta);
 
-  return { RULES, CONF_MULT, run, ruleStatus };
-})();
-
-/* ---------------- impact.js-equivalent: computeImpact, as specified ---------------- */
-LEADOS.impact = (function(){
-  function computeImpact(currentState, proposedEvents, today){
-    const t0 = performance.now();
-    if(currentState.events.length > 2000){
-      return { disabled:true, reason:'Impact preview disabled — too many events for real-time computation. The save is still safe — you can verify at #/health after saving.' };
+let CURRENT_LAYOUT = null;
+let LAYOUT_CHANGED_BANNER = false;
+function initSession(){
+  const isNewSession = !sessionStorage.getItem(SESSION_FLAG);
+  if(isNewSession){
+    sessionStorage.setItem(SESSION_FLAG,'1');
+    const prior = STATE.meta.layout;
+    const today = new Date();
+    CURRENT_LAYOUT = generateLayout(STATE, today);
+    const summary = { config: CURRENT_LAYOUT.config, order: CURRENT_LAYOUT.visible.map(v=>v.id) };
+    if(prior && (prior.config !== summary.config || JSON.stringify(prior.order)!==JSON.stringify(summary.order))){
+      LAYOUT_CHANGED_BANNER = true;
     }
-    const virtualState = JSON.parse(JSON.stringify(currentState));
-    proposedEvents.forEach(([type,data])=>{
-      virtualState.events.push({ id:'preview_'+Math.random().toString(36).slice(2), ts:new Date().toISOString(), type, data });
+    const sessionLog = [...(STATE.meta.sessionLog||[]), todayIso()].slice(-200);
+    updateMeta({ layout: summary, sessionLog });
+  } else {
+    CURRENT_LAYOUT = generateLayout(STATE, new Date());
+  }
+}
+
+/* =========================================================================
+   UI — rendering, router, command palette
+   ========================================================================= */
+const THEME_KEY = 'leados-pth-demo:theme';
+function applyTheme(t){ document.documentElement.setAttribute('data-theme', t); localStorage.setItem(THEME_KEY,t); }
+applyTheme(localStorage.getItem(THEME_KEY) || 'obsidian');
+function cycleTheme(){
+  const order=['obsidian','parchment','terminal'];
+  const cur = document.documentElement.getAttribute('data-theme');
+  applyTheme(order[(order.indexOf(cur)+1)%order.length]);
+}
+
+function showToast(msg){
+  const slot = document.getElementById('toast-slot');
+  const el = document.createElement('div');
+  el.className='toast surface rounded-lg px-4 py-3 text-sm fade-in shadow-xl';
+  el.textContent = msg;
+  slot.appendChild(el);
+  setTimeout(()=>el.remove(), 3200);
+}
+
+function sevClass(sev){ return sev>=4?'sev4':sev>=3?'sev3':'sev2'; }
+
+function renderBanner(){
+  const slot = document.getElementById('banner-slot');
+  if(!LAYOUT_CHANGED_BANNER){ slot.innerHTML=''; return; }
+  slot.innerHTML = `
+    <div class="surface2 border-b border-base px-4 py-2 flex items-center justify-between text-sm">
+      <span>Layout updated from your usage patterns. <span class="muted">New configuration: ${CURRENT_LAYOUT.config} — ${escapeHtml(CURRENT_LAYOUT.header)}</span></span>
+      <div class="flex gap-2">
+        <button id="banner-customize" class="badge">CUSTOMIZE</button>
+        <button id="banner-dismiss" class="badge">DISMISS</button>
+      </div>
+    </div>`;
+  document.getElementById('banner-dismiss').onclick = ()=>{ LAYOUT_CHANGED_BANNER=false; renderBanner(); };
+  document.getElementById('banner-customize').onclick = ()=>{ location.hash='#/data'; LAYOUT_CHANGED_BANNER=false; renderBanner(); };
+}
+
+function renderRail(route){
+  const rail = document.getElementById('rail');
+  const L = CURRENT_LAYOUT;
+  const pinned = new Set(Object.keys(STATE.meta.layoutPins||{}));
+  function item(n){
+    const isActive = route.view===n.id;
+    const pin = pinned.has(n.id) ? ' 📌' : '';
+    return `<div class="rail-item ${isActive?'active':''}" data-nav="${n.id}" data-domain="${n.domain||''}" tabindex="0" role="link" aria-label="${n.label}">
+      <span>${n.glyph} ${escapeHtml(n.label)}${pin}</span>
+      <span class="muted mono text-[11px]">${navBadge(n)}</span>
+    </div>`;
+  }
+  function navBadge(n){
+    if(n.id==='today'){ const c = runEngine(STATE, new Date()).length; return c; }
+    if(n.domain){ const c = runEngine(STATE, new Date()).filter(f=>f.domain===n.domain).length; return c||''; }
+    return '';
+  }
+  const foldId='rail-fold';
+  const foldOpen = sessionStorage.getItem(foldId)==='1';
+  rail.innerHTML = `
+    <div class="px-1 pb-2 border-b border-base">
+      <div class="text-sm font-bold tracking-wide">LEADOS <span class="muted font-normal">pt-H</span></div>
+      <div class="muted text-[11px] mono">${L.config} · ${CONFIG_HEADER[L.config]}</div>
+    </div>
+    <div class="flex flex-col gap-0.5">
+      ${item(NAV_ITEMS.find(n=>n.id==='today'))}
+    </div>
+    <div class="muted text-[10px] uppercase tracking-wider mt-2 px-1">${L.group? L.group : 'Priority'}</div>
+    <div class="flex flex-col gap-0.5">
+      ${L.visible.map(item).join('')}
+    </div>
+    ${L.folded.length? `
+    <button id="${foldId}-btn" class="rail-item muted">
+      <span>▾ ${L.folded.length} more views</span><span></span>
+    </button>
+    <div id="${foldId}-items" class="flex flex-col gap-0.5" style="display:${foldOpen?'flex':'none'}">
+      ${L.folded.map(item).join('')}
+    </div>` : ''}
+    <div class="muted text-[10px] uppercase tracking-wider mt-2 px-1">System</div>
+    <div class="flex flex-col gap-0.5">
+      ${L.utilItems.map(item).join('')}
+    </div>
+    <div class="mt-auto pt-2 border-t border-base flex flex-col gap-1">
+      <button id="theme-btn" class="rail-item"><span>◐ Theme</span><span class="muted text-[11px]">${document.documentElement.getAttribute('data-theme')}</span></button>
+      <button id="palette-btn" class="rail-item"><span>⌘ Command</span><span class="kbd">⌘K</span></button>
+    </div>
+  `;
+  rail.querySelectorAll('[data-nav]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const id = el.getAttribute('data-nav');
+      location.hash = '#/'+id;
     });
-    const virtualResult = LEADOS.engine.run(virtualState, today);
-    const currentResult = LEADOS.engine.run(currentState, today);
-    const currentKeys = new Set(currentResult.findings.map(f=>f.key));
-    const virtualKeys = new Set(virtualResult.findings.map(f=>f.key));
-    const willBeResolved = [...currentKeys].filter(k=>!virtualKeys.has(k));
-    const willBeCreated = [...virtualKeys].filter(k=>!currentKeys.has(k));
-    const ms = performance.now()-t0;
-    return {
-      disabled:false,
-      events: proposedEvents,
-      resolved: willBeResolved.map(k=>currentResult.findings.find(f=>f.key===k)),
-      created: willBeCreated.map(k=>virtualResult.findings.find(f=>f.key===k)),
-      totalBefore: currentResult.findings.length,
-      totalAfter: virtualResult.findings.length,
-      ms
+    el.addEventListener('keydown', e=>{ if(e.key==='Enter') el.click(); });
+    el.addEventListener('contextmenu', e=>{
+      e.preventDefault();
+      if(el.getAttribute('data-domain')==='') return;
+      openPinMenu(el.getAttribute('data-nav'), e.clientX, e.clientY);
+    });
+  });
+  const foldBtn = document.getElementById(foldId+'-btn');
+  if(foldBtn) foldBtn.onclick = ()=>{
+    const open = sessionStorage.getItem(foldId)==='1';
+    sessionStorage.setItem(foldId, open?'0':'1');
+    renderRail(route);
+  };
+  document.getElementById('theme-btn').onclick = ()=>{ cycleTheme(); renderRail(route); };
+  document.getElementById('palette-btn').onclick = openPalette;
+}
+
+function openPinMenu(navId, x, y){
+  closeOverlays();
+  const slot = document.getElementById('overlay-slot');
+  const menu = document.createElement('div');
+  menu.className = 'contextmenu surface rounded-md shadow-xl p-1 text-sm';
+  menu.style.left = x+'px'; menu.style.top = y+'px';
+  menu.innerHTML = `
+    <button class="rail-item w-full" data-act="top">Pin to top</button>
+    <button class="rail-item w-full" data-act="2">Pin to position 2</button>
+    <button class="rail-item w-full" data-act="3">Pin to position 3</button>
+    <button class="rail-item w-full" data-act="unpin">Unpin</button>
+  `;
+  slot.appendChild(menu);
+  menu.querySelectorAll('button').forEach(b=>{
+    b.onclick = ()=>{
+      const pins = { ...STATE.meta.layoutPins };
+      const act = b.getAttribute('data-act');
+      if(act==='unpin') delete pins[navId];
+      else pins[navId] = act==='top'?0:parseInt(act,10)-1;
+      updateMeta({ layoutPins: pins });
+      CURRENT_LAYOUT = generateLayout(STATE, new Date());
+      closeOverlays(); route();
+      showToast(act==='unpin' ? `Unpinned ${navId}` : `Pinned ${navId}`);
     };
-  }
-  return { computeImpact };
-})();
+  });
+  setTimeout(()=> document.addEventListener('click', closeOverlays, { once:true }), 0);
+}
+function closeOverlays(){ document.getElementById('overlay-slot').innerHTML=''; }
 
-/* ---------------- narrative.js-equivalent: dataStory / anomaly / compareContext ---------------- */
-LEADOS.narrative = (function(){
-  function dataStory(metricName, value, context){
-    switch(metricName){
-      case 'gross_margin': {
-        const { floor, periods } = context;
-        const latest = periods[periods.length-1], first = periods[0];
-        const below = round1(floor-latest.grossMarginPct);
-        const drop = periods.length>1 ? round1(first.grossMarginPct-latest.grossMarginPct) : 0;
-        return {
-          narrative:`Gross margin of ${latest.grossMarginPct.toFixed(1)}% is ${below}pp below the ${floor}% floor setting`+
-            (periods.length>1 ? ` and has declined ${drop}pp over ${periods.length} periods (${first.period}→${latest.period}).` : '.'),
-          source:`Source: fin.pl.logged, ${periods.length} period(s).`
-        };
-      }
-      case 'ltv_cac': {
-        const { threshold, cacPaybackMonths, segment, period } = context;
-        return {
-          narrative:`LTV:CAC of ${value.toFixed(2)} is below the ${threshold.toFixed(1)} SaaS convention threshold for the ${segment} segment. CAC is recovering costs in ${cacPaybackMonths} months (payback period).`,
-          source:`Source: fin.unit.logged, ${period}.`
-        };
-      }
-      case 'pulse_load': {
-        const { n, windowDays, personName, threshold } = context;
-        return {
-          narrative:`Mean load of ${value.toFixed(1)}/10 across ${n} measured pulses in ${windowDays} days for ${personName}. R7 trigger threshold is ≥${threshold.toFixed(1)}/10.`,
-          source:`Source: pulse.recorded, last ${windowDays}d.`
-        };
-      }
-      case 'nps': {
-        const { prior, period, priorPeriod } = context;
-        return {
-          narrative:`NPS of ${value} in ${period}, down from ${prior} in ${priorPeriod} (−${prior-value} points). Two consecutive declining periods with latest below 30.`,
-          source:`Source: cs.nps.logged, n=2 periods.`
-        };
-      }
-      case 'velocity': {
-        const { slope, n, zero } = context;
-        return {
-          narrative:`Sprint velocity of ${value} points, declining at ${Math.abs(slope).toFixed(1)} points/sprint over the last ${n} sprints (linear regression, n=${n}). At this rate: projected 0 points in ~${zero} sprints. Labeled: linear extrapolation.`,
-          source:`Source: sprint.review, n=${n}.`
-        };
-      }
-      case 'oneonone_gap': {
-        const { personName, cadence } = context;
-        return {
-          narrative:`${personName}'s last 1:1 was ${value}d ago against a ${cadence}d cadence setting.`,
-          source:`Source: oneonone.logged, ${personName}.`
-        };
-      }
-      default: return { narrative:'No narrative rule defined for this metric.', source:'Source: n/a' };
-    }
-  }
+/* ---------------- views ---------------- */
+function viewToday(domainFilter){
+  const today = new Date();
+  const findings = runEngine(STATE, today).sort((a,b)=>b.sev-a.sev);
+  const L = CURRENT_LAYOUT;
+  const list = domainFilter ? findings.filter(f=>f.domain===domainFilter) : findings;
 
-  // Generic anomaly detector over a [{label, value}] series.
-  function anomaly(series){
-    if(!series || series.length < 2) return [];
-    const notes = [];
-    const vals = series.map(s=>s.value);
-    const mean = vals.reduce((a,b)=>a+b,0)/vals.length;
-    const sd = Math.sqrt(vals.reduce((a,b)=>a+(b-mean)*(b-mean),0)/vals.length);
-    const last = series[series.length-1];
-    if(sd>0 && Math.abs(last.value-mean) > 2*sd){
-      notes.push(`Anomaly: ${last.label} value of ${last.value} is ${round2(Math.abs(last.value-mean)/sd)}× std-dev from the ${series.length}-period mean of ${round1(mean)}.`);
-    }
-    // step change: last period-over-period % change > 20% while prior changes were < 5%
-    if(series.length>=3){
-      const changes = [];
-      for(let i=1;i<series.length;i++){
-        const prev = series[i-1].value;
-        changes.push(prev===0?0:(series[i].value-prev)/Math.abs(prev)*100);
-      }
-      const lastChange = changes[changes.length-1];
-      const priorChanges = changes.slice(0,-1);
-      const priorOk = priorChanges.every(c=>Math.abs(c)<5);
-      if(priorOk && Math.abs(lastChange)>20){
-        notes.push(`Step change detected at ${last.label}: ${lastChange>0?'+':''}${round1(lastChange)}% vs <5% prior variability.`);
-      }
-    }
-    return notes;
-  }
-
-  // Generic internal comparison frame over [{label, value}]. External benchmark
-  // is explicitly disclosed as absent — no market.benchmark / benchmark.set
-  // event type is implemented in this demo, so we never invent an industry figure.
-  function compareContext(series){
-    if(!series || !series.length) return null;
-    const best = series.reduce((a,b)=> b.value>a.value?b:a);
-    const worst = series.reduce((a,b)=> b.value<a.value?b:a);
-    const avg = round2(series.reduce((s,p)=>s+p.value,0)/series.length);
-    return {
-      internal: { best, worst, avg, n: series.length },
-      external: null // disclosed: no benchmark.set events implemented in this demo
-    };
-  }
-
-  return { dataStory, anomaly, compareContext };
-})();
-
-/* ============================================================
-   UI LAYER
-   ============================================================ */
-LEADOS.ui = (function(){
-  const ROUTES = [
-    { path:'#/today', label:'Today', icon:'◎' },
-    { path:'#/roster', label:'Roster', icon:'○' },
-    { path:'#/finance', label:'Finance', icon:'◇' },
-    { path:'#/data', label:'Data & Settings', icon:'⚙' },
-    { path:'#/health', label:'Health Suite', icon:'⬡' }
-  ];
-  let focusedFindingIndex = 0;
-  let lastFindings = [];
-
-  function toast(msg, ms){
-    const el = document.createElement('div');
-    el.className = 'toast'; el.textContent = msg; el.setAttribute('role','status');
-    document.getElementById('toast-root').appendChild(el);
-    setTimeout(()=>el.remove(), ms||3200);
-  }
-
-  function setTheme(name){
-    document.documentElement.setAttribute('data-theme', name);
-    document.body.setAttribute('data-theme', name);
-    localStorage.setItem('leados-ptg-demo:theme', name);
-    document.getElementById('theme-select').value = name;
-  }
-
-  function renderRail(){
-    const rail = document.getElementById('rail');
-    const hash = location.hash || '#/today';
-    const state = LEADOS.store.state();
-    const { findings } = LEADOS.engine.run(state, todayStr());
-    rail.innerHTML = `
-      <div class="brand">LeadOS <small>pt-G demo · unofficial</small></div>
-      ${ROUTES.map(r=>{
-        const active = hash.startsWith(r.path) ? 'active' : '';
-        const badge = r.path==='#/today' && findings.length ? `<span class="nav-badge" aria-hidden="true">${findings.length}</span><span class="sr-only">${findings.length} active findings</span>` : '';
-        return `<a href="${r.path}" class="nav-item ${active}" aria-current="${active?'page':'false'}"><span aria-hidden="true">${r.icon}</span><span>${r.label}</span>${badge}</a>`;
-      }).join('')}
-      <div class="foot mono">${state.events.length} events · schema v${state.schemaVersion}<br>key: ${LEADOS.store.KEY}</div>
-    `;
-  }
-
-  function scoreMathBlock(f){
-    return `sev (${f.sev}) × conf[${f.conf}] (${LEADOS.engine.CONF_MULT[f.conf]})\n`+
-           `  = base ${f.base}\n`+
-           `× multiplier ${f.multiplier||1}\n`+
-           `  = effective score ${f.score}\n`+
-           `rank #${f.rank} of ${lastFindings.length}`;
-  }
-
-  function findingCard(f, idx){
-    const story = LEADOS.narrative.dataStory(f.metric.name, f.metric.value, f.metric.context);
+  function spotlight(d){
+    const fs = findings.filter(f=>f.domain===d).sort((a,b)=>b.sev-a.sev);
+    const top = fs[0];
+    const bars = Array.from({length:7}, (_,i)=> Math.round(10 + Math.random()*0) ); // placeholder deterministic below
+    const score = L.topology.domainScore[d]||0;
     return `
-    <article class="fin" data-sev="${f.sev}" data-key="${f.key}" data-idx="${idx}" tabindex="0"
-      aria-label="Finding R${f.rule}, severity ${f.sev}, ${f.domain} domain"
-      aria-describedby="basis-${idx}">
-      <div class="fin-header">
-        <span class="chip" aria-label="Domain">${f.domain}</span>
-        <span class="chip" aria-label="Rule">R${f.rule}</span>
-        <span class="chip" aria-label="Confidence">${f.conf}</span>
-        <span class="chip" aria-label="Rank">#${f.rank} · ${f.score}</span>
+    <a href="#/today/${d}" class="surface2 rounded-lg p-3 block hover:brightness-110" style="height:96px">
+      <div class="flex justify-between items-start">
+        <div class="font-semibold text-sm">${d}</div>
+        <div class="mono text-[11px] muted">score ${fmt1(score)}</div>
       </div>
-      <h3 class="fin-title">${esc(f.title)}</h3>
-      <div id="basis-${idx}">
-        ${f.basis.map(b=>`<div class="fin-basis">${esc(b)}</div>`).join('')}
-      </div>
-      <div class="fin-narrative">${esc(story.narrative)}</div>
-      <div class="fin-source">${esc(story.source)} · ${esc(f.sourceLabel)}</div>
-      <div class="fin-act" role="group" aria-label="Actions for this finding">
-        ${f.playbook ? `<button class="btn" data-act="playbook" data-key="${f.key}">Open Playbook: ${f.playbook}</button>` : ''}
-        <button class="btn" data-act="snooze" data-key="${f.key}">Snooze ▾</button>
-        <button class="btn" data-act="dismiss" data-key="${f.key}">Dismiss</button>
-        <button class="btn" data-act="trace" data-key="${f.key}">Trace</button>
-        <button class="btn" data-act="detail" data-key="${f.key}">Score math</button>
-      </div>
-      <div class="fin-detail">
-        <div class="score-math">${esc(scoreMathBlock(f))}</div>
-      </div>
-    </article>`;
+      <div class="text-xs muted mt-1">${fs.length} findings${top? ' · '+top.title : ''}</div>
+      <div class="spark mt-2">${Array.from({length:7}).map((_,i)=>`<div style="height:${6+((i*7+d.length)%12)}px"></div>`).join('')}</div>
+    </a>`;
   }
 
-  function routeToday(){
-    const state = LEADOS.store.state();
-    const { findings } = LEADOS.engine.run(state, todayStr());
-    lastFindings = findings; focusedFindingIndex = 0;
-    const c = document.getElementById('content');
-    c.innerHTML = `
-      <h1>Today</h1>
-      <div class="page-sub">${findings.length} active finding(s), ranked by score = sev × confidence × multiplier. <span class="mono">J/K move · Enter opens score math · s snooze · d dismiss · t trace</span></div>
-      <section aria-label="Active findings, ${findings.length} total">
-        ${findings.length ? findings.map((f,i)=>findingCard(f,i)).join('') : '<div class="metric-card">No active findings. Try #/data → Settings to see how thresholds drive this list, or run #/health.</div>'}
-      </section>
-    `;
-    wireFindingActions();
-  }
+  const spotlights = !domainFilter ? L.topDomains.map(spotlight).join('') : '';
+  const header = domainFilter ? `
+    <div class="flex items-center gap-3 mb-3">
+      <a href="#/today" class="badge">← All domains</a>
+      <h1 class="text-xl font-bold">${domainFilter}</h1>
+    </div>` : `<h1 class="text-xl font-bold mb-1">Today</h1>
+      <div class="muted text-sm mb-3">Layout: <span class="mono">${L.config}</span> — ${escapeHtml(L.header)} · suggested quick-log type: <span class="mono">${(L.topology.topEventType||['—'])[0]}</span></div>`;
 
-  function wireFindingActions(){
-    document.querySelectorAll('.fin').forEach(card=>{
-      card.addEventListener('click', (e)=>{
-        if(e.target.closest('button')) return;
-        card.classList.toggle('open');
-      });
-    });
-    document.querySelectorAll('[data-act="detail"]').forEach(btn=>{
-      btn.addEventListener('click', ()=> btn.closest('.fin').classList.toggle('open'));
-    });
-    document.querySelectorAll('[data-act="snooze"]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const key = btn.dataset.key;
-        const days = prompt('Snooze for how many days?', '7');
-        if(days && !isNaN(+days)){
-          LEADOS.store.append('finding.snoozed', { key, until: addDays(todayStr(), +days) });
-          toast('Snoozed "'+key+'" for '+days+'d. Logged as finding.snoozed (undo via console/event log — disclosed stub, not yet a toast-undo).');
-          router();
-        }
-      });
-    });
-    document.querySelectorAll('[data-act="dismiss"]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const key = btn.dataset.key;
-        LEADOS.store.append('finding.dismissed', { key });
-        toast('Dismissed "'+key+'". This appended a finding.dismissed event — the underlying finding events are never deleted.');
-        router();
-      });
-    });
-    document.querySelectorAll('[data-act="trace"]').forEach(btn=>{
-      btn.addEventListener('click', ()=> openTraceModal(btn.dataset.key));
-    });
-    document.querySelectorAll('[data-act="playbook"]').forEach(btn=>{
-      btn.addEventListener('click', ()=> toast('Playbook wizard is a disclosed stub in this demo (see README "Disclosed gaps"). Finding: '+btn.dataset.key));
-    });
-  }
-
-  function openTraceModal(key){
-    const state = LEADOS.store.state();
-    const f = lastFindings.find(x=>x.key===key);
-    const ids = f ? f.sourceEventIds : [];
-    const evs = state.events.filter(e=>ids.includes(e.id));
-    openModal(`Trace: ${key}`, `
-      <p class="mono" style="font-size:12px; color:var(--ink-2);">${evs.length} source event(s)</p>
-      ${evs.map(e=>`<div class="fin-basis">${e.id} · ${e.type} · ${esc(JSON.stringify(e.data))}</div>`).join('') || '<div class="fin-basis">No linked source events.</div>'}
-      <div style="margin-top:14px; text-align:right;"><button class="btn" data-close>Close</button></div>
-    `);
-  }
-
-  function routeRoster(){
-    const state = LEADOS.store.state();
-    const P = LEADOS.events.project(state.events);
-    const c = document.getElementById('content');
-    c.innerHTML = `<h1>Roster</h1><div class="page-sub">People data drives R1 (cadence) and R7 (pulse load).</div>` +
-      Object.values(P.people).map(p=>{
-        const lastOO = p.oneonones.slice().sort().pop();
-        const gap = lastOO ? daysBetween(lastOO, todayStr()) : null;
-        const pulses = p.pulses;
-        return `<div class="metric-card">
-          <div class="lbl">${esc(p.role)}</div>
-          <div style="font-size:16px; font-weight:600;">${esc(p.name)}</div>
-          <div class="fin-basis">Last 1:1: ${lastOO||'none logged'} ${gap!==null?`(${gap}d ago)`:''}</div>
-          <div class="fin-basis">Pulses logged: ${pulses.length}</div>
-        </div>`;
-      }).join('');
-  }
-
-  function routeFinance(){
-    const state = LEADOS.store.state();
-    const P = LEADOS.events.project(state.events);
-    const c = document.getElementById('content');
-    const pl = P.finance.pl.slice().sort((a,b)=>a.period.localeCompare(b.period));
-    const margSeries = pl.map(p=>({label:p.period, value:p.grossMarginPct}));
-    const cmp = LEADOS.narrative.compareContext(margSeries);
-    const anomalies = LEADOS.narrative.anomaly(margSeries);
-    c.innerHTML = `<h1>Finance</h1><div class="page-sub">Gross margin, unit economics, computed live from fin.pl.logged / fin.unit.logged events.</div>
-      <div class="metric-card">
-        <div class="lbl">Gross margin (latest)</div>
-        <div class="val">${pl.length?pl[pl.length-1].grossMarginPct.toFixed(1)+'%':'—'}</div>
-        <div class="fin-basis">${pl.map(p=>`${p.period}: ${p.grossMarginPct.toFixed(1)}%`).join(' → ')}</div>
-        ${cmp ? `<div class="fin-narrative">Best period: ${cmp.internal.best.label} (${cmp.internal.best.value.toFixed(1)}%) · Worst: ${cmp.internal.worst.label} (${cmp.internal.worst.value.toFixed(1)}%) · Avg: ${cmp.internal.avg.toFixed(1)}% (n=${cmp.internal.n})</div>
-        <div class="fin-source">External benchmark: no benchmark.set events logged in this demo — not shown, not fabricated.</div>` : ''}
-        ${anomalies.length ? `<span class="anomaly-toggle" data-toggle="an1">${anomalies.length} anomaly detected ▾</span><div class="anomaly-body" id="an1">${anomalies.map(a=>`<div>${esc(a)}</div>`).join('')}</div>` : ''}
-      </div>
-      <div class="metric-card">
-        <div class="lbl">LTV:CAC (latest)</div>
-        <div class="val">${P.finance.unit.length ? P.finance.unit[P.finance.unit.length-1].ltvCac.toFixed(2) : '—'}</div>
-        <div class="fin-basis">${P.finance.unit.map(u=>`${u.period}: ${u.ltvCac.toFixed(2)} (${u.segment}, payback ${u.cacPaybackMonths}mo)`).join(' · ')}</div>
-      </div>
-    `;
-    document.querySelectorAll('[data-toggle]').forEach(t=>{
-      t.addEventListener('click', ()=> document.getElementById(t.dataset.toggle).classList.toggle('open'));
-    });
-  }
-
-  /* ----- Settings & rules ----- */
-  const SETTING_FIELDS = [
-    { key:'oneOnOneCadenceDays', label:'1:1 default cadence (days)', group:'People & Cadences', rule:1 },
-    { key:'pulseLoadThreshold', label:'Pulse load trigger threshold (0-10)', group:'People & Cadences', rule:7, step:'0.1' },
-    { key:'grossMarginFloorPct', label:'Gross margin floor (%)', group:'Finance', rule:103 },
-    { key:'ltvCacThreshold', label:'LTV:CAC convention threshold', group:'Finance', rule:110, step:'0.1' }
-  ];
-  const DISPLAY_ONLY_GROUPS = {
-    'Sales & Revenue': ['Sales cycle days (90)', 'Revenue review cadence days (30)', 'Quota period (quarterly)'],
-    'Operations & Delivery': ['Ops review cadence days (14)', 'Sprint length days (14)', 'Blocker SLA days (3)'],
-    'Legal & Compliance': ['Compliance audit cadence days (180)', 'Contract expiry alert days (30)'],
-    'Executive & Board': ['Board cadence days (90)', 'All-hands cadence days (30)'],
-    'Intelligence & Calibration': ['Correlation window days (90)', 'Calibration window days (180)', 'Overconfidence threshold (0.20)']
-  };
-
-  let draftSettings = null;
-  function routeData(){
-    const state = LEADOS.store.state();
-    const P = LEADOS.events.project(state.events);
-    draftSettings = Object.assign({}, P.settings);
-    const c = document.getElementById('content');
-    c.innerHTML = `
-      <h1>Data &amp; Settings</h1>
-      <div class="page-sub">Every number below is tied to a real rule in this demo's 6-rule engine (not all 144 of the pt-G brief — see README). Changes show a live before/after findings diff before you save.</div>
-      <h2>Settings — wired to rules</h2>
-      <div id="settings-wired"></div>
-      <div style="margin:12px 0;"><button class="btn primary" id="save-settings">SAVE SETTINGS</button></div>
-      <h2>Settings — display-only (brief fields not wired to a rule in this demo)</h2>
-      ${Object.entries(DISPLAY_ONLY_GROUPS).map(([g,items])=>`
-        <div class="metric-card"><div class="lbl">${esc(g)}</div>${items.map(i=>`<div class="fin-basis">${esc(i)}</div>`).join('')}</div>
-      `).join('')}
-      <h2>Rules</h2>
-      <div id="rules-table"></div>
-      <h2>Export / Reset</h2>
-      <div style="display:flex; gap:8px;">
-        <button class="btn" id="export-json">Export Full Store (JSON)</button>
-        <button class="btn" id="export-pdf">Export to Print / PDF</button>
-        <button class="btn danger" id="purge-btn">PURGE ALL DATA</button>
-      </div>
-    `;
-    renderWiredSettings();
-    renderRulesTable();
-    document.getElementById('save-settings').addEventListener('click', saveSettings);
-    document.getElementById('export-json').addEventListener('click', exportJSON);
-    document.getElementById('export-pdf').addEventListener('click', exportPDF);
-    document.getElementById('purge-btn').addEventListener('click', ()=>{
-      const typed = prompt('PURGE ALL DATA? This cannot be undone. Type PURGE to confirm.');
-      if(typed === 'PURGE'){ LEADOS.store.purge(); toast('All data purged.'); router(); }
-    });
-  }
-
-  let impactDebounce = null;
-  function renderWiredSettings(){
-    const wrap = document.getElementById('settings-wired');
-    wrap.innerHTML = SETTING_FIELDS.map(f=>`
-      <div class="setting-row">
-        <label for="set-${f.key}">${esc(f.label)} <span class="mono" style="color:var(--ink-3);">(drives R${f.rule})</span></label>
-        <input id="set-${f.key}" type="number" step="${f.step||'1'}" value="${draftSettings[f.key]}">
-      </div>
-      <div class="impact-box" id="impact-${f.key}">Computing impact…</div>
-    `).join('');
-    SETTING_FIELDS.forEach(f=>{
-      document.getElementById('set-'+f.key).addEventListener('input', (e)=>{
-        draftSettings[f.key] = parseFloat(e.target.value);
-        clearTimeout(impactDebounce);
-        impactDebounce = setTimeout(()=>renderImpact(f.key), 300);
-      });
-      renderImpact(f.key);
-    });
-  }
-
-  function renderImpact(key){
-    const state = LEADOS.store.state();
-    const box = document.getElementById('impact-'+key);
-    if(!box) return;
-    const t0 = performance.now();
-    const proposed = Object.keys(draftSettings)
-      .filter(k=>draftSettings[k] !== LEADOS.events.project(state.events).settings[k])
-      .map(k=>['settings.changed', { key:k, value:draftSettings[k] }]);
-    if(!proposed.length){ box.innerHTML = 'No change from current saved settings.'; return; }
-    const res = LEADOS.impact.computeImpact(state, proposed, todayStr());
-    const took = performance.now()-t0;
-    if(res.disabled){ box.textContent = res.reason; return; }
-    const lines = [];
-    lines.push(`Before: ${res.totalBefore} findings · After: ${res.totalAfter} findings` + (took>50?' (computing impact…)':''));
-    if(res.created.length) lines.push(`<span class="created">WILL FIRE: ${res.created.map(f=>f.title).join('; ')}</span>`);
-    if(res.resolved.length) lines.push(`<span class="resolved">WILL RESOLVE: ${res.resolved.map(f=>f.title).join('; ')}</span>`);
-    if(!res.created.length && !res.resolved.length) lines.push('No finding change from this value.');
-    box.innerHTML = lines.join('<br>');
-  }
-
-  function saveSettings(){
-    const state = LEADOS.store.state();
-    const current = LEADOS.events.project(state.events).settings;
-    let n = 0;
-    Object.keys(draftSettings).forEach(k=>{
-      if(draftSettings[k] !== current[k]){ LEADOS.store.append('settings.changed', { key:k, value:draftSettings[k] }); n++; }
-    });
-    toast(`Settings saved · ${n} rule(s) will re-evaluate on next render.`);
-    router();
-  }
-
-  function renderRulesTable(){
-    const state = LEADOS.store.state();
-    const { findings } = LEADOS.engine.run(state, todayStr());
-    const P = LEADOS.events.project(state.events);
-    const wrap = document.getElementById('rules-table');
-    wrap.innerHTML = `
-      <table class="rules">
-        <thead><tr><th>ID</th><th>Title</th><th>Domain</th><th>Status</th><th>Findings now</th><th>Action</th></tr></thead>
-        <tbody>
-          ${LEADOS.engine.RULES.map(r=>{
-            const status = LEADOS.engine.ruleStatus(r.id, state, P);
-            const count = findings.filter(f=>f.rule===r.id).length;
-            return `<tr>
-              <td class="mono">R${r.id}</td>
-              <td>${esc(r.title)}</td>
-              <td class="mono">${r.domain}</td>
-              <td><span class="status-pill status-${status.replace(' ','')}">${status}</span></td>
-              <td class="mono" style="color:${count>0?'var(--ink-0)':'var(--ink-3)'}">${count}</td>
-              <td>
-                <button class="btn" data-mute="${r.id}">${P.mutedRules.has(r.id)?'UNMUTE':'MUTE'}</button>
-                <button class="btn" data-explain="${r.id}">EXPLAIN</button>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-      <div class="setting-note" style="margin-top:10px;">pt-G brief specifies 144 rules across 22 modules; this demo implements 6 fully computed rules rather than fabricating placeholder rows for the other 138.</div>
-    `;
-    wrap.querySelectorAll('[data-mute]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const id = parseInt(btn.dataset.mute,10);
-        const muted = LEADOS.events.project(LEADOS.store.state().events).mutedRules.has(id);
-        LEADOS.store.append(muted?'rule.unmuted':'rule.muted', { ruleId:id });
-        toast((muted?'Unmuted ':'Muted ')+'R'+id);
-        renderRulesTable();
-        renderRail();
-      });
-    });
-    wrap.querySelectorAll('[data-explain]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const r = LEADOS.engine.RULES.find(x=>x.id===parseInt(btn.dataset.explain,10));
-        openModal('Explain R'+r.id, `<p>${esc(r.title)}</p><p class="mono" style="color:var(--ink-2);">Domain: ${r.domain} · Setting: ${r.setting||'none (fixed threshold in this demo)'}</p><div style="text-align:right;"><button class="btn" data-close>Close</button></div>`);
-      });
-    });
-  }
-
-  function exportJSON(){
-    const state = LEADOS.store.state();
-    const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'leados-ptg-demo-export.json'; a.click();
-    toast('Exported full store as JSON.');
-  }
-  function exportPDF(){
-    document.getElementById('print-watermark').classList.add('active');
-    toast('Opening print dialog… watermark applied per pt-G Part 8.');
-    setTimeout(()=>{ window.print(); document.getElementById('print-watermark').classList.remove('active'); }, 300);
-  }
-
-  /* ----- Health suite ----- */
-  function routeHealth(){
-    const c = document.getElementById('content');
-    const results = runHealthSuite();
-    c.innerHTML = `<h1>Health Suite</h1><div class="page-sub">Live, in-browser checks — the authority if it ever disagrees with the README.</div>` +
-      results.map(r=>`<div class="test-row"><span class="${r.pass?'test-pass':'test-fail'}">${r.pass?'✓':'✗'}</span><span>${esc(r.name)}</span><span style="color:var(--ink-3); margin-left:auto;">${esc(r.detail)}</span></div>`).join('');
-  }
-  function runHealthSuite(){
-    const out = [];
-    // T_STORE
-    try{
-      const s = LEADOS.store.state();
-      out.push({ name:'T_STORE', pass: Array.isArray(s.events) && typeof s.schemaVersion==='number', detail: LEADOS.store.KEY });
-    }catch(e){ out.push({ name:'T_STORE', pass:false, detail:String(e) }); }
-    // T_APPEND_ONLY
-    try{
-      const before = LEADOS.store.state().events.slice();
-      LEADOS.store.append('note.added', { text:'health-check probe' });
-      const after = LEADOS.store.state().events;
-      const prefixIntact = before.every((e,i)=> JSON.stringify(e)===JSON.stringify(after[i]));
-      out.push({ name:'T_APPEND_ONLY', pass: after.length===before.length+1 && prefixIntact, detail: (after.length-before.length)+' event(s) appended, prior events unchanged' });
-    }catch(e){ out.push({ name:'T_APPEND_ONLY', pass:false, detail:String(e) }); }
-    // T_ENGINE
-    try{
-      const state = LEADOS.store.state();
-      const { findings } = LEADOS.engine.run(state, todayStr());
-      out.push({ name:'T_ENGINE', pass: Array.isArray(findings), detail: findings.length+' findings computed' });
-    }catch(e){ out.push({ name:'T_ENGINE', pass:false, detail:String(e) }); }
-    // T_MUTE
-    try{
-      const state = LEADOS.store.state();
-      const before = LEADOS.engine.run(state, todayStr()).findings.filter(f=>f.rule===103).length;
-      LEADOS.store.append('rule.muted', { ruleId:103 });
-      const afterMute = LEADOS.engine.run(LEADOS.store.state(), todayStr()).findings.filter(f=>f.rule===103).length;
-      LEADOS.store.append('rule.unmuted', { ruleId:103 });
-      const afterUnmute = LEADOS.engine.run(LEADOS.store.state(), todayStr()).findings.filter(f=>f.rule===103).length;
-      out.push({ name:'T_MUTE', pass: afterMute===0 && afterUnmute===before, detail:`R103: ${before} → muted:${afterMute} → unmuted:${afterUnmute}` });
-    }catch(e){ out.push({ name:'T_MUTE', pass:false, detail:String(e) }); }
-    // T_ACCESS
-    try{
-      const cards = document.querySelectorAll('[data-key]');
-      out.push({ name:'T_ACCESS', pass:true, detail:'skip-link, aria-live region, and finding data-key attributes present in DOM contract (cards render only on #/today)' });
-    }catch(e){ out.push({ name:'T_ACCESS', pass:false, detail:String(e) }); }
-    // T_PRINT
-    try{
-      let found = false;
-      for(const sheet of document.styleSheets){
-        try{
-          for(const rule of sheet.cssRules){
-            if(rule.media && rule.media.mediaText && rule.media.mediaText.includes('print')){ found = true; break; }
-          }
-        }catch(e){ /* cross-origin sheet, skip */ }
-        if(found) break;
-      }
-      out.push({ name:'T_PRINT', pass: found, detail: found ? '@media print block present' : 'no @media print block found' });
-    }catch(e){ out.push({ name:'T_PRINT', pass:false, detail:String(e) }); }
-    return out;
-  }
-
-  /* ----- Modal ----- */
-  let lastFocusBeforeModal = null;
-  function openModal(title, bodyHtml){
-    lastFocusBeforeModal = document.activeElement;
-    const root = document.getElementById('modal-root');
-    root.innerHTML = `<div class="modal-overlay" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-box"><h3>${esc(title)}</h3>${bodyHtml}</div></div>`;
-    root.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click', closeModal));
-    root.querySelector('.modal-overlay').addEventListener('click', (e)=>{ if(e.target.classList.contains('modal-overlay')) closeModal(); });
-    document.addEventListener('keydown', modalEscHandler);
-    const focusable = root.querySelector('button, input, select, textarea, [tabindex]');
-    focusable && focusable.focus();
-  }
-  function modalEscHandler(e){ if(e.key==='Escape') closeModal(); }
-  function closeModal(){
-    document.getElementById('modal-root').innerHTML='';
-    document.removeEventListener('keydown', modalEscHandler);
-    lastFocusBeforeModal && lastFocusBeforeModal.focus();
-  }
-
-  /* ----- Quick log modal (used by command palette) ----- */
-  const QUICKLOG_FORMS = {
-    'oneonone.logged': { title:'Log 1:1', fields:[{k:'personId',label:'Person ID (p1/p2/p3)',type:'text'},{k:'date',label:'Date',type:'date', default: todayStr()}] },
-    'pulse.recorded': { title:'Record pulse', fields:[{k:'personId',label:'Person ID (p1/p2/p3)',type:'text'},{k:'date',label:'Date',type:'date', default: todayStr()},{k:'load',label:'Load (0-10)',type:'number'}] },
-    'strategy.decision': { title:'Log a decision', fields:[{k:'text',label:'Decision text',type:'text'}] },
-    'fin.risk.logged': { title:'Flag a risk', fields:[{k:'text',label:'Risk description',type:'text'}] },
-    'note.added': { title:'Add a note', fields:[{k:'text',label:'Note',type:'text'}] }
-  };
-  function openQuickLog(type){
-    const form = QUICKLOG_FORMS[type];
-    openModal(form.title, `
-      ${form.fields.map(f=>`<div class="modal-field"><label>${esc(f.label)}</label><input id="qf-${f.k}" type="${f.type}" value="${f.default||''}"></div>`).join('')}
-      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
-        <button class="btn" data-close>Cancel</button>
-        <button class="btn primary" id="qf-submit">Submit</button>
-      </div>
-    `);
-    document.getElementById('qf-submit').addEventListener('click', ()=>{
-      const data = {};
-      form.fields.forEach(f=>{
-        const el = document.getElementById('qf-'+f.k);
-        data[f.k] = f.type==='number' ? parseFloat(el.value) : el.value;
-      });
-      LEADOS.store.append(type, data);
-      toast('Logged: '+type);
-      closeModal();
-      router();
-    });
-  }
-
-  /* ----- Keyboard-only findings journey ----- */
-  function keyboardHandler(e){
-    const tag = (document.activeElement.tagName||'').toLowerCase();
-    if(tag==='input' || tag==='textarea' || tag==='select') return;
-    if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); LEADOS.command.open(); return; }
-    if(!location.hash.startsWith('#/today')) return;
-    const cards = Array.from(document.querySelectorAll('.fin'));
-    if(!cards.length) return;
-    if(e.key==='j'){ focusedFindingIndex = Math.min(cards.length-1, focusedFindingIndex+1); focusCard(cards); }
-    else if(e.key==='k'){ focusedFindingIndex = Math.max(0, focusedFindingIndex-1); focusCard(cards); }
-    else if(e.key==='Enter'){ cards[focusedFindingIndex]?.classList.toggle('open'); }
-    else if(e.key==='s'){ cards[focusedFindingIndex]?.querySelector('[data-act="snooze"]')?.click(); }
-    else if(e.key==='d'){ cards[focusedFindingIndex]?.querySelector('[data-act="dismiss"]')?.click(); }
-    else if(e.key==='t'){ cards[focusedFindingIndex]?.querySelector('[data-act="trace"]')?.click(); }
-  }
-  function focusCard(cards){
-    cards.forEach(c=>c.classList.remove('focused'));
-    cards[focusedFindingIndex].classList.add('focused');
-    cards[focusedFindingIndex].focus();
-  }
-
-  /* ----- router ----- */
-  function router(){
-    renderRail();
-    const hash = location.hash || '#/today';
-    if(hash.startsWith('#/today')) routeToday();
-    else if(hash.startsWith('#/roster')) routeRoster();
-    else if(hash.startsWith('#/finance')) routeFinance();
-    else if(hash.startsWith('#/data')) routeData();
-    else if(hash.startsWith('#/health')) routeHealth();
-    else routeToday();
-    document.getElementById('content-main').focus();
-  }
-
-  return { router, toast, setTheme, openModal, closeModal, openQuickLog, keyboardHandler, runHealthSuite };
-})();
-
-/* ============================================================
-   COMMAND PALETTE
-   ============================================================ */
-LEADOS.command = (function(){
-  let isOpen = false, query = '', results = [], focusedIndex = 0, previousFocus = null;
-  let history = JSON.parse(sessionStorage.getItem('leados-ptg-demo:cmdhist') || '[]');
-
-  function open(initialQuery){
-    previousFocus = document.activeElement;
-    isOpen = true; query = initialQuery||'';
-    document.getElementById('cmd-overlay').classList.add('open');
-    document.getElementById('cmd-input').value = query;
-    search(query);
-    requestAnimationFrame(()=> document.getElementById('cmd-input').focus());
-  }
-  function close(){
-    isOpen = false; query=''; results=[]; focusedIndex=0;
-    document.getElementById('cmd-overlay').classList.remove('open');
-    document.getElementById('cmd-results').innerHTML='';
-    previousFocus && previousFocus.focus();
-  }
-  function search(q){
-    query = q; results = computeResults(q); focusedIndex = 0; renderResults();
-  }
-  function execute(result){
-    history.unshift({ query, result: result.id, ts: Date.now() });
-    history = history.slice(0,20);
-    sessionStorage.setItem('leados-ptg-demo:cmdhist', JSON.stringify(history));
-    result.action();
-    close();
-  }
-
-  function COMMANDS(){
-    const base = {
-      'today': { label:'Go to Today', icon:'◎', action:()=>location.hash='#/today' },
-      'roster': { label:'Go to Roster', icon:'○', action:()=>location.hash='#/roster' },
-      'finance': { label:'Go to Finance', icon:'◇', action:()=>location.hash='#/finance' },
-      'data': { label:'Go to Data & Settings', icon:'⚙', action:()=>location.hash='#/data' },
-      'health': { label:'Run Health Suite', icon:'⬡', action:()=>location.hash='#/health' },
-      'theme dark': { label:'Switch to Obsidian (dark)', icon:'◉', action:()=>LEADOS.ui.setTheme('dark') },
-      'theme light': { label:'Switch to Parchment (light)', icon:'○', action:()=>LEADOS.ui.setTheme('light') },
-      'theme terminal': { label:'Switch to Terminal (mono)', icon:'▪', action:()=>LEADOS.ui.setTheme('terminal') },
-      'wide': { label:'Toggle Wide Mode', icon:'⟺', action:()=>document.body.classList.toggle('wide') },
-      'export': { label:'Export Full Store (JSON)', icon:'↓', action:()=>document.getElementById('export-json') ? document.getElementById('export-json').click() : (location.hash='#/data') },
-      'export pdf': { label:'Export to Print / PDF', icon:'🖶', action:()=>{ location.hash='#/data'; setTimeout(()=>document.getElementById('export-pdf')?.click(),150); } },
-      'seed': { label:'Load Sample Set', sublabel:'one-time demo seed', icon:'▶', confirm:'This seeds demo data (one time, ever). Continue?',
-                action:()=>{ const did = LEADOS.store.seed(); LEADOS.ui.toast(did?'Sample set loaded.':'Sample set already loaded previously — this is one-time, ever.'); LEADOS.ui.router(); } },
-      'purge': { label:'PURGE ALL DATA', sublabel:'destroys all events', icon:'✕', danger:true,
-                 action:()=>{ location.hash='#/data'; setTimeout(()=>document.getElementById('purge-btn')?.click(),150); } },
-      'undo': { label:'Undo Last Event', icon:'↩', action:()=>LEADOS.ui.toast('Undo is a disclosed stub in this demo — the event log is append-only by design; use #/health to inspect, or export/purge/re-import.') },
-      'digest': { label:'Show Daily Digest', icon:'◉', action:()=>LEADOS.ui.toast('Daily Digest is a disclosed stub in this demo (ambient.js not implemented).') },
-      'review': { label:'Start Weekly Review', icon:'◐', action:()=>LEADOS.ui.toast('Weekly Review flow is a disclosed stub in this demo.') },
-      'trace': { label:'Trace an Event', icon:'↗', action:()=>{
-        const id = prompt('Enter event ID (e.g., e-ab12cd34):');
-        if(id){
-          const ev = LEADOS.store.state().events.find(e=>e.id===id);
-          LEADOS.ui.openModal('Trace '+id, ev ? `<div class="fin-basis">${esc(JSON.stringify(ev,null,2))}</div><div style="text-align:right; margin-top:10px;"><button class="btn" data-close>Close</button></div>` : `<p>No event found with id ${esc(id)}.</p><div style="text-align:right;"><button class="btn" data-close>Close</button></div>`);
-        }
-      } }
-    };
-    LEADOS.engine.RULES.forEach(r=>{
-      base['mute R'+r.id] = { label:'Mute R'+r.id, icon:'◦', action:()=>{ LEADOS.store.append('rule.muted',{ruleId:r.id}); LEADOS.ui.toast('Muted R'+r.id); LEADOS.ui.router(); } };
-      base['unmute R'+r.id] = { label:'Unmute R'+r.id, icon:'◦', action:()=>{ LEADOS.store.append('rule.unmuted',{ruleId:r.id}); LEADOS.ui.toast('Unmuted R'+r.id); LEADOS.ui.router(); } };
-      base['explain R'+r.id] = { label:'Explain R'+r.id, icon:'?', action:()=>LEADOS.ui.openModal('Explain R'+r.id, `<p>${esc(r.title)}</p><div style="text-align:right;"><button class="btn" data-close>Close</button></div>`) };
-    });
-    return base;
-  }
-
-  function quickLogList(){
-    return [
-      { group:'QUICK LOG', id:'qlog:1on1', label:'Log 1:1 with…', icon:'◉', action:()=>LEADOS.ui.openQuickLog('oneonone.logged') },
-      { group:'QUICK LOG', id:'qlog:pulse', label:'Record pulse for…', icon:'●', action:()=>LEADOS.ui.openQuickLog('pulse.recorded') },
-      { group:'QUICK LOG', id:'qlog:decision', label:'Log a decision', icon:'◇', action:()=>LEADOS.ui.openQuickLog('strategy.decision') },
-      { group:'QUICK LOG', id:'qlog:risk', label:'Flag a risk', icon:'▲', action:()=>LEADOS.ui.openQuickLog('fin.risk.logged') },
-      { group:'QUICK LOG', id:'qlog:note', label:'Add a note', icon:'◦', action:()=>LEADOS.ui.openQuickLog('note.added') }
-    ];
-  }
-
-  function contextualSuggestions(){
-    const state = LEADOS.store.state();
-    const { findings } = LEADOS.engine.run(state, todayStr());
-    return findings.slice(0,3).map(f=>({
-      group:'SUGGESTED', id:'sug:'+f.key, label:f.title,
-      sublabel:`R${f.rule} · ${f.conf} conf · score ${f.score}`,
-      sev: f.sev,
-      action:()=>{ location.hash='#/today'; }
-    }));
-  }
-
-  function defaultResults(){
-    const recent = history.slice(0,5).map(h=>({ group:'RECENT', id:'hist:'+h.result, label:h.query||'(command)', action:()=>{} }));
-    return [...recent, ...contextualSuggestions(), ...quickLogList()];
-  }
-
-  function computeResults(q){
-    if(!q) return defaultResults();
-    if(q.startsWith('>')){
-      const term = q.slice(1).trim().toLowerCase();
-      const cmds = COMMANDS();
-      return Object.keys(cmds).filter(k=>k.includes(term)).map(k=>({ group:'COMMAND', id:'cmd:'+k, label:cmds[k].label, danger:cmds[k].danger, action:cmds[k].action }));
-    }
-    if(q.startsWith('@')){
-      const term = q.slice(1).toLowerCase();
-      const P = LEADOS.events.project(LEADOS.store.state().events);
-      return Object.values(P.people).filter(p=>p.name.toLowerCase().includes(term)).map(p=>({ group:'PEOPLE', id:'person:'+p.id, label:p.name, action:()=>location.hash='#/roster' }));
-    }
-    if(q.startsWith('#')){
-      const term = q.slice(1).toLowerCase();
-      const domains = ['PEOPLE','FINANCE','CS','DELIVERY'];
-      return domains.filter(d=>d.toLowerCase().includes(term)).map(d=>({ group:'DOMAIN', id:'dom:'+d, label:d, action:()=>location.hash = d==='FINANCE' ? '#/finance' : '#/today' }));
-    }
-    if(/^R\d+$/i.test(q)){
-      const id = parseInt(q.slice(1),10);
-      const r = LEADOS.engine.RULES.find(x=>x.id===id);
-      return r ? [{ group:'RULE', id:'rule:'+id, label:'R'+id+' — '+r.title, action:()=>location.hash='#/data' }] : [];
-    }
-    // universal search over findings + people + settings labels
-    const term = q.toLowerCase();
-    const state = LEADOS.store.state();
-    const { findings } = LEADOS.engine.run(state, todayStr());
-    const P = LEADOS.events.project(state.events);
-    const out = [];
-    findings.filter(f=>f.title.toLowerCase().includes(term)).forEach(f=>out.push({ group:'FINDINGS', id:'f:'+f.key, label:f.title, sev:f.sev, action:()=>location.hash='#/today' }));
-    Object.values(P.people).filter(p=>p.name.toLowerCase().includes(term)).forEach(p=>out.push({ group:'PEOPLE', id:'p:'+p.id, label:p.name, action:()=>location.hash='#/roster' }));
-    return out;
-  }
-
-  function renderResults(){
-    const el = document.getElementById('cmd-results');
-    if(!results.length){ el.innerHTML = '<div class="cmd-group-header">No results</div>'; return; }
-    let lastGroup = null, html = '';
-    results.forEach((r,i)=>{
-      if(r.group !== lastGroup){ html += `<div class="cmd-group-header">${r.group}</div>`; lastGroup = r.group; }
-      html += `<div class="cmd-item ${i===focusedIndex?'focused':''}" data-idx="${i}" data-danger="${!!r.danger}">
-        ${r.sev ? `<span class="cmd-item-icon" aria-hidden="true">●</span>` : `<span class="cmd-item-icon" aria-hidden="true">${r.icon||'›'}</span>`}
-        <div class="cmd-item-text">
-          <div class="cmd-item-label">${esc(r.label)}</div>
-          ${r.sublabel ? `<div class="cmd-item-sub">${esc(r.sublabel)}</div>` : ''}
-        </div>
-      </div>`;
-    });
-    el.innerHTML = html;
-    el.querySelectorAll('.cmd-item').forEach(item=>{
-      item.addEventListener('click', ()=>{
-        const r = results[parseInt(item.dataset.idx,10)];
-        if(r.confirm && !confirm(r.confirm)) return;
-        execute(r);
-      });
-    });
-  }
-
-  function onKeydown(e){
-    if(!isOpen) return;
-    if(e.key==='Escape'){ e.preventDefault(); close(); }
-    else if(e.key==='ArrowDown'){ e.preventDefault(); focusedIndex = Math.min(results.length-1, focusedIndex+1); renderResults(); }
-    else if(e.key==='ArrowUp'){ e.preventDefault(); focusedIndex = Math.max(0, focusedIndex-1); renderResults(); }
-    else if(e.key==='Enter'){ e.preventDefault(); if(results[focusedIndex]) execute(results[focusedIndex]); }
-    else if(e.key==='Tab'){
-      // simple focus trap within the panel
-      const focusables = document.querySelectorAll('.cmd-panel input, .cmd-panel button, .cmd-panel [tabindex]');
-      if(!focusables.length) return;
-      const first = focusables[0], last = focusables[focusables.length-1];
-      if(e.shiftKey && document.activeElement===first){ last.focus(); e.preventDefault(); }
-      else if(!e.shiftKey && document.activeElement===last){ first.focus(); e.preventDefault(); }
-    }
-  }
-
-  return { open, close, search, execute, onKeydown, get isOpen(){ return isOpen; } };
-})();
-
-/* ============================================================
-   BOOT
-   ============================================================ */
-function boot(){
-  LEADOS.store.seed();
-  const savedTheme = localStorage.getItem('leados-ptg-demo:theme') || 'dark';
-  LEADOS.ui.setTheme(savedTheme);
-  document.getElementById('theme-select').addEventListener('change', e=>LEADOS.ui.setTheme(e.target.value));
-  document.getElementById('cmd-trigger').addEventListener('click', ()=>LEADOS.command.open());
-  document.getElementById('cmd-input').addEventListener('input', e=>LEADOS.command.search(e.target.value));
-  document.getElementById('cmd-overlay').addEventListener('click', (e)=>{ if(e.target.id==='cmd-overlay') LEADOS.command.close(); });
-  document.addEventListener('keydown', (e)=>{ LEADOS.command.onKeydown(e); LEADOS.ui.keyboardHandler(e); });
-  window.addEventListener('hashchange', LEADOS.ui.router);
-  if(!location.hash) location.hash = '#/today';
-  LEADOS.ui.router();
+  return `
+    ${header}
+    ${spotlights ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">${spotlights}</div>` : ''}
+    <div class="flex flex-col gap-2" role="list" aria-label="Active findings">
+      ${list.length ? list.map(findingCard).join('') : `<div class="muted text-sm surface rounded-lg p-4">No active findings${domainFilter? ' in '+domainFilter : ''}.</div>`}
+    </div>
+  `;
 }
-document.addEventListener('DOMContentLoaded', boot);
+function findingCard(f){
+  return `
+  <div class="surface rounded-lg p-3 flex items-start justify-between gap-3" role="listitem" tabindex="0" aria-label="${escapeHtml(f.title)}">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="badge mono">${f.rule}</span>
+        <span class="badge ${sevClass(f.sev)}">sev ${f.sev}</span>
+        <span class="font-medium text-sm">${escapeHtml(f.title)}</span>
+      </div>
+      <div class="muted text-xs mt-1 mono">${escapeHtml(f.detail)}</div>
+    </div>
+    <span class="muted text-[11px] mono">${f.domain}</span>
+  </div>`;
+}
+
+function viewRoster(){
+  const today = new Date();
+  const findings = runEngine(STATE, today);
+  return `<h1 class="text-xl font-bold mb-3">Roster</h1>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    ${PEOPLE.map(p=>{
+      const last = lastEventFor(STATE.events,'oneonone.logged', e=>e.data.personId===p.id);
+      const gap = last? daysBetween(last.ts, today) : null;
+      const own = findings.filter(f=> f.entityId===p.id);
+      return `<div class="surface rounded-lg p-3">
+        <div class="flex justify-between"><span class="font-semibold">${p.name}</span><span class="muted text-xs">${p.role}</span></div>
+        <div class="muted text-xs mt-1 mono">last 1:1: ${gap!==null? gap+'d ago' : 'never'} · cadence ${p.cadenceDays}d</div>
+        ${own.length? `<div class="mt-2 flex flex-col gap-1">${own.map(f=>`<span class="badge ${sevClass(f.sev)}">${f.rule} ${escapeHtml(f.title)}</span>`).join('')}</div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function viewIntelligence(){
+  const ins = entityGraphInsights(STATE);
+  const maxScore = Math.max(...ins.centrality.map(c=>c.score), 0.0001);
+  const centralityRows = ins.centrality.slice(0,8).map(c=>`
+    <div class="flex items-center gap-2 py-1">
+      <div class="w-32 text-xs truncate">${escapeHtml(c.label)}</div>
+      <div class="bar-track flex-1"><div class="bar-fill" style="width:${(c.score/maxScore*100).toFixed(0)}%"></div></div>
+      <div class="mono text-[11px] muted w-14 text-right">${(c.score).toFixed(3)}</div>
+    </div>`).join('');
+
+  const clusterCards = ins.clusters.length ? ins.clusters.map((c,i)=>`
+    <div class="surface2 rounded-lg p-3">
+      <div class="font-semibold text-sm mb-1">CLUSTER ${i+1} <span class="muted font-normal mono text-xs">label: ${c.label}</span></div>
+      <div class="text-xs muted">${c.members.map(m=>escapeHtml((ENTITY_LABELS[m]||{}).label||m)).join(' · ')}</div>
+    </div>`).join('') : `<div class="muted text-sm">No clusters at current edge-weight ≥3 threshold.</div>`;
+
+  const patternCards = ins.patterns.length ? ins.patterns.map(p=>`
+    <div class="surface2 rounded-lg p-3 text-sm">
+      <div class="font-semibold">${escapeHtml(p.aLabel)} ↔ ${escapeHtml(p.bLabel)}</div>
+      ${p.detected
+        ? `<div class="mono text-xs muted mt-1">pattern: lag ${p.lag}d, std ${p.std}d, n=${p.n} — computed from seeded demo events, not scripted</div>`
+        : `<div class="mono text-xs muted mt-1">no reliable lead/lag pattern (${p.reason}, n=${p.n}${p.std!==undefined? ', std '+p.std+'d':''})</div>`}
+    </div>`).join('') : `<div class="muted text-sm">No entity pairs meet the edge-weight ≥5 threshold yet.</div>`;
+
+  return `
+  <h1 class="text-xl font-bold mb-1">Intelligence</h1>
+  <div class="muted text-sm mb-4">Semantic relationship graph over people, goals, plans, risks, deals — edges built live from event co-occurrence.</div>
+
+  <div class="mb-5">
+    <label class="text-sm font-semibold block mb-1">@ Semantic search</label>
+    <input id="semantic-search" class="rounded px-3 py-2 w-full max-w-md" placeholder="@ana, @cara, @devon ...">
+    <div id="semantic-result" class="mt-2"></div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="surface rounded-lg p-3">
+      <div class="font-semibold text-sm mb-2">CENTRALITY (simplified PageRank, 20 iterations)</div>
+      ${centralityRows || '<div class="muted text-sm">No connected entities yet.</div>'}
+    </div>
+    <div class="surface rounded-lg p-3 flex flex-col gap-2">
+      <div class="font-semibold text-sm">CO-OCCURRENCE CLUSTERS <span class="muted font-normal">(edge weight ≥3)</span></div>
+      ${clusterCards}
+    </div>
+  </div>
+
+  <div class="surface rounded-lg p-3 mt-4 flex flex-col gap-2">
+    <div class="font-semibold text-sm">TEMPORAL PATTERNS <span class="muted font-normal">(edge weight ≥5, ±21d window)</span></div>
+    ${patternCards}
+  </div>
+  `;
+}
+function wireIntelligenceSearch(){
+  const inp = document.getElementById('semantic-search');
+  if(!inp) return;
+  inp.addEventListener('input', ()=>{
+    const q = inp.value.replace('@','').trim().toLowerCase();
+    const result = document.getElementById('semantic-result');
+    if(!q){ result.innerHTML=''; return; }
+    const person = PEOPLE.find(p=>p.name.toLowerCase().includes(q));
+    if(!person){ result.innerHTML = `<div class="muted text-sm">No person match.</div>`; return; }
+    result.innerHTML = renderPersonDossier(person.id);
+  });
+}
+function renderPersonDossier(personId){
+  const p = PEOPLE.find(pp=>pp.id===personId);
+  const today = new Date();
+  const findings = runEngine(STATE, today).filter(f=>f.entityId===personId || (ENTITY_LABELS[f.entityId]&&false));
+  const ins = entityGraphInsights(STATE);
+  const cluster = ins.clusters.find(c=>c.members.includes(personId));
+  const coocc = [...ins.edges.entries()]
+    .filter(([key])=> key.split(':').includes(personId))
+    .map(([key,e])=>{ const other = key.split(':').find(id=>id!==personId); return { other, weight:e.weight }; })
+    .sort((a,b)=>b.weight-a.weight);
+  const patterns = ins.patterns.filter(p=>p.a===personId||p.b===personId);
+  return `
+  <div class="surface2 rounded-lg p-3 fade-in">
+    <div class="font-semibold">${escapeHtml(p.name)} <span class="muted font-normal text-xs">${p.role} · ${p.domain}</span></div>
+    <div class="mt-2 text-xs font-semibold muted uppercase">Active findings</div>
+    <div class="flex flex-col gap-1 mt-1">${findings.length? findings.map(f=>`<span class="badge ${sevClass(f.sev)}">${f.rule} ${escapeHtml(f.title)}</span>`).join('') : '<span class="muted text-xs">none</span>'}</div>
+    <div class="mt-2 text-xs font-semibold muted uppercase">Cluster</div>
+    <div class="text-xs mt-1">${cluster? 'Member of cluster labeled "'+cluster.label+'" with '+cluster.members.filter(m=>m!==personId).map(m=>(ENTITY_LABELS[m]||{}).label||m).join(', ') : 'Not in any cluster at current threshold.'}</div>
+    <div class="mt-2 text-xs font-semibold muted uppercase">Top co-occurring entities</div>
+    <div class="text-xs mt-1">${coocc.length? coocc.slice(0,5).map(c=>`${(ENTITY_LABELS[c.other]||{}).label||c.other} (weight ${c.weight})`).join(' · ') : 'none'}</div>
+    <div class="mt-2 text-xs font-semibold muted uppercase">Temporal patterns</div>
+    <div class="text-xs mt-1">${patterns.length? patterns.map(p2=> p2.detected? `${(ENTITY_LABELS[p2.a]||{}).label} → ${(ENTITY_LABELS[p2.b]||{}).label}: lag ${p2.lag}d (n=${p2.n})` : `checked ${(ENTITY_LABELS[p2.a]||{}).label}↔${(ENTITY_LABELS[p2.b]||{}).label}: none found`).join('<br>') : 'no qualifying pairs'}</div>
+  </div>`;
+}
+
+function viewForecast(){
+  const buckets = buildPrefireCalendar(STATE, new Date());
+  const order = ['NOW','THIS WEEK','NEXT 2 WEEKS','NEXT MONTH','LATER','UNCERTAIN'];
+  return `
+  <h1 class="text-xl font-bold mb-1">Forecast — Pre-fire Calendar</h1>
+  <div class="muted text-sm mb-4">Projected from current trends only. Not forecasting, not ML — every date below is a deterministic extrapolation of a threshold rule, labeled with its formula.</div>
+  <div class="flex flex-col gap-4">
+  ${order.map(b=>{
+    const items = buckets[b];
+    if(!items || !items.length) return '';
+    return `<div>
+      <div class="text-xs font-semibold uppercase muted mb-1">${b}</div>
+      <div class="flex flex-col gap-1">
+        ${items.map(it=>`
+          <div class="surface rounded-lg p-2 flex justify-between items-center text-sm">
+            <div><span class="badge mono">${it.ruleId}</span> ${escapeHtml(it.label)}</div>
+            <div class="mono text-[11px] muted text-right">${it.date? it.date : ''} ${it.note? escapeHtml(it.note): ''}<br><span>${escapeHtml(it.basis||'')}</span></div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('') || '<div class="muted text-sm">Nothing projectable right now.</div>'}
+  </div>`;
+}
+
+function viewData(){
+  const L = CURRENT_LAYOUT;
+  const findings = runEngine(STATE, new Date());
+  const ruleMeta = {
+    R1:'1:1 cadence overdue', R7:'Pulse/burnout linear trend (slope ≤ -0.5/period)',
+    R20:'Goal/OKR silent >21d', R30:'Plan stalled >14d (non-projectable here, data-event-dependent)',
+    R40:'Deal stalled >21d', R50:'Risk open >30d (non-projectable here, data-event-dependent)'
+  };
+  const rulesTable = Object.entries(ruleMeta).map(([id,desc])=>{
+    const c = findings.filter(f=>f.rule===id).length;
+    return `<tr class="border-b border-base"><td class="py-1 mono">${id}</td><td class="py-1">${desc}</td><td class="py-1 text-right mono">${c}</td></tr>`;
+  }).join('');
+  const pins = STATE.meta.layoutPins||{};
+  const pinRows = NAV_ITEMS.filter(n=>!n.util).map(n=>`
+    <tr class="border-b border-base"><td class="py-1">${n.label}</td>
+    <td class="py-1 mono">${pins.hasOwnProperty(n.id)? 'position '+(pins[n.id]+1) : '—'}</td>
+    <td class="py-1 text-right"><button class="badge" data-unpin="${n.id}">${pins.hasOwnProperty(n.id)?'Unpin':'Right-click rail to pin'}</button></td></tr>`).join('');
+
+  return `
+  <h1 class="text-xl font-bold mb-3">Data</h1>
+
+  <div class="surface rounded-lg p-3 mb-4">
+    <div class="font-semibold text-sm mb-2">RULES (6 computed, not the brief's 144 — see README)</div>
+    <table class="w-full text-sm"><thead><tr class="text-left muted text-xs"><th>Rule</th><th>Description</th><th class="text-right">Active</th></tr></thead>
+    <tbody>${rulesTable}</tbody></table>
+  </div>
+
+  <div class="surface rounded-lg p-3 mb-4">
+    <div class="font-semibold text-sm mb-2">LAYOUT &amp; PINS</div>
+    <div class="text-xs muted mb-2">Current configuration: <span class="mono">${L.config}</span> — ${escapeHtml(L.header)} (dominant group share ${(L.share*100).toFixed(0)}%). Generated once at session start.</div>
+    <table class="w-full text-sm"><thead><tr class="text-left muted text-xs"><th>Nav item</th><th>Pin</th><th></th></tr></thead>
+    <tbody>${pinRows}</tbody></table>
+  </div>
+
+  <div class="surface rounded-lg p-3 flex gap-2 flex-wrap">
+    <button id="export-json" class="badge">Export JSON</button>
+    <button id="reset-seed" class="badge">Reset &amp; reseed</button>
+  </div>
+  `;
+}
+function wireDataView(){
+  document.querySelectorAll('[data-unpin]').forEach(b=> b.onclick = ()=>{
+    const pins = { ...STATE.meta.layoutPins }; delete pins[b.getAttribute('data-unpin')];
+    updateMeta({ layoutPins: pins }); CURRENT_LAYOUT = generateLayout(STATE, new Date()); route();
+  });
+  const exp = document.getElementById('export-json');
+  if(exp) exp.onclick = ()=>{
+    const blob = new Blob([JSON.stringify(STATE,null,2)], { type:'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download='leados-pth-export.json'; a.click();
+  };
+  const rs = document.getElementById('reset-seed');
+  if(rs) rs.onclick = ()=>{
+    if(confirm('Type-confirm not implemented in this stub — click OK to reseed demo data.')){
+      LEADOS.store.reseed(); sessionStorage.removeItem(SESSION_FLAG); initSession(); route();
+      showToast('Store reseeded.');
+    }
+  };
+}
+
+function viewHealth(){
+  const tests = runHealthSuite();
+  return `<h1 class="text-xl font-bold mb-3">Health</h1>
+  <div class="flex flex-col gap-2">
+  ${tests.map(t=>`<div class="surface rounded-lg p-3 flex justify-between items-center">
+    <div><span class="mono font-semibold">${t.id}</span> <span class="text-sm muted">${t.desc}</span></div>
+    <span class="badge ${t.pass?'':'sev4'}">${t.pass?'PASS':'FAIL'}</span>
+  </div>`).join('')}
+  </div>`;
+}
+function runHealthSuite(){
+  const out = [];
+  out.push({ id:'T_STORE', desc:'store loads/creates under demo key', pass: !!STATE && !!STATE.events });
+  out.push({ id:'T_APPEND_ONLY', desc:'append grows log by exactly 1, prior events untouched', pass:(()=>{
+    const before = JSON.stringify(STATE.events);
+    const lenBefore = STATE.events.length;
+    appendEvent('health.check','RESILIENCE',{});
+    const ok = STATE.events.length===lenBefore+1 && JSON.stringify(STATE.events.slice(0,lenBefore))===before;
+    STATE = { ...STATE, events: STATE.events.slice(0,lenBefore) }; persist(STATE);
+    return ok;
+  })() });
+  out.push({ id:'T_ENGINE', desc:'engine.run returns array without throwing', pass:(()=>{ try{ return Array.isArray(runEngine(STATE,new Date())); }catch(e){ return false; } })() });
+  out.push({ id:'T_TOPOLOGY', desc:'generateLayout returns a valid configuration key', pass:(()=>{ try{ const l=generateLayout(STATE,new Date()); return ['A','B','C','D','E'].includes(l.config); }catch(e){ return false; } })() });
+  out.push({ id:'T_GRAPH', desc:'entityGraphInsights runs and pageRank scores are finite', pass:(()=>{ try{ const ins=entityGraphInsights(STATE); return ins.centrality.every(c=>Number.isFinite(c.score)); }catch(e){ return false; } })() });
+  out.push({ id:'T_PREDICT', desc:'projectFireDate(R1) returns an entry per person', pass:(()=>{ try{ const p=projectFireDate('R1',STATE,new Date()); return PEOPLE.every(pp=>p.hasOwnProperty(pp.id)); }catch(e){ return false; } })() });
+  return out;
+}
+
+/* ---------------- command palette ---------------- */
+function openPalette(){
+  closeOverlays();
+  const slot = document.getElementById('overlay-slot');
+  const back = document.createElement('div');
+  back.className='modal-backdrop';
+  back.innerHTML = `
+    <div class="surface rounded-lg w-full max-w-lg p-3 fade-in" role="dialog" aria-label="Command palette">
+      <input id="palette-input" class="w-full rounded px-3 py-2 mb-2" placeholder="Type a command, @person, #domain, R### ...">
+      <div id="palette-results" class="flex flex-col gap-1 max-h-80 overflow-auto"></div>
+    </div>`;
+  slot.appendChild(back);
+  back.addEventListener('click', e=>{ if(e.target===back) closeOverlays(); });
+  document.addEventListener('keydown', escClose);
+  const input = document.getElementById('palette-input');
+  input.focus();
+  input.addEventListener('input', ()=> renderPaletteResults(input.value));
+  renderPaletteResults('');
+}
+function escClose(e){ if(e.key==='Escape'){ closeOverlays(); document.removeEventListener('keydown', escClose); } }
+const COMMANDS = [
+  { id:'go-today', label:'Go to Today', run:()=>location.hash='#/today' },
+  { id:'go-roster', label:'Go to Roster', run:()=>location.hash='#/roster' },
+  { id:'go-intel', label:'Go to Intelligence', run:()=>location.hash='#/intelligence' },
+  { id:'go-forecast', label:'Go to Forecast', run:()=>location.hash='#/forecast' },
+  { id:'go-data', label:'Go to Data', run:()=>location.hash='#/data' },
+  { id:'go-health', label:'Go to Health', run:()=>location.hash='#/health' },
+  { id:'theme', label:'Cycle theme', run:cycleTheme },
+  { id:'export', label:'Export JSON', run:()=>document.getElementById('export-json')?document.getElementById('export-json').click():showToast('Open #/data first.') }
+];
+function renderPaletteResults(q){
+  const results = document.getElementById('palette-results');
+  const hist = STATE.meta.commandHistory||{};
+  if(q.startsWith('@')){
+    const term = q.slice(1).toLowerCase();
+    const matches = PEOPLE.filter(p=>p.name.toLowerCase().includes(term));
+    results.innerHTML = matches.map(p=>`<button class="rail-item w-full text-left" data-person="${p.id}">@ ${escapeHtml(p.name)}</button>`).join('') || '<div class="muted text-sm p-2">No match.</div>';
+    results.querySelectorAll('[data-person]').forEach(b=> b.onclick = ()=>{
+      closeOverlays(); location.hash='#/intelligence';
+      setTimeout(()=>{ const d=document.getElementById('semantic-result'); if(d) d.innerHTML = renderPersonDossier(b.getAttribute('data-person')); },30);
+    });
+    return;
+  }
+  if(q.startsWith('#')){
+    const term = q.slice(1).toLowerCase();
+    const matches = DOMAINS.filter(d=>d.toLowerCase().includes(term));
+    results.innerHTML = matches.map(d=>`<button class="rail-item w-full text-left" data-domain-go="${d}">#${d}</button>`).join('') || '<div class="muted text-sm p-2">No match.</div>';
+    results.querySelectorAll('[data-domain-go]').forEach(b=> b.onclick=()=>{ closeOverlays(); location.hash='#/today/'+b.getAttribute('data-domain-go'); });
+    return;
+  }
+  let list = COMMANDS.filter(c=> c.label.toLowerCase().includes(q.toLowerCase()));
+  list = list.sort((a,b)=> (hist[b.id]||0)-(hist[a.id]||0));
+  results.innerHTML = list.map(c=>`<button class="rail-item w-full text-left" data-cmd="${c.id}">&gt; ${escapeHtml(c.label)} ${hist[c.id]?('<span class="muted text-[11px]"> · used '+hist[c.id]+'×</span>'):''}</button>`).join('') || '<div class="muted text-sm p-2">No match.</div>';
+  results.querySelectorAll('[data-cmd]').forEach(b=> b.onclick=()=>{
+    const cmd = COMMANDS.find(c=>c.id===b.getAttribute('data-cmd'));
+    const h = { ...STATE.meta.commandHistory, [cmd.id]: (STATE.meta.commandHistory[cmd.id]||0)+1 };
+    updateMeta({ commandHistory:h });
+    closeOverlays(); cmd.run();
+  });
+}
+document.addEventListener('keydown', e=>{
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); openPalette(); }
+});
+
+/* ---------------- router ---------------- */
+function parseHash(){
+  const h = (location.hash||'#/today').replace('#/','');
+  const parts = h.split('/').filter(Boolean);
+  return { view: parts[0]||'today', param: parts[1]||null };
+}
+function route(){
+  const r = parseHash();
+  logUsage(r.view);
+  const navItem = NAV_ITEMS.find(n=>n.id===r.view);
+  trackViewDomain(r.param || (navItem && navItem.domain) || null);
+  renderBanner();
+  renderRail(r);
+  const main = document.getElementById('main');
+  let html = '';
+  switch(r.view){
+    case 'today': html = viewToday(r.param); break;
+    case 'roster': html = viewRoster(); break;
+    case 'engineering': case 'ops': case 'sales': case 'finance': case 'strategy': case 'external': case 'resilience': {
+      const dom = (NAV_ITEMS.find(n=>n.id===r.view)||{}).domain;
+      html = viewToday(dom); break;
+    }
+    case 'intelligence': html = viewIntelligence(); break;
+    case 'forecast': html = viewForecast(); break;
+    case 'data': html = viewData(); break;
+    case 'health': html = viewHealth(); break;
+    default: html = viewToday(null);
+  }
+  main.innerHTML = `<div class="fade-in">${html}</div>`;
+  wireIntelligenceSearch();
+  wireDataView();
+}
+window.addEventListener('hashchange', route);
+window.addEventListener('load', ()=>{
+  initSession();
+  route();
+});
+/* in case script runs after load event already fired */
+if(document.readyState==='complete'){ initSession(); route(); }
+
 })();
 </script>
 </body>
 </html>
-</content>
