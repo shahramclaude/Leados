@@ -1,156 +1,203 @@
-# LeadOS pt-J — The Living Interface
+# LeadOS pt-J — The Living Interface (Parts 1–3)
 
-> **This is not github.com/wbweve/Leados.** That repo was fetched and read
-> directly this session — root file tree (GitHub REST API), root `index.html`,
-> root `App.tsx`, `src/App.tsx`, `src/lib/types.ts`, `src/lib/core.ts`,
-> `src/lib/physics.ts`, `README.md`, `package.json` — before any line here
-> was written. It turned out to contain three structurally different app
-> lineages, at least three different `localStorage` keys across sessions,
-> and a "Finding / domain score" model that the repo's own committed
-> comments say does not match the real, originally-verified product schema
-> at all. Full fetch-by-fetch ledger is in `AI-SESSION-LOG.md` §0. This
-> delivery is a disclosed, hand-authored vanilla HTML/CSS/JS file — not a
-> build of that repo, which has a Vite/React/TypeScript toolchain this tool
-> cannot run.
+> **This is not github.com/wbweve/Leados.** That repo, and its own already-committed
+> pt-J delivery (`README.md`, `AI-SESSION-LOG.md`, `index.html` at the repo root),
+> were fetched and read directly this session — the rendered repo page, and the
+> three files above via **three independent raw mirrors** (`raw.githubusercontent.com`,
+> `cdn.jsdelivr.net`, `rawcdn.githack.com`) — before a line of this file was written.
+> All three mirrors truncated the returned `index.html` at the same ~5,700-token
+> offset inside the middle of the file (a fetch-tool output-length limit, not a
+> content issue); a fourth fetch, in text-rendering mode, returned that missing
+> byte range but with a *different* corruption — its HTML-aware extractor
+> stripped every `<`/`>` character, which silently deleted comparison operators
+> from the JS it ran through. The full, fetch-by-fetch ledger — including which
+> parts of the prior commit are confirmed byte-for-byte, which are recovered
+> cross-mirror text, and which had to be re-implemented from documented
+> behavior rather than corrupted bytes — is in `AI-SESSION-LOG.md` §0–§1.
 
 ## Run it
 
-Open `index.html` in any browser. No build step, no install. Tailwind
-loads from a CDN `<script>`; everything else is one inline `<script>` of
-vanilla JS. All state lives in one `localStorage` key:
-**`leados-pt-j:data`** (a fourth, isolated key — see "why" in the
-changelog below).
+Open `index.html` in any browser. No build step, no install. Tailwind loads
+from a CDN `<script>`; everything else is one inline `<script>` of vanilla
+JS. Durable state lives in one `localStorage` key: **`leados-pt-j:data`**
+(unchanged from the prior session — verified to be the exact key already
+committed at github.com/wbweve/Leados). Two new, intentionally session-only
+`sessionStorage` keys back Part 3's familiarity tracking — see "non-negotiables"
+below.
 
 ## Files on disk
 
-Exactly three files: `index.html`, `README.md` (this file),
-`AI-SESSION-LOG.md`.
+Exactly three files: `index.html`, `README.md` (this file), `AI-SESSION-LOG.md`.
 
-## What this part actually is
+## What this delivery adds
 
-The brief for pt-J ("Part 1" of a larger, only-partially-received spec) asks
-for `LEADOS.cssolver` — a constraint-satisfaction layout engine that
-computes CSS from declared layout/color/typography constraints instead of
-hand-tuned values. That is what's implemented and wired into the running
-app (not left as an unused module):
+This continues the prior session's pt-J build, which implemented **Part 1**
+(`LEADOS.cssolver`, a constraint-satisfaction layout engine). This delivery
+carries Part 1 forward and adds the next two parts of the spec, wired into
+the same running app — not left as described-but-unused modules:
 
-- **Node consistency** — every solver-governed variable (finding-card
-  height, primary-button size, score-math font size, rail/panel/column
-  widths, section gap) is clamped into a real `[lo, hi]` domain and given a
-  data-dependent preferred value (e.g. card height shrinks as the number of
-  open findings grows, within bounds).
-- **One real arc constraint** — `cardHeight × visibleCount + gap ×
-  (visibleCount − 1) ≤ availableListHeight` is enforced by an iterative
-  repair loop (shrink gap first, then card height), not a closed-form
-  solve and not a general backtracking CSP engine. This is disclosed as a
-  **simplified** solver in the source and in `AI-SESSION-LOG.md` §2 — it is
-  not claimed to be more general than it is.
-- **Real metric computation**, not placeholders: WCAG contrast ratio via
-  the actual relative-luminance formula; CIE sRGB→XYZ→Lab→LCH color
-  conversion (D65) for domain-color perceptual distance; Fitts' Law
-  acquisition-time estimate. Where the underlying formula is a public
-  standard (WCAG, CIE, Fitts' functional form), it's labeled verified.
-  Where a specific constant is an assumption (Fitts' `a`/`b` regression
-  constants, the severity-color "arousal" proxy), it's labeled fabricated,
-  at the point of definition.
+* **Part 2 — `LEADOS.aesthetics`** ("The Computational Aesthetics Engine").
+  Real, running code for: a Golden-Ratio spacing scale (φ = 1.6180339887,
+  computed, not hand-typed); an `optimizeDensity()` that computes a
+  bits-per-pixel figure and a Miller's-Law-inspired "visible card count"
+  target; a time-of-day-driven chromatic adaptation that injects a CSS
+  `hue-rotate`/`saturate` filter on `<body>`; and a `generateLivingStylesheet()`
+  that injects a real `<style id="leados-generated">` block. See `#/aesthetics`
+  for the live values and the exact generated CSS.
+* **Part 3 — `LEADOS.familiarity`** ("Familiarity-Adaptive Components").
+  Real `sessionStorage`-backed view-count tracking per finding, plus a
+  cross-session signal derived from the real event log (times a finding was
+  resolved). Finding cards on `#/today` render in four tiers — NOVEL,
+  LEARNING, FAMILIAR, HABITUATED — with genuinely different markup at each
+  tier (not just a CSS class swap): full teaching copy + fabricated-and-labeled
+  confidence/score-math blocks when NOVEL, collapsing down to a single
+  36px-tall table row when HABITUATED. When every active finding is
+  HABITUATED, `#/today` switches to a table-only "expert mode" automatically.
+  A one-time toast notifies the user the first time a given finding compacts,
+  per the brief's own "the adaptation is never silent" rule.
 
 ## Routes
 
 | Route | What it does |
 |---|---|
-| `#/today` | Active findings as severity-bar rows, sized by the live solver output. Resolve findings inline. |
-| `#/domains` | Per-domain heatmap score (decay-weighted, `DECAY=0.85/day`, verified constant — see log), velocity, 30-day projection, and the literal `sev × decay^age = weight` math per contributing signal, rendered in mono at the solver's `score-math.font-size`. |
-| `#/synthesis` | The Organizational Moment, The Five Things That Matter, The Hardest Question — generated only on explicit click (or ⌘/Ctrl+Enter), persisted as an append-only `synthesis.generated` event with `eventCountAtGeneration` snapshotted *before* the append. |
-| `#/decision` | Decision Topology: every logged decision classified into a risk×reversibility×urgency quadrant (fabricated rule, disclosed inline), plus a form to log new decisions. |
-| `#/health` | Live `T_*`/`G_*` checks, including six new ones (`G_FITTS`, `G_CONTRAST`, `G_LCH_SYMMETRY`, `G_ARC_CONSTRAINT`, `G_AROUSAL`, `G_WEIGHT_RATIO`, `T_SOLVER_BOUNDS`) that run against the solver's real output, not a description of what it should do. |
+| `#/today` | Active findings, rendered through `LEADOS.familiarity`'s four-tier adaptive card system; sized by the live `LEADOS.cssolver` output. |
+| `#/domains` | Per-domain heatmap score (decay-weighted, `DECAY=0.85/day`), velocity, 30-day projection, and the literal `sev × decay^age = weight` math per signal. |
+| `#/synthesis` | Generated only on explicit click (or ⌘/Ctrl+Enter); persisted as an append-only `synthesis.generated` event. |
+| `#/decision` | Decision Topology quadrant classifier (fabricated rule, disclosed inline) plus a form to log new decisions. |
+| `#/aesthetics` | **New.** Live Part 2 output: the computed spacing scale (with the brief's own wrong hand-typed comments shown side-by-side for sp7–sp10), the density/Miller-range numbers, the chromatic-adaptation filter and label, the generated CSS, and a session-memory generation audit. |
+| `#/health` | Live `T_*`/`G_*` checks, including new ones for Part 2 (`G_SPACING_GOLDEN_RATIO`, `G_MILLER_RANGE_ORDER`, `G_DENSITY_SANE`, `G_HUE_BOUND`) and Part 3 (`T_FAMILIARITY_THRESHOLDS`, `G_FAMILIARITY_MONOTONIC`). |
 | `#/log` | Raw event log, JSON export, wipe + reseed. |
-| `#/layout` | Full-page constraint monitor: every solved variable, every constraint check (pass/fail against real numbers), and the exact generated `:root{...}` CSS block currently injected into the page. |
-| `#/about` | The verified / unverified / fabricated ledger for this exact build, live in the running app. |
+| `#/layout` | Full-page `LEADOS.cssolver` constraint monitor (Part 1, unchanged in behavior). |
+| `#/about` | The verified / unverified / fabricated ledger for this exact build, covering all three parts. |
 
-A compact version of the same monitor also appears as a floating panel
-(`#cssolver-monitor`) when the "constraint monitor" checkbox in the sidebar
-is on, or when the page is loaded with `?debug=layout` in the query string
-— the brief's own text read `?>debug layout`, interpreted here as that
-flag (see `AI-SESSION-LOG.md` §1 for the literal wording and why).
+The sidebar also has a density-mode selector (`COMPACT`/`STANDARD`/
+`COMFORTABLE`/`READING`, feeds `LEADOS.aesthetics`) and a "reset familiarity"
+button (clears the two `sessionStorage` keys, for demoing the adaptive tiers
+without waiting out a real session).
 
 ## The non-negotiables, as applied here
 
-- All state in `localStorage` under one key, `leados-pt-j:data`.
-- The event log is append-only; `project()` recomputes findings, domain
-  scores, and open decisions/commitments from the raw event array on every
-  call — nothing derived is cached in the store itself.
-- `synthesis.generated` payloads are persisted as new log entries, never
-  edited — the one disclosed exception to "nothing derived persists," with
-  `eventCountAtGeneration` snapshotted *before* the append so the
-  staleness badge is correct.
-- Synthesis is only ever generated by an explicit click or ⌘/Ctrl+Enter;
-  rendering or navigating never appends a synthesis event.
-- Every event validator runs before append, not after; a rejected event
-  never reaches the log (`EVENT_VALIDATORS` / `appendEvent`).
-- The layout solver recomputes on load, on window resize (debounced), and
-  on every re-render — it never hand-waves "would update live"; it does.
+* All **durable** state in `localStorage` under one key, `leados-pt-j:data` — unchanged.
+* `densityMode` (Part 2's only new durable field) is added to `st.meta` as an
+  additive, defaulted field — like the pre-existing `idSeq`/`createdAt` —
+  not routed through `appendEvent`/validators, because it's a UI preference,
+  not a business event.
+* Part 3's familiarity counters are **intentionally not** in the durable
+  store: the brief itself specifies `sessionStorage`, resetting each session.
+  They live in two new, isolated `sessionStorage` keys
+  (`leados-pt-j:familiarity`, `leados-pt-j:familiarity-notified`) rather than
+  being folded into the one `localStorage` key, so a familiarity reset can
+  never accidentally wipe real business events.
+* The event log is still append-only; `project()` still recomputes
+  everything from the raw event array on every call.
+* `synthesis.generated` is still the one disclosed exception to "nothing
+  derived persists," with `eventCountAtGeneration` snapshotted before the append.
+* `LEADOS.cssolver` still recomputes on load, resize, and every re-render.
+* `LEADOS.aesthetics` recomputes on load and resize **only** — a deliberate,
+  disclosed difference in cadence, because Part 2's own brief text says the
+  stylesheet is "regenerated on each session start... not each render,"
+  unlike Part 1's explicit "it never hand-waves — it does [update on every render]."
 
 ## What's verified vs. fabricated vs. simplified (short form)
 
-**Verified this session, by direct fetch (not by trusting a prior
-session's README):** the real repo's `DOMAINS` set and `DECAY=0.85` /
-`CORRELATION_WINDOW_DAYS=90` / `DECISION_MAX_OPEN_DAYS=21` constants
-(`src/lib/types.ts`, `src/lib/core.ts`); the existence of three different
-app lineages in one repo; the existence of `src/lib/physics.ts` and its own
-disclosure that it's a second-generation fabrication; a 5-route whitelist
-in root `App.tsx` vs. a 7-route whitelist in `src/App.tsx`, both confirmed
-by this session's own raw fetches (and independently also noted by an
-earlier session's comment already committed in `src/App.tsx` — a genuine
-cross-confirmation, recorded as such rather than claimed as a new find).
-Also verified: the WCAG 2.5.5 (44×44px, AAA) vs. 2.5.8 (24×24px, AA)
-target-size split, via one external web search this session.
+**Verified this session, cross-mirror:** `DOMAINS`, `DECAY=0.85`,
+`CORRELATION_WINDOW_DAYS=90`, `DECISION_MAX_OPEN_DAYS=21` — identical across
+all three independent raw-file mirrors fetched this session. The WCAG
+contrast formula, CIE Lab/LCH conversion, Fitts' Law functional form, and
+φ=1.618 Golden Ratio arithmetic are real public formulas, re-derived in code
+here. Weber–Fechner (1834/1860) and Miller's "7±2" (1956) are real, named
+citations.
 
-**Unverified / not independently re-fetched this session:** the exact
-contents of two other `localStorage` keys (`leados-orgphysics-sandbox:data`,
-`leados-synthesis:data`) named only inside another file's comments, not
-fetched directly; whether any non-AI-authored version of "org physics" or
-"synthesis" exists in this product at all (every file touching those
-concepts, in every lineage found, self-discloses as an AI construction).
+**Unverified:** whether Miller's working-memory figure or the
+Weber–Fechner law actually transfers to "bits of finding-card information
+per pixel" — not independently verified, carried only as the brief's own
+analogy. The exact byte-for-byte content of roughly the middle third of the
+prior session's committed `index.html` (see the fetch-corruption note at the
+top of this file and in `index.html`'s own header comment) — this build
+re-implements that section's documented behavior rather than guessing at
+corrupted bytes.
 
-**Fabricated in pt-J, disclosed at the point of definition in
-`index.html`:** the Fitts' Law regression constants and travel-distance
-assumption; the domain and severity color palettes; the severity-color
-"arousal" proxy (LCH chroma, not a PAD measurement); the Decision Surface
-quadrant rule; all synthesis text generation.
+**Fabricated, disclosed at the point of definition in `index.html`:**
+(Part 1, carried forward) Fitts' a/b regression constants, the 200px/220px
+travel/saccade assumptions, domain/severity color palettes, the Decision
+Surface quadrant rule, all synthesis text. (Part 2, new) the "257 bits per
+finding" constant; the severity-color "arousal" proxy (chroma, not PAD).
+(Part 3, new) the severity-derived "confidence" proxy shown on NOVEL/LEARNING
+cards — this build's Finding schema has no native confidence field, so this
+is a disclosed stand-in, not a measured model output.
 
-**Simplified relative to the brief's own text, disclosed:** `LEADOS.cssolver`
-implements real node consistency and one real arc-consistency repair loop,
-not a general backtracking CSP solver over an arbitrary constraint graph.
-The brief's own pseudocode also had a JS syntax error (unescaped apostrophe)
-and an internally-inconsistent severity-bar width spec (`[1,2,3,4]` px
-claimed to satisfy a "1px JND" pre-attentive-discrimination requirement);
-both were fixed, not silently reproduced — see `AI-SESSION-LOG.md` §2.
+**Simplified, disclosed at the point of definition:** `LEADOS.cssolver`
+remains a node-consistency + one-arc-repair solver, not a general CSP
+engine. `LEADOS.aesthetics`'s "chromatic adaptation" matches the brief's own
+pseudocode (a flat `hue-rotate`/`saturate` filter), not the fuller
+Bradford/D50 transform named only in the brief's prose — this build
+discloses that gap between the brief's prose and its own code, rather than
+building the fuller, unwritten version. `LEADOS.familiarity`'s "fade over
+600ms while the card height collapses" is not implemented as a true
+cross-render DOM animation (this app re-renders via full `innerHTML`
+replace); a CSS fade-in plus a one-time positioned toast substitutes for it.
+
+## Bugs found in the brief's own text, fixed rather than reproduced
+
+Same policy as the prior session's Part 1 delivery (which fixed an
+unescaped apostrophe and an internally-inconsistent severity-bar width
+spec). This delivery found and fixed two more, in Part 2's own pseudocode:
+
+1. **`optimizeDensity()`'s Miller range is self-inverted.** Its own code
+   computes `withinMillerRange.min` using a ×1.8 multiplier and `.max`
+   using a ×0.55 multiplier — since 1.8 > 0.55, the computed "min" is
+   always numerically larger than the computed "max." Fixed by swapping
+   which multiplier feeds which key, preserving the evident intent
+   (sparser ⇒ fewer visible cards is the "min" end of the range).
+2. **The spacing-scale comments are arithmetically wrong from `sp7` on.**
+   The brief's own hand-typed `// 71px`, `// 115px`, `// 186px`, `// 301px`
+   comments don't match `Math.round(4 × φⁿ)` for those `n` (true values:
+   72, 116, 188, 304 — off by rounding-propagation errors in whoever typed
+   the brief). This build computes the real values and displays both,
+   side by side, on `#/aesthetics`, rather than hard-coding the brief's
+   wrong numbers.
 
 ## Changelog (this delivery)
 
-See `AI-SESSION-LOG.md` §3 for the full table with "why" per row. Short
-version:
+See `AI-SESSION-LOG.md` §2 for the full table with "why" per row. Short version:
 
-- Re-fetched the real repo directly this session (10 raw/API calls) rather
-  than trusting the already-committed `README.md`'s account of a prior
-  session's fetch — *why*: the task requires inspecting actual code before
-  claiming anything about it, and a well-labeled prior disclosure is still
-  a claim, not a re-verification.
-- Carried forward the three numeric constants and the `DOMAINS` set that
-  this session re-verified directly, rather than inventing a fifth set —
-  *why*: keeps this build consistent with the one part of this repo's
-  history that multiple independent sessions now agree on.
-- Used a new, fourth, isolated `localStorage` key — *why*: three different
-  keys already exist across sessions; guessing which is canonical risks
-  silently touching another session's disclosed sandbox.
-- Implemented `LEADOS.cssolver` as real running code wired into the live
-  UI (not a described-but-unused module), with real WCAG/Lab/Fitts math
-  and a disclosed-simplified arc-consistency repair loop — *why*: a
-  "constraint satisfaction layout engine" that only describes itself in
-  prose isn't checkable; `#/layout` and `#/health` let you see it run and
-  fail/pass against real numbers.
-- Fixed two defects in the brief's own constraint pseudocode (a syntax
-  error; an internally-inconsistent severity-bar width spec) instead of
-  reproducing them — *why*: the first doesn't parse, the second contradicts
-  its own stated justification; both are disclosed rather than silently
-  patched.
+* Re-fetched github.com/wbweve/Leados and its own already-committed pt-J
+  files directly this session, via three independent mirrors, rather than
+  trusting the prior session's README/log prose — *why*: the task requires
+  inspecting actual code before claiming anything about it, and a prior
+  disclosure is still a claim, not a re-verification; cross-mirroring also
+  surfaced a fetch-tool corruption that a single fetch would have silently
+  propagated.
+* Kept the same `localStorage` key, `leados-pt-j:data`, and the same
+  durable schema, only adding `meta.densityMode` as an additive field —
+  *why*: Part 2/3 don't require a schema break, and the non-negotiables
+  from Part 1 (one key, append-only log) still apply in full.
+  verified, not reconstructed — *why*: those two mirror-identical raw
+  file quotes required zero reconstruction and shouldn't be touched.
+* Re-implemented (rather than guessed at) the ~5,700-token middle section
+  of the prior `index.html` that three independent mirrors all truncated
+  at the same offset — *why*: reproducing corrupted bytes with false
+  confidence would be worse than a clearly labeled, behavior-matched
+  reimplementation; every such function is marked RECONSTRUCTED at its
+  definition.
+* Implemented `LEADOS.aesthetics` and `LEADOS.familiarity` as real, running
+  code wired into `#/today`, `#/aesthetics`, `#/health`, and the sidebar —
+  not described-but-unused modules — *why*: consistent with this whole
+  project's standing rule that a module only counts as "implemented" if
+  you can watch it run and fail/pass against real numbers.
+* Gave `LEADOS.aesthetics` a different recompute cadence (load + resize
+  only) than `LEADOS.cssolver` (load + resize + every render) — *why*:
+  each module's own brief text says something different about when it
+  should regenerate, and silently picking one cadence for both would
+  erase a real distinction the brief itself draws.
+* Put Part 3's familiarity counters in two new `sessionStorage` keys
+  instead of folding them into `leados-pt-j:data` — *why*: the brief
+  itself specifies session-scoped memory that resets each session; mixing
+  that into the durable, append-only store would make "wipe + reseed"
+  and "reset familiarity" accidentally entangled operations.
+* Fixed the Miller-range min/max inversion and documented the sp7–sp10
+  comment-arithmetic errors in the brief's own Part 2 pseudocode, instead
+  of reproducing them — *why*: same policy the prior session already
+  established for Part 1's two bugs; silently reproducing a broken
+  min>max range would make `#/health`'s own `G_MILLER_RANGE_ORDER` check
+  fail by construction.

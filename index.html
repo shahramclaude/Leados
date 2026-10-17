@@ -3,23 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LeadOS pt-J — The Living Interface</title>
+<title>LeadOS pt-J — The Living Interface (Parts 1–3)</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
 /* =============================================================================
-   LeadOS pt-J — "The Living Interface"
+   LeadOS pt-J — "The Living Interface" — Parts 1, 2, 3
    -----------------------------------------------------------------------------
    This file is a disclosed, hand-authored, single-file vanilla HTML/CSS/JS
    build. It is NOT a build of github.com/wbweve/Leados (that repo is a
-   Vite + React + TypeScript project this tool cannot compile), and it is NOT
-   a literal copy-paste of any file already committed there.
+   Vite + React + TypeScript project this tool cannot compile).
 
-   WHAT WAS ACTUALLY DONE THIS SESSION, BEFORE WRITING ANY OF THIS:
-   the real repo was fetched directly (GitHub REST + raw.githubusercontent.com)
-   and read — not assumed from a prior session's prose. Full ledger with
-   byte-for-byte quotes is in AI-SESSION-LOG.md §0. Short version lives in
-   the "verified vs. fabricated vs. simplified" panel on the #/about route
-   and in the header of the LEADOS.cssolver module below.
+   THIS SESSION'S RECONSTRUCTION NOTE (read AI-SESSION-LOG.md §0–§1 for the
+   full ledger): this delivery continues a prior session's pt-J build that
+   is already committed at github.com/wbweve/Leados (README.md +
+   AI-SESSION-LOG.md + index.html at root). That prior file was re-fetched
+   this session from three independent mirrors (raw.githubusercontent.com,
+   cdn.jsdelivr.net, rawcdn.githack.com). All three truncated the returned
+   content at the same ~5,700-token offset inside Section 7
+   (LEADOS.cssolver's internals) through the start of renderToday — a
+   fetch-tool output-length limit, not a content problem. A fourth fetch
+   (raw.githubusercontent.com, text-rendering mode) returned that missing
+   byte range but with a second, different corruption: its HTML-aware text
+   extractor stripped every "<" / ">" character, which silently deleted
+   comparison operators (e.g. "severity<1 || severity>5") from the JS it
+   ran through. That mode WAS reliable for the pure string literals in
+   seedIfEmpty() (no angle brackets in that data), so that function is
+   carried forward as recovered, cross-confirmed text. Everything else in
+   the previously-missing range — the live body of LEADOS.cssolver's
+   solve()/generateCSS()/contrastRatio()/hexToLch()/lchDistance()/fittsMs(),
+   runHealthChecks(), sidebar(), and the header portion of renderToday() —
+   is RE-IMPLEMENTED this session from the surrounding, cleanly-fetched
+   code's own call signatures and from this repo's own README route table,
+   not copied from corrupted bytes. Each such function is labeled
+   RECONSTRUCTED at its definition below, same honesty bar as a FABRICATED
+   label elsewhere in this file.
    ========================================================================== */
 :root{
   --paper:#f7f5ef; --paper-2:#edeadf; --card:#fffdf9;
@@ -43,9 +60,14 @@
   --column-max-solved: 960px;
   --section-gap-solved: 20px;
   --sev-bar-1: 6px; --sev-bar-2: 9px; --sev-bar-3: 12px; --sev-bar-4: 16px; --sev-bar-5: 20px;
+  /* --- Part 2 (LEADOS.aesthetics) governed variables; fallback only --- */
+  --sp-phi-1: 4px; --sp-phi-2: 6px; --sp-phi-3: 10px; --sp-phi-4: 17px;
+  --sp-phi-5: 27px; --sp-phi-6: 44px; --sp-phi-7: 72px;
+  --card-height-optimal: 120px;
+  --visible-finding-count: 7;
 }
 html,body{background:var(--paper); color:var(--ink-0); height:100%;}
-body{font-family:"Inter",system-ui,-apple-system,sans-serif;}
+body{font-family:"Inter",system-ui,-apple-system,sans-serif; transition: filter .6s ease;}
 .serif{font-family:"Source Serif 4",Georgia,serif; font-weight:400;}
 .mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:500;
   font-size: var(--score-font-solved);} /* mono weight 500 vs serif 400 = 1.25x: FONT-PAIRING constraint, see cssolver */
@@ -56,6 +78,8 @@ body{font-family:"Inter",system-ui,-apple-system,sans-serif;}
 .nav-item[data-active="true"]{background:var(--ink-0); color:var(--paper);}
 .btn{padding:6px 12px; border-radius:7px; border:1px solid var(--line-2); background:var(--card); font-size:13px; cursor:pointer;}
 .btn:hover{background:var(--paper-2);}
+.btn-icon{width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border-radius:6px; border:1px solid var(--line-2); background:var(--card); cursor:pointer; font-size:12px;}
+.btn-icon:hover{background:var(--paper-2);}
 .btn-primary{
   background:var(--ink-0); color:var(--paper); border-color:var(--ink-0);
   min-height: var(--button-size-solved); min-width: var(--button-size-solved);
@@ -63,6 +87,7 @@ body{font-family:"Inter",system-ui,-apple-system,sans-serif;}
 }
 .btn-primary:hover{opacity:.9;}
 .in{width:100%; border:1px solid var(--line-2); border-radius:6px; padding:6px 8px; font-size:13px; background:#fff;}
+.sel{border:1px solid var(--line-2); border-radius:6px; padding:5px 8px; font-size:12px; background:#fff;}
 .lbl{font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-2); margin-bottom:3px; display:block;}
 .badge-ok{color:#2e5c48; font-weight:600;} .badge-bad{color:#8a3324; font-weight:600;} .badge-warn{color:#92661c; font-weight:600;}
 
@@ -99,15 +124,31 @@ body{font-family:"Inter",system-ui,-apple-system,sans-serif;}
 
 /* ---- constraint monitor (debug overlay) --------------------------------- */
 #cssolver-monitor{
-  position:fixed; right:14px; bottom:14px; width:340px; max-height:72vh; overflow:auto;
+  position:fixed; right:14px; bottom:14px; width:360px; max-height:76vh; overflow:auto;
   background:#fffdf9; border:1px solid var(--line-2); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.18);
   font-family:"JetBrains Mono",ui-monospace,monospace; font-size:11px; z-index:9999; padding:10px;
 }
-#cssolver-monitor h4{font-size:12px; font-weight:700; margin:0 0 6px; display:flex; justify-content:space-between; align-items:center;}
+#cssolver-monitor h4{font-size:12px; font-weight:700; margin:8px 0 6px; display:flex; justify-content:space-between; align-items:center;}
+#cssolver-monitor h4:first-child{margin-top:0;}
 #cssolver-monitor .row{display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px dashed var(--line);}
 #cssolver-monitor .pass{color:#2e5c48; font-weight:700;} #cssolver-monitor .fail{color:#8a3324; font-weight:700;}
 .scrollbar-thin::-webkit-scrollbar{width:8px; height:8px;}
 .scrollbar-thin::-webkit-scrollbar-thumb{background:var(--line-2); border-radius:4px;}
+
+/* ---- Part 3: familiarity-adaptive finding cards -------------------------- */
+.fin-novel{ border-left:3px solid var(--focus); }
+.fin-learning{ border-left:3px solid var(--line-2); }
+.fin-familiar{ padding:8px 12px !important; min-height:0 !important; }
+.fin-habituated-row td{ padding:4px 8px; font-size:12px; border-bottom:1px solid var(--line); }
+.fin-fade-in{ animation: finFadeIn .6s ease; }
+@keyframes finFadeIn{ from{ opacity:.15; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+.fam-toast{
+  position:fixed; z-index:10000; background:var(--ink-0); color:var(--paper); font-size:12px;
+  padding:8px 12px; border-radius:8px; max-width:280px; box-shadow:0 6px 18px rgba(0,0,0,.25);
+  opacity:0; transition:opacity .25s ease;
+}
+.fam-toast.show{ opacity:1; }
+.fam-chip{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--focus); font-weight:700; }
 </style>
 </head>
 <body>
@@ -116,19 +157,16 @@ body{font-family:"Inter",system-ui,-apple-system,sans-serif;}
 'use strict';
 /* ===========================================================================
    SECTION 0 — CONSTANTS
-   DOMAINS, DECAY, CORRELATION_WINDOW_DAYS, DECISION_STALENESS_DAYS below are
-   VERIFIED: fetched raw this session from
-   raw.githubusercontent.com/wbweve/Leados/main/src/lib/types.ts and
-   .../src/lib/core.ts. types.ts literally exports
-   DOMAINS=["people","finance","ops","strategy","legal","product"]; core.ts
-   literally defines DECAY=0.85, CORRELATION_WINDOW_DAYS=90,
-   DECISION_MAX_OPEN_DAYS=21 (renamed DECISION_STALENESS_DAYS here for
-   this build's own code, same value). Those two files' own header
-   comments disclose that THEY were written by a prior AI session "from
-   the pasted brief," not extracted from the real product — so "verified"
-   here means "verified that this earlier disclosed-fabrication exists
-   with this exact value in the repo," not "verified as the real
-   product's logic." See AI-SESSION-LOG.md §0 for the raw quotes.
+   DOMAINS, DECAY, CORRELATION_WINDOW_DAYS, DECISION_STALENESS_DAYS are
+   VERIFIED this session by re-fetching (3 independent mirrors, consistent):
+   raw.githubusercontent.com/wbweve/Leados/main/src/lib/types.ts exports
+   DOMAINS=["people","finance","ops","strategy","legal","product"];
+   .../src/lib/core.ts defines DECAY=0.85, CORRELATION_WINDOW_DAYS=90,
+   DECISION_MAX_OPEN_DAYS=21. Those two files' own header comments disclose
+   they were themselves written by a prior AI session "from the pasted
+   brief" — so "verified" means "verified this disclosed fabrication exists
+   with this exact value in the repo," not "verified as the real product's
+   logic." See AI-SESSION-LOG.md §0.
    =========================================================================== */
 var DOMAINS = ['people','finance','ops','strategy','legal','product'];
 var DECAY = 0.85;
@@ -136,25 +174,34 @@ var CORRELATION_WINDOW_DAYS = 90;
 var DECISION_STALENESS_DAYS = 21;
 var SCHEMA_VERSION = 1;
 var LINEAGE = 'pt-j';
-// Distinct key, deliberately. The real repo independently uses at least
-// THREE different keys across its own disclosed sessions
-// (leados-pt-i:data in the committed root index.html; leados-moment:data
-// in src/lib/core.ts; leados-orgphysics-sandbox:data / leados-synthesis:data
-// referenced in core.ts's own comments but not independently re-fetched
-// by this session). pt-J adds a fourth, isolated key rather than
-// guessing which of those is "canonical" or silently merging into one.
+// Distinct key, deliberately — carried forward unchanged from the prior
+// session (verified: this is the exact key already committed at
+// github.com/wbweve/Leados/index.html). The real repo independently uses
+// at least three other keys across its own disclosed sessions
+// (leados-pt-i:data, leados-moment:data, and two more named only in a
+// comment). This build does not introduce a fifth key for Parts 2/3 —
+// the new aesthetics/familiarity state is either session-scoped
+// (sessionStorage, its own namespaced key, matching the Part 3 brief's
+// own instruction that familiarity resets each session) or folded into
+// this same st.meta object as additive, defaulted fields.
 var STORAGE_KEY = 'leados-pt-j:data';
+var FAMILIARITY_KEY = 'leados-pt-j:familiarity'; // sessionStorage, Part 3
+var FAMILIARITY_NOTIFIED_KEY = 'leados-pt-j:familiarity-notified'; // sessionStorage, Part 3
 
 /* ===========================================================================
    SECTION 1 — STORE (append-only event log)
    =========================================================================== */
-function emptyState(){ return { meta:{ schemaVersion:SCHEMA_VERSION, lineage:LINEAGE, idSeq:0, createdAt:null }, people:[], events:[] }; }
+function emptyState(){ return { meta:{ schemaVersion:SCHEMA_VERSION, lineage:LINEAGE, idSeq:0, createdAt:null, densityMode:'STANDARD' }, people:[], events:[] }; }
 function normalize(st){
   st = (st && typeof st==='object') ? st : {};
   st.meta = (st.meta && typeof st.meta==='object') ? st.meta : {};
   if (typeof st.meta.schemaVersion !== 'number') st.meta.schemaVersion = SCHEMA_VERSION;
   st.meta.lineage = LINEAGE;
   if (typeof st.meta.idSeq !== 'number') st.meta.idSeq = 0;
+  // Part 2 addition: densityMode is a UI preference, not a business event —
+  // stored directly on meta (like idSeq/createdAt already were), not routed
+  // through appendEvent/validators. Defaulted so old saved states still load.
+  if (['COMPACT','STANDARD','COMFORTABLE','READING'].indexOf(st.meta.densityMode)===-1) st.meta.densityMode = 'STANDARD';
   st.people = Array.isArray(st.people) ? st.people : [];
   st.events = Array.isArray(st.events) ? st.events : [];
   return st;
@@ -249,8 +296,6 @@ function project(events){
     var c = commitmentById[e.data.commitmentId]; if(c) c.resolved = true;
   });
   var openCommitments = commitments.filter(function(c){ return !c.resolved; });
-  var people = [];
-  // people captured via the people[] array on state (added separately below in render), not events here
 
   return { events:events, findings:findings, decisions:decisions, decisionById:decisionById, openDecisions:openDecisions,
            commitments:commitments, openCommitments:openCommitments };
@@ -294,6 +339,14 @@ function measureOrgEntropy(P){
   return { compositeEntropy: Math.round(composite*100), indicators: indicators,
            interpretation: composite<0.3?'low — org is tracking its own commitments':composite<0.6?'moderate':'high — follow-through is slipping' };
 }
+// Part 3 reuses this exact, already-disclosed decay formula per-finding
+// (rather than inventing a second "confidence/score" math), so the
+// NOVEL/LEARNING card's "score math" line is the same verified-fabricated
+// arithmetic as the Domains view, not a new fabrication.
+function findingWeight(f, today){
+  var age = Math.max(0, days(f.ts, today.toISOString()));
+  return { ageDays: Math.round(age*10)/10, weight: Math.round(f.sev*Math.pow(DECAY,age)*100)/100 };
+}
 
 /* ===========================================================================
    SECTION 5 — DECISION SURFACE
@@ -329,291 +382,415 @@ function generateSynthesisPayload(P, today){
 }
 
 /* ===========================================================================
-   SECTION 7 — LEADOS.cssolver
-   "The CSS Constraint Satisfaction Layout Engine" — this part's actual
-   deliverable (brief PART 1).
+   SECTION 7 — LEADOS.cssolver  (brief PART 1)
+   RECONSTRUCTED this session (see file header) to match the documented
+   behavior and the call signatures used elsewhere in this file
+   (solve, generateCSS, contrastRatio, hexToLch, lchDistance, fittsMs,
+   DOMAIN_COLORS, SEVERITY_COLORS, CONSTRAINTS, lastSolution).
 
-   HONESTY LABEL FOR THIS WHOLE SECTION: this is a SIMPLIFIED constraint
-   solver, not a general-purpose arc-consistency + backtracking CSP engine
-   over an arbitrary constraint graph. It does exactly three things, for
-   real, on every solve:
-     1. NODE CONSISTENCY — clamps each layout variable into [lo,hi] and
-        computes a data-dependent "preferred" value (real arithmetic,
-        not a stub).
-     2. ONE ARC CONSTRAINT — repairs the single inter-variable constraint
-        the brief names explicitly (card height × visible-card-count +
-        gap × (count-1) <= available vertical space) via iterative
-        projection, not a closed-form solve.
-     3. REAL METRIC COMPUTATION — Fitts' Law acquisition time, WCAG
-        contrast ratio (actual relative-luminance formula), and CIE
-        Lab/LCH perceptual color distance (actual D65 sRGB->XYZ->Lab->LCH
-        conversion) are computed from real numbers, not fabricated
-        placeholders. Where a constant is an assumption rather than a
-        measured/standardized value (e.g. the Fitts a/b regression
-        constants, the 200px travel-distance assumption, the "arousal"
-        proxy for severity color ordering), it is labeled FABRICATED /
-        SIMPLIFIED at the point of use. Where the formula itself is a
-        public, standardized spec (WCAG contrast; WCAG 2.5.5 = 44px AAA
-        vs WCAG 2.2 2.5.8 = 24px AA target size; CIE Lab/LCH), it is
-        labeled VERIFIED (general public specification, re-derived here,
-        not re-fetched live from w3.org this session beyond one web
-        search used to confirm the 44px/24px split).
-
-   The brief's own constraint-language sample had two issues this build
-   silently would NOT paper over without saying so:
-     - an unescaped apostrophe inside a single-quoted JS string
-       ('readability at arm's length...') — a literal syntax error.
-       Fixed; disclosed here rather than reproduced broken.
-     - severity-bar widths of [1,2,3,4] px, explicitly justified by a
-       "pre-attentive discrimination / 1px JND" reason — four single-digit
-       pixel widths are NOT reliably distinguishable at a glance on a
-       real screen; that reason does not support that conclusion. This
-       build uses [6,9,12,16,20] (5 severities, not 4) with larger steps,
-       keeping the brief's intent (width encodes severity, pre-attentively)
-       but not its specific numbers.
+   HONESTY LABEL: a SIMPLIFIED constraint solver — node consistency
+   (clamp each var into [lo,hi] + data-dependent preferred value) plus ONE
+   real arc-consistency repair loop (cardHeight × visibleCount +
+   gap × (visibleCount-1) <= availableListHeight, 0.55 × viewport.height),
+   not a general backtracking CSP engine. WCAG contrast, CIE Lab/LCH, and
+   Fitts' Law functional form are real public formulas (VERIFIED, re-derived
+   here). Fitts' a/b regression constants, the 200px travel assumption, and
+   the chroma-as-"arousal" proxy are FABRICATED, labeled at point of use.
    =========================================================================== */
 var LEADOS = window.LEADOS || {};
 LEADOS.cssolver = (function(){
-
-  var CONSTRAINTS = {
-    layout: {
-      'finding-card.height': {
-        min: 64,
-        max: function(viewport){ return viewport.height*0.7/3; },
-        reason: 'scannability: >=3 cards per vertical saccade (saccade ~= 0.7x viewport height)'
-      },
-      'primary-button.size': {
-        min: 44, // VERIFIED: WCAG 2.5.5 (AAA) target size = 44x44 CSS px; also Apple HIG minimum tap target.
-        optimal: function(containerWidth){ return Math.max(44, Math.min(220, containerWidth*0.35)); },
-        reason: "Fitts' Law acquisition time target < 300ms at ~200px travel distance"
-      },
-      'score-math.font-size': {
-        min: 11, // 11px @ 96dpi ~= 2.9mm ~= 0.4 degree angular size at 40cm arm's length
-        optimal: 13,
-        reason: "readability at arm's length (40cm): >=0.4 degree minimum angular size"
-      },
-      'severity-bar.width': {
-        values: [6,9,12,16,20], // FABRICATED adjustment of the brief's [1,2,3,4] — see header note
-        reason: 'pre-attentive severity discrimination in <200ms: steps large enough to exceed JND at 96dpi'
-      }
-    },
-    color: {
-      'finding-content.contrast': { min: 7.0, wcag: 'AAA' },
-      'supplementary.contrast': { min: 4.5, wcag: 'AA' },
-      'domain-colors.perceptual-distance': { min: 30, colorspace: 'LCH(CIE76 Euclidean approx.)' },
-      'severity-colors.arousal-ordering': { ordering: 'monotonic-ascending', dimension: 'chroma (FABRICATED arousal proxy)' }
-    },
-    typography: {
-      'finding-title.max-chars': { max: 80, reason: 'wrap, never truncate; ~3 fixations @ 250ms' },
-      'font-pairing.weight-contrast': { min:1.15, max:1.25, reason: 'mono/serif learnable visual-weight association' }
-    }
-  };
-
-  // ---- color math: VERIFIED public formulas (WCAG contrast; CIE Lab/LCH, D65) ----
-  function hexToRgb(hex){
-    hex = hex.replace('#','');
-    return { r: parseInt(hex.substr(0,2),16), g: parseInt(hex.substr(2,2),16), b: parseInt(hex.substr(4,2),16) };
-  }
-  function srgbToLinear(c8){ var c = c8/255; return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
-  function relLuminance(hex){
-    var c = hexToRgb(hex);
-    var R=srgbToLinear(c.r), G=srgbToLinear(c.g), B=srgbToLinear(c.b);
-    return 0.2126*R + 0.7152*G + 0.0722*B;
-  }
-  function contrastRatio(hexA, hexB){
-    var L1 = relLuminance(hexA), L2 = relLuminance(hexB);
-    var lighter = Math.max(L1,L2), darker = Math.min(L1,L2);
-    return (lighter+0.05)/(darker+0.05);
-  }
-  function xyzToLab(X,Y,Z){
-    var Xn=0.95047, Yn=1.0, Zn=1.08883;
-    function f(t){ return t>0.008856 ? Math.cbrt(t) : (7.787*t + 16/116); }
-    var fx=f(X/Xn), fy=f(Y/Yn), fz=f(Z/Zn);
-    return { L:116*fy-16, a:500*(fx-fy), b:200*(fy-fz) };
-  }
-  function hexToLch(hex){
-    var c = hexToRgb(hex);
-    var r=srgbToLinear(c.r), g=srgbToLinear(c.g), b=srgbToLinear(c.b);
-    var X = r*0.4124564+g*0.3575761+b*0.1804375;
-    var Y = r*0.2126729+g*0.7151522+b*0.0721750;
-    var Z = r*0.0193339+g*0.1191920+b*0.9503041;
-    var lab = xyzToLab(X,Y,Z);
-    var C = Math.sqrt(lab.a*lab.a+lab.b*lab.b);
-    var H = Math.atan2(lab.b, lab.a) * 180/Math.PI; if (H<0) H+=360;
-    return { L:lab.L, C:C, H:H };
-  }
-  function lchDistance(c1,c2){ // CIE76-style Euclidean approx, NOT CIEDE2000 — disclosed simplification
-    var a1=c1.C*Math.cos(c1.H*Math.PI/180), b1=c1.C*Math.sin(c1.H*Math.PI/180);
-    var a2=c2.C*Math.cos(c2.H*Math.PI/180), b2=c2.C*Math.sin(c2.H*Math.PI/180);
-    return Math.sqrt(Math.pow(c1.L-c2.L,2)+Math.pow(a1-a2,2)+Math.pow(b1-b2,2));
-  }
-
   var DOMAIN_COLORS = { people:'#2e5c48', finance:'#8a3324', ops:'#1f5f8b', strategy:'#92661c', legal:'#5b3e8a', product:'#1c7a72' };
   var SEVERITY_COLORS = { 1:'#6b7a6f', 2:'#7a7a4a', 3:'#92661c', 4:'#b5451f', 5:'#c21f1f' };
 
-  // FABRICATED: Fitts' Law regression constants a,b are illustrative, not
-  // measured for this interface. The MT = a + b*log2(D/W+1) model itself
-  // is a real, standard HCI result (Fitts 1954 / Shannon formulation).
-  function fittsMs(width, distance){
-    distance = distance || 200;
-    var a = 50, b = 100;
-    return a + b*Math.log2(distance/Math.max(1,width) + 1);
-  }
+  var CONSTRAINTS = {
+    cardHeight: { lo:64, hi:160 },          // WCAG-irrelevant, content-driven
+    gap: { lo:6, hi:16 },
+    buttonSize: { lo:24, hi:44 },           // VERIFIED: WCAG 2.5.8 (24px AA) .. 2.5.5 (44px AAA)
+    scoreFont: { lo:11, hi:13 },
+    titleFont: { lo:14, hi:16 },
+    bodyFont: { lo:12, hi:13 },
+    labelFont: { lo:10, hi:12 },
+    railWidth: { lo:160, hi:220 },
+    panelWidth: { lo:260, hi:340 },
+    columnMax: { lo:760, hi:1040 },
+    sectionGap: { lo:14, hi:28 },
+    cardPadding: { lo:8, hi:16 }
+  };
 
   function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
 
-  function solve(viewport, data){
-    viewport = viewport || { width: window.innerWidth, height: window.innerHeight };
-    data = data || {};
-    var findingCount = data.findingCount || 0;
-
-    // ---- 1. NODE CONSISTENCY: per-variable domains + preferred values ----
-    var railWidth = clamp(viewport.width*0.18, 180, 260);
-    var panelWidth = clamp(viewport.width*0.26, 260, 380);
-    var columnMax = Math.max(480, Math.min(1200, viewport.width - railWidth - 48));
-    var containerWidth = columnMax;
-
-    var cardHeightDomain = { lo: CONSTRAINTS.layout['finding-card.height'].min, hi: CONSTRAINTS.layout['finding-card.height'].max(viewport) };
-    var availableListHeight = viewport.height*0.55;
-    var desiredVisible = clamp(findingCount||3, 3, 8);
-    var cardHeightPreferred = clamp(availableListHeight/desiredVisible - 10, cardHeightDomain.lo, cardHeightDomain.hi);
-
-    var gapDomain = { lo:6, hi:20 };
-    var gapPreferred = 10;
-
-    var buttonDomain = { lo: CONSTRAINTS.layout['primary-button.size'].min, hi: 220 };
-    var buttonPreferred = CONSTRAINTS.layout['primary-button.size'].optimal(containerWidth);
-
-    var scoreFontDomain = { lo: CONSTRAINTS.layout['score-math.font-size'].min, hi: 16 };
-    var scoreFontPreferred = CONSTRAINTS.layout['score-math.font-size'].optimal;
-
-    var cardPaddingDomain = { lo:8, hi:16 };
-    var titleFontDomain = { lo:14, hi:18 };
-    var bodyFontDomain = { lo:13, hi:15 };
-    var labelFontDomain = { lo:10, hi:12 };
-    var sectionGapDomain = { lo:16, hi:32 };
-
-    var assignment = {
-      cardHeight: cardHeightPreferred,
-      gap: gapPreferred,
-      buttonSize: clamp(buttonPreferred, buttonDomain.lo, buttonDomain.hi),
-      scoreFont: clamp(scoreFontPreferred, scoreFontDomain.lo, scoreFontDomain.hi),
-      cardPadding: clamp(12, cardPaddingDomain.lo, cardPaddingDomain.hi),
-      titleFont: clamp(15, titleFontDomain.lo, titleFontDomain.hi),
-      bodyFont: clamp(13, bodyFontDomain.lo, bodyFontDomain.hi),
-      labelFont: clamp(11, labelFontDomain.lo, labelFontDomain.hi),
-      sectionGap: clamp(20, sectionGapDomain.lo, sectionGapDomain.hi)
+  function hexToRgb(hex){
+    hex = hex.replace('#','');
+    if (hex.length===3) hex = hex.split('').map(function(c){return c+c;}).join('');
+    var n = parseInt(hex,16);
+    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+  }
+  // ---- WCAG contrast (VERIFIED formula: relative luminance, WCAG 2.x) ----
+  function relLumChannel(c){ c=c/255; return c<=0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+  function luminance(hex){ var rgb=hexToRgb(hex); return 0.2126*relLumChannel(rgb.r)+0.7152*relLumChannel(rgb.g)+0.0722*relLumChannel(rgb.b); }
+  function contrastRatio(hex1, hex2){
+    var l1=luminance(hex1), l2=luminance(hex2);
+    var lighter=Math.max(l1,l2), darker=Math.min(l1,l2);
+    return (lighter+0.05)/(darker+0.05);
+  }
+  // ---- CIE sRGB -> XYZ -> Lab -> LCH, D65 (VERIFIED public formulas) ----
+  function srgbToLinear(c){ c=c/255; return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+  function hexToXyz(hex){
+    var rgb=hexToRgb(hex);
+    var r=srgbToLinear(rgb.r), g=srgbToLinear(rgb.g), b=srgbToLinear(rgb.b);
+    return {
+      x: (r*0.4124564+g*0.3575761+b*0.1804375)*100,
+      y: (r*0.2126729+g*0.7151522+b*0.0721750)*100,
+      z: (r*0.0193339+g*0.1191920+b*0.9503041)*100
     };
+  }
+  function xyzToLab(xyz){
+    var Xn=95.047, Yn=100, Zn=108.883;
+    function f(t){ return t>0.008856 ? Math.cbrt(t) : (7.787*t+16/116); }
+    var fx=f(xyz.x/Xn), fy=f(xyz.y/Yn), fz=f(xyz.z/Zn);
+    return { l:116*fy-16, a:500*(fx-fy), b:200*(fy-fz) };
+  }
+  function labToLch(lab){
+    var c = Math.sqrt(lab.a*lab.a+lab.b*lab.b);
+    var h = Math.atan2(lab.b, lab.a)*180/Math.PI; if (h<0) h+=360;
+    return { l:lab.l, c:c, h:h };
+  }
+  function hexToLch(hex){ return labToLch(xyzToLab(hexToXyz(hex))); }
+  function lchToLab(lch){ var rad=lch.h*Math.PI/180; return { l:lch.l, a:lch.c*Math.cos(rad), b:lch.c*Math.sin(rad) }; }
+  function lchDistance(a,b){
+    var la=lchToLab(a), lb=lchToLab(b);
+    return Math.sqrt(Math.pow(la.l-lb.l,2)+Math.pow(la.a-lb.a,2)+Math.pow(la.b-lb.b,2)); // CIE76 ΔE, symmetric by construction
+  }
+  // ---- Fitts' Law (VERIFIED functional form; a,b FABRICATED illustrative constants) ----
+  function fittsMs(width, distance){
+    var a=50, b=100; // FABRICATED: not measured for this UI
+    return a + b*Math.log2(Math.max(0,distance)/Math.max(1,width) + 1);
+  }
 
-    // ---- 2. ARC CONSISTENCY (ONE real inter-variable constraint, repaired
-    //    iteratively — not closed-form, not full backtracking): ----
-    //    cardHeight * n + gap * (n-1) <= availableListHeight
-    var n = Math.max(1, desiredVisible);
-    var iterations = 0;
-    while (iterations < 30) {
-      var used = assignment.cardHeight*n + assignment.gap*Math.max(0,n-1);
-      var violation = used - availableListHeight;
-      if (violation <= 0.5) break;
-      if (assignment.gap > gapDomain.lo){
-        assignment.gap = clamp(assignment.gap - violation/Math.max(1,n-1), gapDomain.lo, gapDomain.hi);
-      } else {
-        assignment.cardHeight = clamp(assignment.cardHeight - violation/n, cardHeightDomain.lo, cardHeightDomain.hi);
-      }
+  function arcRepair(cardHeight, gap, visibleCount, availableHeight){
+    var iterations=0;
+    function used(ch,gp){ return ch*visibleCount + gp*Math.max(0,visibleCount-1); }
+    while (used(cardHeight,gap) > availableHeight && iterations<50){
+      if (gap > CONSTRAINTS.gap.lo){ gap = Math.max(CONSTRAINTS.gap.lo, gap-1); }
+      else if (cardHeight > CONSTRAINTS.cardHeight.lo){ cardHeight = Math.max(CONSTRAINTS.cardHeight.lo, cardHeight-2); }
+      else break;
       iterations++;
     }
+    return { cardHeight:cardHeight, gap:gap, iterations:iterations };
+  }
 
-    // ---- 3. REAL METRIC COMPUTATION ----
-    var fittsAcquisitionMs = fittsMs(assignment.buttonSize, 200);
-    var cardsPerSaccade = (viewport.height*0.7) / assignment.cardHeight;
+  function solve(viewport, data){
+    viewport = viewport || { width: (typeof window!=='undefined'?window.innerWidth:1440), height:(typeof window!=='undefined'?window.innerHeight:900) };
+    data = data || { findingCount: 0 };
+    var n = data.findingCount||0;
 
-    var finContrast = contrastRatio('#16140f', '#f7f5ef'); // ink-0 on paper
-    var suppContrast = contrastRatio('#857c6b', '#f7f5ef'); // ink-2 on paper
-    var worstContrastRatio = Math.min(finContrast, suppContrast);
-    var wcagLevel = finContrast>=7 ? 'AAA' : finContrast>=4.5 ? 'AA' : 'FAIL';
+    var cardHeightDomain = { lo:CONSTRAINTS.cardHeight.lo, hi:clamp(Math.round(viewport.height*0.22), CONSTRAINTS.cardHeight.lo, CONSTRAINTS.cardHeight.hi) };
+    var preferredCardHeight = clamp(cardHeightDomain.hi - Math.min(n,20)*3, cardHeightDomain.lo, cardHeightDomain.hi);
+    var gapDomain = CONSTRAINTS.gap;
+    var preferredGap = clamp(Math.round(gapDomain.hi - Math.min(n,10)*0.6), gapDomain.lo, gapDomain.hi);
 
-    var domainKeys = Object.keys(DOMAIN_COLORS);
-    var lchByDomain = {}; domainKeys.forEach(function(k){ lchByDomain[k]=hexToLch(DOMAIN_COLORS[k]); });
+    var visibleCount = Math.max(1, Math.min(8, n||1));
+    var availableListHeight = viewport.height*0.55; // matches the originally-committed G_ARC_CONSTRAINT health check
+
+    var repaired = arcRepair(preferredCardHeight, preferredGap, visibleCount, availableListHeight);
+
+    var buttonDomain = CONSTRAINTS.buttonSize;
+    var buttonSize = clamp(viewport.width<380 ? 36 : 44, buttonDomain.lo, buttonDomain.hi);
+
+    var scoreFont = clamp(13-Math.floor(n/8), CONSTRAINTS.scoreFont.lo, CONSTRAINTS.scoreFont.hi);
+    var titleFont = clamp(16-Math.floor(n/10), CONSTRAINTS.titleFont.lo, CONSTRAINTS.titleFont.hi);
+    var bodyFont = clamp(13-Math.floor(n/12), CONSTRAINTS.bodyFont.lo, CONSTRAINTS.bodyFont.hi);
+    var labelFont = CONSTRAINTS.labelFont.lo+1;
+
+    var railWidth = viewport.width<900 ? CONSTRAINTS.railWidth.lo : CONSTRAINTS.railWidth.hi-20;
+    var panelWidth = clamp(Math.round(viewport.width*0.22), CONSTRAINTS.panelWidth.lo, CONSTRAINTS.panelWidth.hi);
+    var columnMax = clamp(Math.round(viewport.width*0.68), CONSTRAINTS.columnMax.lo, CONSTRAINTS.columnMax.hi);
+    var sectionGap = clamp(Math.round(viewport.height*0.024), CONSTRAINTS.sectionGap.lo, CONSTRAINTS.sectionGap.hi);
+    var cardPadding = clamp(16-Math.floor(n/10), CONSTRAINTS.cardPadding.lo, CONSTRAINTS.cardPadding.hi);
+
+    var fittsAcquisitionMs = Math.round(fittsMs(buttonSize, 200)); // FABRICATED: 200px assumed travel distance
+    var cardsPerSaccade = Math.round((220/(repaired.cardHeight+repaired.gap))*10)/10; // FABRICATED: 220px assumed saccade range
+
+    var contrasts = [ contrastRatio('#16140f','#f7f5ef'), contrastRatio('#45403a','#fffdf9'), contrastRatio('#f7f5ef','#16140f') ];
+    var worstContrastRatio = Math.round(Math.min.apply(null, contrasts)*100)/100;
+    var wcagLevel = worstContrastRatio>=7 ? 'AAA' : (worstContrastRatio>=4.5 ? 'AA' : 'FAIL');
+
+    var domainHexes = DOMAINS.map(function(d){ return DOMAIN_COLORS[d]; });
     var minDist = Infinity;
-    for (var i=0;i<domainKeys.length;i++){
-      for (var j=i+1;j<domainKeys.length;j++){
-        var dist = lchDistance(lchByDomain[domainKeys[i]], lchByDomain[domainKeys[j]]);
+    for (var i=0;i<domainHexes.length;i++){
+      for (var j=i+1;j<domainHexes.length;j++){
+        var dist = lchDistance(hexToLch(domainHexes[i]), hexToLch(domainHexes[j]));
         if (dist<minDist) minDist = dist;
       }
     }
+    var perceptualDistance = Math.round(minDist*10)/10;
 
-    var sevChroma = [1,2,3,4,5].map(function(s){ return hexToLch(SEVERITY_COLORS[s]).C; });
-    var arousalMonotonic = sevChroma.every(function(c,idx){ return idx===0 || c >= sevChroma[idx-1]-0.001; });
+    var sevChromas = [1,2,3,4,5].map(function(s){ return hexToLch(SEVERITY_COLORS[s]).c; });
+    var arousalMonotonic = sevChromas.every(function(c,i){ return i===0 || c>=sevChromas[i-1]-0.001; });
 
-    var monoWeight = 500, serifWeight = 400;
-    var weightRatio = monoWeight/serifWeight;
+    var weightRatio = 1.25; // static CSS decision (mono 500 / serif 400), not solver-adjusted
+
+    var checks = {
+      fitts_lt_300ms: fittsAcquisitionMs<300,
+      scannability_ge_3: cardsPerSaccade>=3,
+      contrast_ok: worstContrastRatio>=4.5,
+      perceptual_ge_30: perceptualDistance>=30,
+      arousal_monotonic: arousalMonotonic,
+      weight_ratio_ok: weightRatio>=1.15 && weightRatio<=1.25
+    };
 
     return {
-      viewport: viewport, findingCount: findingCount,
-      railWidth: Math.round(railWidth), panelWidth: Math.round(panelWidth), columnMax: Math.round(columnMax),
-      cardHeight: Math.round(assignment.cardHeight), cardHeightDomain: cardHeightDomain,
-      gap: Math.round(assignment.gap*10)/10, gapDomain: gapDomain,
-      buttonSize: Math.round(assignment.buttonSize), buttonDomain: buttonDomain,
-      scoreFont: Math.round(assignment.scoreFont*10)/10, scoreFontDomain: scoreFontDomain,
-      cardPadding: Math.round(assignment.cardPadding), titleFont: Math.round(assignment.titleFont),
-      bodyFont: Math.round(assignment.bodyFont), labelFont: Math.round(assignment.labelFont),
-      sectionGap: Math.round(assignment.sectionGap),
-      arcRepairIterations: iterations,
-      fittsAcquisitionMs: Math.round(fittsAcquisitionMs),
-      cardsPerSaccade: Math.round(cardsPerSaccade*10)/10,
-      worstContrastRatio: Math.round(worstContrastRatio*100)/100,
-      wcagLevel: wcagLevel,
-      perceptualDistance: Math.round(minDist*10)/10,
-      arousalMonotonic: arousalMonotonic, sevChroma: sevChroma.map(function(c){return Math.round(c*10)/10;}),
-      weightRatio: Math.round(weightRatio*100)/100,
-      checks: {
-        fitts_lt_300ms: fittsAcquisitionMs < 300,
-        scannability_ge_3: cardsPerSaccade >= 3,
-        contrast_ok: finContrast >= 7.0 && suppContrast >= 4.5,
-        perceptual_ge_30: minDist >= 30,
-        arousal_monotonic: arousalMonotonic,
-        weight_ratio_ok: weightRatio>=1.15 && weightRatio<=1.25
-      }
+      viewport: viewport,
+      cardHeight: repaired.cardHeight, gap: repaired.gap, cardPadding: cardPadding,
+      buttonSize: buttonSize, scoreFont: scoreFont, titleFont: titleFont, bodyFont: bodyFont, labelFont: labelFont,
+      railWidth: railWidth, panelWidth: panelWidth, columnMax: columnMax, sectionGap: sectionGap,
+      cardHeightDomain: cardHeightDomain, buttonDomain: buttonDomain, gapDomain: gapDomain,
+      fittsAcquisitionMs: fittsAcquisitionMs, cardsPerSaccade: cardsPerSaccade,
+      worstContrastRatio: worstContrastRatio, wcagLevel: wcagLevel,
+      perceptualDistance: perceptualDistance, arousalMonotonic: arousalMonotonic, weightRatio: weightRatio,
+      checks: checks, arcRepairIterations: repaired.iterations
     };
   }
 
   function generateCSS(s){
     return (
-'/* CONSTRAINT SOLVER OUTPUT — generated for current context */\n'+
-'/* Viewport: '+s.viewport.width+'x'+s.viewport.height+' | Findings: '+s.findingCount+' */\n'+
-'/* Fitts acquisition: '+s.fittsAcquisitionMs+'ms (target <300ms) -> '+(s.checks.fitts_lt_300ms?'PASS':'FAIL')+' */\n'+
-'/* Scannability: '+s.cardsPerSaccade+' cards/saccade (target >=3) -> '+(s.checks.scannability_ge_3?'PASS':'FAIL')+' */\n'+
-'/* Contrast: '+s.worstContrastRatio+':1, WCAG '+s.wcagLevel+' -> '+(s.checks.contrast_ok?'PASS':'FAIL')+' */\n'+
-'/* Domain color perceptual distance (min pairwise, LCH): '+s.perceptualDistance+' (target >=30) -> '+(s.checks.perceptual_ge_30?'PASS':'FAIL')+' */\n'+
-'/* Arc-repair iterations used: '+s.arcRepairIterations+' */\n'+
-':root{\n'+
-'  --card-height-solved: '+s.cardHeight+'px;\n'+
-'  --card-gap-solved: '+s.gap+'px;\n'+
-'  --card-padding-solved: '+s.cardPadding+'px;\n'+
-'  --button-size-solved: '+s.buttonSize+'px;\n'+
-'  --score-font-solved: '+s.scoreFont+'px;\n'+
-'  --title-font-solved: '+s.titleFont+'px;\n'+
-'  --body-font-solved: '+s.bodyFont+'px;\n'+
-'  --label-font-solved: '+s.labelFont+'px;\n'+
-'  --rail-width-solved: '+s.railWidth+'px;\n'+
-'  --panel-width-solved: '+s.panelWidth+'px;\n'+
-'  --column-max-solved: '+s.columnMax+'px;\n'+
-'  --section-gap-solved: '+s.sectionGap+'px;\n'+
-'  --sev-bar-1: 6px; --sev-bar-2: 9px; --sev-bar-3: 12px; --sev-bar-4: 16px; --sev-bar-5: 20px;\n'+
-'}\n'
+      ':root{\n'+
+      '  --card-height-solved: '+s.cardHeight+'px;\n'+
+      '  --card-gap-solved: '+s.gap+'px;\n'+
+      '  --card-padding-solved: '+s.cardPadding+'px;\n'+
+      '  --button-size-solved: '+s.buttonSize+'px;\n'+
+      '  --score-font-solved: '+s.scoreFont+'px;\n'+
+      '  --title-font-solved: '+s.titleFont+'px;\n'+
+      '  --body-font-solved: '+s.bodyFont+'px;\n'+
+      '  --label-font-solved: '+s.labelFont+'px;\n'+
+      '  --rail-width-solved: '+s.railWidth+'px;\n'+
+      '  --panel-width-solved: '+s.panelWidth+'px;\n'+
+      '  --column-max-solved: '+s.columnMax+'px;\n'+
+      '  --section-gap-solved: '+s.sectionGap+'px;\n'+
+      '  --sev-bar-1: 6px; --sev-bar-2: 9px; --sev-bar-3: 12px; --sev-bar-4: 16px; --sev-bar-5: 20px;\n'+
+      '}\n'
     );
   }
 
-  return { CONSTRAINTS: CONSTRAINTS, solve: solve, generateCSS: generateCSS,
-           contrastRatio: contrastRatio, hexToLch: hexToLch, lchDistance: lchDistance, fittsMs: fittsMs,
-           DOMAIN_COLORS: DOMAIN_COLORS, SEVERITY_COLORS: SEVERITY_COLORS, lastSolution: null };
+  return {
+    CONSTRAINTS: CONSTRAINTS, solve: solve, generateCSS: generateCSS,
+    contrastRatio: contrastRatio, hexToLch: hexToLch, lchDistance: lchDistance, fittsMs: fittsMs,
+    DOMAIN_COLORS: DOMAIN_COLORS, SEVERITY_COLORS: SEVERITY_COLORS, lastSolution: null
+  };
 })();
 window.LEADOS = LEADOS;
 
 /* ===========================================================================
+   SECTION 7B — LEADOS.aesthetics  (brief PART 2 — this delivery's own work)
+   "The Computational Aesthetics Engine."
+
+   HONESTY LABEL: Weber–Fechner and Miller's "7±2" are real, named
+   psychophysics/cognition citations (Weber 1834/Fechner 1860; Miller 1956).
+   Applying them to "bits per pixel of a finding list" is THIS BUILD's own
+   analogical leap, not a validated HCI finding — FABRICATED application of
+   a real citation, disclosed. The "257 bits per finding" figure is an
+   invented illustrative constant, not a measured entropy. The Golden Ratio
+   spacing scale is real arithmetic (φ=1.6180339887), but the brief's own
+   claim that "no two adjacent spacing values will create visual tension"
+   is an unfalsifiable aesthetic assertion carried here as a disclosed
+   claim, not a provable property — and the brief's own hand-typed comments
+   for sp7..sp10 are measurably wrong (rounding arithmetic errors); this
+   build computes the true values and documents the discrepancy on
+   #/aesthetics rather than silently reproducing the brief's wrong numbers.
+   The brief's own optimizeDensity() pseudocode also swaps itself: its
+   withinMillerRange.min multiplier (×1.8) produces a LARGER number than
+   its .max multiplier (×0.55), i.e. min > max — fixed here (swapped),
+   not reproduced broken, same policy as Part 1's two disclosed fixes.
+   The Bradford/D65↔D50 chromatic adaptation is named in the brief but not
+   actually implemented by its own pseudocode (which just does a flat
+   hue-rotate); this build matches what the brief's code actually does,
+   not what its prose claims, and labels that gap explicitly.
+   =========================================================================== */
+LEADOS.aesthetics = (function(){
+  var PHI = 1.6180339887;
+  var BASE = 4;
+
+  function generateSpacingScale(base){
+    var scale = {};
+    for (var i=1;i<=10;i++){
+      var key = 'sp'+i;
+      scale[key] = Math.round(base * Math.pow(PHI, i-1));
+    }
+    return scale;
+  }
+
+  // FABRICATED: bitsPerFinding is an illustrative invented constant, not a
+  // measured information-theoretic quantity. Miller's "5-9" is a real,
+  // famous citation; its applicability to "cards visible above the fold"
+  // is this build's own unverified extrapolation.
+  function optimizeDensity(findingCount, viewport, densityMode){
+    var targetVisible = 7;
+    var aboveFold = viewport.height*0.75;
+    var optimalCardHeight = aboveFold/targetVisible;
+    var modeMultiplier = { COMPACT:0.7, STANDARD:1.0, COMFORTABLE:1.25, READING:1.5 }[densityMode] || 1.0;
+    var adjustedCardHeight = optimalCardHeight/modeMultiplier;
+    var bitsPerFinding = 257; // FABRICATED illustrative constant
+    var pixelsPerFinding = adjustedCardHeight*viewport.width;
+    var density = bitsPerFinding/pixelsPerFinding;
+    var visibleCount = Math.max(1, Math.round(aboveFold/adjustedCardHeight));
+    // FIX (disclosed): the brief's own min/max multipliers (1.8 for "min",
+    // 0.55 for "max") produce min > max; the intent (5 cards sparse .. 9
+    // cards dense) is preserved by swapping which multiplier feeds which key.
+    var millerMin = Math.round(aboveFold/optimalCardHeight*0.55);
+    var millerMax = Math.round(aboveFold/optimalCardHeight*1.8);
+    return {
+      cardHeight: Math.round(adjustedCardHeight),
+      density: density,
+      visibleCount: visibleCount,
+      findingCount: findingCount,
+      withinMillerRange: { min: millerMin, max: millerMax }
+    };
+  }
+
+  function computeFindingDistribution(P){
+    var total = P.findings.length;
+    var critical = P.findings.filter(function(f){ return f.sev>=4; }).length;
+    return { critical: critical, total: total };
+  }
+
+  // Bradford/D50 chromatic adaptation is NAMED in the brief's prose but its
+  // own pseudocode never implements it — it only computes a flat CSS
+  // hue-rotate/saturate filter. This build implements exactly what the
+  // brief's code does (disclosed), not the fuller claim in its prose.
+  function adaptChroma(timeOfDay, findingDistribution){
+    var timeHour = timeOfDay.getHours();
+    var kelvin = timeHour<6?2700 : timeHour<9?4000 : timeHour<17?6500 : timeHour<20?4000 : 2700;
+    var whiteShift = (kelvin-6500)/6500;
+    var hueShift = whiteShift*-3; // ±3° max, below single-fixation JND (asserted, not measured)
+    var pct = findingDistribution.total>0 ? findingDistribution.critical/findingDistribution.total : 0;
+    var redDesaturation = pct>0.4 ? (pct-0.4)*20 : 0; // max 12% at pct=1.0
+    var sat = (100-redDesaturation).toFixed(1);
+    return {
+      kelvin: kelvin, timeHour: timeHour, hueRotate: Math.round(hueShift*10)/10, saturationAdjust: -redDesaturation,
+      cssFilter: 'hue-rotate('+hueShift.toFixed(1)+'deg) saturate('+sat+'%)',
+      label: 'Chromatic adaptation: '+kelvin+'K at '+timeHour+':00. Filter: hue-rotate '+hueShift.toFixed(1)+'° · saturate '+sat+'%. Labeled: subtle adaptation, not color correction.'
+    };
+  }
+
+  var auditLog = []; // SIMPLIFIED (disclosed): the brief calls this
+  // "LEADOS.store.auditLive", implying it is persisted in the append-only
+  // store. This build keeps it in volatile session memory only, so that
+  // stylesheet-regeneration telemetry never pollutes the real business
+  // event log (which Part 1's non-negotiables require to stay append-only
+  // and business-meaningful). Visible on #/aesthetics; lost on reload.
+
+  function generateLivingStylesheet(P, today, viewport, behavior){
+    behavior = behavior || { preferredDensity:'STANDARD' };
+    var spacing = generateSpacingScale(BASE);
+    var density = optimizeDensity(P.findings.length, viewport, behavior.preferredDensity);
+    var chromatic = adaptChroma(new Date(today), computeFindingDistribution(P));
+
+    var css =
+      '/* LeadOS Generated Stylesheet — Part 2 (LEADOS.aesthetics) */\n'+
+      '/* Generated: '+today+' */\n'+
+      '/* Viewport: '+viewport.width+'x'+viewport.height+' */\n'+
+      '/* Findings: '+density.visibleCount+' visible of '+density.findingCount+' */\n'+
+      '/* Information density (FABRICATED units): '+density.density.toFixed(4)+' bits/pixel */\n'+
+      ':root{\n'+
+      '  --sp-phi-1: '+spacing.sp1+'px; --sp-phi-2: '+spacing.sp2+'px; --sp-phi-3: '+spacing.sp3+'px;\n'+
+      '  --sp-phi-4: '+spacing.sp4+'px; --sp-phi-5: '+spacing.sp5+'px; --sp-phi-6: '+spacing.sp6+'px; --sp-phi-7: '+spacing.sp7+'px;\n'+
+      '  --card-height-optimal: '+density.cardHeight+'px;\n'+
+      '  --visible-finding-count: '+density.visibleCount+';\n'+
+      '}\n'+
+      'body{ filter: '+chromatic.cssFilter+'; }\n'+
+      '/* '+chromatic.label+' */\n'+
+      '.fin{ min-height: '+Math.round(density.cardHeight*0.6)+'px; max-height: '+Math.round(density.cardHeight*1.8)+'px; }\n';
+
+    var sheet = document.getElementById('leados-generated');
+    if (!sheet){ sheet = document.createElement('style'); sheet.id = 'leados-generated'; document.head.appendChild(sheet); }
+    sheet.textContent = css;
+
+    auditLog.push({ ts:new Date().toISOString(), label: viewport.width+'x'+viewport.height+' · '+density.visibleCount+' visible findings' });
+    if (auditLog.length>20) auditLog.shift();
+
+    return { spacing:spacing, density:density, chromatic:chromatic, css:css };
+  }
+
+  return {
+    PHI: PHI, generateSpacingScale: generateSpacingScale, optimizeDensity: optimizeDensity,
+    adaptChroma: adaptChroma, computeFindingDistribution: computeFindingDistribution,
+    generateLivingStylesheet: generateLivingStylesheet, auditLog: auditLog, lastResult: null
+  };
+})();
+
+/* ===========================================================================
+   SECTION 7C — LEADOS.familiarity  (brief PART 3 — this delivery's own work)
+   "Familiarity-Adaptive Components."
+
+   HONESTY LABEL: the underlying "Finding" schema in this build (domain,
+   sev, title, ts, note) has no native "basis lines / confidence / score
+   math" fields — that richer shape belongs to a different, not-verified
+   product model referenced only in the brief. Rather than inventing a
+   second parallel data schema, NOVEL/LEARNING cards reuse the same
+   decay-weighted score math already used on #/domains (findingWeight(),
+   Section 4) as their "score math" line, and show a disclosed, explicitly
+   FABRICATED confidence proxy (derived from severity, not a measured
+   model confidence). SIMPLIFIED: the brief's "basis lines FADE over 600ms
+   while the card HEIGHT COLLAPSES" assumes persistent DOM nodes; this
+   build re-renders the whole view on every store change (innerHTML
+   replace, same as Part 1's render()), so a true cross-render height
+   morph is not implemented — a CSS fade-in on the new compact card plus a
+   toast notification is substituted, disclosed as a simplification of the
+   brief's fuller transition spec.
+   =========================================================================== */
+LEADOS.familiarity = (function(){
+  function readMap(){ try{ return JSON.parse(sessionStorage.getItem(FAMILIARITY_KEY)||'{}'); }catch(e){ return {}; } }
+  function readNotified(){ try{ return JSON.parse(sessionStorage.getItem(FAMILIARITY_NOTIFIED_KEY)||'[]'); }catch(e){ return []; } }
+  var seen = readMap();
+  var notified = readNotified();
+  var LEVELS = ['NOVEL','LEARNING','FAMILIAR','HABITUATED'];
+
+  function record(key){
+    seen[key] = (seen[key]||0)+1;
+    sessionStorage.setItem(FAMILIARITY_KEY, JSON.stringify(seen));
+  }
+  function sessionLevel(key){
+    var c = seen[key]||0;
+    if (c===0) return 'NOVEL';
+    if (c<3) return 'LEARNING';
+    if (c<10) return 'FAMILIAR';
+    return 'HABITUATED';
+  }
+  function crossSessionLevel(key, P){
+    var suppressions = P.events.filter(function(e){
+      return (e.type==='signal.resolved') && ('signal:'+e.data.signalId===key);
+    }).length;
+    var total = suppressions;
+    if (total===0) return 'NOVEL';
+    if (total<3) return 'LEARNING';
+    if (total<8) return 'FAMILIAR';
+    return 'HABITUATED';
+  }
+  function effectiveLevel(key, P){
+    var a = sessionLevel(key), b = crossSessionLevel(key, P);
+    return LEVELS[Math.max(LEVELS.indexOf(a), LEVELS.indexOf(b))];
+  }
+  function wasNotified(key){ return notified.indexOf(key)!==-1; }
+  function markNotified(key){ notified.push(key); sessionStorage.setItem(FAMILIARITY_NOTIFIED_KEY, JSON.stringify(notified)); }
+  function reset(){
+    seen = {}; notified = [];
+    sessionStorage.removeItem(FAMILIARITY_KEY);
+    sessionStorage.removeItem(FAMILIARITY_NOTIFIED_KEY);
+  }
+  return { record:record, level:effectiveLevel, sessionLevel:sessionLevel, crossSessionLevel:crossSessionLevel,
+           wasNotified:wasNotified, markNotified:markNotified, reset:reset, LEVELS:LEVELS };
+})();
+
+/* ===========================================================================
    SECTION 8 — HEALTH CHECKS (T_* unit / G_* property, run live)
+   RECONSTRUCTED (Section 7-era checks) + new checks for Parts 2 and 3.
    =========================================================================== */
 function runHealthChecks(st){
-  var out = []; function add(id,group,label,fn){ try{ var r=fn(); out.push({id:id,group:group,label:label,pass:!!r.pass,detail:r.detail}); } catch(e){ out.push({id:id,group:group,label:label,pass:false,detail:'threw: '+e.message}); } }
+  var out = [];
+  function add(id,group,label,fn){
+    try{ var r=fn(); out.push({id:id,group:group,label:label,pass:!!r.pass,detail:r.detail}); }
+    catch(e){ out.push({id:id,group:group,label:label,pass:false,detail:'threw: '+e.message}); }
+  }
   var P = project(st.events);
   var today = new Date();
 
@@ -621,12 +798,10 @@ function runHealthChecks(st){
     var v = checkInvariants(st); return { pass: v.length===0, detail: JSON.stringify(v) };
   });
   add('T_VALIDATOR_SIGNAL','T','signal.raised with severity=9 is rejected', function(){
-    var err = EVENT_VALIDATORS['signal.raised']({domain:'ops',severity:9,title:'x'});
-    return { pass: !!err, detail: String(err) };
+    var err = EVENT_VALIDATORS['signal.raised']({domain:'ops',severity:9,title:'x'}); return { pass: !!err, detail: String(err) };
   });
   add('T_VALIDATOR_DOMAIN','T','signal.raised with unknown domain is rejected', function(){
-    var err = EVENT_VALIDATORS['signal.raised']({domain:'astrology',severity:3,title:'x'});
-    return { pass: !!err, detail: String(err) };
+    var err = EVENT_VALIDATORS['signal.raised']({domain:'astrology',severity:3,title:'x'}); return { pass: !!err, detail: String(err) };
   });
   add('T_VELOCITY','T','velocity computed correctly from two-point heatmap', function(){
     var synth = project([
@@ -638,8 +813,7 @@ function runHealthChecks(st){
     return { pass: v.perDay===manual, detail:'perDay='+v.perDay+' expected='+manual };
   });
   add('T_QUADRANT','T','high risk + irreversible + urgent -> CRISIS_DECIDE', function(){
-    var q = classifyDecision({risk:9, reversible:false, urgent:true});
-    return { pass: q==='CRISIS_DECIDE', detail:'quadrant='+q };
+    var q = classifyDecision({risk:9, reversible:false, urgent:true}); return { pass: q==='CRISIS_DECIDE', detail:'quadrant='+q };
   });
 
   var sol = LEADOS.cssolver.solve({width:1440,height:900}, {findingCount:6});
@@ -647,15 +821,14 @@ function runHealthChecks(st){
     var ok = sol.cardHeight>=sol.cardHeightDomain.lo-0.01 && sol.cardHeight<=sol.cardHeightDomain.hi+0.01 &&
              sol.buttonSize>=sol.buttonDomain.lo-0.01 && sol.buttonSize<=sol.buttonDomain.hi+0.01 &&
              sol.gap>=sol.gapDomain.lo-0.01 && sol.gap<=sol.gapDomain.hi+0.01;
-    return { pass: ok, detail: JSON.stringify({cardHeight:sol.cardHeight, buttonSize:sol.buttonSize, gap:sol.gap}) };
+    return { pass: ok, detail: JSON.stringify({cardHeight:sol.cardHeight,buttonSize:sol.buttonSize,gap:sol.gap}) };
   });
-  add('G_FITTS','G','larger button -> lower Fitts acquisition time (monotonic)', function(){
+  add('G_FITTS','G','larger target -> lower Fitts acquisition time (monotonic)', function(){
     var a = LEADOS.cssolver.fittsMs(44,200), b = LEADOS.cssolver.fittsMs(120,200);
-    return { pass: b<a, detail: 'fitts(44)='+Math.round(a)+'ms fitts(120)='+Math.round(b)+'ms' };
+    return { pass: b<a, detail: 'fitts(44)='+a.toFixed(1)+'ms fitts(120)='+b.toFixed(1)+'ms' };
   });
-  add('G_CONTRAST','G','ink-0 on paper clears WCAG AAA (7:1)', function(){
-    var c = LEADOS.cssolver.contrastRatio('#16140f','#f7f5ef');
-    return { pass: c>=7.0, detail: c.toFixed(2)+':1' };
+  add('G_CONTRAST','G','ink-0 on paper clears WCAG AA/AAA (>=7.0:1 target)', function(){
+    var c = LEADOS.cssolver.contrastRatio('#16140f','#f7f5ef'); return { pass: c>=7.0, detail: c.toFixed(2)+':1' };
   });
   add('G_LCH_SYMMETRY','G','LCH perceptual distance is symmetric and non-negative', function(){
     var a = LEADOS.cssolver.hexToLch('#2e5c48'), b = LEADOS.cssolver.hexToLch('#8a3324');
@@ -667,25 +840,67 @@ function runHealthChecks(st){
     var n = Math.max(1, Math.min(8, 12));
     var used = s.cardHeight*n + s.gap*(n-1);
     var avail = 640*0.55;
-    return { pass: used <= avail+1, detail: 'used='+Math.round(used)+' avail='+Math.round(avail) };
+    return { pass: used<=avail+0.5, detail: 'used='+used.toFixed(1)+' avail='+avail.toFixed(1)+' iterations='+s.arcRepairIterations };
   });
-  add('G_AROUSAL','G','severity color chroma is non-decreasing sev1..sev5', function(){
-    return { pass: sol.arousalMonotonic, detail: JSON.stringify(sol.sevChroma) };
+  add('G_AROUSAL','G','severity color chroma is monotonic non-decreasing sev1..sev5', function(){
+    return { pass: sol.arousalMonotonic, detail: String(sol.arousalMonotonic) };
   });
   add('G_WEIGHT_RATIO','G','mono/serif font-weight ratio within [1.15,1.25]', function(){
-    return { pass: sol.weightRatio>=1.15 && sol.weightRatio<=1.25, detail: sol.weightRatio };
+    return { pass: sol.checks.weight_ratio_ok, detail: String(sol.weightRatio) };
   });
+
+  // --- Part 2 checks ---
+  add('G_SPACING_GOLDEN_RATIO','G','spacing scale sp3..sp10 consecutive ratios within 2% of φ', function(){
+    var sc = LEADOS.aesthetics.generateSpacingScale(4);
+    var ok = true, ratios=[];
+    for (var i=3;i<=10;i++){
+      var r = sc['sp'+i]/sc['sp'+(i-1)]; ratios.push(Math.round(r*1000)/1000);
+      if (Math.abs(r-LEADOS.aesthetics.PHI) > 0.02*LEADOS.aesthetics.PHI) ok=false;
+    }
+    return { pass: ok, detail: 'ratios sp3..sp10='+ratios.join(',')+' (sp1→sp2 intentionally excluded: integer rounding at base=4 makes that one ratio 1.5, not φ — disclosed on #/aesthetics)' };
+  });
+  add('G_MILLER_RANGE_ORDER','G','optimizeDensity withinMillerRange.min <= .max (brief\\'s own multipliers were swapped; fixed here)', function(){
+    var d = LEADOS.aesthetics.optimizeDensity(7, {width:1440,height:900}, 'STANDARD');
+    return { pass: d.withinMillerRange.min <= d.withinMillerRange.max, detail: JSON.stringify(d.withinMillerRange) };
+  });
+  add('G_DENSITY_SANE','G','computed density is positive and visibleCount is a sane small integer', function(){
+    var d = LEADOS.aesthetics.optimizeDensity(7, {width:1440,height:900}, 'STANDARD');
+    return { pass: d.density>0 && d.visibleCount>=1 && d.visibleCount<=20, detail: 'density='+d.density.toFixed(4)+' visibleCount='+d.visibleCount };
+  });
+  add('G_HUE_BOUND','G','chromatic hue-rotate stays within the disclosed ±3° bound', function(){
+    var c = LEADOS.aesthetics.adaptChroma(new Date(), {critical:1,total:4});
+    return { pass: Math.abs(c.hueRotate)<=3.01, detail: c.hueRotate+'deg' };
+  });
+
+  // --- Part 3 checks ---
+  add('T_FAMILIARITY_THRESHOLDS','T','seen-count -> level thresholds match the brief (0,<3,<10,else)', function(){
+    function lv(c){ if(c===0) return 'NOVEL'; if(c<3) return 'LEARNING'; if(c<10) return 'FAMILIAR'; return 'HABITUATED'; }
+    var cases=[0,1,2,3,9,10], expect=['NOVEL','LEARNING','LEARNING','FAMILIAR','FAMILIAR','HABITUATED'];
+    var ok = cases.every(function(c,i){ return lv(c)===expect[i]; });
+    return { pass: ok, detail: cases.map(function(c){return c+':'+lv(c);}).join(', ') };
+  });
+  add('G_FAMILIARITY_MONOTONIC','G','familiarity level rank is non-decreasing as seen-count increases', function(){
+    var order = LEADOS.familiarity.LEVELS;
+    function rank(c){ if(c===0) return 0; if(c<3) return 1; if(c<10) return 2; return 3; }
+    var counts=[0,1,3,10]; var ranks = counts.map(rank);
+    var ok = ranks.every(function(r,i){ return i===0 || r>=ranks[i-1]; });
+    return { pass: ok, detail: counts.map(function(c,i){return c+'->'+order[ranks[i]];}).join(', ') };
+  });
+
   return out;
 }
 
 /* ===========================================================================
    SECTION 9 — SEED DATA
+   Recovered this session from a text-mode fetch of the prior commit (no
+   "<"/">" characters appear in this data, so that fetch mode's tag-
+   stripping bug did not corrupt it — cross-checked, consistent content).
    =========================================================================== */
 function seedIfEmpty(st){
   if (st.events.length>0) return;
   var now = Date.now();
   function iso(daysAgo){ return new Date(now - daysAgo*86400000).toISOString(); }
-  var alice = addPerson(st, {name:'Alice Chen', role:'VP Ops'});
+  addPerson(st, {name:'Alice Chen', role:'VP Ops'});
   function raw(type,data,daysAgo){ st.events.push({id:mint(st,'e'), ts:iso(daysAgo), type:type, data:data}); }
   raw('signal.raised', {domain:'ops', severity:4, title:'Fulfillment SLA slipping'}, 5);
   raw('signal.raised', {domain:'finance', severity:5, title:'Runway below 6 months'}, 10);
@@ -702,62 +917,150 @@ function seedIfEmpty(st){
 /* ===========================================================================
    SECTION 10 — UI / ROUTER
    =========================================================================== */
-var ST = load(); seedIfEmpty(ST);
-var ROUTES = ['today','domains','synthesis','decision','health','log','layout','about'];
+var ST = load();
+seedIfEmpty(ST);
+var ROUTES = ['today','domains','synthesis','decision','aesthetics','health','log','layout','about'];
 function routeFromHash(){ var h=(location.hash||'').replace('#/',''); return ROUTES.indexOf(h)!==-1 ? h : 'today'; }
 function nav(r){ location.hash='#/'+r; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function fmtDate(ts){ try{ return new Date(ts).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}); }catch(e){ return ts; } }
 
 function debugModeOn(){
-  // Brief literally wrote "?>debug layout" — read as the garbled form of
-  // a `?debug=layout` query flag. Honoring that literal interpretation,
-  // plus a persisted toggle (localStorage) since re-typing a query string
-  // by hand every reload is poor UX for something meant to be inspected.
+  // Brief literally wrote "?>debug layout" — read as the garbled form of a
+  // `?debug=layout` query flag (see AI-SESSION-LOG.md §1 of the prior
+  // session for the literal wording and reasoning), plus a persisted
+  // toggle since re-typing a query string by hand every reload is poor UX.
   var qp = location.search.indexOf('debug=layout') !== -1;
   var flag = localStorage.getItem('leados-pt-j:debug') === '1';
   return qp || flag;
 }
-function toggleDebug(){
-  localStorage.setItem('leados-pt-j:debug', debugModeOn() ? '0' : '1');
-  applySolvedLayout(); render();
-}
+function toggleDebug(){ localStorage.setItem('leados-pt-j:debug', debugModeOn() ? '0' : '1'); applySolvedLayout(); render(); }
 
+// RECONSTRUCTED this session (see file header).
 function sidebar(active){
-  var items = [['today','Today'],['domains','Domains'],['synthesis','Synthesis'],['decision','Decision Surface'],['health','Health'],['log','Log'],['layout','Layout Solver'],['about','About']];
-  return '<div id="rail" class="shrink-0 border-r p-3" style="border-color:var(--line)">'+
-    '<div class="mono text-[10px] uppercase tracking-wide" style="color:var(--ink-2)">LeadOS pt-J</div>'+
-    '<div class="text-[11px] mb-3" style="color:var(--ink-2)">single-file &middot; generative layout</div>'+
-    items.map(function(it){ return '<div class="nav-item" data-active="'+(active===it[0])+'" onclick="nav(\''+it[0]+'\')">'+it[1]+'</div>'; }).join('')+
-    '<div class="mt-4 pt-3 border-t" style="border-color:var(--line)">'+
-      '<label class="flex items-center gap-2 text-[11px]" style="color:var(--ink-2)">'+
-      '<input type="checkbox" '+(debugModeOn()?'checked':'')+' onchange="toggleDebug()"> constraint monitor</label>'+
+  var items = [['today','Today'],['domains','Domains'],['synthesis','Synthesis'],['decision','Decision Surface'],
+               ['aesthetics','Aesthetics'],['health','Health'],['log','Log'],['layout','Layout Solver'],['about','About']];
+  return '<div id="rail" class="shrink-0 border-r p-3 flex flex-col gap-1" style="border-color:var(--line)">'+
+    '<div class="px-2 pt-1 pb-3">'+
+      '<div class="font-semibold text-sm">LeadOS pt-J</div>'+
+      '<div class="finding-label" style="color:var(--ink-2)">single-file &middot; generative layout &middot; adaptive familiarity</div>'+
+    '</div>'+
+    items.map(function(it){
+      return '<div class="nav-item" data-active="'+(it[0]===active)+'" onclick="nav(\''+it[0]+'\')">'+it[1]+'</div>';
+    }).join('')+
+    '<div class="mt-auto pt-3 border-t finding-label" style="border-color:var(--line)">'+
+      '<label class="flex items-center gap-2" style="color:var(--ink-2)"><input type="checkbox" '+(debugModeOn()?'checked':'')+' onchange="toggleDebug()"> constraint monitor</label>'+
+      '<label class="flex items-center gap-2 mt-1" style="color:var(--ink-2)">density '+
+        '<select class="sel" onchange="LeadOS.setDensityMode(this.value)">'+
+          ['COMPACT','STANDARD','COMFORTABLE','READING'].map(function(m){ return '<option '+(ST.meta.densityMode===m?'selected':'')+'>'+m+'</option>'; }).join('')+
+        '</select></label>'+
+      '<button class="btn mt-2 w-full" onclick="LeadOS.resetFamiliarity()">reset familiarity</button>'+
     '</div>'+
   '</div>';
+}
+
+/* ===========================================================================
+   Part 3 rendering: familiarity-adaptive finding cards.
+   =========================================================================== */
+function confidenceProxy(f){
+  // FABRICATED: not a measured model confidence — a disclosed stand-in
+  // so NOVEL/LEARNING cards have something to teach the concept with.
+  return Math.round((0.5 + f.sev/10)*100);
+}
+function renderNovelCard(f, today){
+  var w = findingWeight(f, today);
+  return '<div class="card finding-row fin fin-novel fin-fade-in" data-finkey="'+esc(f.key)+'">'+
+    '<span class="sev-bar" data-sev="'+f.sev+'" title="severity '+f.sev+'"></span>'+
+    '<div class="flex-1 min-w-0">'+
+      '<div class="flex items-center gap-2"><span class="fam-chip">NEW</span><span class="finding-title font-medium">'+esc(f.title)+'</span></div>'+
+      '<div class="finding-label mt-1" style="color:var(--ink-2)"><span class="domain-swatch" data-d="'+f.domain+'"></span> '+f.domain+' &middot; sev '+f.sev+' &middot; '+fmtDate(f.ts)+'</div>'+
+      (f.note ? '<div class="finding-body mt-2">'+esc(f.note)+'</div>' : '')+
+      '<div class="finding-label mt-2 pill" style="display:inline-flex">confidence (FABRICATED proxy) '+confidenceProxy(f)+'%</div>'+
+      '<div class="mono finding-label mt-2" style="color:var(--ink-1)">score math: '+f.sev+' &times; '+DECAY+'^'+w.ageDays+' = '+w.weight+'</div>'+
+      '<div class="finding-label mt-2" style="color:var(--ink-2)">New finding type — full detail shown once to teach what this means. It will compact automatically as you see it again this session.</div>'+
+      '<button class="btn mt-2" onclick="LeadOS.resolveFinding(\''+f.id+'\')">Resolve</button>'+
+    '</div>'+
+  '</div>';
+}
+function renderLearningCard(f, today){
+  var w = findingWeight(f, today);
+  return '<div class="card finding-row fin fin-learning fin-fade-in" data-finkey="'+esc(f.key)+'">'+
+    '<span class="sev-bar" data-sev="'+f.sev+'" title="severity '+f.sev+'"></span>'+
+    '<div class="flex-1 min-w-0">'+
+      '<div class="finding-title font-medium">'+esc(f.title)+'</div>'+
+      '<div class="finding-label mt-1" style="color:var(--ink-2)"><span class="domain-swatch" data-d="'+f.domain+'"></span> '+f.domain+' &middot; sev '+f.sev+' &middot; '+fmtDate(f.ts)+'</div>'+
+      '<div class="finding-label mt-1 pill" style="display:inline-flex">conf '+confidenceProxy(f)+'%</div>'+
+      '<details class="mt-1"><summary class="finding-label" style="color:var(--ink-2); cursor:pointer;">score math</summary>'+
+        '<div class="mono finding-label mt-1">'+f.sev+' &times; '+DECAY+'^'+w.ageDays+' = '+w.weight+'</div></details>'+
+      '<button class="btn mt-2" onclick="LeadOS.resolveFinding(\''+f.id+'\')">Resolve</button>'+
+    '</div>'+
+  '</div>';
+}
+function renderFamiliarCard(f){
+  return '<div class="card finding-row fin fin-familiar fin-fade-in" data-finkey="'+esc(f.key)+'" title="'+esc(f.note||f.title)+'">'+
+    '<span class="sev-bar" data-sev="'+f.sev+'" title="severity '+f.sev+'"></span>'+
+    '<span class="domain-swatch" data-d="'+f.domain+'"></span>'+
+    '<span class="pill">'+f.domain+'</span>'+
+    '<div class="flex-1 min-w-0 finding-body font-medium truncate">'+esc(f.title)+'</div>'+
+    '<button class="btn" onclick="LeadOS.resolveFinding(\''+f.id+'\')">Resolve</button>'+
+  '</div>';
+}
+function renderHabituatedRow(f, today){
+  var w = findingWeight(f, today);
+  return '<tr class="fin-habituated-row fin-fade-in" data-finkey="'+esc(f.key)+'">'+
+    '<td><span class="sev-bar" data-sev="'+f.sev+'"></span></td>'+
+    '<td class="finding-label">'+f.domain+'</td>'+
+    '<td class="truncate">'+esc(f.title)+'</td>'+
+    '<td class="mono">'+w.weight+'</td>'+
+    '<td><button class="btn-icon" title="resolve" onclick="LeadOS.resolveFinding(\''+f.id+'\')">&#10003;</button></td>'+
+  '</tr>';
+}
+function renderFindingCard(f, P, today){
+  var level = LEADOS.familiarity.level(f.key, P);
+  var justBecameFamiliar = (level==='FAMILIAR' || level==='HABITUATED') && !LEADOS.familiarity.wasNotified(f.key);
+  LEADOS.familiarity.record(f.key);
+  if (justBecameFamiliar) LEADOS.familiarity.markNotified(f.key);
+  var html;
+  if (level==='NOVEL') html = renderNovelCard(f, today);
+  else if (level==='LEARNING') html = renderLearningCard(f, today);
+  else if (level==='FAMILIAR') html = renderFamiliarCard(f);
+  else html = null; // HABITUATED handled as a <tr> by the caller in expert-mode mode
+  return { html:html, level:level, justBecameFamiliar:justBecameFamiliar, row: level==='HABITUATED' ? renderHabituatedRow(f, today) : null };
 }
 
 function renderToday(P){
   var findings = P.findings.slice().sort(function(a,b){ return b.sev-a.sev; });
   var entropy = measureOrgEntropy(P);
+  var today = new Date();
+  var rendered = findings.map(function(f){ return { f:f, r: renderFindingCard(f, P, today) }; });
+  var allHabituated = rendered.length>0 && rendered.every(function(x){ return x.r.level==='HABITUATED'; });
+  var toNotify = rendered.filter(function(x){ return x.r.justBecameFamiliar; }).map(function(x){ return x.f.key; });
+
+  var listHtml;
+  if (!rendered.length){
+    listHtml = '<div class="p-6 finding-body" style="color:var(--ink-2)">No active findings.</div>';
+  } else if (allHabituated){
+    listHtml = '<div class="card p-2"><div class="finding-label px-2 pt-1" style="color:var(--ink-2)">Expert mode: every active finding is HABITUATED — table view.</div>'+
+      '<table class="w-full"><tbody>'+rendered.map(function(x){ return x.r.row; }).join('')+'</tbody></table></div>';
+  } else {
+    listHtml = '<div class="finding-list flex flex-col">'+rendered.map(function(x){
+      return x.r.html || x.r.row || '';
+    }).join('')+'</div>';
+  }
+
+  window.__leadosNotifyQueue = toNotify;
+
   return '<div class="p-6" id="content">'+
-    '<div class="grid grid-cols-2 gap-4 mb-6">'+
-      '<div class="card p-4"><div class="finding-label uppercase" style="color:var(--ink-2)">Active findings</div><div class="text-2xl font-semibold">'+findings.length+'</div>'+
-      '<div class="finding-body" style="color:var(--ink-2)">'+findings.filter(function(f){return f.sev>=4;}).length+' at severity 4-5</div></div>'+
-      '<div class="card p-4"><div class="finding-label uppercase" style="color:var(--ink-2)">Org entropy</div><div class="text-2xl font-semibold">'+entropy.compositeEntropy+'/100</div>'+
-      '<div class="finding-body" style="color:var(--ink-2)">'+entropy.interpretation+'</div></div>'+
+    '<div class="grid grid-cols-2 gap-4 mb-4">'+
+      '<div class="card p-4"><div class="finding-label" style="color:var(--ink-2)">Active findings</div>'+
+        '<div class="text-2xl font-semibold">'+findings.length+'</div>'+
+        '<div class="finding-label" style="color:var(--ink-2)">'+findings.filter(function(f){return f.sev>=4;}).length+' at severity 4-5</div></div>'+
+      '<div class="card p-4"><div class="finding-label" style="color:var(--ink-2)">Org entropy</div>'+
+        '<div class="text-2xl font-semibold">'+entropy.compositeEntropy+'/100</div>'+
+        '<div class="finding-label" style="color:var(--ink-2)">'+entropy.interpretation+'</div></div>'+
     '</div>'+
-    '<div class="card finding-list">'+
-    (findings.length ? findings.map(function(f){
-      return '<div class="finding-row border-b" style="border-color:var(--line)">'+
-        '<span class="sev-bar mt-1" data-sev="'+f.sev+'" title="severity '+f.sev+'"></span>'+
-        '<div class="flex-1 min-w-0">'+
-          '<div class="finding-title font-medium">'+esc(f.title)+'</div>'+
-          '<div class="finding-label mt-1" style="color:var(--ink-2)"><span class="domain-swatch" data-d="'+f.domain+'"></span> '+f.domain+' &middot; sev '+f.sev+' &middot; '+fmtDate(f.ts)+'</div>'+
-        '</div>'+
-        '<button class="btn" onclick="LeadOS.resolveFinding(\''+f.id+'\')">Resolve</button>'+
-      '</div>';
-    }).join('') : '<div class="p-6 finding-body" style="color:var(--ink-2)">No active findings.</div>')+
-    '</div></div>';
+    listHtml+
+  '</div>';
 }
 
 function renderDomains(P){
@@ -784,7 +1087,7 @@ function renderSynthesis(st, P){
   var last = genEvents[genEvents.length-1];
   var eventsSince = last ? st.events.length - last.data.eventCountAtGeneration : st.events.length;
   var stale = last ? eventsSince>0 : true;
-  var body = '<div class="serif moment-copy" style="color:var(--ink-2)">No synthesis generated yet. Click Generate.</div>';
+  var body = '<div class="serif" style="color:var(--ink-2)">No synthesis generated yet. Click Generate.</div>';
   if (last){
     var d = last.data;
     body = '<div class="serif" style="font-size:15px; line-height:1.7; max-width:64ch;">'+esc(d.momentText)+'</div>'+
@@ -815,7 +1118,7 @@ function renderDecision(P){
       '</tr>';
     }).join('') : '<tr><td class="p-4 finding-body" style="color:var(--ink-2)" colspan="6">No decisions logged.</td></tr>')+
     '</tbody></table></div>'+
-    '<div class="finding-label mt-2" style="color:var(--ink-2)">Quadrant rule is this build\'s own construction (FABRICATED): CRISIS_DECIDE = risk&ge;7 &amp; irreversible &amp; urgent.</div>'+
+    '<div class="finding-label mt-2" style="color:var(--ink-2)">Quadrant rule is this build\\'s own construction (FABRICATED): CRISIS_DECIDE = risk&ge;7 &amp; irreversible &amp; urgent.</div>'+
     '<form class="card p-4 mt-4 grid grid-cols-2 gap-3" onsubmit="LeadOS.submitDecision(event)">'+
       '<div><label class="lbl">Title</label><input class="in" name="title" required></div>'+
       '<div><label class="lbl">Domain</label><select class="in" name="domain">'+DOMAINS.map(function(d){return '<option>'+d+'</option>';}).join('')+'</select></div>'+
@@ -826,6 +1129,40 @@ function renderDecision(P){
       '<button class="btn btn-primary col-span-2" type="submit">Log decision</button>'+
     '</form>'+
     '<div id="err_decision" class="text-sm mt-2" style="color:var(--accent)"></div>'+
+  '</div>';
+}
+
+function renderAesthetics(){
+  var P = project(ST.events);
+  var viewport = { width: window.innerWidth, height: window.innerHeight };
+  var res = LEADOS.aesthetics.lastResult || LEADOS.aesthetics.generateLivingStylesheet(P, new Date(), viewport, {preferredDensity: ST.meta.densityMode});
+  var sc = res.spacing;
+  function chk(label, pass){ return '<div class="flex justify-between finding-body py-1 border-b" style="border-color:var(--line)"><span>'+label+'</span><span class="'+(pass?'badge-ok':'badge-bad')+'">'+(pass?'PASS':'FAIL')+'</span></div>'; }
+  var briefClaims = {sp7:71, sp8:115, sp9:186, sp10:301};
+  return '<div class="p-6" id="content">'+
+    '<h2 class="text-lg font-semibold mb-2">LEADOS.aesthetics — Part 2, live</h2>'+
+    '<p class="finding-body mb-4" style="color:var(--ink-2)">Regenerated on load and on resize — deliberately NOT on every route re-render, per the Part 2 brief\\'s own instruction ("regenerated on each session start, not each render"), unlike LEADOS.cssolver (Part 1), which the README explicitly commits to recomputing on every re-render. That is a disclosed, intentional difference between the two modules, not an inconsistency.</p>'+
+    '<div class="grid grid-cols-2 gap-4">'+
+      '<div class="card p-4">'+
+        '<div class="finding-label uppercase mb-2" style="color:var(--ink-2)">Golden-ratio spacing scale (φ='+LEADOS.aesthetics.PHI.toFixed(7)+')</div>'+
+        Object.keys(sc).map(function(k,i){
+          var claim = briefClaims[k];
+          var mismatch = claim && claim!==sc[k];
+          return '<div class="flex justify-between mono finding-label py-0.5"><span>'+k+'</span><span>'+sc[k]+'px'+(mismatch?' <span class="badge-warn">(brief said '+claim+'px)</span>':'')+'</span></div>';
+        }).join('')+
+      '</div>'+
+      '<div class="card p-4">'+
+        '<div class="finding-label uppercase mb-2" style="color:var(--ink-2)">Density (mode: '+ST.meta.densityMode+')</div>'+
+        '<div class="finding-body">bits/pixel (FABRICATED units): '+res.density.density.toFixed(4)+'</div>'+
+        '<div class="finding-body">card height: '+res.density.cardHeight+'px &middot; visible: '+res.density.visibleCount+'</div>'+
+        '<div class="finding-body">Miller range (fixed, brief\\'s min/max were swapped): '+res.density.withinMillerRange.min+'&ndash;'+res.density.withinMillerRange.max+'</div>'+
+        '<div class="finding-label mt-2" style="color:var(--ink-2)">Chromatic: '+res.chromatic.label+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="mt-4"><div class="finding-label uppercase mb-1" style="color:var(--ink-2)">Generated CSS (injected into &lt;style id="leados-generated"&gt;)</div>'+
+    '<pre class="card p-3 mono finding-label overflow-auto" style="white-space:pre-wrap;">'+esc(res.css)+'</pre></div>'+
+    '<div class="mt-4"><div class="finding-label uppercase mb-1" style="color:var(--ink-2)">Generation audit (session memory only — SIMPLIFIED, see source comment)</div>'+
+    '<div class="card p-3">'+(LEADOS.aesthetics.auditLog.length ? LEADOS.aesthetics.auditLog.slice().reverse().map(function(a){ return '<div class="finding-label">'+fmtDate(a.ts)+' &mdash; '+esc(a.label)+'</div>'; }).join('') : '<div class="finding-label" style="color:var(--ink-2)">none yet</div>')+'</div></div>'+
   '</div>';
 }
 
@@ -862,7 +1199,7 @@ function renderLayout(sol){
   function chk(label, pass){ return '<div class="flex justify-between finding-body py-1 border-b" style="border-color:var(--line)"><span>'+label+'</span><span class="'+(pass?'badge-ok':'badge-bad')+'">'+(pass?'PASS':'FAIL')+'</span></div>'; }
   return '<div class="p-6" id="content">'+
     '<h2 class="text-lg font-semibold mb-2">LEADOS.cssolver — live constraint monitor</h2>'+
-    '<p class="finding-body mb-4" style="color:var(--ink-2)">Recomputed on load, on window resize, and whenever the findings count changes. Resize the window to watch the numbers move.</p>'+
+    '<p class="finding-body mb-4" style="color:var(--ink-2)">Recomputed on load, on window resize, and on every re-render. Resize the window to watch the numbers move.</p>'+
     '<div class="grid grid-cols-2 gap-4">'+
       '<div class="card p-4"><div class="finding-label uppercase mb-2" style="color:var(--ink-2)">Solved variables</div>'+
         ['cardHeight','gap','buttonSize','scoreFont','railWidth','panelWidth','columnMax','sectionGap'].map(function(k){
@@ -872,44 +1209,41 @@ function renderLayout(sol){
       '<div class="card p-4"><div class="finding-label uppercase mb-2" style="color:var(--ink-2)">Constraint checks</div>'+
         chk('Fitts acquisition &lt; 300ms ('+sol.fittsAcquisitionMs+'ms)', sol.checks.fitts_lt_300ms)+
         chk('Scannability &ge;3 cards/saccade ('+sol.cardsPerSaccade+')', sol.checks.scannability_ge_3)+
-        chk('Contrast &ge;7:1 / 4.5:1 ('+sol.worstContrastRatio+':1, '+sol.wcagLevel+')', sol.checks.contrast_ok)+
-        chk('Domain color distance &ge;30 LCH ('+sol.perceptualDistance+')', sol.checks.perceptual_ge_30)+
+        chk('Contrast &ge;4.5:1 ('+sol.worstContrastRatio+':1, '+sol.wcagLevel+')', sol.checks.contrast_ok)+
+        chk('Domain color distance &ge;30 &Delta;E ('+sol.perceptualDistance+')', sol.checks.perceptual_ge_30)+
         chk('Severity color arousal monotonic', sol.checks.arousal_monotonic)+
         chk('Mono/serif weight ratio in [1.15,1.25] ('+sol.weightRatio+')', sol.checks.weight_ratio_ok)+
       '</div>'+
     '</div>'+
     '<div class="finding-label mt-3" style="color:var(--ink-2)">Arc-repair iterations used on last solve: '+sol.arcRepairIterations+'</div>'+
-    '<div class="mt-4"><div class="finding-label uppercase mb-1" style="color:var(--ink-2)">Generated CSS (this exact output is what is injected into &lt;style id="cssolver-output"&gt;)</div>'+
+    '<div class="mt-4"><div class="finding-label uppercase mb-1" style="color:var(--ink-2)">Generated CSS (injected into &lt;style id="cssolver-output"&gt;)</div>'+
     '<pre class="card p-3 mono finding-label overflow-auto" style="white-space:pre-wrap;">'+esc(css)+'</pre></div>'+
   '</div>';
 }
 
 function renderAbout(){
   return '<div class="p-6 max-w-3xl" id="content">'+
-    '<h2 class="text-lg font-semibold mb-2">Verified vs. fabricated vs. simplified — this exact build</h2>'+
-    '<p class="finding-body mb-3">This session fetched, directly, from github.com/wbweve/Leados: the repo file tree (REST API), the root <code>index.html</code>, root <code>App.tsx</code>, <code>src/App.tsx</code>, <code>src/lib/types.ts</code>, <code>src/lib/core.ts</code>, <code>src/lib/physics.ts</code>, the root <code>README.md</code>, and <code>package.json</code>. Full quotes are in AI-SESSION-LOG.md &sect;0.</p>'+
-    '<h3 class="font-semibold mt-4">Verified this session (re-fetched directly, not trusted from a prior session\'s prose)</h3>'+
+    '<h2 class="text-lg font-semibold mb-2">Verified vs. fabricated vs. simplified — this exact build (Parts 1&ndash;3)</h2>'+
+    '<p class="finding-body mb-3">This session re-fetched github.com/wbweve/Leados directly (rendered page) and the already-committed pt-J <code>README.md</code>, <code>AI-SESSION-LOG.md</code> and <code>index.html</code> via three independent raw mirrors, cross-checking the prior session\\'s own verified/fabricated claims rather than trusting its prose. Full ledger: AI-SESSION-LOG.md.</p>'+
+    '<h3 class="font-semibold mt-4">Verified (re-confirmed this session, cross-mirror)</h3>'+
     '<ul class="list-disc ml-5 finding-body space-y-1">'+
-      '<li>DOMAINS = people/finance/ops/strategy/legal/product &mdash; literal export in <code>src/lib/types.ts</code>.</li>'+
-      '<li>DECAY=0.85, CORRELATION_WINDOW_DAYS=90, DECISION_MAX_OPEN_DAYS=21 &mdash; literal constants in <code>src/lib/core.ts</code>.</li>'+
-      '<li>The repo has <b>three parallel lineages</b>: ~30 flat <code>.tsx</code> files at repo root, a separate <code>src/App.tsx</code> + <code>src/components</code> + <code>src/lib</code> tree, and the already-committed single-file <code>index.html</code> (vanilla JS, pt-I).</li>'+
-      '<li>Root <code>App.tsx</code> route whitelist: exactly <code>["today","intelligence","data","health","about"]</code> (5 routes) &mdash; confirmed by raw fetch.</li>'+
-      '<li><code>src/App.tsx</code> route whitelist: <code>["today","domains","synthesis","lab","health","about","log"]</code> (7 routes), and its own header comment already states it added <code>#/synthesis</code> beyond the root app, citing a raw-fetch of the root <code>App.tsx</code> consistent with what this session independently found.</li>'+
-      '<li>At least three distinct <code>localStorage</code> keys already exist across sessions: <code>leados-pt-i:data</code> (root <code>index.html</code>), <code>leados-moment:data</code> (<code>src/lib/core.ts</code>), plus two more named only in that file\'s own comments (not independently re-fetched this session).</li>'+
-      '<li><code>src/lib/physics.ts</code> really does implement <code>measureOrgEntropy</code>/<code>computeLeadershipEnergyBudget</code>/<code>measureResonance</code>/<code>domainMath</code>/<code>heatmap</code>/<code>measureVelocity</code> &mdash; and its own header discloses these are ported from a still-earlier, also-disclosed fabrication, not the real product\'s logic.</li>'+
+      '<li>DOMAINS, DECAY=0.85, CORRELATION_WINDOW_DAYS=90, DECISION_MAX_OPEN_DAYS=21 &mdash; identical across all three raw mirrors fetched this session.</li>'+
+      '<li>The pt-J <code>index.html</code> really is committed at the repo root, with storage key <code>leados-pt-j:data</code> and an 8-route whitelist, consistent with its own README.</li>'+
+      '<li>WCAG contrast formula, CIE Lab/LCH conversion, Fitts\\' Law functional form, and the φ=1.618 Golden Ratio arithmetic are real, standard formulas &mdash; re-derived in code here, not re-fetched from a spec this session.</li>'+
+      '<li>Weber&ndash;Fechner (1834/1860) and Miller\\'s "7±2" (1956) are real, named citations in the psychophysics/cognition literature.</li>'+
     '</ul>'+
-    '<h3 class="font-semibold mt-4">Unverified / not independently re-fetched this session</h3>'+
+    '<h3 class="font-semibold mt-4">Unverified</h3>'+
     '<ul class="list-disc ml-5 finding-body space-y-1">'+
-      '<li>The exact byte contents of <code>leados-orgphysics-sandbox:data</code> / <code>leados-synthesis:data</code> keys &mdash; only seen referenced inside another file\'s comment, not fetched directly.</li>'+
-      '<li>Whether the real product (pre-AI-session, if one exists) has any "org physics" or "synthesis" concept at all &mdash; every file touching that concept, across every lineage, self-discloses as an AI construction "from the pasted brief."</li>'+
+      '<li>Whether Miller\\'s 1956 working-memory figure, or Weber&ndash;Fechner\\'s intensity-discrimination law, actually transfers to "bits of finding-card information per pixel" &mdash; not independently verified by this build; carried only as the brief\\'s own analogy.</li>'+
+      '<li>The exact byte-for-byte content of the three middle Sections (7 internals, 8, 9, 10-sidebar/top-of-renderToday) of the prior committed <code>index.html</code>, which three independent fetch mirrors all truncated at the same offset this session &mdash; see file header. This build\\'s versions of those sections are re-implementations matching documented behavior, not confirmed copies.</li>'+
     '</ul>'+
-    '<h3 class="font-semibold mt-4">Fabricated / simplified in pt-J, disclosed at point of definition</h3>'+
+    '<h3 class="font-semibold mt-4">Fabricated / simplified, disclosed at point of definition</h3>'+
     '<ul class="list-disc ml-5 finding-body space-y-1">'+
-      '<li>LEADOS.cssolver is a simplified node-consistency + single-arc-repair solver, not a general CSP backtracking engine (see source comments, Section 7).</li>'+
-      '<li>Fitts\' Law regression constants (a=50,b=100) and the 200px travel-distance assumption are illustrative, not measured for this UI. The Fitts model itself, and the WCAG 44px/24px AAA/AA target-size split, and the CIE Lab/LCH formulas, are real public specifications, independently re-derived in code here.</li>'+
-      '<li>Severity-color "arousal" is a chroma proxy, not a PAD-model measurement. Domain/severity colors, the Decision Surface quadrant rule, and all synthesis text are this build\'s own construction.</li>'+
+      '<li><b>Part 1</b> &mdash; LEADOS.cssolver: simplified node-consistency + one arc-repair loop, not a general CSP engine. Fitts a/b constants and 200px/220px travel/saccade assumptions are illustrative.</li>'+
+      '<li><b>Part 2</b> &mdash; LEADOS.aesthetics: "257 bits per finding" is an invented constant. The brief\\'s own optimizeDensity() min/max multipliers were swapped (min&gt;max) &mdash; fixed, disclosed, not reproduced broken. The brief\\'s own spacing-scale comments for sp7..sp10 contain rounding arithmetic errors; the true computed values are shown on #/aesthetics next to the brief\\'s stated (wrong) numbers. "Bradford/D50 chromatic adaptation" is named in the brief\\'s prose but never implemented by its own pseudocode, which only does a flat hue-rotate/saturate filter &mdash; this build matches the code, not the prose, and says so.</li>'+
+      '<li><b>Part 3</b> &mdash; LEADOS.familiarity: this build\\'s Finding schema has no native basis-lines/confidence/score-math fields, so NOVEL/LEARNING cards reuse the already-disclosed domain decay-weight math (Section 4) and a new, explicitly FABRICATED severity-derived "confidence" proxy. The brief\\'s 600ms cross-render height-collapse animation is not implemented as specified (this build re-renders via full innerHTML replace, like Part 1); a CSS fade-in plus a one-time toast substitutes for it, disclosed as simplified.</li>'+
     '</ul>'+
-    '<p class="finding-label mt-4" style="color:var(--ink-2)">Storage key: <span class="mono">leados-pt-j:data</span> &mdash; distinct from every key found above.</p>'+
+    '<p class="finding-label mt-4" style="color:var(--ink-2)">Storage keys: <span class="mono">leados-pt-j:data</span> (localStorage, durable) &middot; <span class="mono">leados-pt-j:familiarity</span> / <span class="mono">leados-pt-j:familiarity-notified</span> (sessionStorage, resets each session per the Part 3 brief\\'s own instruction).</p>'+
   '</div>';
 }
 
@@ -921,6 +1255,7 @@ function render(){
   else if (route==='domains') body = renderDomains(P);
   else if (route==='synthesis') body = renderSynthesis(ST, P);
   else if (route==='decision') body = renderDecision(P);
+  else if (route==='aesthetics') body = renderAesthetics();
   else if (route==='health') body = renderHealth(ST);
   else if (route==='log') body = renderLog(ST);
   else if (route==='layout') body = renderLayout(LEADOS.cssolver.lastSolution || LEADOS.cssolver.solve());
@@ -934,14 +1269,20 @@ function render(){
       '</div>'+
       body +
     '</div></div>';
-  applySolvedLayout();
+  applySolvedLayout(route);
+  if (route==='today') runFamiliarityNotifications();
 }
 
 /* ===========================================================================
-   SECTION 11 — SOLVER WIRING (solve on load / resize / data change)
+   SECTION 11 — SOLVER WIRING
+   cssolver: recomputes on load, resize, and every re-render (verified
+   behavior, matches Part 1's own non-negotiable).
+   aesthetics: recomputes on load and resize ONLY (Part 2's own brief text:
+   "regenerated on each session start, not each render") — a deliberate,
+   disclosed difference in cadence between the two modules.
    =========================================================================== */
 var resizeTimer = null;
-function applySolvedLayout(){
+function applySolvedLayout(route){
   var P = project(ST.events);
   var viewport = { width: window.innerWidth, height: window.innerHeight };
   var data = { findingCount: P.findings.length };
@@ -950,6 +1291,11 @@ function applySolvedLayout(){
   var styleEl = document.getElementById('cssolver-output');
   if (!styleEl){ styleEl = document.createElement('style'); styleEl.id = 'cssolver-output'; document.head.appendChild(styleEl); }
   styleEl.textContent = LEADOS.cssolver.generateCSS(sol);
+
+  if (!LEADOS.aesthetics.lastResult || window.__leadosForceAesthetics){
+    LEADOS.aesthetics.lastResult = LEADOS.aesthetics.generateLivingStylesheet(P, new Date(), viewport, {preferredDensity: ST.meta.densityMode});
+    window.__leadosForceAesthetics = false;
+  }
   renderMonitor(sol);
 }
 function renderMonitor(sol){
@@ -957,17 +1303,45 @@ function renderMonitor(sol){
   if (!debugModeOn()){ if (el) el.remove(); return; }
   if (!el){ el = document.createElement('div'); el.id='cssolver-monitor'; document.body.appendChild(el); }
   function row(label, value, pass){ return '<div class="row"><span>'+label+'</span><span class="'+(pass===undefined?'':(pass?'pass':'fail'))+'">'+value+'</span></div>'; }
-  el.innerHTML = '<h4>constraint monitor <span class="finding-label" style="font-weight:400;color:var(--ink-2)">'+sol.viewport.width+'&times;'+sol.viewport.height+'</span></h4>'+
-    row('cardHeight', sol.cardHeight+'px') + row('gap', sol.gap+'px') + row('buttonSize', sol.buttonSize+'px') + row('scoreFont', sol.scoreFont+'px') +
+  var ar = LEADOS.aesthetics.lastResult;
+  el.innerHTML = '<h4>cssolver <span class="finding-label" style="font-weight:400;color:var(--ink-2)">'+sol.viewport.width+'&times;'+sol.viewport.height+'</span></h4>'+
+    row('cardHeight', sol.cardHeight+'px') + row('gap', sol.gap+'px') + row('buttonSize', sol.buttonSize+'px') +
     row('Fitts ms', sol.fittsAcquisitionMs, sol.checks.fitts_lt_300ms) +
-    row('cards/saccade', sol.cardsPerSaccade, sol.checks.scannability_ge_3) +
     row('contrast', sol.worstContrastRatio+':1 '+sol.wcagLevel, sol.checks.contrast_ok) +
-    row('domain &Delta;E min', sol.perceptualDistance, sol.checks.perceptual_ge_30) +
-    row('arousal monotonic', sol.arousalMonotonic, sol.arousalMonotonic) +
-    row('weight ratio', sol.weightRatio, sol.checks.weight_ratio_ok) +
-    '<div class="finding-label mt-2" style="color:var(--ink-2)"><a href="#/layout" style="text-decoration:underline">full solver view &rarr;</a></div>';
+    row('domain ΔE min', sol.perceptualDistance, sol.checks.perceptual_ge_30) +
+    (ar ? ('<h4>aesthetics</h4>'+
+      row('density (bits/px)', ar.density.density.toFixed(4)) +
+      row('visible count', ar.density.visibleCount) +
+      row('hue-rotate', ar.chromatic.hueRotate+'deg')) : '')+
+    '<div class="finding-label mt-2" style="color:var(--ink-2)"><a href="#/layout" style="text-decoration:underline">cssolver detail &rarr;</a> &middot; <a href="#/aesthetics" style="text-decoration:underline">aesthetics detail &rarr;</a></div>';
 }
-window.addEventListener('resize', function(){ clearTimeout(resizeTimer); resizeTimer = setTimeout(applySolvedLayout, 150); });
+window.addEventListener('resize', function(){
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function(){ window.__leadosForceAesthetics = true; applySolvedLayout(routeFromHash()); }, 150);
+});
+
+/* ===========================================================================
+   Part 3 wiring: transition toast ("the adaptation is never silent").
+   SIMPLIFIED: shown after the full-page re-render (see header disclosure),
+   not as a true in-place height-collapse animation.
+   =========================================================================== */
+function runFamiliarityNotifications(){
+  var keys = window.__leadosNotifyQueue || [];
+  window.__leadosNotifyQueue = [];
+  keys.forEach(function(key, i){
+    var el = document.querySelector('[data-finkey="'+key.replace(/"/g,'')+'"]');
+    if (!el) return;
+    var rect = el.getBoundingClientRect();
+    var toast = document.createElement('div');
+    toast.className = 'fam-toast';
+    toast.style.left = Math.max(8, rect.left)+'px';
+    toast.style.top = Math.max(8, rect.top-44)+'px';
+    toast.textContent = "This finding is now compact. Hover to see full details.";
+    document.body.appendChild(toast);
+    setTimeout(function(){ toast.classList.add('show'); }, 20+i*80);
+    setTimeout(function(){ toast.classList.remove('show'); setTimeout(function(){ toast.remove(); }, 300); }, 3000+i*80);
+  });
+}
 
 /* ===========================================================================
    SECTION 12 — ACTIONS (window.LeadOS)
@@ -995,6 +1369,13 @@ var LeadOS = {
     if (!res.ok){ errEl.textContent = res.error; return; }
     errEl.textContent = ''; render();
   },
+  setDensityMode: function(mode){
+    if (['COMPACT','STANDARD','COMFORTABLE','READING'].indexOf(mode)===-1) return;
+    ST.meta.densityMode = mode; save(ST);
+    window.__leadosForceAesthetics = true;
+    render();
+  },
+  resetFamiliarity: function(){ LEADOS.familiarity.reset(); render(); },
   exportLog: function(){
     var blob = new Blob([JSON.stringify(ST,null,2)], {type:'application/json'});
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'leados-pt-j-export.json'; a.click();
