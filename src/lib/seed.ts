@@ -1,101 +1,150 @@
-import * as store from "./core";
+// src/lib/seed.ts
+//
+// Deterministic synthetic roster + event log generator for this demo.
+// ORIGINAL to this sandbox session. All names/events are fabricated demo
+// data, clearly disclosed as such in the UI (About / Provenance view).
+// Seeded (mulberry32) so the same seed always reproduces the same log —
+// useful for anyone checking the Shannon entropy / mutual information
+// numbers shown in the UI against this source.
 
-/**
- * DISCLOSURE: every event below is fabricated for this delivery, not real
- * organizational data. It exists so the Organizational Moment / Five
- * Things / Hardest Question sections have real numbers to compute from on
- * first load, and so most of the "hardest question" branches are
- * reachable by stepping through #/lab rather than only the default
- * fallback question. 6 domains (people, finance, ops, strategy, legal,
- * product) — the 6th ("product") was added beyond the prior session's
- * 5-domain set purely to match this repo's own "Part 6: 6 domains"
- * convention; it is not a verified fact about the real product.
- */
+import type { OrgEvent, Person } from "./types";
+import { mulberry32 } from "./prng";
 
-function daysAgo(n: number, hour = 9): string {
-  const d = new Date(Date.now() - n * 86400000);
-  d.setUTCHours(hour, 0, 0, 0);
-  return d.toISOString();
+export const DEMO_SEED = 20260101;
+
+export const ROSTER: Person[] = [
+  { id: "me", name: "You", role: "Director of Engineering", team: "org", level: "self" },
+  { id: "p1", name: "Ana Reyes", role: "Eng Manager", team: "platform", level: "direct" },
+  { id: "p2", name: "Marcus Lee", role: "Eng Manager", team: "product-eng", level: "direct" },
+  { id: "p3", name: "Priya Nair", role: "Staff Engineer", team: "platform", level: "direct" },
+  { id: "p4", name: "Sofia Conti", role: "Design Lead", team: "product-eng", level: "direct" },
+  { id: "p5", name: "Devon Ward", role: "Finance BP", team: "finance", level: "direct" },
+  { id: "p6", name: "Yuki Tanaka", role: "Senior Engineer", team: "platform", level: "skip" },
+  { id: "p7", name: "Omar Haddad", role: "Senior Engineer", team: "product-eng", level: "skip" },
+  { id: "p8", name: "Grace Kim", role: "Product Designer", team: "product-eng", level: "skip" },
+  { id: "p9", name: "Liam O'Brien", role: "SRE", team: "platform", level: "skip" },
+  { id: "p10", name: "Nadia Petrov", role: "Analyst", team: "finance", level: "skip" },
+];
+
+const EVENT_TYPES = [
+  "oneOnOne.held",
+  "decision.logged",
+  "decision.resolved",
+  "goal.updated",
+  "signal.raised",
+  "conflict.raised",
+  "conflict.resolved",
+  "org.network.edge",
+  "review.completed",
+  "praise.given",
+] as const;
+
+function iso(d: Date) {
+  return d.toISOString().slice(0, 10);
 }
 
-export function seedIfEmpty() {
-  if (store.hasData()) return;
-  const put = store.appendAt;
+/** Generates ~N days of synthetic org events across the roster. Deterministic for a given seed. */
+export function generateSeedEvents(seed: number = DEMO_SEED, days = 120): OrgEvent[] {
+  const rand = mulberry32(seed);
+  const events: OrgEvent[] = [];
+  let idSeq = 1;
+  const today = new Date();
+  const people = ROSTER.filter((p) => p.level !== "self");
+  const domains = ["people", "strategy", "ops", "finance", "product"];
 
-  // People (broken line: p-ghost reports to a nonexistent id)
-  put("person.added", { id: "p-ceo", name: "Dana Reyes", title: "CEO", reportsTo: null, createdAt: daysAgo(900) }, daysAgo(900));
-  put("person.added", { id: "p-vpe", name: "Marcus Lin", title: "VP Engineering", reportsTo: "p-ceo", createdAt: daysAgo(500) }, daysAgo(500));
-  put("person.added", { id: "p-vps", name: "Priya Shah", title: "VP Sales", reportsTo: "p-ceo", createdAt: daysAgo(400) }, daysAgo(400));
-  put("person.added", { id: "p-vpp", name: "Elena Tran", title: "VP Product", reportsTo: "p-ceo", createdAt: daysAgo(320) }, daysAgo(320));
-  put("person.added", { id: "p-eng1", name: "Jordan Kim", title: "Eng Lead", reportsTo: "p-vpe", createdAt: daysAgo(200) }, daysAgo(200));
-  put("person.added", { id: "p-sales1", name: "Alicia Cruz", title: "AE", reportsTo: "p-vps", createdAt: daysAgo(150) }, daysAgo(150));
-  put("person.added", { id: "p-ghost", name: "Ravi Desai", title: "Contractor PM", reportsTo: "p-missing", createdAt: daysAgo(90) }, daysAgo(90));
+  function push(daysAgo: number, type: string, data: Record<string, any>) {
+    const ts = new Date(today);
+    ts.setDate(ts.getDate() - daysAgo);
+    events.push({ id: `ev_${idSeq++}`, type, ts: iso(ts), data });
+  }
 
-  // Domain signals — a mix of ages so temporal buckets are non-trivial.
-  const signals: [number, number, string, string][] = [
-    // legal — old, structural
-    [240, 3.5, "legal", "Vendor DPA clause still unresolved"],
-    [210, 2.5, "legal", "Contract renewal ambiguity noted"],
-    [195, 3.0, "legal", "Regulatory inquiry opened (info only)"],
-    // people — mid-age, strategic drift
-    [95, 4.0, "people", "Attrition spike in eng org"],
-    [80, 3.0, "people", "Engagement survey dipped"],
-    [60, 2.5, "people", "Manager layer feels 1 level too thin"],
-    // ops — recent, reactive
-    [12, 4.5, "ops", "On-call paged 3 nights running"],
-    [6, 3.0, "ops", "Deploy pipeline flaky again"],
-    [2, 3.5, "ops", "Customer-facing outage, 40min"],
-    // finance — recent, reactive
-    [9, 3.0, "finance", "Runway forecast revised down"],
-    [4, 2.0, "finance", "Minor budget variance in Q"],
-    // strategy — mid-age
-    [110, 3.0, "strategy", "Roadmap bet unproven after one quarter"],
-    // product — recent
-    [15, 3.5, "product", "Churned-customer interviews flag onboarding gap"],
+  // Baseline cadence: 1:1s, slightly irregular per person (some people slip).
+  const oneOnOneGapByPerson: Record<string, number> = {
+    p1: 7, p2: 14, p3: 10, p4: 7, p5: 21, // p5 (Devon) intentionally slipping
+  };
+  Object.entries(oneOnOneGapByPerson).forEach(([pid, gap]) => {
+    for (let d = days; d >= 0; d -= gap) {
+      if (rand() < 0.85) push(d, "oneOnOne.held", { personId: pid, domain: "people" });
+    }
+  });
+
+  // Decisions: logged regularly, some resolved, some left stale.
+  const decisionTitles = [
+    "Adopt new deploy pipeline", "Reorg platform pods", "Vendor renewal: observability",
+    "Hiring plan Q-next", "Pricing experiment rollback", "SLA target change",
+    "Freeze non-critical migrations", "Promote Yuki to Staff", "Consolidate finance tooling",
   ];
-  signals.forEach(([d, sev, domain, title]) => put("signal.raised", { domain, severity: sev, title }, daysAgo(d)));
+  decisionTitles.forEach((title, i) => {
+    const age = 5 + Math.floor(rand() * (days - 5));
+    const domain = domains[i % domains.length];
+    const decisionId = `dec_${i}`;
+    push(age, "decision.logged", { decisionId, title, domain });
+    // ~55% get resolved within a plausible window; rest stay open (-> DECISION_STALE candidates).
+    if (rand() < 0.55) {
+      const resolveAfter = Math.max(1, Math.floor(rand() * Math.min(20, age)));
+      push(age - resolveAfter, "decision.resolved", { decisionId, domain });
+    }
+  });
 
-  // Goals — one ownerless, one silent
-  put("goal.set", { id: "g-1", title: "Cut onboarding time 30%", domain: "product", ownerId: null }, daysAgo(70));
-  put("goal.set", { id: "g-2", title: "Close legal DPA gap", domain: "legal", ownerId: "p-ceo" }, daysAgo(200));
-  put("goal.set", { id: "g-3", title: "Stabilize on-call rotation", domain: "ops", ownerId: "p-vpe" }, daysAgo(40));
-  put("goal.progress", { goalId: "g-3" }, daysAgo(35));
+  // Goals: most owned, a couple ownerless.
+  const goals = [
+    { title: "Reduce P1 incident count 30%", ownerId: "p1" },
+    { title: "Ship v2 onboarding flow", ownerId: "p2" },
+    { title: "Close platform cost gap", ownerId: undefined },
+    { title: "Expand analyst coverage", ownerId: "p5" },
+    { title: "Design system v3 adoption", ownerId: undefined },
+  ];
+  goals.forEach((g, i) => {
+    push(10 + i * 9, "goal.updated", { goalId: `goal_${i}`, title: g.title, ownerId: g.ownerId, domain: "strategy" });
+  });
 
-  // Decisions — some with confidence + outcome for calibration, two stale/avoided
-  put("decision.logged", { id: "d-1", title: "Ship pricing change", domain: "finance", confidence: 0.85 }, daysAgo(160));
-  put("decision.outcome", { decisionId: "d-1", outcome: "failure" }, daysAgo(150));
-  put("decision.logged", { id: "d-2", title: "Hire VP Product", domain: "people", confidence: 0.7 }, daysAgo(330));
-  put("decision.outcome", { decisionId: "d-2", outcome: "success" }, daysAgo(300));
-  put("decision.logged", { id: "d-3", title: "Expand into new region", domain: "strategy", confidence: 0.8 }, daysAgo(120));
-  put("decision.outcome", { decisionId: "d-3", outcome: "failure" }, daysAgo(90));
-  put("decision.logged", { id: "d-4", title: "Rebuild legal escalation path", domain: "legal" }, daysAgo(75)); // stale, no outcome, no confidence — avoidance candidate
-  put("decision.logged", { id: "d-5", title: "Sunset legacy on-call tool", domain: "ops" }, daysAgo(50)); // also stale
+  // Signals: sparse, occasionally recent (so findings have sources).
+  const signalTitles = [
+    "Deploy frequency down 35% this sprint", "Churn ticked up in SMB segment",
+    "On-call page volume +2x week-over-week", "Vendor spend 18% over forecast",
+  ];
+  signalTitles.forEach((title, i) => {
+    push(2 + i * 11, "signal.raised", { title, domain: domains[(i + 2) % domains.length], severity: 2 + (i % 3) });
+  });
 
-  // Commitments — one overdue
-  put("commitment.made", { id: "c-1", ownerId: "p-vps", desc: "Send updated sales forecast", by_date: daysAgo(-5) }, daysAgo(20));
+  // Conflicts: mostly resolved, one left open.
+  const conflicts = [
+    { id: "c1", personId: "p2", resolved: true },
+    { id: "c2", personId: "p4", resolved: true },
+    { id: "c3", personId: "p3", resolved: false },
+  ];
+  conflicts.forEach((c, i) => {
+    const age = 18 + i * 12;
+    push(age, "conflict.raised", { conflictId: c.id, personId: c.personId, domain: "people" });
+    if (c.resolved) push(age - 6, "conflict.resolved", { conflictId: c.id, domain: "people" });
+  });
 
-  // Snoozes — repeated, to feed avoidance + suppression branches
-  put("engine.snoozed", { key: "decision-stale:d-4" }, daysAgo(60));
-  put("engine.snoozed", { key: "decision-stale:d-4" }, daysAgo(40));
-  put("engine.snoozed", { key: "decision-stale:d-4" }, daysAgo(20));
-  put("engine.snoozed", { key: "goal-ownerless:g-1" }, daysAgo(50));
-  put("engine.snoozed", { key: "goal-ownerless:g-1" }, daysAgo(25));
+  // Network edges: collaboration graph. Nadia (p10) intentionally sparse -> bottleneck candidate.
+  const edgeWeights: Array<[string, string, number]> = [
+    ["p1", "p3", 18], ["p1", "p6", 10], ["p1", "p9", 9],
+    ["p2", "p4", 14], ["p2", "p7", 12], ["p2", "p8", 8],
+    ["p3", "p6", 11], ["p3", "p9", 7],
+    ["p4", "p8", 9],
+    ["p5", "p10", 1], // sparse on purpose
+    ["me", "p1", 20], ["me", "p2", 20], ["me", "p3", 10], ["me", "p4", 10], ["me", "p5", 8],
+  ];
+  edgeWeights.forEach(([from, to, weight]) => {
+    for (let i = 0; i < weight; i++) {
+      push(Math.floor(rand() * days), "org.network.edge", { fromId: from, toId: to });
+    }
+  });
 
-  // Wins / culture, for a non-zero energy source side
-  put("goal.closed", { goalId: "g-0", result: "done" }, daysAgo(10));
-  put("conflict.resolved", {}, daysAgo(18));
-  put("culture.signal", { polarity: "positive" }, daysAgo(8));
-  put("culture.signal", { polarity: "positive" }, daysAgo(22));
+  // Reviews + praise: general texture for entropy (adds event-type diversity).
+  people.forEach((p) => {
+    const reviews = 1 + Math.floor(rand() * 3);
+    for (let i = 0; i < reviews; i++) {
+      push(Math.floor(rand() * days), "review.completed", { personId: p.id, domain: "people" });
+    }
+    if (rand() < 0.6) push(Math.floor(rand() * days), "praise.given", { personId: p.id, domain: "people" });
+  });
 
-  // Pipeline checks for information entropy
-  put("info.pipeline.check", { name: "Weekly metrics digest", blocked: false }, daysAgo(14));
-  put("info.pipeline.check", { name: "Customer health sync", blocked: true }, daysAgo(7));
-
-  // Growth plans — several open, no spine movement, feeds the coaching question
-  put("growth.plan.opened", { id: "gp-1", personId: "p-eng1", domain: "ops", startD: "D2" }, daysAgo(100));
-  put("growth.plan.opened", { id: "gp-2", personId: "p-sales1", domain: "finance", startD: "D1" }, daysAgo(80));
-  put("growth.plan.opened", { id: "gp-3", personId: "p-vpp", domain: "product", startD: "D3" }, daysAgo(60));
-  put("growth.plan.opened", { id: "gp-4", personId: "p-vps", domain: "strategy", startD: "D2" }, daysAgo(30));
-
-  // No succession.candidate events on purpose — org is old enough (900d) for that branch to be reachable from #/lab.
+  events.sort((a, b) => a.ts.localeCompare(b.ts));
+  return events;
 }
+
+export const _EVENT_TYPES_FOR_REFERENCE = EVENT_TYPES;

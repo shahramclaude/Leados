@@ -1,70 +1,48 @@
-// Shared types for the LeadOS-Lite decision support app.
-// ORIGINAL to this build — not copied from any external source.
+// src/lib/types.ts
+//
+// Data model for this delivery's event log + org roster.
+// ORIGINAL to this sandbox session (pt-L). Not copied from, or a port of,
+// anything found in github.com/wbweve/Leados — see AI-SESSION-LOG.md.
 
-export type EventType =
-  | "decision.logged"
-  | "bio.energy.logged"
-  | "bio.fatigue.noted"
-  | "simulation.run"
-  | "a11y.profile.changed";
+export type Level = "self" | "direct" | "skip";
 
-export interface AppEvent<T = Record<string, unknown>> {
+export interface Person {
   id: string;
-  type: EventType;
-  ts: string; // ISO timestamp
-  payload: T;
+  name: string;
+  role: string;
+  team: string;
+  level: Level;
 }
 
-export type CircadianPhase =
-  | "MORNING_PEAK"
-  | "MIDDAY_STEADY"
-  | "POST_LUNCH_DIP"
-  | "AFTERNOON_RECOVERY"
-  | "EVENING_WIND_DOWN"
-  | "SLEEP_PREPARATION"
-  | "LOW_ALERTNESS_NIGHT";
-
-export interface CircadianProfile {
-  phase: CircadianPhase;
-  label: string;
-  analytical: number; // 0..1 relative capacity heuristic
-  workingMemory: number; // 0..1
-  note: string;
+export interface OrgEvent {
+  id: string;
+  type: string;
+  ts: string; // ISO date string, e.g. "2026-01-15"
+  data: Record<string, any>;
 }
 
-export interface Scenario {
-  id: string;
-  label: string;
-  probability: number; // 0..1, should sum to 1 across a decision's scenarios
-  impact: number; // signed value, e.g. revenue delta in $k
-  spread: number; // +/- variability applied as uniform noise around impact
+export interface ProjectionState {
+  events: OrgEvent[];
 }
 
-export interface Decision {
-  id: string;
+export interface Projection {
+  self: Person;
+  directs: Person[];
+  skips: Person[];
+  state: ProjectionState;
+}
+
+export interface Finding {
+  key: string;
+  rule: string;
+  domain: string;
+  sev: number; // 1 (low) .. 4 (critical)
+  ts: string;
   title: string;
-  type: DecisionType;
-  createdAt: string;
-  scenarios: Scenario[];
+  detail: string;
+  sources: string[]; // event ids this finding was derived from
 }
 
-export type DecisionType =
-  | "hire"
-  | "termination-prep"
-  | "strategy.decision"
-  | "vendor"
-  | "budget"
-  | "other";
-
-export interface MonteCarloResult {
-  iterations: number;
-  seed: number;
-  mean: number;
-  median: number;
-  p10: number;
-  p90: number;
-  probPositive: number;
-  histogram: { bucket: string; pct: number }[];
-  computedVia: "worker" | "main-thread-fallback";
-  ms: number;
+export interface EngineResult {
+  findings: Finding[];
 }
