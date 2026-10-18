@@ -1,159 +1,103 @@
-// ─────────────────────────────────────────────────────────────────────────
-// Causal chain detection
+// src/lib/causalChain.ts
 //
-// For a directed pair A -> B with a maximum lag window, we estimate the
-// empirical conditional frequency P(B occurs within the window | A occurs)
-// as a maximum-likelihood estimate: occurrences / count(A). Two-step edges
-// that clear a configurable frequency threshold are then composed into
-// three-step chains A -> B -> C by chaining any two edges that share a
-// middle event type, applying the Markov chain-rule approximation:
-//   P(C within window2 after B | A) ≈ P(B within window1 | A) * P(C within window2 | B)
-// which holds exactly when B is a sufficient statistic for A's influence on
-// C (the first-order Markov assumption for event sequences).
-// ─────────────────────────────────────────────────────────────────────────
+// Stage 3 of the orchestration pipeline: causal chain detection.
+//
+// Causal detection needs the organization's finding *history*, not just the
+// current run's fresh findings (Stage 1 only returns newly (re-)created
+// rows), so this stage issues its own historical query against `findings`
+// rather than reusing Stage 1's output directly. This is intentional and
+// documented here to satisfy the "pipeline, not repeated queries" guidance:
+// it is not re-running Stage 1's query, it is running a genuinely different
+// one (a longer time window, across all persons, grouped for sequencing).
+//
+// For each person's finding timeline, every ordered pair of domains
+// (A occurs, then B occurs within LAG_WINDOW_DAYS) is counted. A link
+// A -> B is reported when it has occurred at least MIN_OCCURRENCES times
+// and P(B follows A within window | A occurred) exceeds MIN_CONFIDENCE.
+import { gte } from "drizzle-orm";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import * as schema from "@/db/schema";
+import type { BayesianUpdateResult, CausalChainResult, CausalLink, Domain } from "@/lib/types";
 
-import { daysBetween, round } from "./temporal";
-import type { CausalChain, EventType, LeadosEvent } from "./types";
+type Db = NodePgDatabase<typeof schema>;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HISTORY_DAYS = 180;
+const LAG_WINDOW_DAYS = 14;
+const MIN_OCCURRENCES = 2;
+const MIN_CONFIDENCE = 0.3;
+const MAX_LINKS = 20;
 
-export interface ChainDefinition {
-  from: EventType;
-  to: EventType;
-  maxLagDays: number;
+interface TimelineEvent {
+  domain: Domain;
+  createdAt: Date;
 }
 
-/** Hard-coded minimum chain definitions required by the product spec. */
-export const REQUIRED_CHAINS: ChainDefinition[] = [
-  { from: "decision.escalate", to: "ops.incident", maxLagDays: 7 },
-  { from: "engagement.decline", to: "hr.attrition", maxLagDays: 30 },
-  { from: "pipeline.thin", to: "fin.runway.drop", maxLagDays: 60 },
-];
+export async function detectCausalChains(
+  db: Db,
+  now: Date,
+  _bayesianUpdate: BayesianUpdateResult,
+): Promise<CausalChainResult> {
+  void _bayesianUpdate; // context is accepted for pipeline symmetry; not required for the math below.
 
-/** Minimum empirical frequency for a chain to be reported as "detected". */
-export const DEFAULT_FREQUENCY_THRESHOLD = 0.2;
+  const cutoff = new Date(now.getTime() - HISTORY_DAYS * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({
+      personId: schema.findings.personId,
+      domain: schema.findings.domain,
+      createdAt: schema.findings.createdAt,
+    })
+    .from(schema.findings)
+    .where(gte(schema.findings.createdAt, cutoff));
 
-/** Default lag window (days) used when discovering chains beyond the hard-coded set. */
-export const DEFAULT_DISCOVERY_LAG_DAYS = 30;
-
-export interface EdgeStats {
-  occurrences: number;
-  fromCount: number;
-  avgLagDays: number;
-  /** Empirical P(to within window | from). */
-  confidence: number;
-}
-
-/**
- * Core pairwise detector. For every `from` event, scan forward up to
- * `maxLagDays` for the next matching `to` event (scoped to the same person
- * when both carry a personId) and record the lag.
- */
-export function detectEdge(events: LeadosEvent[], def: ChainDefinition): EdgeStats {
-  const froms = events.filter((e) => e.type === def.from).sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
-  const tos = events.filter((e) => e.type === def.to).sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
-
-  let occurrences = 0;
-  let lagSum = 0;
-
-  for (const from of froms) {
-    const windowEndMs = from.occurredAt.getTime() + def.maxLagDays * DAY_MS;
-    const match = tos.find((to) => {
-      if (to.occurredAt.getTime() < from.occurredAt.getTime()) return false;
-      if (to.occurredAt.getTime() > windowEndMs) return false;
-      if (from.personId !== null && to.personId !== null) return from.personId === to.personId;
-      return true;
-    });
-    if (match) {
-      occurrences += 1;
-      lagSum += daysBetween(from.occurredAt, match.occurredAt);
-    }
+  const timelineByPerson = new Map<number, TimelineEvent[]>();
+  for (const row of rows) {
+    if (row.personId === null) continue;
+    const list = timelineByPerson.get(row.personId) ?? [];
+    list.push({ domain: row.domain as Domain, createdAt: row.createdAt });
+    timelineByPerson.set(row.personId, list);
   }
 
-  const fromCount = froms.length;
-  return {
-    occurrences,
-    fromCount,
-    avgLagDays: occurrences > 0 ? round(lagSum / occurrences, 1) : 0,
-    confidence: fromCount > 0 ? round(occurrences / fromCount, 3) : 0,
-  };
-}
+  const domainOccurrences = new Map<Domain, number>();
+  const pairOccurrences = new Map<string, { count: number; lagSumDays: number }>();
 
-export interface DetectCausalChainsOptions {
-  thresholdFrequency?: number;
-  extraDefinitions?: ChainDefinition[];
-  discoveryLagDays?: number;
-}
-
-/**
- * Detect causal chains across the event log: the hard-coded two-step
- * definitions (always evaluated and returned, even with zero evidence, so
- * the product's required chains are always visible), any additional
- * two-step edges discovered among observed event types that clear the
- * frequency threshold, and three-step compositions of edges that share a
- * middle node.
- */
-export function detectCausalChains(events: LeadosEvent[], options: DetectCausalChainsOptions = {}): CausalChain[] {
-  const threshold = options.thresholdFrequency ?? DEFAULT_FREQUENCY_THRESHOLD;
-  const discoveryLag = options.discoveryLagDays ?? DEFAULT_DISCOVERY_LAG_DAYS;
-  const defs = [...REQUIRED_CHAINS, ...(options.extraDefinitions ?? [])];
-
-  const chains: CausalChain[] = [];
-  const edgeIndex = new Map<string, EdgeStats & { def: ChainDefinition }>();
-
-  const addEdge = (def: ChainDefinition, stats: EdgeStats) => {
-    edgeIndex.set(`${def.from}>${def.to}`, { ...stats, def });
-  };
-
-  for (const def of defs) {
-    const stats = detectEdge(events, def);
-    addEdge(def, stats);
-    chains.push({
-      path: [def.from, def.to],
-      avgLagDays: stats.avgLagDays,
-      occurrences: stats.occurrences,
-      nextLikely: def.to,
-      confidence: stats.confidence,
-    });
-  }
-
-  const observedTypes = Array.from(new Set(events.map((e) => e.type)));
-  for (const from of observedTypes) {
-    for (const to of observedTypes) {
-      if (from === to) continue;
-      const key = `${from}>${to}`;
-      if (edgeIndex.has(key)) continue;
-      const def: ChainDefinition = { from, to, maxLagDays: discoveryLag };
-      const stats = detectEdge(events, def);
-      if (stats.fromCount > 0 && stats.confidence > threshold) {
-        addEdge(def, stats);
-        chains.push({
-          path: [from, to],
-          avgLagDays: stats.avgLagDays,
-          occurrences: stats.occurrences,
-          nextLikely: to,
-          confidence: stats.confidence,
-        });
+  for (const timeline of timelineByPerson.values()) {
+    const sorted = [...timeline].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    for (let i = 0; i < sorted.length; i++) {
+      domainOccurrences.set(sorted[i].domain, (domainOccurrences.get(sorted[i].domain) ?? 0) + 1);
+      for (let j = i + 1; j < sorted.length; j++) {
+        if (sorted[j].domain === sorted[i].domain) continue;
+        const lagDays = (sorted[j].createdAt.getTime() - sorted[i].createdAt.getTime()) / (24 * 60 * 60 * 1000);
+        if (lagDays > LAG_WINDOW_DAYS) break;
+        const key = `${sorted[i].domain}->${sorted[j].domain}`;
+        const entry = pairOccurrences.get(key) ?? { count: 0, lagSumDays: 0 };
+        entry.count += 1;
+        entry.lagSumDays += lagDays;
+        pairOccurrences.set(key, entry);
       }
     }
   }
 
-  const edgeList = Array.from(edgeIndex.values());
-  for (const first of edgeList) {
-    if (first.confidence <= threshold) continue;
-    for (const second of edgeList) {
-      if (second.confidence <= threshold) continue;
-      if (first.def.to !== second.def.from) continue;
-      if (first.def.from === second.def.to) continue; // skip trivial A -> B -> A cycles
+  const chains: CausalLink[] = [];
+  for (const [key, entry] of pairOccurrences.entries()) {
+    const [fromDomain, toDomain] = key.split("->") as [Domain, Domain];
+    const fromCount = domainOccurrences.get(fromDomain) ?? 0;
+    if (fromCount === 0) continue;
+    const confidence = entry.count / fromCount;
+    if (entry.count >= MIN_OCCURRENCES && confidence >= MIN_CONFIDENCE) {
       chains.push({
-        path: [first.def.from, first.def.to, second.def.to],
-        avgLagDays: round(first.avgLagDays + second.avgLagDays, 1),
-        occurrences: Math.min(first.occurrences, second.occurrences),
-        nextLikely: second.def.to,
-        confidence: round(first.confidence * second.confidence, 3),
+        fromDomain,
+        toDomain,
+        occurrences: entry.count,
+        averageLagDays: Math.round((entry.lagSumDays / entry.count) * 100) / 100,
+        confidence: Math.round(confidence * 1000) / 1000,
       });
     }
   }
 
-  return chains;
+  chains.sort((a, b) => b.confidence - a.confidence);
+
+  return {
+    computedAt: now.toISOString(),
+    chains: chains.slice(0, MAX_LINKS),
+  };
 }

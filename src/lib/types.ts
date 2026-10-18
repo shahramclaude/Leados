@@ -1,170 +1,235 @@
-// Shared domain types for the Leados intelligence workspace.
-// These are the contracts every API route and every view agree on.
+// Shared type definitions for the Unified Intelligence Core.
+//
+// Every report produced by a pipeline stage in src/lib/orchestrator.ts is
+// typed here. No `any`, no type assertions. Timestamps are ISO-8601 strings
+// (not Date instances) so results serialize cleanly to JSONB / SSE payloads.
 
 export type Domain =
-  | "people"
-  | "decisions"
-  | "metrics"
-  | "execution"
-  | "finance"
-  | "product"
+  | "workload"
+  | "sentiment"
+  | "retention"
   | "culture"
+  | "engagement"
+  | "collaboration"
+  | "performance"
   | "risk";
 
 export type Severity = 1 | 2 | 3 | 4 | 5;
 
+export type BeliefKey = "flight_risk" | "burnout" | "disengagement";
+
+export type RiskBand = "low" | "moderate" | "elevated" | "high" | "critical";
+
+// --- Stage 1: rule evaluation (src/lib/engine.ts) -----------------------
+
 export interface Finding {
-  id: string;
-  domain: Domain;
-  severity: Severity;
-  title: string;
-  detail: string;
-  ruleKey: string | null;
-  createdAt: string;
-}
-
-export interface DomainHealth {
-  domain: Domain;
-  score: number; // 0-100
-  trend: "up" | "down" | "flat";
-  findingCount: number;
-  criticalCount: number;
-}
-
-export interface IntelligenceReport {
-  orgHealthScore: number; // 0-100 weighted composite
-  domainHealth: DomainHealth[];
-  findings: Finding[];
-  criticalFindingsCount: number;
-  generatedAt: string;
-}
-
-export interface Notification {
   id: number;
-  title: string;
+  ruleId: string;
+  domain: Domain;
+  personId: number | null;
+  teamId: string | null;
+  severity: Severity;
   message: string;
-  severity: Severity;
-  domain: string;
-  read: boolean;
+  evidence: Record<string, number | string>;
+  active: boolean;
   createdAt: string;
-  link: string | null;
 }
 
-export interface OrgNetworkNode {
-  id: number;
-  name: string;
-  role: string;
-  team: string;
-  managerId: number | null;
-  centrality: number; // PageRank score, normalized 0-1
-  isolationRisk: boolean;
-  daysSinceLastOneOnOne: number | null;
+export interface RuleEvaluationResult {
+  computedAt: string;
+  rulesEvaluated: number;
+  peopleEvaluated: number;
+  findings: Finding[];
 }
 
-export interface OrgNetworkEdge {
-  source: number;
-  target: number;
+// --- Stage 2: Bayesian belief updates (src/lib/bayesianNetwork.ts) ------
+
+export interface BeliefNode {
+  personId: number;
+  nodeKey: BeliefKey;
+  priorProbability: number;
+  probability: number;
+  evidenceCount: number;
+  updatedAt: string;
+}
+
+export interface BayesianUpdateResult {
+  computedAt: string;
+  beliefs: BeliefNode[];
+}
+
+// --- Stage 3: causal chain detection (src/lib/causalChain.ts) -----------
+
+export interface CausalLink {
+  fromDomain: Domain;
+  toDomain: Domain;
+  occurrences: number;
+  averageLagDays: number;
+  confidence: number;
+}
+
+export interface CausalChainResult {
+  computedAt: string;
+  chains: CausalLink[];
+}
+
+// --- Stage 4: signal fusion (src/lib/signalFusion.ts) --------------------
+
+export interface FusedSignal {
+  personId: number;
+  riskScore: number;
+  findingContribution: number;
+  beliefContribution: number;
+  causalContribution: number;
+  contributingDomains: Domain[];
+}
+
+export interface SignalFusionResult {
+  computedAt: string;
+  fusedSignals: FusedSignal[];
+  orgFusedScore: number;
+}
+
+// --- Stage 5: predictive scoring (src/lib/predictiveScoring.ts) ---------
+
+export interface PersonRiskScore {
+  personId: number;
+  score: number;
+  band: RiskBand;
+  drivers: string[];
+}
+
+export interface BurnoutRiskResult {
+  computedAt: string;
+  scores: PersonRiskScore[];
+  orgAverage: number;
+}
+
+export interface FlightRiskResult {
+  computedAt: string;
+  scores: PersonRiskScore[];
+  orgAverage: number;
+}
+
+// --- Stage 6: decision health index (src/lib/metricsEngine.ts) ----------
+
+export interface DecisionHealthComponent {
+  label: string;
+  value: number;
   weight: number;
-}
-
-export interface OrgNetworkReport {
-  nodes: OrgNetworkNode[];
-  edges: OrgNetworkEdge[];
-  bottleneckPersonId: number | null;
-  avgSpanOfControl: number;
-  isolatedCount: number;
-  generatedAt: string;
 }
 
 export interface DecisionHealthIndex {
-  score: number; // 0-100
-  totalDecisions: number;
-  overdueCount: number;
-  avgCycleTimeDays: number;
-  brierScore: number | null; // calibration of confidence vs outcome, lower is better
-  decidedWithOutcomeCount: number;
-  generatedAt: string;
-}
-
-export interface RuleHealth {
-  ruleKey: string;
-  name: string;
-  domain: string;
-  status: "healthy" | "warning" | "critical";
+  computedAt: string;
   score: number;
-  weight: number;
-  enabled: boolean;
-  lastEvaluatedAt: string | null;
-  detail: string;
+  components: DecisionHealthComponent[];
 }
 
-export interface MetricHealth {
-  key: string;
-  label: string;
-  domain: string;
-  currentValue: number | null;
-  target: number;
-  benchmark: number;
-  zScore: number | null;
-  mapeVsTarget: number | null;
-  trend: "up" | "down" | "flat";
-  status: "healthy" | "warning" | "critical";
-}
+// --- Stage 7: knowledge graph (src/lib/knowledgeGraph.ts) ---------------
+
+export type GraphNodeType = "person" | "team" | "domain";
+export type GraphEdgeKind = "causal" | "finding" | "collaboration";
 
 export interface GraphNode {
   id: string;
-  type: "person" | "decision" | "metric" | "insight" | "playbook";
+  type: GraphNodeType;
   label: string;
-  importance: number; // PageRank score
+  weight: number;
 }
 
 export interface GraphEdge {
   source: string;
   target: string;
-  relation: string;
+  weight: number;
+  kind: GraphEdgeKind;
 }
 
-export interface GraphSubgraph {
+export interface OrgNetworkReport {
+  computedAt: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
-  generatedAt: string;
+  density: number;
 }
 
-export interface WeeklyBriefing {
-  executiveSummary: string;
-  highlights: string[];
-  risks: string[];
-  generatedAt: string;
-}
+// --- Stage 8: narrative synthesis (src/lib/synthesis.ts / narrativeIntel.ts)
 
-export type CaptureType =
-  | "one_on_one"
-  | "decision"
-  | "metric_update"
-  | "incident"
-  | "feedback";
-
-export interface ClassificationResult {
-  type: CaptureType;
-  confidence: number; // 0-1
-  scores: Record<CaptureType, number>;
-}
-
-export interface PriorityItem {
+export interface NarrativeItem {
   id: string;
-  domain: Domain;
+  title: string;
+  summary: string;
+  domain: Domain | "org";
   severity: Severity;
-  title: string;
-  context: string;
-  suggestedAction: string;
-  sourceType: "finding" | "decision" | "notification" | "oneonone";
-  sourceId: string;
+  relatedPersonIds: number[];
 }
 
-export interface UpcomingItem {
+export interface NarrativeReport {
+  computedAt: string;
+  narratives: NarrativeItem[];
+}
+
+// --- Stage 9: scenario scoring (src/lib/scenarioEngine.ts) ---------------
+
+export interface ScenarioScore {
   id: string;
-  date: string;
-  type: "one_on_one" | "decision" | "playbook";
-  title: string;
-  overdue: boolean;
+  name: string;
+  description: string;
+  likelihood: number;
+  impactScore: number;
+  exposure: number;
+  affectedPersonIds: number[];
+}
+
+export interface ScenarioReport {
+  computedAt: string;
+  scenarios: ScenarioScore[];
+}
+
+// --- Legacy-shaped aggregate (what /api/intelligence historically returned)
+
+export interface IntelligenceReport {
+  computedAt: string;
+  ruleEvaluation: RuleEvaluationResult;
+  bayesian: BayesianUpdateResult;
+  causal: CausalChainResult;
+  fusion: SignalFusionResult;
+}
+
+// --- Orchestrator -----------------------------------------------------
+
+export interface OrgHealthWeights {
+  ruleSeverity: number;
+  belief: number;
+  causal: number;
+  fusion: number;
+  burnout: number;
+  flightRisk: number;
+  decisionHealth: number;
+  network: number;
+  scenario: number;
+}
+
+export interface StageTiming {
+  stage: string;
+  durationMs: number;
+  ok: boolean;
+  error: string | null;
+}
+
+/**
+ * OrchestratorResult is the single unified payload produced by
+ * runFullOrchestration(). It is a strict union (intersection, in TS terms)
+ * of every sub-engine's report plus pipeline metadata.
+ */
+export interface OrchestratorResult {
+  generatedAt: string;
+  orgHealthScore: number;
+  weights: OrgHealthWeights;
+  timings: StageTiming[];
+  intelligence: IntelligenceReport;
+  burnout: BurnoutRiskResult;
+  flightRisk: FlightRiskResult;
+  decisionHealth: DecisionHealthIndex;
+  network: OrgNetworkReport;
+  narratives: NarrativeReport;
+  scenarios: ScenarioReport;
 }
