@@ -1,140 +1,129 @@
-// Database schema for the Leados autonomous intelligence platform.
-//
-// NOTE ON SCOPE: This task ("Part 2 of 8") assumes a Part 1 foundation
-// (people/domains/rules/orchestrator) that was not actually present in
-// this repository snapshot. The core entity tables below (people,
-// domains, metricSnapshots, causalChains, rules, decisionOutcomes) were
-// reconstructed as minimal scaffolding so the Part 2 deliverables
-// (rule calibration, hypothesis generation/resolution, agent audit log)
-// have real tables to read/write. The Part 2-specific tables
-// (hypotheses, agentAuditLog) and all calibration/hypothesis logic are
-// the primary deliverables of this task.
-
 import {
-  pgTable,
-  serial,
-  text,
-  real,
   boolean,
   integer,
-  timestamp,
   jsonb,
+  pgEnum,
+  pgTable,
+  real,
+  serial,
+  text,
+  timestamp,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Part 1 scaffolding (reconstructed minimal entities required by Part 2)
+// Fixed 8-domain taxonomy for the Leados command center. Every chart, radar
+// axis and heatmap row is driven off this single enum so the UI never has to
+// guess at domain membership.
 // ---------------------------------------------------------------------------
+export const domainEnum = pgEnum("domain", [
+  "people",
+  "risk",
+  "pipeline",
+  "finance",
+  "product",
+  "customer",
+  "strategy",
+  "operations",
+]);
+
+export const severityEnum = pgEnum("severity", ["1", "2", "3", "4", "5"]);
+
+export const hypothesisStatusEnum = pgEnum("hypothesis_status", [
+  "open",
+  "confirmed",
+  "refuted",
+]);
+
+export const decisionStatusEnum = pgEnum("decision_status", [
+  "open",
+  "overdue",
+  "resolved",
+]);
+
+// Each orchestrator pass writes one row per rule, per run. Keeping a history
+// of rows is what powers the Signal Board sparklines and the severity
+// heatmap (grouping by day + domain).
+export const ruleEvaluations = pgTable("rule_evaluations", {
+  id: serial("id").primaryKey(),
+  ruleKey: text("rule_key").notNull(),
+  domain: domainEnum("domain").notNull(),
+  title: text("title").notNull(),
+  score: real("score").notNull(),
+  severity: integer("severity").notNull(),
+  evaluatedAt: timestamp("evaluated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Daily-ish snapshots of the aggregate domain score, used for the radar's
+// "ghost" prior polygon and for the single orgHealthScore delta.
+export const domainScores = pgTable("domain_scores", {
+  id: serial("id").primaryKey(),
+  domain: domainEnum("domain").notNull(),
+  score: real("score").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const findings = pgTable("findings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ruleKey: text("rule_key").notNull(),
+  domain: domainEnum("domain").notNull(),
+  severity: integer("severity").notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  probability: real("probability"),
+  causalChainId: text("causal_chain_id"),
+  amplificationFactor: real("amplification_factor"),
+  dismissed: boolean("dismissed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const causalChains = pgTable("causal_chains", {
+  id: text("id").primaryKey(),
+  description: text("description").notNull(),
+  ruleKeys: jsonb("rule_keys").notNull().$type<string[]>(),
+  amplificationFactor: real("amplification_factor").notNull().default(1),
+});
+
+export const riskItems = pgTable("risk_items", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  domain: domainEnum("domain").notNull().default("risk"),
+  probability: real("probability").notNull(),
+  impact: real("impact").notNull(),
+  amplificationFactor: real("amplification_factor"),
+  causalChainId: text("causal_chain_id"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const people = pgTable("people", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  email: text("email"),
-  department: text("department"),
-  // Simulated/derived flight risk score in [0, 1]. Updated each agent run.
-  flightRiskScore: real("flight_risk_score").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  role: text("role").notNull(),
+  flightRiskProbability: real("flight_risk_probability").notNull(),
+  burnoutIndex: real("burnout_index").notNull(),
+  cadenceHealth: real("cadence_health").notNull(),
+  lastOneOnOneAt: timestamp("last_one_on_one_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const domains = pgTable("domains", {
+export const decisions = pgTable("decisions", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
-  healthScore: real("health_score").notNull().default(100),
-  priorHealthScore: real("prior_health_score").notNull().default(100),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const metricSnapshots = pgTable("metric_snapshots", {
-  id: serial("id").primaryKey(),
-  domainId: integer("domain_id").references(() => domains.id),
-  metricName: text("metric_name").notNull(),
-  value: real("value").notNull(),
-  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const causalChains = pgTable("causal_chains", {
-  id: serial("id").primaryKey(),
-  causeDomainId: integer("cause_domain_id").references(() => domains.id),
-  effectDomainId: integer("effect_domain_id").references(() => domains.id),
-  causeLabel: text("cause_label").notNull(),
-  effectLabel: text("effect_label").notNull(),
-  confidence: real("confidence").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const rules = pgTable("rules", {
-  id: serial("id").primaryKey(),
-  key: text("key").notNull().unique(),
-  name: text("name").notNull(),
-  description: text("description"),
-  category: text("category").notNull(),
-  // Live, self-calibrated weight. Clamped to [0.1, 3.0] by selfImprove.ts.
-  weight: real("weight").notNull().default(1.0),
-  baseWeight: real("base_weight").notNull().default(1.0),
-  enabled: boolean("enabled").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// Per-run evaluation record for a rule. `outcome` is filled in later (by
-// resolveHypotheses or manual review) once ground truth is known, which is
-// what allows Brier-score calibration in selfImprove.ts.
-export const ruleEvaluations = pgTable("rule_evaluations", {
-  id: serial("id").primaryKey(),
-  ruleId: integer("rule_id")
-    .notNull()
-    .references(() => rules.id),
-  runId: text("run_id").notNull(),
-  predictedProbability: real("predicted_probability").notNull(),
-  outcome: boolean("outcome"),
-  context: jsonb("context"),
-  evaluatedAt: timestamp("evaluated_at", { withTimezone: true }).notNull().defaultNow(),
+  title: text("title").notNull(),
+  owner: text("owner").notNull(),
+  status: decisionStatusEnum("status").notNull().default("open"),
+  openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+  dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  cycleTimeDays: real("cycle_time_days"),
 });
-
-// "Decision outcomes" referenced by the calibration spec: discrete
-// decisions the system made (e.g. "escalate", "ignore") tied to a rule,
-// resolved later with an actual outcome. Feeds into the same Brier pool
-// as rule_evaluations.
-export const decisionOutcomes = pgTable("decision_outcomes", {
-  id: serial("id").primaryKey(),
-  runId: text("run_id").notNull(),
-  ruleId: integer("rule_id").references(() => rules.id),
-  subjectType: text("subject_type").notNull(),
-  subjectId: text("subject_id").notNull(),
-  decision: text("decision").notNull(),
-  predictedProbability: real("predicted_probability").notNull().default(1.0),
-  outcome: boolean("outcome"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-});
-
-// ---------------------------------------------------------------------------
-// Part 2 deliverables
-// ---------------------------------------------------------------------------
 
 export const hypotheses = pgTable("hypotheses", {
   id: serial("id").primaryKey(),
-  key: text("key").notNull(),
-  entityId: text("entity_id").notNull(),
-  entityType: text("entity_type").notNull(), // 'person' | 'domain' | 'causal_chain'
-  claim: text("claim").notNull(),
-  // Optional link back to the rule that should be rewarded/penalized once resolved.
-  ruleKey: text("rule_key"),
-  // Baseline/trigger data captured at creation time, used by resolveHypotheses
-  // to compare "current" vs "at creation" state without re-deriving it.
-  context: jsonb("context"),
-  predictedBy: timestamp("predicted_by", { withTimezone: true }).notNull(),
+  statement: text("statement").notNull(),
+  domain: domainEnum("domain").notNull(),
+  status: hypothesisStatusEnum("status").notNull().default("open"),
+  openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
   resolveBy: timestamp("resolve_by", { withTimezone: true }).notNull(),
-  status: text("status").notNull().default("open"), // open | confirmed | refuted
-  outcomeValue: jsonb("outcome_value"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-});
-
-export const agentAuditLog = pgTable("agent_audit_log", {
-  id: serial("id").primaryKey(),
-  runId: text("run_id").notNull(),
-  payload: jsonb("payload").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  outcome: text("outcome"),
 });

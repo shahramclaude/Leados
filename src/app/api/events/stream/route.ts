@@ -1,130 +1,70 @@
-// src/app/api/events/stream/route.ts
-//
-// Server-Sent Events stream for the Unified Intelligence Core.
-//
-// UNVERIFIED-PRIOR-STATE: the task brief describes this as an existing file
-// to "upgrade", but no such file existed in this sandbox's repository (see
-// orchestrator.ts header for the full provenance note). This is a new
-// implementation built to the brief's contract: run orchestration on an
-// interval, diff the resulting findings against the previously cached
-// result, and push only the delta as `{ event: "findings_delta", data: [...] }`.
-//
-// Connection management:
-//   - One polling/orchestration interval per connection.
-//   - A separate, lighter heartbeat comment keeps intermediaries (proxies,
-//     browsers) from timing out the connection when there is no delta.
-//   - `request.signal`'s abort event (fired when the client disconnects)
-//     tears down both intervals and closes the controller so no timers
-//     leak across requests.
-import { db } from "@/db";
-import { cacheOrchestratorResult, getLatestOrchestratorResult, runFullOrchestration } from "@/lib/orchestrator";
-import type { Finding } from "@/lib/types";
+import { pickRuleSubset, runOrchestrator } from "@/lib/orchestrator";
+import type { FindingsDeltaEvent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const ORCHESTRATION_INTERVAL_MS = 15_000;
-const HEARTBEAT_INTERVAL_MS = 15_000;
+const TICK_MS = 10_000;
+const HEARTBEAT_MS = 15_000;
 
-function diffFindings(previous: Finding[], next: Finding[]): Finding[] {
-  const previousById = new Map(previous.map((f) => [f.id, f]));
-  const delta: Finding[] = [];
-  for (const finding of next) {
-    const prior = previousById.get(finding.id);
-    if (!prior || prior.severity !== finding.severity || prior.active !== finding.active || prior.message !== finding.message) {
-      delta.push(finding);
-    }
-  }
-  return delta;
-}
-
-function sseEncode(event: string, data: unknown): string {
+function sseFrame(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
 export async function GET(request: Request) {
   const encoder = new TextEncoder();
-
-  let orchestrationTimer: ReturnType<typeof setInterval> | null = null;
-  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  let isRunning = false;
-  let closed = false;
-  let previousFindings: Finding[] = [];
+  let tickTimer: ReturnType<typeof setInterval> | undefined;
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
 
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
+    start(controller) {
       const safeEnqueue = (chunk: string) => {
-        if (closed) return;
         try {
           controller.enqueue(encoder.encode(chunk));
         } catch {
-          // Controller already closed (client disconnected mid-write); ignore.
+          // controller already closed; ignore.
         }
       };
 
-      const cleanup = () => {
-        if (closed) return;
-        closed = true;
-        if (orchestrationTimer) clearInterval(orchestrationTimer);
+      safeEnqueue(sseFrame("connected", { ok: true, at: new Date().toISOString() }));
+
+      tickTimer = setInterval(async () => {
+        try {
+          const subset = pickRuleSubset(3);
+          const result = await runOrchestrator({ ruleSubset: subset });
+          const delta: FindingsDeltaEvent = {
+            type: "findings_delta",
+            generatedAt: result.generatedAt,
+            orgHealthScore: result.orgHealthScore,
+            priorOrgHealthScore: result.priorOrgHealthScore,
+            domainScores: result.domainScores,
+            findings: result.findings,
+            ruleEvaluations: result.ruleEvaluations,
+            heatmap: result.heatmap,
+          };
+          safeEnqueue(sseFrame("findings_delta", delta));
+        } catch (error) {
+          console.error("SSE tick failed", error);
+        }
+      }, TICK_MS);
+
+      heartbeatTimer = setInterval(() => {
+        safeEnqueue(`: heartbeat ${Date.now()}\n\n`);
+      }, HEARTBEAT_MS);
+
+      const abort = () => {
+        if (tickTimer) clearInterval(tickTimer);
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         try {
           controller.close();
         } catch {
-          // Already closed; nothing to do.
+          // already closed
         }
       };
 
-      request.signal.addEventListener("abort", cleanup);
-
-      // Seed from the last cached result (if any) so the first orchestration
-      // run only reports a delta for genuinely new/changed findings rather
-      // than re-announcing the whole org state.
-      try {
-        const cached = await getLatestOrchestratorResult(db);
-        if (cached) {
-          previousFindings = cached.intelligence.ruleEvaluation.findings;
-          safeEnqueue(sseEncode("snapshot", { result: cached }));
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`[api/events/stream] failed to load initial snapshot: ${message}`);
-      }
-
-      const runOrchestrationTick = async () => {
-        if (isRunning || closed) return;
-        isRunning = true;
-        try {
-          const result = await runFullOrchestration(db, new Date());
-          await cacheOrchestratorResult(db, result);
-          const nextFindings = result.intelligence.ruleEvaluation.findings;
-          const delta = diffFindings(previousFindings, nextFindings);
-          previousFindings = nextFindings;
-          if (delta.length > 0) {
-            safeEnqueue(sseEncode("findings_delta", delta));
-          }
-          safeEnqueue(sseEncode("org_health", { orgHealthScore: result.orgHealthScore, generatedAt: result.generatedAt }));
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(`[api/events/stream] orchestration tick failed: ${message}`);
-          safeEnqueue(sseEncode("error", { message }));
-        } finally {
-          isRunning = false;
-        }
-      };
-
-      // Kick off an immediate run so new connections don't wait a full
-      // interval before seeing fresh data, then continue on a timer.
-      void runOrchestrationTick();
-      orchestrationTimer = setInterval(() => {
-        void runOrchestrationTick();
-      }, ORCHESTRATION_INTERVAL_MS);
-
-      heartbeatTimer = setInterval(() => {
-        safeEnqueue(`: heartbeat ${new Date().toISOString()}\n\n`);
-      }, HEARTBEAT_INTERVAL_MS);
+      request.signal.addEventListener("abort", abort);
     },
     cancel() {
-      closed = true;
-      if (orchestrationTimer) clearInterval(orchestrationTimer);
+      if (tickTimer) clearInterval(tickTimer);
       if (heartbeatTimer) clearInterval(heartbeatTimer);
     },
   });

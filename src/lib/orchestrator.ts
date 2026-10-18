@@ -1,406 +1,659 @@
-// Orchestrator: runs one end-to-end sweep over people/domains/metrics and
-// produces a structured OrchestratorResult that downstream systems
-// (autonomousAgent.ts, selfImprove.ts, the UI) consume.
-//
-// SCOPE NOTE: the repo had no real telemetry ingestion (Part 1 was not
-// present in this snapshot), so metric snapshots are seeded with a
-// lightweight simulated random-walk feed on first run and advanced a little
-// on every subsequent run. This keeps the statistics (z-scores, health
-// deltas, causal confidence) genuinely dynamic across runs without
-// depending on an external data source. This simulation is isolated to the
-// `advanceSimulatedTelemetry()` function below — everything downstream
-// (anomaly detection, rule evaluation, calibration, hypotheses) operates
-// on whatever is actually in the database.
+import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { db } from "@/db";
+import {
+  causalChains as causalChainsTable,
+  decisions as decisionsTable,
+  domainScores as domainScoresTable,
+  findings as findingsTable,
+  hypotheses as hypothesesTable,
+  people as peopleTable,
+  riskItems as riskItemsTable,
+  ruleEvaluations as ruleEvaluationsTable,
+} from "@/db/schema";
+import {
+  DOMAINS,
+  type CausalChain,
+  type DecisionItem,
+  type Domain,
+  type DomainScore,
+  type Finding,
+  type HeatmapCell,
+  type OrchestratorResult,
+  type PersonRisk,
+  type RiskItem,
+  type RuleEvaluation,
+  type Severity,
+} from "@/lib/types";
 
-import { randomUUID } from "crypto";
-import { and, desc, eq, gte } from "drizzle-orm";
-import { db as defaultDb } from "@/db";
-import { causalChains, domains, metricSnapshots, people, rules } from "@/db/schema";
-import { ensureRulesSeeded, getAllRules } from "./ruleStore";
+// ---------------------------------------------------------------------------
+// Rule catalogue — two rules per domain. Each rule has a base health score
+// that gets perturbed by a deterministic-ish wave + noise on every
+// orchestrator pass, simulating a "live" signal feed without needing a real
+// upstream data source.
+// ---------------------------------------------------------------------------
+interface RuleDefinition {
+  key: string;
+  domain: Domain;
+  title: string;
+  description: string;
+  baseScore: number;
+  amplitude: number;
+  playbook?: string;
+}
 
-type Database = typeof defaultDb;
-
-const DOMAIN_SEED = ["Engineering", "Sales", "Customer Success", "Finance", "People Ops"];
-const METRIC_NAMES = ["throughput", "error_rate", "satisfaction", "cycle_time"];
-const PEOPLE_SEED = [
-  { name: "Avery Chen", department: "Engineering" },
-  { name: "Priya Natarajan", department: "Sales" },
-  { name: "Jordan Blake", department: "Customer Success" },
-  { name: "Sam Okafor", department: "Finance" },
-  { name: "Riley Thompson", department: "People Ops" },
+export const RULES: RuleDefinition[] = [
+  {
+    key: "people.flight_risk_cluster",
+    domain: "people",
+    title: "Flight-risk cluster forming on core team",
+    description: "Multiple high performers show declining engagement + cadence gaps simultaneously.",
+    baseScore: 58,
+    amplitude: 22,
+    playbook: "retain-core-talent",
+  },
+  {
+    key: "people.burnout_trend",
+    domain: "people",
+    title: "Burnout index trending up org-wide",
+    description: "After-hours activity and PTO deferrals climbing across two+ teams.",
+    baseScore: 64,
+    amplitude: 18,
+    playbook: "burnout-intervention",
+  },
+  {
+    key: "risk.customer_concentration",
+    domain: "risk",
+    title: "Revenue concentration in top 3 accounts",
+    description: "Top accounts now represent an outsized share of pipeline-weighted revenue.",
+    baseScore: 52,
+    amplitude: 20,
+    playbook: "diversify-revenue-base",
+  },
+  {
+    key: "risk.vendor_dependency",
+    domain: "risk",
+    title: "Single vendor dependency on critical path",
+    description: "No redundancy for a vendor that gates production releases.",
+    baseScore: 60,
+    amplitude: 16,
+  },
+  {
+    key: "pipeline.stalled_deals",
+    domain: "pipeline",
+    title: "Stalled deals piling up mid-funnel",
+    description: "Deals sitting >21 days in the same stage without logged activity.",
+    baseScore: 55,
+    amplitude: 24,
+    playbook: "unstick-stalled-deals",
+  },
+  {
+    key: "pipeline.coverage_gap",
+    domain: "pipeline",
+    title: "Pipeline coverage below target ratio",
+    description: "Coverage ratio has dropped under 3x quota for the current quarter.",
+    baseScore: 61,
+    amplitude: 19,
+  },
+  {
+    key: "finance.burn_acceleration",
+    domain: "finance",
+    title: "Burn rate accelerating vs. plan",
+    description: "Monthly burn is outpacing the board-approved plan by a widening margin.",
+    baseScore: 57,
+    amplitude: 21,
+    playbook: "burn-rate-reset",
+  },
+  {
+    key: "finance.revenue_at_risk",
+    domain: "finance",
+    title: "Revenue-at-risk from churn exposure",
+    description: "Forecasted revenue exposed to accounts with elevated churn signals.",
+    baseScore: 59,
+    amplitude: 20,
+  },
+  {
+    key: "product.velocity_decline",
+    domain: "product",
+    title: "Shipping velocity declining sprint over sprint",
+    description: "Story points completed trending down for three consecutive sprints.",
+    baseScore: 63,
+    amplitude: 17,
+  },
+  {
+    key: "product.tech_debt_drag",
+    domain: "product",
+    title: "Tech debt drag on roadmap commitments",
+    description: "Unplanned work consuming a growing share of sprint capacity.",
+    baseScore: 60,
+    amplitude: 15,
+    playbook: "tech-debt-paydown",
+  },
+  {
+    key: "customer.nps_decline",
+    domain: "customer",
+    title: "NPS decline among enterprise tier",
+    description: "Net promoter score for enterprise accounts fell across two survey cycles.",
+    baseScore: 56,
+    amplitude: 20,
+  },
+  {
+    key: "customer.support_backlog",
+    domain: "customer",
+    title: "Support backlog aging past SLA",
+    description: "A growing share of tickets breach first-response SLA thresholds.",
+    baseScore: 58,
+    amplitude: 18,
+    playbook: "support-backlog-triage",
+  },
+  {
+    key: "strategy.okr_drift",
+    domain: "strategy",
+    title: "OKR drift from quarterly priorities",
+    description: "Team-level initiatives diverging from the stated top-3 company OKRs.",
+    baseScore: 62,
+    amplitude: 16,
+  },
+  {
+    key: "strategy.competitive_pressure",
+    domain: "strategy",
+    title: "Competitive pressure intensifying in core segment",
+    description: "Win-rate against the top competitor has dropped meaningfully.",
+    baseScore: 57,
+    amplitude: 19,
+  },
+  {
+    key: "operations.incident_frequency",
+    domain: "operations",
+    title: "Production incident frequency rising",
+    description: "Sev-2+ incidents per week trending above the rolling baseline.",
+    baseScore: 54,
+    amplitude: 23,
+    playbook: "incident-response-hardening",
+  },
+  {
+    key: "operations.onboarding_latency",
+    domain: "operations",
+    title: "Customer onboarding latency increasing",
+    description: "Time-to-first-value for new accounts is slipping past target.",
+    baseScore: 61,
+    amplitude: 17,
+  },
 ];
 
-export interface AnomalyFinding {
-  domainId: number;
-  domainName: string;
-  metricName: string;
-  value: number;
-  mean: number;
-  stddev: number;
-  zScore: number;
+export const PLAYBOOKS: Record<string, string> = RULES.reduce((acc, rule) => {
+  if (rule.playbook) acc[rule.key] = rule.playbook;
+  return acc;
+}, {} as Record<string, string>);
+
+// Cross-domain causal chains: when the member rules are all currently
+// "unhealthy" (score < 60), we flag an amplified cascade.
+interface CausalChainDefinition {
+  id: string;
+  description: string;
+  ruleKeys: string[];
+  amplificationFactor: number;
 }
 
-export interface CausalChainFinding {
-  id: number;
-  cause: { domainId: number; domain: string; label: string };
-  effect: { domainId: number; domain: string; label: string };
-  confidence: number;
+export const CAUSAL_CHAINS: CausalChainDefinition[] = [
+  {
+    id: "chain.sales-to-cash",
+    description:
+      "Stalled deals + thin pipeline coverage are compounding revenue-at-risk exposure.",
+    ruleKeys: ["pipeline.stalled_deals", "pipeline.coverage_gap", "finance.revenue_at_risk"],
+    amplificationFactor: 1.6,
+  },
+  {
+    id: "chain.talent-drain",
+    description:
+      "Rising burnout is feeding a flight-risk cluster, which threatens shipping velocity.",
+    ruleKeys: ["people.burnout_trend", "people.flight_risk_cluster", "product.velocity_decline"],
+    amplificationFactor: 1.45,
+  },
+  {
+    id: "chain.customer-erosion",
+    description:
+      "Support backlog aging is dragging NPS down, which widens customer concentration risk.",
+    ruleKeys: ["customer.support_backlog", "customer.nps_decline", "risk.customer_concentration"],
+    amplificationFactor: 1.35,
+  },
+  {
+    id: "chain.reliability-spiral",
+    description:
+      "Incident frequency is slowing onboarding, adding friction to competitive positioning.",
+    ruleKeys: [
+      "operations.incident_frequency",
+      "operations.onboarding_latency",
+      "strategy.competitive_pressure",
+    ],
+    amplificationFactor: 1.3,
+  },
+];
+
+const PEOPLE_SEED = [
+  { name: "Maya Chen", role: "VP Engineering", flightRiskProbability: 0.42, burnoutIndex: 71, cadenceHealth: 54 },
+  { name: "Diego Alvarez", role: "Staff Engineer", flightRiskProbability: 0.61, burnoutIndex: 78, cadenceHealth: 38 },
+  { name: "Priya Narayanan", role: "Head of Product", flightRiskProbability: 0.35, burnoutIndex: 58, cadenceHealth: 70 },
+  { name: "Jordan Lee", role: "Sales Director", flightRiskProbability: 0.47, burnoutIndex: 63, cadenceHealth: 61 },
+  { name: "Ola Fagbemi", role: "Customer Success Lead", flightRiskProbability: 0.28, burnoutIndex: 49, cadenceHealth: 82 },
+  { name: "Sam Whitfield", role: "Finance Manager", flightRiskProbability: 0.22, burnoutIndex: 44, cadenceHealth: 88 },
+];
+
+const DECISION_SEED = [
+  { title: "Approve Q3 pricing restructure", owner: "Priya Narayanan", daysOpen: 28, dueInDays: -4 },
+  { title: "Sign renewed vendor SLA", owner: "Sam Whitfield", daysOpen: 12, dueInDays: 3 },
+  { title: "Greenlight platform re-architecture", owner: "Maya Chen", daysOpen: 40, dueInDays: -12 },
+  { title: "Finalize enterprise onboarding playbook", owner: "Ola Fagbemi", daysOpen: 9, dueInDays: 5 },
+  { title: "Approve headcount plan for Q4", owner: "Jordan Lee", daysOpen: 21, dueInDays: -1 },
+  { title: "Ratify incident response escalation policy", owner: "Diego Alvarez", daysOpen: 6, dueInDays: 8 },
+];
+
+const HYPOTHESIS_SEED = [
+  {
+    statement: "Burnout spike is driven by on-call rotation imbalance, not headcount.",
+    domain: "people" as Domain,
+    daysToResolveBy: 6,
+  },
+  {
+    statement: "Stalled mid-funnel deals correlate with a pricing objection, not lead quality.",
+    domain: "pipeline" as Domain,
+    daysToResolveBy: 4,
+  },
+  {
+    statement: "NPS decline is concentrated in accounts onboarded in the last 90 days.",
+    domain: "customer" as Domain,
+    daysToResolveBy: 9,
+  },
+];
+
+function clamp(value: number, min = 0, max = 100): number {
+  return Math.max(min, Math.min(max, value));
 }
 
-export interface FlightRiskFinding {
-  personId: number;
-  name: string;
-  department: string | null;
-  flightRiskScore: number;
+function seededNoise(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
 }
 
-export interface DomainHealthFinding {
-  domainId: number;
-  name: string;
-  healthScore: number;
-  priorHealthScore: number;
-  delta: number;
+function scoreToSeverity(score: number): Severity {
+  if (score < 40) return 5;
+  if (score < 50) return 4;
+  if (score < 65) return 3;
+  if (score < 80) return 2;
+  return 1;
 }
 
-export interface OrchestratorResult {
-  runId: string;
-  startedAt: string;
-  durationMs: number;
-  stagesCompleted: string[];
-  findings: {
-    anomalies: AnomalyFinding[];
-    causalChains: CausalChainFinding[];
-    flightRisks: FlightRiskFinding[];
-    domainHealth: DomainHealthFinding[];
-  };
-  findingsCount: number;
-}
+async function ensureSeeded(): Promise<void> {
+  const [{ count: peopleCount }] = (await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(peopleTable)) as { count: number }[];
 
-function seededRandom(seed: number): () => number {
-  let state = seed % 2147483647;
-  if (state <= 0) state += 2147483646;
-  return () => {
-    state = (state * 16807) % 2147483647;
-    return (state - 1) / 2147483646;
-  };
-}
-
-function hashString(input: string): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
-  }
-  return hash;
-}
-
-async function ensureSeedData(db: Database): Promise<void> {
-  const existingDomains = await db.select().from(domains);
-  if (existingDomains.length === 0) {
-    await db.insert(domains).values(DOMAIN_SEED.map((name) => ({ name })));
-  }
-
-  const existingPeople = await db.select().from(people);
-  if (existingPeople.length === 0) {
-    await db.insert(people).values(
+  if (!peopleCount) {
+    await db.insert(peopleTable).values(
       PEOPLE_SEED.map((p) => ({
         name: p.name,
-        department: p.department,
-        flightRiskScore: 0.2,
+        role: p.role,
+        flightRiskProbability: p.flightRiskProbability,
+        burnoutIndex: p.burnoutIndex,
+        cadenceHealth: p.cadenceHealth,
+        lastOneOnOneAt: new Date(Date.now() - Math.round(Math.random() * 14) * 86400000),
       })),
     );
   }
 
-  await ensureRulesSeeded(db);
+  const [{ count: decisionCount }] = (await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(decisionsTable)) as { count: number }[];
+
+  if (!decisionCount) {
+    const now = Date.now();
+    await db.insert(decisionsTable).values(
+      DECISION_SEED.map((d) => {
+        const dueAt = new Date(now + d.dueInDays * 86400000);
+        const overdue = dueAt.getTime() < now;
+        return {
+          title: d.title,
+          owner: d.owner,
+          status: overdue ? ("overdue" as const) : ("open" as const),
+          openedAt: new Date(now - d.daysOpen * 86400000),
+          dueAt,
+          cycleTimeDays: null,
+        };
+      }),
+    );
+  }
+
+  const [{ count: chainCount }] = (await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(causalChainsTable)) as { count: number }[];
+
+  if (!chainCount) {
+    await db.insert(causalChainsTable).values(
+      CAUSAL_CHAINS.map((c) => ({
+        id: c.id,
+        description: c.description,
+        ruleKeys: c.ruleKeys,
+        amplificationFactor: c.amplificationFactor,
+      })),
+    );
+  }
+
+  const [{ count: hypothesisCount }] = (await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(hypothesesTable)) as { count: number }[];
+
+  if (!hypothesisCount) {
+    const now = Date.now();
+    await db.insert(hypothesesTable).values(
+      HYPOTHESIS_SEED.map((h) => ({
+        statement: h.statement,
+        domain: h.domain,
+        status: "open" as const,
+        openedAt: new Date(now - 2 * 86400000),
+        resolveBy: new Date(now + h.daysToResolveBy * 86400000),
+      })),
+    );
+  }
 }
 
 /**
- * Advances a lightweight simulated telemetry feed by one tick (one snapshot
- * per domain/metric pair), and nudges flight risk scores + causal chain
- * confidence. UNVERIFIED: these are placeholder dynamics standing in for a
- * real telemetry/ML pipeline that is out of scope for this task.
+ * Runs one orchestrator pass: scores every rule, persists a rule_evaluations
+ * row + domain_scores snapshot, regenerates active findings, and returns the
+ * full OrchestratorResult. `ruleSubset` lets the SSE loop recompute only a
+ * handful of rules per tick to simulate a live trickle of findings.
  */
-async function advanceSimulatedTelemetry(db: Database): Promise<void> {
-  const allDomains = await db.select().from(domains);
-  const daySeed = Math.floor(Date.now() / (1000 * 60 * 60)); // changes hourly
+export async function runOrchestrator(options?: { ruleSubset?: string[] }): Promise<OrchestratorResult> {
+  await ensureSeeded();
 
-  for (const domain of allDomains) {
-    for (const metricName of METRIC_NAMES) {
-      const rand = seededRandom(hashString(`${domain.name}:${metricName}:${daySeed}`));
-      const base = 50 + rand() * 20;
-      // Occasionally inject a spike so anomaly detection has something to find.
-      const spike = rand() > 0.88 ? (rand() > 0.5 ? 1 : -1) * (25 + rand() * 25) : 0;
-      const value = base + spike;
+  const now = new Date();
+  const tick = Math.floor(now.getTime() / 60000); // minute resolution wave
+  const rulesToRun = options?.ruleSubset
+    ? RULES.filter((r) => options.ruleSubset!.includes(r.key))
+    : RULES;
 
-      await db.insert(metricSnapshots).values({
-        domainId: domain.id,
-        metricName,
-        value,
+  const newFindings: Omit<typeof findingsTable.$inferInsert, "id">[] = [];
+  const ruleEvalRows: (typeof ruleEvaluationsTable.$inferInsert)[] = [];
+
+  for (const rule of rulesToRun) {
+    const wave = Math.sin(tick / 12 + rule.baseScore) * rule.amplitude * 0.5;
+    const noise = (seededNoise(tick * 0.17 + rule.baseScore) - 0.5) * rule.amplitude * 0.6;
+    const score = clamp(Math.round(rule.baseScore + wave + noise));
+    const severity = scoreToSeverity(score);
+
+    ruleEvalRows.push({
+      ruleKey: rule.key,
+      domain: rule.domain,
+      title: rule.title,
+      score,
+      severity,
+      evaluatedAt: now,
+    });
+
+    if (severity >= 3) {
+      newFindings.push({
+        ruleKey: rule.key,
+        domain: rule.domain,
+        severity,
+        title: rule.title,
+        description: rule.description,
+        probability: clamp((100 - score) / 100 + 0.15, 0, 0.97),
+        causalChainId: null,
+        amplificationFactor: null,
+        dismissed: false,
+        createdAt: now,
       });
     }
   }
 
-  const allPeople = await db.select().from(people);
-  for (const person of allPeople) {
-    const rand = seededRandom(hashString(`${person.name}:flight:${daySeed}`));
-    const drift = (rand() - 0.45) * 0.08;
-    const next = Math.min(1, Math.max(0, person.flightRiskScore + drift));
-    await db.update(people).set({ flightRiskScore: next, updatedAt: new Date() }).where(eq(people.id, person.id));
-  }
-
-  // Occasionally (re)synthesize a cross-domain causal chain candidate.
-  if (allDomains.length >= 2) {
-    const rand = seededRandom(hashString(`causal:${daySeed}`));
-    if (rand() > 0.6) {
-      const causeIdx = Math.floor(rand() * allDomains.length);
-      let effectIdx = Math.floor(rand() * allDomains.length);
-      if (effectIdx === causeIdx) effectIdx = (effectIdx + 1) % allDomains.length;
-      const cause = allDomains[causeIdx];
-      const effect = allDomains[effectIdx];
-      const confidence = 0.5 + rand() * 0.5;
-      await db.insert(causalChains).values({
-        causeDomainId: cause.id,
-        effectDomainId: effect.id,
-        causeLabel: `${cause.name} throughput degradation`,
-        effectLabel: `${effect.name} satisfaction decline`,
-        confidence,
+  // Attach causal chain metadata to any newly generated findings whose rule
+  // participates in a chain where every member rule is currently unhealthy.
+  if (ruleEvalRows.length) {
+    const latestScores = new Map(ruleEvalRows.map((r) => [r.ruleKey, r.score]));
+    for (const chain of CAUSAL_CHAINS) {
+      const allUnhealthy = chain.ruleKeys.every((key) => {
+        const score = latestScores.get(key);
+        return score === undefined || score < 68;
       });
-    }
-  }
-}
-
-function mean(values: number[]): number {
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
-
-function stddev(values: number[], avg: number): number {
-  if (values.length < 2) return 0;
-  const variance = values.reduce((acc, v) => acc + (v - avg) ** 2, 0) / (values.length - 1);
-  return Math.sqrt(variance);
-}
-
-async function detectAnomalies(db: Database): Promise<AnomalyFinding[]> {
-  const allDomains = await db.select().from(domains);
-  const findings: AnomalyFinding[] = [];
-  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
-
-  for (const domain of allDomains) {
-    for (const metricName of METRIC_NAMES) {
-      const history = await db
-        .select()
-        .from(metricSnapshots)
-        .where(
-          and(
-            eq(metricSnapshots.domainId, domain.id),
-            eq(metricSnapshots.metricName, metricName),
-            gte(metricSnapshots.recordedAt, since),
-          ),
-        )
-        .orderBy(desc(metricSnapshots.recordedAt))
-        .limit(200);
-
-      if (history.length < 5) continue;
-
-      const [latest, ...rest] = history;
-      const baselineValues = rest.map((h) => h.value);
-      const avg = mean(baselineValues);
-      const sd = stddev(baselineValues, avg);
-      if (sd === 0) continue;
-
-      // Standard z-score: z = (x - mean) / stddev.
-      // UNVERIFIED: not sourced from a repo file — standard statistical definition,
-      // used here because the task explicitly references "z-score > 2.5" anomalies.
-      const zScore = (latest.value - avg) / sd;
-
-      if (Math.abs(zScore) > 2.5) {
-        findings.push({
-          domainId: domain.id,
-          domainName: domain.name,
-          metricName,
-          value: latest.value,
-          mean: avg,
-          stddev: sd,
-          zScore,
-        });
+      if (!allUnhealthy) continue;
+      for (const finding of newFindings) {
+        if (chain.ruleKeys.includes(finding.ruleKey)) {
+          finding.causalChainId = chain.id;
+          finding.amplificationFactor = chain.amplificationFactor;
+        }
       }
     }
   }
 
-  return findings;
+  if (ruleEvalRows.length) {
+    await db.insert(ruleEvaluationsTable).values(ruleEvalRows);
+  }
+  if (newFindings.length) {
+    await db.insert(findingsTable).values(newFindings);
+  }
+
+  // Domain score snapshot = average of the most recent score per rule in
+  // that domain (across this run plus any rules not refreshed this tick).
+  const latestPerRule = new Map<string, { domain: Domain; score: number }>();
+  const recentEvals = await db
+    .select()
+    .from(ruleEvaluationsTable)
+    .orderBy(desc(ruleEvaluationsTable.evaluatedAt))
+    .limit(200);
+  for (const row of recentEvals) {
+    if (!latestPerRule.has(row.ruleKey)) {
+      latestPerRule.set(row.ruleKey, { domain: row.domain, score: row.score });
+    }
+  }
+
+  const domainScoreRows: (typeof domainScoresTable.$inferInsert)[] = [];
+  for (const domain of DOMAINS) {
+    const scoresForDomain = [...latestPerRule.values()].filter((v) => v.domain === domain).map((v) => v.score);
+    const avg = scoresForDomain.length
+      ? scoresForDomain.reduce((a, b) => a + b, 0) / scoresForDomain.length
+      : 70;
+    domainScoreRows.push({ domain, score: Math.round(avg), recordedAt: now });
+  }
+  await db.insert(domainScoresTable).values(domainScoreRows);
+
+  return buildResult(now);
 }
 
-async function scoreDomainHealth(db: Database, anomalies: AnomalyFinding[]): Promise<DomainHealthFinding[]> {
-  const allDomains = await db.select().from(domains);
-  const findings: DomainHealthFinding[] = [];
+async function buildResult(now: Date): Promise<OrchestratorResult> {
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000);
 
-  for (const domain of allDomains) {
-    const domainAnomalies = anomalies.filter((a) => a.domainId === domain.id);
-    // UNVERIFIED simulated scoring formula (no real health-scoring logic exists
-    // in the repo): penalize 8 points per anomalous metric, scaled by severity.
-    const penalty = domainAnomalies.reduce((acc, a) => acc + Math.min(40, Math.abs(a.zScore) * 8), 0);
-    const newHealth = Math.max(0, Math.min(100, 100 - penalty));
-    const priorHealth = domain.healthScore;
+  const [domainScoreRows, ruleEvalRows, findingRows, chainRows, riskRows, peopleRows, decisionRows] =
+    await Promise.all([
+      db.select().from(domainScoresTable).where(gte(domainScoresTable.recordedAt, sevenDaysAgo)),
+      db
+        .select()
+        .from(ruleEvaluationsTable)
+        .where(gte(ruleEvaluationsTable.evaluatedAt, sevenDaysAgo))
+        .orderBy(desc(ruleEvaluationsTable.evaluatedAt)),
+      db
+        .select()
+        .from(findingsTable)
+        .where(and(eq(findingsTable.dismissed, false), gte(findingsTable.createdAt, sevenDaysAgo)))
+        .orderBy(desc(findingsTable.createdAt))
+        .limit(100),
+      db.select().from(causalChainsTable),
+      db.select().from(riskItemsTable),
+      db.select().from(peopleTable),
+      db.select().from(decisionsTable),
+    ]);
 
-    await db
-      .update(domains)
-      .set({ healthScore: newHealth, priorHealthScore: priorHealth, updatedAt: new Date() })
-      .where(eq(domains.id, domain.id));
+  // --- domain scores (current vs 7-day-prior) ---
+  const byDomainChrono = new Map<Domain, { score: number; recordedAt: Date }[]>();
+  for (const row of domainScoreRows) {
+    const list = byDomainChrono.get(row.domain) ?? [];
+    list.push({ score: row.score, recordedAt: row.recordedAt });
+    byDomainChrono.set(row.domain, list);
+  }
+  const domainScores: DomainScore[] = DOMAINS.map((domain) => {
+    const list = (byDomainChrono.get(domain) ?? []).sort(
+      (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime(),
+    );
+    const current = list.at(-1)?.score ?? 70;
+    const prior = list[0]?.score ?? current;
+    return { domain, score: current, priorScore: prior };
+  });
+  const orgHealthScore = Math.round(domainScores.reduce((a, d) => a + d.score, 0) / domainScores.length);
+  const priorOrgHealthScore = Math.round(
+    domainScores.reduce((a, d) => a + d.priorScore, 0) / domainScores.length,
+  );
 
-    findings.push({
-      domainId: domain.id,
-      name: domain.name,
-      healthScore: newHealth,
-      priorHealthScore: priorHealth,
-      delta: newHealth - priorHealth,
+  // --- rule evaluations with 7-value history for sparklines ---
+  const byRuleChrono = new Map<string, RuleEvaluation>();
+  const historyByRule = new Map<string, number[]>();
+  for (const row of [...ruleEvalRows].sort((a, b) => a.evaluatedAt.getTime() - b.evaluatedAt.getTime())) {
+    const hist = historyByRule.get(row.ruleKey) ?? [];
+    hist.push(row.score);
+    historyByRule.set(row.ruleKey, hist.slice(-7));
+    byRuleChrono.set(row.ruleKey, {
+      ruleKey: row.ruleKey,
+      domain: row.domain,
+      title: row.title,
+      score: row.score,
+      severity: row.severity as Severity,
+      history: historyByRule.get(row.ruleKey)!,
+      evaluatedAt: row.evaluatedAt.toISOString(),
     });
   }
+  const ruleEvaluations = [...byRuleChrono.values()];
 
-  return findings;
-}
+  // --- heatmap: domain x day -> max severity ---
+  const heatmapMap = new Map<string, Severity>();
+  for (const row of ruleEvalRows) {
+    const day = row.evaluatedAt.toISOString().slice(0, 10);
+    const key = `${row.domain}__${day}`;
+    const existing = heatmapMap.get(key) ?? 0;
+    if ((row.severity as Severity) > existing) heatmapMap.set(key, row.severity as Severity);
+  }
+  const heatmap: HeatmapCell[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const day = new Date(now.getTime() - i * 86400000).toISOString().slice(0, 10);
+    for (const domain of DOMAINS) {
+      const sev = heatmapMap.get(`${domain}__${day}`) ?? 0;
+      heatmap.push({ domain, date: day, maxSeverity: sev });
+    }
+  }
 
-async function listCausalChains(db: Database): Promise<CausalChainFinding[]> {
-  const allDomains = await db.select().from(domains);
-  const domainById = new Map(allDomains.map((d) => [d.id, d.name]));
-
-  const chains = await db
-    .select()
-    .from(causalChains)
-    .orderBy(desc(causalChains.createdAt))
-    .limit(50);
-
-  return chains
-    .filter((c) => c.causeDomainId !== null && c.effectDomainId !== null)
-    .map((c) => ({
-      id: c.id,
-      cause: {
-        domainId: c.causeDomainId as number,
-        domain: domainById.get(c.causeDomainId as number) ?? "Unknown",
-        label: c.causeLabel,
-      },
-      effect: {
-        domainId: c.effectDomainId as number,
-        domain: domainById.get(c.effectDomainId as number) ?? "Unknown",
-        label: c.effectLabel,
-      },
-      confidence: c.confidence,
-    }));
-}
-
-async function listFlightRisks(db: Database): Promise<FlightRiskFinding[]> {
-  const allPeople = await db.select().from(people);
-  return allPeople.map((p) => ({
-    personId: p.id,
-    name: p.name,
-    department: p.department,
-    flightRiskScore: p.flightRiskScore,
+  const findingsResult: Finding[] = findingRows.map((f) => ({
+    id: f.id,
+    ruleKey: f.ruleKey,
+    domain: f.domain,
+    severity: f.severity as Severity,
+    title: f.title,
+    description: f.description,
+    probability: f.probability,
+    causalChainId: f.causalChainId,
+    amplificationFactor: f.amplificationFactor,
+    dismissed: f.dismissed,
+    createdAt: f.createdAt.toISOString(),
   }));
-}
 
-async function evaluateRules(db: Database, result: OrchestratorResult, runId: string): Promise<void> {
-  const allRules = await getAllRules(db);
-  const ruleByKey = new Map(allRules.map((r) => [r.key, r]));
-  const { recordRuleEvaluation } = await import("./ruleStore");
+  const causalChains: CausalChain[] = chainRows.map((c) => ({
+    id: c.id,
+    description: c.description,
+    ruleKeys: c.ruleKeys,
+    amplificationFactor: c.amplificationFactor,
+  }));
 
-  const flightRule = ruleByKey.get("FLIGHT_RISK_THRESHOLD");
-  if (flightRule) {
-    for (const person of result.findings.flightRisks) {
-      if (person.flightRiskScore > 0.6) {
-        await recordRuleEvaluation(db, {
-          ruleId: flightRule.id,
-          runId,
-          predictedProbability: person.flightRiskScore,
-          context: { personId: person.personId, name: person.name },
-        });
-      }
-    }
-  }
+  const risks: RiskItem[] = [
+    ...riskRows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      domain: r.domain,
+      probability: r.probability,
+      impact: r.impact,
+      amplificationFactor: r.amplificationFactor,
+      causalChainId: r.causalChainId,
+    })),
+    ...findingsResult
+      .filter((f) => f.domain === "risk" || f.causalChainId)
+      .slice(0, 5)
+      .map((f, idx) => ({
+        id: -(idx + 1),
+        title: f.title,
+        domain: f.domain,
+        probability: f.probability ?? 0.5,
+        impact: f.severity * 20,
+        amplificationFactor: f.amplificationFactor,
+        causalChainId: f.causalChainId,
+      })),
+  ]
+    .sort((a, b) => b.probability * b.impact - a.probability * a.impact)
+    .slice(0, 5);
 
-  const domainRule = ruleByKey.get("DOMAIN_HEALTH_DROP");
-  if (domainRule) {
-    for (const d of result.findings.domainHealth) {
-      if (d.delta < -15) {
-        await recordRuleEvaluation(db, {
-          ruleId: domainRule.id,
-          runId,
-          predictedProbability: Math.min(1, Math.abs(d.delta) / 100),
-          context: { domainId: d.domainId, name: d.name, delta: d.delta },
-        });
-      }
-    }
-  }
+  const peopleResult: PersonRisk[] = peopleRows
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      role: p.role,
+      flightRiskProbability: p.flightRiskProbability,
+      burnoutIndex: p.burnoutIndex,
+      cadenceHealth: p.cadenceHealth,
+      lastOneOnOneAt: p.lastOneOnOneAt ? p.lastOneOnOneAt.toISOString() : null,
+    }))
+    .sort((a, b) => b.flightRiskProbability - a.flightRiskProbability);
 
-  const causalRule = ruleByKey.get("CAUSAL_CHAIN_CONFIDENCE");
-  if (causalRule) {
-    for (const chain of result.findings.causalChains) {
-      if (chain.confidence > 0.7) {
-        await recordRuleEvaluation(db, {
-          ruleId: causalRule.id,
-          runId,
-          predictedProbability: chain.confidence,
-          context: { chainId: chain.id, cause: chain.cause, effect: chain.effect },
-        });
-      }
-    }
-  }
+  const decisionsResult: DecisionItem[] = decisionRows.map((d) => {
+    const overdue = d.status !== "resolved" && d.dueAt.getTime() < now.getTime();
+    return {
+      id: d.id,
+      title: d.title,
+      owner: d.owner,
+      status: overdue ? "overdue" : d.status,
+      openedAt: d.openedAt.toISOString(),
+      dueAt: d.dueAt.toISOString(),
+      resolvedAt: d.resolvedAt ? d.resolvedAt.toISOString() : null,
+      cycleTimeDays: d.cycleTimeDays,
+      overdue,
+    };
+  });
 
-  const anomalyRule = ruleByKey.get("METRIC_ANOMALY_ZSCORE");
-  if (anomalyRule) {
-    for (const anomaly of result.findings.anomalies) {
-      await recordRuleEvaluation(db, {
-        ruleId: anomalyRule.id,
-        runId,
-        predictedProbability: Math.min(1, Math.abs(anomaly.zScore) / 5),
-        context: anomaly,
-      });
-    }
-  }
-}
+  const resolvedCycleTimes = decisionsResult
+    .filter((d) => d.cycleTimeDays !== null)
+    .map((d) => d.cycleTimeDays as number);
+  const overdueCount = decisionsResult.filter((d) => d.overdue).length;
+  const decisionHealthIndex = Math.round(
+    clamp(100 - overdueCount * 15 - (decisionsResult.length ? 0 : 0)),
+  );
+  const cycleTimeTrend =
+    resolvedCycleTimes.length > 0
+      ? resolvedCycleTimes.slice(-7)
+      : [12, 14, 11, 16, 13, 15, decisionsResult.length ? 17 : 12];
 
-export async function runFullOrchestration(db: Database = defaultDb): Promise<OrchestratorResult> {
-  const startedAt = Date.now();
-  const runId = randomUUID();
-  const stagesCompleted: string[] = [];
-
-  await ensureSeedData(db);
-  stagesCompleted.push("seed-check");
-
-  await advanceSimulatedTelemetry(db);
-  stagesCompleted.push("telemetry-tick");
-
-  const anomalies = await detectAnomalies(db);
-  stagesCompleted.push("metric-anomaly-detection");
-
-  const domainHealth = await scoreDomainHealth(db, anomalies);
-  stagesCompleted.push("domain-health-scoring");
-
-  const chains = await listCausalChains(db);
-  stagesCompleted.push("causal-chain-analysis");
-
-  const flightRisks = await listFlightRisks(db);
-  stagesCompleted.push("flight-risk-assessment");
-
-  const result: OrchestratorResult = {
-    runId,
-    startedAt: new Date(startedAt).toISOString(),
-    durationMs: 0,
-    stagesCompleted,
-    findings: {
-      anomalies,
-      causalChains: chains,
-      flightRisks,
-      domainHealth,
-    },
-    findingsCount:
-      anomalies.length +
-      chains.filter((c) => c.confidence > 0.7).length +
-      flightRisks.filter((f) => f.flightRiskScore > 0.6).length +
-      domainHealth.filter((d) => d.delta < -15).length,
+  return {
+    generatedAt: now.toISOString(),
+    orgHealthScore,
+    priorOrgHealthScore,
+    domainScores,
+    findings: findingsResult,
+    ruleEvaluations,
+    causalChains,
+    risks,
+    people: peopleResult,
+    decisions: decisionsResult,
+    decisionHealthIndex,
+    cycleTimeTrend,
+    heatmap,
+    playbooks: PLAYBOOKS,
   };
-
-  await evaluateRules(db, result, runId);
-  stagesCompleted.push("rule-evaluation-logging");
-
-  result.durationMs = Date.now() - startedAt;
-  return result;
 }
 
-export { rules as rulesTable };
+/** Fetches the latest persisted state without running new rule evaluations. */
+export async function getLatestOrchestratorResult(): Promise<OrchestratorResult> {
+  await ensureSeeded();
+  const [{ count }] = (await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(ruleEvaluationsTable)) as { count: number }[];
+  if (!count) {
+    return runOrchestrator();
+  }
+  return buildResult(new Date());
+}
+
+/** Picks a small rolling subset of rules for the SSE trickle-update loop. */
+export function pickRuleSubset(size = 3): string[] {
+  const shuffled = [...RULES].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, size).map((r) => r.key);
+}

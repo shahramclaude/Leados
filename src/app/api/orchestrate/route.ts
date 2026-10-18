@@ -1,39 +1,27 @@
-// src/app/api/orchestrate/route.ts
-//
-// POST: runs the full orchestration pipeline (src/lib/orchestrator.ts),
-//       persists the result to orchestrator_cache, and returns it.
-// GET:  returns the most recently cached orchestration result. If none
-//       exists yet (first boot), runs the pipeline once to seed the cache
-//       so callers never have to special-case an empty response.
-import { db } from "@/db";
-import { cacheOrchestratorResult, getLatestOrchestratorResult, runFullOrchestration } from "@/lib/orchestrator";
+import { NextResponse } from "next/server";
+import { getLatestOrchestratorResult, runOrchestrator } from "@/lib/orchestrator";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+// GET: cheap read of the latest persisted orchestrator state. Used on
+// mount and whenever the SSE connection (re)establishes.
+export async function GET() {
   try {
-    const result = await runFullOrchestration(db, new Date());
-    await cacheOrchestratorResult(db, result);
-    return Response.json({ ok: true, result });
+    const result = await getLatestOrchestratorResult();
+    return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[api/orchestrate][POST] unexpected failure: ${message}`);
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    console.error("GET /api/orchestrate failed", error);
+    return NextResponse.json({ error: "Failed to load orchestrator result" }, { status: 500 });
   }
 }
 
-export async function GET() {
+// POST: triggers a full fresh orchestrator run across every rule.
+export async function POST() {
   try {
-    const cached = await getLatestOrchestratorResult(db);
-    if (cached) {
-      return Response.json({ ok: true, result: cached, cached: true });
-    }
-    const result = await runFullOrchestration(db, new Date());
-    await cacheOrchestratorResult(db, result);
-    return Response.json({ ok: true, result, cached: false });
+    const result = await runOrchestrator();
+    return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[api/orchestrate][GET] unexpected failure: ${message}`);
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    console.error("POST /api/orchestrate failed", error);
+    return NextResponse.json({ error: "Failed to run orchestrator" }, { status: 500 });
   }
 }
