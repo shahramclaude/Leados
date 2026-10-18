@@ -1,140 +1,147 @@
-# LEADOS — Organizational Intelligence Platform (pt-O / pt-P delivery)
+# LeadOS pt-Q — Predictive Intelligence Architecture
 
-A React + Vite + Tailwind app implementing ten leadership-intelligence modules
-— life-stage maturity profiling, compound-intelligence effect detection,
-strategic wargaming, organizational design simulation, stakeholder
-intelligence with game theory, Black-Scholes real options valuation,
-executive presence measurement, three-horizons innovation portfolio
-management, ADKAR+Kotter change management, and a competitive intelligence
-aggregator — unified behind one "Today" dashboard and a compound-intelligence
-cross-module detector.
+A React + Vite + Tailwind app implementing the two fully-specified engines
+from the pasted "pt-Q" leadership-intelligence brief — a **Structural Causal
+Model** (do-calculus style causal graph + counterfactual reasoning) and an
+**Individual Flight Risk** model calibrated from your own org's historical
+departures — plus a few smaller original additions, over one synthetic demo
+org.
 
-> **Provenance — read before assuming this continues any prior "pt-" session:**
-> `github.com/wbweve/Leados` was inspected directly this session (full
-> recursive file tree via GitHub's REST API — 148 entries, confirmed not
-> truncated — plus the repo's own raw `AI-SESSION-LOG.md`, root `index.html`,
-> `package.json`, and `src/App.tsx`). Full ledger in `AI-SESSION-LOG.md` and
-> in-app at **About / Provenance**. Short version:
+> **Provenance — read before assuming this continues `github.com/wbweve/Leados`
+> or any prior "pt-" session:** the real repo was inspected this session via
+> GitHub's REST API and raw-file fetches (not cloned, not executed). It
+> contains **at least three separate, mutually inconsistent deliveries**
+> stacked in one place — a ~60-file loose root-level `.tsx` lineage, a
+> separate live `src/` Vite+React+TypeScript app, and a third vanilla-JS
+> "mf-1/mf-2" lineage described only in its own append-log. The repo's own
+> `AI-SESSION-LOG.md` is itself stale relative to its current `src/lib/`
+> listing (it claims files are absent that are now present). Full ledger,
+> with every API call and what it returned, is in **`AI-SESSION-LOG.md`** and
+> in-app at **About / Provenance**.
 >
-> * The real repo's root `index.html` is a **352-byte Vite dev stub**
->   (`<div id="root">` + a script tag to `/src/main.tsx`), not a hand-authored
->   single-file app — verified by direct fetch, not assumed from a README.
-> * The real repo's live `src/` app (confirmed: `App.tsx` → `TodayView` /
->   `SignalBoardView` / `ThermodynamicsView` / `CasView` / `RiskView` /
->   `AboutView`) already has a working Shannon-entropy/CAS/risk-register layer
->   from a prior session — consistent with that prior session's own
->   `AI-SESSION-LOG.md`.
-> * **Not found anywhere in the repo, this session:** any `js/` directory, or
->   any file named `life_stage.js`, `compound_intel.js`, `wargame.js`,
->   `org_design.js`, `stakeholders.js`, `real_options.js`,
->   `executive_presence.js`, `innovation_portfolio.js`,
->   `change_management.js`, or `competitive_intel.js`.
->
-> **This app does not fork, copy, or continue any of that unverified
-> history.** The task's pasted "pt-O"/"pt-P" module list is treated as an
-> **unverified external specification**, exactly the way the real repo's own
-> prior sessions already treated an earlier pasted "pt-L" brief (see the
-> repo's own `AI-SESSION-LOG.md`, which cites "pt-K"/"pt-L" the same way).
-> What follows is a fresh build, in this task's own tool environment, that
-> implements the *functional ideas* named in the brief as original code.
+> **This app does not fork, copy, or continue any of that history.** It is a
+> fresh build, in this task's own tool environment (React + Vite + Tailwind,
+> single `src/App.tsx` entry point, built with `npm run build`), implementing
+> the *functional ideas* in the pasted pt-Q brief — original TypeScript
+> throughout, with the two fully-specified engines (causal model, flight
+> risk) translated as directly as the brief's own pseudocode allows.
 
 ## Run it
 
-`npm install && npm run build`, then open `dist/index.html`. This project's
-Vite config (`vite-plugin-singlefile`) inlines all JS/CSS into that one HTML
-file — verified this session by grepping the build output for any
-`http`-prefixed `<script src>`/`<link href>`: none found. So "open one file,
-zero network calls" is genuinely true here, the same way it's true of the
-real repo's current `src/`-based build.
+`npm install && npm run build`, then open `dist/index.html`. The build
+inlines all JS/CSS into that one HTML file (via `vite-plugin-singlefile`), so
+it opens standalone with zero runtime network calls.
 
 For development: `npm run dev`.
 
-State lives in `localStorage` under `leados-oip:v1`. Use **Reset synthetic
-data** (left sidebar) to clear it.
+State lives in `localStorage` under `leados-ptq:v1`. Use **Reset synthetic
+data** in the header to regenerate the seeded demo org.
 
 ## Pages (hash routes)
 
-| Route | Part | What it does |
-|---|---|---|
-| `#/today` | — | Composite index across all 9 scored dimensions, compound/fragility pair counts, and an in-browser self-test runner (OIP_01..OIP_13). |
-| `#/compound` | **pt-P** | `compound_intel` — every pairwise interaction between the platform's 9 intelligence signals, flagged compounding / fragility / neutral. |
-| `#/lifestage` | **pt-P** | `life_stage` — 12-dimension maturity radar, editable sliders, stage classification (Seed→Mature), weakest-link / strongest-asset lists. |
-| `#/wargame` | pt-O | `wargame` — 4-posture payoff matrix vs. 4 competitor archetypes, 5-round volatility-shocked simulation, recommended posture. |
-| `#/orgdesign` | pt-O | `org_design` — headcount/layers/span inputs, Graicunas (1933) relationship count, coordination cost, decision latency, efficiency score. |
-| `#/stakeholders` | pt-O | `stakeholders` — Mendelow power/interest grid, per-stakeholder 2×2 cooperate/compete game with live Nash-equilibrium check. |
-| `#/realoptions` | pt-O | `real_options` — real Black-Scholes (1973) call valuation applied to a strategic investment, with exercise/hold/expire recommendation. |
-| `#/execpresence` | pt-O | `executive_presence` — Gravitas/Communication/Appearance composite (Hewlett/CTI-style weighting), radar + band classification. |
-| `#/innovation` | pt-O | `innovation_portfolio` — Three Horizons (McKinsey) allocation vs. a 70/20/10 reference band, blended ROI, initiative catalog. |
-| `#/change` | pt-O | `change_management` — ADKAR sliders, barrier-point detection (lowest dimension gates the change), mapped Kotter 8-step stage. |
-| `#/competitive` | pt-O | `competitive_intel` — synthetic competitor roster ranked by threat score, trend (rising/stable/cooling), aggregate market heat. |
-| `#/about` | — | Full provenance ledger — what was checked against the real repo, what was found, and how this delivery compares to the pasted "pt-O"/"pt-P" brief. |
+| Route | What it does |
+|---|---|
+| `#/today` | Overview: active rule-based findings, highest flight-risk people, causal-edge counts, historical departure count. |
+| `#/roster` | Every active person with their individual flight-risk score, risk level, contributing signal factors, and data-quality assessment — computed from **this org's own historical departures**, not population benchmarks. |
+| `#/causal` | The Structural Causal Model: the full ASSUMED / EVIDENCED / CONFIRMED edge table, a do-calculus intervention estimator ("if I set X, what happens to Y?"), and a form to log your own CONFIRMED causal annotations. |
+| `#/counterfactual` | "What would have happened if...?" — replays the event log up to a hypothetical past date and compares it to what actually happened since, clearly labeled as unverifiable. |
+| `#/highpotential` | A simplified, original, explicitly-labeled heuristic combining feedback balance, engagement, growth-plan activity, and conflict history. Not a trained model. |
+| `#/network` | Informal power network / "dark matter" detection: a degree-centrality heuristic over synthetic collaboration events, flagging people with high influence but no formal leadership title. |
+| `#/meetings` | Meeting intelligence: decision velocity (decisions ÷ meeting-hours) per logged meeting, with a simple "this could have been an async update" flag. |
+| `#/about` | Full provenance ledger — what was checked against the real repo, what was found, and exactly what in this delivery is spec-faithful vs. original vs. a disclosed gap. |
 
-## What's real theory, what's an original heuristic, what's a disclosed gap
+## What's spec-faithful, what's original, what's a disclosed gap
 
-* **Real, citable frameworks used as-is, with original application code:**
-  Black-Scholes option pricing (Black & Scholes, 1973) in `realOptions.ts`;
-  Graicunas' span-of-control relationship formula (1933) in `orgDesign.ts`;
-  the power/interest stakeholder grid (Mendelow, 1981) in `stakeholders.ts`;
-  ADKAR (Hiatt) and Kotter's 8-Step Process (1996) in `changeManagement.ts`;
-  the Three Horizons framework (Baghai, Coley & White, 2000) in
-  `innovationPortfolio.ts`; the Gravitas/Communication/Appearance structure
-  (Hewlett / Center for Talent Innovation) in `executivePresence.ts`.
-* **Original, disclosed-fabricated heuristics (not claimed as validated
-  science):** the 12 Life Stage dimensions and stage thresholds; the
-  compound/fragility detection thresholds (≥68 "strong", ≤35 "weak"); the
-  Wargame payoff matrix; Org Design's coordination-cost/decision-latency
-  formulas; the stakeholder game's payoff numbers; the ADKAR→Kotter mapping;
-  Competitive Intel's threat-score weighting.
-* **A gap, left as a gap:** no attempt was made to reconcile this app's nine
-  intelligence signals with the real repo's own CAS/risk-register layer
-  (`casEngine.ts`/`riskIntelligence.ts`) — they are different sessions' work
-  in different sandboxes with no shared state, and merging them would imply a
-  continuity that doesn't exist.
-* **All UI, the synthetic roster/competitor/initiative data, and the
-  self-test suite:** original to this delivery.
+- **Ported as directly as the pasted brief's own pseudocode allows:**
+  `src/lib/causal.ts` (Part 1 — `LEADOS.causal`: causal graph construction,
+  ASSUMED/EVIDENCED/CONFIRMED edges, do-calculus backdoor-adjustment
+  estimator, Lewis-style counterfactual replay) and `src/lib/flightRisk.ts`
+  (Part 2 — `LEADOS.flightRisk`: departure-signature construction, weighted
+  similarity scoring, heuristic fallback). Translated from the brief's
+  `LEADOS.*` object/namespace style into standalone TypeScript modules to fit
+  this project's `src/App.tsx`-entry-point architecture.
+- **Original, because the brief only named these capabilities without
+  algorithms:** `src/lib/extras.ts` — High-Potential Identification
+  (feedback/engagement/growth-plan/conflict heuristic), Informal Power
+  Network detection (simple degree-centrality over synthetic collaboration
+  events — explicitly **not** full betweenness/eigenvector centrality), and
+  Meeting Intelligence (decisions-per-hour heuristic). Each is labeled in the
+  UI as a simplified, original heuristic, not a validated instrument.
+- **Disclosed gaps — not implemented this session**, because the brief names
+  them without a usable algorithm and/or they require data fields (OKRs,
+  compensation, promotion/demographic history) this build deliberately does
+  not fabricate: information cascade prediction through the org network,
+  OKR causal chains / leading-indicator architecture, organizational learning
+  velocity measurement, compensation equity analytics, and promotion
+  pattern/bias analysis. Full reasoning for each is in the in-app About page
+  and in `AI-SESSION-LOG.md` §4.
+- **All UI, the synthetic 10-active + 4-departed roster/event generator, the
+  minimal disclosed-fabricated findings engine (`engine.ts`), and the
+  storage/projection layer:** original to this delivery.
 
 ## Project structure
 
 ```
 src/
   lib/
-    types.ts                 — shared types (AppState, Stakeholder, Initiative, ...)
-    prng.ts                  — seeded PRNG + numeric helpers
-    seed.ts                  — synthetic org/stakeholder/competitor/initiative defaults
-    store.ts                 — localStorage persistence
-    useHashRoute.ts           — tiny hash router
-    lifeStage.ts              — pt-P: 12-dimension maturity profiling
-    compoundIntel.ts           — pt-P: compound intelligence effect detection
-    wargame.ts                 — pt-O: strategic wargaming engine
-    orgDesign.ts                — pt-O: organizational design simulation
-    stakeholders.ts              — pt-O: stakeholder intelligence + game theory
-    realOptions.ts                — pt-O: Black-Scholes real options valuation
-    executivePresence.ts           — pt-O: executive presence measurement
-    innovationPortfolio.ts          — pt-O: three-horizons innovation management
-    changeManagement.ts              — pt-O: ADKAR + Kotter frameworks
-    competitiveIntel.ts               — pt-O: competitive intelligence aggregator
-    selfTest.ts                        — original runtime self-tests (OIP_01..OIP_13)
+    types.ts            — shared types (Person, LeadEvent, Projection, ...)
+    prng.ts              — deterministic seeded PRNG
+    seed.ts               — synthetic roster + event log (10 active, 4 departed)
+    store.ts               — localStorage persistence + event-log projection
+    stats.ts                 — Pearson correlation, date-diff helper
+    engine.ts                  — minimal disclosed-fabricated findings engine
+    causal.ts                    — Part 1: Structural Causal Model engine (spec-faithful)
+    flightRisk.ts                  — Part 2: Individual Flight Risk engine (spec-faithful)
+    extras.ts                        — High-Potential / Power Network / Meeting Intelligence (original) + disclosed-gap list
+    useHashRoute.ts                    — tiny hash router
   components/
-    Shell.tsx, ui.tsx                  — nav shell + shared UI primitives (Card, Slider, RadarChart, ...)
-    TodayView / CompoundIntelView / LifeStageView / WargameView / OrgDesignView /
-    StakeholdersView / RealOptionsView / ExecutivePresenceView /
-    InnovationPortfolioView / ChangeManagementView / CompetitiveIntelView / AboutView
+    Shell.tsx, ui.tsx                   — nav shell + shared UI primitives (Card, Tag, RiskPill, Callout)
+    TodayView / RosterView / CausalView / CounterfactualView /
+    HighPotentialView / PowerNetworkView / MeetingView / AboutView
   App.tsx                                 — route composition (entry point)
 ```
 
 ## Changelog
 
-**Part pt-P**
-* **Inspected `github.com/wbweve/Leados` first** — via GitHub's REST tree API (confirmed complete, 148 entries, `truncated: false`) and raw fetches of `AI-SESSION-LOG.md`, `README.md`, `index.html`, `package.json`, `src/App.tsx` — before writing any code. *Why*: the task requires inspecting actual code, not trusting a README's self-framing or the task prompt's own pasted module list at face value.
-* **Found the real root `index.html` is a 352-byte Vite stub, not a feature-complete single-file app** — *why disclosed*: a prior session's log described a 54KB hand-authored `index.html`; this session's direct fetch shows that file has since been replaced by the Vite scaffold entry point. Stating the current byte count avoids silently inheriting a stale claim.
-* **Declared the pasted "pt-P" (and "pt-O") module list an unverified specification, not repo fact** — *why*: no string match for `life_stage`, `compound_intel`, or a `js/` directory was found anywhere in the tree or in the fetched files. This mirrors how the real repo's own `AI-SESSION-LOG.md` already treats an earlier pasted "pt-L" brief.
-* **Implemented `life_stage` as `src/lib/lifeStage.ts` (TypeScript) rather than `js/life_stage.js`** — *why*: this sandbox's required stack (React+Vite+TS, confirmed identical to the real repo's own `package.json`/`vite.config.ts`) has no vanilla-JS runtime path; naming it `.ts` under `src/lib/` instead of silently claiming a `.js` file would misrepresent the environment.
-* **Invented 12 original maturity dimensions rather than citing a named external 12-dimension framework** — *why*: no such framework was specified in the brief or found in the repo; presenting invented dimension names under a borrowed framework's authority would be a false citation.
-* **Built `compound_intel` as a disclosed threshold heuristic (≥68 "strong", ≤35 "weak") instead of a statistical correlation/interaction-term model** — *why*: a real correlation measure needs a time series of repeated observations, which a single-snapshot synthetic dataset doesn't have; a transparent, documented threshold rule was chosen over implying unearned statistical rigor.
-
-**Part pt-O**
-* **Reused two verifiable, citable frameworks as-is (Black-Scholes for `real_options`, Graicunas for `org_design`)** — *why*: where real, textbook-standard math exists for the named module, using it (with original application code) is stronger and more honest than inventing a parallel heuristic from scratch.
-* **Left the `casEngine.ts`/`riskIntelligence.ts` modules from the real repo's prior session untouched/unreferenced** — *why*: they live in a different repository and session with no accessible state from this sandbox; merging them here would fabricate a continuity that doesn't exist.
-* **Added a "pt-O"/"pt-P" grouping label in the sidebar** — *why*: purely for traceability back to the task's own pasted spec sections, not a claim that those labels exist in the real repo (the About page states this explicitly).
-* **Wrote an original self-test suite (`OIP_01`..`OIP_13`) instead of any externally-named test IDs** — *why*: no `T_L_*`/`G_L_*`-style test suite for these ten modules was specified or found; inventing test bodies under borrowed names would misstate their provenance.
-* **Used a new storage key (`leados-oip:v1`)** — *why*: this sandbox began from the default scaffold `App.tsx` with no prior state; a new key avoids implying continuity with any other session.
+- **Inspected `github.com/wbweve/Leados` first** — via GitHub's REST API
+  (trees, contents) and raw-file fetches of the root README, root
+  `index.html`, `src/App.tsx`, `src/lib`/`src/components` listings, and both
+  `AI-SESSION-LOG.md` and `AI-SESSION-LOG.append.md` — *why*: the task
+  requires inspecting actual code before claiming anything about it, not
+  trusting the repo's own README self-framing (which turned out to itself be
+  one layer of several self-contradicting session narratives).
+- **Found and documented that the repo's own session log is stale relative to
+  its own current file tree** (claims `casEngine.ts`/`riskIntelligence.ts`
+  don't exist; they currently do) — *why disclosed prominently*: a stale
+  provenance document is more dangerous than no provenance document, since it
+  invites a future session to trust a false "verified absent" claim.
+- **Declared the repo a multi-lineage, non-continuous artifact and built
+  fresh instead of porting any one lineage** — *why*: with three
+  self-contradicting deliveries in one repo, "continuing" any single one
+  would arbitrarily privilege a fragment of a history that isn't actually
+  coherent, and would misrepresent this build's relationship to it.
+- **Ported the two fully-specified pt-Q engines (causal model, flight risk)
+  as directly as their pasted pseudocode allows** — *why*: the brief gave
+  complete, runnable logic for these two; reimplementing them loosely instead
+  of following the given structure would discard the one part of the input
+  that was actually unambiguous.
+- **Left 5 named pt-Q capabilities as disclosed gaps** (cascade prediction,
+  OKR causal chains, learning velocity, comp equity, promotion bias) instead
+  of inventing algorithms for them — *why*: the brief's intro names them
+  without any method, and several require data (compensation, OKRs,
+  promotion/demographic history) that would need to be fabricated in a way
+  that could misleadingly imply real analytical rigor over invented numbers.
+- **Built a simplified, explicitly-labeled degree-centrality network metric**
+  for "dark matter" detection instead of a full social-network-analysis
+  implementation — *why*: betweenness/eigenvector centrality would need a
+  much richer interaction graph than this synthetic demo's handful of
+  `collab.logged` events can support without becoming misleading theater.
+- **Disclosed, rather than silently patched, the spec's own `flightRisk`
+  causal-variable limitation** (it is structurally always 0 among currently
+  active people) — *why*: matches the "label it, don't quietly fix it"
+  convention, so the UI's claims stay traceable to what the pasted spec
+  actually does.
+- **Used a new storage key (`leados-ptq:v1`)** — *why*: this workspace began
+  from the default scaffold with no prior app state; reusing any other
+  session's key would falsely imply continuity with data that was never
+  here.

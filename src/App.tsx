@@ -1,49 +1,38 @@
-import { useState } from "react";
-import { Shell } from "./components/Shell";
-import { TodayView } from "./components/TodayView";
-import { CompoundIntelView } from "./components/CompoundIntelView";
-import { LifeStageView } from "./components/LifeStageView";
-import { WargameView } from "./components/WargameView";
-import { OrgDesignView } from "./components/OrgDesignView";
-import { StakeholdersView } from "./components/StakeholdersView";
-import { RealOptionsView } from "./components/RealOptionsView";
-import { ExecutivePresenceView } from "./components/ExecutivePresenceView";
-import { InnovationPortfolioView } from "./components/InnovationPortfolioView";
-import { ChangeManagementView } from "./components/ChangeManagementView";
-import { CompetitiveIntelView } from "./components/CompetitiveIntelView";
-import { AboutView } from "./components/AboutView";
-import { useHashRoute } from "./lib/useHashRoute";
-import { loadState, resetState, saveState } from "./lib/store";
-import type { AppState } from "./lib/types";
+import { useMemo, useState } from 'react';
+import { Shell } from './components/Shell';
+import { TodayView } from './components/TodayView';
+import { RosterView } from './components/RosterView';
+import { CausalView } from './components/CausalView';
+import { CounterfactualView } from './components/CounterfactualView';
+import { HighPotentialView } from './components/HighPotentialView';
+import { PowerNetworkView } from './components/PowerNetworkView';
+import { MeetingView } from './components/MeetingView';
+import { AboutView } from './components/AboutView';
+import { useHashRoute } from './lib/useHashRoute';
+import { loadState, resetState, appendEvent, project } from './lib/store';
+import type { AppState } from './lib/types';
 
 export default function App() {
-  const [route, navigate] = useHashRoute("/today");
-  const [state, setStateRaw] = useState<AppState>(() => loadState());
+  const [route, navigate] = useHashRoute('/today');
+  const [state, setState] = useState<AppState>(() => loadState());
+  const today = useMemo(() => new Date().toISOString(), []);
+  const P = useMemo(() => project(state), [state]);
 
-  const setState = (updater: (s: AppState) => AppState) => {
-    setStateRaw((prev) => {
-      const next = updater(prev);
-      saveState(next);
-      return next;
-    });
+  const handleReset = () => setState(resetState());
+  const handleAnnotate = (cause: string, effect: string, direction: 'DIRECT' | 'INVERSE', strength: number, note: string) => {
+    setState(appendEvent(state, 'causal.annotation', { cause, effect, direction, strength, note }));
   };
 
-  const onReset = () => setStateRaw(resetState());
-
   return (
-    <Shell route={route} navigate={navigate} onReset={onReset}>
-      {route === "/today" && <TodayView state={state} navigate={navigate} />}
-      {route === "/compound" && <CompoundIntelView state={state} />}
-      {route === "/lifestage" && <LifeStageView state={state} setState={setState} />}
-      {route === "/wargame" && <WargameView state={state} setState={setState} />}
-      {route === "/orgdesign" && <OrgDesignView state={state} setState={setState} />}
-      {route === "/stakeholders" && <StakeholdersView state={state} setState={setState} />}
-      {route === "/realoptions" && <RealOptionsView state={state} setState={setState} />}
-      {route === "/execpresence" && <ExecutivePresenceView state={state} setState={setState} />}
-      {route === "/innovation" && <InnovationPortfolioView state={state} />}
-      {route === "/change" && <ChangeManagementView state={state} setState={setState} />}
-      {route === "/competitive" && <CompetitiveIntelView state={state} />}
-      {route === "/about" && <AboutView />}
+    <Shell route={route} navigate={navigate} onReset={handleReset}>
+      {route === '/today' && <TodayView P={P} today={today} navigate={navigate} />}
+      {route === '/roster' && <RosterView P={P} today={today} />}
+      {route === '/causal' && <CausalView P={P} today={today} onAnnotate={handleAnnotate} />}
+      {route === '/counterfactual' && <CounterfactualView P={P} today={today} />}
+      {route === '/highpotential' && <HighPotentialView P={P} today={today} />}
+      {route === '/network' && <PowerNetworkView P={P} />}
+      {route === '/meetings' && <MeetingView P={P} />}
+      {route === '/about' && <AboutView />}
     </Shell>
   );
 }
