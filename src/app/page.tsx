@@ -17,10 +17,10 @@ export default async function HomePage() {
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
         <a
-          href="/decisions"
-          className="mt-6 inline-block rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+          href="/metrics"
+          className="mt-6 inline-block rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-800"
         >
-          Open Decision Intelligence →
+          Open Metrics dashboard →
         </a>
       </section>
     </main>

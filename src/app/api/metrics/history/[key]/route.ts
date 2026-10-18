@@ -1,18 +1,23 @@
 import { db } from "@/db";
-import { leados_metrics } from "@/db/schema";
+import { leadosMetrics } from "@/db/schema";
 import { asc, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
+  const decodedKey = decodeURIComponent(key);
 
   const rows = await db
     .select()
-    .from(leados_metrics)
-    .where(eq(leados_metrics.key, key))
-    .orderBy(asc(leados_metrics.createdAt));
+    .from(leadosMetrics)
+    .where(eq(leadosMetrics.key, decodedKey))
+    .orderBy(asc(leadosMetrics.createdAt));
 
-  const last30 = rows.slice(-30);
-  return Response.json(last30);
+  const last200 = rows.slice(-200).map((r) => ({
+    ...r,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
+  return Response.json(last200);
 }
