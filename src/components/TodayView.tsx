@@ -1,88 +1,62 @@
-import type { Projection } from '../lib/types';
-import { run } from '../lib/engine';
-import { computeFlightRisk } from '../lib/flightRisk';
-import { buildCausalGraph } from '../lib/causal';
-import { Card, SectionTitle, RiskPill, Tag, Callout } from './ui';
+import { project } from "../lib/engine";
+import { buildAllClear, buildCrisis, buildSeed } from "../lib/store";
+import type { AppState } from "../lib/types";
+import { DOMAIN_LABEL } from "../lib/types";
+import { Button, BucketBadge, Card, SeverityBadge } from "./Shell";
 
-export function TodayView({ P, today, navigate }: { P: Projection; today: string; navigate: (r: string) => void }) {
-  const findings = run(P, today).findings;
-  const flight = computeFlightRisk(P, today);
-  const graph = buildCausalGraph(P, today);
-  const confirmed = graph.edges.filter((e) => e.type === 'CONFIRMED').length;
-  const evidenced = graph.edges.filter((e) => e.type === 'EVIDENCED').length;
+export function TodayView({ state, onReplace }: { state: AppState; onReplace: (s: AppState) => void }) {
+  const projection = project(state);
+  const top = [...projection.findings].sort((a, b) => b.ageDays - a.ageDays).slice(0, 6);
 
   return (
     <div className="space-y-6">
-      <SectionTitle
-        title="Today"
-        subtitle={`Demo org snapshot \u2014 ${P.people.length} active people, ${P.state.events.length} logged events. All data is synthetic.`}
-      />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Active findings</div>
-          <div className="mt-2 text-3xl font-bold text-slate-900">{findings.length}</div>
-          <div className="mt-1 text-xs text-slate-500">Rule-based, disclosed-fabricated (engine.ts)</div>
-        </Card>
-        <Card>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">High flight risk</div>
-          <div className="mt-2 text-3xl font-bold text-rose-600">{flight.highRisk.length}</div>
-          <div className="mt-1 text-xs text-slate-500">of {flight.scores.length} people \u00b7 model quality {flight.modelQuality}</div>
-        </Card>
-        <Card>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Causal edges</div>
-          <div className="mt-2 text-3xl font-bold text-slate-900">{graph.edges.length}</div>
-          <div className="mt-1 text-xs text-slate-500">{evidenced} evidenced \u00b7 {confirmed} confirmed by you</div>
-        </Card>
-        <Card>
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Historical departures</div>
-          <div className="mt-2 text-3xl font-bold text-slate-900">{flight.historicalDepartures}</div>
-          <div className="mt-1 text-xs text-slate-500">Used to calibrate the flight-risk signature</div>
-        </Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
+          <p className="text-sm text-stone-500">Live projection — recomputed from current state on every render, nothing derived is stored.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => onReplace(buildAllClear())}>Scenario: all clear</Button>
+          <Button onClick={() => onReplace(buildSeed())}>Scenario: busy quarter</Button>
+          <Button variant="danger" onClick={() => onReplace(buildCrisis())}>Scenario: crisis</Button>
+        </div>
       </div>
 
-      <Card>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-semibold text-slate-900">Highest flight-risk people</h3>
-          <button onClick={() => navigate('/roster')} className="text-xs font-semibold text-indigo-600 hover:underline">
-            View full roster \u2192
-          </button>
-        </div>
-        <div className="space-y-2">
-          {flight.scores.slice(0, 5).map((s) => (
-            <div key={s.person.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
-              <div>
-                <div className="text-sm font-medium text-slate-800">{s.person.name}</div>
-                <div className="text-xs text-slate-400">{s.person.title} \u00b7 {s.person.team}</div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-500">{Math.round(s.riskScore * 100)}%</span>
-                <RiskPill level={s.riskLevel} />
-              </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
+        <Card className="lg:col-span-1">
+          <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">Overall score</div>
+          <div className="mt-2 text-3xl font-bold text-rose-600">{projection.overallScore}</div>
+          <div className="mt-1 text-xs text-stone-400">{projection.findings.length} open findings</div>
+        </Card>
+        {projection.domainScores.map((d) => (
+          <Card key={d.domain}>
+            <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">{DOMAIN_LABEL[d.domain]}</div>
+            <div className="mt-2 text-2xl font-bold">{d.score}</div>
+            <div className="mt-1">
+              <BucketBadge bucket={d.bucket} />
             </div>
-          ))}
-        </div>
-      </Card>
+          </Card>
+        ))}
+      </div>
 
-      <Card>
-        <h3 className="mb-2 font-semibold text-slate-900">Active findings</h3>
-        {findings.length === 0 ? (
-          <p className="text-sm text-slate-500">No findings right now.</p>
+      <Card title="Most overdue / most severe">
+        {top.length === 0 ? (
+          <div className="py-6 text-center text-sm text-stone-400">No active findings. All clear.</div>
         ) : (
-          <ul className="space-y-1.5">
-            {findings.map((f) => (
-              <li key={f.id} className="flex items-center gap-2 text-sm text-slate-700">
-                <span className={`h-2 w-2 rounded-full ${f.severity === 'high' ? 'bg-rose-500' : 'bg-amber-400'}`} />
-                {f.label}
+          <ul className="divide-y divide-stone-100">
+            {top.map((f) => (
+              <li key={f.key} className="flex items-start justify-between gap-4 py-3">
+                <div>
+                  <div className="text-sm font-medium">{f.title}</div>
+                  <div className="text-xs text-stone-500">{f.detail}</div>
+                  <div className="mt-1 text-[11px] font-mono text-stone-400">{f.rule}</div>
+                </div>
+                <SeverityBadge severity={f.severity} />
               </li>
             ))}
           </ul>
         )}
       </Card>
-
-      <Callout tone="amber">
-        <Tag kind="DISCLOSED GAP" /> <span className="ml-1">This build implements the two fully-specified pt-Q engines (Causal Model, Flight Risk) plus three original lightweight additions
-        (High Potential, Power Network, Meeting Intelligence). Several other named pt-Q capabilities are not implemented \u2014 see About / Provenance for the full list and why.</span>
-      </Callout>
     </div>
   );
 }

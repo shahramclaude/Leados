@@ -1,69 +1,69 @@
-import { useMemo } from "react";
+import { project } from "../lib/engine";
 import type { AppState } from "../lib/types";
-import { buildFindings } from "../lib/engine";
-import { buildRiskRegister } from "../lib/riskIntelligence";
-import type { RiskStatus } from "../lib/riskIntelligence";
-import { Card, Bar, Badge, Stat } from "./ui";
-
-const STATUS_TONE: Record<RiskStatus, "slate" | "sky" | "amber" | "rose"> = {
-  CLEAR: "slate",
-  WATCH: "sky",
-  ELEVATED: "amber",
-  CRITICAL: "rose",
-};
+import { DOMAIN_LABEL, DOMAINS } from "../lib/types";
+import { BucketBadge, Card, SeverityBadge } from "./Shell";
 
 export function RiskView({ state }: { state: AppState }) {
-  const findings = useMemo(() => buildFindings(state), [state]);
-  const register = useMemo(() => buildRiskRegister(findings), [findings]);
+  const projection = project(state);
+  const org = projection.findings.filter((f) => f.domain === "org");
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Risk Register</h1>
-        <p className="mt-1 max-w-3xl text-xs text-slate-500">
-          All 8 categories are always shown, even at zero. Scores are a disclosed, simplified severity-weighted formula, not a calibrated
-          actuarial model.
+        <h1 className="text-2xl font-semibold tracking-tight">Risk Register</h1>
+        <p className="text-sm text-stone-500">
+          All {DOMAINS.length} domains always shown, even at zero. Score = Σ severity-weight × 0.92<sup>ageDays</sup> over open findings in that domain.
         </p>
       </div>
 
-      <Card>
-        <Stat label="Overall risk score" value={`${register.overallScore} / 100`} tone={register.overallScore > 50 ? "rose" : register.overallScore > 20 ? "amber" : "emerald"} />
-      </Card>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {register.categories.map((c) => (
-          <Card key={c.category} title={c.category}>
-            <div className="flex items-center justify-between">
-              <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
-              <span className="text-xs text-slate-500">{c.findingCount} findings</span>
-            </div>
-            <div className="mt-3">
-              <Bar value={c.score} max={100} tone={c.score > 60 ? "rose" : c.score > 25 ? "amber" : "emerald"} />
-            </div>
-            <div className="mt-1 text-right text-[11px] text-slate-500">{c.score}/100</div>
-          </Card>
-        ))}
-      </div>
-
-      <Card title={`Cross-category amplifications (${register.amplifications.length})`} subtitle="Rule combinations that span two categories and compound each other's score.">
-        {register.amplifications.length === 0 ? (
-          <p className="text-xs text-slate-500">None detected with the current Signal Board state.</p>
-        ) : (
+      {org.length > 0 && (
+        <Card title="Cross-domain amplification">
           <ul className="space-y-2">
-            {register.amplifications.map((a) => (
-              <li key={a.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs">
-                <div className="flex flex-wrap items-center gap-2 font-medium text-slate-200">
-                  {a.label}
-                  {a.categories.map((c) => (
-                    <Badge key={c} tone="amber">{c}</Badge>
-                  ))}
+            {org.map((f) => (
+              <li key={f.key} className="flex items-start justify-between gap-4 rounded-lg bg-rose-50 p-3">
+                <div>
+                  <div className="text-sm font-medium text-rose-800">{f.title}</div>
+                  <div className="text-xs text-rose-700">{f.detail}</div>
                 </div>
-                <p className="mt-1 text-slate-500">{a.detail}</p>
+                <SeverityBadge severity={f.severity} />
               </li>
             ))}
           </ul>
-        )}
-      </Card>
+        </Card>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {projection.domainScores.map((d) => {
+          const findings = projection.findings.filter((f) => f.domain === d.domain);
+          return (
+            <Card key={d.domain}>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="font-semibold">{DOMAIN_LABEL[d.domain]}</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-mono text-stone-500">{d.score}</span>
+                  <BucketBadge bucket={d.bucket} />
+                </div>
+              </div>
+              {findings.length === 0 ? (
+                <div className="py-3 text-center text-xs text-stone-400">No open findings</div>
+              ) : (
+                <ul className="space-y-2">
+                  {findings.map((f) => (
+                    <li key={f.key} className="rounded-lg border border-stone-100 p-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-sm font-medium">{f.title}</div>
+                        <SeverityBadge severity={f.severity} />
+                      </div>
+                      <div className="mt-1 text-xs text-stone-500">{f.detail}</div>
+                      <div className="mt-1 font-mono text-[11px] text-stone-400">{f.rule} · age {Math.round(f.ageDays)}d</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 }

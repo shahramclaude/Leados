@@ -1,94 +1,104 @@
-// Original in-browser self-test suite for this delivery's own math (not a
-// reproduction of any T_L_*/G_L_* or other externally-named test suite,
-// which could not be verified anywhere — see AI-SESSION-LOG.md).
-
-import { computeLifeStage } from "./lifeStage";
-import { detectCompoundEffects } from "./compoundIntel";
-import { runWargame } from "./wargame";
-import { computeOrgDesign, graicunasRelationships } from "./orgDesign";
-import { analyzeStakeholders, stakeholderGame } from "./stakeholders";
-import { computeRealOptionValue, normCdf } from "./realOptions";
-import { computeExecutivePresence } from "./executivePresence";
-import { computeInnovationPortfolio } from "./innovationPortfolio";
-import { computeChangeManagement } from "./changeManagement";
-import { computeCompetitiveIntel } from "./competitiveIntel";
-import { buildSeedState } from "./seed";
+import { project, computeFindings } from "./engine";
+import { buildAllClear, buildSeed } from "./store";
+import { SEVERITY_WEIGHT } from "./types";
+import type { AppState } from "./types";
 
 export interface TestResult {
   id: string;
+  name: string;
   pass: boolean;
   detail: string;
 }
 
+// Original self-tests, run against the real engine functions (not reimplemented
+// logic), in the browser, on demand. A small, honestly-scoped suite (6 tests) —
+// not presented as equivalent to any larger test-suite history claimed for
+// github.com/wbweve/Leados, which this delivery does not share or continue.
+
 export function runSelfTests(): TestResult[] {
-  const seed = buildSeedState();
   const results: TestResult[] = [];
+  const now = new Date().toISOString();
 
-  const push = (id: string, pass: boolean, detail: string) => results.push({ id, pass, detail });
+  // T1: an all-clear org produces zero findings and every domain score is 0.
+  {
+    const state = buildAllClear();
+    const p = project(state, now);
+    const pass = p.findings.length === 0 && p.domainScores.every((d) => d.score === 0);
+    results.push({
+      id: "T1",
+      name: "All-clear org → zero findings, all domain scores 0",
+      pass,
+      detail: pass ? "OK" : `Got ${p.findings.length} findings, scores: ${p.domainScores.map((d) => d.score).join(",")}`,
+    });
+  }
 
-  // OIP_01 — life stage overall is bounded and matches mean of inputs
-  const ls = computeLifeStage(seed.lifeStage);
-  const manualMean = Object.values(seed.lifeStage).reduce((a, b) => a + b, 0) / 12;
-  push("OIP_01_lifeStage_mean", Math.abs(ls.overall - manualMean) < 0.2, `overall=${ls.overall} manualMean=${manualMean.toFixed(1)}`);
+  // T2: a person exactly on cadence (not past it) does not fire ONE_ON_ONE_OVERDUE.
+  {
+    const state = buildAllClear();
+    const exactlyOnCadence = new Date(Date.now() - state.people[0].cadenceDays * 86400000).toISOString();
+    const edited: AppState = { ...state, people: [{ ...state.people[0], lastOneOnOne: exactlyOnCadence }, ...state.people.slice(1)] };
+    const findings = computeFindings(edited, now);
+    const fired = findings.some((f) => f.key === `R1:${edited.people[0].id}`);
+    results.push({
+      id: "T2",
+      name: "1:1 exactly on cadence (not past it) does not fire R1",
+      pass: !fired,
+      detail: !fired ? "OK — strict > boundary respected" : "R1 fired at the exact boundary (should not)",
+    });
+  }
 
-  // OIP_02 — compound effects: identical twin strong signals must be flagged compounding
-  const cp = detectCompoundEffects([
-    { key: "a", label: "A", value: 90 },
-    { key: "b", label: "B", value: 90 },
-    { key: "c", label: "C", value: 10 },
-  ]);
-  const hasCompounding = cp.pairs.some((p) => p.type === "compounding");
-  const hasFragility = cp.pairs.some((p) => p.type === "fragility");
-  push("OIP_02_compound_detect", hasCompounding && hasFragility, `compounding=${hasCompounding} fragility=${hasFragility}`);
+  // T3: logging a 1:1 today clears an overdue R1 finding for that person.
+  {
+    const state = buildSeed();
+    const before = computeFindings(state, now).some((f) => f.rule === "ONE_ON_ONE_OVERDUE" && f.sourceIds.includes(state.people[0].id));
+    const fixed: AppState = { ...state, people: [{ ...state.people[0], lastOneOnOne: now }, ...state.people.slice(1)] };
+    const after = computeFindings(fixed, now).some((f) => f.rule === "ONE_ON_ONE_OVERDUE" && f.sourceIds.includes(state.people[0].id));
+    results.push({
+      id: "T3",
+      name: "Logging a 1:1 today clears that person's overdue finding",
+      pass: before && !after,
+      detail: `before=${before} after=${after}`,
+    });
+  }
 
-  // OIP_03 — wargame matrix always has 4 postures and a defined recommendation
-  const wg = runWargame(seed.wargame.ourPosture, seed.wargame.competitorArchetype, seed.wargame.marketVolatility);
-  push("OIP_03_wargame_matrix", wg.matrix.length === 4 && !!wg.recommendedPosture, `postures=${wg.matrix.length}`);
+  // T4: severity weights are strictly ordered critical > high > medium > low.
+  {
+    const pass = SEVERITY_WEIGHT.critical > SEVERITY_WEIGHT.high && SEVERITY_WEIGHT.high > SEVERITY_WEIGHT.medium && SEVERITY_WEIGHT.medium > SEVERITY_WEIGHT.low;
+    results.push({ id: "T4", name: "Severity weights strictly ordered (critical > high > medium > low)", pass, detail: JSON.stringify(SEVERITY_WEIGHT) });
+  }
 
-  // OIP_04 — Graicunas relationships grows super-linearly with span
-  const g4 = graicunasRelationships(4);
-  const g8 = graicunasRelationships(8);
-  push("OIP_04_graicunas_growth", g8 > g4 * 2, `g4=${g4} g8=${g8}`);
+  // T5: BURNOUT_RISK (R3) requires BOTH an overdue 1:1 AND recent negative feedback — neither alone is enough.
+  {
+    const state = buildSeed();
+    const person = state.people[0];
+    const onlyOverdue: AppState = { ...state, people: [{ ...person, lastFeedbackSentiment: "positive" }, ...state.people.slice(1)] };
+    const onlyNegative: AppState = { ...state, people: [{ ...person, lastOneOnOne: now }, ...state.people.slice(1)] };
+    const bothTrue = computeFindings(state, now).some((f) => f.key === `R3:${person.id}`);
+    const overdueOnlyFires = computeFindings(onlyOverdue, now).some((f) => f.key === `R3:${person.id}`);
+    const negativeOnlyFires = computeFindings(onlyNegative, now).some((f) => f.key === `R3:${person.id}`);
+    const pass = bothTrue && !overdueOnlyFires && !negativeOnlyFires;
+    results.push({
+      id: "T5",
+      name: "BURNOUT_RISK (R3) only fires when both sub-conditions hold",
+      pass,
+      detail: `both=${bothTrue} overdueOnly=${overdueOnlyFires} negativeOnly=${negativeOnlyFires}`,
+    });
+  }
 
-  const od = computeOrgDesign(seed.orgDesign);
-  push("OIP_05_orgdesign_bounds", od.efficiencyScore >= 0 && od.efficiencyScore <= 100, `efficiency=${od.efficiencyScore}`);
-
-  // OIP_06 — stakeholder alignment index within [-100,100] and quadrants valid
-  const { analyzed, alignmentIndex } = analyzeStakeholders(seed.stakeholders);
-  const validQuadrants = analyzed.every((a) =>
-    ["Manage Closely", "Keep Satisfied", "Keep Informed", "Monitor"].includes(a.quadrant)
-  );
-  push("OIP_06_stakeholder_quadrants", validQuadrants && Math.abs(alignmentIndex) <= 100, `alignment=${alignmentIndex}`);
-
-  // OIP_07 — game theory: fully positive stance should yield mutual cooperation
-  const game = stakeholderGame(100);
-  push("OIP_07_game_cooperation", game.equilibrium === "mutual cooperation", `equilibrium=${game.equilibrium}`);
-
-  // OIP_08 — normCdf(0) ≈ 0.5, standard normal distribution sanity check
-  push("OIP_08_normcdf_sanity", Math.abs(normCdf(0) - 0.5) < 0.001, `normCdf(0)=${normCdf(0).toFixed(4)}`);
-
-  // OIP_09 — Black-Scholes call value is non-negative (no-arbitrage property)
-  const ro = computeRealOptionValue(seed.realOptions);
-  push("OIP_09_blackscholes_nonneg", ro.callValue >= 0, `callValue=${ro.callValue}`);
-
-  // OIP_10 — executive presence composite respects gravitas-heaviest weighting
-  const ep = computeExecutivePresence({ gravitas: 100, communication: 0, appearance: 0 });
-  push("OIP_10_execpresence_weighting", ep.composite === 50, `composite=${ep.composite}`);
-
-  // OIP_11 — innovation portfolio horizons sum to total investment
-  const ip = computeInnovationPortfolio(seed.initiatives);
-  const sumInvestment = ip.horizons.reduce((s, h) => s + h.investment, 0);
-  push("OIP_11_portfolio_sum", sumInvestment === ip.totalInvestment, `sum=${sumInvestment} total=${ip.totalInvestment}`);
-
-  // OIP_12 — ADKAR barrier point is always the minimum dimension
-  const cm = computeChangeManagement(seed.adkar);
-  const manualMin = Math.min(...Object.values(seed.adkar));
-  push("OIP_12_adkar_barrier", cm.barrierScore === manualMin, `barrier=${cm.barrierScore} min=${manualMin}`);
-
-  // OIP_13 — competitive intel ranks competitors in descending threat order
-  const ci = computeCompetitiveIntel(seed.competitors);
-  const sortedCorrectly = ci.ranked.every((c, i) => i === 0 || ci.ranked[i - 1].threatScore >= c.threatScore);
-  push("OIP_13_competitive_sort", sortedCorrectly, `top=${ci.topThreat.name}@${ci.topThreat.threatScore}`);
+  // T6: DOMAIN_CONCENTRATION (R11) requires >=2 high/critical findings in the same domain, not just 1.
+  {
+    const state = buildSeed(); // seed is designed to have 2+ high/critical "people" findings (overdue 1:1 + burnout)
+    const findings = computeFindings(state, now);
+    const peopleHiCrit = findings.filter((f) => f.domain === "people" && (f.severity === "high" || f.severity === "critical")).length;
+    const concentrationFired = findings.some((f) => f.rule === "DOMAIN_CONCENTRATION" && f.key === "R11:people");
+    const pass = peopleHiCrit >= 2 ? concentrationFired : !concentrationFired;
+    results.push({
+      id: "T6",
+      name: "DOMAIN_CONCENTRATION (R11) fires iff a domain has >= 2 high/critical findings",
+      pass,
+      detail: `peopleHiCrit=${peopleHiCrit} fired=${concentrationFired}`,
+    });
+  }
 
   return results;
 }
