@@ -1,12 +1,708 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LeadOS pt-V — Self-Sovereign Intelligence Sandbox</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Leados Sandbox — Thermodynamics, CAS Engine, Risk Intelligence (original single-file build)</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+  body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#334155;border-radius:4px;}
+  .fade-in{animation:fadeIn .25s ease-out;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .nav-btn.active{background:#1d4ed8;color:#fff;}
+  input[type=range]{accent-color:#3b82f6;}
+</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+<div id="app"></div>
+
+<script>
+/* =========================================================================
+   LEADOS SANDBOX — original single-file build
+   -------------------------------------------------------------------------
+   PROVENANCE (short form — full ledger in AI-SESSION-LOG.md / #/about):
+   This file does NOT copy code from github.com/wbweve/Leados. That repo was
+   inspected this session via GitHub's REST API + raw file fetches. It is a
+   React+Vite+TypeScript project (src/App.tsx -> components -> lib/*), not a
+   single HTML file, so nothing from it can be pasted here verbatim even if
+   wanted. This build independently implements the same *functional ideas*
+   (Signal Board, Thermodynamics/info-theory, CAS engine, Risk Register)
+   using vanilla JS + Tailwind, because that is what this tool environment
+   supports (single index.html, no build step). All data, rules, formulas-
+   as-coded, and UI below are original to this delivery unless labeled
+   "textbook formula" (Shannon entropy / mutual information), which are
+   standard public-domain math, not copied code.
+   ========================================================================= */
+
+  // ---------------------------------------------------------------------
+  // 1. DATA MODEL
+  // ---------------------------------------------------------------------
+  const STORAGE_KEY = "leados-singlefile:v1"; // new key — no continuity claimed with any other build
+
+  const CATEGORIES = ["Financial","Operational","People","Technical","Strategic","Compliance","Cultural","External"];
+  const CAT_COLOR = {
+    Financial:"#f59e0b", Operational:"#38bdf8", People:"#f472b6", Technical:"#a78bfa",
+    Strategic:"#34d399", Compliance:"#fb7185", Cultural:"#facc15", External:"#94a3b8"
+  };
+
+  const RULE_TITLES = [
+    "Runway below 6 months","Burn rate acceleration","Customer concentration risk","Key-person financial dependency",
+    "Unbudgeted spend spike","Deployment frequency drop","Incident recurrence (same root cause)","On-call fatigue reports",
+    "Backlog growth outpacing throughput","Vendor SLA breach","Key-person overload (single point of failure)","Unplanned attrition risk flagged",
+    "Manager span-of-control exceeded","Onboarding time trending up","Cross-team handoff friction","Technical debt ratio rising",
+    "Test coverage declining","Architecture review overdue","Security patch backlog","Data quality incidents",
+    "Strategic goal drift","Roadmap churn (2+ replans/quarter)","Feature-parity competitive gap","Market segment contraction",
+    "OKR confidence score low","Regulatory filing overdue","Policy exception count rising","Audit finding unresolved",
+    "Access review overdue","Data retention violation risk","Psychological safety score drop","Recognition/reward mismatch reported",
+    "Meeting load above threshold","After-hours activity spike","Decision reversal rate rising","Supplier dependency concentration",
+    "Partner integration risk","External PR/sentiment dip","Macroeconomic exposure flagged","Talent market tightening (role)",
+    "Burnout self-report (person-linked)","Repeated escalation, same person","Trust erosion signal (survey)","Silent-quitting indicator",
+    "Cross-functional conflict reported","Scope creep on flagship project","Release rollback event","Customer churn signal",
+    "Compliance training overdue","Knowledge concentration (bus factor = 1)"
+  ];
+  const PERSON_LINKED_IDX = new Set([7,10,11,13,14,30,31,32,33,34,40,41,42,43,44,49]); // 0-based indices likely to involve a specific person
+
+  const RULES = RULE_TITLES.map((title, i) => ({
+    id: "R" + (i + 1),
+    category: CATEGORIES[i % 8],
+    title,
+    severity: ((i * 3) % 5) + 1,
+    personLinked: PERSON_LINKED_IDX.has(i)
+  }));
+
+  const PEOPLE = [
+    {id:"p1", name:"Alice Chen",    role:"Eng Lead"},
+    {id:"p2", name:"Ben Osei",      role:"Product Manager"},
+    {id:"p3", name:"Carla Nunez",   role:"Design Lead"},
+    {id:"p4", name:"Diego Silva",   role:"Finance"},
+    {id:"p5", name:"Elin Berg",     role:"Sales Lead"},
+    {id:"p6", name:"Farid Haidari", role:"Support Lead"}
+  ];
+
+  const EVENT_TYPES = ["meeting","commit","review","incident","message","decision","absence","escalation"];
+
+  // deterministic PRNG (mulberry32) — synthetic data must be reproducible
+  function mulberry32(seed){
+    return function(){
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function generateEvents(seed, days, count){
+    const rnd = mulberry32(seed);
+    const now = Date.now();
+    const events = [];
+    for(let i=0;i<count;i++){
+      const person = PEOPLE[Math.floor(rnd()*PEOPLE.length)];
+      events.push({
+        id: "E"+i,
+        ts: now - Math.floor(rnd()*days*86400000),
+        personId: person.id,
+        type: EVENT_TYPES[Math.floor(rnd()*EVENT_TYPES.length)],
+        category: CATEGORIES[Math.floor(rnd()*CATEGORIES.length)],
+        direction: rnd() > 0.45 ? "in" : "out"
+      });
+    }
+    return events.sort((a,b)=>a.ts-b.ts);
+  }
+
+  // ---------------------------------------------------------------------
+  // 2. STORE (localStorage)
+  // ---------------------------------------------------------------------
+  function defaultState(){
+    return {
+      runwayMonths: 9,
+      rules: Object.fromEntries(RULES.map(r => [r.id, {active:false, severity:r.severity, personId:null, recurrence:0}])),
+      events: generateEvents(1337, 90, 420)
+    };
+  }
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      if(!parsed.events || !parsed.rules) return defaultState();
+      return parsed;
+    }catch(e){ return defaultState(); }
+  }
+  function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  let state = loadState();
+
+  // ---------------------------------------------------------------------
+  // 3. ENGINE — Signal Board -> Findings
+  // ---------------------------------------------------------------------
+  function computeFindings(){
+    return RULES.filter(r => state.rules[r.id].active).map(r => ({
+      ...r,
+      severity: state.rules[r.id].severity,
+      personId: state.rules[r.id].personId,
+      recurrence: state.rules[r.id].recurrence
+    }));
+  }
+
+  // ---------------------------------------------------------------------
+  // 4. THERMODYNAMICS — Shannon entropy / mutual information / SNR / bottlenecks
+  //    (standard textbook formulas, Shannon 1948 — original code, not copied)
+  // ---------------------------------------------------------------------
+  function shannonEntropy(events){
+    if(events.length === 0) return {H:0, Hmax:0, normalized:0, richness:0, dominant:null};
+    const counts = {};
+    events.forEach(e => counts[e.type] = (counts[e.type]||0) + 1);
+    const n = events.length;
+    let H = 0, dominant = null, dmax = -1;
+    Object.entries(counts).forEach(([type,c]) => {
+      const p = c/n;
+      H -= p * Math.log2(p);
+      if(c > dmax){ dmax = c; dominant = type; }
+    });
+    const richness = Object.keys(counts).length;
+    const Hmax = richness > 1 ? Math.log2(richness) : 0;
+    return {H, Hmax, normalized: Hmax>0 ? H/Hmax : 0, richness, dominant};
+  }
+
+  function weeklyBins(events, personId, windowDays){
+    const weeks = Math.ceil(windowDays/7);
+    const end = Date.now();
+    const start = end - windowDays*86400000;
+    const bins = new Array(weeks).fill(false);
+    events.filter(e => e.personId === personId && e.ts >= start && e.ts <= end).forEach(e => {
+      const b = Math.floor((e.ts-start)/(7*86400000));
+      if(b>=0 && b<weeks) bins[b] = true;
+    });
+    return bins;
+  }
+
+  function binEntropy(bins){
+    const p1 = bins.filter(Boolean).length / bins.length;
+    if(p1===0 || p1===1) return 0;
+    return -(p1*Math.log2(p1) + (1-p1)*Math.log2(1-p1));
+  }
+
+  function mutualInformation(personA, personB, windowDays=90){
+    const binsX = weeklyBins(state.events, personA, windowDays);
+    const binsY = weeklyBins(state.events, personB, windowDays);
+    const HX = binEntropy(binsX), HY = binEntropy(binsY);
+    const joint = {};
+    for(let i=0;i<binsX.length;i++){
+      const key = (binsX[i]?1:0)+","+(binsY[i]?1:0);
+      joint[key] = (joint[key]||0)+1;
+    }
+    let HXY = 0;
+    Object.values(joint).forEach(c => { const p = c/binsX.length; HXY -= p*Math.log2(p); });
+    const MI = Math.max(0, HX + HY - HXY);
+    const maxMI = Math.min(HX,HY) || 1;
+    return {MI, HX, HY, normalized: maxMI>0 ? MI/maxMI : 0};
+  }
+
+  function signalToNoise(events, findings){
+    const windowMs = 2*86400000;
+    let signal = 0;
+    events.forEach(e => {
+      const isSignal = findings.some(f => f.category === e.category &&
+        (!f.personId || !e.personId || f.personId === e.personId));
+      if(isSignal) signal++;
+    });
+    const noise = events.length - signal;
+    const snr = noise>0 ? signal/noise : (signal>0 ? Infinity : 0);
+    const snrDb = Number.isFinite(snr) ? (snr>0 ? 10*Math.log10(snr) : -99) : 99;
+    return {signal, noise, snr, snrDb, total: events.length};
+  }
+
+  function identifyBottlenecks(events){
+    const counts = PEOPLE.map(p => ({
+      person: p,
+      inCount: events.filter(e => e.personId===p.id && e.direction==="in").length
+    }));
+    const mean = counts.reduce((a,b)=>a+b.inCount,0) / (PEOPLE.length||1);
+    const threshold = mean*0.3; // disclosed: illustrative convention, not a validated threshold
+    return {
+      mean,
+      threshold,
+      bottlenecks: counts.filter(c => c.inCount < threshold)
+        .map(c => ({...c, percentOfMean: mean>0 ? Math.round((c.inCount/mean)*100) : 0}))
+    };
+  }
+
+  // ---------------------------------------------------------------------
+  // 5. CAS ENGINE — feedback loops / bifurcations / attractors
+  //    (original design, not a verified port of any external spec)
+  // ---------------------------------------------------------------------
+  const LOOP_DEFS = [
+    {a:"People", b:"Technical", name:"Workload Amplification Loop", type:"reinforcing",
+     desc:"An overloaded person makes more technical mistakes, which creates more incidents, which increases their load further."},
+    {a:"Operational", b:"People", name:"Burnout Spiral", type:"reinforcing",
+     desc:"Operational strain concentrates on one person, raising burnout risk, which further degrades operational throughput."},
+    {a:"Financial", b:"Strategic", name:"Austerity Trap", type:"reinforcing",
+     desc:"Budget cuts shrink capability, which weakens strategic delivery, which invites further cuts."},
+    {a:"Compliance", b:"Cultural", name:"Trust Collapse Loop", type:"balancing",
+     desc:"Rising policy exceptions erode psychological safety; lower safety reduces voluntary disclosure, hiding more exceptions."}
+  ];
+
+  function identifyFeedbackLoops(findings){
+    const loops = [];
+    LOOP_DEFS.forEach(def => {
+      const as = findings.filter(f => f.category===def.a);
+      const bs = findings.filter(f => f.category===def.b);
+      if(as.length===0 || bs.length===0) return;
+      // person-specific match preferred; fall back to category-level co-occurrence
+      const personMatch = as.find(x => x.personId && bs.some(y => y.personId === x.personId));
+      loops.push({...def, personId: personMatch ? personMatch.personId : null,
+        basis: personMatch ? "same-person co-occurrence" : "category-level co-occurrence"});
+    });
+    return loops;
+  }
+
+  function identifyBifurcations(findings){
+    const points = [];
+    if(state.runwayMonths < 6){
+      points.push({name:"Financial Bifurcation", detail:`Runway (${state.runwayMonths}mo) crossed the 6-month critical threshold.`});
+    }
+    const highSev = findings.filter(f => f.severity >= 4).length;
+    if(highSev >= 5){
+      points.push({name:"Systemic Strain Bifurcation", detail:`${highSev} active findings at severity >= 4.`});
+    }
+    const activeCats = new Set(findings.map(f=>f.category)).size;
+    if(activeCats >= 6){
+      points.push({name:"Complexity Bifurcation", detail:`Active findings now span ${activeCats} of 8 categories simultaneously.`});
+    }
+    return points;
+  }
+
+  function identifyAttractors(){
+    // disclosed, chosen convention: >=3 simulated recurrences marks an attractor state
+    return RULES.filter(r => (state.rules[r.id].recurrence||0) >= 3)
+      .map(r => ({...r, recurrence: state.rules[r.id].recurrence}));
+  }
+
+  // ---------------------------------------------------------------------
+  // 6. RISK INTELLIGENCE — 8-category register + cross-category amplification
+  // ---------------------------------------------------------------------
+  function buildRiskRegister(findings){
+    return CATEGORIES.map(cat => {
+      const items = findings.filter(f => f.category===cat);
+      const maxSev = items.reduce((m,f)=>Math.max(m,f.severity),0);
+      return {category:cat, count: items.length, maxSeverity: maxSev, items};
+    });
+  }
+
+  function crossCategoryAmplification(findings){
+    const byPerson = {};
+    findings.forEach(f => {
+      if(!f.personId) return;
+      (byPerson[f.personId] = byPerson[f.personId]||new Set()).add(f.category);
+    });
+    return Object.entries(byPerson)
+      .filter(([,cats]) => cats.size >= 3)
+      .map(([personId,cats]) => ({
+        personId, person: PEOPLE.find(p=>p.id===personId),
+        categories: [...cats]
+      }));
+  }
+
+  // ---------------------------------------------------------------------
+  // 7. SELF-TESTS — original, check this build's own math (not an external spec)
+  // ---------------------------------------------------------------------
+  function runSelfTests(){
+    const tests = [];
+    const approx = (a,b,eps=1e-6) => Math.abs(a-b) < eps;
+
+    tests.push({name:"shannonEntropy: single event type => H = 0", pass:
+      shannonEntropy([{type:"a"},{type:"a"},{type:"a"}]).H === 0});
+
+    tests.push({name:"shannonEntropy: empty log => H = 0, no throw", pass:
+      shannonEntropy([]).H === 0});
+
+    tests.push({name:"shannonEntropy: normalized in [0,1]", pass: (() => {
+      const r = shannonEntropy(state.events); return r.normalized >= 0 && r.normalized <= 1;
+    })()});
+
+    tests.push({name:"mutualInformation: MI(A,A) equals HX (self-information)", pass: (() => {
+      const r = mutualInformation(PEOPLE[0].id, PEOPLE[0].id);
+      return approx(r.MI, r.HX, 1e-9);
+    })()});
+
+    tests.push({name:"riskRegister: always returns all 8 categories, even at zero", pass:
+      buildRiskRegister([]).length === 8});
+
+    tests.push({name:"identifyBifurcations: runway<6 triggers Financial Bifurcation", pass: (() => {
+      const saved = state.runwayMonths; state.runwayMonths = 3;
+      const got = identifyBifurcations([]).some(b=>b.name==="Financial Bifurcation");
+      state.runwayMonths = saved; return got;
+    })()});
+
+    tests.push({name:"identifyAttractors: threshold is recurrence >= 3 (disclosed convention)", pass: (() => {
+      const r = RULES[0].id; const saved = state.rules[r].recurrence;
+      state.rules[r].recurrence = 2; const notYet = identifyAttractors().some(a=>a.id===r);
+      state.rules[r].recurrence = 3; const now = identifyAttractors().some(a=>a.id===r);
+      state.rules[r].recurrence = saved;
+      return !notYet && now;
+    })()});
+
+    tests.push({name:"RULES catalog has exactly 50 entries across 8 categories", pass:
+      RULES.length === 50 && new Set(RULES.map(r=>r.category)).size === 8});
+
+    return tests;
+  }
+
+  // ---------------------------------------------------------------------
+  // 8. ROUTER + RENDER
+  // ---------------------------------------------------------------------
+  const ROUTES = [
+    {hash:"#/today", label:"Today"},
+    {hash:"#/signals", label:"Signal Board"},
+    {hash:"#/thermodynamics", label:"Thermodynamics"},
+    {hash:"#/cas", label:"CAS Engine"},
+    {hash:"#/risk", label:"Risk Register"},
+    {hash:"#/about", label:"About / Provenance"}
+  ];
+
+  function nav(){
+    return `<nav class="flex flex-wrap gap-2 p-4 bg-slate-900/80 border-b border-slate-800 sticky top-0 backdrop-blur z-10">
+      <span class="font-bold text-blue-400 mr-4 self-center">LEADOS <span class="text-slate-500 font-normal">· sandbox</span></span>
+      ${ROUTES.map(r => `<button data-hash="${r.hash}" class="nav-btn px-3 py-1.5 rounded-lg text-sm text-slate-300 hover:bg-slate-800 ${location.hash===r.hash || (!location.hash && r.hash==='#/today') ? 'active':''}">${r.label}</button>`).join("")}
+    </nav>`;
+  }
+
+  function badge(text, color){
+    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:${color}22;color:${color};border:1px solid ${color}55">${text}</span>`;
+  }
+
+  function sevColor(s){ return s>=4 ? "#f87171" : s===3 ? "#fbbf24" : "#4ade80"; }
+
+  function renderToday(){
+    const findings = computeFindings();
+    const loops = identifyFeedbackLoops(findings);
+    const bifs = identifyBifurcations(findings);
+    const attractors = identifyAttractors();
+    const entropy = shannonEntropy(state.events);
+    const amps = crossCategoryAmplification(findings);
+    const tests = runSelfTests();
+    const passCount = tests.filter(t=>t.pass).length;
+    const overallRisk = findings.reduce((s,f)=>s+f.severity,0);
+
+    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
+      <h1 class="text-2xl font-bold">Today</h1>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        ${statCard("Overall risk score", overallRisk, "sum of active severities")}
+        ${statCard("Active findings", findings.length, "toggled rules on Signal Board")}
+        ${statCard("Entropy", (entropy.normalized*100).toFixed(0)+"%", "normalized Shannon entropy of event log")}
+        ${statCard("CAS signals", loops.length+bifs.length+attractors.length, "loops + bifurcations + attractors")}
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+          <h2 class="font-semibold mb-2">Cross-category amplification</h2>
+          ${amps.length ? amps.map(a=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0">
+            <b>${a.person ? a.person.name : a.personId}</b> active across <b>${a.categories.length}</b> categories: ${a.categories.join(", ")}
+          </div>`).join("") : `<p class="text-sm text-slate-500">None detected. Toggle rules across 3+ categories for the same person on the Signal Board to trigger this.</p>`}
+        </div>
+        <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+          <h2 class="font-semibold mb-2">Scenario presets</h2>
+          <div class="flex flex-wrap gap-2">
+            <button class="preset-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm" data-preset="burnout">Burnout loop</button>
+            <button class="preset-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm" data-preset="austerity">Austerity trap</button>
+            <button class="preset-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm" data-preset="trust">Trust collapse</button>
+            <button class="preset-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm" data-preset="clear">Reset signals</button>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">Presets are original to this build — they are not a verified port of any external rule set.</p>
+          <button id="reset-data-btn" class="mt-4 px-3 py-1.5 bg-red-900/60 hover:bg-red-900 rounded-lg text-sm">Reset synthetic data (wipes localStorage)</button>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+        <h2 class="font-semibold mb-2">Self-test runner <span class="text-sm font-normal text-slate-500">(${passCount}/${tests.length} passing)</span></h2>
+        <div class="space-y-1 text-sm font-mono">
+          ${tests.map(t=>`<div class="${t.pass ? 'text-emerald-400' : 'text-red-400'}">${t.pass ? '✓' : '✗'} ${t.name}</div>`).join("")}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function statCard(label, value, sub){
+    return `<div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+      <div class="text-xs text-slate-500">${label}</div>
+      <div class="text-2xl font-bold mt-1">${value}</div>
+      <div class="text-xs text-slate-600 mt-1">${sub}</div>
+    </div>`;
+  }
+
+  function renderSignals(){
+    const byCat = CATEGORIES.map(cat => ({cat, rules: RULES.filter(r=>r.category===cat)}));
+    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
+      <h1 class="text-2xl font-bold">Signal Board <span class="text-sm font-normal text-slate-500">— 50 synthetic rules across 8 categories</span></h1>
+
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800 flex items-center gap-4">
+        <label class="text-sm font-medium">Runway (months): <span id="runway-val">${state.runwayMonths}</span></label>
+        <input type="range" id="runway-slider" min="0" max="24" value="${state.runwayMonths}" class="flex-1 max-w-xs">
+        <span class="text-xs text-slate-500">Drives the Financial bifurcation check on the CAS page (threshold: &lt; 6mo).</span>
+      </div>
+
+      ${byCat.map(group => `
+        <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+          <h2 class="font-semibold mb-3 flex items-center gap-2">${badge(group.cat, CAT_COLOR[group.cat])} <span class="text-slate-500 text-sm font-normal">${group.rules.length} rules</span></h2>
+          <div class="grid md:grid-cols-2 gap-2">
+            ${group.rules.map(r => {
+              const rs = state.rules[r.id];
+              return `<div class="flex items-center justify-between gap-2 p-2 rounded-lg ${rs.active ? 'bg-slate-800' : 'bg-slate-950/50'} border border-slate-800">
+                <div class="flex items-center gap-2 min-w-0">
+                  <input type="checkbox" class="rule-toggle shrink-0" data-id="${r.id}" ${rs.active?'checked':''}>
+                  <div class="min-w-0">
+                    <div class="text-sm truncate">${r.id} — ${r.title}</div>
+                    ${r.personLinked ? `<select class="person-select text-xs bg-slate-800 rounded mt-1" data-id="${r.id}">
+                        <option value="">— no person —</option>
+                        ${PEOPLE.map(p=>`<option value="${p.id}" ${rs.personId===p.id?'selected':''}>${p.name}</option>`).join("")}
+                      </select>` : ""}
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <select class="sev-select text-xs bg-slate-800 rounded" data-id="${r.id}">
+                    ${[1,2,3,4,5].map(s=>`<option value="${s}" ${rs.severity===s?'selected':''}>sev ${s}</option>`).join("")}
+                  </select>
+                  <button class="recur-btn text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded" data-id="${r.id}" title="simulate 3x recurrence">×3</button>
+                  <span class="text-xs text-slate-500 w-5 text-center">${rs.recurrence||0}</span>
+                </div>
+              </div>`;
+            }).join("")}
+          </div>
+        </div>
+      `).join("")}
+    </div>`;
+  }
+
+  function renderThermo(){
+    const entropy = shannonEntropy(state.events);
+    const findings = computeFindings();
+    const snr = signalToNoise(state.events, findings);
+    const bottlenecks = identifyBottlenecks(state.events);
+    const mi = mutualInformation(document.getElementById("mi-a")?.value || PEOPLE[0].id,
+                                  document.getElementById("mi-b")?.value || PEOPLE[1].id);
+    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
+      <h1 class="text-2xl font-bold">Thermodynamics <span class="text-sm font-normal text-slate-500">— information theory over the synthetic event log</span></h1>
+      <p class="text-xs text-slate-500">Formulas are standard Shannon (1948) entropy / mutual information, implemented fresh for this build — not copied from any external source.</p>
+
+      <div class="grid md:grid-cols-3 gap-4">
+        ${statCard("Shannon entropy H", entropy.H.toFixed(2)+" bits", `${entropy.richness} distinct event types, dominant: ${entropy.dominant||'—'}`)}
+        ${statCard("Normalized entropy", (entropy.normalized*100).toFixed(0)+"%", "H / Hmax")}
+        ${statCard("Signal-to-noise", snr.snrDb.toFixed(1)+" dB", `${snr.signal} signal / ${snr.noise} noise of ${snr.total} events`)}
+      </div>
+
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+        <h2 class="font-semibold mb-2">Mutual information between two people</h2>
+        <div class="flex gap-2 items-center mb-2">
+          <select id="mi-a" class="bg-slate-800 rounded px-2 py-1 text-sm">${PEOPLE.map(p=>`<option value="${p.id}">${p.name}</option>`).join("")}</select>
+          <span class="text-slate-500">vs</span>
+          <select id="mi-b" class="bg-slate-800 rounded px-2 py-1 text-sm">${PEOPLE.map((p,i)=>`<option value="${p.id}" ${i===1?'selected':''}>${p.name}</option>`).join("")}</select>
+        </div>
+        <div class="text-sm">MI = <b>${mi.MI.toFixed(3)}</b> bits (normalized: ${(mi.normalized*100).toFixed(0)}%) — H(A)=${mi.HX.toFixed(2)}, H(B)=${mi.HY.toFixed(2)}, 90-day weekly bins.</div>
+        <p class="text-xs text-slate-500 mt-1">High coupling could mean healthy collaboration OR unhealthy dependency — this metric cannot distinguish the two (disclosed limit).</p>
+      </div>
+
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+        <h2 class="font-semibold mb-2">Information bottlenecks</h2>
+        <p class="text-xs text-slate-500 mb-2">Threshold: &lt;30% of mean inbound events/person (mean = ${bottlenecks.mean.toFixed(1)}). Disclosed: illustrative convention, not a validated organizational-science threshold.</p>
+        ${bottlenecks.bottlenecks.length ? bottlenecks.bottlenecks.map(b=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0">
+          <b>${b.person.name}</b> (${b.person.role}) — ${b.inCount} inbound events (${b.percentOfMean}% of mean)
+        </div>`).join("") : `<p class="text-sm text-slate-500">No bottlenecks detected at current threshold.</p>`}
+      </div>
+    </div>`;
+  }
+
+  function renderCas(){
+    const findings = computeFindings();
+    const loops = identifyFeedbackLoops(findings);
+    const bifs = identifyBifurcations(findings);
+    const attractors = identifyAttractors();
+    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
+      <h1 class="text-2xl font-bold">CAS Engine <span class="text-sm font-normal text-slate-500">— feedback loops, bifurcations, attractors</span></h1>
+      <p class="text-xs text-slate-500">Original rule definitions for this build (see About page). Not a verified port of any external CAS implementation.</p>
+
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+        <h2 class="font-semibold mb-2">Feedback loops</h2>
+        ${loops.length ? loops.map(l=>`<div class="py-2 border-b border-slate-800 last:border-0">
+          <div class="flex items-center gap-2">${badge(l.type, l.type==='reinforcing' ? '#f87171':'#38bdf8')} <b>${l.name}</b></div>
+          <div class="text-sm text-slate-400 mt-1">${l.desc}</div>
+          <div class="text-xs text-slate-600 mt-1">${l.a} + ${l.b} · basis: ${l.basis}${l.personId ? ' · person: '+(PEOPLE.find(p=>p.id===l.personId)||{}).name : ''}</div>
+        </div>`).join("") : `<p class="text-sm text-slate-500">No loops active. Try the "Burnout loop" preset on Today, or toggle People + Technical rules for the same person.</p>`}
+      </div>
+
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+        <h2 class="font-semibold mb-2">Bifurcation points</h2>
+        ${bifs.length ? bifs.map(b=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0"><b>${b.name}</b> — ${b.detail}</div>`).join("")
+          : `<p class="text-sm text-slate-500">None crossed. Lower runway below 6 months on the Signal Board to trigger the Financial bifurcation.</p>`}
+      </div>
+
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+        <h2 class="font-semibold mb-2">Attractors <span class="text-xs font-normal text-slate-500">(recurrence >= 3, simulated via ×3 button on Signal Board)</span></h2>
+        ${attractors.length ? attractors.map(a=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0">${a.id} — ${a.title} <span class="text-slate-500">(recurrence: ${a.recurrence})</span></div>`).join("")
+          : `<p class="text-sm text-slate-500">No attractor states yet. Use the ×3 recurrence button next to any rule on the Signal Board.</p>`}
+      </div>
+    </div>`;
+  }
+
+  function renderRisk(){
+    const findings = computeFindings();
+    const register = buildRiskRegister(findings);
+    const amps = crossCategoryAmplification(findings);
+    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
+      <h1 class="text-2xl font-bold">Risk Register <span class="text-sm font-normal text-slate-500">— always shows all 8 categories</span></h1>
+      <div class="grid md:grid-cols-2 gap-4">
+        ${register.map(r=>`<div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="font-semibold">${badge(r.category, CAT_COLOR[r.category])}</h2>
+            <span class="text-xs text-slate-500">${r.count} active · max sev ${r.maxSeverity}</span>
+          </div>
+          <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+            <div class="h-full" style="width:${Math.min(100,r.maxSeverity*20)}%;background:${sevColor(r.maxSeverity)}"></div>
+          </div>
+          ${r.items.length ? `<div class="mt-2 space-y-1">${r.items.map(f=>`<div class="text-xs text-slate-400">${f.id} — ${f.title} (sev ${f.severity})</div>`).join("")}</div>` : `<div class="mt-2 text-xs text-slate-600">No active findings.</div>`}
+        </div>`).join("")}
+      </div>
+
+      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
+        <h2 class="font-semibold mb-2">Cross-category amplification</h2>
+        ${amps.length ? amps.map(a=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0"><b>${a.person?a.person.name:a.personId}</b> — ${a.categories.join(", ")}</div>`).join("")
+          : `<p class="text-sm text-slate-500">None detected (needs 3+ categories active for the same person).</p>`}
+      </div>
+    </div>`;
+  }
+
+  function renderAbout(){
+    return `<div class="max-w-4xl mx-auto p-6 space-y-5 fade-in text-sm leading-relaxed">
+      <h1 class="text-2xl font-bold mb-2">About / Provenance</h1>
+
+      <div class="bg-amber-950/40 border border-amber-800 rounded-xl p-4">
+        <b>Read this before trusting any other "verified" narrative about this project lineage</b> — including the real
+        <code>github.com/wbweve/Leados</code> repo's own <code>README.md</code> / <code>AI-SESSION-LOG.md</code>, which were
+        inspected directly this session and are <b>not</b> fully reliable (see "Contradiction found" below).
+      </div>
+
+      <h2 class="font-semibold text-lg mt-4">What was actually checked in github.com/wbweve/Leados this session</h2>
+      <ul class="list-disc ml-5 space-y-1 text-slate-300">
+        <li>Fetched the rendered repo page, then independently via <code>api.github.com/repos/wbweve/Leados/contents/</code> and <code>git/trees</code>.</li>
+        <li><b>Verified:</b> the repo root contains ~40 loose <code>.tsx</code>/<code>.md</code> files (App.tsx, AboutView.tsx, Catalog.tsx, FinanceDashboard.tsx, etc.) <i>and</i> a separate <code>src/</code> Vite+React+TypeScript tree (<code>src/App.tsx</code>, <code>src/components/</code>, <code>src/lib/</code>, <code>src/main.tsx</code>, <code>src/utils/</code>).</li>
+        <li><b>Verified by raw fetch:</b> <code>src/App.tsx</code> imports <code>Shell</code>, <code>TodayView</code>, <code>SignalBoardView</code>, <code>ThermodynamicsView</code>, <code>CasView</code>, <code>RiskView</code>, <code>AboutView</code> and <code>loadState</code> from <code>./lib/store</code> — i.e. a live Signal Board / Thermodynamics / CAS / Risk app genuinely exists in <code>src/</code>.</li>
+        <li><b>Verified by raw fetch:</b> <code>src/lib/infoTheory.ts</code> exists and implements Shannon entropy, mutual information, SNR, and a 30%-of-mean bottleneck rule — matching the four metrics this page's Thermodynamics view also implements (independently coded here, formulas only, not copied).</li>
+        <li><b>Verified by directory listing:</b> <code>src/lib/casEngine.ts</code> (6,628 bytes) and a <code>core.ts</code>, <code>engine.ts</code>, <code>intelligence.ts</code>, <code>physics.ts</code> and 18+ other files exist in <code>src/lib</code>.</li>
+        <li><b>Verified by raw fetch, root <code>index.html</code>:</b> it is a 352-byte stock Vite scaffold (<code>&lt;div id="root"&gt;&lt;/div&gt;&lt;script type="module" src="/src/main.tsx"&gt;&lt;/script&gt;</code>) — i.e. there is <b>no</b> hand-authored single-file demo at the repo root as of this session's fetch.</li>
+      </ul>
+
+      <h2 class="font-semibold text-lg mt-4">Contradiction found — disclosed, not resolved</h2>
+      <p class="text-slate-300">The repo's own <code>AI-SESSION-LOG.md</code> (as fetched this session) claims a prior session ran
+      <code>curl</code> against the root <code>index.html</code> and found it to be <b>54,081 bytes</b>, containing
+      <code>identifyAttractors(P, today)</code>, ~61 distinct <code>R*</code> rule IDs, and the literal string <code>pt-L</code>.
+      Fetching that same file directly, this session, returns <b>352 bytes</b> — a trivial Vite scaffold with none of that content.
+      Both claims cannot be true of the same commit. This was <b>not resolved</b> by walking full commit history (out of scope for
+      this session's budget); it is reported as an open, verified discrepancy rather than silently repeated as fact. <b>Practical
+      conclusion: do not take that repo's own session logs at face value — verify specific claims directly before relying on them.</b></p>
+
+      <h2 class="font-semibold text-lg mt-4">What this delivery is, and isn't</h2>
+      <ul class="list-disc ml-5 space-y-1 text-slate-300">
+        <li><b>Is:</b> an original, hand-authored single <code>index.html</code> (vanilla JS + Tailwind CDN), because that is what this tool environment supports — it cannot run <code>npm install</code> / Vite / React.</li>
+        <li><b>Is:</b> a fresh implementation of the same functional ideas confirmed to exist in the real repo (Signal Board, Thermodynamics, CAS engine, Risk Register) — rules, data, and code written from scratch here.</li>
+        <li><b>Is not:</b> a copy, port, fork, or build output of <code>github.com/wbweve/Leados</code>. No file from that repo was pasted into this one.</li>
+        <li><b>Is not</b> a continuation of the unverified "pt-L" brief referenced inside that repo's own README — this conversation never received that brief's text, so none of its specific named scenarios (e.g. "R7+R4 burnout loop") are replicated here under those IDs. The burnout/austerity/trust-collapse <i>concepts</i> are common leadership-risk patterns and are implemented here independently, under this build's own rule IDs (R1–R50).</li>
+        <li><b>Disclosed gap:</b> "cultural bifurcation" / a generic culture-scoring function is not implemented — no verified definition for it was found anywhere, and inventing one would misattribute it to a source that doesn't exist.</li>
+      </ul>
+
+      <h2 class="font-semibold text-lg mt-4">Conventions used here (all disclosed, none claimed as validated science)</h2>
+      <ul class="list-disc ml-5 space-y-1 text-slate-300">
+        <li>Bottleneck threshold: &lt;30% of mean inbound events/person.</li>
+        <li>Attractor threshold: recurrence count &gt;= 3 simulated toggles.</li>
+        <li>Financial bifurcation threshold: runway &lt; 6 months.</li>
+        <li>Systemic strain bifurcation: &gt;=5 active findings at severity &gt;= 4.</li>
+        <li>Cross-category amplification: one person with active findings in &gt;=3 of the 8 categories.</li>
+      </ul>
+
+      <p class="text-xs text-slate-600 mt-4">Storage key: <code>${STORAGE_KEY}</code> — new key, no prior session's state is assumed or migrated.</p>
+    </div>`;
+  }
+
+  function render(){
+    const hash = location.hash || "#/today";
+    let body;
+    if(hash==="#/signals") body = renderSignals();
+    else if(hash==="#/thermodynamics") body = renderThermo();
+    else if(hash==="#/cas") body = renderCas();
+    else if(hash==="#/risk") body = renderRisk();
+    else if(hash==="#/about") body = renderAbout();
+    else body = renderToday();
+
+    document.getElementById("app").innerHTML = nav() + body;
+    attachHandlers();
+  }
+
+  function attachHandlers(){
+    document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => { location.hash = b.dataset.hash; });
+
+    document.querySelectorAll(".rule-toggle").forEach(el => el.onchange = () => {
+      state.rules[el.dataset.id].active = el.checked; saveState(); render();
+    });
+    document.querySelectorAll(".sev-select").forEach(el => el.onchange = () => {
+      state.rules[el.dataset.id].severity = parseInt(el.value,10); saveState(); render();
+    });
+    document.querySelectorAll(".person-select").forEach(el => el.onchange = () => {
+      state.rules[el.dataset.id].personId = el.value || null; saveState(); render();
+    });
+    document.querySelectorAll(".recur-btn").forEach(el => el.onclick = () => {
+      const r = state.rules[el.dataset.id];
+      r.recurrence = (r.recurrence||0) + 3; r.active = true; saveState(); render();
+    });
+    const runwaySlider = document.getElementById("runway-slider");
+    if(runwaySlider) runwaySlider.oninput = (e) => {
+      state.runwayMonths = parseInt(e.target.value,10);
+      document.getElementById("runway-val").textContent = state.runwayMonths;
+      saveState();
+    };
+    if(runwaySlider) runwaySlider.onchange = () => render();
+
+    document.getElementById("mi-a")?.addEventListener("change", render);
+    document.getElementById("mi-b")?.addEventListener("change", render);
+
+    document.getElementById("reset-data-btn")?.addEventListener("click", () => {
+      localStorage.removeItem(STORAGE_KEY);
+      state = defaultState();
+      render();
+    });
+
+    document.querySelectorAll(".preset-btn").forEach(el => el.onclick = () => {
+      applyPreset(el.dataset.preset); saveState(); render();
+    });
+  }
+
+  function clearAllRules(){
+    Object.values(state.rules).forEach(r => { r.active=false; r.personId=null; r.recurrence=0; });
+  }
+
+  function applyPreset(name){
+    if(name==="clear"){ clearAllRules(); return; }
+    clearAllRules();
+    const person = PEOPLE[0].id;
+    if(name==="burnout"){
+      // People + Technical rules, same person -> Workload Amplification Loop
+      const peopleRule = RULES.find(r=>r.category==="People" && r.personLinked);
+      const techRule = RULES.find(r=>r.category==="Technical");
+      [peopleRule, techRule].forEach(r => { state.rules[r.id].active = true; state.rules[r.id].personId = person; state.rules[r.id].severity = 4; });
+    } else if(name==="austerity"){
+      state.runwayMonths = 4;
+      const finRule = RULES.find(r=>r.category==="Financial");
+      const stratRule = RULES.find(r=>r.category==="Strategic");
+      [finRule, stratRule].forEach(r => { state.rules[r.id].active = true; state.rules[r.id].severity = 4; });
+    } else if(name==="trust"){
+      const compRule = RULES.find(r=>r.category==="Compliance");
+      const cultRule = RULES.find(r=>r.category==="Cultural");
+      [compRule, cultRule].forEach(r => { state.rules[r.id].active = true; state.rules[r.id].severity = 5; });
+    }
+  }
+
+  window.addEventListener("hashchange", render);
+  render();
+</script>
+</body>
 </html>
