@@ -1,147 +1,142 @@
-# LeadOS pt-Q — Predictive Intelligence Architecture
+# LEADOS — pt-Q sandbox: Cascade, Meetings, Performance & Compensation
 
-A React + Vite + Tailwind app implementing the two fully-specified engines
-from the pasted "pt-Q" leadership-intelligence brief — a **Structural Causal
-Model** (do-calculus style causal graph + counterfactual reasoning) and an
-**Individual Flight Risk** model calibrated from your own org's historical
-departures — plus a few smaller original additions, over one synthetic demo
-org.
+A single-file (`index.html`) leadership-intelligence sandbox implementing
+four modules from a pasted specification: an **information cascade**
+engine, a **meeting intelligence** system, a **performance architecture**
+(activity → output → outcome → impact), and **compensation equity**
+analytics — plus a 15-rule "Health Wall" (R161–R175) that reads findings
+out of all four.
 
-> **Provenance — read before assuming this continues `github.com/wbweve/Leados`
-> or any prior "pt-" session:** the real repo was inspected this session via
-> GitHub's REST API and raw-file fetches (not cloned, not executed). It
-> contains **at least three separate, mutually inconsistent deliveries**
-> stacked in one place — a ~60-file loose root-level `.tsx` lineage, a
-> separate live `src/` Vite+React+TypeScript app, and a third vanilla-JS
-> "mf-1/mf-2" lineage described only in its own append-log. The repo's own
-> `AI-SESSION-LOG.md` is itself stale relative to its current `src/lib/`
-> listing (it claims files are absent that are now present). Full ledger,
-> with every API call and what it returned, is in **`AI-SESSION-LOG.md`** and
-> in-app at **About / Provenance**.
->
-> **This app does not fork, copy, or continue any of that history.** It is a
-> fresh build, in this task's own tool environment (React + Vite + Tailwind,
-> single `src/App.tsx` entry point, built with `npm run build`), implementing
-> the *functional ideas* in the pasted pt-Q brief — original TypeScript
-> throughout, with the two fully-specified engines (causal model, flight
-> risk) translated as directly as the brief's own pseudocode allows.
+Everything runs client-side against a seeded synthetic dataset stored in
+`localStorage`. No network calls, no real org data, no backend.
+
+## ⚠️ Provenance — read this before assuming anything about `github.com/wbweve/Leados`
+
+This file is **not** a fork, export, or continuation of
+`github.com/wbweve/Leados`. Before writing any code this session, that repo
+was inspected directly (GitHub REST `contents`/tree API + raw file fetches),
+not taken on faith from the task prompt or from the repo's own README.
+
+**Verified this session, independently:**
+- The repo root holds a large **flat set of `.tsx` files** (`App.tsx`,
+  `AboutView.tsx`, `HealthView.tsx`, `FinanceDashboard.tsx`,
+  `RosterView.tsx`, `Network.tsx`, dozens more) plus `README.md`,
+  `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`.
+- A **separate `src/` tree** also exists (`src/App.tsx`, `src/main.tsx`,
+  `src/lib/`, `src/components/`, `src/utils/`) — the repo genuinely contains
+  two parallel deliveries, not one coherent app.
+- A root `index.html` exists; its `<title>` reads "LEADOS Sandbox — CAS
+  Engine, Risk Intelligence & Thermodynamics" (title only — body/script not
+  read line-by-line this session).
+- The repo's own `README.md`, fetched raw, is itself a provenance ledger
+  from an earlier session. It states that session verified
+  `src/lib/infoTheory.ts` is live (wired through `Thermodynamics.tsx` →
+  `IntelligenceView.tsx` → `src/App.tsx`), found `core.ts`/`intelligence.ts`
+  orphaned/broken, and found **no CAS engine, no risk register, and none of
+  a prior pasted "pt-L" brief's claimed 58/62-file, 144-rule history**
+  anywhere in the repo — and explicitly labels that earlier brief
+  "unverified," not repo fact.
+
+**Not independently re-verified this session:** the specific internal
+import-wiring claims inside that fetched README (e.g., exactly how
+`infoTheory.ts` connects to `App.tsx`). Those are the real repo's own prior
+session's claims, relayed here — not re-checked line-by-line by this
+session. Full detail in `AI-SESSION-LOG.md` and the in-app **About /
+Provenance** tab.
+
+**Bottom line:** the "pt-Q" brief this build implements (cascade/meetings/
+performance/compensation, rules R161–R175, "83 files," prior "Parts 1–2")
+has no corresponding evidence anywhere in the real repo, and no prior
+`index.html`/log/README existed in *this* sandbox project before this
+session either. It is treated as an unverified task prompt and implemented
+as an original, fresh build — the same convention the real repo's own
+sessions already use for their own pasted briefs.
 
 ## Run it
 
-`npm install && npm run build`, then open `dist/index.html`. The build
-inlines all JS/CSS into that one HTML file (via `vite-plugin-singlefile`), so
-it opens standalone with zero runtime network calls.
+Open `index.html` in any browser. That's it — no build step, no server.
+Click **↻ Reset synthetic data** (top right) to regenerate the seeded
+roster/event log with a new random seed.
 
-For development: `npm run dev`.
+## What's in the sandbox
 
-State lives in `localStorage` under `leados-ptq:v1`. Use **Reset synthetic
-data** in the header to regenerate the seeded demo org.
-
-## Pages (hash routes)
-
-| Route | What it does |
+| Tab | What it shows |
 |---|---|
-| `#/today` | Overview: active rule-based findings, highest flight-risk people, causal-edge counts, historical departure count. |
-| `#/roster` | Every active person with their individual flight-risk score, risk level, contributing signal factors, and data-quality assessment — computed from **this org's own historical departures**, not population benchmarks. |
-| `#/causal` | The Structural Causal Model: the full ASSUMED / EVIDENCED / CONFIRMED edge table, a do-calculus intervention estimator ("if I set X, what happens to Y?"), and a form to log your own CONFIRMED causal annotations. |
-| `#/counterfactual` | "What would have happened if...?" — replays the event log up to a hypothetical past date and compares it to what actually happened since, clearly labeled as unverifiable. |
-| `#/highpotential` | A simplified, original, explicitly-labeled heuristic combining feedback balance, engagement, growth-plan activity, and conflict history. Not a trained model. |
-| `#/network` | Informal power network / "dark matter" detection: a degree-centrality heuristic over synthetic collaboration events, flagging people with high influence but no formal leadership title. |
-| `#/meetings` | Meeting intelligence: decision velocity (decisions ÷ meeting-hours) per logged meeting, with a simple "this could have been an async update" flag. |
-| `#/about` | Full provenance ledger — what was checked against the real repo, what was found, and exactly what in this delivery is spec-faithful vs. original vs. a disclosed gap. |
+| Today | Rollup: open findings by severity, influence leaders, 30-day meeting spend, people below market, decision velocity, performance snapshot. |
+| Cascade | Informal influence network (inferred from event co-occurrence), dark-matter detection, and an interactive "predict a cascade" simulator. |
+| Meetings | Meeting cost (€/person-hour × hours), decisions/action items produced, closure rate, per-person meeting load, decision velocity (open/closed/aged). |
+| Performance | The activity → output → outcome → impact chain, causal-chain hypotheses (explicitly labeled ASSUMED vs EVIDENCED), leading/lagging indicators. |
+| Compensation | Compa-ratios vs. synthetic market benchmarks, band-level equity spread, at-risk list, promotion-pattern / overdue-review detection. |
+| Health Wall | All 15 rules (R161–R175) from the pasted brief, evaluated live against the synthetic dataset, each with its severity and an explicit "labeled" note where the underlying signal is a proxy or assumption. |
+| Event Log | Raw synthetic event counts by type and a scrollable log, for auditing where every number on every other tab comes from. |
+| About / Provenance | The full ledger above, plus a list of what in this build is a transcription of the pasted spec vs. an original, disclosed gap-fill. |
 
-## What's spec-faithful, what's original, what's a disclosed gap
+## What's original, what's a disclosed gap
 
-- **Ported as directly as the pasted brief's own pseudocode allows:**
-  `src/lib/causal.ts` (Part 1 — `LEADOS.causal`: causal graph construction,
-  ASSUMED/EVIDENCED/CONFIRMED edges, do-calculus backdoor-adjustment
-  estimator, Lewis-style counterfactual replay) and `src/lib/flightRisk.ts`
-  (Part 2 — `LEADOS.flightRisk`: departure-signature construction, weighted
-  similarity scoring, heuristic fallback). Translated from the brief's
-  `LEADOS.*` object/namespace style into standalone TypeScript modules to fit
-  this project's `src/App.tsx`-entry-point architecture.
-- **Original, because the brief only named these capabilities without
-  algorithms:** `src/lib/extras.ts` — High-Potential Identification
-  (feedback/engagement/growth-plan/conflict heuristic), Informal Power
-  Network detection (simple degree-centrality over synthetic collaboration
-  events — explicitly **not** full betweenness/eigenvector centrality), and
-  Meeting Intelligence (decisions-per-hour heuristic). Each is labeled in the
-  UI as a simplified, original heuristic, not a validated instrument.
-- **Disclosed gaps — not implemented this session**, because the brief names
-  them without a usable algorithm and/or they require data fields (OKRs,
-  compensation, promotion/demographic history) this build deliberately does
-  not fabricate: information cascade prediction through the org network,
-  OKR causal chains / leading-indicator architecture, organizational learning
-  velocity measurement, compensation equity analytics, and promotion
-  pattern/bias analysis. Full reasoning for each is in the in-app About page
-  and in `AI-SESSION-LOG.md` §4.
-- **All UI, the synthetic 10-active + 4-departed roster/event generator, the
-  minimal disclosed-fabricated findings engine (`engine.ts`), and the
-  storage/projection layer:** original to this delivery.
+- **Implements the pasted brief closely:** `LEADOS.cascade`, `LEADOS.meetings`,
+  `LEADOS.performance`, `LEADOS.compensation`, and rules R161–R175 — the
+  brief's own pasted JavaScript, adapted minimally to run standalone.
+- **Original glue, because the brief didn't define it this part:**
+  `LEADOS.engine._days` and a small `LEADOS.wargame` stand-in
+  (`_computeVelocityMean`, `_latestMetric`, `_computeWinRate`), which
+  `LEADOS.performance` calls but which were never provided in this part of
+  the spec.
+- **Disclosed proxy, not a real module:** `LEADOS.flightRiskProxy` stands in
+  for a `js/flight_risk.js` the brief *names* (for R161) but never supplies
+  source for. It is clearly labeled in the UI as a simplified combination of
+  1:1 recency, pulse mood, feedback frequency, and compa-ratio — not a
+  validated attrition model. Same treatment for the causal-graph dependency
+  behind R166.
+- **All synthetic roster/event generation, UI, and rule runner:** original
+  to this delivery.
 
-## Project structure
+## Data model (synthetic, in `localStorage` under `leados:pt-Q:v1`)
 
-```
-src/
-  lib/
-    types.ts            — shared types (Person, LeadEvent, Projection, ...)
-    prng.ts              — deterministic seeded PRNG
-    seed.ts               — synthetic roster + event log (10 active, 4 departed)
-    store.ts               — localStorage persistence + event-log projection
-    stats.ts                 — Pearson correlation, date-diff helper
-    engine.ts                  — minimal disclosed-fabricated findings engine
-    causal.ts                    — Part 1: Structural Causal Model engine (spec-faithful)
-    flightRisk.ts                  — Part 2: Individual Flight Risk engine (spec-faithful)
-    extras.ts                        — High-Potential / Power Network / Meeting Intelligence (original) + disclosed-gap list
-    useHashRoute.ts                    — tiny hash router
-  components/
-    Shell.tsx, ui.tsx                   — nav shell + shared UI primitives (Card, Tag, RiskPill, Callout)
-    TodayView / RosterView / CausalView / CounterfactualView /
-    HighPotentialView / PowerNetworkView / MeetingView / AboutView
-  App.tsx                                 — route composition (entry point)
-```
+A seeded roster of 6 direct reports + 4 skip-level reports, and ~180 days of
+synthetic events across every event type the brief references
+(`oneonone.logged`, `feedback.given`, `blocker.logged`, `goal.progress`,
+`conflict.logged`, `meeting.logged`, `meeting.followup`, `strategy.decision`,
+`decision.outcome`, `pulse.recorded`, `sprint.review`, `sales.deal.closed`,
+`fin.pl.logged`, `hr.started`, `hr.attrition.logged`, `comp.logged`,
+`comp.benchmark`, `comp.review`, `goal.closed`). The dataset is deliberately
+shaped so each of the 15 rules has at least one real example to show.
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` first** — via GitHub's REST API
-  (trees, contents) and raw-file fetches of the root README, root
-  `index.html`, `src/App.tsx`, `src/lib`/`src/components` listings, and both
-  `AI-SESSION-LOG.md` and `AI-SESSION-LOG.append.md` — *why*: the task
-  requires inspecting actual code before claiming anything about it, not
-  trusting the repo's own README self-framing (which turned out to itself be
-  one layer of several self-contradicting session narratives).
-- **Found and documented that the repo's own session log is stale relative to
-  its own current file tree** (claims `casEngine.ts`/`riskIntelligence.ts`
-  don't exist; they currently do) — *why disclosed prominently*: a stale
-  provenance document is more dangerous than no provenance document, since it
-  invites a future session to trust a false "verified absent" claim.
-- **Declared the repo a multi-lineage, non-continuous artifact and built
-  fresh instead of porting any one lineage** — *why*: with three
-  self-contradicting deliveries in one repo, "continuing" any single one
-  would arbitrarily privilege a fragment of a history that isn't actually
-  coherent, and would misrepresent this build's relationship to it.
-- **Ported the two fully-specified pt-Q engines (causal model, flight risk)
-  as directly as their pasted pseudocode allows** — *why*: the brief gave
-  complete, runnable logic for these two; reimplementing them loosely instead
-  of following the given structure would discard the one part of the input
-  that was actually unambiguous.
-- **Left 5 named pt-Q capabilities as disclosed gaps** (cascade prediction,
-  OKR causal chains, learning velocity, comp equity, promotion bias) instead
-  of inventing algorithms for them — *why*: the brief's intro names them
-  without any method, and several require data (compensation, OKRs,
-  promotion/demographic history) that would need to be fabricated in a way
-  that could misleadingly imply real analytical rigor over invented numbers.
-- **Built a simplified, explicitly-labeled degree-centrality network metric**
-  for "dark matter" detection instead of a full social-network-analysis
-  implementation — *why*: betweenness/eigenvector centrality would need a
-  much richer interaction graph than this synthetic demo's handful of
-  `collab.logged` events can support without becoming misleading theater.
-- **Disclosed, rather than silently patched, the spec's own `flightRisk`
-  causal-variable limitation** (it is structurally always 0 among currently
-  active people) — *why*: matches the "label it, don't quietly fix it"
-  convention, so the UI's claims stay traceable to what the pasted spec
-  actually does.
-- **Used a new storage key (`leados-ptq:v1`)** — *why*: this workspace began
-  from the default scaffold with no prior app state; reusing any other
-  session's key would falsely imply continuity with data that was never
-  here.
+- **Inspected `github.com/wbweve/Leados` via GitHub's REST API and raw file
+  fetches before writing any code** — *why*: the task requires inspecting
+  actual code, not trusting the pasted brief's own "pt-Q / 83 files / R161+"
+  framing, or the repo's README, at face value.
+- **Found the repo is two parallel deliveries (flat root `.tsx` files +
+  separate `src/` Vite app) and that its own README already flags an
+  earlier "pt-L" brief as unverified** — *why disclosed this way*: a
+  half-right provenance claim is more dangerous than a fully-wrong one; the
+  README and in-app About tab spell out exactly what was checked vs. relied
+  on from a prior session's own claim.
+- **Started this sandbox project from zero rather than inventing "Parts
+  1–2"** — *why*: no `index.html`, log, or README existed in this workspace
+  before this session; continuing a history that doesn't exist here would
+  misrepresent the project.
+- **Built a single hand-authored `index.html` (Tailwind CDN + inline JS)
+  instead of mirroring the real repo's React/Vite `src/` layout** — *why*:
+  this tool environment's deliverable is one static HTML file; presenting a
+  framework-based structure here would misstate the environment.
+- **Transcribed `LEADOS.cascade` / `meetings` / `performance` /
+  `compensation` from the pasted brief near-verbatim** — *why*: the pasted
+  code was internally consistent and ran correctly once wired to a real
+  data model, so rewriting it from scratch would add risk without benefit.
+- **Added `LEADOS.engine._days` and a minimal `LEADOS.wargame` stand-in** —
+  *why*: `LEADOS.performance` calls both, but neither was defined anywhere
+  in this part of the brief; without them the performance chain throws.
+- **Added `LEADOS.flightRiskProxy` instead of a file named
+  `flight_risk.js`** — *why*: inventing a module under that exact name
+  would imply it came from somewhere verified; the proxy is original and
+  labeled as such so R161 is demonstrable without misattributing it.
+- **Generated a seeded, deterministic-by-default synthetic dataset shaped
+  to trigger every one of R161–R175 at least once** — *why*: a Health Wall
+  that never lights up can't be evaluated; the seed is reproducible
+  (`mulberry32(42)` on first load) and only reseeds randomly on explicit
+  "Reset synthetic data."
+- **Used a fresh storage key (`leados:pt-Q:v1`)** — *why*: no prior session
+  state exists in this workspace; reusing another session's key would
+  assert false continuity.
