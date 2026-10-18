@@ -3,9 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LeadOS pt-T",
-  description:
-    "LeadOS pt-T — Strategic Consciousness, Decision Oracle, and Knowledge Graph. Served as a self-contained static index.html.",
+  title: "Arena Next.js PostgreSQL Starter",
+  description: "Starter template with Next.js, Drizzle, and PostgreSQL.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

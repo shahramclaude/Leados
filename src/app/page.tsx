@@ -1,12 +1,22 @@
-import { redirect } from "next/navigation";
+import { db } from "@/db";
+import { sql } from "drizzle-orm";
 
-// LeadOS pt-T is delivered as a single self-contained static artifact at
-// public/index.html (zero network calls, zero dependencies, per the task's
-// requested deliverable format). The Next.js app's job here is only to:
-//   1) satisfy this platform's required fullstack/DB-backed scaffold
-//      (see src/app/api/health/route.ts for the DB-backed healthcheck), and
-//   2) route the site root straight at the static artifact so "open the
-//      app" and "open index.html" are the same action.
-export default function HomePage() {
-  redirect("/index.html");
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  await db.execute(sql`select 1`);
+
+  return (
+    <main className="grid min-h-screen place-items-center px-6 py-12">
+      <section className="w-full max-w-2xl rounded-3xl bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
+        <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">Starter template</p>
+        <h1 className="mt-4 text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.05] text-slate-950">
+          Arena Next.js PostgreSQL Starter
+        </h1>
+        <p className="mt-4 text-base text-slate-700">
+          Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
+        </p>
+      </section>
+    </main>
+  );
 }
