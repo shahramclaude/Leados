@@ -1,61 +1,100 @@
-import { project } from "../lib/engine";
-import { buildAllClear, buildCrisis, buildSeed } from "../lib/store";
+import { computeAllBeliefs, highRiskBeliefs } from "../lib/bayesian";
+import { activeFindings, extractEvidenceSignals, moodTrendFor } from "../lib/engine";
+import { todayISO } from "../lib/seed";
 import type { AppState } from "../lib/types";
-import { DOMAIN_LABEL } from "../lib/types";
-import { Button, BucketBadge, Card, SeverityBadge } from "./Shell";
+import { Badge, Card, ProgressBar } from "./ui";
 
-export function TodayView({ state, onReplace }: { state: AppState; onReplace: (s: AppState) => void }) {
-  const projection = project(state);
-  const top = [...projection.findings].sort((a, b) => b.ageDays - a.ageDays).slice(0, 6);
+export function TodayView({
+  state,
+  onNavigate,
+}: {
+  state: AppState;
+  onNavigate: (t: "signals" | "beliefs" | "about") => void;
+}) {
+  const findings = activeFindings(state);
+  const evidenceSignals = extractEvidenceSignals(state);
+  const beliefs = computeAllBeliefs(evidenceSignals, todayISO());
+  const highRisk = highRiskBeliefs(beliefs);
+  const moodTrend = moodTrendFor(state);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
-          <p className="text-sm text-stone-500">Live projection — recomputed from current state on every render, nothing derived is stored.</p>
+      <Card className="bg-gradient-to-br from-indigo-500/10 via-transparent to-violet-500/10">
+        <h1 className="text-2xl font-bold tracking-tight text-white">
+          The Strategic Brain — Part 1: Bayesian Belief Network
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm text-slate-400">
+          Every organizational belief here is a probability, continuously re-derived from priors (labeled,
+          unverified citations from the task's pasted spec) and the evidence you toggle on the Signal Board.
+          This is a scoped delivery: the forward 30/60/90-day scenario simulator and the always-on background
+          "composes insight for you" process described later in the pasted brief were not included in this
+          part's pasted text, so they are not implemented here — see About / Provenance.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            onClick={() => onNavigate("signals")}
+            className="rounded-lg bg-indigo-500 px-3.5 py-2 text-xs font-semibold text-white hover:bg-indigo-400"
+          >
+            Open Signal Board
+          </button>
+          <button
+            onClick={() => onNavigate("beliefs")}
+            className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
+          >
+            Open Belief Network
+          </button>
+          <button
+            onClick={() => onNavigate("about")}
+            className="rounded-lg border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10"
+          >
+            Provenance ledger
+          </button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => onReplace(buildAllClear())}>Scenario: all clear</Button>
-          <Button onClick={() => onReplace(buildSeed())}>Scenario: busy quarter</Button>
-          <Button variant="danger" onClick={() => onReplace(buildCrisis())}>Scenario: crisis</Button>
-        </div>
-      </div>
+      </Card>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
-        <Card className="lg:col-span-1">
-          <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">Overall score</div>
-          <div className="mt-2 text-3xl font-bold text-rose-600">{projection.overallScore}</div>
-          <div className="mt-1 text-xs text-stone-400">{projection.findings.length} open findings</div>
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <Card>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Active findings</div>
+          <div className="mt-2 text-3xl font-bold text-white">{findings.length}</div>
+          <div className="mt-1 text-xs text-slate-500">of {8} synthetic rules toggled on</div>
         </Card>
-        {projection.domainScores.map((d) => (
-          <Card key={d.domain}>
-            <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">{DOMAIN_LABEL[d.domain]}</div>
-            <div className="mt-2 text-2xl font-bold">{d.score}</div>
-            <div className="mt-1">
-              <BucketBadge bucket={d.bucket} />
-            </div>
-          </Card>
-        ))}
+        <Card>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            High-risk beliefs (≥60%)
+          </div>
+          <div className="mt-2 text-3xl font-bold text-white">{highRisk.length}</div>
+          <div className="mt-1 text-xs text-slate-500">of 5 hypotheses tracked</div>
+        </Card>
+        <Card>
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Mood trend slope</div>
+          <div className="mt-2 text-3xl font-bold text-white">{moodTrend.toFixed(2)}</div>
+          <div className="mt-1 text-xs text-slate-500">
+            scenario: <span className="capitalize">{state.moodScenario}</span>
+          </div>
+        </Card>
       </div>
 
-      <Card title="Most overdue / most severe">
-        {top.length === 0 ? (
-          <div className="py-6 text-center text-sm text-stone-400">No active findings. All clear.</div>
-        ) : (
-          <ul className="divide-y divide-stone-100">
-            {top.map((f) => (
-              <li key={f.key} className="flex items-start justify-between gap-4 py-3">
-                <div>
-                  <div className="text-sm font-medium">{f.title}</div>
-                  <div className="text-xs text-stone-500">{f.detail}</div>
-                  <div className="mt-1 text-[11px] font-mono text-stone-400">{f.rule}</div>
+      <Card>
+        <h2 className="text-sm font-semibold text-white">Belief summary</h2>
+        <div className="mt-3 space-y-3">
+          {(Object.entries(beliefs) as [string, (typeof beliefs)[keyof typeof beliefs]][]).map(
+            ([h, b]) => (
+              <div key={h} className="flex items-center gap-3">
+                <div className="w-56 shrink-0 truncate text-xs text-slate-400">{h}</div>
+                <div className="flex-1">
+                  <ProgressBar
+                    value={b.posteriorPct}
+                    tone={b.posteriorPct >= 60 ? "bad" : b.posteriorPct >= 35 ? "warn" : "good"}
+                  />
                 </div>
-                <SeverityBadge severity={f.severity} />
-              </li>
-            ))}
-          </ul>
-        )}
+                <div className="w-14 shrink-0 text-right text-sm font-semibold tabular-nums text-white">
+                  {b.posteriorPct}%
+                </div>
+                {!b.hasLikelihoodModel && <Badge tone="neutral">static</Badge>}
+              </div>
+            )
+          )}
+        </div>
       </Card>
     </div>
   );

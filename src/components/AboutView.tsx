@@ -1,55 +1,119 @@
-import { Card, SectionTitle, Tag, Callout } from './ui';
-import { DISCLOSED_GAPS } from '../lib/extras';
+import { Badge, Card } from "./ui";
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 gap-1 border-b border-white/5 py-3 last:border-0 sm:grid-cols-[180px_1fr]">
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      <div className="text-sm text-slate-300">{children}</div>
+    </div>
+  );
+}
 
 export function AboutView() {
   return (
     <div className="space-y-6">
-      <SectionTitle title="About / Provenance" subtitle="What was checked against github.com/wbweve/Leados this session, what was found, and what in this delivery is spec-faithful, original, or a disclosed gap." />
+      <Card>
+        <h2 className="text-lg font-semibold text-white">About / Provenance</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          This session inspected <code>github.com/wbweve/Leados</code> directly before writing any code, per
+          the task's instruction. Full ledger below.
+        </p>
+      </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold text-slate-900">1. What was verified about the real repo, this session</h3>
-        <p className="mb-3 text-sm text-slate-600">Checked via GitHub's REST API and raw-file fetches only (no clone, no code execution, no git history/PRs/issues).</p>
-        <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700">
-          <li><Tag kind="VERIFIED" /> <strong>The repo mixes at least three separate, mutually inconsistent lineages in one place:</strong> (a) ~60 loose root-level <code>.tsx</code>/<code>.md</code> files plus a root <code>index.html</code>/<code>README.md</code> describing a "LEADOS Sandbox" (Thermodynamics + CAS Engine + Risk Intelligence); (b) a separate live <code>src/</code> Vite+React+TypeScript tree with its own <code>App.tsx</code>, <code>components/</code>, and 28 files under <code>src/lib/</code>; (c) an <code>AI-SESSION-LOG.append.md</code> describing yet another, vanilla-JS single-file lineage ("mf-1"/"mf-2": <code>index.html</code>, <code>store.js</code>, <code>events.js</code>, <code>engine.js</code>, <code>ui.js</code>) that doesn't match either (a) or (b).</li>
-          <li><Tag kind="VERIFIED" /> The repo's own <code>AI-SESSION-LOG.md</code> documents an earlier session finding <strong>no</strong> CAS engine, risk register, or info-theory files anywhere in <code>src/lib</code> (24 files listed) — yet the <em>current</em> <code>src/lib</code> listing (fetched independently this session) has 28 files, including <code>casEngine.ts</code>, <code>riskIntelligence.ts</code>, <code>rules.ts</code>, and <code>selfTest.ts</code>, none of which appear in that log's own file list. <strong>Conclusion: the repo's own session log is stale relative to its current tree</strong> — a later, unlogged (or separately-logged) session added those files after the log entry was written.</li>
-          <li><Tag kind="VERIFIED" /> <code>src/App.tsx</code> (current, raw-fetched) imports <code>TodayView</code>, <code>SignalBoardView</code>, <code>ThermodynamicsView</code>, <code>CasView</code>, <code>RiskView</code>, <code>AboutView</code> from <code>./components</code> — consistent with the current root README's description of a Signal-Board-driven app, and inconsistent with the older session log's own description of the live app's import list (<code>IntelligenceView</code>, <code>PeopleView</code>, <code>EventLogView</code>), confirming the component tree was substantially replaced at some point.</li>
-          <li><Tag kind="UNVERIFIED" /> Anything about "pt-P" specifically. No part of this conversation or the repo's fetched files used that exact label — the task's own framing ("everything through pt-P is retrospective and correlational") is treated as a claim about this session's input brief, not as a verified fact about repo history.</li>
+        <h3 className="mb-1 text-sm font-semibold text-white">What was fetched, this session</h3>
+        <Row label="1. README">
+          <code>web_fetch https://github.com/wbweve/Leados</code> — rendered README, treated as a claim to
+          verify, not fact. It already disclosed (from an earlier session in this lineage) that the repo is
+          two deliveries: loose root-level files + a live <code>src/</code> Vite+React+TS app.
+        </Row>
+        <Row label="2. File tree">
+          <code>GET api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1</code> — 148 files
+          confirmed. Grepped (case-insensitive) for <code>bayes*</code> and <code>belief*</code> across every
+          path: <Badge tone="bad">zero matches</Badge>.
+        </Row>
+        <Row label="3. Session log">
+          <code>raw.githubusercontent.com/.../AI-SESSION-LOG.md</code> — read a prior session's own
+          first-hand ledger. Confirms a live <code>infoTheory.ts</code>/<code>Thermodynamics.tsx</code> pair,
+          and that <code>core.ts</code>/<code>intelligence.ts</code>/<code>physics.ts</code> exist but are
+          orphaned (broken import: <code>intelligence.ts</code> imports <code>{"{ engine, run }"}</code> from{" "}
+          <code>./core</code>, which does not export them).
+        </Row>
+        <Row label="4. src/App.tsx">
+          Fetched raw. Current live app imports <code>Shell</code>, <code>TodayView</code>,{" "}
+          <code>SignalBoardView</code>, <code>ThermodynamicsView</code>, <code>CasView</code>,{" "}
+          <code>RiskView</code>, <code>AboutView</code> — i.e. the repo has since moved to a
+          Thermodynamics + CAS Engine + Risk Register build (a later session than the one in #3). No
+          Bayesian import anywhere in this file.
+        </Row>
+        <Row label="5. Root index.html">
+          Fetched raw (12 lines — a Vite-built shell, not the earlier hand-authored demo described in older
+          logs). Grepped for <code>bayes</code>/<code>belief</code>: <Badge tone="bad">zero matches</Badge>.
+        </Row>
+      </Card>
+
+      <Card>
+        <h3 className="mb-1 text-sm font-semibold text-white">Verified facts (first-hand, this session)</h3>
+        <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-300">
+          <li>No file, export, symbol, or string resembling a Bayesian belief network exists anywhere in
+            <code> github.com/wbweve/Leados</code> as of this session's inspection.</li>
+          <li>The real repo's live <code>src/App.tsx</code> currently renders a Thermodynamics + CAS Engine +
+            Risk Register build, per its own README's route table (Today / Signal Board / Thermodynamics /
+            CAS / Risk / About).</li>
+          <li>Earlier <code>src/lib/core.ts</code>, <code>intelligence.ts</code>, <code>physics.ts</code> were
+            confirmed (by an earlier session's own log) to be present but orphaned/broken.</li>
         </ul>
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold text-slate-900">2. Why this delivery does not continue any of that history</h3>
-        <p className="text-sm text-slate-600">This sandbox's tool environment began from the default Vite scaffold (plain <code>src/App.tsx</code>, no prior state) — it is not a checkout of <code>github.com/wbweve/Leados</code> and has no access to its git history. Given that the real repo's own lineages already actively contradict and supersede each other, continuing any one of them here (e.g. porting <code>src/lib/casEngine.ts</code>) would misrepresent a chosen fragment as "the" continuation when the repo itself has no single continuous thread. This build is therefore <strong>original, in this task's own environment</strong>, implementing the functional ideas in the pasted pt-Q brief — not a port of any verified repo file.</p>
-      </Card>
-
-      <Card>
-        <h3 className="mb-3 font-semibold text-slate-900">3. What's spec-faithful vs. original in this delivery</h3>
-        <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700">
-          <li><Tag kind="CONFIRMED" /> <code>src/lib/causal.ts</code> — ported line-for-line in structure from the pasted pt-Q Part 1 (<code>LEADOS.causal</code>): the same variable set, ASSUMED edge list with the same citations, EVIDENCED Pearson-correlation computation, CONFIRMED annotation mechanism, backdoor-adjustment do-calculus estimator, and Lewis-style counterfactual replay.</li>
-          <li><Tag kind="CONFIRMED" /> <code>src/lib/flightRisk.ts</code> — ported from the pasted pt-Q Part 2 (<code>LEADOS.flightRisk</code>): departure-signature construction, weighted similarity scoring, heuristic fallback, and the explicit "never used for any employment decision" label.</li>
-          <li><Tag kind="ORIGINAL" /> <code>src/lib/extras.ts</code> (High-Potential, Power Network, Meeting Intelligence) — the pasted brief only names these capabilities in its intro, without algorithms. Everything here is invented for this build and labeled as a simplified heuristic, not a verified method.</li>
-          <li><Tag kind="ORIGINAL" /> All seed data, UI components, routing, storage layer (<code>leados-ptq:v1</code>), and the minimal findings engine (<code>engine.ts</code>) used to support the counterfactual tool's "active findings" metric.</li>
+        <h3 className="mb-1 text-sm font-semibold text-white">What this delivery is — and isn't</h3>
+        <ul className="list-disc space-y-1.5 pl-5 text-sm text-slate-300">
+          <li><Badge tone="good">Original</Badge> — <code>src/lib/bayesian.ts</code>, <code>engine.ts</code>,
+            <code>rules.ts</code>, <code>seed.ts</code>, <code>store.ts</code>, all components. Built to
+            satisfy the <em>described behavior</em> in the task's pasted "pt-S" brief; not a port of any file
+            in the real repo (none exists there to port, per the verified facts above).</li>
+          <li><Badge tone="warn">Unverified citations</Badge> — every prior probability and likelihood ratio
+            (SHRM, Bessemer, Lattice, Gallup, Leiter &amp; Maslach, Doerr, Reichheld, LinkedIn Talent Trends)
+            is reproduced verbatim from the pasted brief's own text, not checked against the original sources
+            this session. Treat as illustrative, not validated.</li>
+          <li><Badge tone="bad">Disclosed gaps in the pasted spec itself</Badge> — applying "inspect before
+            claiming" to the brief's own code, not only to GitHub:
+            <ol className="mt-1 list-decimal space-y-1 pl-5">
+              <li><code>crisis.next30d</code> and <code>key_hire.success</code> have priors but no
+                likelihood-ratio entries in the brief's own <code>LIKELIHOODS</code> table, so its own{" "}
+                <code>update()</code> can never move them. Reproduced faithfully (see "static prior" badges
+                in the Belief Network tab) instead of inventing ratios the brief never specified.</li>
+              <li>Five likelihood keys (<code>comp.at_market</code>, <code>promotion.recent</code>,{" "}
+                <code>pipeline.shrinking</code>, <code>nps.high</code>, <code>velocity.stable</code>) are
+                defined but never emitted by the brief's own <code>_extractEvidenceSignals()</code> — dead
+                code in the source spec. Exposed here as explicit manual toggles rather than silently wired
+                into automatic rules.</li>
+              <li>The brief's <code>beliefs: {"{}"}</code> cache is declared but never written to by{" "}
+                <code>update()</code> (which writes to a different object, <code>state.meta.beliefs</code>),
+                so every recompute always restarts from the original prior. Replicated intentionally: this
+                build performs a full, stateless re-derivation from the base prior across the current
+                evidence snapshot on every change, not a running sequential update.</li>
+            </ol>
+          </li>
+          <li><Badge tone="info">Scope limit</Badge> — only "Part 1: The Bayesian Belief Network Engine" was
+            pasted into this conversation. The brief's own framing describes further parts (a forward
+            30/60/90-day scenario simulator; an always-on background process that proactively composes and
+            delivers insights). Neither is implemented, because neither's text was supplied this part — per
+            the delivery instruction to ship after every part, not to pre-build unseen future parts.</li>
         </ul>
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold text-slate-900">4. Disclosed gaps</h3>
-        <p className="mb-3 text-sm text-slate-600">Named in the pasted pt-Q brief's intro but <strong>not implemented</strong> this session, with why:</p>
-        <ul className="space-y-2">
-          {DISCLOSED_GAPS.map((g, i) => (
-            <li key={i} className="rounded-lg bg-slate-50 p-3 text-sm">
-              <div className="font-semibold text-slate-800">{g.name}</div>
-              <div className="mt-1 text-slate-500">{g.why}</div>
-            </li>
-          ))}
-        </ul>
+        <h3 className="mb-1 text-sm font-semibold text-white">Environment constraint</h3>
+        <p className="text-sm text-slate-300">
+          This tool environment requires a React + Vite + Tailwind app with <code>src/App.tsx</code> as the
+          entry point, built via <code>npm run build</code>. <code>vite-plugin-singlefile</code> is already
+          configured in <code>vite.config.ts</code>, so the build still inlines all JS/CSS into one{" "}
+          <code>dist/index.html</code> with no runtime network calls — the same "open one file" property the
+          pasted brief's framing implies, just produced by a build step rather than hand-authored, matching
+          the convention the real repo's own prior session used for the same constraint.
+        </p>
       </Card>
-
-      <Callout tone="amber">
-        All org/people data in this app is synthetic demo data generated by a seeded PRNG (<code>src/lib/seed.ts</code>), not real. Every causal and
-        flight-risk claim is labeled with its type (ASSUMED / EVIDENCED / CONFIRMED / HYPOTHETICAL) and evidence base directly in the UI, per the brief's own
-        stated requirement.
-      </Callout>
     </div>
   );
 }

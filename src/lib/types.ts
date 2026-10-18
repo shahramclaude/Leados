@@ -1,123 +1,72 @@
-// Shared types for this sandbox.
-// NOTE ON PROVENANCE: this entire file (and every file under src/lib and
-// src/components) is original work written for THIS delivery. None of it is
-// copied from github.com/wbweve/Leados. See ProvenanceView.tsx / the
-// AI-SESSION-LOG.md / README.md "Verification ledger" for exactly what was
-// inspected in that repo and why nothing from it was ported byte-for-byte.
+// Shared types for LeadOS pt-S — Bayesian Belief Network Engine (Part 1).
+// Original to this delivery. No equivalent type file was found anywhere in
+// github.com/wbweve/Leados during this session's inspection (see AI-SESSION-LOG.md).
 
-export type Domain = "people" | "finance" | "ops" | "strategy" | "legal" | "product";
+export type HypothesisId =
+  | "attrition.next60d"
+  | "revenue.miss.next_quarter"
+  | "crisis.next30d"
+  | "okr.on_track"
+  | "key_hire.success";
 
-export const DOMAINS: Domain[] = ["people", "finance", "ops", "strategy", "legal", "product"];
+export type RuleId = "R1" | "R6" | "R7" | "R10" | "R14" | "R73" | "R104" | "R157";
 
-export const DOMAIN_LABEL: Record<Domain, string> = {
-  people: "People",
-  finance: "Finance",
-  ops: "Ops",
-  strategy: "Strategy",
-  legal: "Legal",
-  product: "Product",
-};
-
-export type Severity = "low" | "medium" | "high" | "critical";
-
-export const SEVERITY_WEIGHT: Record<Severity, number> = {
-  low: 1,
-  medium: 2,
-  high: 4,
-  critical: 8,
-};
-
-export const SEVERITY_ORDER: Severity[] = ["low", "medium", "high", "critical"];
-
-export interface Person {
-  id: string;
-  name: string;
-  role: string;
-  cadenceDays: number; // expected 1:1 cadence
-  lastOneOnOne: string; // ISO date
-  lastFeedback: string | null; // ISO date
-  lastFeedbackSentiment: "positive" | "neutral" | "negative" | null;
-}
-
-export interface DecisionItem {
-  id: string;
-  domain: Domain;
+export interface RuleDef {
+  id: RuleId;
   title: string;
-  loggedAt: string;
-  reviewBy: string;
-  outcome: "validated" | "reversed" | null;
+  description: string;
+  category: string;
 }
 
-export interface GoalItem {
-  id: string;
-  domain: Domain;
-  title: string;
-  ownerId: string | null;
-  lastUpdate: string;
+export interface Finding {
+  rule: RuleId;
 }
 
-export interface VendorItem {
-  id: string;
-  name: string;
-  renewalDue: string;
-  counterpartRespondedAt: string | null;
+export interface LikelihoodEntry {
+  likelihoodRatio: number;
+  source: string;
 }
 
-export interface Metrics {
-  budgetVariancePct: number; // + = over budget
-  deployFreqDeltaPct: number; // - = slower deploys
-  churnDeltaPct: number; // + = more churn
+export interface PriorEntry {
+  description: string;
+  prior: number;
+  source: string;
+  label: string;
+}
+
+export interface AppliedEvidence {
+  evidence: string;
+  likelihoodRatio: number;
+  source: string;
+  effect: "increases" | "decreases";
+}
+
+export interface BeliefResult {
+  prior: number;
+  posterior: number;
+  posteriorPct: number;
+  appliedEvidence: AppliedEvidence[];
+  label: string;
+  hasLikelihoodModel: boolean;
+}
+
+export type MoodScenario = "declining" | "stable" | "improving";
+
+export interface ManualEvidenceState {
+  "comp.at_market": boolean;
+  "promotion.recent": boolean;
+  "pipeline.shrinking": boolean;
+  "nps.high": boolean;
+  "velocity.stable": boolean;
 }
 
 export interface AppState {
-  people: Person[];
-  decisions: DecisionItem[];
-  goals: GoalItem[];
-  vendors: VendorItem[];
-  metrics: Metrics;
-  settings: {
-    oneOnOneCadenceDefault: number;
-    feedbackGapDays: number;
-  };
-  meta: {
-    createdAt: string;
-    idSeq: number;
-  };
+  ruleFlags: Record<RuleId, boolean>;
+  moodScenario: MoodScenario;
+  goalHitRateMode: "synthetic" | "manual";
+  goalHitRateManual: number; // 0..1
+  manualEvidence: ManualEvidenceState;
+  lastComputedAt: string | null;
 }
 
-export type RuleId =
-  | "ONE_ON_ONE_OVERDUE"
-  | "FEEDBACK_GAP"
-  | "BURNOUT_RISK"
-  | "DECISION_STALE"
-  | "GOAL_OWNERLESS"
-  | "GOAL_STALE"
-  | "VENDOR_RENEWAL_AT_RISK"
-  | "BUDGET_OVERRUN"
-  | "DEPLOY_FREQ_DROP"
-  | "CHURN_UPTICK"
-  | "DOMAIN_CONCENTRATION";
-
-export interface Finding {
-  key: string; // stable id for this finding instance
-  rule: RuleId;
-  domain: Domain | "org";
-  title: string;
-  detail: string;
-  severity: Severity;
-  ageDays: number; // how far past threshold / how overdue, >= 0
-  sourceIds: string[]; // ids of underlying records this finding is about
-}
-
-export interface DomainScore {
-  domain: Domain;
-  score: number;
-  openFindings: number;
-  bucket: "clear" | "moderate" | "elevated" | "critical";
-}
-
-export interface Projection {
-  findings: Finding[];
-  domainScores: DomainScore[];
-  overallScore: number;
-}
+export const STORAGE_KEY = "leados-pts-bayesian:v1";
