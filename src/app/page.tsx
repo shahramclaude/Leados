@@ -16,12 +16,6 @@ export default async function HomePage() {
         <p className="mt-4 text-base text-slate-700">
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
-        <a
-          href="/memory"
-          className="mt-6 inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
-        >
-          Open Institutional Memory &amp; Knowledge Graph →
-        </a>
       </section>
     </main>
   );

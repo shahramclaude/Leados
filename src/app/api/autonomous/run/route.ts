@@ -1,36 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { persistAutonomousRun } from "@/lib/autonomousPersist";
+import { runAutonomousPass } from "@/lib/autonomous";
+import { jsonError } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-/** Validate the caller against CRON_SECRET, when one is configured. */
-function isAuthorized(req: NextRequest): boolean {
+// This is the "official" cron-facing endpoint. When CRON_SECRET is
+// configured in the environment, callers must present it as a bearer token.
+// The in-app autonomous runner never calls this endpoint directly from the
+// browser (secrets must stay server-side) — instead the browser polls
+// /api/autonomous/trigger, which is a server route that forwards to this
+// one with the secret attached server-side. This keeps CRON_SECRET out of
+// the client bundle while still gating this endpoint for external callers
+// (e.g. a real cron provider hitting it directly).
+export async function POST(request: Request): Promise<Response> {
   const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    // No secret configured — fail safe to "open" only in non-production so
-    // local development keeps working; always set CRON_SECRET in production.
-    return process.env.NODE_ENV !== "production";
+  if (secret) {
+    const auth = request.headers.get("authorization");
+    if (auth !== `Bearer ${secret}`) {
+      return jsonError("unauthorized", 401);
+    }
   }
-  const header = req.headers.get("x-cron-secret");
-  const auth = req.headers.get("authorization");
-  const bearer = auth?.toLowerCase().startsWith("bearer ") ? auth.slice(7) : null;
-  return header === secret || bearer === secret;
+  const summary = await runAutonomousPass();
+  return Response.json(summary);
 }
-
-/** POST /api/autonomous/run — intended to be hit by an external scheduler (cron). */
-export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  try {
-    const result = await persistAutonomousRun(db, new Date());
-    return NextResponse.json(result);
-  } catch (err) {
-    console.error("autonomous run failed", err);
-    return NextResponse.json({ error: "Autonomous run failed" }, { status: 500 });
-  }
-}
-
-

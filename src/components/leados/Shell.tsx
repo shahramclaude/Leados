@@ -1,319 +1,152 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { navItems } from "./nav";
-import ProactiveRail from "./ProactiveRail";
-import Badge from "./ui/Badge";
-import ProgressRing from "./ui/ProgressRing";
-import Tooltip from "./ui/Tooltip";
-import CommandPalette, { type CommandItem } from "./ui/CommandPalette";
-import ToastStack, { type ToastItem } from "./ui/ToastStack";
-import { domainColor, domainLabel, type DomainKey } from "./ui/tokens";
-import { IconBell, IconMenu, IconSearch, IconLeadosMark } from "./icons";
-import { findings, people, metrics, decisions, playbooks, compositeHealth } from "@/lib/leados/data";
+import { useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useAppContext } from "@/lib/AppContext";
+import CommandPalette from "@/components/leados/CommandPalette";
+import {
+  TodayIcon,
+  IntelligenceIcon,
+  SignalIcon,
+  PeopleIcon,
+  DecisionIcon,
+  MetricsIcon,
+  ScenarioIcon,
+  MemoryIcon,
+  PlaybookIcon,
+  WorkQueueIcon,
+  SettingsIcon,
+  SearchIcon,
+  BellIcon,
+} from "@/components/leados/icons";
 
-function domainStatus(domain: DomainKey) {
-  const domainMetrics = metrics.filter((m) => m.domain === domain);
-  if (domainMetrics.some((m) => m.status === "red")) return "red" as const;
-  if (domainMetrics.some((m) => m.status === "yellow")) return "yellow" as const;
-  return "green" as const;
+interface NavItem {
+  href: string;
+  label: string;
+  icon: (props: { className?: string }) => ReactNode;
+  badge?: number;
 }
-
-const statusDotColor: Record<"green" | "yellow" | "red", string> = {
-  green: "var(--status-green)",
-  yellow: "var(--status-yellow)",
-  red: "var(--status-red)",
-};
 
 export default function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  const { intelligence, unreadCount, decisionHealth, lastUpdated } = useAppContext();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [lastSync, setLastSync] = useState<string>("—");
-
-  const { composite, byDomain } = useMemo(() => {
-    const result = compositeHealth();
-    return { composite: result.composite, byDomain: result.byDomain };
-  }, []);
-
-  const cognitiveLoad = useMemo(() => {
-    const openCount = findings.filter((f) => f.status !== "resolved").length;
-    const criticalCount = findings.filter((f) => f.severity === "sev5" && f.status !== "resolved").length;
-    const score = Math.min(100, openCount * 10 + criticalCount * 15);
-    return { score, level: score >= 60 ? "high" : score >= 30 ? "moderate" : "low" } as const;
-  }, []);
-
-  const unread = findings.filter((f) => f.status === "open").length;
 
   useEffect(() => {
-    setLastSync(
-      new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit" }).format(new Date())
-    );
-    const id = setTimeout(() => {
-      setToasts((prev) => [
-        ...prev,
-        { id: "sync-1", title: "Workspace synced", message: "All domains refreshed just now.", variant: "success" },
-      ]);
-    }, 600);
-    return () => clearTimeout(id);
+    const handler = (e: KeyboardEvent) => {
+      const isK = e.key.toLowerCase() === "k";
+      if ((e.metaKey || e.ctrlKey) && isK) {
+        e.preventDefault();
+        setPaletteOpen((prev) => !prev);
+      }
+      if (e.key === "Escape") setPaletteOpen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  function dismissToast(id: string) {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }
+  const overdueDecisions = decisionHealth.overdueCount;
 
-  const commandItems: CommandItem[] = useMemo(() => {
-    const navCommands: CommandItem[] = navItems.map((item) => ({
-      id: `nav-${item.id}`,
-      title: item.label,
-      section: "Navigation",
-      subtitle: item.description,
-      keywords: `${item.label} ${item.description}`,
-      icon: item.icon({}),
-      onRun: () => router.push(item.href),
-    }));
-    const peopleCommands: CommandItem[] = people.map((p) => ({
-      id: `person-${p.id}`,
-      title: p.name,
-      section: "People",
-      subtitle: p.role,
-      keywords: `${p.name} ${p.role}`,
-      onRun: () => router.push("/leados/signals"),
-    }));
-    const metricCommands: CommandItem[] = metrics.map((m) => ({
-      id: `metric-${m.id}`,
-      title: m.label,
-      section: "Metrics",
-      subtitle: `${m.value}${m.unit}`,
-      keywords: m.label,
-      onRun: () => router.push("/leados/thermodynamics"),
-    }));
-    const decisionCommands: CommandItem[] = decisions.map((d) => ({
-      id: `decision-${d.id}`,
-      title: d.title,
-      section: "Decisions",
-      subtitle: d.owner,
-      keywords: d.title,
-      onRun: () => router.push("/leados/now"),
-    }));
-    const playbookCommands: CommandItem[] = playbooks.map((p) => ({
-      id: `playbook-${p.id}`,
-      title: p.name,
-      section: "Playbooks",
-      subtitle: p.description,
-      keywords: p.name,
-      onRun: () => router.push("/leados/cas"),
-    }));
-    return [...navCommands, ...peopleCommands, ...metricCommands, ...decisionCommands, ...playbookCommands];
-  }, [router]);
+  const primaryNav: NavItem[] = [{ href: "/leados", label: "Today", icon: TodayIcon }];
 
-  function renderNav(showLabels: boolean) {
+  const moduleNav: NavItem[] = [
+    { href: "/leados/intelligence", label: "Intelligence", icon: IntelligenceIcon, badge: intelligence.criticalFindingsCount },
+    { href: "/leados/signals", label: "Signal Board", icon: SignalIcon },
+    { href: "/leados/people", label: "People", icon: PeopleIcon },
+    { href: "/leados/decisions", label: "Decisions", icon: DecisionIcon, badge: overdueDecisions },
+    { href: "/leados/metrics", label: "Metrics", icon: MetricsIcon },
+    { href: "/leados/scenarios", label: "Scenarios", icon: ScenarioIcon },
+    { href: "/leados/memory", label: "Memory & Insights", icon: MemoryIcon },
+    { href: "/leados/playbooks", label: "Playbooks", icon: PlaybookIcon },
+    { href: "/leados/queue", label: "Work Queue", icon: WorkQueueIcon, badge: unreadCount },
+  ];
+
+  const bottomNav: NavItem[] = [{ href: "/leados/settings", label: "Settings", icon: SettingsIcon }];
+
+  const isActive = (href: string) => (href === "/leados" ? pathname === "/leados" : pathname.startsWith(href));
+
+  const renderItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const active = isActive(item.href);
     return (
-      <nav className="flex flex-1 flex-col gap-0.5 px-2">
-        {navItems.map((item) => {
-          const active = pathname?.startsWith(item.href);
-          return (
-            <button
-              key={item.id}
-              onClick={() => {
-                router.push(item.href);
-                setMobileNavOpen(false);
-              }}
-              className="group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors focus-visible:outline-none"
-              style={{
-                backgroundColor: active ? "var(--bg-elevated)" : "transparent",
-                color: active ? "var(--text-primary)" : "var(--text-secondary)",
-              }}
-            >
-              {active && (
-                <span
-                  aria-hidden
-                  className="absolute -left-2 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r"
-                  style={{ backgroundColor: "var(--accent-blue)" }}
-                />
-              )}
-              <span className="shrink-0">{item.icon({ className: "h-[18px] w-[18px]" })}</span>
-              {showLabels && (
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate" style={{ fontSize: "var(--fs-sm)" }}>
-                    {item.label}
-                  </span>
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-    );
-  }
-
-  function HealthWidget({ showLabels }: { showLabels: boolean }) {
-    return (
-      <div
-        className="flex items-center gap-3 border-t px-3 py-3"
-        style={{ borderColor: "var(--border-subtle)" }}
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`group flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
+          active ? "bg-indigo-500/15 text-indigo-200" : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100"
+        }`}
       >
-        <ProgressRing value={composite} size="sm" color="var(--accent-blue)" />
-        {showLabels && (
-          <div className="min-w-0 flex-1">
-            <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-xs)" }}>Composite Health</p>
-            <div className="mt-1 flex items-center gap-1.5">
-              {byDomain.slice(0, 3).map((d) => (
-                <Tooltip key={d.domain} content={`${domainLabel[d.domain]} · ${domainStatus(d.domain)}`}>
-                  <span
-                    className="inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: statusDotColor[domainStatus(d.domain)] }}
-                  />
-                </Tooltip>
-              ))}
-            </div>
-          </div>
+        <span className="flex items-center gap-2.5">
+          <Icon className={active ? "text-indigo-300" : "text-slate-500 group-hover:text-slate-300"} />
+          {item.label}
+        </span>
+        {!!item.badge && item.badge > 0 && (
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+            active ? "bg-indigo-400/30 text-indigo-100" : "bg-slate-700 text-slate-200"
+          }`}>
+            {item.badge}
+          </span>
         )}
-      </div>
+      </Link>
     );
-  }
+  };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden" style={{ backgroundColor: "var(--bg-base)" }}>
-      {/* Desktop / tablet sidebar */}
-      <aside
-        className="hidden shrink-0 flex-col border-r md:flex md:w-14 lg:w-56"
-        style={{ backgroundColor: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}
-      >
-        <div className="flex items-center gap-2.5 border-b px-3 py-4" style={{ borderColor: "var(--border-subtle)" }}>
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-            style={{ backgroundColor: "color-mix(in srgb, var(--accent-blue) 18%, transparent)", color: "var(--accent-blue)" }}
-          >
-            <IconLeadosMark width={18} height={18} />
-          </span>
-          <span className="hidden min-w-0 lg:block">
-            <span className="font-data block truncate font-bold tracking-tight" style={{ color: "var(--text-primary)", fontSize: "var(--fs-base)" }}>
-              LEADOS
-            </span>
-            <span className="block truncate" style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-xs)" }}>
-              Intelligence Workspace
-            </span>
-          </span>
+    <div className="flex h-screen w-full overflow-hidden bg-[#0a0c10] text-slate-100">
+      <aside className="flex w-60 shrink-0 flex-col border-r border-slate-800 bg-[#0d1016] px-3 py-4">
+        <div className="mb-4 flex items-center gap-2 px-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/20 text-sm font-bold text-indigo-300">
+            L
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-100">Leados</p>
+            <p className="text-[11px] text-slate-500">Intelligence Shell</p>
+          </div>
         </div>
 
-        <div className="flex flex-1 flex-col overflow-y-auto py-3">
-          <div className="hidden lg:block">{renderNav(true)}</div>
-          <div className="lg:hidden">{renderNav(false)}</div>
-        </div>
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className="mb-4 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-xs text-slate-400 hover:border-slate-700 hover:text-slate-200"
+        >
+          <span className="flex items-center gap-2">
+            <SearchIcon className="text-slate-500" />
+            Search or run command
+          </span>
+          <kbd className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+        </button>
 
-        <div className="hidden lg:block">
-          <HealthWidget showLabels />
-        </div>
-        <div className="lg:hidden">
-          <HealthWidget showLabels={false} />
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
+          {primaryNav.map(renderItem)}
+          <div className="my-2 border-t border-slate-800" />
+          {moduleNav.map(renderItem)}
+          <div className="my-2 border-t border-slate-800" />
+          {bottomNav.map(renderItem)}
+        </nav>
+
+        <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] text-slate-500">
+          <span className="flex items-center gap-1.5">
+            <BellIcon className="h-3.5 w-3.5" />
+            Updated
+          </span>
+          <span>{formatRelative(lastUpdated)}</span>
         </div>
       </aside>
 
-      {/* Mobile overlay sidebar */}
-      {mobileNavOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div
-            className="absolute inset-0"
-            style={{ backgroundColor: "rgba(4, 6, 12, 0.65)" }}
-            onClick={() => setMobileNavOpen(false)}
-          />
-          <div
-            className="relative flex h-full w-60 flex-col border-r animate-slide-in-right"
-            style={{ backgroundColor: "var(--bg-surface)", borderColor: "var(--border-subtle)" }}
-          >
-            <div className="flex items-center gap-2.5 border-b px-3 py-4" style={{ borderColor: "var(--border-subtle)" }}>
-              <span
-                className="flex h-8 w-8 items-center justify-center rounded-lg"
-                style={{ backgroundColor: "color-mix(in srgb, var(--accent-blue) 18%, transparent)", color: "var(--accent-blue)" }}
-              >
-                <IconLeadosMark width={18} height={18} />
-              </span>
-              <span className="font-data font-bold tracking-tight" style={{ color: "var(--text-primary)", fontSize: "var(--fs-base)" }}>
-                LEADOS
-              </span>
-            </div>
-            <div className="flex-1 overflow-y-auto py-3">{renderNav(true)}</div>
-            <HealthWidget showLabels />
-          </div>
-        </div>
-      )}
+      <main className="relative flex-1 overflow-y-auto">{children}</main>
 
-      {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top bar */}
-        <header
-          className="flex h-12 shrink-0 items-center justify-between gap-3 border-b px-4"
-          style={{ backgroundColor: "var(--bg-base)", borderColor: "var(--border-subtle)" }}
-        >
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setMobileNavOpen(true)}
-              aria-label="Open navigation"
-              className="flex h-7 w-7 items-center justify-center rounded-md border md:hidden focus-visible:outline-none"
-              style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
-            >
-              <IconMenu width={15} height={15} />
-            </button>
-            <button
-              onClick={() => setPaletteOpen(true)}
-              className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors focus-visible:outline-none"
-              style={{ borderColor: "var(--border-default)", color: "var(--text-tertiary)" }}
-            >
-              <IconSearch width={13} height={13} />
-              <span style={{ fontSize: "var(--fs-xs)" }}>Search…</span>
-              <kbd
-                className="font-data ml-2 rounded border px-1"
-                style={{ borderColor: "var(--border-default)", fontSize: 10 }}
-              >
-                ⌘K
-              </kbd>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Tooltip content={`Cognitive load: ${cognitiveLoad.level}`}>
-              <Badge
-                variant={cognitiveLoad.level === "high" ? "sev4" : cognitiveLoad.level === "moderate" ? "sev3" : "sev2"}
-                label={`Load · ${cognitiveLoad.score}`}
-                size="sm"
-              />
-            </Tooltip>
-
-            <button
-              aria-label={`${unread} unread findings`}
-              className="relative flex h-7 w-7 items-center justify-center rounded-md border transition-colors focus-visible:outline-none"
-              style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
-            >
-              <IconBell width={14} height={14} />
-              {unread > 0 && (
-                <span
-                  className="font-data absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-0.5"
-                  style={{ backgroundColor: "var(--sev5)", color: "#fff", fontSize: 9 }}
-                >
-                  {unread}
-                </span>
-              )}
-            </button>
-
-            <span className="font-data hidden sm:inline" style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-xs)" }}>
-              Synced {lastSync}
-            </span>
-          </div>
-        </header>
-
-        <div className="flex min-h-0 flex-1">
-          <main className="min-w-0 flex-1 overflow-y-auto p-6">{children}</main>
-          <ProactiveRail findings={findings} collapsed={railCollapsed} onToggle={() => setRailCollapsed((v) => !v)} />
-        </div>
-      </div>
-
-      <CommandPalette items={commandItems} open={paletteOpen} onOpenChange={setPaletteOpen} />
-      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
+}
+
+export function formatRelative(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }

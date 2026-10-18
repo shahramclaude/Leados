@@ -1,221 +1,444 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState, type ReactNode } from "react";
+import { useAppContext } from "@/lib/AppContext";
+import { useFetchResource, postJson } from "@/lib/useFetch";
+import { SkeletonList } from "@/components/leados/ui/Skeleton";
+import { DOMAINS, DOMAIN_LABELS } from "@/lib/domains";
+import type { NotificationPrefs } from "@/db/schema";
 
-interface Person {
+interface SettingsRow {
   id: number;
+  orgName: string;
+  industry: string;
+  stage: string;
+  teamSize: number;
+  notificationPrefs: NotificationPrefs;
+  autonomousEnabled: boolean;
+  autonomousIntervalMinutes: number;
+  lastRunAt: string | null;
+}
+
+interface AutonomousRunRow {
+  id: number;
+  startedAt: string;
+  finishedAt: string | null;
+  status: string;
+  summary: string;
+  findingsCount: number;
+}
+
+interface MetricRow {
+  key: string;
+  label: string;
+  domain: string;
+  target: string;
+  benchmark: string;
+}
+
+interface RuleRow {
+  key: string;
   name: string;
-  role: string;
-  cadenceDays: number;
-  archived: boolean;
+  domain: string;
+  weight: string;
+  enabled: boolean;
 }
 
-interface Counts {
-  events: number;
-  people: number;
-  decisions: number;
-  hypotheses: number;
+interface StatsPayload {
+  appVersion: string;
+  schemaVersion: string;
+  totalEvents: number;
+  totalPeople: number;
+  lastIntelligenceRun: string | null;
 }
 
-export function SettingsView() {
-  const [people, setPeople] = useState<Person[]>([]);
-  const [counts, setCounts] = useState<Counts>({ events: 0, people: 0, decisions: 0, hypotheses: 0 });
-  const [editing, setEditing] = useState<Record<number, Partial<Person>>>({});
-  const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState("");
-  const [newCadence, setNewCadence] = useState(14);
-  const [reseeding, setReseeding] = useState(false);
-  const [saving, setSaving] = useState<number | null>(null);
+const STAGES = ["seed", "series-a", "series-b", "growth", "enterprise"];
+const INTERVALS = [
+  { label: "15 minutes", value: 15 },
+  { label: "30 minutes", value: 30 },
+  { label: "1 hour", value: 60 },
+  { label: "4 hours", value: 240 },
+  { label: "Daily", value: 1440 },
+];
 
-  const load = useCallback(async () => {
-    const [peopleRes, eventsRes, decisionsRes, hypothesesRes] = await Promise.all([
-      fetch("/api/people", { cache: "no-store" }),
-      fetch("/api/events", { cache: "no-store" }),
-      fetch("/api/decisions", { cache: "no-store" }),
-      fetch("/api/hypotheses", { cache: "no-store" }),
-    ]);
-    const activePeople: Person[] = peopleRes.ok ? await peopleRes.json() : [];
-    const events = eventsRes.ok ? await eventsRes.json() : [];
-    const decisions = decisionsRes.ok ? await decisionsRes.json() : [];
-    const hypotheses = hypothesesRes.ok ? await hypothesesRes.json() : [];
-    setPeople(activePeople);
-    setCounts({ events: events.length, people: activePeople.length, decisions: decisions.length, hypotheses: hypotheses.length });
-  }, []);
+export default function SettingsView() {
+  const { toast, refetch } = useAppContext();
+  const { data: settings, setData: setSettings, refetch: refetchSettings } = useFetchResource<SettingsRow>("/api/settings");
+  const { data: runs, refetch: refetchRuns } = useFetchResource<AutonomousRunRow[]>("/api/autonomous/history");
+  const { data: metrics, setData: setMetrics } = useFetchResource<MetricRow[]>("/api/metrics");
+  const { data: rules, setData: setRules } = useFetchResource<RuleRow[]>("/api/rules");
+  const { data: stats } = useFetchResource<StatsPayload>("/api/stats");
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [running, setRunning] = useState(false);
 
-  function editField(id: number, field: keyof Person, value: string | number | boolean) {
-    setEditing((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
-  }
-
-  async function save(person: Person) {
-    const patch = editing[person.id];
-    if (!patch) return;
-    setSaving(person.id);
+  const saveProfile = async (patch: Partial<SettingsRow>) => {
+    if (!settings) return;
+    const prev = settings;
+    setSettings(() => ({ ...settings, ...patch }));
     try {
-      await fetch(`/api/people/${person.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      setEditing((prev) => {
-        const next = { ...prev };
-        delete next[person.id];
-        return next;
-      });
-      await load();
-    } finally {
-      setSaving(null);
+      await postJson("/api/settings", patch, "PATCH");
+    } catch (err) {
+      setSettings(() => prev);
+      toast(err instanceof Error ? err.message : "Failed to save settings", 4);
     }
-  }
+  };
 
-  async function toggleArchive(person: Person) {
-    await fetch(`/api/people/${person.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ archived: !person.archived }),
-    });
-    await load();
-  }
+  const toggleDomainPref = async (domain: string, field: "enabled" | "minSeverity", value: boolean | number) => {
+    if (!settings) return;
+    const current = settings.notificationPrefs[domain] ?? { enabled: true, minSeverity: 2 };
+    const nextPrefs: NotificationPrefs = {
+      ...settings.notificationPrefs,
+      [domain]: { ...current, [field]: value },
+    };
+    await saveProfile({ notificationPrefs: nextPrefs });
+  };
 
-  async function addPerson() {
-    if (!newName || !newRole) return;
-    await fetch("/api/people", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName, role: newRole, cadenceDays: newCadence }),
-    });
-    setNewName("");
-    setNewRole("");
-    setNewCadence(14);
-    await load();
-  }
-
-  async function reseed() {
-    setReseeding(true);
+  const runNow = async () => {
+    setRunning(true);
     try {
-      await fetch("/api/seed", { method: "POST" });
-      await load();
+      await postJson("/api/autonomous/trigger", {});
+      toast("Autonomous pass complete", 1);
+      void refetchRuns();
+      void refetchSettings();
+      refetch();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Autonomous run failed", 4);
     } finally {
-      setReseeding(false);
+      setRunning(false);
     }
-  }
+  };
+
+  const updateMetricTarget = async (metric: MetricRow, field: "target" | "benchmark", value: number) => {
+    const prevMetrics = metrics;
+    setMetrics((prev) => prev?.map((m) => (m.key === metric.key ? { ...m, [field]: String(value) } : m)) ?? prev);
+    try {
+      await postJson("/api/metrics", { key: metric.key, [field]: value }, "PATCH");
+    } catch (err) {
+      setMetrics(() => prevMetrics ?? null);
+      toast(err instanceof Error ? err.message : "Failed to update metric", 4);
+    }
+  };
+
+  const updateRule = async (rule: RuleRow, patch: Partial<RuleRow>) => {
+    const prevRules = rules;
+    setRules((prev) => prev?.map((r) => (r.key === rule.key ? { ...r, ...patch } : r)) ?? prev);
+    try {
+      await postJson("/api/rules", { key: rule.key, ...patch }, "PATCH");
+    } catch (err) {
+      setRules(() => prevRules ?? null);
+      toast(err instanceof Error ? err.message : "Failed to update rule", 4);
+    }
+  };
+
+  const seedDemo = async () => {
+    try {
+      const result = await postJson<{ seeded: boolean }>("/api/seed", {});
+      toast(result.seeded ? "Demo data seeded" : "Demo data already present", result.seeded ? 1 : 2);
+      refetch();
+      void refetchSettings();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Seeding failed", 4);
+    }
+  };
+
+  const clearAll = async () => {
+    try {
+      await fetch("/api/seed", { method: "DELETE" });
+      toast("All data cleared", 3);
+      setConfirmClear(false);
+      refetch();
+      void refetchSettings();
+    } catch {
+      toast("Failed to clear data", 4);
+    }
+  };
+
+  const exportData = () => {
+    window.open("/api/export", "_blank");
+  };
 
   return (
-    <div className="flex flex-col gap-6">
-      <h2 className="text-xl font-semibold text-slate-100">Settings</h2>
+    <div className="flex flex-col gap-6 p-6 pb-16">
+      <header>
+        <h1 className="text-xl font-semibold text-slate-100">Settings</h1>
+        <p className="text-sm text-slate-500">Org profile, notifications, autonomous runner, and data management.</p>
+      </header>
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-300">People</h3>
-        <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-900/80 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Role</th>
-                <th className="px-3 py-2">Cadence (d)</th>
-                <th className="px-3 py-2">Archived</th>
-                <th className="px-3 py-2">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {people.map((p) => {
-                const patch = editing[p.id] ?? {};
-                return (
-                  <tr key={p.id} className="border-t border-slate-800">
-                    <td className="px-3 py-1.5">
-                      <input
-                        defaultValue={p.name}
-                        onChange={(e) => editField(p.id, "name", e.target.value)}
-                        className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-200 hover:border-slate-700 focus:border-slate-600 focus:bg-slate-800"
-                      />
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <input
-                        defaultValue={p.role}
-                        onChange={(e) => editField(p.id, "role", e.target.value)}
-                        className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-200 hover:border-slate-700 focus:border-slate-600 focus:bg-slate-800"
-                      />
-                    </td>
-                    <td className="px-3 py-1.5">
+      <Section title="Org Profile">
+        {!settings ? (
+          <SkeletonList rows={2} />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <LabeledInput label="Org name" value={settings.orgName} onChange={(v) => void saveProfile({ orgName: v })} />
+            <LabeledInput label="Industry" value={settings.industry} onChange={(v) => void saveProfile({ industry: v })} />
+            <label className="flex flex-col gap-1 text-xs text-slate-500">
+              Stage
+              <select
+                value={settings.stage}
+                onChange={(e) => void saveProfile({ stage: e.target.value })}
+                className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100"
+              >
+                {STAGES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-slate-500">
+              Team size
+              <input
+                type="number"
+                value={settings.teamSize}
+                onChange={(e) => void saveProfile({ teamSize: Number(e.target.value) })}
+                className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100"
+              />
+            </label>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Notification Preferences">
+        {!settings ? (
+          <SkeletonList rows={3} />
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-slate-800">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-900/80 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Domain</th>
+                  <th className="px-3 py-2">Enabled</th>
+                  <th className="px-3 py-2">Min severity to notify</th>
+                </tr>
+              </thead>
+              <tbody>
+                {DOMAINS.map((d) => {
+                  const pref = settings.notificationPrefs[d] ?? { enabled: true, minSeverity: 2 };
+                  return (
+                    <tr key={d} className="border-t border-slate-800">
+                      <td className="px-3 py-2 text-slate-300">{DOMAIN_LABELS[d]}</td>
+                      <td className="px-3 py-2">
+                        <input type="checkbox" checked={pref.enabled} onChange={(e) => void toggleDomainPref(d, "enabled", e.target.checked)} className="accent-indigo-500" />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="range"
+                          min={1}
+                          max={5}
+                          value={pref.minSeverity}
+                          onChange={(e) => void toggleDomainPref(d, "minSeverity", Number(e.target.value))}
+                          className="accent-indigo-500"
+                        />
+                        <span className="ml-2 text-xs text-slate-400">{pref.minSeverity}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Autonomous Runner">
+        {!settings ? (
+          <SkeletonList rows={2} />
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input type="checkbox" checked={settings.autonomousEnabled} onChange={(e) => void saveProfile({ autonomousEnabled: e.target.checked })} className="accent-indigo-500" />
+                Enabled
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                Interval
+                <select
+                  value={settings.autonomousIntervalMinutes}
+                  onChange={(e) => void saveProfile({ autonomousIntervalMinutes: Number(e.target.value) })}
+                  className="rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 text-sm text-slate-100"
+                >
+                  {INTERVALS.map((i) => (
+                    <option key={i.value} value={i.value}>{i.label}</option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-xs text-slate-500">
+                Last run: {settings.lastRunAt ? new Date(settings.lastRunAt).toLocaleString() : "never"}
+              </span>
+              <button disabled={running} onClick={() => void runNow()} className="ml-auto rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50">
+                {running ? "Running…" : "Run now"}
+              </button>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-slate-800">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-900/80 text-left uppercase text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2">Started</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Summary</th>
+                    <th className="px-3 py-2">Findings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(runs ?? []).map((r) => (
+                    <tr key={r.id} className="border-t border-slate-800 text-slate-300">
+                      <td className="px-3 py-2">{new Date(r.startedAt).toLocaleString()}</td>
+                      <td className="px-3 py-2 capitalize">{r.status}</td>
+                      <td className="px-3 py-2">{r.summary}</td>
+                      <td className="px-3 py-2">{r.findingsCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Metric Targets">
+        {!metrics ? (
+          <SkeletonList rows={3} />
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-slate-800">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-900/80 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Metric</th>
+                  <th className="px-3 py-2">Target</th>
+                  <th className="px-3 py-2">Benchmark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.map((m) => (
+                  <tr key={m.key} className="border-t border-slate-800">
+                    <td className="px-3 py-2 text-slate-300">{m.label}</td>
+                    <td className="px-3 py-2">
                       <input
                         type="number"
-                        defaultValue={p.cadenceDays}
-                        onChange={(e) => editField(p.id, "cadenceDays", Number(e.target.value))}
-                        className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-200 hover:border-slate-700 focus:border-slate-600 focus:bg-slate-800"
+                        defaultValue={m.target}
+                        onBlur={(e) => void updateMetricTarget(m, "target", Number(e.target.value))}
+                        className="w-28 rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 text-sm text-slate-100"
                       />
                     </td>
-                    <td className="px-3 py-1.5">
-                      <span className={p.archived ? "text-amber-400" : "text-slate-500"}>{p.archived ? "Yes" : "No"}</span>
-                    </td>
-                    <td className="px-3 py-1.5">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => save(p)}
-                          disabled={!editing[p.id] || saving === p.id}
-                          className="rounded-lg bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-40"
-                        >
-                          {saving === p.id ? "…" : "Save"}
-                        </button>
-                        <button
-                          onClick={() => toggleArchive(p)}
-                          className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-slate-600"
-                        >
-                          {p.archived ? "Unarchive" : "Archive"}
-                        </button>
-                      </div>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        defaultValue={m.benchmark}
+                        onBlur={(e) => void updateMetricTarget(m, "benchmark", Number(e.target.value))}
+                        className="w-28 rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1 text-sm text-slate-100"
+                      />
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
 
-        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <label className="text-sm text-slate-400">
-            Name
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} className="mt-1 block rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200" />
-          </label>
-          <label className="text-sm text-slate-400">
-            Role
-            <input value={newRole} onChange={(e) => setNewRole(e.target.value)} className="mt-1 block rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200" />
-          </label>
-          <label className="text-sm text-slate-400">
-            Cadence
-            <input
-              type="number"
-              value={newCadence}
-              onChange={(e) => setNewCadence(Number(e.target.value))}
-              className="mt-1 block w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200"
-            />
-          </label>
-          <button onClick={addPerson} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">
-            Add person
+      <Section title="Rule Weights">
+        {!rules ? (
+          <SkeletonList rows={3} />
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-slate-800">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-900/80 text-left text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Rule</th>
+                  <th className="px-3 py-2">Weight</th>
+                  <th className="px-3 py-2">Enabled</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rules.map((r) => (
+                  <tr key={r.key} className="border-t border-slate-800">
+                    <td className="px-3 py-2 text-slate-300">{r.name}</td>
+                    <td className="px-3 py-2">
+                      <input type="range" min={0} max={3} step={0.1} value={parseFloat(r.weight)} onChange={(e) => void updateRule(r, { weight: e.target.value })} className="accent-indigo-500" />
+                      <span className="ml-2 text-xs text-slate-400">{parseFloat(r.weight).toFixed(1)}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="checkbox" checked={r.enabled} onChange={(e) => void updateRule(r, { enabled: e.target.checked })} className="accent-indigo-500" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Data Management">
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => void seedDemo()} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">
+            Seed demo data
+          </button>
+          <button onClick={exportData} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700">
+            Export all data (JSON)
+          </button>
+          <button onClick={() => setConfirmClear(true)} className="rounded-lg bg-red-900/40 px-3 py-1.5 text-sm text-red-300 hover:bg-red-900/60">
+            Clear all data
           </button>
         </div>
-      </div>
+      </Section>
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-300">Database</h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {Object.entries(counts).map(([k, v]) => (
-            <div key={k} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center">
-              <div className="text-2xl font-bold text-slate-100">{v}</div>
-              <div className="text-xs capitalize text-slate-500">{k}</div>
+      <Section title="About">
+        {!stats ? (
+          <SkeletonList rows={2} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 text-sm text-slate-300 sm:grid-cols-4">
+            <p>App version: <span className="text-slate-100">{stats.appVersion}</span></p>
+            <p>Schema version: <span className="text-slate-100">{stats.schemaVersion}</span></p>
+            <p>Total events: <span className="text-slate-100">{stats.totalEvents}</span></p>
+            <p>Total people: <span className="text-slate-100">{stats.totalPeople}</span></p>
+            <p className="col-span-2">
+              Last intelligence run: <span className="text-slate-100">{stats.lastIntelligenceRun ? new Date(stats.lastIntelligenceRun).toLocaleString() : "never"}</span>
+            </p>
+          </div>
+        )}
+      </Section>
+
+      {confirmClear && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-xl border border-slate-700 bg-[#10131a] p-5">
+            <h3 className="text-sm font-semibold text-slate-100">Clear all data?</h3>
+            <p className="mt-2 text-xs text-slate-400">
+              This permanently deletes every person, decision, metric, event, rule, and notification. This cannot be undone.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setConfirmClear(false)} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700">
+                Cancel
+              </button>
+              <button onClick={() => void clearAll()} className="rounded-lg bg-red-700 px-3 py-1.5 text-xs text-white hover:bg-red-600">
+                Yes, clear everything
+              </button>
             </div>
-          ))}
+          </div>
         </div>
-        <button
-          onClick={reseed}
-          disabled={reseeding}
-          className="mt-3 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {reseeding ? "Reseeding…" : "Reseed database"}
-        </button>
-      </div>
+      )}
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function LabeledInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  return (
+    <label className="flex flex-col gap-1 text-xs text-slate-500">
+      {label}
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => onChange(draft)}
+        className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-100"
+      />
+    </label>
   );
 }

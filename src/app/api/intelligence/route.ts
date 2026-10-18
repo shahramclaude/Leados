@@ -1,14 +1,9 @@
-import { computeIntelligence } from "@/lib/intelligence";
-import { seedIfEmpty } from "@/db/seed";
+import { getIntelligenceReport } from "@/lib/engine";
+import { cachedJson } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  try {
-    await seedIfEmpty();
-    const report = await computeIntelligence();
-    return Response.json(report);
-  } catch (err) {
-    return Response.json({ error: String(err) }, { status: 500 });
-  }
+export async function GET(): Promise<Response> {
+  const report = await getIntelligenceReport();
+  return cachedJson(report);
 }

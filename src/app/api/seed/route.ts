@@ -1,12 +1,13 @@
-import { seedDatabase } from "@/db/seed";
+import { seedDemoData, clearAllData } from "@/lib/seed";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
-  try {
-    await seedDatabase();
-    return Response.json({ ok: true });
-  } catch (err) {
-    return Response.json({ ok: false, error: String(err) }, { status: 500 });
-  }
+export async function POST(): Promise<Response> {
+  const result = await seedDemoData();
+  return Response.json(result);
+}
+
+export async function DELETE(): Promise<Response> {
+  await clearAllData();
+  return Response.json({ cleared: true });
 }

@@ -1,100 +1,41 @@
 import { db } from "@/db";
-import { leados_people, leados_events, leados_person_snapshots, leados_relationships } from "@/db/schema";
-import { computePersonProfile, type PersonRecord, type PersonSnapshotRecord } from "@/lib/talentEngine";
-import type { PersonEvent } from "@/lib/flightRisk";
-import { eq } from "drizzle-orm";
+import { people, oneOnOnes } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { cachedJson, jsonError, isRecord } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-function toPersonRecord(row: typeof leados_people.$inferSelect): PersonRecord {
-  return {
-    id: row.id,
-    name: row.name,
-    role: row.role,
-    team: row.team,
-    managerId: row.managerId,
-    level: row.level,
-    tenureStart: row.tenureStart,
-    lastPromotedAt: row.lastPromotedAt,
-    compensationBand: row.compensationBand,
-    skills: row.skills,
-    okrScore: row.okrScore,
-    archived: row.archived,
-  };
-}
-
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const includeArchived = url.searchParams.get("archived") === "true";
-
-  const [peopleRows, eventRows, snapshotRows] = await Promise.all([
-    db.select().from(leados_people),
-    db.select().from(leados_events).where(eq(leados_events.domain, "people")),
-    db.select().from(leados_person_snapshots),
-  ]);
-
-  const today = new Date();
-  const events: PersonEvent[] = eventRows.map((e) => ({
-    id: e.id,
-    type: e.type,
-    domain: e.domain,
-    personId: e.personId,
-    data: e.data,
-    occurredAt: e.occurredAt,
-  }));
-  const snapshots: PersonSnapshotRecord[] = snapshotRows.map((s) => ({
-    id: s.id,
-    personId: s.personId,
-    snapshotAt: s.snapshotAt,
-    healthScore: s.healthScore,
-    flightRisk: s.flightRisk,
-    performanceScore: s.performanceScore,
-    burnoutIndex: s.burnoutIndex,
-    morale: s.morale,
-    data: s.data,
-  }));
-
-  const people = (includeArchived ? peopleRows : peopleRows.filter((p) => !p.archived)).map((row) => {
-    const person = toPersonRecord(row);
-    const profile = computePersonProfile(person, events, snapshots, today);
-    return { ...row, profile };
-  });
-
-  return Response.json(people);
-}
-
-export async function POST(request: Request) {
-  const body = await request.json();
-  const { name, role, team, managerId, level, tenureStart, compensationBand, skills, okrScore } = body ?? {};
-
-  if (!name || typeof name !== "string" || !name.trim()) {
-    return Response.json({ error: "name is required" }, { status: 400 });
-  }
-
-  const [created] = await db
-    .insert(leados_people)
-    .values({
-      name: name.trim(),
-      role: typeof role === "string" ? role : "",
-      team: typeof team === "string" ? team : "",
-      managerId: typeof managerId === "number" ? managerId : null,
-      level: typeof level === "string" ? level : "",
-      tenureStart: typeof tenureStart === "string" ? tenureStart : new Date().toISOString().slice(0, 10),
-      compensationBand: typeof compensationBand === "string" ? compensationBand : "",
-      skills: Array.isArray(skills) ? skills : [],
-      okrScore: typeof okrScore === "number" ? okrScore : null,
+export async function GET(): Promise<Response> {
+  const rows = await db.select().from(people).orderBy(people.name);
+  const withOneOnOnes = await Promise.all(
+    rows.map(async (p) => {
+      const last = await db
+        .select()
+        .from(oneOnOnes)
+        .where(eq(oneOnOnes.personId, p.id))
+        .orderBy(desc(oneOnOnes.occurredAt))
+        .limit(3);
+      return { ...p, recentOneOnOnes: last };
     })
-    .returning();
+  );
+  return cachedJson(withOneOnOnes);
+}
 
-  // Seed an initial relationship edge if a manager was specified.
-  if (created.managerId) {
-    await db.insert(leados_relationships).values({
-      fromId: created.id,
-      toId: created.managerId,
-      type: "reports_to",
-      strength: 0.9,
-    });
+export async function POST(request: Request): Promise<Response> {
+  const body: unknown = await request.json();
+  if (!isRecord(body) || typeof body.name !== "string" || body.name.trim() === "") {
+    return jsonError("name is required");
   }
-
-  return Response.json(created, { status: 201 });
+  if (typeof body.role !== "string" || body.role.trim() === "") {
+    return jsonError("role is required");
+  }
+  if (typeof body.team !== "string" || body.team.trim() === "") {
+    return jsonError("team is required");
+  }
+  const managerId = typeof body.managerId === "number" ? body.managerId : null;
+  const [created] = await db
+    .insert(people)
+    .values({ name: body.name, role: body.role, team: body.team, managerId })
+    .returning();
+  return cachedJson(created, { status: 201 });
 }

@@ -1,221 +1,299 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { IntelligenceData } from "@/lib/intelligence";
-import type { ViewKey } from "@/components/leados/Shell";
-import { QuickCapture, type EventType } from "@/components/leados/QuickCapture";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAppContext } from "@/lib/AppContext";
+import { postJson } from "@/lib/useFetch";
+import { SearchIcon, CloseIcon } from "@/components/leados/icons";
+import type { SearchResultItem } from "@/app/api/search/route";
 
-interface Props {
-  data: IntelligenceData;
-  navigate: (v: ViewKey, personId?: number) => void;
-  onClose: () => void;
-  refetch: () => Promise<void>;
+interface PaletteEntry {
+  id: string;
+  group: "Navigate" | "Actions" | "People" | "Decisions" | "Metrics" | "Playbooks" | "Insights" | "Recent";
+  title: string;
+  subtitle?: string;
+  run: () => void;
 }
 
-type Intent =
-  | { kind: "LOG_1ON1"; personName: string; personId?: number }
-  | { kind: "LOG_PULSE"; personName: string; personId?: number }
-  | { kind: "LOG_FEEDBACK"; personName: string; personId?: number }
-  | { kind: "ASSESS"; personName: string; personId?: number }
-  | { kind: "SIMULATE"; query: string }
-  | { kind: "LOG_DECISION"; title: string }
-  | { kind: "LOG_HYPOTHESIS"; statement: string }
-  | { kind: "NAV"; view: ViewKey }
-  | { kind: "LOOKUP_RULE"; rule: string }
-  | { kind: "LOOKUP_PERSON"; personName: string; personId?: number }
-  | null;
-
-function resolvePerson(name: string, people: { id: number; name: string }[]) {
-  const lower = name.trim().toLowerCase();
-  const match = people.find((p) => p.name.toLowerCase().startsWith(lower)) ?? people.find((p) => p.name.toLowerCase().includes(lower));
-  return match;
+interface RecentEntry {
+  id: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  at: number;
 }
 
-function resolveIntent(query: string, people: { id: number; name: string }[]): Intent {
-  const q = query.trim();
-  if (!q) return null;
+const RECENTS_KEY = "leados.commandPalette.recents";
+const STATIC_VIEWS: Array<{ title: string; href: string; subtitle: string }> = [
+  { title: "Today (Command Center)", href: "/leados", subtitle: "Heads-up display" },
+  { title: "Intelligence", href: "/leados/intelligence", subtitle: "Org health & findings" },
+  { title: "Signal Board", href: "/leados/signals", subtitle: "Rule health across domains" },
+  { title: "People", href: "/leados/people", subtitle: "Org network & 1:1s" },
+  { title: "Decisions", href: "/leados/decisions", subtitle: "Decision log & health" },
+  { title: "Metrics", href: "/leados/metrics", subtitle: "KPI tracking" },
+  { title: "Scenarios", href: "/leados/scenarios", subtitle: "Monte Carlo planning" },
+  { title: "Memory & Insights", href: "/leados/memory", subtitle: "Knowledge graph" },
+  { title: "Playbooks", href: "/leados/playbooks", subtitle: "Standard response plans" },
+  { title: "Work Queue", href: "/leados/queue", subtitle: "Notifications & tasks" },
+  { title: "Settings", href: "/leados/settings", subtitle: "Org profile & preferences" },
+];
 
-  let m = q.match(/^1[:\-]?1 with (.+)/i);
-  if (m) {
-    const p = resolvePerson(m[1], people);
-    return { kind: "LOG_1ON1", personName: p?.name ?? m[1], personId: p?.id };
-  }
-  m = q.match(/^pulse for (.+)/i);
-  if (m) {
-    const p = resolvePerson(m[1], people);
-    return { kind: "LOG_PULSE", personName: p?.name ?? m[1], personId: p?.id };
-  }
-  m = q.match(/^feedback for (.+)/i);
-  if (m) {
-    const p = resolvePerson(m[1], people);
-    return { kind: "LOG_FEEDBACK", personName: p?.name ?? m[1], personId: p?.id };
-  }
-  m = q.match(/^how is (.+) doing/i);
-  if (m) {
-    const p = resolvePerson(m[1], people);
-    return { kind: "ASSESS", personName: p?.name ?? m[1], personId: p?.id };
-  }
-  m = q.match(/^what if (.+)/i);
-  if (m) return { kind: "SIMULATE", query: m[1] };
-  m = q.match(/^decided (.+)/i);
-  if (m) return { kind: "LOG_DECISION", title: m[1] };
-  m = q.match(/^hypothes(?:is|e) (.+)/i);
-  if (m) return { kind: "LOG_HYPOTHESIS", statement: m[2] ?? m[1] };
-
-  if (/^g t$/i.test(q)) return { kind: "NAV", view: "today" };
-  if (/^g r$/i.test(q)) return { kind: "NAV", view: "roster" };
-  if (/^g i$/i.test(q)) return { kind: "NAV", view: "intelligence" };
-  if (/^g s$/i.test(q)) return { kind: "NAV", view: "simulation" };
-  if (/^g a$/i.test(q)) return { kind: "NAV", view: "attention" };
-
-  m = q.match(/R\d+/);
-  if (m) return { kind: "LOOKUP_RULE", rule: m[0] };
-
-  m = q.match(/@(\w+)/);
-  if (m) {
-    const p = resolvePerson(m[1], people);
-    return { kind: "LOOKUP_PERSON", personName: p?.name ?? m[1], personId: p?.id };
-  }
-
-  return null;
-}
-
-function describeIntent(intent: Intent): string {
-  if (!intent) return "No match — try “1:1 with Ana”, “g t”, “@ana”, “R5”…";
-  switch (intent.kind) {
-    case "LOG_1ON1":
-      return `Log 1:1 with ${intent.personName}`;
-    case "LOG_PULSE":
-      return `Log pulse for ${intent.personName}`;
-    case "LOG_FEEDBACK":
-      return `Give feedback for ${intent.personName}`;
-    case "ASSESS":
-      return `Go to roster and expand ${intent.personName}`;
-    case "SIMULATE":
-      return `Open simulation for “${intent.query}”`;
-    case "LOG_DECISION":
-      return `Log decision: "${intent.title}"`;
-    case "LOG_HYPOTHESIS":
-      return `Create hypothesis: "${intent.statement}"`;
-    case "NAV":
-      return `Navigate to ${intent.view}`;
-    case "LOOKUP_RULE":
-      return `Look up rule ${intent.rule}`;
-    case "LOOKUP_PERSON":
-      return `Look up ${intent.personName}`;
+function loadRecents(): RecentEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(RECENTS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as RecentEntry[];
+  } catch {
+    return [];
   }
 }
 
-export function CommandPalette({ data, navigate, onClose, refetch }: Props) {
-  const [query, setQuery] = useState("");
-  const [quickCapture, setQuickCapture] = useState<{ type: EventType; personId?: number } | null>(null);
+function pushRecent(entry: RecentEntry) {
+  if (typeof window === "undefined") return;
+  const current = loadRecents().filter((r) => r.id !== entry.id);
+  const next = [entry, ...current].slice(0, 5);
+  window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+}
 
-  const people = useMemo(() => data.flightRisk.map((f) => ({ id: f.personId, name: f.personName })), [data.flightRisk]);
-  const intent = useMemo(() => resolveIntent(query, people), [query, people]);
-  const confidence = query.trim().length ? Math.min(100, Math.round((Math.min(query.length, 40) / 40) * 100)) : 0;
-
-  const rule = intent?.kind === "LOOKUP_RULE" ? data.findings.find((f) => f.rule === intent.rule) : undefined;
-  const person = intent?.kind === "LOOKUP_PERSON" ? data.flightRisk.find((f) => f.personId === intent.personId) : undefined;
-
-  function execute() {
-    if (!intent) return;
-    switch (intent.kind) {
-      case "LOG_1ON1":
-        setQuickCapture({ type: "oneonone", personId: intent.personId });
-        return;
-      case "LOG_PULSE":
-        setQuickCapture({ type: "pulse", personId: intent.personId });
-        return;
-      case "LOG_FEEDBACK":
-        setQuickCapture({ type: "feedback", personId: intent.personId });
-        return;
-      case "ASSESS":
-        navigate("roster", intent.personId);
-        onClose();
-        return;
-      case "SIMULATE":
-        navigate("simulation");
-        onClose();
-        return;
-      case "LOG_DECISION":
-        navigate("decisions");
-        onClose();
-        return;
-      case "LOG_HYPOTHESIS":
-        navigate("hypotheses");
-        onClose();
-        return;
-      case "NAV":
-        navigate(intent.view);
-        onClose();
-        return;
-      default:
-        return;
+// Simple fuzzy scorer: subsequence match with bonus for contiguous runs.
+function fuzzyScore(query: string, target: string): number {
+  if (query === "") return 1;
+  const q = query.toLowerCase();
+  const t = target.toLowerCase();
+  if (t.includes(q)) return 100 - (t.indexOf(q) - 0);
+  let qi = 0;
+  let score = 0;
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) {
+      score += 1;
+      qi++;
     }
   }
+  return qi === q.length ? score : -1;
+}
 
-  if (quickCapture) {
-    return (
-      <QuickCapture
-        eventType={quickCapture.type}
-        personId={quickCapture.personId}
-        people={data.flightRisk}
-        onClose={() => {
-          setQuickCapture(null);
-          onClose();
-        }}
-        onSuccess={refetch}
-      />
-    );
-  }
+export default function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const router = useRouter();
+  const { toast, refetch } = useAppContext();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResultItem[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [recents, setRecents] = useState<RecentEntry[]>([]);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setActiveIndex(0);
+      setRecents(loadRecents());
+      setTimeout(() => inputRef.current?.focus(), 10);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        if (res.ok) setResults((await res.json()) as SearchResultItem[]);
+      } catch {
+        // aborted or network error — ignore
+      }
+    })();
+    return () => controller.abort();
+  }, [query, open]);
+
+  const navigate = (href: string, title: string, subtitle: string) => {
+    pushRecent({ id: href, title, subtitle, href, at: Date.now() });
+    router.push(href);
+    onClose();
+  };
+
+  const runAction = async (label: string, fn: () => Promise<void>) => {
+    try {
+      await fn();
+      toast(`${label} — done`, 2);
+      refetch();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : `${label} failed`, 4);
+    }
+    onClose();
+  };
+
+  const entries: PaletteEntry[] = useMemo(() => {
+    const list: PaletteEntry[] = [];
+
+    STATIC_VIEWS.forEach((v) => {
+      list.push({
+        id: `view-${v.href}`,
+        group: "Navigate",
+        title: v.title,
+        subtitle: v.subtitle,
+        run: () => navigate(v.href, v.title, v.subtitle),
+      });
+    });
+
+    const trimmed = query.trim();
+    if (trimmed.length > 0) {
+      const lower = trimmed.toLowerCase();
+      if (lower.startsWith("log 1:1") || lower.startsWith("log 1-1") || lower.startsWith("log one")) {
+        list.push({
+          id: "action-log-1on1",
+          group: "Actions",
+          title: `Log 1:1: "${trimmed}"`,
+          subtitle: "Quick-capture as a 1:1 note",
+          run: () => runAction("Log 1:1", async () => { await postJson("/api/capture", { text: trimmed, type: "one_on_one" }); }),
+        });
+      }
+      if (lower.startsWith("add decision") || lower.includes("decide")) {
+        list.push({
+          id: "action-add-decision",
+          group: "Actions",
+          title: `Add decision from: "${trimmed}"`,
+          subtitle: "Create a new decision record",
+          run: () => runAction("Add decision", async () => { await postJson("/api/capture", { text: trimmed, type: "decision" }); }),
+        });
+      }
+      if (lower.startsWith("add metric") || lower.includes("metric")) {
+        list.push({
+          id: "action-add-metric",
+          group: "Actions",
+          title: `Add metric value from: "${trimmed}"`,
+          subtitle: "Route text as a metric update",
+          run: () => runAction("Add metric value", async () => { await postJson("/api/capture", { text: trimmed, type: "metric_update" }); }),
+        });
+      }
+      list.push({
+        id: "action-generate-briefing",
+        group: "Actions",
+        title: "Generate weekly briefing",
+        subtitle: "Recompute the executive summary now",
+        run: () => runAction("Generate briefing", async () => { await fetch("/api/briefing", { cache: "no-store" }); }),
+      });
+      list.push({
+        id: "action-run-playbook",
+        group: "Actions",
+        title: "Run autonomous intelligence pass",
+        subtitle: "Re-evaluate all rules now",
+        run: () => runAction("Autonomous run", async () => { await postJson("/api/autonomous/trigger", {}); }),
+      });
+      list.push({
+        id: "action-new-scenario",
+        group: "Actions",
+        title: "New scenario",
+        subtitle: "Go to Scenarios to model a new plan",
+        run: () => navigate("/leados/scenarios", "Scenarios", "Monte Carlo planning"),
+      });
+    }
+
+    results.forEach((r) => {
+      const group: PaletteEntry["group"] =
+        r.type === "person" ? "People" : r.type === "decision" ? "Decisions" : r.type === "metric" ? "Metrics" : r.type === "playbook" ? "Playbooks" : "Insights";
+      const href =
+        r.type === "person" ? "/leados/people" : r.type === "decision" ? "/leados/decisions" : r.type === "metric" ? "/leados/metrics" : r.type === "playbook" ? "/leados/playbooks" : "/leados/memory";
+      list.push({
+        id: `${r.type}-${r.id}`,
+        group,
+        title: r.title,
+        subtitle: r.subtitle,
+        run: () => navigate(href, r.title, r.subtitle),
+      });
+    });
+
+    if (trimmed.length === 0) {
+      recents.forEach((r) => {
+        list.push({ id: `recent-${r.id}`, group: "Recent", title: r.title, subtitle: r.subtitle, run: () => navigate(r.href, r.title, r.subtitle) });
+      });
+    }
+
+    const scored = list
+      .map((entry) => ({ entry, score: fuzzyScore(trimmed, `${entry.title} ${entry.subtitle ?? ""}`) }))
+      .filter((s) => s.score >= 0)
+      .sort((a, b) => b.score - a.score);
+
+    return scored.map((s) => s.entry);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, results, recents]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [entries.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(entries.length - 1, i + 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(0, i - 1));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        entries[activeIndex]?.run();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, entries, activeIndex]);
+
+  if (!open) return null;
+
+  const groups = Array.from(new Set(entries.map((e) => e.group)));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-28" onClick={onClose}>
-      <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") execute();
-          }}
-          placeholder='Try "1:1 with Ana", "pulse for Marcus", "g r", "@priya", "R5"…'
-          className="w-full rounded-t-xl border-b border-slate-800 bg-transparent px-4 py-3 text-slate-100 outline-none placeholder:text-slate-600"
-        />
-        <div className="space-y-3 p-4">
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-teal-600/20 px-2 py-0.5 text-xs font-medium text-teal-400">
-              {intent ? intent.kind : "NO MATCH"}
-            </span>
-            <span className="text-sm text-slate-300">{describeIntent(intent)}</span>
-          </div>
-
-          {rule && (
-            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
-              <div className="font-mono text-xs text-slate-500">{rule.rule}</div>
-              <div className="text-slate-200">{rule.title}</div>
-              <div className="text-slate-500">{rule.detail}</div>
+    <div className="fixed inset-0 z-[300] flex items-start justify-center bg-black/60 pt-[12vh]" onClick={onClose}>
+      <div
+        className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-700 bg-[#10131a] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
+          <SearchIcon className="text-slate-500" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search views, people, decisions, metrics… or type an action"
+            className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+          />
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-200">
+            <CloseIcon className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-[50vh] overflow-y-auto py-2">
+          {entries.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No matches.</p>}
+          {groups.map((group) => (
+            <div key={group} className="mb-1">
+              <p className="px-4 pb-1 pt-2 text-[10px] uppercase tracking-wider text-slate-500">{group}</p>
+              {entries
+                .filter((e) => e.group === group)
+                .map((entry) => {
+                  const globalIndex = entries.indexOf(entry);
+                  const active = globalIndex === activeIndex;
+                  return (
+                    <button
+                      key={entry.id}
+                      onMouseEnter={() => setActiveIndex(globalIndex)}
+                      onClick={() => entry.run()}
+                      className={`flex w-full flex-col items-start px-4 py-2 text-left text-sm ${
+                        active ? "bg-indigo-500/15 text-indigo-100" : "text-slate-300 hover:bg-slate-800/60"
+                      }`}
+                    >
+                      <span>{entry.title}</span>
+                      {entry.subtitle && <span className="text-xs text-slate-500">{entry.subtitle}</span>}
+                    </button>
+                  );
+                })}
             </div>
-          )}
-          {person && (
-            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
-              <div className="text-slate-200">{person.personName} · {person.role}</div>
-              <div className="text-slate-500">
-                Risk {person.riskScore}% · mood {person.moodMean} · load {person.loadMean}
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>confidence: {confidence}%</span>
-            <span>↵ to execute</span>
-          </div>
-
-          <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-3 text-xs text-slate-500">
-            <span className="font-mono">g t</span> today ·<span className="font-mono">g r</span> people ·
-            <span className="font-mono">g i</span> intel ·<span className="font-mono">g s</span> simulate ·
-            <span className="font-mono">g a</span> plan
-          </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between border-t border-slate-800 px-4 py-2 text-[11px] text-slate-500">
+          <span>↑↓ navigate · Enter run · Esc close</span>
+          <span>⌘K to toggle</span>
         </div>
       </div>
     </div>
