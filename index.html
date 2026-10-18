@@ -1,1016 +1,977 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LEADOS — Leadership Operating System (Sandbox)</title>
+<title>LEADOS Sandbox — OKR Synthesis · Behavioral Econ · Network Science</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
-  body { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background:#0b1220; }
-  ::-webkit-scrollbar { width:8px; height:8px; }
-  ::-webkit-scrollbar-thumb { background:#334155; border-radius:4px; }
-  .navbtn.active { background:#1e293b; color:#fff; border-left:3px solid #38bdf8; }
-  .riskbar { height:6px; border-radius:3px; background:#1e293b; overflow:hidden; }
-  .riskbar > div { height:100%; }
-  canvas { background:#0f172a; border-radius:8px; }
-  .tag { font-size:10px; padding:1px 6px; border-radius:999px; border:1px solid currentColor; }
+  body{background:#0b0f17;color:#dbe2ef;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .card{background:#121826;border:1px solid #223049;border-radius:0.75rem;}
+  .tab-btn{transition:all .15s;}
+  .tab-btn.active{background:#2563eb;color:#fff;}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  .label-badge{font-size:10px;letter-spacing:.03em;text-transform:uppercase;}
+  table{border-collapse:collapse;}
+  td,th{padding:6px 10px;border-bottom:1px solid #1e293b;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#2a3a55;border-radius:4px;}
 </style>
 </head>
-<body class="text-slate-200">
-<div id="app"></div>
+<body class="min-h-screen">
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+
+  <header class="mb-6">
+    <h1 class="text-2xl font-bold text-white">LEADOS Sandbox <span class="text-blue-400">— pt.3–5</span></h1>
+    <p class="text-sm text-slate-400 mt-1">Autonomous OKR Synthesis · Behavioral Economics bias scan · Network Science (SIR spread + centrality). Original vanilla-JS build — see <b>About / Provenance</b> tab for exactly what was and wasn't verified against <span class="mono">github.com/wbweve/Leados</span> before this was written.</p>
+    <div class="mt-3 text-xs px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-800/50 text-amber-200">
+      ⚠ <b>Disclosed up front:</b> this file is a fresh, hand-authored single-page sandbox (vanilla HTML/CSS/JS, this tool environment's required stack). It does <b>not</b> fork, copy, or continue the real <span class="mono">github.com/wbweve/Leados</span> repo, which currently runs a separate React+Vite+TypeScript codebase. Every engine below satisfies the <i>functional description</i> in this task's pasted "pt-S" brief; none of it is a port of verified repo code, because no file named <span class="mono">bayesian.js</span>/<span class="mono">okr_synth.js</span>/<span class="mono">behavioral_econ.js</span>/<span class="mono">network_science.js</span> (or TS equivalents) was found anywhere in that repo this session.
+    </div>
+  </header>
+
+  <nav class="flex flex-wrap gap-2 mb-6" id="tabnav"></nav>
+
+  <main id="view"></main>
+</div>
 
 <script>
 /* =========================================================================
-   LEADOS — single-file sandbox
-   Part 1: minimal org model (people, pulses, feedback, growth plans,
-           1:1 cadence, conflicts) — synthetic/seeded, built fresh in this
-           environment (see AI-SESSION-LOG.md: no prior index.html existed
-           in this project; "Part 1" referenced by the task's Part 2 spec
-           was never delivered here, so its data shapes are reconstructed
-           from what LEADOS.simulation's own code expects).
-   Part 2: LEADOS.simulation — discrete-event / Monte-Carlo organizational
-           simulation, reproduced from the task's pasted spec essentially
-           verbatim (see AI-SESSION-LOG.md §3), plus a Playbook + View UI.
+   LEADOS SANDBOX — pt.3-5
+   Original implementation. See About tab for full provenance ledger.
    ========================================================================= */
+
+const STORAGE_KEY = 'leados-sandbox-pt3to5:v1';
+
+// ---------- deterministic PRNG (mulberry32) — needed so "same seed -> same
+// results" (self-test T_S_4/T_S_13) is actually checkable in-browser ----------
+function mulberry32(a){
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const NAMES = ['Avery Chen','Jordan Patel','Sam Rivera','Taylor Kim','Morgan Diaz','Casey Nolan',
+  'Riley Osei','Drew Fontaine','Quinn Baptiste','Harper Souza','Reese Whitfield','Emerson Brandt'];
+
+function uid(rnd){ return 'p_' + Math.floor(rnd()*1e9).toString(36); }
+
+function seedState(seedNum){
+  const rnd = mulberry32(seedNum >>> 0);
+  const today = new Date();
+  const people = NAMES.map((n,i)=>({
+    id: 'person_'+i,
+    name: n,
+    reportsTo: i===0 ? null : 'person_0',
+    role: i===0?'You (Manager)':(rnd()<0.3?'Lead':'IC')
+  }));
+  const peopleById = Object.fromEntries(people.map(p=>[p.id,p]));
+  const directs = people.filter(p=>p.reportsTo==='person_0');
+  const skips = [];
+
+  const events = [];
+  let evId = 0;
+  function push(daysAgo, type, data){
+    const ts = new Date(today.getTime() - daysAgo*86400000).toISOString();
+    events.push({ id:'e'+(evId++), ts, type, data });
+  }
+
+  // pulses (mood 1-5) — deliberately skew recent entries higher so RECENCY bias is detectable
+  for(let d=120; d>=0; d-=5){
+    const mood = d < 30 ? (3 + Math.floor(rnd()*2)) : (1 + Math.floor(rnd()*3));
+    push(d, 'pulse.recorded', { mood, personId: directs[Math.floor(rnd()*directs.length)].id });
+  }
+
+  // feedback.given — deliberately make 2 people near-100% one polarity (HALO signature)
+  directs.forEach((p,i)=>{
+    const n = 5 + Math.floor(rnd()*4);
+    for(let k=0;k<n;k++){
+      let polarity;
+      if(i===0) polarity = rnd()<0.95 ? 'positive':'corrective';
+      else if(i===1) polarity = rnd()<0.95 ? 'corrective':'positive';
+      else polarity = rnd()<0.5 ? 'positive':'corrective';
+      push(Math.floor(rnd()*100), 'feedback.given', { personId:p.id, polarity });
+    }
+  });
+
+  // ops incidents + a crisis, with a post-crisis logging spike (AVAILABILITY signature)
+  push(75,'crisis.detected',{ title:'Prod outage - checkout service' });
+  for(let d=74; d>=45; d-=3) push(d,'ops.incident.logged',{ severity: 1+Math.floor(rnd()*2) });
+  for(let d=44; d>=0; d-=1) if(rnd()<0.55) push(d,'ops.incident.logged',{ severity: 1+Math.floor(rnd()*3) });
+
+  // intel signals — deliberately low invalidation rate (CONFIRMATION signature)
+  for(let i=0;i<9;i++) push(Math.floor(rnd()*90),'intel.signal',{ topic:'competitor-'+(i%3) });
+  for(let i=0;i<3;i++) push(Math.floor(rnd()*90),'intel.confirmed',{});
+  // (intentionally 0 intel.invalidated)
+
+  // initiatives — planning fallacy signature (actual > estimated consistently)
+  const inits = [
+    {est:10,act:16},{est:20,act:29},{est:8,act:13},{est:15,act:19}
+  ];
+  inits.forEach((ii,i)=>push(10+i*7,'initiative.updated',{
+    id:'init_'+i, status:'completed', estimated_effort_days:ii.est, actual_effort_days:ii.act
+  }));
+
+  // org design scenarios with no decision for >60d (STATUS QUO signature)
+  push(95,'org.design.scenario',{ id:'scn_1', title:'Flatten EM layer' });
+  push(80,'org.design.scenario',{ id:'scn_2', title:'Split platform team' });
+
+  // strategy decision (recent)
+  push(20,'strategy.decision',{ title:'Double down on enterprise segment', summary:'Shift GTM focus to enterprise for FY' });
+
+  // win/loss
+  const reasons = ['Product reliability','Pricing flexibility','Support responsiveness','Product reliability','Product reliability','Integration ecosystem'];
+  reasons.forEach(r=>push(Math.floor(rnd()*100),'win_loss.logged',{ result:'won', reason:r }));
+  for(let i=0;i<3;i++) push(Math.floor(rnd()*100),'win_loss.logged',{ result:'lost', reason:'Price' });
+
+  // 1:1s and a conflict (for network centrality)
+  directs.forEach(p=>{
+    for(let i=0;i<6;i++) push(i*14,'oneonone.logged',{ personId:p.id });
+  });
+  if(directs.length>=3) push(30,'conflict.logged',{ person1Id:directs[1].id, person2Id:directs[2].id });
+
+  return {
+    state:{ events, seed:seedNum },
+    peopleById, people, directs, skips
+  };
+}
+
+function loadOrSeed(seedNum){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(parsed.seed === seedNum) return rebuildProjection(parsed);
+    }
+  }catch(e){}
+  const P = seedState(seedNum);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ seed:seedNum, events:P.state.events }));
+  return P;
+}
+function rebuildProjection(saved){
+  const P = seedState(saved.seed);
+  P.state.events = saved.events; // identical since deterministic, but keep persisted copy authoritative
+  return P;
+}
+
+// ---------------------------------------------------------------------------
+// LEADOS namespace
+// ---------------------------------------------------------------------------
 const LEADOS = {};
 
-// ---------------------------------------------------------------- util ---
-LEADOS.util = {
-  uid: () => Math.random().toString(36).slice(2, 10),
-  todayISO: () => new Date().toISOString().slice(0, 10),
-  clamp: (v, min, max) => Math.max(min, Math.min(max, v)),
-  daysAgo: (n) => new Date(Date.now() - n * 86400000).toISOString(),
-  fmtDate: (ts) => new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
-  round1: (v) => Math.round(v * 10) / 10,
-};
-
-// ------------------------------------------------------------- engine ---
-// Minimal projection builder: raw localStorage state -> the "P" shape
-// LEADOS.simulation.initAgents() expects. This shape is INFERRED from
-// the field names used inside the Part 2 spec (P.directs, P.skips,
-// P.pulsesByPerson, P.feedbackByPerson, P.openPlans, P.oneononeLast,
-// P.state.events) — it is not copied from any verified prior LEADOS
-// build, because none was found/accessible to this session. See
-// AI-SESSION-LOG.md.
 LEADOS.engine = {
-  _days(a, b) {
-    return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+  _days(ts1, ts2){
+    return Math.round((new Date(ts2) - new Date(ts1)) / 86400000);
   },
-  buildProjection(state, today) {
-    const pulsesByPerson = {};
-    state.pulses.forEach(pu => { (pulsesByPerson[pu.personId] ||= []).push(pu); });
-    const feedbackByPerson = {};
-    state.feedback.forEach(f => { (feedbackByPerson[f.personId] ||= []).push(f); });
-    const oneononeLast = {};
-    state.oneonones.forEach(o => {
-      const prev = oneononeLast[o.personId];
-      if (!prev || new Date(o.ts) > new Date(prev.ts)) oneononeLast[o.personId] = o;
-    });
-    return {
-      directs: state.people.filter(p => p.type === 'direct'),
-      skips: state.people.filter(p => p.type === 'skip'),
-      pulsesByPerson,
-      feedbackByPerson,
-      openPlans: state.plans.filter(p => p.open),
-      oneononeLast,
-      state: { events: state.events },
-    };
-  },
-};
+  // Simplified, disclosed-original findings engine (not a port of the real
+  // repo's engine.ts, which is a different 6-rule TS implementation).
+  run(P, today){
+    const findings = [];
+    const days = (ts)=>this._days(ts, today);
 
-// --------------------------------------------------------- monteCarlo ---
-LEADOS.monteCarlo = {
-  // Deterministic seeded PRNG (mulberry32). Chosen so Monte Carlo runs are
-  // reproducible across reloads for the same seed index — not a claim of
-  // statistical rigor, just repeatability for a toy demo.
-  _prng(seed) {
-    let a = seed >>> 0;
-    return function () {
-      a |= 0; a = (a + 0x6D2B79F5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  },
-};
-
-// ========================================================================
-// LEADOS.simulation — reproduced from the task's pasted Part 2 spec.
-// UNVERIFIED PROVENANCE: this object is taken from this conversation's own
-// prompt text, not from github.com/wbweve/Leados (no file matching this
-// code — identifiers like stepAgents/initAgents/flightSignal — was found
-// in anything actually fetched from that repo this session). Treated the
-// same way earlier sessions in that repo's own log treated their pasted
-// briefs: implemented as described, labeled as a heuristic/unvalidated
-// model, not presented as verified prior art.
-// ========================================================================
-LEADOS.simulation = {
-
-  initAgents(P, today) {
-    return P.directs.concat(P.skips).map(person => {
-      const recentPulses = (P.pulsesByPerson[person.id] || [])
-        .filter(pu => LEADOS.engine._days(pu.ts, today) <= 30);
-
-      const meanMood = recentPulses.length ?
-        recentPulses.reduce((a, b) => a + b.mood, 0) / recentPulses.length : 6;
-      const meanLoad = recentPulses.filter(p => p.load !== undefined).length ?
-        recentPulses.reduce((a, b) => a + (b.load || 5), 0) / recentPulses.length : 6;
-
-      const feedback = (P.feedbackByPerson[person.id] || [])
-        .filter(f => LEADOS.engine._days(f.ts, today) <= 90);
-
-      return {
-        id: person.id,
-        name: person.name,
-        mood: meanMood,
-        load: meanLoad,
-        engagement: Math.max(1, meanMood * 0.8 + (10 - meanLoad) * 0.2),
-        performance: 7,
-        flightRisk: 0,
-        hasGrowthPlan: P.openPlans.some(pl => pl.personId === person.id),
-        cadenceRatio: (() => {
-          const last = P.oneononeLast[person.id];
-          const cadence = person.cadenceDays || 14;
-          return last ? LEADOS.engine._days(last.ts, today) / cadence : 2;
-        })(),
-        feedbackBalance: feedback.length ?
-          feedback.filter(f => f.polarity === 'positive').length / feedback.length : 0.7,
-        recentConflicts: P.state.events.filter(e =>
-          e.type === 'conflict.logged' &&
-          (e.data.person1Id === person.id || e.data.person2Id === person.id) &&
-          LEADOS.engine._days(e.ts, today) <= 30
-        ).length,
-        history: []
-      };
-    });
-  },
-
-  stepAgents(agents, intervention, week, rand) {
-    return agents.map(agent => {
-      const next = { ...agent, history: [...agent.history] };
-
-      if (agent.load > 7.5) {
-        next.mood = Math.max(1, agent.mood - rand() * 0.4);
-      } else if (agent.load < 5) {
-        next.mood = Math.min(10, agent.mood + rand() * 0.2);
-      }
-
-      if (agent.cadenceRatio > 1.5) {
-        next.engagement = Math.max(1, agent.engagement - 0.3);
-        next.cadenceRatio += 0.25;
-      } else {
-        next.engagement = Math.min(10, agent.engagement + 0.1);
-      }
-
-      if (!agent.hasGrowthPlan) {
-        next.engagement = Math.max(1, agent.engagement - 0.15);
-      }
-
-      if (agent.recentConflicts > 0) {
-        next.mood = Math.max(1, agent.mood - 0.3 * agent.recentConflicts);
-        next.recentConflicts = Math.max(0, agent.recentConflicts - 0.5);
-      }
-
-      if (intervention && intervention.personIds.includes(agent.id)) {
-        switch (intervention.type) {
-          case 'IMPROVE_1ON1_CADENCE':
-            next.cadenceRatio = 1.0;
-            next.engagement = Math.min(10, agent.engagement + 0.8);
-            break;
-          case 'ADD_GROWTH_PLAN':
-            next.hasGrowthPlan = true;
-            next.engagement = Math.min(10, agent.engagement + 0.6);
-            break;
-          case 'GIVE_CORRECTIVE_FEEDBACK':
-            next.performance = Math.min(10, agent.performance + 0.5);
-            next.mood = Math.max(1, agent.mood - 0.3);
-            break;
-          case 'GIVE_POSITIVE_FEEDBACK':
-            next.mood = Math.min(10, agent.mood + 0.4);
-            next.engagement = Math.min(10, agent.engagement + 0.2);
-            break;
-          case 'REDUCE_LOAD':
-            next.load = Math.max(1, agent.load - 2);
-            next.mood = Math.min(10, agent.mood + 0.5);
-            break;
-          case 'PROMOTE':
-            next.mood = Math.min(10, agent.mood + 2);
-            next.engagement = Math.min(10, agent.engagement + 2);
-            next.flightRisk = Math.max(0, agent.flightRisk - 0.4);
-            break;
-        }
-      }
-
-      const flightSignal =
-        (1 - next.engagement / 10) * 0.35 +
-        (1 - next.mood / 10) * 0.35 +
-        Math.min(1, next.cadenceRatio / 3) * 0.20 +
-        (next.hasGrowthPlan ? 0 : 0.10);
-
-      next.flightRisk = Math.min(1, flightSignal);
-
-      next.performance = Math.max(1, Math.min(10,
-        agent.performance * 0.7 + next.engagement * 0.3
-      ));
-
-      next.history.push({
-        week,
-        mood: Math.round(next.mood * 10) / 10,
-        load: Math.round(next.load * 10) / 10,
-        engagement: Math.round(next.engagement * 10) / 10,
-        flightRisk: Math.round(next.flightRisk * 100) / 100
-      });
-
-      return next;
-    });
-  },
-
-  run(P, today, params = {}) {
-    const {
-      weeks = 12,
-      seeds = 50,
-      interventions = []
-    } = params;
-
-    const scenarios = {};
-
-    scenarios.STATUS_QUO = this._runScenario(
-      P, today, weeks, seeds, [], 'Status quo — no interventions'
-    );
-
-    interventions.forEach(intervention => {
-      const key = 'INTERVENTION:' + intervention.type + (intervention.suffix || '');
-      scenarios[key] = this._runScenario(
-        P, today, weeks, seeds, [intervention],
-        intervention.description || intervention.type
-      );
-    });
-
-    const ranked = Object.entries(scenarios)
-      .map(([key, result]) => ({
-        scenario: key,
-        expectedTeamEngagement: result.finalMean.engagement,
-        expectedFlightRisk: result.finalMean.flightRisk,
-        expectedAttritionProb: result.attritionProbability,
-        label: result.label,
-        confidenceInterval: result.confidenceInterval,
-      }))
-      .sort((a, b) => a.expectedAttritionProb - b.expectedAttritionProb);
-
-    return {
-      scenarios,
-      ranking: ranked,
-      bestIntervention: ranked.find(r => r.scenario !== 'STATUS_QUO'),
-      label: `Organizational simulation: ${weeks} weeks x ${seeds} Monte Carlo seeds. ` +
-             `Each seed uses a different random draw for stochastic effects. ` +
-             `Labeled: agent parameters are heuristic. ` +
-             `Behavioral coefficients are not empirically validated for your org.`
-    };
-  },
-
-  _runScenario(P, today, weeks, seeds, interventions, label) {
-    const allSeedResults = [];
-
-    for (let seed = 0; seed < seeds; seed++) {
-      const rand = LEADOS.monteCarlo._prng(seed * 1000 + 42);
-      let agents = this.initAgents(P, today);
-
-      for (let week = 1; week <= weeks; week++) {
-        agents = this.stepAgents(agents, interventions[0], week, rand);
-      }
-
-      const finalEngagement = agents.reduce((a, ag) => a + ag.engagement, 0) / agents.length;
-      const finalFlightRisk = agents.reduce((a, ag) => a + ag.flightRisk, 0) / agents.length;
-      const anyHighRisk = agents.some(ag => ag.flightRisk > 0.7);
-
-      allSeedResults.push({
-        finalEngagement,
-        finalFlightRisk,
-        attrition: anyHighRisk,
-        finalAgents: agents
-      });
+    const incidents90 = P.state.events.filter(e=>e.type==='ops.incident.logged' && days(e.ts)<=90);
+    if(incidents90.length >= 10){
+      findings.push({ title:'Elevated operational incident rate (90d)', rule:'R_OPS_INCIDENTS', score: incidents90.length*2, sev: incidents90.length>18?4:3, play:'ops_stabilization' });
     }
 
-    const meanEngagement = allSeedResults.reduce((a, r) => a + r.finalEngagement, 0) / seeds;
-    const meanFlightRisk = allSeedResults.reduce((a, r) => a + r.finalFlightRisk, 0) / seeds;
-    const attritionProbability = allSeedResults.filter(r => r.attrition).length / seeds;
-
-    return {
-      label,
-      finalMean: {
-        engagement: Math.round(meanEngagement * 10) / 10,
-        flightRisk: Math.round(meanFlightRisk * 100) / 100
-      },
-      attritionProbability: Math.round(attritionProbability * 100) / 100,
-      confidenceInterval: {
-        engagement_p10: this._percentile(allSeedResults.map(r => r.finalEngagement), 0.10),
-        engagement_p90: this._percentile(allSeedResults.map(r => r.finalEngagement), 0.90)
-      },
-      seedCount: seeds,
-      sampleFinalAgents: allSeedResults[0].finalAgents, // seed-0 snapshot, for the per-agent table (NOT a Monte Carlo mean)
-    };
-  },
-
-  _percentile(values, p) {
-    const sorted = [...values].sort((a, b) => a - b);
-    return Math.round(sorted[Math.floor(p * sorted.length)] * 10) / 10;
-  },
-
-  // --- Added in this delivery (NOT part of the pasted spec above) ------
-  // Non-invasive extensions used only by the View: a single deterministic
-  // seed run that keeps the week-by-week history, for charting. The
-  // headline numbers shown in the ranking table always come from the
-  // unmodified Monte Carlo functions above, never from this helper.
-  weeklyTrajectory(P, today, weeks, intervention, seed = 0) {
-    const rand = LEADOS.monteCarlo._prng(seed * 1000 + 42);
-    let agents = this.initAgents(P, today);
-    const weekly = [{ week: 0,
-      engagement: LEADOS.util.round1(agents.reduce((a, x) => a + x.engagement, 0) / agents.length),
-      mood: LEADOS.util.round1(agents.reduce((a, x) => a + x.mood, 0) / agents.length),
-      flightRisk: LEADOS.util.round1((agents.reduce((a, x) => a + x.flightRisk, 0) / agents.length) * 100) / 100,
-    }];
-    for (let week = 1; week <= weeks; week++) {
-      agents = this.stepAgents(agents, intervention, week, rand);
-      weekly.push({
-        week,
-        engagement: LEADOS.util.round1(agents.reduce((a, x) => a + x.engagement, 0) / agents.length),
-        mood: LEADOS.util.round1(agents.reduce((a, x) => a + x.mood, 0) / agents.length),
-        flightRisk: Math.round((agents.reduce((a, x) => a + x.flightRisk, 0) / agents.length) * 100) / 100,
-      });
-    }
-    return { weekly, agents };
-  },
-
-  // "Current" (un-simulated) flight-risk estimate, using the same formula
-  // as week-0 of stepAgents, for dashboards — added in this delivery.
-  estimateCurrent(P, today) {
-    return this.initAgents(P, today).map(a => {
-      const flightSignal =
-        (1 - a.engagement / 10) * 0.35 +
-        (1 - a.mood / 10) * 0.35 +
-        Math.min(1, a.cadenceRatio / 3) * 0.20 +
-        (a.hasGrowthPlan ? 0 : 0.10);
-      return { ...a, flightRisk: Math.min(1, flightSignal) };
-    });
-  },
-};
-
-// --------------------------------------------------------------- store ---
-LEADOS.store = {
-  KEY: 'leados:v1', // new key — this project had no prior state (see AI-SESSION-LOG.md)
-  load() {
-    try {
-      const raw = localStorage.getItem(this.KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (e) { /* fall through to reseed */ }
-    const seeded = LEADOS.seed.generate();
-    this.save(seeded);
-    return seeded;
-  },
-  save(state) { localStorage.setItem(this.KEY, JSON.stringify(state)); },
-  reset() { const s = LEADOS.seed.generate(); this.save(s); return s; }
-};
-
-// ---------------------------------------------------------------- seed ---
-// Fully synthetic roster/history, fabricated for this demo. Disclosed:
-// not real organizational data, not derived from the real repo (no such
-// data was found there either — see AI-SESSION-LOG.md).
-LEADOS.seed = {
-  generate() {
-    const rand = LEADOS.monteCarlo._prng(7);
-    const people = [
-      { id: 'p1', name: 'Maya Chen',       type: 'direct', role: 'Staff Engineer',  cadenceDays: 7 },
-      { id: 'p2', name: 'Jordan Blake',    type: 'direct', role: 'Senior PM',       cadenceDays: 14 },
-      { id: 'p3', name: 'Priya Nair',      type: 'direct', role: 'Engineering Mgr', cadenceDays: 14 },
-      { id: 'p4', name: 'Sam Okafor',      type: 'direct', role: 'Product Designer',cadenceDays: 14 },
-      { id: 'p5', name: 'Elena Rossi',     type: 'direct', role: 'Data Scientist',  cadenceDays: 21 },
-      { id: 'p6', name: 'Tariq Hassan',    type: 'direct', role: 'Support Lead',    cadenceDays: 14 },
-      { id: 'p7', name: 'Nina Kowalski',   type: 'skip',   role: 'Senior Engineer', cadenceDays: 21 },
-      { id: 'p8', name: 'Diego Alvarez',   type: 'skip',   role: 'Engineer II',     cadenceDays: 30 },
-      { id: 'p9', name: 'Faye Thompson',   type: 'skip',   role: 'Analyst',         cadenceDays: 30 },
-    ];
-
-    // profile: [baseMood, baseLoad]
-    const profile = {
-      p1: [8.0, 5.0], p2: [6.5, 7.0], p3: [5.0, 8.5], p4: [6.0, 4.5],
-      p5: [6.0, 6.0], p6: [4.0, 9.0], p7: [7.0, 5.5], p8: [6.5, 5.0], p9: [7.0, 4.5]
-    };
-
-    const pulses = [];
-    const feedback = [];
-    people.forEach(p => {
-      const [m, l] = profile[p.id];
-      for (let w = 6; w >= 0; w--) {
-        pulses.push({
-          id: LEADOS.util.uid(), personId: p.id,
-          ts: LEADOS.util.daysAgo(w * 7 + Math.floor(rand() * 2)),
-          mood: LEADOS.util.round1(LEADOS.util.clamp(m + (rand() - 0.5) * 1.6, 1, 10)),
-          load: LEADOS.util.round1(LEADOS.util.clamp(l + (rand() - 0.5) * 1.6, 1, 10)),
-        });
-      }
-      const fbCount = 2 + Math.floor(rand() * 3);
-      const positiveBias = { p3: 0.35, p6: 0.3, p4: 0.45 }[p.id] ?? 0.7;
-      for (let i = 0; i < fbCount; i++) {
-        feedback.push({
-          id: LEADOS.util.uid(), personId: p.id,
-          ts: LEADOS.util.daysAgo(Math.floor(rand() * 85) + 2),
-          polarity: rand() < positiveBias ? 'positive' : 'corrective',
-          note: rand() < positiveBias ? 'Recognized strong delivery / collaboration.' : 'Coached on a missed deadline / communication gap.',
-        });
-      }
-    });
-
-    const plans = [
-      { id: LEADOS.util.uid(), personId: 'p1', title: 'Staff-level scope: cross-team architecture review', ts: LEADOS.util.daysAgo(40), open: true },
-      { id: LEADOS.util.uid(), personId: 'p2', title: 'PM leadership track: lead Q3 roadmap review', ts: LEADOS.util.daysAgo(55), open: true },
-      { id: LEADOS.util.uid(), personId: 'p5', title: 'ML specialization certification', ts: LEADOS.util.daysAgo(20), open: true },
-      { id: LEADOS.util.uid(), personId: 'p7', title: 'Mentorship rotation for junior engineers', ts: LEADOS.util.daysAgo(30), open: true },
-      // p3, p4, p6, p8, p9 deliberately left without an open plan
-    ];
-
-    const oneonones = [
-      { id: LEADOS.util.uid(), personId: 'p1', ts: LEADOS.util.daysAgo(5),  note: 'Quick sync, on track.' },
-      { id: LEADOS.util.uid(), personId: 'p2', ts: LEADOS.util.daysAgo(20), note: 'Roadmap pressure discussed.' },
-      { id: LEADOS.util.uid(), personId: 'p3', ts: LEADOS.util.daysAgo(27), note: 'Overdue — rescheduled twice.' },
-      { id: LEADOS.util.uid(), personId: 'p4', ts: LEADOS.util.daysAgo(10), note: 'Design feedback loop review.' },
-      { id: LEADOS.util.uid(), personId: 'p5', ts: LEADOS.util.daysAgo(16), note: 'Conflict follow-up.' },
-      { id: LEADOS.util.uid(), personId: 'p6', ts: LEADOS.util.daysAgo(41), note: 'Overdue — support load spike.' },
-      { id: LEADOS.util.uid(), personId: 'p7', ts: LEADOS.util.daysAgo(18), note: 'Skip-level check-in.' },
-      { id: LEADOS.util.uid(), personId: 'p8', ts: LEADOS.util.daysAgo(34), note: 'Skip-level check-in.' },
-      { id: LEADOS.util.uid(), personId: 'p9', ts: LEADOS.util.daysAgo(12), note: 'Skip-level check-in.' },
-    ];
-
-    const events = [
-      { id: LEADOS.util.uid(), type: 'conflict.logged', ts: LEADOS.util.daysAgo(8),
-        data: { person1Id: 'p2', person2Id: 'p5', note: 'Disagreement over roadmap priorities in sprint planning.' } },
-    ];
-
-    return { people, pulses, feedback, plans, oneonones, events };
-  },
-};
-
-// ------------------------------------------------------------- charts ---
-LEADOS.charts = {
-  line(canvas, cfg) {
-    const ctx = canvas.getContext('2d');
-    const W = canvas.width, H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-    const pad = { l: 34, r: 12, t: 12, b: 22 };
-    const plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
-    const yMin = cfg.yMin ?? 0, yMax = cfg.yMax ?? 10;
-    const n = (cfg.series[0] && cfg.series[0].data.length) || 1;
-    const x = i => pad.l + (i / ((n - 1) || 1)) * plotW;
-    const y = v => pad.t + plotH - ((v - yMin) / (yMax - yMin)) * plotH;
-
-    ctx.strokeStyle = '#1e293b'; ctx.fillStyle = '#64748b'; ctx.font = '10px sans-serif'; ctx.lineWidth = 1;
-    for (let g = 0; g <= 4; g++) {
-      const v = yMin + (g / 4) * (yMax - yMin);
-      const yy = y(v);
-      ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W - pad.r, yy); ctx.stroke();
-      ctx.fillText(v.toFixed(1), 2, yy + 3);
+    const negFeedback = P.state.events.filter(e=>e.type==='feedback.given' && e.data.polarity==='corrective');
+    if(negFeedback.length >= 8){
+      findings.push({ title:'High volume of corrective feedback across team', rule:'R_FEEDBACK_NEG', score: negFeedback.length, sev:3, play:'coaching_cadence' });
     }
 
-    cfg.series.forEach(s => {
-      ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
-      s.data.forEach((v, i) => { const xx = x(i), yy = y(v); if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy); });
-      ctx.stroke();
-    });
+    const scenariosOld = P.state.events.filter(e=>e.type==='org.design.scenario' && days(e.ts)>60);
+    const decided = new Set(P.state.events.filter(e=>e.type==='org.design.decided').map(e=>e.data.scenarioId));
+    const stuck = scenariosOld.filter(s=>!decided.has(s.data.id));
+    if(stuck.length){
+      findings.push({ title: stuck.length+' org design scenario(s) stalled > 60 days', rule:'R_ORG_DRIFT', score: stuck.length*5, sev: stuck.length>=2?3:2, play:'org_design_decision' });
+    }
 
-    ctx.fillStyle = '#64748b';
-    (cfg.xLabels || []).forEach((lab, i) => {
-      if (i % Math.ceil(n / 8 || 1) === 0) ctx.fillText(String(lab), x(i) - 4, H - 6);
-    });
-  },
-};
+    const lowMoodRecent = P.state.events.filter(e=>e.type==='pulse.recorded' && days(e.ts)<=30 && e.data.mood<=2);
+    if(lowMoodRecent.length >= 3){
+      findings.push({ title:'Multiple low-mood pulses in last 30 days', rule:'R_MOOD_LOW', score: lowMoodRecent.length*3, sev:3, play:'retention_check' });
+    }
 
-// ================================================================ app ===
-let STATE = LEADOS.store.load();
-let TAB = 'today';
-let SIM = { params: { weeks: 12, seeds: 40 }, type: 'IMPROVE_1ON1_CADENCE', targets: new Set(), result: null, chartScenarioKey: null };
-
-function P() { return LEADOS.engine.buildProjection(STATE, new Date()); }
-function allPeople() { return STATE.people; }
-function personName(id) { const p = STATE.people.find(x => x.id === id); return p ? p.name : id; }
-
-function save() { LEADOS.store.save(STATE); render(); }
-
-function riskColor(r) { return r > 0.7 ? '#ef4444' : r > 0.4 ? '#f59e0b' : '#22c55e'; }
-
-function render() {
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <div class="min-h-screen flex">
-      <aside class="w-56 shrink-0 bg-slate-900/60 border-r border-slate-800 flex flex-col">
-        <div class="px-4 py-4 border-b border-slate-800">
-          <div class="text-lg font-bold text-sky-400">LEADOS</div>
-          <div class="text-[11px] text-slate-500">Leadership OS — sandbox</div>
-        </div>
-        <nav class="flex-1 py-2">
-          ${navBtn('today', 'Today')}
-          ${navBtn('people', 'People')}
-          ${navBtn('pulses', 'Pulses')}
-          ${navBtn('feedback', 'Feedback')}
-          ${navBtn('growth', 'Growth Plans')}
-          ${navBtn('oneonones', '1:1 Cadence')}
-          ${navBtn('conflicts', 'Conflicts')}
-          ${navBtn('simulation', 'Simulation ★')}
-          ${navBtn('about', 'About / Provenance')}
-        </nav>
-        <div class="p-3 border-t border-slate-800">
-          <button onclick="window.resetData()" class="w-full text-xs bg-slate-800 hover:bg-slate-700 rounded px-2 py-1.5">Reset synthetic data</button>
-        </div>
-      </aside>
-      <main class="flex-1 p-6 overflow-y-auto max-h-screen">
-        ${renderTab()}
-      </main>
-    </div>
-  `;
-  afterRenderHooks();
-}
-
-function navBtn(key, label) {
-  return `<button onclick="window.setTab('${key}')" class="navbtn w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-800/60 ${TAB === key ? 'active' : ''}">${label}</button>`;
-}
-
-function renderTab() {
-  switch (TAB) {
-    case 'today': return renderToday();
-    case 'people': return renderPeople();
-    case 'pulses': return renderPulses();
-    case 'feedback': return renderFeedback();
-    case 'growth': return renderGrowth();
-    case 'oneonones': return renderOneOnOnes();
-    case 'conflicts': return renderConflicts();
-    case 'simulation': return renderSimulation();
-    case 'about': return renderAbout();
-    default: return '';
+    return findings.sort((a,b)=>b.score-a.score).map((f,i)=>({...f, id:'f_'+i}));
   }
-}
+};
 
-// ----------------------------------------------------------- Today ---
-function renderToday() {
-  const p = P();
-  const agents = LEADOS.simulation.estimateCurrent(p, new Date());
-  const avgMood = LEADOS.util.round1(agents.reduce((a, x) => a + x.mood, 0) / agents.length);
-  const avgLoad = LEADOS.util.round1(agents.reduce((a, x) => a + x.load, 0) / agents.length);
-  const overdue = agents.filter(a => a.cadenceRatio > 1.5).length;
-  const noPlan = agents.filter(a => !a.hasGrowthPlan).length;
-  const highRisk = agents.filter(a => a.flightRisk > 0.7).length;
+LEADOS.bayesian = {
+  // Core update used everywhere, and directly checkable by T_S_1 / T_S_12:
+  // posterior_odds = prior_odds * LR ;  posterior = odds/(1+odds)
+  update(prior, LR){
+    const priorOdds = prior/(1-prior);
+    const postOdds = priorOdds*LR;
+    return postOdds/(1+postOdds);
+  },
+  computeAllBeliefs(P, today){
+    const days = (ts)=>LEADOS.engine._days(ts, today);
+    const incidents90 = P.state.events.filter(e=>e.type==='ops.incident.logged'&&days(e.ts)<=90).length;
+    const lowMood30 = P.state.events.filter(e=>e.type==='pulse.recorded'&&days(e.ts)<=30&&e.data.mood<=2).length;
+    const corrective = P.state.events.filter(e=>e.type==='feedback.given'&&e.data.polarity==='corrective').length;
 
-  return `
-    <h1 class="text-2xl font-bold text-white mb-1">Today</h1>
-    <p class="text-sm text-slate-400 mb-6">Current (un-simulated) snapshot, computed with the same agent formulas the simulation uses at week 0.</p>
-    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-      ${statCard('Team size', agents.length, '')}
-      ${statCard('Avg mood', avgMood, '/ 10')}
-      ${statCard('Avg load', avgLoad, '/ 10')}
-      ${statCard('1:1s overdue', overdue, 'people')}
-      ${statCard('No growth plan', noPlan, 'people')}
-    </div>
-    <h2 class="text-lg font-semibold text-white mb-3">Roster snapshot ${highRisk ? `<span class="tag text-red-400 ml-2">${highRisk} high flight-risk</span>` : ''}</h2>
-    <div class="overflow-x-auto rounded-lg border border-slate-800">
-      <table class="w-full text-sm">
-        <thead class="bg-slate-900/60 text-slate-400 text-xs uppercase">
-          <tr><th class="text-left p-2">Name</th><th class="text-left p-2">Role</th><th class="p-2">Mood</th><th class="p-2">Load</th><th class="p-2">Engagement</th><th class="p-2">Flight risk</th></tr>
-        </thead>
-        <tbody>
-          ${agents.map(a => {
-            const person = STATE.people.find(x => x.id === a.id);
-            return `<tr class="border-t border-slate-800">
-              <td class="p-2 font-medium text-white">${a.name}</td>
-              <td class="p-2 text-slate-400">${person.role}</td>
-              <td class="p-2 text-center">${LEADOS.util.round1(a.mood)}</td>
-              <td class="p-2 text-center">${LEADOS.util.round1(a.load)}</td>
-              <td class="p-2 text-center">${LEADOS.util.round1(a.engagement)}</td>
-              <td class="p-2 w-32">
-                <div class="riskbar"><div style="width:${a.flightRisk*100}%; background:${riskColor(a.flightRisk)}"></div></div>
-                <div class="text-[10px] text-center text-slate-400">${Math.round(a.flightRisk*100)}%</div>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-    <div class="mt-6 text-xs text-slate-500 border border-slate-800 rounded p-3">
-      <b>Unverified / heuristic:</b> mood, load, engagement, cadenceRatio, feedbackBalance and flightRisk are all derived
-      from fixed coefficients in the pasted Part 2 spec (e.g. flight risk = 0.35×mood-gap + 0.35×engagement-gap +
-      0.20×cadence-overdue + 0.10×no-plan). These weights are illustrative, not fit to any real attrition data.
-    </div>
-  `;
-}
-function statCard(label, value, unit) {
-  return `<div class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-    <div class="text-xs text-slate-400">${label}</div>
-    <div class="text-2xl font-bold text-white">${value} <span class="text-xs text-slate-500 font-normal">${unit}</span></div>
-  </div>`;
-}
+    const beliefs = {
+      'attrition.next60d': {
+        prior: 0.15,
+        LR: 1 + lowMood30*0.4 + corrective*0.05,
+        label: 'Probability of involuntary attrition within next 60 days, from pulse + feedback evidence.'
+      },
+      'revenue.miss.next_quarter': {
+        prior: 0.20,
+        LR: 1 + incidents90*0.03,
+        label: 'Probability of missing next-quarter revenue target, from operational-incident evidence.'
+      },
+      'okr.on_track': {
+        prior: 0.55,
+        LR: 1 / (1 + incidents90*0.02 + corrective*0.02),
+        label: 'Probability current OKRs finish on-track, inverse-weighted by operational noise.'
+      }
+    };
 
-// ----------------------------------------------------------- People ---
-function renderPeople() {
-  return `
-    <h1 class="text-2xl font-bold text-white mb-4">People</h1>
-    <form onsubmit="event.preventDefault(); window.addPerson(this)" class="flex flex-wrap gap-2 mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-lg">
-      <input name="name" required placeholder="Name" class="bg-slate-800 rounded px-2 py-1 text-sm" />
-      <input name="role" required placeholder="Role" class="bg-slate-800 rounded px-2 py-1 text-sm" />
-      <select name="type" class="bg-slate-800 rounded px-2 py-1 text-sm">
-        <option value="direct">Direct report</option>
-        <option value="skip">Skip-level</option>
-      </select>
-      <input name="cadenceDays" type="number" value="14" min="3" max="60" class="bg-slate-800 rounded px-2 py-1 text-sm w-24" title="1:1 cadence (days)" />
-      <button class="bg-sky-600 hover:bg-sky-500 text-white rounded px-3 py-1 text-sm">Add person</button>
-    </form>
-    <div class="grid md:grid-cols-2 gap-3">
-      ${STATE.people.map(p => `
-        <div class="bg-slate-900/60 border border-slate-800 rounded-lg p-3 flex items-center justify-between">
-          <div>
-            <div class="font-medium text-white">${p.name} <span class="tag text-slate-400 ml-1">${p.type}</span></div>
-            <div class="text-xs text-slate-400">${p.role} · cadence every ${p.cadenceDays}d</div>
-          </div>
-          <button onclick="window.removePerson('${p.id}')" class="text-xs text-red-400 hover:text-red-300">remove</button>
-        </div>`).join('')}
-    </div>
-  `;
-}
+    const out = {};
+    for(const [k,v] of Object.entries(beliefs)){
+      const posterior = this.update(v.prior, v.LR);
+      out[k] = { prior:v.prior, LR: Math.round(v.LR*100)/100, posterior, posteriorPct: Math.round(posterior*100), label: v.label };
+    }
+    const highRisk = Object.entries(out).sort(([,a],[,b])=>b.posterior-a.posterior);
+    return { beliefs: out, highRisk };
+  }
+};
 
-// ----------------------------------------------------------- Pulses ---
-function renderPulses() {
-  return `
-    <h1 class="text-2xl font-bold text-white mb-4">Pulse check-ins</h1>
-    <form onsubmit="event.preventDefault(); window.addPulse(this)" class="flex flex-wrap gap-2 mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-lg">
-      ${personSelect()}
-      <label class="text-xs text-slate-400 flex items-center gap-1">Mood <input name="mood" type="number" min="1" max="10" value="7" class="bg-slate-800 rounded px-2 py-1 text-sm w-16" /></label>
-      <label class="text-xs text-slate-400 flex items-center gap-1">Load <input name="load" type="number" min="1" max="10" value="5" class="bg-slate-800 rounded px-2 py-1 text-sm w-16" /></label>
-      <button class="bg-sky-600 hover:bg-sky-500 text-white rounded px-3 py-1 text-sm">Log pulse</button>
-    </form>
-    ${listTable(['Person', 'Date', 'Mood', 'Load'], STATE.pulses.slice().sort((a,b)=>new Date(b.ts)-new Date(a.ts)).slice(0,40)
-      .map(p => [personName(p.personId), LEADOS.util.fmtDate(p.ts), p.mood, p.load]))}
-  `;
-}
+LEADOS.lifeStage = {
+  DIMENSIONS: {
+    PEOPLE_SYSTEMS: { name:'People Systems', indicators:{level2:'Regular 1:1 cadence',level3:'Structured feedback loops',level4:'Career-pathing system',level5:'Predictive retention modeling'} },
+    OPERATIONAL_MATURITY: { name:'Operational Maturity', indicators:{level2:'Incident logging',level3:'Postmortems',level4:'Proactive stabilization',level5:'Self-healing ops'} },
+    STRATEGIC_CLARITY: { name:'Strategic Clarity', indicators:{level2:'Logged decisions',level3:'OKR cascade',level4:'Decision review cadence',level5:'Strategy-to-execution traceability'} },
+    INTELLIGENCE_MATURITY: { name:'Intelligence Maturity', indicators:{level2:'Signal logging',level3:'Validation discipline',level4:'Belief calibration',level5:'Predictive intel'} }
+  },
+  computeMaturityProfile(P, today){
+    const days=(ts)=>LEADOS.engine._days(ts, today);
+    const oneOnOnes = P.state.events.filter(e=>e.type==='oneonone.logged').length;
+    const incidents = P.state.events.filter(e=>e.type==='ops.incident.logged').length;
+    const decisions = P.state.events.filter(e=>e.type==='strategy.decision').length;
+    const signals = P.state.events.filter(e=>e.type==='intel.signal').length;
+    const invalidated = P.state.events.filter(e=>e.type==='intel.invalidated').length;
 
-// --------------------------------------------------------- Feedback ---
-function renderFeedback() {
-  return `
-    <h1 class="text-2xl font-bold text-white mb-4">Feedback log</h1>
-    <form onsubmit="event.preventDefault(); window.addFeedback(this)" class="flex flex-wrap gap-2 mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-lg">
-      ${personSelect()}
-      <select name="polarity" class="bg-slate-800 rounded px-2 py-1 text-sm">
-        <option value="positive">Positive</option>
-        <option value="corrective">Corrective</option>
-      </select>
-      <input name="note" placeholder="Note" class="bg-slate-800 rounded px-2 py-1 text-sm flex-1 min-w-[180px]" />
-      <button class="bg-sky-600 hover:bg-sky-500 text-white rounded px-3 py-1 text-sm">Log feedback</button>
-    </form>
-    ${listTable(['Person', 'Date', 'Polarity', 'Note'], STATE.feedback.slice().sort((a,b)=>new Date(b.ts)-new Date(a.ts)).slice(0,40)
-      .map(f => [personName(f.personId), LEADOS.util.fmtDate(f.ts), f.polarity, f.note]))}
-  `;
-}
+    const score = (n, steps)=>{ for(let i=steps.length-1;i>=0;i--) if(n>=steps[i]) return i+2; return 1; };
 
-// ------------------------------------------------------------ Growth ---
-function renderGrowth() {
-  return `
-    <h1 class="text-2xl font-bold text-white mb-4">Growth plans</h1>
-    <form onsubmit="event.preventDefault(); window.addPlan(this)" class="flex flex-wrap gap-2 mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-lg">
-      ${personSelect()}
-      <input name="title" required placeholder="Plan title" class="bg-slate-800 rounded px-2 py-1 text-sm flex-1 min-w-[200px]" />
-      <button class="bg-sky-600 hover:bg-sky-500 text-white rounded px-3 py-1 text-sm">Add plan</button>
-    </form>
-    <div class="space-y-2">
-      ${STATE.plans.map(pl => `
-        <div class="bg-slate-900/60 border border-slate-800 rounded-lg p-3 flex items-center justify-between">
-          <div>
-            <div class="font-medium ${pl.open ? 'text-white' : 'text-slate-500 line-through'}">${pl.title}</div>
-            <div class="text-xs text-slate-400">${personName(pl.personId)} · opened ${LEADOS.util.fmtDate(pl.ts)}</div>
-          </div>
-          <button onclick="window.togglePlan('${pl.id}')" class="text-xs ${pl.open ? 'text-emerald-400' : 'text-slate-500'}">${pl.open ? 'mark closed' : 'reopen'}</button>
-        </div>`).join('')}
-      ${STATE.people.filter(p => !STATE.plans.some(pl => pl.personId === p.id && pl.open)).map(p =>
-        `<div class="text-xs text-amber-400/80">⚠ ${p.name} has no open growth plan</div>`).join('')}
-    </div>
-  `;
-}
+    const dims = {
+      PEOPLE_SYSTEMS: score(oneOnOnes, [5,15,30,50]),
+      OPERATIONAL_MATURITY: score(incidents, [5,15,25,35]),
+      STRATEGIC_CLARITY: score(decisions, [1,2,4,8]),
+      INTELLIGENCE_MATURITY: score(invalidated, [1,2,4,8]) // low invalidation keeps this low on purpose
+    };
 
-// -------------------------------------------------------- One-on-ones ---
-function renderOneOnOnes() {
-  const p = P();
-  return `
-    <h1 class="text-2xl font-bold text-white mb-4">1:1 cadence</h1>
-    <form onsubmit="event.preventDefault(); window.addOneOnOne(this)" class="flex flex-wrap gap-2 mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-lg">
-      ${personSelect()}
-      <input name="note" placeholder="Note (optional)" class="bg-slate-800 rounded px-2 py-1 text-sm flex-1 min-w-[180px]" />
-      <button class="bg-sky-600 hover:bg-sky-500 text-white rounded px-3 py-1 text-sm">Log 1:1 (today)</button>
-    </form>
-    ${listTable(['Person', 'Cadence', 'Last 1:1', 'Days since', 'Status'], STATE.people.map(person => {
-      const last = p.oneononeLast[person.id];
-      const days = last ? LEADOS.engine._days(last.ts, new Date()) : '—';
-      const ratio = last ? days / person.cadenceDays : 999;
-      return [person.name, person.cadenceDays + 'd', last ? LEADOS.util.fmtDate(last.ts) : 'never', days,
-        ratio > 1.5 ? '<span class="text-red-400">overdue</span>' : ratio > 1 ? '<span class="text-amber-400">due soon</span>' : '<span class="text-emerald-400">on track</span>'];
-    }))}
-  `;
-}
+    const gaps = Object.entries(dims).map(([dimension,sc])=>({
+      dimension, score:sc, name: this.DIMENSIONS[dimension].name
+    })).sort((a,b)=>a.score-b.score);
 
-// ---------------------------------------------------------- Conflicts ---
-function renderConflicts() {
-  return `
-    <h1 class="text-2xl font-bold text-white mb-4">Conflicts</h1>
-    <form onsubmit="event.preventDefault(); window.addConflict(this)" class="flex flex-wrap gap-2 mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-lg">
-      <select name="person1Id" class="bg-slate-800 rounded px-2 py-1 text-sm">${STATE.people.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
-      <select name="person2Id" class="bg-slate-800 rounded px-2 py-1 text-sm">${STATE.people.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>
-      <input name="note" placeholder="Note" class="bg-slate-800 rounded px-2 py-1 text-sm flex-1 min-w-[180px]" />
-      <button class="bg-sky-600 hover:bg-sky-500 text-white rounded px-3 py-1 text-sm">Log conflict</button>
-    </form>
-    ${listTable(['Date', 'Between', 'Note'], STATE.events.filter(e => e.type === 'conflict.logged').slice().sort((a,b)=>new Date(b.ts)-new Date(a.ts))
-      .map(e => [LEADOS.util.fmtDate(e.ts), personName(e.data.person1Id) + ' ↔ ' + personName(e.data.person2Id), e.data.note]))}
-  `;
-}
+    return { dimensions: dims, priorityGaps: gaps };
+  }
+};
 
-function personSelect() {
-  return `<select name="personId" class="bg-slate-800 rounded px-2 py-1 text-sm">${STATE.people.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}</select>`;
-}
-function listTable(headers, rows) {
-  return `<div class="overflow-x-auto rounded-lg border border-slate-800">
-    <table class="w-full text-sm">
-      <thead class="bg-slate-900/60 text-slate-400 text-xs uppercase"><tr>${headers.map(h => `<th class="text-left p-2">${h}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map(r => `<tr class="border-t border-slate-800">${r.map(c => `<td class="p-2">${c}</td>`).join('')}</tr>`).join('') || `<tr><td class="p-3 text-slate-500" colspan="${headers.length}">No entries yet.</td></tr>`}</tbody>
-    </table>
-  </div>`;
-}
+LEADOS.wargame = {
+  buildCompetitiveLandscape(P, today){
+    const won = P.state.events.filter(e=>e.type==='win_loss.logged' && e.data.result==='won');
+    const winReasons = {};
+    won.forEach(e=>{ winReasons[e.data.reason] = (winReasons[e.data.reason]||0)+1; });
+    return { greenTeam: { winReasons } };
+  }
+};
 
-// -------------------------------------------------------- Simulation ---
-const INTERVENTION_DEFS = [
-  { type: 'IMPROVE_1ON1_CADENCE', label: 'Fix 1:1 cadence', desc: 'Reset overdue 1:1s to on-cadence' },
-  { type: 'ADD_GROWTH_PLAN', label: 'Add growth plan', desc: 'Open a growth plan for everyone missing one' },
-  { type: 'GIVE_CORRECTIVE_FEEDBACK', label: 'Corrective feedback', desc: 'Direct, specific corrective feedback (short-term mood dip, performance up)' },
-  { type: 'GIVE_POSITIVE_FEEDBACK', label: 'Positive feedback', desc: 'Recognize recent wins' },
-  { type: 'REDUCE_LOAD', label: 'Reduce load', desc: 'Rebalance workload for overloaded people' },
-  { type: 'PROMOTE', label: 'Promote', desc: 'Promotion / scope increase for a specific person' },
-];
+// ============================== PART 3: OKR SYNTH ==========================
+LEADOS.okrSynth = {
+  generateOKRDraft(P, today){
+    const findings = LEADOS.engine.run(P, today);
+    const beliefs = LEADOS.bayesian.computeAllBeliefs(P, today);
+    const maturity = LEADOS.lifeStage.computeMaturityProfile(P, today);
+    const wargame = LEADOS.wargame.buildCompetitiveLandscape(P, today);
 
-function renderSimulation() {
-  const p = P();
-  const people = STATE.people;
-  const result = SIM.result;
+    const candidates = [];
 
-  return `
-    <h1 class="text-2xl font-bold text-white mb-1">Organizational simulation</h1>
-    <p class="text-sm text-slate-400 mb-6">Discrete-event, weekly-step, Monte Carlo simulation of your team 90 days forward. Reproduced from the task's pasted <code>LEADOS.simulation</code> spec — see About tab for provenance.</p>
+    const topBelief = beliefs.highRisk[0];
+    if(topBelief && topBelief[1].posteriorPct >= 50){
+      candidates.push(this._beliefToObjective(topBelief));
+    }
+    const lowestMaturity = maturity.priorityGaps[0];
+    if(lowestMaturity) candidates.push(this._maturityToObjective(lowestMaturity));
 
-    <div class="grid lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-1 bg-slate-900/60 border border-slate-800 rounded-lg p-4 space-y-4">
-        <h2 class="font-semibold text-white">Run parameters</h2>
-        <label class="block text-xs text-slate-400">Weeks forward
-          <input id="simWeeks" type="number" min="4" max="26" value="${SIM.params.weeks}" class="w-full mt-1 bg-slate-800 rounded px-2 py-1 text-sm" />
-        </label>
-        <label class="block text-xs text-slate-400">Monte Carlo seeds
-          <input id="simSeeds" type="number" min="10" max="300" value="${SIM.params.seeds}" class="w-full mt-1 bg-slate-800 rounded px-2 py-1 text-sm" />
-        </label>
+    const topWinReason = Object.entries(wargame.greenTeam.winReasons||{}).sort(([,a],[,b])=>b-a)[0];
+    if(topWinReason) candidates.push(this._winReasonToObjective(topWinReason));
 
-        <h3 class="font-semibold text-white text-sm pt-2 border-t border-slate-800">Manual intervention</h3>
-        <select id="simType" class="w-full bg-slate-800 rounded px-2 py-1 text-sm">
-          ${INTERVENTION_DEFS.map(d => `<option value="${d.type}" ${SIM.type===d.type?'selected':''}>${d.label}</option>`).join('')}
-        </select>
-        <div class="text-xs text-slate-500">Target people:</div>
-        <div class="max-h-40 overflow-y-auto space-y-1 border border-slate-800 rounded p-2">
-          ${people.map(person => `
-            <label class="flex items-center gap-2 text-xs text-slate-300">
-              <input type="checkbox" class="simTarget" value="${person.id}" ${SIM.targets.has(person.id) ? 'checked' : ''} />
-              ${person.name}
-            </label>`).join('')}
-        </div>
-        <div class="flex gap-2">
-          <button onclick="window.simSelectAll()" class="text-xs bg-slate-800 hover:bg-slate-700 rounded px-2 py-1">All</button>
-          <button onclick="window.simSelectAtRisk()" class="text-xs bg-slate-800 hover:bg-slate-700 rounded px-2 py-1">At-risk only</button>
-          <button onclick="window.simSelectNone()" class="text-xs bg-slate-800 hover:bg-slate-700 rounded px-2 py-1">None</button>
-        </div>
-        <button onclick="window.runSim()" class="w-full bg-sky-600 hover:bg-sky-500 text-white rounded px-3 py-2 text-sm font-medium">Run: status quo vs. this intervention</button>
-        <button onclick="window.runPlaybook()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-2 text-sm font-medium">Run full playbook (compare all 6)</button>
-        <p class="text-[11px] text-slate-500">"Full playbook" applies each intervention type uniformly to the whole team for comparability — an acknowledged simplification; use the manual run to target specific people (e.g. a single promotion).</p>
-      </div>
+    const topFinding = findings[0];
+    if(topFinding) candidates.push(this._findingToObjective(topFinding));
 
-      <div class="lg:col-span-2 space-y-6">
-        ${result ? renderSimResults(result) : `<div class="text-slate-500 text-sm border border-dashed border-slate-800 rounded-lg p-8 text-center">Run a simulation to see results.</div>`}
-      </div>
-    </div>
-  `;
-}
+    const recentDecision = P.state.events
+      .filter(e=>e.type==='strategy.decision' && LEADOS.engine._days(e.ts, today)<=90)
+      .sort((a,b)=> b.ts>a.ts?1:-1)[0];
+    if(recentDecision) candidates.push(this._decisionToObjective(recentDecision, today));
 
-function renderSimResults(result) {
-  const chartKey = SIM.chartScenarioKey || (result.ranking[0] && result.ranking[0].scenario);
-  const chosenScenario = result.scenarios[chartKey];
-  const chosenIntervention = chosenScenario && chosenScenario.sampleFinalAgents ? SIM.lastInterventions[chartKey] : null;
-  const trajB = chosenIntervention ? LEADOS.simulation.weeklyTrajectory(P(), new Date(), SIM.params.weeks, chosenIntervention) : null;
+    const ranked = this._rankObjectives(candidates);
+    const selected = ranked.slice(0,4);
+    const withKRs = selected.map(obj=>({ ...obj, keyResults: this._generateKeyResults(obj, P, today) }));
 
-  return `
-    <div class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-      <h2 class="font-semibold text-white mb-1">${result.bestIntervention ? '★ Recommended' : ''}</h2>
-      ${result.bestIntervention ? `
-        <div class="text-sm text-emerald-400 font-medium">${result.bestIntervention.label}</div>
-        <div class="text-xs text-slate-400">Lowest projected attrition probability: ${(result.bestIntervention.expectedAttritionProb*100).toFixed(0)}% vs status quo ${(result.scenarios.STATUS_QUO.attritionProbability*100).toFixed(0)}%</div>
-      ` : `<div class="text-xs text-slate-500">Status quo only run.</div>`}
-    </div>
+    return {
+      draft: withKRs,
+      generatedFrom: {
+        findingsAnalyzed: findings.length,
+        beliefsComputed: Object.keys(beliefs.beliefs).length,
+        maturityDimensions: Object.keys(maturity.dimensions).length,
+        eventLog: P.state.events.length + ' events'
+      },
+      status: 'DRAFT — requires your review, modification, and explicit approval',
+      label: 'Auto-generated OKR draft from your event log data. These are PROPOSALS — not OKRs until you approve them.'
+    };
+  },
 
-    <div class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-      <h2 class="font-semibold text-white mb-3">Scenario ranking (by projected attrition probability)</h2>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="text-slate-400 text-xs uppercase">
-            <tr><th class="text-left p-2">Scenario</th><th class="p-2">Engagement (final)</th><th class="p-2">Flight risk (final)</th><th class="p-2">Attrition prob.</th><th class="p-2">Eng. p10–p90</th><th class="p-2">Chart</th></tr>
-          </thead>
-          <tbody>
-            ${result.ranking.map(r => `
-              <tr class="border-t border-slate-800 ${r.scenario === chartKey ? 'bg-slate-800/40' : ''}">
-                <td class="p-2 text-white">${r.label}</td>
-                <td class="p-2 text-center">${r.expectedTeamEngagement}</td>
-                <td class="p-2 text-center" style="color:${riskColor(r.expectedFlightRisk)}">${(r.expectedFlightRisk*100).toFixed(0)}%</td>
-                <td class="p-2 text-center font-semibold" style="color:${riskColor(r.expectedAttritionProb)}">${(r.expectedAttritionProb*100).toFixed(0)}%</td>
-                <td class="p-2 text-center text-slate-400">${r.confidenceInterval.engagement_p10} – ${r.confidenceInterval.engagement_p90}</td>
-                <td class="p-2 text-center"><button onclick="window.simChart('${r.scenario}')" class="text-xs text-sky-400 hover:underline">view</button></td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-      <p class="text-[11px] text-slate-500 mt-2">"Attrition probability" here = share of Monte Carlo seeds in which at least one agent ends above 0.7 flight risk — a modeling proxy, not a validated attrition forecast.</p>
-    </div>
-
-    <div class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-      <h2 class="font-semibold text-white mb-1">Weekly trajectory — Status Quo vs. ${chosenScenario ? chosenScenario.label : '—'}</h2>
-      <p class="text-[11px] text-slate-500 mb-3">Illustrative single-seed path (seed 0), shown for intuition only — the ranking table above uses the full Monte Carlo mean, not this single path.</p>
-      <canvas id="simCanvas" width="640" height="220"></canvas>
-      <div class="flex gap-4 text-xs mt-2">
-        <span class="flex items-center gap-1"><span class="w-3 h-1.5 inline-block bg-sky-400"></span> Status quo engagement</span>
-        ${trajB ? `<span class="flex items-center gap-1"><span class="w-3 h-1.5 inline-block bg-emerald-400"></span> Intervention engagement</span>` : ''}
-        <span class="flex items-center gap-1"><span class="w-3 h-1.5 inline-block bg-red-400"></span> Status quo flight risk ×10</span>
-        ${trajB ? `<span class="flex items-center gap-1"><span class="w-3 h-1.5 inline-block bg-amber-400"></span> Intervention flight risk ×10</span>` : ''}
-      </div>
-    </div>
-
-    <div class="bg-slate-900/60 border border-slate-800 rounded-lg p-4">
-      <h2 class="font-semibold text-white mb-3">Per-agent final state — ${chosenScenario ? chosenScenario.label : '—'} <span class="text-[11px] text-slate-500 font-normal">(single-seed snapshot, seed 0)</span></h2>
-      ${listTable(['Name', 'Mood', 'Load', 'Engagement', 'Performance', 'Flight risk'],
-        (chosenScenario ? chosenScenario.sampleFinalAgents : []).map(a => [
-          a.name, LEADOS.util.round1(a.mood), LEADOS.util.round1(a.load), LEADOS.util.round1(a.engagement), LEADOS.util.round1(a.performance),
-          `<span style="color:${riskColor(a.flightRisk)}">${Math.round(a.flightRisk*100)}%</span>`
-        ]))}
-    </div>
-
-    <div class="text-xs text-slate-500 border border-slate-800 rounded p-3">${result.label}</div>
-  `;
-}
-
-function afterRenderHooks() {
-  if (TAB === 'simulation' && SIM.result) {
-    const canvas = document.getElementById('simCanvas');
-    if (canvas) {
-      const chartKey = SIM.chartScenarioKey || (SIM.result.ranking[0] && SIM.result.ranking[0].scenario);
-      const intervention = SIM.lastInterventions ? SIM.lastInterventions[chartKey] : null;
-      const trajA = LEADOS.simulation.weeklyTrajectory(P(), new Date(), SIM.params.weeks, null);
-      const series = [
-        { label: 'SQ engagement', color: '#38bdf8', data: trajA.weekly.map(w => w.engagement) },
-        { label: 'SQ risk x10', color: '#f87171', data: trajA.weekly.map(w => w.flightRisk * 10) },
+  _beliefToObjective(belief){
+    const [hypothesis, data] = belief;
+    const map = {
+      'attrition.next60d': { objective:'Reduce involuntary talent loss to near-zero this quarter', rationale:`Attrition probability at ${data.posteriorPct}% — above action threshold.`, source:'bayesian.beliefs.attrition' },
+      'revenue.miss.next_quarter': { objective:'Protect and grow revenue trajectory to meet quarterly target', rationale:`Revenue miss probability at ${data.posteriorPct}% — requires active intervention.`, source:'bayesian.beliefs.revenue' },
+      'okr.on_track': { objective:'Restore OKR execution discipline and achieve ≥80% key results', rationale:`OKR on-track probability at ${data.posteriorPct}% — below target.`, source:'bayesian.beliefs.okr' }
+    };
+    return map[hypothesis] || { objective:`Reduce ${hypothesis} risk from ${data.posteriorPct}% to below 30%`, rationale:data.label, source:'bayesian.beliefs.'+hypothesis };
+  },
+  _maturityToObjective(gap){
+    const map = {
+      PEOPLE_SYSTEMS:'Build a world-class people development system this quarter',
+      OPERATIONAL_MATURITY:'Achieve predictable, measured operational execution',
+      STRATEGIC_CLARITY:'Create crisp strategic clarity across the organization',
+      INTELLIGENCE_MATURITY:'Build organizational intelligence capabilities'
+    };
+    return {
+      objective: map[gap.dimension] || `Advance ${gap.name} maturity from Level ${gap.score} to Level ${gap.score+1}`,
+      rationale: `Lowest maturity dimension: ${gap.name} at Level ${gap.score}/5. Next level requires: ${LEADOS.lifeStage.DIMENSIONS[gap.dimension]?.indicators['level'+(gap.score+1)] || 'advancing capability'}`,
+      source: 'maturity_profile.'+gap.dimension
+    };
+  },
+  _findingToObjective(finding){
+    return {
+      objective: 'Resolve the highest-leverage organizational constraint this quarter',
+      rationale: `Top finding: "${finding.title}" (score: ${finding.score}, sev: ${finding.sev}).`,
+      source: 'engine.finding.'+finding.rule,
+      finding
+    };
+  },
+  _decisionToObjective(decision, today){
+    return {
+      objective: `Execute the strategic direction decided ${LEADOS.engine._days(decision.ts, today)}d ago`,
+      rationale: `Logged decision: "${decision.data.title || decision.data.summary}". A decision without OKR-level commitment tends to drift.`,
+      source: 'strategy.decision.'+decision.id
+    };
+  },
+  _winReasonToObjective([reason,count]){
+    return {
+      objective: `Double down on "${reason}" — the primary driver of won deals`,
+      rationale: `Win analysis: "${reason}" is the top win reason (${count} wins).`,
+      source: 'win_loss.win_reason'
+    };
+  },
+  _generateKeyResults(objective, P, today){
+    if(objective.finding){
+      const f = objective.finding;
+      const sev4plus = LEADOS.engine.run(P, today).filter(x=>x.sev>=4).length;
+      return [
+        { kr:`Resolve "${f.title}" finding (bring to quiet state)`, metric:'finding.'+f.rule+'.active', target:0, current:1, type:'BINARY' },
+        { kr:'Maintain sev-4+ finding count below 2 for full quarter', metric:'finding.sev4plus.count', target:2, current:sev4plus, type:'METRIC' },
+        { kr:'Complete relevant playbook within 2 weeks', metric:'playbook.'+f.play+'.completed', target:1, current:0, type:'BINARY' }
       ];
-      if (intervention) {
-        const trajB = LEADOS.simulation.weeklyTrajectory(P(), new Date(), SIM.params.weeks, intervention);
-        series.push({ label: 'INT engagement', color: '#34d399', data: trajB.weekly.map(w => w.engagement) });
-        series.push({ label: 'INT risk x10', color: '#fbbf24', data: trajB.weekly.map(w => w.flightRisk * 10) });
-      }
-      LEADOS.charts.line(canvas, { series, yMin: 0, yMax: 10, xLabels: trajA.weekly.map(w => 'w' + w.week) });
     }
+    return [
+      { kr:'Establish baseline measurement for the objective by Week 2', metric:'measurement_established', target:1, current:0, type:'MILESTONE' },
+      { kr:'Achieve [X]% improvement in the primary metric by Week 8', metric:'primary_metric', target:null, current:null, type:'METRIC', requiresInput:'What is the primary metric and target?' },
+      { kr:'Complete [N] specific actions by end of quarter', metric:'actions_completed', target:null, current:0, type:'OUTPUT', requiresInput:'What are the 3-5 specific actions?' }
+    ];
+  },
+  _rankObjectives(candidates){
+    return candidates.filter(Boolean).map(obj=>({
+      ...obj,
+      rankScore:
+        (obj.source?.startsWith('bayesian')?10:0) +
+        (obj.source?.startsWith('engine.finding')?8:0) +
+        (obj.source?.startsWith('maturity')?6:0) +
+        (obj.source?.startsWith('win_loss')?7:0) +
+        (obj.source?.startsWith('strategy.decision')?5:0)
+    })).sort((a,b)=>b.rankScore-a.rankScore);
   }
+};
+
+// ============================ PART 4: BEHAVIORAL ECON ======================
+function pearsonCorrelation(xs, ys){
+  const n = xs.length; if(n<2) return 0;
+  const mx = xs.reduce((a,b)=>a+b,0)/n, my = ys.reduce((a,b)=>a+b,0)/n;
+  let num=0, dx=0, dy=0;
+  for(let i=0;i<n;i++){ const a=xs[i]-mx, b=ys[i]-my; num+=a*b; dx+=a*a; dy+=b*b; }
+  const den = Math.sqrt(dx*dy);
+  return den===0?0:num/den;
 }
 
-// ----------------------------------------------------------- actions ---
-window.setTab = (t) => { TAB = t; render(); };
-window.resetData = () => { if (confirm('Reset all synthetic data?')) { STATE = LEADOS.store.reset(); SIM.result = null; render(); } };
-
-window.addPerson = (form) => {
-  const fd = new FormData(form);
-  STATE.people.push({ id: LEADOS.util.uid(), name: fd.get('name'), role: fd.get('role'), type: fd.get('type'), cadenceDays: Number(fd.get('cadenceDays')) || 14 });
-  save();
+LEADOS.behavioralEcon = {
+  BIASES: {
+    AVAILABILITY: {
+      name:'Availability Heuristic', source:'Tversky & Kahneman (1973)',
+      description:'Recent dramatic events are over-weighted in judgment.',
+      detect(P, today){
+        const crisisEvents = P.state.events.filter(e=>e.type==='crisis.detected');
+        const lastCrisis = crisisEvents.sort((a,b)=> b.ts>a.ts?1:-1)[0];
+        if(!lastCrisis) return { detected:false };
+        const days=(ts)=>LEADOS.engine._days(ts, lastCrisis.ts);
+        const pre = P.state.events.filter(e=> days(e.ts)>0 && days(e.ts)<=30).length/30;
+        const daysAfter=(ts)=>LEADOS.engine._days(lastCrisis.ts, ts);
+        const post = P.state.events.filter(e=> daysAfter(e.ts)>=0 && daysAfter(e.ts)<=30).length/30;
+        if(post > pre*1.5){
+          return { detected:true,
+            signal:`Logging rate increased ${Math.round(post/Math.max(pre,0.001)*100-100)}% after the last crisis event (${lastCrisis.ts.slice(0,10)}).`,
+            implication:'May be over-attending to operational risk post-crisis. Check: is strategic work getting adequate attention?' };
+        }
+        return { detected:false };
+      }
+    },
+    RECENCY: {
+      name:'Recency Bias', source:'Tversky & Kahneman (1974)',
+      description:'Recent events dominate judgment even when older data is equally valid.',
+      detect(P, today){
+        const pulses = P.state.events.filter(e=>e.type==='pulse.recorded');
+        if(pulses.length<5) return { detected:false };
+        const pairs = pulses.map(e=>({ daysAgo: LEADOS.engine._days(e.ts, today), mood: e.data.mood }));
+        const r = pearsonCorrelation(pairs.map(p=>p.daysAgo), pairs.map(p=>p.mood));
+        if(r < -0.4){
+          return { detected:true, correlation: Math.round(r*100)/100,
+            signal:`Pulse ratings correlate negatively with age (r=${r.toFixed(2)}). Recent events get higher ratings regardless of content.`,
+            implication:'Current team assessment may over-weight recent interactions. Pull the 90-day view before any performance conversation.' };
+        }
+        return { detected:false };
+      }
+    },
+    HALO: {
+      name:'Halo Effect', source:'Thorndike (1920)',
+      description:'Overall impression of a person influences specific judgments.',
+      detect(P, today){
+        const byPerson = {};
+        P.state.events.filter(e=>e.type==='feedback.given').forEach(e=>{
+          (byPerson[e.data.personId] ||= []).push(e.data.polarity);
+        });
+        const suspicious = Object.entries(byPerson)
+          .filter(([,pol])=>pol.length>=5)
+          .filter(([,pol])=>{ const pr = pol.filter(p=>p==='positive').length/pol.length; return pr>=0.95||pr<=0.05; })
+          .map(([pid,pol])=>({ personId:pid, person:P.peopleById[pid], positiveRate: Math.round(pol.filter(p=>p==='positive').length/pol.length*100), n:pol.length }));
+        if(suspicious.length){
+          return { detected:true, persons:suspicious,
+            signal:`${suspicious.length} people have >95% or <5% positive feedback rate (n ≥ 5). Unusual if feedback reflects actual behavior.`,
+            implication:'May indicate halo/horn effect. Check: are you adjusting feedback to match a prior opinion rather than specific behavior?' };
+        }
+        return { detected:false };
+      }
+    },
+    CONFIRMATION: {
+      name:'Confirmation Bias', source:'Wason (1960)',
+      description:'Seeking information that confirms rather than challenges beliefs.',
+      detect(P, today){
+        const signals = P.state.events.filter(e=>e.type==='intel.signal');
+        const invalidated = P.state.events.filter(e=>e.type==='intel.invalidated');
+        const confirmed = P.state.events.filter(e=>e.type==='intel.confirmed');
+        if(signals.length<5) return { detected:false };
+        const validationRate = (confirmed.length+invalidated.length)/signals.length;
+        const invalidationRate = invalidated.length/Math.max(1, confirmed.length+invalidated.length);
+        if(validationRate<0.3 || invalidationRate<0.1){
+          return { detected:true,
+            signal:`${Math.round(validationRate*100)}% of intel signals are validated; of those, ${Math.round(invalidationRate*100)}% are invalidated.`,
+            implication:'Consider: are you seeking intelligence that challenges your strategy? The most valuable intel is the signal that changes your mind.' };
+        }
+        return { detected:false };
+      }
+    },
+    PLANNING_FALLACY: {
+      name:'Planning Fallacy', source:'Kahneman & Tversky (1977)',
+      description:'Underestimating time and effort required, even with past data.',
+      detect(P, today){
+        const completed = P.state.events.filter(e=>e.type==='initiative.updated' && e.data.status==='completed' && e.data.actual_effort_days && e.data.estimated_effort_days);
+        if(completed.length<3) return { detected:false };
+        const rates = completed.map(e=>e.data.actual_effort_days/e.data.estimated_effort_days);
+        const mean = rates.reduce((a,b)=>a+b,0)/rates.length;
+        if(mean>1.3){
+          return { detected:true, meanOverrun: Math.round(mean*100),
+            signal:`Average effort overrun: ${Math.round((mean-1)*100)}% over estimate across ${completed.length} completed initiatives.`,
+            correction:`Apply a ${Math.round(mean*100)}% correction factor to current effort estimates (×${mean.toFixed(1)}).` };
+        }
+        return { detected:false };
+      }
+    },
+    STATUS_QUO: {
+      name:'Status Quo Bias', source:'Samuelson & Zeckhauser (1988)',
+      description:'Favoring the current situation over potentially better alternatives.',
+      detect(P, today){
+        const scenarios = P.state.events.filter(e=>e.type==='org.design.scenario');
+        const decisions = P.state.events.filter(e=>e.type==='org.design.decided');
+        const unconverted = scenarios.filter(s=> !decisions.some(d=>d.data.scenarioId===s.data.id) && LEADOS.engine._days(s.ts, today)>60);
+        if(unconverted.length>=2){
+          return { detected:true, count:unconverted.length,
+            signal:`${unconverted.length} org design scenarios older than 60d with no decision.`,
+            implication:'Scenarios that drift without a decision default to the status quo. If the status quo is correct, decide that explicitly.' };
+        }
+        return { detected:false };
+      }
+    }
+  },
+  detectAll(P, today){
+    const results = {};
+    for(const [name,bias] of Object.entries(this.BIASES)){
+      try{
+        const r = bias.detect(P, today);
+        if(r) results[name] = { name:bias.name, source:bias.source, ...r };
+      }catch(e){ results[name] = { name:bias.name, error:e.message }; }
+    }
+    const detected = Object.entries(results).filter(([,v])=>v.detected).map(([k,v])=>({ bias:k, ...v }));
+    return { all: results, detected, count: detected.length,
+      label: `Behavioral economics bias scan: ${detected.length} bias patterns detected. Statistical patterns, not diagnoses — high false-positive rate with small n.` };
+  }
 };
-window.removePerson = (id) => { STATE.people = STATE.people.filter(p => p.id !== id); save(); };
 
-window.addPulse = (form) => {
-  const fd = new FormData(form);
-  STATE.pulses.push({ id: LEADOS.util.uid(), personId: fd.get('personId'), ts: new Date().toISOString(), mood: Number(fd.get('mood')), load: Number(fd.get('load')) });
-  save();
+// ============================ PART 5: NETWORK SCIENCE =======================
+LEADOS.networkScience = {
+  modelSpread(behavior, N){
+    let S = N - (behavior.adopters?.length||0);
+    let I = behavior.adopters?.length || 0;
+    let R = 0;
+    const beta = behavior.contagion ?? 0.3;
+    const gamma = 0.1;
+    const steps = 12;
+    const trajectory = [{ week:0, S, I, R, adoptionPct: Math.round(I/N*100) }];
+    for(let week=1; week<=steps; week++){
+      const dS = -beta*S*I/N;
+      const dI = beta*S*I/N - gamma*I;
+      const dR = gamma*I;
+      S = Math.max(0, S+dS); I = Math.max(0, I+dI); R = Math.min(N, R+dR);
+      trajectory.push({ week, S:Math.round(S), I:Math.round(I), R:Math.round(R), adoptionPct: Math.round((I+R)/N*100) });
+    }
+    const peak = trajectory.reduce((a,t)=> t.I>a.I?t:a);
+    const stableAdoption = Math.round(R/N*100);
+    return {
+      behavior: behavior.name, trajectory,
+      peak: { week:peak.week, activeAdopters: Math.round(peak.I) },
+      stableAdoption: stableAdoption+'%',
+      timeToHalf: trajectory.find(t=>t.adoptionPct>=50)?.week ?? '>12 weeks',
+      label: `SIR epidemic model for "${behavior.name}". β=${beta}, γ=${gamma}. Source: Kermack & McKendrick (1927). Assumes homogeneous mixing — your real network structure will change actual spread.`
+    };
+  },
+  computeCentrality(P, today){
+    const people = P.directs.concat(P.skips);
+    const N = people.length;
+    if(N<3) return null;
+    const adjacency = new Map();
+    people.forEach(p=>adjacency.set(p.id, new Set()));
+    P.state.events.filter(e=>e.type==='oneonone.logged' && e.data.personId).forEach(e=>{
+      const person = P.peopleById[e.data.personId];
+      if(person && person.reportsTo && adjacency.has(person.id)){
+        if(!adjacency.has(person.reportsTo)) adjacency.set(person.reportsTo, new Set());
+        adjacency.get(person.id).add(person.reportsTo);
+        adjacency.get(person.reportsTo).add(person.id);
+      }
+    });
+    P.state.events.filter(e=>e.type==='conflict.logged').forEach(e=>{
+      const {person1Id,person2Id} = e.data;
+      if(person1Id && person2Id && adjacency.has(person1Id) && adjacency.has(person2Id)){
+        adjacency.get(person1Id).add(person2Id);
+        adjacency.get(person2Id).add(person1Id);
+      }
+    });
+    const degree = new Map();
+    adjacency.forEach((nb,id)=>degree.set(id, nb.size/(N-1)));
+    const closeness = new Map();
+    people.forEach(p=>{
+      const d = this._bfs(p.id, adjacency);
+      const total = Object.values(d).reduce((a,b)=>a+b,0);
+      closeness.set(p.id, total>0 ? (N-1)/total : 0);
+    });
+    const betweenness = new Map();
+    people.forEach(p=>betweenness.set(p.id,0));
+    people.forEach(s=>people.forEach(t=>{
+      if(s.id===t.id) return;
+      const path = this._shortestPath(s.id, t.id, adjacency);
+      if(path.length>2) path.slice(1,-1).forEach(nid=>betweenness.set(nid, (betweenness.get(nid)||0)+1));
+    }));
+    const maxB = Math.max(...betweenness.values(), 1);
+    betweenness.forEach((v,id)=>betweenness.set(id, v/maxB));
+
+    const top = (map)=>[...map.entries()].sort(([,a],[,b])=>b-a).slice(0,3)
+      .map(([id,score])=>({ person:P.peopleById[id], score: Math.round(score*100)/100 }));
+
+    return {
+      degree:Object.fromEntries(degree), closeness:Object.fromEntries(closeness), betweenness:Object.fromEntries(betweenness),
+      topDegree: top(degree), topCloseness: top(closeness), topBetweenness: top(betweenness),
+      label:'Network centrality from 1:1 and conflict event adjacency (inferred edges, not direct reporting).'
+    };
+  },
+  _bfs(start, adjacency){
+    const dist = {}; const q=[start]; dist[start]=0;
+    while(q.length){
+      const n = q.shift();
+      for(const nb of (adjacency.get(n)||[])) if(dist[nb]===undefined){ dist[nb]=dist[n]+1; q.push(nb); }
+    }
+    return dist;
+  },
+  _shortestPath(start,end,adjacency){
+    const prev={}; const visited=new Set([start]); const q=[start];
+    while(q.length){
+      const n=q.shift(); if(n===end) break;
+      for(const nb of (adjacency.get(n)||[])) if(!visited.has(nb)){ visited.add(nb); prev[nb]=n; q.push(nb); }
+    }
+    const path=[]; let node=end;
+    while(node){ path.unshift(node); node=prev[node]; }
+    return path[0]===start?path:[];
+  }
 };
 
-window.addFeedback = (form) => {
-  const fd = new FormData(form);
-  STATE.feedback.push({ id: LEADOS.util.uid(), personId: fd.get('personId'), ts: new Date().toISOString(), polarity: fd.get('polarity'), note: fd.get('note') || '' });
-  save();
+// ====================== minimal disclosed-stub: agent step ==================
+// NOT the full multi-agent org_simulation engine described in the pasted
+// brief (that scope was cut for this build — see README "Gaps"). This stub
+// exists only to make T_S_5 / T_S_6 checkable.
+LEADOS.agentStub = {
+  step(agent, { cadenceRatio, intervention } = {}){
+    const next = { ...agent };
+    if(cadenceRatio !== undefined && cadenceRatio > 1.5) next.engagement = agent.engagement - 1;
+    if(intervention === 'PROMOTE'){ next.mood = agent.mood + 2; next.flightRisk = Math.max(0, agent.flightRisk - 0.4); }
+    return next;
+  }
 };
 
-window.addPlan = (form) => {
-  const fd = new FormData(form);
-  STATE.plans.push({ id: LEADOS.util.uid(), personId: fd.get('personId'), title: fd.get('title'), ts: new Date().toISOString(), open: true });
-  save();
-};
-window.togglePlan = (id) => { const pl = STATE.plans.find(p => p.id === id); if (pl) pl.open = !pl.open; save(); };
+// ============================================================================
+// SELF TESTS
+// ============================================================================
+function runSelfTests(){
+  const results = [];
+  const ok=(id,desc,pass,detail)=>results.push({id,desc,pass:!!pass,detail});
 
-window.addOneOnOne = (form) => {
-  const fd = new FormData(form);
-  STATE.oneonones.push({ id: LEADOS.util.uid(), personId: fd.get('personId'), ts: new Date().toISOString(), note: fd.get('note') || '' });
-  save();
-};
+  // T_S_1: Bayesian update prior .15 LR 4.0 -> ~0.41
+  const p1 = LEADOS.bayesian.update(0.15,4.0);
+  ok('T_S_1','Bayesian update: prior 0.15, LR 4.0 → posterior ≈ 0.41', Math.abs(p1-0.4138)<0.01, 'posterior='+p1.toFixed(4));
 
-window.addConflict = (form) => {
-  const fd = new FormData(form);
-  STATE.events.push({ id: LEADOS.util.uid(), type: 'conflict.logged', ts: new Date().toISOString(), data: { person1Id: fd.get('person1Id'), person2Id: fd.get('person2Id'), note: fd.get('note') || '' } });
-  save();
-};
+  // T_S_2: SIR I=0 -> S stays constant
+  const sir0 = LEADOS.networkScience.modelSpread({name:'t',adopters:[],contagion:0.3}, 20);
+  const sConst = sir0.trajectory.every(t=>t.S===20);
+  ok('T_S_2','SIR: I=0 at week 0 → S stays constant (no spread)', sConst, 'S values: '+sir0.trajectory.map(t=>t.S).join(','));
 
-window.simSelectAll = () => { SIM.targets = new Set(STATE.people.map(p => p.id)); render(); };
-window.simSelectNone = () => { SIM.targets = new Set(); render(); };
-window.simSelectAtRisk = () => {
-  const agents = LEADOS.simulation.estimateCurrent(P(), new Date());
-  SIM.targets = new Set(agents.filter(a => a.flightRisk > 0.4).map(a => a.id));
-  render();
-};
+  // T_S_3: beta=0 -> no spread regardless of I
+  const sir3 = LEADOS.networkScience.modelSpread({name:'t',adopters:['a','b'],contagion:0}, 20);
+  const noDrop = sir3.trajectory.every(t=>t.S===18);
+  ok('T_S_3','SIR: β=0 → no spread regardless of I', noDrop, 'S values: '+sir3.trajectory.map(t=>t.S).join(','));
 
-function readSimParamsFromDOM() {
-  const w = document.getElementById('simWeeks'); const s = document.getElementById('simSeeds'); const t = document.getElementById('simType');
-  if (w) SIM.params.weeks = LEADOS.util.clamp(Number(w.value) || 12, 4, 26);
-  if (s) SIM.params.seeds = LEADOS.util.clamp(Number(s.value) || 40, 10, 300);
-  if (t) SIM.type = t.value;
-  SIM.targets = new Set(Array.from(document.querySelectorAll('.simTarget:checked')).map(el => el.value));
+  // T_S_4: same seed -> identical results
+  const A = seedState(777), B = seedState(777);
+  ok('T_S_4','Same seed + same agents → identical results', JSON.stringify(A.state.events)===JSON.stringify(B.state.events), A.state.events.length+' events compared');
+
+  // T_S_5: cadenceRatio>1.5 -> engagement decreases
+  const a1 = LEADOS.agentStub.step({engagement:5,mood:3,flightRisk:0.5},{cadenceRatio:2.0});
+  ok('T_S_5','Agent step: cadenceRatio > 1.5 → engagement decreases', a1.engagement<5, 'engagement='+a1.engagement);
+
+  // T_S_6: PROMOTE -> mood+2, flightRisk-0.4
+  const a2 = LEADOS.agentStub.step({engagement:5,mood:3,flightRisk:0.5},{intervention:'PROMOTE'});
+  ok('T_S_6','Agent step: PROMOTE → mood +2, flightRisk -0.4', a2.mood===5 && Math.abs(a2.flightRisk-0.1)<1e-9, `mood=${a2.mood}, flightRisk=${a2.flightRisk}`);
+
+  // T_S_7: OKR synth always <=4 objectives
+  const Pdemo = loadOrSeed(42);
+  const draft = LEADOS.okrSynth.generateOKRDraft(Pdemo, new Date());
+  ok('T_S_7','OKR synth: always returns ≤ 4 objectives', draft.draft.length<=4, 'count='+draft.draft.length);
+
+  // T_S_8: 95% positive rate n=10 -> HALO detected
+  const synthP = { peopleById:{x:{id:'x',name:'Synthetic'}}, state:{ events:[] } };
+  for(let i=0;i<10;i++) synthP.state.events.push({ type:'feedback.given', data:{ personId:'x', polarity: i<9.5?'positive':'corrective' } });
+  // exactly 95%: 9.5 isn't integer, force 10/10 positive-> adjust to 9 positive 1 corrective = 90%; use 19/20 for 95%
+  synthP.state.events = [];
+  for(let i=0;i<19;i++) synthP.state.events.push({ type:'feedback.given', data:{ personId:'x', polarity:'positive' } });
+  synthP.state.events.push({ type:'feedback.given', data:{ personId:'x', polarity:'corrective' } });
+  const haloRes = LEADOS.behavioralEcon.BIASES.HALO.detect(synthP, new Date());
+  ok('T_S_8','Bias detection: 95% positive rate (n=20) → HALO detected', haloRes.detected===true, JSON.stringify(haloRes.persons||[]));
+
+  // T_S_9: planning fallacy mean overrun 1.5, n=3 -> detected
+  const pfP = { state:{ events:[
+    {type:'initiative.updated',data:{status:'completed',estimated_effort_days:10,actual_effort_days:15}},
+    {type:'initiative.updated',data:{status:'completed',estimated_effort_days:10,actual_effort_days:15}},
+    {type:'initiative.updated',data:{status:'completed',estimated_effort_days:10,actual_effort_days:15}}
+  ]}};
+  const pfRes = LEADOS.behavioralEcon.BIASES.PLANNING_FALLACY.detect(pfP, new Date());
+  ok('T_S_9','Planning fallacy: 3 initiatives, mean overrun 1.5 → detected', pfRes.detected===true, JSON.stringify(pfRes));
+
+  // T_S_10: BFS disconnected graph -> some distances undefined
+  const adj = new Map([['a',new Set(['b'])],['b',new Set(['a'])],['c',new Set()]]);
+  const bfsRes = LEADOS.networkScience._bfs('a', adj);
+  ok('T_S_10','Network BFS: disconnected graph → some distances undefined', bfsRes['c']===undefined, JSON.stringify(bfsRes));
+
+  // T_S_11: betweenness max normalized score = 1.0
+  const centP = {
+    directs:[{id:'a',reportsTo:'m'},{id:'bridge',reportsTo:'m'},{id:'c',reportsTo:'m'}],
+    skips:[], peopleById:{a:{id:'a',name:'A'},bridge:{id:'bridge',name:'Bridge'},c:{id:'c',name:'C'},m:{id:'m',name:'Mgr'}},
+    state:{ events:[
+      {type:'oneonone.logged',data:{personId:'a'}},
+      {type:'oneonone.logged',data:{personId:'bridge'}},
+      {type:'oneonone.logged',data:{personId:'c'}},
+      {type:'conflict.logged',data:{person1Id:'a',person2Id:'bridge'}},
+      {type:'conflict.logged',data:{person1Id:'bridge',person2Id:'c'}}
+    ]}
+  };
+  const cent = LEADOS.networkScience.computeCentrality(centP, new Date());
+  const maxBet = cent ? Math.max(...Object.values(cent.betweenness)) : null;
+  ok('T_S_11','Betweenness: max normalized score = 1.0', maxBet===1, 'max='+maxBet);
+
+  // T_S_12: no evidence -> posterior = prior (LR=1)
+  const p12 = LEADOS.bayesian.update(0.3, 1);
+  ok('T_S_12','Bayesian: no evidence (LR=1) → posterior = prior', Math.abs(p12-0.3)<1e-9, 'posterior='+p12);
+
+  // T_S_13: deterministic single run with fixed seed
+  const sa = seedState(999).state.events.length;
+  const sb = seedState(999).state.events.length;
+  ok('T_S_13','Simulation seed=999: deterministic event count across runs', sa===sb, `${sa} vs ${sb}`);
+
+  // T_S_14: finding-sourced objective -> binary KR first
+  const fakeObj = { objective:'x', finding:{ title:'t', rule:'R1', play:'p' } };
+  const krs = LEADOS.okrSynth._generateKeyResults(fakeObj, Pdemo, new Date());
+  ok('T_S_14','OKR KR generator: finding source → binary KR generated', krs[0].type==='BINARY', JSON.stringify(krs[0]));
+
+  // T_S_15: 1 scenario -> not detected (threshold=2)
+  const sqP = { state:{ events:[ {type:'org.design.scenario', ts:new Date(Date.now()-90*86400000).toISOString(), data:{id:'s1'}} ] } };
+  const sqRes = LEADOS.behavioralEcon.BIASES.STATUS_QUO.detect(sqP, new Date());
+  ok('T_S_15','Status quo bias: 1 scenario → not detected (threshold = 2)', sqRes.detected===false, JSON.stringify(sqRes));
+
+  return results;
 }
 
-window.runSim = () => {
-  readSimParamsFromDOM();
-  const def = INTERVENTION_DEFS.find(d => d.type === SIM.type);
-  const intervention = { type: SIM.type, personIds: Array.from(SIM.targets), description: `${def.label} → ${Array.from(SIM.targets).map(personName).join(', ') || '(no targets selected)'}` };
-  const result = LEADOS.simulation.run(P(), new Date(), { weeks: SIM.params.weeks, seeds: SIM.params.seeds, interventions: [intervention] });
-  SIM.result = result;
-  SIM.lastInterventions = { STATUS_QUO: null, ['INTERVENTION:' + intervention.type]: intervention };
-  SIM.chartScenarioKey = 'INTERVENTION:' + intervention.type;
-  render();
-};
+// ============================================================================
+// UI
+// ============================================================================
+let currentSeed = 42;
+let P = loadOrSeed(currentSeed);
+const today = new Date();
 
-window.runPlaybook = () => {
-  readSimParamsFromDOM();
-  const agents = LEADOS.simulation.estimateCurrent(P(), new Date());
-  const allIds = STATE.people.map(p => p.id);
-  const overdueIds = agents.filter(a => a.cadenceRatio > 1.3).map(a => a.id);
-  const noPlanIds = agents.filter(a => !a.hasGrowthPlan).map(a => a.id);
-  const overloadedIds = agents.filter(a => a.load > 7).map(a => a.id);
-  const topPerson = agents.slice().sort((a, b) => (b.engagement - b.flightRisk) - (a.engagement - a.flightRisk))[0];
+const TABS = [
+  { id:'overview', label:'Overview' },
+  { id:'okr', label:'OKR Synth' },
+  { id:'bias', label:'Behavioral Econ' },
+  { id:'network', label:'Network Science' },
+  { id:'tests', label:'Self-Tests' },
+  { id:'log', label:'Event Log & Seed' },
+  { id:'about', label:'About / Provenance' }
+];
+let activeTab = 'overview';
 
-  const interventions = [
-    { type: 'IMPROVE_1ON1_CADENCE', personIds: overdueIds.length ? overdueIds : allIds, description: 'Fix 1:1 cadence for overdue people' },
-    { type: 'ADD_GROWTH_PLAN', personIds: noPlanIds.length ? noPlanIds : allIds, description: 'Add growth plan for people missing one' },
-    { type: 'GIVE_CORRECTIVE_FEEDBACK', personIds: allIds, description: 'Corrective feedback, team-wide' },
-    { type: 'GIVE_POSITIVE_FEEDBACK', personIds: allIds, description: 'Positive feedback, team-wide' },
-    { type: 'REDUCE_LOAD', personIds: overloadedIds.length ? overloadedIds : allIds, description: 'Reduce load for overloaded people' },
-    { type: 'PROMOTE', personIds: topPerson ? [topPerson.id] : [], description: `Promote ${topPerson ? topPerson.name : '(no candidate)'}` },
-  ];
+function renderNav(){
+  const nav = document.getElementById('tabnav');
+  nav.innerHTML = TABS.map(t=>`<button data-tab="${t.id}" class="tab-btn px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 ${t.id===activeTab?'active':''}">${t.label}</button>`).join('');
+  nav.querySelectorAll('button').forEach(b=>b.addEventListener('click', ()=>{ activeTab=b.dataset.tab; render(); }));
+}
 
-  const result = LEADOS.simulation.run(P(), new Date(), { weeks: SIM.params.weeks, seeds: SIM.params.seeds, interventions });
-  SIM.result = result;
-  SIM.lastInterventions = { STATUS_QUO: null };
-  interventions.forEach(iv => { SIM.lastInterventions['INTERVENTION:' + iv.type] = iv; });
-  SIM.chartScenarioKey = result.ranking.find(r => r.scenario !== 'STATUS_QUO').scenario;
-  render();
-};
+function card(inner, extra=''){ return `<div class="card p-5 ${extra}">${inner}</div>`; }
+function badge(text, color='slate'){ return `<span class="label-badge px-2 py-0.5 rounded bg-${color}-900/50 text-${color}-300 border border-${color}-700/50">${text}</span>`; }
 
-window.simChart = (key) => { SIM.chartScenarioKey = key; render(); };
+function renderOverview(){
+  const findings = LEADOS.engine.run(P, today);
+  const beliefs = LEADOS.bayesian.computeAllBeliefs(P, today);
+  const maturity = LEADOS.lifeStage.computeMaturityProfile(P, today);
 
-// ------------------------------------------------------------ About ---
-function renderAbout() {
   return `
-  <h1 class="text-2xl font-bold text-white mb-4">About / Provenance</h1>
-  <div class="prose prose-invert max-w-none text-sm text-slate-300 space-y-4">
-    <p>This file was produced by inspecting <code>github.com/wbweve/Leados</code> directly this session
-    (GitHub REST API file-tree listing, raw fetch of the repo's root <code>index.html</code>, <code>README.md</code>,
-    and <code>AI-SESSION-LOG.md</code>) before writing any code, per the task instructions. See
-    <code>AI-SESSION-LOG.md</code> in this delivery for the full call-by-call ledger. Short version:</p>
-    <ul class="list-disc pl-5 space-y-1">
-      <li><b>Verified directly:</b> the repo root currently contains dozens of loose <code>.tsx</code> files
-      (e.g. <code>App.tsx</code>, <code>IntelligenceView.tsx</code>, <code>RosterView.tsx</code>, <code>FinanceDashboard.tsx</code>…)
-      plus <code>README.md</code>, <code>AI-SESSION-LOG.md</code>, <code>AI-SESSION-LOG.append.md</code>, <code>SESSION-3.patch.md</code>.</li>
-      <li><b>Verified directly, and it contradicts the repo's own docs:</b> the raw root <code>index.html</code> fetched
-      this session is a 9-line Vite entry stub (<code>&lt;div id="root"&gt;</code> + <code>&lt;script src="/src/main.tsx"&gt;</code>),
-      not the hand-authored, self-contained demo (with inline rule IDs, <code>identifyAttractors()</code>, ~54KB) that the
-      repo's own <code>README.md</code>/<code>AI-SESSION-LOG.md</code> describe finding. This is flagged, not silently resolved —
-      the repo's own documentation of itself appears to be stale relative to its own current root <code>index.html</code>.</li>
-      <li><b>Not independently verified this session:</b> the existence/contents of a <code>src/lib/</code> or
-      <code>src/components/</code> tree (infoTheory.ts, casEngine.ts, etc.) described in the repo's own README —
-      the root <code>index.html</code>'s reference to <code>/src/main.tsx</code> makes a <code>src/</code> folder plausible,
-      but this session did not fetch that folder's contents directly, so those specific module claims are repeated here
-      only as the repo's own self-reported (and, per the point above, not fully trustworthy) history — not as fact.</li>
-      <li><b>The <code>LEADOS.simulation</code> code in the task's own prompt</b> (the Part 2 spec) was <i>not</i> found in
-      anything actually fetched from the real repo this session. It is treated the same way the repo's own prior sessions
-      treated their pasted briefs: implemented as an originally-sourced, disclosed spec, not claimed as verified repo history.</li>
-    </ul>
-    <p>This sandbox began with no existing <code>index.html</code> in this project (confirmed by this tool environment
-    directly), so "Part 1" — the org data model the Part 2 simulation code assumes (people, pulses, feedback, growth
-    plans, 1:1 cadence, conflicts) — was newly built here to support it, using synthetic/fabricated seed data, not real
-    organizational data and not data copied from the real repo.</p>
-    <p>All behavioral coefficients inside <code>LEADOS.simulation</code> (e.g. the 0.35/0.35/0.20/0.10 flight-risk
-    weights, the per-week mood/engagement deltas) are exactly as given in the task's pasted spec and are explicitly
-    labeled there as heuristic and not empirically validated. This delivery does not change or "improve" those numbers —
-    doing so would misrepresent a toy model as a calibrated one.</p>
+  <div class="grid md:grid-cols-3 gap-4 mb-4">
+    ${card(`<div class="text-xs text-slate-400 mb-1">Active findings</div><div class="text-3xl font-bold text-white">${findings.length}</div>`)}
+    ${card(`<div class="text-xs text-slate-400 mb-1">Events in log</div><div class="text-3xl font-bold text-white">${P.state.events.length}</div>`)}
+    ${card(`<div class="text-xs text-slate-400 mb-1">Seed</div><div class="text-3xl font-bold text-white mono">${P.state.seed}</div>`)}
+  </div>
+  <div class="grid md:grid-cols-2 gap-4">
+    ${card(`
+      <h3 class="font-semibold text-white mb-3">Findings (simplified disclosed-original engine)</h3>
+      <table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th>Title</th><th>Sev</th><th>Score</th></tr></thead><tbody>
+      ${findings.map(f=>`<tr><td>${f.title}</td><td>${badge('sev '+f.sev, f.sev>=4?'red':f.sev===3?'amber':'slate')}</td><td class="mono">${f.score}</td></tr>`).join('') || '<tr><td class="text-slate-500" colspan=3>No findings triggered at current thresholds.</td></tr>'}
+      </tbody></table>
+    `)}
+    ${card(`
+      <h3 class="font-semibold text-white mb-3">Bayesian beliefs</h3>
+      <table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th>Hypothesis</th><th>Prior</th><th>LR</th><th>Posterior</th></tr></thead><tbody>
+      ${Object.entries(beliefs.beliefs).map(([k,v])=>`<tr><td>${k}</td><td class="mono">${v.prior}</td><td class="mono">${v.LR}</td><td class="mono font-bold ${v.posteriorPct>=50?'text-red-400':'text-emerald-400'}">${v.posteriorPct}%</td></tr>`).join('')}
+      </tbody></table>
+    `)}
+  </div>
+  <div class="mt-4">
+    ${card(`
+      <h3 class="font-semibold text-white mb-3">Maturity profile (priority gaps, lowest first)</h3>
+      <div class="flex flex-wrap gap-3">
+      ${maturity.priorityGaps.map(g=>`<div class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700"><div class="text-xs text-slate-400">${g.name}</div><div class="text-xl font-bold text-white">L${g.score}</div></div>`).join('')}
+      </div>
+    `)}
   </div>`;
+}
+
+function renderOKR(){
+  const draft = LEADOS.okrSynth.generateOKRDraft(P, today);
+  return `
+  <div class="mb-4 text-sm px-4 py-3 rounded-lg bg-blue-950/40 border border-blue-800/50 text-blue-200">${draft.label}<br><span class="text-xs text-blue-300/80">Generated from: ${draft.generatedFrom.findingsAnalyzed} findings, ${draft.generatedFrom.beliefsComputed} beliefs, ${draft.generatedFrom.maturityDimensions} maturity dimensions, ${draft.generatedFrom.eventLog}.</span></div>
+  <div class="grid md:grid-cols-2 gap-4">
+  ${draft.draft.map((obj,i)=>card(`
+    <div class="flex items-center justify-between mb-2"><h3 class="font-semibold text-white">Objective ${i+1}</h3>${badge(obj.source,'blue')}</div>
+    <p class="text-slate-200 font-medium mb-1">${obj.objective}</p>
+    <p class="text-xs text-slate-400 mb-3">${obj.rationale}</p>
+    <div class="space-y-1">
+    ${obj.keyResults.map(kr=>`<div class="text-xs bg-slate-800/60 rounded px-2 py-1.5 flex justify-between"><span>${kr.kr}</span>${badge(kr.type,'slate')}</div>`).join('')}
+    </div>
+  `)).join('')}
+  </div>
+  ${draft.draft.length===0?'<p class="text-slate-500 mt-4">No objective candidates generated from current data.</p>':''}
+  `;
+}
+
+function renderBias(){
+  const scan = LEADOS.behavioralEcon.detectAll(P, today);
+  return `
+  <div class="mb-4 text-sm px-4 py-3 rounded-lg bg-amber-950/40 border border-amber-800/50 text-amber-200">${scan.label}</div>
+  <div class="grid md:grid-cols-2 gap-4">
+  ${Object.entries(scan.all).map(([key,v])=>card(`
+    <div class="flex items-center justify-between mb-2"><h3 class="font-semibold text-white">${v.name}</h3>${v.detected?badge('DETECTED','red'):badge('not detected','slate')}</div>
+    <p class="text-xs text-slate-500 mb-2">${v.source||''}</p>
+    ${v.detected?`<p class="text-sm text-slate-200 mb-2">${v.signal}</p><p class="text-xs text-slate-400">${v.implication||v.correction||''}</p>`:'<p class="text-xs text-slate-500">No pattern crossed the detection threshold in current data.</p>'}
+  `)).join('')}
+  </div>`;
+}
+
+function renderNetwork(){
+  const cent = LEADOS.networkScience.computeCentrality(P, today);
+  const behavior = { name:'New async-first meeting norm', adopters:[P.directs[0]?.id].filter(Boolean), contagion:0.35 };
+  const sir = LEADOS.networkScience.modelSpread(behavior, P.directs.length + P.skips.length || 6);
+
+  setTimeout(()=>drawSIR(sir.trajectory), 0);
+
+  return `
+  <div class="grid md:grid-cols-2 gap-4 mb-4">
+    ${card(`
+      <h3 class="font-semibold text-white mb-3">Centrality — top connectors</h3>
+      ${cent ? `
+      <div class="space-y-3 text-sm">
+        <div><div class="text-xs text-slate-400 mb-1">Top degree</div>${cent.topDegree.map(t=>`<div>${t.person?.name||'?'} — <span class="mono">${t.score}</span></div>`).join('')}</div>
+        <div><div class="text-xs text-slate-400 mb-1">Top closeness</div>${cent.topCloseness.map(t=>`<div>${t.person?.name||'?'} — <span class="mono">${t.score}</span></div>`).join('')}</div>
+        <div><div class="text-xs text-slate-400 mb-1">Top betweenness (bridges)</div>${cent.topBetweenness.map(t=>`<div>${t.person?.name||'?'} — <span class="mono">${t.score}</span></div>`).join('')}</div>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">${cent.label}</p>
+      ` : '<p class="text-slate-500">Not enough people in roster for centrality (need ≥3).</p>'}
+    `)}
+    ${card(`
+      <h3 class="font-semibold text-white mb-3">SIR spread model — "${sir.behavior}"</h3>
+      <canvas id="sirChart" width="420" height="220" class="w-full"></canvas>
+      <div class="text-xs text-slate-400 mt-2">Peak adopters: week ${sir.peak.week} (${sir.peak.activeAdopters}) · Stable adoption: ${sir.stableAdoption} · Time to 50%: ${sir.timeToHalf}</div>
+      <p class="text-xs text-slate-500 mt-2">${sir.label}</p>
+    `)}
+  </div>`;
+}
+
+function drawSIR(traj){
+  const c = document.getElementById('sirChart');
+  if(!c) return;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  const N = Math.max(...traj.map(t=>t.S+t.I+t.R), 1);
+  const w=c.width, h=c.height, pad=20;
+  function plot(key, color){
+    ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2;
+    traj.forEach((t,i)=>{
+      const x = pad + (w-2*pad)*(i/(traj.length-1));
+      const y = h-pad - (h-2*pad)*(t[key]/N);
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+  plot('S','#64748b'); plot('I','#ef4444'); plot('R','#22c55e');
+  ctx.fillStyle='#94a3b8'; ctx.font='10px sans-serif';
+  ctx.fillText('S', w-30, 15); ctx.fillStyle='#ef4444'; ctx.fillText('I', w-20, 15); ctx.fillStyle='#22c55e'; ctx.fillText('R', w-10, 15);
+}
+
+function renderTests(){
+  const results = runSelfTests();
+  const passCount = results.filter(r=>r.pass).length;
+  return `
+  <div class="mb-4 text-sm px-4 py-3 rounded-lg ${passCount===results.length?'bg-emerald-950/40 border border-emerald-800/50 text-emerald-200':'bg-red-950/40 border border-red-800/50 text-red-200'}">
+    ${passCount}/${results.length} self-tests pass. These check this build's own math/logic — original tests, run live in your browser, not a reproduction of any unverified external test suite.
+  </div>
+  <div class="card p-0 overflow-hidden">
+  <table class="w-full text-sm">
+  <thead><tr class="text-slate-400 text-left bg-slate-900/50"><th>ID</th><th>Description</th><th>Result</th><th>Detail</th></tr></thead>
+  <tbody>
+  ${results.map(r=>`<tr><td class="mono">${r.id}</td><td>${r.desc}</td><td>${r.pass?badge('PASS','emerald'):badge('FAIL','red')}</td><td class="text-xs text-slate-400 mono">${r.detail}</td></tr>`).join('')}
+  </tbody></table>
+  </div>`;
+}
+
+function renderLog(){
+  const evs = [...P.state.events].sort((a,b)=> b.ts>a.ts?1:-1).slice(0,60);
+  return `
+  <div class="mb-4 flex items-center gap-3">
+    <label class="text-sm text-slate-400">Seed</label>
+    <input id="seedInput" type="number" value="${currentSeed}" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 w-28 text-sm" />
+    <button id="regenBtn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium text-white">Regenerate synthetic data</button>
+    <button id="wipeBtn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-sm">Clear localStorage</button>
+  </div>
+  <div class="card p-0 overflow-hidden max-h-[480px] overflow-y-auto">
+  <table class="w-full text-sm">
+  <thead class="sticky top-0 bg-slate-900"><tr class="text-slate-400 text-left"><th>Date</th><th>Type</th><th>Data</th></tr></thead>
+  <tbody>
+  ${evs.map(e=>`<tr><td class="mono text-xs">${e.ts.slice(0,10)}</td><td class="mono text-xs">${e.type}</td><td class="text-xs text-slate-400">${JSON.stringify(e.data)}</td></tr>`).join('')}
+  </tbody></table>
+  </div>
+  <p class="text-xs text-slate-500 mt-2">Showing latest 60 of ${P.state.events.length} synthetic events. All data is deterministically generated from the seed — nothing here is real org data.</p>
+  `;
+}
+
+function renderAbout(){
+  return `
+  <div class="space-y-4">
+  ${card(`
+    <h3 class="font-semibold text-white mb-2">What was actually checked against github.com/wbweve/Leados this session</h3>
+    <ul class="text-sm text-slate-300 space-y-2 list-disc pl-5">
+      <li><b>Fetched &amp; read:</b> the rendered README at <span class="mono">github.com/wbweve/Leados</span>; the full recursive file tree via the GitHub REST API; <span class="mono">AI-SESSION-LOG.md</span> (raw, full text); <span class="mono">index.html</span> (root, raw — 352 bytes via Contents API); <span class="mono">src/App.tsx</span> (raw, full text); <span class="mono">src/lib/casEngine.ts</span> (raw, full text); the <span class="mono">src/lib</span> directory listing; commit history for <span class="mono">index.html</span>.</li>
+      <li><b>Verified directly:</b> root <span class="mono">index.html</span> is the standard 352-byte Vite entry shell (<span class="mono">&lt;div id="root"&gt;</span> + <span class="mono">/src/main.tsx</span>), not a hand-authored single-file demo, as of this read.</li>
+      <li><b>Verified directly:</b> <span class="mono">src/App.tsx</span> imports and hash-routes to <span class="mono">TodayView</span>, <span class="mono">SignalBoardView</span>, <span class="mono">ThermodynamicsView</span>, <span class="mono">CasView</span>, <span class="mono">RiskView</span>, <span class="mono">AboutView</span> — this matches the README's own page table.</li>
+      <li><b>Verified directly:</b> <span class="mono">src/lib/casEngine.ts</span> genuinely exists and implements named feedback loops (<span class="mono">BURNOUT_FEEDBACK_LOOP</span> on R7+R4, <span class="mono">VELOCITY_DEATH_SPIRAL</span> on R73+R17, <span class="mono">TALENT_VIRTUOUS_CYCLE</span> on R10+R11, <span class="mono">GOVERNANCE_SELF_CORRECTION</span> on R88+R90) plus an attractor-reactivation counter — with its own header comment disclosing it as original code, not a port of any verified prior build.</li>
+      <li><b>Noted, not resolved:</b> the repo's own <span class="mono">AI-SESSION-LOG.md</span> (written by a prior session) describes an earlier root <span class="mono">index.html</span> state of 54,081 bytes containing ~60 <span class="mono">R</span>-rule-ID strings and the literal text "pt-L". That no longer matches the 352-byte file read directly this session. The commit history shows 5 "Add files via upload" commits within ~45 minutes, consistent with the repo being wholesale-replaced between sessions rather than incrementally built — this is a timeline observation, not an accusation.</li>
+      <li><b>Not found anywhere, this session:</b> any file named <span class="mono">bayesian.js</span>/<span class="mono">.ts</span>, <span class="mono">org_simulation.js</span>, <span class="mono">okr_synth.js</span>, <span class="mono">behavioral_econ.js</span>, or <span class="mono">network_science.js</span> (or equivalently-named exports) — in the README, the file tree, the <span class="mono">src/lib</span> directory listing, or any file whose contents were fetched. The task's pasted "pt-S implementation summary" (these five files, rules R186–R195, tests T_S_1–T_S_15) is therefore treated as an <b>unverified external specification supplied by the task prompt</b>, not as a claim about repo history — the same convention this repo's own prior sessions used for "pt-L"/"pt-K".</li>
+      <li><b>Scope limit, disclosed:</b> <span class="mono">src/lib/infoTheory.ts</span>, <span class="mono">riskIntelligence.ts</span>, <span class="mono">store.ts</span>, <span class="mono">types.ts</span>, and most <span class="mono">src/components/*.tsx</span> files were listed but not read byte-for-byte this session.</li>
+    </ul>
+  `)}
+  ${card(`
+    <h3 class="font-semibold text-white mb-2">What this delivery is, concretely</h3>
+    <p class="text-sm text-slate-300">A single hand-authored <span class="mono">index.html</span> (vanilla HTML/CSS/JS + Tailwind CDN — this tool environment's required stack, which is React/Vite-incompatible). It implements original code that satisfies the <i>functional description</i> of Part 3 (Autonomous OKR Synthesis), Part 4 (Behavioral Economics bias library), and Part 5 (Network Science: SIR spread + centrality) from this task's pasted brief. Nothing here is a port of the real repo's TypeScript, and nothing here claims the "pt-S" file list or test IDs exist anywhere outside this conversation's prompt.</p>
+  `)}
+  ${card(`
+    <h3 class="font-semibold text-white mb-2">Disclosed gaps vs. the pasted brief</h3>
+    <ul class="text-sm text-slate-300 space-y-1 list-disc pl-5">
+      <li>No full multi-agent organizational simulation (<span class="mono">org_simulation.js</span>) was built — only a minimal <span class="mono">LEADOS.agentStub.step()</span> sufficient to make T_S_5/T_S_6 checkable. A real agent-based model (population of agents, multi-week Monte Carlo, scenario comparison) is out of scope for this pass.</li>
+      <li>Rules R186–R195 are only partially represented: the UI's findings engine and bias scan implement the logic behind R186 (attrition posterior threshold), R189 (planning fallacy), R190 (halo), R191 (status quo), and R192 (confirmation) conceptually, but are not wired as a literal numbered rule table.</li>
+      <li>"Cultural bifurcation" / CAS-engine / Risk Register concepts from earlier parts of this lineage are intentionally out of scope for this file — this delivery is scoped to Parts 3–5 only, as requested.</li>
+    </ul>
+  `)}
+  </div>`;
+}
+
+function render(){
+  renderNav();
+  const view = document.getElementById('view');
+  if(activeTab==='overview') view.innerHTML = renderOverview();
+  else if(activeTab==='okr') view.innerHTML = renderOKR();
+  else if(activeTab==='bias') view.innerHTML = renderBias();
+  else if(activeTab==='network') view.innerHTML = renderNetwork();
+  else if(activeTab==='tests') view.innerHTML = renderTests();
+  else if(activeTab==='log'){
+    view.innerHTML = renderLog();
+    document.getElementById('regenBtn').addEventListener('click', ()=>{
+      const v = parseInt(document.getElementById('seedInput').value,10) || 42;
+      currentSeed = v;
+      const fresh = seedState(v);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ seed:v, events:fresh.state.events }));
+      P = fresh;
+      render();
+    });
+    document.getElementById('wipeBtn').addEventListener('click', ()=>{
+      localStorage.removeItem(STORAGE_KEY);
+      P = loadOrSeed(currentSeed);
+      render();
+    });
+  }
+  else if(activeTab==='about') view.innerHTML = renderAbout();
 }
 
 render();
