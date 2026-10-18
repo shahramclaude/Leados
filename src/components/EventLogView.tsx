@@ -1,81 +1,84 @@
-import { useMemo, useState } from "react";
-import type { AppState } from "../lib/types";
-import { deleteEvent, resetToSeed, wipeAll } from "../lib/store";
-import { Card, Button, Badge, EmptyState } from "./ui";
-import { fmtDateTime } from "../lib/format";
+import { useMemo, useState } from 'react';
+import type { AppState } from '../lib/types';
+import { Panel, Label, Stat } from './Shell';
 
-export function EventLogView({ state, setState }: { state: AppState; setState: (s: AppState) => void }) {
-  const [filter, setFilter] = useState("");
-  const events = useMemo(() => {
-    const sorted = [...state.events].sort((a, b) => (a.ts < b.ts ? 1 : -1));
-    if (!filter) return sorted;
-    const f = filter.toLowerCase();
-    return sorted.filter((e) => e.type.toLowerCase().includes(f) || JSON.stringify(e.data).toLowerCase().includes(f));
-  }, [state.events, filter]);
+export function EventLogView({ state, onReset }: { state: AppState; onReset: () => void }) {
+  const [filter, setFilter] = useState('');
+  const events = state.events;
+
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    events.forEach((e) => (counts[e.type] = (counts[e.type] || 0) + 1));
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  }, [events]);
+
+  const filtered = useMemo(() => {
+    const rows = filter ? events.filter((e) => e.type.includes(filter)) : events;
+    return [...rows].sort((a, b) => (a.ts < b.ts ? 1 : -1)).slice(0, 60);
+  }, [events, filter]);
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-zinc-100">Event log</h1>
-          <p className="mt-1 text-sm text-zinc-400">{state.events.length} events total — the single source of truth for every other view.</p>
+      <Panel title="Event log" subtitle={`${events.length} total events across ${state.roster.length} people. This is the only substrate every view computes from.`}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Total events" value={events.length} />
+          <Stat label="Distinct types" value={typeCounts.length} />
+          <Stat label="Roster size" value={state.roster.length} />
+          <Stat
+            label="Span"
+            value={
+              events.length
+                ? `${Math.round(
+                    (new Date(events[events.length - 1].ts).getTime() - new Date(events[0].ts).getTime()) / 86400000
+                  )}d`
+                : '—'
+            }
+          />
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setState(resetToSeed())}>
-            Reset demo data
-          </Button>
-          <Button
-            variant="danger"
-            onClick={() => {
-              if (confirm("Wipe all events? This cannot be undone.")) setState(wipeAll());
-            }}
-          >
-            Wipe all
-          </Button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {typeCounts.map(([type, count]) => (
+            <button
+              key={type}
+              onClick={() => setFilter(filter === type ? '' : type)}
+              className={`rounded-full border px-3 py-1 text-xs font-mono ${
+                filter === type ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {type} · {count}
+            </button>
+          ))}
         </div>
-      </div>
+        <button
+          onClick={onReset}
+          className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-100"
+        >
+          Reset synthetic data
+        </button>
+        <Label>Resetting regenerates the deterministic seed log for "today" and clears all logged hypotheses/agent audit entries.</Label>
+      </Panel>
 
-      <input
-        className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-violet-600"
-        placeholder="Filter by type or content…"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-      />
-
-      <Card>
-        {events.length === 0 ? (
-          <EmptyState>No events match.</EmptyState>
-        ) : (
-          <div className="max-h-[70vh] overflow-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="sticky top-0 bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
-                <tr>
-                  <th className="px-2 py-2">When</th>
-                  <th className="px-2 py-2">Type</th>
-                  <th className="px-2 py-2">Data</th>
-                  <th className="px-2 py-2"></th>
+      <Panel title={filter ? `Events: ${filter}` : 'Most recent events'} subtitle="Showing up to 60 rows, newest first">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-slate-500">
+                <th className="pb-2 pr-4">Timestamp</th>
+                <th className="pb-2 pr-4">Type</th>
+                <th className="pb-2">Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((e) => (
+                <tr key={e.id} className="border-t border-slate-100 align-top">
+                  <td className="whitespace-nowrap py-2 pr-4 text-xs text-slate-500">{new Date(e.ts).toLocaleString()}</td>
+                  <td className="py-2 pr-4 font-mono text-xs text-indigo-600">{e.type}</td>
+                  <td className="py-2 font-mono text-xs text-slate-600">{JSON.stringify(e.data)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {events.map((e) => (
-                  <tr key={e.id} className="border-t border-zinc-800 align-top hover:bg-zinc-900/40">
-                    <td className="whitespace-nowrap px-2 py-2 text-xs text-zinc-500">{fmtDateTime(e.ts)}</td>
-                    <td className="px-2 py-2">
-                      <Badge>{e.type}</Badge>
-                    </td>
-                    <td className="px-2 py-2 font-mono text-xs text-zinc-400">{JSON.stringify(e.data)}</td>
-                    <td className="px-2 py-2">
-                      <button className="text-xs text-red-400 hover:text-red-300" onClick={() => setState(deleteEvent(state, e.id))}>
-                        delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
     </div>
   );
 }

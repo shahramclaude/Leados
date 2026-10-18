@@ -1,53 +1,105 @@
-import { Card, Label, Badge } from "./ui";
+import { Panel, Label } from './Shell';
 
 export function AboutView() {
   return (
     <div className="space-y-6">
-      <Card title="Provenance — read before assuming this continues github.com/wbweve/Leados">
+      <Panel title="Provenance — read before assuming this continues github.com/wbweve/Leados">
         <p className="text-sm text-slate-700">
-          <code>github.com/wbweve/Leados</code> was inspected directly this session — via GitHub's REST Trees API
-          (full recursive file list, 148 files), raw fetches of <code>package.json</code>, <code>vite.config.ts</code>,
-          root <code>index.html</code>, <code>src/App.tsx</code>, the rendered root <code>README.md</code>, and the
-          repo's own <code>AI-SESSION-LOG.md</code> / <code>AI-SESSION-LOG.append.md</code> / <code>SESSION-3.patch.md</code> —
-          before any code in this delivery was written.
+          <code>github.com/wbweve/Leados</code> was inspected directly this session via GitHub's REST API (commits, git
+          trees, contents listings) and direct raw-file fetches — before any code in this app was written. Full detail
+          is in <code>AI-SESSION-LOG.md</code>; short version below.
         </p>
+      </Panel>
 
-        <h4 className="mt-4 text-sm font-semibold text-slate-800">Verified, first-hand, this session</h4>
-        <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
-          <li>The repo mixes two things in one tree: ~90 loose <b>root-level</b> files (many duplicated as <code>.js</code> AND <code>.ts</code>/<code>.tsx</code> pairs — e.g. <code>engine.js</code> + <code>engine.ts</code>, <code>store.js</code> + <code>store.ts</code>, <code>ui.js</code> + <code>ui.tsx</code>) alongside a separate, self-contained <code>src/</code> Vite+React+TypeScript app.</li>
-          <li>The real <code>package.json</code>/<code>vite.config.ts</code> confirm: React 19.2.6, Vite 7.3.2, Tailwind 4 (via <code>@tailwindcss/vite</code>), TypeScript 5.9.3, and <code>vite-plugin-singlefile</code> — so a real build does inline everything into one <code>dist/index.html</code>.</li>
-          <li>The <b>live</b> <code>src/App.tsx</code>, read directly, routes <code>/today /signals /thermodynamics /cas /risk /about</code> to <code>TodayView / SignalBoardView / ThermodynamicsView / CasView / RiskView / AboutView</code> — this matches the rendered README's own "Pages" table exactly, corroborating that part of the README first-hand.</li>
-          <li>The root-level <code>index.html</code>, read directly <b>this session</b>, is the default 352-byte Vite scaffold pointing at <code>/src/main.tsx</code> — <b>not</b> a large hand-rolled single-file demo. This directly contradicts byte-size claims in the repo's own prior session logs (which, across different sessions, variously describe the root <code>index.html</code> as 1,920 B, 54,081 B, 251,817 B, and 337,974 B at different points in time). Conclusion: file state in this repo is highly volatile between sessions — a historical claim about file size/contents is not evidence of current state.</li>
-          <li>No file, export, or path containing <code>talent</code>, <code>financial_os</code>, <code>regulatory</code>, <code>narrative</code>, <code>org_ode</code>/<code>orgPhysics-ODE</code>, <code>attention_opt</code>, <code>living_docs</code>, or <code>scenarios</code> exists anywhere in the 148-file tree (checked by direct substring match against every path, this session).</li>
+      <Panel title="1. What was verified, first-hand, this session">
+        <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700">
+          <li>
+            <strong>Repo churn:</strong> at the time of inspection, HEAD was commit <code>5c84566</code> (2026-10-17
+            14:03 UTC) — the <em>fifth</em> "Add files via upload" commit in under an hour (13:10–14:03 UTC). This is
+            consistent with successive sessions repeatedly overwriting the repo, not incremental development.
+          </li>
+          <li>
+            <strong>The repo's own README/AI-SESSION-LOG at that commit</strong> describe a "LEADOS Sandbox —
+            Thermodynamics, CAS Engine, Risk Intelligence" app with hash routes <code>#/today #/signals
+            #/thermodynamics #/cas #/risk #/about</code> and a project tree under <code>src/lib/*</code> (types,
+            rules, seed, store, engine, infoTheory, casEngine, riskIntelligence, selfTest) and <code>src/components/*</code>.
+          </li>
+          <li>
+            <strong>But the live <code>src/App.tsx</code> at that same commit</strong> (fetched raw, 1195 bytes)
+            imports a different set entirely — <code>./lib/store</code>, <code>./lib/seed</code>,{' '}
+            <code>./lib/engine</code>, <code>./lib/types</code>, and components <code>Shell, TodayView,
+            IntelligenceView, DataView, HealthView, AboutView</code> — five routes
+            (today/intelligence/data/health/about), <strong>not</strong> the six the README documents. No file named
+            <code> casEngine.ts</code>, <code>riskIntelligence.ts</code>, or <code>SignalBoardView</code> was found
+            under <code>src/</code> at this commit.
+          </li>
+          <li>
+            <strong>A large, separate pile of ~30+ loose <code>.tsx</code> files sits at repo root</strong> alongside
+            the real <code>src/</code> tree — e.g. <code>FinanceDashboard.tsx</code>, <code>ContractView.tsx</code>,{' '}
+            <code>RosterView.tsx</code>, <code>BundlesView.tsx</code>, <code>BundleModal.tsx</code>,{' '}
+            <code>Catalog.tsx</code>, <code>PlaybooksView.tsx</code>, <code>PeopleDashboard.tsx</code>,{' '}
+            <code>Network.tsx</code>, <code>Radar.tsx</code>, <code>Heatmap.tsx</code>, <code>CommandPalette.tsx</code>,
+            and a <em>second, different</em> <code>App.tsx</code> (1847 bytes — a distinct file from{' '}
+            <code>src/App.tsx</code>'s 1195 bytes, confirmed by differing blob SHAs). These filenames don't match
+            anything in the README's documented structure and don't match what the live <code>src/App.tsx</code>{' '}
+            imports. This looks like debris from an unrelated delivery (a finance/CRM-style dashboard), not part of
+            the live LeadOS app.
+          </li>
+          <li>
+            <strong>A public search index</strong> separately surfaced an older cached version of this repo
+            describing a completely different, vanilla-JS, no-build-step app ("pt-3 growth slice": <code>engine.js</code>,{' '}
+            <code>store.js</code>, <code>events.js</code>, <code>health.js</code>, flat 14-entry tree). That does not
+            match current HEAD and is treated here strictly as a <strong>stale snapshot</strong>, not current fact.
+          </li>
         </ul>
+      </Panel>
 
-        <h4 className="mt-4 text-sm font-semibold text-slate-800">Treated as unverified</h4>
-        <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
-          <li>The task prompt's pasted "Part 4–8" brief and its "pt-U Implementation Summary" (105 files, 220 rules, <code>T_U_1…T_U_20</code> test suite) — <b>no trace of this file list, rule count, or test-ID scheme was found anywhere in the real repo.</b> It is treated here exactly as the real repo's own prior sessions treated their own pasted "pt-L" brief: an external specification to satisfy functionally, not a claim about repo history.</li>
-          <li>This delivery does <b>not</b> fork, copy, or continue any file from <code>github.com/wbweve/Leados</code>. This sandbox began from the default Vite scaffold <code>App.tsx</code>, with no access to any prior session's actual code.</li>
+      <Panel title="2. What this means for this delivery">
+        <p className="text-sm text-slate-700">
+          The repo does not currently contain a working, internally-consistent implementation of anything resembling
+          this task's pasted "pt-V" brief (<code>LEADOS.hypothesis</code>, <code>LEADOS.emergent</code>,{' '}
+          <code>LEADOS.agent</code>, <code>LEADOS.layout</code>, the 20-step boot sequence, etc.) — no matching file,
+          export, or identifier was found anywhere fetched this session. The brief is therefore treated as an{' '}
+          <strong>unverified external specification</strong>, the same convention the repo's own prior sessions
+          already used for their own pasted briefs.
+        </p>
+      </Panel>
+
+      <Panel title="3. What's original in this delivery vs. what's a disclosed simplification">
+        <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700">
+          <li>
+            <strong>Original, built from scratch:</strong> every file under this app's own <code>src/lib</code> and{' '}
+            <code>src/components</code> — the Hypothesis Engine, Emergent Pattern Detector (Poisson z-score frequency
+            anomalies, 7-day co-occurrence clustering, CUSUM behavioral change points), the three-level Autonomous
+            Agent authority model, the Cognitive Load score, and the synthetic seed generator/roster. These implement
+            the <em>functional ideas</em> described in the pasted brief, not a port of any verified prior code.
+          </li>
+          <li>
+            <strong>Disclosed simplification:</strong> the brief's 20-step session "boot sequence" (workers, haptics,
+            voice input, gamepad support, a living stylesheet, a protocol server, circadian adaptation, etc.) is not
+            implemented — those modules were not found anywhere in the real repo either, and inventing 15+ speculative
+            subsystems for a static sandbox would misrepresent effort as verified capability. The four modules
+            actually built (Hypothesis Engine, Emergent Pattern Detector, Autonomous Agent Loop, and a working slice
+            of the Cognitive Load Architecture) are the ones this delivery can run live, on real computed numbers, in
+            front of you.
+          </li>
+          <li>
+            <strong>Disclosed simplification:</strong> "cognitive load" here is recomputed on each render from
+            counts of open findings/hypotheses/anomalies/pending proposals — not a continuously-running background
+            fatigue model, since this is a static build with no server or timer loop.
+          </li>
+          <li>
+            <strong>Command palette / voice / keyboard map</strong> from the pasted brief's "Final Interface" section
+            are out of scope for this delivery — left out rather than stubbed, to avoid implying a capability that
+            isn't there.
+          </li>
         </ul>
+      </Panel>
 
-        <h4 className="mt-4 text-sm font-semibold text-slate-800">Disclosed gaps in this delivery</h4>
-        <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm text-slate-700">
-          <li><b>Rules R206, R207, R220</b> (living strategy documents) and <b>R216</b> (simulated-annealing attention optimizer) are <b>not implemented</b> — their dependencies are described only in the pasted summary's "Parts 1–3", whose full code was not pasted into this session. Inventing them would misattribute original work to an unseen spec.</li>
-          <li><b>Scenario federation</b> (<code>LEADOS.scenarios</code>) is replaced by a small local 3-scenario stand-in inside <code>financialOS.ts</code>, clearly labeled, since the full module wasn't pasted either.</li>
-          <li>The ODE system's own formulas (as given in the pasted brief) have <b>no exact all-variables-zero fixed point</b> for generic states — e.g. <code>dC</code> never references <code>C</code> itself, and the pulls toward 5 vs 8 for different variables are not mutually consistent. This is a mechanical observation about the pasted formulas, not a bug introduced here; self-tests (ST-05/ST-06/ST-07) verify directional and boundary behavior instead of a false "equilibrium" claim.</li>
-          <li>All people, events, metrics, jurisdictions, and narrative outcomes are <b>fabricated demo data</b> (<code>src/lib/seed.ts</code>), regenerated deterministically unless "Regenerate synthetic data" is clicked.</li>
-        </ul>
-
-        <Label>
-          Full session-by-session ledger (calls made, raw responses, byte counts) is in <code>AI-SESSION-LOG.md</code> in
-          this delivery's repo root.
-        </Label>
-      </Card>
-
-      <Card title="What's original vs. what's a reused idea">
-        <div className="space-y-2 text-sm text-slate-700">
-          <div><Badge tone="indigo">Original</Badge> <span className="ml-1">All TypeScript in <code>src/lib/*.ts</code> and all UI components — written fresh for this delivery, satisfying the pasted brief's described behavior.</span></div>
-          <div><Badge tone="slate">Reused idea, not code</Badge> <span className="ml-1">The event-type shapes (<code>talent.succession.candidate</code>, <code>reg.interpretation</code>, <code>narrative.outcome</code>, etc.) and formula definitions (LTV:CAC, Rule of 40, RK4 integration) come from the task's pasted brief — no source for them exists in the real repo, so "reused" means "implemented to match the brief's description," not "copied from a verified prior implementation."</span></div>
-          <div><Badge tone="amber">Gap, left as a gap</Badge> <span className="ml-1">R206/R207/R216/R220 and full scenario federation — see above.</span></div>
-        </div>
-      </Card>
+      <Label>
+        Full call-by-call inspection ledger (commit SHAs, byte sizes, exact imports fetched) is in this project's{' '}
+        <code>AI-SESSION-LOG.md</code>.
+      </Label>
     </div>
   );
 }
