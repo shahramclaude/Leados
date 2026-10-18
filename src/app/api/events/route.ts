@@ -1,8 +1,6 @@
 import { db } from "@/db";
 import { leados_events } from "@/db/schema";
 import { desc } from "drizzle-orm";
-import { NextRequest } from "next/server";
-import { logAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +9,19 @@ export async function GET() {
   return Response.json(rows);
 }
 
-export async function POST(req: NextRequest) {
-  const { type, domain, personId, data = {} } = await req.json();
-  if (!type || !domain) {
-    return Response.json({ error: "type and domain required" }, { status: 400 });
+export async function POST(req: Request) {
+  const body = await req.json();
+  if (!body?.type || !body?.domain) {
+    return Response.json({ error: "type and domain are required" }, { status: 400 });
   }
-  const [ev] = await db
+  const [row] = await db
     .insert(leados_events)
-    .values({ type, domain, personId: personId ?? null, data })
+    .values({
+      type: body.type,
+      domain: body.domain,
+      personId: body.personId ?? null,
+      data: body.data ?? {},
+    })
     .returning();
-  await logAudit("EVENT_LOGGED", `${type} / ${domain}${personId ? ` / person ${personId}` : ""}`);
-  return Response.json(ev, { status: 201 });
+  return Response.json(row, { status: 201 });
 }

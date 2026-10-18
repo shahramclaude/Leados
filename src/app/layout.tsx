@@ -3,14 +3,14 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Arena Next.js PostgreSQL Starter",
-  description: "Starter template with Next.js, Drizzle, and PostgreSQL.",
+  title: "LeadOS — Leadership Intelligence",
+  description: "Autonomous leadership intelligence: findings, playbooks, metrics, and work queues.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-slate-100 text-slate-900 antialiased">{children}</body>
+      <body className="bg-slate-950 text-slate-100 antialiased">{children}</body>
     </html>
   );
 }

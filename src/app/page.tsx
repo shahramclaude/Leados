@@ -1,5 +1,7 @@
-import { redirect } from "next/navigation";
+import Shell from "@/components/leados/Shell";
 
-export default function Root() {
-  redirect("/leados");
+export const dynamic = "force-dynamic";
+
+export default function HomePage() {
+  return <Shell />;
 }

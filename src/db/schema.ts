@@ -3,81 +3,76 @@ import {
   serial,
   text,
   integer,
-  boolean,
   timestamp,
   jsonb,
+  real,
 } from "drizzle-orm/pg-core";
 
-// ── People ──────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// LeadOS schema
+// ─────────────────────────────────────────────────────────────────────────
+
 export const leados_people = pgTable("leados_people", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  role: text("role").notNull(),
-  cadenceDays: integer("cadence_days").notNull().default(14),
-  archived: boolean("archived").notNull().default(false),
+  role: text("role").notNull().default(""),
+  email: text("email").notNull().default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Events (pulse / oneonone / feedback / generic) ────────────────────
 export const leados_events = pgTable("leados_events", {
   id: serial("id").primaryKey(),
-  type: text("type").notNull(),
-  domain: text("domain").notNull(),
+  type: text("type").notNull(), // oneonone | pulse | feedback | decision | incident | support_ticket | okr_review | deal | meeting | task_assigned
   personId: integer("person_id").references(() => leados_people.id),
-  data: jsonb("data").notNull().default({}),
+  domain: text("domain").notNull(), // people | finance | sales | ops | strategy
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Decisions ──────────────────────────────────────────────────────
-export const leados_decisions = pgTable("leados_decisions", {
+export const leados_growth_plans = pgTable("leados_growth_plans", {
   id: serial("id").primaryKey(),
+  personId: integer("person_id").references(() => leados_people.id),
   title: text("title").notNull(),
-  owner: text("owner").notNull(),
-  domain: text("domain").notNull(),
-  status: text("status").notNull().default("open"), // open | resolved
-  openedAt: timestamp("opened_at").notNull().defaultNow(),
-  resolvedAt: timestamp("resolved_at"),
-});
-
-// ── Growth plans / goals ───────────────────────────────────────────
-export const leados_plans = pgTable("leados_plans", {
-  id: serial("id").primaryKey(),
-  personId: integer("person_id")
-    .notNull()
-    .references(() => leados_people.id),
-  goal: text("goal").notNull(),
-  level: text("level").notNull().default("mid"),
-  status: text("status").notNull().default("active"), // active | completed
-  lastCheckin: timestamp("last_checkin").notNull().defaultNow(),
+  status: text("status").notNull().default("open"), // open | completed
+  lastCheckinAt: timestamp("last_checkin_at").notNull().defaultNow(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Autonomous work queue ──────────────────────────────────────────
 export const leados_work_queue = pgTable("leados_work_queue", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
-  type: text("type").notNull(),
-  data: jsonb("data").notNull().default({}),
-  status: text("status").notNull().default("pending"), // pending | accepted | dismissed
+  type: text("type").notNull().default("action"),
+  status: text("status").notNull().default("pending"), // pending | done | dismissed
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ── Hypotheses ──────────────────────────────────────────────────────
-export const leados_hypotheses = pgTable("leados_hypotheses", {
-  id: serial("id").primaryKey(),
-  statement: text("statement").notNull(),
-  prediction: text("prediction").notNull(),
-  testMetric: text("test_metric").notNull(),
-  windowDays: integer("window_days").notNull().default(14),
-  confidence: integer("confidence").notNull().default(50),
-  status: text("status").notNull().default("open"), // open | confirmed | refuted
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// ── Audit log ───────────────────────────────────────────────────────
 export const leados_audit = pgTable("leados_audit", {
   id: serial("id").primaryKey(),
   action: text("action").notNull(),
-  detail: text("detail").default(""),
+  key: text("key").notNull().default(""),
+  meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const leados_playbooks = pgTable("leados_playbooks", {
+  id: serial("id").primaryKey(),
+  triggeredBy: text("triggered_by").notNull(), // rule key e.g. 'CADENCE_SLIP'
+  personId: integer("person_id").references(() => leados_people.id),
+  findingKey: text("finding_key").notNull(),
+  status: text("status").notNull().default("open"), // open | completed | skipped
+  steps: jsonb("steps").$type<string[]>().notNull().default([]),
+  completedSteps: jsonb("completed_steps").$type<number[]>().notNull().default([]),
+  notes: text("notes").default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const leados_metrics = pgTable("leados_metrics", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull(), // 'runway_months' | 'mrr_growth_pct' etc.
+  value: real("value").notNull(),
+  domain: text("domain").notNull(),
+  note: text("note").default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

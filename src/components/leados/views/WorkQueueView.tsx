@@ -1,105 +1,108 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { useIntelligence } from "@/hooks/useIntelligence";
 
 interface WorkItem {
   id: number;
   title: string;
   type: string;
-  data: Record<string, unknown>;
-  status: "pending" | "accepted" | "dismissed";
+  status: string;
+  data: { findingKey?: string; rule?: string; domain?: string; suggestedAction?: string };
   createdAt: string;
 }
 
-export function WorkQueueView() {
+export default function WorkQueueView({ intelligence }: { intelligence: ReturnType<typeof useIntelligence> }) {
   const [items, setItems] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showHistory, setShowHistory] = useState(false);
 
   const load = useCallback(async () => {
+    setLoading(true);
     const res = await fetch("/api/work-queue", { cache: "no-store" });
-    if (res.ok) setItems(await res.json());
+    setItems(await res.json());
     setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, intelligence.data?.generatedAt]);
 
-  async function act(id: number, status: "accepted" | "dismissed") {
-    await fetch(`/api/work-queue/${id}`, {
+  async function setStatus(id: number, status: string) {
+    await fetch("/api/work-queue", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ id, status }),
     });
-    load();
+    await load();
+    intelligence.refetch();
   }
 
   const pending = items.filter((i) => i.status === "pending");
-  const history = items.filter((i) => i.status !== "pending");
+  const resolved = items.filter((i) => i.status !== "pending");
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h2 className="text-xl font-semibold text-slate-100">Autonomous Work Queue</h2>
-        <p className="mt-1 text-xs text-slate-500">Items prepared by the system awaiting your review</p>
-      </div>
+    <div>
+      <h2 className="mb-1 text-2xl font-bold text-white">Work Queue</h2>
+      <p className="mb-6 text-sm text-slate-400">
+        Critical findings (sev ≥ 4) automatically generate work here — the system prepares work before you ask.
+      </p>
 
-      {loading && <div className="text-slate-500">Loading…</div>}
-
-      {!loading && pending.length === 0 && (
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-center text-slate-500">
-          No pending items. The system has nothing queued for review right now.
-        </div>
-      )}
-
-      <div className="space-y-2">
-        {pending.map((item) => (
-          <div key={item.id} className="rounded-xl border border-indigo-700/40 bg-indigo-950/20 p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-indigo-600/20 px-2 py-0.5 text-xs text-indigo-400">{item.type}</span>
-                <span className="font-medium text-slate-100">{item.title}</span>
-              </div>
-              <span className="text-xs text-slate-500">{new Date(item.createdAt).toLocaleString()}</span>
-            </div>
-            <pre className="mt-2 overflow-x-auto rounded bg-slate-950/60 p-2 text-[10px] text-slate-500">
-              {JSON.stringify(item.data, null, 2)}
-            </pre>
-            <div className="mt-2 flex gap-2">
-              <button onClick={() => act(item.id, "accepted")} className="rounded-lg bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-500">
-                Accept ✓
-              </button>
-              <button onClick={() => act(item.id, "dismissed")} className="rounded-lg bg-slate-700 px-3 py-1 text-xs text-slate-200 hover:bg-slate-600">
-                Dismiss ×
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div>
-        <button onClick={() => setShowHistory((s) => !s)} className="text-sm font-semibold text-slate-400 hover:text-slate-200">
-          {showHistory ? "▾" : "▸"} History ({history.length})
-        </button>
-        {showHistory && (
-          <div className="mt-2 space-y-2">
-            {history.map((item) => (
-              <div key={item.id} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/40 p-2 text-sm">
-                <span className="text-slate-300">{item.title}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    item.status === "accepted" ? "bg-green-600/20 text-green-400" : "bg-slate-800 text-slate-500"
-                  }`}
-                >
-                  {item.status === "accepted" ? "Accepted" : "Dismissed"}
-                </span>
+      {loading ? (
+        <p className="text-slate-400">Loading…</p>
+      ) : (
+        <>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Pending ({pending.length})
+          </h3>
+          <div className="mb-8 space-y-3">
+            {pending.length === 0 && <p className="text-sm text-slate-500">Nothing pending. Nice.</p>}
+            {pending.map((i) => (
+              <div key={i.id} className="rounded-xl border border-orange-500/30 bg-orange-500/5 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-mono uppercase tracking-wide text-orange-300">
+                      {i.data?.rule} · {i.data?.domain}
+                    </p>
+                    <p className="mt-1 font-semibold text-white">{i.title}</p>
+                    {i.data?.suggestedAction && (
+                      <p className="mt-1 text-xs text-slate-300">Suggested: {i.data.suggestedAction}</p>
+                    )}
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Auto-created {new Date(i.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex flex-shrink-0 gap-2">
+                    <button
+                      onClick={() => setStatus(i.id, "done")}
+                      className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white hover:bg-emerald-500"
+                    >
+                      Done
+                    </button>
+                    <button
+                      onClick={() => setStatus(i.id, "dismissed")}
+                      className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
-            {history.length === 0 && <div className="text-xs text-slate-600">No history yet.</div>}
           </div>
-        )}
-      </div>
+
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Resolved ({resolved.length})
+          </h3>
+          <div className="space-y-2">
+            {resolved.map((i) => (
+              <div key={i.id} className="rounded-lg border border-slate-800 bg-slate-900/30 p-3 text-sm text-slate-500">
+                <span className="mr-2 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] uppercase">{i.status}</span>
+                {i.title}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

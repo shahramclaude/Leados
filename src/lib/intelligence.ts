@@ -2,800 +2,672 @@ import { db } from "@/db";
 import {
   leados_people,
   leados_events,
-  leados_decisions,
-  leados_plans,
+  leados_growth_plans,
+  leados_work_queue,
+  leados_metrics,
+  leados_playbooks,
 } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { logAudit } from "@/lib/audit";
 
-// ────────────────────────────────────────────────────────────────────
-// Types
-// ────────────────────────────────────────────────────────────────────
-
-export { DOMAINS } from "@/lib/domains";
-export type { Domain } from "@/lib/domains";
-import { DOMAINS, type Domain } from "@/lib/domains";
+const DAY = 24 * 60 * 60 * 1000;
 
 export type Severity = 1 | 2 | 3 | 4 | 5;
-export type Urgency = "NOW" | "TODAY" | "THIS_WEEK" | "MONITOR";
-export type TemporalMode = "REACTIVE" | "BALANCED" | "STRATEGIC_DRIFT" | "STRUCTURAL_STRESS";
+export type Domain = "people" | "finance" | "sales" | "ops" | "strategy";
 
 export interface Finding {
   key: string;
   rule: string;
   domain: Domain;
   sev: Severity;
-  title: string;
-  detail: string;
   personId?: number;
   personName?: string;
-}
-
-export interface DomainScore {
-  domain: Domain;
-  score: number;
-  findingCount: number;
-}
-
-export interface DecisionView {
-  id: number;
   title: string;
-  owner: string;
-  domain: Domain;
-  openDays: number;
-  status: "OPEN" | "STALE" | "ESCALATE" | "RESOLVED";
-  openedAt: string;
-  resolvedAt: string | null;
+  detail: string;
 }
 
-export interface PulseStat {
-  moodMean: number;
-  loadMean: number;
-  series: number[];
-  loadSeries: number[];
+type MetricRow = typeof leados_metrics.$inferSelect;
+type EventDataRecord = Record<string, unknown>;
+
+function asData(d: unknown): EventDataRecord {
+  return (d ?? {}) as EventDataRecord;
 }
 
-export interface OpenPlan {
-  id: number;
-  personId: number;
-  personName: string;
-  goal: string;
-  level: string;
-  daysSinceCheckin: number;
-  lastCheckin: string;
+// Helper: latest metric value
+function latestMetric(metrics: MetricRow[], key: string): number | null {
+  const matches = metrics
+    .filter((m) => m.key === key)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return matches.length ? matches[0].value : null;
 }
 
-export interface Correlation {
-  id: string;
-  name: string;
-  domains: Domain[];
-  members: string[];
-  combinedSev: Severity;
-  description: string;
+function daysSince(d: Date, now: number) {
+  return Math.floor((now - d.getTime()) / DAY);
 }
 
-export interface Inference {
-  id: string;
-  title: string;
-  premises: string[];
-  confidence: number;
-  urgency: Urgency;
-  action: string;
-  domain: Domain;
-}
-
-export interface Belief {
-  label: string;
-  priorPct: number;
-  posteriorPct: number;
-  appliedEvidence: string[];
-  highRisk: boolean;
-}
-
-export interface FlightRisk {
-  personId: number;
-  personName: string;
-  role: string;
-  riskScore: number;
-  riskLevel: "LOW" | "ELEVATED" | "HIGH";
-  moodMean: number;
-  loadMean: number;
-  daysSinceOneOnOne: number | null;
-}
-
-export interface HealthScore {
-  overall: number;
-  grade: "A" | "B" | "C" | "D" | "F";
-  domains: Record<Domain, number>;
-  trend: "up" | "down" | "flat";
-}
-
-export interface ScenarioResult {
-  attritionProbability: number;
-  finalMeanEngagement: number;
-  p10: number;
-  p90: number;
-}
-
-export interface Simulation {
-  scenarios: {
-    STATUS_QUO: ScenarioResult;
-    IMPROVE_CADENCE: ScenarioResult;
-    ADD_GROWTH_PLAN: ScenarioResult;
-    REDUCE_LOAD: ScenarioResult;
-  };
-  bestIntervention: { name: string; delta: number };
-  seeds: number;
-}
-
-export interface AttentionItem {
-  id: string;
-  day: "Mon" | "Tue" | "Wed" | "Thu" | "Fri";
-  title: string;
-  domain: Domain;
-  rule: string;
-  roi: number;
-  hours: number;
-  cognitiveLoad: number;
-  severity: Severity;
-  findingKey: string;
-}
-
-export interface DeferredItem {
-  title: string;
-  rule: string;
-  reason: string;
-}
-
-export interface AttentionPlan {
-  sequence: AttentionItem[];
-  deferred: DeferredItem[];
-  totalHours: number;
-  utilizationPct: number;
-  cognitiveLoadUsed: number;
-}
-
-export interface HighestLeverageAction {
-  action: string;
-  source: string;
-  urgency: Urgency;
-}
-
-export interface FeedbackLoop {
-  id: string;
-  name: string;
-  polarity: "REINFORCING" | "BALANCING";
-  active: boolean;
-}
-
-export interface IntelligenceData {
-  findings: Finding[];
-  domainScores: DomainScore[];
-  decisions: DecisionView[];
-  eventCount: number;
-  peopleCount: number;
-  pulseByPerson: Record<number, PulseStat>;
-  openGoals: OpenPlan[];
-  openPlans: OpenPlan[];
-  correlations: Correlation[];
-  inferences: Inference[];
-  beliefs: Record<string, Belief>;
-  flightRisk: FlightRisk[];
-  healthScore: HealthScore;
-  temporalMode: TemporalMode;
-  orgEntropy: number;
-  feedbackLoops: FeedbackLoop[];
-  simulation: Simulation;
-  attentionPlan: AttentionPlan;
-  highestLeverageAction: HighestLeverageAction | null;
-  generatedAt: string;
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Helpers
-// ────────────────────────────────────────────────────────────────────
-
-function mean(xs: number[]): number {
-  if (xs.length === 0) return 0;
-  return xs.reduce((a, b) => a + b, 0) / xs.length;
-}
-
-function daysBetween(a: Date, b: Date): number {
-  return Math.round((a.getTime() - b.getTime()) / (24 * 60 * 60 * 1000));
-}
-
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, n));
-}
-
-const SEV_WEIGHT: Record<Severity, number> = { 1: 2, 2: 5, 3: 9, 4: 15, 5: 22 };
-const URGENCY_FOR_SEV: Record<Severity, Urgency> = {
-  5: "NOW",
-  4: "TODAY",
-  3: "THIS_WEEK",
-  2: "MONITOR",
-  1: "MONITOR",
+export const SUGGESTED_ACTIONS: Record<string, string> = {
+  MORALE_LOW: "Schedule focused 1:1. Discuss workload and wellbeing.",
+  BURNOUT_COMPOUND: "Schedule focused 1:1. Discuss workload and wellbeing.",
+  CADENCE_SLIP: "Log overdue 1:1 now. Commit to weekly cadence for 4 weeks.",
+  DECISION_ESCALATE: "Force-resolve in next leadership sync. Owner must decide or delegate.",
+  RUNWAY_LOW: "Emergency finance review. Extend runway or cut burn within 2 weeks.",
+  PIPELINE_THIN: "Pipeline review with sales lead. Identify acceleration levers.",
+  WIN_RATE_LOW: "Win-loss analysis. Competitive debrief on last 5 losses.",
+  LTV_CAC_LOW: "Unit economics review. Identify cost reduction or LTV improvement paths.",
+  CHURN_ELEVATED: "Churn analysis: identify cohort, reason, and rescue actions.",
 };
 
-// ────────────────────────────────────────────────────────────────────
-// Main computation
-// ────────────────────────────────────────────────────────────────────
+// Default playbook steps per triggering rule — reused by the playbooks API.
+export const PLAYBOOK_STEPS: Record<string, string[]> = {
+  MORALE_LOW: [
+    "Review last 3 pulse entries — identify the trend start date",
+    "Schedule 1:1 within 24h — focus on listening, not solutions",
+    "Identify 1-2 specific workload items to remove or defer",
+    "Log the conversation outcome and agreed actions",
+    "Set 7-day follow-up: log next pulse to track improvement",
+  ],
+  CADENCE_SLIP: [
+    "Log the overdue 1:1 now (even a brief check-in counts)",
+    "Identify what caused the slip — protect the next scheduled time",
+    "Set recurring calendar block to protect the cadence",
+    "Log commitment in growth plan",
+  ],
+  BURNOUT_COMPOUND: [
+    'Immediate 1:1 — open with "How are you actually doing?"',
+    "Map their current commitments — identify what can be removed",
+    "Discuss 1 project to defer or delegate",
+    "Agree on a specific load target for next 2 weeks",
+    "Set daily check-in for 1 week (pulse logs)",
+    "Review in 2 weeks — if no improvement, escalate to HR",
+  ],
+  DECISION_ESCALATE: [
+    "Add to next leadership sync agenda — today",
+    "Identify the specific blocker: information gap, stakeholder misalignment, or priority conflict",
+    "Force a choice: decide, delegate, or explicitly defer with a hard deadline",
+    "Log the decision outcome in LeadOS",
+  ],
+  RUNWAY_LOW: [
+    "Emergency finance review: current burn rate vs revenue",
+    "Model 3 scenarios: current path, -20% burn, +20% revenue",
+    "Identify top 3 cost line items that could be reduced",
+    "Identify top 3 revenue acceleration opportunities",
+    "Decide: raise, cut, or grow — within 2 weeks",
+    "Log decision and actions",
+  ],
+  PIPELINE_THIN: [
+    "Pipeline review with sales lead — identify stuck deals",
+    "Qualify: how many deals are actually closeable in 90d?",
+    "Identify the top outbound channel that can accelerate",
+    "Set a weekly pipeline review cadence",
+    "Log the agreed acceleration actions",
+  ],
+  LTV_CAC_LOW: [
+    "Pull unit economics: LTV, CAC, payback period by cohort",
+    "Identify: is LTV too low (churn/expansion) or CAC too high (GTM efficiency)?",
+    "Model 3 paths to LTV:CAC ≥ 3",
+    "Assign owner and 30-day target per path",
+    "Log decisions and track in metrics",
+  ],
+  default: [
+    "Understand the finding: review the detail and source data",
+    "Identify the root cause — what is driving this signal?",
+    "Agree on the intervention — specific, time-bound, owned",
+    "Log the action plan",
+    "Set a review date — when will you know if it worked?",
+  ],
+};
 
-export async function computeIntelligence(): Promise<IntelligenceData> {
-  const now = new Date();
+export async function computeIntelligence() {
+  const now = Date.now();
 
-  const [people, events, decisionsRaw, plansRaw] = await Promise.all([
+  const [people, events, growthPlans, metrics, pendingWork, openPlaybooks] = await Promise.all([
     db.select().from(leados_people),
     db.select().from(leados_events),
-    db.select().from(leados_decisions),
-    db.select().from(leados_plans),
+    db.select().from(leados_growth_plans),
+    db.select().from(leados_metrics),
+    db.select().from(leados_work_queue).where(eq(leados_work_queue.status, "pending")),
+    db.select().from(leados_playbooks).where(eq(leados_playbooks.status, "open")),
   ]);
 
-  const activePeople = people.filter((p) => !p.archived);
-  const peopleById = new Map(people.map((p) => [p.id, p]));
-
-  // ── Pulse stats per person ──────────────────────────────────────────
-  const pulseByPerson: Record<number, PulseStat> = {};
-  for (const p of activePeople) {
-    const pulses = events
-      .filter((e) => e.type === "pulse" && e.personId === p.id)
-      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    const moods = pulses.map((e) => Number((e.data as { mood?: number })?.mood ?? 3));
-    const loads = pulses.map((e) => Number((e.data as { load?: number })?.load ?? 3));
-    const last12Moods = moods.slice(-12);
-    const last12Loads = loads.slice(-12);
-    pulseByPerson[p.id] = {
-      moodMean: mean(last12Moods) || 3,
-      loadMean: mean(last12Loads) || 3,
-      series: last12Moods,
-      loadSeries: last12Loads,
-    };
-  }
-
-  // ── 1:1 cadence per person ──────────────────────────────────────────
-  const lastOneOnOne: Record<number, Date | null> = {};
-  for (const p of activePeople) {
-    const held = events
-      .filter((e) => e.type === "oneonone" && e.personId === p.id && (e.data as { status?: string })?.status !== "skipped")
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    lastOneOnOne[p.id] = held[0]?.createdAt ?? null;
-  }
-
-  // ── Feedback per person ─────────────────────────────────────────────
-  const feedbackByPerson: Record<number, { sentiment: string; createdAt: Date }[]> = {};
-  for (const p of activePeople) {
-    feedbackByPerson[p.id] = events
-      .filter((e) => e.type === "feedback" && e.personId === p.id)
-      .map((e) => ({ sentiment: String((e.data as { sentiment?: string })?.sentiment ?? "neutral"), createdAt: e.createdAt }))
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }
-
-  // ── Growth plans ─────────────────────────────────────────────────────
-  const openPlans: OpenPlan[] = plansRaw
-    .filter((pl) => pl.status === "active")
-    .map((pl) => {
-      const person = peopleById.get(pl.personId);
-      return {
-        id: pl.id,
-        personId: pl.personId,
-        personName: person?.name ?? "Unknown",
-        goal: pl.goal,
-        level: pl.level,
-        daysSinceCheckin: daysBetween(now, pl.lastCheckin),
-        lastCheckin: pl.lastCheckin.toISOString(),
-      };
-    });
-
-  // ── Decisions ────────────────────────────────────────────────────────
-  const decisions: DecisionView[] = decisionsRaw
-    .map((d) => {
-      const openDays = daysBetween(d.resolvedAt ?? now, d.openedAt);
-      let status: DecisionView["status"] = "OPEN";
-      if (d.status === "resolved") status = "RESOLVED";
-      else if (openDays > 45) status = "ESCALATE";
-      else if (openDays > 21) status = "STALE";
-      return {
-        id: d.id,
-        title: d.title,
-        owner: d.owner,
-        domain: d.domain as Domain,
-        openDays,
-        status,
-        openedAt: d.openedAt.toISOString(),
-        resolvedAt: d.resolvedAt ? d.resolvedAt.toISOString() : null,
-      };
-    })
-    .sort((a, b) => daysBetween(now, new Date(a.openedAt)) - daysBetween(now, new Date(b.openedAt)));
-
-  // ── Findings generation ──────────────────────────────────────────────
   const findings: Finding[] = [];
+  const openPlans = growthPlans
+    .filter((p) => p.status === "open")
+    .map((p) => ({ ...p, daysSinceCheckin: daysSince(p.lastCheckinAt, now) }));
 
-  for (const p of activePeople) {
-    const stat = pulseByPerson[p.id];
-    const days = lastOneOnOne[p.id] !== null ? daysBetween(now, lastOneOnOne[p.id] as Date) : null;
+  const eventsFor = (personId: number, type?: string) =>
+    events.filter((e) => e.personId === personId && (!type || e.type === type));
 
-    // Mood rules
-    if (stat.moodMean < 2.3) {
-      findings.push({
-        key: `R1-${p.id}`, rule: "R1", domain: "people", sev: 5,
-        title: `${p.name}: critical mood decline`,
-        detail: `Mood average ${stat.moodMean.toFixed(2)}/5 across recent pulses — sustained depletion.`,
-        personId: p.id, personName: p.name,
-      });
-    } else if (stat.moodMean < 3.0) {
-      findings.push({
-        key: `R2-${p.id}`, rule: "R2", domain: "people", sev: 3,
-        title: `${p.name}: mood trending low`,
-        detail: `Mood average ${stat.moodMean.toFixed(2)}/5 — below neutral baseline.`,
-        personId: p.id, personName: p.name,
-      });
-    } else if (stat.moodMean < 3.3) {
-      findings.push({
-        key: `R13-${p.id}`, rule: "R13", domain: "people", sev: 1,
-        title: `${p.name}: mood watch`,
-        detail: `Mood average ${stat.moodMean.toFixed(2)}/5 — stable but worth monitoring.`,
-        personId: p.id, personName: p.name,
-      });
-    }
+  // ===================== PEOPLE DOMAIN (12 rules) =====================
+  people.forEach((p) => {
+    const pulses = eventsFor(p.id, "pulse").sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const oneOnOnes = eventsFor(p.id, "oneonone").sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const feedback = eventsFor(p.id, "feedback").sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    const tasks14d = eventsFor(p.id, "task_assigned").filter((e) => now - e.createdAt.getTime() < 14 * DAY);
+    const tasksPrev14d = eventsFor(p.id, "task_assigned").filter(
+      (e) => now - e.createdAt.getTime() >= 14 * DAY && now - e.createdAt.getTime() < 28 * DAY,
+    );
+    const personAgeDays = daysSince(p.createdAt, now);
 
-    // Load rules
-    if (stat.loadMean > 4.3) {
-      findings.push({
-        key: `R3-${p.id}`, rule: "R3", domain: "people", sev: 4,
-        title: `${p.name}: critical overload`,
-        detail: `Load average ${stat.loadMean.toFixed(2)}/5 — sustained overcapacity.`,
-        personId: p.id, personName: p.name,
-      });
-    } else if (stat.loadMean > 3.6) {
-      findings.push({
-        key: `R4-${p.id}`, rule: "R4", domain: "people", sev: 3,
-        title: `${p.name}: elevated load`,
-        detail: `Load average ${stat.loadMean.toFixed(2)}/5 — above sustainable range.`,
-        personId: p.id, personName: p.name,
-      });
-    } else if (stat.loadMean > 3.2) {
-      findings.push({
-        key: `R14-${p.id}`, rule: "R14", domain: "people", sev: 1,
-        title: `${p.name}: load watch`,
-        detail: `Load average ${stat.loadMean.toFixed(2)}/5 — trending up, not yet critical.`,
-        personId: p.id, personName: p.name,
-      });
-    }
-
-    // Cadence rules
-    if (days !== null) {
-      if (days > p.cadenceDays * 2) {
+    // R-MORALE: last pulse mood low
+    if (pulses.length) {
+      const mood = Number(asData(pulses[0].data).mood ?? 3);
+      if (mood <= 2) {
         findings.push({
-          key: `R5-${p.id}`, rule: "R5", domain: "people", sev: 5,
-          title: `${p.name}: 1:1 cadence critically breached`,
-          detail: `${days}d since last 1:1 vs ${p.cadenceDays}d target.`,
-          personId: p.id, personName: p.name,
-        });
-      } else if (days > p.cadenceDays * 1.3) {
-        findings.push({
-          key: `R6-${p.id}`, rule: "R6", domain: "people", sev: 3,
-          title: `${p.name}: 1:1 cadence slipping`,
-          detail: `${days}d since last 1:1 vs ${p.cadenceDays}d target.`,
-          personId: p.id, personName: p.name,
+          key: `MORALE_LOW:${p.id}`, rule: "MORALE_LOW", domain: "people",
+          sev: mood <= 1 ? 5 : 3, personId: p.id, personName: p.name,
+          title: `Low morale signal: ${p.name}`,
+          detail: `Latest pulse mood is ${mood}/5, logged ${daysSince(pulses[0].createdAt, now)}d ago.`,
         });
       }
-    } else {
+    }
+
+    // R-CADENCE: 1:1 cadence slip
+    const lastOneOnOne = oneOnOnes[0];
+    const cadenceDays = lastOneOnOne ? daysSince(lastOneOnOne.createdAt, now) : personAgeDays;
+    if (cadenceDays > 14) {
       findings.push({
-        key: `R5-${p.id}`, rule: "R5", domain: "people", sev: 5,
-        title: `${p.name}: no 1:1 on record`,
-        detail: `No held 1:1 found for this person.`,
-        personId: p.id, personName: p.name,
+        key: `CADENCE_SLIP:${p.id}`, rule: "CADENCE_SLIP", domain: "people",
+        sev: cadenceDays > 28 ? 4 : cadenceDays > 21 ? 3 : 2, personId: p.id, personName: p.name,
+        title: `1:1 cadence slipping: ${p.name}`,
+        detail: lastOneOnOne
+          ? `Last 1:1 was ${cadenceDays}d ago. Target cadence is weekly.`
+          : `No 1:1 ever logged in ${cadenceDays}d since joining.`,
       });
     }
 
-    // Feedback streak rule
-    const fb = feedbackByPerson[p.id] ?? [];
-    if (fb.length >= 2 && fb.slice(0, 2).every((f) => f.sentiment === "negative")) {
+    // R-LOAD: load high
+    if (tasks14d.length >= 8) {
       findings.push({
-        key: `R7-${p.id}`, rule: "R7", domain: "people", sev: 4,
-        title: `${p.name}: negative feedback streak`,
-        detail: `Last 2 feedback entries both negative — possible process or support issue.`,
-        personId: p.id, personName: p.name,
+        key: `LOAD_HIGH:${p.id}`, rule: "LOAD_HIGH", domain: "people",
+        sev: tasks14d.length >= 14 ? 4 : 3, personId: p.id, personName: p.name,
+        title: `High task load: ${p.name}`,
+        detail: `${tasks14d.length} tasks assigned in the last 14 days.`,
       });
     }
-  }
 
-  // Growth plan stalled
-  for (const plan of openPlans) {
+    // R-LOAD-TREND: load increased sharply vs prior period
+    if (tasksPrev14d.length >= 3 && tasks14d.length > tasksPrev14d.length * 1.5) {
+      findings.push({
+        key: `LOAD_TREND_UP:${p.id}`, rule: "LOAD_TREND_UP", domain: "people",
+        sev: 3, personId: p.id, personName: p.name,
+        title: `Task load climbing fast: ${p.name}`,
+        detail: `${tasksPrev14d.length} → ${tasks14d.length} tasks period over period.`,
+      });
+    }
+
+    // R-ONE-ON-ONE-NEVER
+    if (oneOnOnes.length === 0 && personAgeDays > 14) {
+      findings.push({
+        key: `ONE_ON_ONE_NEVER:${p.id}`, rule: "ONE_ON_ONE_NEVER", domain: "people",
+        sev: 3, personId: p.id, personName: p.name,
+        title: `No 1:1 ever logged: ${p.name}`,
+        detail: `${p.name} has been on the roster for ${personAgeDays}d with zero 1:1s recorded.`,
+      });
+    }
+
+    // R-NEW-HIRE-NO-CHECKIN
+    if (personAgeDays <= 14 && oneOnOnes.length === 0) {
+      findings.push({
+        key: `NEW_HIRE_NO_CHECKIN:${p.id}`, rule: "NEW_HIRE_NO_CHECKIN", domain: "people",
+        sev: 3, personId: p.id, personName: p.name,
+        title: `New hire missing onboarding check-in: ${p.name}`,
+        detail: `Joined ${personAgeDays}d ago with no 1:1 logged yet.`,
+      });
+    }
+
+    // R-PULSE-MISSING
+    const recentPulse = pulses.find((e) => now - e.createdAt.getTime() < 14 * DAY);
+    if (!recentPulse && personAgeDays > 14) {
+      findings.push({
+        key: `PULSE_MISSING:${p.id}`, rule: "PULSE_MISSING", domain: "people",
+        sev: 2, personId: p.id, personName: p.name,
+        title: `No pulse check in 14 days: ${p.name}`,
+        detail: `Mood/pulse tracking has gone quiet for ${p.name}.`,
+      });
+    }
+
+    // R-MOOD-DECLINE-TREND
+    if (pulses.length >= 3) {
+      const [m0, m1, m2] = pulses.slice(0, 3).map((e) => Number(asData(e.data).mood ?? 3));
+      if (m0 < m1 && m1 < m2) {
+        findings.push({
+          key: `MOOD_DECLINE_TREND:${p.id}`, rule: "MOOD_DECLINE_TREND", domain: "people",
+          sev: 3, personId: p.id, personName: p.name,
+          title: `Mood trending down: ${p.name}`,
+          detail: `Last 3 pulses: ${m2} → ${m1} → ${m0}.`,
+        });
+      }
+    }
+
+    // R-NEGATIVE-FEEDBACK-STREAK
+    if (feedback.length >= 3) {
+      const last3 = feedback.slice(0, 3);
+      if (last3.every((e) => asData(e.data).sentiment === "negative")) {
+        findings.push({
+          key: `NEGATIVE_FEEDBACK_STREAK:${p.id}`, rule: "NEGATIVE_FEEDBACK_STREAK", domain: "people",
+          sev: 4, personId: p.id, personName: p.name,
+          title: `3 consecutive negative feedback entries: ${p.name}`,
+          detail: `Pattern of negative feedback detected without any positive signal between.`,
+        });
+      }
+    }
+
+    // R-FEEDBACK-SILENCE
+    if (feedback.length === 0 && personAgeDays > 30) {
+      findings.push({
+        key: `FEEDBACK_SILENCE:${p.id}`, rule: "FEEDBACK_SILENCE", domain: "people",
+        sev: 2, personId: p.id, personName: p.name,
+        title: `No feedback ever logged: ${p.name}`,
+        detail: `${personAgeDays}d on roster, zero feedback entries of any sentiment.`,
+      });
+    }
+  });
+
+  // R-BURNOUT: Same person MORALE_LOW + LOAD_HIGH → escalate combined sev
+  const burnoutPeople = people.filter(
+    (p) =>
+      findings.some((f) => f.rule === "MORALE_LOW" && f.personId === p.id) &&
+      findings.some((f) => f.rule === "LOAD_HIGH" && f.personId === p.id),
+  );
+  burnoutPeople.forEach((p) => {
+    const moodFinding = findings.find((f) => f.rule === "MORALE_LOW" && f.personId === p.id);
+    const loadFinding = findings.find((f) => f.rule === "LOAD_HIGH" && f.personId === p.id);
+    const combinedSev = Math.min(5, Math.max(moodFinding?.sev ?? 3, loadFinding?.sev ?? 3) + 1) as Severity;
+    findings.push({
+      key: `BURNOUT_COMPOUND:${p.id}`, rule: "BURNOUT_COMPOUND", domain: "people",
+      sev: combinedSev, personId: p.id, personName: p.name,
+      title: `Burnout compound signal: ${p.name}`,
+      detail: `Low morale (${moodFinding?.detail}) AND high load (${loadFinding?.detail}) co-occurring.`,
+    });
+  });
+
+  // R-RECOGNITION: person has 4+ 1:1s but no positive feedback in 60d
+  people.forEach((p) => {
+    const oneOnOnes = events.filter((e) => e.type === "oneonone" && e.personId === p.id);
+    const positiveFeedback = events.filter(
+      (e) =>
+        e.type === "feedback" &&
+        e.personId === p.id &&
+        asData(e.data).sentiment === "positive" &&
+        now - e.createdAt.getTime() < 60 * DAY,
+    );
+    if (oneOnOnes.length >= 4 && positiveFeedback.length === 0) {
+      findings.push({
+        key: `RECOGNITION_GAP:${p.id}`, rule: "RECOGNITION_GAP", domain: "people",
+        sev: 2, personId: p.id, personName: p.name,
+        title: `Recognition gap for ${p.name}`,
+        detail: `${oneOnOnes.length} 1:1s logged, no positive feedback in 60 days.`,
+      });
+    }
+  });
+
+  // ===================== GROWTH PLANS (4 rules) =====================
+  openPlans.forEach((plan) => {
     if (plan.daysSinceCheckin > 30) {
       findings.push({
-        key: `R8-${plan.id}`, rule: "R8", domain: "people", sev: 2,
-        title: `${plan.personName}: growth plan stalled`,
-        detail: `"${plan.goal}" has not been checked in for ${plan.daysSinceCheckin}d.`,
-        personId: plan.personId, personName: plan.personName,
+        key: `GROWTH_STALLED:${plan.id}`, rule: "GROWTH_STALLED", domain: "people",
+        sev: plan.daysSinceCheckin > 50 ? 4 : 3,
+        personId: plan.personId ?? undefined,
+        personName: people.find((p) => p.id === plan.personId)?.name,
+        title: `Growth plan stalled: ${plan.title}`,
+        detail: `No check-in in ${plan.daysSinceCheckin} days.`,
       });
     }
-  }
+  });
+  // Escalation pass: plans stalled >50d are bumped to sev 4 (kept explicit per spec).
+  openPlans.forEach((plan) => {
+    if (plan.daysSinceCheckin > 50) {
+      const existing = findings.find((f) => f.key === `GROWTH_STALLED:${plan.id}`);
+      if (existing) existing.sev = 4;
+    }
+  });
 
-  // Decision rules
-  for (const d of decisions) {
-    if (d.status === "ESCALATE") {
+  people.forEach((p) => {
+    const hasPlan = growthPlans.some((g) => g.personId === p.id);
+    if (!hasPlan && daysSince(p.createdAt, now) > 21) {
       findings.push({
-        key: `R9-${d.id}`, rule: "R9", domain: d.domain, sev: 5,
-        title: `Decision escalating: ${d.title}`,
-        detail: `Open ${d.openDays}d, owned by ${d.owner}. Exceeds escalation threshold.`,
-      });
-    } else if (d.status === "STALE") {
-      findings.push({
-        key: `R10-${d.id}`, rule: "R10", domain: d.domain, sev: 3,
-        title: `Decision going stale: ${d.title}`,
-        detail: `Open ${d.openDays}d, owned by ${d.owner}.`,
+        key: `GROWTH_PLAN_MISSING:${p.id}`, rule: "GROWTH_PLAN_MISSING", domain: "people",
+        sev: 2, personId: p.id, personName: p.name,
+        title: `No growth plan: ${p.name}`,
+        detail: `No growth plan has been created for ${p.name}.`,
       });
     }
-  }
+  });
 
-  // Domain concentration
-  const domainCounts: Record<Domain, number> = { people: 0, finance: 0, sales: 0, ops: 0, strategy: 0, gov: 0 };
-  for (const f of findings) domainCounts[f.domain]++;
-  const totalFindingsSoFar = findings.length || 1;
-  if (domainCounts.people / totalFindingsSoFar > 0.5 && findings.length >= 6) {
+  openPlans.forEach((plan) => {
+    if (plan.daysSinceCheckin > 21 && plan.daysSinceCheckin <= 30) {
+      findings.push({
+        key: `GROWTH_REVIEW_OVERDUE:${plan.id}`, rule: "GROWTH_REVIEW_OVERDUE", domain: "people",
+        sev: 2,
+        personId: plan.personId ?? undefined,
+        personName: people.find((p) => p.id === plan.personId)?.name,
+        title: `Growth plan review overdue: ${plan.title}`,
+        detail: `Check-in due — last one was ${plan.daysSinceCheckin} days ago.`,
+      });
+    }
+  });
+
+  const completedPlans = growthPlans.filter((g) => g.status === "completed").length;
+  const totalPlans = growthPlans.length;
+  if (totalPlans >= 4 && completedPlans / totalPlans < 0.25) {
     findings.push({
-      key: "R11-concentration", rule: "R11", domain: "strategy", sev: 3,
-      title: "Signal concentration in people domain",
-      detail: `${Math.round((domainCounts.people / totalFindingsSoFar) * 100)}% of active findings are people-domain — other functions may be under-instrumented.`,
+      key: "GROWTH_COMPLETION_LOW", rule: "GROWTH_COMPLETION_LOW", domain: "people",
+      sev: 2,
+      title: "Growth plan completion rate low",
+      detail: `Only ${completedPlans}/${totalPlans} growth plans completed (${Math.round((completedPlans / totalPlans) * 100)}%).`,
     });
   }
 
-  // Cross-domain compounding
-  const peopleSev4Plus = findings.filter((f) => f.domain === "people" && f.sev >= 4).length;
-  const decisionSev4Plus = findings.filter((f) => ["R9", "R10"].includes(f.rule) && f.sev >= 4).length;
-  if (peopleSev4Plus >= 2 && decisionSev4Plus >= 1) {
+  // ===================== STRATEGY / DECISIONS (6 rules) =====================
+  const decisionEvents = events.filter((e) => e.type === "decision");
+  const openDecisions = decisionEvents.filter((e) => asData(e.data).status !== "resolved");
+
+  openDecisions.forEach((e) => {
+    const ageDays = daysSince(e.createdAt, now);
+    const topic = String(asData(e.data).topic ?? "Untitled decision");
+    if (ageDays > 7) {
+      findings.push({
+        key: `DECISION_ESCALATE:${e.id}`, rule: "DECISION_ESCALATE", domain: "strategy",
+        sev: ageDays > 14 ? 4 : 3,
+        title: `Decision unresolved: ${topic}`,
+        detail: `Open for ${ageDays} days without resolution.`,
+      });
+    }
+    if (ageDays > 21) {
+      findings.push({
+        key: `DECISION_AGE_CRITICAL:${e.id}`, rule: "DECISION_AGE_CRITICAL", domain: "strategy",
+        sev: 5,
+        title: `Decision critically overdue: ${topic}`,
+        detail: `Open for ${ageDays} days — this is actively blocking progress.`,
+      });
+    }
+  });
+
+  if (openDecisions.length >= 5) {
     findings.push({
-      key: "R12-compounding", rule: "R12", domain: "gov", sev: 4,
-      title: "Compounding organizational stress",
-      detail: "Multiple critical people signals are coinciding with escalating governance decisions — risk of cascading failure.",
+      key: "DECISION_BACKLOG_HIGH", rule: "DECISION_BACKLOG_HIGH", domain: "strategy",
+      sev: openDecisions.length >= 8 ? 4 : 3,
+      title: `${openDecisions.length} open decisions in backlog`,
+      detail: `Decision backlog is growing. Dedicate a session to clearing it.`,
     });
   }
+
+  const strategyEvents = events.filter((e) => e.domain === "strategy" && now - e.createdAt.getTime() < 30 * DAY);
+  if (strategyEvents.length === 0) {
+    findings.push({
+      key: "STRATEGY_SILENCE", rule: "STRATEGY_SILENCE", domain: "strategy",
+      sev: 2,
+      title: "No strategic activity logged in 30 days",
+      detail: "No strategy events recorded. Are OKRs being reviewed? Is direction being discussed?",
+    });
+  }
+
+  const lastOkrReview = events
+    .filter((e) => e.type === "okr_review")
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+  const okrAge = lastOkrReview ? daysSince(lastOkrReview.createdAt, now) : null;
+  if (okrAge === null || okrAge > 45) {
+    findings.push({
+      key: "OKR_STALE", rule: "OKR_STALE", domain: "strategy",
+      sev: okrAge !== null && okrAge > 90 ? 4 : 2,
+      title: "OKRs stale",
+      detail: okrAge !== null ? `Last OKR review was ${okrAge} days ago.` : "No OKR review has ever been logged.",
+    });
+  }
+
+  const meetings7d = events.filter((e) => e.type === "meeting" && now - e.createdAt.getTime() < 7 * DAY);
+  if (meetings7d.length >= 15) {
+    findings.push({
+      key: "MEETING_OVERLOAD", rule: "MEETING_OVERLOAD", domain: "strategy",
+      sev: 2,
+      title: "Meeting load is high org-wide",
+      detail: `${meetings7d.length} meetings logged in the last 7 days.`,
+    });
+  }
+
+  // ===================== FINANCE (6 rules) =====================
+  const runway = latestMetric(metrics, "runway_months");
+  if (runway !== null && runway < 12) {
+    const sev: Severity = runway < 3 ? 5 : runway < 6 ? 4 : 3;
+    findings.push({
+      key: "RUNWAY_LOW", rule: "RUNWAY_LOW", domain: "finance", sev,
+      title: `Runway at ${runway} months`,
+      detail: `${runway < 6 ? "Critical: under 6 months." : "Warning: under 12 months."} Action required.`,
+    });
+  }
+
+  const mrrGrowth = latestMetric(metrics, "mrr_growth_pct");
+  if (mrrGrowth !== null && mrrGrowth < 0) {
+    findings.push({
+      key: "MRR_DECLINING", rule: "MRR_DECLINING", domain: "finance",
+      sev: mrrGrowth < -10 ? 4 : 3,
+      title: `MRR growth negative at ${mrrGrowth}%`,
+      detail: `Revenue base is contracting. Review churn and expansion.`,
+    });
+  }
+
+  const ltvCac = latestMetric(metrics, "ltv_cac");
+  if (ltvCac !== null && ltvCac < 3) {
+    findings.push({
+      key: "LTV_CAC_LOW", rule: "LTV_CAC_LOW", domain: "finance",
+      sev: ltvCac < 1 ? 5 : ltvCac < 2 ? 4 : 3,
+      title: `LTV:CAC at ${ltvCac} (target ≥3)`,
+      detail: `Unit economics unviable. ${ltvCac < 1 ? "Critical: acquiring customers at a loss." : "Growth spending may not be recoverable."}`,
+    });
+  }
+
+  const burnMultiple = latestMetric(metrics, "burn_multiple");
+  if (burnMultiple !== null && burnMultiple > 2) {
+    findings.push({
+      key: "BURN_MULTIPLE_HIGH", rule: "BURN_MULTIPLE_HIGH", domain: "finance",
+      sev: burnMultiple > 4 ? 4 : 3,
+      title: `Burn multiple at ${burnMultiple}x`,
+      detail: `Spending ${burnMultiple}x per dollar of net new revenue — efficiency is slipping.`,
+    });
+  }
+
+  const cashBuffer = latestMetric(metrics, "cash_buffer_months");
+  if (cashBuffer !== null && cashBuffer < 3) {
+    findings.push({
+      key: "CASH_BUFFER_LOW", rule: "CASH_BUFFER_LOW", domain: "finance",
+      sev: cashBuffer < 1 ? 5 : 4,
+      title: `Cash buffer at ${cashBuffer} months`,
+      detail: `Operating cash cushion is thin. Tighten payment terms and reserves.`,
+    });
+  }
+
+  const expenseGrowth = latestMetric(metrics, "expense_growth_pct");
+  if (expenseGrowth !== null && expenseGrowth > 25) {
+    findings.push({
+      key: "EXPENSE_SPIKE", rule: "EXPENSE_SPIKE", domain: "finance",
+      sev: expenseGrowth > 50 ? 4 : 3,
+      title: `Expenses up ${expenseGrowth}% period over period`,
+      detail: `Review new recurring spend commitments and vendor contracts.`,
+    });
+  }
+
+  // ===================== SALES (6 rules) =====================
+  const pipeline = latestMetric(metrics, "pipeline_coverage_x");
+  if (pipeline !== null && pipeline < 3) {
+    findings.push({
+      key: "PIPELINE_THIN", rule: "PIPELINE_THIN", domain: "sales",
+      sev: pipeline < 1.5 ? 5 : pipeline < 2 ? 4 : 3,
+      title: `Pipeline coverage at ${pipeline}× (target ≥3×)`,
+      detail: `Insufficient pipeline to cover revenue targets. GTM intervention needed.`,
+    });
+  }
+
+  const winRate = latestMetric(metrics, "win_rate_pct");
+  if (winRate !== null && winRate < 30) {
+    findings.push({
+      key: "WIN_RATE_LOW", rule: "WIN_RATE_LOW", domain: "sales",
+      sev: winRate < 20 ? 4 : 3,
+      title: `Win rate at ${winRate}% (below 30% threshold)`,
+      detail: `Review competitive positioning, qualification process, and proposal quality.`,
+    });
+  }
+
+  const churn = latestMetric(metrics, "churn_pct");
+  if (churn !== null && churn > 2) {
+    findings.push({
+      key: "CHURN_ELEVATED", rule: "CHURN_ELEVATED", domain: "sales",
+      sev: churn > 5 ? 5 : churn > 3 ? 4 : 2,
+      title: `Churn at ${churn}% MRR (threshold: 2%)`,
+      detail: `Elevated churn is destroying unit economics. Root cause: review support, product, pricing.`,
+    });
+  }
+
+  const nps = latestMetric(metrics, "nps");
+  if (nps !== null && nps < 30) {
+    findings.push({
+      key: "NPS_LOW", rule: "NPS_LOW", domain: "sales",
+      sev: nps < 0 ? 4 : 2,
+      title: `NPS at ${nps} (below 30)`,
+      detail: `Customer satisfaction signal is weak — investigate detractor themes.`,
+    });
+  }
+
+  const salesCycleDelta = latestMetric(metrics, "sales_cycle_days_delta_pct");
+  if (salesCycleDelta !== null && salesCycleDelta > 20) {
+    findings.push({
+      key: "SALES_CYCLE_LENGTHENING", rule: "SALES_CYCLE_LENGTHENING", domain: "sales",
+      sev: salesCycleDelta > 40 ? 4 : 3,
+      title: `Sales cycle lengthened ${salesCycleDelta}%`,
+      detail: `Deals are taking longer to close — review qualification and friction points.`,
+    });
+  }
+
+  const dealEvents = events.filter((e) => e.type === "deal");
+  const stalledDeals = dealEvents.filter((e) => Number(asData(e.data).daysInStage ?? 0) > 30);
+  if (stalledDeals.length >= 2) {
+    findings.push({
+      key: "DEAL_STALL", rule: "DEAL_STALL", domain: "sales",
+      sev: stalledDeals.length >= 5 ? 4 : 3,
+      title: `${stalledDeals.length} deals stalled in stage 30+ days`,
+      detail: `Stalled deals risk slipping or dying silently. Review with sales lead.`,
+    });
+  }
+
+  // ===================== OPS (6 rules) =====================
+  const deployDelta = latestMetric(metrics, "deploy_freq_delta_pct");
+  if (deployDelta !== null && deployDelta < -30) {
+    findings.push({
+      key: "DEPLOY_DECLINE", rule: "DEPLOY_DECLINE", domain: "ops",
+      sev: deployDelta < -50 ? 4 : 3,
+      title: `Deploy frequency down ${Math.abs(deployDelta)}%`,
+      detail: `Delivery throughput declining. Check: tech debt, team capacity, process friction.`,
+    });
+  }
+
+  const incidents14d = events.filter((e) => e.type === "incident" && now - e.createdAt.getTime() < 14 * DAY);
+  if (incidents14d.length >= 3) {
+    findings.push({
+      key: "INCIDENT_SPIKE", rule: "INCIDENT_SPIKE", domain: "ops",
+      sev: incidents14d.length >= 6 ? 5 : incidents14d.length >= 4 ? 4 : 3,
+      title: `${incidents14d.length} incidents in 14 days`,
+      detail: `Incident rate is elevated. Run a blameless retro and look for a common root cause.`,
+    });
+  }
+
+  const openTickets = events.filter((e) => e.type === "support_ticket" && asData(e.data).status !== "closed");
+  if (openTickets.length >= 10) {
+    findings.push({
+      key: "SUPPORT_BACKLOG", rule: "SUPPORT_BACKLOG", domain: "ops",
+      sev: openTickets.length >= 25 ? 4 : 3,
+      title: `${openTickets.length} open support tickets`,
+      detail: `Support backlog is building — consider surge staffing or triage sweep.`,
+    });
+  }
+
+  const onCallEvents14d = events.filter(
+    (e) => e.type === "incident" && asData(e.data).afterHours === true && now - e.createdAt.getTime() < 14 * DAY,
+  );
+  if (onCallEvents14d.length >= 3) {
+    findings.push({
+      key: "ON_CALL_FATIGUE", rule: "ON_CALL_FATIGUE", domain: "ops",
+      sev: 3,
+      title: `${onCallEvents14d.length} after-hours incidents in 14 days`,
+      detail: `On-call load is high. Review rotation fairness and alert quality.`,
+    });
+  }
+
+  const codeReviewLag = latestMetric(metrics, "code_review_lag_hours");
+  if (codeReviewLag !== null && codeReviewLag > 48) {
+    findings.push({
+      key: "CODE_REVIEW_LAG", rule: "CODE_REVIEW_LAG", domain: "ops",
+      sev: codeReviewLag > 96 ? 4 : 3,
+      title: `Code review lag at ${codeReviewLag}h`,
+      detail: `PRs are sitting too long — review bottleneck is slowing delivery.`,
+    });
+  }
+
+  const headcount = latestMetric(metrics, "headcount");
+  const headcountTarget = latestMetric(metrics, "headcount_target");
+  if (headcount !== null && headcountTarget !== null && headcount < headcountTarget * 0.8) {
+    findings.push({
+      key: "HEADCOUNT_GAP", rule: "HEADCOUNT_GAP", domain: "ops",
+      sev: 3,
+      title: `Headcount at ${headcount} vs target ${headcountTarget}`,
+      detail: `Team is understaffed relative to plan — hiring plan needs attention.`,
+    });
+  }
+
+  // ===================== AUTONOMOUS WORK QUEUE GENERATION =====================
+  const criticalFindings = findings.filter((f) => f.sev >= 4);
+  for (const finding of criticalFindings) {
+    const alreadyQueued = pendingWork.some((w) => (w.data as EventDataRecord)?.findingKey === finding.key);
+    if (alreadyQueued) continue;
+
+    const suggestedAction = SUGGESTED_ACTIONS[finding.rule] ?? "Review and address finding with relevant stakeholder.";
+
+    await db.insert(leados_work_queue).values({
+      title: `Address: ${finding.title}`,
+      type: "action",
+      status: "pending",
+      data: {
+        findingKey: finding.key,
+        rule: finding.rule,
+        domain: finding.domain,
+        personId: finding.personId ?? null,
+        suggestedAction,
+      },
+    });
+    await logAudit("WORK_ITEM_AUTO_CREATED", finding.key, { rule: finding.rule, sev: finding.sev });
+    pendingWork.push({
+      id: -1,
+      title: `Address: ${finding.title}`,
+      type: "action",
+      status: "pending",
+      data: { findingKey: finding.key },
+      createdAt: new Date(),
+    });
+  }
+
+  const metricsSnapshot: Record<string, number> = {};
+  const seenKeys = new Set<string>();
+  metrics
+    .slice()
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .forEach((m) => {
+      if (!seenKeys.has(m.key)) {
+        seenKeys.add(m.key);
+        metricsSnapshot[m.key] = m.value;
+      }
+    });
 
   findings.sort((a, b) => b.sev - a.sev);
 
-  // ── Domain scores ────────────────────────────────────────────────────
-  const domainScores: DomainScore[] = DOMAINS.map((domain) => {
-    const domainFindings = findings.filter((f) => f.domain === domain);
-    const penalty = domainFindings.reduce((sum, f) => sum + SEV_WEIGHT[f.sev], 0);
-    return { domain, score: clamp(100 - penalty, 0, 100), findingCount: domainFindings.length };
-  });
-
-  // ── Flight risk ──────────────────────────────────────────────────────
-  const flightRisk: FlightRisk[] = activePeople
-    .map((p) => {
-      const stat = pulseByPerson[p.id];
-      const days = lastOneOnOne[p.id] !== null ? daysBetween(now, lastOneOnOne[p.id] as Date) : 90;
-      const fb = feedbackByPerson[p.id] ?? [];
-      const negRatio = fb.length ? fb.filter((f) => f.sentiment === "negative").length / fb.length : 0;
-
-      const moodComponent = ((5 - stat.moodMean) / 4) * 40;
-      const loadComponent = ((stat.loadMean - 1) / 4) * 30;
-      const cadenceComponent = Math.min(days / 60, 1) * 20;
-      const feedbackComponent = negRatio * 10;
-      const riskScore = clamp(Math.round(moodComponent + loadComponent + cadenceComponent + feedbackComponent), 0, 100);
-      const riskLevel: FlightRisk["riskLevel"] = riskScore >= 65 ? "HIGH" : riskScore >= 40 ? "ELEVATED" : "LOW";
-
-      return {
-        personId: p.id,
-        personName: p.name,
-        role: p.role,
-        riskScore,
-        riskLevel,
-        moodMean: Number(stat.moodMean.toFixed(2)),
-        loadMean: Number(stat.loadMean.toFixed(2)),
-        daysSinceOneOnOne: lastOneOnOne[p.id] !== null ? days : null,
-      };
-    })
-    .sort((a, b) => b.riskScore - a.riskScore);
-
-  // ── Health score ──────────────────────────────────────────────────────
-  const domainScoreMap = Object.fromEntries(domainScores.map((d) => [d.domain, d.score])) as Record<Domain, number>;
-  const overall = Math.round(mean(domainScores.map((d) => d.score)));
-  const grade: HealthScore["grade"] = overall >= 90 ? "A" : overall >= 80 ? "B" : overall >= 70 ? "C" : overall >= 60 ? "D" : "F";
-
-  // ── Org entropy (Shannon entropy over finding domain distribution) ───
-  const totalF = findings.length || 1;
-  let H = 0;
-  for (const domain of DOMAINS) {
-    const c = domainCounts[domain];
-    if (c === 0) continue;
-    const pr = c / totalF;
-    H -= pr * Math.log2(pr);
-  }
-  const orgEntropy = clamp(H / Math.log2(DOMAINS.length), 0, 1);
-
-  // ── Temporal mode ────────────────────────────────────────────────────
-  const sev5Count = findings.filter((f) => f.sev === 5).length;
-  const escalateCount = decisions.filter((d) => d.status === "ESCALATE").length;
-  let temporalMode: TemporalMode;
-  if (sev5Count >= 2) temporalMode = "REACTIVE";
-  else if (escalateCount >= 2) temporalMode = "STRUCTURAL_STRESS";
-  else if (orgEntropy > 0.75) temporalMode = "STRATEGIC_DRIFT";
-  else temporalMode = "BALANCED";
-
-  const trend: HealthScore["trend"] = temporalMode === "REACTIVE" ? "down" : temporalMode === "BALANCED" ? "up" : "flat";
-
-  const healthScore: HealthScore = { overall, grade, domains: domainScoreMap, trend };
-
-  // ── Feedback loops ───────────────────────────────────────────────────
-  const anyHighLoad = flightRisk.some((f) => f.loadMean > 4.3);
-  const anyHighFlightRisk = flightRisk.some((f) => f.riskLevel === "HIGH");
-  const positiveFeedbackRatio = (() => {
-    const all = Object.values(feedbackByPerson).flat();
-    if (!all.length) return 0;
-    return all.filter((f) => f.sentiment === "positive").length / all.length;
-  })();
-  const feedbackLoops: FeedbackLoop[] = [
-    { id: "loop-overload-attrition", name: "Overload → Attrition → More Overload", polarity: "REINFORCING", active: anyHighLoad && anyHighFlightRisk },
-    { id: "loop-feedback-trust", name: "Feedback → Trust → Performance", polarity: "BALANCING", active: positiveFeedbackRatio >= 0.5 },
-    { id: "loop-stale-decisions-drift", name: "Stale Decisions → Strategic Drift", polarity: "REINFORCING", active: escalateCount >= 1 },
-    { id: "loop-cadence-engagement", name: "1:1 Cadence → Engagement", polarity: "BALANCING", active: flightRisk.some((f) => f.riskLevel === "LOW") },
-  ];
-
-  // ── Correlations ─────────────────────────────────────────────────────
-  const correlations: Correlation[] = [];
-  if (peopleSev4Plus >= 2 && decisionSev4Plus >= 1) {
-    const members = [
-      ...flightRisk.filter((f) => f.riskLevel !== "LOW").map((f) => f.personName),
-      ...decisions.filter((d) => d.status === "ESCALATE").map((d) => d.title),
-    ];
-    correlations.push({
-      id: "corr-compounding-stress",
-      name: "Compounding Organizational Stress",
-      domains: ["people", "ops", "strategy", "gov"],
-      members,
-      combinedSev: 5,
-      description: "Critical people signals are coinciding with escalating cross-domain decisions — elevated cascading-failure risk.",
-    });
-  }
-  if (domainCounts.people / totalF > 0.5) {
-    correlations.push({
-      id: "corr-domain-concentration",
-      name: "People-Domain Signal Concentration",
-      domains: ["people", "strategy"],
-      members: activePeople.map((p) => p.name),
-      combinedSev: 3,
-      description: "The majority of active findings originate from the people domain, suggesting other functions are under-instrumented.",
-    });
-  }
-
-  // ── Bayesian beliefs (exactly 3) ─────────────────────────────────────
-  function bayes(prior: number, evidences: { applies: boolean; lr: number; label: string }[]) {
-    let odds = prior / (1 - prior);
-    const applied: string[] = [];
-    for (const e of evidences) {
-      if (e.applies) {
-        odds *= e.lr;
-        applied.push(`${e.label} (LR ${e.lr.toFixed(1)}×)`);
-      }
-    }
-    const posterior = odds / (1 + odds);
-    return { posterior, applied };
-  }
-
-  const highFlightRiskCount = flightRisk.filter((f) => f.riskLevel === "HIGH").length;
-  const sev4PlusPeopleFindings = findings.filter((f) => f.domain === "people" && f.sev >= 4).length;
-  const criticalCadenceBreach = findings.some((f) => f.rule === "R5");
-
-  const attritionBayes = bayes(0.15, [
-    { applies: highFlightRiskCount >= 1, lr: 2.2, label: "≥1 person at HIGH flight risk" },
-    { applies: sev4PlusPeopleFindings >= 2, lr: 1.7, label: "≥2 critical people findings" },
-    { applies: criticalCadenceBreach, lr: 1.5, label: "Critical 1:1 cadence breach" },
-  ]);
-
-  const anyLoadCritical = findings.some((f) => f.rule === "R3");
-  const sev3PlusLoadCount = findings.filter((f) => ["R3", "R4"].includes(f.rule)).length;
-  const anyNegativeFeedback = Object.values(feedbackByPerson).flat().some((f) => f.sentiment === "negative");
-  const burnoutBayes = bayes(0.2, [
-    { applies: anyLoadCritical, lr: 2.0, label: "Critical sustained overload present" },
-    { applies: sev3PlusLoadCount >= 2, lr: 1.5, label: "≥2 people with elevated load" },
-    { applies: anyNegativeFeedback, lr: 1.3, label: "Negative feedback on record" },
-  ]);
-
-  const domainConcentrationFinding = findings.some((f) => f.rule === "R11");
-  const compoundingFinding = findings.some((f) => f.rule === "R12");
-  const decisionParalysisBayes = bayes(0.15, [
-    { applies: escalateCount >= 2, lr: 2.3, label: "≥2 decisions in ESCALATE state" },
-    { applies: domainConcentrationFinding, lr: 1.4, label: "Signal concentration detected" },
-    { applies: compoundingFinding, lr: 1.6, label: "Cross-domain compounding detected" },
-  ]);
-
-  const beliefs: Record<string, Belief> = {
-    attritionRisk: {
-      label: "Elevated attrition risk this quarter",
-      priorPct: Math.round(0.15 * 100),
-      posteriorPct: Math.round(attritionBayes.posterior * 100),
-      appliedEvidence: attritionBayes.applied,
-      highRisk: attritionBayes.posterior > 0.6,
-    },
-    burnoutRisk: {
-      label: "Team burnout risk from sustained overload",
-      priorPct: Math.round(0.2 * 100),
-      posteriorPct: Math.round(burnoutBayes.posterior * 100),
-      appliedEvidence: burnoutBayes.applied,
-      highRisk: burnoutBayes.posterior > 0.6,
-    },
-    decisionParalysis: {
-      label: "Organizational decision paralysis risk",
-      priorPct: Math.round(0.15 * 100),
-      posteriorPct: Math.round(decisionParalysisBayes.posterior * 100),
-      appliedEvidence: decisionParalysisBayes.applied,
-      highRisk: decisionParalysisBayes.posterior > 0.6,
-    },
-  };
-
-  // ── Inferences ───────────────────────────────────────────────────────
-  const inferences: Inference[] = [];
-  const topFlight = flightRisk[0];
-  if (topFlight && topFlight.riskLevel !== "LOW") {
-    inferences.push({
-      id: "inf-flight-risk",
-      title: `${topFlight.personName}'s trajectory points toward disengagement if unaddressed`,
-      premises: [
-        `Mood average ${topFlight.moodMean}/5`,
-        `Load average ${topFlight.loadMean}/5`,
-        topFlight.daysSinceOneOnOne != null ? `${topFlight.daysSinceOneOnOne}d since last 1:1` : "No 1:1 on record",
-      ],
-      confidence: clamp(Math.round(topFlight.riskScore * 1.05), 0, 100),
-      urgency: topFlight.riskLevel === "HIGH" ? "NOW" : "TODAY",
-      action: `Schedule immediate 1:1 with ${topFlight.personName} and rebalance workload`,
-      domain: "people",
-    });
-  }
-  if (escalateCount >= 1) {
-    inferences.push({
-      id: "inf-decision-backlog",
-      title: "Decision backlog will compound into next planning cycle",
-      premises: [
-        `${escalateCount} decision(s) in ESCALATE state`,
-        "Average open decision age exceeds escalation threshold",
-      ],
-      confidence: 68,
-      urgency: "TODAY",
-      action: "Force a decision review session this week",
-      domain: "gov",
-    });
-  }
-  const negativeFeedbackFinding = findings.find((f) => f.rule === "R7");
-  if (negativeFeedbackFinding) {
-    inferences.push({
-      id: "inf-feedback-pattern",
-      title: `${negativeFeedbackFinding.personName}'s feedback pattern suggests a process issue, not a performance issue`,
-      premises: ["2+ consecutive negative feedback entries", "No corresponding mood decline for this person"],
-      confidence: 55,
-      urgency: "THIS_WEEK",
-      action: "Audit process friction points in the relevant workflow",
-      domain: negativeFeedbackFinding.domain,
-    });
-  }
-  if (domainConcentrationFinding) {
-    inferences.push({
-      id: "inf-domain-concentration",
-      title: "Signal concentration suggests under-invested functions elsewhere",
-      premises: [`${Math.round((domainCounts.people / totalF) * 100)}% of findings are people-domain`, "Finance and gov domains show minimal signal"],
-      confidence: 45,
-      urgency: "THIS_WEEK",
-      action: "Increase instrumentation in low-signal domains",
-      domain: "strategy",
-    });
-  }
-
-  // ── Simulation ───────────────────────────────────────────────────────
-  const currentEngagement = mean(activePeople.map((p) => ((pulseByPerson[p.id].moodMean - 1) / 4) * 100));
-  const highCount = flightRisk.filter((f) => f.riskLevel === "HIGH").length;
-  const elevatedCount = flightRisk.filter((f) => f.riskLevel === "ELEVATED").length;
-  const statusQuoAttrition = clamp(0.15 + highCount * 0.15 + elevatedCount * 0.07, 0, 0.95);
-
-  function scenario(attrition: number, engagementDelta: number): ScenarioResult {
-    const finalMeanEngagement = clamp(Math.round(currentEngagement + engagementDelta), 0, 100);
-    return {
-      attritionProbability: Number(clamp(attrition, 0, 0.95).toFixed(2)),
-      finalMeanEngagement,
-      p10: clamp(finalMeanEngagement - 15, 0, 100),
-      p90: clamp(finalMeanEngagement + 15, 0, 100),
-    };
-  }
-
-  const scenarios = {
-    STATUS_QUO: scenario(statusQuoAttrition, -5),
-    IMPROVE_CADENCE: scenario(statusQuoAttrition - 0.12, 8),
-    ADD_GROWTH_PLAN: scenario(statusQuoAttrition - 0.05, 4),
-    REDUCE_LOAD: scenario(statusQuoAttrition - 0.18, 12),
-  };
-
-  const interventionNames = ["IMPROVE_CADENCE", "ADD_GROWTH_PLAN", "REDUCE_LOAD"] as const;
-  let bestName: string = interventionNames[0];
-  let bestDelta = scenarios.STATUS_QUO.attritionProbability - scenarios[interventionNames[0]].attritionProbability;
-  for (const name of interventionNames) {
-    const delta = scenarios.STATUS_QUO.attritionProbability - scenarios[name].attritionProbability;
-    if (delta > bestDelta) {
-      bestDelta = delta;
-      bestName = name;
-    }
-  }
-
-  const simulation: Simulation = {
-    scenarios,
-    bestIntervention: { name: bestName, delta: Number(bestDelta.toFixed(2)) },
-    seeds: 50,
-  };
-
-  // ── Attention plan (simulated-annealing-style greedy allocation) ─────
-  const HOURS_BUDGET = 30;
-  const LOAD_BUDGET = 40;
-  const days: AttentionItem["day"][] = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-
-  const candidates = findings.map((f) => {
-    const hours = f.sev === 5 ? 4 : f.sev === 4 ? 3 : f.sev === 3 ? 2 : f.sev === 2 ? 1 : 0.5;
-    const cognitiveLoad = Number((hours * 1.2).toFixed(1));
-    const roi = Number(((f.sev * f.sev * 5) / hours).toFixed(1));
-    return { finding: f, hours, cognitiveLoad, roi };
-  });
-  candidates.sort((a, b) => b.roi - a.roi);
-
-  const sequence: AttentionItem[] = [];
-  const deferred: DeferredItem[] = [];
-  let totalHours = 0;
-  let cognitiveLoadUsed = 0;
-  let dayIdx = 0;
-  for (const c of candidates) {
-    if (totalHours + c.hours <= HOURS_BUDGET && cognitiveLoadUsed + c.cognitiveLoad <= LOAD_BUDGET) {
-      sequence.push({
-        id: `item-${c.finding.key}`,
-        day: days[dayIdx % days.length],
-        title: c.finding.title,
-        domain: c.finding.domain,
-        rule: c.finding.rule,
-        roi: c.roi,
-        hours: c.hours,
-        cognitiveLoad: c.cognitiveLoad,
-        severity: c.finding.sev,
-        findingKey: c.finding.key,
-      });
-      totalHours += c.hours;
-      cognitiveLoadUsed += c.cognitiveLoad;
-      dayIdx++;
-    } else {
-      deferred.push({
-        title: c.finding.title,
-        rule: c.finding.rule,
-        reason: "Exceeds this week's hours/cognitive-load budget",
-      });
-    }
-  }
-
-  const attentionPlan: AttentionPlan = {
-    sequence,
-    deferred,
-    totalHours: Number(totalHours.toFixed(1)),
-    utilizationPct: Math.round((totalHours / HOURS_BUDGET) * 100),
-    cognitiveLoadUsed: Number(cognitiveLoadUsed.toFixed(1)),
-  };
-
-  // ── Highest leverage action ───────────────────────────────────────────
-  const highestLeverageAction: HighestLeverageAction | null = sequence.length
-    ? { action: sequence[0].title, source: `${sequence[0].rule}`, urgency: URGENCY_FOR_SEV[sequence[0].severity] }
-    : null;
-
   return {
+    generatedAt: new Date().toISOString(),
     findings,
-    domainScores,
-    decisions,
-    eventCount: events.length,
-    peopleCount: activePeople.length,
-    pulseByPerson,
-    openGoals: openPlans,
-    openPlans,
-    correlations,
-    inferences,
-    beliefs,
-    flightRisk,
-    healthScore,
-    temporalMode,
-    orgEntropy: Number(orgEntropy.toFixed(3)),
-    feedbackLoops,
-    simulation,
-    attentionPlan,
-    highestLeverageAction,
-    generatedAt: now.toISOString(),
+    metricsSnapshot,
+    activePlaybooks: openPlaybooks.length,
+    counts: {
+      people: people.length,
+      events: events.length,
+      findings: findings.length,
+      critical: findings.filter((f) => f.sev >= 4).length,
+      pendingWork: pendingWork.length,
+    },
   };
 }

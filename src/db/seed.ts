@@ -1,119 +1,172 @@
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   leados_people,
   leados_events,
-  leados_decisions,
-  leados_plans,
+  leados_growth_plans,
+  leados_work_queue,
+  leados_metrics,
 } from "@/db/schema";
-import { sql } from "drizzle-orm";
 
-function daysAgo(n: number) {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
-}
-
-// Builds 12 evenly spaced timestamps from `spanDays` ago up to `recencyDays` ago.
-function series(spanDays: number, recencyDays: number, count = 12) {
-  const out: Date[] = [];
-  const step = (spanDays - recencyDays) / (count - 1);
-  for (let i = 0; i < count; i++) {
-    out.push(daysAgo(spanDays - step * i));
-  }
-  return out;
-}
+const DAY = 24 * 60 * 60 * 1000;
+const daysAgo = (n: number) => new Date(Date.now() - n * DAY);
 
 export async function seed() {
-  const existing = await db.execute(sql`select count(*)::int as n from leados_people`);
-  const count = Number((existing.rows[0] as { n: number })?.n ?? 0);
-  if (count > 0) return; // idempotent — already seeded
+  const result: Record<string, unknown> = {};
 
-  const [ana, marcus, priya, diego, fatima, tom] = await db
-    .insert(leados_people)
-    .values([
-      { name: "Ana Petrova", role: "Engineering Manager", cadenceDays: 14 },
-      { name: "Marcus Chen", role: "Sales Lead", cadenceDays: 14 },
-      { name: "Priya Sharma", role: "Ops Lead", cadenceDays: 14 },
-      { name: "Diego Fernandez", role: "Finance Analyst", cadenceDays: 21 },
-      { name: "Fatima Al-Sayed", role: "Strategy Lead", cadenceDays: 14 },
-      { name: "Tom O'Brien", role: "Senior Engineer", cadenceDays: 14 },
-    ])
-    .returning();
+  const [{ ecount }] = await db
+    .select({ ecount: sql<number>`count(*)::int` })
+    .from(leados_events);
 
-  // ── Pulse history (mood + load, 1-5 scale) ──────────────────────────
-  const pulsePlan: { person: typeof ana; mood: number[]; load: number[] }[] = [
-    { person: ana, mood: [3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 2, 1], load: [3, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5] },
-    { person: priya, mood: [3, 3, 3, 3, 2, 3, 2, 3, 2, 2, 3, 2], load: [4, 4, 4, 5, 5, 4, 5, 5, 5, 5, 5, 5] },
-    { person: marcus, mood: [4, 4, 3, 4, 3, 4, 4, 3, 4, 4, 3, 4], load: [3, 3, 2, 3, 3, 3, 2, 3, 3, 2, 3, 3] },
-    { person: diego, mood: [4, 4, 4, 3, 4, 4, 3, 4, 4, 4, 3, 4], load: [3, 3, 4, 3, 4, 3, 4, 3, 4, 3, 4, 3] },
-    { person: fatima, mood: [4, 5, 4, 5, 4, 4, 5, 4, 4, 5, 4, 4], load: [3, 3, 3, 2, 3, 3, 2, 3, 3, 3, 2, 3] },
-    { person: tom, mood: [3, 3, 4, 3, 3, 3, 3, 3, 3, 3, 4, 3], load: [4, 4, 3, 4, 4, 4, 3, 4, 4, 4, 4, 4] },
-  ];
+  if (ecount === 0) {
+    const [mia, diego, sarah, tom, priya, liam] = await db
+      .insert(leados_people)
+      .values([
+        { name: "Mia Chen", role: "Product Manager", email: "mia@acme.io", createdAt: daysAgo(400) },
+        { name: "Diego Alvarez", role: "Engineering Lead", email: "diego@acme.io", createdAt: daysAgo(300) },
+        { name: "Sarah Kim", role: "Sales Lead", email: "sarah@acme.io", createdAt: daysAgo(500) },
+        { name: "Tom Okafor", role: "Support Lead", email: "tom@acme.io", createdAt: daysAgo(200) },
+        { name: "Priya Nair", role: "Software Engineer", email: "priya@acme.io", createdAt: daysAgo(5) },
+        { name: "Liam Walsh", role: "Software Engineer", email: "liam@acme.io", createdAt: daysAgo(250) },
+      ])
+      .returning();
 
-  const pulseRows: (typeof leados_events.$inferInsert)[] = [];
-  for (const { person, mood, load } of pulsePlan) {
-    const dates = series(74, 2, 12);
-    mood.forEach((m, i) => {
-      pulseRows.push({
-        type: "pulse",
-        domain: "people",
-        personId: person.id,
-        data: { mood: m, load: load[i], notes: "" },
-        createdAt: dates[i],
+    const events: (typeof leados_events.$inferInsert)[] = [];
+
+    // ---- Mia: healthy baseline ----
+    events.push(
+      { type: "oneonone", personId: mia.id, domain: "people", data: { notes: "Roadmap check-in" }, createdAt: daysAgo(10) },
+      { type: "pulse", personId: mia.id, domain: "people", data: { mood: 4 }, createdAt: daysAgo(3) },
+      { type: "feedback", personId: mia.id, domain: "people", data: { sentiment: "positive", text: "Great quarter" }, createdAt: daysAgo(10) },
+    );
+
+    // ---- Diego: burnout compound (low morale + high load) ----
+    events.push(
+      { type: "pulse", personId: diego.id, domain: "people", data: { mood: 1 }, createdAt: daysAgo(1) },
+      { type: "pulse", personId: diego.id, domain: "people", data: { mood: 2 }, createdAt: daysAgo(6) },
+      { type: "oneonone", personId: diego.id, domain: "people", data: { notes: "Workload check" }, createdAt: daysAgo(5) },
+      { type: "feedback", personId: diego.id, domain: "people", data: { sentiment: "neutral", text: "Delivering but stretched" }, createdAt: daysAgo(20) },
+    );
+    for (let i = 0; i < 15; i++) {
+      events.push({
+        type: "task_assigned", personId: diego.id, domain: "people",
+        data: { title: `Task ${i + 1}` }, createdAt: daysAgo(1 + i * 0.8),
       });
-    });
-  }
-  await db.insert(leados_events).values(pulseRows);
+    }
 
-  // ── 1:1 history ──────────────────────────────────────────────────────
-  const oneOnOnePlan = [
-    { person: ana, lastHeld: 40, history: [68, 54, 40] },
-    { person: priya, lastHeld: 25, history: [50, 25] },
-    { person: tom, lastHeld: 20, history: [48, 34, 20] },
-    { person: marcus, lastHeld: 10, history: [38, 24, 10] },
-    { person: diego, lastHeld: 12, history: [44, 28, 12] },
-    { person: fatima, lastHeld: 8, history: [36, 22, 8] },
-  ];
-  const oneOnOneRows: (typeof leados_events.$inferInsert)[] = [];
-  for (const { person, history } of oneOnOnePlan) {
-    history.forEach((d, i) => {
-      oneOnOneRows.push({
-        type: "oneonone",
-        domain: "people",
-        personId: person.id,
-        data: { notes: "Regular check-in.", status: "held" },
-        createdAt: daysAgo(d),
+    // ---- Sarah: cadence slip, open decision, stalled deals ----
+    events.push(
+      { type: "oneonone", personId: sarah.id, domain: "people", data: { notes: "Pipeline review" }, createdAt: daysAgo(35) },
+      { type: "oneonone", personId: sarah.id, domain: "people", data: { notes: "Deal strategy" }, createdAt: daysAgo(70) },
+      { type: "pulse", personId: sarah.id, domain: "people", data: { mood: 3 }, createdAt: daysAgo(4) },
+      { type: "feedback", personId: sarah.id, domain: "people", data: { sentiment: "positive", text: "Closed a big logo" }, createdAt: daysAgo(15) },
+      { type: "decision", personId: sarah.id, domain: "strategy", data: { topic: "Expand into EU market", status: "open" }, createdAt: daysAgo(10) },
+    );
+    for (let i = 0; i < 3; i++) {
+      events.push({
+        type: "deal", personId: sarah.id, domain: "sales",
+        data: { stage: "negotiation", daysInStage: 35 + i * 5 }, createdAt: daysAgo(5),
       });
-      void i;
-    });
+    }
+
+    // ---- Tom: recognition gap (lots of 1:1s, no positive feedback) ----
+    for (let i = 0; i < 5; i++) {
+      events.push({
+        type: "oneonone", personId: tom.id, domain: "people",
+        data: { notes: `Support ops sync ${i + 1}` }, createdAt: daysAgo(7 + i * 10),
+      });
+    }
+    events.push(
+      { type: "feedback", personId: tom.id, domain: "people", data: { sentiment: "negative", text: "Missed SLA" }, createdAt: daysAgo(40) },
+      { type: "feedback", personId: tom.id, domain: "people", data: { sentiment: "neutral", text: "On track" }, createdAt: daysAgo(70) },
+      { type: "pulse", personId: tom.id, domain: "people", data: { mood: 3 }, createdAt: daysAgo(2) },
+    );
+
+    // ---- Priya: new hire, no check-in yet ----
+    // (intentionally no oneonone / pulse events logged yet)
+
+    // ---- Liam: negative feedback streak + declining mood ----
+    events.push(
+      { type: "feedback", personId: liam.id, domain: "people", data: { sentiment: "negative", text: "Missed deadline" }, createdAt: daysAgo(3) },
+      { type: "feedback", personId: liam.id, domain: "people", data: { sentiment: "negative", text: "Quality concerns" }, createdAt: daysAgo(12) },
+      { type: "feedback", personId: liam.id, domain: "people", data: { sentiment: "negative", text: "Communication gaps" }, createdAt: daysAgo(20) },
+      { type: "pulse", personId: liam.id, domain: "people", data: { mood: 2 }, createdAt: daysAgo(2) },
+      { type: "pulse", personId: liam.id, domain: "people", data: { mood: 3 }, createdAt: daysAgo(9) },
+      { type: "pulse", personId: liam.id, domain: "people", data: { mood: 4 }, createdAt: daysAgo(16) },
+      { type: "oneonone", personId: liam.id, domain: "people", data: { notes: "Check-in" }, createdAt: daysAgo(10) },
+    );
+
+    // ---- Org-wide: strategy, ops, decisions ----
+    events.push(
+      { type: "okr_review", domain: "strategy", data: { quarter: "Q2" }, createdAt: daysAgo(60) },
+      { type: "meeting", domain: "strategy", data: { topic: "Leadership sync" }, createdAt: daysAgo(2) },
+      { type: "meeting", domain: "strategy", data: { topic: "All hands" }, createdAt: daysAgo(5) },
+      { type: "decision", domain: "strategy", data: { topic: "Pricing tier restructure", status: "open" }, createdAt: daysAgo(25) },
+      { type: "decision", domain: "strategy", data: { topic: "Hire VP Eng", status: "open" }, createdAt: daysAgo(18) },
+      { type: "decision", domain: "strategy", data: { topic: "Office relocation", status: "open" }, createdAt: daysAgo(9) },
+      { type: "decision", domain: "strategy", data: { topic: "New brand positioning", status: "open" }, createdAt: daysAgo(8) },
+      { type: "decision", domain: "strategy", data: { topic: "Partner integration", status: "resolved" }, createdAt: daysAgo(40) },
+    );
+    for (let i = 0; i < 4; i++) {
+      events.push({
+        type: "incident", domain: "ops",
+        data: { severity: "sev2", afterHours: i < 3 }, createdAt: daysAgo(1 + i * 3),
+      });
+    }
+    for (let i = 0; i < 12; i++) {
+      events.push({
+        type: "support_ticket", domain: "ops",
+        data: { status: "open", subject: `Ticket ${i + 1}` }, createdAt: daysAgo(1 + i),
+      });
+    }
+
+    await db.insert(leados_events).values(events);
+
+    await db.insert(leados_growth_plans).values([
+      { personId: mia.id, title: "Staff PM track", status: "completed", lastCheckinAt: daysAgo(5), createdAt: daysAgo(120) },
+      { personId: diego.id, title: "Eng leadership growth", status: "open", lastCheckinAt: daysAgo(60), createdAt: daysAgo(150) },
+      { personId: sarah.id, title: "Sales management track", status: "open", lastCheckinAt: daysAgo(25), createdAt: daysAgo(100) },
+      { personId: tom.id, title: "Support ops scale-up", status: "open", lastCheckinAt: daysAgo(10), createdAt: daysAgo(90) },
+      { personId: liam.id, title: "Senior engineer track", status: "open", lastCheckinAt: daysAgo(35), createdAt: daysAgo(80) },
+    ]);
+
+    result.people = 6;
+    result.events = events.length;
+    result.growthPlans = 5;
   }
-  await db.insert(leados_events).values(oneOnOneRows);
 
-  // ── Feedback history ──────────────────────────────────────────────────
-  const feedbackRows: (typeof leados_events.$inferInsert)[] = [
-    { type: "feedback", domain: "sales", personId: marcus.id, data: { notes: "Client flagged missed SLAs in renewal.", sentiment: "negative" }, createdAt: daysAgo(18) },
-    { type: "feedback", domain: "sales", personId: marcus.id, data: { notes: "Second escalation from enterprise account this month.", sentiment: "negative" }, createdAt: daysAgo(6) },
-    { type: "feedback", domain: "people", personId: ana.id, data: { notes: "Strong technical mentorship noted by team.", sentiment: "positive" }, createdAt: daysAgo(45) },
-    { type: "feedback", domain: "people", personId: fatima.id, data: { notes: "Clear strategic communication in all-hands.", sentiment: "positive" }, createdAt: daysAgo(20) },
-    { type: "feedback", domain: "ops", personId: priya.id, data: { notes: "Ops migration slipping, team morale strained.", sentiment: "negative" }, createdAt: daysAgo(15) },
-    { type: "feedback", domain: "people", personId: diego.id, data: { notes: "Reliable, steady quarterly close.", sentiment: "neutral" }, createdAt: daysAgo(30) },
-    { type: "feedback", domain: "people", personId: tom.id, data: { notes: "Good debugging support for on-call.", sentiment: "positive" }, createdAt: daysAgo(22) },
-  ];
-  await db.insert(leados_events).values(feedbackRows);
+  const [{ mcount }] = await db
+    .select({ mcount: sql<number>`count(*)::int` })
+    .from(leados_metrics);
 
-  // ── Decisions ───────────────────────────────────────────────────────
-  await db.insert(leados_decisions).values([
-    { title: "Re-architect billing pipeline", owner: "Diego Fernandez", domain: "finance", status: "open", openedAt: daysAgo(10) },
-    { title: "Vendor contract renewal", owner: "Fatima Al-Sayed", domain: "strategy", status: "open", openedAt: daysAgo(70) },
-    { title: "Sales comp plan redesign", owner: "Marcus Chen", domain: "sales", status: "open", openedAt: daysAgo(30) },
-    { title: "Ops tooling migration", owner: "Priya Sharma", domain: "ops", status: "open", openedAt: daysAgo(50) },
-    { title: "Governance policy update", owner: "Ana Petrova", domain: "gov", status: "open", openedAt: daysAgo(5) },
-    { title: "Q3 roadmap prioritization", owner: "Fatima Al-Sayed", domain: "strategy", status: "resolved", openedAt: daysAgo(40), resolvedAt: daysAgo(2) },
-  ]);
+  if (mcount === 0) {
+    await db.insert(leados_metrics).values([
+      { key: "runway_months", value: 8.5, domain: "finance", note: "Updated Q3" },
+      { key: "mrr_growth_pct", value: -2.1, domain: "finance", note: "Q3 contraction" },
+      { key: "pipeline_coverage_x", value: 2.3, domain: "sales", note: "Below 3× target" },
+      { key: "win_rate_pct", value: 28, domain: "sales", note: "Declining from 35%" },
+      { key: "churn_pct", value: 3.1, domain: "sales", note: "Above 2% threshold" },
+      { key: "ltv_cac", value: 2.4, domain: "finance", note: "Below 3× benchmark" },
+      { key: "deploy_freq_delta_pct", value: -38, domain: "ops", note: "Dropped since migration" },
+      { key: "nps", value: 34, domain: "sales", note: "Q3 survey" },
+      { key: "headcount", value: 6, domain: "people", note: "Current roster" },
+    ]);
 
-  // ── Growth plans ────────────────────────────────────────────────────
-  await db.insert(leados_plans).values([
-    { personId: priya.id, goal: "Lead cross-team ops initiative", level: "senior", status: "active", lastCheckin: daysAgo(35) },
-    { personId: diego.id, goal: "Finance modeling certification", level: "mid", status: "active", lastCheckin: daysAgo(40) },
-    { personId: ana.id, goal: "People management skills", level: "senior", status: "active", lastCheckin: daysAgo(5) },
-    { personId: tom.id, goal: "Backend architecture mastery", level: "mid", status: "active", lastCheckin: daysAgo(10) },
-  ]);
+    // Extra metrics to exercise additional finance/ops rules in the demo.
+    await db.insert(leados_metrics).values([
+      { key: "burn_multiple", value: 2.6, domain: "finance", note: "Efficiency slipping" },
+      { key: "cash_buffer_months", value: 2.2, domain: "finance", note: "Thin operating cushion" },
+      { key: "code_review_lag_hours", value: 52, domain: "ops", note: "Review bottleneck" },
+      { key: "headcount_target", value: 9, domain: "people", note: "Approved hiring plan" },
+    ]);
+
+    result.metrics = 13;
+  }
+
+  const [{ wcount }] = await db
+    .select({ wcount: sql<number>`count(*)::int` })
+    .from(leados_work_queue);
+  result.existingWorkQueueItems = wcount;
+
+  return result;
 }

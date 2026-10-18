@@ -4,58 +4,55 @@ import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
+async function getEventCount() {
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(leados_events);
+  return count;
+}
+
 export async function GET() {
+  const encoder = new TextEncoder();
+  let poll: ReturnType<typeof setInterval> | undefined;
+  let ping: ReturnType<typeof setInterval> | undefined;
+
   const stream = new ReadableStream({
-    start(controller) {
-      const enc = new TextEncoder();
-      const send = (data: unknown) => {
+    async start(controller) {
+      const emit = (d: unknown) => {
         try {
-          controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(d)}\n\n`));
         } catch {
           // controller already closed
         }
       };
 
-      send({ type: "connected" });
+      emit({ type: "connected", ts: new Date().toISOString() });
 
-      let lastCount = 0;
-      let closed = false;
+      let lastCount = await getEventCount();
 
-      const interval = setInterval(async () => {
-        if (closed) return;
+      poll = setInterval(async () => {
         try {
-          const [{ count }] = await db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(leados_events);
+          const count = await getEventCount();
           if (count !== lastCount) {
             lastCount = count;
-            send({ type: "new_events", count });
+            emit({ type: "refresh", count });
           }
         } catch {
-          // ignore transient DB errors
+          // ignore transient db errors between polls
         }
       }, 5000);
 
-      const ping = setInterval(() => {
-        if (closed) return;
+      ping = setInterval(() => {
         try {
-          controller.enqueue(enc.encode(`: ping\n\n`));
+          controller.enqueue(encoder.encode(": ping\n\n"));
         } catch {
           // controller already closed
         }
       }, 15000);
-
-      const cleanup = () => {
-        closed = true;
-        clearInterval(interval);
-        clearInterval(ping);
-      };
-
-      // @ts-expect-error - non-standard but supported by the Next.js runtime
-      controller._cleanup = cleanup;
     },
     cancel() {
-      // no-op: intervals are cleared via closed flag on next tick
+      if (poll) clearInterval(poll);
+      if (ping) clearInterval(ping);
     },
   });
 
