@@ -1,153 +1,50 @@
-# AI Session Log — LeadOS pt-S (Bayesian Belief Network Engine, Part 1)
+# AI Session Log — LEADOS Sandbox (Part 2: Multi-Agent Organizational Simulation)
 
 This log records what was actually checked against `github.com/wbweve/Leados`
 this session, via which calls, what was found, and what in this delivery is
-original, a reused pattern, an unverified citation, or a disclosed gap.
+verified, original, or a disclosed gap. Per the task instruction ("inspect
+the actual code before claiming anything about it; label anything
+unverified"), this applies to the real repo *and* to the task's own pasted
+`LEADOS.simulation` spec.
 
 ## 1. What was fetched, and how (this session)
 
 | # | Call | Purpose / result |
 |---|------|-------------------|
-| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered README) | Initial orientation — treated as a claim to verify, not fact. The README itself already disclosed (per an earlier session in this lineage) that the repo is two deliveries: loose root-level files (incl. a single-file `index.html` demo) plus a separate live `src/` Vite+React+TypeScript app currently implementing Thermodynamics + a CAS engine + an 8-category Risk Register. |
-| 2 | `bash curl https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive file tree: 148 files. Piped through Python to list every path containing `lib`, `App.tsx`, or `index.html`. Confirmed `src/lib/` contains 23 files (`a11y.ts`, `aesthetics.ts`, `casEngine.ts`, `circadian.ts`, `core.ts`, `cssolver.ts`, `engine.ts`, `familiarity.ts`, `fatigue.ts`, `genome.ts`, `health.ts`, `infoTheory.ts`, `intelligence.ts`, `memory.ts`, `monteCarlo.ts`, `physics.ts`, `prng.ts`, `riskIntelligence.ts`, `rules.ts`, `seed.ts`, `selfTest.ts`, `sensory.ts`, `storage.ts`, `store.ts`, `synthesis.ts`, `types.ts`, `useHashRoute.ts`, `workers.ts`). **No file named `bayesian.ts`, `belief.ts`, or any plausible equivalent exists.** |
-| 3 | `bash grep -io` for `bayes[a-z]*` and `belief[a-z]*` across the raw JSON tree-listing text | **Zero matches**, both patterns. This is the single most load-bearing check this session: it confirms no Bayesian-named file exists anywhere in the 148-file tree, not just in `src/lib`. |
-| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read an **earlier session's own first-hand log** directly (describing a "Part 2+3 / CAS Engine + Risk Intelligence" delivery). It documents, with its own call-by-call ledger: a live `src/lib/infoTheory.ts` wired into `Thermodynamics.tsx` via `IntelligenceView.tsx`; `core.ts`/`intelligence.ts`/`physics.ts` present but orphaned (`intelligence.ts` imports `{ engine, run }` from `./core`, which does not export them); no CAS/risk-register code found anywhere at the time that log was written. **This log predates the CAS/Risk Register build described in the current README (call #1)** — i.e. it describes an earlier state of the same repo, not necessarily its current one. |
-| 5 | `bash curl` of raw `src/App.tsx` (27 lines) | **Verified directly, this session.** Current live app imports `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`, `useHashRoute`, and `loadState`/types from `./lib`. This is a **different** import set than the one described in the earlier log (call #4), which referenced `PeopleView`/`EventLogView`/`IntelligenceView`/`Thermodynamics.tsx` as a component (not `ThermodynamicsView`). Conclusion: the repo has moved forward between sessions; call #4's log is a historical artifact, not a description of the repo's current `src/App.tsx`. No Bayesian import of any kind in this file. |
-| 6 | `bash curl` of raw root `index.html` (12 lines) | **Verified directly, this session.** A short, Vite-built shell (`<div id="root">` + one `<script type="module">` tag) — not the large hand-authored vanilla-JS demo described in the earlier log (call #4), which reported 54,081 bytes containing `identifyAttractors()`, ~60 `R*` rule IDs, and a literal `pt-L` string. Conclusion: the root `index.html` has also been replaced/rebuilt between sessions (consistent with the live app now being a Vite build with `vite-plugin-singlefile`, matching the README's own description). Grepped directly for `bayes`/`belief`: **zero matches**. |
-| 7 | `bash grep -io` for `bayes[a-z]*`/`belief[a-z]*` on files fetched in calls #5–#6 | **Zero matches** in both. Combined with call #3, this is three independent zero-match checks (full tree, live `App.tsx`, root `index.html`) before any claim was made that "there is no Bayesian code in the real repo." |
+| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered page) | Initial orientation. Returned a README whose text is itself a **prior AI session's self-description** of inspecting this same repo — i.e. the repo's README is not neutral documentation, it's a narrated provenance claim from an earlier pass. Treated as a claim to verify, not fact. |
+| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Recursive tree listing. Returned dozens of entries — **all at repo root**, no `src/` prefix visible in the (truncated) response: `AI-SESSION-LOG.append.md`, `AI-SESSION-LOG.md`, `AboutView.tsx`, `App.tsx`, `BulletGraph.tsx`, `BundleModal.tsx`, `BundlesView.tsx`, `CalibrationCurve.tsx`, `Catalog.tsx`, `ChartFrame.tsx`, `CohortGrid.tsx`, `CommandPalette.tsx`, `ContractView.tsx`, `DataView.tsx`, `DataWidgets.tsx`, `DomainViews.tsx`, `FinanceDashboard.tsx`, `GanttText.tsx`, `HealthView.tsx`, `Heatmap.tsx`, `Histogram.tsx`, `IntelligenceDashboard.tsx`, `IntelligenceView.tsx`, `LineChart.tsx`, `MaintenanceView.tsx`, `MiscViews.tsx`, `Network.tsx`, `OverlayPanels.tsx`, `PeopleDashboard.tsx`, `PlaybooksView.tsx`, `ProvenanceView.tsx`, `Radar.tsx`, `RosterView.tsx`, `README.md`, `SESSION-3.patch.md`, `ScoreMath.tsx`, and more (response was truncated by size; not every row was enumerated). |
+| 3 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/` | Root directory listing, confirms #2: a flat root directory of loose `.tsx`/`.md` files. |
+| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | **Verified directly:** the repo's own log file. It narrates a session that claims to have found `src/lib/` and `src/components/` trees (with `infoTheory.ts`, `core.ts`, `engine.ts`, `intelligence.ts`, `casEngine.ts` absent, etc.) and a root `index.html` of 54,081 bytes containing `identifyAttractors()`, ~60 `R`-prefixed rule IDs, and the string `pt-L`. This is the repo *documenting itself*, not this session independently confirming the `src/` tree's contents. |
+| 5 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/README.md` | **Verified directly:** matches the rendered page from call #1 — same provenance narrative, same project-structure diagram (`src/lib/...`, `src/components/...`). |
+| 6 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/index.html` (text mode) | Returned only `<title>LEADOS Sandbox — CAS Engine, Risk Intelligence & Thermodynamics</title>` — a signal the body was minimal/empty of static text. |
+| 7 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/index.html` (html mode) | **Verified directly, this session, in full:** the entire file is 9 lines — a bare Vite entry stub: `<div id="root"></div>` + `<script type="module" src="/src/main.tsx"></script>`. **This directly contradicts** the 54,081-byte, rule-ID-laden, hand-authored `index.html` that the repo's own README (#5) and AI-SESSION-LOG.md (#4) describe inspecting. |
 
-No commit history, pull requests, issues, or GitHub code search were used.
-No code from the real repo was executed. This is a read-only, API/raw-file
-based inspection, scoped to the specific calls listed above.
+No commit history, blame, or GitHub code search was used, so it is not established *when* the root `index.html` changed to this stub, or whether the `src/` tree the repo's docs describe currently exists — only that the docs' description of the root `index.html` does not match what that file actually contains as of this fetch.
 
 ## 2. Verified facts (first-hand, this session)
 
-- **V1.** No file, export, identifier, or string matching `bayes*`/`belief*`
-  exists anywhere in the real repo's 148-file tree, its current live
-  `src/App.tsx`, or its current root `index.html`. (Calls #2, #3, #5, #6, #7)
-- **V2.** The real repo's live `src/App.tsx` currently composes
-  `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`,
-  `RiskView`, `AboutView` — a Thermodynamics + CAS + Risk Register build.
-  (Call #5, corroborated by the README fetched in call #1.)
-- **V3.** An earlier session's own `AI-SESSION-LOG.md`, still present at the
-  repo root, describes an *earlier* state of the same repo (pre-CAS/Risk
-  Register) and is not an accurate description of the repo's current
-  `src/App.tsx` or root `index.html`. (Calls #4, #5, #6 — direct
-  contradiction on import names and file size/content between what call #4
-  reports and what calls #5–#6 independently fetched this session.)
-- **V4 (scope limit, disclosed).** This session did not fetch the contents
-  of any individual `src/lib/*.ts` file beyond what the earlier log (call
-  #4) already reported reading, nor any `src/components/*.tsx` file. The
-  "no Bayesian code" conclusion rests on the full-tree filename grep (call
-  #3) plus direct content greps of `App.tsx` and root `index.html` (calls
-  #5–#7) — not on reading every byte of every one of the 148 files. Flagged
-  as a gap, not glossed over: it remains conceivable (though contrary to
-  every available signal) that a `bayes`/`belief` string appears inside the
-  body of some unfetched file under a different identifier name this
-  session's greps didn't anticipate.
+- **V1.** The repo root is a flat directory of ~35+ loose `.tsx`/`.md` files (not nested under `src/`), confirmed via two independent calls (#2, #3).
+- **V2.** The current root `index.html`, fetched and read in full (#7), is a minimal Vite/React entry stub with zero inline application logic, zero rule IDs, zero `identifyAttractors` reference.
+- **V3.** The repo's own `README.md` and `AI-SESSION-LOG.md` (#4, #5) describe a *different* root `index.html` (54KB, hand-authored, rule-ID catalog) than what V2 shows. **This is a direct contradiction**, surfaced here rather than silently resolved in either document's favor.
+- **V4 (not verified, disclosed as a gap).** Whether a `src/lib/` or `src/components/` directory exists with the specific files the repo's docs name (`infoTheory.ts`, `casEngine.ts`, `Thermodynamics.tsx`, etc.) was **not independently confirmed this session** — no `contents/src` call was made. The root `index.html`'s `/src/main.tsx` reference makes some `src/` folder plausible, but its contents are repeated here only as the repo's *own, not fully reliable* self-report (per V3), not as this session's verified fact.
+- **V5.** The task's pasted `LEADOS.simulation` code (agent model: mood/load/engagement/flightRisk/performance, `stepAgents`, Monte Carlo `run`/`_runScenario`) does **not** appear in anything actually fetched from the real repo this session. No search for its specific identifiers (`stepAgents`, `initAgents`, `flightSignal`, `attritionProbability`) was run against the repo, but it is absent from every file this session actually read (the stub `index.html`, `README.md`, `AI-SESSION-LOG.md`). Treated as an **unverified specification pasted into this task**, exactly as earlier sessions in this repo's own lineage treated their own pasted briefs (per their own disclosed convention, itself unverified beyond the repo's self-report — see V3).
 
-## 3. Conclusion drawn from the above
+## 3. Conclusion
 
-The task's pasted "pt-S, Part 1" brief (`LEADOS.bayesian`, `PRIORS`,
-`LIKELIHOODS`, `update()`, `computeAllBeliefs()`) is treated as an
-**unverified specification supplied by the task prompt**, not as a claim
-about what exists in `github.com/wbweve/Leados`. No part of it was found in
-the real repo. This delivery does not fork, copy, or continue any code from
-that repo, nor from any prior "pt-K"/"pt-L" sandbox session (none of which
-is accessible from this workspace — this sandbox began from the default
-Vite scaffold `App.tsx`, confirmed empty of any prior app logic before this
-session's edits).
+The real repo's own documentation about itself is **not reliable on its own** — at minimum, its description of its own root `index.html` is contradicted by that file's actual current content. This session therefore did not extend, copy, or "continue" any specific module from that repo (no verified module was available to continue), and treats the task's pasted `LEADOS.simulation` spec purely as this task's own input, not as repo-sourced code.
 
-## 4. Fidelity check on the pasted brief's own code
+## 4. What this delivery actually is
 
-Per the task's instruction to inspect actual code before claiming anything
-about it, the same standard was applied to the **pasted brief's own text**:
+This tool environment's own constraint is a **single hand-authored `index.html`** (Tailwind via CDN, inline `<script>`, no build step) — the opposite of the real repo's current Vite/React stub. No attempt was made to imitate the Vite app; this is a fresh, self-contained build.
 
-- **Gap A.** `PRIORS` defines `crisis.next30d` and `key_hire.success`, but
-  `LIKELIHOODS` defines no entry for either. The brief's own `update()`
-  contains `if (!likelihoodFn) return prior;` — meaning, as written, these
-  two hypotheses can never be moved by evidence. Reproduced faithfully in
-  `src/lib/bayesian.ts` (`hasLikelihoodModel: false`), surfaced in the UI as
-  a "static prior" badge, rather than inventing likelihood ratios the brief
-  never specified.
-- **Gap B.** `LIKELIHOODS['attrition.next60d']` defines `comp.at_market`
-  and `promotion.recent`; `LIKELIHOODS['revenue.miss.next_quarter']`
-  defines `pipeline.shrinking` and `nps.high`; `LIKELIHOODS['okr.on_track']`
-  defines `velocity.stable`. None of these five keys is ever pushed onto an
-  evidence array by the brief's own `_extractEvidenceSignals()` method —
-  they are unreachable in the brief's own logic as pasted. Rather than
-  quietly wiring them into the automatic rule-finding mapping (which would
-  misattribute a connection the brief itself never made), `src/lib/engine.ts`
-  exposes them as separate, explicitly-labeled "manual-only" toggles in the
-  Signal Board UI.
-- **Gap C.** The brief declares `beliefs: {}` as an instance field and reads
-  `this.beliefs[hypothesis]` as the starting "prior" inside `update()`, but
-  no method in the pasted brief ever assigns to `this.beliefs` — `update()`
-  persists its result to `state.meta.beliefs` instead, a different object
-  reached through `LEADOS.store.state()`. Net effect: every call to
-  `update()` in the brief as written always falls back to
-  `this.PRIORS[hypothesis]?.prior`, i.e. it always restarts from the
-  original base prior rather than compounding from a previous posterior.
-  `src/lib/bayesian.ts` replicates this exact behavior (full, stateless
-  recompute from the base prior over the current evidence snapshot on every
-  change) and documents it in a code comment, rather than silently
-  "upgrading" it into true sequential updating — a design the brief doesn't
-  actually specify.
-- **Unverified citations.** Every numeric prior and likelihood ratio in the
-  brief cites a named source (SHRM 2022, Bessemer Venture Partners 2023,
-  Lattice OKR Benchmark Report 2023, Gallup 2023, Leiter & Maslach 2009,
-  Doerr 2018, Reichheld's Net Promoter 3.0, LinkedIn Talent Trends 2023).
-  None of these was fetched or checked against its original publication
-  this session. All are reproduced verbatim and labeled "unverified
-  citation" in `src/lib/bayesian.ts` and in the in-app Belief Network and
-  About tabs.
+- **Part 1 (org data model)** — not previously delivered in *this* project (confirmed: `read_file index.html` returned "does not exist" before this session's first write). Built from scratch: a `people / pulses / feedback / plans / oneonones / events` localStorage-backed store, shaped specifically to match the field names (`P.directs`, `P.pulsesByPerson`, `P.openPlans`, `P.oneononeLast`, `P.state.events`, etc.) that the pasted Part 2 spec's `initAgents()` already assumes. This is an **inference from the spec's own code**, not a port of any verified prior LEADOS data model.
+- **Part 2 (`LEADOS.simulation`)** — `initAgents`, `stepAgents`, `run`, `_runScenario`, `_percentile` are reproduced **verbatim** from the task's pasted code (unverified-provenance, per §2 V5), unmodified. Two small additive helpers (`weeklyTrajectory`, `estimateCurrent`) were added in a clearly separate block, used only for charting/dashboard display — the headline Monte Carlo numbers shown to the user always come from the unmodified pasted functions, never from these helpers.
+- **Synthetic seed data** (9-person roster, pulses, feedback, growth plans, 1:1 history, one conflict) — entirely fabricated for this demo, not real organizational data, not copied from the repo (no such dataset was found there either).
+- **Simulation Playbook + View** — new UI: manual single-intervention run, a "full playbook" run comparing all six intervention types (auto-targeted by simple heuristics — overdue people, no-plan people, overloaded people, or the whole team, disclosed inline in the UI as a simplification), a ranked scenario table, a single-seed illustrative trajectory chart (explicitly labeled as distinct from the Monte Carlo means), and a per-agent final-state table.
 
-## 5. Environment constraint that shaped this delivery
+## 5. Known limitations, disclosed
 
-This task's tool environment requires a React + Vite + Tailwind app with
-`src/App.tsx` as the entry point, built via `npm run build`. This is
-incompatible with hand-authoring a single vanilla-JS `index.html` the way
-the real repo's root-level demo once did (per the earlier log, call #4) —
-and, per calls #5–#6 this session, the real repo's root `index.html` and
-`src/App.tsx` have themselves since moved to a Vite-built shell anyway.
-**Disclosed explicitly:** `vite.config.ts` in this workspace already
-includes `vite-plugin-singlefile` (not added this session — present from
-the initial scaffold), confirmed by running `npm run build` and grepping
-`dist/index.html` for external URLs: only inert XML/SVG namespace strings,
-a baked-in React-docs error-text link, and one inert display string (inside
-the in-app provenance text) that happens to quote `https://github.com/wbweve/Leados`
-as plain text were found — no actual runtime `fetch`/script/link tags
-pointing outside the file.
-
-## 6. Original work in this delivery (not claimed as verified spec or repo code)
-
-- `src/lib/bayesian.ts` — `PRIORS`, `LIKELIHOODS`, `updateBelief()`,
-  `computeAllBeliefs()`, `highRiskBeliefs()`, `computeMoodTrend()`. Original
-  TypeScript implementing the pasted brief's described math (Bayes' rule via
-  likelihood-ratio odds form) and reproducing its disclosed gaps (§4) rather
-  than silently fixing them.
-- `src/lib/engine.ts` — evidence-signal extraction from toggleable synthetic
-  state, modeled on the *behavior* of the brief's
-  `_extractEvidenceSignals()`, including its gaps.
-- `src/lib/rules.ts` — 8-rule synthetic catalog. IDs `R1`, `R6`, `R7`,
-  `R10`, `R14`, `R73`, `R104`, `R157` are reused verbatim from the brief
-  (they're the exact IDs its own evidence-mapping logic checks for); all
-  titles, descriptions, and categories are invented for this delivery.
-- `src/lib/seed.ts` — synthetic 8-point mood-trajectory series (three
-  scenarios) and a fixed 10-goal synthetic ledger, used to drive
-  `mood.declining` and `goal_hit_rate.high` evidence signals.
-- `src/lib/store.ts` — localStorage persistence, new key
-  `leados-pts-bayesian:v1` (no continuity claimed with any other session's
-  key; this workspace began from the default Vite scaffold).
-- All UI (`Shell`, `ui.tsx`, `TodayView`, `SignalBoardView`, `BeliefsView`,
-  `AboutView`) — original to this delivery.
-
-## 7. Scope note
-
-Only "PART 1: THE BAYESIAN BELIEF NETWORK ENGINE" (and its opening framing
-text describing a forward scenario simulator and an always-on background
-process) was pasted into this conversation. The forward 30/60/90-day
-simulator and the always-on insight-composition process are **not**
-implemented — no implementation-level spec for either was supplied in this
-part's text. Per the task's own delivery instruction ("after every part"),
-this delivery covers exactly, and only, what was pasted as Part 1.
+- All behavioral coefficients in `LEADOS.simulation` are exactly as pasted in the task prompt and are **not** empirically validated for any real organization — this is stated in the model's own `label` string and repeated in the UI and About tab.
+- "Attrition probability" = share of Monte Carlo seeds where any agent's flight risk exceeds 0.7 — a modeling proxy invented by the pasted spec, not a calibrated forecast.
+- The playbook's auto-targeting (e.g. "reduce load for everyone with load > 7") is a simplification for comparability across scenarios; real interventions are rarely applied uniformly.
+- The chart renderer is a small hand-written `<canvas>` line chart (no charting library), chosen to keep the deliverable a single dependency-free file (Tailwind CDN only).
