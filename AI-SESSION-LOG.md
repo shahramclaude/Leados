@@ -1,103 +1,109 @@
-# AI Session Log — LeadOS Sandbox (original single-file build)
+# AI Session Log — LEADOS Cognitive Workspace (this delivery)
 
-This log records exactly what was fetched and read from `github.com/wbweve/Leados`
-this session, what was independently confirmed, and what remains unverified —
-per the task instruction to inspect actual code before claiming anything about it.
+This log records what was actually fetched and read this session, via which
+calls, and what conclusions those calls support. Anything not confirmed by a
+call listed below is labeled **unverified** in the sections that follow.
 
 ## 1. What was fetched, and how (this session)
 
-| # | Call | Purpose / result |
-|---|------|-------------------|
-| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered README) | Initial orientation, treated as a claim, not fact. The README describes a React+Vite+Tailwind app ("Signal Board / Thermodynamics / CAS Engine / Risk Register") and itself claims to have inspected the repo in a prior session, including a reported broken `intelligence.ts → core.ts` import and an orphaned `core.ts`/`intelligence.ts`/`physics.ts` trio. |
-| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados` | Confirmed the repo is real, public, TypeScript-majority, pushed 2026-10-17, 1 fork, no license. |
-| 3 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Partial recursive file tree (response was long/truncated in what was retrieved). Confirmed: dozens of loose root-level `.tsx`/`.md` files (e.g. `AboutView.tsx`, `BulletGraph.tsx`, `CommandPalette.tsx`, `IntelligenceView.tsx`, `SESSION-3.patch.md`, `README.md`) coexist with a separate `src/` tree. **No `js/` folder, and no file named `hypothesis.js`, `emergent.js`, `agent.js`, `boot.js`, or `master_health.js` appeared anywhere in what was retrieved.** |
-| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read the repo's own prior session log directly. It documents an even earlier finding that `src/lib/core.ts` does not export `engine`/`run`, which `intelligence.ts` imports. Treated as a claim to spot-check, not accepted outright. |
-| 5 | `web_fetch` raw `src/App.tsx` | **Verified directly, this session:** imports `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`, `useHashRoute`, and `loadState` from `./lib/store`. This matches the README's self-description of the live app. |
-| 6 | `web_fetch` raw `src/lib/core.ts` | **Verified directly, this session, in full:** exports `DOMAINS, DomainKey, DECAY, CORRELATION_WINDOW_DAYS, DECISION_MAX_OPEN_DAYS, STORAGE_KEY ("leados-pt-j:data"), FAMILIARITY_KEY, FAMILIARITY_NOTIFIED_KEY, Severity, SEVERITY_WEIGHT, FindingEvent, DecisionEvent, SynthesisEvent, AnyEvent, Meta, StoreState, loadState, saveState, nextId, appendEvent, seedIfEmpty, ProjectedFinding, ProjectedDomainScore, ProjectedDecision, Projection, project`. **Confirmed: no export named `engine` and no export named `run`.** The file's own header comment discloses that most of its internals are a fresh implementation, not a port of the original vanilla-JS root `index.html`. |
-| 7 | `web_fetch` raw `src/lib/intelligence.ts` | **Verified directly, this session:** its first import line is `import { engine, run } from "./core";`. Given finding #6, **this import is confirmed broken** — `core.ts` exports neither symbol. The file is not imported by the current `App.tsx` (per #5), so it is orphaned dead code in the current tree, independent of whatever a prior session's log claimed. |
-| 8 | `web_fetch` raw root `index.html` | Returned only the page `<title>`: "LEADOS Sandbox — CAS Engine, Risk Intelligence & Thermodynamics". This file is confirmed to be a real, different, client-rendered single-file artifact from the `src/` app, but its body/script content was **not** inspectable via this fetch method (format=text strips rendered-nothing from a JS-driven page) — disclosed as a scope limit, not glossed over. |
+| # | Call | Result |
+|---|------|--------|
+| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered page) | Returned a README body describing a React+Vite+Tailwind app with a narrow scope — information theory ("Thermodynamics"), a CAS engine, and an 8-category Risk Register, driven by a 50-rule "Signal Board" under a `src/` tree. The README's own text frames a prior pasted "pt-L" brief as an **unverified external spec**, and documents its own prior-session fact-checking against the repo. |
+| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Returned the real recursive git tree. **Verified:** the repo root is a flat list of dozens of `.tsx`/`.md` files — `AboutView.tsx`, `App.tsx`, `BulletGraph.tsx`, `BundleModal.tsx`, `BundlesView.tsx`, `CalibrationCurve.tsx`, `Catalog.tsx`, `ChartFrame.tsx`, `CohortGrid.tsx`, `CommandPalette.tsx`, `ContractView.tsx`, `DataView.tsx`, `DataWidgets.tsx`, `DomainViews.tsx`, `FinanceDashboard.tsx`, `GanttText.tsx`, `HealthView.tsx`, `Heatmap.tsx`, `Histogram.tsx`, `IntelligenceDashboard.tsx`, `IntelligenceView.tsx`, `LineChart.tsx`, `MaintenanceView.tsx`, `MiscViews.tsx`, `Network.tsx`, `OverlayPanels.tsx`, `PeopleDashboard.tsx`, `PlaybooksView.tsx`, `ProvenanceView.tsx`, `README.md`, `Radar.tsx`, `RosterView.tsx`, `SESSION-3.patch.md`, `ScoreMath.tsx`, plus `AI-SESSION-LOG.md` / `AI-SESSION-LOG.append.md`, and more (the tree response was long and the raw fetch truncated before the end of the alphabetical listing — not every entry was read). **None of this list was mentioned in the README's own prose (call #1).** |
+| 3 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/README.md` | Byte-for-byte consistent with call #1's rendered content — confirms call #1 was reading the real file, not a render artifact. |
+| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/App.tsx` (root-level file) | **Verified:** this file imports from `./lib/store`, `./lib/seed`, `./lib/engine`, `./components/Shell`, `./components/TodayView`, `./components/IntelligenceView`, `./components/DataView`, `./components/HealthView`, `./components/AboutView`, and its `routeFromHash()` only recognizes `["today","intelligence","data","health","about"]`. **This route list does not match the README's own published route table** (`#/today #/signals #/thermodynamics #/cas #/risk #/about`, call #1). |
+| 5 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Returned the repo's own prior log, which itself documents an even earlier fact-check (file listings of `src/lib`, `src/components`, raw reads of `src/App.tsx`, `IntelligenceView.tsx`, `Thermodynamics.tsx`, `engine.ts`, `core.ts`, `intelligence.ts`, and the root `index.html`) concluding that a live `src/lib/infoTheory.ts` → `Thermodynamics.tsx` chain exists, but no CAS engine or risk register file exists anywhere in `src/lib`, and that `intelligence.ts` imports `{ engine, run }` from `core.ts`, which does not export them. **This is the repo's own self-reported history, read directly this session; it was not independently re-verified file-by-file in this session** beyond what calls #2–#4 cover. |
 
-No commit history, pull requests, issues, or GitHub code search were used this
-session. No code from the real repo was executed. This is a read-only,
-API/raw-file inspection scoped to the calls above.
+No commit history, pull requests, issues, or GitHub code search were used. No
+code from the real repo was executed. This is a read-only, API/raw-file-based
+inspection scoped to the five calls above.
 
 ## 2. Verified facts (first-hand, this session)
 
-- **V1.** `github.com/wbweve/Leados` is a real public repo with two structurally
-  different deliveries: loose root-level files (including a single-file
-  `index.html` demo) and a separate live `src/` Vite+React+TypeScript app. (Calls #3, #8)
-- **V2.** The current `src/App.tsx` wires up a Signal-Board/Thermodynamics/CAS/Risk
-  app, matching the README's own description. (Call #5)
-- **V3.** `src/lib/core.ts` does not export `engine` or `run`; `src/lib/intelligence.ts`
-  imports exactly those two names from `./core` and is therefore broken as written,
-  and is not part of the live render path. (Calls #5, #6, #7)
-- **V4.** The root `index.html` is a real, separate, differently-titled artifact.
-  Its internal logic (e.g. whether an `identifyAttractors()` dead-end exists, exact
-  rule-ID count) was **not independently re-verified this session** — any such
-  claim in the repo's own README/prior log is noted here as **unconfirmed by this
-  session** rather than restated as fact. (Call #8)
-- **V5.** No evidence of a `js/` folder, nor of `hypothesis.js`, `emergent.js`,
-  `agent.js`, `boot.js`, `master_health.js`, a "230 active rules" catalog, a
-  "110 files" count, or a "pt-V" label, was found anywhere in the tree or files
-  fetched this session. (Calls #3, #5–#8)
+- **V1.** `github.com/wbweve/Leados`'s README/root `App.tsx` files are
+  internally **inconsistent with each other**: the README markets a narrow
+  Thermodynamics/CAS/Risk sandbox with 6 named hash routes; the actual
+  root-level `App.tsx` recognizes a different 5-route set
+  (`today/intelligence/data/health/about`) and imports a `./lib`/`./components`
+  structure whose full contents were not read beyond what call #2's tree
+  listing shows.
+- **V2.** The repo's root-level file tree (call #2) contains far more
+  surface area — chart primitives (`LineChart`, `Heatmap`, `Histogram`,
+  `Radar`, `BulletGraph`, `Network`), dashboards (`FinanceDashboard`,
+  `PeopleDashboard`, `IntelligenceDashboard`), and ops/HR views
+  (`RosterView`, `PlaybooksView`, `MaintenanceView`, `ContractView`,
+  `BundlesView`) — than either the README or the repo's own prior
+  `AI-SESSION-LOG.md` describes. **The contents of these specific files were
+  not fetched this session; only their existence (filename + size) is
+  verified.** What they do is **unverified**.
+- **V3.** The repo's own prior `AI-SESSION-LOG.md` (call #5) claims a
+  separate `src/` Vite+React+TS tree with a live `infoTheory.ts` →
+  `Thermodynamics.tsx` chain, and explicitly states no CAS-engine or
+  risk-register file exists anywhere in that tree. This claim comes from the
+  repo's own prior session, read directly this session — it is **one level
+  removed from first-hand verification** of the `src/` tree itself (this
+  session did not re-fetch `src/lib/infoTheory.ts` or `src/App.tsx`
+  directly; it read the log that claims to have done so).
+- **V4.** No file, export, or identifier resembling a CAS engine or an
+  8-category risk register was found by this session in anything it fetched
+  directly (calls #2–#4). Per V3, the repo's own prior log independently
+  reports the same absence inside `src/lib`.
 
-## 3. Disposition of the pasted "Color System v15 / Health Wall Master Suite / pt-V" spec
+## 3. Conclusion
 
-The large block of text pasted into this task's prompt (the HSL color-token
-system, the `runCompleteHealthWall` pseudocode with 75+ named tests, and the
-closing "pt-V final state" summary claiming 110 files / 230 rules / 150+ event
-types / etc.) is treated in this delivery as an **unverified external
-specification supplied by the task prompt**, not as a fact about
-`github.com/wbweve/Leados`. Nothing matching its specific module names, file
-counts, or test IDs was found in anything fetched this session (see V5 above).
+`github.com/wbweve/Leados` is not a single coherent artifact as of this
+session's inspection: its README's self-description does not match its own
+root `App.tsx`'s route list, and its root-level file tree is far larger and
+more varied than either document discloses. Per the task's instruction to
+inspect actual code before claiming anything about it, **no claim in this
+delivery is based on the README's narrative alone** — every claim above cites
+the specific raw file or API response it came from, and every file whose
+contents were not fetched this session is labeled unverified rather than
+assumed.
 
-This mirrors the disposition the repo's *own* prior session already gave to a
-similarly large pasted "pt-L" brief in an earlier task — i.e., treating an
-unverifiable pasted spec as inspiration/requirements text, not as repo history
-to "continue."
+## 4. What this delivery does and does not take from that repo
 
-## 4. What this delivery actually is
+- **Does not** copy, port, or paste any code from `github.com/wbweve/Leados`.
+  No file content from that repo was reused verbatim.
+- **Does** reuse, as a *conceptual* reference point only, the idea set the
+  repo's README (call #1/#3) describes in prose: a toggleable synthetic
+  Signal Board, an entropy/SNR/bottleneck "Thermodynamics" module, a CAS
+  engine (feedback loops / bifurcations / attractors), and an 8-category
+  Risk Register with cross-category amplification. These are **reimplemented
+  from scratch** in vanilla JS for this single-file build; none of the
+  underlying math, rule catalog, or component code was read from any real
+  `.ts`/`.tsx` file and transcribed.
+- The Shannon-entropy and signal-to-noise formulas used here are standard
+  textbook information theory (Shannon, 1948), not copied from any fetched
+  file.
 
-This task's tool environment produces a plain HTML/CSS/JS single file (Tailwind
-via CDN), not a React/Vite build — a different constraint than the environment
-the inspected repo's `src/` app was built under. Given that constraint, this
-delivery is an **original, from-scratch single-file sandbox** (`index.html`)
-that:
+## 5. Design-system discrepancy — checked, not assumed
 
-- Implements a small, real, original rule engine (12 base rules + 2 compound
-  rules, labeled `R1`–`R12` and `AMP1`) over a deterministic synthetic event log —
-  not a port or copy of the inspected repo's rule logic (most of which was not
-  read, and the part that was read — `intelligence.ts` — is confirmed broken/orphaned anyway).
-- Reuses the **CSS token structure** (surface stack, ink stack, severity hues,
-  domain hues) from the pasted "Color System v15" spec, trimmed to what is
-  actually used, as a generic design system. This is a styling choice, not a
-  provenance claim — it does not imply that structure exists in the real repo.
-- Implements a small, real Shannon-entropy calculation over its own synthetic
-  event log (genuine textbook formula, tiny scope) rather than reproducing the
-  pasted spec's larger "Thermodynamics" module under false pretenses.
-- Implements an 8-category risk register (2 categories are always empty by
-  construction, and this is disclosed in the UI) and a single, original,
-  disclosed-heuristic "cross-category amplification" check.
-- Implements 14 original, actually-executing self-tests in a "Health Wall" tab —
-  not the pasted spec's 75+ named `T1`–`T_PERC_7` tests, whose bodies/behavior
-  could not be verified anywhere and are therefore not reproduced under their
-  original names (doing so would misrepresent their provenance).
-- Explicitly leaves "attractor detection" unimplemented with a visible, honest
-  label in the UI, rather than faking an output — the same disclosed-gap pattern
-  independently found in this session's reading of the real repo's own code
-  comments (re: `identifyAttractors`), applied here as a design principle, not
-  copied code.
+The task brief asserted a "frozen" design system "already built" as this
+project's `index.html` ("pt-R Cognitive Workspace") and instructed me to
+copy its visual language exactly. **This workspace's `index.html` was read
+directly before any claim was made about it (`read_file` tool, this
+session): no such file existed prior to this delivery.** There was nothing
+to copy pixel values, exact hex codes, or component markup from. Consequently:
 
-## 5. Scope limits, disclosed
+- All token values (backgrounds `#0a0c10 / #0d1016 / #10131a`, border/text
+  slate scale, indigo accent, red/amber/slate severity colors, card/rail
+  shapes) are taken literally from the brief's **written** token list, not
+  from inspecting a pre-existing file.
+- The 8 domain-dot colors (`blue/emerald/pink/violet/teal/sky/purple/rose`
+  at the Tailwind 400 shade) are an **original invention for this delivery**,
+  since the brief said to copy pt-R's domain-dot colors "exactly" but no such
+  file or color values were recoverable from this workspace. This is
+  disclosed in-app under **About / Provenance** rather than silently
+  presented as a faithful copy.
 
-- Only `App.tsx`, `core.ts`, `intelligence.ts`, the repo's own `AI-SESSION-LOG.md`,
-  and the root `index.html`'s `<title>` were actually read this session. The
-  majority of `src/lib/*.ts`, `src/components/*.tsx`, and root-level `.tsx`
-  files were **not** fetched or read this session.
-- The repo's own prior-session claim that `src/lib/infoTheory.ts` /
-  `Thermodynamics.tsx` form a "real, live, wired" pair was **not** independently
-  re-confirmed this session. It is neither repeated as fact nor assumed false —
-  it is simply out of this session's verified scope.
-- No determination was made this session about the full content or correctness
-  of the root `index.html`'s embedded logic (rule count, `identifyAttractors`
-  dead-end, etc.) beyond its page title.
+## 6. Self-disclosed limitations of this delivery
+
+- The CAS feedback-loop/bifurcation/attractor rules and the risk-register
+  amplification rule are illustrative heuristics invented to satisfy the
+  *described* behavior pattern, not validated organizational-science models.
+  Labeled as such in the Thermodynamics and CAS views.
+- The 50-rule catalog, roster-free synthetic Signal Board, self-test suite,
+  and all UI/JS are original to this delivery.
+- `localStorage` key `leados-cognitive-workspace:v1` is new to this
+  workspace; it does not continue any other session's saved state.
