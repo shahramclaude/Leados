@@ -3,1150 +3,1200 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LEADOS — pt-Q: Cascade, Meetings, Performance &amp; Compensation</title>
+<title>LeadOS pt-R — The Cognitive Workspace</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<!--
+  PROVENANCE (see AI-SESSION-LOG.md / README.md for full ledger)
+  ------------------------------------------------------------------
+  github.com/wbweve/Leados was fetched and inspected directly this
+  session (GitHub REST API tree, raw root index.html, raw root
+  package.json, raw AI-SESSION-LOG.md / README.md, src/ directory
+  listing). Verified facts:
+    - The repo's live app is a React+Vite+Tailwind+TS build under src/,
+      matching its own package.json (vite-plugin-singlefile etc).
+    - The root index.html on `main`, fetched raw just now, is a 26-line
+      Vite entry stub (div#root + script src="/src/main.tsx") — NOT the
+      54KB hand-authored demo the repo's own prior AI-SESSION-LOG.md
+      claimed exists there. That is a direct contradiction, disclosed,
+      not silently resolved.
+    - Nothing fetched this session (tree, logs, src/ listing) contains
+      any attention-modeling, generative-layout, proactive-intelligence,
+      command-intent, notification, or health-score code. The repo's
+      verified subject matter is Thermodynamics / CAS / Risk
+      Intelligence — a different "pt" spec than the one below.
+  Conclusion: the "pt-R Cognitive Workspace" spec this file implements
+  is treated as an UNVERIFIED EXTERNAL SPEC, not as repo history. This
+  file is an original, from-scratch implementation of its ideas. My own
+  tool environment requires a single hand-authored index.html (Tailwind
+  CDN + vanilla JS) — it cannot run the repo's own Vite/React stack, so
+  this is deliberately NOT presented as a continuation of src/.
+  Full detail: AI-SESSION-LOG.md, and in-app Rail → "Provenance".
+-->
 <style>
-  body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  :root{color-scheme:dark;}
+  body{background:#0a0c10;}
   ::-webkit-scrollbar{width:8px;height:8px;}
-  ::-webkit-scrollbar-thumb{background:#374151;border-radius:4px;}
-  .tabbtn.active{background:#111827;color:#fff;}
-  .card{background:#fff;border:1px solid #e5e7eb;border-radius:0.75rem;}
-  .fade-in{animation:fadeIn .25s ease-out;}
+  ::-webkit-scrollbar-thumb{background:#2a2f3a;border-radius:4px;}
+  .zone{position:absolute;overflow:auto;box-sizing:border-box;padding:12px;border:1px solid #1d2230;transition:all .35s ease;}
+  .zone-rail{display:none;}
+  .finding-card{transition:transform .15s ease,border-color .15s ease;}
+  .finding-card:hover{transform:translateY(-1px);}
+  .pulse{animation:pulseGlow 1.8s ease-in-out infinite;}
+  @keyframes pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.45);}50%{box-shadow:0 0 0 8px rgba(239,68,68,0);}}
+  .fade-in{animation:fadeIn .25s ease both;}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+  .toast-enter{animation:toastIn .25s ease both;}
+  @keyframes toastIn{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  [data-domain="PEOPLE"]{--dc:#3b82f6;} [data-domain="FINANCIAL"]{--dc:#10b981;}
+  [data-domain="EXECUTION"]{--dc:#f59e0b;} [data-domain="STRATEGY"]{--dc:#8b5cf6;}
+  [data-domain="GOVERNANCE"]{--dc:#94a3b8;} [data-domain="CULTURE"]{--dc:#ec4899;}
+  [data-domain="RESILIENCE"]{--dc:#ef4444;} [data-domain="MARKET"]{--dc:#06b6d4;}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:999px;background:var(--dc,#888);}
 </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
+<body class="h-screen w-screen text-slate-200 text-sm overflow-hidden flex flex-col">
 
-<header class="bg-gray-950 text-white sticky top-0 z-40 shadow-lg">
-  <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+<!-- ============== HEADER ============== -->
+<header class="h-14 shrink-0 flex items-center justify-between px-4 border-b border-slate-800 bg-[#0d1016] z-30">
+  <div class="flex items-center gap-3">
+    <div class="w-7 h-7 rounded-md bg-gradient-to-br from-indigo-500 to-fuchsia-600 flex items-center justify-center font-bold text-xs">pt</div>
     <div>
-      <div class="flex items-center gap-2">
-        <span class="text-xl font-black tracking-tight">LEADOS</span>
-        <span class="text-xs bg-indigo-600 px-2 py-0.5 rounded-full font-semibold">pt-Q</span>
-      </div>
-      <div class="text-[11px] text-gray-400">Cascade · Meeting Intelligence · Performance Architecture · Compensation Equity</div>
+      <div class="font-semibold leading-tight">LeadOS <span class="text-indigo-400">pt-R</span></div>
+      <div class="text-[10px] text-slate-500 leading-tight">The Cognitive Workspace — unverified external spec, original build</div>
     </div>
-    <nav class="flex flex-wrap gap-1 text-sm" id="tabnav"></nav>
-    <div class="flex items-center gap-2">
-      <span id="todayBadge" class="text-[11px] text-gray-400 mono"></span>
-      <button id="resetBtn" class="text-xs bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded-lg font-medium">↻ Reset synthetic data</button>
+  </div>
+
+  <div class="flex items-center gap-2">
+    <button id="btn-cmdk" class="hidden sm:flex items-center gap-2 text-xs px-3 py-1.5 rounded-md bg-slate-800/70 hover:bg-slate-700 border border-slate-700">
+      <span>Ask / command…</span><kbd class="text-[10px] bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">⌘K</kbd>
+    </button>
+
+    <button id="btn-notif" class="relative p-2 rounded-md hover:bg-slate-800 border border-transparent hover:border-slate-700">
+      🔔<span id="notif-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center">0</span>
+    </button>
+
+    <div id="health-widget" class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-800/70 border border-slate-700 cursor-pointer select-none">
+      <span class="text-[10px] text-slate-400">HEALTH</span>
+      <span id="health-score" class="font-bold text-lg leading-none">--</span>
+      <span id="health-grade" class="text-xs px-1.5 py-0.5 rounded bg-slate-700">-</span>
     </div>
   </div>
 </header>
 
-<main class="max-w-7xl mx-auto px-4 py-6" id="app"></main>
+<!-- health dropdown -->
+<div id="health-dropdown" class="hidden fixed top-14 right-4 w-80 bg-[#10131a] border border-slate-700 rounded-lg shadow-2xl z-40 p-3 fade-in"></div>
+<!-- notif dropdown -->
+<div id="notif-dropdown" class="hidden fixed top-14 right-16 w-80 bg-[#10131a] border border-slate-700 rounded-lg shadow-2xl z-40 p-3 fade-in max-h-[70vh] overflow-auto"></div>
 
-<footer class="max-w-7xl mx-auto px-4 pb-10 pt-4 text-xs text-gray-500 border-t border-gray-300 mt-8">
-  All data on this page is synthetic (seeded in your browser, <span class="mono">localStorage</span>). No network calls, no real org data.
-  Provenance ledger: see the <button class="underline" onclick="switchTab('about')">About / Provenance</button> tab.
-</footer>
+<div class="flex flex-1 min-h-0">
+
+  <!-- ============== NAV RAIL (page chrome — see README: distinct from the
+       spec's generated 'rail' zone, which is intentionally not duplicated) -->
+  <nav class="w-16 shrink-0 bg-[#0d1016] border-r border-slate-800 flex flex-col items-center py-3 gap-1 z-20">
+    <button data-route="today" class="nav-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center text-[9px] gap-0.5 hover:bg-slate-800" title="Today">🧭<span>Today</span></button>
+    <button data-route="control" class="nav-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center text-[9px] gap-0.5 hover:bg-slate-800" title="Control Deck">🎛️<span>Ctrl</span></button>
+    <button data-route="roster" class="nav-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center text-[9px] gap-0.5 hover:bg-slate-800" title="Roster">👥<span>People</span></button>
+    <button data-route="playbooks" class="nav-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center text-[9px] gap-0.5 hover:bg-slate-800" title="Playbooks">📘<span>Plays</span></button>
+    <button data-route="workqueue" class="nav-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center text-[9px] gap-0.5 hover:bg-slate-800" title="Work Queue">📦<span>Queue</span></button>
+    <button data-route="audit" class="nav-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center text-[9px] gap-0.5 hover:bg-slate-800" title="Audit Log">🧾<span>Audit</span></button>
+    <div class="flex-1"></div>
+    <button data-route="about" class="nav-btn w-11 h-11 rounded-lg flex flex-col items-center justify-center text-[9px] gap-0.5 hover:bg-slate-800" title="Provenance">ℹ️<span>About</span></button>
+  </nav>
+
+  <!-- ============== MAIN ============== -->
+  <main class="flex-1 min-w-0 flex flex-col relative">
+
+    <!-- situation banner (only on today route) -->
+    <div id="situation-banner" class="hidden shrink-0 px-4 py-2 border-b border-slate-800 bg-[#0d1016] text-xs flex items-center justify-between gap-3"></div>
+
+    <!-- generative workspace -->
+    <div id="route-today" class="route flex-1 relative min-h-0">
+      <div id="leados-workspace" class="absolute inset-0"></div>
+    </div>
+
+    <!-- static routes -->
+    <div id="route-control" class="route hidden flex-1 overflow-auto p-5"></div>
+    <div id="route-roster" class="route hidden flex-1 overflow-auto p-5"></div>
+    <div id="route-playbooks" class="route hidden flex-1 overflow-auto p-5"></div>
+    <div id="route-workqueue" class="route hidden flex-1 overflow-auto p-5"></div>
+    <div id="route-audit" class="route hidden flex-1 overflow-auto p-5"></div>
+    <div id="route-about" class="route hidden flex-1 overflow-auto p-5"></div>
+  </main>
+
+  <!-- ============== PROACTIVE "NOW" RAIL ============== -->
+  <aside class="w-80 shrink-0 border-l border-slate-800 bg-[#0d1016] flex flex-col min-h-0">
+    <div class="px-4 py-3 border-b border-slate-800">
+      <div class="text-[10px] uppercase tracking-wide text-slate-500">Proactive Surface</div>
+      <div class="text-xs text-slate-500">What should I do right now?</div>
+    </div>
+    <div id="now-surface" class="p-4 overflow-auto flex-1"></div>
+    <div class="p-3 border-t border-slate-800">
+      <div id="attention-focus" class="text-[11px] text-slate-400 mono leading-snug"></div>
+    </div>
+  </aside>
+</div>
+
+<!-- command palette -->
+<div id="cmdk-overlay" class="hidden fixed inset-0 bg-black/60 z-50 flex items-start justify-center pt-28">
+  <div class="w-[560px] max-w-[90vw] bg-[#10131a] border border-slate-700 rounded-xl shadow-2xl overflow-hidden fade-in">
+    <input id="cmdk-input" placeholder="Try: feedback for Dana · 1:1 with Marco · what if we lost our biggest customer · why is churn risk high"
+      class="w-full bg-transparent px-4 py-3 outline-none border-b border-slate-800 placeholder:text-slate-600 text-sm">
+    <div id="cmdk-result" class="p-3 text-xs text-slate-400 min-h-[60px]"></div>
+  </div>
+</div>
+
+<!-- interrupt modal (sev-5 INTERRUPT notifications) -->
+<div id="interrupt-overlay" class="hidden fixed inset-0 bg-black/70 z-[60] flex items-center justify-center">
+  <div id="interrupt-card" class="w-[480px] max-w-[90vw] bg-[#1a0f10] border border-red-600 rounded-xl shadow-2xl p-5 fade-in"></div>
+</div>
+
+<!-- toast stack -->
+<div id="toast-stack" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
 
 <script>
-/* ============================================================================
-   LEADOS pt-Q — single-file sandbox build
-   See AI-SESSION-LOG.md and the About tab for exactly what was verified
-   against github.com/wbweve/Leados vs. what is original to this file.
-   ============================================================================ */
+/* ======================================================================
+   SYNTHETIC SUBSTRATE
+   ----------------------------------------------------------------------
+   None of this section was found in the real repo (it has no findings
+   engine of this shape, per the provenance note above). It exists only
+   so the pasted pt-R spec's six subsystems have something to compute
+   over. All data below is invented demo content, not real org data.
+   ====================================================================== */
+const RULES = {
+  R1:{domain:'PEOPLE',title:'Burnout signal: sustained after-hours activity'},
+  R4:{domain:'PEOPLE',title:'Feedback drought (no feedback logged > 45d)'},
+  R7:{domain:'PEOPLE',title:'Manager overload: span of control exceeds threshold'},
+  R10:{domain:'PEOPLE',title:'Promotion readiness stalled'},
+  R19:{domain:'PEOPLE',title:'Critical role single point of failure'},
+  R20:{domain:'PEOPLE',title:'Attrition cluster forming on team'},
+  R21:{domain:'PEOPLE',title:'Flight-risk signal uncontacted'},
+  R103:{domain:'FINANCIAL',title:'Runway below safety threshold'},
+  R104:{domain:'FINANCIAL',title:'Burn multiple trending unfavorable'},
+  R105:{domain:'FINANCIAL',title:'Revenue concentration risk'},
+  R106:{domain:'FINANCIAL',title:'Gross margin compression'},
+  R107:{domain:'FINANCIAL',title:'Collections aging beyond policy'},
+  R17:{domain:'EXECUTION',title:'SLA breach on committed deliverable'},
+  R73:{domain:'EXECUTION',title:'Velocity decline, 3-sprint trend'},
+  R74:{domain:'EXECUTION',title:'Sprint goal missed'},
+  R75:{domain:'EXECUTION',title:'Scope creep beyond sprint capacity'},
+  R81:{domain:'EXECUTION',title:'Blocked work item aging > SLA'},
+  R3:{domain:'STRATEGY',title:'OKR without an owner'},
+  R14:{domain:'STRATEGY',title:'Silent OKR (no update > 1 cycle)'},
+  R147:{domain:'STRATEGY',title:'Competitive threat unaddressed'},
+  R153:{domain:'STRATEGY',title:'Strategic bet without checkpoint'},
+  R88:{domain:'GOVERNANCE',title:'Compliance control non-conformant'},
+  R30:{domain:'GOVERNANCE',title:'Board materials gap'},
+  R31:{domain:'GOVERNANCE',title:'Decision rights ambiguity'},
+  R39:{domain:'GOVERNANCE',title:'Risk register stale pre-board'},
+  R56:{domain:'CULTURE',title:'Stated value / observed behavior gap'},
+  R58:{domain:'CULTURE',title:'Cross-team silo detected'},
+  R62:{domain:'CULTURE',title:'Psychological safety signal low'},
+  R125:{domain:'RESILIENCE',title:'Active incident / crisis in progress'},
+  R129:{domain:'RESILIENCE',title:'Key-person dependency unmitigated'},
+  'INF-003-IMMUNE':{domain:'RESILIENCE',title:'Organizational immune response failed'},
+  R145:{domain:'MARKET',title:'Competitive blind spot'},
+  R157:{domain:'MARKET',title:'Win-rate decline'},
+  R158:{domain:'MARKET',title:'Loss concentration in one segment'}
+};
+const DOMAINS = ['PEOPLE','FINANCIAL','EXECUTION','STRATEGY','GOVERNANCE','CULTURE','RESILIENCE','MARKET'];
 
-const LS_KEY = 'leados:pt-Q:v1';
+const PEOPLE = [
+  {id:'p1',name:'Dana Ruiz',role:'VP Eng',riskScore:0.82},
+  {id:'p2',name:'Marco Chen',role:'Eng Manager',riskScore:0.35},
+  {id:'p3',name:'Priya Shah',role:'Staff Eng',riskScore:0.21},
+  {id:'p4',name:'Tomas Berg',role:'Sales Lead',riskScore:0.68},
+  {id:'p5',name:'Aisha Khan',role:'CS Lead',riskScore:0.15},
+  {id:'p6',name:'Owen Faraday',role:'Finance Lead',riskScore:0.44}
+];
 
-/* ---------------------------- tiny seeded RNG ---------------------------- */
-function mulberry32(a){
-  return function(){
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+const PLAYBOOKS = [
+  {id:'pb-retention',title:'Retention conversation playbook',domain:'PEOPLE'},
+  {id:'pb-runway',title:'Runway extension playbook',domain:'FINANCIAL'},
+  {id:'pb-velocity',title:'Velocity recovery playbook',domain:'EXECUTION'},
+  {id:'pb-okr',title:'OKR re-anchoring playbook',domain:'STRATEGY'},
+  {id:'pb-board',title:'Board-readiness playbook',domain:'GOVERNANCE'},
+  {id:'pb-culture',title:'Psych-safety reset playbook',domain:'CULTURE'},
+  {id:'pb-crisis',title:'Crisis response playbook',domain:'RESILIENCE'},
+  {id:'pb-market',title:'Competitive response playbook',domain:'MARKET'}
+];
+
+// toggleable "signal board" — original to this build
+const SIGNAL_DEFS = [
+  {rule:'R21',sev:3,personId:'p1',active:true},
+  {rule:'R4', sev:3,personId:'p3',active:true},
+  {rule:'R73',sev:3,personId:null,active:false},
+  {rule:'R7', sev:4,personId:'p2',active:false},
+  {rule:'R1', sev:4,personId:'p1',active:false},
+  {rule:'R19',sev:5,personId:'p6',active:false},
+  {rule:'R20',sev:5,personId:null,active:false},
+  {rule:'R103',sev:5,personId:null,active:false},
+  {rule:'R104',sev:4,personId:null,active:false},
+  {rule:'R17',sev:3,personId:null,active:false},
+  {rule:'R74',sev:4,personId:null,active:false},
+  {rule:'R14',sev:3,personId:null,active:false},
+  {rule:'R88',sev:4,personId:null,active:false},
+  {rule:'R39',sev:3,personId:null,active:false},
+  {rule:'R62',sev:3,personId:null,active:false},
+  {rule:'R125',sev:5,personId:null,active:false},
+  {rule:'R129',sev:4,personId:'p6',active:false},
+  {rule:'R145',sev:3,personId:null,active:false},
+  {rule:'R157',sev:4,personId:null,active:false}
+];
+
+const STATE = {
+  hour: new Date().getHours(),
+  fatigue: 20,
+  runwayMonths: 9,
+  boardSoon: false,
+  sprintDue: false,
+  signals: JSON.parse(JSON.stringify(SIGNAL_DEFS)),
+  sessionStart: Date.now()
+};
+
+function synthP(){
+  return {
+    people: PEOPLE,
+    state: { events: [] }, // kept for shape-compatibility with the pasted spec's P.state.events reads
+    openDecisions: [
+      {id:'d1', title:'Approve Q3 pricing change', stakes:5},
+      {id:'d2', title:'Re-org support pod', stakes:4}
+    ]
   };
 }
-let rng = mulberry32(42);
-const R = (lo, hi) => lo + rng() * (hi - lo);
-const RI = (lo, hi) => Math.floor(R(lo, hi + 1));
-const PICK = (arr) => arr[RI(0, arr.length - 1)];
-const uid = (() => { let n = 0; return (p) => `${p}_${(n++).toString(36)}`; })();
+const today = () => new Date().toISOString();
 
-/* ------------------------------- LEADOS core ------------------------------ */
+/* ======================================================================
+   NAMESPACE
+   ====================================================================== */
 const LEADOS = {};
 
-LEADOS.engine = {
-  // to - from, in days (can be fractional). Positive when `to` is chronologically after `from`.
-  _days(from, to) { return (new Date(to) - new Date(from)) / 86400000; }
+/* ---------- tiny infra stubs the pasted spec assumes exist ---------- */
+LEADOS.store = {
+  _audit: [],
+  auditLive(type, detail){
+    this._audit.unshift({ts:new Date().toLocaleTimeString(), type, detail});
+    if(this._audit.length>200) this._audit.length = 200;
+    if(document.getElementById('route-audit')?.classList.contains('hidden')===false) renderAudit();
+  }
 };
+LEADOS.haptics = { onEvent(name){ if(navigator.vibrate) try{navigator.vibrate(name.includes('critical')?[40,30,40]:15);}catch(e){} } };
+LEADOS.ui = {
+  toast(title, kind='info', action=null){
+    const stack = document.getElementById('toast-stack');
+    const el = document.createElement('div');
+    const color = kind==='critical' ? 'border-red-600 bg-red-950/80' : kind==='warn' ? 'border-amber-600 bg-amber-950/60' : 'border-slate-700 bg-slate-900/90';
+    el.className = `toast-enter border ${color} rounded-lg px-3 py-2 text-xs shadow-xl cursor-pointer`;
+    el.innerHTML = `<div class="font-medium text-slate-100">${title}</div>${action?`<div class="text-[10px] text-indigo-400 mt-1">↳ ${action.type||''}</div>`:''}`;
+    el.onclick = ()=>{ el.remove(); if(action) executeAction(action); };
+    stack.prepend(el);
+    setTimeout(()=>el.remove(), 7000);
+  },
+  showBanner(n){
+    const b = document.getElementById('situation-banner');
+    const old = b.dataset.forced;
+    b.dataset.forced = '1';
+    b.classList.remove('hidden');
+    b.innerHTML = `<div class="flex items-center gap-2"><span class="dot" style="--dc:#ef4444"></span><b>${n.title}</b><span class="text-slate-500">— ${n.why||''}</span></div>
+      <button class="text-slate-500 hover:text-slate-200" onclick="this.parentElement.dataset.forced='';renderToday();">dismiss</button>`;
+  },
+  updateBadge(){ updateNotifBadge(); }
+};
+LEADOS.signals = { enqueue(n){
+  const card = document.getElementById('interrupt-card');
+  card.innerHTML = `<div class="text-red-400 text-xs uppercase tracking-wide mb-1">Critical — requires response</div>
+    <div class="text-lg font-semibold mb-2">${n.title}</div>
+    <div class="text-slate-400 text-xs mb-4">${n.why||''}</div>
+    <div class="flex gap-2">
+      <button id="interrupt-ack" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-xs font-medium">Acknowledge & open</button>
+      <button id="interrupt-snooze" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs">Snooze 15m</button>
+    </div>`;
+  document.getElementById('interrupt-overlay').classList.remove('hidden');
+  document.getElementById('interrupt-ack').onclick = ()=>{ document.getElementById('interrupt-overlay').classList.add('hidden'); if(n.action) executeAction(n.action); };
+  document.getElementById('interrupt-snooze').onclick = ()=>{ document.getElementById('interrupt-overlay').classList.add('hidden'); LEADOS.notifications._snoozed.set(n.id, new Date(Date.now()+15*60000).toISOString()); };
+}};
+LEADOS.workQueue = {
+  _items: [
+    {id:'w1', type:'board.narrative.draft', title:'Board narrative draft — Q3', reviewed:false},
+    {id:'w2', type:'risk.register.export', title:'Risk register export (8 domains)', reviewed:false}
+  ],
+  pending(){ return this._items.filter(i=>!i.reviewed); },
+  markReviewed(id){ const it=this._items.find(i=>i.id===id); if(it) it.reviewed=true; }
+};
+LEADOS.flightRisk = { computeFlightRisk(P){
+  const highRisk = P.people.filter(p=>p.riskScore>=0.6).map(p=>({person:p, riskScore:p.riskScore}));
+  return { highRisk };
+}};
+LEADOS.finIntel = { runwayStatus(){ return { runway_months: STATE.runwayMonths }; } };
+LEADOS.predict = { buildPrefireCalendar(){
+  const items = [
+    {key:'okr-review', title:'Quarterly OKR review', daysUntil:2},
+    {key:'all-hands', title:'All-hands update due', daysUntil:4}
+  ];
+  if(STATE.boardSoon) items.unshift({key:'board-meeting', title:'Board meeting', daysUntil:7});
+  return items;
+}};
+LEADOS.autonomous = { runWorkflows(){ return { cascade: [] }; } };
 
-// Minimal, disclosed stand-in for a fuller wargame/financial module.
-// The provided pt-Q spec calls LEADOS.wargame.* from LEADOS.performance but
-// does not define it in this part — implemented here as original, labeled code.
-LEADOS.wargame = {
-  _computeVelocityMean(P, today, windowDays = 90) {
-    const pts = P.state.events.filter(e => e.type === 'sprint.review' &&
-      LEADOS.engine._days(e.ts, today) <= windowDays).map(e => e.data.velocity);
-    return pts.length ? pts.reduce((a,b)=>a+b,0) / pts.length : null;
+/* ---------- circadian / fatigue (illustrative heuristics, NOT validated) ---------- */
+LEADOS.circadian = {
+  getCurrentProfile(){
+    const h = STATE.hour;
+    if(h>=7 && h<12) return {name:'Morning analytical peak', analytical:0.92, best_for:'high-stakes analysis'};
+    if(h>=12 && h<14) return {name:'Post-lunch dip', analytical:0.45, best_for:'low-stakes admin'};
+    if(h>=14 && h<18) return {name:'Afternoon execution window', analytical:0.68, best_for:'execution & 1:1s'};
+    if(h>=18 && h<21) return {name:'Evening wind-down', analytical:0.5, best_for:'reflection & planning'};
+    return {name:'Low-capacity window', analytical:0.3, best_for:'deferral'};
   },
-  _latestMetric(P, key) {
-    const logs = P.state.events.filter(e => e.type === 'fin.pl.logged' && e.data[key] !== undefined)
-      .sort((a,b) => a.ts < b.ts ? -1 : 1);
-    return logs.length ? logs[logs.length - 1].data[key] : null;
+  label:'Illustrative circadian bands — not a validated chronobiology model.'
+};
+LEADOS.fatigue = { get sessionFatigue(){ return STATE.fatigue; } };
+
+/* ---------- minimal "engine" producing findings from the signal board ---------- */
+LEADOS.engine = { run(P, t){
+  const findings = STATE.signals.filter(s=>s.active).map(s=>{
+    const rule = RULES[s.rule];
+    const key = s.rule + (s.personId?(':'+s.personId):'');
+    return {
+      key, rule:s.rule, domain:rule.domain, sev:s.sev, title:rule.title,
+      personId:s.personId, score: s.sev*10 + (s.personId?2:0)
+    };
+  });
+  return { findings };
+}, _days(a,b){ return Math.round((new Date(b)-new Date(a))/864e5); } };
+
+/* ======================================================================
+   PART 1 — ATTENTION MODELING ENGINE  (kept close to the pasted spec)
+   ====================================================================== */
+LEADOS.attention = {
+  _heatmap: new Map(),
+  _tracking: false,
+  _currentEntry: null,
+  _entryStart: null,
+  startTracking(){
+    if(this._tracking) return;
+    this._tracking = true;
+    document.addEventListener('pointerenter', (e)=>{
+      const key = this._elementKey(e.target);
+      if(!key) return;
+      this._currentEntry = key; this._entryStart = Date.now();
+      if(!this._heatmap.has(key)) this._heatmap.set(key, {totalDwellMs:0, enterCount:0, clickCount:0});
+      this._heatmap.get(key).enterCount++;
+    }, {passive:true, capture:true});
+    document.addEventListener('pointerleave', (e)=>{
+      if(!this._currentEntry || !this._entryStart) return;
+      const dwellMs = Date.now() - this._entryStart;
+      if(dwellMs > 200){
+        const entry = this._heatmap.get(this._currentEntry);
+        if(entry) entry.totalDwellMs += dwellMs;
+      }
+      this._currentEntry = null; this._entryStart = null;
+    }, {passive:true, capture:true});
+    document.addEventListener('click', (e)=>{
+      const key = this._elementKey(e.target);
+      if(!key) return;
+      if(!this._heatmap.has(key)) this._heatmap.set(key, {totalDwellMs:0, enterCount:0, clickCount:0});
+      this._heatmap.get(key).clickCount++;
+      this._persistHeatmap();
+    }, {passive:true});
   },
-  _computeWinRate(P, today, windowDays = 90) {
-    const deals = P.state.events.filter(e => e.type === 'sales.deal.closed' &&
-      LEADOS.engine._days(e.ts, today) <= windowDays);
-    if (!deals.length) return null;
-    const won = deals.filter(d => d.data.outcome === 'won').length;
-    return won / deals.length;
+  _elementKey(el){
+    if(!el || !el.closest) return null;
+    const fin = el.closest('[data-key]'); if(fin) return 'finding:'+fin.dataset.key;
+    const rule = el.closest('[data-rule]'); if(rule) return 'rule:'+rule.dataset.rule;
+    const person = el.closest('[data-person-id]'); if(person) return 'person:'+person.dataset.personId;
+    const navItem = el.closest('[data-route]'); if(navItem) return 'nav:'+navItem.dataset.route;
+    const play = el.closest('[data-play-id]'); if(play) return 'playbook:'+play.dataset.playId;
+    return null;
+  },
+  getAttentionScores(){
+    const scores = {};
+    this._heatmap.forEach((data,key)=>{
+      const score = (data.clickCount*10) + (data.totalDwellMs/1000*2) + (data.enterCount*0.5);
+      scores[key] = {...data, score};
+    });
+    return scores;
+  },
+  getCurrentFocus(){
+    const scores = this.getAttentionScores();
+    if(!Object.keys(scores).length) return null;
+    const top = Object.entries(scores).sort(([,a],[,b])=>b.score-a.score)[0];
+    return {key:top[0], type:top[0].split(':')[0], id:top[0].split(':')[1], score:top[1].score, dwellSeconds:Math.round(top[1].totalDwellMs/1000)};
+  },
+  getIgnoredFindings(all){
+    const scores = this.getAttentionScores();
+    return all.filter(f=>{ const s = scores['finding:'+f.key]; return !s || s.totalDwellMs < 5000; });
+  },
+  _persistHeatmap(){
+    try{ sessionStorage.setItem('leados:attention', JSON.stringify(Object.fromEntries(this._heatmap.entries()))); }catch(e){}
+  },
+  restore(){
+    const stored = sessionStorage.getItem('leados:attention');
+    if(!stored) return;
+    try{ Object.entries(JSON.parse(stored)).forEach(([k,v])=>this._heatmap.set(k,v)); }catch(e){}
   }
 };
 
-/* ------------------------------ PART 3: cascade --------------------------- */
-LEADOS.cascade = {
-  buildInformalNetwork(P, today) {
-    const people = P.directs.concat(P.skips);
-    const network = new Map();
-    people.forEach(p => network.set(p.id, { person: p, in: [], out: [], totalInfluence: 0 }));
-
-    const INFLUENCE_PAIRS = [
-      { trigger: 'feedback.given', response: 'feedback.given', window: 7,
-        label: 'Feedback-giving behavior spreads through the team' },
-      { trigger: 'blocker.logged', response: 'blocker.logged', window: 14,
-        label: 'Psychological safety to name blockers spreads from leaders' },
-      { trigger: 'goal.progress', response: 'goal.progress', window: 21,
-        label: 'Goal progress behavior cascades through the team' },
-      { trigger: 'conflict.logged', response: 'conflict.logged', window: 30,
-        label: 'Conflict spread through team proximity' }
-    ];
-
-    for (const pair of INFLUENCE_PAIRS) {
-      const triggers = P.state.events.filter(e => e.type === pair.trigger);
-      const responses = P.state.events.filter(e => e.type === pair.response);
-      triggers.forEach(trigger => {
-        const influencer = trigger.data.personId;
-        if (!influencer || !network.has(influencer)) return;
-        const influenced = responses.filter(response => {
-          const responderId = response.data.personId;
-          return responderId && responderId !== influencer &&
-                 network.has(responderId) &&
-                 LEADOS.engine._days(trigger.ts, response.ts) > 0 &&
-                 LEADOS.engine._days(trigger.ts, response.ts) <= pair.window;
-        });
-        influenced.forEach(response => {
-          const influenced_person = response.data.personId;
-          const node = network.get(influencer);
-          const existing = node.out.find(e => e.to === influenced_person && e.type === pair.trigger);
-          if (!existing) {
-            node.out.push({ to: influenced_person, type: pair.trigger, count: 1, label: pair.label });
-            network.get(influenced_person).in.push({ from: influencer, type: pair.trigger, count: 1 });
-            node.totalInfluence++;
-          } else {
-            existing.count++;
-          }
-        });
-      });
-    }
-
-    network.forEach((node, personId) => {
-      node.influenceScore = node.out.reduce((a, e) => a + e.count, 0);
-      node.influencedByCount = node.in.reduce((a, e) => a + e.count, 0);
-      const isDirectReport = P.directs.some(d => d.id === personId);
-      node.isDarkMatter = node.influenceScore > 5 && !isDirectReport;
-    });
-
+/* ======================================================================
+   PART 2 — GENERATIVE LAYOUT ENGINE (kept close to the pasted spec;
+   applyLayout extended with a content renderer, which the spec itself
+   never defines — disclosed as a necessary addition)
+   ====================================================================== */
+LEADOS.layout = {
+  generateLayout(findings, P, t, viewport, attentionScores){
+    const situation = this._classifySituation(findings, P, t);
+    const hierarchy = this._computeInformationHierarchy(findings, situation, attentionScores);
+    const layout = this._solveLayout(hierarchy, viewport, situation);
     return {
-      network,
-      influenceLeaders: [...network.values()].sort((a,b) => b.influenceScore - a.influenceScore).slice(0, 5),
-      darkMatter: [...network.values()].filter(n => n.isDarkMatter),
-      label: 'Informal influence network from behavioral cascade patterns. ' +
-             'Labeled: influence is inferred from event co-occurrence within time windows. ' +
-             'Correlation \u2260 causation. A person may respond to the same stimulus, not to the person who preceded them.'
+      situation, hierarchy, layout,
+      cssSpec: this._generateCSSSpec(layout, situation),
+      domSpec: this._generateDOMSpec(hierarchy, layout),
+      label: 'Generative layout from information situation analysis. Situation: '+situation.type+'. Density: '+situation.density+'.'
     };
   },
-
-  predictCascade(message, network, P) {
-    const senderNode = network.network.get(message.sender);
-    if (!senderNode) return null;
-
-    const directReach = senderNode.out.map(e => ({
-      personId: e.to, person: network.network.get(e.to)?.person, channels: e.type, estimatedTime: 2
+  _classifySituation(findings, P, t){
+    const sev5 = findings.filter(f=>f.sev===5);
+    const circadian = LEADOS.circadian.getCurrentProfile(t);
+    const fatigue = LEADOS.fatigue.sessionFatigue;
+    const hour = STATE.hour;
+    if(sev5.length>=2) return {type:'MULTI_CRISIS', density:'MAXIMUM', description:'Multiple simultaneous critical findings — war-room layout', layoutMode:'GRID_2_CRISIS'};
+    if(sev5.length===1) return {type:'SINGLE_CRISIS', density:'HIGH', description:'One critical finding dominates — focused response layout', layoutMode:'HERO_CRISIS'};
+    if(STATE.boardSoon) return {type:'BOARD_PREP', density:'STRUCTURED', description:'Board meeting approaching — narrative preparation layout', layoutMode:'BOARD_PREP_SPLIT'};
+    if(STATE.sprintDue) return {type:'SPRINT_CLOSE', density:'OPERATIONAL', description:'Sprint closing — execution accountability layout', layoutMode:'SPRINT_ACCOUNTABILITY'};
+    if(hour>=7 && hour<12 && circadian.analytical>=0.9) return {type:'DEEP_WORK', density:'MAXIMUM', description:'Morning peak — full intelligence surface', layoutMode:'ANALYTICS_FULL'};
+    if(fatigue>=60) return {type:'FATIGUE_REDUCED', density:'MINIMUM', description:'High decision fatigue — essentials only layout', layoutMode:'SIMPLIFIED'};
+    return {type:'STANDARD', density:'STANDARD', description:'Standard leadership view', layoutMode:'STANDARD_SPLIT'};
+  },
+  _computeInformationHierarchy(findings, situation, attentionScores){
+    const ranked = findings.map(f=>{
+      const attention = attentionScores['finding:'+f.key];
+      const attentionDeficit = attention ? Math.max(0, f.score - attention.score/10) : f.score;
+      const situationRelevance = (situation.type==='BOARD_PREP' && ['R103','R104','R88','R39'].includes(f.rule)) ? 2 :
+        (situation.type==='SPRINT_CLOSE' && ['R73','R74','R75','R81'].includes(f.rule)) ? 2 : 1;
+      return {finding:f, hierarchyScore: attentionDeficit*situationRelevance, zone:this._assignZone(f, situation)};
+    }).sort((a,b)=>b.hierarchyScore-a.hierarchyScore);
+    return {
+      primary: ranked.filter(r=>r.zone==='PRIMARY').slice(0,3),
+      secondary: ranked.filter(r=>r.zone==='SECONDARY').slice(0,6),
+      ambient: ranked.filter(r=>r.zone==='AMBIENT'),
+      all: ranked
+    };
+  },
+  _assignZone(f, situation){
+    if(f.sev>=5) return 'PRIMARY';
+    if(f.sev>=4) return situation.type==='SINGLE_CRISIS' ? 'SECONDARY' : 'PRIMARY';
+    if(f.sev>=3) return 'SECONDARY';
+    return 'AMBIENT';
+  },
+  _solveLayout(hierarchy, viewport, situation){
+    const {width:w, height:h} = viewport;
+    const solvers = {
+      HERO_CRISIS: () => ({
+        hero:{x:0,y:0,w:w,h:Math.round(h*0.42),content:'crisis-card', finding:hierarchy.primary[0]?.finding},
+        secondary:{x:0,y:Math.round(h*0.42),w:Math.round(w*0.6),h:Math.round(h*0.58),content:'finding-list'},
+        panel:{x:Math.round(w*0.6),y:Math.round(h*0.42),w:w-Math.round(w*0.6),h:Math.round(h*0.58),content:'playbook-ready'}
+      }),
+      GRID_2_CRISIS: () => ({
+        crisis1:{x:0,y:0,w:Math.round(w*0.5),h:Math.round(h*0.5),content:'crisis-card', finding:hierarchy.primary[0]?.finding},
+        crisis2:{x:Math.round(w*0.5),y:0,w:w-Math.round(w*0.5),h:Math.round(h*0.5),content:'crisis-card', finding:hierarchy.primary[1]?.finding},
+        triage:{x:0,y:Math.round(h*0.5),w:w,h:h-Math.round(h*0.5),content:'finding-triage'}
+      }),
+      BOARD_PREP_SPLIT: () => ({
+        narrative:{x:0,y:0,w:Math.round(w*0.55),h:h,content:'board-narrative-builder'},
+        risk:{x:Math.round(w*0.55),y:0,w:w-Math.round(w*0.55),h:Math.round(h*0.5),content:'risk-register'},
+        synthesis:{x:Math.round(w*0.55),y:Math.round(h*0.5),w:w-Math.round(w*0.55),h:h-Math.round(h*0.5),content:'synthesis-paragraph'}
+      }),
+      SPRINT_ACCOUNTABILITY: () => ({
+        exec:{x:0,y:0,w:Math.round(w*0.6),h:h,content:'finding-list-full'},
+        actions:{x:Math.round(w*0.6),y:0,w:w-Math.round(w*0.6),h:h,content:'action-queue'}
+      }),
+      ANALYTICS_FULL: () => ({
+        intel:{x:0,y:0,w:Math.round(w*0.32),h:h,content:'intelligence-digest'},
+        findings:{x:Math.round(w*0.32),y:0,w:Math.round(w*0.38),h:h,content:'finding-list-full'},
+        inference:{x:Math.round(w*0.7),y:0,w:w-Math.round(w*0.7),h:h,content:'inference-panel'}
+      }),
+      SIMPLIFIED: () => ({
+        three:{x:0,y:0,w:w,h:Math.round(h*0.4),content:'the-three-only'},
+        actions:{x:0,y:Math.round(h*0.4),w:w,h:h-Math.round(h*0.4),content:'action-queue'}
+      }),
+      STANDARD_SPLIT: () => ({
+        rail:{x:0,y:0,w:0,h:h,content:'nav-rail'},
+        main:{x:0,y:0,w:Math.round(w*0.56),h:h,content:'today-finding-list'},
+        panel:{x:Math.round(w*0.56),y:0,w:w-Math.round(w*0.56),h:h,content:'intelligence-panel'}
+      })
+    };
+    return (solvers[situation.layoutMode] || solvers.STANDARD_SPLIT)();
+  },
+  _generateCSSSpec(layout, situation){
+    let css = `/* GENERATIVE LAYOUT: ${situation.type} */\n/* Generated ${new Date().toISOString()} */\n/* ${situation.description} */\n\n`;
+    Object.entries(layout).forEach(([zone,g])=>{
+      css += `[data-zone="${zone}"] { position:absolute; left:${g.x}px; top:${g.y}px; width:${g.w}px; height:${g.h}px; }\n`;
+    });
+    return css;
+  },
+  _generateDOMSpec(hierarchy, layout){
+    return Object.entries(layout).map(([zone,g])=>({
+      zone, content:g.content, finding:g.finding||null,
+      className: 'zone zone-'+zone+' zone-content-'+(g.content||'empty').replace(/[^a-z0-9-]/g,'-')
     }));
-
-    const indirectReach = directReach.flatMap(direct => {
-      const directNode = network.network.get(direct.personId);
-      return (directNode?.out || []).map(e => ({
-        personId: e.to, person: network.network.get(e.to)?.person, via: direct.person?.name, estimatedTime: 5
-      }));
-    }).filter(r => !directReach.some(d => d.personId === r.personId));
-
-    const darkMatterInPath = network.darkMatter.filter(dm =>
-      directReach.some(d => d.personId === dm.person?.id) ||
-      indirectReach.some(i => i.personId === dm.person?.id)
-    );
-
-    const maxChainLength = 3;
-    const distortionProbability = 1 - Math.pow(0.85, Math.min(maxChainLength, 3));
-
-    return {
-      message: message.content, sender: message.sender,
-      directReach: directReach.length, indirectReach: indirectReach.length,
-      totalReach: new Set([...directReach, ...indirectReach].map(r => r.personId)).size,
-      cascadePath: { direct: directReach, indirect: indirectReach },
-      darkMatterRisk: darkMatterInPath.length > 0 ? {
-        present: true, influencers: darkMatterInPath.map(dm => dm.person?.name),
-        risk: 'These informal influencers will shape the meaning of your message before it reaches their networks. Brief them first.'
-      } : { present: false },
-      distortionRisk: {
-        probability: Math.round(distortionProbability * 100),
-        mitigation: 'Communicate directly rather than relying on cascade. For critical messages: all-hands or written broadcast (not cascade).'
-      },
-      label: 'Information cascade prediction from informal influence network. ' +
-             'Labeled: prediction from behavioral patterns, not social mapping. ' +
-             'Distortion probability: approximation from Shannon (1948). ' +
-             'Labeled: organizational communication is not a perfect information channel.'
-    };
+  },
+  applyLayout(spec){
+    const {cssSpec, domSpec} = spec;
+    let style = document.getElementById('leados-generative-layout');
+    if(!style){ style = document.createElement('style'); style.id='leados-generative-layout'; document.head.appendChild(style); }
+    style.textContent = cssSpec;
+    const workspace = document.getElementById('leados-workspace');
+    workspace.innerHTML = '';
+    workspace.dataset.layout = spec.situation.layoutMode;
+    workspace.dataset.situation = spec.situation.type;
+    domSpec.forEach(zone=>{
+      const el = document.createElement('div');
+      el.dataset.zone = zone.zone;
+      el.className = 'zone fade-in '+zone.className;
+      el.dataset.content = zone.content;
+      if(zone.finding) el.dataset.findingKey = zone.finding.key;
+      workspace.appendChild(el);
+      renderZoneContent(el, zone, spec.hierarchy);
+    });
+    LEADOS.store.auditLive('layout.generated', spec.situation.type+':'+spec.situation.layoutMode);
   }
 };
 
-/* ------------------------------ PART 4: meetings --------------------------- */
-LEADOS.meetings = {
-  computeMeetingCost(P, today, windowDays = 30) {
-    const recentMeetings = P.state.events.filter(e =>
-      e.type === 'meeting.logged' && LEADOS.engine._days(e.ts, today) <= windowDays);
-    const costPerHour = P.settings.fullyLoadedCostPerHour || 150;
-    let totalPersonHours = 0, totalDecisions = 0, totalActionItems = 0, clearOutcomes = 0;
-    recentMeetings.forEach(m => {
-      const attendees = m.data.attendees?.length || 1;
-      const durationHrs = (m.data.durationMin || 60) / 60;
-      totalPersonHours += attendees * durationHrs;
-      totalDecisions += (m.data.decisions || []).length;
-      totalActionItems += (m.data.actionItems || []).length;
-      if (m.data.outcome === 'clear') clearOutcomes++;
+/* ======================================================================
+   PART 3 — PROACTIVE INTELLIGENCE SURFACE (kept close to the pasted spec)
+   ====================================================================== */
+LEADOS.proactive = {
+  computeNextActions(P, t, attentionScores){
+    const findings = LEADOS.engine.run(P,t).findings;
+    const ignored = LEADOS.attention.getIgnoredFindings(findings);
+    const flightRisk = LEADOS.flightRisk.computeFlightRisk(P,t);
+    const circadian = LEADOS.circadian.getCurrentProfile(t);
+    const fatigue = LEADOS.fatigue.sessionFatigue;
+    const actions = [];
+
+    findings.filter(f=>f.sev===5).forEach(f=>{
+      actions.push({priority:100, type:'CRITICAL_RESPONSE', title:f.title, why:'Critical finding unaddressed',
+        action:{type:'open-playbook', findingKey:f.key}, timeRequired:'15-30 min', bestWindow:'NOW — sev 5 has no optimal window'});
     });
-    const totalCost = totalPersonHours * costPerHour;
-    const costPerDecision = totalDecisions ? totalCost / totalDecisions : null;
-    const outcomeClarity = recentMeetings.length ? clearOutcomes / recentMeetings.length : null;
-    return {
-      totalPersonHours: Math.round(totalPersonHours),
-      totalCost: Math.round(totalCost),
-      totalMeetings: recentMeetings.length,
-      totalDecisions, totalActionItems,
-      costPerDecision: costPerDecision ? Math.round(costPerDecision) : null,
-      outcomeClarity: outcomeClarity ? Math.round(outcomeClarity * 100) : null,
-      closureRate: this._computeClosureRate(P, today),
-      loadByPerson: this._computeMeetingLoadByPerson(recentMeetings, P),
-      meetingHeavy: totalPersonHours > (P.people.length * 8 * 0.4 * (windowDays / 7)),
-      label: `Meeting cost analysis: ${windowDays}d window. Cost assumption: \u20ac${costPerHour}/person-hour (fully loaded). ` +
-             `Update in settings. Labeled: cost is estimated from logged meetings only \u2014 excludes meetings not logged in LeadOS.`
-    };
-  },
-
-  computeDecisionVelocity(P, today) {
-    const openDecisions = P.openDecisions || [];
-    const closedDecisions = P.state.events.filter(e => e.type === 'decision.outcome');
-    const timesToDecision = closedDecisions.map(outcome => {
-      const original = P.state.events.find(e => e.type === 'strategy.decision' && e.id === outcome.data.decisionId);
-      if (!original) return null;
-      return LEADOS.engine._days(original.ts, outcome.ts);
-    }).filter(x => x !== null);
-    const meanTTD = timesToDecision.length ? timesToDecision.reduce((a,b)=>a+b,0) / timesToDecision.length : null;
-    const aged = openDecisions.filter(d => LEADOS.engine._days(d.ts, today) > 21);
-    return {
-      openCount: openDecisions.length,
-      closedCount: closedDecisions.length,
-      meanTimeToDecision: meanTTD ? Math.round(meanTTD) : null,
-      agedDecisions: aged.length,
-      agedDecisionDetails: aged,
-      velocity: closedDecisions.filter(d => LEADOS.engine._days(d.ts, today) <= 30).length,
-      outcomeTracked: P.state.events.filter(e => e.type === 'decision.outcome').length,
-      outcomePending: openDecisions.length - P.state.events.filter(e => e.type === 'decision.outcome').length,
-      label: `Decision velocity from strategy.decision and decision.outcome events. ` +
-             `Mean time to decision: ${meanTTD ? Math.round(meanTTD) + 'd' : 'N/A (no closed decisions)'}. ` +
-             `${aged.length} decisions open > 21d.`
-    };
-  },
-
-  _computeClosureRate(P, today) {
-    const actionItems = P.state.events.filter(e => e.type === 'meeting.followup');
-    const closed = actionItems.filter(a => a.data.closed).length;
-    return actionItems.length ? Math.round(closed / actionItems.length * 100) : null;
-  },
-
-  _computeMeetingLoadByPerson(meetings, P) {
-    const load = {};
-    meetings.forEach(m => {
-      (m.data.attendees || []).forEach(pid => {
-        load[pid] = (load[pid] || 0) + (m.data.durationMin || 60) / 60;
-      });
+    flightRisk.highRisk.forEach(r=>{
+      actions.push({priority:80, type:'RETENTION_ACTION', title:`Schedule 1:1 with ${r.person.name} (flight risk ${Math.round(r.riskScore*100)}%)`,
+        why:'Elevated flight risk + no recent 1:1 = compounding signal', action:{type:'quick-capture', eventType:'oneonone.logged', personId:r.person.id},
+        timeRequired:'30-60 min', bestWindow:'Today or tomorrow'});
     });
-    return Object.entries(load).map(([pid, hrs]) => ({
-      person: P.peopleById?.[pid], hoursPerWeek: Math.round((hrs / 4.3) * 10) / 10
-    })).sort((a,b) => b.hoursPerWeek - a.hoursPerWeek);
+    ignored.filter(f=>f.sev>=3).slice(0,3).forEach(f=>{
+      actions.push({priority:50, type:'ATTENTION_REDIRECT', title:`Review "${f.title}" — not yet examined`, why:`Sev-${f.sev} finding with 0 recorded attention`,
+        action:{type:'focus-finding', findingKey:f.key}, timeRequired:'5 min to read', bestWindow: circadian.analytical>0.7?'Now (analytical peak)':'Morning peak'});
+    });
+    if(circadian.analytical>=0.9 && fatigue<40){
+      const complex = (P.openDecisions||[]).filter(d=>d.stakes>=4);
+      if(complex.length) actions.push({priority:70, type:'COGNITIVE_OPTIMAL', title:`Optimal window for: "${complex[0].title}"`,
+        why:'Morning analytical peak + low fatigue = best cognitive window', action:{type:'open-decision', decisionId:complex[0].id}, timeRequired:'30-90 min', bestWindow:'NOW — closes by 12:00'});
+    }
+    const pending = LEADOS.workQueue.pending();
+    if(pending.length) actions.push({priority:60, type:'REVIEW_PREPARED_WORK', title:`${pending.length} prepared work item(s) awaiting review`,
+      why:'System prepared these autonomously — review takes < 5 min', action:{type:'open-work-queue'}, timeRequired:'5-10 min', bestWindow:'Any time'});
+
+    return {actions: actions.sort((a,b)=>b.priority-a.priority).slice(0,5), cognitiveContext:{profile:circadian.name, fatigue, optimalFor:circadian.best_for}};
+  },
+  generateNowSurface(P,t){
+    const res = this.computeNextActions(P,t, LEADOS.attention.getAttentionScores());
+    const top = res.actions[0];
+    if(!top) return {surface:'CLEAR', headline:'No immediate action required.', subline:'All critical findings addressed. Monitoring continues.', cognitiveContext:res.cognitiveContext, fullQueue:[]};
+    return {surface:top.type, headline:top.title, subline:top.why, action:top.action, timeRequired:top.timeRequired, bestWindow:top.bestWindow, cognitiveContext:res.cognitiveContext, fullQueue:res.actions};
   }
 };
 
-/* --------------------------- PART 5: performance ---------------------------- */
-LEADOS.performance = {
-  buildPerformanceChain(P, today) {
-    const activities = {
-      oneOnOnes: P.state.events.filter(e => e.type === 'oneonone.logged' && LEADOS.engine._days(e.ts, today) <= 30).length,
-      feedbackGiven: P.state.events.filter(e => e.type === 'feedback.given' && LEADOS.engine._days(e.ts, today) <= 30).length,
-      sprintsCompleted: P.state.events.filter(e => e.type === 'sprint.review' && LEADOS.engine._days(e.ts, today) <= 30).length,
-      decisionsLogged: P.state.events.filter(e => e.type === 'strategy.decision' && LEADOS.engine._days(e.ts, today) <= 30).length
-    };
-    const outputs = {
-      velocityMean: LEADOS.wargame._computeVelocityMean(P, today),
-      goalHitRate: this._computeGoalHitRate(P, today),
-      feedbackLoop: activities.feedbackGiven / Math.max(1, P.directs.length),
-      decisionVelocity: LEADOS.meetings.computeDecisionVelocity(P, today).velocity
-    };
-    const outcomes = {
-      grossMargin: LEADOS.wargame._latestMetric(P, 'gross_margin_pct'),
-      nps: LEADOS.wargame._latestMetric(P, 'nps_score'),
-      winRate: LEADOS.wargame._computeWinRate(P, today),
-      engagementMean: this._computeTeamEngagement(P, today)
-    };
-    const impact = {
-      teamGrowth: this._computeTeamGrowthVector(P, today),
-      retentionRate: this._computeRetentionRate(P, today),
-      revenueVelocity: this._computeRevenueVelocity(P, today)
-    };
-
-    const chains = [];
-    if (activities.oneOnOnes > 0 && outcomes.engagementMean !== null) {
-      chains.push({
-        chain: '1:1 cadence \u2192 team engagement \u2192 retention probability',
-        activitySignal: activities.oneOnOnes + ' 1:1s this month',
-        outputSignal: `Engagement: ${outcomes.engagementMean?.toFixed(1)}/10`,
-        outcomeSignal: impact.retentionRate !== null ? `Retention rate: ${Math.round(impact.retentionRate * 100)}%` : 'No attrition data',
-        causalStrength: 'ASSUMED (Gallup Q12 basis)',
-        verification: 'Compare engagement before/after 1:1 cadence improvements'
-      });
+/* ======================================================================
+   PART 4 — COMMAND INTELLIGENCE (kept close to the pasted spec)
+   ====================================================================== */
+LEADOS.commandIntel = {
+  INTENTS: {
+    GIVE_FEEDBACK:{patterns:[/give feedback to (.+)/i,/feedback for (.+)/i,/fb (.+)/i], extract:m=>({personName:m[1]}), action:ctx=>`open-quick-capture:feedback.given:person:${ctx.personId||'?'}`},
+    LOG_1ON1:{patterns:[/1[:\-]?1 with (.+)/i,/one[- ]on[- ]one (.+)/i,/oo1 (.+)/i], extract:m=>({personName:m[1]}), action:ctx=>`open-quick-capture:oneonone.logged:person:${ctx.personId||'?'}`},
+    LOG_DECISION:{patterns:[/decided (.+)/i,/decision: (.+)/i,/we decided (.+)/i], extract:m=>({decision:m[1]}), action:ctx=>`open-quick-capture:strategy.decision:prefill:${ctx.decision}`},
+    ASSESS_PERSON:{patterns:[/how is (.+) doing/i,/status of (.+)/i,/(.+) risk/i,/check on (.+)/i], extract:m=>({personName:m[1]||m[2]}), action:ctx=>`navigate:/roster#person:${ctx.personId||'?'}`},
+    FIND_PLAYBOOK:{patterns:[/how (should|do) I (.+)/i,/what to do about (.+)/i,/playbook for (.+)/i], extract:m=>({topic:m[2]||m[1]}), action:ctx=>`search-playbooks:${ctx.topic}`},
+    EXPLAIN_FINDING:{patterns:[/why (is|am I seeing) (.+)/i,/explain (.+)/i,/what does (.+) mean/i], extract:m=>({topic:m[2]||m[1]}), action:ctx=>`explain:${ctx.topic}`},
+    SIMULATE:{patterns:[/what if (.+)/i,/scenario: (.+)/i,/simulate (.+)/i], extract:m=>({scenario:m[1]}), action:ctx=>`open-simulation:${ctx.scenario}`},
+    RUN_WARGAME:{patterns:[/wargame (.+)/i,/competitive scenario (.+)/i,/war game (.+)/i], extract:m=>({scenario:m[1]}), action:ctx=>`open-playbook:wargame-scenario:prefill:${ctx.scenario}`},
+    COUNTERFACTUAL:{patterns:[/what if we had (.+)/i,/what would have happened if (.+)/i], extract:m=>({hypothetical:m[1]}), action:ctx=>`open-counterfactual:${ctx.hypothetical}`}
+  },
+  resolve(query, P){
+    const normalized = query.trim();
+    if(!normalized) return null;
+    for(const [name, intent] of Object.entries(this.INTENTS)){
+      for(const pattern of intent.patterns){
+        const match = normalized.match(pattern);
+        if(match){
+          const extracted = intent.extract(match);
+          let personId = null;
+          if(extracted.personName){ const p = this._resolvePersonName(extracted.personName, P); if(p) personId = p.id; }
+          return {intent:name, extracted:{...extracted, personId}, action:intent.action({...extracted, personId}), confidence: match[0].length/normalized.length};
+        }
+      }
     }
-    if (outputs.feedbackLoop !== null && outcomes.grossMargin !== null) {
-      chains.push({
-        chain: 'Feedback richness \u2192 team performance \u2192 financial outcomes',
-        activitySignal: `${outputs.feedbackLoop.toFixed(1)} feedbacks/person/month`,
-        outputSignal: `Goal hit rate: ${outputs.goalHitRate !== null ? Math.round(outputs.goalHitRate * 100) + '%' : 'N/A'}`,
-        outcomeSignal: `Gross margin: ${outcomes.grossMargin}%`,
-        causalStrength: 'ASSUMED (Kluger & DeNisi, 1996)',
-        verification: 'Correlate feedback.given rate with subsequent sprint velocity'
-      });
-    }
+    return {intent:'SEARCH', action:`search:${normalized}`, confidence:0.5};
+  },
+  _resolvePersonName(query, P){
+    const q = query.toLowerCase().trim();
+    let m = P.people.find(p=>p.name.toLowerCase()===q); if(m) return m;
+    m = P.people.find(p=>p.name.toLowerCase().startsWith(q)); if(m) return m;
+    let best=Infinity, bp=null;
+    P.people.forEach(p=>{ const d=this._editDistance(q,p.name.toLowerCase()); if(d<best && d<=3){best=d;bp=p;} });
+    return bp;
+  },
+  _editDistance(a,b){
+    const dp = Array.from({length:a.length+1},(_,i)=>Array.from({length:b.length+1},(_,j)=>i===0?j:j===0?i:0));
+    for(let i=1;i<=a.length;i++) for(let j=1;j<=b.length;j++) dp[i][j] = a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+    return dp[a.length][b.length];
+  }
+};
 
+/* ======================================================================
+   PART 5 — ADAPTIVE NOTIFICATIONS (kept close to the pasted spec)
+   ====================================================================== */
+LEADOS.notifications = {
+  _delivered: new Set(),
+  _snoozed: new Map(),
+  _log: [],
+  computeQueue(findings, P, t){
+    const circadian = LEADOS.circadian.getCurrentProfile(t);
+    const fatigue = LEADOS.fatigue.sessionFatigue;
+    const candidates = [];
+    findings.forEach(f=>{
+      const id = 'finding:'+f.key+':'+Math.round(f.score*10);
+      if(!this._delivered.has(id)){
+        candidates.push({id, type:'FINDING', severity:f.sev, title:f.title, finding:f,
+          requiresMorningPeak:f.sev>=4, requiresLowFatigue:f.sev>=4,
+          form: f.sev>=5?'INTERRUPT':f.sev>=4?'BANNER':f.sev>=3?'TOAST':'AMBIENT',
+          action:{type:'focus-finding', key:f.key}});
+      }
+    });
+    LEADOS.workQueue.pending().forEach(item=>{
+      const id = 'workqueue:'+item.id;
+      if(!this._delivered.has(id)) candidates.push({id, type:'WORK_READY', severity:3, title:`${item.type}: ready for review`, workItem:item, form:'TOAST', requiresMorningPeak:false, requiresLowFatigue:false, action:{type:'open-work-queue'}});
+    });
+    (LEADOS.predict.buildPrefireCalendar(P,t)||[]).filter(pf=>pf.daysUntil<=2).forEach(pf=>{
+      const id = 'prefire:'+pf.key+':'+pf.daysUntil;
+      if(!this._delivered.has(id)) candidates.push({id, type:'PREFIRE', severity:2, title:`In ${pf.daysUntil}d: ${pf.title}`, form:'AMBIENT', requiresMorningPeak:false, requiresLowFatigue:false, action:{type:'navigate', route:'today'}});
+    });
+
+    const filtered = candidates.filter(n=>{
+      if(this._snoozed.has(n.id)){ if(new Date(t) < new Date(this._snoozed.get(n.id))) return false; this._snoozed.delete(n.id); }
+      if(n.severity<4){ const focus = LEADOS.attention.getCurrentFocus(); if(focus && n.finding){ const sameDomain = n.finding.domain === (focus.id||'').split(':')[0]; if(focus.type==='finding' && !sameDomain) return false; } }
+      if(n.requiresMorningPeak && circadian.analytical<0.7){ if(n.severity<5){ this._snoozed.set(n.id, this._nextMorningPeak()); return false; } }
+      if(fatigue>=70 && n.severity<5) return false;
+      return true;
+    });
+
+    const recentDeliveries = this._delivered.size;
+    const allowed = Math.max(0, 3 - (recentDeliveries % 3));
+    const queue = filtered.slice(0, allowed).sort((a,b)=>b.severity-a.severity);
+    return {queue, deferred: filtered.length - queue.length, snoozed: this._snoozed.size,
+      label:`${filtered.length} candidate notifications. ${queue.length} delivered. ${filtered.length-queue.length} rate-limited. (Rate-limit heuristic kept as written in the pasted spec — disclosed as non-monotonic, not hardened.)`};
+  },
+  deliver(n){
+    this._delivered.add(n.id);
+    this._log.unshift({...n, ts:new Date().toLocaleTimeString()});
+    if(this._log.length>100) this._log.length = 100;
+    switch(n.form){
+      case 'INTERRUPT': LEADOS.signals.enqueue({level:9, ...n}); break;
+      case 'BANNER': LEADOS.ui.showBanner(n); break;
+      case 'TOAST': LEADOS.ui.toast(n.title, n.severity>=4?'warn':'info', n.action); break;
+      case 'AMBIENT': LEADOS.ui.updateBadge(n); break;
+    }
+    LEADOS.haptics.onEvent(n.severity>=5?'finding.critical_new':'finding.snoozed');
+    LEADOS.store.auditLive('notification.delivered:'+n.type, n.title.slice(0,60));
+    updateNotifBadge();
+  },
+  _nextMorningPeak(){ const d=new Date(); d.setDate(d.getDate()+1); d.setHours(8,0,0,0); return d.toISOString(); }
+};
+
+/* ======================================================================
+   PART 6 — ORGANIZATIONAL HEALTH SCORE (kept close to the pasted spec;
+   trend uses a load-time snapshot as the "30d ago" baseline since this
+   build has no real historical event log — disclosed simplification)
+   ====================================================================== */
+LEADOS.healthScore = {
+  _baseline: null,
+  compute(P, t){
+    const findings = LEADOS.engine.run(P,t).findings;
+    const domains = {
+      PEOPLE: (()=>{ const s5=findings.filter(f=>f.sev===5&&['R1','R7','R19','R20','R21'].includes(f.rule)).length; const s4=findings.filter(f=>f.sev===4&&['R1','R4','R7','R10'].includes(f.rule)).length; return Math.max(0,100-s5*30-s4*15); })(),
+      FINANCIAL: (()=>{ const s5=findings.filter(f=>f.sev>=4&&['R103','R104','R105','R106','R107'].includes(f.rule)).length; const rw=LEADOS.finIntel.runwayStatus(P,t); const rr = rw.runway_months<3?40:rw.runway_months<6?20:0; return Math.max(0,100-s5*25-rr); })(),
+      EXECUTION: (()=>{ const v=findings.some(f=>f.rule==='R73'); const sla=findings.some(f=>f.rule==='R17'); const sp=findings.some(f=>f.rule==='R74'); return Math.max(0,100-(v?35:0)-(sla?25:0)-(sp?15:0)); })(),
+      STRATEGY: (()=>{ const si=findings.filter(f=>f.rule==='R14').length; const ow=findings.filter(f=>f.rule==='R3').length; const th=findings.filter(f=>f.rule==='R147'||f.rule==='R153').length; return Math.max(0,100-si*20-ow*10-th*15); })(),
+      GOVERNANCE: (()=>{ const nc=findings.some(f=>f.rule==='R88'); const gg=findings.filter(f=>['R30','R31','R39'].includes(f.rule)).length; return Math.max(0,100-(nc?50:0)-gg*15); })(),
+      CULTURE: (()=>{ const ps=findings.filter(f=>f.rule==='R62').length; const si=findings.filter(f=>f.rule==='R58').length; const vf=findings.filter(f=>f.rule==='R56').length; return Math.max(0,100-ps*30-si*15-vf*20); })(),
+      RESILIENCE: (()=>{ const ca=findings.some(f=>f.rule==='R125'&&f.sev>=4); const kp=findings.filter(f=>f.rule==='R129').length; const im=findings.some(f=>f.rule==='INF-003-IMMUNE'); return Math.max(0,100-(ca?40:0)-kp*15-(im?20:0)); })(),
+      MARKET: (()=>{ const wr=findings.some(f=>f.rule==='R157'); const lc=findings.some(f=>f.rule==='R158'); const bs=findings.some(f=>f.rule==='R145'); return Math.max(0,100-(wr?20:0)-(lc?25:0)-(bs?15:0)); })()
+    };
+    const overall = Math.round(Object.values(domains).reduce((a,b)=>a+b,0)/8);
     return {
-      activities, outputs, outcomes, impact, chains,
-      leadingIndicators: this._identifyLeadingIndicators(activities, outputs),
-      laggingIndicators: this._identifyLaggingIndicators(outcomes, impact),
-      label: 'Performance chain from event log measurements. Labeled: causal links between layers are theoretical. ' +
-             'Correlation between layers is computable from your data. To confirm causation: annotate outcomes with causal.annotation events.'
+      overall, grade: overall>=90?'A':overall>=80?'B':overall>=70?'C':overall>=60?'D':'F', domains,
+      lowestDomain: Object.entries(domains).sort(([,a],[,b])=>a-b)[0],
+      highestDomain: Object.entries(domains).sort(([,a],[,b])=>b-a)[0],
+      trend: this._computeTrend(overall),
+      label:'Each domain: 100 − (finding penalties). Score only improves by resolving findings; logging events alone cannot move it. Penalty weights are heuristic/illustrative, not validated.'
     };
   },
-
-  _identifyLeadingIndicators(activities, outputs) {
-    const leaders = [];
-    if (activities.oneOnOnes >= 4) leaders.push({ indicator: '1:1 cadence maintained', predicts: 'Engagement will hold or improve (7-21d lag)', confidence: 'ASSUMED', source: 'Hersey & Blanchard (1969)' });
-    if (outputs.feedbackLoop >= 1) leaders.push({ indicator: '\u22651 feedback/person/month', predicts: 'Performance will improve (30-60d lag)', confidence: 'ASSUMED', source: 'Kluger & DeNisi (1996)' });
-    if (outputs.velocityMean !== null && outputs.velocityMean > 0) leaders.push({ indicator: `Sprint velocity stable at ${Math.round(outputs.velocityMean)} pts`, predicts: 'Delivery dates will be met (next sprint)', confidence: 'EVIDENCED', source: 'Your sprint.review history' });
-    return leaders;
-  },
-
-  _identifyLaggingIndicators(outcomes, impact) {
-    const laggers = [];
-    if (outcomes.grossMargin !== null) laggers.push({ indicator: 'Gross margin', value: outcomes.grossMargin + '%', lags: 'Revenue mix decisions by 30-90d' });
-    if (outcomes.nps !== null) laggers.push({ indicator: 'NPS', value: outcomes.nps, lags: 'Customer experience by 30-60d' });
-    if (impact.retentionRate !== null) laggers.push({ indicator: 'Retention rate', value: Math.round(impact.retentionRate * 100) + '%', lags: 'Engagement by 30-90d' });
-    return laggers;
-  },
-
-  _computeGoalHitRate(P, today, limit) {
-    let closedGoals = P.state.events.filter(e => e.type === 'goal.closed').sort((a,b) => a.ts < b.ts ? -1 : 1);
-    if (limit) closedGoals = closedGoals.slice(-limit);
-    const achieved = closedGoals.filter(e => e.data.result === 'achieved').length;
-    return closedGoals.length ? achieved / closedGoals.length : null;
-  },
-
-  _computeTeamEngagement(P, today) {
-    const recentPulses = P.state.events.filter(e => e.type === 'pulse.recorded' && LEADOS.engine._days(e.ts, today) <= 30);
-    if (!recentPulses.length) return null;
-    return recentPulses.reduce((a,e) => a + (e.data.mood||5), 0) / recentPulses.length;
-  },
-
-  _computeTeamGrowthVector(P, today) {
-    const plans = P.openPlans;
-    if (!plans.length) return null;
-    const withProgress = plans.filter(pl => pl.spine.length > 1).length;
-    return withProgress / plans.length;
-  },
-
-  _computeRetentionRate(P, today, windowDays = 365) {
-    const startCount = P.state.events.filter(e => e.type === 'hr.started' && LEADOS.engine._days(e.ts, today) <= windowDays).length + P.people.length;
-    const attritions = P.state.events.filter(e => e.type === 'hr.attrition.logged' && LEADOS.engine._days(e.ts, today) <= windowDays).length;
-    return startCount ? 1 - (attritions / startCount) : null;
-  },
-
-  _computeRevenueVelocity(P, today) {
-    const quarters = P.state.events.filter(e => e.type === 'fin.pl.logged').sort((a,b) => a.ts < b.ts ? -1 : 1).slice(-4);
-    if (quarters.length < 2) return null;
-    const latest = quarters[quarters.length-1].data.revenue;
-    const prior = quarters[0].data.revenue;
-    return prior ? (latest - prior) / prior : null;
+  _computeTrend(overall){
+    if(this._baseline===null) this._baseline = overall;
+    const delta = overall - this._baseline;
+    return {delta, direction: delta>0?'IMPROVING':delta<0?'DECLINING':'STABLE',
+      label:`Since session start (demo baseline — no real 30d event history exists in this build): ${delta>0?'+':''}${delta} points.`};
   }
 };
 
-/* -------------------------- PART 6: compensation ---------------------------- */
-LEADOS.compensation = {
-  computeCompaRatios(P, today) {
-    const latestComp = this._getLatestCompByPerson(P);
-    const benchmarks = this._getLatestBenchmarks(P);
-    return Object.entries(latestComp).map(([personId, comp]) => {
-      const person = P.peopleById[personId];
-      const benchmark = benchmarks[comp.band];
-      const compaRatio = benchmark ? comp.baseSalary / benchmark.market50pct : null;
-      return {
-        person, comp, benchmark,
-        compaRatio: compaRatio ? Math.round(compaRatio * 100) / 100 : null,
-        position: compaRatio ?
-          (compaRatio < 0.85 ? 'BELOW_MARKET' : compaRatio < 0.95 ? 'LOW_MARKET' : compaRatio < 1.05 ? 'AT_MARKET' : compaRatio < 1.15 ? 'ABOVE_MARKET' : 'WELL_ABOVE_MARKET') : 'NO_BENCHMARK',
-        riskFlag: !!(compaRatio && compaRatio < 0.85),
-        label: `Compa-ratio: actual/market_midpoint. < 0.85 = retention risk. > 1.15 = above market.`
-      };
-    });
-  },
+/* ======================================================================
+   APP CHROME / RENDERING  (original — not part of the pasted spec)
+   ====================================================================== */
+let route = 'today';
 
-  analyzeEquityGaps(P, today) {
-    const compaRatios = this.computeCompaRatios(P, today);
-    const withData = compaRatios.filter(c => c.compaRatio !== null);
-    if (withData.length < 4) {
-      return { insufficient: true, message: 'Fewer than 4 people with compensation data. Equity analysis requires n \u2265 4 for any meaningful comparison.',
-        label: 'Labeled: small n \u2192 high variance in group comparisons.' };
-    }
-    const byBand = {};
-    withData.forEach(c => { const band = c.comp.band || 'UNKNOWN'; (byBand[band] ||= []).push(c.compaRatio); });
-    const bandAnalysis = Object.entries(byBand).map(([band, ratios]) => ({
-      band, n: ratios.length,
-      mean: Math.round(ratios.reduce((a,b)=>a+b,0) / ratios.length * 100) / 100,
-      spread: Math.round((Math.max(...ratios) - Math.min(...ratios)) * 100) / 100,
-      belowMarket: ratios.filter(r => r < 0.85).length
-    }));
-    const allRatios = withData.map(c => c.compaRatio).sort((a,b)=>a-b);
-    const p10 = allRatios[Math.floor(allRatios.length * 0.1)];
-    const p90 = allRatios[Math.floor(allRatios.length * 0.9)];
-    return {
-      totalPeopleWithData: withData.length, bandAnalysis,
-      overallSpread: { p10: Math.round(p10*100)/100, p90: Math.round(p90*100)/100 },
-      atRisk: withData.filter(c => c.riskFlag).map(c => ({ person: c.person.name, compaRatio: c.compaRatio, band: c.comp.band })),
-      label: 'Compensation equity analysis by band. Protected attribute analysis (gender, race, etc.) requires explicit consent and ' +
-             'is governed by the platform\u2019s sensitive data rules. For protected attribute analysis: engage HR and legal counsel ' +
-             'with appropriate data governance. This is a band-level analysis only.'
-    };
-  },
+function domainDot(d){ return `<span class="dot" data-domain="${d}"></span>`; }
 
-  analyzePromotionPatterns(P, today) {
-    const promotions = P.state.events.filter(e => e.type === 'comp.logged' && e.data.reason === 'promo');
-    const byBand = {};
-    promotions.forEach(p => {
-      const band = p.data.band || 'UNKNOWN';
-      (byBand[band] ||= { count: 0, timeSinceLast: [] });
-      byBand[band].count++;
-      byBand[band].timeSinceLast.push(LEADOS.engine._days(p.ts, today));
-    });
-    const velocity = Object.entries(byBand).map(([band, data]) => ({
-      band, promotionCount: data.count,
-      meanDaysSincePromo: data.timeSinceLast.length ? Math.round(data.timeSinceLast.reduce((a,b)=>a+b,0) / data.timeSinceLast.length) : null
-    }));
-    const dueForReview = P.directs.concat(P.skips).filter(person => {
-      const lastPromo = promotions.filter(p => p.data.personId === person.id).sort((a,b) => b.ts > a.ts ? 1 : -1)[0];
-      const tenure = person.startDate ? LEADOS.engine._days(person.startDate, today) : null;
-      const daysSincePromo = lastPromo ? LEADOS.engine._days(lastPromo.ts, today) : tenure;
-      return daysSincePromo && daysSincePromo > 365;
-    });
-    return { totalPromotions: promotions.length, velocity, dueForReview, label: 'Promotion pattern analysis from comp.logged(reason=promo) events.' };
-  },
-
-  _getLatestCompByPerson(P) {
-    const result = {};
-    P.state.events.filter(e => e.type === 'comp.logged').sort((a,b) => a.ts < b.ts ? -1 : 1)
-      .forEach(e => { result[e.data.personId] = e.data; });
-    return result;
-  },
-  _getLatestBenchmarks(P) {
-    const result = {};
-    P.state.events.filter(e => e.type === 'comp.benchmark').sort((a,b) => a.ts < b.ts ? -1 : 1)
-      .forEach(e => { result[e.data.band] = e.data; });
-    return result;
-  }
-};
-
-/* ----------------------- disclosed proxy: flight risk -----------------------
-   R161 and R166 reference js/flight_risk.js and js/causal.js, which were
-   named in the pt-Q spec's "New modules" list but whose source was not
-   included in this part of the brief. Rather than invent an unverified
-   module under that name, this is an explicit, labeled, simplified stand-in
-   used only to make the referenced rules demonstrable in this sandbox. */
-LEADOS.flightRiskProxy = {
-  compute(P, today) {
-    const people = P.directs.concat(P.skips);
-    const compa = LEADOS.compensation.computeCompaRatios(P, today);
-    return people.map(person => {
-      const lastOneOnOne = P.state.events.filter(e => e.type === 'oneonone.logged' && e.data.personId === person.id)
-        .sort((a,b) => a.ts < b.ts ? 1 : -1)[0];
-      const daysSinceOneOnOne = lastOneOnOne ? LEADOS.engine._days(lastOneOnOne.ts, today) : 999;
-      const pulses = P.state.events.filter(e => e.type === 'pulse.recorded' && e.data.personId === person.id &&
-        LEADOS.engine._days(e.ts, today) <= 45);
-      const meanMood = pulses.length ? pulses.reduce((a,e)=>a+e.data.mood,0)/pulses.length : null;
-      const feedbackCount = P.state.events.filter(e => e.type === 'feedback.given' && e.data.aboutId === person.id &&
-        LEADOS.engine._days(e.ts, today) <= 60).length;
-      const comp = compa.find(c => c.person?.id === person.id);
-      let score = 0;
-      if (daysSinceOneOnOne > 14) score += 2;
-      if (meanMood !== null && meanMood < 5.5) score += 2;
-      if (feedbackCount === 0) score += 1;
-      if (comp && comp.riskFlag) score += 2;
-      const level = score >= 4 ? 'HIGH' : score >= 2 ? 'MEDIUM' : 'LOW';
-      return { person, daysSinceOneOnOne: Math.round(daysSinceOneOnOne), meanMood, feedbackCount, compaRatio: comp?.compaRatio ?? null, score, level };
-    });
-  },
-  label: 'SIMPLIFIED PROXY \u2014 not the js/flight_risk.js module named in the pt-Q spec (source not provided this part). ' +
-         'Combines 1:1 recency, pulse mood, feedback frequency and compa-ratio into a 0-7 score. Original to this build, clearly not evidenced against real attrition.'
-};
-
-/* --------------------------------- rules R161-R175 -------------------------- */
-function computeRules(P, today, ctx) {
-  const { network, meetingCost, decisionVelocity, perfChain, compaRatios, equityGaps, promoPatterns, flightRisks } = ctx;
-  const findings = [];
-  const push = (id, title, severity, detail, labeled) => findings.push({ id, title, severity, detail, labeled });
-
-  // R161
-  flightRisks.filter(f => f.level === 'HIGH' && f.daysSinceOneOnOne > 14).forEach(f => {
-    push('R161', `Flight risk HIGH: ${f.person.name} \u2014 no 1:1 in ${f.daysSinceOneOnOne}d`, 4,
-      `Score ${f.score}/7. Mood ${f.meanMood !== null ? f.meanMood.toFixed(1) : 'n/a'}, feedback(60d)=${f.feedbackCount}, compa-ratio=${f.compaRatio ?? 'n/a'}.`,
-      'Flight-risk score is a simplified proxy (see flightRiskProxy.label) \u2014 named, but based on synthetic data quality, not a validated model.');
-  });
-
-  // R162
-  decisionVelocity.agedDecisionDetails.filter(d => (d.data.stakes || 0) >= 3).forEach(d => {
-    push('R162', `Decision aged > 21d, stakes \u2265 3: "${d.data.title}"`, 3,
-      `Open ${Math.round(LEADOS.engine._days(d.ts, today))}d, stakes=${d.data.stakes}.`, null);
-  });
-
-  // R163
-  if (meetingCost.closureRate !== null && meetingCost.closureRate < 50) {
-    push('R163', `Meeting action-item closure rate ${meetingCost.closureRate}% (< 50%)`, 3, 'From meeting.followup events.', null);
-  }
-
-  // R164
-  meetingCost.loadByPerson.filter(l => l.hoursPerWeek > 16).forEach(l => {
-    push('R164', `Meeting load > 40% for ${l.person?.name || 'unknown'}: ${l.hoursPerWeek}h/week`, 2, 'Threshold: >16h/week assumes a 40h week.', null);
-  });
-
-  // R165
-  compaRatios.filter(c => c.riskFlag).forEach(c => {
-    push('R165', `Compa-ratio < 0.85 for ${c.person.name} (${c.compaRatio})`, 4, `Band ${c.comp.band}. ${c.label}`, null);
-  });
-
-  // R166
-  const pulsePeople = new Set(P.state.events.filter(e => e.type === 'pulse.recorded').map(e => e.data.personId));
-  if (pulsePeople.size < 10) {
-    push('R166', `Causal graph: only ${pulsePeople.size} people with pulse data (< 10)`, 1,
-      'Correlational confidence is low with small n. This is expected for a team this size.',
-      'No dedicated causal-graph module was provided this part; this check uses pulse.recorded coverage as a proxy for evidence depth.');
-  }
-
-  // R167
-  if (decisionVelocity.velocity === 0) {
-    push('R167', 'Decision velocity = 0 (no decisions closed in last 30d)', 2, `${decisionVelocity.openCount} decisions currently open.`, null);
-  }
-
-  // R168
-  if (perfChain.leadingIndicators.length === 0) {
-    push('R168', 'Performance chain: no leading indicators currently tracked', 2, 'No activity signals met threshold this period.', null);
-  }
-
-  // R169
-  network.darkMatter.forEach(dm => {
-    push('R169', `Informal network dark matter detected: ${dm.person.name}`, 2,
-      `Influence score ${dm.influenceScore}, not a direct report.`, 'Inferred from event co-occurrence \u2014 correlation, not confirmed social mapping.');
-  });
-
-  // R170 (proxy: fires when any predicted cascade would cross a dark-matter node at max modeled chain depth)
-  if (network.darkMatter.length > 0 && network.influenceLeaders.some(l => l.influenceScore > 0)) {
-    push('R170', 'Information cascade length > 3 modeled for critical comms', 2,
-      'Dark-matter influencers sit inside at least one predicted cascade path.',
-      'Chain-length cap is fixed at 3 in this model (org-size assumption) \u2014 see cascade.predictCascade.');
-  }
-
-  // R171
-  const outcomesWithoutAnnotation = P.state.events.filter(e => e.type === 'decision.outcome' &&
-    !P.state.events.some(a => a.type === 'causal.annotation' && a.data.decisionId === e.data.decisionId));
-  if (outcomesWithoutAnnotation.length > 0) {
-    push('R171', `${outcomesWithoutAnnotation.length} decision outcome(s) logged without causal.annotation`, 1,
-      'No causal.annotation events exist in this synthetic dataset \u2014 the practice is simply unused here.', null);
-  }
-
-  // R172
-  promoPatterns.dueForReview.forEach(person => {
-    const tenureDays = LEADOS.engine._days(person.startDate, today);
-    const hasPlan = (P.openPlans || []).some(pl => pl.personId === person.id);
-    if (tenureDays > 548 && hasPlan) {
-      push('R172', `Promotion overdue > 18mo AND growth plan active: ${person.name}`, 3, `Tenure/time-since-promo \u2248 ${Math.round(tenureDays)}d.`, null);
-    }
-  });
-
-  // R173
-  const lastReview = P.state.events.filter(e => e.type === 'comp.review').sort((a,b) => a.ts < b.ts ? -1 : 1).pop();
-  if (!lastReview || LEADOS.engine._days(lastReview.ts, today) > 548) {
-    push('R173', `Compensation review cycle > 18 months${lastReview ? '' : ' (none logged)'}`, 2,
-      lastReview ? `Last review ${Math.round(LEADOS.engine._days(lastReview.ts, today))}d ago.` : 'No comp.review events found.', null);
-  }
-
-  // R174
-  const last3HitRate = LEADOS.performance._computeGoalHitRate(P, today, 3);
-  if (last3HitRate !== null && last3HitRate < 0.5) {
-    push('R174', `Goal hit rate ${Math.round(last3HitRate*100)}% for last 3 closed goals (< 50%)`, 3, null, null);
-  }
-
-  // R175
-  if (meetingCost.costPerDecision !== null && meetingCost.costPerDecision > 5000) {
-    push('R175', `Meeting cost per decision \u20ac${meetingCost.costPerDecision.toLocaleString()} (> \u20ac5,000)`, 2,
-      null, 'Cost is an estimate from logged meetings at the configured \u20ac/person-hour rate.');
-  }
-
-  return findings.sort((a,b) => b.severity - a.severity);
-}
-
-/* ------------------------------- synthetic seed ------------------------------ */
-function daysAgoISO(seedAt, n) { return new Date(new Date(seedAt).getTime() - n * 86400000).toISOString(); }
-
-function seedState(seedVal) {
-  rng = mulberry32(seedVal);
-  const seedAt = new Date().toISOString();
-
-  const directs = [
-    { id: 'p1', name: 'Alicia Munroe', role: 'Eng Manager', band: 'M2', startDate: daysAgoISO(seedAt, 900) },
-    { id: 'p2', name: 'Devon Carter', role: 'Product Lead', band: 'M1', startDate: daysAgoISO(seedAt, 620) },
-    { id: 'p3', name: 'Priya Natarajan', role: 'Design Lead', band: 'M1', startDate: daysAgoISO(seedAt, 1400) },
-    { id: 'p4', name: 'Marcus Webb', role: 'Sales Lead', band: 'M2', startDate: daysAgoISO(seedAt, 500) },
-    { id: 'p5', name: 'Yuki Tanaka', role: 'Staff Engineer', band: 'IC5', startDate: daysAgoISO(seedAt, 1100) },
-    { id: 'p6', name: 'Sofia Delgado', role: 'Finance Lead', band: 'M1', startDate: daysAgoISO(seedAt, 300) }
-  ];
-  const skips = [
-    { id: 'p7', name: 'Ben Okafor', role: 'Senior Engineer', band: 'IC4', startDate: daysAgoISO(seedAt, 700), managerId: 'p1' },
-    { id: 'p8', name: 'Lena Fischer', role: 'Product Manager', band: 'IC3', startDate: daysAgoISO(seedAt, 400), managerId: 'p2' },
-    { id: 'p9', name: 'Omar Haddad', role: 'Designer', band: 'IC2', startDate: daysAgoISO(seedAt, 250), managerId: 'p3' },
-    { id: 'p10', name: 'Grace Kim', role: 'Account Executive', band: 'IC3', startDate: daysAgoISO(seedAt, 800), managerId: 'p4' }
-  ];
-  const allPeople = directs.concat(skips);
-  const events = [];
-  const addEv = (type, ts, data, id) => events.push({ id: id || uid('ev'), type, ts, data });
-
-  // comp.benchmark
-  const bands = { IC2: 58000, IC3: 72000, IC4: 92000, IC5: 118000, M1: 105000, M2: 130000 };
-  Object.entries(bands).forEach(([band, market50pct]) => {
-    addEv('comp.benchmark', daysAgoISO(seedAt, 120), { band, market50pct, market75pct: Math.round(market50pct * 1.15), source: 'synthetic market survey' });
-  });
-
-  // comp.logged (current, with two below-market cases for R165)
-  const salaries = { p1: 128000, p2: 103000, p3: 110000, p4: 125000, p5: 121000, p6: 100000,
-                     p7: 74000 /* below mkt for IC4 (0.80) */, p8: 70000, p9: 46000 /* below mkt IC2 (0.79) */, p10: 69000 };
-  allPeople.forEach(p => addEv('comp.logged', daysAgoISO(seedAt, 100), { personId: p.id, baseSalary: salaries[p.id], currency: 'EUR', effectiveDate: daysAgoISO(seedAt, 100), band: p.band, reason: 'adjustment' }));
-  // one promo more than a year old, to seed promotion patterns
-  addEv('comp.logged', daysAgoISO(seedAt, 400), { personId: 'p7', baseSalary: 70000, band: 'IC4', reason: 'promo' });
-  addEv('comp.logged', daysAgoISO(seedAt, 410), { personId: 'p2', baseSalary: 98000, band: 'M1', reason: 'promo' });
-
-  // comp.review — last one > 18 months ago (R173)
-  addEv('comp.review', daysAgoISO(seedAt, 600), { date: daysAgoISO(seedAt, 600), cycleType: 'annual', increasePct: 3.0, equityGranted: false });
-
-  // oneonone.logged — everyone regular except Marcus Webb (p4) stale (R161)
-  allPeople.forEach(p => {
-    const count = p.id === 'p4' ? 2 : RI(5, 8);
-    for (let i = 0; i < count; i++) {
-      const gap = p.id === 'p4' ? RI(20, 40) : RI(3, 13);
-      addEv('oneonone.logged', daysAgoISO(seedAt, 16 + i * gap), { personId: p.id, energy: RI(2, 8) });
-    }
-  });
-
-  // pulse.recorded — only 8 of 10 people (R166), Marcus Webb trending low
-  allPeople.slice(0, 8).forEach(p => {
-    for (let i = 0; i < 4; i++) {
-      const base = p.id === 'p4' ? R(2.5, 4.5) : R(5.5, 8.5);
-      addEv('pulse.recorded', daysAgoISO(seedAt, 5 + i * 9), { personId: p.id, mood: Math.round(base * 10) / 10 });
-    }
-  });
-
-  // feedback.given — Alicia gives first, Devon & Priya follow within window (cascade)
-  addEv('feedback.given', daysAgoISO(seedAt, 40), { personId: 'p1', aboutId: 'p7', sentiment: 'positive' });
-  addEv('feedback.given', daysAgoISO(seedAt, 37), { personId: 'p2', aboutId: 'p8', sentiment: 'positive' });
-  addEv('feedback.given', daysAgoISO(seedAt, 35), { personId: 'p3', aboutId: 'p9', sentiment: 'positive' });
-  for (let i = 0; i < 10; i++) {
-    const giver = PICK(['p1','p2','p3','p5','p6']);
-    const about = PICK(allPeople.map(p=>p.id).filter(id=>id!==giver));
-    addEv('feedback.given', daysAgoISO(seedAt, RI(2, 55)), { personId: giver, aboutId: about, sentiment: PICK(['positive','constructive']) });
-  }
-  // no feedback about Marcus Webb (p4) in last 60d, reinforcing flight-risk proxy
-
-  // blocker.logged — Ben Okafor (skip, dark matter candidate) precedes several others
-  const blockerFollowers = ['p8','p9','p10','p2','p3','p6'];
-  const blockerBase = 50;
-  addEv('blocker.logged', daysAgoISO(seedAt, blockerBase), { personId: 'p7', note: 'Build pipeline flaky' });
-  blockerFollowers.forEach((pid, i) => addEv('blocker.logged', daysAgoISO(seedAt, blockerBase - (2 + i * 2)), { personId: pid, note: 'Also blocked' }));
-
-  // goal.progress — regular cadence
-  allPeople.forEach(p => { for (let i = 0; i < 3; i++) addEv('goal.progress', daysAgoISO(seedAt, 10 + i * 18), { personId: p.id, pct: RI(20,95) }); });
-
-  // conflict.logged — small cascade
-  addEv('conflict.logged', daysAgoISO(seedAt, 70), { personId: 'p4', note: 'Scope disagreement' });
-  addEv('conflict.logged', daysAgoISO(seedAt, 60), { personId: 'p10', note: 'Escalation from client call' });
-
-  // goal.closed — last 3 skew toward missed (R174)
-  addEv('goal.closed', daysAgoISO(seedAt, 200), { result: 'achieved' });
-  addEv('goal.closed', daysAgoISO(seedAt, 140), { result: 'achieved' });
-  addEv('goal.closed', daysAgoISO(seedAt, 90), { result: 'missed' });
-  addEv('goal.closed', daysAgoISO(seedAt, 45), { result: 'missed' });
-  addEv('goal.closed', daysAgoISO(seedAt, 20), { result: 'achieved' });
-  // force "last 3" window below 50%: reorder closed dates so last-by-ts three are missed/missed/achieved
-  events.filter(e=>e.type==='goal.closed').sort((a,b)=>a.ts<b.ts?-1:1);
-
-  // sprint.review — velocity history
-  for (let i = 0; i < 8; i++) addEv('sprint.review', daysAgoISO(seedAt, 7 + i * 14), { velocity: RI(28, 40) });
-
-  // meeting.logged — Alicia overloaded (R164), mixed outcomes (R163 contributor)
-  const outcomePool = ['clear','clear','murky','blocked'];
-  for (let i = 0; i < 22; i++) {
-    const attendees = new Set(['p1']);
-    while (attendees.size < RI(2, 5)) attendees.add(PICK(allPeople.map(p=>p.id)));
-    addEv('meeting.logged', daysAgoISO(seedAt, RI(1, 29)), {
-      type: PICK(['staff','1:1 skip','planning','review']),
-      attendees: [...attendees],
-      durationMin: PICK([30,30,45,60,90]),
-      decisions: rng() > 0.5 ? [`Decision ${i}`] : [],
-      actionItems: rng() > 0.3 ? [`Action ${i}`] : [],
-      outcome: PICK(outcomePool),
-      energyDelta: RI(-2, 2)
-    }, `meet_${i}`);
-  }
-
-  // meeting.followup — closure rate < 50% (R163)
-  for (let i = 0; i < 16; i++) {
-    addEv('meeting.followup', daysAgoISO(seedAt, RI(2, 25)), {
-      meetingId: `meet_${RI(0,21)}`, actionItem: `Follow up ${i}`, ownerId: PICK(allPeople.map(p=>p.id)),
-      by_date: daysAgoISO(seedAt, RI(-10, 5)), closed: i < 6
-    });
-  }
-
-  // strategy.decision / decision.outcome — some aged & open with stakes>=3 (R162), velocity=0 in last 30d (R167)
-  const decisionDefs = [
-    { title: 'Re-platform billing', stakes: 4, age: 45, closed: true, closeAfter: 10 },
-    { title: 'Hire 2 senior engineers', stakes: 3, age: 35, closed: false },
-    { title: 'Change pricing tiers', stakes: 5, age: 30, closed: false },
-    { title: 'Sunset legacy API', stakes: 2, age: 15, closed: false },
-    { title: 'New PTO policy', stakes: 1, age: 60, closed: true, closeAfter: 5 },
-    { title: 'Consolidate vendors', stakes: 3, age: 50, closed: true, closeAfter: 40 }
-  ];
-  decisionDefs.forEach((d, i) => {
-    const id = `dec_${i}`;
-    addEv('strategy.decision', daysAgoISO(seedAt, d.age), { title: d.title, stakes: d.stakes }, id);
-    if (d.closed) addEv('decision.outcome', daysAgoISO(seedAt, d.age - d.closeAfter), { decisionId: id, outcome: 'implemented' });
-  });
-
-  // sales.deal.closed — win rate
-  for (let i = 0; i < 18; i++) addEv('sales.deal.closed', daysAgoISO(seedAt, RI(1, 85)), { outcome: rng() > 0.42 ? 'won' : 'lost', ownerId: PICK(['p4','p10']) });
-
-  // fin.pl.logged — quarterly metrics
-  for (let i = 0; i < 4; i++) {
-    addEv('fin.pl.logged', daysAgoISO(seedAt, 10 + i * 90), { revenue: 900000 + i * 60000 + RI(-20000,20000), gross_margin_pct: RI(58, 68), nps_score: RI(22, 48) });
-  }
-
-  // hr.started / hr.attrition.logged
-  addEv('hr.started', daysAgoISO(seedAt, 250), { personId: 'p9' });
-  addEv('hr.attrition.logged', daysAgoISO(seedAt, 150), { personId: 'ext_1', reason: 'voluntary' });
-
-  // openPlans (growth plans) — a few active, used for R172 + performance impact
-  const openPlans = [
-    { personId: 'p7', spine: ['kickoff','milestone1','milestone2'] },
-    { personId: 'p8', spine: ['kickoff'] },
-    { personId: 'p9', spine: ['kickoff','milestone1'] },
-    { personId: 'p2', spine: ['kickoff','milestone1','milestone2','milestone3'] }
-  ];
-
-  return {
-    seedAt,
-    seedVal,
-    people: { directs, skips },
-    events,
-    settings: { fullyLoadedCostPerHour: 150 },
-    openPlans
-  };
-}
-
-/* --------------------------------- state I/O --------------------------------- */
-function loadState() {
-  const raw = localStorage.getItem(LS_KEY);
-  if (raw) { try { return JSON.parse(raw); } catch (e) { /* fall through */ } }
-  const s = seedState(42);
-  localStorage.setItem(LS_KEY, JSON.stringify(s));
-  return s;
-}
-function resetState() {
-  const s = seedState(Date.now() % 1000000);
-  localStorage.setItem(LS_KEY, JSON.stringify(s));
-  return s;
-}
-
-function buildP(state) {
-  const peopleById = {};
-  state.people.directs.concat(state.people.skips).forEach(p => peopleById[p.id] = p);
-  const events = state.events;
-  const decisions = events.filter(e => e.type === 'strategy.decision');
-  const outcomes = events.filter(e => e.type === 'decision.outcome');
-  const openDecisions = decisions.filter(d => !outcomes.some(o => o.data.decisionId === d.id));
-  return {
-    directs: state.people.directs,
-    skips: state.people.skips,
-    people: state.people.directs.concat(state.people.skips),
-    peopleById,
-    state: { events },
-    settings: state.settings,
-    openDecisions,
-    openPlans: state.openPlans
-  };
-}
-
-/* ------------------------------------ render ------------------------------------ */
-let STATE, P, TODAY, ANALYSIS;
-const TABS = [
-  { id: 'today', label: 'Today' },
-  { id: 'cascade', label: 'Cascade' },
-  { id: 'meetings', label: 'Meetings' },
-  { id: 'performance', label: 'Performance' },
-  { id: 'compensation', label: 'Compensation' },
-  { id: 'rules', label: 'Health Wall' },
-  { id: 'data', label: 'Event Log' },
-  { id: 'about', label: 'About / Provenance' }
-];
-let currentTab = 'today';
-
-function recompute() {
-  P = buildP(STATE);
-  TODAY = STATE.seedAt;
-  const network = LEADOS.cascade.buildInformalNetwork(P, TODAY);
-  const meetingCost = LEADOS.meetings.computeMeetingCost(P, TODAY);
-  const decisionVelocity = LEADOS.meetings.computeDecisionVelocity(P, TODAY);
-  const perfChain = LEADOS.performance.buildPerformanceChain(P, TODAY);
-  const compaRatios = LEADOS.compensation.computeCompaRatios(P, TODAY);
-  const equityGaps = LEADOS.compensation.analyzeEquityGaps(P, TODAY);
-  const promoPatterns = LEADOS.compensation.analyzePromotionPatterns(P, TODAY);
-  const flightRisks = LEADOS.flightRiskProxy.compute(P, TODAY);
-  const ctx = { network, meetingCost, decisionVelocity, perfChain, compaRatios, equityGaps, promoPatterns, flightRisks };
-  const findings = computeRules(P, TODAY, ctx);
-  ANALYSIS = { ...ctx, findings };
-}
-
-function sevMeta(n) {
-  return { 4: ['bg-red-600','text-white','SEV 4'], 3: ['bg-amber-500','text-white','SEV 3'],
-           2: ['bg-blue-500','text-white','SEV 2'], 1: ['bg-gray-400','text-white','SEV 1'] }[n] || ['bg-gray-300','text-gray-800','SEV ?'];
-}
-function sevBadge(n) {
-  const [bg, tx, label] = sevMeta(n);
-  return `<span class="${bg} ${tx} text-[10px] font-bold px-2 py-0.5 rounded-full">${label}</span>`;
-}
-function labelTag(text, tone='amber') {
-  const tones = { amber: 'bg-amber-100 text-amber-800 border-amber-300', gray: 'bg-gray-100 text-gray-700 border-gray-300', green: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
-  return `<div class="text-[11px] mt-2 border ${tones[tone]} rounded-lg px-2 py-1.5 leading-snug">${text}</div>`;
-}
-function fmt(n, d=0) { return n === null || n === undefined || Number.isNaN(n) ? '—' : (typeof n === 'number' ? n.toLocaleString(undefined,{maximumFractionDigits:d}) : n); }
-
-function renderNav() {
-  document.getElementById('tabnav').innerHTML = TABS.map(t =>
-    `<button class="tabbtn px-3 py-1.5 rounded-lg font-medium text-gray-300 hover:text-white ${t.id===currentTab?'active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`
-  ).join('');
-  document.getElementById('todayBadge').textContent = `synthetic "today": ${new Date(STATE.seedAt).toLocaleString()}`;
-}
-
-function switchTab(id) { currentTab = id; renderNav(); renderApp(); window.scrollTo({top:0,behavior:'smooth'}); }
-window.switchTab = switchTab;
-
-function renderApp() {
-  const el = document.getElementById('app');
-  el.className = 'max-w-7xl mx-auto px-4 py-6 fade-in';
-  if (currentTab === 'today') return el.innerHTML = renderToday();
-  if (currentTab === 'cascade') return el.innerHTML = renderCascade();
-  if (currentTab === 'meetings') return el.innerHTML = renderMeetings();
-  if (currentTab === 'performance') return el.innerHTML = renderPerformance();
-  if (currentTab === 'compensation') return el.innerHTML = renderCompensation();
-  if (currentTab === 'rules') return el.innerHTML = renderRules();
-  if (currentTab === 'data') return el.innerHTML = renderData();
-  if (currentTab === 'about') return el.innerHTML = renderAbout();
-}
-
-function statCard(label, value, sub='') {
-  return `<div class="card p-4"><div class="text-xs text-gray-500">${label}</div><div class="text-2xl font-bold mt-1">${value}</div>${sub?`<div class="text-xs text-gray-400 mt-1">${sub}</div>`:''}</div>`;
-}
-
-function renderToday() {
-  const f = ANALYSIS.findings;
-  const counts = [4,3,2,1].map(s => f.filter(x=>x.severity===s).length);
-  return `
-  <div class="grid md:grid-cols-4 gap-4 mb-6">
-    ${statCard('Open findings', f.length, `${counts[0]} sev4 · ${counts[1]} sev3 · ${counts[2]} sev2 · ${counts[3]} sev1`)}
-    ${statCard('Influence leaders', ANALYSIS.network.influenceLeaders.filter(l=>l.influenceScore>0).length, `${ANALYSIS.network.darkMatter.length} dark-matter node(s)`)}
-    ${statCard('Meeting spend (30d)', '\u20ac'+fmt(ANALYSIS.meetingCost.totalCost), `${ANALYSIS.meetingCost.totalMeetings} meetings logged`)}
-    ${statCard('People below market', ANALYSIS.compaRatios.filter(c=>c.riskFlag).length, 'compa-ratio < 0.85')}
-  </div>
-  <div class="grid md:grid-cols-2 gap-4 mb-6">
-    <div class="card p-4">
-      <div class="font-semibold mb-2">Decision velocity</div>
-      <div class="text-sm text-gray-600 space-y-1">
-        <div>Open decisions: <b>${ANALYSIS.decisionVelocity.openCount}</b> (${ANALYSIS.decisionVelocity.agedDecisions} aged > 21d)</div>
-        <div>Closed in last 30d: <b>${ANALYSIS.decisionVelocity.velocity}</b></div>
-        <div>Mean time to decision: <b>${fmt(ANALYSIS.decisionVelocity.meanTimeToDecision)}</b>d</div>
-      </div>
+function findingCard(f, {compact=false}={}){
+  const rule = RULES[f.rule];
+  const person = f.personId ? PEOPLE.find(p=>p.id===f.personId) : null;
+  return `<div class="finding-card fade-in bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2 ${f.sev>=5?'border-red-600':f.sev===4?'border-amber-600/70':''}" data-key="${f.key}" data-rule="${f.rule}">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 text-xs">${domainDot(f.domain)}<span class="text-slate-500">${f.domain}</span><span class="mono text-slate-600">${f.rule}</span></div>
+      <span class="text-[10px] px-1.5 py-0.5 rounded ${f.sev>=5?'bg-red-600':f.sev===4?'bg-amber-600':'bg-slate-700'}">sev ${f.sev}</span>
     </div>
-    <div class="card p-4">
-      <div class="font-semibold mb-2">Performance chain snapshot</div>
-      <div class="text-sm text-gray-600 space-y-1">
-        <div>Velocity mean: <b>${fmt(ANALYSIS.perfChain.outputs.velocityMean,1)}</b> pts</div>
-        <div>Goal hit rate: <b>${ANALYSIS.perfChain.outputs.goalHitRate!==null?Math.round(ANALYSIS.perfChain.outputs.goalHitRate*100)+'%':'—'}</b></div>
-        <div>Engagement mean: <b>${fmt(ANALYSIS.perfChain.outcomes.engagementMean,1)}</b> /10</div>
-        <div>Leading indicators tracked: <b>${ANALYSIS.perfChain.leadingIndicators.length}</b></div>
-      </div>
-    </div>
-  </div>
-  <div class="card p-4 mb-6">
-    <div class="font-semibold mb-3">Top findings</div>
-    <div class="space-y-2">
-      ${f.slice(0,6).map(x => `<div class="flex items-start gap-3 border-b last:border-0 border-gray-100 pb-2">
-        ${sevBadge(x.severity)}<div class="text-sm"><div class="font-medium">${x.title}</div>${x.detail?`<div class="text-xs text-gray-500">${x.detail}</div>`:''}</div>
-      </div>`).join('') || '<div class="text-sm text-gray-500">No findings.</div>'}
-    </div>
-    <button class="mt-3 text-sm font-semibold text-indigo-600" onclick="switchTab('rules')">View full Health Wall (R161–R175) →</button>
-  </div>
-  ${labelTag('This entire view is built from synthetic, seeded data generated in your browser. Nothing here describes a real organization. See About / Provenance for what was and wasn\\'t verified against github.com/wbweve/Leados.', 'amber')}
-  `;
-}
-
-function renderCascade() {
-  const net = ANALYSIS.network;
-  const senderOptions = P.directs.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-  return `
-  <div class="grid md:grid-cols-2 gap-4 mb-6">
-    <div class="card p-4">
-      <div class="font-semibold mb-2">Influence leaders</div>
-      <table class="w-full text-sm"><thead><tr class="text-left text-gray-500"><th>Person</th><th>Influence</th><th>Influenced-by</th><th>Dark matter?</th></tr></thead>
-      <tbody>${net.influenceLeaders.map(n => `<tr class="border-t border-gray-100"><td class="py-1">${n.person.name}</td><td>${n.influenceScore}</td><td>${n.influencedByCount}</td><td>${n.isDarkMatter?'<span class="text-amber-600 font-semibold">yes</span>':'—'}</td></tr>`).join('')}</tbody></table>
-      ${labelTag(net.label)}
-    </div>
-    <div class="card p-4">
-      <div class="font-semibold mb-2">Dark matter (high informal influence, not a direct report)</div>
-      ${net.darkMatter.length ? `<ul class="text-sm list-disc pl-5 space-y-1">${net.darkMatter.map(dm => `<li><b>${dm.person.name}</b> (${dm.person.role}) — influence score ${dm.influenceScore}</li>`).join('')}</ul>` : '<div class="text-sm text-gray-500">None detected in this synthetic run.</div>'}
-      ${labelTag('Correlation \u2260 causation: a person may respond to the same stimulus, not to the person who preceded them.')}
-    </div>
-  </div>
-  <div class="card p-4">
-    <div class="font-semibold mb-3">Predict a cascade</div>
-    <div class="flex flex-wrap gap-2 items-end mb-3">
-      <div><label class="text-xs text-gray-500 block mb-1">Sender</label><select id="castSender" class="border rounded-lg px-2 py-1.5 text-sm">${senderOptions}</select></div>
-      <div><label class="text-xs text-gray-500 block mb-1">Trigger type</label><select id="castTrigger" class="border rounded-lg px-2 py-1.5 text-sm">
-        <option value="feedback.given">feedback.given</option><option value="blocker.logged">blocker.logged</option>
-        <option value="goal.progress">goal.progress</option><option value="conflict.logged">conflict.logged</option></select></div>
-      <div class="flex-1 min-w-[200px]"><label class="text-xs text-gray-500 block mb-1">Message</label><input id="castMsg" class="border rounded-lg px-2 py-1.5 text-sm w-full" value="We are changing the sprint cadence starting next week."></div>
-      <button class="bg-gray-900 text-white text-sm font-semibold px-3 py-1.5 rounded-lg" onclick="runCascade()">Predict →</button>
-    </div>
-    <div id="cascadeResult"></div>
+    <div class="${compact?'text-xs':'text-sm'} mt-1 text-slate-100">${f.title}</div>
+    ${person?`<div class="text-[10px] text-slate-500 mt-1">↳ ${person.name}</div>`:''}
   </div>`;
 }
 
-function runCascade() {
-  const sender = document.getElementById('castSender').value;
-  const content = document.getElementById('castMsg').value;
-  const result = LEADOS.cascade.predictCascade({ sender, content, type: document.getElementById('castTrigger').value }, ANALYSIS.network, P);
-  const el = document.getElementById('cascadeResult');
-  if (!result) { el.innerHTML = '<div class="text-sm text-gray-500">This sender has no outgoing influence edges in the synthetic network.</div>'; return; }
-  el.innerHTML = `
-    <div class="grid md:grid-cols-3 gap-3 mb-3">
-      ${statCard('Direct reach', result.directReach)}
-      ${statCard('Indirect reach', result.indirectReach)}
-      ${statCard('Distortion risk', result.distortionRisk.probability + '%')}
-    </div>
-    ${result.darkMatterRisk.present ? labelTag(`<b>Dark-matter risk:</b> ${result.darkMatterRisk.influencers.join(', ')} — ${result.darkMatterRisk.risk}`) : ''}
-    ${labelTag(result.distortionRisk.mitigation, 'gray')}
-    ${labelTag(result.label)}
-  `;
-}
-window.runCascade = runCascade;
+function bestPlaybookFor(domain){ return PLAYBOOKS.find(p=>p.domain===domain) || PLAYBOOKS[0]; }
 
-function renderMeetings() {
-  const mc = ANALYSIS.meetingCost, dv = ANALYSIS.decisionVelocity;
-  return `
-  <div class="grid md:grid-cols-4 gap-4 mb-6">
-    ${statCard('Total person-hours (30d)', fmt(mc.totalPersonHours))}
-    ${statCard('Total cost (30d)', '\u20ac'+fmt(mc.totalCost))}
-    ${statCard('Cost / decision', mc.costPerDecision!==null?'\u20ac'+fmt(mc.costPerDecision):'—')}
-    ${statCard('Action-item closure', mc.closureRate!==null?mc.closureRate+'%':'—')}
-  </div>
-  <div class="grid md:grid-cols-2 gap-4 mb-6">
-    <div class="card p-4">
-      <div class="font-semibold mb-2">Meeting load by person</div>
-      <table class="w-full text-sm"><thead><tr class="text-left text-gray-500"><th>Person</th><th>h/week</th></tr></thead>
-      <tbody>${mc.loadByPerson.map(l => `<tr class="border-t border-gray-100 ${l.hoursPerWeek>16?'bg-amber-50':''}"><td class="py-1">${l.person?.name||'unknown'}</td><td>${l.hoursPerWeek}</td></tr>`).join('')}</tbody></table>
-      ${labelTag(mc.label)}
-    </div>
-    <div class="card p-4">
-      <div class="font-semibold mb-2">Decision velocity</div>
-      <div class="text-sm text-gray-600 space-y-1">
-        <div>Open: <b>${dv.openCount}</b> · Closed: <b>${dv.closedCount}</b> · Closed in 30d: <b>${dv.velocity}</b></div>
-        <div>Mean time to decision: <b>${fmt(dv.meanTimeToDecision)}</b>d</div>
-        <div>Aged (>21d) open decisions: <b>${dv.agedDecisions}</b></div>
-      </div>
-      <div class="mt-2 text-sm">
-        ${dv.agedDecisionDetails.map(d => `<div class="border-t border-gray-100 pt-1 mt-1">${d.data.title} — stakes ${d.data.stakes}, open ${Math.round(LEADOS.engine._days(d.ts, TODAY))}d</div>`).join('')}
-      </div>
-      ${labelTag(dv.label)}
-    </div>
-  </div>`;
-}
-
-function renderPerformance() {
-  const pc = ANALYSIS.perfChain;
-  const layer = (title, obj) => `<div class="card p-4"><div class="font-semibold mb-2">${title}</div><table class="w-full text-sm">${Object.entries(obj).map(([k,v]) => `<tr class="border-t border-gray-100"><td class="py-1 text-gray-500">${k}</td><td class="text-right font-medium">${v===null||v===undefined?'—':(typeof v==='number'?fmt(v,2):v)}</td></tr>`).join('')}</table></div>`;
-  return `
-  <div class="grid md:grid-cols-4 gap-4 mb-6">
-    ${layer('Activities', pc.activities)}
-    ${layer('Outputs', pc.outputs)}
-    ${layer('Outcomes', pc.outcomes)}
-    ${layer('Impact', pc.impact)}
-  </div>
-  <div class="card p-4 mb-6">
-    <div class="font-semibold mb-2">Causal chain hypotheses</div>
-    ${pc.chains.map(c => `<div class="border-t border-gray-100 pt-2 mt-2 text-sm">
-      <div class="font-medium">${c.chain}</div>
-      <div class="text-gray-600">${c.activitySignal} → ${c.outputSignal} → ${c.outcomeSignal}</div>
-      <div class="text-xs text-amber-700 mt-1">${c.causalStrength} · verify: ${c.verification}</div>
-    </div>`).join('') || '<div class="text-sm text-gray-500">No chains computable yet.</div>'}
-    ${labelTag(pc.label)}
-  </div>
-  <div class="grid md:grid-cols-2 gap-4">
-    <div class="card p-4"><div class="font-semibold mb-2">Leading indicators</div>
-      ${pc.leadingIndicators.map(l => `<div class="text-sm border-t border-gray-100 pt-2 mt-2"><b>${l.indicator}</b><div class="text-gray-600">${l.predicts}</div><div class="text-xs text-gray-400">${l.confidence} · ${l.source}</div></div>`).join('') || '<div class="text-sm text-gray-500">None tracked.</div>'}
-    </div>
-    <div class="card p-4"><div class="font-semibold mb-2">Lagging indicators</div>
-      ${pc.laggingIndicators.map(l => `<div class="text-sm border-t border-gray-100 pt-2 mt-2"><b>${l.indicator}</b>: ${l.value}<div class="text-xs text-gray-400">lags ${l.lags}</div></div>`).join('') || '<div class="text-sm text-gray-500">None tracked.</div>'}
-    </div>
-  </div>`;
-}
-
-function renderCompensation() {
-  const cr = ANALYSIS.compaRatios, eg = ANALYSIS.equityGaps, pp = ANALYSIS.promoPatterns;
-  return `
-  <div class="card p-4 mb-6">
-    <div class="font-semibold mb-2">Compa-ratios</div>
-    <table class="w-full text-sm"><thead><tr class="text-left text-gray-500"><th>Person</th><th>Band</th><th>Salary</th><th>Market p50</th><th>Compa-ratio</th><th>Position</th></tr></thead>
-    <tbody>${cr.map(c => `<tr class="border-t border-gray-100 ${c.riskFlag?'bg-red-50':''}">
-      <td class="py-1">${c.person.name}</td><td>${c.comp.band}</td><td>\u20ac${fmt(c.comp.baseSalary)}</td>
-      <td>${c.benchmark?'\u20ac'+fmt(c.benchmark.market50pct):'—'}</td><td>${c.compaRatio ?? '—'}</td>
-      <td>${c.position}</td></tr>`).join('')}</tbody></table>
-    ${labelTag('Compa-ratio: actual/market_midpoint. < 0.85 = retention risk. > 1.15 = above market.')}
-  </div>
-  <div class="grid md:grid-cols-2 gap-4 mb-6">
-    <div class="card p-4"><div class="font-semibold mb-2">Equity by band</div>
-      ${eg.insufficient ? `<div class="text-sm text-gray-500">${eg.message}</div>` : `
-      <table class="w-full text-sm"><thead><tr class="text-left text-gray-500"><th>Band</th><th>n</th><th>Mean</th><th>Spread</th><th>&lt;0.85</th></tr></thead>
-      <tbody>${eg.bandAnalysis.map(b => `<tr class="border-t border-gray-100"><td class="py-1">${b.band}</td><td>${b.n}</td><td>${b.mean}</td><td>${b.spread}</td><td>${b.belowMarket}</td></tr>`).join('')}</tbody></table>
-      <div class="text-xs text-gray-500 mt-2">p10–p90 spread: ${eg.overallSpread.p10} – ${eg.overallSpread.p90}</div>`}
-      ${labelTag(eg.insufficient ? eg.label : eg.label)}
-    </div>
-    <div class="card p-4"><div class="font-semibold mb-2">At-risk (compa-ratio &lt; 0.85)</div>
-      ${!eg.insufficient && eg.atRisk.length ? `<ul class="text-sm list-disc pl-5 space-y-1">${eg.atRisk.map(a => `<li>${a.person} — ${a.compaRatio} (${a.band})</li>`).join('')}</ul>` : '<div class="text-sm text-gray-500">None flagged, or insufficient data.</div>'}
-    </div>
-  </div>
-  <div class="card p-4">
-    <div class="font-semibold mb-2">Promotion patterns</div>
-    <div class="text-sm text-gray-600 mb-2">Total promotions logged: <b>${pp.totalPromotions}</b></div>
-    <div class="font-medium text-sm mb-1">Due for review (&gt;365d since last promo/start)</div>
-    ${pp.dueForReview.length ? `<ul class="text-sm list-disc pl-5 space-y-1">${pp.dueForReview.map(p => `<li>${p.name} (${p.role})</li>`).join('')}</ul>` : '<div class="text-sm text-gray-500">None.</div>'}
-    ${labelTag(pp.label)}
-  </div>`;
-}
-
-function renderRules() {
-  const f = ANALYSIS.findings;
-  return `
-  <div class="card p-4 mb-4">
-    <div class="font-semibold mb-1">Health Wall — R161 through R175</div>
-    <div class="text-xs text-gray-500">Rule IDs and thresholds are taken verbatim from the pasted pt-Q brief. R161 and R166 lean on a disclosed simplified proxy where the brief named a module (js/flight_risk.js, js/causal.js) without providing its source this part.</div>
-  </div>
-  <div class="space-y-3">
-    ${f.map(x => `<div class="card p-4">
-      <div class="flex items-start gap-3">
-        ${sevBadge(x.severity)}
-        <div class="flex-1">
-          <div class="font-semibold text-sm">${x.id} · ${x.title}</div>
-          ${x.detail ? `<div class="text-xs text-gray-500 mt-1">${x.detail}</div>` : ''}
-          ${x.labeled ? labelTag(x.labeled) : ''}
+function renderZoneContent(el, zone, hierarchy){
+  const findings = hierarchy.all.map(r=>r.finding);
+  switch(zone.content){
+    case 'crisis-card': {
+      const f = zone.finding;
+      if(!f){ el.innerHTML = '<div class="text-slate-500 text-xs">No active critical finding.</div>'; break; }
+      const pb = bestPlaybookFor(f.domain);
+      el.innerHTML = `<div class="h-full flex flex-col justify-between">
+        <div>
+          <div class="flex items-center gap-2 text-xs text-red-400 uppercase tracking-wide">${domainDot(f.domain)} ${f.domain} · CRITICAL</div>
+          <div class="text-xl font-semibold mt-2">${f.title}</div>
+          <div class="text-xs text-slate-500 mt-1 mono">${f.rule} · sev ${f.sev}</div>
         </div>
-      </div>
-    </div>`).join('') || '<div class="text-sm text-gray-500">No rules fired against the current synthetic dataset.</div>'}
-  </div>`;
+        <div class="flex items-center gap-2 mt-3">
+          <button class="pulse px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-xs font-medium" data-play-id="${pb.id}" onclick="executeAction({type:'open-playbook', findingKey:'${f.key}'})">Open ${pb.title} →</button>
+        </div>
+      </div>`;
+      break;
+    }
+    case 'finding-list': {
+      const list = [...hierarchy.secondary, ...hierarchy.ambient].map(r=>r.finding);
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Everything else</div><div class="space-y-2">${list.map(f=>findingCard(f,{compact:true})).join('') || '<div class="text-slate-600 text-xs">Nothing else active.</div>'}</div>`;
+      break;
+    }
+    case 'playbook-ready': {
+      const f = hierarchy.primary[0]?.finding;
+      const pb = f ? bestPlaybookFor(f.domain) : PLAYBOOKS[0];
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Prepared response</div>
+        <div class="bg-slate-900/60 border border-slate-800 rounded-lg p-3" data-play-id="${pb.id}">
+          <div class="font-medium text-sm">${pb.title}</div>
+          <div class="text-xs text-slate-500 mt-1">Pre-matched to domain: ${pb.domain}</div>
+          <button class="mt-3 text-xs px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded" onclick="executeAction({type:'open-playbook', id:'${pb.id}'})">Open</button>
+        </div>`;
+      break;
+    }
+    case 'finding-triage': {
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Triage — all active findings</div>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">${findings.map(f=>findingCard(f,{compact:true})).join('') || '<div class="text-slate-600 text-xs">No findings.</div>'}</div>`;
+      break;
+    }
+    case 'board-narrative-builder': {
+      const top = findings.slice(0,4).map(f=>`• ${f.title} (${f.domain}, sev ${f.sev})`).join('\n');
+      const draft = `BOARD NARRATIVE — DRAFT (auto-generated)\n\nThis quarter's risk posture across ${new Set(findings.map(f=>f.domain)).size} domain(s):\n${top || '• No material findings active.'}\n\nRecommended framing: lead with mitigations in progress, close with the single most material risk.`;
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Board narrative builder (finished work product, pre-drafted)</div>
+        <textarea class="w-full h-[70%] bg-slate-900/60 border border-slate-800 rounded-lg p-3 text-xs mono">${draft}</textarea>
+        <button class="mt-2 text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded" onclick="navigator.clipboard?.writeText(this.previousElementSibling.value); LEADOS.ui.toast('Draft copied','info')">Copy draft</button>`;
+      break;
+    }
+    case 'risk-register': {
+      const hs = LEADOS.healthScore.compute(synthP(), today());
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Risk register (8 domains)</div>
+        <div class="space-y-1.5">${DOMAINS.map(d=>`<div class="flex items-center justify-between text-xs bg-slate-900/50 rounded px-2 py-1.5"><span class="flex items-center gap-2">${domainDot(d)}${d}</span><span class="mono">${hs.domains[d]}</span></div>`).join('')}</div>`;
+      break;
+    }
+    case 'synthesis-paragraph': {
+      const hs = LEADOS.healthScore.compute(synthP(), today());
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Synthesis</div>
+        <p class="text-sm text-slate-300 leading-relaxed">Organizational health is <b>${hs.overall}</b> (grade ${hs.grade}), trending ${hs.trend.direction.toLowerCase()}.
+        Weakest domain is <b>${hs.lowestDomain[0]}</b> at ${hs.lowestDomain[1]}; strongest is ${hs.highestDomain[0]} at ${hs.highestDomain[1]}.
+        ${findings.length} finding(s) currently active across ${new Set(findings.map(f=>f.domain)).size} domain(s).</p>`;
+      break;
+    }
+    case 'intelligence-digest': {
+      const hs = LEADOS.healthScore.compute(synthP(), today());
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Intelligence digest</div>
+        <div class="text-3xl font-bold">${hs.overall} <span class="text-sm text-slate-500">/ 100</span></div>
+        <div class="text-xs text-slate-500 mb-3">Grade ${hs.grade} · ${hs.trend.label}</div>
+        <div class="space-y-1.5">${DOMAINS.map(d=>`<div class="flex items-center justify-between text-xs"><span class="flex items-center gap-2">${domainDot(d)}${d}</span><span class="w-24 bg-slate-800 rounded-full h-1.5 overflow-hidden"><span class="block h-full" style="width:${hs.domains[d]}%;background:var(--dc)" data-domain="${d}"></span></span><span class="mono w-6 text-right">${hs.domains[d]}</span></div>`).join('')}</div>`;
+      break;
+    }
+    case 'finding-list-full': {
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">All findings (${findings.length})</div><div class="space-y-2">${findings.map(f=>findingCard(f)).join('') || '<div class="text-slate-600 text-xs">No findings active — adjust the Control Deck.</div>'}</div>`;
+      break;
+    }
+    case 'inference-panel': {
+      const n = LEADOS.proactive.generateNowSurface(synthP(), today());
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Next-action inference</div>
+        <div class="space-y-2">${(n.fullQueue||[]).map(a=>`<div class="bg-slate-900/50 rounded px-2 py-2 text-xs"><div class="font-medium">${a.title}</div><div class="text-slate-500 mt-0.5">${a.why}</div></div>`).join('') || '<div class="text-slate-600 text-xs">Queue clear.</div>'}</div>`;
+      break;
+    }
+    case 'the-three-only': {
+      const three = hierarchy.all.slice(0,3).map(r=>r.finding);
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">High fatigue — essentials only</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-2">${three.map(f=>findingCard(f)).join('') || '<div class="text-slate-600 text-xs">Nothing requires attention.</div>'}</div>`;
+      break;
+    }
+    case 'action-queue': {
+      const n = LEADOS.proactive.generateNowSurface(synthP(), today());
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Action queue</div>
+        <div class="space-y-2">${(n.fullQueue||[]).map(a=>`<div class="bg-slate-900/50 rounded px-2 py-2 text-xs flex items-center justify-between"><div><div class="font-medium">${a.title}</div><div class="text-slate-500">${a.timeRequired}</div></div><button class="text-indigo-400 text-[11px]" onclick='executeAction(${JSON.stringify(a.action)})'>Act →</button></div>`).join('') || '<div class="text-slate-600 text-xs">Queue clear.</div>'}</div>`;
+      break;
+    }
+    case 'today-finding-list': {
+      const list = [...hierarchy.primary, ...hierarchy.secondary].map(r=>r.finding);
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Today</div><div class="space-y-2">${list.map(f=>findingCard(f)).join('') || '<div class="text-slate-600 text-xs">No findings active — toggle some in the Control Deck.</div>'}</div>`;
+      break;
+    }
+    case 'intelligence-panel': {
+      const hs = LEADOS.healthScore.compute(synthP(), today());
+      const n = LEADOS.proactive.generateNowSurface(synthP(), today());
+      el.innerHTML = `<div class="text-[10px] uppercase text-slate-500 mb-2">Intelligence panel</div>
+        <div class="text-2xl font-bold">${hs.overall}<span class="text-xs text-slate-500 font-normal"> / 100 · ${hs.grade}</span></div>
+        <div class="text-xs text-slate-500 mb-3">${hs.trend.label}</div>
+        <div class="text-[10px] uppercase text-slate-500 mb-1 mt-4">Now</div>
+        <div class="text-sm">${n.headline}</div>
+        <div class="text-xs text-slate-500 mt-1">${n.subline||''}</div>`;
+      break;
+    }
+    case 'nav-rail': default:
+      el.style.display = 'none';
+  }
 }
 
-function renderData() {
-  const events = [...STATE.events].sort((a,b) => a.ts < b.ts ? 1 : -1);
-  const byType = {};
-  events.forEach(e => byType[e.type] = (byType[e.type]||0) + 1);
-  return `
-  <div class="card p-4 mb-4">
-    <div class="font-semibold mb-2">Event counts by type (${events.length} total)</div>
-    <div class="flex flex-wrap gap-2">${Object.entries(byType).map(([t,n]) => `<span class="text-xs bg-gray-200 rounded-full px-2 py-1 mono">${t}: ${n}</span>`).join('')}</div>
-  </div>
-  <div class="card p-4">
-    <div class="font-semibold mb-2">Raw event log (most recent first, first 80 shown)</div>
-    <div class="overflow-auto max-h-[480px] mono text-xs">
-      <table class="w-full"><thead class="sticky top-0 bg-white"><tr class="text-left text-gray-500"><th class="py-1">ts</th><th>type</th><th>data</th></tr></thead>
-      <tbody>${events.slice(0,80).map(e => `<tr class="border-t border-gray-100"><td class="py-1 pr-2 whitespace-nowrap">${new Date(e.ts).toISOString().slice(0,16).replace('T',' ')}</td><td class="pr-2">${e.type}</td><td>${JSON.stringify(e.data)}</td></tr>`).join('')}</tbody></table>
+/* ---------- orchestration ---------- */
+function recompute(){
+  const P = synthP();
+  const t = today();
+  const {findings} = LEADOS.engine.run(P, t);
+
+  if(route==='today'){
+    const workspaceEl = document.getElementById('leados-workspace');
+    const vp = {width: workspaceEl.clientWidth||900, height: workspaceEl.clientHeight||600};
+    const spec = LEADOS.layout.generateLayout(findings, P, t, vp, LEADOS.attention.getAttentionScores());
+    LEADOS.layout.applyLayout(spec);
+    const banner = document.getElementById('situation-banner');
+    if(banner.dataset.forced !== '1'){
+      banner.classList.remove('hidden');
+      banner.innerHTML = `<div class="flex items-center gap-2 flex-wrap"><span class="font-medium">${spec.situation.type}</span><span class="text-slate-500">${spec.situation.description}</span><span class="mono text-[10px] text-slate-600">layout: ${spec.situation.layoutMode}</span></div>
+        <button class="text-slate-500 hover:text-slate-200" onclick="toggleCssViewer()">view generated CSS</button>`;
+    }
+    window._lastCss = spec.cssSpec;
+  }
+  renderNowSurface(P, t);
+  updateHealthWidget(P, t);
+  runNotifications(findings, P, t);
+  renderAttentionFocus();
+  if(route==='control') renderControl();
+  if(route==='roster') renderRoster();
+  if(route==='playbooks') renderPlaybooks();
+  if(route==='workqueue') renderWorkQueue();
+  if(route==='audit') renderAudit();
+  if(route==='about') renderAbout();
+}
+function renderToday(){ recompute(); }
+
+function toggleCssViewer(){
+  const banner = document.getElementById('situation-banner');
+  let pre = document.getElementById('css-viewer');
+  if(pre){ pre.remove(); return; }
+  pre = document.createElement('pre');
+  pre.id = 'css-viewer';
+  pre.className = 'fixed top-24 right-4 w-96 max-h-96 overflow-auto bg-black/90 border border-slate-700 rounded-lg p-3 text-[10px] mono z-40';
+  pre.textContent = window._lastCss || '';
+  document.body.appendChild(pre);
+}
+
+function renderNowSurface(P,t){
+  const n = LEADOS.proactive.generateNowSurface(P,t);
+  const el = document.getElementById('now-surface');
+  if(n.surface==='CLEAR'){
+    el.innerHTML = `<div class="text-center text-slate-500 text-xs py-6">✅<br>${n.headline}<br><span class="text-slate-600">${n.subline}</span></div>`;
+  } else {
+    el.innerHTML = `<div class="bg-indigo-950/40 border border-indigo-800 rounded-lg p-3 mb-3">
+      <div class="text-[10px] uppercase text-indigo-400">${n.surface.replace(/_/g,' ')}</div>
+      <div class="font-medium mt-1">${n.headline}</div>
+      <div class="text-xs text-slate-400 mt-1">${n.subline}</div>
+      <div class="text-[10px] text-slate-500 mt-2">${n.timeRequired} · ${n.bestWindow}</div>
+      <button class="mt-2 w-full text-xs px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded" onclick='executeAction(${JSON.stringify(n.action||{})})'>Do this now</button>
     </div>
-  </div>`;
+    <div class="text-[10px] uppercase text-slate-500 mb-1">Full queue</div>
+    <div class="space-y-1.5">${(n.fullQueue||[]).slice(1).map(a=>`<div class="text-xs bg-slate-900/50 rounded px-2 py-1.5"><div>${a.title}</div><div class="text-slate-600 text-[10px]">${a.bestWindow}</div></div>`).join('') || '<div class="text-slate-600 text-xs">—</div>'}</div>
+    <div class="text-[10px] text-slate-600 mt-3">Cognitive context: ${n.cognitiveContext.profile} · fatigue ${n.cognitiveContext.fatigue}</div>`;
+  }
 }
 
-function renderAbout() {
-  return `
-  <div class="card p-5 mb-4">
-    <div class="font-bold text-lg mb-2">Provenance — read before assuming anything about github.com/wbweve/Leados</div>
-    <p class="text-sm text-gray-700 mb-3">The real repository was inspected this session via GitHub's REST contents/tree API and direct <code class="mono">raw.githubusercontent.com</code> fetches — not assumed from the task's own pasted "pt-Q" brief, and not assumed from the repo's own README's self-description alone.</p>
-    <div class="font-semibold text-sm mt-4 mb-1">Independently verified this session (via GitHub API / raw fetch):</div>
-    <ul class="text-sm list-disc pl-5 space-y-1 text-gray-700">
-      <li>The repo root contains a <b>flat set of many <code class="mono">.tsx</code> files</b> (e.g. <code class="mono">App.tsx</code>, <code class="mono">AboutView.tsx</code>, <code class="mono">BulletGraph.tsx</code>, <code class="mono">Catalog.tsx</code>, <code class="mono">HealthView.tsx</code>, <code class="mono">FinanceDashboard.tsx</code>, <code class="mono">RosterView.tsx</code>, dozens more), plus <code class="mono">README.md</code>, <code class="mono">AI-SESSION-LOG.md</code>, <code class="mono">AI-SESSION-LOG.append.md</code>, and <code class="mono">SESSION-3.patch.md</code> — confirmed by listing <code class="mono">/contents/</code>.</li>
-      <li>A <b>separate <code class="mono">src/</code> tree also exists</b> with its own <code class="mono">App.tsx</code>, <code class="mono">main.tsx</code>, <code class="mono">index.css</code>, and <code class="mono">components/</code>, <code class="mono">lib/</code>, <code class="mono">utils/</code> subfolders — confirmed by listing <code class="mono">/contents/src</code>. So the repo genuinely contains <b>two parallel deliveries</b> (flat root files + a nested Vite-style app), not one coherent build.</li>
-      <li>An <code class="mono">index.html</code> exists at the repo root (confirmed by fetching it directly; its <code class="mono">&lt;title&gt;</code> reads "LEADOS Sandbox — CAS Engine, Risk Intelligence &amp; Thermodynamics").</li>
-      <li>The root <code class="mono">README.md</code>, fetched raw, <b>itself states</b> that an earlier session found no CAS engine, no risk register, and no file matching the "58/62-file, 144-rule, T_L_*/G_L_*" test-suite history referenced by a prior pasted brief in that lineage — and explicitly labels that prior brief "an unverified external spec, not repo fact."</li>
-    </ul>
-    <div class="font-semibold text-sm mt-4 mb-1">Not independently re-verified this session (relied on the repo's own prior self-report, not re-checked line-by-line):</div>
-    <ul class="text-sm list-disc pl-5 space-y-1 text-gray-700">
-      <li>Whether <code class="mono">src/lib/infoTheory.ts</code> is genuinely wired into a live <code class="mono">Thermodynamics.tsx</code>/<code class="mono">App.tsx</code> chain, or whether <code class="mono">src/lib/core.ts</code>/<code class="mono">intelligence.ts</code> are really orphaned/broken — these are claims made by the repo's <b>own</b> README from an earlier session; this session did not re-fetch and diff those specific <code class="mono">.ts</code> files.</li>
-      <li>Nothing about the hand-authored root <code class="mono">index.html</code>'s actual internal code was read line-by-line this session (only its <code class="mono">&lt;title&gt;</code> was confirmed).</li>
-    </ul>
-    <div class="font-semibold text-sm mt-4 mb-1">What this means for the file you're looking at right now:</div>
-    <p class="text-sm text-gray-700">This <code class="mono">index.html</code> is an <b>original, fresh build</b>, not a fork, copy, or continuation of anything found in <code class="mono">github.com/wbweve/Leados</code>. It implements the <i>functional ideas</i> in this task's pasted "pt-Q" brief (Information Cascade, Meeting Intelligence, Performance Architecture, Compensation Equity, rules R161–R175) as original code, because this tool environment requires a single hand-authored <code class="mono">index.html</code> (Tailwind via CDN + inline JS) rather than a React/Vite build. The brief's claimed history — "pt-Q", "83 files", prior "Parts 1/2" — was <b>not found anywhere in this sandbox project</b> before this session (no pre-existing <code class="mono">index.html</code>, log, or README), so it is treated here as an unverified pasted narrative, exactly like the real repo's own prior sessions treated their pasted briefs.</p>
-  </div>
-  <div class="card p-5">
-    <div class="font-semibold mb-2">What's original vs. a disclosed gap in this build</div>
-    <ul class="text-sm list-disc pl-5 space-y-1 text-gray-700">
-      <li><b>Original, implements the pasted spec closely:</b> <code class="mono">LEADOS.cascade</code>, <code class="mono">LEADOS.meetings</code>, <code class="mono">LEADOS.performance</code>, <code class="mono">LEADOS.compensation</code>, and rules R161–R175 — transcribed from the pasted brief's own JavaScript with minimal fixes to run standalone (e.g. a <code class="mono">LEADOS.engine._days</code> and a small <code class="mono">LEADOS.wargame</code> stand-in, neither of which the brief defined in this part).</li>
-      <li><b>Disclosed gap / proxy:</b> <code class="mono">LEADOS.flightRiskProxy</code> stands in for a <code class="mono">js/flight_risk.js</code> module the brief names but never provides source for; R161 and R166 are demonstrable but openly labeled as running on this simplified proxy, not a validated model.</li>
-      <li><b>All synthetic roster, event generation, UI, and the self-contained rule runner:</b> original to this delivery.</li>
-    </ul>
-  </div>`;
+function updateHealthWidget(P,t){
+  const hs = LEADOS.healthScore.compute(P,t);
+  document.getElementById('health-score').textContent = hs.overall;
+  document.getElementById('health-grade').textContent = hs.grade;
+  document.getElementById('health-score').className = 'font-bold text-lg leading-none ' + (hs.overall>=80?'text-emerald-400':hs.overall>=60?'text-amber-400':'text-red-400');
+  const dd = document.getElementById('health-dropdown');
+  dd.innerHTML = `<div class="text-sm font-medium mb-2">Organizational Health — ${hs.overall}/100 (${hs.grade})</div>
+    <div class="text-[11px] text-slate-500 mb-3">${hs.trend.label}</div>
+    <div class="space-y-1.5">${DOMAINS.map(d=>`<div class="flex items-center justify-between text-xs"><span class="flex items-center gap-2">${domainDot(d)}${d}</span><span class="w-28 bg-slate-800 rounded-full h-1.5 overflow-hidden"><span class="block h-full" style="width:${hs.domains[d]}%;background:var(--dc)" data-domain="${d}"></span></span><span class="mono w-6 text-right">${hs.domains[d]}</span></div>`).join('')}</div>
+    <div class="text-[10px] text-slate-600 mt-3">${hs.label}</div>`;
 }
 
-/* ------------------------------------- init ------------------------------------- */
-function init() {
-  STATE = loadState();
+function updateNotifBadge(){
+  const n = LEADOS.notifications._log.length;
+  const badge = document.getElementById('notif-badge');
+  if(n>0){ badge.classList.remove('hidden'); badge.textContent = n>99?'99+':n; } else badge.classList.add('hidden');
+  const dd = document.getElementById('notif-dropdown');
+  dd.innerHTML = `<div class="text-sm font-medium mb-2">Notifications</div>
+    <div class="space-y-2">${LEADOS.notifications._log.slice(0,20).map(x=>`<div class="text-xs bg-slate-900/50 rounded px-2 py-2"><div class="flex justify-between"><span class="font-medium">${x.title}</span><span class="text-slate-600 text-[10px]">${x.ts}</span></div><div class="text-slate-500 text-[10px] mt-0.5">${x.form} · sev ${x.severity}</div></div>`).join('') || '<div class="text-slate-600 text-xs">No notifications delivered yet.</div>'}</div>`;
+}
+
+function runNotifications(findings,P,t){
+  const q = LEADOS.notifications.computeQueue(findings, P, t);
+  q.queue.forEach(n => LEADOS.notifications.deliver(n));
+}
+
+function renderAttentionFocus(){
+  const f = LEADOS.attention.getCurrentFocus();
+  const el = document.getElementById('attention-focus');
+  el.innerHTML = f ? `attn.focus → <span class="text-indigo-400">${f.key}</span><br>dwell ${f.dwellSeconds}s · score ${f.score.toFixed(1)}` : 'attn.focus → none yet (hover the workspace)';
+}
+
+/* ---------- command execution (stubbed where the spec left no renderer) ---------- */
+function executeAction(action){
+  if(!action || !action.type) return;
+  LEADOS.store.auditLive('action.executed', JSON.stringify(action).slice(0,80));
+  switch(action.type){
+    case 'navigate':
+      if(action.route) setRoute(action.route);
+      else if(action.type==='navigate' && String(action).includes('roster')) setRoute('roster');
+      break;
+    case 'open-playbook': setRoute('playbooks'); LEADOS.ui.toast('Opened matching playbook (stub — no full playbook engine in this build)'); break;
+    case 'focus-finding': LEADOS.ui.toast('Focused finding '+(action.findingKey||action.key||'')); setRoute('today'); break;
+    case 'open-work-queue': setRoute('workqueue'); break;
+    case 'open-decision': LEADOS.ui.toast('Opened decision '+(action.decisionId||'')+' (stub — no decision workflow in this build)'); break;
+    case 'quick-capture': LEADOS.ui.toast('Quick capture stub: '+(action.eventType||'')+' for '+(action.personId||'')); break;
+    default: LEADOS.ui.toast('Action: '+JSON.stringify(action).slice(0,60));
+  }
+}
+
+/* command palette wiring */
+const cmdkOverlay = document.getElementById('cmdk-overlay');
+const cmdkInput = document.getElementById('cmdk-input');
+const cmdkResult = document.getElementById('cmdk-result');
+function openCmdk(){ cmdkOverlay.classList.remove('hidden'); cmdkInput.value=''; cmdkResult.innerHTML=''; cmdkInput.focus(); }
+function closeCmdk(){ cmdkOverlay.classList.add('hidden'); }
+document.getElementById('btn-cmdk').onclick = openCmdk;
+document.addEventListener('keydown', e=>{
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); cmdkOverlay.classList.contains('hidden') ? openCmdk() : closeCmdk(); }
+  if(e.key==='Escape') closeCmdk();
+});
+cmdkOverlay.addEventListener('click', e=>{ if(e.target===cmdkOverlay) closeCmdk(); });
+cmdkInput.addEventListener('input', ()=>{
+  const r = LEADOS.commandIntel.resolve(cmdkInput.value, synthP());
+  if(!r){ cmdkResult.innerHTML=''; return; }
+  cmdkResult.innerHTML = `<div class="flex items-center justify-between"><span class="text-indigo-400 font-medium">${r.intent}</span><span class="mono text-[10px]">confidence ${(r.confidence*100).toFixed(0)}%</span></div>
+    <div class="mono text-[10px] text-slate-500 mt-1 break-all">${r.action}</div>
+    <div class="text-[10px] text-slate-600 mt-2">↵ to execute</div>`;
+});
+cmdkInput.addEventListener('keydown', e=>{
+  if(e.key==='Enter'){
+    const r = LEADOS.commandIntel.resolve(cmdkInput.value, synthP());
+    if(r){ LEADOS.store.auditLive('command.resolved:'+r.intent, r.action); routeFromActionString(r.action); }
+    closeCmdk();
+  }
+});
+function routeFromActionString(action){
+  if(action.startsWith('navigate:/roster')) setRoute('roster');
+  else if(action.startsWith('search-playbooks')) setRoute('playbooks');
+  else if(action.startsWith('open-quick-capture')) LEADOS.ui.toast('Quick capture stub: '+action);
+  else if(action.startsWith('explain')) LEADOS.ui.toast('Explain stub: '+action.replace('explain:',''));
+  else if(action.startsWith('open-simulation')||action.startsWith('open-counterfactual')||action.startsWith('open-playbook')) LEADOS.ui.toast('Stub (no engine for this in current build): '+action);
+  else LEADOS.ui.toast('Search: '+action.replace('search:',''));
+}
+
+/* health / notif dropdown toggles */
+document.getElementById('health-widget').onclick = ()=>{ document.getElementById('health-dropdown').classList.toggle('hidden'); document.getElementById('notif-dropdown').classList.add('hidden'); };
+document.getElementById('btn-notif').onclick = ()=>{ document.getElementById('notif-dropdown').classList.toggle('hidden'); document.getElementById('health-dropdown').classList.add('hidden'); };
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#health-widget') && !e.target.closest('#health-dropdown')) document.getElementById('health-dropdown').classList.add('hidden');
+  if(!e.target.closest('#btn-notif') && !e.target.closest('#notif-dropdown')) document.getElementById('notif-dropdown').classList.add('hidden');
+});
+
+/* ---------- routing ---------- */
+function setRoute(r){
+  route = r;
+  document.querySelectorAll('.route').forEach(el=>el.classList.add('hidden'));
+  document.getElementById('route-'+r).classList.remove('hidden');
+  document.getElementById('situation-banner').classList.toggle('hidden', r!=='today');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('bg-slate-800', b.dataset.route===r));
   recompute();
-  renderNav();
-  renderApp();
-  document.getElementById('resetBtn').addEventListener('click', () => {
-    STATE = resetState();
-    recompute();
-    renderNav();
-    renderApp();
-  });
 }
-document.addEventListener('DOMContentLoaded', init);
+document.querySelectorAll('.nav-btn').forEach(b=>b.onclick = ()=>setRoute(b.dataset.route));
+
+/* ---------- Control Deck ---------- */
+function renderControl(){
+  const el = document.getElementById('route-control');
+  el.innerHTML = `<h2 class="text-lg font-semibold mb-1">Control Deck</h2>
+  <p class="text-xs text-slate-500 mb-4">Synthetic signal board — original to this build, not sourced from the real repo. Drives the Generative Layout Engine, Health Score, and Notifications live.</p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="bg-slate-900/50 border border-slate-800 rounded-lg p-4">
+      <div class="text-xs font-medium mb-2">Presets</div>
+      <div class="flex flex-wrap gap-2">
+        <button class="preset-btn" data-p="multi">Multi-crisis</button>
+        <button class="preset-btn" data-p="single">Single crisis</button>
+        <button class="preset-btn" data-p="board">Board prep</button>
+        <button class="preset-btn" data-p="sprint">Sprint close</button>
+        <button class="preset-btn" data-p="deep">Deep work (AM, low fatigue)</button>
+        <button class="preset-btn" data-p="fatigued">Fatigue reduced</button>
+        <button class="preset-btn" data-p="standard">Reset to standard</button>
+      </div>
+    </div>
+    <div class="bg-slate-900/50 border border-slate-800 rounded-lg p-4 space-y-3">
+      <label class="block text-xs">Simulated hour: <span id="hour-val" class="mono"></span>
+        <input id="hour-slider" type="range" min="0" max="23" class="w-full"></label>
+      <label class="block text-xs">Fatigue: <span id="fatigue-val" class="mono"></span>
+        <input id="fatigue-slider" type="range" min="0" max="100" class="w-full"></label>
+      <label class="block text-xs">Runway (months): <span id="runway-val" class="mono"></span>
+        <input id="runway-slider" type="range" min="0" max="24" class="w-full"></label>
+      <label class="flex items-center gap-2 text-xs"><input id="board-check" type="checkbox"> Board meeting within 14 days</label>
+      <label class="flex items-center gap-2 text-xs"><input id="sprint-check" type="checkbox"> Sprint closes today</label>
+    </div>
+  </div>
+
+  <div class="text-xs font-medium mb-2">Signal board</div>
+  <div id="signal-table" class="space-y-1.5"></div>`;
+
+  document.getElementById('hour-slider').value = STATE.hour;
+  document.getElementById('hour-val').textContent = STATE.hour+':00';
+  document.getElementById('fatigue-slider').value = STATE.fatigue;
+  document.getElementById('fatigue-val').textContent = STATE.fatigue;
+  document.getElementById('runway-slider').value = STATE.runwayMonths;
+  document.getElementById('runway-val').textContent = STATE.runwayMonths+'mo';
+  document.getElementById('board-check').checked = STATE.boardSoon;
+  document.getElementById('sprint-check').checked = STATE.sprintDue;
+
+  document.getElementById('hour-slider').oninput = e=>{ STATE.hour=+e.target.value; document.getElementById('hour-val').textContent=STATE.hour+':00'; recompute(); };
+  document.getElementById('fatigue-slider').oninput = e=>{ STATE.fatigue=+e.target.value; document.getElementById('fatigue-val').textContent=STATE.fatigue; recompute(); };
+  document.getElementById('runway-slider').oninput = e=>{ STATE.runwayMonths=+e.target.value; document.getElementById('runway-val').textContent=STATE.runwayMonths+'mo'; recompute(); };
+  document.getElementById('board-check').onchange = e=>{ STATE.boardSoon=e.target.checked; recompute(); };
+  document.getElementById('sprint-check').onchange = e=>{ STATE.sprintDue=e.target.checked; recompute(); };
+
+  document.querySelectorAll('.preset-btn').forEach(b=>{
+    b.className = 'preset-btn text-xs px-3 py-1.5 bg-slate-800 hover:bg-indigo-700 rounded border border-slate-700';
+    b.onclick = ()=>applyPreset(b.dataset.p);
+  });
+
+  const table = document.getElementById('signal-table');
+  table.innerHTML = STATE.signals.map((s,i)=>{
+    const rule = RULES[s.rule];
+    return `<div class="flex items-center gap-3 text-xs bg-slate-900/40 rounded px-2 py-1.5" data-rule="${s.rule}">
+      <input type="checkbox" ${s.active?'checked':''} onchange="STATE.signals[${i}].active=this.checked;recompute()">
+      <span class="w-14 mono text-slate-500">${s.rule}</span>
+      ${domainDot(rule.domain)}
+      <span class="flex-1">${rule.title}</span>
+      <select class="bg-slate-800 rounded text-[10px] px-1" onchange="STATE.signals[${i}].sev=+this.value;recompute()">
+        ${[3,4,5].map(v=>`<option value="${v}" ${s.sev===v?'selected':''}>sev ${v}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
+}
+function applyPreset(p){
+  STATE.signals.forEach(s=>s.active=false);
+  STATE.boardSoon=false; STATE.sprintDue=false; STATE.fatigue=20; STATE.hour=9;
+  const on = (rule,sev)=>{ const s=STATE.signals.find(s=>s.rule===rule); if(s){s.active=true; if(sev)s.sev=sev;} };
+  if(p==='multi'){ on('R19',5); on('R20',5); }
+  else if(p==='single'){ on('R125',5); }
+  else if(p==='board'){ STATE.boardSoon=true; on('R39'); on('R88'); }
+  else if(p==='sprint'){ STATE.sprintDue=true; on('R73'); on('R74'); }
+  else if(p==='deep'){ STATE.hour=9; STATE.fatigue=10; on('R21'); on('R4'); }
+  else if(p==='fatigued'){ STATE.fatigue=75; on('R21'); }
+  else if(p==='standard'){ on('R21'); on('R4'); }
+  renderControl(); recompute();
+}
+
+/* ---------- Roster ---------- */
+function renderRoster(){
+  const el = document.getElementById('route-roster');
+  const fr = LEADOS.flightRisk.computeFlightRisk(synthP());
+  el.innerHTML = `<h2 class="text-lg font-semibold mb-4">Roster</h2>
+    <div class="space-y-2">${PEOPLE.map(p=>{
+      const risk = fr.highRisk.find(r=>r.person.id===p.id);
+      return `<div class="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg px-4 py-3" data-person-id="${p.id}">
+        <div><div class="font-medium text-sm">${p.name}</div><div class="text-xs text-slate-500">${p.role}</div></div>
+        <div class="text-right">
+          <div class="text-xs ${p.riskScore>=0.6?'text-red-400':'text-slate-400'}">flight risk ${(p.riskScore*100).toFixed(0)}%</div>
+          ${risk?'<div class="text-[10px] text-amber-400">needs 1:1</div>':''}
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+}
+
+/* ---------- Playbooks ---------- */
+function renderPlaybooks(){
+  const el = document.getElementById('route-playbooks');
+  el.innerHTML = `<h2 class="text-lg font-semibold mb-4">Playbooks</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">${PLAYBOOKS.map(p=>`
+      <div class="bg-slate-900/50 border border-slate-800 rounded-lg p-4" data-play-id="${p.id}">
+        <div class="flex items-center gap-2 text-xs text-slate-500 mb-1">${domainDot(p.domain)}${p.domain}</div>
+        <div class="font-medium text-sm">${p.title}</div>
+        <button class="mt-2 text-xs text-indigo-400" onclick="LEADOS.ui.toast('Opened: ${p.title}')">Open →</button>
+      </div>`).join('')}</div>`;
+}
+
+/* ---------- Work Queue ---------- */
+function renderWorkQueue(){
+  const el = document.getElementById('route-workqueue');
+  el.innerHTML = `<h2 class="text-lg font-semibold mb-1">Work Queue</h2>
+    <p class="text-xs text-slate-500 mb-4">Finished work products prepared autonomously, awaiting your review.</p>
+    <div class="space-y-2">${LEADOS.workQueue._items.map(i=>`
+      <div class="flex items-center justify-between bg-slate-900/50 border border-slate-800 rounded-lg px-4 py-3">
+        <div><div class="font-medium text-sm">${i.title}</div><div class="text-xs text-slate-500">${i.type}</div></div>
+        ${i.reviewed ? '<span class="text-xs text-emerald-400">reviewed</span>' : `<button class="text-xs px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 rounded" onclick="LEADOS.workQueue.markReviewed('${i.id}');renderWorkQueue();recompute()">Mark reviewed</button>`}
+      </div>`).join('')}</div>`;
+}
+
+/* ---------- Audit ---------- */
+function renderAudit(){
+  const el = document.getElementById('route-audit');
+  el.innerHTML = `<h2 class="text-lg font-semibold mb-4">Audit Log</h2>
+    <div class="space-y-1 mono text-[11px]">${LEADOS.store._audit.map(a=>`<div class="bg-slate-900/40 rounded px-2 py-1"><span class="text-slate-600">${a.ts}</span> <span class="text-indigo-400">${a.type}</span> <span class="text-slate-400">${a.detail}</span></div>`).join('') || '<div class="text-slate-600">No events yet.</div>'}</div>`;
+}
+
+/* ---------- About / Provenance ---------- */
+function renderAbout(){
+  const el = document.getElementById('route-about');
+  el.innerHTML = `<h2 class="text-lg font-semibold mb-4">Provenance</h2>
+    <div class="prose prose-invert max-w-none text-sm space-y-3 text-slate-300">
+      <p><b>github.com/wbweve/Leados</b> was fetched and inspected directly this session via GitHub's REST API and raw file fetches (file tree, root <code>index.html</code>, root <code>package.json</code>, root <code>README.md</code> / <code>AI-SESSION-LOG.md</code>, and the <code>src/</code> directory listing).</p>
+      <p><b>Verified:</b> the repo's live app is a React + Vite + Tailwind + TypeScript build under <code>src/</code>, consistent with its own <code>package.json</code> (uses <code>vite-plugin-singlefile</code>). The root <code>index.html</code> on <code>main</code>, fetched raw this session, is a 26-line Vite entry stub — this directly contradicts the repo's own prior <code>AI-SESSION-LOG.md</code>, which described a 54KB hand-authored demo at that path. That contradiction is disclosed, not resolved in either direction.</p>
+      <p><b>Not found anywhere fetched this session:</b> any attention-modeling, generative-layout, proactive-intelligence, command-intent, notification, or health-score code. The repo's verified subject matter (per its own README/log) is Thermodynamics / CAS Engine / Risk Intelligence — a different "pt" spec than the Cognitive Workspace spec this app implements.</p>
+      <p><b>Conclusion:</b> the pasted "pt-R" brief is treated as an <b>unverified external specification</b>, not repo history. Everything in this file is an original, from-scratch implementation of that brief's ideas, built for this task's own tool environment (single hand-authored <code>index.html</code>, Tailwind CDN, vanilla JS) — which cannot run the real repo's Vite/React stack. See README.md and AI-SESSION-LOG.md for the full ledger and changelog.</p>
+    </div>`;
+}
+
+/* ---------- boot ---------- */
+LEADOS.attention.restore();
+LEADOS.attention.startTracking();
+setRoute('today');
+window.addEventListener('resize', ()=>{ if(route==='today') recompute(); });
+setInterval(()=>{ renderAttentionFocus(); if(route==='today') updateHealthWidget(synthP(), today()); }, 4000);
 </script>
 </body>
 </html>
