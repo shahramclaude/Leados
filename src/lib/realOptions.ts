@@ -1,73 +1,228 @@
-// real_options — Black-Scholes real options valuation.
+// realOptions.ts — real-options valuation for strategic decisions.
 //
-// PROVENANCE: pasted "pt-O" brief names `js/real_options.js`. Not found in
-// github.com/wbweve/Leados this session. The Black-Scholes formula itself
-// IS a verifiable, citable piece of real finance theory (Black & Scholes,
-// 1973) — applied here to a strategic-investment "real option" framing
-// (Myers, 1977), which is a standard, textbook technique, not invented here.
-// The application to this app's specific synthetic numbers is original.
+// Two complementary models are provided:
+//  1. Black-Scholes, treating a strategic initiative as a financial option
+//     (e.g. the "option" to expand, enter a market, or exercise a follow-on
+//     investment).
+//  2. A multi-stage decision tree evaluated by backward induction, for
+//     situations that are better modelled as a sequence of go/no-go gates
+//     with costs and probabilities of success (e.g. R&D phases).
+//
+// `analyzeStrategicOption` combines both and reports a sensitivity table.
 
-import { round1 } from "./prng";
-import type { RealOptionsInputs } from "./types";
+import { normalCdf } from "./monteCarlo";
 
-/** Abramowitz & Stegun (1964) rational approximation of the standard normal CDF. */
-export function normCdf(x: number): number {
-  const b1 = 0.319381530;
-  const b2 = -0.356563782;
-  const b3 = 1.781477937;
-  const b4 = -1.821255978;
-  const b5 = 1.330274429;
-  const p = 0.2316419;
-  const c = 0.39894228;
+export type OptionType = "call" | "put";
 
-  if (x >= 0) {
-    const t = 1 / (1 + p * x);
-    return 1 - c * Math.exp((-x * x) / 2) * t * (t * (t * (t * (t * b5 + b4) + b3) + b2) + b1);
+/**
+ * Black-Scholes valuation of a European option.
+ *
+ *   d1 = [ln(S / K) + (r + sigma^2 / 2) * T] / (sigma * sqrt(T))
+ *   d2 = d1 - sigma * sqrt(T)
+ *
+ *   Call = S * N(d1) - K * e^(-rT) * N(d2)
+ *   Put  = K * e^(-rT) * N(-d2) - S * N(-d1)
+ *
+ * Applied to strategy, the analogy is:
+ *   S     = present value of expected cash flows if the option is exercised
+ *           now (e.g. value of entering the market today)
+ *   K     = cost of exercising the option (e.g. investment required)
+ *   T     = time until the option expires (how long the opportunity stays open)
+ *   r     = risk-free rate
+ *   sigma = volatility of the underlying value (how uncertain the payoff is)
+ *
+ * @param type  'call' = option to invest/expand, 'put' = option to abandon/divest
+ * @param S     current value of the underlying asset / opportunity
+ * @param K     strike price / cost to exercise
+ * @param T     time to expiry, in years
+ * @param r     risk-free interest rate (annualized, decimal, e.g. 0.04)
+ * @param sigma volatility of the underlying (annualized, decimal, e.g. 0.35)
+ */
+export function valuateOption(type: OptionType, S: number, K: number, T: number, r: number, sigma: number): number {
+  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) {
+    // At/after expiry (or degenerate inputs) the option is worth its intrinsic value.
+    return type === "call" ? Math.max(S - K, 0) : Math.max(K - S, 0);
   }
-  const t = 1 / (1 - p * x);
-  return c * Math.exp((-x * x) / 2) * t * (t * (t * (t * (t * b5 + b4) + b3) + b2) + b1);
+
+  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * Math.sqrt(T));
+  const d2 = d1 - sigma * Math.sqrt(T);
+  const discountedK = K * Math.exp(-r * T);
+
+  if (type === "call") {
+    return S * normalCdf(d1) - discountedK * normalCdf(d2);
+  }
+  return discountedK * normalCdf(-d2) - S * normalCdf(-d1);
 }
 
-export interface RealOptionsResult {
-  d1: number;
-  d2: number;
-  callValue: number;
-  staticNpv: number;
-  optionPremiumOverNpv: number;
-  decision: "exercise now" | "hold the option" | "let expire";
+// ---------------------------------------------------------------------------
+// Decision-tree NPV engine (backward induction)
+// ---------------------------------------------------------------------------
+
+export interface Choice {
+  label: string;
+  /** Cost incurred immediately when this choice is taken. */
+  cost: number;
+  /** Probability this choice succeeds, 0-1. */
+  pSuccess: number;
+  /** Payoff received immediately on success, before any continuation value. */
+  payoff?: number;
+  /** Subsequent decision stage(s) reachable after this choice succeeds. */
+  nextStages?: Stage[];
 }
 
-export function computeRealOptionValue(input: RealOptionsInputs): RealOptionsResult {
-  const { pv: S, cost: K, years: T, volatility: sigma, riskFreeRate: r } = input;
+export interface Stage {
+  name: string;
+  choices: Choice[];
+}
 
-  const safeT = Math.max(T, 0.0001);
-  const safeSigma = Math.max(sigma, 0.0001);
+export interface TreeNode {
+  stageName: string;
+  bestChoiceLabel: string;
+  expectedNPV: number;
+  choices: { label: string; expectedValue: number }[];
+  children?: TreeNode[];
+}
 
-  const d1 = (Math.log(S / K) + (r + (safeSigma * safeSigma) / 2) * safeT) / (safeSigma * Math.sqrt(safeT));
-  const d2 = d1 - safeSigma * Math.sqrt(safeT);
+/** Evaluate a chain of sequential stages, summing their expected NPVs. */
+function evaluateChain(stages: Stage[]): { value: number; nodes: TreeNode[] } {
+  let total = 0;
+  const nodes: TreeNode[] = [];
+  for (const stage of stages) {
+    const { node, value } = evaluateStage(stage);
+    total += value;
+    nodes.push(node);
+  }
+  return { value: total, nodes };
+}
 
-  const callValue = S * normCdf(d1) - K * Math.exp(-r * safeT) * normCdf(d2);
-  const staticNpv = S - K;
-  const optionPremiumOverNpv = callValue - staticNpv;
+/**
+ * Backward induction: to value a stage we must first value every stage that
+ * could follow it (the recursive call below), THEN fold that continuation
+ * value back into the expected value of each choice at this stage.
+ */
+function evaluateStage(stage: Stage): { node: TreeNode; value: number } {
+  let best: { label: string; expectedValue: number; children: TreeNode[] } | null = null;
+  const choiceSummaries: { label: string; expectedValue: number }[] = [];
 
-  let decision: RealOptionsResult["decision"];
-  if (staticNpv > 0 && optionPremiumOverNpv < staticNpv * 0.1) decision = "exercise now";
-  else if (callValue > 0) decision = "hold the option";
-  else decision = "let expire";
+  for (const choice of stage.choices) {
+    const continuation =
+      choice.nextStages && choice.nextStages.length > 0
+        ? evaluateChain(choice.nextStages)
+        : { value: 0, nodes: [] as TreeNode[] };
 
+    // Expected value = -cost (paid regardless) + P(success) * (immediate payoff + value of what follows)
+    const expectedValue = -choice.cost + choice.pSuccess * ((choice.payoff ?? 0) + continuation.value);
+    choiceSummaries.push({ label: choice.label, expectedValue });
+
+    if (!best || expectedValue > best.expectedValue) {
+      best = { label: choice.label, expectedValue, children: continuation.nodes };
+    }
+  }
+
+  const node: TreeNode = {
+    stageName: stage.name,
+    bestChoiceLabel: best?.label ?? "",
+    expectedNPV: best?.expectedValue ?? 0,
+    choices: choiceSummaries,
+    children: best?.children,
+  };
+  return { node, value: node.expectedNPV };
+}
+
+/**
+ * Build and solve a (possibly multi-stage) decision tree by backward
+ * induction, returning the root node with the recommended path's NPV and,
+ * attached under `children`, the downstream stages that follow the optimal
+ * choice at the root.
+ */
+export function buildDecisionTree(stages: Stage[]): TreeNode {
+  if (!stages || stages.length === 0) {
+    return { stageName: "empty", bestChoiceLabel: "", expectedNPV: 0, choices: [] };
+  }
+  const { nodes, value } = evaluateChain(stages);
+  const [root, ...rest] = nodes;
   return {
-    d1: round1(d1),
-    d2: round1(d2),
-    callValue: round1(callValue),
-    staticNpv: round1(staticNpv),
-    optionPremiumOverNpv: round1(optionPremiumOverNpv),
-    decision,
+    ...root,
+    expectedNPV: value,
+    children: rest.length > 0 ? rest : root.children,
   };
 }
 
-export function realOptionsSignal(input: RealOptionsInputs): number {
-  const { callValue } = computeRealOptionValue(input);
-  // Normalize option value relative to cost basis into a 0-100 "strategic optionality" signal.
-  const ratio = input.cost > 0 ? callValue / input.cost : 0;
-  return Math.max(0, Math.min(100, ratio * 60));
+// ---------------------------------------------------------------------------
+// Combined strategic option analysis
+// ---------------------------------------------------------------------------
+
+export interface StrategicOptionParams {
+  /** Present value of the opportunity if exercised today. */
+  S: number;
+  /** Cost to exercise / invest. */
+  K: number;
+  /** Years until the opportunity closes. */
+  T: number;
+  /** Risk-free rate, decimal. */
+  r: number;
+  /** Volatility of the underlying opportunity's value, decimal. */
+  sigma: number;
+  /** Optional multi-stage decision tree describing a phased path to the same opportunity. */
+  stages?: Stage[];
+  /** Up-front investment already assumed sunk, subtracted from the combined value. */
+  investmentCost?: number;
+  optionType?: OptionType;
+}
+
+export interface OptionAnalysis {
+  description: string;
+  blackScholesValue: number;
+  treeNPV: number;
+  combinedValue: number;
+  recommendation: string;
+  sensitivity: Record<string, number>;
+}
+
+const SENSITIVITY_BUMP = 0.1; // +/-10%
+
+export function analyzeStrategicOption(description: string, params: StrategicOptionParams): OptionAnalysis {
+  const { S, K, T, r, sigma, stages, investmentCost = 0, optionType = "call" } = params;
+
+  const blackScholesValue = valuateOption(optionType, S, K, T, r, sigma);
+  const treeNPV = stages && stages.length > 0 ? buildDecisionTree(stages).expectedNPV : 0;
+  const combinedValue = blackScholesValue + treeNPV - investmentCost;
+
+  const recommendation =
+    combinedValue > Math.max(S, 1) * 0.02
+      ? "Proceed — the option value plus expected path NPV comfortably clears the investment hurdle. Keep the option alive and revisit as uncertainty resolves."
+      : combinedValue > 0
+        ? "Hold / stage cautiously — value is marginally positive. Consider a smaller, reversible first step rather than full commitment."
+        : "Do not exercise now — expected value is negative. Either wait for more favorable volatility/time conditions or abandon the option.";
+
+  // Sensitivity: bump each Black-Scholes parameter by +10% and record the effect on value.
+  const bumps: Record<string, Partial<StrategicOptionParams>> = {
+    S: { S: S * (1 + SENSITIVITY_BUMP) },
+    K: { K: K * (1 + SENSITIVITY_BUMP) },
+    T: { T: T * (1 + SENSITIVITY_BUMP) },
+    r: { r: r + SENSITIVITY_BUMP * Math.max(Math.abs(r), 0.01) },
+    sigma: { sigma: sigma * (1 + SENSITIVITY_BUMP) },
+  };
+
+  const sensitivity: Record<string, number> = {};
+  for (const [key, bump] of Object.entries(bumps)) {
+    const bumped = valuateOption(
+      optionType,
+      bump.S ?? S,
+      bump.K ?? K,
+      bump.T ?? T,
+      bump.r ?? r,
+      bump.sigma ?? sigma,
+    );
+    sensitivity[key] = bumped - blackScholesValue;
+  }
+
+  return {
+    description,
+    blackScholesValue,
+    treeNPV,
+    combinedValue,
+    recommendation,
+    sensitivity,
+  };
 }
