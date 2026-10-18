@@ -1,20 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Shared types for the LeadOS probabilistic intelligence layer.
-//
-// `Finding` and `Person` are kept as stable, backward-compatible exports —
-// every other module in src/app and src/lib that rendered the old flat
-// rule-engine output can keep importing them unchanged.
 // ─────────────────────────────────────────────────────────────────────────
 
 export type Domain = "people" | "finance" | "sales" | "ops" | "strategy";
-
 export type Severity = 1 | 2 | 3 | 4 | 5;
 
-/**
- * The closed set of raw signal types the event log accepts. Every
- * probabilistic module below (Bayesian network, fusion, causal chains,
- * predictive scoring) is written against this vocabulary.
- */
+/** The closed set of raw signal types the event log accepts. */
 export type EventType =
   | "people.oneonone.logged"
   | "people.pulse.logged"
@@ -36,7 +27,6 @@ export type EventType =
 
 export type PersonId = string;
 
-/** Backward-compatible Person shape (id normalized to string everywhere). */
 export interface Person {
   id: PersonId;
   name: string;
@@ -47,15 +37,16 @@ export interface Person {
 
 export interface LeadosEvent {
   id: string;
-  type: EventType;
+  type: EventType | string;
   domain: Domain;
   personId: PersonId | null;
   data: Record<string, unknown>;
   occurredAt: Date;
 }
 
-/** Backward-compatible Finding shape, extended with an optional posterior. */
+/** A single detected condition produced by the intelligence engine. */
 export interface Finding {
+  /** Stable key used to diff findings across autonomous runs (rule+entity). */
   key: string;
   rule: string;
   domain: Domain;
@@ -64,104 +55,104 @@ export interface Finding {
   personName?: string;
   title: string;
   detail: string;
-  /** Posterior probability (0-1) backing this finding, when derived from the belief network. */
+  suggestedAction?: string;
+  /** Posterior probability (0-1) backing this finding, when available. */
   probability?: number;
-}
-
-// ───────────────────────── Bayesian belief network ─────────────────────────
-
-export type ObservableNodeId =
-  | "cadenceSlip"
-  | "moralePulse"
-  | "flightRiskFlag"
-  | "decisionBacklogAge"
-  | "pipelineCoverage"
-  | "runwayMonths";
-
-export type LatentNodeId = "flightRisk" | "strategyRisk";
-
-export type NodeId = ObservableNodeId | LatentNodeId;
-
-export interface NodeMarginal {
-  /** P(node = elevated-risk state), in [0, 1]. */
-  p: number;
-  /** Confidence in that estimate, in [0, 1], driven by evidence volume/recency. */
-  confidence: number;
-}
-
-export type BeliefNetworkPriors = Record<NodeId, number>;
-
-export type BeliefNetworkPosteriors = Record<NodeId, NodeMarginal>;
-
-// ───────────────────────── Signal fusion ─────────────────────────
-
-export type DomainWeights = Record<Domain, number>;
-
-export interface OrgHealthScore {
-  /** 0-100 composite organizational health score. */
-  composite: number;
-  /** 0-100 score per domain. */
-  breakdown: Record<Domain, number>;
-  trend: "up" | "flat" | "down";
-  /** 0-1 confidence in the composite, driven by evidence volume/recency. */
-  confidence: number;
-}
-
-// ───────────────────────── Causal chains ─────────────────────────
-
-export interface CausalChain {
-  path: EventType[];
-  avgLagDays: number;
-  occurrences: number;
-  nextLikely: EventType;
-  /** 0-1 empirical confidence (conditional frequency) behind this chain. */
-  confidence: number;
-}
-
-// ───────────────────────── Predictive scoring ─────────────────────────
-
-export type RiskHorizon = "30d" | "90d";
-
-export interface FlightRiskScore {
-  personId: PersonId;
-  score: number; // 0-1
-  drivers: string[];
-  horizon: RiskHorizon;
-}
-
-export interface BurnoutRiskIndex {
-  value: number; // 0-1 org-wide
-  hotspots: PersonId[];
-  evidence: string[];
-}
-
-export interface DecisionHealthIndex {
-  stale: number;
-  velocityTrend: "accelerating" | "decelerating";
-  blockedCount: number;
-}
-
-// ───────────────────────── Intelligence report ─────────────────────────
-
-export interface IntelligenceReport {
-  generatedAt: string;
-  healthScore: OrgHealthScore;
-  findings: Finding[];
-  causalChains: CausalChain[];
-  predictions: {
-    flightRisk: FlightRiskScore[];
-    burnoutIndex: BurnoutRiskIndex;
-    decisionHealth: DecisionHealthIndex;
-  };
-  counts: {
-    critical: number;
-    major: number;
-    minor: number;
-    findings: number;
-  };
 }
 
 export interface AppState {
   events: LeadosEvent[];
   roster: Person[];
+}
+
+// ───────────────────────── Work queue ─────────────────────────
+
+export type WorkItemStatus = "pending" | "in_progress" | "resolved" | "dismissed";
+
+export interface WorkItem {
+  id: number;
+  title: string;
+  steps: string[];
+  status: WorkItemStatus;
+  domain: Domain;
+  /** The rule key of the finding that generated this item. */
+  source: string;
+  findingKey: string;
+  priority: Severity;
+  dueAt: Date | null;
+  assignedTo: number | null;
+  assignedToName?: string | null;
+  blockedBy: number[];
+  outcomeNotes: string | null;
+  suggestedAction?: string | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
+}
+
+export interface NewWorkItemInput {
+  title: string;
+  steps: string[];
+  domain: Domain;
+  source: string;
+  findingKey: string;
+  priority: Severity;
+  dueAt: Date;
+  suggestedAction?: string;
+}
+
+// ───────────────────────── Notifications ─────────────────────────
+
+export type NotificationType = "finding_new" | "finding_resolved" | "work_item" | "escalation" | "system";
+
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  severity: Severity;
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: Date;
+  entityType: string | null;
+  entityId: number | null;
+}
+
+export interface NewNotificationInput {
+  type: NotificationType;
+  severity: Severity;
+  title: string;
+  body: string;
+  entityType?: string;
+  entityId?: number;
+}
+
+// ───────────────────────── Autonomous runs ─────────────────────────
+
+export interface AutonomousRunSummary {
+  id: number;
+  ranAt: string;
+  findingsCount: number;
+  actionsTaken: number;
+  escalations: number;
+  durationMs: number;
+  summary: string;
+}
+
+export interface AutonomousRunResult {
+  runAt: string;
+  durationMs: number;
+  findings: Finding[];
+  newFindings: Finding[];
+  resolvedFindings: Finding[];
+  newWorkItems: NewWorkItemInput[];
+  staleWorkItemIds: number[];
+  escalations: Finding[];
+  notifications: NewNotificationInput[];
+  counts: {
+    findings: number;
+    newFindings: number;
+    resolvedFindings: number;
+    newWorkItems: number;
+    escalations: number;
+  };
+  summary: string;
 }

@@ -1,160 +1,264 @@
 "use client";
 
-import { useState } from "react";
-import type { IntelligenceData } from "@/lib/intelligence";
-import type { ViewKey } from "@/components/leados/Shell";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-const URGENCY_COLOR: Record<string, string> = {
-  NOW: "bg-red-600/20 text-red-400 border-red-700/50",
-  TODAY: "bg-amber-600/20 text-amber-400 border-amber-700/50",
-  THIS_WEEK: "bg-yellow-600/20 text-yellow-400 border-yellow-700/50",
-  MONITOR: "bg-slate-700/40 text-slate-400 border-slate-700",
+type StreamEventType = "finding" | "work_item" | "notification" | "run" | "connected";
+
+interface StreamEvent {
+  type: StreamEventType;
+  action: string;
+  payload: unknown;
+  ts: string;
+}
+
+interface NotificationRow {
+  id: number;
+  type: string;
+  severity: number;
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+  entityType: string | null;
+  entityId: number | null;
+}
+
+interface FeedItem {
+  key: string;
+  type: StreamEventType;
+  severity: number;
+  title: string;
+  body: string;
+  ts: string;
+}
+
+const TYPE_ICON: Record<StreamEventType, string> = {
+  finding: "🔎",
+  work_item: "🗂️",
+  notification: "🔔",
+  run: "⏱️",
+  connected: "🟢",
 };
 
-const RISK_COLOR: Record<string, string> = {
-  HIGH: "text-red-400",
-  ELEVATED: "text-amber-400",
-  LOW: "text-green-400",
+const SEVERITY_CLASSES: Record<number, string> = {
+  5: "border-red-300 bg-red-50 text-red-800",
+  4: "border-orange-300 bg-orange-50 text-orange-800",
+  3: "border-amber-300 bg-amber-50 text-amber-800",
+  2: "border-sky-300 bg-sky-50 text-sky-800",
+  1: "border-slate-300 bg-slate-50 text-slate-700",
 };
 
-export function ProactiveRail({
-  data,
-  navigate,
-  refetch,
-}: {
-  data: IntelligenceData;
-  navigate: (v: ViewKey, personId?: number) => void;
-  refetch: () => Promise<void>;
-}) {
-  const [logging, setLogging] = useState<number | null>(null);
+function severityClass(sev: number) {
+  return SEVERITY_CLASSES[Math.max(1, Math.min(5, Math.round(sev) || 1))];
+}
 
-  async function logOneOnOne(personId: number) {
-    setLogging(personId);
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const s = Math.max(0, Math.round(diffMs / 1000));
+  if (s < 5) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+function feedItemFromPayload(type: StreamEventType, action: string, ts: string, payload: unknown): FeedItem {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  const title = typeof p.title === "string" ? p.title : typeof p.summary === "string" ? p.summary : `${type} ${action}`;
+  const body = typeof p.body === "string" ? p.body : typeof p.detail === "string" ? p.detail : "";
+  const severity = typeof p.severity === "number" ? p.severity : typeof p.sev === "number" ? p.sev : typeof p.priority === "number" ? p.priority : 1;
+  return {
+    key: `${type}:${action}:${ts}:${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    severity,
+    title: action === "resolved" && type === "finding" ? `Resolved: ${title}` : title,
+    body,
+    ts,
+  };
+}
+
+export default function ProactiveRail() {
+  const [connected, setConnected] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationRow[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const esRef = useRef<EventSource | null>(null);
+  const retryRef = useRef(1000);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadNotifications = useCallback(async () => {
     try {
-      await fetch("/api/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "oneonone", domain: "people", personId, data: { notes: "Urgent check-in", status: "held" } }),
-      });
-      await refetch();
-    } finally {
-      setLogging(null);
+      const res = await fetch("/api/notifications?pageSize=10");
+      if (!res.ok) return;
+      const data = await res.json();
+      setNotifications(data.notifications ?? []);
+      setUnreadCount(data.unreadCount ?? 0);
+    } catch {
+      // ignore transient failures; SSE will keep us current
     }
-  }
+  }, []);
 
-  const highRiskBeliefs = Object.entries(data.beliefs).filter(([, b]) => b.highRisk);
-  const atRiskPeople = data.flightRisk.filter((f) => f.riskLevel !== "LOW").slice(0, 3);
-  const topPlan = data.attentionPlan.sequence.slice(0, 3);
-  const activeCorrelations = data.correlations.slice(0, 3);
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const connect = () => {
+      if (cancelled) return;
+      const es = new EventSource("/api/events/stream");
+      esRef.current = es;
+
+      es.addEventListener("connected", () => {
+        setConnected(true);
+        retryRef.current = 1000;
+      });
+
+      const pushFeed = (type: StreamEventType, action: string, ts: string, payload: unknown) => {
+        setFeed((prev) => [feedItemFromPayload(type, action, ts, payload), ...prev].slice(0, 10));
+      };
+
+      es.addEventListener("finding", (ev: MessageEvent) => {
+        const data: StreamEvent = JSON.parse(ev.data);
+        pushFeed("finding", data.action, data.ts, data.payload);
+      });
+
+      es.addEventListener("work_item", (ev: MessageEvent) => {
+        const data: StreamEvent = JSON.parse(ev.data);
+        pushFeed("work_item", data.action, data.ts, data.payload);
+      });
+
+      es.addEventListener("run", (ev: MessageEvent) => {
+        const data: StreamEvent = JSON.parse(ev.data);
+        pushFeed("run", data.action, data.ts, data.payload);
+      });
+
+      es.addEventListener("notification", (ev: MessageEvent) => {
+        const data: StreamEvent = JSON.parse(ev.data);
+        if (data.action === "new") {
+          const row = data.payload as NotificationRow;
+          setNotifications((prev) => [row, ...prev].slice(0, 20));
+          setUnreadCount((c) => c + 1);
+          pushFeed("notification", data.action, data.ts, row);
+        } else if (data.action === "all_read") {
+          setNotifications([]);
+          setUnreadCount(0);
+        } else if (data.action === "read") {
+          const row = data.payload as NotificationRow;
+          setNotifications((prev) => prev.filter((n) => n.id !== row.id));
+          setUnreadCount((c) => Math.max(0, c - 1));
+        }
+      });
+
+      es.onerror = () => {
+        setConnected(false);
+        es.close();
+        if (esRef.current === es) esRef.current = null;
+        if (cancelled) return;
+        const delay = Math.min(retryRef.current, 15000);
+        reconnectTimer.current = setTimeout(connect, delay);
+        retryRef.current = Math.min(retryRef.current * 2, 15000);
+      };
+    };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      esRef.current?.close();
+    };
+  }, []);
+
+  const markAllRead = useCallback(async () => {
+    setNotifications([]);
+    setUnreadCount(0);
+    try {
+      await fetch("/api/notifications", { method: "DELETE" });
+    } catch {
+      // next SSE/poll cycle will reconcile
+    }
+  }, []);
 
   return (
-    <div className="flex h-full flex-col gap-4 p-3 text-sm">
-      {/* Do this now */}
-      <section className="rounded-xl border border-indigo-700/50 bg-indigo-950/30 p-3">
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-indigo-400">Do this now</div>
-        {data.highestLeverageAction ? (
-          <>
-            <div className="text-sm font-medium text-slate-100">{data.highestLeverageAction.action}</div>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="rounded border border-slate-700 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
-                {data.highestLeverageAction.source}
-              </span>
-              <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${URGENCY_COLOR[data.highestLeverageAction.urgency]}`}>
-                {data.highestLeverageAction.urgency}
-              </span>
-            </div>
-          </>
-        ) : (
-          <div className="text-slate-500">No urgent actions.</div>
-        )}
-      </section>
-
-      {/* Bayesian alerts */}
-      {highRiskBeliefs.length > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Bayesian alerts</div>
-          <div className="space-y-2">
-            {highRiskBeliefs.map(([key, b]) => (
-              <div key={key} className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-slate-300">{b.label}</div>
-                  <div className="text-[10px] text-slate-500">{b.appliedEvidence.length} signals</div>
-                </div>
-                <div className="text-lg font-bold text-red-400">{b.posteriorPct}%</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Flight risk */}
-      {atRiskPeople.length > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Flight risk</div>
-          <div className="space-y-2">
-            {atRiskPeople.map((p) => (
-              <div key={p.personId} className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-xs text-slate-200">{p.personName}</div>
-                  <span className={`text-[10px] ${RISK_COLOR[p.riskLevel]}`}>
-                    {p.riskScore}% · {p.riskLevel}
-                  </span>
-                </div>
-                <button
-                  onClick={() => logOneOnOne(p.personId)}
-                  disabled={logging === p.personId}
-                  className="shrink-0 rounded-lg bg-indigo-600 px-2 py-1 text-[10px] text-white hover:bg-indigo-500 disabled:opacity-50"
-                >
-                  {logging === p.personId ? "…" : "1:1 Now"}
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Week plan preview */}
-      <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-        <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Week plan preview</div>
-        <div className="space-y-2">
-          {topPlan.length === 0 && <div className="text-xs text-slate-500">Nothing scheduled.</div>}
-          {topPlan.map((item) => (
-            <div key={item.id} className="text-xs">
-              <div className="truncate text-slate-200">{item.title}</div>
-              <div className="text-[10px] text-slate-500">
-                ROI {item.roi} · {item.hours}h
-              </div>
-            </div>
-          ))}
+    <aside className="flex h-full w-full max-w-sm flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-block h-2.5 w-2.5 rounded-full ${connected ? "bg-emerald-500" : "bg-slate-300"}`}
+            title={connected ? "Live" : "Reconnecting…"}
+          />
+          <h2 className="text-sm font-semibold text-slate-900">Proactive Intelligence</h2>
         </div>
-        <button onClick={() => navigate("attention")} className="mt-2 text-xs text-indigo-400 hover:text-indigo-300">
-          See full plan →
-        </button>
-      </section>
-
-      {/* Active correlations */}
-      {activeCorrelations.length > 0 && (
-        <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Active correlations</div>
-          <div className="space-y-2">
-            {activeCorrelations.map((c) => (
-              <div key={c.id} className="flex items-start gap-2">
-                <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${c.combinedSev >= 4 ? "bg-red-500" : "bg-yellow-500"}`} />
-                <div className="min-w-0">
-                  <div className="truncate text-xs text-slate-200">{c.name}</div>
-                  <div className="truncate text-[10px] text-slate-500">{c.description}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <div className="mt-auto pt-2 text-[10px] text-slate-600">
-        Updated {new Date(data.generatedAt).toLocaleTimeString()}
-        <br />
-        Updated every 30s
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-semibold text-white">
+              {unreadCount}
+            </span>
+          )}
+          <button
+            onClick={markAllRead}
+            disabled={unreadCount === 0 && notifications.length === 0}
+            className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Mark all read
+          </button>
+        </div>
       </div>
-    </div>
+
+      <div className="flex-1 overflow-y-auto px-3 py-3">
+        {notifications.length > 0 && (
+          <div className="mb-3">
+            <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              Unread notifications
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {notifications.map((n) => (
+                <li
+                  key={n.id}
+                  className={`rail-slide-in rounded-xl border px-3 py-2 text-xs ${severityClass(n.severity)}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold">{n.title}</span>
+                    <span className="shrink-0 text-[10px] opacity-70">{timeAgo(n.createdAt)}</span>
+                  </div>
+                  {n.body && <p className="mt-0.5 opacity-90">{n.body}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          Live feed
+        </p>
+        {feed.length === 0 ? (
+          <p className="px-1 text-xs text-slate-400">
+            Waiting for the background intelligence loop… trigger a cycle to see live updates here.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {feed.map((item) => (
+              <li
+                key={item.key}
+                className={`rail-slide-in flex items-start gap-2 rounded-xl border px-3 py-2 text-xs ${severityClass(item.severity)}`}
+              >
+                <span className="mt-0.5">{TYPE_ICON[item.type]}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-semibold">{item.title}</span>
+                    <span className="shrink-0 text-[10px] opacity-70">{timeAgo(item.ts)}</span>
+                  </div>
+                  {item.body && <p className="mt-0.5 line-clamp-2 opacity-90">{item.body}</p>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </aside>
   );
 }

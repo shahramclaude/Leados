@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LeadOS — Probabilistic Intelligence Engine",
-  description: "Bayesian belief network, signal fusion, causal chains, and predictive scoring for org health.",
+  title: "LeadOS — Autonomous Operations",
+  description: "Server-side background intelligence loop, work queue, and live notifications.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

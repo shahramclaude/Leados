@@ -1,66 +1,73 @@
-import { db } from "@/db";
-import { leados_events } from "@/db/schema";
-import { sql } from "drizzle-orm";
+import { subscribeStreamEvents, type StreamEvent } from "@/lib/eventBus";
 
 export const dynamic = "force-dynamic";
 
-async function getEventCount() {
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(leados_events);
-  return count;
-}
+const HEARTBEAT_MS = 15_000;
 
-export async function GET() {
+/**
+ * Live server push channel for the background intelligence layer.
+ *
+ * Emits three named SSE event types — `finding`, `work_item`, and
+ * `notification` — plus a generic `run` event when a full autonomous cycle
+ * completes. A heartbeat comment line is sent every 15s to keep
+ * intermediary proxies from closing the connection; the client (see
+ * ProactiveRail) reconnects automatically on any drop.
+ */
+export async function GET(req: Request) {
   const encoder = new TextEncoder();
-  let poll: ReturnType<typeof setInterval> | undefined;
-  let ping: ReturnType<typeof setInterval> | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let unsubscribe: (() => void) | undefined;
 
   const stream = new ReadableStream({
-    async start(controller) {
-      const emit = (d: unknown) => {
+    start(controller) {
+      let closed = false;
+
+      const safeEnqueue = (chunk: string) => {
+        if (closed) return;
         try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(d)}\n\n`));
+          controller.enqueue(encoder.encode(chunk));
         } catch {
-          // controller already closed
+          closed = true;
         }
       };
 
-      emit({ type: "connected", ts: new Date().toISOString() });
+      const sendEvent = (event: StreamEvent) => {
+        safeEnqueue(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      };
 
-      let lastCount = await getEventCount();
+      // Initial hello so the client can distinguish "connected" from "never connected".
+      safeEnqueue(`event: connected\ndata: ${JSON.stringify({ ts: new Date().toISOString() })}\n\n`);
 
-      poll = setInterval(async () => {
+      unsubscribe = subscribeStreamEvents(sendEvent);
+
+      heartbeat = setInterval(() => {
+        safeEnqueue(`: ping ${Date.now()}\n\n`);
+      }, HEARTBEAT_MS);
+
+      const onAbort = () => {
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        if (unsubscribe) unsubscribe();
         try {
-          const count = await getEventCount();
-          if (count !== lastCount) {
-            lastCount = count;
-            emit({ type: "refresh", count });
-          }
+          controller.close();
         } catch {
-          // ignore transient db errors between polls
+          // already closed
         }
-      }, 5000);
-
-      ping = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(": ping\n\n"));
-        } catch {
-          // controller already closed
-        }
-      }, 15000);
+      };
+      req.signal.addEventListener("abort", onAbort);
     },
     cancel() {
-      if (poll) clearInterval(poll);
-      if (ping) clearInterval(ping);
+      if (heartbeat) clearInterval(heartbeat);
+      if (unsubscribe) unsubscribe();
     },
   });
 
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
