@@ -1,69 +1,41 @@
-// Maps active synthetic rule flags + mood trend + goal-hit-rate into the
-// evidence-signal arrays each Bayesian hypothesis consumes. This function is
-// an original, typed reimplementation of the *behavior* described by
-// `LEADOS.bayesian._extractEvidenceSignals()` in the pasted brief — see
-// bayesian.ts header for the two disclosed gaps in that original function
-// (two hypotheses with no likelihood model; five likelihood keys the
-// original function never actually emits) that are preserved here rather
-// than silently patched.
-import type { AppState } from "./types";
-import { computeMoodTrend, type EvidenceSignals } from "./bayesian";
-import { MOOD_SERIES } from "./seed";
-import { RULES } from "./rules";
+// src/lib/engine.ts
+// Signal Board -> Finding[]. Disclosed-fabricated scoring: score is simply
+// severity^1.6 scaled, which is an illustrative convention chosen for this
+// sandbox so higher-severity findings dominate the optimizer's benefit
+// ranking without a hard cliff. Not a validated risk model.
 
-export function activeFindings(state: AppState) {
-  return RULES.filter((r) => state.ruleFlags[r.id]);
-}
+import { RULES, dependenciesFor } from "./rules";
+import type { Finding } from "./types";
+import type { SignalState } from "./store";
 
-export function extractEvidenceSignals(state: AppState): EvidenceSignals {
-  const findings = activeFindings(state);
-  const has = (id: string) => findings.some((f) => f.id === id);
-
-  const signals: EvidenceSignals = {
-    "attrition.next60d": [],
-    "revenue.miss.next_quarter": [],
-    "okr.on_track": [],
-    "crisis.next30d": [],
-    "key_hire.success": [],
-  };
-
-  // --- Auto-detected mappings, faithful to the pasted brief's own wiring ---
-  if (has("R7")) signals["attrition.next60d"].push("burnout.signal");
-  if (has("R1")) signals["attrition.next60d"].push("1on1.missed");
-  if (has("R10")) signals["attrition.next60d"].push("no_growth_plan");
-  if (has("R6")) signals["attrition.next60d"].push("conflict.recent");
-
-  const moodTrend = computeMoodTrend(MOOD_SERIES[state.moodScenario]);
-  if (moodTrend < -0.1) signals["attrition.next60d"].push("mood.declining");
-
-  if (has("R157")) signals["revenue.miss.next_quarter"].push("win_rate.declining");
-  if (has("R73")) {
-    signals["revenue.miss.next_quarter"].push("velocity.declining");
-    signals["okr.on_track"].push("velocity.declining");
+export function buildFindings(state: SignalState): Finding[] {
+  const findings: Finding[] = [];
+  for (const r of RULES) {
+    if (!state.active[r.rule]) continue;
+    const sev = state.sev[r.rule] ?? r.baseSev;
+    const score = Math.round(Math.pow(sev, 1.6) * 10) / 10;
+    // synthetic "sources" so overlap-based leverage has something to bite on:
+    // every finding touches its own category id plus, for person-linked
+    // rules, the linked person id.
+    const sources = [r.category, ...(r.personLinked ? [state.person[r.rule]] : [])];
+    findings.push({
+      key: r.rule,
+      rule: r.rule,
+      category: r.category,
+      title: r.title,
+      sev,
+      score,
+      sources,
+      person: r.personLinked ? state.person[r.rule] : undefined,
+      active: true,
+    });
   }
-  if (has("R104")) signals["revenue.miss.next_quarter"].push("ltv_cac.below_threshold");
-  if (has("R14")) signals["okr.on_track"].push("okr.silent_over_30d");
-
-  const goalHitRate =
-    state.goalHitRateMode === "synthetic" ? state.goalHitRateManual : state.goalHitRateManual;
-  if (goalHitRate > 0.7) signals["okr.on_track"].push("goal_hit_rate.high");
-
-  // --- Manual-only evidence: defined as likelihood ratios in the pasted
-  // brief but NEVER emitted by its own _extractEvidenceSignals(). Surfaced
-  // here as explicit, separately-labeled toggles rather than silently wired
-  // into the automatic rule mapping (which would misattribute a connection
-  // the brief itself never made). ---
-  if (state.manualEvidence["comp.at_market"]) signals["attrition.next60d"].push("comp.at_market");
-  if (state.manualEvidence["promotion.recent"])
-    signals["attrition.next60d"].push("promotion.recent");
-  if (state.manualEvidence["pipeline.shrinking"])
-    signals["revenue.miss.next_quarter"].push("pipeline.shrinking");
-  if (state.manualEvidence["nps.high"]) signals["revenue.miss.next_quarter"].push("nps.high");
-  if (state.manualEvidence["velocity.stable"]) signals["okr.on_track"].push("velocity.stable");
-
-  return signals;
+  // Runway-driven synthetic escalation: if runway < 6 months, bump finance
+  // findings' severity influence by flagging them (does not mutate sev, the
+  // optimizer's urgency function reads runway directly where relevant).
+  return findings;
 }
 
-export function moodTrendFor(state: AppState): number {
-  return computeMoodTrend(MOOD_SERIES[state.moodScenario]);
+export function dependenciesForFinding(rule: string): string[] {
+  return dependenciesFor(rule);
 }

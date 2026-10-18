@@ -1,60 +1,52 @@
+// src/lib/rules.ts
+// Synthetic 24-rule catalog across 6 categories, used to drive the Signal
+// Board that feeds the Attention Optimizer. ORIGINAL to this sandbox —
+// disclosed-fabricated, not pulled from any verified rule engine. Rule IDs
+// R1/R4/R7/R10/R17/R73/R88/R103/R104 are deliberately reused from the task's
+// pasted "pt-U" brief so its own named dependency examples (R10 depends on
+// R1, R104 depends on R103) stay explorable; everything else is invented.
+
 import type { RuleDef } from "./types";
 
-// Synthetic 8-rule catalog, original to this delivery.
-// Rule IDs (R1, R6, R7, R10, R14, R73, R104, R157) are reused verbatim from the
-// task's pasted "pt-S" brief so its own named evidence-mapping logic
-// (_extractEvidenceSignals) is directly explorable here — the same convention
-// the real repo's prior session used for its own reused IDs (R1, R4, R7, R17,
-// R73, R88), per github.com/wbweve/Leados/blob/main/README.md (fetched this
-// session). Titles/descriptions/categories are invented for this delivery;
-// no rule catalog with these exact titles was found in the real repo.
 export const RULES: RuleDef[] = [
-  {
-    id: "R1",
-    title: "1:1 Cadence Missed",
-    description: "A direct report's scheduled 1:1 was skipped or cancelled twice in a row.",
-    category: "People",
-  },
-  {
-    id: "R6",
-    title: "Recent Interpersonal Conflict",
-    description: "A conflict or friction event was logged for this person in the last 14 days.",
-    category: "People",
-  },
-  {
-    id: "R7",
-    title: "Burnout Signal Detected",
-    description: "Workload + declining mood pattern crosses the burnout heuristic threshold.",
-    category: "People",
-  },
-  {
-    id: "R10",
-    title: "No Active Growth Plan",
-    description: "No documented development/growth plan on file for this person.",
-    category: "People",
-  },
-  {
-    id: "R14",
-    title: "OKR Silent > 30 Days",
-    description: "An active OKR has had no check-in or update logged in over 30 days.",
-    category: "Execution",
-  },
-  {
-    id: "R73",
-    title: "Delivery Velocity Declining",
-    description: "Rolling team velocity has dropped for 3+ consecutive cycles.",
-    category: "Execution",
-  },
-  {
-    id: "R104",
-    title: "LTV:CAC Below Threshold",
-    description: "Lifetime value to customer acquisition cost ratio has fallen under 3x.",
-    category: "Finance",
-  },
-  {
-    id: "R157",
-    title: "Win Rate Declining",
-    description: "Sales win rate has dropped across the last two measured periods.",
-    category: "Revenue",
-  },
+  { rule: "R1", category: "people", title: "1:1 cadence slipping with a direct report", baseSev: 3, playId: "oneonone-bundle", personLinked: true },
+  { rule: "R4", category: "people", title: "Sustained after-hours activity spike (burnout signal)", baseSev: 4, playId: "oneonone-bundle", personLinked: true },
+  { rule: "R7", category: "people", title: "Repeated missed deadlines, same owner", baseSev: 4, playId: "oneonone-bundle", personLinked: true },
+  { rule: "R10", category: "people", title: "No documented growth plan for a flight-risk performer", baseSev: 3, playId: "oneonone-bundle", personLinked: true },
+  { rule: "R12", category: "people", title: "Underperformance uncorrected after two review cycles", baseSev: 5, playId: "termination-prep", personLinked: true },
+  { rule: "R17", category: "ops", title: "Deploy frequency down sharply this sprint", baseSev: 3, playId: "sprint-plan" },
+  { rule: "R19", category: "ops", title: "On-call rotation overloaded on one engineer", baseSev: 4, playId: "sprint-plan", personLinked: true },
+  { rule: "R22", category: "ops", title: "Incident MTTR trending up three sprints running", baseSev: 3, playId: "sprint-plan" },
+  { rule: "R30", category: "strategy", title: "Roadmap bet has no accountable owner", baseSev: 3, playId: "roadmap-sync" },
+  { rule: "R33", category: "strategy", title: "Board narrative contradicts last quarter's stated bet", baseSev: 4, playId: "board-narrative" },
+  { rule: "R36", category: "strategy", title: "Competitive move unaddressed for 30+ days", baseSev: 3, playId: "roadmap-sync" },
+  { rule: "R41", category: "legal", title: "Key contract renewal unanswered by counterparty", baseSev: 3, playId: "contract-review" },
+  { rule: "R44", category: "legal", title: "Regulatory filing window closing within 10 days", baseSev: 5, playId: "contract-review" },
+  { rule: "R47", category: "legal", title: "Data processing agreement past review date", baseSev: 2, playId: "contract-review" },
+  { rule: "R51", category: "product", title: "Churn ticked up in a concentrated cohort", baseSev: 4, playId: "sprint-plan" },
+  { rule: "R55", category: "product", title: "Activation rate regression after last release", baseSev: 3, playId: "sprint-plan" },
+  { rule: "R58", category: "product", title: "Support escalations up without a root cause owner", baseSev: 3, playId: "crisis-response" },
+  { rule: "R73", category: "finance", title: "Runway under 6 months at current burn", baseSev: 5, playId: "pl-review" },
+  { rule: "R76", category: "finance", title: "Vendor spend materially over forecast", baseSev: 4, playId: "pl-review" },
+  { rule: "R80", category: "finance", title: "Budget variance unexplained for two consecutive months", baseSev: 3, playId: "pl-review" },
+  { rule: "R88", category: "finance", title: "Customer concentration risk — top account over 30% of revenue", baseSev: 4, playId: "board-narrative" },
+  { rule: "R103", category: "finance", title: "Gross margin compressed vs. plan", baseSev: 4, playId: "pl-review" },
+  { rule: "R104", category: "finance", title: "LTV:CAC ratio below healthy threshold", baseSev: 4, playId: "pl-review" },
+  { rule: "R110", category: "ops", title: "Cross-team dependency blocking two workstreams", baseSev: 3, playId: "sprint-plan" },
 ];
+
+export const RULES_BY_ID: Record<string, RuleDef> = Object.fromEntries(
+  RULES.map((r) => [r.rule, r])
+);
+
+// Dependency heuristic, carried over verbatim from the pasted brief's own
+// described examples (R10 needs R1 first; R104 needs R103 first). This is a
+// hand-authored heuristic map, not a learned or verified dependency graph.
+export function dependenciesFor(rule: string): string[] {
+  if (rule === "R10") return ["R1"];
+  if (rule === "R104") return ["R103"];
+  if (rule === "R12") return ["R7"];
+  return [];
+}
+
+export const PEOPLE = ["Ana", "Marcus", "Priya", "Dee", "Lior", "Sam"];

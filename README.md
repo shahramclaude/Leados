@@ -1,168 +1,152 @@
-# LeadOS pt-T — Strategic Consciousness, Decision Oracle, Knowledge Graph
+# LeadOS pt-U — Attention Optimizer (Part 1)
 
-A single self-contained `index.html` (served at the site root by a minimal
-Next.js + Drizzle + PostgreSQL scaffold — see **Why two layers?** below)
-implementing three leadership-intelligence modules from this task's pasted
-"pt-T" brief: a **Strategic Consciousness** synthesis engine, a real-time
-**Decision Oracle**, and an **Autonomous Knowledge Graph** — all running on
-synthetic, in-browser data with zero network calls and zero dependencies.
+A React + Vite + Tailwind app implementing **Part 1** of the pasted "pt-U"
+brief: a simulated-annealing optimizer that sequences a week of leadership
+attention across synthetic findings, under time and cognitive-load
+constraints, with dependencies and urgency windows.
 
 > **Provenance — read before assuming this continues `github.com/wbweve/Leados`
-> or any prior "pt-"-numbered session:** the real repo was inspected directly
-> this session (GitHub REST API file tree, raw-file fetches of its root
-> `index.html`, `README.md`, `AI-SESSION-LOG.md`, and `src/lib/core.ts`)
-> before any code was written here. Full ledger in `AI-SESSION-LOG.md`.
-> Short version:
+> or any other "pt-" session:** the real repo was inspected directly this
+> session (GitHub REST API file trees, raw fetches of `src/App.tsx`,
+> `src/lib/core.ts`, `src/lib/circadian.ts`, `src/lib/engine.ts`, the repo's
+> own `AI-SESSION-LOG.md`, and its `README.md`) **before** any code here was
+> written. Full ledger in `AI-SESSION-LOG.md` and in-app at **About /
+> Provenance**. Short version:
 >
-> - The real repo already contains **multiple, mutually-unaware prior
->   sessions** stacked on top of each other: loose root-level files
->   (including its own `index.html` and root `.tsx` files), plus a separate
->   `src/` Vite+React+TypeScript app that itself uses the storage key
->   `leados-pt-j:data`. A *different* prior session's own live README
->   (fetched directly, not assumed) describes yet another from-scratch
->   React/Vite rebuild with its own storage key, `leados-sandbox:v1`, and its
->   own disclosed gaps.
-> - That same prior session's own `AI-SESSION-LOG.md` (fetched and read
->   directly) states it searched the real repo and found **no** CAS engine,
->   no risk register, and none of the "58/62-file, 144-rule, `T_L_*`/`G_L_*`"
->   history referenced by an earlier pasted brief in that lineage.
-> - **Not found anywhere in the real repo, this session:** any file,
->   export, or identifier resembling "Strategic Consciousness," a
->   "Decision Oracle," an "Autonomous Knowledge Graph," 97 files, or 205
->   active rules — the specific claims in this task's pasted "pt-T"
->   implementation summary.
+> - The real repo mixes two deliveries: ~40 loose root-level files (incl. a
+>   single-file `index.html` demo) plus a separate, live
+>   Vite+React+TypeScript app under `src/`.
+> - **Verified directly, this session:** `src/App.tsx` is live and imports a
+>   Signal Board / Thermodynamics / CAS / Risk route set; `src/lib/` holds 29
+>   files including `circadian.ts`, `core.ts`, `intelligence.ts`,
+>   `physics.ts`, `casEngine.ts`, `infoTheory.ts`, `riskIntelligence.ts`.
+>   `core.ts` and `intelligence.ts` are present but **not wired into** the
+>   live app, and `intelligence.ts`'s import from `core.ts` is broken
+>   (confirmed by reading both files directly) — this matches what the real
+>   repo's own `AI-SESSION-LOG.md` already documents from an earlier
+>   session's inspection.
+> - **Not found anywhere in the real repo, this session:** any file, export,
+>   or global object named `attentionOpt`, `buildAttentionItems`,
+>   `optimizeSequence`, `buildWeeklyAttentionPlan`, `playbooks`, or any global
+>   `LEADOS.*` namespace object. The real repo's verified live code is
+>   consistently ES-module named exports per file, never a single global
+>   `LEADOS` object.
 >
-> **This delivery does not fork, copy, or continue that unverified history.**
-> It is a fresh build, in this task's own tool environment, implementing
-> only the *functional ideas* in the pasted brief — original code
-> throughout, deliberately scoped down from the brief's claimed scale (14
-> rules, not 205; 3 Bayesian hypotheses, not 5+; 10 self-tests, not 94).
-
-## Why two layers? (Next.js scaffold + static `index.html`)
-
-This task's tool environment requires a Next.js App Router + Drizzle +
-PostgreSQL project that passes `next typegen`, `tsc`, `next build`, and a
-DB-backed `/api/health` check. That is incompatible with *only* shipping a
-hand-authored vanilla-JS `index.html` the way the pasted brief's lineage
-does. Both constraints are satisfied honestly, without pretending one is
-the other:
-
-- `public/index.html` is the actual deliverable: one file, inline
-  `<style>`/`<script>`, no imports, no build step, no network calls,
-  state in `localStorage` only. Verified by inspection — there is nothing
-  in it that reaches out to a server.
-- `src/app/page.tsx` is a one-line server redirect to `/index.html`, so
-  opening the app's root URL *is* opening that file.
-- `src/app/api/health/route.ts` (unchanged from the starter scaffold) does
-  a real `select 1` against PostgreSQL via Drizzle, satisfying the
-  platform's healthcheck. The LeadOS app itself needs no database — all
-  of its state is synthetic and client-side, consistent with every prior
-  session's convention in this lineage (`localStorage`, never a server).
+> **This app does not fork, copy, or continue that history.** It is a fresh
+> build in this task's own tool environment (React + Vite + Tailwind, single
+> `src/App.tsx` entry point, built with `npm run build`), implementing only
+> the *described algorithm* from the pasted "pt-U" brief — original code
+> throughout. The brief's own `LEADOS.attentionOpt = {...}` code sample is
+> treated as an **unverified external specification**, the same convention
+> the real repo's own prior sessions already applied to earlier pasted
+> briefs (see their `AI-SESSION-LOG.md`).
 
 ## Run it
 
-Open `public/index.html` directly in a browser — that is the entire app,
-with zero setup. Inside this project's dev/preview environment, visiting
-`/` redirects there automatically. Use **↺ Reset synthetic data** (top
-right) to regenerate the demo dataset with a new random seed.
+`npm install && npm run build`, then open `dist/index.html`. The Vite config
+inlines all JS/CSS into that one HTML file via `vite-plugin-singlefile`
+(already present in `package.json`), so it opens with zero runtime network
+calls.
 
-## What's inside `index.html`
+For development: `npm run dev`.
 
-| Module | What it does |
-|---|---|
-| `LEADOS.engine` | 14 original detection rules (`P01–P05` people, `F01–F03` finance, `O01–O03` ops, `S01–S02` strategy, `G01` governance), each computed from the synthetic event log — not 205. |
-| `LEADOS.bayesian` | Genuine odds-form Bayesian updating (`posterior_odds = prior_odds × ΠLR`) for 3 hypotheses. The *mechanism* is real Bayes; the likelihood-ratio *inputs* are disclosed, illustrative estimates, not a validated base-rate study. |
-| `LEADOS.behavioralEcon` | 3 disclosed heuristic detectors: Recency, Planning Fallacy (Kahneman, Lovallo & Sibony), Status-Quo Bias (Samuelson & Zeckhauser, 1988). |
-| `LEADOS.flightRisk` | Weighted composite (1:1 cadence, engagement trend, feedback recency, blocker load) per person. |
-| `LEADOS.healthScore` | 100 − Σ(severity²×1.1) over active findings; trend recomputed against the event log truncated 30 days ago (a real recomputation, not a stored delta). |
-| `LEADOS.consciousness` | **Strategic Consciousness.** Runs the 5 frames above, checks 3 specific cross-frame convergence patterns, derives a strategic question, a highest-leverage action, and an NLG narrative — recomputed from live data on every call. |
-| `LEADOS.oracle` | **Decision Oracle.** Classifies a free-text decision (domain / stakes / reversibility), retrieves matching findings + decision history, applies named real frameworks (Radical Candor — Scott 2017; Real Options — Myers 1977; Premortem — Klein 2007; Two-Way Door — Bezos 2016), flags detected biases, runs a disclosed *directional, non–Monte-Carlo* estimate for people decisions, and synthesizes a recommendation. |
-| `LEADOS.knowledgeGraph` | Builds PERSON/FINDING/DOMAIN/GOAL nodes and typed edges from the same event log; BFS neighborhood queries (visited-set guarded against cycles) rendered on an in-browser canvas; a capped non-obvious-connection search (path length ≥ 3, first 25 nodes / 40 pairs — disclosed limit). |
-| `LEADOS.selfTest` | 10 original self-tests, IDs `PT-T-01…10` — not a reproduction of the pasted brief's unverified `T_T_*` suite, which could not be found or verified anywhere. Results render live on the **About** page. |
+State (the Signal Board toggles) lives in `localStorage` under
+`leados-pt-u:v1`. Use **Clear all** (Signal Board view) to reset, or **Load
+busy-week preset** to restore a demo scenario.
 
-## Pages (hash routes, inside `index.html`)
+## Pages (hash routes)
 
-| Route | What it shows |
-|---|---|
-| `#/today` | Health score, active findings, flight-risk summary. |
-| `#/consciousness` | Strategic moment: narrative, strategic question, highest-leverage action, cross-frame insights, per-frame status. |
-| `#/oracle` | Decision input → full brief (classification, evidence, frameworks, bias warnings, quick simulation, Bayesian belief, recommendation). |
-| `#/knowledge-graph` | Canvas graph explorer (BFS highlight by start node + hop count) and a non-obvious-connection finder. |
-| `#/about` | Full provenance ledger, self-test results, and disclosed gaps/limitations. |
+| Route         | What it does |
+|---------------|--------------|
+| `#/today`     | Overview: active finding count, aggregate score, current circadian phase, findings by category. |
+| `#/signals`   | The **Signal Board**: 24 synthetic rule IDs across 6 categories, each toggleable with a severity override and a runway slider that pulls finance urgency forward below 6 months. |
+| `#/attention` | The **Attention Optimizer**: builds cost/benefit/urgency/dependency items from active findings, runs simulated annealing to pick the sequence that maximizes benefit within your hours/cognitive-load budget, shows a Mon–Fri schedule, the ranked sequence, and what got deferred and why. |
+| `#/about`     | Provenance ledger — what was checked against the real repo, what was found, and how this delivery compares to the pasted "pt-U" brief. |
 
-## What's original, what's a disclosed gap
+## What's original, what's modeled on a verified pattern, what's a disclosed gap
 
-- **Original, built from scratch for this session:** the 14-rule engine,
-  the Bayesian hypothesis set, the 3 bias detectors, flight-risk model,
-  health score, Strategic Consciousness synthesis, Decision Oracle, and
-  Knowledge Graph — all satisfy the *described behavior* in the pasted
-  brief, not any verified prior implementation (none was found to port).
-- **Deliberately scoped down, disclosed as such:** 14 rules (not 205), 3
-  Bayesian hypotheses (not 5+), 10 self-tests (not 94), a capped
-  25-node/40-pair non-obvious-connection search (not an unbounded graph
-  mine), and a fixed-factor "Quick Simulation" heuristic in the Oracle
-  (not a 50-seed Monte Carlo multi-agent simulation — no such engine
-  exists in this file).
-- **A gap, left as a gap:** no Web Worker, no 15-minute background
-  scheduler, and no cultural-bifurcation-style undefined-dependency
-  features are implemented. All of pt-T's five outputs are generated
-  on-demand (button click / page load), not on a timer, so the
-  "continuous background process" framing in the brief is implemented as
-  "recompute live from current data, instantly," not literally
-  continuous.
-- **Synthetic data only:** people, events, goals are fabricated by a
-  seeded PRNG at first load (and on **Reset**), deliberately skewed so
-  every rule/detector has a realistic chance to fire. None of it reflects
-  a real organization.
+- **Modeled on a verified real-repo pattern, reimplemented independently:**
+  `src/lib/circadian.ts`. A real, same-purpose file was confirmed to exist in
+  the repo (a 7-phase chronobiology heuristic); this file's *numbers* were
+  not copied from it (only its general shape — phase → analytical/working-
+  memory multiplier — was reused), because copying undisclosed internal
+  values would overstate what was actually verified.
+- **Built from scratch because no verified source exists anywhere:**
+  `src/lib/attentionOpt.ts` (the simulated-annealing optimizer itself),
+  `src/lib/playbooks.ts` (cost/load proxy per intervention type), and
+  `src/lib/engine.ts` (Signal Board → Finding[]). These implement the
+  *described behavior* in the pasted brief, not any verified prior
+  implementation — none was found to port.
+- **Reused specific rule IDs from the pasted brief** (`R1`, `R4`, `R7`,
+  `R10`, `R17`, `R73`, `R88`, `R103`, `R104`) inside an otherwise-original
+  24-rule catalog — *why*: keeps the brief's own named dependency examples
+  (R10 depends on R1; R104 depends on R103) explorable, without claiming
+  those IDs came from a real rule engine.
+- **A disclosed simplification:** the optimizer's "downstream blocked"
+  leverage proxy uses a synthetic `sources` overlap (category + linked
+  person) rather than a real cross-finding signal graph, because no such
+  graph exists in this sandbox's data model. Labeled in code comments.
 
-## Project structure (this delivery)
+## Project structure
 
 ```
-public/index.html        — the entire LeadOS pt-T app (single file)
-src/app/page.tsx          — redirects "/" to "/index.html"
-src/app/layout.tsx         — page metadata only
-src/app/api/health/route.ts — DB-backed healthcheck (platform requirement, unchanged)
-src/db/schema.ts             — no tables needed; app state is client-side only
-AI-SESSION-LOG.md              — full inspection ledger for this session
+src/
+  lib/
+    types.ts           — shared types (Category, Finding, AttentionItem, ...)
+    rules.ts            — 24-rule synthetic catalog, 6 categories (original)
+    store.ts             — localStorage persistence for the Signal Board
+    engine.ts              — Signal Board -> Finding[] (disclosed-fabricated)
+    playbooks.ts             — cost/cognitive-load proxy per intervention type
+    circadian.ts               — heuristic time-of-day capacity model
+    attentionOpt.ts               — simulated annealing attention optimizer
+    useHashRoute.ts                 — tiny hash router
+  components/
+    Shell.tsx, TodayView.tsx, SignalBoardView.tsx, AttentionView.tsx,
+    AboutView.tsx                     — route views + shared UI primitives
+  App.tsx                                — route composition (entry point)
 ```
 
 ## Changelog
 
-- **Inspected `github.com/wbweve/Leados` via GitHub's REST API (full
-  recursive tree) and raw-file fetches of its root `index.html`,
-  `README.md`, `AI-SESSION-LOG.md`, and `src/lib/core.ts`, before writing
-  any code** — *why*: the task requires inspecting actual code, not
-  trusting the pasted "pt-T" brief's own framing of a 97-file/205-rule
-  history at face value.
-- **Found the real repo already contains at least two other sessions'
-  worth of mutually-inconsistent prior work (different storage keys,
-  different frameworks, different disclosed gaps), and that none of them
-  contain Strategic Consciousness / Decision Oracle / Knowledge Graph
-  code** — *why disclosed this way*: half-right continuity claims are
-  worse than a clean break; this README and the in-app About page name
-  exactly what was checked and what was and wasn't found.
-- **Declared the pasted "pt-T" brief's 97-file/205-rule/pt-A…pt-S lineage
-  an unverified specification, not repo fact** — *why*: no matching
-  strings, file names, or counts were found in anything fetched this
-  session, mirroring the convention the real repo's own prior sessions
-  already used for their own pasted briefs.
-- **Built a single static `index.html` plus a minimal Next.js redirect
-  shell, instead of either a pure vanilla-JS repo (no DB/healthcheck) or a
-  full React rewrite** — *why*: this task's platform requires a working
-  Next.js+Drizzle+Postgres app with a passing `/api/health`, while the
-  user explicitly asked for an `index.html` deliverable; redirecting `/`
-  to the static file satisfies both without misrepresenting either.
-- **Scoped the rule engine to 14 rules, Bayesian beliefs to 3 hypotheses,
-  and self-tests to 10 checks, instead of matching the brief's 205/5+/94
-  figures** — *why*: inventing that volume of rules/tests with no
-  verified source to back them would manufacture false scale; a smaller,
-  fully-working, honestly-labeled set is more trustworthy than a padded
-  one.
-- **Implemented the Oracle's people-decision simulation as a disclosed
-  fixed-factor directional estimate, not a Monte Carlo simulation** —
-  *why*: a real multi-agent Monte Carlo engine does not exist in this
-  file; labeling a heuristic as a full simulation would overclaim.
-- **Used a new storage key, `leados-pt-t:v1`** — *why*: this session has
-  no prior local state, and the real repo's own divergent sessions already
-  use their own distinct keys (`leados-pt-j:data`, `leados-sandbox:v1`);
-  reusing either would falsely imply shared history.
+- **Inspected `github.com/wbweve/Leados` first** — via GitHub's REST API
+  (file trees, contents listings) and direct raw-file fetches of
+  `src/App.tsx`, `src/lib/core.ts`, `src/lib/circadian.ts`,
+  `src/lib/engine.ts`, the repo's `README.md`, and its `AI-SESSION-LOG.md` —
+  *why*: the task requires inspecting actual code before claiming anything
+  about it, not trusting the pasted brief's framing at face value.
+- **Confirmed the repo's own README's claims largely hold, but its
+  "Project structure" section is stale** — it lists 10 `src/lib` files;
+  the real `src/lib` directory has 29, including `circadian.ts`, `core.ts`,
+  `intelligence.ts`, `physics.ts`, `memory.ts`, `monteCarlo.ts`, `health.ts`,
+  `genome.ts`, `fatigue.ts`, `familiarity.ts`, `sensory.ts`, `synthesis.ts`,
+  `workers.ts` — *why flagged*: a stale "project structure" section is an
+  easy way to under- or over-claim scope; disclosing the mismatch here keeps
+  this delivery honest about what it did and didn't re-verify line-by-line.
+- **Declared the pasted "pt-U" brief's `LEADOS.attentionOpt` code sample an
+  unverified specification, not repo fact** — *why*: no string match for
+  `attentionOpt`, `buildAttentionItems`, `optimizeSequence`,
+  `buildWeeklyAttentionPlan`, `playbooks`, or a global `LEADOS` object was
+  found in any file fetched this session, and the real repo's verified code
+  is consistently per-file ES-module exports, never a global namespace
+  object.
+- **Built as a React+Vite+Tailwind app with `src/App.tsx` as the entry
+  point** (this task's required stack) rather than a hand-authored
+  single-file demo — *why*: this tool environment's contract requires it;
+  `vite-plugin-singlefile` (already in `package.json`) still produces a
+  single `dist/index.html` with zero runtime network calls, preserving the
+  "open one file" property the brief cares about.
+- **Reused R1/R4/R7/R10/R17/R73/R88/R103/R104 inside an original 24-rule
+  catalog** — *why*: lets the brief's own named dependency chains stay
+  explorable without claiming those IDs came from a real rule engine.
+- **Scoped this delivery to Part 1 only (Attention Optimizer)** — *why*:
+  the pasted brief's Parts 2–8 (scenario planning, narrative intelligence,
+  living strategy documents, organizational physics, talent architecture,
+  regulatory intelligence, financial intelligence OS) were described only as
+  section headers with no algorithmic detail in this task; implementing them
+  without a concrete spec to verify or faithfully reimplement would mean
+  inventing significant behavior and presenting it as if it answered the
+  brief. Flagged here as a scope limit, not glossed over.
+- **Used a new storage key (`leados-pt-u:v1`)** — *why*: this workspace
+  began with the default Vite scaffold and no prior app state; claiming
+  continuity with any other session's key would assert a shared history
+  that doesn't exist in this workspace.

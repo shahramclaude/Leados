@@ -1,163 +1,139 @@
+import { CATEGORIES, CATEGORY_LABEL, type Category } from "../lib/types";
 import { RULES } from "../lib/rules";
-import { moodTrendFor } from "../lib/engine";
-import { syntheticGoalHitRate } from "../lib/seed";
-import type { AppState, ManualEvidenceState, MoodScenario, RuleId } from "../lib/types";
-import { Badge, Card, Toggle } from "./ui";
+import type { SignalState } from "../lib/store";
+import { Card, Badge } from "./Shell";
+import { cn } from "../utils/cn";
 
-const MANUAL_EVIDENCE_META: {
-  key: keyof ManualEvidenceState;
-  label: string;
-  hypothesis: string;
-  ratio: string;
-}[] = [
-  { key: "comp.at_market", label: "Compensation at/above market", hypothesis: "attrition.next60d", ratio: "0.6×" },
-  { key: "promotion.recent", label: "Recent promotion", hypothesis: "attrition.next60d", ratio: "0.4×" },
-  { key: "pipeline.shrinking", label: "Pipeline shrinking", hypothesis: "revenue.miss.next_quarter", ratio: "3.0×" },
-  { key: "nps.high", label: "NPS is high", hypothesis: "revenue.miss.next_quarter", ratio: "0.7×" },
-  { key: "velocity.stable", label: "Execution velocity stable", hypothesis: "okr.on_track", ratio: "1.8×" },
-];
+const SEV_TONE: Record<number, "slate" | "amber" | "rose" | "emerald" | "indigo"> = {
+  1: "slate",
+  2: "indigo",
+  3: "amber",
+  4: "amber",
+  5: "rose",
+};
 
 export function SignalBoardView({
   state,
   onChange,
+  onReset,
+  onClear,
 }: {
-  state: AppState;
-  onChange: (next: AppState) => void;
+  state: SignalState;
+  onChange: (s: SignalState) => void;
+  onReset: () => void;
+  onClear: () => void;
 }) {
-  const moodTrend = moodTrendFor(state);
+  const activeCount = Object.values(state.active).filter(Boolean).length;
 
-  const toggleRule = (id: RuleId) => {
-    onChange({ ...state, ruleFlags: { ...state.ruleFlags, [id]: !state.ruleFlags[id] } });
+  const toggle = (rule: string) => {
+    onChange({ ...state, active: { ...state.active, [rule]: !state.active[rule] } });
   };
-
-  const setMood = (m: MoodScenario) => onChange({ ...state, moodScenario: m });
-
-  const toggleManual = (key: keyof ManualEvidenceState) => {
-    onChange({
-      ...state,
-      manualEvidence: { ...state.manualEvidence, [key]: !state.manualEvidence[key] },
-    });
+  const setSev = (rule: string, sev: 1 | 2 | 3 | 4 | 5) => {
+    onChange({ ...state, sev: { ...state.sev, [rule]: sev } });
   };
 
   return (
     <div className="space-y-6">
-      <Card>
-        <h2 className="text-lg font-semibold text-white">Signal Board</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Toggle synthetic findings on/off to simulate evidence arriving. Rule IDs are reused from the
-          task's pasted brief so its own named evidence-mapping logic is directly explorable — titles and
-          descriptions are invented for this build.
-        </p>
-      </Card>
-
-      <Card>
-        <h3 className="text-sm font-semibold text-white">Rule-derived findings (auto-mapped to evidence)</h3>
-        <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          {RULES.map((rule) => (
-            <Toggle
-              key={rule.id}
-              checked={state.ruleFlags[rule.id]}
-              onChange={() => toggleRule(rule.id)}
-              label={`${rule.id} · ${rule.title}`}
-              sub={rule.description}
-            />
-          ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold text-white">Signal Board</h1>
+          <p className="text-sm text-slate-400">
+            {activeCount} of {RULES.length} synthetic rules active. Toggle findings on/off and
+            adjust severity — the Attention Optimizer reads this live.
+          </p>
         </div>
-      </Card>
-
-      <Card>
-        <h3 className="text-sm font-semibold text-white">Team mood trajectory (8 synthetic pulses)</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          Feeds the <code>mood.declining</code> evidence signal when the regression slope is below -0.1 —
-          this mirrors the pasted brief's reference to a <code>flightRisk._computeTrend</code> helper that
-          was not found anywhere in the real repo, so it is implemented fresh here (see About tab).
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {(["declining", "stable", "improving"] as MoodScenario[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMood(m)}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
-                state.moodScenario === m
-                  ? "border-indigo-400/40 bg-indigo-500/15 text-indigo-200"
-                  : "border-white/10 bg-white/[0.02] text-slate-400 hover:bg-white/5"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-          <Badge tone={moodTrend < -0.1 ? "bad" : moodTrend > 0.1 ? "good" : "neutral"}>
-            slope {moodTrend.toFixed(2)} {moodTrend < -0.1 ? "(declining — evidence active)" : ""}
-          </Badge>
+        <div className="flex gap-2">
+          <button onClick={onReset} className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500">
+            Load busy-week preset
+          </button>
+          <button onClick={onClear} className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-300 hover:bg-slate-800">
+            Clear all
+          </button>
         </div>
-      </Card>
+      </div>
 
-      <Card>
-        <h3 className="text-sm font-semibold text-white">Goal / OKR hit rate</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          Feeds <code>goal_hit_rate.high</code> when above 70%. Synthetic mode derives from a fixed
-          10-goal ledger ({Math.round(syntheticGoalHitRate() * 100)}% achieved); manual mode lets you
-          explore other values directly.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1">
-            {(["synthetic", "manual"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => onChange({ ...state, goalHitRateMode: mode })}
-                className={`rounded-md px-2.5 py-1 text-xs capitalize ${
-                  state.goalHitRateMode === mode
-                    ? "bg-indigo-500 text-white"
-                    : "text-slate-400 hover:bg-white/5"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
+      <Card title="Runway" subtitle="Drives urgency pull-forward for finance findings below 6 months (disclosed heuristic).">
+        <div className="flex items-center gap-3">
           <input
             type="range"
             min={0}
-            max={100}
-            disabled={state.goalHitRateMode === "synthetic"}
-            value={Math.round(
-              (state.goalHitRateMode === "synthetic" ? syntheticGoalHitRate() : state.goalHitRateManual) * 100
-            )}
-            onChange={(e) => onChange({ ...state, goalHitRateManual: Number(e.target.value) / 100 })}
-            className="h-1.5 w-48 accent-indigo-500 disabled:opacity-40"
+            max={24}
+            value={state.runwayMonths}
+            onChange={(e) => onChange({ ...state, runwayMonths: Number(e.target.value) })}
+            className="w-64 accent-indigo-500"
           />
-          <span className="text-sm font-semibold tabular-nums text-white">
-            {Math.round(
-              (state.goalHitRateMode === "synthetic" ? syntheticGoalHitRate() : state.goalHitRateManual) * 100
-            )}
-            %
-          </span>
+          <span className="text-sm font-medium text-slate-200">{state.runwayMonths} months</span>
+          {state.runwayMonths < 6 && <Badge tone="rose">Urgent: runway &lt; 6mo</Badge>}
         </div>
       </Card>
 
-      <Card>
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">Manual-only evidence</h3>
-          <Badge tone="warn">disclosed gap</Badge>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          These five likelihood ratios are defined in the pasted brief's <code>LIKELIHOODS</code> table but
-          its own <code>_extractEvidenceSignals()</code> never emits any of them — they are dead code in the
-          source spec. Rather than silently wiring them into the automatic rules above (which would
-          misattribute a connection the brief never made), they're exposed here as explicit manual toggles.
-        </p>
-        <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          {MANUAL_EVIDENCE_META.map((m) => (
-            <Toggle
-              key={m.key}
-              checked={state.manualEvidence[m.key]}
-              onChange={() => toggleManual(m.key)}
-              label={`${m.label} (${m.ratio})`}
-              sub={`affects ${m.hypothesis}`}
-            />
-          ))}
-        </div>
-      </Card>
+      {CATEGORIES.map((cat) => (
+        <CategoryBlock key={cat} category={cat} state={state} onToggle={toggle} onSev={setSev} />
+      ))}
     </div>
+  );
+}
+
+function CategoryBlock({
+  category,
+  state,
+  onToggle,
+  onSev,
+}: {
+  category: Category;
+  state: SignalState;
+  onToggle: (rule: string) => void;
+  onSev: (rule: string, sev: 1 | 2 | 3 | 4 | 5) => void;
+}) {
+  const rules = RULES.filter((r) => r.category === category);
+  return (
+    <Card title={CATEGORY_LABEL[category]} subtitle={`${rules.filter((r) => state.active[r.rule]).length} active`}>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {rules.map((r) => {
+          const on = !!state.active[r.rule];
+          const sev = state.sev[r.rule] ?? r.baseSev;
+          return (
+            <div
+              key={r.rule}
+              className={cn(
+                "flex items-start justify-between gap-3 rounded-lg border px-3 py-2 transition",
+                on ? "border-indigo-500/40 bg-indigo-500/5" : "border-slate-800 bg-slate-900/40"
+              )}
+            >
+              <button onClick={() => onToggle(r.rule)} className="flex flex-1 items-start gap-2 text-left">
+                <span
+                  className={cn(
+                    "mt-0.5 h-4 w-4 flex-shrink-0 rounded border",
+                    on ? "border-indigo-400 bg-indigo-500" : "border-slate-600 bg-transparent"
+                  )}
+                />
+                <span>
+                  <span className="block text-xs font-medium text-slate-200">
+                    {r.rule} · {r.title}
+                  </span>
+                  {state.person[r.rule] && <span className="text-[11px] text-slate-500">linked: {state.person[r.rule]}</span>}
+                </span>
+              </button>
+              <div className="flex items-center gap-1">
+                <Badge tone={SEV_TONE[sev]}>sev {sev}</Badge>
+                {on && (
+                  <select
+                    value={sev}
+                    onChange={(e) => onSev(r.rule, Number(e.target.value) as 1 | 2 | 3 | 4 | 5)}
+                    className="rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-[10px] text-slate-200"
+                  >
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }

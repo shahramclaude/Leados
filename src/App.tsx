@@ -1,26 +1,34 @@
-import { useEffect, useState } from "react";
-import { Shell, type TabId } from "./components/Shell";
+import { useState } from "react";
+import { Shell } from "./components/Shell";
 import { TodayView } from "./components/TodayView";
 import { SignalBoardView } from "./components/SignalBoardView";
-import { BeliefsView } from "./components/BeliefsView";
+import { AttentionView } from "./components/AttentionView";
 import { AboutView } from "./components/AboutView";
-import { loadState, saveState } from "./lib/store";
-import type { AppState } from "./lib/types";
+import { useHashRoute } from "./lib/useHashRoute";
+import { loadState, saveState, resetState, clearState, type SignalState } from "./lib/store";
 
 export default function App() {
-  const [tab, setTab] = useState<TabId>("today");
-  const [state, setState] = useState<AppState>(() => loadState());
+  const [route, navigate] = useHashRoute("/today");
+  const [state, setState] = useState<SignalState>(() => loadState());
 
-  useEffect(() => {
-    saveState(state);
-  }, [state]);
+  const update = (s: SignalState) => {
+    setState(s);
+    saveState(s);
+  };
 
   return (
-    <Shell active={tab} onNavigate={setTab}>
-      {tab === "today" && <TodayView state={state} onNavigate={setTab} />}
-      {tab === "signals" && <SignalBoardView state={state} onChange={setState} />}
-      {tab === "beliefs" && <BeliefsView state={state} />}
-      {tab === "about" && <AboutView />}
+    <Shell route={route} navigate={navigate}>
+      {route === "/today" && <TodayView state={state} navigate={navigate} />}
+      {route === "/signals" && (
+        <SignalBoardView
+          state={state}
+          onChange={update}
+          onReset={() => update(resetState())}
+          onClear={() => update(clearState())}
+        />
+      )}
+      {route === "/attention" && <AttentionView state={state} />}
+      {route === "/about" && <AboutView />}
     </Shell>
   );
 }
