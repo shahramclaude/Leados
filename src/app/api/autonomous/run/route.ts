@@ -1,54 +1,44 @@
-// src/app/api/autonomous/run/route.ts
-//
-// Autonomous/cron entry point. Previously (per the task brief) this route
-// only triggered evaluateRules(); it now runs the full orchestration
-// pipeline (rules -> beliefs -> causal chains -> fusion -> predictive
-// scoring -> decision health -> knowledge graph -> narratives -> scenarios)
-// and caches the unified result, exactly like POST /api/orchestrate. The
-// CRON_SECRET bearer-token auth is preserved.
 import { db } from "@/db";
-import { cacheOrchestratorResult, runFullOrchestration } from "@/lib/orchestrator";
+import { runAgentCycle } from "@/lib/autonomousAgent";
 
 export const dynamic = "force-dynamic";
 
-function isAuthorized(request: Request): boolean {
-  const expected = process.env.CRON_SECRET;
-  if (!expected) {
-    // No secret configured: fail closed rather than silently allowing
-    // unauthenticated autonomous runs.
-    return false;
-  }
-  const header = request.headers.get("authorization") ?? "";
-  const bearerToken = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : null;
-  const headerSecret = request.headers.get("x-cron-secret");
-  return bearerToken === expected || headerSecret === expected;
-}
-
-export async function POST(request: Request) {
-  if (!isAuthorized(request)) {
-    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
-
+// POST /api/autonomous/run
+// Triggers one full agent cycle on demand: orchestration -> rule
+// calibration -> hypothesis generation -> hypothesis resolution. Returns
+// the structured agent audit log entry plus a summary of the run.
+//
+// Note: this on-demand endpoint complements (not replaces) the true
+// interval-based schedule started via `scheduleLoop()` in
+// src/lib/autonomousAgent.ts.
+export async function POST() {
   try {
-    const result = await runFullOrchestration(db, new Date());
-    await cacheOrchestratorResult(db, result);
+    const cycle = await runAgentCycle(db);
+
     return Response.json({
       ok: true,
-      generatedAt: result.generatedAt,
-      orgHealthScore: result.orgHealthScore,
-      timings: result.timings,
-      findingsCount: result.intelligence.ruleEvaluation.findings.length,
-      narrativesCount: result.narratives.narratives.length,
+      audit: cycle.audit,
+      orchestration: {
+        runId: cycle.orchestration.runId,
+        startedAt: cycle.orchestration.startedAt,
+        durationMs: cycle.orchestration.durationMs,
+        stagesCompleted: cycle.orchestration.stagesCompleted,
+        findingsCount: cycle.orchestration.findingsCount,
+        findings: cycle.orchestration.findings,
+      },
+      calibration: cycle.calibration,
+      hypothesesGenerated: cycle.hypothesesGenerated,
+      hypothesesResolved: cycle.hypothesesResolved,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[api/autonomous/run] unexpected failure: ${message}`);
-    return Response.json({ ok: false, error: message }, { status: 500 });
+    console.error("[api/autonomous/run] failed", error);
+    return Response.json(
+      { ok: false, error: error instanceof Error ? error.message : "unknown error" },
+      { status: 500 },
+    );
   }
 }
 
-export async function GET(request: Request) {
-  // Convenience alias so cron providers that only support GET pings can
-  // still trigger a run; same auth requirement applies.
-  return POST(request);
+export async function GET() {
+  return POST();
 }

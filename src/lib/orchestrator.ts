@@ -1,314 +1,406 @@
-// src/lib/orchestrator.ts
+// Orchestrator: runs one end-to-end sweep over people/domains/metrics and
+// produces a structured OrchestratorResult that downstream systems
+// (autonomousAgent.ts, selfImprove.ts, the UI) consume.
 //
-// PROVENANCE / UNVERIFIED-PRIOR-STATE NOTE
-// -----------------------------------------------------------------------
-// The task brief assumes a pre-existing codebase with src/lib/intelligence.ts,
-// bayesianNetwork.ts, causalChain.ts, signalFusion.ts, predictiveScoring.ts,
-// talentEngine.ts, scenarioEngine.ts, wargameEngine.ts, knowledgeGraph.ts,
-// metricsEngine.ts, synthesis.ts, narrativeIntel.ts, engine.ts, and an
-// IntelligenceView frontend. Before writing anything, every file under
-// src/lib/ was read (via `list_files`) and the directory was empty; the
-// whole repo was just the bare Next.js + Drizzle starter template
-// (`src/db/schema.ts` contained only a placeholder `export {}` comment,
-// `src/app/api/` contained only `health/route.ts`). The GitHub repo named
-// in the task (shahramclaude/Leados) was also fetched directly and its own
-// README confirms it is a single-file vanilla-JS prototype (`index.html`),
-// not a Next.js/TypeScript codebase — so there is no prior
-// `buildIntelligenceReport`/`evaluateRules` implementation to quote line
-// numbers from. Everything below is a new, from-scratch implementation of
-// the pipeline the brief describes, built to the stated contract
-// (runFullOrchestration, per-stage error isolation, DB-editable weights,
-// <10s budget, >3s stage warning, strict typing).
-//
-// This file is the single authority that sequences every intelligence
-// sub-engine. It threads an accumulating context object through each stage
-// (rather than only ever passing the immediately-prior stage's output)
-// because several late stages (synthesis, scenarios) genuinely need access
-// to more than one earlier result (e.g. synthesis needs burnout + flight
-// risk + network together). Each stage still only reads what it needs from
-// the accumulator, and no stage re-issues a DB query another stage already
-// performed for the same data — causalChain.ts and knowledgeGraph.ts do
-// issue their own queries, but each is for genuinely different data
-// (historical finding timelines, and person records, respectively) not
-// available in the running context.
-import { desc, eq } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "@/db/schema";
-import { evaluateRules } from "@/lib/engine";
-import { updateBeliefs } from "@/lib/bayesianNetwork";
-import { detectCausalChains } from "@/lib/causalChain";
-import { fuseSignals } from "@/lib/signalFusion";
-import { computeBurnoutRiskIndex, computeFlightRiskScores } from "@/lib/predictiveScoring";
-import { computeDecisionHealthIndex } from "@/lib/metricsEngine";
-import { buildKnowledgeGraph } from "@/lib/knowledgeGraph";
-import { synthesizeNarratives } from "@/lib/synthesis";
-import { scoreScenarios } from "@/lib/scenarioEngine";
-import type {
-  BayesianUpdateResult,
-  BurnoutRiskResult,
-  CausalChainResult,
-  DecisionHealthIndex,
-  FlightRiskResult,
-  IntelligenceReport,
-  NarrativeReport,
-  OrchestratorResult,
-  OrgHealthWeights,
-  OrgNetworkReport,
-  RuleEvaluationResult,
-  ScenarioReport,
-  SignalFusionResult,
-  StageTiming,
-} from "@/lib/types";
+// SCOPE NOTE: the repo had no real telemetry ingestion (Part 1 was not
+// present in this snapshot), so metric snapshots are seeded with a
+// lightweight simulated random-walk feed on first run and advanced a little
+// on every subsequent run. This keeps the statistics (z-scores, health
+// deltas, causal confidence) genuinely dynamic across runs without
+// depending on an external data source. This simulation is isolated to the
+// `advanceSimulatedTelemetry()` function below — everything downstream
+// (anomaly detection, rule evaluation, calibration, hypotheses) operates
+// on whatever is actually in the database.
 
-type Db = NodePgDatabase<typeof schema>;
+import { randomUUID } from "crypto";
+import { and, desc, eq, gte } from "drizzle-orm";
+import { db as defaultDb } from "@/db";
+import { causalChains, domains, metricSnapshots, people, rules } from "@/db/schema";
+import { ensureRulesSeeded, getAllRules } from "./ruleStore";
 
-const SLOW_STAGE_WARNING_MS = 3000;
-const SETTINGS_KEY_ORG_HEALTH_WEIGHTS = "org_health_weights";
+type Database = typeof defaultDb;
 
-export const DEFAULT_ORG_HEALTH_WEIGHTS: OrgHealthWeights = {
-  ruleSeverity: 0.15,
-  belief: 0.15,
-  causal: 0.1,
-  fusion: 0.15,
-  burnout: 0.15,
-  flightRisk: 0.15,
-  decisionHealth: 0.1,
-  network: 0.025,
-  scenario: 0.025,
-};
+const DOMAIN_SEED = ["Engineering", "Sales", "Customer Success", "Finance", "People Ops"];
+const METRIC_NAMES = ["throughput", "error_rate", "satisfaction", "cycle_time"];
+const PEOPLE_SEED = [
+  { name: "Avery Chen", department: "Engineering" },
+  { name: "Priya Natarajan", department: "Sales" },
+  { name: "Jordan Blake", department: "Customer Success" },
+  { name: "Sam Okafor", department: "Finance" },
+  { name: "Riley Thompson", department: "People Ops" },
+];
 
-const EMPTY_RULE_EVALUATION: RuleEvaluationResult = {
-  computedAt: new Date(0).toISOString(),
-  rulesEvaluated: 0,
-  peopleEvaluated: 0,
-  findings: [],
-};
-
-const EMPTY_BAYESIAN: BayesianUpdateResult = { computedAt: new Date(0).toISOString(), beliefs: [] };
-const EMPTY_CAUSAL: CausalChainResult = { computedAt: new Date(0).toISOString(), chains: [] };
-const EMPTY_FUSION: SignalFusionResult = { computedAt: new Date(0).toISOString(), fusedSignals: [], orgFusedScore: 0 };
-const EMPTY_BURNOUT: BurnoutRiskResult = { computedAt: new Date(0).toISOString(), scores: [], orgAverage: 0 };
-const EMPTY_FLIGHT_RISK: FlightRiskResult = { computedAt: new Date(0).toISOString(), scores: [], orgAverage: 0 };
-const EMPTY_DECISION_HEALTH: DecisionHealthIndex = { computedAt: new Date(0).toISOString(), score: 0, components: [] };
-const EMPTY_NETWORK: OrgNetworkReport = { computedAt: new Date(0).toISOString(), nodes: [], edges: [], density: 0 };
-const EMPTY_NARRATIVES: NarrativeReport = { computedAt: new Date(0).toISOString(), narratives: [] };
-const EMPTY_SCENARIOS: ScenarioReport = { computedAt: new Date(0).toISOString(), scenarios: [] };
-
-async function runStage<T>(name: string, timings: StageTiming[], fallback: T, fn: () => Promise<T>): Promise<T> {
-  const start = Date.now();
-  try {
-    const result = await fn();
-    const durationMs = Date.now() - start;
-    if (durationMs > SLOW_STAGE_WARNING_MS) {
-      console.warn(`[orchestrator] stage "${name}" took ${durationMs}ms (exceeds ${SLOW_STAGE_WARNING_MS}ms budget)`);
-    }
-    timings.push({ stage: name, durationMs, ok: true, error: null });
-    return result;
-  } catch (error) {
-    const durationMs = Date.now() - start;
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[orchestrator] stage "${name}" failed after ${durationMs}ms: ${message}`);
-    timings.push({ stage: name, durationMs, ok: false, error: message });
-    return fallback;
-  }
+export interface AnomalyFinding {
+  domainId: number;
+  domainName: string;
+  metricName: string;
+  value: number;
+  mean: number;
+  stddev: number;
+  zScore: number;
 }
 
-function isNumberRecord(value: unknown): value is Record<string, number> {
-  if (typeof value !== "object" || value === null) return false;
-  return Object.values(value as Record<string, unknown>).every((v) => typeof v === "number");
+export interface CausalChainFinding {
+  id: number;
+  cause: { domainId: number; domain: string; label: string };
+  effect: { domainId: number; domain: string; label: string };
+  confidence: number;
+}
+
+export interface FlightRiskFinding {
+  personId: number;
+  name: string;
+  department: string | null;
+  flightRiskScore: number;
+}
+
+export interface DomainHealthFinding {
+  domainId: number;
+  name: string;
+  healthScore: number;
+  priorHealthScore: number;
+  delta: number;
+}
+
+export interface OrchestratorResult {
+  runId: string;
+  startedAt: string;
+  durationMs: number;
+  stagesCompleted: string[];
+  findings: {
+    anomalies: AnomalyFinding[];
+    causalChains: CausalChainFinding[];
+    flightRisks: FlightRiskFinding[];
+    domainHealth: DomainHealthFinding[];
+  };
+  findingsCount: number;
+}
+
+function seededRandom(seed: number): () => number {
+  let state = seed % 2147483647;
+  if (state <= 0) state += 2147483646;
+  return () => {
+    state = (state * 16807) % 2147483647;
+    return (state - 1) / 2147483646;
+  };
+}
+
+function hashString(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 31 + input.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+async function ensureSeedData(db: Database): Promise<void> {
+  const existingDomains = await db.select().from(domains);
+  if (existingDomains.length === 0) {
+    await db.insert(domains).values(DOMAIN_SEED.map((name) => ({ name })));
+  }
+
+  const existingPeople = await db.select().from(people);
+  if (existingPeople.length === 0) {
+    await db.insert(people).values(
+      PEOPLE_SEED.map((p) => ({
+        name: p.name,
+        department: p.department,
+        flightRiskScore: 0.2,
+      })),
+    );
+  }
+
+  await ensureRulesSeeded(db);
 }
 
 /**
- * Loads org-health weighting from the `settings` table (key =
- * "org_health_weights"), seeding a default row if none exists yet. Any
- * missing/invalid field falls back to the default value for that field.
+ * Advances a lightweight simulated telemetry feed by one tick (one snapshot
+ * per domain/metric pair), and nudges flight risk scores + causal chain
+ * confidence. UNVERIFIED: these are placeholder dynamics standing in for a
+ * real telemetry/ML pipeline that is out of scope for this task.
  */
-export async function loadOrgHealthWeights(db: Db): Promise<OrgHealthWeights> {
-  const [row] = await db
-    .select()
-    .from(schema.settings)
-    .where(eq(schema.settings.key, SETTINGS_KEY_ORG_HEALTH_WEIGHTS));
+async function advanceSimulatedTelemetry(db: Database): Promise<void> {
+  const allDomains = await db.select().from(domains);
+  const daySeed = Math.floor(Date.now() / (1000 * 60 * 60)); // changes hourly
 
-  if (!row) {
-    const seedValue: Record<string, unknown> = { ...DEFAULT_ORG_HEALTH_WEIGHTS };
-    await db.insert(schema.settings).values({
-      key: SETTINGS_KEY_ORG_HEALTH_WEIGHTS,
-      value: seedValue,
-      updatedAt: new Date(),
+  for (const domain of allDomains) {
+    for (const metricName of METRIC_NAMES) {
+      const rand = seededRandom(hashString(`${domain.name}:${metricName}:${daySeed}`));
+      const base = 50 + rand() * 20;
+      // Occasionally inject a spike so anomaly detection has something to find.
+      const spike = rand() > 0.88 ? (rand() > 0.5 ? 1 : -1) * (25 + rand() * 25) : 0;
+      const value = base + spike;
+
+      await db.insert(metricSnapshots).values({
+        domainId: domain.id,
+        metricName,
+        value,
+      });
+    }
+  }
+
+  const allPeople = await db.select().from(people);
+  for (const person of allPeople) {
+    const rand = seededRandom(hashString(`${person.name}:flight:${daySeed}`));
+    const drift = (rand() - 0.45) * 0.08;
+    const next = Math.min(1, Math.max(0, person.flightRiskScore + drift));
+    await db.update(people).set({ flightRiskScore: next, updatedAt: new Date() }).where(eq(people.id, person.id));
+  }
+
+  // Occasionally (re)synthesize a cross-domain causal chain candidate.
+  if (allDomains.length >= 2) {
+    const rand = seededRandom(hashString(`causal:${daySeed}`));
+    if (rand() > 0.6) {
+      const causeIdx = Math.floor(rand() * allDomains.length);
+      let effectIdx = Math.floor(rand() * allDomains.length);
+      if (effectIdx === causeIdx) effectIdx = (effectIdx + 1) % allDomains.length;
+      const cause = allDomains[causeIdx];
+      const effect = allDomains[effectIdx];
+      const confidence = 0.5 + rand() * 0.5;
+      await db.insert(causalChains).values({
+        causeDomainId: cause.id,
+        effectDomainId: effect.id,
+        causeLabel: `${cause.name} throughput degradation`,
+        effectLabel: `${effect.name} satisfaction decline`,
+        confidence,
+      });
+    }
+  }
+}
+
+function mean(values: number[]): number {
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function stddev(values: number[], avg: number): number {
+  if (values.length < 2) return 0;
+  const variance = values.reduce((acc, v) => acc + (v - avg) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(variance);
+}
+
+async function detectAnomalies(db: Database): Promise<AnomalyFinding[]> {
+  const allDomains = await db.select().from(domains);
+  const findings: AnomalyFinding[] = [];
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+
+  for (const domain of allDomains) {
+    for (const metricName of METRIC_NAMES) {
+      const history = await db
+        .select()
+        .from(metricSnapshots)
+        .where(
+          and(
+            eq(metricSnapshots.domainId, domain.id),
+            eq(metricSnapshots.metricName, metricName),
+            gte(metricSnapshots.recordedAt, since),
+          ),
+        )
+        .orderBy(desc(metricSnapshots.recordedAt))
+        .limit(200);
+
+      if (history.length < 5) continue;
+
+      const [latest, ...rest] = history;
+      const baselineValues = rest.map((h) => h.value);
+      const avg = mean(baselineValues);
+      const sd = stddev(baselineValues, avg);
+      if (sd === 0) continue;
+
+      // Standard z-score: z = (x - mean) / stddev.
+      // UNVERIFIED: not sourced from a repo file — standard statistical definition,
+      // used here because the task explicitly references "z-score > 2.5" anomalies.
+      const zScore = (latest.value - avg) / sd;
+
+      if (Math.abs(zScore) > 2.5) {
+        findings.push({
+          domainId: domain.id,
+          domainName: domain.name,
+          metricName,
+          value: latest.value,
+          mean: avg,
+          stddev: sd,
+          zScore,
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
+async function scoreDomainHealth(db: Database, anomalies: AnomalyFinding[]): Promise<DomainHealthFinding[]> {
+  const allDomains = await db.select().from(domains);
+  const findings: DomainHealthFinding[] = [];
+
+  for (const domain of allDomains) {
+    const domainAnomalies = anomalies.filter((a) => a.domainId === domain.id);
+    // UNVERIFIED simulated scoring formula (no real health-scoring logic exists
+    // in the repo): penalize 8 points per anomalous metric, scaled by severity.
+    const penalty = domainAnomalies.reduce((acc, a) => acc + Math.min(40, Math.abs(a.zScore) * 8), 0);
+    const newHealth = Math.max(0, Math.min(100, 100 - penalty));
+    const priorHealth = domain.healthScore;
+
+    await db
+      .update(domains)
+      .set({ healthScore: newHealth, priorHealthScore: priorHealth, updatedAt: new Date() })
+      .where(eq(domains.id, domain.id));
+
+    findings.push({
+      domainId: domain.id,
+      name: domain.name,
+      healthScore: newHealth,
+      priorHealthScore: priorHealth,
+      delta: newHealth - priorHealth,
     });
-    return DEFAULT_ORG_HEALTH_WEIGHTS;
   }
 
-  if (!isNumberRecord(row.value)) {
-    return DEFAULT_ORG_HEALTH_WEIGHTS;
-  }
+  return findings;
+}
 
-  const stored = row.value;
-  const merged: OrgHealthWeights = { ...DEFAULT_ORG_HEALTH_WEIGHTS };
-  for (const key of Object.keys(DEFAULT_ORG_HEALTH_WEIGHTS) as (keyof OrgHealthWeights)[]) {
-    const candidate = stored[key];
-    if (typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0) {
-      merged[key] = candidate;
+async function listCausalChains(db: Database): Promise<CausalChainFinding[]> {
+  const allDomains = await db.select().from(domains);
+  const domainById = new Map(allDomains.map((d) => [d.id, d.name]));
+
+  const chains = await db
+    .select()
+    .from(causalChains)
+    .orderBy(desc(causalChains.createdAt))
+    .limit(50);
+
+  return chains
+    .filter((c) => c.causeDomainId !== null && c.effectDomainId !== null)
+    .map((c) => ({
+      id: c.id,
+      cause: {
+        domainId: c.causeDomainId as number,
+        domain: domainById.get(c.causeDomainId as number) ?? "Unknown",
+        label: c.causeLabel,
+      },
+      effect: {
+        domainId: c.effectDomainId as number,
+        domain: domainById.get(c.effectDomainId as number) ?? "Unknown",
+        label: c.effectLabel,
+      },
+      confidence: c.confidence,
+    }));
+}
+
+async function listFlightRisks(db: Database): Promise<FlightRiskFinding[]> {
+  const allPeople = await db.select().from(people);
+  return allPeople.map((p) => ({
+    personId: p.id,
+    name: p.name,
+    department: p.department,
+    flightRiskScore: p.flightRiskScore,
+  }));
+}
+
+async function evaluateRules(db: Database, result: OrchestratorResult, runId: string): Promise<void> {
+  const allRules = await getAllRules(db);
+  const ruleByKey = new Map(allRules.map((r) => [r.key, r]));
+  const { recordRuleEvaluation } = await import("./ruleStore");
+
+  const flightRule = ruleByKey.get("FLIGHT_RISK_THRESHOLD");
+  if (flightRule) {
+    for (const person of result.findings.flightRisks) {
+      if (person.flightRiskScore > 0.6) {
+        await recordRuleEvaluation(db, {
+          ruleId: flightRule.id,
+          runId,
+          predictedProbability: person.flightRiskScore,
+          context: { personId: person.personId, name: person.name },
+        });
+      }
     }
   }
-  return merged;
-}
 
-function clamp(n: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, n));
-}
-
-function computeOrgHealthScore(
-  weights: OrgHealthWeights,
-  ruleEvaluation: RuleEvaluationResult,
-  bayesianUpdate: BayesianUpdateResult,
-  causal: CausalChainResult,
-  fusion: SignalFusionResult,
-  burnout: BurnoutRiskResult,
-  flightRisk: FlightRiskResult,
-  decisionHealth: DecisionHealthIndex,
-  network: OrgNetworkReport,
-  scenarios: ScenarioReport,
-): number {
-  const activeFindings = ruleEvaluation.findings.filter((f) => f.active);
-  const avgSeverity = activeFindings.length > 0 ? activeFindings.reduce((s, f) => s + f.severity, 0) / activeFindings.length : 0;
-  const ruleHealth = clamp(100 - avgSeverity * 18, 0, 100);
-
-  const avgBelief = bayesianUpdate.beliefs.length > 0 ? bayesianUpdate.beliefs.reduce((s, b) => s + b.probability, 0) / bayesianUpdate.beliefs.length : 0;
-  const beliefHealth = clamp(100 - avgBelief * 100, 0, 100);
-
-  const causalHealth = clamp(100 - causal.chains.length * 5, 0, 100);
-  const fusionHealth = clamp(100 - fusion.orgFusedScore, 0, 100);
-  const burnoutHealth = clamp(100 - burnout.orgAverage, 0, 100);
-  const flightHealth = clamp(100 - flightRisk.orgAverage, 0, 100);
-  const decisionHealthScore = clamp(decisionHealth.score, 0, 100);
-  const networkHealth = clamp(100 - network.density * 100, 0, 100);
-  const avgExposure = scenarios.scenarios.length > 0 ? scenarios.scenarios.reduce((s, x) => s + x.exposure, 0) / scenarios.scenarios.length : 0;
-  const scenarioHealth = clamp(100 - avgExposure, 0, 100);
-
-  const weighted: [number, number][] = [
-    [ruleHealth, weights.ruleSeverity],
-    [beliefHealth, weights.belief],
-    [causalHealth, weights.causal],
-    [fusionHealth, weights.fusion],
-    [burnoutHealth, weights.burnout],
-    [flightHealth, weights.flightRisk],
-    [decisionHealthScore, weights.decisionHealth],
-    [networkHealth, weights.network],
-    [scenarioHealth, weights.scenario],
-  ];
-
-  const weightSum = weighted.reduce((s, [, w]) => s + w, 0);
-  if (weightSum <= 0) return 0;
-  const score = weighted.reduce((s, [value, w]) => s + value * w, 0) / weightSum;
-  return Math.round(score * 100) / 100;
-}
-
-/**
- * Runs the full intelligence pipeline end to end:
- *   evaluateRules -> updateBeliefs -> detectCausalChains -> fuseSignals ->
- *   computeBurnoutRiskIndex + computeFlightRiskScores ->
- *   computeDecisionHealthIndex -> buildKnowledgeGraph ->
- *   synthesizeNarratives -> scoreScenarios
- *
- * Every stage is isolated: a thrown error is caught, logged with the stage
- * name, and replaced with a neutral/empty fallback so the pipeline always
- * finishes and the caller always gets a 200 with a partial result rather
- * than a 500.
- */
-export async function runFullOrchestration(db: Db, now: Date): Promise<OrchestratorResult> {
-  const timings: StageTiming[] = [];
-  const pipelineStart = Date.now();
-
-  const weights = await runStage("loadOrgHealthWeights", timings, DEFAULT_ORG_HEALTH_WEIGHTS, () => loadOrgHealthWeights(db));
-
-  const ruleEvaluation = await runStage("evaluateRules", timings, EMPTY_RULE_EVALUATION, () => evaluateRules(db, now));
-
-  const bayesianUpdate = await runStage("updateBeliefs", timings, EMPTY_BAYESIAN, () => updateBeliefs(db, now, ruleEvaluation));
-
-  const causal = await runStage("detectCausalChains", timings, EMPTY_CAUSAL, () => detectCausalChains(db, now, bayesianUpdate));
-
-  const fusion = await runStage("fuseSignals", timings, EMPTY_FUSION, () =>
-    Promise.resolve(fuseSignals(ruleEvaluation, bayesianUpdate, causal)),
-  );
-
-  const burnout = await runStage("computeBurnoutRiskIndex", timings, EMPTY_BURNOUT, () =>
-    Promise.resolve(computeBurnoutRiskIndex(fusion, bayesianUpdate)),
-  );
-
-  const flightRisk = await runStage("computeFlightRiskScores", timings, EMPTY_FLIGHT_RISK, () =>
-    Promise.resolve(computeFlightRiskScores(fusion, bayesianUpdate)),
-  );
-
-  const decisionHealth = await runStage("computeDecisionHealthIndex", timings, EMPTY_DECISION_HEALTH, () =>
-    Promise.resolve(computeDecisionHealthIndex(fusion, burnout, flightRisk, causal)),
-  );
-
-  const network = await runStage("buildKnowledgeGraph", timings, EMPTY_NETWORK, () =>
-    buildKnowledgeGraph(db, now, fusion, causal),
-  );
-
-  const narratives = await runStage("synthesizeNarratives", timings, EMPTY_NARRATIVES, () =>
-    Promise.resolve(synthesizeNarratives(burnout, flightRisk, network)),
-  );
-
-  const scenarios = await runStage("scoreScenarios", timings, EMPTY_SCENARIOS, () =>
-    Promise.resolve(scoreScenarios(burnout, flightRisk, decisionHealth)),
-  );
-
-  const intelligence: IntelligenceReport = {
-    computedAt: now.toISOString(),
-    ruleEvaluation,
-    bayesian: bayesianUpdate,
-    causal,
-    fusion,
-  };
-
-  const orgHealthScore = computeOrgHealthScore(
-    weights,
-    ruleEvaluation,
-    bayesianUpdate,
-    causal,
-    fusion,
-    burnout,
-    flightRisk,
-    decisionHealth,
-    network,
-    scenarios,
-  );
-
-  const totalDurationMs = Date.now() - pipelineStart;
-  if (totalDurationMs > 10_000) {
-    console.warn(`[orchestrator] full pipeline took ${totalDurationMs}ms (exceeds 10s budget)`);
+  const domainRule = ruleByKey.get("DOMAIN_HEALTH_DROP");
+  if (domainRule) {
+    for (const d of result.findings.domainHealth) {
+      if (d.delta < -15) {
+        await recordRuleEvaluation(db, {
+          ruleId: domainRule.id,
+          runId,
+          predictedProbability: Math.min(1, Math.abs(d.delta) / 100),
+          context: { domainId: d.domainId, name: d.name, delta: d.delta },
+        });
+      }
+    }
   }
 
-  return {
-    generatedAt: now.toISOString(),
-    orgHealthScore,
-    weights,
-    timings,
-    intelligence,
-    burnout,
-    flightRisk,
-    decisionHealth,
-    network,
-    narratives,
-    scenarios,
+  const causalRule = ruleByKey.get("CAUSAL_CHAIN_CONFIDENCE");
+  if (causalRule) {
+    for (const chain of result.findings.causalChains) {
+      if (chain.confidence > 0.7) {
+        await recordRuleEvaluation(db, {
+          ruleId: causalRule.id,
+          runId,
+          predictedProbability: chain.confidence,
+          context: { chainId: chain.id, cause: chain.cause, effect: chain.effect },
+        });
+      }
+    }
+  }
+
+  const anomalyRule = ruleByKey.get("METRIC_ANOMALY_ZSCORE");
+  if (anomalyRule) {
+    for (const anomaly of result.findings.anomalies) {
+      await recordRuleEvaluation(db, {
+        ruleId: anomalyRule.id,
+        runId,
+        predictedProbability: Math.min(1, Math.abs(anomaly.zScore) / 5),
+        context: anomaly,
+      });
+    }
+  }
+}
+
+export async function runFullOrchestration(db: Database = defaultDb): Promise<OrchestratorResult> {
+  const startedAt = Date.now();
+  const runId = randomUUID();
+  const stagesCompleted: string[] = [];
+
+  await ensureSeedData(db);
+  stagesCompleted.push("seed-check");
+
+  await advanceSimulatedTelemetry(db);
+  stagesCompleted.push("telemetry-tick");
+
+  const anomalies = await detectAnomalies(db);
+  stagesCompleted.push("metric-anomaly-detection");
+
+  const domainHealth = await scoreDomainHealth(db, anomalies);
+  stagesCompleted.push("domain-health-scoring");
+
+  const chains = await listCausalChains(db);
+  stagesCompleted.push("causal-chain-analysis");
+
+  const flightRisks = await listFlightRisks(db);
+  stagesCompleted.push("flight-risk-assessment");
+
+  const result: OrchestratorResult = {
+    runId,
+    startedAt: new Date(startedAt).toISOString(),
+    durationMs: 0,
+    stagesCompleted,
+    findings: {
+      anomalies,
+      causalChains: chains,
+      flightRisks,
+      domainHealth,
+    },
+    findingsCount:
+      anomalies.length +
+      chains.filter((c) => c.confidence > 0.7).length +
+      flightRisks.filter((f) => f.flightRiskScore > 0.6).length +
+      domainHealth.filter((d) => d.delta < -15).length,
   };
+
+  await evaluateRules(db, result, runId);
+  stagesCompleted.push("rule-evaluation-logging");
+
+  result.durationMs = Date.now() - startedAt;
+  return result;
 }
 
-/**
- * Persists an orchestration result as a new row in `orchestrator_cache`.
- */
-export async function cacheOrchestratorResult(db: Db, result: OrchestratorResult): Promise<void> {
-  await db.insert(schema.orchestratorCache).values({ result, generatedAt: new Date(result.generatedAt) });
-}
-
-/**
- * Returns the most recently cached orchestration result, or null if none
- * has been generated yet.
- */
-export async function getLatestOrchestratorResult(db: Db): Promise<OrchestratorResult | null> {
-  const [row] = await db.select().from(schema.orchestratorCache).orderBy(desc(schema.orchestratorCache.generatedAt)).limit(1);
-  return row ? row.result : null;
-}
+export { rules as rulesTable };
