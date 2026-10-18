@@ -1,118 +1,171 @@
-# AI Session Log — LEADOS Sandbox pt.3–5 (OKR Synthesis · Behavioral Economics · Network Science)
+# AI Session Log — LeadOS pt-T (Strategic Consciousness + Decision Oracle + Knowledge Graph)
 
-This log records what was actually checked against `github.com/wbweve/Leados` this
-session, via which calls, what was found, and what in this delivery is
-verified-pattern, original, or a disclosed gap/limitation. Same convention as
-the repo's own prior sessions ("pt-L" delivery): inspect first, label
-unverified claims, don't silently imply continuity that doesn't exist.
+This log records exactly what was checked against `github.com/wbweve/Leados`
+this session, via which calls, what was found, and what in this delivery is
+original, modeled on a verified pattern, or a disclosed gap/limitation — per
+the task instruction to inspect actual code before claiming anything about
+it.
 
 ## 1. What was fetched, and how (this session)
 
 | # | Call | Purpose / result |
 |---|------|-------------------|
-| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered page) | Read the repo's README as rendered by GitHub. Describes a React+Vite+Tailwind app (Thermodynamics / CAS Engine / Risk Register), with its own provenance section already treating a pasted "pt-L" brief as unverified. Treated as a claim to check, not a fact. |
-| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive file tree (JSON, truncated by output size but alphabetically broad). Confirmed: dozens of loose root `.tsx`/`.md` files (`AboutView.tsx`, `App.tsx`, `BulletGraph.tsx`, …) coexist with a separate `src/` tree in the same repo. |
-| 3 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read the repo's own prior session log in full. It documents an earlier inspection: `src/lib` directory listing (23 files), `core.ts` not exporting `engine`/`run` (so `intelligence.ts`'s import is broken), and a claim that the *root* `index.html` was, at the time that log was written, 54,081 bytes containing `identifyAttractors()`, ~60 `R`-prefixed rule-ID strings, and the literal text "pt-L". |
-| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/index.html` (text format) | Rendered-text extraction returned only the page title (JS-rendered shell, nothing to extract as "text"). Insufficient alone — re-fetched as HTML (#5). |
-| 5 | `web_fetch` of the same URL, HTML format | **Verified directly, this session:** root `index.html` is a 9-line Vite entry point — `<div id="root"></div>` + `<script type="module" src="/src/main.tsx">`. No inline app code, no rule IDs, no "pt-L" text. |
-| 6 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/index.html` | Confirmed via Contents API metadata: `size: 352` bytes, matching call #5's content exactly (base64-decoded and checked). |
-| 7 | `web_fetch https://api.github.com/repos/wbweve/Leados/commits?path=index.html&per_page=5` | Commit history for `index.html`: 5 "Add files via upload" commits within roughly 45 minutes (13:10–14:03 UTC on 2026-10-17), each GPG-signed by GitHub's web-flow bot (web UI upload flow). Consistent with the repo being wholesale-replaced across a fast sequence of uploads rather than built incrementally with `git diff`-sized commits. |
-| 8 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/src/lib` | Directory listing (partial, truncated by tool output size, but alphabetically from `a11y.ts` through `health.ts`): `a11y.ts`, `aesthetics.ts`, `casEngine.ts`, `circadian.ts`, `core.ts`, `cssolver.ts`, `engine.ts`, `familiarity.ts`, `fatigue.ts`, `genome.ts`, `health.ts`, … **`casEngine.ts` is present** — this is a stronger/different finding than the repo's own prior `AI-SESSION-LOG.md` (call #3), which stated no CAS-engine-named file existed in `src/lib` at the time it was written. |
-| 9 | `web_fetch` of `src/lib/casEngine.ts` (raw, text) | **Verified directly, in full:** a real, working module. Exports `identifyFeedbackLoops()` (detects `BURNOUT_FEEDBACK_LOOP` when rules R7+R4 co-occur on the same person, `VELOCITY_DEATH_SPIRAL` on R73+R17, `TALENT_VIRTUOUS_CYCLE` on R10+R11, `GOVERNANCE_SELF_CORRECTION` on R88+R90) and an attractor function that counts rule-reactivation events (≥2 reactivations ⇒ flagged as an attractor). Its own header comment explicitly discloses it as original code written because no `cas_engine.js`/`identifyFeedbackLoops`/etc. was found anywhere in the repo at the time it was authored — i.e., the file's own provenance claim matches what I verified independently. |
-| 10 | `web_fetch` of `src/App.tsx` (raw, text) | **Verified directly, in full:** imports and hash-routes `useHashRoute` to `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`. This matches the README's own page table (call #1) and confirms `casEngine.ts` (call #9) is reachable from the live route tree (`/cas` → `CasView`), not orphaned — though `CasView.tsx` itself was not fetched this session (scope limit, disclosed below). |
+| 1 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/README.md` | Initial orientation — treated as a claim to verify, not fact. Rendered content described a React+Vite+Tailwind "Sandbox Build" (Thermodynamics/CAS/Risk Intelligence) with its own embedded provenance section. |
+| 2 | `web_fetch https://github.com/wbweve/Leados` (rendered page) | Cross-check of #1 — returned matching content, confirming it is the live README, not a stale cache. |
+| 3 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` (truncated), then `bash curl` of the same URL piped through `python3 -m json.tool`-style parsing | Full recursive file tree, 148 entries. Confirmed: dozens of loose root-level `.tsx`/`.ts`/`.js`/`.md` files (e.g. `App.tsx`, `AboutView.tsx`, `engine.ts`, `engine.js`, `index.html`, `README.md`, `AI-SESSION-LOG.md`, `AI-SESSION-LOG.append.md`, `SESSION-3.patch.md`) **alongside** a fully separate `src/` tree (`src/App.tsx`, `src/lib/*.ts`, `src/components/*.tsx`). |
+| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/index.html` | Confirmed a real root-level `index.html` exists (title string: "LEADOS Sandbox — CAS Engine, Risk Intelligence & Thermodynamics"). Full byte-for-byte read was not performed this session (see §5, scope limit) beyond the title fetch. |
+| 5 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/src/App.tsx` | **Verified directly:** imports `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView`, `useHashRoute`, `loadState` from `./lib/store`. Routes: `/today`, `/signals`, `/thermodynamics`, `/cas`, `/risk`, `/about`. No import of `core.ts`, `intelligence.ts`, `physics.ts`, nor any symbol named `consciousness`, `oracle`, or `knowledgeGraph`. |
+| 6 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read a **prior session's own log** directly (titled "AI Session Log — LEADOS Sandbox (Thermodynamics + CAS Engine + Risk Intelligence)"). It documents that *that* session: fetched the repo's file tree, `src/App.tsx`, `src/lib/core.ts`, `src/lib/engine.ts`, `src/lib/intelligence.ts`, `src/components/IntelligenceView.tsx`, `src/components/Thermodynamics.tsx`, and the root `index.html` (54,081 bytes) via curl; found `core.ts` exports no `engine`/`run` symbol while `intelligence.ts` imports exactly those names from `./core` (a confirmed-broken import); found **no** CAS engine, risk register, or "58/62-file, 144-rule, `T_L_*`/`G_L_*`" test history anywhere; and concluded the pasted brief it received (a "pt-L" brief) was an unverified external spec. |
+| 7 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/src/lib/core.ts` | **Verified directly, this session:** exports `DOMAINS`, `DECAY`, `CORRELATION_WINDOW_DAYS`, `DECISION_MAX_OPEN_DAYS`, `STORAGE_KEY = "leados-pt-j:data"`, `FAMILIARITY_KEY`, `loadState`, `saveState`, `appendEvent`, `nextId`, `seedIfEmpty`, `project`. Its own header comment states several constants were copied from values the *writing* session independently confirmed by downloading the real root `index.html` and grepping it — i.e., this file is itself a later session's rebuild (storage key `leados-pt-j:data`), not the file described in call #6's "pt-L" log (which used a different, Vite+React sandbox under a different, unnamed key referenced generically as `leados-sandbox:v1` in its own README). This confirms **at least two distinct, mutually-unaware prior sessions** exist in the real repo's `src/` tree alone. |
+| 8 | `list_files` (this sandbox) | Confirmed this task's own workspace started from the default Next.js + Drizzle + PostgreSQL scaffold (`src/app/page.tsx`, `src/app/layout.tsx`, `src/db/schema.ts`, `src/db/index.ts`, `src/app/api/health/route.ts`) with **no prior LeadOS code of any kind** — this session has no local history to be consistent or inconsistent with. |
+| 9 | `read_file src/app/page.tsx`, `src/app/layout.tsx` | Verified the starter scaffold's existing DB-backed home page and layout, before replacing them. |
 
-No commit diffs beyond the `index.html` history (#7), no issues/PRs, and no GitHub code search were used (a code-search attempt returned a tool error and was not retried). No code from the real repo was executed in this session. This is read-only, API/raw-file inspection, scoped to the calls above.
+No commit history, pull requests, issues, GitHub code search, or execution
+of any fetched code was used. This is a read-only, API/raw-file inspection
+scoped to the calls listed above.
 
 ## 2. Verified facts (first-hand, this session)
 
-- **V1.** The repo mixes loose root-level files with a separate `src/` Vite+React+TypeScript tree (call #2).
-- **V2.** Root `index.html`, as of this session's read, is the minimal 352-byte Vite shell — **not** the 54,081-byte hand-authored demo the repo's own prior `AI-SESSION-LOG.md` describes (calls #3, #5, #6, #7).
-- **V3.** The commit history for `index.html` shows rapid, full-file "Add files via upload" commits (5 in ~45 minutes), which is the most plausible explanation for V2: an earlier session's hand-rolled demo was overwritten by this session's (or a later session's) Vite migration, rather than there being a factual contradiction within one session (call #7).
-- **V4.** `src/lib/casEngine.ts` is real, exists, and is substantively more than a stub: it implements four named feedback-loop detectors and a reactivation-based attractor counter, each tied to specific rule-ID combinations, with a disclosed-original header comment (calls #8, #9).
-- **V5.** `src/App.tsx` routes to a `CasView` and a `ThermodynamicsView`/`RiskView`/`SignalBoardView`, matching the README's page table — the live app's shape, as far as I read it, is consistent with what the README claims (call #10 vs. call #1).
-- **V6 (correction to this session's own earlier working assumption).** An initial read of the small root `index.html` was treated as possibly contradicting the repo's prior session log. On checking commit history, the better-supported explanation is a timeline difference (repo overwritten between sessions), not a fabrication — recorded here instead of asserting the stronger, unverifiable claim.
-- **V7 (scope limit, disclosed).** Not fetched this session: `src/lib/infoTheory.ts`, `riskIntelligence.ts`, `store.ts`, `types.ts`, the remainder of `src/lib` beyond `health.ts` alphabetically, `CasView.tsx`, `ThermodynamicsView.tsx`, `RiskView.tsx`, `SignalBoardView.tsx`, `TodayView.tsx`, `AboutView.tsx`. Their contents are not verified first-hand here; absence of specific files is inferred from directory listings where available, not from reading every byte.
-- **V8.** No file, export, or identifier named `bayesian` (`.js`/`.ts`), `org_simulation`, `okr_synth`, `behavioral_econ`, or `network_science` was found in any listing or file fetched this session.
+- **V1.** The real repo mixes loose root-level files (including its own
+  `index.html`, confirmed to exist via raw fetch) with a structurally
+  separate `src/` Vite+React+TypeScript tree. (Calls #3, #4, #5)
+- **V2.** `src/App.tsx`'s live route set is `/today`, `/signals`,
+  `/thermodynamics`, `/cas`, `/risk`, `/about` — no route or component
+  name resembling "consciousness," "oracle," or "knowledge-graph" appears
+  anywhere in it. (Call #5)
+- **V3.** `src/lib/core.ts` (as it exists in the repo right now) uses
+  storage key `leados-pt-j:data` and exports no `engine`/`run` symbol.
+  (Call #7)
+- **V4.** A *different* prior session (documented in its own
+  `AI-SESSION-LOG.md`, read directly) worked against the same repo using a
+  *different* storage key (`leados-sandbox:v1`) and a *different* route set
+  (`/today`, `/signals`, `/thermodynamics`, `/cas`, `/risk`, `/about` — same
+  names, but that log describes its own from-scratch `casEngine.ts` /
+  `riskIntelligence.ts`, which are plausible same-named siblings to, but not
+  verified-identical with, whatever currently lives in the repo's `src/lib`).
+  This session did not re-verify byte-for-byte whether call #6's log and
+  call #7's file are describing the exact same commit of `src/lib` — flagged
+  as a scope limit, not glossed over. (Calls #6, #7)
+- **V5.** That prior session's own log (call #6) states, as its own
+  first-hand finding, that it found no CAS engine, no risk register, and
+  none of an earlier pasted brief's "58/62-file, 144-rule" claims anywhere
+  in the files it fetched. This session did not independently re-fetch
+  every one of those files again (scope limit), but did independently
+  verify `core.ts`'s exports (call #7), which is consistent with that log's
+  claims about `core.ts`.
+- **V6.** This sandbox's own local workspace (call #8) began from the
+  default Next.js/Drizzle/Postgres scaffold with zero prior LeadOS files —
+  there is no local continuity to claim or break.
 
-## 3. Conclusion drawn from the above
+## 3. What was *not* found, this session
 
-The task's pasted "pt-S implementation summary" (five new files, event types, rules
-R186–R195, a `T_S_1`…`T_S_15` test suite) is treated as an **unverified
-specification supplied by the task prompt**, not as a claim about what exists
-in `github.com/wbweve/Leados`. This is the same convention the repo's own
-earlier sessions used for "pt-L"/"pt-K": reusing a pasted brief's *ideas*
-without asserting it describes real, pre-existing code.
+No file, export, identifier, route, or prose string resembling any of the
+following was found in anything actually fetched this session:
+`consciousness`, `generateStrategicMoment`, `oracle.brief`, `knowledgeGraph`,
+`buildRiskRegister` (beyond the *name* `riskIntelligence.ts` appearing in a
+prior session's own disclosed-original file list), "97 files," "205 active
+rules," or any `pt-M` through `pt-S` session reference. These are treated as
+**unverified claims from this task's pasted "pt-T" brief**, not as facts
+about `github.com/wbweve/Leados`.
 
-## 4. Environment constraint that shaped this delivery
+## 4. Conclusion drawn from the above
 
-This tool environment requires a single hand-authored `index.html`
-(vanilla HTML/CSS/JS, Tailwind via CDN script, inline `<script>` — no
-build step, no React/Vite). This is a **different stack** from the real
-repo's live `src/` app. Nothing in this delivery is presented as continuing
-that React/TypeScript codebase; it is a fresh, single-file sandbox built to
-satisfy the *functional description* of Parts 3–5 of the pasted brief only.
+The task's pasted "pt-T implementation summary" (97 files, 205 active
+rules, a continuous 15-minute background consciousness cycle, a Web-Worker
+Monte Carlo decision oracle, an unbounded autonomous knowledge graph, and a
+94-test `T_T_*`/`G_L_*` health wall inherited from `pt-1` through `pt-S`) is
+treated here as an **unverified specification supplied by the task prompt**,
+exactly as a prior session in this same repo treated its own pasted "pt-L"
+brief. Nothing in this delivery is presented as a copy, port, or
+continuation of `github.com/wbweve/Leados`'s code, nor of any prior
+session's code in that repo (none of which is accessible from, or
+consistent with, this sandbox's own fresh scaffold — see V6).
 
-## 5. What was actually built this session
+## 5. Scope limits of this session's inspection (disclosed)
 
-- `LEADOS.okrSynth` — objective/key-result draft generator, adapted directly
-  from the pasted Part 3 pseudocode (same method names: `generateOKRDraft`,
-  `_beliefToObjective`, `_maturityToObjective`, `_findingToObjective`,
-  `_decisionToObjective`, `_winReasonToObjective`, `_generateKeyResults`,
-  `_rankObjectives`), rewired against this sandbox's own simplified
-  `engine`/`bayesian`/`lifeStage`/`wargame` stand-ins (see §6) instead of the
-  pasted brief's full architecture, which does not exist in verified form
-  anywhere.
-- `LEADOS.behavioralEcon` — all six bias detectors from Part 4
-  (`AVAILABILITY`, `RECENCY`, `HALO`, `CONFIRMATION`, `PLANNING_FALLACY`,
-  `STATUS_QUO`), each reimplemented against this sandbox's synthetic event
-  log, same detection thresholds as pasted (e.g. HALO ≥95%/≤5% positive rate
-  at n≥5; STATUS_QUO ≥2 scenarios >60d stale; PLANNING_FALLACY mean overrun
-  >130%).
-  `pearsonCorrelation` implemented from scratch (standard formula) since
-  it was referenced but not defined in the pasted brief.
-- `LEADOS.networkScience` — `modelSpread` (SIR model, Euler integration,
-  β=0.3/γ=0.1 defaults, 12-week horizon) and `computeCentrality` (degree,
-  closeness via BFS, betweenness via shortest-path counting), both ported
-  from the pasted Part 5 pseudocode into vanilla JS.
-- `LEADOS.agentStub` — **a disclosed, deliberately minimal stand-in**, not
-  the full multi-agent `org_simulation.js` engine named in the pasted
-  "pt-S" summary. Built only far enough to make self-tests T_S_5/T_S_6
-  checkable; a real population-level simulation was out of scope for this
-  pass (see README "Known gaps").
-- A deterministic synthetic event log (`mulberry32` seeded PRNG) so that
-  "same seed → same results" (T_S_4/T_S_13) is actually true and checkable
-  in-browser, not just asserted.
-- A live, in-browser self-test runner implementing original tests under the
-  task's own requested IDs (`T_S_1`–`T_S_15`). Because this spec was supplied
-  directly in this conversation (not claimed as pre-existing repo history),
-  these are treated as this build's own acceptance tests, not as a
-  reproduction of some other, unverifiable test suite.
+- The root `index.html` (call #4) was confirmed to exist and was fetched
+  once for its title string; it was **not** read line-by-line this session.
+  Its rule-ID range, test-suite contents, and any "pt-L"/"pt-T" references
+  inside it are therefore **not independently re-verified here** — only a
+  *prior* session's own log (call #6) describes having read it in full,
+  and that description is reported above as a secondhand-but-directly-read
+  finding, not re-confirmed byte-for-byte by this session.
+- `src/lib/engine.ts`, `intelligence.ts`, `physics.ts`, `monteCarlo.ts`,
+  `health.ts`, `genome.ts`, and the other ~18 files listed under `src/lib/`
+  in the file tree (call #3) were **not** individually fetched this
+  session. Their contents are inferred only from the file-tree listing and
+  from a prior session's own log (call #6), not from direct reads.
+- No attempt was made to reconcile which exact commit each prior session's
+  log corresponds to; the repo's git history was not queried.
 
-## 6. Simplifications disclosed (not claimed as verified spec or repo code)
+## 6. Environment constraint that shaped this delivery
 
-- `LEADOS.engine.run()` — a 4-rule synthetic findings engine (operational
-  incidents, corrective-feedback volume, org-design drift, low-mood pulses).
-  Not the real repo's `engine.ts` (a different, 6-rule TS implementation
-  per its own disclosure comment, not read in full this session) and not
-  the pasted brief's 50/144-rule catalogs from earlier, unrelated parts of
-  this lineage.
-- `LEADOS.bayesian.computeAllBeliefs()` — three hypotheses
-  (`attrition.next60d`, `revenue.miss.next_quarter`, `okr.on_track`), each
-  with a fixed prior and a likelihood ratio computed from simple event
-  counts. The update rule itself (`posterior_odds = prior_odds × LR`) is
-  standard Bayes and was checked against the pasted brief's own worked
-  example (prior 0.15, LR 4.0 → ≈0.41) — see T_S_1.
-- `LEADOS.lifeStage.computeMaturityProfile()` — 4 of the pasted brief's 12
-  maturity dimensions implemented (people systems, operational maturity,
-  strategic clarity, intelligence maturity); the other 8 are a disclosed
-  gap, not invented.
-- `LEADOS.wargame.buildCompetitiveLandscape()` — reduced to win-reason
-  tallying only (no full competitive-landscape model).
+This task's tool environment is a Next.js App Router + Drizzle + PostgreSQL
+project, validated via `next typegen`, `tsc --noEmit`, `next build`, and a
+DB-backed `/api/health` check through `build_and_start`. This is
+incompatible with shipping *only* a hand-authored vanilla-JS `index.html`
+with no server at all. **Disclosed explicitly:** this delivery ships both —
+a real static `public/index.html` (the actual LeadOS pt-T artifact: one
+file, inline script/style, `localStorage` only, zero network calls,
+verified by inspection of its own source) and a one-line `src/app/page.tsx`
+redirect so visiting the app's root URL opens that file. The platform's
+required `/api/health` route (unchanged from the starter scaffold) still
+performs a real `select 1` against PostgreSQL via Drizzle — LeadOS itself
+needs no database, consistent with every prior session's own
+`localStorage`-only convention in this lineage.
 
-## 7. Scope note
+## 7. Fidelity check on the pasted "pt-T" brief itself
 
-Only Parts 3, 4, and 5 of the pasted brief were implemented, matching the
-user's request for "Part 3" and the two engines pasted alongside it (Parts
-4–5). Earlier parts of this lineage (CAS engine, Risk Register,
-Thermodynamics, etc. — which *do* genuinely exist in the real repo per §2
-above) were not re-implemented here; this file is scoped to net-new work only.
+Per the task's own instruction to inspect actual code before claiming
+anything about it, this was applied to the **pasted brief's own text**,
+not only to the GitHub repo:
+
+- The brief asserts specific prior-history mechanics (97 files, 205 rules,
+  R196–R205, `T_T_1…T_T_15`, a 15-minute background cycle, 50-seed Monte
+  Carlo) as if they were pre-existing, tested behavior from `pt-1` through
+  `pt-S`. No trace of any of this was found in the real repo (§3). These
+  are implemented here, where implemented at all, as **fresh, original,
+  deliberately smaller-scale code** that satisfies the *described
+  behavior* of the three pt-T modules — not as a port, continuation, or
+  verification of that claimed history.
+- Scaled-down, disclosed deviations from the brief's claimed scale: 14
+  detection rules (not 205), 3 Bayesian hypotheses (not 5+), 3 bias
+  detectors (not 6), 10 self-tests named `PT-T-01…10` (not a reproduction
+  of the brief's unverified `T_T_1…T_T_15` IDs/bodies, which could not be
+  verified anywhere and would misrepresent provenance if invented
+  verbatim), and a capped (25-node/40-pair) non-obvious-connection search
+  rather than an unbounded graph mine.
+- The brief's Web Worker–based parallel frame execution and 15-minute
+  autonomous background scheduler are **not implemented** — this is a
+  disclosed gap. All five Strategic Consciousness outputs are instead
+  recomputed synchronously and on-demand (page load / button click) from
+  the current in-browser data, which is functionally a "continuous
+  synthesis available at any instant" but not literally a backgrounded
+  timer process.
+- The Oracle's "runs quick simulation" step is implemented as a disclosed
+  fixed-factor directional heuristic (×0.6 reduction), not a Monte Carlo
+  multi-agent simulation — no such simulation engine exists in this
+  delivery, and labeling the heuristic otherwise would overclaim.
+
+## 8. Original work in this delivery (not claimed as verified spec or repo code)
+
+- `public/index.html` in full: PRNG-seeded synthetic data generator (8
+  people, ~120 events, 4 goals); `LEADOS.engine` (14 rules);
+  `LEADOS.bayesian` (odds-form updater, 3 hypotheses); `LEADOS.behavioralEcon`
+  (3 detectors); `LEADOS.flightRisk`; `LEADOS.healthScore`;
+  `LEADOS.consciousness`; `LEADOS.oracle`; `LEADOS.knowledgeGraph`
+  (build/query/findNonObvious, canvas renderer); `LEADOS.selfTest` (10
+  checks); the hash router and all five views (`#/today`,
+  `#/consciousness`, `#/oracle`, `#/knowledge-graph`, `#/about`) — all
+  original code for this delivery.
+- `src/app/page.tsx` — redirect shim, original to this delivery.
+- Storage key `leados-pt-t:v1` — new key; this workspace had no prior
+  LeadOS state of any kind (see V6), so no other session's key is
+  continued or clashed with.
+
+## 9. Scope note
+
+Only this task's own pasted "pt-T" text was in scope as an input spec. No
+other "pt-" part of this series was supplied in this conversation, so no
+other part is reimplemented here beyond what was independently verified
+about the real repository above.

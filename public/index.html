@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeadOS pt-T — Strategic Consciousness, Decision Oracle, Knowledge Graph</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#121723; --panel2:#171d2c; --border:#262f45;
+    --text:#e8ecf7; --muted:#8c96b3; --accent:#5dd6b5; --accent2:#7aa2ff;
+    --warn:#f2b84b; --bad:#f2605e; --good:#5dd6b5;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--accent2);}
+  header{position:sticky;top:0;z-index:10;background:rgba(11,14,20,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  header h1{font-size:15px;margin:0;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
+  header h1 span{color:var(--accent);}
+  nav{display:flex;gap:4px;flex-wrap:wrap;}
+  nav button{background:transparent;border:1px solid transparent;color:var(--muted);padding:6px 10px;border-radius:7px;font-size:13px;cursor:pointer;}
+  nav button:hover{color:var(--text);background:var(--panel2);}
+  nav button.active{color:var(--bg);background:var(--accent);font-weight:600;}
+  .spacer{flex:1;}
+  #resetBtn{background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:6px 10px;border-radius:7px;font-size:12px;cursor:pointer;}
+  #resetBtn:hover{color:var(--bad);border-color:var(--bad);}
+  main{max-width:1180px;margin:0 auto;padding:22px 18px 80px;}
+  .grid{display:grid;gap:14px;}
+  .cols-2{grid-template-columns:1fr 1fr;}
+  .cols-3{grid-template-columns:repeat(3,1fr);}
+  @media (max-width:860px){.cols-2,.cols-3{grid-template-columns:1fr;}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
+  .card h2{margin:0 0 10px;font-size:15px;}
+  .card h3{margin:14px 0 6px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .muted{color:var(--muted);}
+  .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em;}
+  .pill.sev5,.pill.bad{background:rgba(242,96,94,.15);color:var(--bad);}
+  .pill.sev4,.pill.warn{background:rgba(242,184,75,.15);color:var(--warn);}
+  .pill.sev3,.pill.ok{background:rgba(122,162,255,.15);color:var(--accent2);}
+  .pill.sev2,.pill.sev1,.pill.good{background:rgba(93,214,181,.15);color:var(--good);}
+  .finding{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--panel2);}
+  .finding .top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .finding .title{font-weight:600;font-size:13.5px;}
+  .finding .basis{margin-top:6px;font-size:12px;color:var(--muted);}
+  .scorebar{height:6px;border-radius:4px;background:#262f45;overflow:hidden;margin-top:8px;}
+  .scorebar > div{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));}
+  .kpi{font-size:34px;font-weight:700;}
+  .kpi .unit{font-size:14px;color:var(--muted);font-weight:500;}
+  .label{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px;font-style:italic;}
+  textarea,input[type=text],select{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:8px;font-size:13.5px;font-family:inherit;}
+  button.primary{background:var(--accent);color:#06251c;border:none;padding:9px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:13.5px;}
+  button.primary:hover{filter:brightness(1.08);}
+  button.secondary{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:13px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table th{text-align:left;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--border);}
+  table td{padding:6px 8px;border-bottom:1px solid #1c2232;}
+  .prose{font-size:14.5px;line-height:1.75;}
+  .insight{border-left:3px solid var(--accent2);padding:8px 12px;background:var(--panel2);border-radius:0 8px 8px 0;margin-bottom:10px;}
+  .insight.high{border-color:var(--warn);}
+  .insight.veryhigh{border-color:var(--bad);}
+  .badge-row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;}
+  code{background:#1c2232;padding:1px 5px;border-radius:4px;font-size:12px;}
+  #graphCanvas{width:100%;height:420px;background:var(--panel2);border-radius:10px;border:1px solid var(--border);}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--muted);}
+  .legend span.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle;}
+  .ledger td,.ledger th{vertical-align:top;}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:30px 0 10px;}
+  .tag{font-size:10.5px;padding:1px 7px;border-radius:5px;background:#1c2232;color:var(--muted);margin-left:6px;}
+  .flex{display:flex;gap:10px;align-items:center;}
+  .hr{height:1px;background:var(--border);margin:14px 0;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Lead<span>OS</span> <span class="tag">pt-T</span></h1>
+  <nav id="nav"></nav>
+  <div class="spacer"></div>
+  <button id="resetBtn" title="Regenerate synthetic data">↺ Reset synthetic data</button>
+</header>
+<main id="app"></main>
+<footer>LeadOS pt-T sandbox build · single file · zero network calls · zero dependencies · synthetic data only · see <a href="#/about">About / Provenance</a></footer>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   STORAGE + PRNG
+   New storage key for this delivery: this sandbox session has no
+   prior local state, and the real github.com/wbweve/Leados repo's
+   own divergent sessions already use distinct keys of their own
+   (e.g. "leados-pt-j:data", "leados-sandbox:v1") — see About page.
+   ============================================================ */
+const STORAGE_KEY = "leados-pt-t:v1";
+
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ============================================================
+   SYNTHETIC DATA GENERATION
+   Everything below is fabricated test data generated client-side.
+   No claims are made that this reflects any real organization.
+   ============================================================ */
+const NAMES = ["Priya Natarajan","Jordan Alvarez","Mei Lin Chen","Samuel Okafor","Freya Nilsson",
+               "Diego Ramirez","Aisha Rahman","Tom Fletcher"];
+const ROLES = ["Eng Lead","Product Manager","Staff Engineer","Design Lead","Ops Manager",
+               "Sales Lead","Data Lead","Support Lead"];
+
+function genPeople(rnd){
+  const people = NAMES.map((name,i)=>({
+    id: "p"+(i+1), name, role: ROLES[i], reportsTo: null,
+    tenureMonths: Math.round(2 + rnd()*48)
+  }));
+  // give two people a manager other than the leader, for graph variety
+  people[2].reportsTo = people[0].id;
+  people[5].reportsTo = people[1].id;
+  return people;
+}
+
+function daysAgo(n){ const d = new Date(); d.setDate(d.getDate()-n); return d.toISOString(); }
+
+function genEvents(rnd, people){
+  const events = [];
+  let seq = 1;
+  const push = (type, ageDays, data) => events.push({ id:"ev"+(seq++), ts: daysAgo(ageDays), type, data });
+
+  // 1:1s — one person has a visibly slipping cadence, rest mostly healthy
+  const slippingPerson = people[0];
+  people.forEach(p=>{
+    for(let k=0;k<4;k++){
+      const ageDays = k*7 + Math.round(rnd()*2);
+      let status = rnd() < 0.12 ? "skipped" : (rnd() < 0.12 ? "moved" : "held");
+      if (p.id === slippingPerson.id) status = (k<3 ? (rnd()<0.75?"skipped":"moved") : "held");
+      push("oneonone.logged", ageDays, { personId:p.id, status, sentiment: Math.round((rnd()*2-1)*100)/100 });
+    }
+  });
+
+  // engagement pulses — one person trending down, pick a different person than above for variety
+  const decliningPerson = people[3];
+  people.forEach(p=>{
+    let base = 6 + rnd()*3;
+    for(let k=3;k>=0;k--){
+      let score = base + (rnd()*1.4-0.7);
+      if (p.id === decliningPerson.id) score = 8 - (3-k)*1.3 + rnd()*0.4;
+      push("engagement.pulse", k*10+Math.round(rnd()*3), { personId:p.id, score: Math.max(1,Math.min(10,Math.round(score*10)/10)) });
+    }
+  });
+
+  // feedback — most people get feedback, one gets none recently
+  const noFeedbackPerson = people[4];
+  people.forEach(p=>{
+    if (p.id === noFeedbackPerson.id){
+      push("feedback.given", 55, { personId:p.id, sentiment: 0.2 });
+    } else {
+      const n = 1 + Math.floor(rnd()*3);
+      for(let k=0;k<n;k++) push("feedback.given", Math.round(rnd()*40), { personId:p.id, sentiment: Math.round((rnd()*2-1)*100)/100 });
+    }
+  });
+
+  // blockers — cluster on one overloaded person + a general rising trend
+  const overloadedPerson = people[0];
+  for(let k=0;k<10;k++){
+    const ageDays = Math.round(rnd()*28);
+    const personId = (rnd()<0.4 ? overloadedPerson.id : people[Math.floor(rnd()*people.length)].id);
+    push("blocker.logged", ageDays, { personId, severity: 1+Math.floor(rnd()*3) });
+  }
+  // extra recent blockers for the overloaded person to trigger the 14d-window rule
+  for(let k=0;k<4;k++) push("blocker.logged", Math.round(rnd()*12), { personId: overloadedPerson.id, severity: 2+Math.floor(rnd()*2) });
+
+  // onboarding — new-tenure person with no check-in logged (disclosed synthetic gap)
+  const newPerson = people.find(p=>p.tenureMonths <= 3) || people[people.length-1];
+  if (newPerson.tenureMonths > 3){ /* no one is new this cycle, skip rule naturally */ }
+
+  // decisions — outcomes with estimate vs actual (for planning fallacy) and a few pending (for backlog rule)
+  const domains = ["PEOPLE","FINANCE","OPS","STRATEGY"];
+  for(let k=0;k<6;k++){
+    const est = 5+Math.floor(rnd()*15);
+    const overrunFactor = 1 + rnd()*0.6; // deliberately skewed over, to make planning fallacy detectable
+    const actual = Math.round(est*overrunFactor);
+    push("decision.outcome", Math.round(rnd()*70), {
+      domain: domains[Math.floor(rnd()*domains.length)],
+      title: "Decision #"+(k+1),
+      estimatedDays: est, actualDays: actual,
+      result: rnd()<0.7?"success":(rnd()<0.5?"mixed":"failure")
+    });
+  }
+  push("decision.pending", 25, { title:"Vendor contract renegotiation", domain:"FINANCE" });
+  push("decision.pending", 9, { title:"Support tier restructure", domain:"OPS" });
+
+  // finance — runway tightening + budget variance
+  for(let k=2;k>=0;k--){
+    push("fin.pl.logged", k*20, {
+      runwayMonths: Math.round((14 - (2-k)*2.3 + rnd())*10)/10,
+      burnRate: Math.round((180000 + (2-k)*14000 + rnd()*8000)),
+      budgetVariancePct: Math.round((rnd()*30-8)*10)/10
+    });
+  }
+  for(let k=1;k>=0;k--){
+    push("fin.kpi.logged", k*30, {
+      revenueActual: Math.round(240000 - (1-k)*9000 + rnd()*6000),
+      revenueTarget: 255000
+    });
+  }
+
+  // ops — sprint velocity declining, strategy review stale
+  for(let k=2;k>=0;k--) push("sprint.review", k*14, { velocity: Math.round(38 - (2-k)*5 + rnd()*3) });
+  push("strategy.review", 42, {});
+  push("strategy.okr.set", 50, { objective:"Expand enterprise segment", progressPct: Math.round(14+rnd()*12), quarterElapsedPct: 68 });
+
+  // governance — synthetic overdue flag, decided once per generation
+  const complianceOverdue = rnd() < 0.6;
+
+  return { events, complianceOverdue, newPersonId: newPerson.tenureMonths<=3 ? newPerson.id : null };
+}
+
+function genGoals(rnd, people){
+  const titles = ["Grow enterprise ARR 25%","Ship v2 platform migration","Reduce support backlog 40%","Launch partner program"];
+  return titles.map((title,i)=>({
+    id:"g"+(i+1), title, ownerId: people[i % people.length].id,
+    progress: Math.round(rnd()*70), dueDate: daysAgo(-30*(i+1))
+  }));
+}
+
+function buildFreshState(){
+  const seed = (Date.now() % 2147483647);
+  const rnd = mulberry32(seed);
+  const people = genPeople(rnd);
+  const { events, complianceOverdue, newPersonId } = genEvents(rnd, people);
+  const openGoals = genGoals(rnd, people);
+  return { seed, people, openGoals, state:{ events, complianceOverdue, newPersonId }, generatedAt: new Date().toISOString() };
+}
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) { const fresh = buildFreshState(); saveState(fresh); return fresh; }
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.people || !parsed.state) { const fresh = buildFreshState(); saveState(fresh); return fresh; }
+    return parsed;
+  }catch(e){ const fresh = buildFreshState(); saveState(fresh); return fresh; }
+}
+function saveState(P){ localStorage.setItem(STORAGE_KEY, JSON.stringify(P)); }
+
+let P = loadState();
+function today(){ return new Date().toISOString(); }
+function ageDaysOf(ts){ return (Date.now() - new Date(ts).getTime())/86400000; }
+function personName(id){ const p = P.people.find(x=>x.id===id); return p? p.name : id; }
+
+/* ============================================================
+   LEADOS NAMESPACE
+   ============================================================ */
+const LEADOS = {};
+
+/* ---------- 1. ENGINE: original, modestly-scoped rule set ----------
+   14 rules across 5 domains, each deterministic from the synthetic
+   event log. This is NOT the "205 active rules" referenced in the
+   unverified pasted brief — see About page. */
+LEADOS.engine = {
+  run(P, nowIso){
+    const findings = [];
+    const evs = P.state.events;
+    const byPerson = (pid, type) => evs.filter(e=>e.type===type && e.data.personId===pid)
+                                        .sort((a,b)=> new Date(b.ts)-new Date(a.ts));
+
+    // P01 — 1:1 cadence slipping
+    P.people.forEach(p=>{
+      const last4 = byPerson(p.id,"oneonone.logged").slice(0,4);
+      const bad = last4.filter(e=>e.data.status!=="held").length;
+      if (last4.length>=3 && bad>=2){
+        findings.push(mkFinding("P01","PEOPLE",`1:1 cadence slipping with ${p.name}`,
+          bad>=3?5:4, bad>=3?"high":"medium",
+          [`${bad} of last ${last4.length} scheduled 1:1s with ${p.name} were skipped or moved.`],
+          "1:1-recovery"));
+      }
+    });
+
+    // P02 — engagement declining
+    P.people.forEach(p=>{
+      const pulses = byPerson(p.id,"engagement.pulse").slice(0,4).map(e=>e.data.score).reverse();
+      if (pulses.length>=3){
+        const last3 = pulses.slice(-3);
+        if (last3[0]>last3[1] && last3[1]>last3[2]){
+          findings.push(mkFinding("P02","PEOPLE",`Engagement declining for ${p.name}`,
+            3,"medium",[`Pulse scores trending down: ${last3.join(" → ")}.`],"engagement-checkin"));
+        }
+      }
+    });
+
+    // P03 — feedback silence
+    P.people.forEach(p=>{
+      const fb = byPerson(p.id,"feedback.given");
+      const lastAge = fb.length ? ageDaysOf(fb[0].ts) : Infinity;
+      if (lastAge > 30){
+        findings.push(mkFinding("P03","PEOPLE",`No feedback logged for ${p.name} in 30+ days`,
+          2,"medium",[fb.length? `Last feedback was ${Math.round(lastAge)} days ago.` : "No feedback events found."],
+          "feedback-cadence"));
+      }
+    });
+
+    // P04 — overload signal (blockers + low engagement)
+    P.people.forEach(p=>{
+      const recentBlockers = evs.filter(e=>e.type==="blocker.logged" && e.data.personId===p.id && ageDaysOf(e.ts)<=14).length;
+      const pulses = byPerson(p.id,"engagement.pulse").slice(0,2).map(e=>e.data.score);
+      const avgEng = pulses.length ? pulses.reduce((a,b)=>a+b,0)/pulses.length : null;
+      if (recentBlockers>3 && avgEng!==null && avgEng<6){
+        findings.push(mkFinding("P04","PEOPLE",`Overload signature detected for ${p.name}`,
+          4,"medium",[`${recentBlockers} blockers raised in last 14 days; recent engagement avg ${avgEng.toFixed(1)}/10.`],
+          "workload-rebalance"));
+      }
+    });
+
+    // P05 — onboarding gap
+    if (P.state.newPersonId){
+      const np = P.people.find(x=>x.id===P.state.newPersonId);
+      const checkins = evs.filter(e=>e.type==="onboarding.checkin" && e.data.personId===np.id);
+      if (!checkins.length){
+        findings.push(mkFinding("P05","PEOPLE",`No onboarding check-in logged for ${np.name}`,
+          3,"low",[`${np.name} has tenure of ${np.tenureMonths} months and no onboarding.checkin event.`],
+          "onboarding-followup"));
+      }
+    }
+
+    // F01 — runway tightening
+    const pl = evs.filter(e=>e.type==="fin.pl.logged").sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    if (pl.length>=2){
+      const latest = pl[pl.length-1].data, prev = pl[pl.length-2].data;
+      if (latest.runwayMonths<9 && latest.burnRate>prev.burnRate){
+        findings.push(mkFinding("F01","FINANCE",`Runway tightening: ${latest.runwayMonths} months at current burn`,
+          5,"high",[`Burn rose from $${prev.burnRate.toLocaleString()} to $${latest.burnRate.toLocaleString()}; runway ${latest.runwayMonths} months.`],
+          "runway-extension"));
+      }
+      if (Math.abs(latest.budgetVariancePct)>15){
+        findings.push(mkFinding("F02","FINANCE",`Budget variance ${latest.budgetVariancePct>0?"+":""}${latest.budgetVariancePct}%`,
+          3,"medium",[`Latest period variance vs budget: ${latest.budgetVariancePct}%.`],"budget-review"));
+      }
+    }
+
+    // F03 — revenue miss streak
+    const kpi = evs.filter(e=>e.type==="fin.kpi.logged").sort((a,b)=>new Date(a.ts)-new Date(b.ts));
+    if (kpi.length>=2 && kpi.every(e=>e.data.revenueActual<e.data.revenueTarget)){
+      findings.push(mkFinding("F03","FINANCE",`Revenue target missed ${kpi.length} consecutive periods`,
+        4,"high",kpi.map(e=>`$${e.data.revenueActual.toLocaleString()} actual vs $${e.data.revenueTarget.toLocaleString()} target`),
+        "revenue-recovery-plan"));
+    }
+
+    // O01 — blocker trend rising
+    const recentB = evs.filter(e=>e.type==="blocker.logged" && ageDaysOf(e.ts)<=14).length;
+    const priorB = evs.filter(e=>e.type==="blocker.logged" && ageDaysOf(e.ts)>14 && ageDaysOf(e.ts)<=28).length;
+    if (priorB>0 && recentB >= priorB*1.5){
+      findings.push(mkFinding("O01","OPS",`Blocker volume rising: ${recentB} in last 14d vs ${priorB} prior 14d`,
+        3,"medium",[`+${Math.round((recentB/priorB-1)*100)}% period-over-period.`],"blocker-triage"));
+    }
+
+    // O02 — velocity declining
+    const sprints = evs.filter(e=>e.type==="sprint.review").sort((a,b)=>new Date(a.ts)-new Date(b.ts)).map(e=>e.data.velocity);
+    if (sprints.length>=3 && sprints[sprints.length-1]<sprints[sprints.length-2] && sprints[sprints.length-2]<sprints[sprints.length-3]){
+      findings.push(mkFinding("O02","OPS",`Sprint velocity declining 2 consecutive sprints`,
+        4,"high",[`Velocity trend: ${sprints.join(" → ")}.`],"tech-debt-sprint"));
+    }
+
+    // O03 — decision backlog
+    evs.filter(e=>e.type==="decision.pending").forEach(e=>{
+      const age = Math.round(ageDaysOf(e.ts));
+      if (age>21){
+        findings.push(mkFinding("O03","OPS",`Decision open ${age} days: "${e.data.title}"`,
+          3,"medium",[`Opened ${age} days ago in ${e.data.domain}; exceeds 21-day threshold.`],"decision-forcing-function"));
+      }
+    });
+
+    // S01 — OKR off track
+    const okr = evs.find(e=>e.type==="strategy.okr.set");
+    if (okr && okr.data.progressPct < 30 && okr.data.quarterElapsedPct > 60){
+      findings.push(mkFinding("S01","STRATEGY",`OKR "${okr.data.objective}" at risk: ${okr.data.progressPct}% progress`,
+        4,"high",[`${okr.data.quarterElapsedPct}% of quarter elapsed vs ${okr.data.progressPct}% progress.`],
+        "okr-rescope"));
+    }
+
+    // S02 — strategy review stale
+    const sr = evs.filter(e=>e.type==="strategy.review").sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
+    if (!sr || ageDaysOf(sr.ts)>30){
+      findings.push(mkFinding("S02","STRATEGY",`No strategy review logged in 30+ days`,
+        2,"low",[sr?`Last review ${Math.round(ageDaysOf(sr.ts))} days ago.`:"No strategy.review event found."],
+        "strategy-review-cadence"));
+    }
+
+    // G01 — synthetic compliance flag
+    if (P.state.complianceOverdue){
+      findings.push(mkFinding("G01","GOVERNANCE",`Vendor DPA compliance review overdue`,
+        3,"medium",["Synthetic governance flag set at data-generation time (disclosed; not derived from a real compliance system)."],
+        "compliance-escalation"));
+    }
+
+    findings.forEach(f=> f.score = f.sev*10 + (f.conf==="high"?5:f.conf==="medium"?2:0));
+    findings.sort((a,b)=>b.score-a.score);
+    return { findings, label: `Engine: ${findings.length} findings across 14 original rules (P01–P05, F01–F03, O01–O03, S01–S02, G01). Not the 205-rule system referenced in the unverified pasted brief.` };
+  }
+};
+function mkFinding(rule,domain,title,sev,conf,basis,play){
+  return { key: rule+":"+title.slice(0,24), rule, domain, title, sev, conf, basis, play };
+}
+
+/* ---------- 2. BAYESIAN BELIEFS ----------
+   Genuine odds-form Bayesian updating. Likelihood ratios are
+   disclosed, fabricated-but-labeled estimates (no real base-rate
+   study backs them) — the *mechanism* is real Bayes, the *inputs*
+   are illustrative. */
+LEADOS.bayesian = {
+  HYPOTHESES: {
+    "attrition.next60d": { prior: 0.15, evidence: [
+      { rule:"P01", lr: 2.6 }, { rule:"P02", lr: 1.8 }, { rule:"P04", lr: 2.2 }, { rule:"P03", lr: 1.4 }
+    ]},
+    "revenue.miss.next_quarter": { prior: 0.20, evidence: [
+      { rule:"F01", lr: 2.8 }, { rule:"F02", lr: 1.5 }, { rule:"F03", lr: 3.0 }
+    ]},
+    "okr.miss.this_quarter": { prior: 0.25, evidence: [
+      { rule:"S01", lr: 3.2 }, { rule:"O02", lr: 1.6 }, { rule:"O01", lr: 1.3 }
+    ]}
+  },
+  computeAllBeliefs(P, nowIso){
+    const { findings } = LEADOS.engine.run(P, nowIso);
+    const activeRules = new Set(findings.map(f=>f.rule));
+    const beliefs = {};
+    Object.entries(this.HYPOTHESES).forEach(([hyp, cfg])=>{
+      let odds = cfg.prior/(1-cfg.prior);
+      const applied = [];
+      cfg.evidence.forEach(ev=>{
+        if (activeRules.has(ev.rule)){ odds *= ev.lr; applied.push(ev.rule); }
+      });
+      const posterior = odds/(1+odds);
+      beliefs[hyp] = {
+        prior: cfg.prior, posterior, posteriorPct: Math.round(posterior*100),
+        appliedEvidence: applied,
+        label: `Odds-form Bayes: prior ${Math.round(cfg.prior*100)}% × LR(${applied.join(",")||"none"}) → ${Math.round(posterior*100)}%.`
+      };
+    });
+    const highRisk = Object.entries(beliefs).filter(([,v])=>v.posterior>=0.5).sort((a,b)=>b[1].posterior-a[1].posterior);
+    return { beliefs, highRisk };
+  }
+};
+
+/* ---------- 3. BEHAVIORAL ECONOMICS ----------
+   3 original detectors, disclosed heuristics, named after real
+   literature (Kahneman & Tversky 1979 prospect theory family;
+   Kahneman, Lovallo & Sibony on planning fallacy; Samuelson &
+   Zeckhauser 1988 on status-quo bias). */
+LEADOS.behavioralEcon = {
+  detectAll(P, nowIso){
+    const detected = [];
+    const evs = P.state.events;
+
+    const fb = evs.filter(e=>e.type==="feedback.given");
+    const recentFb = fb.filter(e=>ageDaysOf(e.ts)<=14).length;
+    if (fb.length>=4 && recentFb/fb.length > 0.6){
+      detected.push({ bias:"RECENCY", detail:`${recentFb} of ${fb.length} feedback events logged in the last 14 days.` });
+    }
+
+    const decisions = evs.filter(e=>e.type==="decision.outcome");
+    if (decisions.length>=3){
+      const ratios = decisions.map(d=>d.data.actualDays/d.data.estimatedDays);
+      const mean = ratios.reduce((a,b)=>a+b,0)/ratios.length;
+      if (mean > 1.15){
+        detected.push({ bias:"PLANNING_FALLACY", meanOverrun: Math.round(mean*100), detail:`Mean actual/estimate ratio ${mean.toFixed(2)}× across ${decisions.length} logged decisions.` });
+      }
+    }
+
+    const { findings } = LEADOS.engine.run(P, nowIso);
+    const peopleRisk = findings.some(f=>f.domain==="PEOPLE" && f.sev>=4);
+    const hasRestructureEvent = evs.some(e=>e.type==="org.restructure");
+    if (peopleRisk && !hasRestructureEvent){
+      detected.push({ bias:"STATUS_QUO", detail:"Elevated PEOPLE-domain findings present with no org.restructure event ever logged — a heuristic proxy, not proof of bias." });
+    }
+
+    return { detected, label: `Behavioral econ: ${detected.length} of 3 original detectors triggered. Heuristic thresholds, disclosed above.` };
+  }
+};
+
+/* ---------- 4. FLIGHT RISK ---------- */
+LEADOS.flightRisk = {
+  computeFlightRisk(P, nowIso){
+    const evs = P.state.events;
+    const rows = P.people.map(p=>{
+      const oneonones = evs.filter(e=>e.type==="oneonone.logged"&&e.data.personId===p.id).slice(0,4);
+      const badCadence = oneonones.length? oneonones.filter(e=>e.data.status!=="held").length/oneonones.length : 0;
+      const pulses = evs.filter(e=>e.type==="engagement.pulse"&&e.data.personId===p.id).sort((a,b)=>new Date(b.ts)-new Date(a.ts)).slice(0,3).map(e=>e.data.score);
+      const engScore = pulses.length? pulses.reduce((a,b)=>a+b,0)/pulses.length : 7;
+      const engRisk = Math.max(0, (7-engScore)/7);
+      const fb = evs.filter(e=>e.type==="feedback.given"&&e.data.personId===p.id).sort((a,b)=>new Date(b.ts)-new Date(a.ts))[0];
+      const fbRisk = fb ? Math.min(1, ageDaysOf(fb.ts)/60) : 1;
+      const blockers = evs.filter(e=>e.type==="blocker.logged"&&e.data.personId===p.id&&ageDaysOf(e.ts)<=14).length;
+      const blockerRisk = Math.min(1, blockers/5);
+
+      const riskScore = 0.35*badCadence + 0.3*engRisk + 0.2*fbRisk + 0.15*blockerRisk;
+      return { person:p, riskScore: Math.round(riskScore*1000)/1000,
+        factors:{ badCadence: Math.round(badCadence*100), engScore: Math.round(engScore*10)/10, lastFeedbackDaysAgo: fb?Math.round(ageDaysOf(fb.ts)):null, recentBlockers: blockers } };
+    }).sort((a,b)=>b.riskScore-a.riskScore);
+    return { all: rows, highRisk: rows.filter(r=>r.riskScore>=0.4),
+      label: "Flight risk: weighted composite of 1:1 cadence, engagement trend, feedback recency, and blocker load. Weights are disclosed heuristics." };
+  }
+};
+
+/* ---------- 5. HEALTH SCORE ---------- */
+LEADOS.healthScore = {
+  _scoreAt(P, cutoffDaysAgo){
+    const cutoff = Date.now() - cutoffDaysAgo*86400000;
+    const filtered = { ...P, state: { ...P.state, events: P.state.events.filter(e=>new Date(e.ts).getTime()<=cutoff) } };
+    const { findings } = LEADOS.engine.run(filtered, new Date(cutoff).toISOString());
+    const penalty = findings.reduce((s,f)=>s + f.sev*f.sev, 0);
+    return Math.max(0, Math.round(100 - penalty*1.1));
+  },
+  compute(P, nowIso){
+    const overall = this._scoreAt(P, 0);
+    const past = this._scoreAt(P, 30);
+    const delta = overall - past;
+    const grade = overall>=85?"A":overall>=70?"B":overall>=55?"C":overall>=40?"D":"F";
+    return { overall, grade, trend:{ direction: delta>2?"IMPROVING":delta<-2?"DECLINING":"STABLE", delta },
+      label: "Health score: 100 − Σ(severity²×1.1) over active findings, floored at 0. Trend compares to the same formula recomputed on the event log truncated 30 days ago." };
+  }
+};
+
+/* ---------- 6. STRATEGIC CONSCIOUSNESS ---------- */
+LEADOS.consciousness = {
+  generateStrategicMoment(P, nowIso){
+    const startMs = Date.now();
+    const frames = this._runAllFrames(P, nowIso);
+    const synthesis = this._synthesizeAcrossFrames(frames);
+    const strategicQuestion = this._deriveStrategicQuestion(frames);
+    const highestLeverage = this._computeHighestLeverage(frames, synthesis);
+    const narrative = this._generateNarrative(frames, synthesis, nowIso);
+    return {
+      timestamp: nowIso, durationMs: Date.now()-startMs,
+      organizationalMoment: narrative, strategicQuestion, highestLeverage, synthesis,
+      frames: this._summarizeFrames(frames),
+      label: `Strategic consciousness synthesis: ${Date.now()-startMs}ms across ${Object.keys(frames).length} frames.`
+    };
+  },
+  _runAllFrames(P, nowIso){
+    const safe = fn => { try{ return fn(); }catch(e){ return { error: e.message }; } };
+    return {
+      findings: safe(()=>LEADOS.engine.run(P, nowIso)),
+      beliefs: safe(()=>LEADOS.bayesian.computeAllBeliefs(P, nowIso)),
+      biases: safe(()=>LEADOS.behavioralEcon.detectAll(P, nowIso)),
+      flightRisk: safe(()=>LEADOS.flightRisk.computeFlightRisk(P, nowIso)),
+      health: safe(()=>LEADOS.healthScore.compute(P, nowIso))
+    };
+  },
+  _synthesizeAcrossFrames(frames){
+    const insights = [];
+    const attrition = frames.beliefs?.beliefs?.["attrition.next60d"];
+    const highFlight = frames.flightRisk?.highRisk?.length || 0;
+    if (attrition && attrition.posteriorPct>=50 && highFlight>=1){
+      insights.push({ type:"CONVERGENT_ATTRITION_SIGNAL", confidence:"HIGH",
+        title:"Two independent frames converge on attrition risk",
+        detail:`Bayesian posterior ${attrition.posteriorPct}% + ${highFlight} person/people at high flight risk by behavioral pattern. Independent methods agreeing is stronger evidence than either alone.`,
+        urgency:"THIS_WEEK", action:"Schedule a retention 1:1 with the highest flight-risk person this week." });
+    }
+    const okrBelief = frames.beliefs?.beliefs?.["okr.miss.this_quarter"];
+    const planningFallacy = frames.biases?.detected?.some(b=>b.bias==="PLANNING_FALLACY");
+    if (okrBelief && okrBelief.posteriorPct>=50 && planningFallacy){
+      insights.push({ type:"SYSTEMATIC_DELIVERY_FAILURE", confidence:"HIGH",
+        title:"OKR miss risk + planning fallacy = structural delivery problem",
+        detail:"Elevated probability of missing this quarter's OKR coincides with a detected pattern of historically over-running estimates. Together these point to a goal-setting discipline issue, not a one-off.",
+        urgency:"THIS_QUARTER", action:"Re-scope the at-risk OKR using the measured mean overrun factor as a correction." });
+    }
+    const financeSev = frames.findings?.findings?.some(f=>f.domain==="FINANCE" && f.sev>=4);
+    const peopleSev = frames.findings?.findings?.some(f=>f.domain==="PEOPLE" && f.sev>=4);
+    if (financeSev && peopleSev){
+      insights.push({ type:"AUSTERITY_TRAP_RISK", confidence:"MEDIUM",
+        title:"Financial pressure + people risk active simultaneously",
+        detail:"High-severity findings are active in both FINANCE and PEOPLE domains at once. Cost-cutting decisions made under financial pressure risk worsening the people risk already present.",
+        urgency:"THIS_WEEK", action:"Review any pending cost actions against the active PEOPLE findings before approving." });
+    }
+    return { insights, crossFrameSignals: insights.length,
+      highConfidence: insights.filter(i=>i.confidence==="HIGH").length };
+  },
+  _deriveStrategicQuestion(frames){
+    const beliefs = frames.beliefs?.beliefs || {};
+    const entries = Object.entries(beliefs).map(([hyp,d])=>({ hyp, uncertainty: 1-Math.abs(d.posterior-0.5)*2 }));
+    entries.sort((a,b)=>b.uncertainty-a.uncertainty);
+    const top = entries[0];
+    const QUESTIONS = {
+      "attrition.next60d": "Is someone about to leave — and what would change their mind?",
+      "revenue.miss.next_quarter": "What is the single most leveraged action on next quarter's revenue?",
+      "okr.miss.this_quarter": "Which OKR is most at risk, and what is the structural reason?"
+    };
+    if (!top) return "What is the single most important constraint on your organization right now?";
+    return QUESTIONS[top.hyp] || `Given current uncertainty, what evidence would most change your strategy right now?`;
+  },
+  _computeHighestLeverage(frames, synthesis){
+    const candidates = [];
+    synthesis.insights.forEach(i=>candidates.push({ intervention:i.action, urgency:i.urgency,
+      leverageScore: i.confidence==="HIGH"?80:60, source:"cross-frame:"+i.type }));
+    const top = frames.findings?.findings?.[0];
+    if (top) candidates.push({ intervention:`Open "${top.play}" playbook for "${top.title}"`,
+      urgency: top.sev>=5?"NOW":top.sev>=4?"THIS_WEEK":"THIS_MONTH", leverageScore: top.score, source:"engine."+top.rule });
+    const topFR = frames.flightRisk?.highRisk?.[0];
+    if (topFR) candidates.push({ intervention:`1:1 with ${topFR.person.name} — retention is cheaper than replacement`,
+      urgency:"TODAY", leverageScore: Math.round(topFR.riskScore*100), source:"flightRisk."+topFR.person.id });
+    candidates.sort((a,b)=>b.leverageScore-a.leverageScore);
+    const pick = candidates[0];
+    return pick ? { ...pick, rationale:`Highest leverage-score across ${candidates.length} candidates (score ${Math.round(pick.leverageScore)}/100).` } : null;
+  },
+  _generateNarrative(frames, synthesis, nowIso){
+    const health = frames.health;
+    const top = frames.findings?.findings?.[0];
+    const topBelief = frames.beliefs?.highRisk?.[0];
+    const flight = frames.flightRisk?.highRisk?.length || 0;
+    const sentences = [];
+    sentences.push(`As of ${new Date(nowIso).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}, the organizational health score is ${health?.overall ?? "—"}/100 (${health?.grade ?? "—"}), ${health?.trend?.direction?.toLowerCase() || "indeterminate"} by ${Math.abs(health?.trend?.delta||0)} points over 30 days. `);
+    if (top) sentences.push(`The highest-priority signal is "${top.title}" (${top.rule}, severity ${top.sev}/5). `);
+    else sentences.push(`No active findings — the signal board is clear. `);
+    if (topBelief) sentences.push(`The system estimates ${topBelief[1].posteriorPct}% probability of ${topBelief[0].replace(/_/g,' ').replace(/\./g,' ')}. `);
+    if (flight>0) sentences.push(`${flight} ${flight===1?"person is":"people are"} at elevated flight risk by behavioral pattern. `);
+    if (synthesis.crossFrameSignals>0) sentences.push(`${synthesis.crossFrameSignals} cross-frame insight${synthesis.crossFrameSignals>1?"s":""} identified — patterns no single frame shows alone. `);
+    else sentences.push(`No cross-frame convergence detected this cycle. `);
+    return { prose: sentences.join(""), label:"NLG synthesis assembled from this build's own computed frame outputs — every sentence is derived from data, not a canned template string." };
+  },
+  _summarizeFrames(frames){
+    return Object.entries(frames).map(([name,result])=>({
+      frame:name, status: result?.error?"ERROR":"OK",
+      topSignal: result?.error || this._extractTop(name,result)
+    }));
+  },
+  _extractTop(name, result){
+    if (!result) return null;
+    switch(name){
+      case "findings": return result.findings?.[0]?.title?.slice(0,60) || "Clear";
+      case "beliefs": return result.highRisk?.[0]?.[0] || "No high-risk beliefs";
+      case "health": return `Score ${result.overall}/100`;
+      case "flightRisk": return `${result.highRisk?.length||0} high-risk`;
+      case "biases": return `${result.detected?.length||0} detected`;
+      default: return null;
+    }
+  }
+};
+
+/* ---------- 7. DECISION ORACLE ---------- */
+LEADOS.oracle = {
+  DOMAIN_RULES: { PEOPLE:["P01","P02","P03","P04","P05"], FINANCIAL:["F01","F02","F03"],
+    STRATEGIC:["S01","S02"], OPERATIONAL:["O01","O02","O03"], GOVERNANCE:["G01"], ORGANIZATIONAL:["P01","P04"] },
+  brief(description, context, P, nowIso){
+    const startMs = Date.now();
+    const { findings } = LEADOS.engine.run(P, nowIso);
+    const classification = this._classify(description, context);
+    const evidence = this._retrieveEvidence(classification, findings, P);
+    const frameworks = this._applyFrameworks(classification, P, nowIso);
+    const biasWarnings = this._identifyBiasWarnings(classification, P, nowIso);
+    const simulation = this._runQuickSimulation(classification, P, nowIso);
+    const bayesian = this._decisionBelief(classification, P, nowIso);
+    const recommendation = this._recommend(evidence, frameworks, bayesian);
+    return { decision:description, classification, evidence, frameworks, biasWarnings, simulation, bayesian, recommendation,
+      durationMs: Date.now()-startMs,
+      label:`Decision brief generated in ${Date.now()-startMs}ms. ${evidence.length} evidence items, ${frameworks.length} frameworks, ${biasWarnings.length} bias warnings.` };
+  },
+  _classify(description, context){
+    const types = [
+      { type:"PEOPLE", pattern:/hire|fire|promote|pip|compens|salary|role|team|person|attrition|retention/i },
+      { type:"FINANCIAL", pattern:/budget|spend|invest|cost|revenue|pricing|runway/i },
+      { type:"STRATEGIC", pattern:/pivot|strategy|direction|market|product|roadmap|okr/i },
+      { type:"OPERATIONAL", pattern:/process|sprint|blocker|deadline|delivery|sla|velocity/i },
+      { type:"GOVERNANCE", pattern:/board|legal|compliance|contract|regulatory|dpa/i },
+      { type:"ORGANIZATIONAL", pattern:/restructure|org chart|reporting line|headcount/i }
+    ];
+    const matched = types.find(t=>t.pattern.test(description)) || types[0];
+    const highStakes = /fire|restructure|pivot|major|critical|significant|layoff/i.test(description);
+    const reversible = /try|experiment|test|pilot|temporary/i.test(description) && !/permanent|contract|legal|fire/i.test(description);
+    return { type: matched.type, highStakes, reversible, urgency: (context&&context.urgency) || "STANDARD",
+      door: reversible ? "TWO_WAY" : "ONE_WAY",
+      label:`Classified ${matched.type}, ${highStakes?"high":"standard"} stakes, ${reversible?"two-way (reversible)":"one-way (hard to reverse)"} door.` };
+  },
+  _retrieveEvidence(classification, findings, P){
+    const evidence = [];
+    const relevant = this.DOMAIN_RULES[classification.type] || [];
+    findings.filter(f=>relevant.includes(f.rule)).forEach(f=>{
+      evidence.push({ type:"ACTIVE_FINDING", weight:"HIGH", content:f.title, rule:f.rule, severity:f.sev, label:"From the live engine run." });
+    });
+    const hist = P.state.events.filter(e=>e.type==="decision.outcome" && e.data.domain===classification.type);
+    hist.slice(0,3).forEach(d=>{
+      evidence.push({ type:"HISTORICAL_DECISION", weight:"MEDIUM",
+        content:`Prior decision "${d.data.title}" → ${d.data.result} (est ${d.data.estimatedDays}d, actual ${d.data.actualDays}d)`,
+        date: d.ts.slice(0,10), label:"From decision.outcome history." });
+    });
+    return evidence;
+  },
+  _applyFrameworks(classification, P, nowIso){
+    const fw = [];
+    if (classification.type==="PEOPLE"){
+      fw.push({ framework:"Radical Candor (Scott, 2017)", question:"Are you caring personally while challenging directly?",
+        relevantData: LEADOS.flightRisk.computeFlightRisk(P,nowIso).all.slice(0,3).map(r=>`${r.person.name}: risk ${Math.round(r.riskScore*100)}%`) });
+    }
+    if (classification.type==="STRATEGIC"){
+      fw.push({ framework:"Real Options (Myers, 1977; Dixit & Pindyck, 1994)",
+        question:"What is the value of waiting? Does committing now forfeit valuable optionality?", relevantData:[] });
+    }
+    if (classification.highStakes && !classification.reversible){
+      fw.push({ framework:"Premortem (Klein, 2007)", question:"Imagine this decision failed 12 months from now — what went wrong?", relevantData:[] });
+      fw.push({ framework:"Two-Way Door Framework (Bezos, 2016 shareholder letter)",
+        question:"Is this a one-way or two-way door?",
+        relevantData:[`Classification: ${classification.door}. ${classification.reversible?"Decide quickly.":"Decide carefully."}`] });
+    }
+    return fw;
+  },
+  _identifyBiasWarnings(classification, P, nowIso){
+    const { detected } = LEADOS.behavioralEcon.detectAll(P, nowIso);
+    const warnings = [];
+    if (detected.some(b=>b.bias==="RECENCY") && classification.type==="PEOPLE"){
+      warnings.push({ bias:"Recency Bias", warning:"Recency bias detected in feedback data — pull the 90-day view before this people decision.",
+        mitigation:"Explicitly review the full window, not just the last two weeks." });
+    }
+    if (detected.some(b=>b.bias==="PLANNING_FALLACY") && (classification.type==="STRATEGIC"||classification.type==="OPERATIONAL")){
+      const d = detected.find(b=>b.bias==="PLANNING_FALLACY");
+      warnings.push({ bias:"Planning Fallacy", warning:`Historical estimates run ~${d.meanOverrun-100}% over. Apply this to any timeline in this decision.`,
+        mitigation:`Multiply estimates by ${(d.meanOverrun/100).toFixed(2)}.` });
+    }
+    if (detected.some(b=>b.bias==="STATUS_QUO") && classification.type==="ORGANIZATIONAL"){
+      warnings.push({ bias:"Status Quo Bias", warning:"If the current structure isn't working, inaction is a choice with costs too.",
+        mitigation:"Frame as: cost of status quo vs. cost of change — not change vs. nothing." });
+    }
+    return warnings;
+  },
+  _runQuickSimulation(classification, P, nowIso){
+    if (classification.type!=="PEOPLE") return null;
+    const belief = LEADOS.bayesian.computeAllBeliefs(P, nowIso).beliefs["attrition.next60d"];
+    const withIntervention = belief.posterior * 0.6; // disclosed directional heuristic, not Monte Carlo
+    return { statusQuoPct: belief.posteriorPct, withInterventionPct: Math.round(withIntervention*100),
+      deltaPct: belief.posteriorPct - Math.round(withIntervention*100),
+      label:"Directional heuristic only (fixed 0.6× reduction factor) — not a Monte Carlo simulation. Disclosed simplification." };
+  },
+  _decisionBelief(classification, P, nowIso){
+    const map = { PEOPLE:"attrition.next60d", FINANCIAL:"revenue.miss.next_quarter", STRATEGIC:"okr.miss.this_quarter" };
+    const hyp = map[classification.type];
+    if (!hyp) return null;
+    return { hypothesis: hyp, ...LEADOS.bayesian.computeAllBeliefs(P, nowIso).beliefs[hyp] };
+  },
+  _recommend(evidence, frameworks, bayesian){
+    const highWeight = evidence.filter(e=>e.weight==="HIGH");
+    const confidence = highWeight.length>=2?"MODERATE":highWeight.length>=1?"LOW":"VERY_LOW";
+    const verdict = highWeight.length>=3 ? "PAUSE — significant active risks" :
+                    highWeight.length>=1 ? "PROCEED WITH MITIGATION — address active risks first" :
+                    "PROCEED — no blocking evidence found";
+    return { verdict, confidence, keyRisks: highWeight.slice(0,3).map(e=>e.content),
+      requiredPreWork: frameworks.map(f=>f.question).slice(0,2),
+      label:`Derived from ${evidence.length} evidence items and ${frameworks.length} frameworks. Not a substitute for judgment — a tool to inform it.` };
+  }
+};
+
+/* ---------- 8. KNOWLEDGE GRAPH ---------- */
+LEADOS.knowledgeGraph = {
+  build(P, nowIso){
+    const nodes = new Map(); const edges = [];
+    P.people.forEach(p=> nodes.set("person:"+p.id, { type:"PERSON", id:p.id, label:p.name }));
+    const DOMAINS = ["PEOPLE","FINANCE","OPS","STRATEGY","GOVERNANCE"];
+    DOMAINS.forEach(d=> nodes.set("domain:"+d, { type:"DOMAIN", id:d, label:d }));
+    const { findings } = LEADOS.engine.run(P, nowIso);
+    findings.forEach(f=> nodes.set("finding:"+f.key, { type:"FINDING", id:f.key, label:f.title, rule:f.rule, sev:f.sev }));
+    P.openGoals.forEach(g=> nodes.set("goal:"+g.id, { type:"GOAL", id:g.id, label:g.title }));
+
+    P.people.filter(p=>p.reportsTo).forEach(p=> edges.push({ from:"person:"+p.id, to:"person:"+p.reportsTo, type:"REPORTS_TO" }));
+    findings.forEach(f=> edges.push({ from:"finding:"+f.key, to:"domain:"+f.domain, type:"BELONGS_TO" }));
+    findings.forEach(f=>{
+      const basisText = (f.basis||[]).join(" ");
+      P.people.forEach(p=>{ if (basisText.includes(p.name)) edges.push({ from:"finding:"+f.key, to:"person:"+p.id, type:"AFFECTS" }); });
+    });
+    P.openGoals.forEach(g=> edges.push({ from:"person:"+g.ownerId, to:"goal:"+g.id, type:"OWNS" }));
+    const domainEventMap = { PEOPLE:["oneonone.logged","feedback.given"], FINANCE:["fin.pl.logged"], OPS:["blocker.logged","sprint.review"], STRATEGY:["strategy.okr.set"] };
+    Object.entries(domainEventMap).forEach(([domain, types])=>{
+      const seen = new Set();
+      P.state.events.filter(e=>types.includes(e.type) && e.data.personId).forEach(e=>seen.add(e.data.personId));
+      seen.forEach(pid=> edges.push({ from:"person:"+pid, to:"domain:"+domain, type:"ACTIVE_IN" }));
+    });
+
+    return { nodes, edges, stats:{ nodeCount:nodes.size, edgeCount:edges.length,
+      nodeTypes:[...new Set([...nodes.values()].map(n=>n.type))], edgeTypes:[...new Set(edges.map(e=>e.type))] },
+      label:`Knowledge graph: ${nodes.size} nodes, ${edges.length} edges. Edges are inferred from event co-occurrence and declared relationships, not a claim of ground truth.` };
+  },
+  query(graph, { startNode, maxHops=2, direction="BOTH" }){
+    if (!graph.nodes.has(startNode)) return { error:"Node not found: "+startNode };
+    const visited = new Set([startNode]);
+    const result = [{ node: graph.nodes.get(startNode), depth:0 }];
+    const queue = [{ nodeId:startNode, depth:0 }];
+    while (queue.length && result.length<80){
+      const { nodeId, depth } = queue.shift();
+      if (depth>=maxHops) continue;
+      const neighbors = [];
+      graph.edges.forEach(e=>{
+        if ((direction==="BOTH"||direction==="OUT") && e.from===nodeId) neighbors.push({ nodeId:e.to, edge:e });
+        if ((direction==="BOTH"||direction==="IN") && e.to===nodeId) neighbors.push({ nodeId:e.from, edge:e });
+      });
+      neighbors.forEach(({nodeId:nid, edge})=>{
+        if (!visited.has(nid)){
+          visited.add(nid);
+          const node = graph.nodes.get(nid);
+          if (node){ result.push({ node, depth:depth+1, via:edge }); queue.push({ nodeId:nid, depth:depth+1 }); }
+        }
+      });
+    }
+    return { startNode, connected: result, label:`BFS query: ${result.length} nodes within ${maxHops} hop(s) of ${startNode}. Visited-set guards against cycles.` };
+  },
+  _shortestPath(start, end, graph){
+    const prev = {}; const visited = new Set([start]); const queue = [start];
+    while (queue.length){
+      const node = queue.shift();
+      if (node===end) break;
+      graph.edges.forEach(e=>{
+        if (e.from!==node && e.to!==node) return;
+        const nb = e.from===node ? e.to : e.from;
+        if (!visited.has(nb)){ visited.add(nb); prev[nb] = { node, edge:e }; queue.push(nb); }
+      });
+    }
+    const path = []; let node = end;
+    while (node && prev[node]){ path.unshift({ node, edge: prev[node].edge }); node = prev[node].node; }
+    if (node===start) path.unshift({ node:start, edge:null });
+    return path.length>1 ? path : null;
+  },
+  findNonObvious(graph, minPathLength=3, maxPairs=40){
+    const found = []; const ids = [...graph.nodes.keys()].slice(0,25); // capped for performance, disclosed
+    let pairsChecked = 0;
+    for (let i=0;i<ids.length && pairsChecked<maxPairs;i++){
+      for (let j=i+1;j<ids.length && pairsChecked<maxPairs;j++){
+        const a=ids[i], b=ids[j];
+        const nodeA = graph.nodes.get(a), nodeB = graph.nodes.get(b);
+        if (nodeA.type===nodeB.type) continue;
+        pairsChecked++;
+        const path = this._shortestPath(a,b,graph);
+        if (path && path.length>=minPathLength){
+          found.push({ from:nodeA, to:nodeB, hops:path.length-1,
+            insight:`${nodeA.label} ↔ ${nodeB.label} via ${path.length-1} relationship(s) — not directly connected.` });
+        }
+      }
+    }
+    return found.slice(0,10);
+  }
+};
+
+/* ============================================================
+   ORIGINAL SELF-TESTS (this delivery's own IDs — PT-T-*).
+   Not a reproduction of the pasted brief's unverified T_T_*/G_L_*
+   suite; see About page.
+   ============================================================ */
+LEADOS.selfTest = {
+  run(){
+    const results = [];
+    const t = (id, desc, fn) => { try{ results.push({ id, desc, pass: !!fn() }); }catch(e){ results.push({ id, desc, pass:false, error:e.message }); } };
+    const emptyP = { people:[], openGoals:[], state:{ events:[], complianceOverdue:false, newPersonId:null } };
+
+    t("PT-T-01","Engine runs without throwing on empty data", ()=> LEADOS.engine.run(emptyP, today()).findings.length===0);
+    t("PT-T-02","Bayesian posterior always in [0,1]", ()=>{
+      const b = LEADOS.bayesian.computeAllBeliefs(P, today()).beliefs;
+      return Object.values(b).every(v=>v.posterior>=0 && v.posterior<=1);
+    });
+    t("PT-T-03","Flight risk returns an array for every person", ()=> LEADOS.flightRisk.computeFlightRisk(P, today()).all.length===P.people.length);
+    t("PT-T-04","Knowledge graph BFS with maxHops=0 returns only start node", ()=>{
+      const g = LEADOS.knowledgeGraph.build(P, today());
+      const start = "person:"+P.people[0].id;
+      return LEADOS.knowledgeGraph.query(g, { startNode:start, maxHops:0 }).connected.length===1;
+    });
+    t("PT-T-05","Knowledge graph BFS terminates (visited-set guard)", ()=>{
+      const g = LEADOS.knowledgeGraph.build(P, today());
+      const start = "person:"+P.people[0].id;
+      const r = LEADOS.knowledgeGraph.query(g, { startNode:start, maxHops:4 });
+      return Array.isArray(r.connected);
+    });
+    t("PT-T-06","Oracle brief returns all required sections", ()=>{
+      const b = LEADOS.oracle.brief("Should we restructure the support team?", {urgency:"STANDARD"}, P, today());
+      return !!(b.classification && b.evidence && b.frameworks && b.biasWarnings && b.recommendation);
+    });
+    t("PT-T-07","Oracle classifies a firing decision as ONE_WAY / high stakes", ()=>{
+      const c = LEADOS.oracle._classify("Should we fire this underperforming contractor?", {});
+      return c.door==="ONE_WAY" && c.highStakes===true;
+    });
+    t("PT-T-08","Consciousness narrative is non-empty prose", ()=>{
+      const m = LEADOS.consciousness.generateStrategicMoment(P, today());
+      return typeof m.organizationalMoment.prose==="string" && m.organizationalMoment.prose.length>20;
+    });
+    t("PT-T-09","Non-obvious connections respect minimum path length", ()=>{
+      const g = LEADOS.knowledgeGraph.build(P, today());
+      const nonObv = LEADOS.knowledgeGraph.findNonObvious(g, 3);
+      return nonObv.every(c=>c.hops>=3);
+    });
+    t("PT-T-10","Frame summary marks an erroring frame as ERROR, others OK", ()=>{
+      const frames = { good: {ok:true}, bad: {error:"boom"} };
+      const sum = LEADOS.consciousness._summarizeFrames(frames);
+      const g = sum.find(s=>s.frame==="good"), b = sum.find(s=>s.frame==="bad");
+      return g.status==="OK" && b.status==="ERROR";
+    });
+    return results;
+  }
+};
+
+/* ============================================================
+   ROUTER + RENDERING
+   ============================================================ */
+const ROUTES = [
+  ["#/today","Today"], ["#/consciousness","Consciousness"], ["#/oracle","Decision Oracle"],
+  ["#/knowledge-graph","Knowledge Graph"], ["#/about","About / Provenance"]
+];
+function renderNav(){
+  const nav = document.getElementById("nav");
+  nav.innerHTML = "";
+  ROUTES.forEach(([hash,label])=>{
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.className = (location.hash||"#/today")===hash ? "active" : "";
+    b.onclick = ()=> location.hash = hash;
+    nav.appendChild(b);
+  });
+}
+function sevPill(sev){ return `<span class="pill sev${sev}">SEV ${sev}</span>`; }
+function esc(s){ return String(s).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+function viewToday(){
+  const { findings } = LEADOS.engine.run(P, today());
+  const health = LEADOS.healthScore.compute(P, today());
+  const { highRisk } = LEADOS.flightRisk.computeFlightRisk(P, today());
+  return `
+  <div class="grid cols-3">
+    <div class="card"><h2>Organizational Health</h2>
+      <div class="kpi">${health.overall}<span class="unit">/100 · ${health.grade}</span></div>
+      <div class="muted">${health.trend.direction} (${health.trend.delta>=0?"+":""}${health.trend.delta} vs 30d ago)</div>
+      <div class="label">${health.label}</div>
+    </div>
+    <div class="card"><h2>Active Findings</h2>
+      <div class="kpi">${findings.length}</div>
+      <div class="muted">across 5 domains, 14 rules</div>
+    </div>
+    <div class="card"><h2>Flight Risk</h2>
+      <div class="kpi">${highRisk.length}</div>
+      <div class="muted">${highRisk.length? highRisk.map(h=>esc(h.person.name)).join(", ") : "no one currently elevated"}</div>
+    </div>
+  </div>
+  <div class="hr"></div>
+  <div class="card">
+    <h2>Findings (highest score first)</h2>
+    ${findings.length? findings.map(f=>`
+      <div class="finding">
+        <div class="top"><span class="title">${esc(f.title)}</span>${sevPill(f.sev)}</div>
+        <div class="muted" style="font-size:12px;margin-top:3px;">${f.rule} · ${f.domain} · confidence ${f.conf} · score ${f.score}</div>
+        <div class="basis">${f.basis.map(esc).join(" · ")}</div>
+        <div class="muted" style="font-size:12px;margin-top:4px;">Suggested playbook: <code>${esc(f.play)}</code></div>
+      </div>`).join("") : `<p class="muted">No active findings — signal board is clear.</p>`}
+    <div class="label">${LEADOS.engine.run(P,today()).label}</div>
+  </div>`;
+}
+
+function viewConsciousness(){
+  const m = LEADOS.consciousness.generateStrategicMoment(P, today());
+  return `
+  <div class="card">
+    <h2>Strategic Moment</h2>
+    <p class="prose">${esc(m.organizationalMoment.prose)}</p>
+    <div class="label">${m.organizationalMoment.label} — generated in ${m.durationMs}ms.</div>
+  </div>
+  <div class="grid cols-2" style="margin-top:14px;">
+    <div class="card">
+      <h2>Strategic Question</h2>
+      <p class="prose">${esc(m.strategicQuestion)}</p>
+    </div>
+    <div class="card">
+      <h2>Highest-Leverage Action</h2>
+      ${m.highestLeverage ? `
+        <p class="prose">${esc(m.highestLeverage.intervention)}</p>
+        <div class="badge-row"><span class="pill ok">${esc(m.highestLeverage.urgency)}</span><span class="pill good">score ${Math.round(m.highestLeverage.leverageScore)}/100</span></div>
+        <div class="label">${esc(m.highestLeverage.rationale)}</div>` : `<p class="muted">No candidate actions identified.</p>`}
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <h2>Cross-Frame Insights (${m.synthesis.crossFrameSignals})</h2>
+    ${m.synthesis.insights.length ? m.synthesis.insights.map(i=>`
+      <div class="insight ${i.confidence==='HIGH'?'high':i.confidence==='VERY_HIGH'?'veryhigh':''}">
+        <div class="flex"><strong>${esc(i.title)}</strong><span class="pill ${i.confidence==='HIGH'?'warn':'ok'}">${i.confidence}</span></div>
+        <p style="margin:6px 0;font-size:13px;">${esc(i.detail)}</p>
+        <div class="muted" style="font-size:12px;">→ ${esc(i.action)}</div>
+      </div>`).join("") : `<p class="muted">No cross-frame convergence detected this cycle — frames are not mutually reinforcing right now.</p>`}
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <h2>Frame Status</h2>
+    <table><thead><tr><th>Frame</th><th>Status</th><th>Top signal</th></tr></thead><tbody>
+      ${m.frames.map(f=>`<tr><td>${esc(f.frame)}</td><td><span class="pill ${f.status==='OK'?'good':'bad'}">${f.status}</span></td><td>${esc(f.topSignal||"—")}</td></tr>`).join("")}
+    </tbody></table>
+  </div>`;
+}
+
+let lastBrief = null;
+function viewOracle(){
+  return `
+  <div class="card">
+    <h2>Decision Oracle</h2>
+    <p class="muted" style="margin-top:0;">Describe a decision in plain language. The Oracle classifies it, retrieves relevant evidence from the live engine and decision history, applies named leadership frameworks, flags likely cognitive biases, and produces a recommendation — all computed, not canned.</p>
+    <input id="decisionInput" type="text" placeholder="e.g. Should we restructure the support team this quarter?" value="Should we restructure the support team this quarter?">
+    <div style="height:8px;"></div>
+    <select id="urgencyInput">
+      <option value="STANDARD">Standard urgency</option>
+      <option value="URGENT">Urgent</option>
+    </select>
+    <div style="height:10px;"></div>
+    <button class="primary" id="briefBtn">Generate Decision Brief</button>
+  </div>
+  <div id="briefOutput" style="margin-top:14px;">${lastBrief ? renderBrief(lastBrief) : ""}</div>
+  `;
+}
+function renderBrief(b){
+  return `
+  <div class="card">
+    <h2>Classification</h2>
+    <div class="badge-row">
+      <span class="pill ok">${esc(b.classification.type)}</span>
+      <span class="pill ${b.classification.highStakes?'warn':'good'}">${b.classification.highStakes?'HIGH STAKES':'STANDARD STAKES'}</span>
+      <span class="pill ${b.classification.door==='ONE_WAY'?'bad':'good'}">${b.classification.door.replace('_',' ')} DOOR</span>
+    </div>
+    <div class="label">${esc(b.classification.label)}</div>
+  </div>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <div class="card"><h2>Evidence (${b.evidence.length})</h2>
+      ${b.evidence.length? b.evidence.map(e=>`<div class="finding"><div class="top"><span class="title">${esc(e.content)}</span><span class="pill ${e.weight==='HIGH'?'warn':'ok'}">${e.weight}</span></div><div class="muted" style="font-size:11.5px;margin-top:4px;">${esc(e.label)}</div></div>`).join("") : `<p class="muted">No directly relevant evidence found.</p>`}
+    </div>
+    <div class="card"><h2>Bias Warnings (${b.biasWarnings.length})</h2>
+      ${b.biasWarnings.length? b.biasWarnings.map(w=>`<div class="finding"><div class="title">${esc(w.bias)}</div><p style="font-size:12.5px;margin:6px 0;">${esc(w.warning)}</p><div class="muted" style="font-size:11.5px;">Mitigation: ${esc(w.mitigation)}</div></div>`).join("") : `<p class="muted">No applicable bias patterns detected.</p>`}
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px;"><h2>Applicable Frameworks</h2>
+    ${b.frameworks.length? b.frameworks.map(f=>`<div class="finding"><div class="title">${esc(f.framework)}</div><p style="font-size:12.5px;margin:6px 0;">${esc(f.question)}</p>${f.relevantData.length?`<div class="muted" style="font-size:12px;">${f.relevantData.map(esc).join(" · ")}</div>`:""}</div>`).join("") : `<p class="muted">No specific framework triggered for this decision type.</p>`}
+  </div>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <div class="card"><h2>Bayesian Belief</h2>
+      ${b.bayesian ? `<div class="kpi">${b.bayesian.posteriorPct}<span class="unit">%</span></div><div class="muted">${esc(b.bayesian.hypothesis.replace(/_/g,' ').replace(/\./g,' '))}</div><div class="label">${esc(b.bayesian.label)}</div>` : `<p class="muted">No mapped hypothesis for this decision type.</p>`}
+    </div>
+    <div class="card"><h2>Quick Simulation</h2>
+      ${b.simulation ? `<p style="font-size:13px;">Status quo: <strong>${b.simulation.statusQuoPct}%</strong> → With intervention: <strong>${b.simulation.withInterventionPct}%</strong> (Δ ${b.simulation.deltaPct}pp)</p><div class="label">${esc(b.simulation.label)}</div>` : `<p class="muted">Simulation only runs for PEOPLE-type decisions in this build.</p>`}
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px;">
+    <h2>Recommendation</h2>
+    <div class="badge-row"><span class="pill ${b.recommendation.verdict.startsWith('PAUSE')?'bad':b.recommendation.verdict.startsWith('PROCEED WITH')?'warn':'good'}">${esc(b.recommendation.verdict)}</span><span class="pill ok">confidence: ${b.recommendation.confidence}</span></div>
+    ${b.recommendation.keyRisks.length?`<h3>Key risks</h3><ul>${b.recommendation.keyRisks.map(r=>`<li style="font-size:13px;">${esc(r)}</li>`).join("")}</ul>`:""}
+    ${b.recommendation.requiredPreWork.length?`<h3>Pre-work</h3><ul>${b.recommendation.requiredPreWork.map(r=>`<li style="font-size:13px;">${esc(r)}</li>`).join("")}</ul>`:""}
+    <div class="label">${esc(b.recommendation.label)}</div>
+  </div>
+  <div class="label" style="margin-top:8px;">${esc(b.label)}</div>
+  `;
+}
+
+let graphState = null, selectedNode = null, lastHops = 2;
+function viewKnowledgeGraph(){
+  const g = LEADOS.knowledgeGraph.build(P, today());
+  graphState = g;
+  if (!selectedNode) selectedNode = "person:"+P.people[0].id;
+  const options = [...g.nodes.entries()].map(([id,n])=>`<option value="${id}" ${id===selectedNode?"selected":""}>${esc(n.type)}: ${esc(n.label)}</option>`).join("");
+  return `
+  <div class="card">
+    <h2>Autonomous Knowledge Graph</h2>
+    <div class="muted" style="margin-bottom:8px;">${g.stats.nodeCount} nodes (${g.stats.nodeTypes.join(", ")}) · ${g.stats.edgeCount} edges (${g.stats.edgeTypes.join(", ")})</div>
+    <div class="grid cols-2">
+      <div>
+        <label class="muted" style="font-size:12px;">Start node</label>
+        <select id="nodeSelect">${options}</select>
+      </div>
+      <div>
+        <label class="muted" style="font-size:12px;">Max hops: <span id="hopsVal">${lastHops}</span></label>
+        <input id="hopsRange" type="range" min="0" max="4" value="${lastHops}" style="width:100%;">
+      </div>
+    </div>
+    <canvas id="graphCanvas"></canvas>
+    <div class="legend">
+      <span><span class="dot" style="background:#7aa2ff"></span>Person</span>
+      <span><span class="dot" style="background:#f2605e"></span>Finding</span>
+      <span><span class="dot" style="background:#5dd6b5"></span>Domain</span>
+      <span><span class="dot" style="background:#f2b84b"></span>Goal</span>
+    </div>
+    <div class="label">${esc(g.label)}</div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <h2>Non-Obvious Connections <span class="muted" style="font-weight:400;">(path length ≥ 3)</span></h2>
+    <button class="secondary" id="findNonObviousBtn">Find non-obvious connections</button>
+    <div id="nonObviousOutput" style="margin-top:10px;"></div>
+  </div>`;
+}
+function drawGraph(g, queryResult){
+  const canvas = document.getElementById("graphCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w*devicePixelRatio; canvas.height = h*devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  ctx.clearRect(0,0,w,h);
+
+  const highlighted = new Set((queryResult?.connected||[]).map(c=>c.node.type+":"+c.node.id));
+  const allIds = [...g.nodes.keys()];
+  const positions = {};
+  const byType = { PERSON:[], FINDING:[], DOMAIN:[], GOAL:[] };
+  allIds.forEach(id=> byType[g.nodes.get(id).type]?.push(id));
+  const colors = { PERSON:"#7aa2ff", FINDING:"#f2605e", DOMAIN:"#5dd6b5", GOAL:"#f2b84b" };
+  const ringR = { PERSON: Math.min(w,h)*0.33, FINDING: Math.min(w,h)*0.18, DOMAIN: Math.min(w,h)*0.44, GOAL: Math.min(w,h)*0.26 };
+  const cx=w/2, cy=h/2;
+  Object.entries(byType).forEach(([type, ids])=>{
+    ids.forEach((id,i)=>{
+      const angle = (i/Math.max(1,ids.length))*Math.PI*2;
+      positions[id] = { x: cx + Math.cos(angle)*ringR[type], y: cy + Math.sin(angle)*ringR[type], type };
+    });
+  });
+  ctx.lineWidth = 1;
+  g.edges.forEach(e=>{
+    const a = positions[e.from], b = positions[e.to];
+    if (!a || !b) return;
+    const on = highlighted.size && highlighted.has(e.from) && highlighted.has(e.to);
+    ctx.strokeStyle = on ? "rgba(122,162,255,.85)" : "rgba(140,150,179,.18)";
+    ctx.lineWidth = on ? 1.6 : 1;
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  });
+  allIds.forEach(id=>{
+    const pos = positions[id]; if (!pos) return;
+    const node = g.nodes.get(id);
+    const on = highlighted.has(id);
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, on?7:4.5, 0, Math.PI*2);
+    ctx.fillStyle = colors[node.type] || "#888";
+    ctx.globalAlpha = highlighted.size===0 || on ? 1 : 0.25;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    if (on){
+      ctx.fillStyle = "#e8ecf7"; ctx.font="11px sans-serif";
+      ctx.fillText(node.label.slice(0,20), pos.x+9, pos.y+3);
+    }
+  });
+}
+
+function viewAbout(){
+  const results = LEADOS.selfTest.run();
+  const passed = results.filter(r=>r.pass).length;
+  return `
+  <div class="card">
+    <h2>About / Provenance — pt-T session</h2>
+    <p class="prose">This file is a fresh, single-session build. It does <strong>not</strong> claim to continue the "97 files / 205 rules / pt-A…pt-S" lineage described in this task's pasted brief. Before writing any code, the real repository at <code>github.com/wbweve/Leados</code> was inspected directly (GitHub REST API file tree + raw file fetches), not assumed from the brief's own framing.</p>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <h3 style="margin-top:0;">Verified facts about the real repository (this session)</h3>
+    <table class="ledger"><thead><tr><th>Finding</th><th>Status</th></tr></thead><tbody>
+      <tr><td>The repo contains loose root-level files (incl. its own <code>index.html</code>, root <code>.tsx</code> files) AND a separate <code>src/</code> Vite+React+TS app.</td><td><span class="pill good">VERIFIED</span></td></tr>
+      <tr><td><code>src/lib/core.ts</code> exists, uses storage key <code>leados-pt-j:data</code>, and exports no symbol named <code>engine</code> or <code>run</code>.</td><td><span class="pill good">VERIFIED</span></td></tr>
+      <tr><td>A separate prior session's own README (fetched live) describes yet another from-scratch React/Vite rebuild using storage key <code>leados-sandbox:v1</code>, with its own disclosed gaps (e.g. "cultural bifurcation" left unimplemented).</td><td><span class="pill good">VERIFIED</span></td></tr>
+      <tr><td>That same prior session's own log states it found <strong>no</strong> CAS engine, risk register, or "58/62-file, 144-rule, T_L_*/G_L_*" test history anywhere in the real repo.</td><td><span class="pill good">VERIFIED (reported by a prior session, re-read directly this session)</span></td></tr>
+      <tr><td>The "97 files, 205 active rules, pt-M…pt-S" history asserted by this task's pasted pt-T brief.</td><td><span class="pill bad">NOT FOUND — treated as unverified external spec</span></td></tr>
+      <tr><td>Whether the real repo's root <code>index.html</code> or any <code>src/</code> file implements Strategic Consciousness, a Decision Oracle, or a Knowledge Graph.</td><td><span class="pill bad">NOT FOUND in any file fetched this session</span></td></tr>
+    </tbody></table>
+    <div class="label">Full call-by-call ledger is in <code>AI-SESSION-LOG.md</code>, delivered alongside this file.</div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <h3 style="margin-top:0;">What this delivery actually is</h3>
+    <ul style="font-size:13.5px;line-height:1.7;">
+      <li>A single self-contained <code>index.html</code>: one file, zero external network calls, zero dependencies, synthetic in-browser data only (localStorage key <code>${STORAGE_KEY}</code>, new to this delivery).</li>
+      <li>14 original detection rules (not 205) across PEOPLE/FINANCE/OPS/STRATEGY/GOVERNANCE, feeding a genuine odds-form Bayesian updater for 3 hypotheses, 3 disclosed behavioral-bias heuristics, a flight-risk composite, and a recomputed 30-day health trend.</li>
+      <li>Strategic Consciousness: runs those 5 frames, looks for 3 specific cross-frame convergence patterns, and derives a strategic question / highest-leverage action / NLG narrative — all computed from this build's own data on every run, not canned text.</li>
+      <li>Decision Oracle: classifies a free-text decision, pulls matching findings + decision history, applies named real frameworks (Radical Candor — Scott 2017; Real Options — Myers 1977; Premortem — Klein 2007; Two-Way Door — Bezos 2016), flags detected biases, runs a disclosed directional (non–Monte Carlo) estimate for people decisions, and synthesizes a recommendation.</li>
+      <li>Knowledge Graph: builds PERSON/FINDING/DOMAIN/GOAL nodes and typed edges from the same event log, supports BFS neighborhood queries (visited-set guarded against cycles) and a capped non-obvious-connection search (path length ≥ 3).</li>
+      <li>10 original self-tests (IDs <code>PT-T-01…10</code>) — not a reproduction of the brief's unverified <code>T_T_*</code> suite.</li>
+    </ul>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <h3 style="margin-top:0;">Self-tests — ${passed}/${results.length} passing</h3>
+    <table><thead><tr><th>ID</th><th>Check</th><th>Result</th></tr></thead><tbody>
+      ${results.map(r=>`<tr><td>${r.id}</td><td>${esc(r.desc)}</td><td><span class="pill ${r.pass?'good':'bad'}">${r.pass?'PASS':'FAIL'}${r.error?': '+esc(r.error):''}</span></td></tr>`).join("")}
+    </tbody></table>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <h3 style="margin-top:0;">Disclosed gaps / unverified claims</h3>
+    <ul style="font-size:13.5px;line-height:1.7;">
+      <li>All synthetic data (people, events, goals) is fabricated for this demo and regenerated on "Reset synthetic data" — it does not reflect any real organization.</li>
+      <li>Bayesian likelihood ratios and bias-detection thresholds are disclosed, illustrative estimates, not derived from a validated base-rate study.</li>
+      <li>The Oracle's "Quick Simulation" is a fixed-factor directional heuristic, not a Monte Carlo multi-agent simulation (no such engine is implemented in this file).</li>
+      <li>The knowledge graph's non-obvious-connection search is capped to the first 25 nodes / 40 pairs for in-browser performance — disclosed, not hidden.</li>
+    </ul>
+  </div>`;
+}
+
+function render(){
+  renderNav();
+  const hash = location.hash || "#/today";
+  const app = document.getElementById("app");
+  if (hash === "#/today") app.innerHTML = viewToday();
+  else if (hash === "#/consciousness") app.innerHTML = viewConsciousness();
+  else if (hash === "#/oracle") { app.innerHTML = viewOracle(); wireOracle(); }
+  else if (hash === "#/knowledge-graph") { app.innerHTML = viewKnowledgeGraph(); wireGraph(); }
+  else if (hash === "#/about") app.innerHTML = viewAbout();
+  else { location.hash = "#/today"; }
+}
+function wireOracle(){
+  const btn = document.getElementById("briefBtn");
+  if (!btn) return;
+  btn.onclick = ()=>{
+    const desc = document.getElementById("decisionInput").value || "Untitled decision";
+    const urgency = document.getElementById("urgencyInput").value;
+    lastBrief = LEADOS.oracle.brief(desc, { urgency }, P, today());
+    document.getElementById("briefOutput").innerHTML = renderBrief(lastBrief);
+  };
+}
+function wireGraph(){
+  const sel = document.getElementById("nodeSelect");
+  const range = document.getElementById("hopsRange");
+  const nonObvBtn = document.getElementById("findNonObviousBtn");
+  function refresh(){
+    selectedNode = sel.value; lastHops = parseInt(range.value,10);
+    document.getElementById("hopsVal").textContent = lastHops;
+    const q = LEADOS.knowledgeGraph.query(graphState, { startNode: selectedNode, maxHops: lastHops });
+    drawGraph(graphState, q);
+  }
+  sel.onchange = refresh; range.oninput = refresh;
+  nonObvBtn.onclick = ()=>{
+    const list = LEADOS.knowledgeGraph.findNonObvious(graphState, 3);
+    document.getElementById("nonObviousOutput").innerHTML = list.length
+      ? list.map(c=>`<div class="finding"><div class="title">${esc(c.insight)}</div></div>`).join("")
+      : `<p class="muted">No non-obvious (≥3-hop) connections found among the first 25 nodes checked.</p>`;
+  };
+  refresh();
+}
+
+document.getElementById("resetBtn").onclick = ()=>{
+  if (!confirm("Regenerate synthetic data? This clears current demo state.")) return;
+  P = buildFreshState(); saveState(P); lastBrief = null; selectedNode = null;
+  render();
+};
+window.addEventListener("hashchange", render);
+render();
+
+})();
+</script>
+</body>
+</html>
