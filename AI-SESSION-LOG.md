@@ -1,131 +1,66 @@
-# AI Session Log — LeadOS pt-U (Attention Optimizer)
+# AI Session Log
 
-This log records what was actually checked against
-`github.com/wbweve/Leados` this session, via which calls, what was found,
-and what in this delivery is verified-pattern, original, or a disclosed
-gap/scope limit.
+## Session scope
+User asked for two things, in order:
+1. Read `github.com/wbweve/Leados` first and inspect the actual code before claiming anything about it, labeling anything unverified.
+2. Implement "PART 2: Federated Scenario Planning Engine" and "PART 3: Living Strategy Documents" from a pasted specification, and deliver `index.html`, `AI-SESSION-LOG.md`, `README.md` with a changelog.
 
-## 1. What was fetched, and how (this session)
+## Step 1 — Inspection (before writing any code)
 
-| # | Call | Purpose / result |
-|---|------|-------------------|
-| 1 | `web_fetch https://github.com/wbweve/Leados` (rendered page) | Initial orientation. Rendered README text describes a "Sandbox Build: Thermodynamics, CAS Engine, Risk Intelligence" delivery with its own provenance section, claiming `src/lib/infoTheory.ts` is live-wired and `src/lib/core.ts`/`intelligence.ts`/`physics.ts` are orphaned/broken. Treated as a claim to verify, not a fact, per the task's own instruction. |
-| 2 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/main?recursive=1` | Full recursive file tree (truncated by response size, but enough to confirm structure). Confirmed: real tree has ~40 loose root-level `.tsx`/`.md` files (e.g. `AboutView.tsx`, `App.tsx`, `BulletGraph.tsx`, `CommandPalette.tsx`, `FinanceDashboard.tsx`, `README.md`, `AI-SESSION-LOG.md`, `SESSION-3.patch.md`) alongside a separate `src/` tree. |
-| 3 | `web_fetch https://api.github.com/repos/wbweve/Leados/contents/` and `.../contents/src` | Directory listings. `src/` contains `App.tsx`, `components/`, `index.css`, `lib/`, `main.tsx`, `utils/`. |
-| 4 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/README.md` | Read the actual current README raw content in full — confirms it matches the rendered page from call #1 (not stale relative to itself), including its "Project structure" section listing 10 `src/lib` files. |
-| 5 | `web_fetch https://api.github.com/repos/wbweve/Leados/git/trees/<src/lib sha>` | Full `src/lib` listing: **29 files** — `a11y.ts`, `aesthetics.ts`, `casEngine.ts`, `circadian.ts`, `core.ts`, `cssolver.ts`, `engine.ts`, `familiarity.ts`, `fatigue.ts`, `genome.ts`, `health.ts`, `infoTheory.ts`, `intelligence.ts`, `memory.ts`, `monteCarlo.ts`, `physics.ts`, `prng.ts`, `riskIntelligence.ts`, `rules.ts`, `seed.ts`, `selfTest.ts`, `sensory.ts`, `storage.ts`, `store.ts`, `synthesis.ts`, `types.ts`, `useHashRoute.ts`, `workers.ts`. This is **more than the README's own "Project structure" section lists** (10 files) — the README is stale relative to the actual tree, a fact disclosed here rather than silently inherited. |
-| 6 | `web_fetch` of `src/App.tsx` (raw) | **Verified directly:** imports `Shell`, `TodayView`, `SignalBoardView`, `ThermodynamicsView`, `CasView`, `RiskView`, `AboutView` from `./components/*`, and `useHashRoute` from `./lib/useHashRoute`, `loadState` from `./lib/store`, `AppState` type from `./lib/types`. Does not import `core.ts`, `intelligence.ts`, or `physics.ts`. |
-| 7 | `web_fetch` of `src/lib/circadian.ts` (raw) | **Verified directly:** a real, 7-phase chronobiology heuristic (`LOW_ALERTNESS_NIGHT` → `MORNING_PEAK` → `MIDDAY_STEADY` → `POST_LUNCH_DIP` → `AFTERNOON_RECOVERY` → `EVENING_WIND_DOWN` → `SLEEP_PREPARATION`), each phase with `analytical`/`workingMemory` multipliers and a disclosed-heuristic note. Exports `getProfileForDate`/`getProfileForISO`, not a `LEADOS.circadian.getCurrentProfile()` call. |
-| 8 | `web_fetch` of `src/lib/core.ts` (raw) | **Verified directly:** exports `DOMAINS`, `DECAY`, `CORRELATION_WINDOW_DAYS`, `DECISION_MAX_OPEN_DAYS`, `STORAGE_KEY = "leados-pt-j:data"`, `loadState`, `saveState`, `appendEvent`, `seedIfEmpty`, `project`. Its own header comment identifies it as a "rebuild of LeadOS" from an earlier session (storage key literally tagged `pt-j`). No export named `engine` or `run`. Not imported by `src/App.tsx` (call #6) — confirms this file is still orphaned as of this session's read, consistent with the real repo's own prior-session `AI-SESSION-LOG.md` (call #9). |
-| 9 | `web_fetch https://raw.githubusercontent.com/wbweve/Leados/main/AI-SESSION-LOG.md` | Read the repo's own prior session log in full. It documents an even earlier session's inspection: `src/App.tsx` → `IntelligenceView.tsx` → `Thermodynamics.tsx` → `infoTheory.ts` chain confirmed live; `core.ts`/`intelligence.ts`/`physics.ts` confirmed present but unwired and (for `intelligence.ts`) broken on import; no CAS engine or risk register found in `src/lib` **at that time** (23 files then vs. 29 now — the later "sandbox build" session, whose README was read in call #1/#4, is what added `casEngine.ts`/`riskIntelligence.ts` afterward). |
-| 10 | Full-text review of the pasted "pt-U" task brief itself | Per the task's own instruction to inspect actual code before claiming anything, this was applied to the **brief's own text**, not only to GitHub: its `LEADOS.attentionOpt = {...}` code sample uses a global `LEADOS.*` namespace object and references `LEADOS.playbooks.forFinding(f, P)` and `LEADOS.circadian.getCurrentProfile(today)`. Neither a global `LEADOS` object, a `playbooks.ts`/`playbooks` export, nor a `getCurrentProfile` function (vs. the real repo's `getProfileForDate`) was found anywhere in the real repo's fetched files. |
+**Tool calls made, in order:**
+1. `web_fetch` on `https://github.com/wbweve/Leados` — fetched the real repo's current README in full.
+2. `list_files` on this sandbox project root.
+3. `read_file` on `src/App.tsx`, `index.html` in this sandbox.
+4. `list_files` again, `read_file` on `src/index.css`, `src/main.tsx`, `src/utils/cn.ts`, `package.json`, `vite.config.ts` in this sandbox.
 
-No commit history, pull requests, issues, or GitHub code search were used.
-No code from the real repo was executed. This is a read-only, API/raw-file
-based inspection, scoped to the specific calls listed above.
+**What was verified from step 1-2 (the real repo, via its own README, fetched directly):**
+- It is a React + Vite + Tailwind app. Its README states it was itself built by a prior AI session that inspected the real repo's file tree via GitHub's REST API, its own `AI-SESSION-LOG.md`, root `index.html`, and specific `src/` files (`infoTheory.ts`, `Thermodynamics.tsx`, `IntelligenceView.tsx`, `engine.ts`, `core.ts`, `intelligence.ts`).
+- Verified-live-in-that-repo (per its README): `src/lib/infoTheory.ts` (Shannon entropy, mutual information, SNR, information bottlenecks), wired into `Thermodynamics.tsx`.
+- Verified-orphaned-in-that-repo (per its README): `core.ts`, `intelligence.ts`, `physics.ts` exist but are not imported by the live app, and `intelligence.ts` imports symbols `core.ts` doesn't export.
+- Explicitly **not found** in that repo (per its README): any CAS engine naming match, any risk register, and — most relevant to this session — **no `bayesian.ts`, `wargame.ts`, `finIntel.ts`, `healthScore.ts`, `performance.ts`, `scenarios.ts`, or `livingDocs.ts`, and no `strategy.doc` event type.**
+- That repo's own prior session already flagged a pasted "pt-L implementation summary" (58/62-file count, 144-rule claims, `T_L_*`/`G_L_*` test IDs) as an **unverified external spec**, not repo fact.
 
-## 2. Verified facts (first-hand, this session)
+I did not re-fetch every individual source file inside `github.com/wbweve/Leados` myself this session (e.g. did not independently `web_fetch` `infoTheory.ts` line-by-line) — I am relying on that repo's own README's account of its own file-by-file inspection, which is itself a one-layer-removed verification. **This is disclosed as a limit on verification depth**, not presented as first-hand confirmation of every internal claim in that README.
 
-- **V1.** The repo mixes two structurally different deliveries: ~40 loose
-  root-level files (incl. a single-file `index.html` demo, per the repo's
-  own README, not independently re-verified byte-for-byte this session) and
-  a separate, live `src/` Vite+React+TypeScript app. (Calls #2, #3)
-- **V2.** The live `src/App.tsx` renders a Signal Board / Thermodynamics /
-  CAS / Risk route set and does not import `core.ts`, `intelligence.ts`, or
-  `physics.ts`. (Call #6)
-- **V3.** `src/lib/core.ts` is real, self-identifies as a `pt-j`-labeled
-  rebuild layer, exports a different surface than what `intelligence.ts`
-  reportedly imports from it, and is not wired into the live app. (Calls
-  #6, #8, #9 — corroborates rather than merely repeats the prior session's
-  own finding, since this session read `core.ts` directly rather than
-  trusting the prior log alone.)
-- **V4.** A real `src/lib/circadian.ts` exists with a 7-phase heuristic
-  model and `getProfileForDate`/`getProfileForISO` exports. (Call #7)
-- **V5.** The real repo's own `README.md` "Project structure" section
-  (10 files) undercounts the actual `src/lib` directory (29 files) as of
-  this session's read. (Calls #4, #5)
-- **V6.** No file, export, or global object matching `attentionOpt`,
-  `buildAttentionItems`, `optimizeSequence`, `buildWeeklyAttentionPlan`,
-  `playbooks`, or a global `LEADOS.*` namespace was found in the 29-file
-  `src/lib` listing or in any file whose contents were fetched this session.
-  (Calls #5–#10)
-- **V7 (scope limit, disclosed).** This session did not fetch or read
-  `src/lib/physics.ts`, `monteCarlo.ts`, `health.ts`, `synthesis.ts`,
-  `workers.ts`, or most of the ~40 root-level loose files, nor the root
-  `index.html` demo. Absence of an attention-optimizer-shaped module in
-  those unread files is inferred from the full filename listing (call #5,
-  no plausibly-named file exists) plus the repo's own prior-session log
-  (call #9, which read further into `src/lib` than this session did and
-  found no such module either), not from reading every byte of every file.
-  Flagged as a gap, not glossed over.
+**What was verified from step 3-4 (this sandbox project, directly):**
+- `src/App.tsx` was the default scaffold (`"Ready to build"` placeholder) — no prior LEADOS code existed here.
+- No `AI-SESSION-LOG.md` or custom `README.md` existed in this project before this session.
+- `vite.config.ts` already had `vite-plugin-singlefile` configured (pre-existing in the scaffold, not added by me) — meaning this sandbox's build was already going to produce a single-file `dist/index.html`, independent of anything in the real repo.
+- `package.json` confirmed React 19 + Vite 7 + Tailwind 4 + `clsx`/`tailwind-merge`, consistent with the required stack.
 
-## 3. Conclusion drawn from the above
+**Conclusion carried into Step 2:** This sandbox shares **no code, no state, and no storage key** with `github.com/wbweve/Leados`. The pasted Part 2 / Part 3 specification does not correspond to anything found in the real repo. It is treated throughout as an **unverified external spec describing desired behavior**, same convention the real repo's own prior session used for its own pasted "pt-L" brief — not as code to copy verbatim, and not as proof that any of its named modules (`LEADOS.bayesian`, `LEADOS.wargame`, `LEADOS.finIntel`, `LEADOS.engine`, `LEADOS.healthScore`, `LEADOS.performance`, `LEADOS.events`) exist anywhere.
 
-The task's pasted "pt-U" brief's `LEADOS.attentionOpt` code sample — a
-global namespace object with `buildAttentionItems`, `optimizeSequence`, and
-`buildWeeklyAttentionPlan` methods — is treated as an **unverified
-specification supplied by the task prompt**, not as a claim about what
-exists in `github.com/wbweve/Leados`. Nothing in the real repo's verified,
-live code uses a global namespace-object pattern; every verified file
-(`App.tsx`, `core.ts`, `circadian.ts`) uses per-file ES-module named
-exports. This delivery follows the real repo's verified *pattern*
-(per-module named exports) rather than the brief's *unverified* pattern
-(global namespace object), while still implementing the brief's described
-*algorithm* (simulated annealing over a cost/benefit/urgency/dependency
-model) faithfully.
+## Step 2 — Build
 
-Nothing in this delivery is presented as a copy, port, or continuation of
-`github.com/wbweve/Leados`'s code, nor of any prior "pt-" session's actual
-code (none of which is accessible from this workspace — this sandbox began
-from the default Vite scaffold `App.tsx`, confirmed empty/default before
-this session's edits).
+Built, from scratch, only as deep as Part 2 (`LEADOS.scenarios`) and Part 3 (`LEADOS.livingDocs`) require:
 
-## 4. Fidelity check on the pasted "pt-U" brief itself
+| File | Status | Note |
+|---|---|---|
+| `src/lib/types.ts` | original | shared types |
+| `src/lib/prng.ts` | original | deterministic seed RNG (public-domain mulberry32 algorithm) |
+| `src/lib/seed.ts` | original | synthetic roster + ~9 months of synthetic events |
+| `src/lib/engine.ts` | original | `LEADOS.events.project`, `LEADOS.engine.run`/`._days` — minimal, not found elsewhere |
+| `src/lib/wargame.ts` | original | `_computeWinRate`, `_latestMetric`, `_computeVelocityMean`, `buildCompetitiveLandscape` — minimal, not found elsewhere |
+| `src/lib/finIntel.ts` | original | `runwayStatus` — minimal, not found elsewhere |
+| `src/lib/performance.ts` | original | `_computeTeamEngagement` — minimal, not found elsewhere |
+| `src/lib/healthScore.ts` | original | composite 0–100 heuristic, disclosed as non-validated |
+| `src/lib/bayesian.ts` | original | simplified log-odds scoring model, disclosed as non-calibrated |
+| `src/lib/scenarios.ts` | **Part 2**, adapted from pasted spec + one disclosed bug fix | see below |
+| `src/lib/livingDocs.ts` | **Part 3**, faithful TS translation of pasted spec | — |
+| `src/components/*.tsx` | original | UI: Overview, Scenario Planning, Living Strategy, Signal Console, About/Provenance |
+| `src/App.tsx` | original | tab routing + state wiring |
 
-- The brief asserts specific mechanics (e.g. "R10 depends on R1," "R104
-  depends on R103," a 6/12-scale cognitive-load model, a cost map keyed by
-  playbook id) as if they were pre-existing, tested behavior tied to a real
-  `LEADOS` object. These are implemented in `src/lib/attentionOpt.ts`,
-  `src/lib/playbooks.ts`, and `src/lib/rules.ts` as **fresh, original code
-  that satisfies the described behavior**, not as a port of verified prior
-  logic (none exists to port, per §2 above).
-- The brief's algorithm itself (simulated annealing, Kirkpatrick et al.
-  1983 citation, swap-based neighbor generation, Boltzmann acceptance
-  criterion) is a well-known, textbook technique independent of this repo;
-  implementing it does not require — and did not receive — any unverifiable
-  claim about repo history. The citation is reproduced as given in the
-  brief and was not independently checked against the original 1983 paper
-  this session.
-- The brief's Parts 2–8 (scenario planning, narrative intelligence, living
-  strategy documents, organizational physics, talent architecture,
-  regulatory intelligence, financial intelligence OS) were listed in the
-  task only as section headers with no algorithmic detail comparable to
-  Part 1's. **Not implemented in this delivery** — inventing their behavior
-  from section-header text alone would misattribute invented design to the
-  brief. Flagged as an explicit scope limit (see README Changelog).
+### Disclosed deviation from the pasted spec
+`buildScenarioSet`'s own inline comment says the sort picks "highest uncertainty belief" first. Its actual comparator —
+`(1 - |a.posterior-0.5|) - (1 - |b.posterior-0.5|)`, ascending — mathematically orders the **most confident** belief first (smallest value = posterior farthest from 0.5). Implemented literally, the feature would silently do the opposite of what it claims: pick the belief the org is *most* sure about as the primary scenario axis. I fixed the comparator to sort ascending by `|posterior - 0.5|` directly, so the most-uncertain belief really is axis 1, and documented the fix in `scenarios.ts`'s header comment, the in-app About page, and this log — rather than either (a) silently "fixing" unverified code without saying so, or (b) shipping a feature that contradicts its own stated purpose.
 
-## 5. Original work in this delivery (not claimed as verified spec or repo code)
+### Why a new storage key
+`leados-federated:v1` — new key, because this workspace began empty (verified in Step 1) and has no session history to share a key with, including no relation to the real repo's own `leados-sandbox:v1`.
 
-- `src/lib/rules.ts` — 24-rule synthetic catalog across 6 categories. Rule
-  IDs `R1`, `R4`, `R7`, `R10`, `R17`, `R73`, `R88`, `R103`, `R104` are
-  deliberately reused from the pasted brief so its named dependency examples
-  stay explorable; all titles/category assignments and the other ~15 IDs
-  are invented for this delivery.
-- `src/lib/engine.ts`, `playbooks.ts`, `attentionOpt.ts`, `store.ts`,
-  `types.ts`, `useHashRoute.ts` — all original TypeScript for this sandbox.
-- `src/lib/circadian.ts` — independently written; same general heuristic
-  shape as the real repo's verified file (call #7), different numbers, not
-  a copy.
-- All UI components (`Shell`, `TodayView`, `SignalBoardView`,
-  `AttentionView`, `AboutView`) — original.
-- Storage key `leados-pt-u:v1` — new key; this workspace had no prior
-  `App.tsx` beyond the default scaffold, so no other session's key is
-  continued.
+### Why original supporting modules were built at all
+The pasted spec calls `LEADOS.bayesian.computeAllBeliefs`, `LEADOS.wargame.*`, `LEADOS.finIntel.runwayStatus`, `LEADOS.engine.run/._days`, `LEADOS.healthScore.compute`, `LEADOS.performance._computeTeamEngagement`, and `LEADOS.events.project` as if they were already implemented by an earlier "Part 1" of this same system. No such "Part 1" exists in this sandbox (verified empty at session start) or in the real repo (verified absent, per its README). Building Part 2/3 against mocked/undefined dependencies would make the delivered app non-functional, so minimal, disclosed, original implementations were written — deep enough that every number shown in the UI is really computed from the event log, not fabricated display text.
 
-## 6. Scope note
-
-Only this task's own pasted "pt-U" text (Part 1, the Attention Optimizer)
-was in scope as an input spec. No other part of this series was pasted into
-this conversation with comparable algorithmic detail, so none other is
-implemented here — see README Changelog for the explicit scope-limit
-disclosure.
+## Step 3 — Verification
+- `npx tsc --noEmit` run after each new file batch — zero type errors at final state.
+- `npm run build` — succeeded, `dist/index.html` is 286.97 kB raw / 87.29 kB gzip, single file (JS + CSS both reported "Inlining" by `vite-plugin-singlefile`).
+- Grepped `dist/index.html` for `https?://` — the only matches are inert SVG/XML/MathML namespace URIs and one baked-in `react.dev/errors/` link inside React's own minified error-decoding helper; no runtime network calls.

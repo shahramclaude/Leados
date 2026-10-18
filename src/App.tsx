@@ -1,34 +1,24 @@
-import { useState } from "react";
-import { Shell } from "./components/Shell";
-import { TodayView } from "./components/TodayView";
-import { SignalBoardView } from "./components/SignalBoardView";
-import { AttentionView } from "./components/AttentionView";
-import { AboutView } from "./components/AboutView";
-import { useHashRoute } from "./lib/useHashRoute";
-import { loadState, saveState, resetState, clearState, type SignalState } from "./lib/store";
+import { useState } from 'react';
+import { AboutView } from './components/AboutView';
+import { ConsoleView } from './components/ConsoleView';
+import { LivingDocsView } from './components/LivingDocsView';
+import { OverviewView } from './components/OverviewView';
+import { ScenariosView } from './components/ScenariosView';
+import { Shell, type Tab } from './components/Shell';
+import { useStore } from './lib/store';
 
 export default function App() {
-  const [route, navigate] = useHashRoute("/today");
-  const [state, setState] = useState<SignalState>(() => loadState());
-
-  const update = (s: SignalState) => {
-    setState(s);
-    saveState(s);
-  };
+  const { state, addEvent, reset } = useStore();
+  const [tab, setTab] = useState<Tab>('overview');
+  const today = Date.now();
 
   return (
-    <Shell route={route} navigate={navigate}>
-      {route === "/today" && <TodayView state={state} navigate={navigate} />}
-      {route === "/signals" && (
-        <SignalBoardView
-          state={state}
-          onChange={update}
-          onReset={() => update(resetState())}
-          onClear={() => update(clearState())}
-        />
-      )}
-      {route === "/attention" && <AttentionView state={state} />}
-      {route === "/about" && <AboutView />}
+    <Shell active={tab} onChange={setTab} onReset={reset}>
+      {tab === 'overview' && <OverviewView state={state} today={today} />}
+      {tab === 'scenarios' && <ScenariosView state={state} today={today} />}
+      {tab === 'living-docs' && <LivingDocsView state={state} today={today} onAddDoc={(data) => addEvent('strategy.doc', data)} />}
+      {tab === 'console' && <ConsoleView state={state} onAddEvent={addEvent} />}
+      {tab === 'about' && <AboutView />}
     </Shell>
   );
 }

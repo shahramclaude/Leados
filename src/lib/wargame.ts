@@ -1,80 +1,51 @@
-// wargame — strategic wargaming engine.
-//
-// PROVENANCE: pasted "pt-O" brief names `js/wargame.js`. Not found in
-// github.com/wbweve/Leados this session. Original payoff-matrix simulation
-// built from scratch; the four postures/archetypes and payoff numbers below
-// are an original, disclosed-fabricated scenario design, not sourced data.
+// LEADOS.wargame — original, minimal. The pasted spec calls
+// LEADOS.wargame.buildCompetitiveLandscape / ._computeWinRate /
+// ._latestMetric / ._computeVelocityMean as pre-existing helpers; none exist
+// in the real repo (verified: no wargame.ts, finIntel.ts anywhere in
+// wbweve/Leados). Implemented here only as far as Part 2 + Part 3 need.
+import { engine } from './engine';
+import type { Projection } from './types';
 
-import type { CompetitorArchetype, Posture } from "./types";
-import { round1 } from "./prng";
+export const wargame = {
+  _computeWinRate(P: Projection, today: number): number | null {
+    const ev = P.state.events;
+    const won = ev.filter((e) => e.type === 'sales.deal.won' && engine._days(e.ts, today) <= 180 && engine._days(e.ts, today) >= 0);
+    const lost = ev.filter((e) => e.type === 'sales.deal.lost' && engine._days(e.ts, today) <= 180 && engine._days(e.ts, today) >= 0);
+    const total = won.length + lost.length;
+    if (total < 3) return null; // insufficient sample
+    return won.length / total;
+  },
 
-// Expected-value payoff[ourPosture][competitorArchetype] = our net outcome index (-100..100)
-// Hand-authored, disclosed-fabricated payoff table (original to this delivery).
-const PAYOFF: Record<Posture, Record<CompetitorArchetype, number>> = {
-  aggressive: { incumbent: 30, disruptor: -15, "fast-follower": 20, "niche-player": 45 },
-  defensive: { incumbent: 10, disruptor: -35, "fast-follower": 5, "niche-player": 15 },
-  collaborative: { incumbent: 25, disruptor: 20, "fast-follower": 35, "niche-player": 10 },
-  niche: { incumbent: 5, disruptor: 10, "fast-follower": 0, "niche-player": -20 },
-};
+  _latestMetric(P: Projection, metric: string): number | null {
+    const rows = P.state.events
+      .filter((e) => e.type === 'fin.kpi.logged' && e.data.metric === metric)
+      .sort((a, b) => +new Date(b.ts) - +new Date(a.ts));
+    return rows[0]?.data.value ?? null;
+  },
 
-export interface WargameRound {
-  round: number;
-  posture: Posture;
-  outcome: number;
-  volatilityShock: number;
-}
+  _computeVelocityMean(P: Projection, today: number): number | null {
+    const won = P.state.events.filter((e) => e.type === 'sales.deal.won' && engine._days(e.ts, today) <= 180 && engine._days(e.ts, today) >= 0);
+    if (!won.length) return null;
+    return won.reduce((a, e) => a + (e.data.cycleDays || 0), 0) / won.length;
+  },
 
-export interface WargameResult {
-  recommendedPosture: Posture;
-  expectedOutcome: number;
-  matrix: { posture: Posture; outcome: number }[];
-  rounds: WargameRound[];
-  summary: string;
-}
-
-/** Deterministic pseudo-random shock from a numeric seed, no external RNG dependency. */
-function shockFor(seed: number, round: number): number {
-  const x = Math.sin(seed * 12.9898 + round * 78.233) * 43758.5453;
-  return (x - Math.floor(x)) * 2 - 1; // -1..1
-}
-
-export function runWargame(
-  posture: Posture,
-  competitorArchetype: CompetitorArchetype,
-  marketVolatility: number,
-  roundsCount = 5
-): WargameResult {
-  const matrix = (Object.keys(PAYOFF) as Posture[]).map((p) => ({
-    posture: p,
-    outcome: PAYOFF[p][competitorArchetype],
-  }));
-  const best = [...matrix].sort((a, b) => b.outcome - a.outcome)[0];
-
-  const seed = competitorArchetype.length * 7 + marketVolatility;
-  const volAmplitude = marketVolatility / 100;
-  const rounds: WargameRound[] = Array.from({ length: roundsCount }, (_, i) => {
-    const base = PAYOFF[posture][competitorArchetype];
-    const shock = shockFor(seed, i + 1) * volAmplitude * 25;
+  buildCompetitiveLandscape(P: Projection, today: number) {
+    const winRate = this._computeWinRate(P, today);
+    const velocity = this._computeVelocityMean(P, today);
+    const lossReasons: Record<string, number> = {};
+    P.state.events
+      .filter((e) => e.type === 'sales.deal.lost' && engine._days(e.ts, today) <= 180 && engine._days(e.ts, today) >= 0)
+      .forEach((e) => {
+        const r = e.data.reason || 'unknown';
+        lossReasons[r] = (lossReasons[r] || 0) + 1;
+      });
+    const totalLosses = Object.values(lossReasons).reduce((a, b) => a + b, 0);
+    const topLossReason = Object.entries(lossReasons).sort((a, b) => b[1] - a[1])[0];
     return {
-      round: i + 1,
-      posture,
-      outcome: round1(base + shock),
-      volatilityShock: round1(shock),
+      winRate,
+      velocityDaysMean: velocity,
+      topLossReason: topLossReason ? { reason: topLossReason[0], share: totalLosses ? Math.round((topLossReason[1] / totalLosses) * 100) : 0 } : null,
+      label: 'Competitive landscape computed from logged deal win/loss events in trailing 180d. Labeled: directional, not a CRM-grade pipeline analysis.',
     };
-  });
-
-  const expectedOutcome = round1(rounds.reduce((s, r) => s + r.outcome, 0) / rounds.length);
-
-  const summary =
-    best.posture === posture
-      ? `Current posture (${posture}) is already the modeled best response to a ${competitorArchetype} competitor.`
-      : `Modeled best response to a ${competitorArchetype} competitor is "${best.posture}" (expected ${best.outcome}), vs current posture "${posture}" (expected ${PAYOFF[posture][competitorArchetype]}).`;
-
-  return { recommendedPosture: best.posture, expectedOutcome, matrix, rounds, summary };
-}
-
-export function wargameSignal(posture: Posture, competitorArchetype: CompetitorArchetype, marketVolatility: number): number {
-  const r = runWargame(posture, competitorArchetype, marketVolatility, 3);
-  // Map outcome index (-100..100) onto a 0-100 "strategic position strength" signal.
-  return Math.max(0, Math.min(100, (r.expectedOutcome + 100) / 2));
-}
+  },
+};

@@ -1,87 +1,61 @@
-import type { ReactNode } from "react";
-import { cn } from "../utils/cn";
+import type { ReactNode } from 'react';
+import { cn } from '../utils/cn';
 
-const NAV: { route: string; label: string }[] = [
-  { route: "/today", label: "Today" },
-  { route: "/signals", label: "Signal Board" },
-  { route: "/attention", label: "Attention Optimizer" },
-  { route: "/about", label: "About / Provenance" },
+export type Tab = 'overview' | 'scenarios' | 'living-docs' | 'console' | 'about';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'scenarios', label: 'Scenario Planning' },
+  { id: 'living-docs', label: 'Living Strategy' },
+  { id: 'console', label: 'Signal Console' },
+  { id: 'about', label: 'About / Provenance' },
 ];
 
 export function Shell({
-  route,
-  navigate,
+  active,
+  onChange,
+  onReset,
   children,
 }: {
-  route: string;
-  navigate: (r: string) => void;
+  active: Tab;
+  onChange: (t: Tab) => void;
+  onReset: () => void;
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-fuchsia-600 font-bold text-white shadow-lg shadow-indigo-900/40">
-              Λ
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white">L</div>
+              <h1 className="text-lg font-semibold tracking-tight text-slate-900">LEADOS — Federated Scenarios &amp; Living Strategy</h1>
             </div>
-            <div>
-              <div className="text-sm font-semibold tracking-tight text-white">LeadOS · pt-U</div>
-              <div className="text-[11px] text-slate-400">Autonomous Attention Optimizer</div>
-            </div>
+            <p className="mt-1 text-sm text-slate-500">A distribution of futures, each fully modeled — plus strategy documents that check themselves against reality.</p>
           </div>
-          <nav className="flex flex-wrap items-center gap-1">
-            {NAV.map((n) => (
-              <button
-                key={n.route}
-                onClick={() => navigate(n.route)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-xs font-medium transition",
-                  route === n.route
-                    ? "bg-indigo-500/20 text-indigo-300 ring-1 ring-inset ring-indigo-500/40"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                )}
-              >
-                {n.label}
-              </button>
-            ))}
-          </nav>
+          <button
+            onClick={onReset}
+            className="h-fit whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            Reset synthetic data
+          </button>
         </div>
+        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-6 pb-3">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onChange(t.id)}
+              className={cn(
+                'whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                active === t.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">{children}</main>
-      <footer className="mx-auto max-w-6xl px-4 pb-10 pt-4 text-[11px] leading-relaxed text-slate-500 sm:px-6">
-        Synthetic demo data. Scores, costs, and urgency windows are disclosed
-        heuristics for illustration — see{" "}
-        <button onClick={() => navigate("/about")} className="underline hover:text-slate-300">
-          About / Provenance
-        </button>{" "}
-        for exactly what was verified against the real repo versus invented here.
-      </footer>
+      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
     </div>
-  );
-}
-
-export function Card({ title, subtitle, children, className }: { title?: string; subtitle?: string; children: ReactNode; className?: string }) {
-  return (
-    <div className={cn("rounded-xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm", className)}>
-      {title && <h3 className="text-sm font-semibold text-slate-100">{title}</h3>}
-      {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
-      <div className={cn(title || subtitle ? "mt-3" : "")}>{children}</div>
-    </div>
-  );
-}
-
-export function Badge({ children, tone = "slate" }: { children: ReactNode; tone?: "slate" | "amber" | "rose" | "emerald" | "indigo" }) {
-  const tones: Record<string, string> = {
-    slate: "bg-slate-800 text-slate-300 ring-slate-700",
-    amber: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-    rose: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
-    emerald: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-    indigo: "bg-indigo-500/15 text-indigo-300 ring-indigo-500/30",
-  };
-  return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset", tones[tone])}>
-      {children}
-    </span>
   );
 }
