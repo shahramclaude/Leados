@@ -1,16 +1,12 @@
-import { seed } from "@/db/seed";
+import { seedDatabase } from "@/db/seed";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
   try {
-    const result = await seed();
-    return Response.json({ ok: true, result });
+    await seedDatabase();
+    return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ ok: false, error: String(err) }, { status: 500 });
   }
-}
-
-export async function GET() {
-  return POST();
 }
