@@ -1,94 +1,76 @@
 import {
   pgTable,
-  uuid,
+  serial,
   text,
   integer,
-  real,
   boolean,
-  jsonb,
   timestamp,
+  jsonb,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-
-// ════════════════════════════════════════════════════════════════
-// BASE LAYER — people + events (the substrate the engine projects)
-// ════════════════════════════════════════════════════════════════
 
 export const leados_people = pgTable("leados_people", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  role: text("role").notNull(),
-  reports_to: uuid("reports_to"),
-  cadence_days: integer("cadence_days").notNull().default(14),
+  role: text("role").notNull().default(""),
+  cadenceDays: integer("cadence_days").notNull().default(14),
   archived: boolean("archived").notNull().default(false),
-  joined_at: timestamp("joined_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  created_at: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Generic event log: pulses, 1:1s, feedback, etc.
 export const leados_events = pgTable("leados_events", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  type: text("type").notNull(),
-  domain: text("domain").notNull(),
-  person_id: uuid("person_id"),
-  ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
-  data: jsonb("data").notNull().default(sql`'{}'::jsonb`),
-  created_at: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // pulse | oneonone | feedback | note | other
+  domain: text("domain").notNull().default("people"), // people|finance|sales|ops|strategy|gov
+  personId: integer("person_id").references(() => leados_people.id),
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ════════════════════════════════════════════════════════════════
-// INTELLIGENCE LAYER — hypotheses, beliefs, work queue, audit trail
-// ════════════════════════════════════════════════════════════════
-
-export const leados_hypotheses = pgTable("leados_hypotheses", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  statement: text("statement").notNull(),
-  source: text("source").notNull(),
-  prediction: text("prediction").notNull(),
-  test_metric: text("test_metric").notNull(),
-  test_window_days: integer("test_window_days").notNull(),
-  confidence: real("confidence").notNull().default(0.5),
-  auto_generated: boolean("auto_generated").notNull().default(true),
-  // 'confirmed' | 'refuted' | 'inconclusive' | null
-  result: text("result"),
-  result_note: text("result_note"),
-  created_at: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  resolved_at: timestamp("resolved_at", { withTimezone: true }),
+export const leados_decisions = pgTable("leados_decisions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  owner: text("owner").notNull().default(""),
+  domain: text("domain").notNull().default("gov"),
+  openedAt: timestamp("opened_at").notNull().defaultNow(),
+  status: text("status").notNull().default("open"), // open|resolved
+  resolvedAt: timestamp("resolved_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const leados_beliefs = pgTable("leados_beliefs", {
-  hypothesis: text("hypothesis").primaryKey(),
-  prior: real("prior").notNull(),
-  posterior: real("posterior").notNull(),
-  evidence: jsonb("evidence").notNull().default(sql`'[]'::jsonb`),
-  updated_at: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+export const leados_growth_plans = pgTable("leados_growth_plans", {
+  id: serial("id").primaryKey(),
+  personId: integer("person_id").references(() => leados_people.id),
+  goal: text("goal").notNull().default(""),
+  level: text("level").notNull().default("developing"), // developing|solid|advanced
+  status: text("status").notNull().default("open"), // open|closed
+  lastCheckin: timestamp("last_checkin").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const leados_work_queue = pgTable("leados_work_queue", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  type: text("type").notNull(),
+  id: serial("id").primaryKey(),
   title: text("title").notNull(),
-  payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
-  // 'pending' | 'accepted' | 'dismissed'
-  status: text("status").notNull().default("pending"),
-  created_at: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  resolved_at: timestamp("resolved_at", { withTimezone: true }),
+  type: text("type").notNull().default("draft"), // draft|summary|email|plan
+  status: text("status").notNull().default("pending"), // pending|accepted|dismissed
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const leados_hypotheses = pgTable("leados_hypotheses", {
+  id: serial("id").primaryKey(),
+  statement: text("statement").notNull(),
+  prediction: text("prediction").notNull().default(""),
+  testMetric: text("test_metric").notNull().default(""),
+  windowDays: integer("window_days").notNull().default(14),
+  status: text("status").notNull().default("open"), // open|confirmed|refuted
+  confidence: integer("confidence").notNull().default(50),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
 export const leados_audit = pgTable("leados_audit", {
-  id: uuid("id").primaryKey().defaultRandom(),
+  id: serial("id").primaryKey(),
   action: text("action").notNull(),
-  detail: text("detail"),
-  ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
+  detail: text("detail").notNull().default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });

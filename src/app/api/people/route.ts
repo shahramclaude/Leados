@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { leados_people } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
-import { NextRequest } from "next/server";
+import { logAudit } from "@/lib/leados/audit";
+import { asc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -10,28 +10,18 @@ export async function GET() {
   return Response.json(rows);
 }
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const [person] = await db
-    .insert(leados_people)
-    .values({
-      name: body.name,
-      role: body.role,
-      reports_to: body.reports_to ?? null,
-      cadence_days: body.cadence_days ?? 14,
-      joined_at: body.joined_at ? new Date(body.joined_at) : new Date(),
-    })
-    .returning();
-  return Response.json(person, { status: 201 });
-}
-
-export async function PATCH(req: NextRequest) {
-  const body = await req.json();
-  const { id, ...rest } = body;
-  const [updated] = await db
-    .update(leados_people)
-    .set(rest)
-    .where(eq(leados_people.id, id))
-    .returning();
-  return Response.json(updated);
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { name, role, cadenceDays } = body ?? {};
+    if (!name) return Response.json({ error: "name is required" }, { status: 400 });
+    const [row] = await db
+      .insert(leados_people)
+      .values({ name, role: role ?? "", cadenceDays: cadenceDays ?? 14 })
+      .returning();
+    await logAudit("PERSON_ADDED", `${name} (${role ?? "no role"})`);
+    return Response.json(row, { status: 201 });
+  } catch (err: any) {
+    return Response.json({ error: err?.message ?? "failed to create person" }, { status: 500 });
+  }
 }

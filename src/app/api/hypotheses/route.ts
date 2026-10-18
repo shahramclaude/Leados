@@ -1,32 +1,32 @@
 import { db } from "@/db";
 import { leados_hypotheses } from "@/db/schema";
-import { desc, isNull } from "drizzle-orm";
-import { NextRequest } from "next/server";
+import { logAudit } from "@/lib/leados/audit";
+import { desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const open = await db
-    .select()
-    .from(leados_hypotheses)
-    .where(isNull(leados_hypotheses.result))
-    .orderBy(desc(leados_hypotheses.created_at));
-  return Response.json(open);
+  const rows = await db.select().from(leados_hypotheses).orderBy(desc(leados_hypotheses.createdAt));
+  return Response.json(rows);
 }
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const [h] = await db
-    .insert(leados_hypotheses)
-    .values({
-      statement: body.statement,
-      source: body.source ?? "manual",
-      prediction: body.prediction,
-      test_metric: body.test_metric,
-      test_window_days: body.test_window_days ?? 30,
-      confidence: body.confidence ?? 0.5,
-      auto_generated: body.auto_generated ?? false,
-    })
-    .returning();
-  return Response.json(h, { status: 201 });
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { statement, prediction, testMetric, windowDays } = body ?? {};
+    if (!statement) return Response.json({ error: "statement is required" }, { status: 400 });
+    const [row] = await db
+      .insert(leados_hypotheses)
+      .values({
+        statement,
+        prediction: prediction ?? "",
+        testMetric: testMetric ?? "",
+        windowDays: windowDays ?? 14,
+      })
+      .returning();
+    await logAudit("HYPOTHESIS_CREATED", statement);
+    return Response.json(row, { status: 201 });
+  } catch (err: any) {
+    return Response.json({ error: err?.message ?? "failed to create hypothesis" }, { status: 500 });
+  }
 }
