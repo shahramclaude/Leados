@@ -17,10 +17,10 @@ export default async function HomePage() {
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
         <a
-          href="/scenarios"
-          className="mt-6 inline-flex items-center rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          href="/memory"
+          className="mt-6 inline-flex items-center gap-2 rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
         >
-          Open Scenario Engine &amp; War Room →
+          Open Institutional Memory &amp; Knowledge Graph →
         </a>
       </section>
     </main>
