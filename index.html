@@ -1,708 +1,669 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Leados Sandbox — Thermodynamics, CAS Engine, Risk Intelligence (original single-file build)</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LeadOS Sandbox — Findings, Risk &amp; Health Wall (original build)</title>
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <style>
-  body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-  ::-webkit-scrollbar{width:8px;height:8px;}
-  ::-webkit-scrollbar-thumb{background:#334155;border-radius:4px;}
-  .fade-in{animation:fadeIn .25s ease-out;}
-  @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
-  .nav-btn.active{background:#1d4ed8;color:#fff;}
-  input[type=range]{accent-color:#3b82f6;}
+  /* ════════════════════════════════════════════════════════════
+     Color tokens adapted from the color system pasted into this
+     task's prompt. NOTE (provenance): that pasted spec is treated
+     as unverified external text, not a fact about wbweve/Leados —
+     see the "Provenance" tab in-app and AI-SESSION-LOG.md. The
+     token *structure* (surface stack / ink stack / severity /
+     domain hues) is reused here as a design system for this
+     original build, trimmed to what this app actually uses.
+     ════════════════════════════════════════════════════════════ */
+  :root{
+    --s0:hsl(20,6%,7%); --s1:hsl(20,6%,10%); --s2:hsl(20,6%,13%);
+    --s3:hsl(20,6%,17%); --s4:hsl(20,6%,22%); --s5:hsl(20,6%,28%);
+    --i0:hsl(35,20%,97%); --i1:hsl(35,15%,80%); --i2:hsl(35,10%,60%); --i3:hsl(35,8%,40%);
+    --sev-5:hsl(0,85%,52%); --sev-4:hsl(25,90%,52%); --sev-3:hsl(43,85%,52%);
+    --sev-2:hsl(200,80%,52%); --sev-1:hsl(160,60%,45%); --sev-clear:hsl(160,50%,35%);
+    --d-people:hsl(200,70%,55%); --d-finance:hsl(145,60%,45%); --d-sales:hsl(35,80%,55%);
+    --d-ops:hsl(260,55%,60%); --d-strategy:hsl(180,65%,45%); --d-gov:hsl(340,65%,55%);
+    --dur-fast:140ms; --dur-normal:220ms; --ease-out:cubic-bezier(0,0,.2,1);
+    --font-ui:'Inter','SF Pro',system-ui,sans-serif; --font-mono:'JetBrains Mono','Fira Code',monospace;
+  }
+  [data-theme="light"]{
+    --s0:hsl(40,30%,96%); --s1:hsl(40,25%,93%); --s2:hsl(40,20%,89%);
+    --s3:hsl(40,15%,83%); --s4:hsl(40,12%,75%); --s5:hsl(40,10%,65%);
+    --i0:hsl(20,20%,10%); --i1:hsl(20,15%,25%); --i2:hsl(20,10%,45%); --i3:hsl(20,8%,65%);
+  }
+  [data-theme="terminal"]{
+    --s0:hsl(120,100%,2%); --s1:hsl(120,80%,4%); --s2:hsl(120,60%,6%);
+    --s3:hsl(120,50%,9%); --s4:hsl(120,40%,12%); --s5:hsl(120,30%,16%);
+    --i0:hsl(120,100%,75%); --i1:hsl(120,80%,60%); --i2:hsl(120,60%,45%); --i3:hsl(120,40%,30%);
+    --font-ui:'JetBrains Mono','Fira Code',monospace;
+  }
+  html,body{background:var(--s0); color:var(--i0); font-family:var(--font-ui);}
+  * { transition: background-color var(--dur-normal) var(--ease-out), color var(--dur-normal) var(--ease-out), border-color var(--dur-normal) var(--ease-out); }
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:var(--s4);border-radius:6px;}
+  ::-webkit-scrollbar-track{background:var(--s1);}
+  .tab-btn.active{ background:var(--s3); color:var(--i0); border-color:var(--s5);}
+  .tab-btn{ color:var(--i2); }
+  .view{ display:none; }
+  .view.active{ display:block; animation: fade var(--dur-normal) var(--ease-out); }
+  @keyframes fade{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+  .mono{ font-family:var(--font-mono); }
+  .sev-dot{ width:10px; height:10px; border-radius:50%; display:inline-block; flex-shrink:0; }
+  .card{ background:var(--s2); border:1px solid var(--s3); border-radius:12px; }
+  .card:hover{ background:var(--s3); }
+  code.inline{ background:var(--s3); padding:1px 6px; border-radius:4px; font-size:11px; }
 </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
-<div id="app"></div>
+<body class="min-h-screen">
+
+<!-- ════════════════════════ HEADER / NAV ════════════════════════ -->
+<header class="sticky top-0 z-20 border-b" style="background:var(--s1); border-color:var(--s3);">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3 justify-between">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-lg flex items-center justify-center font-bold" style="background:var(--s4); color:var(--i0);">L</div>
+      <div>
+        <div class="font-semibold leading-tight">LeadOS Sandbox</div>
+        <div class="text-[11px]" style="color:var(--i3);">original build · see Provenance tab</div>
+      </div>
+    </div>
+    <nav class="flex flex-wrap gap-1" id="tabNav"></nav>
+    <div class="flex items-center gap-2">
+      <select id="themeSelect" class="text-xs rounded-md px-2 py-1 border" style="background:var(--s2); border-color:var(--s4); color:var(--i1);">
+        <option value="dark">Dark</option>
+        <option value="light">Light (Parchment)</option>
+        <option value="terminal">Terminal</option>
+      </select>
+      <button id="resetBtn" class="text-xs rounded-md px-2 py-1 border" style="background:var(--s2); border-color:var(--s4); color:var(--i1);">Reset demo data</button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 py-6" id="mainRoot">
+
+  <!-- TODAY -->
+  <section class="view active" id="view-today">
+    <h1 class="text-xl font-semibold mb-1">Today</h1>
+    <p class="text-sm mb-4" style="color:var(--i2);">All numbers below are derived live from a small, deterministic synthetic event log — nothing is fetched or hard-coded as a "score." See <button class="underline" onclick="showView('about')">Provenance</button> for what is/isn't verified against the real repo.</p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6" id="todayStats"></div>
+    <h2 class="font-semibold mb-2 text-sm" style="color:var(--i1);">Active findings (sorted by severity)</h2>
+    <div id="todayFindings" class="space-y-2"></div>
+  </section>
+
+  <!-- FINDINGS -->
+  <section class="view" id="view-findings">
+    <h1 class="text-xl font-semibold mb-1">Findings by domain</h1>
+    <p class="text-sm mb-4" style="color:var(--i2);">12 original rules (R1–R12) + 2 compound/cross-domain rules, evaluated against the synthetic event log. Not a port of any rule catalog from the inspected repo — its real rule-engine files (<code class="inline">engine.ts</code>) were found broken/orphaned where inspected; this is a fresh, small, working implementation.</p>
+    <div id="findingsByDomain" class="space-y-6"></div>
+  </section>
+
+  <!-- DECISIONS -->
+  <section class="view" id="view-decisions">
+    <h1 class="text-xl font-semibold mb-1">Decisions</h1>
+    <p class="text-sm mb-4" style="color:var(--i2);">Open/closed decisions from the event log, flagged stale past 21 days (R11) and escalated past 45 days (R12).</p>
+    <div id="decisionsTable"></div>
+  </section>
+
+  <!-- RISK REGISTER -->
+  <section class="view" id="view-risk">
+    <h1 class="text-xl font-semibold mb-1">Risk Register</h1>
+    <p class="text-sm mb-4" style="color:var(--i2);">Always shows all 8 categories, even at zero — a pattern worth keeping regardless of origin: a risk board that hides empty categories hides the question "did anyone check?" Cross-category amplification below is an original heuristic, not a verified formula.</p>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6" id="riskGrid"></div>
+    <div id="amplification"></div>
+  </section>
+
+  <!-- SYSTEMS (thermodynamics + CAS-lite) -->
+  <section class="view" id="view-systems">
+    <h1 class="text-xl font-semibold mb-1">Systems view</h1>
+    <p class="text-sm mb-4" style="color:var(--i2);">Lightweight, original "information" and "feedback loop" metrics — textbook formulas (Shannon entropy) applied to this sandbox's own event log, plus a disclosed, unimplemented gap (attractor detection), deliberately left honest rather than faked.</p>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="card p-4">
+        <h3 class="font-semibold text-sm mb-2">Information (Shannon entropy)</h3>
+        <div id="thermoBox" class="text-sm space-y-1" style="color:var(--i1);"></div>
+      </div>
+      <div class="card p-4">
+        <h3 class="font-semibold text-sm mb-2">Feedback loops &amp; bifurcations (heuristic)</h3>
+        <div id="casBox" class="text-sm space-y-2" style="color:var(--i1);"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HEALTH WALL -->
+  <section class="view" id="view-health">
+    <h1 class="text-xl font-semibold mb-1">Health Wall</h1>
+    <p class="text-sm mb-4" style="color:var(--i2);">14 original, actually-executing self-tests (not a reproduction of the pasted spec's 75-test "T1–T_PERC_7" catalog — those names/bodies are not verified to exist anywhere and are not reproduced here under false provenance).</p>
+    <button id="runHealthBtn" class="mb-4 text-sm px-3 py-1.5 rounded-md border" style="background:var(--s2); border-color:var(--s4);">Run health wall</button>
+    <div id="healthVerdict" class="mb-3 text-sm font-semibold"></div>
+    <div id="healthRows" class="space-y-1 mono text-xs"></div>
+  </section>
+
+  <!-- ABOUT / PROVENANCE -->
+  <section class="view" id="view-about">
+    <h1 class="text-xl font-semibold mb-3">Provenance</h1>
+    <div class="prose-sm space-y-4 text-sm leading-relaxed" style="color:var(--i1); max-width:68ch;">
+      <div class="card p-4">
+        <h3 class="font-semibold text-[var(--i0)] mb-1">What was actually checked (this session)</h3>
+        <ul class="list-disc ml-5 space-y-1">
+          <li>Fetched the live GitHub README and the repo API tree for <code class="inline">github.com/wbweve/Leados</code>.</li>
+          <li>Fetched and read, raw, first-hand: <code class="inline">src/App.tsx</code>, <code class="inline">src/lib/core.ts</code>, <code class="inline">src/lib/intelligence.ts</code>, and the root <code class="inline">index.html</code> (title only rendered — it's a client-rendered single-file build, so body content wasn't inspectable via plain text fetch).</li>
+          <li>Also read the repo's own <code class="inline">AI-SESSION-LOG.md</code>, which documents a <em>prior</em> AI session's own inspection — treated as a claim to spot-check, not as fact, per the task's instruction.</li>
+        </ul>
+      </div>
+      <div class="card p-4">
+        <h3 class="font-semibold mb-1" style="color:var(--sev-1);">Verified directly, independently, this session</h3>
+        <ul class="list-disc ml-5 space-y-1">
+          <li>The repo is real, public, and contains two different deliveries: loose root-level files plus a separate live <code class="inline">src/</code> Vite+React+TS app.</li>
+          <li>The current <code class="inline">src/App.tsx</code> imports <code class="inline">Shell</code>, <code class="inline">TodayView</code>, <code class="inline">SignalBoardView</code>, <code class="inline">ThermodynamicsView</code>, <code class="inline">CasView</code>, <code class="inline">RiskView</code>, <code class="inline">AboutView</code> — matching the README's self-description of a "Signal Board / CAS / Risk Register / Thermodynamics" app.</li>
+          <li><code class="inline">src/lib/core.ts</code> exports <code class="inline">DOMAINS, DECAY, STORAGE_KEY, loadState, saveState, appendEvent, seedIfEmpty, project</code> — and does <strong>not</strong> export <code class="inline">engine</code> or <code class="inline">run</code>.</li>
+          <li><code class="inline">src/lib/intelligence.ts</code> opens with <code class="inline">import { engine, run } from "./core"</code> — confirmed broken, since <code class="inline">core.ts</code> exports neither. This file is orphaned (not imported by the live <code class="inline">App.tsx</code>).</li>
+          <li>The root <code class="inline">index.html</code> is a real, separate artifact; its page title is literally "LEADOS Sandbox — CAS Engine, Risk Intelligence &amp; Thermodynamics".</li>
+        </ul>
+      </div>
+      <div class="card p-4">
+        <h3 class="font-semibold mb-1" style="color:var(--sev-3);">Not verified / explicitly unverified</h3>
+        <ul class="list-disc ml-5 space-y-1">
+          <li>The large pasted spec in this task's prompt — "Color System v15," the 75+ test "Health Wall Master Suite" (<code class="inline">T1…T_PERC_7</code>), modules named <code class="inline">js/hypothesis.js</code>, <code class="inline">js/emergent.js</code>, <code class="inline">js/agent.js</code>, <code class="inline">js/boot.js</code>, <code class="inline">js/master_health.js</code>, and the closing "110 files / 230 rules / pt-V" summary — was <strong>not found anywhere</strong> in the file tree or files fetched this session. No <code class="inline">js/</code> folder exists in the repo at all (it is loose <code class="inline">.tsx</code> files + a <code class="inline">src/</code> tree). This is treated as an unverified external specification pasted into the prompt, not as a fact about the repository.</li>
+          <li>The repo's own <code class="inline">infoTheory.ts</code> / <code class="inline">Thermodynamics.tsx</code> pairing (claimed "live and wired" by the repo's own prior session log) was <strong>not independently re-fetched</strong> this session — flagged as a scope limit, not asserted as fact first-hand here.</li>
+          <li>Full byte-for-byte contents of most <code class="inline">src/lib/*.ts</code> and root <code class="inline">.tsx</code> files were not read this session (only <code class="inline">core.ts</code>, <code class="inline">intelligence.ts</code>, <code class="inline">App.tsx</code>, root <code class="inline">index.html</code>'s head/title).</li>
+        </ul>
+      </div>
+      <div class="card p-4">
+        <h3 class="font-semibold mb-1">What this build is</h3>
+        <p>This <code class="inline">index.html</code> does not fork, copy, or continue any code from <code class="inline">wbweve/Leados</code> or from the pasted spec. It reuses the pasted spec's CSS <em>token structure</em> (surface stack / ink stack / severity hues / domain hues) as a generic design system — original styling, not a provenance claim — and otherwise implements a small, original findings/risk/health-wall sandbox from scratch, built for this tool environment's single-file HTML/Tailwind/vanilla-JS constraint.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="max-w-6xl mx-auto px-4 pb-8 pt-4 text-[11px]" style="color:var(--i3);">
+  Zero network calls after load · zero accounts · one localStorage key (<span class="mono" id="storageKeyLabel"></span>) · open this file, that is the install.
+</footer>
 
 <script>
-/* =========================================================================
-   LEADOS SANDBOX — original single-file build
-   -------------------------------------------------------------------------
-   PROVENANCE (short form — full ledger in AI-SESSION-LOG.md / #/about):
-   This file does NOT copy code from github.com/wbweve/Leados. That repo was
-   inspected this session via GitHub's REST API + raw file fetches. It is a
-   React+Vite+TypeScript project (src/App.tsx -> components -> lib/*), not a
-   single HTML file, so nothing from it can be pasted here verbatim even if
-   wanted. This build independently implements the same *functional ideas*
-   (Signal Board, Thermodynamics/info-theory, CAS engine, Risk Register)
-   using vanilla JS + Tailwind, because that is what this tool environment
-   supports (single index.html, no build step). All data, rules, formulas-
-   as-coded, and UI below are original to this delivery unless labeled
-   "textbook formula" (Shannon entropy / mutual information), which are
-   standard public-domain math, not copied code.
-   ========================================================================= */
+/* ════════════════════════════════════════════════════════════
+   LEADOS SANDBOX — original implementation
+   Single localStorage key, append-only event log, pure projection.
+   ════════════════════════════════════════════════════════════ */
+const STORAGE_KEY = 'leados-sandbox:v1';
+const SCHEMA_VERSION = 1;
 
-  // ---------------------------------------------------------------------
-  // 1. DATA MODEL
-  // ---------------------------------------------------------------------
-  const STORAGE_KEY = "leados-singlefile:v1"; // new key — no continuity claimed with any other build
+const DOMAINS = [
+  {key:'people',   label:'People',    color:'var(--d-people)'},
+  {key:'finance',  label:'Finance',   color:'var(--d-finance)'},
+  {key:'sales',    label:'Sales',     color:'var(--d-sales)'},
+  {key:'ops',      label:'Ops',       color:'var(--d-ops)'},
+  {key:'strategy', label:'Strategy',  color:'var(--d-strategy)'},
+  {key:'gov',      label:'Governance',color:'var(--d-gov)'},
+];
+const DOMAIN_KEYS = DOMAINS.map(d=>d.key);
 
-  const CATEGORIES = ["Financial","Operational","People","Technical","Strategic","Compliance","Cultural","External"];
-  const CAT_COLOR = {
-    Financial:"#f59e0b", Operational:"#38bdf8", People:"#f472b6", Technical:"#a78bfa",
-    Strategic:"#34d399", Compliance:"#fb7185", Cultural:"#facc15", External:"#94a3b8"
+const SEV = {
+  5:{label:'Critical',  color:'var(--sev-5)'},
+  4:{label:'High',      color:'var(--sev-4)'},
+  3:{label:'Elevated',  color:'var(--sev-3)'},
+  2:{label:'Monitored', color:'var(--sev-2)'},
+  1:{label:'Nudge',     color:'var(--sev-1)'},
+};
+
+// ---------- storage ----------
+function emptyState(){
+  return { schemaVersion: SCHEMA_VERSION, createdAt: Date.now(), nextId: 1, events: [] };
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return emptyState();
+    const parsed = JSON.parse(raw);
+    if(!parsed || !Array.isArray(parsed.events)) return emptyState();
+    if(!parsed.schemaVersion) parsed.schemaVersion = SCHEMA_VERSION;
+    return parsed;
+  }catch(e){ return emptyState(); }
+}
+function saveState(state){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); return state; }
+
+// append-only: returns a brand-new state object, never mutates the old events array
+function appendEvent(state, ev){
+  const id = 'ev_' + state.nextId;
+  const full = Object.assign({ id, ts: Date.now() }, ev);
+  const next = { ...state, nextId: state.nextId + 1, events: [...state.events, full] };
+  return saveState(next);
+}
+
+let STATE = loadState();
+
+// ---------- deterministic synthetic seed ----------
+function daysAgo(n){ return Date.now() - n*86400000; }
+
+function buildSeedEvents(){
+  const evs = [];
+  let id = 1;
+  const push = (o) => evs.push(Object.assign({id:'ev_'+(id++)}, o));
+
+  // People: Ana has 3 skipped 1:1s in last 30d -> R1
+  ['skipped','skipped','held','skipped'].forEach((status,i)=>{
+    push({type:'oneonone', personId:'ana', person:'Ana', status, domain:'people', ts: daysAgo(28-i*6)});
+  });
+  // Cara: 5 held 1:1s, zero recognition in 60d -> R2
+  for(let i=0;i<5;i++) push({type:'oneonone', personId:'cara', person:'Cara', status:'held', domain:'people', ts: daysAgo(55-i*10)});
+
+  // Finance metrics
+  push({type:'metric', key:'runway_months', value:5.2, domain:'finance', ts: daysAgo(1)});
+  push({type:'metric', key:'burn_rate_delta_pct', value:24, domain:'finance', ts: daysAgo(2)});
+  push({type:'metric', key:'mrr_growth_pct', value:-3, domain:'finance', ts: daysAgo(3)});
+
+  // Sales metrics
+  push({type:'metric', key:'pipeline_coverage_x', value:2.1, domain:'sales', ts: daysAgo(2)});
+  push({type:'metric', key:'churn_pct', value:2.8, domain:'sales', ts: daysAgo(4)});
+
+  // Ops metrics
+  push({type:'metric', key:'deploy_freq_delta_pct', value:-35, domain:'ops', ts: daysAgo(5)});
+
+  // Strategy goals
+  push({type:'goal', id:'g1', title:'Expand EU pilot', domain:'strategy', ownerAssigned:false, status:'active', ts: daysAgo(20)});
+  push({type:'goal', id:'g2', title:'Legacy infra sunset', domain:'strategy', ownerAssigned:true, status:'active', ts: daysAgo(120)});
+
+  // Governance decisions
+  push({type:'decision', id:'d1', title:'Vendor contract renewal', domain:'gov', ownerId:'ana', owner:'Ana', openedAt: daysAgo(30), resolvedAt:null, ts: daysAgo(30)});
+  push({type:'decision', id:'d2', title:'Pricing tier restructure', domain:'gov', ownerId:'ben', owner:'Ben', openedAt: daysAgo(50), resolvedAt:null, ts: daysAgo(50)});
+  push({type:'decision', id:'d3', title:'Office lease renewal', domain:'gov', ownerId:'dev', owner:'Dev', openedAt: daysAgo(60), resolvedAt: daysAgo(40), ts: daysAgo(60)});
+
+  return evs;
+}
+
+function seedIfEmpty(state){
+  if(state.events.length > 0) return state;
+  let next = { ...state, events: buildSeedEvents() };
+  next.nextId = next.events.length + 1;
+  return saveState(next);
+}
+function resetDemo(){
+  STATE = saveState({ ...emptyState() });
+  STATE = seedIfEmpty(STATE);
+  renderAll();
+}
+
+STATE = seedIfEmpty(STATE);
+
+// ---------- pure projection ----------
+function project(state){
+  const events = state.events;
+  const findings = [];
+  const addFinding = (f) => findings.push(Object.assign({ key: f.rule+':'+(f.ref||f.rule) }, f));
+
+  // R1: >=3 skipped oneonones per person in window
+  const skippedByPerson = {};
+  events.filter(e=>e.type==='oneonone' && e.status==='skipped').forEach(e=>{
+    (skippedByPerson[e.personId] = skippedByPerson[e.personId]||[]).push(e);
+  });
+  Object.entries(skippedByPerson).forEach(([pid,list])=>{
+    if(list.length>=3){
+      addFinding({rule:'R1', domain:'people', sev:4, ref:pid, personId:pid,
+        title:`1:1 cadence slipping with ${list[0].person}`,
+        detail:`${list.length} skipped 1:1s in the tracked window.`});
+    }
+  });
+
+  // R2: >=4 held oneonones, zero recognition, per person
+  const heldByPerson = {};
+  events.filter(e=>e.type==='oneonone' && e.status==='held').forEach(e=>{
+    (heldByPerson[e.personId]=heldByPerson[e.personId]||[]).push(e);
+  });
+  const recognized = new Set(events.filter(e=>e.type==='recognition').map(e=>e.personId));
+  Object.entries(heldByPerson).forEach(([pid,list])=>{
+    if(list.length>=4 && !recognized.has(pid)){
+      addFinding({rule:'R2', domain:'people', sev:3, ref:pid, personId:pid,
+        title:`Recognition gap for ${list[0].person}`,
+        detail:`${list.length} 1:1s held, no recognition event logged.`});
+    }
+  });
+
+  // metric-based rules — use latest value per key
+  const latestMetric = (key) => {
+    const ms = events.filter(e=>e.type==='metric' && e.key===key).sort((a,b)=>b.ts-a.ts);
+    return ms.length ? ms[0].value : null;
   };
+  const runway = latestMetric('runway_months');
+  if(runway!==null && runway<6) addFinding({rule:'R3', domain:'finance', sev:5, ref:'runway',
+    title:'Runway under 6 months', detail:`Runway at ${runway} months.`});
 
-  const RULE_TITLES = [
-    "Runway below 6 months","Burn rate acceleration","Customer concentration risk","Key-person financial dependency",
-    "Unbudgeted spend spike","Deployment frequency drop","Incident recurrence (same root cause)","On-call fatigue reports",
-    "Backlog growth outpacing throughput","Vendor SLA breach","Key-person overload (single point of failure)","Unplanned attrition risk flagged",
-    "Manager span-of-control exceeded","Onboarding time trending up","Cross-team handoff friction","Technical debt ratio rising",
-    "Test coverage declining","Architecture review overdue","Security patch backlog","Data quality incidents",
-    "Strategic goal drift","Roadmap churn (2+ replans/quarter)","Feature-parity competitive gap","Market segment contraction",
-    "OKR confidence score low","Regulatory filing overdue","Policy exception count rising","Audit finding unresolved",
-    "Access review overdue","Data retention violation risk","Psychological safety score drop","Recognition/reward mismatch reported",
-    "Meeting load above threshold","After-hours activity spike","Decision reversal rate rising","Supplier dependency concentration",
-    "Partner integration risk","External PR/sentiment dip","Macroeconomic exposure flagged","Talent market tightening (role)",
-    "Burnout self-report (person-linked)","Repeated escalation, same person","Trust erosion signal (survey)","Silent-quitting indicator",
-    "Cross-functional conflict reported","Scope creep on flagship project","Release rollback event","Customer churn signal",
-    "Compliance training overdue","Knowledge concentration (bus factor = 1)"
+  const burn = latestMetric('burn_rate_delta_pct');
+  if(burn!==null && burn>20) addFinding({rule:'R4', domain:'finance', sev:4, ref:'burn',
+    title:'Burn rate accelerating', detail:`Burn up ${burn}% month-over-month.`});
+
+  const mrrGrowth = latestMetric('mrr_growth_pct');
+  if(mrrGrowth!==null && mrrGrowth<0) addFinding({rule:'R5', domain:'finance', sev:3, ref:'mrr',
+    title:'MRR declining', detail:`MRR growth at ${mrrGrowth}%.`});
+
+  const pipeline = latestMetric('pipeline_coverage_x');
+  if(pipeline!==null && pipeline<3) addFinding({rule:'R6', domain:'sales', sev:3, ref:'pipeline',
+    title:'Pipeline coverage thin', detail:`Coverage at ${pipeline}x quota (target ≥3x).`});
+
+  const churn = latestMetric('churn_pct');
+  if(churn!==null && churn>2) addFinding({rule:'R7', domain:'sales', sev:2, ref:'churn',
+    title:'Churn above threshold', detail:`Churn at ${churn}%.`});
+
+  const deploy = latestMetric('deploy_freq_delta_pct');
+  if(deploy!==null && deploy<-30) addFinding({rule:'R8', domain:'ops', sev:3, ref:'deploy',
+    title:'Deploy frequency dropped', detail:`Deploy frequency down ${Math.abs(deploy)}%.`});
+
+  // goals
+  events.filter(e=>e.type==='goal').forEach(g=>{
+    const ageDays = (Date.now()-g.ts)/86400000;
+    if(!g.ownerAssigned && ageDays>14) addFinding({rule:'R9', domain:'strategy', sev:3, ref:g.id,
+      title:`Goal unowned: ${g.title}`, detail:`No owner assigned for ${Math.round(ageDays)} days.`});
+    if(g.status==='active' && ageDays>90) addFinding({rule:'R10', domain:'strategy', sev:2, ref:g.id,
+      title:`Stale goal: ${g.title}`, detail:`Active for ${Math.round(ageDays)} days with no resolution.`});
+  });
+
+  // decisions
+  const decisions = events.filter(e=>e.type==='decision').map(d=>{
+    const openDays = ((d.resolvedAt||Date.now()) - d.openedAt)/86400000;
+    const stale = !d.resolvedAt && openDays>21;
+    const escalate = !d.resolvedAt && openDays>45;
+    return { ...d, openDays: Math.round(openDays), stale, escalate };
+  });
+  decisions.forEach(d=>{
+    if(d.escalate) addFinding({rule:'R12', domain:'gov', sev:4, ref:d.id, personId:d.ownerId,
+      title:`Decision escalation: ${d.title}`, detail:`Open ${d.openDays} days, owner ${d.owner}.`});
+    else if(d.stale) addFinding({rule:'R11', domain:'gov', sev:2, ref:d.id, personId:d.ownerId,
+      title:`Stale decision: ${d.title}`, detail:`Open ${d.openDays} days, owner ${d.owner}.`});
+  });
+
+  // compound / cross-domain (original heuristic, disclosed)
+  const r1People = new Set(findings.filter(f=>f.rule==='R1').map(f=>f.personId));
+  const r12Owners = findings.filter(f=>f.rule==='R12' || f.rule==='R11').map(f=>f.personId);
+  r12Owners.forEach(pid=>{
+    if(r1People.has(pid)){
+      addFinding({rule:'AMP1', domain:'gov', sev:4, ref:pid, personId:pid,
+        title:'Burnout feedback-loop candidate',
+        detail:`Same person has slipping 1:1 cadence (R1) and a stale/escalated decision (R11/R12). Heuristic pairing, not a validated causal model.`});
+    }
+  });
+
+  // domain scores: simple weighted sum of open findings
+  const domainScores = DOMAINS.map(d=>{
+    const open = findings.filter(f=>f.domain===d.key);
+    const score = open.reduce((s,f)=>s+f.sev,0);
+    return { domain:d.key, label:d.label, color:d.color, score, count:open.length };
+  });
+
+  return { findings: findings.sort((a,b)=>b.sev-a.sev), domainScores, decisions };
+}
+
+// ---------- risk register (8 categories, original mapping) ----------
+const RISK_CATEGORIES = [
+  {key:'people',       label:'People',       maps:['people']},
+  {key:'financial',    label:'Financial',    maps:['finance']},
+  {key:'operational',  label:'Operational',  maps:['ops']},
+  {key:'strategic',    label:'Strategic',    maps:['strategy']},
+  {key:'market',       label:'Market',       maps:['sales']},
+  {key:'compliance',   label:'Compliance',   maps:['gov']},
+  {key:'technology',   label:'Technology',   maps:[]},    // intentionally always empty in this sandbox — disclosed
+  {key:'reputational', label:'Reputational', maps:[]},    // intentionally always empty in this sandbox — disclosed
+];
+function buildRiskRegister(P){
+  return RISK_CATEGORIES.map(cat=>{
+    const items = P.findings.filter(f=>cat.maps.includes(f.domain));
+    const score = items.reduce((s,f)=>s+f.sev,0);
+    return { ...cat, items, score };
+  });
+}
+function detectAmplification(P){
+  const highCats = buildRiskRegister(P).filter(c=>c.score>=4);
+  if(highCats.length>=2){
+    return `Cross-category amplification: ${highCats.map(c=>c.label).join(' + ')} are simultaneously elevated (score ≥4 each). Heuristic co-occurrence flag, not a validated interaction model.`;
+  }
+  return null;
+}
+
+// ---------- thermodynamics-lite (real Shannon entropy, small scope) ----------
+function shannonEntropy(counts){
+  const total = counts.reduce((a,b)=>a+b,0);
+  if(total===0) return 0;
+  return -counts.filter(c=>c>0).reduce((s,c)=>{
+    const p = c/total; return s + p*Math.log2(p);
+  },0);
+}
+function buildThermo(state){
+  const types = {};
+  state.events.forEach(e=>{ types[e.type]=(types[e.type]||0)+1; });
+  const counts = Object.values(types);
+  const H = shannonEntropy(counts);
+  const Hmax = counts.length ? Math.log2(counts.length) : 0;
+  const byDomain = {};
+  state.events.forEach(e=>{ if(e.domain) byDomain[e.domain]=(byDomain[e.domain]||0)+1; });
+  const vals = Object.values(byDomain);
+  const mean = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+  const bottlenecks = Object.entries(byDomain).filter(([k,v])=> mean>0 && v < 0.3*mean).map(([k])=>k);
+  return { types, H, Hmax, bottlenecks };
+}
+
+// ---------- CAS-lite ----------
+function buildCas(P, state){
+  const loops = [];
+  P.findings.filter(f=>f.rule==='AMP1').forEach(f=>{
+    loops.push({label:f.title, detail:f.detail, kind:'reinforcing'});
+  });
+  const bifurcations = [];
+  const runwayFinding = P.findings.find(f=>f.rule==='R3');
+  if(runwayFinding) bifurcations.push('Financial: runway below 6 months is treated as a bifurcation point (heuristic threshold, not derived from this org\'s actual burn curve).');
+  return { loops, bifurcations, attractorsNote: 'Attractor detection is intentionally NOT implemented — disclosed gap, not a silent stub, echoing the honest-gap pattern this session found in the real repo rather than faking an output.' };
+}
+
+// ---------- health wall (14 original, real tests) ----------
+function runHealthWall(state){
+  const rows = [];
+  const add = (id, name, pass, detail) => rows.push({id, name, status: pass?'PASS':'FAIL', detail});
+
+  add('T1','schema version set', state.schemaVersion === SCHEMA_VERSION, `schemaVersion=${state.schemaVersion}`);
+
+  let onlyKey = true;
+  for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k.startsWith('leados') && k!==STORAGE_KEY) onlyKey=false; }
+  add('T2','single storage key in use', onlyKey, `checked ${localStorage.length} localStorage key(s)`);
+
+  const ids = state.events.map(e=>e.id);
+  add('T3','event IDs unique', new Set(ids).size===ids.length, `${ids.length} events`);
+
+  const badTs = state.events.filter(e=>!Number.isFinite(e.ts) || e.ts>Date.now()+1000);
+  add('T4','timestamps valid & not in future', badTs.length===0, `${badTs.length} invalid`);
+
+  const badDomain = state.events.filter(e=>e.domain && !DOMAIN_KEYS.includes(e.domain));
+  add('T5','all domain fields are known domains', badDomain.length===0, `${badDomain.length} unknown`);
+
+  const before = state.events.length;
+  const after = appendEvent(state, {type:'health.probe', domain:null});
+  const stillSameRef = state.events.length === before;
+  add('T6','appendEvent does not mutate prior array', stillSameRef, `prior length stayed ${before}`);
+  // undo the probe (append-only in storage, but we don't want it polluting the real demo state visually — disclosed: we restore by resaving the pre-probe state)
+  saveState(state);
+
+  const p1 = JSON.stringify(project(state));
+  const p2 = JSON.stringify(project(state));
+  add('T7','project() is pure (same input -> same output)', p1===p2, 'double-call deep match');
+
+  saveState(state);
+  const reloaded = loadState();
+  add('T8','save -> load round trip matches', JSON.stringify(reloaded.events)===JSON.stringify(state.events), `${reloaded.events.length} events round-tripped`);
+
+  const P = project(state);
+  const P2 = project(state);
+  add('T9','engine deterministic across calls', JSON.stringify(P.findings)===JSON.stringify(P2.findings), `${P.findings.length} findings both times`);
+
+  const emptyP = project(emptyState());
+  add('T10','engine safe on empty state', Array.isArray(emptyP.findings) && emptyP.findings.length===0, 'no throw, 0 findings');
+
+  const size = new Blob([JSON.stringify(state)]).size;
+  add('T11','storage well under quota', size < 4_000_000, `${size} bytes`);
+
+  const badSev = P.findings.filter(f=>f.sev<1||f.sev>5);
+  add('T12','all finding severities in [1,5]', badSev.length===0, `${badSev.length} out of range`);
+
+  const negScore = P.domainScores.filter(d=>d.score<0);
+  add('T13','all domain scores non-negative', negScore.length===0, `${negScore.length} negative`);
+
+  const thermo = buildThermo(state);
+  add('T14','entropy within [0, log2(n types)] bounds', thermo.H>=0 && thermo.H<=thermo.Hmax+1e-9, `H=${thermo.H.toFixed(3)}, max=${thermo.Hmax.toFixed(3)}`);
+
+  return rows;
+}
+
+// ════════════════════════ RENDERING ════════════════════════
+const TABS = [
+  {id:'today', label:'Today'},
+  {id:'findings', label:'Findings'},
+  {id:'decisions', label:'Decisions'},
+  {id:'risk', label:'Risk Register'},
+  {id:'systems', label:'Systems'},
+  {id:'health', label:'Health Wall'},
+  {id:'about', label:'Provenance'},
+];
+
+function sevDot(sev){ return `<span class="sev-dot" style="background:${SEV[sev].color}"></span>`; }
+
+function findingCard(f){
+  const dom = DOMAINS.find(d=>d.key===f.domain);
+  return `<div class="card p-3 flex items-start gap-3" style="border-left:3px solid ${dom?dom.color:'var(--s4)'}">
+    ${sevDot(f.sev)}
+    <div class="flex-1">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="font-medium text-sm">${f.title}</span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded" style="background:var(--s3); color:var(--i2);">${f.rule}</span>
+        <span class="text-[10px]" style="color:${SEV[f.sev].color}">${SEV[f.sev].label}</span>
+      </div>
+      <div class="text-xs mt-0.5" style="color:var(--i2);">${f.detail}</div>
+    </div>
+  </div>`;
+}
+
+function renderToday(P, state){
+  const stats = [
+    {label:'Active findings', value:P.findings.length},
+    {label:'Critical/High', value:P.findings.filter(f=>f.sev>=4).length},
+    {label:'Open decisions', value:P.decisions.filter(d=>!d.resolvedAt).length},
+    {label:'Events logged', value:state.events.length},
   ];
-  const PERSON_LINKED_IDX = new Set([7,10,11,13,14,30,31,32,33,34,40,41,42,43,44,49]); // 0-based indices likely to involve a specific person
+  document.getElementById('todayStats').innerHTML = stats.map(s=>`
+    <div class="card p-3">
+      <div class="text-2xl font-semibold">${s.value}</div>
+      <div class="text-xs" style="color:var(--i2);">${s.label}</div>
+    </div>`).join('');
+  document.getElementById('todayFindings').innerHTML = P.findings.length
+    ? P.findings.map(findingCard).join('')
+    : `<div class="text-sm" style="color:var(--i3);">No active findings.</div>`;
+}
 
-  const RULES = RULE_TITLES.map((title, i) => ({
-    id: "R" + (i + 1),
-    category: CATEGORIES[i % 8],
-    title,
-    severity: ((i * 3) % 5) + 1,
-    personLinked: PERSON_LINKED_IDX.has(i)
-  }));
-
-  const PEOPLE = [
-    {id:"p1", name:"Alice Chen",    role:"Eng Lead"},
-    {id:"p2", name:"Ben Osei",      role:"Product Manager"},
-    {id:"p3", name:"Carla Nunez",   role:"Design Lead"},
-    {id:"p4", name:"Diego Silva",   role:"Finance"},
-    {id:"p5", name:"Elin Berg",     role:"Sales Lead"},
-    {id:"p6", name:"Farid Haidari", role:"Support Lead"}
-  ];
-
-  const EVENT_TYPES = ["meeting","commit","review","incident","message","decision","absence","escalation"];
-
-  // deterministic PRNG (mulberry32) — synthetic data must be reproducible
-  function mulberry32(seed){
-    return function(){
-      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-
-  function generateEvents(seed, days, count){
-    const rnd = mulberry32(seed);
-    const now = Date.now();
-    const events = [];
-    for(let i=0;i<count;i++){
-      const person = PEOPLE[Math.floor(rnd()*PEOPLE.length)];
-      events.push({
-        id: "E"+i,
-        ts: now - Math.floor(rnd()*days*86400000),
-        personId: person.id,
-        type: EVENT_TYPES[Math.floor(rnd()*EVENT_TYPES.length)],
-        category: CATEGORIES[Math.floor(rnd()*CATEGORIES.length)],
-        direction: rnd() > 0.45 ? "in" : "out"
-      });
-    }
-    return events.sort((a,b)=>a.ts-b.ts);
-  }
-
-  // ---------------------------------------------------------------------
-  // 2. STORE (localStorage)
-  // ---------------------------------------------------------------------
-  function defaultState(){
-    return {
-      runwayMonths: 9,
-      rules: Object.fromEntries(RULES.map(r => [r.id, {active:false, severity:r.severity, personId:null, recurrence:0}])),
-      events: generateEvents(1337, 90, 420)
-    };
-  }
-
-  function loadState(){
-    try{
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if(!raw) return defaultState();
-      const parsed = JSON.parse(raw);
-      if(!parsed.events || !parsed.rules) return defaultState();
-      return parsed;
-    }catch(e){ return defaultState(); }
-  }
-  function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-
-  let state = loadState();
-
-  // ---------------------------------------------------------------------
-  // 3. ENGINE — Signal Board -> Findings
-  // ---------------------------------------------------------------------
-  function computeFindings(){
-    return RULES.filter(r => state.rules[r.id].active).map(r => ({
-      ...r,
-      severity: state.rules[r.id].severity,
-      personId: state.rules[r.id].personId,
-      recurrence: state.rules[r.id].recurrence
-    }));
-  }
-
-  // ---------------------------------------------------------------------
-  // 4. THERMODYNAMICS — Shannon entropy / mutual information / SNR / bottlenecks
-  //    (standard textbook formulas, Shannon 1948 — original code, not copied)
-  // ---------------------------------------------------------------------
-  function shannonEntropy(events){
-    if(events.length === 0) return {H:0, Hmax:0, normalized:0, richness:0, dominant:null};
-    const counts = {};
-    events.forEach(e => counts[e.type] = (counts[e.type]||0) + 1);
-    const n = events.length;
-    let H = 0, dominant = null, dmax = -1;
-    Object.entries(counts).forEach(([type,c]) => {
-      const p = c/n;
-      H -= p * Math.log2(p);
-      if(c > dmax){ dmax = c; dominant = type; }
-    });
-    const richness = Object.keys(counts).length;
-    const Hmax = richness > 1 ? Math.log2(richness) : 0;
-    return {H, Hmax, normalized: Hmax>0 ? H/Hmax : 0, richness, dominant};
-  }
-
-  function weeklyBins(events, personId, windowDays){
-    const weeks = Math.ceil(windowDays/7);
-    const end = Date.now();
-    const start = end - windowDays*86400000;
-    const bins = new Array(weeks).fill(false);
-    events.filter(e => e.personId === personId && e.ts >= start && e.ts <= end).forEach(e => {
-      const b = Math.floor((e.ts-start)/(7*86400000));
-      if(b>=0 && b<weeks) bins[b] = true;
-    });
-    return bins;
-  }
-
-  function binEntropy(bins){
-    const p1 = bins.filter(Boolean).length / bins.length;
-    if(p1===0 || p1===1) return 0;
-    return -(p1*Math.log2(p1) + (1-p1)*Math.log2(1-p1));
-  }
-
-  function mutualInformation(personA, personB, windowDays=90){
-    const binsX = weeklyBins(state.events, personA, windowDays);
-    const binsY = weeklyBins(state.events, personB, windowDays);
-    const HX = binEntropy(binsX), HY = binEntropy(binsY);
-    const joint = {};
-    for(let i=0;i<binsX.length;i++){
-      const key = (binsX[i]?1:0)+","+(binsY[i]?1:0);
-      joint[key] = (joint[key]||0)+1;
-    }
-    let HXY = 0;
-    Object.values(joint).forEach(c => { const p = c/binsX.length; HXY -= p*Math.log2(p); });
-    const MI = Math.max(0, HX + HY - HXY);
-    const maxMI = Math.min(HX,HY) || 1;
-    return {MI, HX, HY, normalized: maxMI>0 ? MI/maxMI : 0};
-  }
-
-  function signalToNoise(events, findings){
-    const windowMs = 2*86400000;
-    let signal = 0;
-    events.forEach(e => {
-      const isSignal = findings.some(f => f.category === e.category &&
-        (!f.personId || !e.personId || f.personId === e.personId));
-      if(isSignal) signal++;
-    });
-    const noise = events.length - signal;
-    const snr = noise>0 ? signal/noise : (signal>0 ? Infinity : 0);
-    const snrDb = Number.isFinite(snr) ? (snr>0 ? 10*Math.log10(snr) : -99) : 99;
-    return {signal, noise, snr, snrDb, total: events.length};
-  }
-
-  function identifyBottlenecks(events){
-    const counts = PEOPLE.map(p => ({
-      person: p,
-      inCount: events.filter(e => e.personId===p.id && e.direction==="in").length
-    }));
-    const mean = counts.reduce((a,b)=>a+b.inCount,0) / (PEOPLE.length||1);
-    const threshold = mean*0.3; // disclosed: illustrative convention, not a validated threshold
-    return {
-      mean,
-      threshold,
-      bottlenecks: counts.filter(c => c.inCount < threshold)
-        .map(c => ({...c, percentOfMean: mean>0 ? Math.round((c.inCount/mean)*100) : 0}))
-    };
-  }
-
-  // ---------------------------------------------------------------------
-  // 5. CAS ENGINE — feedback loops / bifurcations / attractors
-  //    (original design, not a verified port of any external spec)
-  // ---------------------------------------------------------------------
-  const LOOP_DEFS = [
-    {a:"People", b:"Technical", name:"Workload Amplification Loop", type:"reinforcing",
-     desc:"An overloaded person makes more technical mistakes, which creates more incidents, which increases their load further."},
-    {a:"Operational", b:"People", name:"Burnout Spiral", type:"reinforcing",
-     desc:"Operational strain concentrates on one person, raising burnout risk, which further degrades operational throughput."},
-    {a:"Financial", b:"Strategic", name:"Austerity Trap", type:"reinforcing",
-     desc:"Budget cuts shrink capability, which weakens strategic delivery, which invites further cuts."},
-    {a:"Compliance", b:"Cultural", name:"Trust Collapse Loop", type:"balancing",
-     desc:"Rising policy exceptions erode psychological safety; lower safety reduces voluntary disclosure, hiding more exceptions."}
-  ];
-
-  function identifyFeedbackLoops(findings){
-    const loops = [];
-    LOOP_DEFS.forEach(def => {
-      const as = findings.filter(f => f.category===def.a);
-      const bs = findings.filter(f => f.category===def.b);
-      if(as.length===0 || bs.length===0) return;
-      // person-specific match preferred; fall back to category-level co-occurrence
-      const personMatch = as.find(x => x.personId && bs.some(y => y.personId === x.personId));
-      loops.push({...def, personId: personMatch ? personMatch.personId : null,
-        basis: personMatch ? "same-person co-occurrence" : "category-level co-occurrence"});
-    });
-    return loops;
-  }
-
-  function identifyBifurcations(findings){
-    const points = [];
-    if(state.runwayMonths < 6){
-      points.push({name:"Financial Bifurcation", detail:`Runway (${state.runwayMonths}mo) crossed the 6-month critical threshold.`});
-    }
-    const highSev = findings.filter(f => f.severity >= 4).length;
-    if(highSev >= 5){
-      points.push({name:"Systemic Strain Bifurcation", detail:`${highSev} active findings at severity >= 4.`});
-    }
-    const activeCats = new Set(findings.map(f=>f.category)).size;
-    if(activeCats >= 6){
-      points.push({name:"Complexity Bifurcation", detail:`Active findings now span ${activeCats} of 8 categories simultaneously.`});
-    }
-    return points;
-  }
-
-  function identifyAttractors(){
-    // disclosed, chosen convention: >=3 simulated recurrences marks an attractor state
-    return RULES.filter(r => (state.rules[r.id].recurrence||0) >= 3)
-      .map(r => ({...r, recurrence: state.rules[r.id].recurrence}));
-  }
-
-  // ---------------------------------------------------------------------
-  // 6. RISK INTELLIGENCE — 8-category register + cross-category amplification
-  // ---------------------------------------------------------------------
-  function buildRiskRegister(findings){
-    return CATEGORIES.map(cat => {
-      const items = findings.filter(f => f.category===cat);
-      const maxSev = items.reduce((m,f)=>Math.max(m,f.severity),0);
-      return {category:cat, count: items.length, maxSeverity: maxSev, items};
-    });
-  }
-
-  function crossCategoryAmplification(findings){
-    const byPerson = {};
-    findings.forEach(f => {
-      if(!f.personId) return;
-      (byPerson[f.personId] = byPerson[f.personId]||new Set()).add(f.category);
-    });
-    return Object.entries(byPerson)
-      .filter(([,cats]) => cats.size >= 3)
-      .map(([personId,cats]) => ({
-        personId, person: PEOPLE.find(p=>p.id===personId),
-        categories: [...cats]
-      }));
-  }
-
-  // ---------------------------------------------------------------------
-  // 7. SELF-TESTS — original, check this build's own math (not an external spec)
-  // ---------------------------------------------------------------------
-  function runSelfTests(){
-    const tests = [];
-    const approx = (a,b,eps=1e-6) => Math.abs(a-b) < eps;
-
-    tests.push({name:"shannonEntropy: single event type => H = 0", pass:
-      shannonEntropy([{type:"a"},{type:"a"},{type:"a"}]).H === 0});
-
-    tests.push({name:"shannonEntropy: empty log => H = 0, no throw", pass:
-      shannonEntropy([]).H === 0});
-
-    tests.push({name:"shannonEntropy: normalized in [0,1]", pass: (() => {
-      const r = shannonEntropy(state.events); return r.normalized >= 0 && r.normalized <= 1;
-    })()});
-
-    tests.push({name:"mutualInformation: MI(A,A) equals HX (self-information)", pass: (() => {
-      const r = mutualInformation(PEOPLE[0].id, PEOPLE[0].id);
-      return approx(r.MI, r.HX, 1e-9);
-    })()});
-
-    tests.push({name:"riskRegister: always returns all 8 categories, even at zero", pass:
-      buildRiskRegister([]).length === 8});
-
-    tests.push({name:"identifyBifurcations: runway<6 triggers Financial Bifurcation", pass: (() => {
-      const saved = state.runwayMonths; state.runwayMonths = 3;
-      const got = identifyBifurcations([]).some(b=>b.name==="Financial Bifurcation");
-      state.runwayMonths = saved; return got;
-    })()});
-
-    tests.push({name:"identifyAttractors: threshold is recurrence >= 3 (disclosed convention)", pass: (() => {
-      const r = RULES[0].id; const saved = state.rules[r].recurrence;
-      state.rules[r].recurrence = 2; const notYet = identifyAttractors().some(a=>a.id===r);
-      state.rules[r].recurrence = 3; const now = identifyAttractors().some(a=>a.id===r);
-      state.rules[r].recurrence = saved;
-      return !notYet && now;
-    })()});
-
-    tests.push({name:"RULES catalog has exactly 50 entries across 8 categories", pass:
-      RULES.length === 50 && new Set(RULES.map(r=>r.category)).size === 8});
-
-    return tests;
-  }
-
-  // ---------------------------------------------------------------------
-  // 8. ROUTER + RENDER
-  // ---------------------------------------------------------------------
-  const ROUTES = [
-    {hash:"#/today", label:"Today"},
-    {hash:"#/signals", label:"Signal Board"},
-    {hash:"#/thermodynamics", label:"Thermodynamics"},
-    {hash:"#/cas", label:"CAS Engine"},
-    {hash:"#/risk", label:"Risk Register"},
-    {hash:"#/about", label:"About / Provenance"}
-  ];
-
-  function nav(){
-    return `<nav class="flex flex-wrap gap-2 p-4 bg-slate-900/80 border-b border-slate-800 sticky top-0 backdrop-blur z-10">
-      <span class="font-bold text-blue-400 mr-4 self-center">LEADOS <span class="text-slate-500 font-normal">· sandbox</span></span>
-      ${ROUTES.map(r => `<button data-hash="${r.hash}" class="nav-btn px-3 py-1.5 rounded-lg text-sm text-slate-300 hover:bg-slate-800 ${location.hash===r.hash || (!location.hash && r.hash==='#/today') ? 'active':''}">${r.label}</button>`).join("")}
-    </nav>`;
-  }
-
-  function badge(text, color){
-    return `<span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:${color}22;color:${color};border:1px solid ${color}55">${text}</span>`;
-  }
-
-  function sevColor(s){ return s>=4 ? "#f87171" : s===3 ? "#fbbf24" : "#4ade80"; }
-
-  function renderToday(){
-    const findings = computeFindings();
-    const loops = identifyFeedbackLoops(findings);
-    const bifs = identifyBifurcations(findings);
-    const attractors = identifyAttractors();
-    const entropy = shannonEntropy(state.events);
-    const amps = crossCategoryAmplification(findings);
-    const tests = runSelfTests();
-    const passCount = tests.filter(t=>t.pass).length;
-    const overallRisk = findings.reduce((s,f)=>s+f.severity,0);
-
-    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
-      <h1 class="text-2xl font-bold">Today</h1>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        ${statCard("Overall risk score", overallRisk, "sum of active severities")}
-        ${statCard("Active findings", findings.length, "toggled rules on Signal Board")}
-        ${statCard("Entropy", (entropy.normalized*100).toFixed(0)+"%", "normalized Shannon entropy of event log")}
-        ${statCard("CAS signals", loops.length+bifs.length+attractors.length, "loops + bifurcations + attractors")}
+function renderFindings(P){
+  const html = DOMAINS.map(d=>{
+    const items = P.findings.filter(f=>f.domain===d.key);
+    return `<div>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="w-2.5 h-2.5 rounded-full" style="background:${d.color}"></span>
+        <h3 class="font-semibold text-sm">${d.label}</h3>
+        <span class="text-xs" style="color:var(--i3);">${items.length} finding(s)</span>
       </div>
-
-      <div class="grid md:grid-cols-2 gap-4">
-        <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-          <h2 class="font-semibold mb-2">Cross-category amplification</h2>
-          ${amps.length ? amps.map(a=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0">
-            <b>${a.person ? a.person.name : a.personId}</b> active across <b>${a.categories.length}</b> categories: ${a.categories.join(", ")}
-          </div>`).join("") : `<p class="text-sm text-slate-500">None detected. Toggle rules across 3+ categories for the same person on the Signal Board to trigger this.</p>`}
-        </div>
-        <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-          <h2 class="font-semibold mb-2">Scenario presets</h2>
-          <div class="flex flex-wrap gap-2">
-            <button class="preset-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm" data-preset="burnout">Burnout loop</button>
-            <button class="preset-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm" data-preset="austerity">Austerity trap</button>
-            <button class="preset-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm" data-preset="trust">Trust collapse</button>
-            <button class="preset-btn px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm" data-preset="clear">Reset signals</button>
-          </div>
-          <p class="text-xs text-slate-500 mt-2">Presets are original to this build — they are not a verified port of any external rule set.</p>
-          <button id="reset-data-btn" class="mt-4 px-3 py-1.5 bg-red-900/60 hover:bg-red-900 rounded-lg text-sm">Reset synthetic data (wipes localStorage)</button>
-        </div>
-      </div>
-
-      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-        <h2 class="font-semibold mb-2">Self-test runner <span class="text-sm font-normal text-slate-500">(${passCount}/${tests.length} passing)</span></h2>
-        <div class="space-y-1 text-sm font-mono">
-          ${tests.map(t=>`<div class="${t.pass ? 'text-emerald-400' : 'text-red-400'}">${t.pass ? '✓' : '✗'} ${t.name}</div>`).join("")}
-        </div>
-      </div>
+      <div class="space-y-2">${items.length?items.map(findingCard).join(''):`<div class="text-xs" style="color:var(--i3);">Clear.</div>`}</div>
     </div>`;
-  }
+  }).join('');
+  document.getElementById('findingsByDomain').innerHTML = html;
+}
 
-  function statCard(label, value, sub){
-    return `<div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-      <div class="text-xs text-slate-500">${label}</div>
-      <div class="text-2xl font-bold mt-1">${value}</div>
-      <div class="text-xs text-slate-600 mt-1">${sub}</div>
-    </div>`;
-  }
+function renderDecisions(P){
+  const rows = P.decisions.map(d=>`
+    <tr class="border-b" style="border-color:var(--s3);">
+      <td class="py-2 pr-4">${d.title}</td>
+      <td class="py-2 pr-4">${d.owner}</td>
+      <td class="py-2 pr-4">${d.openDays}d</td>
+      <td class="py-2 pr-4">${d.resolvedAt? '<span style=\"color:var(--sev-1)\">Resolved</span>' : (d.escalate?'<span style="color:var(--sev-4)">Escalate</span>':(d.stale?'<span style="color:var(--sev-2)">Stale</span>':'<span style="color:var(--i2)">Open</span>'))}</td>
+    </tr>`).join('');
+  document.getElementById('decisionsTable').innerHTML = `
+    <table class="w-full text-sm">
+      <thead><tr class="text-left text-xs" style="color:var(--i3);"><th class="py-2 pr-4">Decision</th><th class="py-2 pr-4">Owner</th><th class="py-2 pr-4">Open</th><th class="py-2 pr-4">Status</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
 
-  function renderSignals(){
-    const byCat = CATEGORIES.map(cat => ({cat, rules: RULES.filter(r=>r.category===cat)}));
-    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
-      <h1 class="text-2xl font-bold">Signal Board <span class="text-sm font-normal text-slate-500">— 50 synthetic rules across 8 categories</span></h1>
+function renderRisk(P){
+  const reg = buildRiskRegister(P);
+  document.getElementById('riskGrid').innerHTML = reg.map(c=>`
+    <div class="card p-3">
+      <div class="text-xs" style="color:var(--i3);">${c.label}</div>
+      <div class="text-2xl font-semibold" style="color:${c.score>=4?'var(--sev-4)':c.score>0?'var(--sev-2)':'var(--i2)'}">${c.score}</div>
+      <div class="text-[11px]" style="color:var(--i3);">${c.items.length} item(s)${c.maps.length===0?' · always 0 here (disclosed)':''}</div>
+    </div>`).join('');
+  const amp = detectAmplification(P);
+  document.getElementById('amplification').innerHTML = amp
+    ? `<div class="card p-3 text-sm" style="border-color:var(--sev-4);">⚠ ${amp}</div>`
+    : `<div class="text-xs" style="color:var(--i3);">No cross-category amplification detected.</div>`;
+}
 
-      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800 flex items-center gap-4">
-        <label class="text-sm font-medium">Runway (months): <span id="runway-val">${state.runwayMonths}</span></label>
-        <input type="range" id="runway-slider" min="0" max="24" value="${state.runwayMonths}" class="flex-1 max-w-xs">
-        <span class="text-xs text-slate-500">Drives the Financial bifurcation check on the CAS page (threshold: &lt; 6mo).</span>
-      </div>
+function renderSystems(P, state){
+  const t = buildThermo(state);
+  document.getElementById('thermoBox').innerHTML = `
+    <div>Entropy H = <b>${t.H.toFixed(3)} bits</b> (max possible: ${t.Hmax.toFixed(3)} bits over ${Object.keys(t.types).length} event types)</div>
+    <div>Event type mix: ${Object.entries(t.types).map(([k,v])=>`${k}:${v}`).join(', ')}</div>
+    <div>Information bottleneck domains (&lt;30% of mean event volume): ${t.bottlenecks.length?t.bottlenecks.join(', '):'none'}</div>
+  `;
+  const cas = buildCas(P, state);
+  document.getElementById('casBox').innerHTML = `
+    <div><b>Feedback loops:</b> ${cas.loops.length? cas.loops.map(l=>`${l.label} — ${l.detail}`).join('<br>') : 'none detected'}</div>
+    <div><b>Bifurcation flags:</b> ${cas.bifurcations.length? cas.bifurcations.join('<br>') : 'none'}</div>
+    <div class="text-xs" style="color:var(--i3);"><b>Attractors:</b> ${cas.attractorsNote}</div>
+  `;
+}
 
-      ${byCat.map(group => `
-        <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-          <h2 class="font-semibold mb-3 flex items-center gap-2">${badge(group.cat, CAT_COLOR[group.cat])} <span class="text-slate-500 text-sm font-normal">${group.rules.length} rules</span></h2>
-          <div class="grid md:grid-cols-2 gap-2">
-            ${group.rules.map(r => {
-              const rs = state.rules[r.id];
-              return `<div class="flex items-center justify-between gap-2 p-2 rounded-lg ${rs.active ? 'bg-slate-800' : 'bg-slate-950/50'} border border-slate-800">
-                <div class="flex items-center gap-2 min-w-0">
-                  <input type="checkbox" class="rule-toggle shrink-0" data-id="${r.id}" ${rs.active?'checked':''}>
-                  <div class="min-w-0">
-                    <div class="text-sm truncate">${r.id} — ${r.title}</div>
-                    ${r.personLinked ? `<select class="person-select text-xs bg-slate-800 rounded mt-1" data-id="${r.id}">
-                        <option value="">— no person —</option>
-                        ${PEOPLE.map(p=>`<option value="${p.id}" ${rs.personId===p.id?'selected':''}>${p.name}</option>`).join("")}
-                      </select>` : ""}
-                  </div>
-                </div>
-                <div class="flex items-center gap-1 shrink-0">
-                  <select class="sev-select text-xs bg-slate-800 rounded" data-id="${r.id}">
-                    ${[1,2,3,4,5].map(s=>`<option value="${s}" ${rs.severity===s?'selected':''}>sev ${s}</option>`).join("")}
-                  </select>
-                  <button class="recur-btn text-xs px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded" data-id="${r.id}" title="simulate 3x recurrence">×3</button>
-                  <span class="text-xs text-slate-500 w-5 text-center">${rs.recurrence||0}</span>
-                </div>
-              </div>`;
-            }).join("")}
-          </div>
-        </div>
-      `).join("")}
-    </div>`;
-  }
+function renderHealth(rows){
+  const verdict = document.getElementById('healthVerdict');
+  const failed = rows.filter(r=>r.status==='FAIL').length;
+  verdict.innerHTML = failed===0
+    ? `<span style="color:var(--sev-1)">ALL_CLEAR — ${rows.length}/${rows.length} passing</span>`
+    : `<span style="color:var(--sev-5)">FAILURES_DETECTED — ${rows.length-failed}/${rows.length} passing, ${failed} failing</span>`;
+  document.getElementById('healthRows').innerHTML = rows.map(r=>`
+    <div class="flex items-center gap-3 py-1 border-b" style="border-color:var(--s2);">
+      <span style="color:${r.status==='PASS'?'var(--sev-1)':'var(--sev-5)'}; width:46px;">${r.status}</span>
+      <span style="color:var(--i3); width:34px;">${r.id}</span>
+      <span class="flex-1" style="color:var(--i1);">${r.name}</span>
+      <span style="color:var(--i3);">${r.detail}</span>
+    </div>`).join('');
+}
 
-  function renderThermo(){
-    const entropy = shannonEntropy(state.events);
-    const findings = computeFindings();
-    const snr = signalToNoise(state.events, findings);
-    const bottlenecks = identifyBottlenecks(state.events);
-    const mi = mutualInformation(document.getElementById("mi-a")?.value || PEOPLE[0].id,
-                                  document.getElementById("mi-b")?.value || PEOPLE[1].id);
-    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
-      <h1 class="text-2xl font-bold">Thermodynamics <span class="text-sm font-normal text-slate-500">— information theory over the synthetic event log</span></h1>
-      <p class="text-xs text-slate-500">Formulas are standard Shannon (1948) entropy / mutual information, implemented fresh for this build — not copied from any external source.</p>
+function renderAll(){
+  const P = project(STATE);
+  renderToday(P, STATE);
+  renderFindings(P);
+  renderDecisions(P);
+  renderRisk(P);
+  renderSystems(P, STATE);
+  document.getElementById('storageKeyLabel').textContent = STORAGE_KEY;
+}
 
-      <div class="grid md:grid-cols-3 gap-4">
-        ${statCard("Shannon entropy H", entropy.H.toFixed(2)+" bits", `${entropy.richness} distinct event types, dominant: ${entropy.dominant||'—'}`)}
-        ${statCard("Normalized entropy", (entropy.normalized*100).toFixed(0)+"%", "H / Hmax")}
-        ${statCard("Signal-to-noise", snr.snrDb.toFixed(1)+" dB", `${snr.signal} signal / ${snr.noise} noise of ${snr.total} events`)}
-      </div>
+function showView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+  location.hash = id;
+}
 
-      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-        <h2 class="font-semibold mb-2">Mutual information between two people</h2>
-        <div class="flex gap-2 items-center mb-2">
-          <select id="mi-a" class="bg-slate-800 rounded px-2 py-1 text-sm">${PEOPLE.map(p=>`<option value="${p.id}">${p.name}</option>`).join("")}</select>
-          <span class="text-slate-500">vs</span>
-          <select id="mi-b" class="bg-slate-800 rounded px-2 py-1 text-sm">${PEOPLE.map((p,i)=>`<option value="${p.id}" ${i===1?'selected':''}>${p.name}</option>`).join("")}</select>
-        </div>
-        <div class="text-sm">MI = <b>${mi.MI.toFixed(3)}</b> bits (normalized: ${(mi.normalized*100).toFixed(0)}%) — H(A)=${mi.HX.toFixed(2)}, H(B)=${mi.HY.toFixed(2)}, 90-day weekly bins.</div>
-        <p class="text-xs text-slate-500 mt-1">High coupling could mean healthy collaboration OR unhealthy dependency — this metric cannot distinguish the two (disclosed limit).</p>
-      </div>
+function init(){
+  const nav = document.getElementById('tabNav');
+  nav.innerHTML = TABS.map(t=>`<button class="tab-btn text-xs px-3 py-1.5 rounded-md border" style="border-color:var(--s3)" data-tab="${t.id}" onclick="showView('${t.id}')">${t.label}</button>`).join('');
+  const initial = (location.hash||'#today').replace('#','');
+  showView(TABS.some(t=>t.id===initial)?initial:'today');
 
-      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-        <h2 class="font-semibold mb-2">Information bottlenecks</h2>
-        <p class="text-xs text-slate-500 mb-2">Threshold: &lt;30% of mean inbound events/person (mean = ${bottlenecks.mean.toFixed(1)}). Disclosed: illustrative convention, not a validated organizational-science threshold.</p>
-        ${bottlenecks.bottlenecks.length ? bottlenecks.bottlenecks.map(b=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0">
-          <b>${b.person.name}</b> (${b.person.role}) — ${b.inCount} inbound events (${b.percentOfMean}% of mean)
-        </div>`).join("") : `<p class="text-sm text-slate-500">No bottlenecks detected at current threshold.</p>`}
-      </div>
-    </div>`;
-  }
+  document.getElementById('resetBtn').addEventListener('click', ()=>{ resetDemo(); });
+  document.getElementById('runHealthBtn').addEventListener('click', ()=>{ renderHealth(runHealthWall(STATE)); });
 
-  function renderCas(){
-    const findings = computeFindings();
-    const loops = identifyFeedbackLoops(findings);
-    const bifs = identifyBifurcations(findings);
-    const attractors = identifyAttractors();
-    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
-      <h1 class="text-2xl font-bold">CAS Engine <span class="text-sm font-normal text-slate-500">— feedback loops, bifurcations, attractors</span></h1>
-      <p class="text-xs text-slate-500">Original rule definitions for this build (see About page). Not a verified port of any external CAS implementation.</p>
+  const themeSelect = document.getElementById('themeSelect');
+  const savedTheme = localStorage.getItem('leados-sandbox:theme') || 'dark';
+  themeSelect.value = savedTheme;
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  themeSelect.addEventListener('change', ()=>{
+    document.documentElement.setAttribute('data-theme', themeSelect.value);
+    localStorage.setItem('leados-sandbox:theme', themeSelect.value);
+  });
 
-      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-        <h2 class="font-semibold mb-2">Feedback loops</h2>
-        ${loops.length ? loops.map(l=>`<div class="py-2 border-b border-slate-800 last:border-0">
-          <div class="flex items-center gap-2">${badge(l.type, l.type==='reinforcing' ? '#f87171':'#38bdf8')} <b>${l.name}</b></div>
-          <div class="text-sm text-slate-400 mt-1">${l.desc}</div>
-          <div class="text-xs text-slate-600 mt-1">${l.a} + ${l.b} · basis: ${l.basis}${l.personId ? ' · person: '+(PEOPLE.find(p=>p.id===l.personId)||{}).name : ''}</div>
-        </div>`).join("") : `<p class="text-sm text-slate-500">No loops active. Try the "Burnout loop" preset on Today, or toggle People + Technical rules for the same person.</p>`}
-      </div>
-
-      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-        <h2 class="font-semibold mb-2">Bifurcation points</h2>
-        ${bifs.length ? bifs.map(b=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0"><b>${b.name}</b> — ${b.detail}</div>`).join("")
-          : `<p class="text-sm text-slate-500">None crossed. Lower runway below 6 months on the Signal Board to trigger the Financial bifurcation.</p>`}
-      </div>
-
-      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-        <h2 class="font-semibold mb-2">Attractors <span class="text-xs font-normal text-slate-500">(recurrence >= 3, simulated via ×3 button on Signal Board)</span></h2>
-        ${attractors.length ? attractors.map(a=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0">${a.id} — ${a.title} <span class="text-slate-500">(recurrence: ${a.recurrence})</span></div>`).join("")
-          : `<p class="text-sm text-slate-500">No attractor states yet. Use the ×3 recurrence button next to any rule on the Signal Board.</p>`}
-      </div>
-    </div>`;
-  }
-
-  function renderRisk(){
-    const findings = computeFindings();
-    const register = buildRiskRegister(findings);
-    const amps = crossCategoryAmplification(findings);
-    return `<div class="max-w-6xl mx-auto p-6 space-y-6 fade-in">
-      <h1 class="text-2xl font-bold">Risk Register <span class="text-sm font-normal text-slate-500">— always shows all 8 categories</span></h1>
-      <div class="grid md:grid-cols-2 gap-4">
-        ${register.map(r=>`<div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-          <div class="flex items-center justify-between mb-2">
-            <h2 class="font-semibold">${badge(r.category, CAT_COLOR[r.category])}</h2>
-            <span class="text-xs text-slate-500">${r.count} active · max sev ${r.maxSeverity}</span>
-          </div>
-          <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
-            <div class="h-full" style="width:${Math.min(100,r.maxSeverity*20)}%;background:${sevColor(r.maxSeverity)}"></div>
-          </div>
-          ${r.items.length ? `<div class="mt-2 space-y-1">${r.items.map(f=>`<div class="text-xs text-slate-400">${f.id} — ${f.title} (sev ${f.severity})</div>`).join("")}</div>` : `<div class="mt-2 text-xs text-slate-600">No active findings.</div>`}
-        </div>`).join("")}
-      </div>
-
-      <div class="bg-slate-900 rounded-xl p-4 border border-slate-800">
-        <h2 class="font-semibold mb-2">Cross-category amplification</h2>
-        ${amps.length ? amps.map(a=>`<div class="text-sm py-1 border-b border-slate-800 last:border-0"><b>${a.person?a.person.name:a.personId}</b> — ${a.categories.join(", ")}</div>`).join("")
-          : `<p class="text-sm text-slate-500">None detected (needs 3+ categories active for the same person).</p>`}
-      </div>
-    </div>`;
-  }
-
-  function renderAbout(){
-    return `<div class="max-w-4xl mx-auto p-6 space-y-5 fade-in text-sm leading-relaxed">
-      <h1 class="text-2xl font-bold mb-2">About / Provenance</h1>
-
-      <div class="bg-amber-950/40 border border-amber-800 rounded-xl p-4">
-        <b>Read this before trusting any other "verified" narrative about this project lineage</b> — including the real
-        <code>github.com/wbweve/Leados</code> repo's own <code>README.md</code> / <code>AI-SESSION-LOG.md</code>, which were
-        inspected directly this session and are <b>not</b> fully reliable (see "Contradiction found" below).
-      </div>
-
-      <h2 class="font-semibold text-lg mt-4">What was actually checked in github.com/wbweve/Leados this session</h2>
-      <ul class="list-disc ml-5 space-y-1 text-slate-300">
-        <li>Fetched the rendered repo page, then independently via <code>api.github.com/repos/wbweve/Leados/contents/</code> and <code>git/trees</code>.</li>
-        <li><b>Verified:</b> the repo root contains ~40 loose <code>.tsx</code>/<code>.md</code> files (App.tsx, AboutView.tsx, Catalog.tsx, FinanceDashboard.tsx, etc.) <i>and</i> a separate <code>src/</code> Vite+React+TypeScript tree (<code>src/App.tsx</code>, <code>src/components/</code>, <code>src/lib/</code>, <code>src/main.tsx</code>, <code>src/utils/</code>).</li>
-        <li><b>Verified by raw fetch:</b> <code>src/App.tsx</code> imports <code>Shell</code>, <code>TodayView</code>, <code>SignalBoardView</code>, <code>ThermodynamicsView</code>, <code>CasView</code>, <code>RiskView</code>, <code>AboutView</code> and <code>loadState</code> from <code>./lib/store</code> — i.e. a live Signal Board / Thermodynamics / CAS / Risk app genuinely exists in <code>src/</code>.</li>
-        <li><b>Verified by raw fetch:</b> <code>src/lib/infoTheory.ts</code> exists and implements Shannon entropy, mutual information, SNR, and a 30%-of-mean bottleneck rule — matching the four metrics this page's Thermodynamics view also implements (independently coded here, formulas only, not copied).</li>
-        <li><b>Verified by directory listing:</b> <code>src/lib/casEngine.ts</code> (6,628 bytes) and a <code>core.ts</code>, <code>engine.ts</code>, <code>intelligence.ts</code>, <code>physics.ts</code> and 18+ other files exist in <code>src/lib</code>.</li>
-        <li><b>Verified by raw fetch, root <code>index.html</code>:</b> it is a 352-byte stock Vite scaffold (<code>&lt;div id="root"&gt;&lt;/div&gt;&lt;script type="module" src="/src/main.tsx"&gt;&lt;/script&gt;</code>) — i.e. there is <b>no</b> hand-authored single-file demo at the repo root as of this session's fetch.</li>
-      </ul>
-
-      <h2 class="font-semibold text-lg mt-4">Contradiction found — disclosed, not resolved</h2>
-      <p class="text-slate-300">The repo's own <code>AI-SESSION-LOG.md</code> (as fetched this session) claims a prior session ran
-      <code>curl</code> against the root <code>index.html</code> and found it to be <b>54,081 bytes</b>, containing
-      <code>identifyAttractors(P, today)</code>, ~61 distinct <code>R*</code> rule IDs, and the literal string <code>pt-L</code>.
-      Fetching that same file directly, this session, returns <b>352 bytes</b> — a trivial Vite scaffold with none of that content.
-      Both claims cannot be true of the same commit. This was <b>not resolved</b> by walking full commit history (out of scope for
-      this session's budget); it is reported as an open, verified discrepancy rather than silently repeated as fact. <b>Practical
-      conclusion: do not take that repo's own session logs at face value — verify specific claims directly before relying on them.</b></p>
-
-      <h2 class="font-semibold text-lg mt-4">What this delivery is, and isn't</h2>
-      <ul class="list-disc ml-5 space-y-1 text-slate-300">
-        <li><b>Is:</b> an original, hand-authored single <code>index.html</code> (vanilla JS + Tailwind CDN), because that is what this tool environment supports — it cannot run <code>npm install</code> / Vite / React.</li>
-        <li><b>Is:</b> a fresh implementation of the same functional ideas confirmed to exist in the real repo (Signal Board, Thermodynamics, CAS engine, Risk Register) — rules, data, and code written from scratch here.</li>
-        <li><b>Is not:</b> a copy, port, fork, or build output of <code>github.com/wbweve/Leados</code>. No file from that repo was pasted into this one.</li>
-        <li><b>Is not</b> a continuation of the unverified "pt-L" brief referenced inside that repo's own README — this conversation never received that brief's text, so none of its specific named scenarios (e.g. "R7+R4 burnout loop") are replicated here under those IDs. The burnout/austerity/trust-collapse <i>concepts</i> are common leadership-risk patterns and are implemented here independently, under this build's own rule IDs (R1–R50).</li>
-        <li><b>Disclosed gap:</b> "cultural bifurcation" / a generic culture-scoring function is not implemented — no verified definition for it was found anywhere, and inventing one would misattribute it to a source that doesn't exist.</li>
-      </ul>
-
-      <h2 class="font-semibold text-lg mt-4">Conventions used here (all disclosed, none claimed as validated science)</h2>
-      <ul class="list-disc ml-5 space-y-1 text-slate-300">
-        <li>Bottleneck threshold: &lt;30% of mean inbound events/person.</li>
-        <li>Attractor threshold: recurrence count &gt;= 3 simulated toggles.</li>
-        <li>Financial bifurcation threshold: runway &lt; 6 months.</li>
-        <li>Systemic strain bifurcation: &gt;=5 active findings at severity &gt;= 4.</li>
-        <li>Cross-category amplification: one person with active findings in &gt;=3 of the 8 categories.</li>
-      </ul>
-
-      <p class="text-xs text-slate-600 mt-4">Storage key: <code>${STORAGE_KEY}</code> — new key, no prior session's state is assumed or migrated.</p>
-    </div>`;
-  }
-
-  function render(){
-    const hash = location.hash || "#/today";
-    let body;
-    if(hash==="#/signals") body = renderSignals();
-    else if(hash==="#/thermodynamics") body = renderThermo();
-    else if(hash==="#/cas") body = renderCas();
-    else if(hash==="#/risk") body = renderRisk();
-    else if(hash==="#/about") body = renderAbout();
-    else body = renderToday();
-
-    document.getElementById("app").innerHTML = nav() + body;
-    attachHandlers();
-  }
-
-  function attachHandlers(){
-    document.querySelectorAll(".nav-btn").forEach(b => b.onclick = () => { location.hash = b.dataset.hash; });
-
-    document.querySelectorAll(".rule-toggle").forEach(el => el.onchange = () => {
-      state.rules[el.dataset.id].active = el.checked; saveState(); render();
-    });
-    document.querySelectorAll(".sev-select").forEach(el => el.onchange = () => {
-      state.rules[el.dataset.id].severity = parseInt(el.value,10); saveState(); render();
-    });
-    document.querySelectorAll(".person-select").forEach(el => el.onchange = () => {
-      state.rules[el.dataset.id].personId = el.value || null; saveState(); render();
-    });
-    document.querySelectorAll(".recur-btn").forEach(el => el.onclick = () => {
-      const r = state.rules[el.dataset.id];
-      r.recurrence = (r.recurrence||0) + 3; r.active = true; saveState(); render();
-    });
-    const runwaySlider = document.getElementById("runway-slider");
-    if(runwaySlider) runwaySlider.oninput = (e) => {
-      state.runwayMonths = parseInt(e.target.value,10);
-      document.getElementById("runway-val").textContent = state.runwayMonths;
-      saveState();
-    };
-    if(runwaySlider) runwaySlider.onchange = () => render();
-
-    document.getElementById("mi-a")?.addEventListener("change", render);
-    document.getElementById("mi-b")?.addEventListener("change", render);
-
-    document.getElementById("reset-data-btn")?.addEventListener("click", () => {
-      localStorage.removeItem(STORAGE_KEY);
-      state = defaultState();
-      render();
-    });
-
-    document.querySelectorAll(".preset-btn").forEach(el => el.onclick = () => {
-      applyPreset(el.dataset.preset); saveState(); render();
-    });
-  }
-
-  function clearAllRules(){
-    Object.values(state.rules).forEach(r => { r.active=false; r.personId=null; r.recurrence=0; });
-  }
-
-  function applyPreset(name){
-    if(name==="clear"){ clearAllRules(); return; }
-    clearAllRules();
-    const person = PEOPLE[0].id;
-    if(name==="burnout"){
-      // People + Technical rules, same person -> Workload Amplification Loop
-      const peopleRule = RULES.find(r=>r.category==="People" && r.personLinked);
-      const techRule = RULES.find(r=>r.category==="Technical");
-      [peopleRule, techRule].forEach(r => { state.rules[r.id].active = true; state.rules[r.id].personId = person; state.rules[r.id].severity = 4; });
-    } else if(name==="austerity"){
-      state.runwayMonths = 4;
-      const finRule = RULES.find(r=>r.category==="Financial");
-      const stratRule = RULES.find(r=>r.category==="Strategic");
-      [finRule, stratRule].forEach(r => { state.rules[r.id].active = true; state.rules[r.id].severity = 4; });
-    } else if(name==="trust"){
-      const compRule = RULES.find(r=>r.category==="Compliance");
-      const cultRule = RULES.find(r=>r.category==="Cultural");
-      [compRule, cultRule].forEach(r => { state.rules[r.id].active = true; state.rules[r.id].severity = 5; });
-    }
-  }
-
-  window.addEventListener("hashchange", render);
-  render();
+  renderAll();
+}
+document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
