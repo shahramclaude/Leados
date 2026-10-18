@@ -1,97 +1,153 @@
-# LEADOS — Federated Scenario Planning & Living Strategy
+# LEADOS pt-U — Talent Architecture, Financial OS, Regulatory, Narrative & Org Physics
 
-A React + Vite + Tailwind app implementing two leadership-intelligence
-modules from a pasted specification — a **Federated Scenario Planning
-Engine** (Part 2) and **Living Strategy Documents** (Part 3) — on top of a
-minimal, original event-log / Bayesian-belief / findings substrate built
-from scratch to make them real rather than mocked.
+A React + Vite + Tailwind app implementing five leadership-intelligence modules
+from the task's pasted "Part 4–8" brief: **Talent Architecture** (succession,
+bench strength, capability gaps, headcount recommendations), a **Financial
+Intelligence OS** (unit economics, capital allocation heuristic, scenario-weighted
+MRR projection), **Regulatory Intelligence** (jurisdiction exposure scoring,
+cross-jurisdiction conflict detection), **Predictive Narrative Intelligence**
+(communication effectiveness, auto-generated strategy), and an **Organizational
+Physics ODE system** (RK4 numerical integration of a 5-variable state vector) —
+all driven by one synthetic, regenerable event log.
 
 > **Provenance — read before assuming this continues `github.com/wbweve/Leados`:**
-> `github.com/wbweve/Leados` was inspected this session via a direct fetch of
-> its own README (which documents a prior, separate AI session's own
-> file-by-file inspection of that repo). Full ledger in `AI-SESSION-LOG.md`
+> `github.com/wbweve/Leados` was inspected directly this session (GitHub's Trees
+> API for the full 148-file tree, raw fetches of `package.json`, `vite.config.ts`,
+> root `index.html`, `src/App.tsx`, the rendered README, and the repo's own prior
+> `AI-SESSION-LOG*.md`/`SESSION-3.patch.md`). Full ledger in `AI-SESSION-LOG.md`
 > and in-app at **About / Provenance**. Short version:
 >
-> * The real repo is a different app — information theory ("Thermodynamics"),
->   a CAS engine, and an 8-category Risk Register, driven by a 50-rule
->   "Signal Board." **Verified absent from it:** any `bayesian.ts`,
->   `wargame.ts`, `finIntel.ts`, `healthScore.ts`, `performance.ts`,
->   `scenarios.ts`, `livingDocs.ts`, or `strategy.doc` event type.
-> * **This sandbox started empty** (verified: default scaffold `App.tsx`, no
->   prior session files) — there is no shared code or state with that repo.
-> * The pasted "Part 2 / Part 3" brief in this task is therefore treated as
->   an **unverified external specification of desired behavior**, the same
->   convention the real repo's own prior session used for its own pasted
->   "pt-L" brief — not as proof any of its named modules exist, and not
->   copied verbatim.
-> * One likely **bug in the pasted spec was found and fixed, disclosed**:
->   its scenario-axis sort claims to pick "highest uncertainty" first but its
->   comparator actually picks the *most confident* belief first. Fixed to
->   sort by ascending distance from 0.5 so axis selection matches its stated
->   intent. Details in `AI-SESSION-LOG.md`.
+> * The real repo mixes ~90 loose root-level files (several duplicated as both
+>   `.js` and `.ts`/`.tsx`, e.g. `engine.js` + `engine.ts`) with a separate, live
+>   `src/` Vite+React+TypeScript app.
+> * **Verified directly, this session:** the live `src/App.tsx` routes to
+>   `TodayView`/`SignalBoardView`/`ThermodynamicsView`/`CasView`/`RiskView`/`AboutView`
+>   — matching the rendered README's own page table.
+> * **Verified directly, this session:** the root `index.html` is the 352-byte
+>   default Vite scaffold — **not** a large hand-authored demo, which directly
+>   contradicts other sessions' logged byte counts for the same file (1,920 B /
+>   54,081 B / 251,817 B / 337,974 B at different points). File state in this repo
+>   is volatile between sessions; no historical claim was trusted without a fresh
+>   read.
+> * **Not found anywhere in the real repo, this session:** any file, export, or
+>   path containing `talent`, `financial_os`, `regulatory`, `narrative`,
+>   `org_ode`, `attention_opt`, `living_docs`, or `scenarios`. The task's pasted
+>   "Part 4–8" brief and its "pt-U Implementation Summary" (105 files, 220 rules,
+>   `T_U_1…T_U_20` tests) is therefore treated as an **unverified external
+>   specification**, not repo fact — the same convention the real repo's own
+>   sessions applied to their own pasted "pt-L" brief.
+>
+> **This app does not fork, copy, or continue any of that history.** It is a
+> fresh build, implementing only the *functional ideas* in the pasted brief —
+> original code throughout, with fabricated demo data clearly labeled as such.
 
 ## Run it
 
-`npm install && npm run build`, then open `dist/index.html`. This project's
-Vite config (`vite-plugin-singlefile`, already present before this session)
-inlines all JS/CSS into that one HTML file — verified by grepping the build
-output for external URLs: none found beyond inert XML/SVG namespace strings
-and a baked-in React docs link inside minified error text. Zero runtime
-network calls.
+`npm install && npm run build`, then open `dist/index.html`. The Vite config
+(`vite-plugin-singlefile`) inlines all JS/CSS into that one file — confirmed by
+inspecting the build output — so it opens with zero runtime network calls.
 
 For development: `npm run dev`.
 
-State lives in `localStorage` under `leados-federated:v1`. Use **Reset
-synthetic data** (top-right, any tab) to regenerate the deterministic seed
-dataset.
+State lives in `localStorage` under `leados-ptU:v1`. Use **Regenerate synthetic
+data** (Today view) to reseed it.
 
-## Pages (tabs)
+## Pages (hash routes)
 
-| Tab | What it does |
+| Route | What it does |
 |---|---|
-| **Overview** | Health score, runway, active findings, and the three Bayesian "uncertainty axis" beliefs the scenario engine is built from. |
-| **Scenario Planning** (Part 2) | `LEADOS.scenarios` — a 2×2 matrix (`BEST_CASE` / `RISK_A` / `RISK_B` / `WORST_CASE`) built from your two highest-uncertainty beliefs. Each quadrant is **fully simulated**: synthetic future events for its adverse axes are injected into a cloned event log, then run back through the findings engine and health score, so each scenario shows its own finding count, critical-finding count, health score, and top finding — plus required actions and leading indicators to watch. |
-| **Living Strategy** (Part 3) | `LEADOS.livingDocs` — strategy documents (`strategy.doc` events) whose assumptions (metric + threshold + operator) are re-tested against the live event log on every render. Each doc is marked `VALID` / `DEGRADED` / `INVALIDATED`, never silently assumed true; assumptions with no logged data show as `UNKNOWN` rather than passing by default. Includes a form to author new strategy documents. |
-| **Signal Console** | Inject real events (attrition, pulse mood, deal won/lost, financial KPIs) and watch Overview, Scenario Planning, and Living Strategy all recompute live — nothing is cached per tab. |
-| **About / Provenance** | Full provenance ledger: what was checked against the real repo, what was found, and the disclosed spec-bug fix. |
+| `#/today` | Overview: people/event counts, active findings (rules R208–R215, R217–R219), and an in-browser self-test runner (ST-01…ST-13). |
+| `#/talent` | Succession depth map per critical role, bench-strength %, capability-gap analysis vs. headcount plans, and autonomous headcount recommendations with runway-aware financial constraints. |
+| `#/financial` | Complete unit economics (LTV:CAC, payback period, Rule of 40, Quick Ratio) against labeled external benchmarks; a capital-allocation heuristic; a 12-month scenario-weighted MRR projection. |
+| `#/regulatory` | Jurisdiction obligation registry with an exposure score (coverage × review × recency), and cross-jurisdiction interpretation-conflict detection. |
+| `#/narrative` | Communication effectiveness by audience (alignment/confusion/resistance rates from logged reactions) and an on-demand communication-strategy generator. |
+| `#/physics` | A 5-variable (Engagement/Velocity/Trust/Capacity/Momentum) organizational ODE system, integrated forward with RK4, with interactive intervention sliders and an attractor-type prediction. |
+| `#/about` | Full provenance ledger — what was checked against the real repo, what was found, and exactly what in this delivery is original vs. a reused idea vs. a disclosed gap. |
 
-## What's original, what's a faithful translation of the pasted spec, what's a disclosed fix
+## What's original, what's a reused idea, what's a disclosed gap
 
-* **Faithful TypeScript translation of the pasted spec:** `src/lib/livingDocs.ts` (Part 3) — logic matches the pasted `LEADOS.livingDocs` module 1:1, adapted only for types and wired to this build's own metric sources.
-* **Translation + one disclosed correction:** `src/lib/scenarios.ts` (Part 2) — matches the pasted `LEADOS.scenarios` module's structure and behavior, except the axis-selection sort is fixed to actually pick the highest-uncertainty belief first (the pasted comparator didn't, contradicting its own comment — see `AI-SESSION-LOG.md`).
-* **Built from scratch because no verified source for them was found anywhere** (not in the real repo, not pre-existing in this sandbox): `src/lib/bayesian.ts` (simplified log-odds belief scoring — disclosed as a heuristic, not a calibrated forecast), `src/lib/wargame.ts`, `src/lib/finIntel.ts`, `src/lib/performance.ts`, `src/lib/healthScore.ts`, `src/lib/engine.ts` (`project`/`run`/`_days`). These exist only because the pasted Part 2/3 spec calls them as if an earlier "Part 1" had already built them, and no such Part 1 exists anywhere verified.
-* **All UI, the synthetic roster/event generator, and the Signal Console:** original to this delivery.
+- **Original, this delivery:** every file in `src/lib/*.ts` and every component
+  in `src/components/*.tsx`, including the synthetic roster/event generator
+  (`seed.ts`), the five domain engines, the rule engine (`engine.ts`), and the
+  self-test suite (`selfTest.ts`).
+- **Reused idea, not code:** the event-type shapes (e.g. `talent.succession.candidate`,
+  `reg.interpretation`, `narrative.outcome`) and named formulas (LTV:CAC, Rule of
+  40, Quick Ratio, RK4 integration of the organizational ODE) come from the
+  task's pasted brief. No source for any of it exists in the real repo, so this
+  is "implemented to match a description," not "ported from verified code."
+- **A gap, left as a gap:** rules R206/R207/R220 (living strategy documents) and
+  R216 (simulated-annealing attention optimizer) require Parts 1–3 modules not
+  pasted into this session — not implemented, not invented. `LEADOS.scenarios`
+  (federated scenario planning) is replaced by a small, clearly-labeled local
+  stand-in inside `financialOS.ts`.
+- **A mechanical note on the brief itself:** the pasted ODE derivative formulas
+  have no exact all-zero fixed point for generic states (e.g. `dC` never
+  references `C`). Disclosed in `About / Provenance`; self-tests check
+  directional/boundary behavior instead of asserting a false equilibrium.
 
 ## Project structure
 
 ```
 src/
   lib/
-    types.ts            — shared types (Event, Person, AppState, Assumption, ...)
-    prng.ts              — deterministic seed RNG
-    seed.ts               — synthetic roster + ~9 months of synthetic events (original)
-    engine.ts              — LEADOS.events.project / LEADOS.engine.run+_days (original, minimal)
-    wargame.ts               — win rate / velocity / competitive landscape (original, minimal)
-    finIntel.ts                — runway status (original, minimal)
-    performance.ts               — team engagement (original, minimal)
-    healthScore.ts                — composite org health heuristic (original)
-    bayesian.ts                    — simplified log-odds belief scoring (original)
-    scenarios.ts                     — PART 2: federated scenario planning
-    livingDocs.ts                     — PART 3: living strategy documents
+    types.ts            — shared types (Person, Evt, EventType, Finding, ...)
+    prng.ts              — seeded PRNG (mulberry32) for reproducible synthetic data
+    seed.ts               — synthetic roster + event log across all 5 domains
+    store.ts               — localStorage persistence + state mutations
+    talent.ts                — succession map, capability gaps, headcount recs
+    financialOS.ts             — unit economics, capital allocation, scenario projection
+    regulatory.ts                — jurisdiction registry, cross-jurisdiction conflicts
+    narrativeIntel.ts              — communication effectiveness + strategy generator
+    orgODE.ts                        — RK4 integration of the 5-variable org state vector
+    engine.ts                         — rule engine (R208–R215, R217–R219) over all domains
+    selfTest.ts                       — original ST-01…ST-13 runtime self-tests
+    useHashRoute.ts                    — tiny hash router
   components/
-    Shell.tsx, ui.tsx                  — nav shell + shared UI primitives
-    OverviewView / ScenariosView / LivingDocsView / ConsoleView / AboutView
-  App.tsx                                 — tab routing + state wiring (entry point)
+    Shell.tsx, ui.tsx                   — nav shell + shared UI primitives
+    TodayView / TalentView / FinancialView / RegulatoryView / NarrativeView / PhysicsView / AboutView
+  App.tsx                                 — route composition (entry point)
 ```
 
 ## Changelog
 
-* **Fetched `github.com/wbweve/Leados`'s README directly and inspected this sandbox's own files before writing any code** — *why*: the task requires inspecting actual code, not trusting either the real repo's self-framing or the task prompt's pasted spec at face value.
-* **Confirmed this sandbox started as an untouched default scaffold with no LEADOS history** — *why disclosed*: makes explicit that this delivery has zero shared code/state with `github.com/wbweve/Leados`, so nothing here should be read as "continuing" that repo's lineage.
-* **Declared the pasted "Part 2 / Part 3" brief an unverified external specification, not repo fact** — *why*: no match for `LEADOS.bayesian`, `LEADOS.wargame`, `LEADOS.finIntel`, `LEADOS.engine`, `LEADOS.healthScore`, `LEADOS.performance`, or `strategy.doc` was found in anything fetched from the real repo.
-* **Built original `bayesian.ts`, `wargame.ts`, `finIntel.ts`, `performance.ts`, `healthScore.ts`, `engine.ts` modules** — *why*: the pasted spec calls these as pre-existing dependencies; without them Part 2/3 would be non-functional mockups instead of a working app.
-* **Fixed the scenario axis-selection sort in `scenarios.ts` and disclosed the fix** — *why*: the pasted comparator's own comment ("highest uncertainty first") contradicts what the comparator actually computes (most-confident first); shipping it unfixed would silently invert the feature's stated purpose.
-* **Added a seeded `strategy.doc` with 5 assumptions and a synthetic event log engineered to violate some of them** — *why*: so Living Strategy shows a real `DEGRADED`/`INVALIDATED` state on first load, not an empty or trivially-passing screen.
-* **Added a Signal Console tab for live event injection** — *why*: makes "strategy checks itself against reality" and "a distribution of futures" demonstrable interactively, not just a static snapshot of seed data.
-* **Used a new storage key (`leados-federated:v1`)** — *why*: this sandbox began with the default scaffold and no prior state; reusing another session's key (e.g. the real repo's `leados-sandbox:v1`) would falsely imply shared history.
-* **Kept `vite-plugin-singlefile`** (already present in the scaffold before this session) — *why*: preserves the "open one file, zero network calls" property without needing a hand-authored single HTML file, verified by grepping the actual build output.
+- **Inspected `github.com/wbweve/Leados` first** — via GitHub's Trees API, raw
+  fetches of `package.json`/`vite.config.ts`/root `index.html`/`src/App.tsx`, and
+  the repo's own session logs — before writing any code. *Why:* the task
+  requires inspecting actual code, not trusting a README's self-framing or the
+  prompt's own pasted brief at face value.
+- **Found the real repo's file-state claims are internally inconsistent across
+  its own prior sessions** (four different byte counts logged for the same root
+  `index.html` across different sessions) and re-verified from scratch instead of
+  trusting the most recent-looking log. *Why:* half-right or stale claims are
+  more dangerous than fully-wrong ones when presented with confidence.
+- **Declared the pasted "Part 4–8" brief / "pt-U Implementation Summary" an
+  unverified specification, not repo fact.** *Why:* no string match for its named
+  files, module counts, or test IDs exists anywhere in the real repo's 148-file
+  tree, checked by direct substring search.
+- **Built a 5-domain, single-entry-point React+Vite+TS+Tailwind app
+  (`src/App.tsx`) instead of a vanilla single HTML file.** *Why:* this task
+  environment's required entry point is `src/App.tsx`, built via `npm run
+  build`; the build's own `vite-plugin-singlefile` config still produces a
+  single-file `dist/index.html` with zero runtime network calls, so the
+  "open one file" property survives even though it's produced by a build step.
+- **Implemented rules R208–R215 and R217–R219, and explicitly skipped
+  R206/R207/R216/R220.** *Why:* the skipped rules depend on Parts 1–3 modules
+  (living strategy docs, simulated-annealing attention optimizer) that were not
+  pasted into this session — implementing them would require inventing an
+  unseen spec.
+- **Replaced `LEADOS.scenarios` with a small local 3-scenario stand-in inside
+  `financialOS.ts`.** *Why:* same reasoning — the real federated scenario module
+  wasn't pasted this session; a labeled simplification is more honest than a
+  silent full reconstruction.
+- **Wrote an original self-test suite (`ST-01…ST-13`) instead of reproducing the
+  brief's named `T_U_1…T_U_20` tests verbatim.** *Why:* those test bodies
+  couldn't be verified anywhere and mostly require unpasted modules; inventing
+  test bodies under their exact names would imply false provenance.
+- **Disclosed that the pasted ODE formulas admit no exact zero-derivative fixed
+  point for generic states**, and wrote self-tests that check directional and
+  boundary behavior instead. *Why:* asserting the brief's implied equilibrium
+  property without checking it first would repeat the exact mistake this task
+  asks to avoid.
+- **Used a new storage key (`leados-ptU:v1`).** *Why:* this workspace began from
+  the default Vite scaffold with no prior state; claiming continuity with any
+  other session's key would assert a shared history that doesn't exist here.

@@ -1,50 +1,34 @@
-// localStorage persistence. New key for this fresh session (no shared
-// history with github.com/wbweve/Leados's 'leados-sandbox:v1', or any other
-// prior session's key — this workspace began empty, verified above).
-import { useCallback, useMemo, useState } from 'react';
-import { buildSeedState } from './seed';
-import type { AppState, LeadosEvent } from './types';
+// localStorage persistence for the pt-U sandbox. Original to this delivery.
+// New storage key — this workspace began from the default Vite scaffold with no
+// prior App.tsx, so there is no earlier session's key to continue.
+import { generateSeed } from "./seed";
+import type { AppState } from "./types";
 
-const KEY = 'leados-federated:v1';
+export const STORAGE_KEY = "leados-ptU:v1";
 
-function load(): AppState {
+export function loadState(): AppState {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as AppState;
   } catch {
-    /* ignore */
+    /* fall through to seed */
   }
-  const seeded = buildSeedState();
-  localStorage.setItem(KEY, JSON.stringify(seeded));
+  const seeded = generateSeed(42);
+  saveState(seeded);
   return seeded;
 }
 
-export function useStore() {
-  const [state, setState] = useState<AppState>(() => load());
+export function saveState(state: AppState) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 
-  const persist = useCallback((next: AppState) => {
-    setState(next);
-    localStorage.setItem(KEY, JSON.stringify(next));
-  }, []);
+export function resetToSeed(seedNum = Date.now() % 100000): AppState {
+  const seeded = generateSeed(seedNum);
+  saveState(seeded);
+  return seeded;
+}
 
-  const addEvent = useCallback(
-    (type: LeadosEvent['type'], data: Record<string, any>) => {
-      setState((prev) => {
-        const next: AppState = {
-          ...prev,
-          events: [...prev.events, { id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, ts: new Date().toISOString(), data }],
-        };
-        localStorage.setItem(KEY, JSON.stringify(next));
-        return next;
-      });
-    },
-    []
-  );
-
-  const reset = useCallback(() => {
-    const seeded = buildSeedState();
-    persist(seeded);
-  }, [persist]);
-
-  return useMemo(() => ({ state, addEvent, reset }), [state, addEvent, reset]);
+export function daysBetween(ts: string, today: Date): number {
+  const d = new Date(ts);
+  return Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
 }

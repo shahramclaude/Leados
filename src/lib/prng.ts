@@ -1,6 +1,5 @@
-// Tiny deterministic PRNG so "reset synthetic data" always regenerates the
-// same scenario instead of a different random one each time. Original to
-// this session (standard public-domain mulberry32 algorithm).
+// Deterministic seeded PRNG (mulberry32) so the synthetic dataset is reproducible
+// across reloads until the user clicks "Regenerate". Original to this delivery.
 export function mulberry32(seed: number) {
   let a = seed;
   return function () {

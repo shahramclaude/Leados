@@ -1,4 +1,3 @@
-// src/lib/useHashRoute.ts — tiny hash router. ORIGINAL to this sandbox.
 import { useEffect, useState, useCallback } from "react";
 
 export function useHashRoute(defaultRoute: string): [string, (r: string) => void] {
@@ -8,13 +7,13 @@ export function useHashRoute(defaultRoute: string): [string, (r: string) => void
   useEffect(() => {
     const onHashChange = () => setRoute(read());
     window.addEventListener("hashchange", onHashChange);
-    if (!window.location.hash) window.location.hash = `#${defaultRoute}`;
+    if (!window.location.hash) window.location.hash = defaultRoute;
     return () => window.removeEventListener("hashchange", onHashChange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const navigate = useCallback((r: string) => {
-    window.location.hash = `#${r}`;
+    window.location.hash = r;
   }, []);
 
   return [route, navigate];

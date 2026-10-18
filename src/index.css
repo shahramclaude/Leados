@@ -1,11 +1,1 @@
 @import "tailwindcss";
-
-:root {
-  --sev-clear: #10b981;
-  --sev-1: #34d399;
-  --sev-2: #a3e635;
-  --sev-3: #f59e0b;
-  --sev-4: #f97316;
-  --sev-5: #ef4444;
-}
-
