@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LeadOS — Autonomous Operations",
-  description: "Server-side background intelligence loop, work queue, and live notifications.",
+  title: "LeadOS — People Intelligence",
+  description: "Predictive talent & org network analysis for managers.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
