@@ -1,163 +1,185 @@
 "use client";
-import type { IntelligenceData } from "@/hooks/useIntelligence";
 
-const URGENCY_COLORS: Record<string, string> = {
-  NOW: "text-red-400",
-  TODAY: "text-amber-400",
-  THIS_WEEK: "text-yellow-400",
+import type { IntelligenceData } from "@/lib/intelligence";
+
+const URGENCY_COLOR: Record<string, string> = {
+  NOW: "bg-red-600/20 text-red-400 border-red-700/50",
+  TODAY: "bg-amber-600/20 text-amber-400 border-amber-700/50",
+  THIS_WEEK: "bg-yellow-600/20 text-yellow-400 border-yellow-700/50",
+  MONITOR: "bg-slate-700/40 text-slate-400 border-slate-700",
 };
 
-function entropyLabel(h: number) {
-  if (h < 0.2) return { label: "RIGID", color: "text-blue-400" };
-  if (h > 0.8) return { label: "CHAOTIC", color: "text-red-400" };
-  return { label: "HEALTHY RANGE", color: "text-emerald-400" };
+const MODE_DESCRIPTION: Record<string, string> = {
+  REACTIVE: "Multiple critical fires. Focus entirely on triage this week — defer new initiatives.",
+  STRUCTURAL_STRESS: "Decision backlog is compounding. Prioritize forcing functions and unblockers.",
+  STRATEGIC_DRIFT: "Signal is diffuse across many domains. Tighten focus and re-align priorities.",
+  BALANCED: "Signal is manageable. Good week to invest in growth and proactive work.",
+};
+
+const MODE_COLOR: Record<string, string> = {
+  REACTIVE: "text-red-400",
+  STRUCTURAL_STRESS: "text-amber-400",
+  STRATEGIC_DRIFT: "text-cyan-400",
+  BALANCED: "text-green-400",
+};
+
+function ConfidenceArc({ confidence }: { confidence: number }) {
+  const r = 28;
+  const cx = 32;
+  const cy = 32;
+  const circumference = Math.PI * r;
+  const offset = circumference * (1 - confidence / 100);
+  return (
+    <svg width="64" height="36" viewBox="0 0 64 36">
+      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke="#1e293b" strokeWidth="6" />
+      <path
+        d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`}
+        fill="none"
+        stroke="#6366f1"
+        strokeWidth="6"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+      />
+      <text x={cx} y={cy - 2} textAnchor="middle" fontSize="12" fill="#e2e8f0" fontFamily="monospace">
+        {confidence}%
+      </text>
+    </svg>
+  );
 }
 
-export function IntelligenceView({ data }: { data: IntelligenceData }) {
-  const { beliefs, correlations, inferences, orgEntropy, feedbackLoops } = data;
-  const ent = entropyLabel(orgEntropy);
+export function IntelligenceView({ data, refetch }: { data: IntelligenceData; refetch: () => Promise<void> }) {
+  async function fireAction(action: string, domain: string) {
+    await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "inference_action", domain, data: { action } }),
+    });
+    refetch();
+  }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Bayesian beliefs */}
-      <section>
-        <div className="text-sm font-semibold text-slate-300 mb-2">Bayesian belief state</div>
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[10px] uppercase text-slate-500 border-b border-slate-800">
-                <th className="px-4 py-2 font-medium">Hypothesis</th>
-                <th className="px-4 py-2 font-medium">Prior → Posterior</th>
-                <th className="px-4 py-2 font-medium">Evidence</th>
-                <th className="px-4 py-2 font-medium">Confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(beliefs ?? {}).map(([key, b]: [string, any]) => (
-                <tr key={key} className="border-b border-slate-800/60">
-                  <td className="px-4 py-3">
-                    <div className="text-slate-100 font-medium">{b.label}</div>
-                    <div className="text-[10px] font-mono text-slate-600">{key}</div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-slate-400">
-                    {b.priorPct}% →{" "}
-                    <span className={`font-bold ${b.highRisk ? "text-red-400" : "text-slate-200"}`}>{b.posteriorPct}%</span>
-                    <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${b.highRisk ? "bg-red-600 text-white" : "bg-slate-700 text-slate-300"}`}>
-                      {b.highRisk ? "HIGH RISK" : "watch"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-500">
-                    {b.appliedEvidence.length ? (
-                      <ul className="space-y-0.5">
-                        {b.appliedEvidence.map((e: string, i: number) => (
-                          <li key={i}>• {e}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      "No supporting evidence yet"
-                    )}
-                  </td>
-                  <td className="px-4 py-3 w-40">
-                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${b.highRisk ? "bg-red-500" : "bg-indigo-500"}`} style={{ width: `${b.posteriorPct}%` }} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="text-[10px] text-slate-600 mt-2">Labeled: likelihood ratios from cited research. Small n.</div>
-      </section>
-
-      {/* Correlation clusters */}
-      <section>
-        <div className="text-sm font-semibold text-slate-300 mb-2">Correlation clusters</div>
-        {correlations.length === 0 && <div className="text-sm text-slate-500">No correlated finding clusters detected.</div>}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {correlations.map((c: any) => (
-            <details key={c.id} className="bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-3">
-              <summary className="cursor-pointer flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-100">{c.name}</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300 ml-auto">sev {c.combinedSev}</span>
-              </summary>
-              <div className="text-xs text-slate-500 mt-2">{c.description}</div>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {c.members.map((m: string) => (
-                  <span key={m} className="text-[10px] font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
-                    {m}
+    <div className="flex flex-col gap-4">
+      <h2 className="text-xl font-semibold text-slate-100">Intelligence</h2>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {/* Column 1: Belief state */}
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-300">Belief State</h3>
+            <span
+              title="Bayesian inference. Prior × likelihood ratios from published research. Labeled: small n → high uncertainty. These are estimates, not facts."
+              className="cursor-help text-slate-600"
+            >
+              ⓘ
+            </span>
+          </div>
+          <div className="space-y-3">
+            {Object.entries(data.beliefs).map(([key, b]) => (
+              <div key={key} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-slate-200">{b.label}</div>
+                  {b.highRisk && <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />}
+                </div>
+                <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                  <span>{b.priorPct}%</span>
+                  <span>→</span>
+                  <span className={`text-2xl font-bold ${b.posteriorPct > 60 ? "text-red-400" : b.posteriorPct > 35 ? "text-amber-400" : "text-green-400"}`}>
+                    {b.posteriorPct}%
                   </span>
-                ))}
+                </div>
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div className="h-full rounded-full bg-indigo-500" style={{ width: `${b.posteriorPct}%` }} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {b.appliedEvidence.length === 0 && <span className="text-xs text-slate-600">No evidence applied — baseline prior.</span>}
+                  {b.appliedEvidence.map((e, i) => (
+                    <span key={i} className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                      {e}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </details>
-          ))}
-        </div>
-      </section>
-
-      {/* Forward inference chains */}
-      <section>
-        <div className="text-sm font-semibold text-slate-300 mb-2">Forward inference chains</div>
-        {inferences.length === 0 && <div className="text-sm text-slate-500">No active inference chains.</div>}
-        <div className="space-y-2">
-          {inferences.map((inf: any) => (
-            <div key={inf.id} className="bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-cyan-400">{inf.id}</span>
-                <span className="text-sm text-slate-100 font-medium">{inf.title}</span>
-                <span className={`text-[10px] font-mono ml-auto ${URGENCY_COLORS[inf.urgency] ?? "text-slate-500"}`}>{inf.urgency}</span>
-              </div>
-              <ul className="text-xs text-slate-500 mt-2 space-y-0.5">
-                {inf.premises.map((p: string, i: number) => (
-                  <li key={i}>• {p}</li>
-                ))}
-              </ul>
-              <div className="text-[10px] text-slate-600 mt-1">{inf.confidence}% confidence</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Org entropy */}
-      <section>
-        <div className="text-sm font-semibold text-slate-300 mb-2">Organizational entropy</div>
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl px-5 py-4 flex items-center gap-6">
-          <div className="text-4xl font-bold font-mono text-slate-100">{orgEntropy.toFixed(2)}</div>
-          <div>
-            <div className={`text-sm font-semibold ${ent.color}`}>{ent.label}</div>
-            <div className="text-xs text-slate-500">H = {(orgEntropy * 100).toFixed(0)}% normalized. Below 0.2 = rigid, above 0.8 = chaotic.</div>
+            ))}
           </div>
         </div>
-      </section>
 
-      {/* Feedback loops */}
-      <section>
-        <div className="text-sm font-semibold text-slate-300 mb-2">Feedback loops</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {feedbackLoops.map((loop: any) => (
-            <div key={loop.id} className="bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-3 flex items-center gap-3">
-              <span
-                className={`text-[9px] uppercase font-mono px-1.5 py-0.5 rounded ${
-                  loop.polarity === "REINFORCING" ? "bg-red-900/50 text-red-300" : "bg-blue-900/50 text-blue-300"
-                }`}
-              >
-                {loop.polarity}
-              </span>
-              <span className="text-sm text-slate-200">{loop.name}</span>
-              <span className={`ml-auto text-[10px] font-mono ${loop.active ? "text-emerald-400" : "text-slate-600"}`}>
-                {loop.active ? "ACTIVE" : "inactive"}
-              </span>
+        {/* Column 2: Inference chains */}
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-300">Forward Inference</h3>
+          <div className="space-y-3">
+            {data.inferences.map((inf) => (
+              <div key={inf.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                <div className="flex items-center gap-3">
+                  <ConfidenceArc confidence={inf.confidence} />
+                  <div className="font-semibold text-slate-100">{inf.title}</div>
+                </div>
+                <ul className="mt-2 space-y-1 pl-3 text-xs text-slate-500">
+                  {inf.premises.map((p, i) => (
+                    <li key={i}>• {p}</li>
+                  ))}
+                </ul>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className={`rounded-full border px-2 py-0.5 text-xs ${URGENCY_COLOR[inf.urgency]}`}>{inf.urgency}</span>
+                  <button
+                    onClick={() => fireAction(inf.action, inf.domain)}
+                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
+                  >
+                    {inf.action}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {data.inferences.length === 0 && <div className="text-sm text-slate-500">No active inferences.</div>}
+          </div>
+        </div>
+
+        {/* Column 3: System signals */}
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+            <h3 className="mb-1 text-sm font-semibold text-slate-300">Org Entropy</h3>
+            <div className="text-3xl font-bold text-slate-100">{data.orgEntropy.toFixed(2)}</div>
+            <div className="text-sm text-slate-400">{Math.round(data.orgEntropy * 100)}% normalized</div>
+            <p className="mt-1 text-xs text-slate-500">
+              {data.orgEntropy < 0.2
+                ? "Rigid — low diversity"
+                : data.orgEntropy > 0.8
+                  ? "Chaotic — too dispersed"
+                  : "Healthy signal diversity"}
+            </p>
+            <p className="mt-2 text-[10px] text-slate-600">Source: Shannon entropy over finding domain distribution</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+            <h3 className="mb-1 text-sm font-semibold text-slate-300">Temporal Mode</h3>
+            <div className={`text-2xl font-bold ${MODE_COLOR[data.temporalMode]}`}>{data.temporalMode}</div>
+            <p className="mt-1 text-xs text-slate-500">{MODE_DESCRIPTION[data.temporalMode]}</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+            <h3 className="mb-2 text-sm font-semibold text-slate-300">Feedback Loops</h3>
+            <div className="space-y-2">
+              {data.feedbackLoops.map((loop) => (
+                <div
+                  key={loop.id}
+                  className={`flex items-center justify-between rounded-lg border px-2 py-1.5 text-xs ${
+                    loop.active
+                      ? loop.polarity === "REINFORCING"
+                        ? "animate-pulse border-red-600 text-red-400"
+                        : "border-green-700/60 text-green-400"
+                      : "border-slate-800 text-slate-600"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={`h-1.5 w-1.5 rounded-full ${loop.active ? "bg-current" : "bg-slate-700"}`} />
+                    {loop.name}
+                  </span>
+                  <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px]">{loop.polarity}</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
-      </section>
-
-      {/* Emergent signals */}
-      <section>
-        <div className="text-sm font-semibold text-slate-300 mb-2">Emergent signals</div>
-        <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-xl px-5 py-6 text-center text-xs text-slate-600">
-          Frequency anomaly detection — add events to activate.
-        </div>
-      </section>
+      </div>
     </div>
   );
 }

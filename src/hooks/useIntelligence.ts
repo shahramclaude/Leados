@@ -1,55 +1,35 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
 
-export interface IntelligenceData {
-  findings: any[];
-  domainScores: any[];
-  decisions: any[];
-  eventCount: number;
-  peopleCount: number;
-  pulseByPerson: Record<string, any>;
-  openGoals: any[];
-  openPlans: any[];
-  correlations: any[];
-  inferences: any[];
-  beliefs: Record<string, any>;
-  flightRisk: any[];
-  healthScore: any;
-  temporalMode: string;
-  orgEntropy: number;
-  feedbackLoops: any[];
-  simulation: any;
-  attentionPlan: any;
-  highestLeverageAction: any;
-  generatedAt: string;
-}
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { IntelligenceData } from "@/lib/intelligence";
 
-export function useIntelligence(pollIntervalMs = 30_000) {
+export function useIntelligence() {
   const [data, setData] = useState<IntelligenceData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [error, setError] = useState(false);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetch_ = useCallback(async () => {
+  const refetch = useCallback(async () => {
     try {
-      const res = await fetch("/api/intelligence");
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const json = await res.json();
+      const res = await fetch("/api/intelligence", { cache: "no-store" });
+      if (!res.ok) throw new Error("bad response");
+      const json = (await res.json()) as IntelligenceData;
       setData(json);
-      setLastUpdated(new Date());
-      setError(null);
-    } catch (e: any) {
-      setError(e.message);
+      setError(false);
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetch_();
-    const id = setInterval(fetch_, pollIntervalMs);
-    return () => clearInterval(id);
-  }, [fetch_, pollIntervalMs]);
+    refetch();
+    timer.current = setInterval(refetch, 30000);
+    return () => {
+      if (timer.current) clearInterval(timer.current);
+    };
+  }, [refetch]);
 
-  return { data, loading, error, lastUpdated, refetch: fetch_ };
+  return { data, loading, error, refetch };
 }

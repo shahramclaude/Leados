@@ -1,55 +1,87 @@
 "use client";
-import { useState } from "react";
-import type { IntelligenceData } from "@/hooks/useIntelligence";
 
-export function SettingsView({ data, onRefetch }: { data: IntelligenceData; onRefetch: () => void }) {
-  const [people, setPeople] = useState(data.flightRisk.map((r: any) => ({ id: r.personId, name: r.personName, role: r.role })));
-  const [edits, setEdits] = useState<Record<number, { name: string; role: string; cadenceDays: number }>>({});
+import { useCallback, useEffect, useState } from "react";
+
+interface Person {
+  id: number;
+  name: string;
+  role: string;
+  cadenceDays: number;
+  archived: boolean;
+}
+
+interface Counts {
+  events: number;
+  people: number;
+  decisions: number;
+  hypotheses: number;
+}
+
+export function SettingsView() {
+  const [people, setPeople] = useState<Person[]>([]);
+  const [counts, setCounts] = useState<Counts>({ events: 0, people: 0, decisions: 0, hypotheses: 0 });
+  const [editing, setEditing] = useState<Record<number, Partial<Person>>>({});
   const [newName, setNewName] = useState("");
   const [newRole, setNewRole] = useState("");
   const [newCadence, setNewCadence] = useState(14);
   const [reseeding, setReseeding] = useState(false);
-  const [savedId, setSavedId] = useState<number | null>(null);
+  const [saving, setSaving] = useState<number | null>(null);
 
-  async function loadPeople() {
-    const res = await fetch("/api/people");
-    if (res.ok) setPeople(await res.json());
+  const load = useCallback(async () => {
+    const [peopleRes, eventsRes, decisionsRes, hypothesesRes] = await Promise.all([
+      fetch("/api/people", { cache: "no-store" }),
+      fetch("/api/events", { cache: "no-store" }),
+      fetch("/api/decisions", { cache: "no-store" }),
+      fetch("/api/hypotheses", { cache: "no-store" }),
+    ]);
+    const activePeople: Person[] = peopleRes.ok ? await peopleRes.json() : [];
+    const events = eventsRes.ok ? await eventsRes.json() : [];
+    const decisions = decisionsRes.ok ? await decisionsRes.json() : [];
+    const hypotheses = hypothesesRes.ok ? await hypothesesRes.json() : [];
+    setPeople(activePeople);
+    setCounts({ events: events.length, people: activePeople.length, decisions: decisions.length, hypotheses: hypotheses.length });
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  function editField(id: number, field: keyof Person, value: string | number | boolean) {
+    setEditing((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value } }));
   }
 
-  function edit(id: number, patch: Partial<{ name: string; role: string; cadenceDays: number }>) {
-    setEdits((e) => {
-      const base = people.find((p: any) => p.id === id) ?? {};
-      const existing = e[id] ?? { name: "", role: "", cadenceDays: 14, ...base };
-      return { ...e, [id]: { ...existing, ...patch } };
-    });
-  }
-
-  async function save(id: number) {
-    const patch = edits[id];
+  async function save(person: Person) {
+    const patch = editing[person.id];
     if (!patch) return;
-    await fetch(`/api/people/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    setSavedId(id);
-    setTimeout(() => setSavedId(null), 1500);
-    await loadPeople();
-    onRefetch();
+    setSaving(person.id);
+    try {
+      await fetch(`/api/people/${person.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      setEditing((prev) => {
+        const next = { ...prev };
+        delete next[person.id];
+        return next;
+      });
+      await load();
+    } finally {
+      setSaving(null);
+    }
   }
 
-  async function archive(id: number, archived: boolean) {
-    await fetch(`/api/people/${id}`, {
+  async function toggleArchive(person: Person) {
+    await fetch(`/api/people/${person.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ archived }),
+      body: JSON.stringify({ archived: !person.archived }),
     });
-    await loadPeople();
-    onRefetch();
+    await load();
   }
 
   async function addPerson() {
-    if (!newName.trim()) return;
+    if (!newName || !newRole) return;
     await fetch("/api/people", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -58,98 +90,132 @@ export function SettingsView({ data, onRefetch }: { data: IntelligenceData; onRe
     setNewName("");
     setNewRole("");
     setNewCadence(14);
-    await loadPeople();
-    onRefetch();
+    await load();
   }
 
   async function reseed() {
-    if (!confirm("This will wipe and reseed all LeadOS data. Continue?")) return;
     setReseeding(true);
     try {
       await fetch("/api/seed", { method: "POST" });
-      await loadPeople();
-      onRefetch();
+      await load();
     } finally {
       setReseeding(false);
     }
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
-      <section>
-        <div className="text-sm font-semibold text-slate-300 mb-2">People</div>
-        <div className="space-y-2">
-          {people.map((p: any) => {
-            const current = edits[p.id] ?? { name: p.name, role: p.role, cadenceDays: p.cadenceDays ?? 14 };
-            return (
-              <div key={p.id} className="bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-3 flex flex-wrap items-center gap-2">
-                <input
-                  value={current.name}
-                  onChange={(e) => edit(p.id, { name: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-sm text-slate-100 outline-none w-40"
-                />
-                <input
-                  value={current.role}
-                  onChange={(e) => edit(p.id, { role: e.target.value })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-sm text-slate-100 outline-none w-48"
-                />
-                <input
-                  type="number"
-                  value={current.cadenceDays}
-                  onChange={(e) => edit(p.id, { cadenceDays: Number(e.target.value) })}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-sm text-slate-100 outline-none w-20"
-                  title="Cadence days"
-                />
-                <button onClick={() => save(p.id)} className="bg-indigo-600 hover:bg-indigo-500 rounded-lg px-3 py-1.5 text-xs text-white">
-                  {savedId === p.id ? "Saved ✓" : "Save"}
-                </button>
-                <button onClick={() => archive(p.id, true)} className="bg-slate-700 hover:bg-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-200 ml-auto">
-                  Archive
-                </button>
-              </div>
-            );
-          })}
+    <div className="flex flex-col gap-6">
+      <h2 className="text-xl font-semibold text-slate-100">Settings</h2>
+
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-slate-300">People</h3>
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-900/80 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Role</th>
+                <th className="px-3 py-2">Cadence (d)</th>
+                <th className="px-3 py-2">Archived</th>
+                <th className="px-3 py-2">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {people.map((p) => {
+                const patch = editing[p.id] ?? {};
+                return (
+                  <tr key={p.id} className="border-t border-slate-800">
+                    <td className="px-3 py-1.5">
+                      <input
+                        defaultValue={p.name}
+                        onChange={(e) => editField(p.id, "name", e.target.value)}
+                        className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-200 hover:border-slate-700 focus:border-slate-600 focus:bg-slate-800"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <input
+                        defaultValue={p.role}
+                        onChange={(e) => editField(p.id, "role", e.target.value)}
+                        className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-200 hover:border-slate-700 focus:border-slate-600 focus:bg-slate-800"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <input
+                        type="number"
+                        defaultValue={p.cadenceDays}
+                        onChange={(e) => editField(p.id, "cadenceDays", Number(e.target.value))}
+                        className="w-20 rounded border border-transparent bg-transparent px-1 py-0.5 text-slate-200 hover:border-slate-700 focus:border-slate-600 focus:bg-slate-800"
+                      />
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <span className={p.archived ? "text-amber-400" : "text-slate-500"}>{p.archived ? "Yes" : "No"}</span>
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => save(p)}
+                          disabled={!editing[p.id] || saving === p.id}
+                          className="rounded-lg bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-40"
+                        >
+                          {saving === p.id ? "…" : "Save"}
+                        </button>
+                        <button
+                          onClick={() => toggleArchive(p)}
+                          className="rounded-lg border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:border-slate-600"
+                        >
+                          {p.archived ? "Unarchive" : "Archive"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
-        <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-xl px-4 py-3 mt-3 flex flex-wrap items-center gap-2">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Name"
-            className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-sm text-slate-100 outline-none w-40"
-          />
-          <input
-            value={newRole}
-            onChange={(e) => setNewRole(e.target.value)}
-            placeholder="Role"
-            className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-sm text-slate-100 outline-none w-48"
-          />
-          <input
-            type="number"
-            value={newCadence}
-            onChange={(e) => setNewCadence(Number(e.target.value))}
-            className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-sm text-slate-100 outline-none w-20"
-            title="Cadence days"
-          />
-          <button onClick={addPerson} className="bg-indigo-600 hover:bg-indigo-500 rounded-lg px-3 py-1.5 text-xs text-white">
-            + Add person
+        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+          <label className="text-sm text-slate-400">
+            Name
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} className="mt-1 block rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200" />
+          </label>
+          <label className="text-sm text-slate-400">
+            Role
+            <input value={newRole} onChange={(e) => setNewRole(e.target.value)} className="mt-1 block rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200" />
+          </label>
+          <label className="text-sm text-slate-400">
+            Cadence
+            <input
+              type="number"
+              value={newCadence}
+              onChange={(e) => setNewCadence(Number(e.target.value))}
+              className="mt-1 block w-20 rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-slate-200"
+            />
+          </label>
+          <button onClick={addPerson} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500">
+            Add person
           </button>
         </div>
-      </section>
+      </div>
 
-      <section>
-        <div className="text-sm font-semibold text-slate-300 mb-2">Database</div>
-        <div className="bg-slate-900/60 border border-slate-800 rounded-xl px-4 py-3 flex items-center justify-between">
-          <div className="text-xs text-slate-500">Reset all LeadOS tables and reseed demo data.</div>
-          <button
-            disabled={reseeding}
-            onClick={reseed}
-            className="bg-red-700 hover:bg-red-600 disabled:opacity-50 rounded-lg px-3 py-1.5 text-xs text-white"
-          >
-            {reseeding ? "Resetting…" : "Reset and reseed"}
-          </button>
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-slate-300">Database</h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Object.entries(counts).map(([k, v]) => (
+            <div key={k} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center">
+              <div className="text-2xl font-bold text-slate-100">{v}</div>
+              <div className="text-xs capitalize text-slate-500">{k}</div>
+            </div>
+          ))}
         </div>
-      </section>
+        <button
+          onClick={reseed}
+          disabled={reseeding}
+          className="mt-3 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+        >
+          {reseeding ? "Reseeding…" : "Reseed database"}
+        </button>
+      </div>
     </div>
   );
 }

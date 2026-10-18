@@ -1,26 +1,22 @@
 import { db } from "@/db";
 import { leados_decisions } from "@/db/schema";
-import { logAudit } from "@/lib/leados/audit";
 import { eq } from "drizzle-orm";
+import { NextRequest } from "next/server";
+import { logAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
-  const idNum = Number(id);
-  if (!Number.isFinite(idNum)) return Response.json({ error: "invalid id" }, { status: 400 });
-
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const decisionId = Number(id);
   const body = await req.json().catch(() => ({}));
-  const patch: Record<string, unknown> = {};
-  if (body.status) {
-    patch.status = body.status;
-    if (body.status === "resolved") patch.resolvedAt = new Date();
-  }
-  if (body.title) patch.title = body.title;
-  if (body.owner) patch.owner = body.owner;
-
-  const [row] = await db.update(leados_decisions).set(patch).where(eq(leados_decisions.id, idNum)).returning();
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  await logAudit("DECISION_UPDATED", `${row.title} → ${row.status}`);
-  return Response.json(row);
+  const status = body.status === "resolved" ? "resolved" : "resolved";
+  const [updated] = await db
+    .update(leados_decisions)
+    .set({ status, resolvedAt: new Date() })
+    .where(eq(leados_decisions.id, decisionId))
+    .returning();
+  if (!updated) return Response.json({ error: "not found" }, { status: 404 });
+  await logAudit("DECISION_RESOLVED", updated.title);
+  return Response.json(updated);
 }

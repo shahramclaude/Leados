@@ -1,116 +1,221 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
 
-const INTENTS: Array<{ pattern: RegExp; name: string; action: (m: string[]) => string }> = [
-  { pattern: /^1[:\-]?1 with (.+)/i, name: "LOG_1ON1", action: (m) => `Log 1:1 with ${m[1]}` },
-  { pattern: /feedback for (.+)/i, name: "GIVE_FEEDBACK", action: (m) => `Log feedback for ${m[1]}` },
-  { pattern: /how is (.+) doing/i, name: "ASSESS_PERSON", action: (m) => `Assess ${m[1]}` },
-  { pattern: /what if (.+)/i, name: "SIMULATE", action: (m) => `Simulate: ${m[1]}` },
-  { pattern: /decided (.+)/i, name: "LOG_DECISION", action: (m) => `Log decision: ${m[1]}` },
-  { pattern: /playbook for (.+)/i, name: "FIND_PLAYBOOK", action: (m) => `Find playbook: ${m[1]}` },
-  { pattern: /explain (.+)/i, name: "EXPLAIN", action: (m) => `Explain: ${m[1]}` },
-  { pattern: /^g t$/i, name: "NAV_TODAY", action: () => "Go to Today" },
-  { pattern: /^g r$/i, name: "NAV_ROSTER", action: () => "Go to Roster" },
-  { pattern: /^g i$/i, name: "NAV_INTEL", action: () => "Go to Intelligence" },
-  { pattern: /^g s$/i, name: "NAV_SIMULATE", action: () => "Go to Simulate" },
-];
+import { useMemo, useState } from "react";
+import type { IntelligenceData } from "@/lib/intelligence";
+import type { ViewKey } from "@/components/leados/Shell";
+import { QuickCapture, type EventType } from "@/components/leados/QuickCapture";
 
 interface Props {
-  data: any;
+  data: IntelligenceData;
+  navigate: (v: ViewKey, personId?: number) => void;
   onClose: () => void;
-  onNavigate: (route: string) => void;
+  refetch: () => Promise<void>;
 }
 
-export function CommandPalette({ data, onClose, onNavigate }: Props) {
+type Intent =
+  | { kind: "LOG_1ON1"; personName: string; personId?: number }
+  | { kind: "LOG_PULSE"; personName: string; personId?: number }
+  | { kind: "LOG_FEEDBACK"; personName: string; personId?: number }
+  | { kind: "ASSESS"; personName: string; personId?: number }
+  | { kind: "SIMULATE"; query: string }
+  | { kind: "LOG_DECISION"; title: string }
+  | { kind: "LOG_HYPOTHESIS"; statement: string }
+  | { kind: "NAV"; view: ViewKey }
+  | { kind: "LOOKUP_RULE"; rule: string }
+  | { kind: "LOOKUP_PERSON"; personName: string; personId?: number }
+  | null;
+
+function resolvePerson(name: string, people: { id: number; name: string }[]) {
+  const lower = name.trim().toLowerCase();
+  const match = people.find((p) => p.name.toLowerCase().startsWith(lower)) ?? people.find((p) => p.name.toLowerCase().includes(lower));
+  return match;
+}
+
+function resolveIntent(query: string, people: { id: number; name: string }[]): Intent {
+  const q = query.trim();
+  if (!q) return null;
+
+  let m = q.match(/^1[:\-]?1 with (.+)/i);
+  if (m) {
+    const p = resolvePerson(m[1], people);
+    return { kind: "LOG_1ON1", personName: p?.name ?? m[1], personId: p?.id };
+  }
+  m = q.match(/^pulse for (.+)/i);
+  if (m) {
+    const p = resolvePerson(m[1], people);
+    return { kind: "LOG_PULSE", personName: p?.name ?? m[1], personId: p?.id };
+  }
+  m = q.match(/^feedback for (.+)/i);
+  if (m) {
+    const p = resolvePerson(m[1], people);
+    return { kind: "LOG_FEEDBACK", personName: p?.name ?? m[1], personId: p?.id };
+  }
+  m = q.match(/^how is (.+) doing/i);
+  if (m) {
+    const p = resolvePerson(m[1], people);
+    return { kind: "ASSESS", personName: p?.name ?? m[1], personId: p?.id };
+  }
+  m = q.match(/^what if (.+)/i);
+  if (m) return { kind: "SIMULATE", query: m[1] };
+  m = q.match(/^decided (.+)/i);
+  if (m) return { kind: "LOG_DECISION", title: m[1] };
+  m = q.match(/^hypothes(?:is|e) (.+)/i);
+  if (m) return { kind: "LOG_HYPOTHESIS", statement: m[2] ?? m[1] };
+
+  if (/^g t$/i.test(q)) return { kind: "NAV", view: "today" };
+  if (/^g r$/i.test(q)) return { kind: "NAV", view: "roster" };
+  if (/^g i$/i.test(q)) return { kind: "NAV", view: "intelligence" };
+  if (/^g s$/i.test(q)) return { kind: "NAV", view: "simulation" };
+  if (/^g a$/i.test(q)) return { kind: "NAV", view: "attention" };
+
+  m = q.match(/R\d+/);
+  if (m) return { kind: "LOOKUP_RULE", rule: m[0] };
+
+  m = q.match(/@(\w+)/);
+  if (m) {
+    const p = resolvePerson(m[1], people);
+    return { kind: "LOOKUP_PERSON", personName: p?.name ?? m[1], personId: p?.id };
+  }
+
+  return null;
+}
+
+function describeIntent(intent: Intent): string {
+  if (!intent) return "No match — try “1:1 with Ana”, “g t”, “@ana”, “R5”…";
+  switch (intent.kind) {
+    case "LOG_1ON1":
+      return `Log 1:1 with ${intent.personName}`;
+    case "LOG_PULSE":
+      return `Log pulse for ${intent.personName}`;
+    case "LOG_FEEDBACK":
+      return `Give feedback for ${intent.personName}`;
+    case "ASSESS":
+      return `Go to roster and expand ${intent.personName}`;
+    case "SIMULATE":
+      return `Open simulation for “${intent.query}”`;
+    case "LOG_DECISION":
+      return `Log decision: "${intent.title}"`;
+    case "LOG_HYPOTHESIS":
+      return `Create hypothesis: "${intent.statement}"`;
+    case "NAV":
+      return `Navigate to ${intent.view}`;
+    case "LOOKUP_RULE":
+      return `Look up rule ${intent.rule}`;
+    case "LOOKUP_PERSON":
+      return `Look up ${intent.personName}`;
+  }
+}
+
+export function CommandPalette({ data, navigate, onClose, refetch }: Props) {
   const [query, setQuery] = useState("");
-  const [resolved, setResolved] = useState<{ intent: string; action: string; confidence: number } | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [quickCapture, setQuickCapture] = useState<{ type: EventType; personId?: number } | null>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const people = useMemo(() => data.flightRisk.map((f) => ({ id: f.personId, name: f.personName })), [data.flightRisk]);
+  const intent = useMemo(() => resolveIntent(query, people), [query, people]);
+  const confidence = query.trim().length ? Math.min(100, Math.round((Math.min(query.length, 40) / 40) * 100)) : 0;
 
-  const resolve = (q: string) => {
-    for (const intent of INTENTS) {
-      const m = q.match(intent.pattern);
-      if (m) {
-        setResolved({
-          intent: intent.name,
-          action: intent.action(Array.from(m) as string[]),
-          confidence: m[0].length / q.length,
-        });
+  const rule = intent?.kind === "LOOKUP_RULE" ? data.findings.find((f) => f.rule === intent.rule) : undefined;
+  const person = intent?.kind === "LOOKUP_PERSON" ? data.flightRisk.find((f) => f.personId === intent.personId) : undefined;
+
+  function execute() {
+    if (!intent) return;
+    switch (intent.kind) {
+      case "LOG_1ON1":
+        setQuickCapture({ type: "oneonone", personId: intent.personId });
         return;
-      }
+      case "LOG_PULSE":
+        setQuickCapture({ type: "pulse", personId: intent.personId });
+        return;
+      case "LOG_FEEDBACK":
+        setQuickCapture({ type: "feedback", personId: intent.personId });
+        return;
+      case "ASSESS":
+        navigate("roster", intent.personId);
+        onClose();
+        return;
+      case "SIMULATE":
+        navigate("simulation");
+        onClose();
+        return;
+      case "LOG_DECISION":
+        navigate("decisions");
+        onClose();
+        return;
+      case "LOG_HYPOTHESIS":
+        navigate("hypotheses");
+        onClose();
+        return;
+      case "NAV":
+        navigate(intent.view);
+        onClose();
+        return;
+      default:
+        return;
     }
-    setResolved(null);
-  };
+  }
 
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      onClose();
-      return;
-    }
-    if (e.key === "Enter") {
-      if (resolved?.intent.startsWith("NAV_")) {
-        const routes: Record<string, string> = {
-          NAV_TODAY: "today",
-          NAV_ROSTER: "roster",
-          NAV_INTEL: "intelligence",
-          NAV_SIMULATE: "simulation",
-        };
-        onNavigate(routes[resolved.intent] ?? "today");
-      }
-      onClose();
-    }
-  };
+  if (quickCapture) {
+    return (
+      <QuickCapture
+        eventType={quickCapture.type}
+        personId={quickCapture.personId}
+        people={data.flightRisk}
+        onClose={() => {
+          setQuickCapture(null);
+          onClose();
+        }}
+        onSuccess={refetch}
+      />
+    );
+  }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center pt-28"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="w-[560px] max-w-[90vw] bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-28" onClick={onClose}>
+      <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <input
-          ref={inputRef}
+          autoFocus
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            resolve(e.target.value);
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") execute();
           }}
-          onKeyDown={handleKey}
-          placeholder="1:1 with Ana · feedback for Bruno · what if churn doubles · g t"
-          className="w-full bg-transparent px-4 py-3 outline-none border-b border-slate-800 placeholder:text-slate-600 text-sm text-slate-100"
+          placeholder='Try "1:1 with Ana", "pulse for Marcus", "g r", "@priya", "R5"…'
+          className="w-full rounded-t-xl border-b border-slate-800 bg-transparent px-4 py-3 text-slate-100 outline-none placeholder:text-slate-600"
         />
-        <div className="p-3 min-h-[60px]">
-          {resolved ? (
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-indigo-400 font-medium text-sm">{resolved.intent}</span>
-                <span className="text-[10px] font-mono text-slate-500">{Math.round(resolved.confidence * 100)}% match</span>
-              </div>
-              <div className="text-xs text-slate-400 mt-1">{resolved.action}</div>
-              <div className="text-[10px] text-slate-600 mt-2">↵ to execute</div>
-            </div>
-          ) : query ? (
-            <div className="text-xs text-slate-500">
-              No intent matched — {data?.findings?.length ?? 0} findings, {data?.peopleCount ?? 0} people indexed
-            </div>
-          ) : (
-            <div className="text-xs text-slate-600">Type a command, name, rule ID, or natural language</div>
-          )}
-        </div>
-
-        <div className="border-t border-slate-800 px-3 py-2 flex gap-2 flex-wrap">
-          {[
-            ["g t", "Today"],
-            ["g r", "Roster"],
-            ["g i", "Intel"],
-            ["g s", "Simulate"],
-          ].map(([k, l]) => (
-            <span key={k} className="text-[10px] bg-slate-800 px-2 py-0.5 rounded font-mono text-slate-400">
-              {k} → {l}
+        <div className="space-y-3 p-4">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-teal-600/20 px-2 py-0.5 text-xs font-medium text-teal-400">
+              {intent ? intent.kind : "NO MATCH"}
             </span>
-          ))}
+            <span className="text-sm text-slate-300">{describeIntent(intent)}</span>
+          </div>
+
+          {rule && (
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+              <div className="font-mono text-xs text-slate-500">{rule.rule}</div>
+              <div className="text-slate-200">{rule.title}</div>
+              <div className="text-slate-500">{rule.detail}</div>
+            </div>
+          )}
+          {person && (
+            <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm">
+              <div className="text-slate-200">{person.personName} · {person.role}</div>
+              <div className="text-slate-500">
+                Risk {person.riskScore}% · mood {person.moodMean} · load {person.loadMean}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>confidence: {confidence}%</span>
+            <span>↵ to execute</span>
+          </div>
+
+          <div className="flex flex-wrap gap-2 border-t border-slate-800 pt-3 text-xs text-slate-500">
+            <span className="font-mono">g t</span> today ·<span className="font-mono">g r</span> people ·
+            <span className="font-mono">g i</span> intel ·<span className="font-mono">g s</span> simulate ·
+            <span className="font-mono">g a</span> plan
+          </div>
         </div>
       </div>
     </div>

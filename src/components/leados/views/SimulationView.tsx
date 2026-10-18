@@ -1,63 +1,171 @@
 "use client";
-import type { IntelligenceData } from "@/hooks/useIntelligence";
 
-const SCENARIO_LABELS: Record<string, string> = {
-  STATUS_QUO: "Status quo",
-  IMPROVE_CADENCE: "Improve 1:1 cadence",
-  ADD_GROWTH_PLAN: "Add growth plan",
-  REDUCE_LOAD: "Reduce load",
+import type { IntelligenceData, ScenarioResult } from "@/lib/intelligence";
+
+const SCENARIO_LABEL: Record<string, string> = {
+  STATUS_QUO: "Status Quo",
+  IMPROVE_CADENCE: "Improve Cadence",
+  ADD_GROWTH_PLAN: "Add Growth Plan",
+  REDUCE_LOAD: "Reduce Load",
 };
+
+const SCENARIO_COLOR: Record<string, string> = {
+  STATUS_QUO: "#f87171",
+  IMPROVE_CADENCE: "#60a5fa",
+  ADD_GROWTH_PLAN: "#4ade80",
+  REDUCE_LOAD: "#fb923c",
+};
+
+function attritionColor(p: number) {
+  if (p > 0.4) return "text-red-500";
+  if (p > 0.2) return "text-amber-500";
+  return "text-green-500";
+}
+
+function ScenarioCard({
+  name,
+  result,
+  statusQuo,
+}: {
+  name: string;
+  result: ScenarioResult;
+  statusQuo?: ScenarioResult;
+}) {
+  const delta = statusQuo ? Math.round((statusQuo.attritionProbability - result.attritionProbability) * 100) : null;
+  const isStatusQuo = name === "STATUS_QUO";
+  return (
+    <div
+      className={`rounded-xl border bg-slate-900/60 p-4 ${
+        isStatusQuo && result.attritionProbability > 0.3 ? "border-red-600" : "border-slate-800"
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="font-semibold text-slate-100">{SCENARIO_LABEL[name]}</div>
+        {delta !== null && delta > 0 && <span className="text-xs text-green-400">▼{delta}pp</span>}
+      </div>
+      <div className={`mt-2 text-3xl font-bold ${attritionColor(result.attritionProbability)}`}>
+        {Math.round(result.attritionProbability * 100)}%
+      </div>
+      <div className="text-xs text-slate-500">attrition probability</div>
+
+      <div className="mt-3">
+        <div className="flex justify-between text-xs text-slate-500">
+          <span>Mean engagement</span>
+          <span>{result.finalMeanEngagement}%</span>
+        </div>
+        <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+          <div className="h-full rounded-full bg-indigo-500" style={{ width: `${result.finalMeanEngagement}%` }} />
+        </div>
+      </div>
+
+      <div className="mt-2 text-xs text-slate-500">
+        Range: P10 {result.p10}% – P90 {result.p90}%
+      </div>
+    </div>
+  );
+}
+
+function ProjectionChart({ scenarios, current }: { scenarios: IntelligenceData["simulation"]["scenarios"]; current: number }) {
+  const w = 600;
+  const h = 200;
+  const padding = 24;
+  const weeks = 12;
+
+  function points(final: number) {
+    const pts: [number, number][] = [];
+    for (let week = 0; week <= weeks; week++) {
+      const t = week / weeks;
+      const value = current + (final - current) * t;
+      const x = padding + (t * (w - padding * 2));
+      const y = h - padding - (value / 100) * (h - padding * 2);
+      pts.push([x, y]);
+    }
+    return pts;
+  }
+
+  const lines = (Object.keys(scenarios) as (keyof typeof scenarios)[]).map((key) => ({
+    key,
+    color: SCENARIO_COLOR[key],
+    pts: points(scenarios[key].finalMeanEngagement),
+  }));
+
+  return (
+    <svg width={w} height={h + 30} viewBox={`0 0 ${w} ${h + 30}`} className="rounded-xl bg-slate-950/50">
+      {[0, 25, 50, 75, 100].map((v) => {
+        const y = h - padding - (v / 100) * (h - padding * 2);
+        return (
+          <g key={v}>
+            <line x1={padding} x2={w - padding} y1={y} y2={y} stroke="#1e293b" strokeWidth={1} />
+            <text x={2} y={y + 3} fontSize="9" fill="#64748b">
+              {v}
+            </text>
+          </g>
+        );
+      })}
+      {lines.map((line) => (
+        <polyline
+          key={line.key}
+          points={line.pts.map(([x, y]) => `${x},${y}`).join(" ")}
+          fill="none"
+          stroke={line.color}
+          strokeWidth={2}
+        />
+      ))}
+      <text x={padding} y={h + 20} fontSize="9" fill="#64748b">
+        Week 1
+      </text>
+      <text x={w - padding - 30} y={h + 20} fontSize="9" fill="#64748b">
+        Week 12
+      </text>
+    </svg>
+  );
+}
 
 export function SimulationView({ data }: { data: IntelligenceData }) {
   const { simulation } = data;
-  const scenarios = simulation?.scenarios ?? {};
-  const order = ["STATUS_QUO", "IMPROVE_CADENCE", "ADD_GROWTH_PLAN", "REDUCE_LOAD"];
+  const current = mean(Object.values(data.pulseByPerson).map((p) => ((p.moodMean - 1) / 4) * 100));
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="text-sm font-semibold text-slate-300">Organizational simulation</div>
-
-      {simulation?.bestIntervention && (
-        <div className="bg-indigo-950/40 border border-indigo-700 rounded-xl px-5 py-4">
-          <div className="text-[10px] uppercase text-indigo-400 mb-1">Best intervention</div>
-          <div className="text-lg font-medium text-slate-100">
-            {SCENARIO_LABELS[simulation.bestIntervention.name] ?? simulation.bestIntervention.name} reduces attrition probability by{" "}
-            <span className="text-emerald-400 font-mono">{Math.round(simulation.bestIntervention.delta * 100)}pp</span>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {order.map((key) => {
-          const s = scenarios[key];
-          if (!s) return null;
-          const highlight = key === "STATUS_QUO" && s.attritionProbability > 0.5;
-          return (
-            <div
-              key={key}
-              className={`bg-slate-900/60 border rounded-xl px-4 py-4 ${highlight ? "border-red-600" : "border-slate-800"}`}
-            >
-              <div className="text-[10px] uppercase text-slate-500 mb-2">{SCENARIO_LABELS[key] ?? key}</div>
-              <div className={`text-3xl font-bold font-mono ${highlight ? "text-red-400" : "text-slate-100"}`}>
-                {Math.round(s.attritionProbability * 100)}%
-              </div>
-              <div className="text-[10px] text-slate-600 mb-3">attrition probability</div>
-
-              <div className="text-sm text-slate-300 font-mono">{s.finalMeanEngagement}</div>
-              <div className="text-[10px] text-slate-600 mb-2">final mean engagement</div>
-
-              <div className="text-xs text-slate-400 font-mono">
-                P10 {s.engagementP10} – P90 {s.engagementP90}
-              </div>
-              <div className="text-[10px] text-slate-600 mb-2">engagement range</div>
-
-              <div className="text-[10px] text-slate-600 mt-2">{s.seeds} seeds</div>
-            </div>
-          );
-        })}
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-xl font-semibold text-slate-100">Simulation</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Multi-agent simulation · {simulation.seeds} Monte Carlo seeds · Heuristic agent model. Coefficients not empirically
+          validated. Use as directional guidance only.
+        </p>
       </div>
 
-      <div className="text-[10px] text-slate-600">50 Monte Carlo seeds. Heuristic agent model. Directional only.</div>
+      <div className="rounded-xl border border-indigo-700/50 bg-indigo-950/30 p-4">
+        <div className="text-sm text-indigo-400">Recommended intervention: {SCENARIO_LABEL[simulation.bestIntervention.name]}</div>
+        <div className="mt-1 text-lg font-semibold text-slate-100">
+          Reduces attrition probability by {Math.round(simulation.bestIntervention.delta * 100)}pp vs status quo
+        </div>
+        <div className="mt-1 text-xs text-slate-500">{simulation.seeds} seeds. Refreshes daily.</div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {(Object.keys(simulation.scenarios) as (keyof typeof simulation.scenarios)[]).map((key) => (
+          <ScenarioCard key={key} name={key} result={simulation.scenarios[key]} statusQuo={key !== "STATUS_QUO" ? simulation.scenarios.STATUS_QUO : undefined} />
+        ))}
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-sm font-semibold text-slate-300">12-week projection</h3>
+        <ProjectionChart scenarios={simulation.scenarios} current={current} />
+        <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-400">
+          {(Object.keys(simulation.scenarios) as (keyof typeof simulation.scenarios)[]).map((key) => (
+            <span key={key} className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: SCENARIO_COLOR[key] }} />
+              {SCENARIO_LABEL[key]}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
+}
+
+function mean(xs: number[]): number {
+  if (xs.length === 0) return 50;
+  return xs.reduce((a, b) => a + b, 0) / xs.length;
 }

@@ -1,22 +1,24 @@
 import { db } from "@/db";
 import { leados_hypotheses } from "@/db/schema";
-import { logAudit } from "@/lib/leados/audit";
 import { eq } from "drizzle-orm";
+import { NextRequest } from "next/server";
+import { logAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
-  const idNum = Number(id);
-  if (!Number.isFinite(idNum)) return Response.json({ error: "invalid id" }, { status: 400 });
-
-  const body = await req.json().catch(() => ({}));
-  const patch: Record<string, unknown> = {};
-  if (typeof body.status === "string") patch.status = body.status;
-  if (typeof body.confidence === "number") patch.confidence = body.confidence;
-
-  const [row] = await db.update(leados_hypotheses).set(patch).where(eq(leados_hypotheses.id, idNum)).returning();
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  await logAudit("HYPOTHESIS_UPDATED", `${row.statement} → ${row.status}`);
-  return Response.json(row);
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const hypothesisId = Number(id);
+  const { status } = await req.json();
+  if (status !== "confirmed" && status !== "refuted") {
+    return Response.json({ error: "status must be confirmed or refuted" }, { status: 400 });
+  }
+  const [updated] = await db
+    .update(leados_hypotheses)
+    .set({ status })
+    .where(eq(leados_hypotheses.id, hypothesisId))
+    .returning();
+  if (!updated) return Response.json({ error: "not found" }, { status: 404 });
+  await logAudit("HYPOTHESIS_UPDATED", `#${hypothesisId} -> ${status}`);
+  return Response.json(updated);
 }
