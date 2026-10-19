@@ -1,79 +1,51 @@
-// src/lib/beliefFabric.ts
-//
-// PROVENANCE NOTE: Part 1 ("belief fabric") is not present in this sandbox.
-// This file is a minimal, self-contained reconstruction that exposes only
-// what Part 5 (Financial Nervous System) needs: a `financialRisk`
-// posterior probability in [0, 1]. It implements a simple, explicitly
-// documented Bayesian odds update (log-odds additive evidence combination,
-// a standard/textbook technique — not copied from any file in this repo,
-// since no beliefFabric.ts existed here).
-//
-// Each piece of "evidence" (short runway, weak unit economics, high burn
-// multiple) nudges the posterior away from a neutral prior via a fixed,
-// explicitly labeled log-odds weight. These weights are DESIGN PARAMETERS,
-// not calibrated from historical data.
+// =============================================================================
+// Leados — Belief Fabric (Part 1, minimal rebuild)
+// -----------------------------------------------------------------------------
+// Not present in this checkout. Rebuilt at minimal fidelity: a simple Beta-
+// Binomial posterior over "execution risk" driven by observed blocker/
+// milestone-slip signals, exposed as a single scalar in [0,1] that Part 6
+// consumes as `executionRiskPosterior`.
+// =============================================================================
 
-export interface FinancialRiskEvidence {
-  /** Median simulated runway, in months. */
-  runwayP50: number;
-  /** LTV:CAC ratio, or null if unknown. */
-  ltvCacRatio: number | null;
-  /** Net burn / net new ARR, or null if unknown. */
-  burnMultiple: number | null;
-  /** Probability (0-1) that the company goes under within 6 months. */
-  probabilityCritical: number;
-}
+import type { Blocker, Milestone, Project } from "./types";
 
-function logit(p: number): number {
-  const clamped = Math.min(0.999, Math.max(0.001, p));
-  return Math.log(clamped / (1 - clamped));
-}
-
-function sigmoid(x: number): number {
-  return 1 / (1 + Math.exp(-x));
+export interface ExecutionRiskSignal {
+  successes: number; // evidence execution is healthy
+  failures: number; // evidence execution is at risk
 }
 
 /**
- * computeFinancialRiskPosterior — Bayesian-style log-odds update.
- *
- * PRIOR: 0.3 ("neutral-leaning-safe" baseline risk for an operating
- * company), a DESIGN PARAMETER.
- *
- * EVIDENCE WEIGHTS (all DESIGN PARAMETERS, not statistically calibrated):
- *   - runway p50 < 6 months:      +1.6 log-odds (strong risk signal)
- *   - runway p50 < 12 months:     +0.8 log-odds (moderate risk signal)
- *   - ltvCacRatio < 1 (known):    +1.0 log-odds (unit economics broken)
- *   - ltvCacRatio < 2 (known):    +0.4 log-odds (unit economics weak)
- *   - burnMultiple > 2 (known):   +0.6 log-odds (inefficient growth)
- *   - probabilityCritical > 0.3:  +0.7 log-odds (fat left tail)
+ * computeExecutionRiskPosterior(projects, milestones, blockers): number
+ * Beta(alpha, beta) posterior mean over org-wide execution risk, where
+ * alpha/beta are seeded with weak uniform priors (1,1) and updated by
+ * overdue milestones (failure evidence) vs done milestones (success
+ * evidence), and severity-weighted blockers (failure evidence).
  */
-export function computeFinancialRiskPosterior(
-  evidence: FinancialRiskEvidence
+export function computeExecutionRiskPosterior(
+  projects: Project[],
+  milestones: Milestone[],
+  blockers: Blocker[],
 ): number {
-  const PRIOR = 0.3; // DESIGN PARAMETER
-  let logOdds = logit(PRIOR);
+  let alpha = 1; // risk-present pseudo-count
+  let beta = 1; // risk-absent pseudo-count
 
-  if (evidence.runwayP50 < 6) {
-    logOdds += 1.6; // DESIGN PARAMETER
-  } else if (evidence.runwayP50 < 12) {
-    logOdds += 0.8; // DESIGN PARAMETER
+  for (const m of milestones) {
+    if (m.status === "done") beta += 1;
+    if (m.status === "overdue") alpha += 2;
   }
 
-  if (evidence.ltvCacRatio !== null) {
-    if (evidence.ltvCacRatio < 1) {
-      logOdds += 1.0; // DESIGN PARAMETER
-    } else if (evidence.ltvCacRatio < 2) {
-      logOdds += 0.4; // DESIGN PARAMETER
+  for (const b of blockers) {
+    if (b.resolvedAt) {
+      beta += 0.5;
+    } else {
+      alpha += b.severity >= 4 ? 2 : 1;
     }
   }
 
-  if (evidence.burnMultiple !== null && evidence.burnMultiple > 2) {
-    logOdds += 0.6; // DESIGN PARAMETER
+  for (const p of projects) {
+    if (p.status === "blocked") alpha += 1.5;
+    if (p.status === "complete") beta += 1;
   }
 
-  if (evidence.probabilityCritical > 0.3) {
-    logOdds += 0.7; // DESIGN PARAMETER
-  }
-
-  return sigmoid(logOdds);
+  return alpha / (alpha + beta);
 }

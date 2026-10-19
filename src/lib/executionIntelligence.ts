@@ -1,543 +1,694 @@
-// ---------------------------------------------------------------------------
-// Execution Intelligence
-// ---------------------------------------------------------------------------
-// This repository snapshot does not contain src/lib/metricsEngine.ts,
-// predictiveScoring.ts, simulation.ts, physics.ts, emergent.ts,
-// riskIntelligence.ts or stakeholders.ts (the engines referenced by the
-// Part 7 task brief) and src/db/schema.ts had no project/task/sprint
-// tables. Per the task instructions, when no prior model exists the
-// fallback formula given in the brief is implemented literally below.
-// ---------------------------------------------------------------------------
+// =============================================================================
+// Leados — Execution Intelligence (Part 6)
+// -----------------------------------------------------------------------------
+// Pure computation module. No DB access, no I/O. Everything needed is passed
+// in via ExecutionIntelligenceInput; the API route / orchestrator is
+// responsible for loading rows and calling physics.ts / beliefFabric.ts.
+//
+// physics.ts exports used here (quoted exactly as authored in this checkout
+// — see src/lib/physics.ts):
+//   export function measureOrgEntropy(
+//     events: LeadosEvent[],
+//     people: PersonRecord[],
+//   ): number
+//   export function computeLeadershipEnergyBudget(
+//     events: LeadosEvent[],
+//     people: PersonRecord[],
+//   ): number
+//
+// These are NOT reimplemented here. ExecutionIntelligenceInput.orgEntropy and
+// .energyBudget are expected to already be the return values of those two
+// functions (computed by the orchestrator against the live event log). If a
+// caller (e.g. simulation.ts running a what-if scenario) wants to perturb
+// entropy/energy directly without regenerating a synthetic event log, it may
+// still do so — see the fallback below, which re-derives them from
+// events/people only when the precomputed scalar is not supplied.
+// =============================================================================
 
+import { measureOrgEntropy, computeLeadershipEnergyBudget } from "./physics";
 import type {
   Blocker,
+  BlockerHeatmapCell,
+  CriticalPathResult,
   CrossDependency,
-  LeadosEvent,
-  Person,
-  Project,
-  ProjectId,
   Domain,
-} from "@/lib/types";
+  ExecutionIntelligenceReport,
+  LeadosEvent,
+  Milestone,
+  OrgPhysicsState,
+  PersonRecord,
+  Project,
+  ProjectDeliveryModel,
+  ProjectSnapshot,
+  RiskFactor,
+} from "./types";
+import { DOMAINS } from "./types";
 
-export const CRITICAL_SEVERITY_THRESHOLD = 4; // severity >= 4 is treated as "critical"
-const STALE_EVENT_DAYS = 14;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-export interface ConfidenceFactor {
-  label: string;
-  impact: number; // negative number = points deducted
+export interface ExecutionIntelligenceInput {
+  projects: Project[];
+  milestones: Milestone[];
+  blockers: Blocker[];
+  crossDeps: CrossDependency[];
+  people: PersonRecord[];
+  events: LeadosEvent[];
+  // NOTE: the Part 6 spec's ExecutionIntelligenceInput omits project
+  // snapshots, but the STALE SIGNAL FACTOR ("no project_snapshot in last 7
+  // days") requires them. Added here as a required field; this is the one
+  // deviation from the literal interface in the spec, necessary for the
+  // spec's own scoring rule to be computable.
+  snapshots: ProjectSnapshot[];
+  orgEntropy: number; // measureOrgEntropy(events, people) — see header
+  energyBudget: number; // computeLeadershipEnergyBudget(events, people)
+  executionRiskPosterior: number; // from beliefFabric
+  now: Date;
 }
 
-export interface DeliveryConfidence {
-  projectId: ProjectId;
-  projectName: string;
-  status: Project["status"];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function clamp(n: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, n));
+}
+
+function sigmoid(x: number) {
+  return 1 / (1 + Math.exp(-x));
+}
+
+function daysBetween(a: Date, b: Date) {
+  return (b.getTime() - a.getTime()) / DAY_MS;
+}
+
+function rangesOverlap(
+  aStart: Date | null,
+  aEnd: Date | null,
+  bStart: Date | null,
+  bEnd: Date | null,
+): boolean {
+  if (!aStart || !aEnd || !bStart || !bEnd) return false;
+  return aStart.getTime() <= bEnd.getTime() && bStart.getTime() <= aEnd.getTime();
+}
+
+// -----------------------------------------------------------------------------
+// A. Delivery confidence model
+// -----------------------------------------------------------------------------
+
+interface PreliminaryResult {
+  project: Project;
   confidence: number;
-  factors: ConfidenceFactor[];
+  riskFactors: RiskFactor[];
 }
 
-export interface BlockerHeatmapRow {
-  domain: Domain;
-  sev1: number;
-  sev2: number;
-  sev3: number;
-  sev4: number;
-  sev5: number;
-  total: number;
-}
-
-export type BlockerHeatmap = BlockerHeatmapRow[];
-
-export type DependencyRiskLevel = "low" | "high" | "critical";
-
-export interface DependencyRisk {
-  dependencyId: number;
-  fromProject: ProjectId;
-  toProject: ProjectId;
-  type: CrossDependency["type"];
-  risk: DependencyRiskLevel;
-  reason: string;
-}
-
-export type VelocityTrend = "accelerating" | "stable" | "decelerating";
-
-export interface ExecutionIntelligenceReport {
-  executionHealthScore: number;
-  deliveryConfidence: DeliveryConfidence[];
-  criticalPath: ProjectId[];
-  blockerHeatmap: BlockerHeatmap;
-  dependencyRisk: DependencyRisk[];
-  velocityTrend: VelocityTrend;
-  executionNarratives: string[];
-  generatedAt: string;
-}
-
-export function isOpen(blocker: Blocker): boolean {
-  return blocker.resolvedAt === null || blocker.resolvedAt === undefined;
-}
-
-export function isCritical(blocker: Blocker): boolean {
-  return blocker.severity >= CRITICAL_SEVERITY_THRESHOLD;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function isMilestoneOverdue(m: { status: string; dueDate: string | null }, now: Date): boolean {
-  if (m.status === "overdue") return true;
-  if (m.status === "pending" && m.dueDate) {
-    return new Date(m.dueDate).getTime() < now.getTime();
-  }
-  return false;
-}
-
-// ---------------------------------------------------------------------------
-// Delivery confidence
-// ---------------------------------------------------------------------------
-
-function computeDeliveryConfidence(
-  projects: Project[],
-  milestones: { projectId: ProjectId; status: string; dueDate: string | null }[],
+function computePreliminaryConfidence(
+  project: Project,
+  milestones: Milestone[],
   blockers: Blocker[],
-  crossDeps: CrossDependency[],
+  people: PersonRecord[],
   events: LeadosEvent[],
+  snapshots: ProjectSnapshot[],
+  orgEntropy: number,
+  energyBudget: number,
+  executionRiskPosterior: number,
   now: Date,
-): DeliveryConfidence[] {
-  const projectById = new Map(projects.map((p) => [p.id, p]));
+): PreliminaryResult {
+  let score = 100;
+  const riskFactors: RiskFactor[] = [];
 
-  const lastEventByProject = new Map<ProjectId, number>();
-  for (const e of events) {
-    if (e.projectId === null || e.projectId === undefined) continue;
-    const ts = new Date(e.occurredAt).getTime();
-    const prev = lastEventByProject.get(e.projectId);
-    if (prev === undefined || ts > prev) lastEventByProject.set(e.projectId, ts);
-  }
+  const apply = (label: string, impact: number, category: RiskFactor["category"]) => {
+    score += impact;
+    riskFactors.push({ label, impact, category });
+  };
 
-  return projects.map((project) => {
-    const factors: ConfidenceFactor[] = [];
-    let confidence = 100;
-
-    const projectMilestones = milestones.filter((m) => m.projectId === project.id);
-    const overdueCount = projectMilestones.filter((m) => isMilestoneOverdue(m, now)).length;
-    if (overdueCount > 0) {
-      const impact = -15 * overdueCount;
-      confidence += impact;
-      factors.push({ label: `${overdueCount} overdue milestone(s)`, impact });
-    }
-
-    const projectBlockers = blockers.filter((b) => b.projectId === project.id && isOpen(b));
-    const openCritical = projectBlockers.filter(isCritical).length;
-    const openNonCritical = projectBlockers.length - openCritical;
-    if (openCritical > 0) {
-      const impact = -25 * openCritical;
-      confidence += impact;
-      factors.push({ label: `${openCritical} open critical blocker(s)`, impact });
-    }
-    if (openNonCritical > 0) {
-      const impact = -10 * openNonCritical;
-      confidence += impact;
-      factors.push({ label: `${openNonCritical} open non-critical blocker(s)`, impact });
-    }
-
-    if (project.ownerId === null || project.ownerId === undefined) {
-      confidence += -20;
-      factors.push({ label: "No owner assigned", impact: -20 });
-    }
-
-    const outgoingBlockedDeps = crossDeps.filter((d) => d.fromProject === project.id);
-    let blockedDepCount = 0;
-    for (const dep of outgoingBlockedDeps) {
-      const target = projectById.get(dep.toProject);
-      if (target && target.status === "blocked") blockedDepCount += 1;
-    }
-    if (blockedDepCount > 0) {
-      const impact = -20 * blockedDepCount;
-      confidence += impact;
-      factors.push({
-        label: `${blockedDepCount} dependency/ies pointing to a blocked project`,
-        impact,
-      });
-    }
-
-    const lastEvent = lastEventByProject.get(project.id);
-    const staleDays = lastEvent === undefined ? Infinity : (now.getTime() - lastEvent) / MS_PER_DAY;
-    if (staleDays > STALE_EVENT_DAYS) {
-      confidence += -15;
-      factors.push({
-        label:
-          lastEvent === undefined
-            ? "No recorded activity"
-            : `No activity in ${Math.floor(staleDays)} days (stale)`,
-        impact: -15,
-      });
-    }
-
-    confidence = clamp(confidence, 0, 100);
-
-    return {
-      projectId: project.id,
-      projectName: project.name,
-      status: project.status,
-      confidence,
-      factors,
-    };
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Critical path — Kahn's algorithm
-// ---------------------------------------------------------------------------
-//
-// Kahn's algorithm (standard pseudocode, implemented exactly below):
-//
-//   L <- Empty list that will contain the sorted elements
-//   S <- Set of all nodes with no incoming edge
-//
-//   while S is not empty do
-//       remove a node n from S
-//       add n to tail of L
-//       for each node m with an edge e from n to m do
-//           remove edge e from the graph
-//           if m has no other incoming edges then
-//               insert m into S
-//
-//   if graph has edges then
-//       return error   (graph has at least one cycle)
-//   else
-//       return L   (a topologically sorted order)
-//
-export interface TopoSortResult {
-  order: ProjectId[];
-  hasCycle: boolean;
-  cycleNodes: ProjectId[];
-}
-
-function kahnTopologicalSort(nodes: ProjectId[], edges: [ProjectId, ProjectId][]): TopoSortResult {
-  // adjacency: n -> [m, ...] ("edge e from n to m")
-  const adjacency = new Map<ProjectId, ProjectId[]>();
-  const incomingCount = new Map<ProjectId, number>();
-  for (const n of nodes) {
-    adjacency.set(n, []);
-    incomingCount.set(n, 0);
-  }
-  let remainingEdgeCount = 0;
-  for (const [from, to] of edges) {
-    if (!adjacency.has(from) || !incomingCount.has(to)) continue; // ignore dangling refs
-    adjacency.get(from)!.push(to);
-    incomingCount.set(to, (incomingCount.get(to) ?? 0) + 1);
-    remainingEdgeCount += 1;
-  }
-
-  const L: ProjectId[] = [];
-  const S: ProjectId[] = nodes.filter((n) => (incomingCount.get(n) ?? 0) === 0);
-
-  // local mutable copy of incoming counts, since edges are "removed" from the graph
-  const incoming = new Map(incomingCount);
-
-  while (S.length > 0) {
-    const n = S.shift()!; // remove a node n from S
-    L.push(n); // add n to tail of L
-    for (const m of adjacency.get(n) ?? []) {
-      // remove edge e (n -> m) from the graph
-      incoming.set(m, (incoming.get(m) ?? 0) - 1);
-      remainingEdgeCount -= 1;
-      if ((incoming.get(m) ?? 0) === 0) {
-        S.push(m); // insert m into S
-      }
-    }
-  }
-
-  const hasCycle = remainingEdgeCount > 0;
-  const cycleNodes = hasCycle ? nodes.filter((n) => (incoming.get(n) ?? 0) > 0) : [];
-
-  return { order: L, hasCycle, cycleNodes };
-}
-
-function computeCriticalPath(
-  projects: Project[],
-  crossDeps: CrossDependency[],
-): { path: ProjectId[]; cycle: TopoSortResult } {
-  const nodes = projects.map((p) => p.id);
-  const blockEdges: [ProjectId, ProjectId][] = crossDeps
-    .filter((d) => d.type === "blocks")
-    .map((d) => [d.fromProject, d.toProject]);
-
-  const topo = kahnTopologicalSort(nodes, blockEdges);
-
-  // Longest chain (critical path) via DP over the DAG portion returned by Kahn.
-  const adjacency = new Map<ProjectId, ProjectId[]>();
-  for (const n of nodes) adjacency.set(n, []);
-  for (const [from, to] of blockEdges) {
-    if (adjacency.has(from) && adjacency.has(to)) adjacency.get(from)!.push(to);
-  }
-
-  const orderedSet = new Set(topo.order);
-  const dist = new Map<ProjectId, number>();
-  const prev = new Map<ProjectId, ProjectId | null>();
-  for (const n of topo.order) {
-    dist.set(n, 1);
-    prev.set(n, null);
-  }
-  for (const n of topo.order) {
-    for (const m of adjacency.get(n) ?? []) {
-      if (!orderedSet.has(m)) continue;
-      const candidate = (dist.get(n) ?? 1) + 1;
-      if (candidate > (dist.get(m) ?? 1)) {
-        dist.set(m, candidate);
-        prev.set(m, n);
-      }
-    }
-  }
-
-  let endNode: ProjectId | null = null;
-  let best = 0;
-  for (const [node, d] of dist.entries()) {
-    if (d > best) {
-      best = d;
-      endNode = node;
-    }
-  }
-
-  const path: ProjectId[] = [];
-  let cursor = endNode;
-  while (cursor !== null && cursor !== undefined) {
-    path.unshift(cursor);
-    cursor = prev.get(cursor) ?? null;
-  }
-
-  return { path, cycle: topo };
-}
-
-// ---------------------------------------------------------------------------
-// Blocker heatmap
-// ---------------------------------------------------------------------------
-
-function computeBlockerHeatmap(blockers: Blocker[], projects: Project[]): BlockerHeatmap {
-  const projectDomain = new Map(projects.map((p) => [p.id, p.domain]));
-  const rows = new Map<Domain, BlockerHeatmapRow>();
-
-  for (const b of blockers) {
-    const domain = b.domain ?? projectDomain.get(b.projectId) ?? "unassigned";
-    if (!rows.has(domain)) {
-      rows.set(domain, { domain, sev1: 0, sev2: 0, sev3: 0, sev4: 0, sev5: 0, total: 0 });
-    }
-    const row = rows.get(domain)!;
-    const sev = clamp(Math.round(b.severity), 1, 5);
-    const key = (`sev${sev}` as unknown) as keyof Omit<BlockerHeatmapRow, "domain" | "total">;
-    row[key] += 1;
-    row.total += 1;
-  }
-
-  return Array.from(rows.values()).sort((a, b) => b.total - a.total);
-}
-
-// ---------------------------------------------------------------------------
-// Dependency risk
-// ---------------------------------------------------------------------------
-
-function computeDependencyRisk(
-  crossDeps: CrossDependency[],
-  projects: Project[],
-  confidenceByProject: Map<ProjectId, number>,
-): DependencyRisk[] {
-  const statusByProject = new Map(projects.map((p) => [p.id, p.status]));
-
-  return crossDeps.map((dep) => {
-    const fromStatus = statusByProject.get(dep.fromProject);
-    const toStatus = statusByProject.get(dep.toProject);
-    const fromConfidence = confidenceByProject.get(dep.fromProject) ?? 100;
-    const toConfidence = confidenceByProject.get(dep.toProject) ?? 100;
-
-    let risk: DependencyRiskLevel = "low";
-    let reason = "Both projects healthy";
-
-    if (fromStatus === "blocked" || toStatus === "blocked") {
-      risk = "critical";
-      reason =
-        fromStatus === "blocked" && toStatus === "blocked"
-          ? "Both projects are blocked"
-          : fromStatus === "blocked"
-            ? "Source project is blocked"
-            : "Target project is blocked";
-    } else if (fromConfidence < 60 && toConfidence < 60) {
-      risk = "high";
-      reason = `Both projects have low confidence (${fromConfidence}, ${toConfidence})`;
-    }
-
-    return {
-      dependencyId: dep.id,
-      fromProject: dep.fromProject,
-      toProject: dep.toProject,
-      type: dep.type,
-      risk,
-      reason,
-    };
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Velocity trend
-// ---------------------------------------------------------------------------
-
-function computeVelocityTrend(events: LeadosEvent[], now: Date): VelocityTrend {
-  const sevenDays = 7 * MS_PER_DAY;
-  const nowMs = now.getTime();
-  let recent = 0;
-  let previous = 0;
-  for (const e of events) {
-    const ts = new Date(e.occurredAt).getTime();
-    const age = nowMs - ts;
-    if (age < 0) continue;
-    if (age <= sevenDays) recent += 1;
-    else if (age <= sevenDays * 2) previous += 1;
-  }
-
-  if (previous === 0) {
-    return recent > 0 ? "accelerating" : "stable";
-  }
-  const ratio = recent / previous;
-  if (ratio >= 1.1) return "accelerating";
-  if (ratio <= 0.9) return "decelerating";
-  return "stable";
-}
-
-// ---------------------------------------------------------------------------
-// Execution health score + narratives
-// ---------------------------------------------------------------------------
-
-function computeExecutionHealthScore(
-  deliveryConfidence: DeliveryConfidence[],
-  blockers: Blocker[],
-  hasCycle: boolean,
-): number {
-  const avgConfidence =
-    deliveryConfidence.length === 0
-      ? 100
-      : deliveryConfidence.reduce((sum, d) => sum + d.confidence, 0) / deliveryConfidence.length;
-
-  const openCriticalBlockers = blockers.filter((b) => isOpen(b) && isCritical(b)).length;
-
-  let score = avgConfidence - openCriticalBlockers * 2 - (hasCycle ? 10 : 0);
-  return Math.round(clamp(score, 0, 100));
-}
-
-function buildNarratives(
-  deliveryConfidence: DeliveryConfidence[],
-  blockerHeatmap: BlockerHeatmap,
-  dependencyRisk: DependencyRisk[],
-  velocityTrend: VelocityTrend,
-  cycle: TopoSortResult,
-  criticalPath: ProjectId[],
-  projects: Project[],
-): string[] {
-  const narratives: string[] = [];
-  const projectById = new Map(projects.map((p) => [p.id, p]));
-
-  if (cycle.hasCycle) {
-    narratives.push(
-      `Critical finding: a circular dependency was detected among projects [${cycle.cycleNodes
-        .map((id) => projectById.get(id)?.name ?? `#${id}`)
-        .join(" -> ")}]. Critical path analysis excludes the cyclic portion.`,
-    );
-  }
-
-  const sorted = [...deliveryConfidence].sort((a, b) => a.confidence - b.confidence);
-  const worst = sorted[0];
-  if (worst && worst.confidence < 70) {
-    narratives.push(
-      `${worst.projectName} has the lowest delivery confidence (${worst.confidence}): ${worst.factors
-        .map((f) => f.label)
-        .join(", ") || "no specific factors recorded"}.`,
-    );
-  }
-
-  const atRisk = sorted.filter((d) => d.confidence < 50).length;
-  if (atRisk > 0) {
-    narratives.push(`${atRisk} project(s) are below 50% delivery confidence and at risk of slipping.`);
-  }
-
-  const hottestRow = blockerHeatmap[0];
-  if (hottestRow && hottestRow.total > 0) {
-    narratives.push(
-      `"${hottestRow.domain}" is the hottest blocker domain with ${hottestRow.total} open/reported blocker(s).`,
-    );
-  }
-
-  const criticalDeps = dependencyRisk.filter((d) => d.risk === "critical").length;
-  const highDeps = dependencyRisk.filter((d) => d.risk === "high").length;
-  if (criticalDeps > 0) {
-    narratives.push(`${criticalDeps} cross-project dependency/ies are critical risk due to blocked projects.`);
-  }
-  if (highDeps > 0) {
-    narratives.push(`${highDeps} cross-project dependency/ies are high risk (both sides below 60% confidence).`);
-  }
-
-  if (criticalPath.length > 1) {
-    narratives.push(
-      `Critical path: ${criticalPath.map((id) => projectById.get(id)?.name ?? `#${id}`).join(" -> ")}.`,
-    );
-  }
-
-  narratives.push(
-    velocityTrend === "accelerating"
-      ? "Execution velocity is accelerating compared to the prior week."
-      : velocityTrend === "decelerating"
-        ? "Execution velocity is decelerating compared to the prior week."
-        : "Execution velocity is stable.",
+  const projectMilestones = milestones.filter((m) => m.projectId === project.id);
+  const openBlockers = blockers.filter(
+    (b) => b.projectId === project.id && !b.resolvedAt,
   );
 
-  return narratives;
+  // --- MILESTONE FACTORS ---
+  if (projectMilestones.length === 0) {
+    apply("No milestones defined (planning gap)", -10, "milestone");
+  } else {
+    const done = projectMilestones.filter((m) => m.status === "done").length;
+    const progress = done / projectMilestones.length;
+
+    if (project.startDate && project.targetDate) {
+      const total = daysBetween(project.startDate, project.targetDate);
+      const elapsed = daysBetween(project.startDate, now);
+      const timeElapsedFrac = total > 0 ? clamp(elapsed / total, 0, 2) : 0;
+      if (progress < timeElapsedFrac - 0.15) {
+        apply(
+          `Behind schedule: ${Math.round(progress * 100)}% milestones done vs ${Math.round(timeElapsedFrac * 100)}% time elapsed`,
+          -20,
+          "milestone",
+        );
+      }
+    }
+
+    const overdue = projectMilestones.filter((m) => m.status === "overdue").length;
+    if (overdue > 0) {
+      const impact = -Math.min(36, overdue * 12);
+      apply(`${overdue} overdue milestone(s)`, impact, "milestone");
+    }
+  }
+
+  // --- BLOCKER FACTORS ---
+  const highSevCount = openBlockers.filter((b) => b.severity >= 4).length;
+  if (highSevCount > 0) {
+    apply(`${highSevCount} severity 4-5 blocker(s)`, -Math.min(44, highSevCount * 22), "blocker");
+  }
+  const midSevCount = openBlockers.filter((b) => b.severity >= 2 && b.severity <= 3).length;
+  if (midSevCount > 0) {
+    apply(`${midSevCount} severity 2-3 blocker(s)`, -Math.min(20, midSevCount * 10), "blocker");
+  }
+  const unassigned = openBlockers.filter((b) => !b.assignedTo).length;
+  if (unassigned > 0) {
+    apply(`${unassigned} blocker(s) with no owner assigned`, -5 * unassigned, "blocker");
+  }
+
+  // --- PEOPLE FACTORS ---
+  const owner = project.ownerId ? people.find((p) => p.id === project.ownerId) : undefined;
+  if (!project.ownerId) {
+    apply("No project owner assigned", -20, "people");
+  } else if (owner) {
+    if (owner.flightRisk > 0.5) {
+      apply(`Owner ${owner.name} has elevated flight risk (key person risk)`, -15, "people");
+    }
+    if (owner.burnoutRisk > 0.6) {
+      apply(`Owner ${owner.name} is showing burnout risk`, -10, "people");
+    }
+  }
+
+  // --- PHYSICS FACTORS ---
+  if (orgEntropy > 0.7) {
+    apply("Org entropy is high — chaotic org is unpredictable", -10, "physics");
+  }
+  if (energyBudget < 0.3) {
+    apply("Leadership energy budget depleted", -8, "physics");
+  }
+  if (executionRiskPosterior > 0.5) {
+    apply("Belief network posterior flags elevated execution risk", -10, "physics");
+  }
+
+  // --- STALE SIGNAL FACTOR ---
+  const projectEvents = events.filter((e) => e.projectId === project.id);
+  const lastEvent = projectEvents.reduce<Date | null>((latest, e) => {
+    if (!latest || e.createdAt.getTime() > latest.getTime()) return e.createdAt;
+    return latest;
+  }, null);
+  if (!lastEvent || daysBetween(lastEvent, now) > 14) {
+    apply("No project activity/event in over 14 days", -12, "signal");
+  }
+  const projectSnapshots = snapshots.filter((s) => s.projectId === project.id);
+  const lastSnapshot = projectSnapshots.reduce<Date | null>((latest, s) => {
+    if (!latest || s.snapshotAt.getTime() > latest.getTime()) return s.snapshotAt;
+    return latest;
+  }, null);
+  if (!lastSnapshot || daysBetween(lastSnapshot, now) > 7) {
+    apply("No confidence snapshot recorded in the last 7 days", -5, "signal");
+  }
+
+  return { project, confidence: clamp(score, 0, 100), riskFactors };
 }
 
-// ---------------------------------------------------------------------------
-// Public entry point
-// ---------------------------------------------------------------------------
+function physicsAnnotation(orgEntropy: number, energyBudget: number): string {
+  const highEntropy = orgEntropy > 0.6;
+  const lowEnergy = energyBudget < 0.4;
 
-export function runExecutionIntelligence(
-  projects: Project[],
-  milestones: { projectId: ProjectId; status: string; dueDate: string | null }[],
-  blockers: Blocker[],
-  crossDeps: CrossDependency[],
-  people: Person[],
-  events: LeadosEvent[],
-  now: Date,
-): ExecutionIntelligenceReport {
-  void people; // reserved for future stakeholder-aware scoring (see stakeholders.ts note above)
+  if (highEntropy && lowEnergy) {
+    return "Operating in turbulence with depleted reserves — this project is high risk.";
+  }
+  if (highEntropy && !lowEnergy) {
+    return "Turbulent environment but leadership has reserves to absorb shocks.";
+  }
+  if (!highEntropy && lowEnergy) {
+    return "Structured environment but capacity is the constraint — protect this team from additional work.";
+  }
+  return "Ideal conditions for execution.";
+}
 
-  const deliveryConfidence = computeDeliveryConfidence(
+function buildDeliveryConfidence(input: ExecutionIntelligenceInput): ProjectDeliveryModel[] {
+  const {
     projects,
     milestones,
     blockers,
     crossDeps,
+    people,
     events,
+    snapshots,
+    orgEntropy,
+    energyBudget,
+    executionRiskPosterior,
     now,
-  );
-  const confidenceByProject = new Map(deliveryConfidence.map((d) => [d.projectId, d.confidence]));
+  } = input;
 
-  const { path: criticalPath, cycle } = computeCriticalPath(projects, crossDeps);
-  const blockerHeatmap = computeBlockerHeatmap(blockers, projects);
-  const dependencyRisk = computeDependencyRisk(crossDeps, projects, confidenceByProject);
-  const velocityTrend = computeVelocityTrend(events, now);
-  const executionHealthScore = computeExecutionHealthScore(deliveryConfidence, blockers, cycle.hasCycle);
-  const executionNarratives = buildNarratives(
-    deliveryConfidence,
-    blockerHeatmap,
-    dependencyRisk,
-    velocityTrend,
-    cycle,
-    criticalPath,
-    projects,
+  // Pass 1: preliminary confidence, independent of cross-project dependencies.
+  const prelim = new Map<number, PreliminaryResult>();
+  for (const project of projects) {
+    prelim.set(
+      project.id,
+      computePreliminaryConfidence(
+        project,
+        milestones,
+        blockers,
+        people,
+        events,
+        snapshots,
+        orgEntropy,
+        energyBudget,
+        executionRiskPosterior,
+        now,
+      ),
+    );
+  }
+
+  // Pass 2: apply dependency factors, referencing pass-1 preliminary scores
+  // of upstream projects (avoids order-dependent / circular computation).
+  const results: ProjectDeliveryModel[] = [];
+
+  for (const project of projects) {
+    const base = prelim.get(project.id)!;
+    let score = base.confidence;
+    const riskFactors: RiskFactor[] = [...base.riskFactors];
+    const apply = (label: string, impact: number, category: RiskFactor["category"]) => {
+      score += impact;
+      riskFactors.push({ label, impact, category });
+    };
+
+    // Upstream = projects that must complete before this one (type='blocks',
+    // edge direction fromProject -> toProject, so fromProject is upstream of
+    // this project when this project is the toProject).
+    const upstreamDeps = crossDeps.filter(
+      (d) => d.toProject === project.id && d.type === "blocks",
+    );
+    for (const dep of upstreamDeps) {
+      const upstream = prelim.get(dep.fromProject);
+      if (!upstream) continue;
+      if (upstream.project.status === "blocked") {
+        apply(`Upstream dependency "${upstream.project.name}" is blocked`, -18, "dependency");
+      }
+      if (upstream.confidence < 50) {
+        apply(
+          `Upstream dependency "${upstream.project.name}" has low confidence (${Math.round(upstream.confidence)}%)`,
+          -8,
+          "dependency",
+        );
+      }
+    }
+
+    // shares_resource conflict: same resource person (shared owner), overlapping dates.
+    const sharedDeps = crossDeps.filter(
+      (d) =>
+        d.type === "shares_resource" &&
+        (d.fromProject === project.id || d.toProject === project.id),
+    );
+    for (const dep of sharedDeps) {
+      const otherId = dep.fromProject === project.id ? dep.toProject : dep.fromProject;
+      const other = prelim.get(otherId);
+      if (!other) continue;
+      const sameOwner = project.ownerId && project.ownerId === other.project.ownerId;
+      const overlap = rangesOverlap(
+        project.startDate,
+        project.targetDate,
+        other.project.startDate,
+        other.project.targetDate,
+      );
+      if (sameOwner && overlap) {
+        apply(
+          `Shared resource conflict with "${other.project.name}" over overlapping dates`,
+          -12,
+          "dependency",
+        );
+      }
+    }
+
+    const computedConfidence = clamp(score, 0, 100);
+    const confidenceDelta = computedConfidence - project.confidence;
+
+    // DESIGN PARAMETER: sigmoid steepness (0.08) and midpoint (50) are a
+    // design choice to map a 0-100 confidence score onto a probability
+    // curve, NOT a calibrated statistical model fit to historical outcomes.
+    const completionProbability = sigmoid(0.08 * (computedConfidence - 50));
+
+    // DESIGN PARAMETER: 0.8 days of slip per confidence point below 50 is a
+    // design choice, not derived from historical slippage data.
+    const lateByDays = computedConfidence < 50 ? (50 - computedConfidence) * 0.8 : null;
+    const expectedCompletionDate = project.targetDate
+      ? new Date(project.targetDate.getTime() + (lateByDays ?? 0) * DAY_MS)
+      : null;
+
+    results.push({
+      projectId: project.id,
+      name: project.name,
+      status: project.status,
+      targetDate: project.targetDate,
+      baseConfidence: project.confidence,
+      computedConfidence,
+      confidenceDelta,
+      completionProbability,
+      expectedCompletionDate,
+      lateByDays,
+      riskFactors,
+      physicsAnnotation: physicsAnnotation(orgEntropy, energyBudget),
+    });
+  }
+
+  return results;
+}
+
+// -----------------------------------------------------------------------------
+// B. Critical path — Kahn's algorithm
+// -----------------------------------------------------------------------------
+//
+// Kahn's algorithm (Kahn, 1962). Time complexity O(V+E).
+// If |sorted| < |V|, the remaining nodes form one or more cycles.
+//
+// Pseudocode:
+//   build adjacency[u] = list of v for each edge u -> v
+//   inDegree[v] += 1 for each edge u -> v
+//   queue = [n for n in nodes if inDegree[n] == 0]
+//   sorted = []
+//   while queue not empty:
+//     u = queue.pop_front()
+//     sorted.append(u)
+//     for v in adjacency[u]:
+//       inDegree[v] -= 1
+//       if inDegree[v] == 0:
+//         queue.push_back(v)
+//   if len(sorted) < len(nodes):
+//     remaining = nodes - sorted   // these nodes participate in >=1 cycle
+//     cycles = DFS_find_cycles(remaining, adjacency restricted to remaining)
+// -----------------------------------------------------------------------------
+
+function kahnTopSort(
+  nodes: number[],
+  edges: Array<[number, number]>,
+): { sorted: number[]; adjacency: Map<number, number[]> } {
+  const adjacency = new Map<number, number[]>();
+  const inDegree = new Map<number, number>();
+  for (const n of nodes) {
+    adjacency.set(n, []);
+    inDegree.set(n, 0);
+  }
+  for (const [u, v] of edges) {
+    if (!adjacency.has(u) || !adjacency.has(v)) continue;
+    adjacency.get(u)!.push(v);
+    inDegree.set(v, (inDegree.get(v) ?? 0) + 1);
+  }
+
+  const queue: number[] = nodes.filter((n) => (inDegree.get(n) ?? 0) === 0);
+  const sorted: number[] = [];
+
+  while (queue.length > 0) {
+    const u = queue.shift()!;
+    sorted.push(u);
+    for (const v of adjacency.get(u) ?? []) {
+      inDegree.set(v, (inDegree.get(v) ?? 0) - 1);
+      if (inDegree.get(v) === 0) queue.push(v);
+    }
+  }
+
+  return { sorted, adjacency };
+}
+
+// DFS on the subgraph induced by nodes left out of the topological order to
+// extract the cycle(s) they participate in.
+function findCyclesInRemainder(
+  remaining: number[],
+  adjacency: Map<number, number[]>,
+): number[][] {
+  const remainingSet = new Set(remaining);
+  const visited = new Set<number>();
+  const cycles: number[][] = [];
+
+  function dfs(start: number) {
+    const pathIndex = new Map<number, number>();
+    const path: number[] = [];
+
+    function visit(node: number) {
+      if (pathIndex.has(node)) {
+        const idx = pathIndex.get(node)!;
+        cycles.push(path.slice(idx).concat(node));
+        return;
+      }
+      if (visited.has(node)) return;
+      visited.add(node);
+      pathIndex.set(node, path.length);
+      path.push(node);
+      for (const next of adjacency.get(node) ?? []) {
+        if (!remainingSet.has(next)) continue;
+        visit(next);
+      }
+      path.pop();
+      pathIndex.delete(node);
+    }
+
+    visit(start);
+  }
+
+  for (const n of remaining) {
+    if (!visited.has(n)) dfs(n);
+  }
+
+  return cycles;
+}
+
+function longestPath(sorted: number[], adjacency: Map<number, number[]>): number[] {
+  // Longest path in a DAG via DP over the Kahn topological order.
+  const dist = new Map<number, number>();
+  const next = new Map<number, number | null>();
+  for (const n of sorted) {
+    dist.set(n, 1);
+    next.set(n, null);
+  }
+  // process in reverse topological order so dist[u] depends on already-computed dist[v]
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const u = sorted[i];
+    for (const v of adjacency.get(u) ?? []) {
+      if (!dist.has(v)) continue;
+      const candidate = 1 + (dist.get(v) ?? 1);
+      if (candidate > (dist.get(u) ?? 1)) {
+        dist.set(u, candidate);
+        next.set(u, v);
+      }
+    }
+  }
+
+  let bestStart: number | null = null;
+  let bestLen = 0;
+  for (const n of sorted) {
+    if ((dist.get(n) ?? 0) > bestLen) {
+      bestLen = dist.get(n) ?? 0;
+      bestStart = n;
+    }
+  }
+
+  const chain: number[] = [];
+  let cursor = bestStart;
+  while (cursor !== null && cursor !== undefined) {
+    chain.push(cursor);
+    cursor = next.get(cursor) ?? null;
+  }
+  return chain;
+}
+
+function buildCriticalPath(
+  projects: Project[],
+  crossDeps: CrossDependency[],
+  confidenceById: Map<number, number>,
+): CriticalPathResult {
+  const nodes = projects.map((p) => p.id);
+  const edges: Array<[number, number]> = crossDeps
+    .filter((d) => d.type === "blocks")
+    .map((d) => [d.fromProject, d.toProject]);
+
+  const { sorted, adjacency } = kahnTopSort(nodes, edges);
+
+  let cyclesDetected: number[][] = [];
+  if (sorted.length < nodes.length) {
+    const remaining = nodes.filter((n) => !sorted.includes(n));
+    cyclesDetected = findCyclesInRemainder(remaining, adjacency);
+  }
+
+  const chain = longestPath(sorted, adjacency);
+
+  let bottleneckProject: number | null = null;
+  let bottleneckReason = "No critical chain of dependencies detected.";
+  if (chain.length > 0) {
+    let lowest = Infinity;
+    for (const id of chain) {
+      const conf = confidenceById.get(id) ?? 100;
+      if (conf < lowest) {
+        lowest = conf;
+        bottleneckProject = id;
+      }
+    }
+    const bottleneckName = projects.find((p) => p.id === bottleneckProject)?.name ?? "unknown";
+    bottleneckReason = `"${bottleneckName}" has the lowest confidence (${Math.round(lowest)}%) on the critical chain — a delay here cascades to every downstream dependency.`;
+  }
+
+  return {
+    chain,
+    chainLength: chain.length,
+    cyclesDetected,
+    bottleneckProject,
+    bottleneckReason,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// Blocker heatmap — 8 domains x 5 severities
+// -----------------------------------------------------------------------------
+
+function buildBlockerHeatmap(blockers: Blocker[]): BlockerHeatmapCell[][] {
+  const open = blockers.filter((b) => !b.resolvedAt);
+  const grid: BlockerHeatmapCell[][] = DOMAINS.map((domain) =>
+    [1, 2, 3, 4, 5].map((severity) => ({
+      domain,
+      severity,
+      count: 0,
+      blockerIds: [] as number[],
+    })),
   );
+
+  for (const b of open) {
+    const domain = (b.domain ?? "operations") as Domain;
+    const rowIdx = DOMAINS.indexOf(domain);
+    const row = rowIdx >= 0 ? grid[rowIdx] : grid[DOMAINS.length - 1];
+    const cell = row[clamp(b.severity, 1, 5) - 1];
+    cell.count += 1;
+    cell.blockerIds.push(b.id);
+  }
+
+  return grid;
+}
+
+// -----------------------------------------------------------------------------
+// Org physics state (inertia, momentum, friction derived here; entropy &
+// energyBudget pass through from physics.ts per the header note)
+// -----------------------------------------------------------------------------
+
+function buildPhysicsState(input: ExecutionIntelligenceInput): OrgPhysicsState {
+  const { projects, blockers, people, crossDeps, milestones, now } = input;
+
+  const entropy = input.orgEntropy ?? measureOrgEntropy(input.events, people);
+  const energyBudget =
+    input.energyBudget ?? computeLeadershipEnergyBudget(input.events, people);
+
+  const activeBlockers = blockers.filter((b) => !b.resolvedAt).length;
+  const inertia = people.length > 0 ? clamp(activeBlockers / people.length, 0, 1) : 0;
+
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * DAY_MS);
+  const completedLast14d = milestones.filter(
+    (m) => m.status === "done" && m.completedAt && m.completedAt.getTime() >= fourteenDaysAgo.getTime(),
+  ).length;
+  const pending = milestones.filter((m) => m.status === "pending" || m.status === "overdue").length;
+  const momentum = pending > 0 ? clamp(completedLast14d / pending, 0, 1) : completedLast14d > 0 ? 1 : 0;
+
+  const shareDeps = crossDeps.filter((d) => d.type === "shares_resource");
+  let conflicts = 0;
+  for (const dep of shareDeps) {
+    const from = projects.find((p) => p.id === dep.fromProject);
+    const to = projects.find((p) => p.id === dep.toProject);
+    if (!from || !to) continue;
+    const sharedPersonId = from.ownerId && from.ownerId === to.ownerId ? from.ownerId : null;
+    if (!sharedPersonId) continue;
+    const person = people.find((p) => p.id === sharedPersonId);
+    if (person && (person.flightRisk > 0.4 || person.burnoutRisk > 0.4)) {
+      conflicts += 1;
+    }
+  }
+  const frictionIndex = projects.length > 0 ? clamp(conflicts / projects.length, 0, 1) : 0;
+
+  return { entropy, energyBudget, inertia, momentum, frictionIndex };
+}
+
+function buildVelocityTrend(
+  milestones: Milestone[],
+  now: Date,
+): "accelerating" | "stable" | "decelerating" {
+  const window = 14 * DAY_MS;
+  const recentStart = new Date(now.getTime() - window);
+  const priorStart = new Date(now.getTime() - 2 * window);
+
+  const recentDone = milestones.filter(
+    (m) => m.status === "done" && m.completedAt && m.completedAt >= recentStart && m.completedAt <= now,
+  ).length;
+  const priorDone = milestones.filter(
+    (m) =>
+      m.status === "done" &&
+      m.completedAt &&
+      m.completedAt >= priorStart &&
+      m.completedAt < recentStart,
+  ).length;
+
+  if (priorDone === 0 && recentDone === 0) return "stable";
+  if (priorDone === 0) return "accelerating";
+
+  const change = (recentDone - priorDone) / priorDone;
+  if (change > 0.1) return "accelerating";
+  if (change < -0.1) return "decelerating";
+  return "stable";
+}
+
+// -----------------------------------------------------------------------------
+// Entry point
+// -----------------------------------------------------------------------------
+
+export function buildExecutionIntelligenceReport(
+  input: ExecutionIntelligenceInput,
+): ExecutionIntelligenceReport {
+  const deliveryConfidence = buildDeliveryConfidence(input);
+  const confidenceById = new Map(deliveryConfidence.map((d) => [d.projectId, d.computedConfidence]));
+
+  const criticalPath = buildCriticalPath(input.projects, input.crossDeps, confidenceById);
+  const blockerHeatmap = buildBlockerHeatmap(input.blockers);
+  const physicsState = buildPhysicsState(input);
+  const velocityTrend = buildVelocityTrend(input.milestones, input.now);
+
+  // momentumIndex (0-100): weighted composite of org momentum, tempered by
+  // entropy (chaos erodes perceived momentum) and boosted by remaining
+  // leadership energy. DESIGN PARAMETER weights (0.6 / 0.25 / 0.15).
+  const momentumIndex = clamp(
+    Math.round(
+      100 *
+        (0.6 * physicsState.momentum +
+          0.25 * (1 - physicsState.entropy) +
+          0.15 * physicsState.energyBudget),
+    ),
+    0,
+    100,
+  );
+
+  const activeProjects = deliveryConfidence.filter((d) => d.status !== "complete");
+  const avgConfidence =
+    activeProjects.length > 0
+      ? activeProjects.reduce((s, d) => s + d.computedConfidence, 0) / activeProjects.length
+      : 100;
+
+  // executionHealthScore (0-100): weighted composite. DESIGN PARAMETER.
+  const executionHealthScore = clamp(
+    Math.round(
+      0.4 * avgConfidence +
+        0.2 * momentumIndex +
+        0.15 * (100 * (1 - physicsState.entropy)) +
+        0.15 * (100 * physicsState.energyBudget) +
+        0.1 * (100 * (1 - input.executionRiskPosterior)),
+    ),
+    0,
+    100,
+  );
+
+  const atRiskProjects = deliveryConfidence
+    .filter((d) => d.computedConfidence < 50)
+    .sort((a, b) => a.computedConfidence - b.computedConfidence);
 
   return {
     executionHealthScore,
     deliveryConfidence,
     criticalPath,
     blockerHeatmap,
-    dependencyRisk,
+    momentumIndex,
     velocityTrend,
-    executionNarratives,
-    generatedAt: now.toISOString(),
+    physicsState,
+    atRiskProjects,
+    generatedAt: input.now.toISOString(),
   };
 }

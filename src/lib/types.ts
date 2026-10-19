@@ -1,161 +1,181 @@
-// src/lib/types.ts
-//
-// PROVENANCE NOTE: no central types.ts existed in this repo prior to Part
-// 5 (Parts 1-4 were not present in this sandbox). This file defines, from
-// scratch, the shared types needed by the Financial Nervous System
-// (src/lib/financialOS.ts, the /api/financial* routes, and
-// src/views/FinancialView.tsx). It is written to be additive so later
-// parts can extend it without breaking these definitions.
+// =============================================================================
+// Leados — shared domain types
+// Part 6 adds Project / Milestone / Blocker / CrossDependency / execution
+// intelligence types. Earlier-part types (Person, LeadosEvent) are rebuilt
+// here at minimal fidelity since this checkout does not include Parts 1-5.
+// =============================================================================
 
-// ---------------------------------------------------------------------------
-// Generic persistence-adjacent shapes
-// ---------------------------------------------------------------------------
+export type Domain =
+  | "engineering"
+  | "product"
+  | "design"
+  | "sales"
+  | "marketing"
+  | "support"
+  | "finance"
+  | "operations";
 
-export interface MetricDefRecord {
-  key: string;
-  label: string;
-  unit: string;
-  category: string;
-}
+export const DOMAINS: Domain[] = [
+  "engineering",
+  "product",
+  "design",
+  "sales",
+  "marketing",
+  "support",
+  "finance",
+  "operations",
+];
 
-export interface MetricValueRecord {
-  metricKey: string;
-  value: number;
-  recordedAt: string; // ISO timestamp
-}
-
-export interface MetricSnapshot {
-  key: string;
-  label: string;
-  unit: string;
-  value: number | null;
-  recordedAt: string | null;
-}
-
-export interface FinancialEvent {
-  type: string;
-  payload: Record<string, unknown>;
-  occurredAt: string; // ISO timestamp
-}
-
-export type DecisionLevel = "board" | "exec" | "team";
-
-export interface Decision {
+export interface PersonRecord {
   id: number;
+  name: string;
+  domain: string | null;
+  flightRisk: number; // 0-1
+  burnoutRisk: number; // 0-1
+}
+
+export interface LeadosEvent {
+  id: number;
+  type: string;
+  projectId: number | null;
+  personId: number | null;
+  domain: string | null;
+  payload: string | null;
+  createdAt: Date;
+}
+
+export type ProjectStatus = "planning" | "active" | "blocked" | "complete";
+export type MilestoneStatus = "pending" | "done" | "overdue" | "cancelled";
+export type DependencyType = "blocks" | "enables" | "shares_resource";
+
+export interface Project {
+  id: number;
+  name: string;
+  domain: string | null;
+  ownerId: number | null;
+  startDate: Date | null;
+  targetDate: Date | null;
+  status: ProjectStatus;
+  scopeStatement: string;
+  confidence: number; // base, self-assessed
+  impact: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Milestone {
+  id: number;
+  projectId: number;
   title: string;
-  level: DecisionLevel;
-  cycleTimeDays: number;
-  decidedAt: string; // ISO timestamp
+  dueDate: Date | null;
+  status: MilestoneStatus;
+  completedAt: Date | null;
 }
 
-// ---------------------------------------------------------------------------
-// Monte Carlo runway simulation
-// ---------------------------------------------------------------------------
-
-export interface MonteCarloMonthPoint {
-  month: number;
-  cash: number;
-  burn: number;
-  revenue: number;
+export interface Blocker {
+  id: number;
+  projectId: number;
+  title: string;
+  description: string;
+  severity: number; // 1-5
+  reportedBy: number | null;
+  assignedTo: number | null;
+  domain: string | null;
+  reportedAt: Date;
+  resolvedAt: Date | null;
 }
 
-export interface MonteCarloPath {
-  pathId: number;
-  monthly: MonteCarloMonthPoint[];
-  runwayMonth: number;
+export interface ProjectSnapshot {
+  id: number;
+  projectId: number;
+  snapshotAt: Date;
+  confidence: number;
+  status: string;
+  blockerCount: number;
+  milestoneDone: number;
+  milestoneTotal: number;
 }
 
-export interface RunwayHistogramBucket {
-  bucket: number; // bucket index, 0-23
+export interface CrossDependency {
+  id: number;
+  fromProject: number;
+  toProject: number;
+  type: DependencyType;
+  strength: number;
+}
+
+// -----------------------------------------------------------------------------
+// Execution Intelligence (Part 6)
+// -----------------------------------------------------------------------------
+
+export interface RiskFactor {
+  label: string;
+  impact: number; // negative = bad, positive = good, in confidence points
+  category:
+    | "milestone"
+    | "blocker"
+    | "people"
+    | "physics"
+    | "dependency"
+    | "signal";
+}
+
+export interface ProjectDeliveryModel {
+  projectId: number;
+  name: string;
+  status: ProjectStatus;
+  targetDate: Date | null;
+  baseConfidence: number;
+  computedConfidence: number;
+  confidenceDelta: number;
+  completionProbability: number;
+  expectedCompletionDate: Date | null;
+  lateByDays: number | null;
+  riskFactors: RiskFactor[];
+  physicsAnnotation: string;
+}
+
+export interface CriticalPathResult {
+  chain: number[];
+  chainLength: number;
+  cyclesDetected: number[][];
+  bottleneckProject: number | null;
+  bottleneckReason: string;
+}
+
+export interface BlockerHeatmapCell {
+  domain: string;
+  severity: number;
   count: number;
-  pct: number; // 0-100
+  blockerIds: number[];
 }
 
-export interface RunwayDistribution {
-  p5: number;
-  p10: number;
-  p25: number;
-  p50: number;
-  p75: number;
-  p90: number;
-  p95: number;
-  mean: number;
-  probabilityCritical: number; // fraction of paths with runway < 6 months
-  probabilityComfortable: number; // fraction of paths with runway > 18 months
-  histogram: RunwayHistogramBucket[]; // 24 buckets, 2 months each (0-48mo)
-  topPaths: MonteCarloPath[]; // representative p10/p25/p50/p75/p90 paths
-  seed: number;
+export interface OrgPhysicsState {
+  entropy: number;
+  energyBudget: number;
+  inertia: number;
+  momentum: number;
+  frictionIndex: number;
 }
 
-export interface RunwayInputs {
-  cashBalance: number;
-  burnRate: number;
-  revenue: number;
-  /** Monthly drift applied to burn rate. DESIGN PARAMETER default below. */
-  burnGrowth?: number;
-  /** Monthly stddev of burn-rate noise. DESIGN PARAMETER default below. */
-  burnVolatility?: number;
-  /** Monthly drift applied to revenue. DESIGN PARAMETER default below. */
-  revenueGrowth?: number;
-  /** Monthly stddev of revenue noise. DESIGN PARAMETER default below. */
-  revenueVolatility?: number;
-  /** Number of simulated paths. Default 5000. */
-  paths?: number;
-  /** Simulation horizon in months. Default 60. */
-  maxMonths?: number;
-  /** String hashed via hashSeed() for reproducibility. */
-  seedKey?: string;
-}
-
-// ---------------------------------------------------------------------------
-// Unit economics
-// ---------------------------------------------------------------------------
-
-export type UnitEconomicsHealth = "strong" | "adequate" | "weak" | "unknown";
-
-export interface UnitEconomics {
-  cac: number | null;
-  ltv: number | null;
-  ltvCacRatio: number | null;
-  paybackMonths: number | null;
-  grossMargin: number | null;
-  netRevenueRetention: number | null;
-  arpu: number | null;
-  burnMultiple: number | null;
-  ruleOf40Score: number | null;
-  unitEconomicsHealth: UnitEconomicsHealth;
-}
-
-// ---------------------------------------------------------------------------
-// Fundraising readiness
-// ---------------------------------------------------------------------------
-
-export type RaiseTiming =
-  | "raise_now"
-  | "raise_in_3_months"
-  | "raise_in_6_months"
-  | "not_ready"
-  | "no_need";
-
-export interface FundraisingReadiness {
-  readinessScore: number; // 0-100
-  raiseNowOrWait: RaiseTiming;
-  strengthSignals: string[]; // max 4
-  weaknessSignals: string[]; // max 4
-  optimalRaiseWindowMonths: number;
-  diligenceRisks: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Aggregate report
-// ---------------------------------------------------------------------------
-
-export interface FinancialIntelligenceReport {
-  runway: RunwayDistribution;
-  unitEconomics: UnitEconomics;
-  fundraisingReadiness: FundraisingReadiness;
-  financialRiskPosterior: number;
-  financialHealthScore: number;
-  latestMetrics: Record<string, MetricSnapshot>;
+export interface ExecutionIntelligenceReport {
+  executionHealthScore: number;
+  deliveryConfidence: ProjectDeliveryModel[];
+  criticalPath: CriticalPathResult;
+  blockerHeatmap: BlockerHeatmapCell[][];
+  momentumIndex: number;
+  velocityTrend: "accelerating" | "stable" | "decelerating";
+  physicsState: OrgPhysicsState;
+  atRiskProjects: ProjectDeliveryModel[];
   generatedAt: string;
+}
+
+export type ProjectAnomalyType = "structural_break" | "trend_reversal";
+
+export interface ProjectAnomaly {
+  projectId: number;
+  type: ProjectAnomalyType;
+  detectedAt: string;
+  detail: string;
+  magnitude: number;
 }

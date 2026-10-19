@@ -1,45 +1,44 @@
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { blockers } from "@/db/schema";
+import { blockers as blockersTable } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-// PATCH resolves a blocker by stamping resolved_at. Other editable fields
-// (assignedTo, severity) may also be passed through.
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const blockerId = Number(id);
-  if (!Number.isInteger(blockerId)) {
-    return Response.json({ error: "Invalid blocker id" }, { status: 400 });
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const blockerId = Number(id);
+    if (!Number.isFinite(blockerId)) {
+      return Response.json({ error: "Invalid blocker id" }, { status: 400 });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const patch: Record<string, unknown> = {};
+
+    // Default action for this route per spec: resolve the blocker.
+    if (body?.resolve !== false) {
+      patch.resolvedAt = sql`now()`;
+    }
+    if ("severity" in (body ?? {})) patch.severity = body.severity;
+    if ("assignedTo" in (body ?? {})) patch.assignedTo = body.assignedTo;
+    if ("description" in (body ?? {})) patch.description = body.description;
+
+    const [updated] = await db
+      .update(blockersTable)
+      .set(patch)
+      .where(eq(blockersTable.id, blockerId))
+      .returning();
+
+    if (!updated) {
+      return Response.json({ error: "Blocker not found" }, { status: 404 });
+    }
+
+    return Response.json(updated);
+  } catch (err) {
+    console.error("PATCH /api/execution/blockers/[id] failed", err);
+    return Response.json({ error: "Failed to update blocker" }, { status: 500 });
   }
-
-  const body = await request.json().catch(() => ({}));
-
-  const updates: Partial<typeof blockers.$inferInsert> = {};
-  if (body?.resolved === true) {
-    updates.resolvedAt = new Date();
-  } else if (body?.resolved === false) {
-    updates.resolvedAt = null;
-  }
-  if (typeof body?.assignedTo === "number") updates.assignedTo = body.assignedTo;
-  if (typeof body?.severity === "number") {
-    updates.severity = Math.max(1, Math.min(5, Math.round(body.severity)));
-  }
-
-  if (Object.keys(updates).length === 0) {
-    // Default behaviour: PATCH with no recognizable fields resolves the blocker.
-    updates.resolvedAt = new Date();
-  }
-
-  const [updated] = await db
-    .update(blockers)
-    .set(updates)
-    .where(eq(blockers.id, blockerId))
-    .returning();
-
-  if (!updated) {
-    return Response.json({ error: "Blocker not found" }, { status: 404 });
-  }
-
-  return Response.json(updated);
 }

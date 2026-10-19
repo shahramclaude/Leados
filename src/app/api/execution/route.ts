@@ -1,35 +1,30 @@
-import { loadExecutionInputs } from "@/lib/orchestrator";
-import { runExecutionIntelligence } from "@/lib/executionIntelligence";
+import { generateExecutionIntelligenceReport, loadExecutionDomain } from "@/lib/orchestrator";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const inputs = await loadExecutionInputs();
-    const report = runExecutionIntelligence(
-      inputs.projects,
-      inputs.milestones,
-      inputs.blockers,
-      inputs.crossDependencies,
-      inputs.people,
-      inputs.events,
-      new Date(),
-    );
-
-    // The report is returned alongside the raw entities so the Execution
-    // view can render the Kanban board / detail panels without a second
-    // round trip. These extra keys do not collide with the
-    // ExecutionIntelligenceReport shape.
+    // The ExecutionIntelligenceReport is the computed core payload. The view
+    // additionally needs lightweight raw context (owners, milestones,
+    // blockers, dependency edges) to render the DAG, table, and detail
+    // panel, so we bundle both under one response.
+    const [report, domain] = await Promise.all([
+      generateExecutionIntelligenceReport(),
+      loadExecutionDomain(),
+    ]);
     return Response.json({
-      ...report,
-      projects: inputs.projects,
-      milestones: inputs.milestones,
-      blockers: inputs.blockers,
-      crossDependencies: inputs.crossDependencies,
-      people: inputs.people,
+      report,
+      projects: domain.projects,
+      milestones: domain.milestones,
+      blockers: domain.blockers,
+      crossDependencies: domain.crossDeps,
+      people: domain.people,
     });
-  } catch (error) {
-    console.error("GET /api/execution failed", error);
-    return Response.json({ error: "Failed to compute execution intelligence" }, { status: 500 });
+  } catch (err) {
+    console.error("GET /api/execution failed", err);
+    return Response.json(
+      { error: "Failed to generate execution intelligence report" },
+      { status: 500 },
+    );
   }
 }

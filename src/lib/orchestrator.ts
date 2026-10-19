@@ -1,133 +1,181 @@
-// src/lib/orchestrator.ts
+// =============================================================================
+// Leados — Orchestrator
+// -----------------------------------------------------------------------------
+// Not present in this checkout (Parts 1-5 missing). Rebuilt at the scope
+// needed to wire Part 6 (Execution Intelligence) to real data: loads rows via
+// Drizzle, calls physics.ts + beliefFabric.ts (quoted signatures below), and
+// hands fully-typed arrays to the pure executionIntelligence.ts module.
 //
-// Full orchestration pass: takes an already-computed BeliefFabricResult
-// (produced by beliefFabric.runBeliefFabric in agentCore STEP 1) and layers
-// rule evaluation, domain health rollups, project/decision summaries, and
-// per-person flight-risk scoring on top of it.
+// physics.ts exports (quoted exactly from src/lib/physics.ts):
+//   export function measureOrgEntropy(events: LeadosEvent[], people: PersonRecord[]): number
+//   export function computeLeadershipEnergyBudget(events: LeadosEvent[], people: PersonRecord[]): number
+// =============================================================================
 
-import { gte } from "drizzle-orm";
-import type { db as defaultDb } from "@/db";
-import { decisions as decisionsTable, events as eventsTable, people as peopleTable, projects as projectsTable } from "@/db/schema";
+import { db } from "@/db";
+import {
+  blockers as blockersTable,
+  crossDependencies as crossDepsTable,
+  leadosEvents as eventsTable,
+  milestones as milestonesTable,
+  people as peopleTable,
+  projectSnapshots as snapshotsTable,
+  projects as projectsTable,
+} from "@/db/schema";
+import { computeLeadershipEnergyBudget, measureOrgEntropy } from "./physics";
+import { computeExecutionRiskPosterior } from "./beliefFabric";
+import { buildExecutionIntelligenceReport } from "./executionIntelligence";
 import type {
-  BeliefFabricResult,
-  DecisionSummary,
-  Domain,
-  DomainHealthScore,
+  Blocker,
+  CrossDependency,
+  ExecutionIntelligenceReport,
   LeadosEvent,
-  OrchestratorResult,
-  ProjectSummary,
+  Milestone,
+  PersonRecord,
+  Project,
+  ProjectSnapshot,
 } from "./types";
-import { DOMAINS, LATENT_NODE_DOMAIN } from "./types";
-import { evaluateRules } from "./ruleEngine";
-import { daysBetween } from "./temporal";
 
-type Database = typeof defaultDb;
-
-function computeDomainHealth(beliefs: BeliefFabricResult): Record<string, DomainHealthScore> {
-  const result: Record<string, DomainHealthScore> = {};
-  for (const domain of DOMAINS) {
-    const nodesInDomain = (Object.keys(LATENT_NODE_DOMAIN) as Array<keyof typeof LATENT_NODE_DOMAIN>).filter(
-      (node) => LATENT_NODE_DOMAIN[node] === domain,
-    );
-    const maxP = nodesInDomain.reduce((acc, node) => Math.max(acc, beliefs.posteriors[node].p), 0);
-    const score = Math.round(Math.max(0, Math.min(100, (1 - maxP) * 100)));
-    result[domain] = { domain, score, trend: "stable" };
-  }
-  return result;
+function toProject(row: typeof projectsTable.$inferSelect): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    domain: row.domain,
+    ownerId: row.ownerId,
+    startDate: row.startDate,
+    targetDate: row.targetDate,
+    status: (row.status as Project["status"]) ?? "planning",
+    scopeStatement: row.scopeStatement ?? "",
+    confidence: row.confidence ?? 50,
+    impact: row.impact ?? 3,
+    createdAt: row.createdAt ?? new Date(),
+    updatedAt: row.updatedAt ?? new Date(),
+  };
 }
 
-async function loadRecentEvents(db: Database, now: Date, days = 30): Promise<LeadosEvent[]> {
-  const cutoff = new Date(now.getTime() - days * 86_400_000);
-  const rows = await db.select().from(eventsTable).where(gte(eventsTable.occurredAt, cutoff));
-  return rows.map((r) => ({
-    id: String(r.id),
-    type: r.type,
-    occurredAt: r.occurredAt,
-    personId: r.personId ?? undefined,
-    teamId: r.teamId ?? undefined,
-    projectId: r.projectId ?? undefined,
-    domain: r.domain ?? undefined,
-    weight: r.weight ?? 1,
-    data: (r.data as Record<string, unknown>) ?? undefined,
-  }));
+function toMilestone(row: typeof milestonesTable.$inferSelect): Milestone {
+  return {
+    id: row.id,
+    projectId: row.projectId as number,
+    title: row.title,
+    dueDate: row.dueDate,
+    status: (row.status as Milestone["status"]) ?? "pending",
+    completedAt: row.completedAt,
+  };
 }
 
-function computePersonFlightRisk(
-  personId: string,
-  events: LeadosEvent[],
-  basePosterior: number,
-  now: Date,
-): number {
-  const personEvents = events.filter(
-    (e) => String(e.personId) === personId && daysBetween(e.occurredAt, now) <= 30,
-  );
-  const negativeSignals = personEvents.filter((e) =>
-    ["sentiment.negative", "comp.flag", "attrition.peer_departure", "negative_sentiment", "compensation_flag"].some(
-      (t) => e.type.includes(t),
-    ),
-  ).length;
-  // Each negative signal nudges this person's individual estimate above the
-  // org-wide base posterior; capped at 0.95.
-  const adjusted = basePosterior + negativeSignals * 0.08;
-  return Math.min(0.95, Math.max(0, adjusted));
+function toBlocker(row: typeof blockersTable.$inferSelect): Blocker {
+  return {
+    id: row.id,
+    projectId: row.projectId as number,
+    title: row.title,
+    description: row.description ?? "",
+    severity: row.severity ?? 2,
+    reportedBy: row.reportedBy,
+    assignedTo: row.assignedTo,
+    domain: row.domain,
+    reportedAt: row.reportedAt ?? new Date(),
+    resolvedAt: row.resolvedAt,
+  };
 }
 
-export async function runFullOrchestration(
-  db: Database,
-  beliefs: BeliefFabricResult,
-  now: Date,
-  cycleId?: string | null,
-): Promise<OrchestratorResult> {
-  const events = await loadRecentEvents(db, now);
+function toCrossDep(row: typeof crossDepsTable.$inferSelect): CrossDependency {
+  return {
+    id: row.id,
+    fromProject: row.fromProject as number,
+    toProject: row.toProject as number,
+    type: row.type as CrossDependency["type"],
+    strength: row.strength ?? 1,
+  };
+}
 
-  const evaluated = await evaluateRules(db, beliefs, events, now, { cycleId });
-  const findings = evaluated.map((e) => e.finding).filter((f): f is NonNullable<typeof f> => f !== null);
+function toPerson(row: typeof peopleTable.$inferSelect): PersonRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    domain: row.domain,
+    flightRisk: row.flightRisk ?? 0,
+    burnoutRisk: row.burnoutRisk ?? 0,
+  };
+}
 
-  const domainHealth = computeDomainHealth(beliefs);
+function toEvent(row: typeof eventsTable.$inferSelect): LeadosEvent {
+  return {
+    id: row.id,
+    type: row.type,
+    projectId: row.projectId,
+    personId: row.personId,
+    domain: row.domain,
+    payload: row.payload,
+    createdAt: row.createdAt ?? new Date(),
+  };
+}
 
-  const peopleRows = await db.select().from(peopleTable);
-  const flightRiskByPerson: OrchestratorResult["flightRiskByPerson"] = {};
-  for (const person of peopleRows) {
-    const p = computePersonFlightRisk(String(person.id), events, beliefs.posteriors.flightRisk.p, now);
-    flightRiskByPerson[String(person.id)] = { personId: String(person.id), name: person.name, p };
-  }
+function toSnapshot(row: typeof snapshotsTable.$inferSelect): ProjectSnapshot {
+  return {
+    id: row.id,
+    projectId: row.projectId as number,
+    snapshotAt: row.snapshotAt ?? new Date(),
+    confidence: row.confidence ?? 0,
+    status: row.status ?? "",
+    blockerCount: row.blockerCount ?? 0,
+    milestoneDone: row.milestoneDone ?? 0,
+    milestoneTotal: row.milestoneTotal ?? 0,
+  };
+}
 
-  const projectRows = await db.select().from(projectsTable);
-  const projects: ProjectSummary[] = projectRows.map((p) => ({
-    id: p.id,
-    name: p.name,
-    domain: (p.domain ?? "execution") as Domain,
-    deliveryConfidence: p.deliveryConfidence ?? 80,
-    previousDeliveryConfidence: p.previousDeliveryConfidence ?? 80,
-    targetDate: p.targetDate ? new Date(p.targetDate).toISOString() : null,
-  }));
-
-  const decisionRows = await db.select().from(decisionsTable);
-  const decisions: DecisionSummary[] = decisionRows.map((d) => ({
-    id: d.id,
-    title: d.title,
-    domain: (d.domain ?? "strategy") as Domain,
-    confidence: d.confidence ?? 50,
-    deadline: d.deadline ? new Date(d.deadline).toISOString() : null,
-    status: d.status ?? "open",
-  }));
-
-  const narrative = [
-    beliefs.dominantRiskDetail,
-    `Cascade risk is at ${Math.round(beliefs.cascadeRisk.p * 100)}% (confidence ${Math.round(
-      beliefs.cascadeRisk.confidence * 100,
-    )}%).`,
-    `${findings.length} finding(s) generated this cycle across ${new Set(findings.map((f) => f.domain)).size} domain(s).`,
-  ];
+export async function loadExecutionDomain() {
+  const [projectRows, milestoneRows, blockerRows, crossDepRows, peopleRows, eventRows, snapshotRows] =
+    await Promise.all([
+      db.select().from(projectsTable),
+      db.select().from(milestonesTable),
+      db.select().from(blockersTable),
+      db.select().from(crossDepsTable),
+      db.select().from(peopleTable),
+      db.select().from(eventsTable),
+      db.select().from(snapshotsTable),
+    ]);
 
   return {
-    beliefs,
-    findings,
-    domainHealth,
-    projects,
-    decisions,
-    flightRiskByPerson,
-    narrative,
-    generatedAt: now.toISOString(),
+    projects: projectRows.map(toProject),
+    milestones: milestoneRows.map(toMilestone),
+    blockers: blockerRows.map(toBlocker),
+    crossDeps: crossDepRows.map(toCrossDep),
+    people: peopleRows.map(toPerson),
+    events: eventRows.map(toEvent),
+    snapshots: snapshotRows.map(toSnapshot),
   };
+}
+
+/**
+ * generateExecutionIntelligenceReport()
+ * Loads all execution-domain rows, computes org entropy / leadership energy
+ * budget via physics.ts, derives the execution-risk posterior via
+ * beliefFabric.ts, then builds the full ExecutionIntelligenceReport via the
+ * pure executionIntelligence.ts module.
+ */
+export async function generateExecutionIntelligenceReport(): Promise<ExecutionIntelligenceReport> {
+  const domain = await loadExecutionDomain();
+  const now = new Date();
+
+  const orgEntropy = measureOrgEntropy(domain.events, domain.people);
+  const energyBudget = computeLeadershipEnergyBudget(domain.events, domain.people);
+  const executionRiskPosterior = computeExecutionRiskPosterior(
+    domain.projects,
+    domain.milestones,
+    domain.blockers,
+  );
+
+  return buildExecutionIntelligenceReport({
+    projects: domain.projects,
+    milestones: domain.milestones,
+    blockers: domain.blockers,
+    crossDeps: domain.crossDeps,
+    people: domain.people,
+    events: domain.events,
+    snapshots: domain.snapshots,
+    orgEntropy,
+    energyBudget,
+    executionRiskPosterior,
+    now,
+  });
 }
