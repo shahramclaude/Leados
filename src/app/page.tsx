@@ -1,5 +1,7 @@
-import CockpitView from "@/views/CockpitView";
+import CockpitDashboard from "@/components/CockpitDashboard";
+
+export const dynamic = "force-dynamic";
 
 export default function HomePage() {
-  return <CockpitView />;
+  return <CockpitDashboard />;
 }

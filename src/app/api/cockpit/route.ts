@@ -1,74 +1,56 @@
-import { db } from "@/db";
-import * as schema from "@/db/schema";
-import { ensureBaselineData } from "@/lib/seed";
-import { withErrorHandling, jsonOk } from "@/lib/api";
+/**
+ * GET /api/cockpit — single aggregate endpoint for the dashboard shell.
+ * Fetches everything the UI needs in one round trip: the brain's current
+ * findings, domain metrics, org physics snapshot, causal cascades, and
+ * the most recent autonomous run record (if any).
+ */
+
 import { desc } from "drizzle-orm";
-import { LATENT_NODES, defaultObservables, computePosteriors, computeCascadeRisk } from "@/lib/beliefFabric";
-import { generateMorningBrief } from "@/lib/agentCycle";
-import { buildCriticalPath } from "@/lib/strategicIntel";
-import { runMonteCarloRunway } from "@/lib/financialIntel";
+import { db } from "@/db";
+import { brainRuns } from "@/db/schema";
+import { ensureBaselineData } from "@/lib/seed";
+import { load, count } from "@/lib/store";
+import { project, run } from "@/lib/eventBrain";
+import { detectCascades } from "@/lib/causalInference";
+import { DOMAIN_KEYS, DOMAIN_LABELS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Single aggregate endpoint for the cockpit shell. Fetches every
- * cross-domain number the Command Center needs in ONE round trip so
- * CockpitView can render with zero additional fetches once this
- * resolves (data flows through AppContext afterwards).
- */
-export const GET = withErrorHandling("cockpit", async (_req, requestId) => {
-  await ensureBaselineData(db);
+export async function GET() {
+  try {
+    await ensureBaselineData();
+    const [events, eventCount, lastRuns] = await Promise.all([
+      load(),
+      count(),
+      db.select().from(brainRuns).orderBy(desc(brainRuns.runAt)).limit(1),
+    ]);
 
-  const [people, findings, hypotheses, projects, playbookInstances, lastRuns] = await Promise.all([
-    db.select().from(schema.people),
-    db.select().from(schema.findings).orderBy(desc(schema.findings.createdAt)),
-    db.select().from(schema.hypotheses),
-    db.select().from(schema.projects),
-    db.select().from(schema.playbookInstances),
-    db.select().from(schema.agentCycleRuns).orderBy(desc(schema.agentCycleRuns.completedAt)).limit(1),
-  ]);
+    const now = new Date();
+    const P = project(events, now);
+    const findings = run(P, now);
+    const cascades = detectCascades(P.ruleStates, now);
 
-  const posteriors = computePosteriors(defaultObservables());
-  const cascadeRisk = computeCascadeRisk(posteriors);
+    const topFindings = findings.findings.slice(0, 8);
 
-  const criticalPath = buildCriticalPath(
-    projects.map((p) => ({ id: p.id, name: p.name, durationDays: p.durationDays, dependencies: p.dependencies })),
-  );
-
-  const runway = runMonteCarloRunway({ cashBalance: 1_800_000, burnRate: 180_000, revenue: 70_000, revenueGrowth: 0.04 }, 500, 42);
-
-  const atRiskPeople = people.filter((p) => p.flightRiskScore > 0.5);
-  const openFindings = findings.filter((f) => f.status === "open");
-  const openHypotheses = hypotheses.filter((h) => h.status === "open");
-
-  const brief = generateMorningBrief({
-    openFindings: openFindings.length,
-    criticalPeopleAtRisk: atRiskPeople.filter((p) => p.isCritical).length,
-    cascadeRisk,
-  });
-
-  return jsonOk(
-    {
-      people,
-      findings,
-      hypotheses,
-      projects,
-      playbookInstances,
-      lastAgentRun: lastRuns[0] ?? null,
-      belief: { nodes: LATENT_NODES, posteriors, cascadeRisk },
-      criticalPath,
-      runway,
-      brief,
-      summary: {
-        peopleCount: people.length,
-        atRiskPeopleCount: atRiskPeople.length,
-        openFindingsCount: openFindings.length,
-        openHypothesesCount: openHypotheses.length,
-        projectsCount: projects.length,
-      },
-    },
-    requestId,
-  );
-});
-
-export const revalidate = 0;
+    return Response.json({
+      ok: true,
+      now: now.toISOString(),
+      eventCount,
+      domains: DOMAIN_KEYS.map((key) => ({ ...P.domainMetrics[key], label: DOMAIN_LABELS[key] })),
+      orgHealthScore: findings.orgHealthScore,
+      riskProfile: findings.riskProfile,
+      dominantDomain: findings.dominantDomain,
+      physicsSummary: findings.physicsSummary,
+      uncertaintyCount: findings.uncertaintyCount,
+      orgPhysics: P.orgPhysicsState,
+      topFindings,
+      totalFindings: findings.findings.length,
+      cascades,
+      hypotheses: P.hypotheses.slice(0, 10),
+      lastAutonomousRun: lastRuns[0] ?? null,
+    });
+  } catch (err) {
+    console.error("[api/cockpit]", err);
+    return Response.json({ ok: false, error: err instanceof Error ? err.message : "unknown error" }, { status: 500 });
+  }
+}

@@ -1,65 +1,65 @@
-// localStorage persistence. One key, read/write guarded with try/catch.
-// Original to this delivery — new key (`leados-ptv:v1`) because this
-// workspace began from the default scaffold with no prior LeadOS state,
-// so claiming continuity with any other session's storage key would be false.
+/**
+ * src/lib/store.ts — append-only event log, Postgres-backed.
+ *
+ * AUDIT NOTE: the real repo's root `store.ts` is a localStorage-only
+ * implementation (`STORAGE_KEY = "leados-orgphysics-sandbox:data"`),
+ * which is exactly the "no persistence beyond localStorage" gap this
+ * Part 1 brief calls out as a problem to fix. This module keeps the same
+ * public shape (`load`, `append`, `appendAt`, `reset`, `hasData`) but
+ * backs it with the `events` table in Postgres via Drizzle, so the same
+ * log is readable from both the browser and every Next.js API route.
+ */
 
-import type { AppState, LeadosEvent } from './types';
-import { buildInitialState } from './seed';
+import { asc, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { events as eventsTable } from "@/db/schema";
+import type { LeadosEvent } from "./types";
 
-const KEY = 'leados-ptv:v1';
-let idCounter = Date.now();
-
-export function mintId(prefix: string): string {
-  idCounter += 1;
-  return `${prefix}_${idCounter.toString(36)}`;
+function rowToEvent(row: typeof eventsTable.$inferSelect): LeadosEvent {
+  return {
+    id: row.eventId,
+    ts: row.ts.toISOString(),
+    type: row.type,
+    data: row.data,
+    meta: row.seeded ? { seeded: true } : undefined,
+  };
 }
 
-export function load(today: Date): AppState {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) {
-      const fresh = buildInitialState(today);
-      save(fresh);
-      return fresh;
-    }
-    const parsed = JSON.parse(raw) as AppState;
-    if (!parsed || !Array.isArray(parsed.events) || !Array.isArray(parsed.roster)) {
-      throw new Error('malformed state');
-    }
-    return parsed;
-  } catch {
-    const fresh = buildInitialState(today);
-    save(fresh);
-    return fresh;
-  }
+let seq = 0;
+function nextId(): string {
+  seq += 1;
+  return "e-" + Date.now().toString(36) + "-" + String(seq).padStart(4, "0");
 }
 
-export function save(state: AppState): boolean {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(state));
-    return true;
-  } catch {
-    return false;
-  }
+export async function load(): Promise<LeadosEvent[]> {
+  const rows = await db.select().from(eventsTable).orderBy(asc(eventsTable.ts));
+  return rows.map(rowToEvent);
 }
 
-export function appendEvent(state: AppState, ev: Omit<LeadosEvent, 'id'> & { id?: string }): AppState {
-  const full: LeadosEvent = { id: ev.id ?? mintId('ev'), ts: ev.ts, type: ev.type, data: ev.data };
-  const next: AppState = { ...state, events: [...state.events, full] };
-  save(next);
-  return next;
+export async function append(type: string, data: Record<string, any>): Promise<LeadosEvent> {
+  const id = nextId();
+  const ts = new Date();
+  await db.insert(eventsTable).values({ eventId: id, ts, type, data, seeded: false });
+  return { id, ts: ts.toISOString(), type, data };
 }
 
-export function resetToSeed(today: Date): AppState {
-  const fresh = buildInitialState(today);
-  save(fresh);
-  return fresh;
+/** Seed-only backdating path. Every event produced here is marked seeded=true. */
+export async function appendAt(type: string, data: Record<string, any>, ts: string): Promise<LeadosEvent> {
+  const id = nextId();
+  await db.insert(eventsTable).values({ eventId: id, ts: new Date(ts), type, data, seeded: true });
+  return { id, ts, type, data, meta: { seeded: true } };
 }
 
-export function updateSettings(state: AppState, patch: Record<string, any>): AppState {
-  const next: AppState = { ...state, settings: { ...state.settings, ...patch } };
-  save(next);
-  return next;
+export async function reset(): Promise<void> {
+  await db.execute(sql`delete from ${eventsTable}`);
 }
 
-export const STORAGE_KEY = KEY;
+export async function hasData(): Promise<boolean> {
+  const rows = await db.select({ id: eventsTable.id }).from(eventsTable).limit(1);
+  return rows.length > 0;
+}
+
+export async function count(): Promise<number> {
+  const result = await db.select({ c: sql<number>`count(*)::int` }).from(eventsTable);
+  return result[0]?.c ?? 0;
+}
