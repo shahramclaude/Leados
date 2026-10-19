@@ -1,69 +1,75 @@
 // src/lib/narrativeIntel.ts
 //
-// Text-generation helpers used by synthesis.ts. Kept deterministic
-// (template-based, no external LLM calls) so the orchestrator pipeline
-// stays fast (<10s budget) and reproducible without adding npm dependencies
-// or outbound network calls.
-import type { BurnoutRiskResult, Domain, FlightRiskResult, NarrativeItem, OrgNetworkReport, Severity } from "@/lib/types";
+// BOOTSTRAP NOTE: no prior narrativeIntel.ts existed in the repository.
+// Template-based narrative generation: turns belief-fabric + causal-chain
+// output into plain-English findings. Original derivation; no external NLG
+// library, just string templates gated on thresholds (DESIGN PARAMETERS).
 
-function severityFromScore(score: number): Severity {
-  if (score >= 80) return 5;
-  if (score >= 60) return 4;
-  if (score >= 40) return 3;
-  if (score >= 20) return 2;
-  return 1;
-}
+import type { BeliefFabricResult, CausalEdge, LatentNodeId } from "./types";
 
-export function narrateTopFlightRisks(flightRisk: FlightRiskResult, limit = 3): NarrativeItem[] {
-  const sorted = [...flightRisk.scores].sort((a, b) => b.score - a.score).slice(0, limit);
-  return sorted
-    .filter((s) => s.score >= 40)
-    .map((s) => ({
-      id: `narrative:flight_risk:${s.personId}`,
-      title: `Elevated flight risk (person #${s.personId})`,
-      summary: `Person #${s.personId} shows a ${s.band} flight-risk score of ${s.score}/100. ${
-        s.drivers.length > 0 ? `Primary drivers: ${s.drivers.join("; ")}.` : "No single dominant driver identified."
-      }`,
-      domain: "risk" as Domain,
-      severity: severityFromScore(s.score),
-      relatedPersonIds: [s.personId],
-    }));
-}
+const SEVERITY_LABEL = (p: number): string => {
+  if (p >= 0.7) return "critical";
+  if (p >= 0.5) return "elevated";
+  if (p >= 0.3) return "watch";
+  return "nominal";
+};
 
-export function narrateTopBurnout(burnout: BurnoutRiskResult, limit = 3): NarrativeItem[] {
-  const sorted = [...burnout.scores].sort((a, b) => b.score - a.score).slice(0, limit);
-  return sorted
-    .filter((s) => s.score >= 40)
-    .map((s) => ({
-      id: `narrative:burnout:${s.personId}`,
-      title: `Burnout signal building (person #${s.personId})`,
-      summary: `Person #${s.personId} shows a ${s.band} burnout score of ${s.score}/100. ${
-        s.drivers.length > 0 ? `Primary drivers: ${s.drivers.join("; ")}.` : "No single dominant driver identified."
-      }`,
-      domain: "workload" as Domain,
-      severity: severityFromScore(s.score),
-      relatedPersonIds: [s.personId],
-    }));
-}
+const RISK_LABELS: Record<LatentNodeId, string> = {
+  flightRisk: "key-person flight risk",
+  burnoutRisk: "team burnout risk",
+  strategyRisk: "strategic drift risk",
+  executionRisk: "execution/delivery risk",
+  cultureRisk: "culture & psychological-safety risk",
+  financialRisk: "financial/runway risk",
+  innovationStall: "innovation stall risk",
+  decisionParalysis: "decision paralysis risk",
+  cascadeRisk: "cross-domain cascade risk",
+  leadershipEnergyDepletion: "leadership energy depletion",
+};
 
-export function narrateNetwork(network: OrgNetworkReport): NarrativeItem[] {
-  if (network.edges.length === 0) return [];
-  const causalEdges = network.edges.filter((e) => e.kind === "causal").sort((a, b) => b.weight - a.weight);
-  if (causalEdges.length === 0) return [];
-  const top = causalEdges[0];
-  return [
-    {
-      id: "narrative:network:top-causal-edge",
-      title: `Strongest cross-domain pattern: ${top.source} -> ${top.target}`,
-      summary: `The knowledge graph's strongest causal edge connects "${top.source.replace("domain:", "")}" to "${top.target.replace(
-        "domain:",
-        "",
-      )}" with weight ${Math.round(top.weight)}. Network density is ${network.density}, across ${network.nodes.length} nodes and ${
-        network.edges.length
-      } edges.`,
-      domain: "org",
-      severity: top.weight >= 70 ? 4 : 3,
-      relatedPersonIds: [],
-    },
-  ];
+export function generateNarrative(
+  beliefs: BeliefFabricResult,
+  causalEdges: CausalEdge[],
+): string[] {
+  const lines: string[] = [];
+
+  lines.push(
+    `Dominant risk: ${RISK_LABELS[beliefs.dominantRisk]} is ${SEVERITY_LABEL(
+      beliefs.posteriors[beliefs.dominantRisk].p,
+    )} (p=${(beliefs.posteriors[beliefs.dominantRisk].p * 100).toFixed(0)}%).`,
+  );
+
+  if (beliefs.cascadeRisk.p >= 0.5) {
+    lines.push(
+      `Cascade alert: multiple latent risks are compounding — cascade risk is ${SEVERITY_LABEL(
+        beliefs.cascadeRisk.p,
+      )} at p=${(beliefs.cascadeRisk.p * 100).toFixed(0)}%.`,
+    );
+  }
+
+  for (const nodeId of Object.keys(beliefs.posteriors) as LatentNodeId[]) {
+    if (nodeId === beliefs.dominantRisk || nodeId === "cascadeRisk") continue;
+    const marginal = beliefs.posteriors[nodeId];
+    if (marginal.p >= 0.6) {
+      lines.push(
+        `Secondary signal: ${RISK_LABELS[nodeId]} is also ${SEVERITY_LABEL(marginal.p)} (p=${(
+          marginal.p * 100
+        ).toFixed(0)}%).`,
+      );
+    }
+  }
+
+  for (const edge of causalEdges.slice(0, 5)) {
+    lines.push(
+      `Pattern: "${edge.from}" is empirically followed by "${edge.to}" ${(edge.probability * 100).toFixed(
+        0,
+      )}% of the time (n=${edge.support}).`,
+    );
+  }
+
+  if (lines.length === 1) {
+    lines.push("No elevated secondary risks or recurring causal patterns detected in this window.");
+  }
+
+  return lines;
 }

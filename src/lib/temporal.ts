@@ -1,37 +1,44 @@
-// ─────────────────────────────────────────────────────────────────────────
-// Shared time-decay utilities. Every probabilistic module (bayesianNetwork,
-// signalFusion, predictiveScoring, causalChain) uses the same recency model
-// so "how much does a 20-day-old signal matter" has one answer in the app.
-// ─────────────────────────────────────────────────────────────────────────
+// src/lib/temporal.ts
+//
+// BOOTSTRAP NOTE: no prior temporal.ts existed in the repository (see Part-1
+// read step). This is an original-derivation baseline implementation.
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-export function daysBetween(earlier: Date, later: Date): number {
-  return (later.getTime() - earlier.getTime()) / DAY_MS;
-}
-
-/**
- * Exponential recency decay.
- *
- * Formula: w(t) = 0.5 ^ (t / halfLife)
- *
- * This is the standard half-life decay formula (identical in form to
- * radioactive decay, and the same model used for recency weighting in
- * information-retrieval ranking). At t = halfLife, w = 0.5 exactly; the
- * weight approaches but never reaches 0 for finite t.
+/** Days between two dates (b - a), fractional. Original derivation:
+ * plain millisecond delta divided by ms-per-day.
  */
-export function recencyWeight(ageDays: number, halfLifeDays: number): number {
-  if (!Number.isFinite(ageDays) || ageDays <= 0) return 1;
-  if (halfLifeDays <= 0) return 0;
-  return Math.pow(0.5, ageDays / halfLifeDays);
+export function daysBetween(a: Date | string, b: Date | string): number {
+  const ta = new Date(a).getTime();
+  const tb = new Date(b).getTime();
+  return (tb - ta) / 86_400_000;
 }
 
-export function clamp(value: number, min: number, max: number): number {
-  if (Number.isNaN(value)) return min;
-  return Math.min(max, Math.max(min, value));
+export function isWithinDays(date: Date | string, now: Date, days: number): boolean {
+  const delta = daysBetween(date, now);
+  return delta >= 0 && delta <= days;
 }
 
-export function round(value: number, decimals: number): number {
-  const f = Math.pow(10, decimals);
-  return Math.round(value * f) / f;
+/** Exponential half-life recency weight. Original derivation (standard
+ * radioactive-decay analogue, not from a specific paper):
+ *   w(t) = 2^(-age/halfLife) = exp(-ln(2) * age / halfLife)
+ * age <= 0 (future-dated) clamps to weight 1.
+ */
+export function recencyWeight(date: Date | string, now: Date, halfLifeDays: number): number {
+  const age = daysBetween(date, now);
+  if (age <= 0) return 1;
+  return Math.exp(-Math.LN2 * (age / halfLifeDays));
+}
+
+export function clamp01(x: number): number {
+  if (Number.isNaN(x)) return 0;
+  return Math.max(0, Math.min(1, x));
+}
+
+export function clamp(x: number, min: number, max: number): number {
+  if (Number.isNaN(x)) return min;
+  return Math.max(min, Math.min(max, x));
+}
+
+export function mean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
 }

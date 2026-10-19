@@ -1,93 +1,216 @@
 // src/lib/knowledgeGraph.ts
 //
-// Stage 7 of the orchestration pipeline: org knowledge graph construction.
-//
-// Builds a lightweight graph of person/domain nodes connected by edges
-// derived from active findings (person -> domain) and high-confidence
-// causal links (domain -> domain). Needs person names, so it reads the
-// `people` table directly (a genuinely new query vs. prior stages, which
-// only operate on signals/findings).
-import { inArray } from "drizzle-orm";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import * as schema from "@/db/schema";
-import type { CausalChainResult, GraphEdge, GraphNode, OrgNetworkReport, SignalFusionResult } from "@/lib/types";
+// BOOTSTRAP NOTE: no prior knowledgeGraph.ts existed in the repository.
+// This file defines the full node/edge/RelationType taxonomy (re-exported
+// from types.ts, the single shared type root — no parallel hierarchy) plus
+// CRUD helpers, and the Part-1-mandated `updateBeliefNodes`.
 
-type Db = NodePgDatabase<typeof schema>;
+import { and, desc, eq, gte, inArray } from "drizzle-orm";
+import { db } from "@/db";
+import { memoryEdges, memoryNodes } from "@/db/schema";
+import type {
+  BeliefFabricResult,
+  LatentNodeId,
+  MemoryEdge,
+  MemoryNode,
+  MemoryNodeType,
+  RelationType,
+} from "./types";
 
-export async function buildKnowledgeGraph(
-  db: Db,
-  now: Date,
-  fusion: SignalFusionResult,
-  causal: CausalChainResult,
-): Promise<OrgNetworkReport> {
-  const personIds = fusion.fusedSignals.map((f) => f.personId);
-  const people = personIds.length > 0 ? await db.select().from(schema.people).where(inArray(schema.people.id, personIds)) : [];
-  const peopleById = new Map(people.map((p) => [p.id, p]));
+export type { MemoryNode, MemoryEdge, MemoryNodeType, RelationType } from "./types";
 
-  const nodes: GraphNode[] = [];
-  const nodeIds = new Set<string>();
-  const edges: GraphEdge[] = [];
+type DbClient = typeof db;
 
-  const addNode = (node: GraphNode) => {
-    if (!nodeIds.has(node.id)) {
-      nodeIds.add(node.id);
-      nodes.push(node);
-    }
-  };
-
-  const domainsSeen = new Set<string>();
-
-  for (const fused of fusion.fusedSignals) {
-    const person = peopleById.get(fused.personId);
-    const personNodeId = `person:${fused.personId}`;
-    addNode({
-      id: personNodeId,
-      type: "person",
-      label: person?.name ?? `Person ${fused.personId}`,
-      weight: fused.riskScore,
-    });
-
-    for (const domain of fused.contributingDomains) {
-      const domainNodeId = `domain:${domain}`;
-      if (!domainsSeen.has(domain)) {
-        domainsSeen.add(domain);
-        addNode({ id: domainNodeId, type: "domain", label: domain, weight: 0 });
-      }
-      edges.push({
-        source: personNodeId,
-        target: domainNodeId,
-        weight: fused.riskScore,
-        kind: "finding",
-      });
-    }
-  }
-
-  for (const chain of causal.chains) {
-    const fromId = `domain:${chain.fromDomain}`;
-    const toId = `domain:${chain.toDomain}`;
-    if (!domainsSeen.has(chain.fromDomain)) {
-      domainsSeen.add(chain.fromDomain);
-      addNode({ id: fromId, type: "domain", label: chain.fromDomain, weight: 0 });
-    }
-    if (!domainsSeen.has(chain.toDomain)) {
-      domainsSeen.add(chain.toDomain);
-      addNode({ id: toId, type: "domain", label: chain.toDomain, weight: 0 });
-    }
-    edges.push({
-      source: fromId,
-      target: toId,
-      weight: chain.confidence * 100,
-      kind: "causal",
-    });
-  }
-
-  const n = nodes.length;
-  const density = n > 1 ? Math.round((edges.length / (n * (n - 1))) * 1000) / 1000 : 0;
-
+function toMemoryNode(row: typeof memoryNodes.$inferSelect): MemoryNode {
   return {
-    computedAt: now.toISOString(),
-    nodes,
-    edges,
-    density,
+    id: row.id,
+    type: row.type as MemoryNodeType,
+    key: row.key,
+    label: row.label,
+    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    createdAt: row.createdAt ?? new Date(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Node / edge CRUD
+// ---------------------------------------------------------------------------
+
+export async function findNodeByKey(key: string, dbClient: DbClient = db): Promise<MemoryNode | null> {
+  const rows = await dbClient.select().from(memoryNodes).where(eq(memoryNodes.key, key)).limit(1);
+  return rows[0] ? toMemoryNode(rows[0]) : null;
+}
+
+export async function upsertNode(
+  type: MemoryNodeType,
+  key: string,
+  label: string,
+  metadata: Record<string, unknown>,
+  dbClient: DbClient = db,
+): Promise<MemoryNode> {
+  const existing = await findNodeByKey(key, dbClient);
+  if (existing) {
+    const merged = { ...existing.metadata, ...metadata };
+    const rows = await dbClient
+      .update(memoryNodes)
+      .set({ label, metadata: merged })
+      .where(eq(memoryNodes.id, existing.id))
+      .returning();
+    return toMemoryNode(rows[0]);
+  }
+  const rows = await dbClient
+    .insert(memoryNodes)
+    .values({ type, key, label, metadata })
+    .returning();
+  return toMemoryNode(rows[0]);
+}
+
+export async function createEdge(
+  fromNodeId: number,
+  toNodeId: number,
+  relation: RelationType,
+  metadata: Record<string, unknown> = {},
+  dbClient: DbClient = db,
+): Promise<MemoryEdge> {
+  const rows = await dbClient
+    .insert(memoryEdges)
+    .values({ fromNodeId, toNodeId, relation, metadata })
+    .returning();
+  const row = rows[0];
+  return {
+    id: row.id,
+    fromNodeId: row.fromNodeId,
+    toNodeId: row.toNodeId,
+    relation: row.relation as RelationType,
+    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    createdAt: row.createdAt ?? new Date(),
+  };
+}
+
+export async function edgeExists(
+  fromNodeId: number,
+  toNodeId: number,
+  relation: RelationType,
+  dbClient: DbClient = db,
+): Promise<boolean> {
+  const rows = await dbClient
+    .select({ id: memoryEdges.id })
+    .from(memoryEdges)
+    .where(
+      and(
+        eq(memoryEdges.fromNodeId, fromNodeId),
+        eq(memoryEdges.toNodeId, toNodeId),
+        eq(memoryEdges.relation, relation),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function createFinding(
+  key: string,
+  label: string,
+  metadata: Record<string, unknown> = {},
+  dbClient: DbClient = db,
+): Promise<MemoryNode> {
+  return upsertNode("finding", key, label, metadata, dbClient);
+}
+
+export async function getRecentFindings(hours: number, dbClient: DbClient = db): Promise<MemoryNode[]> {
+  const cutoff = new Date(Date.now() - hours * 3_600_000);
+  const rows = await dbClient
+    .select()
+    .from(memoryNodes)
+    .where(and(eq(memoryNodes.type, "finding"), gte(memoryNodes.createdAt, cutoff)))
+    .orderBy(desc(memoryNodes.createdAt));
+  return rows.map(toMemoryNode);
+}
+
+// ---------------------------------------------------------------------------
+// Part 1: updateBeliefNodes — refresh the knowledge graph from the belief
+// fabric's output after every belief revision.
+// ---------------------------------------------------------------------------
+
+function beliefKey(nodeId: LatentNodeId): string {
+  return `belief:${nodeId}`;
+}
+
+/** DESIGN PARAMETER thresholds, taken verbatim from the task spec:
+ *  - cascadeRisk > 0.5 activates the "triggered" fan-in edges.
+ *  - a latent posterior > 0.6 is considered a cascade contributor.
+ */
+const CASCADE_TRIGGER_THRESHOLD = 0.5;
+const CASCADE_CONTRIBUTOR_THRESHOLD = 0.6;
+
+export async function updateBeliefNodes(
+  result: BeliefFabricResult,
+  dbClient: DbClient = db,
+): Promise<void> {
+  // 1) Find-or-create an "insight" MemoryNode per latent node, keyed
+  //    "belief:{nodeId}", and refresh its probability/confidence metadata.
+  const nodeIds = Object.keys(result.posteriors) as LatentNodeId[];
+  const insightNodes = new Map<LatentNodeId, MemoryNode>();
+
+  for (const nodeId of nodeIds) {
+    const marginal = result.posteriors[nodeId];
+    const node = await upsertNode(
+      "insight",
+      beliefKey(nodeId),
+      `Belief: ${nodeId}`,
+      {
+        probability: marginal.p,
+        confidence: marginal.confidence,
+        updatedAt: result.generatedAt,
+      },
+      dbClient,
+    );
+    insightNodes.set(nodeId, node);
+  }
+
+  // 2) cascadeRisk > 0.5 -> "triggered" edge from every latent node with
+  //    posterior > 0.6 to the cascadeRisk insight node.
+  if (result.cascadeRisk.p > CASCADE_TRIGGER_THRESHOLD) {
+    const cascadeNode = insightNodes.get("cascadeRisk");
+    if (cascadeNode) {
+      for (const nodeId of nodeIds) {
+        if (nodeId === "cascadeRisk") continue;
+        if (result.posteriors[nodeId].p > CASCADE_CONTRIBUTOR_THRESHOLD) {
+          const contributor = insightNodes.get(nodeId);
+          if (contributor && !(await edgeExists(contributor.id, cascadeNode.id, "triggered", dbClient))) {
+            await createEdge(
+              contributor.id,
+              cascadeNode.id,
+              "triggered",
+              { cascadeRiskAt: result.cascadeRisk.p },
+              dbClient,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  // 3) dominantRisk -> "caused" edge to every Finding node created in the
+  //    last 24h (provenance: "why is this finding showing?").
+  const dominantNode = insightNodes.get(result.dominantRisk);
+  if (dominantNode) {
+    const recentFindings = await getRecentFindings(24, dbClient);
+    for (const finding of recentFindings) {
+      if (!(await edgeExists(dominantNode.id, finding.id, "caused", dbClient))) {
+        await createEdge(
+          dominantNode.id,
+          finding.id,
+          "caused",
+          { dominantRiskDetail: result.dominantRiskDetail },
+          dbClient,
+        );
+      }
+    }
+  }
+}
+
+export async function getNodesByIds(ids: number[], dbClient: DbClient = db): Promise<MemoryNode[]> {
+  if (ids.length === 0) return [];
+  const rows = await dbClient.select().from(memoryNodes).where(inArray(memoryNodes.id, ids));
+  return rows.map(toMemoryNode);
 }
