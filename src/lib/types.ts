@@ -1,181 +1,177 @@
-// =============================================================================
-// Leados — shared domain types
-// Part 6 adds Project / Milestone / Blocker / CrossDependency / execution
-// intelligence types. Earlier-part types (Person, LeadosEvent) are rebuilt
-// here at minimal fidelity since this checkout does not include Parts 1-5.
-// =============================================================================
+// Shared type contracts for the Leados command-center intelligence layer.
+// These types are used on both server (engine, API routes) and client
+// (hooks, components) — keep this file free of server-only imports.
 
 export type Domain =
-  | "engineering"
+  | "people"
+  | "strategic"
+  | "financial"
+  | "execution"
+  | "signals"
+  | "legal"
   | "product"
-  | "design"
-  | "sales"
-  | "marketing"
-  | "support"
-  | "finance"
-  | "operations";
+  | "culture";
 
 export const DOMAINS: Domain[] = [
-  "engineering",
+  "people",
+  "strategic",
+  "financial",
+  "execution",
+  "signals",
+  "legal",
   "product",
-  "design",
-  "sales",
-  "marketing",
-  "support",
-  "finance",
-  "operations",
+  "culture",
 ];
 
-export interface PersonRecord {
-  id: number;
-  name: string;
-  domain: string | null;
-  flightRisk: number; // 0-1
-  burnoutRisk: number; // 0-1
-}
+export type Severity = 1 | 2 | 3 | 4 | 5;
 
-export interface LeadosEvent {
-  id: number;
-  type: string;
-  projectId: number | null;
-  personId: number | null;
-  domain: string | null;
-  payload: string | null;
-  createdAt: Date;
-}
-
-export type ProjectStatus = "planning" | "active" | "blocked" | "complete";
-export type MilestoneStatus = "pending" | "done" | "overdue" | "cancelled";
-export type DependencyType = "blocks" | "enables" | "shares_resource";
-
-export interface Project {
-  id: number;
-  name: string;
-  domain: string | null;
-  ownerId: number | null;
-  startDate: Date | null;
-  targetDate: Date | null;
-  status: ProjectStatus;
-  scopeStatement: string;
-  confidence: number; // base, self-assessed
-  impact: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface Milestone {
-  id: number;
-  projectId: number;
+export interface Finding {
+  id: string;
+  domain: Domain;
+  severity: Severity;
   title: string;
-  dueDate: Date | null;
-  status: MilestoneStatus;
-  completedAt: Date | null;
-}
-
-export interface Blocker {
-  id: number;
-  projectId: number;
-  title: string;
-  description: string;
-  severity: number; // 1-5
-  reportedBy: number | null;
-  assignedTo: number | null;
-  domain: string | null;
-  reportedAt: Date;
-  resolvedAt: Date | null;
-}
-
-export interface ProjectSnapshot {
-  id: number;
-  projectId: number;
-  snapshotAt: Date;
-  confidence: number;
-  status: string;
-  blockerCount: number;
-  milestoneDone: number;
-  milestoneTotal: number;
-}
-
-export interface CrossDependency {
-  id: number;
-  fromProject: number;
-  toProject: number;
-  type: DependencyType;
-  strength: number;
-}
-
-// -----------------------------------------------------------------------------
-// Execution Intelligence (Part 6)
-// -----------------------------------------------------------------------------
-
-export interface RiskFactor {
-  label: string;
-  impact: number; // negative = bad, positive = good, in confidence points
-  category:
-    | "milestone"
-    | "blocker"
-    | "people"
-    | "physics"
-    | "dependency"
-    | "signal";
-}
-
-export interface ProjectDeliveryModel {
-  projectId: number;
-  name: string;
-  status: ProjectStatus;
-  targetDate: Date | null;
-  baseConfidence: number;
-  computedConfidence: number;
-  confidenceDelta: number;
-  completionProbability: number;
-  expectedCompletionDate: Date | null;
-  lateByDays: number | null;
-  riskFactors: RiskFactor[];
-  physicsAnnotation: string;
-}
-
-export interface CriticalPathResult {
-  chain: number[];
-  chainLength: number;
-  cyclesDetected: number[][];
-  bottleneckProject: number | null;
-  bottleneckReason: string;
-}
-
-export interface BlockerHeatmapCell {
-  domain: string;
-  severity: number;
-  count: number;
-  blockerIds: number[];
-}
-
-export interface OrgPhysicsState {
-  entropy: number;
-  energyBudget: number;
-  inertia: number;
-  momentum: number;
-  frictionIndex: number;
-}
-
-export interface ExecutionIntelligenceReport {
-  executionHealthScore: number;
-  deliveryConfidence: ProjectDeliveryModel[];
-  criticalPath: CriticalPathResult;
-  blockerHeatmap: BlockerHeatmapCell[][];
-  momentumIndex: number;
-  velocityTrend: "accelerating" | "stable" | "decelerating";
-  physicsState: OrgPhysicsState;
-  atRiskProjects: ProjectDeliveryModel[];
-  generatedAt: string;
-}
-
-export type ProjectAnomalyType = "structural_break" | "trend_reversal";
-
-export interface ProjectAnomaly {
-  projectId: number;
-  type: ProjectAnomalyType;
-  detectedAt: string;
   detail: string;
-  magnitude: number;
+  probability: number | null;
+  confidence: number;
+  createdAt: string; // ISO timestamp
+  playbookId: string | null;
+  dismissed: boolean;
 }
+
+export interface Decision {
+  id: string;
+  title: string;
+  domain: Domain;
+  deadline: string | null; // ISO timestamp
+  status: "open" | "done";
+}
+
+export interface Hypothesis {
+  id: string;
+  title: string;
+  domain: Domain;
+  status: "open" | "confirmed" | "refuted";
+  resolvesAt: string | null;
+  confidence: number;
+}
+
+export interface Playbook {
+  id: string;
+  title: string;
+  domain: Domain;
+  status: "triggered" | "in_progress" | "done";
+  findingId: string | null;
+}
+
+export interface Person {
+  id: string;
+  name: string;
+  role: string;
+  domain: Domain;
+  riskScore: number;
+  notes: string;
+}
+
+export interface LatentNode {
+  id: string;
+  label: string;
+  domain: Domain;
+  posterior: number;
+  confidence: number;
+  updatedAt: string;
+}
+
+export interface Briefing {
+  id: string;
+  date: string;
+  executiveSummary: string;
+  bullets: string[];
+  fullText: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  domain: Domain;
+  severity: Severity;
+  title: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface OrchestratorResult {
+  generatedAt: string;
+  domainHealth: Record<Domain, number>;
+  priorDomainHealth: Record<Domain, number>;
+  findings: Finding[];
+  decisions: Decision[];
+  hypotheses: Hypothesis[];
+  playbooks: Playbook[];
+  people: Person[];
+  latentNodes: LatentNode[];
+  cascadeRisk: number;
+  orgHealthScore: number;
+  systemConfidence: number;
+  situationalAssessment: string;
+  briefing: Briefing | null;
+}
+
+export type AgentStatus = "running" | "idle" | "degraded";
+
+export interface AgentCycleResult {
+  status: AgentStatus;
+  lastRun: string;
+  nextRun: string;
+  playbooksTriggeredThisWeek: number;
+  hypothesesOpen: number;
+  hypothesesConfirmed: number;
+  hypothesesRefuted: number;
+}
+
+export interface CommandPaletteItem {
+  type: "route" | "person" | "decision" | "blocker" | "finding" | "hypothesis";
+  id: string;
+  label: string;
+  sublabel: string;
+  severity: number | null;
+  route: string;
+}
+
+export type SidePanelType =
+  | "person"
+  | "project"
+  | "finding"
+  | "decision"
+  | "hypothesis"
+  | null;
+
+export interface SidePanelState {
+  type: SidePanelType;
+  entityId: string | null;
+}
+
+// SSE event payload shapes -----------------------------------------------
+
+export interface FindingsDeltaEvent {
+  type: "findings_delta";
+  findings: Finding[];
+  domainHealth: Record<Domain, number>;
+  orgHealthScore: number;
+}
+
+export interface BeliefUpdateEvent {
+  type: "belief_update";
+  cascadeRisk: number;
+  systemConfidence: number;
+  latentNodes: LatentNode[];
+}
+
+export interface AgentCycleCompleteEvent {
+  type: "agent_cycle_complete";
+  agentStatus: AgentCycleResult;
+}
+
+export type RealtimeServerEvent =
+  | FindingsDeltaEvent
+  | BeliefUpdateEvent
+  | AgentCycleCompleteEvent;

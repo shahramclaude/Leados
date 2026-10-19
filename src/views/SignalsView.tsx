@@ -1,68 +1,87 @@
 "use client";
 
-import { useState } from "react";
-import { useAppContext } from "@/lib/AppContext";
-import { DOMAINS, type DomainKey } from "@/lib/types";
-import { Card, ErrorPanel, LoadingPanel, SevBadge, StatusPill, ViewHeader } from "@/components/ui";
+import { useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useApp } from "@/lib/AppContext";
+import { DOMAIN_META, DOMAIN_ORDER, severityColor, timeAgo } from "@/lib/domains";
+import DomainView from "@/views/_DomainView";
 
 export default function SignalsView() {
-  const { result, error } = useAppContext();
-  const [filter, setFilter] = useState<DomainKey | "all">("all");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const lowConfidenceFilter = searchParams.get("filter") === "low-confidence";
+  const { orchestratorResult } = useApp();
 
-  if (error && !result) return <ErrorPanel message={error} />;
-  if (!result) return <LoadingPanel />;
+  const lowConfidenceNodes = useMemo(
+    () => (orchestratorResult ? orchestratorResult.latentNodes.filter((n) => n.confidence < 0.5) : []),
+    [orchestratorResult],
+  );
 
-  const findings = result.findings
-    .filter((f) => f.status === "open")
-    .filter((f) => filter === "all" || f.domain === filter)
-    .slice()
-    .sort((a, b) => b.sev - a.sev || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (!lowConfidenceFilter) {
+    return <DomainView domain="signals" description="External market, competitive, and leading-indicator signals." />;
+  }
 
   return (
-    <div>
-      <ViewHeader title="Signal Board" subtitle="Every open finding across every domain, worst severity first." />
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setFilter("all")}
-          className={`rounded border px-2 py-1 text-xs ${filter === "all" ? "border-indigo-600 text-indigo-300" : "border-slate-700 text-slate-400"}`}
-        >
-          All ({result.findings.filter((f) => f.status === "open").length})
-        </button>
-        {DOMAINS.filter((d) => d !== "signals" && d !== "about").map((d) => {
-          const health = result.domainHealth[d];
-          return (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setFilter(d)}
-              className={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${filter === d ? "border-indigo-600 text-indigo-300" : "border-slate-700 text-slate-400"}`}
-            >
-              {d}
-              <StatusPill status={health.status} />
-            </button>
-          );
-        })}
+    <div className="mx-auto max-w-3xl space-y-4 p-4">
+      <header className="rounded border border-amber-700/50 bg-amber-950/20 p-4">
+        <h1 className="font-mono text-xs tracking-widest text-amber-400">LOW-CONFIDENCE BELIEF NODES</h1>
+        <p className="mt-1 text-xs text-slate-400">
+          These are the latent variables in the belief network with the weakest evidential support. Log more
+          data in these domains to raise system confidence.
+        </p>
+      </header>
+      <div className="space-y-2">
+        {lowConfidenceNodes.length === 0 ? (
+          <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-panel-raised)] p-4 text-center font-mono text-xs text-slate-500">
+            ALL NODES ABOVE 50% CONFIDENCE
+          </div>
+        ) : (
+          lowConfidenceNodes.map((n) => (
+            <div key={n.id} className="rounded border border-[var(--border-subtle)] bg-[var(--bg-panel-raised)] p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: DOMAIN_META[n.domain].color }} />
+                  <span className="text-sm text-slate-100">{n.label}</span>
+                </div>
+                <span className="font-mono text-[10px] text-slate-500">{timeAgo(n.updatedAt)}</span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <div className="font-mono text-[9px] text-slate-500">POSTERIOR</div>
+                  <div className="h-1.5 w-full overflow-hidden rounded bg-slate-800">
+                    <div className="h-full bg-indigo-500" style={{ width: `${n.posterior * 100}%` }} />
+                  </div>
+                </div>
+                <div>
+                  <div className="font-mono text-[9px] text-slate-500">CONFIDENCE</div>
+                  <div className="h-1.5 w-full overflow-hidden rounded bg-slate-800">
+                    <div
+                      className="h-full"
+                      style={{ width: `${n.confidence * 100}%`, backgroundColor: severityColor(n.confidence < 0.3 ? 5 : 4) }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
-
-      <Card>
-        {findings.length === 0 && <p className="text-sm text-slate-500">No findings for this filter.</p>}
-        <ul className="divide-y divide-slate-800">
-          {findings.map((f) => (
-            <li key={f.id} className="flex items-center justify-between gap-3 py-2">
-              <div>
-                <p className="text-sm text-slate-200">{f.title}</p>
-                <p className="text-xs text-slate-500">{f.detail}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="text-xs uppercase text-slate-500">{f.domain}</span>
-                <SevBadge sev={f.sev} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      {orchestratorResult && (
+        <div className="space-y-2">
+          <h2 className="font-mono text-[10px] tracking-widest text-slate-500">ALL DOMAINS</h2>
+          <div className="flex flex-wrap gap-2">
+            {DOMAIN_ORDER.map((d) => (
+              <button
+                key={d}
+                onClick={() => DOMAIN_META[d].route && router.push(DOMAIN_META[d].route!)}
+                className="rounded border border-[var(--border-subtle)] bg-[var(--bg-panel-raised)] px-2 py-1 font-mono text-[10px] text-slate-400"
+              >
+                {DOMAIN_META[d].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

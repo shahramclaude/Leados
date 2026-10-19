@@ -1,43 +1,66 @@
 import type { Domain } from "@/lib/types";
 
-export const DOMAINS: Domain[] = [
+// Static metadata for each domain axis on the radar + nav badges.
+// Colors are drawn from the design-system palette in globals.css
+// (see --domain-* custom properties).
+export const DOMAIN_META: Record<
+  Domain,
+  { label: string; short: string; color: string; route: string | null }
+> = {
+  people: { label: "People", short: "PPL", color: "var(--domain-people)", route: "/people" },
+  strategic: { label: "Strategic", short: "STR", color: "var(--domain-strategic)", route: "/strategic" },
+  financial: { label: "Financial", short: "FIN", color: "var(--domain-financial)", route: "/financial" },
+  execution: { label: "Execution", short: "EXE", color: "var(--domain-execution)", route: "/execution" },
+  signals: { label: "Signals", short: "SIG", color: "var(--domain-signals)", route: "/signals" },
+  legal: { label: "Legal", short: "LEG", color: "var(--domain-legal)", route: null },
+  product: { label: "Product", short: "PRD", color: "var(--domain-product)", route: null },
+  culture: { label: "Culture", short: "CUL", color: "var(--domain-culture)", route: null },
+};
+
+export const DOMAIN_ORDER: Domain[] = [
   "people",
-  "decisions",
-  "metrics",
+  "strategic",
+  "financial",
   "execution",
-  "finance",
+  "signals",
+  "legal",
   "product",
   "culture",
-  "risk",
 ];
 
-export const DOMAIN_LABELS: Record<Domain, string> = {
-  people: "People",
-  decisions: "Decisions",
-  metrics: "Metrics",
-  execution: "Execution",
-  finance: "Finance",
-  product: "Product",
-  culture: "Culture",
-  risk: "Risk",
-};
-
-export function isDomain(value: string): value is Domain {
-  return (DOMAINS as string[]).includes(value);
+export function severityColor(sev: number): string {
+  if (sev >= 5) return "var(--sev-5)";
+  if (sev === 4) return "var(--sev-4)";
+  if (sev === 3) return "var(--sev-3)";
+  return "var(--sev-low)";
 }
 
-export const SEVERITY_COLORS: Record<number, string> = {
-  1: "#64748b",
-  2: "#3b82f6",
-  3: "#eab308",
-  4: "#f97316",
-  5: "#ef4444",
-};
+export function healthColor(score: number): string {
+  if (score < 40) return "var(--sev-5)";
+  if (score < 70) return "var(--sev-4)";
+  return "var(--good)";
+}
 
-export const SEVERITY_LABELS: Record<number, string> = {
-  1: "Info",
-  2: "Minor",
-  3: "Moderate",
-  4: "High",
-  5: "Critical",
-};
+export function timeUntil(iso: string | null | undefined, nowMs: number = Date.now()): string {
+  if (!iso) return "—";
+  const diffMs = new Date(iso).getTime() - nowMs;
+  if (diffMs <= 0) return "overdue";
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return `in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `in ${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `in ${days}d`;
+}
+
+export function timeAgo(iso: string | null | undefined, nowMs: number = Date.now()): string {
+  if (!iso) return "—";
+  const diffMs = nowMs - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}

@@ -1,46 +1,50 @@
-import { logDuration } from "@/lib/apiUtils";
+import { subscribe } from "@/lib/server/engine";
+import type { RealtimeServerEvent } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-const ROUTE = "api/events/stream";
-const HEARTBEAT_MS = 15_000;
+function sseLine(event: string, data: unknown) {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
 
-/**
- * Minimal Server-Sent-Events endpoint. Pushes a `connected` event immediately
- * and a `heartbeat` event on an interval, so clients (see useOrchestrator)
- * can show a live/offline indicator without needing a message broker.
- */
 export async function GET() {
-  const start = Date.now();
   const encoder = new TextEncoder();
-  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let unsubscribe: (() => void) | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream({
     start(controller) {
-      controller.enqueue(
-        encoder.encode(`event: connected\ndata: ${JSON.stringify({ connectedAt: new Date().toISOString() })}\n\n`)
-      );
+      controller.enqueue(encoder.encode(sseLine("connected", { ok: true, at: new Date().toISOString() })));
+
+      const onEvent = (event: RealtimeServerEvent) => {
+        try {
+          controller.enqueue(encoder.encode(sseLine(event.type, event)));
+        } catch {
+          // controller already closed
+        }
+      };
+      unsubscribe = subscribe(onEvent);
+
       heartbeat = setInterval(() => {
         try {
-          controller.enqueue(
-            encoder.encode(`event: heartbeat\ndata: ${JSON.stringify({ ts: new Date().toISOString() })}\n\n`)
-          );
+          controller.enqueue(encoder.encode(sseLine("heartbeat", { at: new Date().toISOString() })));
         } catch {
-          clearInterval(heartbeat);
+          // controller already closed
         }
-      }, HEARTBEAT_MS);
+      }, 15000);
     },
     cancel() {
+      if (unsubscribe) unsubscribe();
       if (heartbeat) clearInterval(heartbeat);
     },
   });
 
-  logDuration(ROUTE, start);
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
