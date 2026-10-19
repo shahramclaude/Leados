@@ -1,181 +1,88 @@
-// =============================================================================
-// Leados — Orchestrator
-// -----------------------------------------------------------------------------
-// Not present in this checkout (Parts 1-5 missing). Rebuilt at the scope
-// needed to wire Part 6 (Execution Intelligence) to real data: loads rows via
-// Drizzle, calls physics.ts + beliefFabric.ts (quoted signatures below), and
-// hands fully-typed arrays to the pure executionIntelligence.ts module.
-//
-// physics.ts exports (quoted exactly from src/lib/physics.ts):
-//   export function measureOrgEntropy(events: LeadosEvent[], people: PersonRecord[]): number
-//   export function computeLeadershipEnergyBudget(events: LeadosEvent[], people: PersonRecord[]): number
-// =============================================================================
-
 import { db } from "@/db";
-import {
-  blockers as blockersTable,
-  crossDependencies as crossDepsTable,
-  leadosEvents as eventsTable,
-  milestones as milestonesTable,
-  people as peopleTable,
-  projectSnapshots as snapshotsTable,
-  projects as projectsTable,
-} from "@/db/schema";
-import { computeLeadershipEnergyBudget, measureOrgEntropy } from "./physics";
-import { computeExecutionRiskPosterior } from "./beliefFabric";
-import { buildExecutionIntelligenceReport } from "./executionIntelligence";
-import type {
-  Blocker,
-  CrossDependency,
-  ExecutionIntelligenceReport,
-  LeadosEvent,
-  Milestone,
-  PersonRecord,
-  Project,
-  ProjectSnapshot,
-} from "./types";
+import { metricDefs as metricDefsTable, metricValues as metricValuesTable, events as eventsTable } from "@/db/schema";
+import { runMetricsIntelligence } from "./metricsIntelligence";
+import { ingestObservables, type Observable } from "./beliefFabric";
+import type { Domain, LeadosEvent, MetricDef, MetricValue, MetricsIntelligenceReport } from "./types";
 
-function toProject(row: typeof projectsTable.$inferSelect): Project {
-  return {
-    id: row.id,
-    name: row.name,
-    domain: row.domain,
-    ownerId: row.ownerId,
-    startDate: row.startDate,
-    targetDate: row.targetDate,
-    status: (row.status as Project["status"]) ?? "planning",
-    scopeStatement: row.scopeStatement ?? "",
-    confidence: row.confidence ?? 50,
-    impact: row.impact ?? 3,
-    createdAt: row.createdAt ?? new Date(),
-    updatedAt: row.updatedAt ?? new Date(),
-  };
+// ---------------------------------------------------------------------------
+// orchestrator.ts — loads inputs from Postgres, runs the Metrics
+// Intelligence pipeline, and feeds the resulting composite domain scores
+// into the Belief Fabric as observables.
+// ---------------------------------------------------------------------------
+
+export async function loadMetricsIntelligenceInputs(): Promise<{
+  metricDefs: MetricDef[];
+  metricValues: MetricValue[];
+  events: LeadosEvent[];
+}> {
+  const [defRows, valueRows, eventRows] = await Promise.all([
+    db.select().from(metricDefsTable),
+    db.select().from(metricValuesTable),
+    db.select().from(eventsTable),
+  ]);
+
+  const metricDefsOut: MetricDef[] = defRows.map((r) => ({
+    id: r.id,
+    key: r.key,
+    name: r.name,
+    domain: r.domain as Domain,
+    unit: r.unit,
+    higherIsBetter: r.higherIsBetter,
+    target: r.target,
+    weight: r.weight,
+    description: r.description,
+  }));
+
+  const metricValuesOut: MetricValue[] = valueRows.map((r) => ({
+    id: r.id,
+    metricKey: r.metricKey,
+    value: r.value,
+    recordedAt: r.recordedAt,
+  }));
+
+  const eventsOut: LeadosEvent[] = eventRows.map((r) => ({
+    id: r.id,
+    type: r.type,
+    metricKey: r.metricKey,
+    domain: r.domain,
+    payload: r.payload,
+    occurredAt: r.occurredAt,
+  }));
+
+  return { metricDefs: metricDefsOut, metricValues: metricValuesOut, events: eventsOut };
 }
 
-function toMilestone(row: typeof milestonesTable.$inferSelect): Milestone {
-  return {
-    id: row.id,
-    projectId: row.projectId as number,
-    title: row.title,
-    dueDate: row.dueDate,
-    status: (row.status as Milestone["status"]) ?? "pending",
-    completedAt: row.completedAt,
-  };
-}
-
-function toBlocker(row: typeof blockersTable.$inferSelect): Blocker {
-  return {
-    id: row.id,
-    projectId: row.projectId as number,
-    title: row.title,
-    description: row.description ?? "",
-    severity: row.severity ?? 2,
-    reportedBy: row.reportedBy,
-    assignedTo: row.assignedTo,
-    domain: row.domain,
-    reportedAt: row.reportedAt ?? new Date(),
-    resolvedAt: row.resolvedAt,
-  };
-}
-
-function toCrossDep(row: typeof crossDepsTable.$inferSelect): CrossDependency {
-  return {
-    id: row.id,
-    fromProject: row.fromProject as number,
-    toProject: row.toProject as number,
-    type: row.type as CrossDependency["type"],
-    strength: row.strength ?? 1,
-  };
-}
-
-function toPerson(row: typeof peopleTable.$inferSelect): PersonRecord {
-  return {
-    id: row.id,
-    name: row.name,
-    domain: row.domain,
-    flightRisk: row.flightRisk ?? 0,
-    burnoutRisk: row.burnoutRisk ?? 0,
-  };
-}
-
-function toEvent(row: typeof eventsTable.$inferSelect): LeadosEvent {
-  return {
-    id: row.id,
-    type: row.type,
-    projectId: row.projectId,
-    personId: row.personId,
-    domain: row.domain,
-    payload: row.payload,
-    createdAt: row.createdAt ?? new Date(),
-  };
-}
-
-function toSnapshot(row: typeof snapshotsTable.$inferSelect): ProjectSnapshot {
-  return {
-    id: row.id,
-    projectId: row.projectId as number,
-    snapshotAt: row.snapshotAt ?? new Date(),
-    confidence: row.confidence ?? 0,
-    status: row.status ?? "",
-    blockerCount: row.blockerCount ?? 0,
-    milestoneDone: row.milestoneDone ?? 0,
-    milestoneTotal: row.milestoneTotal ?? 0,
-  };
-}
-
-export async function loadExecutionDomain() {
-  const [projectRows, milestoneRows, blockerRows, crossDepRows, peopleRows, eventRows, snapshotRows] =
-    await Promise.all([
-      db.select().from(projectsTable),
-      db.select().from(milestonesTable),
-      db.select().from(blockersTable),
-      db.select().from(crossDepsTable),
-      db.select().from(peopleTable),
-      db.select().from(eventsTable),
-      db.select().from(snapshotsTable),
-    ]);
-
-  return {
-    projects: projectRows.map(toProject),
-    milestones: milestoneRows.map(toMilestone),
-    blockers: blockerRows.map(toBlocker),
-    crossDeps: crossDepRows.map(toCrossDep),
-    people: peopleRows.map(toPerson),
-    events: eventRows.map(toEvent),
-    snapshots: snapshotRows.map(toSnapshot),
-  };
+export async function getMetricsIntelligenceReport(
+  now: Date = new Date(),
+): Promise<MetricsIntelligenceReport> {
+  const { metricDefs, metricValues, events } = await loadMetricsIntelligenceInputs();
+  return runMetricsIntelligence(metricDefs, metricValues, events, now);
 }
 
 /**
- * generateExecutionIntelligenceReport()
- * Loads all execution-domain rows, computes org entropy / leadership energy
- * budget via physics.ts, derives the execution-risk posterior via
- * beliefFabric.ts, then builds the full ExecutionIntelligenceReport via the
- * pure executionIntelligence.ts module.
+ * Runs the metrics intelligence pipeline and feeds each domain's composite
+ * score into the Belief Fabric as an observable. Confidence is derived from
+ * how many metrics backed the domain score (more metrics = more confidence),
+ * capped at 0.95.
  */
-export async function generateExecutionIntelligenceReport(): Promise<ExecutionIntelligenceReport> {
-  const domain = await loadExecutionDomain();
-  const now = new Date();
+export async function runOrchestrationPipeline(
+  now: Date = new Date(),
+): Promise<MetricsIntelligenceReport> {
+  const report = await getMetricsIntelligenceReport(now);
 
-  const orgEntropy = measureOrgEntropy(domain.events, domain.people);
-  const energyBudget = computeLeadershipEnergyBudget(domain.events, domain.people);
-  const executionRiskPosterior = computeExecutionRiskPosterior(
-    domain.projects,
-    domain.milestones,
-    domain.blockers,
-  );
-
-  return buildExecutionIntelligenceReport({
-    projects: domain.projects,
-    milestones: domain.milestones,
-    blockers: domain.blockers,
-    crossDeps: domain.crossDeps,
-    people: domain.people,
-    events: domain.events,
-    snapshots: domain.snapshots,
-    orgEntropy,
-    energyBudget,
-    executionRiskPosterior,
-    now,
+  const observables: Observable[] = Object.values(report.compositeScores).map((domainScore) => {
+    const metricCount = domainScore.metricsAboveTarget + domainScore.metricsBelowTarget;
+    const confidence = Math.min(0.95, 0.4 + metricCount * 0.1);
+    return {
+      key: `domain_score:${domainScore.domain}`,
+      value: domainScore.score,
+      confidence,
+      source: "metricsIntelligence",
+      observedAt: now,
+    };
   });
+
+  ingestObservables(observables);
+
+  return report;
 }

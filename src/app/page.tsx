@@ -16,12 +16,6 @@ export default async function HomePage() {
         <p className="mt-4 text-base text-slate-700">
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
-        <a
-          href="/knowledge"
-          className="mt-6 inline-block rounded-full bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
-        >
-          Open Knowledge Architecture →
-        </a>
       </section>
     </main>
   );

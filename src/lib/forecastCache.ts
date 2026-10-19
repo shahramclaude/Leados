@@ -1,26 +1,53 @@
-// Tiny in-memory cache shared across requests within the same server
-// process. Good enough for "cache for 1 hour server-side" semantics without
-// pulling in a cache dependency.
+import type { Forecast } from "./types";
 
-interface CacheEntry<T> {
-  value: T;
-  expiresAt: number;
+// ---------------------------------------------------------------------------
+// forecastCache.ts — process-local memoization for forecasts.
+//
+// Forecasting (especially Holt-Winters) is the most expensive step in the
+// pipeline. Since `runMetricsIntelligence` can be invoked repeatedly within
+// a short window (API route + orchestrator), we cache the last computed
+// forecast per metric key for a short TTL keyed off the input data
+// fingerprint (point count + last value + last timestamp) so a cache hit is
+// only returned when nothing has actually changed.
+// ---------------------------------------------------------------------------
+
+interface CacheEntry {
+  fingerprint: string;
+  forecast: Forecast;
+  cachedAt: number;
 }
 
-const store = new Map<string, CacheEntry<unknown>>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-export function cacheGet<T>(key: string): T | undefined {
-  const entry = store.get(key);
-  if (!entry) return undefined;
-  if (Date.now() > entry.expiresAt) {
-    store.delete(key);
-    return undefined;
-  }
-  return entry.value as T;
+const cache = new Map<string, CacheEntry>();
+
+export function buildFingerprint(
+  pointCount: number,
+  lastValue: number,
+  lastRecordedAt: Date,
+): string {
+  return `${pointCount}:${lastValue}:${lastRecordedAt.getTime()}`;
 }
 
-export function cacheSet<T>(key: string, value: T, ttlMs: number): void {
-  store.set(key, { value, expiresAt: Date.now() + ttlMs });
+export function getCachedForecast(
+  metricKey: string,
+  fingerprint: string,
+): Forecast | null {
+  const entry = cache.get(metricKey);
+  if (!entry) return null;
+  if (entry.fingerprint !== fingerprint) return null;
+  if (Date.now() - entry.cachedAt > CACHE_TTL_MS) return null;
+  return entry.forecast;
 }
 
-export const ONE_HOUR_MS = 60 * 60 * 1000;
+export function setCachedForecast(
+  metricKey: string,
+  fingerprint: string,
+  forecast: Forecast,
+): void {
+  cache.set(metricKey, { fingerprint, forecast, cachedAt: Date.now() });
+}
+
+export function clearForecastCache(): void {
+  cache.clear();
+}

@@ -1,59 +1,74 @@
 import { db } from "@/db";
 import { metricDefs, metricValues } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
-import { cachedJson, jsonError, isRecord } from "@/lib/api";
+import { runOrchestrationPipeline } from "@/lib/orchestrator";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
-  const defs = await db.select().from(metricDefs).orderBy(metricDefs.label);
-  const withSeries = await Promise.all(
-    defs.map(async (d) => {
-      const rows = await db
-        .select()
-        .from(metricValues)
-        .where(eq(metricValues.metricKey, d.key))
-        .orderBy(desc(metricValues.recordedAt))
-        .limit(12);
-      return { ...d, series: rows.reverse() };
-    })
-  );
-  return cachedJson(withSeries);
+export async function GET() {
+  try {
+    const report = await runOrchestrationPipeline(new Date());
+
+    const defs = await db.select().from(metricDefs);
+    const allValues = await db.select().from(metricValues);
+
+    // Last 14 points per metric so the grid's sparklines don't require an
+    // extra round-trip per card. Full history is available via
+    // /api/metrics/series/:key for the detail panel.
+    const recentValues: Record<string, { recordedAt: string; value: number }[]> = {};
+    for (const v of allValues) {
+      if (!recentValues[v.metricKey]) recentValues[v.metricKey] = [];
+      recentValues[v.metricKey].push({ recordedAt: v.recordedAt.toISOString(), value: v.value });
+    }
+    for (const key of Object.keys(recentValues)) {
+      recentValues[key] = recentValues[key]
+        .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
+        .slice(-14);
+    }
+
+    return Response.json({ ...report, metricDefs: defs, recentValues });
+  } catch (err) {
+    console.error("GET /api/metrics failed", err);
+    return Response.json({ error: "Failed to build metrics intelligence report" }, { status: 500 });
+  }
 }
 
-export async function POST(request: Request): Promise<Response> {
-  const body: unknown = await request.json();
-  if (!isRecord(body) || typeof body.key !== "string" || body.key.trim() === "") {
-    return jsonError("key is required");
+interface PostBody {
+  metricKey?: string;
+  value?: number;
+  recordedAt?: string;
+}
+
+export async function POST(request: Request) {
+  let body: PostBody;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
-  if (typeof body.label !== "string" || body.label.trim() === "") {
-    return jsonError("label is required");
+
+  const { metricKey, value } = body;
+  if (!metricKey || typeof metricKey !== "string") {
+    return Response.json({ error: "metricKey is required" }, { status: 400 });
   }
-  if (typeof body.domain !== "string" || body.domain.trim() === "") {
-    return jsonError("domain is required");
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return Response.json({ error: "value must be a finite number" }, { status: 400 });
   }
-  const [created] = await db
-    .insert(metricDefs)
-    .values({
-      key: body.key,
-      label: body.label,
-      domain: body.domain,
-      unit: typeof body.unit === "string" ? body.unit : "",
-      target: typeof body.target === "number" ? String(body.target) : "0",
-      benchmark: typeof body.benchmark === "number" ? String(body.benchmark) : "0",
-      direction: typeof body.direction === "string" ? body.direction : "higher_better",
-    })
+
+  const def = await db.select().from(metricDefs).where(eq(metricDefs.key, metricKey)).limit(1);
+  if (def.length === 0) {
+    return Response.json({ error: `Unknown metricKey '${metricKey}' — no matching metric_defs row` }, { status: 400 });
+  }
+
+  const recordedAt = body.recordedAt ? new Date(body.recordedAt) : new Date();
+  if (Number.isNaN(recordedAt.getTime())) {
+    return Response.json({ error: "recordedAt must be a valid date" }, { status: 400 });
+  }
+
+  const [inserted] = await db
+    .insert(metricValues)
+    .values({ metricKey, value, recordedAt })
     .returning();
-  return cachedJson(created, { status: 201 });
-}
 
-export async function PATCH(request: Request): Promise<Response> {
-  const body: unknown = await request.json();
-  if (!isRecord(body) || typeof body.key !== "string") return jsonError("key is required");
-  const patch: Partial<typeof metricDefs.$inferInsert> = {};
-  if (typeof body.target === "number") patch.target = String(body.target);
-  if (typeof body.benchmark === "number") patch.benchmark = String(body.benchmark);
-  const [updated] = await db.update(metricDefs).set(patch).where(eq(metricDefs.key, body.key)).returning();
-  if (!updated) return jsonError("metric not found", 404);
-  return cachedJson(updated);
+  return Response.json({ metricValue: inserted }, { status: 201 });
 }

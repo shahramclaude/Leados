@@ -1,185 +1,188 @@
-// Part 8 — Knowledge Architecture
-// Shared types for the knowledge graph, institutional memory digest, and the
-// adaptive playbooks engine. Kept framework-agnostic so both server (API
-// routes) and client (views) can import from here.
-
-export type NodeType =
-  | "person"
-  | "decision"
-  | "finding"
-  | "insight"
-  | "belief"
-  | "playbook"
-  | "domain";
-
-export type RelationType =
-  | "caused"
-  | "resolved"
-  | "informed"
-  | "triggered"
-  | "blocked"
-  | "created";
+// ---------------------------------------------------------------------------
+// Shared domain types for the Metrics Intelligence OS (Part 9).
+// ---------------------------------------------------------------------------
 
 export type Domain =
-  | "people"
-  | "risk"
-  | "finance"
-  | "strategy"
-  | "operations"
-  | "culture"
-  | "customer"
-  | "compliance";
+  | "pipeline"
+  | "marketing"
+  | "engagement"
+  | "retention"
+  | "revenue"
+  | "ops";
 
-export const ALL_DOMAINS: Domain[] = [
-  "people",
-  "risk",
-  "finance",
-  "strategy",
-  "operations",
-  "culture",
-  "customer",
-  "compliance",
+export const DOMAINS: Domain[] = [
+  "pipeline",
+  "marketing",
+  "engagement",
+  "retention",
+  "revenue",
+  "ops",
 ];
+
+export interface MetricDef {
+  id: number;
+  key: string;
+  name: string;
+  domain: Domain;
+  unit: string;
+  higherIsBetter: boolean;
+  target: number | null;
+  weight: number;
+  description: string;
+}
+
+export interface MetricValue {
+  id: number;
+  metricKey: string;
+  value: number;
+  recordedAt: Date;
+}
+
+export interface LeadosEvent {
+  id: number;
+  type: string;
+  metricKey: string | null;
+  domain: string | null;
+  payload: Record<string, unknown>;
+  occurredAt: Date;
+}
 
 export interface MemoryNode {
   id: number;
   key: string;
-  type: NodeType;
   label: string;
-  domain: Domain | string;
-  severity: number | null;
-  tags: string[];
+  domain: string;
+  linkedMetricKeys: string[];
+  content: string;
   importance: number;
-  metadata: Record<string, unknown>;
-  createdAt: string; // ISO
-  updatedAt: string; // ISO
 }
 
-export interface MemoryEdge {
-  id: number;
-  sourceId: number;
-  targetId: number;
-  relation: RelationType;
-  weight: number;
-  createdAt: string; // ISO
+// --------------------------- Forecasting ----------------------------------
+
+export type ForecastMethod =
+  | "holt-winters"
+  | "double-exponential"
+  | "simple-exponential";
+
+export interface ForecastPoint {
+  /** ISO date string */
+  date: string;
+  p10: number;
+  p50: number;
+  p90: number;
 }
 
-export interface GraphSubgraph {
-  nodes: MemoryNode[];
-  edges: MemoryEdge[];
+export interface Forecast {
+  metricKey: string;
+  method: ForecastMethod;
   generatedAt: string;
-  windowDays: number;
+  horizonDays: number;
+  points: ForecastPoint[];
+  /** accuracy = clamp(100 - MAPE, 0, 100) computed on last 30d in-sample fit */
+  accuracy: number;
+  mape: number;
+  parameters: Record<string, number>;
 }
 
-// ---------------------------------------------------------------------------
-// Findings / beliefs (minimal shapes — these would normally come from the
-// earlier parts of the Leados pipeline: rule evaluation + belief fabric).
-// ---------------------------------------------------------------------------
-export interface Finding {
-  id: number;
-  key: string;
-  ruleKey: string;
-  title: string;
+// --------------------------- Anomalies --------------------------------------
+
+export type AnomalyType = "point" | "structural_break";
+
+export interface Anomaly {
+  metricKey: string;
+  type: AnomalyType;
+  detectedAt: string;
+  value: number;
+  expected: number;
+  zScore: number | null;
+  cusum: { sHigh: number; sLow: number; threshold: number } | null;
   description: string;
-  domain: Domain | string;
-  severity: number; // 1-5
-  tags: string[];
-  status: "open" | "resolved";
-  createdAt: string;
-  resolvedAt: string | null;
 }
 
-export interface BeliefFabricResult {
-  posteriors: Record<string, number>;
-  priorShift?: number;
-  cascadeRisk?: { p: number; description?: string };
+// --------------------------- Correlation ------------------------------------
+
+export interface CorrelationPair {
+  metricA: string;
+  metricB: string;
+  r: number;
+  n: number;
 }
 
-// ---------------------------------------------------------------------------
-// Root cause analysis
-// ---------------------------------------------------------------------------
-export interface RootCauseAnalysis {
-  finding: MemoryNode;
-  causalChain: MemoryNode[];
-  rootNodes: MemoryNode[];
-  contributingDecisions: MemoryNode[];
-  affectedPeople: MemoryNode[];
-  confidenceDecay: number;
-  narrative: string;
+export interface CorrelationMatrix {
+  pairs: CorrelationPair[];
+  significantPairs: CorrelationPair[];
+  interpretation: string;
 }
 
-// ---------------------------------------------------------------------------
-// Pattern matching
-// ---------------------------------------------------------------------------
-export interface PatternMatch {
-  node: MemoryNode;
-  similarity: number;
-  resolvedHow: string | null;
-  resolutionDays: number | null;
+export type CausalConfidence = "tentative" | "moderate" | "strong";
+
+export interface MetricCausalHypothesis {
+  leadMetric: string;
+  lagMetric: string;
+  lagDays: number;
+  correlationAtLag: number;
+  confidence: CausalConfidence;
+  interpretation: string;
 }
 
-// ---------------------------------------------------------------------------
-// Institutional memory digest
-// ---------------------------------------------------------------------------
-export interface DecisionLedgerEntry {
-  id: number;
-  key: string;
-  label: string;
-  domain: Domain | string;
-  outcome: boolean | null;
-  daysToOutcome: number | null;
-  confidenceAtDecision: number;
-  confidenceError: number | null; // |actual - predicted|
+// --------------------------- Health & scoring -------------------------------
+
+export type MetricStatus = "healthy" | "warning" | "critical";
+export type TrendDirection = "strong_up" | "up" | "flat" | "down" | "strong_down";
+
+export interface MetricHealthFull {
+  metricKey: string;
+  currentValue: number;
+  previousValue: number | null;
+  target: number | null;
+  vsTargetPct: number | null;
+  status: MetricStatus;
+  trend: TrendDirection;
+  trendArrow: "↑" | "↗" | "→" | "↘" | "↓";
+  slope: number;
+  r2: number;
+  recencyWeightedScore: number;
+  lastUpdated: string;
+  dataPoints: number;
 }
 
-export interface RepeatingPattern {
-  ruleKey: string;
-  label: string;
-  domain: Domain | string;
-  occurrences: number;
-  avgSeverity: number;
-  avgResolutionDays: number | null;
-  trend: "worsening" | "improving" | "flat";
+export interface DomainMetricScore {
+  domain: Domain;
+  score: number;
+  metricsAboveTarget: number;
+  metricsBelowTarget: number;
+  trend: "improving" | "stable" | "degrading";
+  drivers: string[];
 }
 
-export interface KnowledgeGap {
-  domain: Domain | string;
-  nodeCount: number;
-  mostRecentNodeAgeDays: number | null;
-  reason: "too_few_nodes" | "stale" | "both";
+// --------------------------- Alerts -----------------------------------------
+
+export type MetricAlertType =
+  | "anomaly"
+  | "target_miss"
+  | "trend_reversal"
+  | "structural_break"
+  | "forecast_threshold";
+
+export interface MetricAlert {
+  metricKey: string;
+  type: MetricAlertType;
+  severity: 1 | 2 | 3 | 4 | 5;
+  message: string;
+  value: number;
+  threshold: number | null;
+  detectedAt: Date;
 }
 
-export interface InstitutionalMemoryDigest {
-  decisionsWithOutcomes: DecisionLedgerEntry[];
-  repeatingPatterns: RepeatingPattern[];
-  unresolvedChronicIssues: MemoryNode[];
-  knowledgeHalfLife: number; // days
-  topKnowledgeGaps: KnowledgeGap[];
-}
+// --------------------------- Report -----------------------------------------
 
-// ---------------------------------------------------------------------------
-// Adaptive playbooks
-// ---------------------------------------------------------------------------
-export type PlaybookUrgency = "immediate" | "this_week" | "this_month";
-export type ResponsibleParty = "leader" | "manager" | "hr" | "finance" | "system";
-
-export interface AdaptiveStep {
-  order: number;
-  title: string;
-  responsible: ResponsibleParty;
-  timeboxDays: number;
-  automaticallyDone: boolean;
-  automationAction: string | null;
-}
-
-export interface AdaptivePlaybook {
-  name: string;
-  description: string;
-  urgency: PlaybookUrgency;
-  steps: AdaptiveStep[];
-  expectedOutcome: string;
-  successMetric: string;
-  failureSignal: string;
-  basedOnPastPattern: PatternMatch | null;
-  confidenceScore: number;
+export interface MetricsIntelligenceReport {
+  metricHealthMap: Record<string, MetricHealthFull>;
+  forecasts: Record<string, Forecast>;
+  anomalies: Anomaly[];
+  correlationMatrix: CorrelationMatrix;
+  causalHypotheses: MetricCausalHypothesis[];
+  compositeScores: Record<string, DomainMetricScore>;
+  alertQueue: MetricAlert[];
+  generatedAt: string;
 }

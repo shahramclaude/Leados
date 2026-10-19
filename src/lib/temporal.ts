@@ -1,21 +1,31 @@
-// src/lib/temporal.ts
-//
-// Small date-math helpers shared across the belief fabric + agent core.
+// ---------------------------------------------------------------------------
+// temporal.ts — time decay helpers shared by the metrics engine and the
+// belief fabric.
+// ---------------------------------------------------------------------------
 
-export function daysBetween(a: Date | string, b: Date | string): number {
-  const aMs = new Date(a).getTime();
-  const bMs = new Date(b).getTime();
-  return (bMs - aMs) / 86_400_000;
+/**
+ * Exponential recency weight with a configurable half-life.
+ * weight = 0.5 ^ (ageDays / halfLifeDays)
+ * DESIGN PARAMETER: default half-life = 14 days (per Part 9 spec).
+ */
+export function recencyWeight(ageDays: number, halfLifeDays = 14): number {
+  if (ageDays <= 0) return 1;
+  return Math.pow(0.5, ageDays / halfLifeDays);
+}
+
+export function daysBetween(a: Date, b: Date): number {
+  const ms = Math.abs(a.getTime() - b.getTime());
+  return ms / (1000 * 60 * 60 * 24);
 }
 
 export function addDays(date: Date, days: number): Date {
-  return new Date(date.getTime() + days * 86_400_000);
+  const d = new Date(date.getTime());
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
 }
 
-export function hoursBetween(a: Date | string, b: Date | string): number {
-  return daysBetween(a, b) * 24;
-}
-
-export function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
+export function startOfDayUTC(date: Date): Date {
+  const d = new Date(date.getTime());
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
 }
