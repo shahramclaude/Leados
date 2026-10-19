@@ -1,145 +1,161 @@
 // src/lib/types.ts
-// Shared metric / event / scenario primitives used across the strategic layer.
+//
+// PROVENANCE NOTE: no central types.ts existed in this repo prior to Part
+// 5 (Parts 1-4 were not present in this sandbox). This file defines, from
+// scratch, the shared types needed by the Financial Nervous System
+// (src/lib/financialOS.ts, the /api/financial* routes, and
+// src/views/FinancialView.tsx). It is written to be additive so later
+// parts can extend it without breaking these definitions.
 
-export type MetricKey =
-  | 'revenue'
-  | 'churnRate'
-  | 'cac'
-  | 'burnRate'
-  | 'runwayMonths'
-  | 'nps'
-  | 'headcount'
-  | 'pipelineCoverage'
-  | 'conversionRate'
-  | 'grossMargin'
-  | 'productUsage';
+// ---------------------------------------------------------------------------
+// Generic persistence-adjacent shapes
+// ---------------------------------------------------------------------------
 
-export const ALL_METRIC_KEYS: MetricKey[] = [
-  'revenue',
-  'churnRate',
-  'cac',
-  'burnRate',
-  'runwayMonths',
-  'nps',
-  'headcount',
-  'pipelineCoverage',
-  'conversionRate',
-  'grossMargin',
-  'productUsage',
-];
-
-export interface MetricDef {
-  key: MetricKey;
+export interface MetricDefRecord {
+  key: string;
   label: string;
   unit: string;
-  direction: 'higher_better' | 'lower_better';
+  category: string;
 }
 
-export interface MetricValue {
-  metricKey: MetricKey;
-  date: string; // ISO date
+export interface MetricValueRecord {
+  metricKey: string;
   value: number;
+  recordedAt: string; // ISO timestamp
 }
 
-export interface LeadosEvent {
-  id: string;
+export interface MetricSnapshot {
+  key: string;
+  label: string;
+  unit: string;
+  value: number | null;
+  recordedAt: string | null;
+}
+
+export interface FinancialEvent {
   type: string;
-  timestamp: string; // ISO date
-  description?: string;
-  payload?: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  occurredAt: string; // ISO timestamp
 }
 
-export interface SavedScenario {
-  id: string;
-  name: string;
-  metricKey: MetricKey;
-  createdAt: string;
+export type DecisionLevel = "board" | "exec" | "team";
+
+export interface Decision {
+  id: number;
+  title: string;
+  level: DecisionLevel;
+  cycleTimeDays: number;
+  decidedAt: string; // ISO timestamp
 }
 
 // ---------------------------------------------------------------------------
-// Part 4 — Strategic War Room shared types
+// Monte Carlo runway simulation
 // ---------------------------------------------------------------------------
 
-import type { ScenarioResult } from './scenarioEngine';
-import type { Move, RoundScore } from './wargameEngine';
-import type { Decision, DecisionDomain } from './decisionTypes';
-
-export type Urgency = 'watch' | 'plan' | 'act';
-
-export interface ActivatedScenario {
-  metricKey: MetricKey;
-  actualValue: number;
-  baselineValue: number;
-  deviationSigmas: number;
-  trendPerMonth: number;
-  projection: ScenarioResult;
-  implication: string;
-  urgency: Urgency;
+export interface MonteCarloMonthPoint {
+  month: number;
+  cash: number;
+  burn: number;
+  revenue: number;
 }
 
-export interface WargameAutoResult {
-  trigger: string[];
-  ourBestMove: Move;
-  competitorCounters: Record<string, Move>;
-  roundScores: Record<string, RoundScore>;
-  blindspots: string[];
-  recommendation: string;
+export interface MonteCarloPath {
+  pathId: number;
+  monthly: MonteCarloMonthPoint[];
+  runwayMonth: number;
 }
 
-export interface StrategicRisk {
-  title: string;
-  domain: DecisionDomain | string;
-  severity: number; // 0-100
-  confidence: number; // 0-1
-  implication: string;
+export interface RunwayHistogramBucket {
+  bucket: number; // bucket index, 0-23
+  count: number;
+  pct: number; // 0-100
 }
 
-export interface BoardDecision {
-  id: string;
-  title: string;
-  domain: DecisionDomain;
-  stakes: string;
-  options: string[];
-  recommendation: string;
-  deadline: string;
-  optionValue: number | null;
+export interface RunwayDistribution {
+  p5: number;
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+  p95: number;
+  mean: number;
+  probabilityCritical: number; // fraction of paths with runway < 6 months
+  probabilityComfortable: number; // fraction of paths with runway > 18 months
+  histogram: RunwayHistogramBucket[]; // 24 buckets, 2 months each (0-48mo)
+  topPaths: MonteCarloPath[]; // representative p10/p25/p50/p75/p90 paths
+  seed: number;
 }
 
-export interface BoardIntelligencePack {
-  executiveSummary: string;
-  organizationalMoment: string;
-  domainHealthNarrative: string;
-  top3StrategicRisks: StrategicRisk[];
-  activatedScenarios: ActivatedScenario[];
-  decisionsForBoard: BoardDecision[];
-  keyMetricTableHTML: string;
-  wargameInsight: string | null;
-  confidenceStatement: string;
+export interface RunwayInputs {
+  cashBalance: number;
+  burnRate: number;
+  revenue: number;
+  /** Monthly drift applied to burn rate. DESIGN PARAMETER default below. */
+  burnGrowth?: number;
+  /** Monthly stddev of burn-rate noise. DESIGN PARAMETER default below. */
+  burnVolatility?: number;
+  /** Monthly drift applied to revenue. DESIGN PARAMETER default below. */
+  revenueGrowth?: number;
+  /** Monthly stddev of revenue noise. DESIGN PARAMETER default below. */
+  revenueVolatility?: number;
+  /** Number of simulated paths. Default 5000. */
+  paths?: number;
+  /** Simulation horizon in months. Default 60. */
+  maxMonths?: number;
+  /** String hashed via hashSeed() for reproducibility. */
+  seedKey?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Unit economics
+// ---------------------------------------------------------------------------
+
+export type UnitEconomicsHealth = "strong" | "adequate" | "weak" | "unknown";
+
+export interface UnitEconomics {
+  cac: number | null;
+  ltv: number | null;
+  ltvCacRatio: number | null;
+  paybackMonths: number | null;
+  grossMargin: number | null;
+  netRevenueRetention: number | null;
+  arpu: number | null;
+  burnMultiple: number | null;
+  ruleOf40Score: number | null;
+  unitEconomicsHealth: UnitEconomicsHealth;
+}
+
+// ---------------------------------------------------------------------------
+// Fundraising readiness
+// ---------------------------------------------------------------------------
+
+export type RaiseTiming =
+  | "raise_now"
+  | "raise_in_3_months"
+  | "raise_in_6_months"
+  | "not_ready"
+  | "no_need";
+
+export interface FundraisingReadiness {
+  readinessScore: number; // 0-100
+  raiseNowOrWait: RaiseTiming;
+  strengthSignals: string[]; // max 4
+  weaknessSignals: string[]; // max 4
+  optimalRaiseWindowMonths: number;
+  diligenceRisks: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Aggregate report
+// ---------------------------------------------------------------------------
+
+export interface FinancialIntelligenceReport {
+  runway: RunwayDistribution;
+  unitEconomics: UnitEconomics;
+  fundraisingReadiness: FundraisingReadiness;
+  financialRiskPosterior: number;
+  financialHealthScore: number;
+  latestMetrics: Record<string, MetricSnapshot>;
   generatedAt: string;
-}
-
-export interface MetricSurveillanceEntry {
-  metricKey: MetricKey;
-  actualValue: number;
-  baselineValue: number;
-  deviationSigmas: number;
-  trendPerMonth: number;
-  urgency: Urgency;
-}
-
-export interface StrategicIntelligenceReport {
-  activatedScenarios: ActivatedScenario[];
-  metricSurveillance: MetricSurveillanceEntry[];
-  wargameAutoResult: WargameAutoResult | null;
-  boardPack: BoardIntelligencePack;
-  generatedAt: string;
-}
-
-export interface StrategicIntelligenceInputLike {
-  decisions: Decision[];
-  metrics: MetricValue[];
-  metricDefs: MetricDef[];
-  events: LeadosEvent[];
-  existingScenarios: SavedScenario[];
-  now: Date;
 }

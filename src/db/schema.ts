@@ -1,63 +1,69 @@
-// src/db/schema.ts
+// Keep the schema entrypoint present so models can define tables and run
+// `npx drizzle-kit push` without bootstrapping Drizzle config first.
 //
-// No schema existed in this checkout (see provenance note in
-// src/lib/types.ts). This defines the minimal People Intelligence data
-// model: people, their 1:1 notes, generic org events (pulse surveys,
-// reviews, promotions, goals), and the collaboration graph edges that
-// src/lib/orgNetwork.ts turns into centrality/anomaly reports.
+// NOTE ON PROVENANCE: This sandbox only contains the bare Next.js/Postgres
+// starter template. Parts 1-4 of the broader "Leados" build (belief fabric,
+// scenario engine, decisions, metric pipeline, etc.) were not present in
+// this repository, so the tables below are a minimal, self-contained
+// reconstruction of just the persistence surface Part 5 (Financial Nervous
+// System) needs: a generic metric catalogue/value store, a decision log
+// (used for fundraising-readiness "decision velocity" signals), and a
+// generic event log (referenced by computeUnitEconomics for future
+// extensibility). Nothing here is copied from prior parts because they do
+// not exist in this environment.
 
 import {
   pgTable,
   serial,
-  integer,
   text,
-  boolean,
-  real,
-  date,
   timestamp,
+  doublePrecision,
+  integer,
   jsonb,
 } from "drizzle-orm/pg-core";
 
-export const people = pgTable("people", {
+// Catalogue of every metric the system knows how to collect/display.
+export const metricDefs = pgTable("metric_defs", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  role: text("role").notNull(),
-  team: text("team").notNull(),
-  managerId: integer("manager_id"),
-  email: text("email").notNull(),
-  startDate: date("start_date", { mode: "string" }).notNull(),
-  status: text("status").notNull().default("active"), // active | departed | archived
-  skills: jsonb("skills").$type<string[]>().notNull().default([]),
-  performanceScore: integer("performance_score"), // 0-100, nullable
-  promotionReadiness: integer("promotion_readiness"), // 0-100, nullable
-  growthVelocity: real("growth_velocity"), // 0-1, nullable
-  compensationFlag: boolean("compensation_flag").notNull().default(false),
-  createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow(),
+  key: text("key").notNull().unique(),
+  label: text("label").notNull(),
+  unit: text("unit").notNull().default(""),
+  category: text("category").notNull().default("general"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
-export const oneOnOnes = pgTable("one_on_ones", {
+// Time series of recorded metric values, keyed by metric_defs.key.
+export const metricValues = pgTable("metric_values", {
   id: serial("id").primaryKey(),
-  personId: integer("person_id").notNull(),
-  managerId: integer("manager_id"),
-  date: date("date", { mode: "string" }).notNull(),
-  notes: text("notes").notNull().default(""),
-  createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+  metricKey: text("metric_key").notNull(),
+  value: doublePrecision("value").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  source: text("source").notNull().default("manual"),
 });
 
-export const leadosEvents = pgTable("leados_events", {
+// Lightweight decision log used to derive "decision velocity" signals for
+// fundraising readiness (e.g. board decisions resolved in < 7 days).
+export const decisions = pgTable("decisions", {
   id: serial("id").primaryKey(),
-  personId: integer("person_id").notNull(),
-  type: text("type").notNull(), // pulse | promotion | review | goal | collab
-  psychologicalSafetyIndex: real("psychological_safety_index"), // 0-1
-  payload: jsonb("payload").$type<Record<string, unknown>>(),
-  createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+  title: text("title").notNull(),
+  level: text("level").notNull().default("team"), // 'board' | 'exec' | 'team'
+  cycleTimeDays: integer("cycle_time_days").notNull().default(0),
+  decidedAt: timestamp("decided_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
-export const orgEdges = pgTable("org_edges", {
+// Generic append-only event log. Reserved for richer unit-economics
+// derivations (e.g. cohort expansion events) in later parts.
+export const events = pgTable("events", {
   id: serial("id").primaryKey(),
-  sourceId: integer("source_id").notNull(),
-  targetId: integer("target_id").notNull(),
-  weight: real("weight").notNull().default(0), // 0-1 collaboration strength
-  createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+  type: text("type").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  occurredAt: timestamp("occurred_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
