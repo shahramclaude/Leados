@@ -1,31 +1,33 @@
+import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { leados_hypotheses } from "@/db/schema";
-import { desc } from "drizzle-orm";
-import { NextRequest } from "next/server";
-import { logAudit } from "@/lib/audit";
+import { events as eventsTable, hypotheses as hypothesesTable } from "@/db/schema";
+import { updateAllHypotheses } from "@/lib/hypothesis";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const rows = await db.select().from(leados_hypotheses).orderBy(desc(leados_hypotheses.createdAt));
-  return Response.json(rows);
+  const [rows, events] = await Promise.all([
+    db.select().from(hypothesesTable),
+    db.select().from(eventsTable),
+  ]);
+  const updates = updateAllHypotheses(rows, events, new Date());
+  const merged = rows.map((row) => ({ ...row, inference: updates.find((u) => u.id === row.id) }));
+  return NextResponse.json({ hypotheses: merged });
 }
 
-export async function POST(req: NextRequest) {
-  const { statement, prediction, testMetric, windowDays, confidence } = await req.json();
-  if (!statement || !prediction || !testMetric) {
-    return Response.json({ error: "statement, prediction and testMetric required" }, { status: 400 });
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({}));
+  const { statement, priorProbability } = body as Record<string, unknown>;
+  if (!statement) {
+    return NextResponse.json({ error: "statement is required" }, { status: 400 });
   }
-  const [row] = await db
-    .insert(leados_hypotheses)
+  const [created] = await db
+    .insert(hypothesesTable)
     .values({
-      statement,
-      prediction,
-      testMetric,
-      windowDays: windowDays ?? 14,
-      confidence: confidence ?? 50,
+      statement: String(statement),
+      priorProbability: priorProbability !== undefined ? String(priorProbability) : "0.5",
+      posteriorProbability: priorProbability !== undefined ? String(priorProbability) : "0.5",
     })
     .returning();
-  await logAudit("HYPOTHESIS_ADDED", statement);
-  return Response.json(row, { status: 201 });
+  return NextResponse.json({ hypothesis: created }, { status: 201 });
 }

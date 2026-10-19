@@ -1,39 +1,48 @@
+import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { decisions } from "@/db/schema";
-import { desc } from "drizzle-orm";
-import { cachedJson, jsonError, isRecord, parseNumber } from "@/lib/api";
+import { decisions as decisionsTable } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
-  const rows = await db.select().from(decisions).orderBy(desc(decisions.createdAt));
-  return cachedJson(rows);
+export async function GET() {
+  const rows = await db.select().from(decisionsTable);
+  return NextResponse.json({ decisions: rows });
 }
 
-export async function POST(request: Request): Promise<Response> {
-  const body: unknown = await request.json();
-  if (!isRecord(body) || typeof body.title !== "string" || body.title.trim() === "") {
-    return jsonError("title is required");
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => ({}));
+  const {
+    title,
+    description,
+    domain,
+    status,
+    impact,
+    probability,
+    deadline,
+    optionCostToDecide,
+    optionVolatility,
+    context,
+  } = body as Record<string, unknown>;
+
+  if (!title) {
+    return NextResponse.json({ error: "title is required" }, { status: 400 });
   }
-  if (typeof body.owner !== "string" || body.owner.trim() === "") {
-    return jsonError("owner is required");
-  }
-  if (typeof body.domain !== "string" || body.domain.trim() === "") {
-    return jsonError("domain is required");
-  }
-  const deadline = typeof body.deadline === "string" && body.deadline !== "" ? new Date(body.deadline) : null;
+
   const [created] = await db
-    .insert(decisions)
+    .insert(decisionsTable)
     .values({
-      title: body.title,
-      description: typeof body.description === "string" ? body.description : "",
-      owner: body.owner,
-      domain: body.domain,
-      status: typeof body.status === "string" ? body.status : "proposed",
-      deadline,
-      confidence: parseNumber(body.confidence, 50),
-      impact: parseNumber(body.impact, 3),
+      title: String(title),
+      description: description ? String(description) : null,
+      domain: domain ? String(domain) : "general",
+      status: status ? String(status) : "open",
+      impact: impact !== undefined ? Number(impact) : 3,
+      probability: probability !== undefined ? String(probability) : "0.5",
+      deadline: deadline ? new Date(String(deadline)) : null,
+      optionCostToDecide: optionCostToDecide !== undefined ? String(optionCostToDecide) : "10000",
+      optionVolatility: optionVolatility !== undefined ? String(optionVolatility) : "0.35",
+      context: (context as Record<string, unknown>) ?? {},
     })
     .returning();
-  return cachedJson(created, { status: 201 });
+
+  return NextResponse.json({ decision: created }, { status: 201 });
 }

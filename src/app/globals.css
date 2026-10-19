@@ -1,14 +1,1 @@
 @import "tailwindcss";
-
-:root {
-  color-scheme: dark;
-}
-
-body {
-  background: #0a0c10;
-  color: #f1f5f9;
-}
-
-* {
-  box-sizing: border-box;
-}

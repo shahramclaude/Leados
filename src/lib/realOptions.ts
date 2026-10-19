@@ -1,228 +1,137 @@
-// realOptions.ts — real-options valuation for strategic decisions.
+// Real-options valuation adapted from the Black-Scholes option pricing model.
 //
-// Two complementary models are provided:
-//  1. Black-Scholes, treating a strategic initiative as a financial option
-//     (e.g. the "option" to expand, enter a market, or exercise a follow-on
-//     investment).
-//  2. A multi-stage decision tree evaluated by backward induction, for
-//     situations that are better modelled as a sequence of go/no-go gates
-//     with costs and probabilities of success (e.g. R&D phases).
+// Mapping strategic "wait and see" decisions onto a financial call option:
+//   S (spot)   -> current estimated value of the opportunity if exercised today
+//   K (strike) -> cost of committing/deciding now
+//   T (time)   -> years until the decision deadline
+//   r          -> discount/risk-free rate assumption
+//   sigma      -> volatility of the opportunity's value (uncertainty)
 //
-// `analyzeStrategicOption` combines both and reports a sensitivity table.
+// A strategic decision with a deadline behaves like an American/European call:
+// the "option to wait" has value only while uncertainty can still resolve in
+// your favor and there is time left before the deadline forces exercise.
+//
+// This module was previously orphaned — built, never imported anywhere. Part 5
+// wires it into `strategicIntelligence.ts`.
 
-import { normalCdf } from "./monteCarlo";
+/** Standard normal cumulative distribution function (Abramowitz & Stegun 7.1.26 approximation). */
+export function normalCdf(x: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989423 * Math.exp((-x * x) / 2);
+  const prob =
+    d *
+    t *
+    (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return x > 0 ? 1 - prob : prob;
+}
 
-export type OptionType = "call" | "put";
+/** Standard normal probability density function. */
+export function normalPdf(x: number): number {
+  return Math.exp(-(x * x) / 2) / Math.sqrt(2 * Math.PI);
+}
+
+export interface BlackScholesInputs {
+  spot: number; // S
+  strike: number; // K
+  timeToExpiryYears: number; // T
+  riskFreeRate: number; // r
+  volatility: number; // sigma
+}
+
+export interface BlackScholesResult {
+  value: number; // call option value
+  delta: number; // d(value)/d(spot)
+  theta: number; // d(value)/d(t), PER YEAR (negative = value decays as time passes)
+  thetaPerDay: number; // convenience: theta / 365
+  d1: number;
+  d2: number;
+}
 
 /**
- * Black-Scholes valuation of a European option.
- *
- *   d1 = [ln(S / K) + (r + sigma^2 / 2) * T] / (sigma * sqrt(T))
- *   d2 = d1 - sigma * sqrt(T)
- *
- *   Call = S * N(d1) - K * e^(-rT) * N(d2)
- *   Put  = K * e^(-rT) * N(-d2) - S * N(-d1)
- *
- * Applied to strategy, the analogy is:
- *   S     = present value of expected cash flows if the option is exercised
- *           now (e.g. value of entering the market today)
- *   K     = cost of exercising the option (e.g. investment required)
- *   T     = time until the option expires (how long the opportunity stays open)
- *   r     = risk-free rate
- *   sigma = volatility of the underlying value (how uncertain the payoff is)
- *
- * @param type  'call' = option to invest/expand, 'put' = option to abandon/divest
- * @param S     current value of the underlying asset / opportunity
- * @param K     strike price / cost to exercise
- * @param T     time to expiry, in years
- * @param r     risk-free interest rate (annualized, decimal, e.g. 0.04)
- * @param sigma volatility of the underlying (annualized, decimal, e.g. 0.35)
+ * Black-Scholes value of a European call option, with first-order greeks.
+ * Formula: C = S*N(d1) - K*e^(-rT)*N(d2)
+ * Theta (call): -[S*N'(d1)*sigma / (2*sqrt(T))] - r*K*e^(-rT)*N(d2)
+ * Reference: Black & Scholes (1973) closed-form solution — textbook formula.
  */
-export function valuateOption(type: OptionType, S: number, K: number, T: number, r: number, sigma: number): number {
-  if (T <= 0 || sigma <= 0 || S <= 0 || K <= 0) {
-    // At/after expiry (or degenerate inputs) the option is worth its intrinsic value.
-    return type === "call" ? Math.max(S - K, 0) : Math.max(K - S, 0);
-  }
+export function blackScholesCall(inputs: BlackScholesInputs): BlackScholesResult {
+  const { spot, strike, riskFreeRate: r } = inputs;
+  // Guard against non-physical/degenerate inputs (expired or zero-volatility options).
+  const T = Math.max(inputs.timeToExpiryYears, 1 / 365);
+  const sigma = Math.max(inputs.volatility, 0.01);
 
-  const d1 = (Math.log(S / K) + (r + (sigma * sigma) / 2) * T) / (sigma * Math.sqrt(T));
+  const d1 =
+    (Math.log(spot / strike) + (r + (sigma * sigma) / 2) * T) / (sigma * Math.sqrt(T));
   const d2 = d1 - sigma * Math.sqrt(T);
-  const discountedK = K * Math.exp(-r * T);
 
-  if (type === "call") {
-    return S * normalCdf(d1) - discountedK * normalCdf(d2);
-  }
-  return discountedK * normalCdf(-d2) - S * normalCdf(-d1);
-}
+  const discountedStrike = strike * Math.exp(-r * T);
+  const value = spot * normalCdf(d1) - discountedStrike * normalCdf(d2);
 
-// ---------------------------------------------------------------------------
-// Decision-tree NPV engine (backward induction)
-// ---------------------------------------------------------------------------
+  const theta =
+    -((spot * normalPdf(d1) * sigma) / (2 * Math.sqrt(T))) -
+    r * discountedStrike * normalCdf(d2);
 
-export interface Choice {
-  label: string;
-  /** Cost incurred immediately when this choice is taken. */
-  cost: number;
-  /** Probability this choice succeeds, 0-1. */
-  pSuccess: number;
-  /** Payoff received immediately on success, before any continuation value. */
-  payoff?: number;
-  /** Subsequent decision stage(s) reachable after this choice succeeds. */
-  nextStages?: Stage[];
-}
-
-export interface Stage {
-  name: string;
-  choices: Choice[];
-}
-
-export interface TreeNode {
-  stageName: string;
-  bestChoiceLabel: string;
-  expectedNPV: number;
-  choices: { label: string; expectedValue: number }[];
-  children?: TreeNode[];
-}
-
-/** Evaluate a chain of sequential stages, summing their expected NPVs. */
-function evaluateChain(stages: Stage[]): { value: number; nodes: TreeNode[] } {
-  let total = 0;
-  const nodes: TreeNode[] = [];
-  for (const stage of stages) {
-    const { node, value } = evaluateStage(stage);
-    total += value;
-    nodes.push(node);
-  }
-  return { value: total, nodes };
-}
-
-/**
- * Backward induction: to value a stage we must first value every stage that
- * could follow it (the recursive call below), THEN fold that continuation
- * value back into the expected value of each choice at this stage.
- */
-function evaluateStage(stage: Stage): { node: TreeNode; value: number } {
-  let best: { label: string; expectedValue: number; children: TreeNode[] } | null = null;
-  const choiceSummaries: { label: string; expectedValue: number }[] = [];
-
-  for (const choice of stage.choices) {
-    const continuation =
-      choice.nextStages && choice.nextStages.length > 0
-        ? evaluateChain(choice.nextStages)
-        : { value: 0, nodes: [] as TreeNode[] };
-
-    // Expected value = -cost (paid regardless) + P(success) * (immediate payoff + value of what follows)
-    const expectedValue = -choice.cost + choice.pSuccess * ((choice.payoff ?? 0) + continuation.value);
-    choiceSummaries.push({ label: choice.label, expectedValue });
-
-    if (!best || expectedValue > best.expectedValue) {
-      best = { label: choice.label, expectedValue, children: continuation.nodes };
-    }
-  }
-
-  const node: TreeNode = {
-    stageName: stage.name,
-    bestChoiceLabel: best?.label ?? "",
-    expectedNPV: best?.expectedValue ?? 0,
-    choices: choiceSummaries,
-    children: best?.children,
-  };
-  return { node, value: node.expectedNPV };
-}
-
-/**
- * Build and solve a (possibly multi-stage) decision tree by backward
- * induction, returning the root node with the recommended path's NPV and,
- * attached under `children`, the downstream stages that follow the optimal
- * choice at the root.
- */
-export function buildDecisionTree(stages: Stage[]): TreeNode {
-  if (!stages || stages.length === 0) {
-    return { stageName: "empty", bestChoiceLabel: "", expectedNPV: 0, choices: [] };
-  }
-  const { nodes, value } = evaluateChain(stages);
-  const [root, ...rest] = nodes;
   return {
-    ...root,
-    expectedNPV: value,
-    children: rest.length > 0 ? rest : root.children,
+    value: Math.max(0, value),
+    delta: normalCdf(d1),
+    theta,
+    thetaPerDay: theta / 365,
+    d1,
+    d2,
   };
 }
 
-// ---------------------------------------------------------------------------
-// Combined strategic option analysis
-// ---------------------------------------------------------------------------
-
-export interface StrategicOptionParams {
-  /** Present value of the opportunity if exercised today. */
-  S: number;
-  /** Cost to exercise / invest. */
-  K: number;
-  /** Years until the opportunity closes. */
-  T: number;
-  /** Risk-free rate, decimal. */
-  r: number;
-  /** Volatility of the underlying opportunity's value, decimal. */
-  sigma: number;
-  /** Optional multi-stage decision tree describing a phased path to the same opportunity. */
-  stages?: Stage[];
-  /** Up-front investment already assumed sunk, subtracted from the combined value. */
-  investmentCost?: number;
-  optionType?: OptionType;
+export interface DecisionOptionInputs {
+  /** Estimated value captured if the opportunity is exercised today. */
+  spot: number;
+  /** Cost of committing to the decision now. */
+  strike: number;
+  /** Days remaining until the decision must be made. */
+  daysRemaining: number;
+  /** Annualized discount rate assumption. */
+  riskFreeRate?: number;
+  /** Volatility of the underlying opportunity's value. */
+  volatility?: number;
 }
 
-export interface OptionAnalysis {
-  description: string;
-  blackScholesValue: number;
-  treeNPV: number;
-  combinedValue: number;
-  recommendation: string;
-  sensitivity: Record<string, number>;
+export interface DecisionOptionValuation extends BlackScholesResult {
+  daysRemaining: number;
+  /** True when the option is decaying fast enough that waiting is net-costly. */
+  isDecayingFast: boolean;
+  recommendation: "decide_now" | "wait" | "monitor";
 }
 
-const SENSITIVITY_BUMP = 0.1; // +/-10%
+const FAST_DECAY_THETA_PER_DAY_THRESHOLD = -5; // value units lost per day, heuristic threshold
 
-export function analyzeStrategicOption(description: string, params: StrategicOptionParams): OptionAnalysis {
-  const { S, K, T, r, sigma, stages, investmentCost = 0, optionType = "call" } = params;
+/**
+ * Value the "option to wait" on a strategic decision and recommend whether to
+ * decide now, keep waiting, or simply monitor.
+ * Formula source: `blackScholesCall` above (realOptions.ts).
+ */
+export function valueDecisionOption(inputs: DecisionOptionInputs): DecisionOptionValuation {
+  const { spot, strike, daysRemaining, riskFreeRate = 0.08, volatility = 0.35 } = inputs;
+  const timeToExpiryYears = Math.max(daysRemaining, 0) / 365;
 
-  const blackScholesValue = valuateOption(optionType, S, K, T, r, sigma);
-  const treeNPV = stages && stages.length > 0 ? buildDecisionTree(stages).expectedNPV : 0;
-  const combinedValue = blackScholesValue + treeNPV - investmentCost;
+  const bs = blackScholesCall({
+    spot,
+    strike,
+    timeToExpiryYears,
+    riskFreeRate,
+    volatility,
+  });
 
-  const recommendation =
-    combinedValue > Math.max(S, 1) * 0.02
-      ? "Proceed — the option value plus expected path NPV comfortably clears the investment hurdle. Keep the option alive and revisit as uncertainty resolves."
-      : combinedValue > 0
-        ? "Hold / stage cautiously — value is marginally positive. Consider a smaller, reversible first step rather than full commitment."
-        : "Do not exercise now — expected value is negative. Either wait for more favorable volatility/time conditions or abandon the option.";
+  const isDecayingFast = bs.thetaPerDay < FAST_DECAY_THETA_PER_DAY_THRESHOLD;
 
-  // Sensitivity: bump each Black-Scholes parameter by +10% and record the effect on value.
-  const bumps: Record<string, Partial<StrategicOptionParams>> = {
-    S: { S: S * (1 + SENSITIVITY_BUMP) },
-    K: { K: K * (1 + SENSITIVITY_BUMP) },
-    T: { T: T * (1 + SENSITIVITY_BUMP) },
-    r: { r: r + SENSITIVITY_BUMP * Math.max(Math.abs(r), 0.01) },
-    sigma: { sigma: sigma * (1 + SENSITIVITY_BUMP) },
-  };
-
-  const sensitivity: Record<string, number> = {};
-  for (const [key, bump] of Object.entries(bumps)) {
-    const bumped = valuateOption(
-      optionType,
-      bump.S ?? S,
-      bump.K ?? K,
-      bump.T ?? T,
-      bump.r ?? r,
-      bump.sigma ?? sigma,
-    );
-    sensitivity[key] = bumped - blackScholesValue;
+  let recommendation: DecisionOptionValuation["recommendation"] = "monitor";
+  if (isDecayingFast || daysRemaining <= 3) {
+    recommendation = "decide_now";
+  } else if (bs.value > strike * 0.1) {
+    recommendation = "wait";
   }
 
   return {
-    description,
-    blackScholesValue,
-    treeNPV,
-    combinedValue,
+    ...bs,
+    daysRemaining,
+    isDecayingFast,
     recommendation,
-    sensitivity,
   };
 }
