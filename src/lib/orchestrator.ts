@@ -1,48 +1,51 @@
-// Central pipeline orchestrator.
-//
-// Before Part 5, this pipeline only ran the inference layer (hypotheses) and
-// the innovation portfolio scorer — it never touched scenarios, wargaming or
-// real options, so the strategic layer was effectively disconnected from the
-// rest of the system. This file now adds `runStrategicIntelligence` as a
-// first-class pipeline stage.
-
-import { db } from "@/db";
-import { decisions as decisionsTable, events as eventsTable, hypotheses as hypothesesTable, innovationPortfolioItems, metricValues as metricValuesTable } from "@/db/schema";
-import { updateAllHypotheses, type HypothesisUpdate } from "./hypothesis";
-import { scorePortfolio, type PortfolioSummary } from "./innovationPortfolio";
-import { runStrategicIntelligence, type StrategicIntelligenceReport } from "./strategicIntelligence";
+/**
+ * src/lib/orchestrator.ts
+ *
+ * Aggregates per-domain "OS" health scores into one OrchestratorResult. In
+ * this codebase slice, only the Financial Intelligence OS (Part 6) has been
+ * built, so `peopleHealthScore` and `strategicHealthScore` are explicitly
+ * `null` placeholders (not fabricated numbers) until a People OS / Strategic
+ * OS module exists. `overallHealthScore` averages whichever pillar scores
+ * are actually available, so it degrades gracefully instead of pretending to
+ * combine data that doesn't exist yet.
+ */
 
 export interface OrchestratorResult {
-  hypotheses: HypothesisUpdate[];
-  innovationPortfolio: PortfolioSummary;
-  strategicIntelligence: StrategicIntelligenceReport;
+  financialHealthScore: number;
+  peopleHealthScore: number | null;
+  strategicHealthScore: number | null;
+  overallHealthScore: number;
+  pillarsIncluded: ("financial" | "people" | "strategic")[];
   generatedAt: string;
 }
 
-/**
- * Run the full cross-engine pipeline once. Intended to be called from a
- * scheduled job or an on-demand API route (see /api/strategic).
- */
-export async function runOrchestratorPipeline(now: Date = new Date()): Promise<OrchestratorResult> {
-  const [decisions, events, metrics, hypothesisRows, portfolioRows] = await Promise.all([
-    db.select().from(decisionsTable),
-    db.select().from(eventsTable),
-    db.select().from(metricValuesTable),
-    db.select().from(hypothesesTable),
-    db.select().from(innovationPortfolioItems),
-  ]);
+export function buildOrchestratorResult(params: {
+  financialHealthScore: number;
+  peopleHealthScore?: number | null;
+  strategicHealthScore?: number | null;
+}): OrchestratorResult {
+  const { financialHealthScore, peopleHealthScore = null, strategicHealthScore = null } = params;
 
-  const hypotheses = updateAllHypotheses(hypothesisRows, events, now);
-  const innovationPortfolio = scorePortfolio(portfolioRows);
+  const pillars: { name: "financial" | "people" | "strategic"; score: number | null }[] = [
+    { name: "financial", score: financialHealthScore },
+    { name: "people", score: peopleHealthScore },
+    { name: "strategic", score: strategicHealthScore },
+  ];
 
-  // NEW in Part 5: the strategic intelligence layer is now a pipeline stage,
-  // not a standalone, manually-triggered report.
-  const strategicIntelligence = await runStrategicIntelligence(decisions, events, metrics, now);
+  const available = pillars.filter((p): p is { name: "financial" | "people" | "strategic"; score: number } =>
+    typeof p.score === "number",
+  );
+
+  const overallHealthScore = available.length
+    ? Math.round(available.reduce((sum, p) => sum + p.score, 0) / available.length)
+    : 0;
 
   return {
-    hypotheses,
-    innovationPortfolio,
-    strategicIntelligence,
-    generatedAt: now.toISOString(),
+    financialHealthScore,
+    peopleHealthScore,
+    strategicHealthScore,
+    overallHealthScore,
+    pillarsIncluded: available.map((p) => p.name),
+    generatedAt: new Date().toISOString(),
   };
 }

@@ -1,182 +1,410 @@
-// Financial Intelligence OS — original TypeScript implementing the *functional
-// ideas* described in the task's pasted "Part 5" brief (unit economics, capital
-// allocation heuristic, scenario-weighted projection). That brief is treated as
-// an unverified external specification — no matching module was found anywhere
-// in github.com/wbweve/Leados (see AI-SESSION-LOG.md) — so nothing here is a
-// port of real repo code. All formulas are labeled with their source.
-import type { AppState } from "./types";
-import { daysBetween } from "./store";
+/**
+ * src/lib/financialOS.ts
+ *
+ * Core Financial Intelligence OS domain logic. Pure functions only — no
+ * database access here (that lives in `src/lib/financialReport.ts`, which
+ * fetches rows and calls into this module).
+ *
+ * This file is organized as:
+ *   1. Shared domain types (Domain, Person, FinancialEvent, BurnTrend)
+ *   2. Baseline financial math (burn stats, deterministic runway, burn trend,
+ *      financial health score) — the "existing" model this slice extends.
+ *   3. NEW: Monte Carlo runway simulation (`runMonteCarloRunway`)
+ *   4. NEW: Cost attribution by domain/team (`addCostAttribution`)
+ */
 
-function metric(P: AppState, name: string): number | null {
-  const rows = P.events.filter((e) => e.type === "fin.metric" && e.data.metric === name);
-  if (!rows.length) return null;
-  return rows[rows.length - 1].data.value as number;
+import { createMersenneTwister } from "./prng";
+import { compoundGrowthStep, mean, percentile, sampleStandardNormal, sampleStdDev } from "./monteCarlo";
+
+// ---------------------------------------------------------------------------
+// 1. Shared domain types
+// ---------------------------------------------------------------------------
+
+export type Domain =
+  | "engineering"
+  | "product"
+  | "design"
+  | "sales"
+  | "marketing"
+  | "operations"
+  | "finance"
+  | "people"
+  | "other";
+
+export const ALL_DOMAINS: Domain[] = [
+  "engineering",
+  "product",
+  "design",
+  "sales",
+  "marketing",
+  "operations",
+  "finance",
+  "people",
+  "other",
+];
+
+export type FinancialEventType = "burn" | "revenue" | "expense" | "funding" | "pl_summary";
+
+export interface FinancialEvent {
+  id: string;
+  date: string; // ISO date string
+  type: FinancialEventType;
+  domain: Domain | null;
+  team: string | null;
+  amount: number; // always a positive magnitude; direction implied by `type`
+  description: string;
+  category: string | null;
 }
 
-export type ScenarioAxis = "BASE" | "ADVERSE" | "FAVORABLE";
-export type Scenario = { name: string; probability: number; axes: Record<string, ScenarioAxis> };
+export interface Person {
+  id: string;
+  name: string;
+  role: string;
+  domain: Domain;
+  team: string;
+  monthlySalary: number | null;
+  active: boolean;
+}
 
-// A deliberately small, local stand-in for the pasted brief's `LEADOS.scenarios`
-// module (Part 1–3 content, not included in this session's pasted text — so it
-// is not reimplemented in full here; this is a disclosed simplification).
-export function buildMinimalScenarioSet(): { scenarios: Scenario[] } {
+export type BurnTrend = "improving" | "flat" | "deteriorating";
+
+// ---------------------------------------------------------------------------
+// 2. Baseline financial math (existing model)
+// ---------------------------------------------------------------------------
+
+interface MonthlyNet {
+  monthKey: string; // YYYY-MM
+  netBurn: number; // outflow - inflow for that month (positive = burning cash)
+}
+
+function groupNetBurnByMonth(events: FinancialEvent[]): MonthlyNet[] {
+  const byMonth = new Map<string, number>();
+  for (const e of events) {
+    if (e.type === "pl_summary") continue; // summary rows aren't raw cash movements
+    const monthKey = e.date.slice(0, 7); // YYYY-MM
+    const signed =
+      e.type === "revenue" || e.type === "funding" ? -e.amount : e.amount; // inflow reduces net burn
+    byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + signed);
+  }
+  return Array.from(byMonth.entries())
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([monthKey, netBurn]) => ({ monthKey, netBurn }));
+}
+
+/**
+ * Computes the mean and sample standard deviation of monthly net burn over a
+ * trailing lookback window, from raw ledger events. This feeds the Monte
+ * Carlo simulation's burn distribution parameters.
+ */
+export function computeMonthlyBurnStats(
+  events: FinancialEvent[],
+  lookbackMonths = 6,
+): { mean: number; stdDev: number; monthsObserved: number } {
+  const months = groupNetBurnByMonth(events).slice(-lookbackMonths);
+  const values = months.map((m) => m.netBurn);
+  if (values.length === 0) {
+    return { mean: 0, stdDev: 0, monthsObserved: 0 };
+  }
+  return { mean: mean(values), stdDev: sampleStdDev(values), monthsObserved: values.length };
+}
+
+/** Simple deterministic runway: balance / burn. This is the naive baseline the Monte Carlo model refines. */
+export function computeDeterministicRunwayMonths(currentBalance: number, monthlyBurnMean: number): number {
+  if (monthlyBurnMean <= 0) return Infinity;
+  return currentBalance / monthlyBurnMean;
+}
+
+/**
+ * Classifies the burn trend by comparing the most recent 3 months of net
+ * burn against the preceding 3 months. >10% increase = deteriorating, >10%
+ * decrease = improving, otherwise flat.
+ */
+export function classifyBurnTrend(events: FinancialEvent[]): BurnTrend {
+  const months = groupNetBurnByMonth(events);
+  if (months.length < 2) return "flat";
+
+  const recent = months.slice(-3);
+  const prior = months.slice(-6, -3);
+  if (prior.length === 0) return "flat";
+
+  const recentAvg = mean(recent.map((m) => m.netBurn));
+  const priorAvg = mean(prior.map((m) => m.netBurn));
+  if (priorAvg === 0) return "flat";
+
+  const changeRatio = (recentAvg - priorAvg) / Math.abs(priorAvg);
+  if (changeRatio > 0.1) return "deteriorating";
+  if (changeRatio < -0.1) return "improving";
+  return "flat";
+}
+
+// ---------------------------------------------------------------------------
+// 3. NEW: Monte Carlo runway simulation
+// ---------------------------------------------------------------------------
+
+export interface RunwayDistribution {
+  p10RunwayMonths: number;
+  p50RunwayMonths: number;
+  p90RunwayMonths: number;
+  probabilityOfRunwayAbove18Months: number;
+  probabilityOfRunwayAbove12Months: number;
+  pathsBelow6Months: number; // fraction in [0,1], not a percent
+  histogram: { bucketMonths: number; count: number }[];
+}
+
+/** Paths that survive this long are "censored" at the cap — see note below. */
+export const MAX_SIMULATED_MONTHS = 60;
+const HISTOGRAM_BUCKET_SIZE_MONTHS = 3;
+
+/**
+ * Monte Carlo simulation of cash runway.
+ *
+ * Per simulated path, for each month until cash runs out (or the 60-month
+ * cap is hit):
+ *   1. Draw a standard-normal variate Z via the Box-Muller transform
+ *      (see `sampleStandardNormal` in monteCarlo.ts), seeded by a Mersenne
+ *      Twister PRNG (`createMersenneTwister`) so the whole simulation is
+ *      reproducible given the same seed.
+ *   2. Model that month's burn as an ADDITIVE GAUSSIAN NOISE process:
+ *        burn_t = max(0, burnMean + Z * burnStdDev)
+ *      NOTE: this is an UNVERIFIED simplification. It is not geometric
+ *      Brownian motion (which models multiplicative/log-normal moves on a
+ *      price-like quantity, dS = mu*S*dt + sigma*S*dW). Burn rate here is
+ *      modeled as a stationary Gaussian around the trailing mean because the
+ *      caller supplies burn as a (mean, stdDev) pair rather than a process
+ *      with its own growth rate. This is a common, simple approximation used
+ *      in startup runway calculators, not a textbook stochastic-process
+ *      model — label kept here intentionally so future readers do not assume
+ *      otherwise.
+ *   3. Grow revenue deterministically via the COMPOUND (GEOMETRIC) GROWTH
+ *      FORMULA: revenue_t = revenue_(t-1) * (1 + revenueGrowthRate). This is
+ *      a standard, verifiable formula (not a simplification).
+ *   4. balance -= (burn_t - revenue_t); stop when balance <= 0.
+ *
+ * Percentiles (p10/p50/p90) use linear interpolation of the empirical CDF
+ * (see `percentile` in monteCarlo.ts, matching NumPy's default method).
+ */
+export function runMonteCarloRunway(
+  currentBalance: number,
+  monthlyBurnMean: number,
+  monthlyBurnStdDev: number,
+  expectedMonthlyRevenue: number,
+  revenueGrowthRate: number,
+  n: number = 5000,
+  seed: number = 42,
+): RunwayDistribution {
+  const rng = createMersenneTwister(seed);
+  const runways = new Array<number>(n);
+
+  for (let i = 0; i < n; i++) {
+    let balance = currentBalance;
+    let revenue = expectedMonthlyRevenue;
+    let month = 0;
+
+    while (balance > 0 && month < MAX_SIMULATED_MONTHS) {
+      const z = sampleStandardNormal(rng); // Box-Muller standard normal draw
+      const burnThisMonth = Math.max(0, monthlyBurnMean + z * monthlyBurnStdDev); // additive Gaussian noise model (UNVERIFIED simplification)
+      revenue = compoundGrowthStep(revenue, revenueGrowthRate); // compound/geometric growth formula
+      const netBurn = burnThisMonth - revenue;
+      balance -= netBurn;
+      month += 1;
+    }
+
+    runways[i] = month;
+  }
+
+  runways.sort((a, b) => a - b);
+
+  const p10 = percentile(runways, 0.1);
+  const p50 = percentile(runways, 0.5);
+  const p90 = percentile(runways, 0.9);
+
+  const above18 = runways.filter((m) => m >= 18).length / n;
+  const above12 = runways.filter((m) => m >= 12).length / n;
+  const below6 = runways.filter((m) => m < 6).length / n;
+
+  const histogramMap = new Map<number, number>();
+  for (const m of runways) {
+    const bucket = Math.floor(m / HISTOGRAM_BUCKET_SIZE_MONTHS) * HISTOGRAM_BUCKET_SIZE_MONTHS;
+    histogramMap.set(bucket, (histogramMap.get(bucket) ?? 0) + 1);
+  }
+  const histogram = Array.from(histogramMap.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([bucketMonths, count]) => ({ bucketMonths, count }));
+
   return {
-    scenarios: [
-      { name: "WORST_CASE", probability: 20, axes: { "attrition.next60d": "ADVERSE", "revenue.miss.next_quarter": "ADVERSE" } },
-      { name: "BASE_CASE", probability: 55, axes: { "attrition.next60d": "BASE", "revenue.miss.next_quarter": "BASE" } },
-      { name: "BEST_CASE", probability: 25, axes: { "attrition.next60d": "FAVORABLE", "revenue.miss.next_quarter": "FAVORABLE" } },
-    ],
+    p10RunwayMonths: p10,
+    p50RunwayMonths: p50,
+    p90RunwayMonths: p90,
+    probabilityOfRunwayAbove18Months: above18,
+    probabilityOfRunwayAbove12Months: above12,
+    pathsBelow6Months: below6,
+    histogram,
   };
 }
 
-export const financialOS = {
-  runwayStatus(P: AppState) {
-    const cash = metric(P, "cash");
-    const burn = metric(P, "monthly_burn");
-    if (cash == null || burn == null || burn <= 0) return null;
-    const runway_months = Math.round((cash / burn) * 10) / 10;
-    return { cash, burn, runway_months };
-  },
+/**
+ * Financial health score, 0-100. Pure function so it can be shared between
+ * the /api/financial route and the orchestrator.
+ *
+ * Formula (as specified):
+ *  - start at 100
+ *  - -30 if p50RunwayMonths < 12
+ *  - -20 if p50RunwayMonths < 18 (and >= 12)
+ *  - -15 if burnTrend === 'deteriorating'
+ *  - -10 if pathsBelow6Months > 0.10
+ *  - clamp to [0, 100]
+ */
+export function computeFinancialHealthScore(runway: RunwayDistribution, burnTrend: BurnTrend): number {
+  let score = 100;
 
-  computeCompleteUnitEconomics(P: AppState, today: Date) {
-    const arr = metric(P, "arr") ?? ((metric(P, "mrr") ?? 0) * 12 || null);
-    const mrr = metric(P, "mrr");
-    const customers = metric(P, "customer_count");
-    const cac = metric(P, "cac");
-    const ltv = metric(P, "ltv");
-    const grossMargin = metric(P, "gross_margin_pct");
-    const growthRate = metric(P, "revenue_growth_pct");
-    const ebitdaMargin = metric(P, "ebitda_margin_pct");
+  if (runway.p50RunwayMonths < 12) {
+    score -= 30;
+  } else if (runway.p50RunwayMonths < 18) {
+    score -= 20;
+  }
 
-    const newCustomers30d = P.events.filter(
-      (e) => e.type === "sales.deal.closed" && e.data.result === "won" && daysBetween(e.ts, today) <= 30
-    ).length;
+  if (burnTrend === "deteriorating") {
+    score -= 15;
+  }
 
-    const arpu = customers && mrr ? mrr / customers : null;
-    const ltvCac = ltv && cac ? ltv / cac : null;
-    const paybackPeriodMonths = arpu && cac && grossMargin ? cac / (arpu * (grossMargin / 100)) : null;
-    const ruleOf40 = growthRate != null && ebitdaMargin != null ? growthRate + ebitdaMargin : null;
+  if (runway.pathsBelow6Months > 0.1) {
+    score -= 10;
+  }
 
-    const newMRR30d = P.events
-      .filter((e) => e.type === "sales.deal.closed" && e.data.result === "won" && daysBetween(e.ts, today) <= 30)
-      .reduce((a, e) => a + (e.data.value || 0) / 12, 0);
-    const churnedMRR30d = P.events
-      .filter((e) => e.type === "cs.churn.logged" && daysBetween(e.ts, today) <= 30)
-      .reduce((a, e) => a + (e.data.mrr_lost || 0), 0);
-    const quickRatio = churnedMRR30d > 0 ? Math.round((newMRR30d / churnedMRR30d) * 10) / 10 : null;
-    const churnRate = mrr ? churnedMRR30d / mrr : 0.02;
+  return Math.max(0, Math.min(100, score));
+}
 
-    return {
-      arr, mrr, customers, arpu, cac, ltv, ltvCac, paybackPeriodMonths, ruleOf40,
-      churnRate, grossMargin, quickRatio, newCustomers30d,
-      benchmarks: {
-        ltvCac: ltvCac != null ? {
-          value: Math.round(ltvCac * 10) / 10,
-          benchmark: "> 3.0 (Bessemer Venture Partners, 2023)",
-          status: ltvCac >= 3 ? "PASSING" : ltvCac >= 2 ? "WATCH" : "CRITICAL",
-        } : null,
-        paybackMonths: paybackPeriodMonths != null ? {
-          value: Math.round(paybackPeriodMonths),
-          benchmark: "< 18 months (SaaS Capital, 2023)",
-          status: paybackPeriodMonths <= 18 ? "PASSING" : "CRITICAL",
-        } : null,
-        ruleOf40: ruleOf40 != null ? {
-          value: Math.round(ruleOf40),
-          benchmark: "≥ 40 (McKinsey, 2022)",
-          status: ruleOf40 >= 40 ? "PASSING" : ruleOf40 >= 20 ? "WATCH" : "CRITICAL",
-        } : null,
-        quickRatio: quickRatio != null ? {
-          value: quickRatio,
-          benchmark: "> 4.0 (Mamoon Hamid / Scale Venture Partners)",
-          status: quickRatio >= 4 ? "PASSING" : quickRatio >= 2 ? "WATCH" : "CRITICAL",
-        } : null,
-      },
-      label:
-        "Unit economics from fin.metric + sales.deal.closed + cs.churn.logged events. " +
-        "Formulas: LTV:CAC=LTV/CAC, Payback=CAC/(ARPU×GM%), Rule of 40=Growth%+EBITDA margin%, " +
-        "Quick Ratio=new MRR/churned MRR (trailing 30d). Benchmarks: Bessemer (2023), SaaS Capital (2023), " +
-        "McKinsey (2022) — vary by stage/sector. Labeled, not validated against this (synthetic) company.",
-    };
-  },
+// ---------------------------------------------------------------------------
+// 4. NEW: Cost attribution by domain / team
+// ---------------------------------------------------------------------------
 
-  optimizeCapitalAllocation(P: AppState, today: Date) {
-    const unitEcon = this.computeCompleteUnitEconomics(P, today);
-    const runway = this.runwayStatus(P);
-    const ltvCacVal = unitEcon.ltvCac ?? 0;
+/**
+ * UNVERIFIED ESTIMATE: role -> median fully-loaded monthly cost in USD
+ * (base + ~25-30% overhead for benefits/payroll tax/tooling), derived from
+ * general US tech-industry compensation ranges. This is NOT sourced from
+ * this repository's data and should be treated as a rough placeholder used
+ * only when a person record has no `monthlySalary` on file.
+ */
+export const ROLE_COST_MAP: Record<string, number> = {
+  "software engineer": 14500,
+  "senior software engineer": 19000,
+  "staff engineer": 24000,
+  "principal engineer": 27000,
+  "engineering manager": 22000,
+  "product manager": 17000,
+  "senior product manager": 20500,
+  designer: 13500,
+  "senior designer": 16500,
+  "data scientist": 16500,
+  "data analyst": 11500,
+  "sales rep": 11000,
+  "account executive": 13000,
+  "sales manager": 18000,
+  "vp sales": 26000,
+  "marketing manager": 14000,
+  "marketing specialist": 10000,
+  "customer support": 7000,
+  "customer success manager": 11500,
+  "operations manager": 15000,
+  "finance analyst": 12500,
+  controller: 17500,
+  cfo: 30000,
+  ceo: 28000,
+  coo: 27000,
+  cto: 29000,
+  "hr manager": 13000,
+  recruiter: 10500,
+  "office manager": 8500,
+  default: 12000,
+};
 
-    const categories = [
-      { name: "PEOPLE", allocMin: 0.4, allocMax: 0.7, expectedROI: ltvCacVal >= 3 ? 2.5 : 1.5 },
-      { name: "PRODUCT", allocMin: 0.15, allocMax: 0.35, expectedROI: 2.0 },
-      { name: "GTM", allocMin: 0.1, allocMax: 0.3, expectedROI: ltvCacVal >= 3 ? 3.0 : 0.8 },
-      { name: "OPERATIONS", allocMin: 0.05, allocMax: 0.15, expectedROI: 1.2 },
-      {
-        name: "RESERVE",
-        allocMin: (runway?.runway_months ?? 24) < 12 ? 0.15 : 0.05,
-        allocMax: (runway?.runway_months ?? 24) < 6 ? 0.3 : 0.1,
-        expectedROI: 0.5,
-      },
-    ];
-    const totalEV = categories.reduce((a, c) => a + c.expectedROI, 0);
-    const raw = categories.map((c) => {
-      const evWeight = c.expectedROI / totalEV;
-      const allocation = Math.min(c.allocMax, Math.max(c.allocMin, evWeight));
-      return { ...c, allocation };
-    });
-    const sumRaw = raw.reduce((a, c) => a + c.allocation, 0);
-    let allocations = raw.map((c) => ({ ...c, allocation: Math.round((c.allocation / sumRaw) * 100) }));
-    // Round-off repair: push any rounding remainder onto the largest bucket so the
-    // total is exactly 100 (self-tested — see selfTest.ts).
-    const diff = 100 - allocations.reduce((a, c) => a + c.allocation, 0);
-    if (diff !== 0) {
-      const idx = allocations.reduce((best, c, i) => (c.allocation > allocations[best].allocation ? i : best), 0);
-      allocations[idx] = { ...allocations[idx], allocation: allocations[idx].allocation + diff };
+function estimatePersonMonthlyCost(person: Person): number {
+  if (person.monthlySalary != null && person.monthlySalary > 0) {
+    return person.monthlySalary;
+  }
+  const key = person.role.trim().toLowerCase();
+  return ROLE_COST_MAP[key] ?? ROLE_COST_MAP.default;
+}
+
+export interface CostAttributionReport {
+  byDomain: Record<Domain, { headcount: number; estimatedCost: number }>;
+  byTeam: Record<string, { headcount: number; estimatedCost: number }>;
+  topCostCenters: { name: string; cost: number; trend: "up" | "flat" | "down" }[];
+  totalBurn: number;
+  /** True if at least one person's cost was estimated via ROLE_COST_MAP rather than an actual salary on file. */
+  containsEstimatedCosts: boolean;
+}
+
+/**
+ * Determines whether a team's spend is trending up/flat/down by comparing
+ * its two most recent months of `expense`/`burn` ledger events (>5% change
+ * threshold). Falls back to 'flat' when there isn't enough history.
+ */
+function computeTeamTrend(team: string, events: FinancialEvent[]): "up" | "flat" | "down" {
+  const teamEvents = events.filter(
+    (e) => e.team === team && (e.type === "expense" || e.type === "burn"),
+  );
+  const byMonth = new Map<string, number>();
+  for (const e of teamEvents) {
+    const key = e.date.slice(0, 7);
+    byMonth.set(key, (byMonth.get(key) ?? 0) + e.amount);
+  }
+  const months = Array.from(byMonth.entries()).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  if (months.length < 2) return "flat";
+
+  const [, latest] = months[months.length - 1];
+  const [, previous] = months[months.length - 2];
+  if (previous === 0) return "flat";
+
+  const change = (latest - previous) / previous;
+  if (change > 0.05) return "up";
+  if (change < -0.05) return "down";
+  return "flat";
+}
+
+/**
+ * Builds a cost attribution report: headcount + estimated monthly cost by
+ * domain and by team, plus the top cost centers ranked by spend with a
+ * simple month-over-month trend indicator.
+ */
+export function addCostAttribution(events: FinancialEvent[], people: Person[]): CostAttributionReport {
+  const byDomain = {} as Record<Domain, { headcount: number; estimatedCost: number }>;
+  for (const domain of ALL_DOMAINS) {
+    byDomain[domain] = { headcount: 0, estimatedCost: 0 };
+  }
+
+  const byTeam: Record<string, { headcount: number; estimatedCost: number }> = {};
+  let containsEstimatedCosts = false;
+
+  for (const person of people) {
+    if (!person.active) continue;
+
+    const cost = estimatePersonMonthlyCost(person);
+    if (person.monthlySalary == null || person.monthlySalary <= 0) {
+      containsEstimatedCosts = true;
     }
 
-    return {
-      allocations,
-      scenarioAdjustment:
-        ltvCacVal < 2
-          ? "LTV:CAC below 2.0 — GTM allocation capped at lower band; see R211."
-          : null,
-      label:
-        "Capital allocation from a simplified Markowitz-style mean-variance heuristic " +
-        "(Markowitz, 1952). Labeled: this is a heuristic illustration, not a financial plan. " +
-        "Consult a CFO/financial advisor for real allocation decisions.",
-    };
-  },
+    byDomain[person.domain].headcount += 1;
+    byDomain[person.domain].estimatedCost += cost;
 
-  buildScenarioProjection(P: AppState, today: Date, horizonMonths = 12) {
-    const unitEcon = this.computeCompleteUnitEconomics(P, today);
-    const { scenarios } = buildMinimalScenarioSet();
-    const mrr = unitEcon.mrr || 0;
-    const churnRate = unitEcon.churnRate || 0.02;
-    const newMRR30d = P.events
-      .filter((e) => e.type === "sales.deal.closed" && e.data.result === "won" && daysBetween(e.ts, today) <= 30)
-      .reduce((a, e) => a + (e.data.value || 0) / 12, 0);
+    const teamKey = person.team?.trim() || "Unassigned";
+    if (!byTeam[teamKey]) {
+      byTeam[teamKey] = { headcount: 0, estimatedCost: 0 };
+    }
+    byTeam[teamKey].headcount += 1;
+    byTeam[teamKey].estimatedCost += cost;
+  }
 
-    const projections = scenarios.map((scenario) => {
-      const probability = scenario.probability / 100;
-      const churnAdj = scenario.axes["attrition.next60d"] === "ADVERSE" ? churnRate * 1.3 : churnRate;
-      const newMRRadj = scenario.axes["revenue.miss.next_quarter"] === "ADVERSE" ? newMRR30d * 0.7 : newMRR30d;
+  const totalBurn = Object.values(byDomain).reduce((sum, d) => sum + d.estimatedCost, 0);
 
-      let projectedMRR = mrr;
-      const trajectory: { month: number; mrr: number }[] = [];
-      for (let m = 1; m <= horizonMonths; m++) {
-        projectedMRR = projectedMRR * (1 - churnAdj) + newMRRadj;
-        trajectory.push({ month: m, mrr: Math.round(projectedMRR) });
-      }
-      return { scenario: scenario.name, probability, finalMRR: Math.round(projectedMRR), trajectory, impliedARR: Math.round(projectedMRR * 12) };
-    });
+  const topCostCenters = Object.entries(byTeam)
+    .map(([name, { estimatedCost }]) => ({
+      name,
+      cost: estimatedCost,
+      trend: computeTeamTrend(name, events),
+    }))
+    .sort((a, b) => b.cost - a.cost)
+    .slice(0, 5);
 
-    const evMRR = projections.reduce((a, p) => a + p.finalMRR * p.probability, 0);
-    return {
-      projections,
-      expectedValue: { mrr: Math.round(evMRR), arr: Math.round(evMRR * 12) },
-      horizonMonths,
-      label:
-        `Scenario-weighted ${horizonMonths}-month MRR projection. Starting MRR €${mrr.toLocaleString()}. ` +
-        `Expected value MRR €${Math.round(evMRR).toLocaleString()}. Labeled: constant-churn compounding model — ` +
-        `no seasonality, no expansion MRR, no market dynamics.`,
-    };
-  },
-};
+  return { byDomain, byTeam, topCostCenters, totalBurn, containsEstimatedCosts };
+}

@@ -1,136 +1,75 @@
-// Generic Monte Carlo simulation engine.
-//
-// Historically this module was only wired into the scenario layer to turn a
-// single point-probability into a distribution. Part 5 (strategic
-// intelligence layer) reuses the exact same primitives for:
-//   - decision outcome distributions (`simulateDecisionOutcomes`)
-//   - financial runway projections (`simulateRunway`)
-//   - delivery-date confidence (`simulateDeliveryConfidence`)
-// so the same statistical core backs every probabilistic view in the app.
+/**
+ * src/lib/monteCarlo.ts
+ *
+ * Shared statistical primitives for Monte Carlo simulation. These are used by
+ * `financialOS.ts` (server) and are intentionally re-implemented (duplicated,
+ * not imported) inside `src/workers/monteCarloWorker.ts` because a Web Worker
+ * cannot import server-only modules and we want the worker bundle to be a
+ * fully self-contained script.
+ *
+ * Every formula below is labeled with its textbook name. Anything that is a
+ * simplification rather than a rigorous model is explicitly marked
+ * UNVERIFIED.
+ */
 
-import type { Decision } from "./types";
-import { toNumber } from "./types";
+import type { MersenneTwister } from "./prng";
 
-export interface MonteCarloResult {
-  iterations: number;
-  mean: number;
-  median: number;
-  stdDev: number;
-  p10: number;
-  p50: number;
-  p90: number;
-  min: number;
-  max: number;
-  /** Histogram with a fixed number of buckets across [min, max] for charting. */
-  histogram: { bucketStart: number; bucketEnd: number; count: number }[];
+/**
+ * Box-Muller transform.
+ * Converts two independent Uniform(0,1) draws into one standard-normal
+ * N(0,1) variate: Z = sqrt(-2 ln U1) * cos(2*pi*U2).
+ * Reference: Box, G.E.P. and Muller, M.E., "A Note on the Generation of
+ * Random Normal Deviates", Annals of Mathematical Statistics, 1958.
+ */
+export function sampleStandardNormal(rng: MersenneTwister): number {
+  let u1 = rng.random();
+  const u2 = rng.random();
+  // Guard against log(0) when u1 is numerically zero.
+  if (u1 < 1e-12) u1 = 1e-12;
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
-/** Box-Muller transform producing a standard-normal random sample. */
-function sampleStandardNormal(): number {
-  let u = 0;
-  let v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-}
-
-function buildHistogram(samples: number[], buckets = 12): MonteCarloResult["histogram"] {
-  const min = Math.min(...samples);
-  const max = Math.max(...samples);
-  const span = max - min || 1;
-  const width = span / buckets;
-  const counts = new Array(buckets).fill(0);
-  for (const s of samples) {
-    const idx = Math.min(buckets - 1, Math.floor((s - min) / width));
-    counts[idx] += 1;
-  }
-  return counts.map((count, i) => ({
-    bucketStart: min + i * width,
-    bucketEnd: min + (i + 1) * width,
-    count,
-  }));
-}
-
-function summarize(samples: number[]): MonteCarloResult {
-  const sorted = [...samples].sort((a, b) => a - b);
-  const n = sorted.length;
-  const mean = sorted.reduce((a, b) => a + b, 0) / n;
-  const variance = sorted.reduce((a, b) => a + (b - mean) ** 2, 0) / n;
-  const pct = (p: number) => sorted[Math.min(n - 1, Math.max(0, Math.floor(p * n)))];
-  return {
-    iterations: n,
-    mean,
-    median: pct(0.5),
-    stdDev: Math.sqrt(variance),
-    p10: pct(0.1),
-    p50: pct(0.5),
-    p90: pct(0.9),
-    min: sorted[0],
-    max: sorted[n - 1],
-    histogram: buildHistogram(sorted),
-  };
-}
-
-/** Core driver: simulate a drift/volatility random walk `horizonSteps` ahead. */
-export function runMonteCarlo(params: {
-  base: number;
-  volatility: number; // as a fraction, e.g. 0.3 = 30%
-  drift?: number; // expected fractional change over the horizon
-  iterations?: number;
-}): MonteCarloResult {
-  const { base, volatility, drift = 0, iterations = 1000 } = params;
-  const samples: number[] = [];
-  for (let i = 0; i < iterations; i += 1) {
-    const shock = sampleStandardNormal() * volatility;
-    samples.push(Math.max(0, base * (1 + drift + shock)));
-  }
-  return summarize(samples);
+/** Arithmetic mean. */
+export function mean(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  return xs.reduce((a, b) => a + b, 0) / xs.length;
 }
 
 /**
- * Outcome distribution for a strategic decision: the "base" payoff is derived
- * from impact x probability, volatility scales with how uncertain/novel the
- * decision context is (we use optionVolatility as a stand-in).
+ * Sample standard deviation using Bessel's correction (n - 1 denominator),
+ * the standard unbiased estimator of population variance from a sample.
  */
-export function simulateDecisionOutcomes(
-  decision: Decision,
-  iterations = 1000,
-): MonteCarloResult {
-  const impact = toNumber(decision.impact, 3);
-  const probability = toNumber(decision.probability, 0.5);
-  const volatility = toNumber(decision.optionVolatility, 0.35);
-  const base = impact * 20000 * probability; // heuristic expected-value baseline
-  return runMonteCarlo({ base, volatility, drift: 0, iterations });
+export function sampleStdDev(xs: number[]): number {
+  if (xs.length < 2) return 0;
+  const m = mean(xs);
+  const sumSq = xs.reduce((acc, x) => acc + (x - m) ** 2, 0);
+  return Math.sqrt(sumSq / (xs.length - 1));
 }
 
-/** Financial runway projection: months of cash remaining under burn uncertainty. */
-export function simulateRunway(params: {
-  cashOnHand: number;
-  monthlyBurn: number;
-  burnVolatility?: number;
-  iterations?: number;
-}): MonteCarloResult {
-  const { cashOnHand, monthlyBurn, burnVolatility = 0.2, iterations = 1000 } = params;
-  const samples: number[] = [];
-  for (let i = 0; i < iterations; i += 1) {
-    const shock = sampleStandardNormal() * burnVolatility;
-    const effectiveBurn = Math.max(1, monthlyBurn * (1 + shock));
-    samples.push(cashOnHand / effectiveBurn);
-  }
-  return summarize(samples);
+/**
+ * Percentile / quantile estimator using linear interpolation between the two
+ * closest ranks of the empirical CDF (equivalent to NumPy's default
+ * `linear` interpolation method for `numpy.percentile`).
+ *
+ * @param sortedAsc values already sorted ascending
+ * @param p fraction in [0, 1] (e.g. 0.5 for the median)
+ */
+export function percentile(sortedAsc: number[], p: number): number {
+  if (sortedAsc.length === 0) return 0;
+  if (sortedAsc.length === 1) return sortedAsc[0];
+  const clampedP = Math.min(1, Math.max(0, p));
+  const rank = clampedP * (sortedAsc.length - 1);
+  const lowIndex = Math.floor(rank);
+  const highIndex = Math.ceil(rank);
+  if (lowIndex === highIndex) return sortedAsc[lowIndex];
+  const weight = rank - lowIndex;
+  return sortedAsc[lowIndex] * (1 - weight) + sortedAsc[highIndex] * weight;
 }
 
-/** Delivery-date confidence: distribution of completion days for an estimate. */
-export function simulateDeliveryConfidence(params: {
-  estimateDays: number;
-  varianceFraction?: number;
-  iterations?: number;
-}): MonteCarloResult {
-  const { estimateDays, varianceFraction = 0.4, iterations = 1000 } = params;
-  return runMonteCarlo({
-    base: estimateDays,
-    volatility: varianceFraction,
-    drift: 0.1, // delivery dates skew late more often than early
-    iterations,
-  });
+/**
+ * Compound (geometric) growth step: value(t) = value(t-1) * (1 + rate).
+ * Standard discrete compounding formula, not stochastic.
+ */
+export function compoundGrowthStep(previousValue: number, rate: number): number {
+  return previousValue * (1 + rate);
 }
