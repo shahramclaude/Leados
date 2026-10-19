@@ -1,66 +1,34 @@
-import { db } from "@/db";
-import { people as peopleTable } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { runOrchestrator, recentEventsForPerson, getPersonContext } from "@/lib/orchestrator";
-import { jsonError, cachedJson, isRecord } from "@/lib/api";
+import { resolveViewer } from "@/lib/platform/auth";
+import { getPersonProfile, updatePersonProfile } from "@/lib/app/people/profile";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
-  const { id } = await context.params;
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const personId = Number(id);
-  if (!Number.isFinite(personId)) return jsonError("invalid id");
+  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
 
-  const { person } = await getPersonContext(personId);
-  if (!person) return jsonError("not found", 404);
+  const viewer = resolveViewer(request);
+  const result = await getPersonProfile(viewer, personId);
+  if (!result) return Response.json({ error: "not_found" }, { status: 404 });
 
-  const report = await runOrchestrator();
-  const personIntelligence = report.individuals.find((p) => p.personId === personId);
-  if (!personIntelligence) return jsonError("not found", 404);
-
-  const recentEvents = await recentEventsForPerson(personId, 5);
-
-  return cachedJson({
-    person: personIntelligence,
-    roster: { name: person.name, role: person.role, team: person.team, level: person.level },
-    recentEvents,
-  });
+  return Response.json(result);
 }
 
-export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }): Promise<Response> {
-  const { id } = await context.params;
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const personId = Number(id);
-  if (!Number.isFinite(personId)) return jsonError("invalid id");
+  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
 
-  const body: unknown = await request.json();
-  if (!isRecord(body)) return jsonError("invalid body");
+  const viewer = resolveViewer(request);
+  const patch = await request.json().catch(() => null);
+  if (!patch) return Response.json({ error: "Request body must be JSON." }, { status: 400 });
 
-  const allowed: Record<string, unknown> = {};
-  for (const key of [
-    "name",
-    "role",
-    "team",
-    "managerId",
-    "level",
-    "tenureStart",
-    "lastPromotedAt",
-    "compensationBand",
-    "skills",
-    "okrScore",
-    "archived",
-  ]) {
-    if (key in body) allowed[key] = body[key];
+  const result = await updatePersonProfile(viewer, personId, patch);
+  if (!result.ok) {
+    const status = result.error === "forbidden" ? 403 : 404;
+    return Response.json({ error: result.error }, { status });
   }
-  if (Object.keys(allowed).length === 0) return jsonError("no updatable fields provided");
 
-  if (typeof allowed.tenureStart === "string") allowed.tenureStart = new Date(allowed.tenureStart);
-  if (typeof allowed.lastPromotedAt === "string") allowed.lastPromotedAt = new Date(allowed.lastPromotedAt);
-
-  const [updated] = await db
-    .update(peopleTable)
-    .set({ ...allowed, updatedAt: new Date() })
-    .where(eq(peopleTable.id, personId))
-    .returning();
-  if (!updated) return jsonError("not found", 404);
-  return cachedJson(updated);
+  return Response.json({ person: result.person });
 }

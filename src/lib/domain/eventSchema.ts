@@ -1,92 +1,114 @@
-/**
- * src/lib/domain/eventSchema.ts
- *
- * Runtime validation for every event payload that crosses the API
- * boundary, keyed by `type:version` against `eventCatalog.ts`. This is the
- * "versioned schema registry" required by Part 0, item 4.
- *
- * Validation approach: zod. Chosen because it is already idiomatic in the
- * Next.js App Router ecosystem, gives us static type inference for free
- * (`z.infer`), and composes cleanly with a registry keyed by string ->
- * schema without any code generation step.
- */
 import { z } from "zod";
-import { EVENT_CATALOG, findCatalogEntry, registryKey, type EventType } from "./eventCatalog";
+import { findCatalogEntry } from "./eventCatalog";
 
-type ZodIssue = z.ZodError["issues"][number];
+// Each schema below is the single source of truth for what a payload may
+// contain. Note what is deliberately absent: no `collaboration.*` schema has
+// a text field for message/meeting content, and no people-domain schema
+// accepts any of PROTECTED_ATTRIBUTES (see src/lib/domain/types.ts).
 
-const systemPingPayloadV1 = z.object({
-  message: z.string().min(1).max(2000),
-});
+const schemas: Record<string, z.ZodTypeAny> = {
+  "system.ping:1": z.object({ message: z.string() }),
+  "system.annotation:1": z.object({
+    title: z.string(),
+    body: z.string(),
+    tags: z.array(z.string()).optional(),
+  }),
 
-const systemAnnotationPayloadV1 = z.object({
-  title: z.string().min(1).max(200),
-  body: z.string().min(1).max(5000),
-  tags: z.array(z.string().min(1).max(40)).max(20).optional(),
-});
+  "person.hired:1": z.object({
+    personId: z.number(),
+    title: z.string(),
+    teamId: z.number().nullable(),
+    managerId: z.number().nullable(),
+    hireDate: z.string(),
+  }),
+  "person.role_changed:1": z.object({
+    personId: z.number(),
+    fromTitle: z.string(),
+    toTitle: z.string(),
+  }),
+  "person.manager_changed:1": z.object({
+    personId: z.number(),
+    fromManagerId: z.number().nullable(),
+    toManagerId: z.number().nullable(),
+  }),
+  "person.compensation_reviewed:1": z.object({
+    personId: z.number(),
+    compaRatio: z.number().min(0).max(3),
+    bandMidpointDeltaPct: z.number().optional(),
+  }),
+  "person.skill_evidenced:1": z.object({
+    personId: z.number(),
+    skill: z.string(),
+    level: z.number().min(1).max(5),
+    evidence: z.string(),
+  }),
+  "person.growth_conversation_held:1": z.object({
+    personId: z.number(),
+    managerId: z.number(),
+    topics: z.array(z.string()),
+  }),
 
-/**
- * Registry of payload schemas keyed by `${type}:${version}`. Every entry in
- * `EVENT_CATALOG` must have a matching schema here — enforced below.
- */
-const EVENT_PAYLOAD_SCHEMAS = {
-  [registryKey("system.ping", 1)]: systemPingPayloadV1,
-  [registryKey("system.annotation", 1)]: systemAnnotationPayloadV1,
-} as const;
+  "oneonone.scheduled:1": z.object({
+    oneOnOneId: z.number(),
+    personId: z.number(),
+    managerId: z.number(),
+    scheduledAt: z.string(),
+  }),
+  "oneonone.completed:1": z.object({
+    oneOnOneId: z.number(),
+    personId: z.number(),
+    managerId: z.number(),
+    commitmentCount: z.number(),
+  }),
+  "oneonone.commitment_resolved:1": z.object({
+    oneOnOneId: z.number(),
+    commitmentId: z.string(),
+    status: z.enum(["done", "missed"]),
+  }),
+  "growth.milestone_completed:1": z.object({
+    personId: z.number(),
+    planId: z.number(),
+    milestoneId: z.number(),
+    skill: z.string(),
+    evidence: z.string(),
+  }),
 
-// Fail fast (at module load, not at request time) if the catalog and the
-// schema registry ever drift apart.
-for (const entry of EVENT_CATALOG) {
-  if (!(registryKey(entry.type, entry.version) in EVENT_PAYLOAD_SCHEMAS)) {
-    throw new Error(
-      `Event catalog entry "${entry.type}:${entry.version}" has no matching schema in eventSchema.ts`,
-    );
-  }
+  "consent.recorded:1": z.object({
+    personId: z.number(),
+    scope: z.string(),
+    noticeVersion: z.string(),
+    granted: z.boolean(),
+  }),
+
+  "collaboration.meeting_logged:1": z.object({
+    meetingId: z.string(),
+    participantIds: z.array(z.number()).min(1),
+    organizerId: z.number(),
+    durationMinutes: z.number().positive(),
+    recurring: z.boolean(),
+    occurredAt: z.string(),
+  }),
+  "collaboration.message_logged:1": z.object({
+    fromId: z.number(),
+    toId: z.number(),
+    channel: z.enum(["chat", "email", "comment"]),
+    occurredAt: z.string(),
+  }),
+};
+
+export function schemaFor(type: string, version: number): z.ZodTypeAny | undefined {
+  if (!findCatalogEntry(type, version)) return undefined;
+  return schemas[`${type}:${version}`];
 }
 
-export class UnknownEventTypeError extends Error {
-  constructor(type: string, version: number) {
-    super(`Unknown event type/version combination: "${type}:${version}". See eventCatalog.ts.`);
-    this.name = "UnknownEventTypeError";
+export function validatePayload(type: string, version: number, payload: unknown) {
+  const schema = schemaFor(type, version);
+  if (!schema) {
+    return { ok: false as const, error: `Unknown event type/version: ${type} v${version}` };
   }
+  const parsed = schema.safeParse(payload);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.message };
+  }
+  return { ok: true as const, data: parsed.data };
 }
-
-export class EventPayloadValidationError extends Error {
-  issues: ZodIssue[];
-
-  constructor(type: string, version: number, issues: ZodIssue[]) {
-    super(
-      `Event payload for "${type}:${version}" failed validation: ${issues
-        .map((issue) => `${issue.path.join(".") || "(root)"} - ${issue.message}`)
-        .join("; ")}`,
-    );
-    this.name = "EventPayloadValidationError";
-    this.issues = issues;
-  }
-}
-
-/**
- * Validate an arbitrary payload against the registered schema for
- * `type`/`version`. Throws `UnknownEventTypeError` if the catalog has no
- * such entry, or `EventPayloadValidationError` if the payload does not
- * match the schema. Returns the parsed (and therefore typed) payload.
- */
-export function validateEventPayload(type: string, version: number, payload: unknown): unknown {
-  const catalogEntry = findCatalogEntry(type, version);
-  if (!catalogEntry) {
-    throw new UnknownEventTypeError(type, version);
-  }
-
-  const schema = EVENT_PAYLOAD_SCHEMAS[registryKey(type, version) as keyof typeof EVENT_PAYLOAD_SCHEMAS];
-  const result = schema.safeParse(payload);
-
-  if (!result.success) {
-    throw new EventPayloadValidationError(type, version, result.error.issues);
-  }
-
-  return result.data;
-}
-
-export type { EventType };
-export type SystemPingPayloadV1 = z.infer<typeof systemPingPayloadV1>;
-export type SystemAnnotationPayloadV1 = z.infer<typeof systemAnnotationPayloadV1>;

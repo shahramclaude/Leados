@@ -1,33 +1,35 @@
-import { db } from "@/db";
-import { oneOnOnes, people } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { cachedJson, jsonError, isRecord } from "@/lib/api";
+import { resolveViewer } from "@/lib/platform/auth";
+import { listOneOnOnes, scheduleOneOnOne } from "@/lib/app/people/oneOnOnes";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(
-  request: Request,
-  context: { params: Promise<{ id: string }> }
-): Promise<Response> {
-  const { id } = await context.params;
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const personId = Number(id);
-  if (!Number.isInteger(personId)) return jsonError("invalid person id");
+  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
 
-  const body: unknown = await request.json();
-  if (!isRecord(body) || typeof body.notes !== "string" || body.notes.trim() === "") {
-    return jsonError("notes is required");
+  const viewer = resolveViewer(request);
+  const result = await listOneOnOnes(viewer, personId);
+  if (!result.ok) return Response.json({ error: result.error }, { status: 403 });
+
+  return Response.json(result);
+}
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const personId = Number(id);
+  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
+
+  const viewer = resolveViewer(request);
+  const body = await request.json().catch(() => null);
+  if (!body?.scheduledAt) return Response.json({ error: "scheduledAt is required." }, { status: 400 });
+
+  const managerId = body.managerId ?? viewer.id;
+  const result = await scheduleOneOnOne(viewer, personId, managerId, body.scheduledAt);
+  if (!result.ok) {
+    const status = result.error === "forbidden" ? 403 : 404;
+    return Response.json({ error: result.error }, { status });
   }
-  const sentiment = typeof body.sentiment === "number" ? body.sentiment : 0;
-  const actionItems = Array.isArray(body.actionItems)
-    ? body.actionItems.filter((i): i is string => typeof i === "string")
-    : [];
 
-  const [created] = await db
-    .insert(oneOnOnes)
-    .values({ personId, notes: body.notes, sentiment, actionItems })
-    .returning();
-
-  await db.update(people).set({ lastOneOnOneAt: new Date() }).where(eq(people.id, personId));
-
-  return cachedJson(created, { status: 201 });
+  return Response.json({ oneOnOne: result.oneOnOne }, { status: 201 });
 }

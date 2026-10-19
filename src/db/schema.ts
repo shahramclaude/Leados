@@ -1,353 +1,160 @@
-// =============================================================================
-// LEADOS — Part 4: Autonomous Automation schema
-// -----------------------------------------------------------------------------
-// Provenance note: the upstream repo (github.com/shahramclaude/Leados) was
-// cloned and read in full for this session. Its own src/db/schema.ts only
-// defines 7 tables (beliefs, belief_observations, findings, calibration_runs,
-// rule_weights, forecast_cache, scenarios) while ~40 route/lib files import
-// tables that do not exist anywhere in that tree (agentCycles, autonomousRuns,
-// leados_autonomous_runs, hypotheses, playbookInstances, notifications,
-// settings, work_queue, people, rules, ...). That tree is a merged-but-
-// unreconciled stack of independent "part" sessions (each one's own code
-// comments admit "recreated for this sandbox" / "not present in this
-// checkout"), so it does not compile as a unit. This session builds Part 4 —
-// the autonomous orchestration kernel — fresh, self-consistently, against
-// this working tree, reusing naming/concepts from the upstream repo
-// (agent cycles, autonomous runs, playbook/finding domain, work queue,
-// self-improvement, briefings) wherever they map cleanly onto a single
-// coherent schema. See AI-SESSION-LOG.md for the full provenance record.
-// =============================================================================
-
+// LEADOS data model.
+//
+// `events` is the append-only backbone every domain engine ultimately derives
+// its view from (see src/lib/domain/eventCatalog.ts for the schema registry).
+// Part 5 (People & Organization Intelligence) additionally needs a small set
+// of materialized tables — people, teams, 1:1s, growth plans, succession,
+// consent, and an access-audit trail — because those surfaces need
+// transactional CRUD + server-side access scoping, not just event replay.
+// The timeline view still projects `events` for the "what happened and why"
+// story; these tables hold current state.
 import {
-  bigserial,
   boolean,
-  doublePrecision,
-  index,
+  date,
   integer,
   jsonb,
+  numeric,
   pgTable,
   serial,
   text,
   timestamp,
-  uniqueIndex,
+  varchar,
 } from "drizzle-orm/pg-core";
 
-// -----------------------------------------------------------------------------
-// Domain: findings & metrics (what the agent observes)
-// -----------------------------------------------------------------------------
-
-export const findings = pgTable(
-  "findings",
-  {
-    id: serial("id").primaryKey(),
-    domain: text("domain").notNull(), // e.g. "people", "financial", "execution"
-    severity: integer("severity").notNull(), // 1-5, 5 = critical
-    title: text("title").notNull(),
-    description: text("description").notNull(),
-    status: text("status").notNull().default("open"), // open | resolved
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-  },
-  (t) => [index("findings_status_idx").on(t.status), index("findings_severity_idx").on(t.severity)],
-);
-
-export const metricReadings = pgTable(
-  "metric_readings",
-  {
-    id: serial("id").primaryKey(),
-    key: text("key").notNull(),
-    value: doublePrecision("value").notNull(),
-    observedAt: timestamp("observed_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("metric_readings_key_idx").on(t.key)],
-);
-
-export const rules = pgTable("rules", {
+// ---------------------------------------------------------------------------
+// Part 0/2 backbone: append-only event log
+// ---------------------------------------------------------------------------
+export const events = pgTable("events", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  domain: text("domain").notNull(),
-  weight: doublePrecision("weight").notNull().default(1),
-  threshold: doublePrecision("threshold").notNull().default(0.5),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  type: varchar("type", { length: 255 }).notNull(),
+  version: integer("version").notNull(),
+  payload: jsonb("payload").notNull(),
+  // Optional indexing hints so people-intelligence queries don't have to
+  // scan + JSON-parse every row. Nullable because not every event concerns a
+  // single person (e.g. system.ping).
+  actorId: integer("actor_id"),
+  subjectId: integer("subject_id"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// -----------------------------------------------------------------------------
-// Capability registry (admin overrides over the code-defined registry)
-// -----------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Part 5: People & Organization Intelligence
+// ---------------------------------------------------------------------------
 
-export const capabilityOverrides = pgTable("capability_overrides", {
-  key: text("key").primaryKey(),
-  enabled: boolean("enabled").notNull().default(true),
-  mode: text("mode"), // auto | ask-once | manual — null = use code default
-  dailyBudget: integer("daily_budget"), // null = use code default
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedBy: text("updated_by"),
+export const teams = pgTable("teams", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  department: varchar("department", { length: 255 }).notNull(),
+  leadId: integer("lead_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// -----------------------------------------------------------------------------
-// Orchestration kernel — event-sourced runs
-// -----------------------------------------------------------------------------
-
-export const kernelRuns = pgTable(
-  "kernel_runs",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    triggerType: text("trigger_type").notNull(), // cron | event | manual
-    triggerSource: text("trigger_source").notNull(),
-    dryRun: boolean("dry_run").notNull().default(false),
-    status: text("status").notNull().default("running"), // running | completed | failed | paused_budget
-    planSummary: text("plan_summary"),
-    outcome: jsonb("outcome").$type<Record<string, unknown>>(),
-    rollbackPoints: jsonb("rollback_points").$type<string[]>().default([]),
-    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    createdBy: text("created_by").notNull().default("system"),
-  },
-  (t) => [index("kernel_runs_started_idx").on(t.startedAt)],
-);
-
-export const kernelSteps = pgTable(
-  "kernel_steps",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    runId: bigserial("run_id", { mode: "number" }).notNull(),
-    stepIndex: integer("step_index").notNull(),
-    phase: text("phase").notNull(), // observe|orient|hypothesize|plan|act|verify|learn
-    input: jsonb("input").$type<Record<string, unknown>>(),
-    output: jsonb("output").$type<Record<string, unknown>>(),
-    status: text("status").notNull().default("ok"), // ok | error
-    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-  },
-  (t) => [index("kernel_steps_run_idx").on(t.runId)],
-);
-
-export const kernelToolCalls = pgTable(
-  "kernel_tool_calls",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    runId: bigserial("run_id", { mode: "number" }).notNull(),
-    capabilityKey: text("capability_key").notNull(),
-    params: jsonb("params").$type<Record<string, unknown>>(),
-    riskClass: text("risk_class").notNull(), // low | medium | high
-    mode: text("mode").notNull(), // auto | ask-once | manual
-    dryRun: boolean("dry_run").notNull().default(false),
-    status: text("status").notNull().default("pending"),
-    // pending | approved | rejected | executed | failed | skipped_budget | skipped_disabled
-    costEstimate: doublePrecision("cost_estimate").notNull().default(0),
-    predictedDiff: jsonb("predicted_diff").$type<Record<string, unknown>>(),
-    actualResult: jsonb("actual_result").$type<Record<string, unknown>>(),
-    undoHandle: text("undo_handle"),
-    undone: boolean("undone").notNull().default(false),
-    approvalId: bigserial("approval_id", { mode: "number" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    executedAt: timestamp("executed_at", { withTimezone: true }),
-  },
-  (t) => [index("kernel_tool_calls_run_idx").on(t.runId), index("kernel_tool_calls_status_idx").on(t.status)],
-);
-
-// -----------------------------------------------------------------------------
-// Approvals (human-in-the-loop gate)
-// -----------------------------------------------------------------------------
-
-export const approvals = pgTable(
-  "approvals",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    toolCallId: bigserial("tool_call_id", { mode: "number" }).notNull(),
-    riskClass: text("risk_class").notNull(),
-    summary: text("summary").notNull(),
-    status: text("status").notNull().default("pending"), // pending | approved | rejected
-    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
-    decidedBy: text("decided_by"),
-    decidedAt: timestamp("decided_at", { withTimezone: true }),
-    reason: text("reason"),
-  },
-  (t) => [index("approvals_status_idx").on(t.status)],
-);
-
-// -----------------------------------------------------------------------------
-// Scheduler — jobs, runs, dead letter queue
-// -----------------------------------------------------------------------------
-
-export const jobs = pgTable("jobs", {
-  key: text("key").primaryKey(),
-  kind: text("kind").notNull(), // cron | event | manual
-  cronExpr: text("cron_expr"),
-  eventType: text("event_type"),
-  dependsOn: jsonb("depends_on").$type<string[]>().default([]),
-  concurrencyLimit: integer("concurrency_limit").notNull().default(1),
-  timeoutMs: integer("timeout_ms").notNull().default(60000),
-  maxRetries: integer("max_retries").notNull().default(3),
-  backoffBaseMs: integer("backoff_base_ms").notNull().default(1000),
-  enabled: boolean("enabled").notNull().default(true),
+export const people = pgTable("people", {
+  id: serial("id").primaryKey(),
+  displayName: varchar("display_name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  title: varchar("title", { length: 255 }).notNull(),
+  teamId: integer("team_id").references(() => teams.id),
+  managerId: integer("manager_id"),
+  hireDate: date("hire_date").notNull(),
+  location: varchar("location", { length: 255 }).notNull(),
+  employmentStatus: varchar("employment_status", { length: 50 }).notNull().default("active"),
+  // Sensitive / field-redacted attributes. Never returned to a viewer who
+  // isn't the person themself, their manager, HR, or an exec — see
+  // src/lib/domain/people/privacy.ts.
+  compaRatio: numeric("compa_ratio", { precision: 5, scale: 2 }),
+  skills: jsonb("skills").notNull().default([]),
+  goals: jsonb("goals").notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const jobRuns = pgTable(
-  "job_runs",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    jobKey: text("job_key").notNull(),
-    idempotencyKey: text("idempotency_key").notNull(),
-    status: text("status").notNull().default("queued"),
-    // queued | running | succeeded | failed | dead_letter
-    attempt: integer("attempt").notNull().default(1),
-    scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
-    jitterMs: integer("jitter_ms").notNull().default(0),
-    startedAt: timestamp("started_at", { withTimezone: true }),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-    error: text("error"),
-    kernelRunId: bigserial("kernel_run_id", { mode: "number" }),
-  },
-  (t) => [
-    uniqueIndex("job_runs_idempotency_idx").on(t.idempotencyKey),
-    index("job_runs_job_key_idx").on(t.jobKey),
-  ],
-);
+export const oneOnOnes = pgTable("one_on_ones", {
+  id: serial("id").primaryKey(),
+  personId: integer("person_id").notNull().references(() => people.id),
+  managerId: integer("manager_id").notNull().references(() => people.id),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+  status: varchar("status", { length: 50 }).notNull().default("scheduled"),
+  // Shared, co-edited agenda. Visible to the person + manager.
+  sharedAgenda: jsonb("shared_agenda").notNull().default([]),
+  // System-suggested talking points, derived from recent signals. Advisory
+  // only — rendered as suggestions the manager can accept/discard, never
+  // auto-sent to the employee. See oneOnOne.ts `suggestTalkingPoints`.
+  talkingPointSuggestions: jsonb("talking_point_suggestions").notNull().default([]),
+  // Commitments made during the 1:1. Each entry tracks follow-through.
+  commitments: jsonb("commitments").notNull().default([]),
+  // Manager-private notes. Never exposed to the person, peers, or anyone
+  // without an HR/exec access grant. Enforced in oneOnOneRepository.ts.
+  privateManagerNotes: text("private_manager_notes"),
+  sharedSummary: text("shared_summary"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
 
-export const deadLetterQueue = pgTable("dead_letter_queue", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  jobRunId: bigserial("job_run_id", { mode: "number" }).notNull(),
-  jobKey: text("job_key").notNull(),
+export const growthPlans = pgTable("growth_plans", {
+  id: serial("id").primaryKey(),
+  personId: integer("person_id").notNull().references(() => people.id),
+  title: varchar("title", { length: 255 }).notNull(),
+  status: varchar("status", { length: 50 }).notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const growthMilestones = pgTable("growth_milestones", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id").notNull().references(() => growthPlans.id),
+  title: varchar("title", { length: 255 }).notNull(),
+  skill: varchar("skill", { length: 255 }).notNull(),
+  targetDate: date("target_date"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  // Links to evidence: 1:1 commitment ids, event ids, artifact URLs.
+  evidence: jsonb("evidence").notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const consentRecords = pgTable("consent_records", {
+  id: serial("id").primaryKey(),
+  personId: integer("person_id").notNull().references(() => people.id),
+  noticeVersion: varchar("notice_version", { length: 50 }).notNull(),
+  scope: varchar("scope", { length: 100 }).notNull(),
+  granted: boolean("granted").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const successionRoles = pgTable("succession_roles", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  teamId: integer("team_id").references(() => teams.id),
+  criticality: varchar("criticality", { length: 20 }).notNull().default("high"),
+  incumbentId: integer("incumbent_id").references(() => people.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const successionCandidates = pgTable("succession_candidates", {
+  id: serial("id").primaryKey(),
+  roleId: integer("role_id").notNull().references(() => successionRoles.id),
+  personId: integer("person_id").notNull().references(() => people.id),
+  // 'ready_now' | 'ready_later' | 'develop'
+  readiness: varchar("readiness", { length: 20 }).notNull(),
+  confidence: numeric("confidence", { precision: 4, scale: 3 }).notNull(),
+  evidence: jsonb("evidence").notNull().default([]),
+  gapPlan: text("gap_plan"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Every people-data read is logged here: who asked, about whom, what was
+// returned vs. redacted, and why access was allowed/denied. This is the
+// evidence trail for "privacy scoping enforced server-side."
+export const accessAuditLog = pgTable("access_audit_log", {
+  id: serial("id").primaryKey(),
+  requesterId: integer("requester_id").notNull(),
+  requesterRole: varchar("requester_role", { length: 50 }).notNull(),
+  subjectId: integer("subject_id"),
+  resource: varchar("resource", { length: 100 }).notNull(),
+  fieldsRedacted: jsonb("fields_redacted").notNull().default([]),
+  allowed: boolean("allowed").notNull(),
   reason: text("reason").notNull(),
-  payload: jsonb("payload").$type<Record<string, unknown>>(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  reviewedBy: text("reviewed_by"),
-  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-  resolution: text("resolution"), // requeued | dismissed
-});
-
-// -----------------------------------------------------------------------------
-// Work queue — proposed tasks with a status machine
-// -----------------------------------------------------------------------------
-
-export const workItems = pgTable(
-  "work_items",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    title: text("title").notNull(),
-    description: text("description").notNull(),
-    domain: text("domain").notNull(),
-    proposedBy: text("proposed_by").notNull(), // "agent" | human name
-    assignee: text("assignee"),
-    status: text("status").notNull().default("proposed"),
-    // proposed | approved | running | verifying | done | reverted | rejected
-    riskClass: text("risk_class").notNull().default("low"),
-    slaDueAt: timestamp("sla_due_at", { withTimezone: true }),
-    escalatedAt: timestamp("escalated_at", { withTimezone: true }),
-    kernelRunId: bigserial("kernel_run_id", { mode: "number" }),
-    evidence: jsonb("evidence").$type<Record<string, unknown>>(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("work_items_status_idx").on(t.status)],
-);
-
-export const notifications = pgTable(
-  "notifications",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    type: text("type").notNull(),
-    title: text("title").notNull(),
-    body: text("body").notNull(),
-    severity: text("severity").notNull().default("info"), // info | warn | critical
-    linkedWorkItemId: bigserial("linked_work_item_id", { mode: "number" }),
-    read: boolean("read").notNull().default(false),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("notifications_read_idx").on(t.read)],
-);
-
-// -----------------------------------------------------------------------------
-// Immutable audit log
-// -----------------------------------------------------------------------------
-
-export const auditLog = pgTable(
-  "audit_log",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    actor: text("actor").notNull(), // "agent:kernel" | "human:<name>"
-    action: text("action").notNull(),
-    subjectType: text("subject_type").notNull(),
-    subjectId: text("subject_id").notNull(),
-    reason: text("reason").notNull(),
-    riskClass: text("risk_class").notNull().default("low"),
-    rollbackHandle: text("rollback_handle"),
-    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("audit_log_created_idx").on(t.createdAt)],
-);
-
-// -----------------------------------------------------------------------------
-// Budgets (per-domain daily write budget)
-// -----------------------------------------------------------------------------
-
-export const actionBudgets = pgTable(
-  "action_budgets",
-  {
-    id: serial("id").primaryKey(),
-    domain: text("domain").notNull(),
-    dateKey: text("date_key").notNull(), // YYYY-MM-DD (UTC)
-    maxWrites: integer("max_writes").notNull().default(20),
-    usedWrites: integer("used_writes").notNull().default(0),
-  },
-  (t) => [uniqueIndex("action_budgets_domain_date_idx").on(t.domain, t.dateKey)],
-);
-
-// -----------------------------------------------------------------------------
-// Global autonomy settings (kill switch, singleton row id=1)
-// -----------------------------------------------------------------------------
-
-export const autonomySettings = pgTable("autonomy_settings", {
-  id: integer("id").primaryKey().default(1),
-  paused: boolean("paused").notNull().default(false),
-  pausedReason: text("paused_reason"),
-  pausedAt: timestamp("paused_at", { withTimezone: true }),
-  anomalyTripwireActive: boolean("anomaly_tripwire_active").notNull().default(false),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// -----------------------------------------------------------------------------
-// Self-improvement proposals (safe, approval-gated)
-// -----------------------------------------------------------------------------
-
-export const goldenDatasetCases = pgTable("golden_dataset_cases", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  domain: text("domain").notNull(),
-  input: jsonb("input").$type<Record<string, unknown>>().notNull(),
-  expectedSeverityAtLeast: integer("expected_severity_at_least"),
-  expectedOutcome: boolean("expected_outcome").notNull(), // should this input fire a finding/rule?
-});
-
-export const selfImproveProposals = pgTable(
-  "self_improve_proposals",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    proposedBy: text("proposed_by").notNull().default("agent:kernel"),
-    kind: text("kind").notNull(), // rule_weight | rule_threshold | prompt
-    targetRuleId: integer("target_rule_id"),
-    beforeValue: jsonb("before_value").$type<Record<string, unknown>>().notNull(),
-    afterValue: jsonb("after_value").$type<Record<string, unknown>>().notNull(),
-    rationale: text("rationale").notNull(),
-    scorecard: jsonb("scorecard").$type<Record<string, unknown>>(),
-    status: text("status").notNull().default("proposed"),
-    // proposed | evaluating | approved | rejected | merged
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    decidedBy: text("decided_by"),
-    decidedAt: timestamp("decided_at", { withTimezone: true }),
-  },
-  (t) => [index("self_improve_status_idx").on(t.status)],
-);
-
-// -----------------------------------------------------------------------------
-// Briefings
-// -----------------------------------------------------------------------------
-
-export const briefings = pgTable("briefings", {
-  id: serial("id").primaryKey(),
-  forDate: text("for_date").notNull(), // YYYY-MM-DD
-  content: jsonb("content").$type<Record<string, unknown>>().notNull(),
-  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
