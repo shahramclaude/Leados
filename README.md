@@ -1,139 +1,161 @@
-# LEADOS — Cognitive Workspace (original single-file build)
+# LEADOS
 
-A hand-authored, single-file `index.html` (vanilla JS, Tailwind via CDN, no
-build step) implementing a Signal-Board-driven leadership-intelligence
-workspace: a Now surface, a 50-rule Signal Board across 8 domains, a
-Thermodynamics panel (entropy / SNR / bottlenecks), a CAS engine (feedback
-loops / bifurcations / attractors), an 8-category Risk Register with
-cross-domain amplification, an audit log, and a command palette.
+LEADOS is an autonomous leadership-intelligence operating system. This
+repository is its Next.js (App Router) + PostgreSQL implementation.
 
-> **Provenance — read before assuming this is a continuation or port of
-> `github.com/wbweve/Leados`:** that repo was inspected directly this
-> session (GitHub REST API file tree, raw `README.md`, raw root `App.tsx`,
-> raw `AI-SESSION-LOG.md`). Full ledger in `AI-SESSION-LOG.md`, short
-> version in **About / Provenance** inside the app. Headline findings:
->
-> - The real repo's own README and its own root-level `App.tsx` **disagree
->   with each other** — the README publishes a 6-route table
->   (`today/signals/thermodynamics/cas/risk/about`); the actual `App.tsx`
->   only recognizes 5 different routes (`today/intelligence/data/health/about`).
-> - The real repo's root file tree (verified via GitHub's REST API) contains
->   dozens of files — chart primitives, finance/people dashboards, roster
->   and playbook views — that neither the README nor its own prior session
->   log mentions at all. Their contents were **not** fetched this session,
->   so what they do is unverified; only their existence is confirmed.
-> - This delivery **does not copy or port any code** from that repo. It
->   reimplements, from scratch, the *ideas* the repo's README describes in
->   prose (Signal Board, entropy/SNR/bottleneck metrics, CAS engine,
->   8-category risk register).
->
-> **Design-system note:** the task brief described a "frozen" design system
-> as already built in this project's `index.html` ("pt-R Cognitive
-> Workspace") to be copied exactly. **This workspace's `index.html` was
-> checked directly before writing any code: it did not exist.** There was
-> nothing to copy pixel-for-pixel. This build instead implements the
-> brief's *written* token list literally (backgrounds, text/border scale,
-> indigo accent, severity colors, card/rail shapes, mono/system fonts) and
-> discloses the one place it had to invent rather than copy: the 8
-> domain-dot colors.
+**Read this before anything else:** this README describes the codebase
+that actually exists in this working tree today, not an aspirational
+future state. For the full list of what is implemented vs. planned, see
+[`FEATURES.md`](./FEATURES.md). For the layer rules, see
+[`ARCHITECTURE.md`](./ARCHITECTURE.md). For environment variables, see
+[`docs/CONFIG.md`](./docs/CONFIG.md). For why this README doesn't describe
+a Signal Board / Thermodynamics / CAS engine / Risk Register yet, see the
+"Scope of this build" section below and `AI-SESSION-LOG.md`.
+
+## What LEADOS is
+
+An operating system for leadership intelligence: an append-only,
+versioned event log at its core, with pure domain engines layered on top
+that turn raw events into signals, systemic-dynamics analysis, and risk
+intelligence. Part 0 of this build establishes that core — the event log,
+its schema registry, and the architectural layering — so that later parts
+can add real engines without re-litigating where code belongs.
+
+## Scope of this build (Part 0 — Ground Truth & Architecture Foundation)
+
+This part's job was consolidation, not new features: one canonical app,
+honest branding, one typed domain model, a repository layer, a feature
+registry, and config hygiene. Concretely, in this working tree, that
+meant:
+
+- Confirming there is exactly **one app** in the repository — the Next.js
+  App Router app under `src/` — and that there is no legacy
+  Vite/vanilla-JS duplicate to remove. (A different artifact describing
+  such a duplicate exists on GitHub; it is not part of this working tree.
+  See `AI-SESSION-LOG.md` for the full provenance note.)
+- Renaming the project from the generic `nextjs-postgresql-template` /
+  "Arena Next.js PostgreSQL Starter" to **LEADOS** everywhere
+  (`package.json`, `src/app/layout.tsx` metadata, this README).
+- Introducing the layer architecture (`src/app` → `src/lib/app` →
+  `src/lib/domain` → `src/lib/platform`) with a real repository layer
+  (`src/lib/platform/db/eventsRepository.ts`) instead of routes calling
+  Drizzle directly.
+- Introducing one canonical domain model (`src/lib/domain/types.ts`) and a
+  versioned event schema registry (`src/lib/domain/eventCatalog.ts` +
+  `eventSchema.ts`, validated with `zod`) that every row written to the
+  new `events` table must pass through.
+- Fail-fast environment validation (`src/lib/platform/env.ts`) so a
+  missing `DATABASE_URL` produces one clear error at boot, not a cryptic
+  failure three layers down.
+- `db:migrate` / `db:seed` / `db:studio` scripts so a fresh clone reaches
+  a running, non-empty app in three commands (see "Run it" below).
+
+## Route table
+
+Source of truth: [`src/app/routes.ts`](./src/app/routes.ts).
+
+| Path | Kind | Label | Status |
+| --- | --- | --- | --- |
+| `/` | page | System Status | live |
+| `/api/health` | api | Health Check | live |
+| `/api/events` | api | Event Ingestion & Log API | live |
+
+## API surface
+
+### Platform / infrastructure
+
+- `GET /api/health` → `{ ok: boolean, service: "leados", database: "connected" \| "unreachable", error?: string }`
+  Executes `select 1` against Postgres through Drizzle. Used by
+  `build_and_start` and any external uptime monitor.
+
+### Events (the shared backbone every future domain engine writes to)
+
+- `GET /api/events?limit=20` → `{ total: number, recent: EventRecord[] }`
+  Returns the most recent events (default 20, max 200) plus a total count.
+- `POST /api/events` with JSON body `{ type: string, version: number, payload: unknown }`
+  Validates `payload` against the schema registered for `type`/`version`
+  in `src/lib/domain/eventSchema.ts` (backed by the catalog in
+  `src/lib/domain/eventCatalog.ts`). Returns `201` with the persisted
+  `EventRecord` on success, or `400` with `{ error: string }` if the type
+  is unknown or the payload fails validation.
+
+  Registered event types today:
+  - `system.ping` v1 — `{ message: string }`
+  - `system.annotation` v1 — `{ title: string, body: string, tags?: string[] }`
+
+## Data model
+
+One table exists today: `events` (`src/db/schema.ts`).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | `serial` primary key | |
+| `type` | `varchar(255)` | Dot-namespaced, e.g. `system.ping`. Must exist in `eventCatalog.ts`. |
+| `version` | `integer` | Schema version for `type`. Must exist in `eventCatalog.ts`. |
+| `payload` | `jsonb` | Validated against the matching `zod` schema before insert. |
+| `created_at` | `timestamptz` | Defaults to `now()`. |
+
+This is intentionally the only table. Every future engine (Signal Board,
+Thermodynamics, CAS, Risk Register — see `FEATURES.md` → Roadmap) gets its
+own table(s) and its own repository file in `src/lib/platform/db/` when
+it's actually built, not speculatively now.
 
 ## Run it
 
-Open `index.html` in any browser. No install, no build step, no network
-calls beyond the one Tailwind CDN `<script>` tag. State persists to
-`localStorage` under `leados-cognitive-workspace:v1`; use **Reset all** (Now
-view) to clear it.
+Three commands from a fresh clone (Postgres must be reachable at the
+connection string in `.env` — see `docs/CONFIG.md`):
 
-## Layout (matches the frozen token spec)
+```bash
+npm install
+npm run db:migrate   # drizzle-kit push — creates the events table
+npm run db:seed      # inserts 2 example events so the UI isn't empty
+npm run dev           # http://localhost:3000
+```
 
-- Left nav rail, `w-16`: route icons + command-palette trigger.
-- Center workspace: one `<div class="route-view">` per route, toggled by a
-  tiny hash router (`#/now #/signals #/thermo #/cas #/risk #/log #/about`).
-- Right proactive rail, `w-[280px]`: health widget, interrupt cards (sev5
-  findings), snapshot stats.
-- Background stack `#0a0c10` (body) → `#0d1016` (rails) → `#10131a`
-  (workspace) → `bg-slate-900/60` (cards), exactly as specified.
-- Severity colors: `red-600` sev5, `amber-600` sev4, `slate-700` sev3/2.
-- Domain dots: `[data-domain]` + CSS var `--dc`, 8 original hues (see
-  provenance note above — not recoverable from any prior file).
-- Fonts: `ui-monospace` for IDs/numbers, `system-ui` for prose.
-- Cards: `bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2`.
-- 12 component patterns reused throughout: finding-card, domain-dot, zone,
-  nav-btn, preset-btn, health-widget, toast, interrupt-card, cmdk,
-  now-surface, signal-table row, audit-log row.
+Other scripts:
 
-## Pages
+```bash
+npm run build         # production build
+npm run start         # run the production build
+npm run lint          # eslint
+npm run typecheck      # tsc --noEmit
+npm run db:studio     # drizzle-kit studio (visual DB browser)
+```
 
-| Route | What it does |
-|---|---|
-| `#/now` | Now surface: sev≥4 findings needing attention, scenario presets, per-domain finding counts. |
-| `#/signals` | Signal Board: all 50 rules, filterable by domain or text, toggle on/off, simulate recurrence (feeds CAS attractors). |
-| `#/thermo` | Shannon entropy of active findings across domains, signal-to-noise ratio, information bottlenecks, co-activation pairs (illustrative mutual-information proxy). |
-| `#/cas` | Feedback loops (reinforcing/balancing), bifurcation points, attractors (recurrence ≥ 3). |
-| `#/risk` | 8-category risk register (always shows all 8) + cross-domain amplification. |
-| `#/log` | Full audit log of every toggle/preset/recurrence/reset action. |
-| `#/about` | Provenance ledger — what was verified against the real repo and what wasn't. |
+## Current capabilities vs. roadmap
 
-## What's original vs. modeled vs. disclosed gap
+| Capability | Status | Evidence |
+| --- | --- | --- |
+| Next.js App Router app, single canonical entry point | live | `src/app/**`, no competing root app |
+| Postgres via Drizzle, fail-fast config | live | `src/db/index.ts`, `src/lib/platform/env.ts` |
+| Layered architecture + repository pattern | live | `ARCHITECTURE.md`, `src/lib/platform/db/eventsRepository.ts` |
+| Versioned event schema registry | live | `src/lib/domain/eventCatalog.ts`, `eventSchema.ts` |
+| Event ingestion + log API and UI | live | `src/app/api/events/route.ts`, `src/app/page.tsx` |
+| Signal Board | not started | see `FEATURES.md` → Roadmap |
+| Thermodynamics (entropy/SNR/bottlenecks) | not started | see `FEATURES.md` → Roadmap |
+| CAS engine (loops/bifurcations/attractors) | not started | see `FEATURES.md` → Roadmap |
+| Risk Register | not started | see `FEATURES.md` → Roadmap |
+| Command palette | not started | see `FEATURES.md` → Roadmap |
 
-- **Original, written from scratch:** the 50-rule catalog, all 8 domains,
-  presets, the entropy/SNR/bottleneck math (standard Shannon 1948
-  formulas — not copied from any fetched file), the CAS heuristics, the
-  risk register, the audit log, the command palette, and all UI/CSS.
-- **Modeled on a concept described in the real repo's README prose only**
-  (not on any read file content): the general shape of "Signal Board →
-  Thermodynamics / CAS / Risk Register" as three lenses on one toggleable
-  rule set.
-- **Disclosed gap:** domain-dot exact colors could not be inherited from a
-  prior build because none existed in this workspace; an original 8-color
-  palette was chosen instead and flagged in-app.
+## Project layout
 
-## Self-tests
-
-**About → Run self-tests** executes a small original assertion suite
-in-browser (risk register always has 8 domains, toggle-twice is a no-op on
-state but +2 on the audit log, `R08` alone triggers a Financial bifurcation,
-uniform one-per-domain activation ≈ 100% entropy, "Calm baseline" clears all
-signals). Results render pass/fail inline — nothing here claims to reproduce
-any `T_L_*`/`G_L_*` test names, since no such test suite was ever verified
-to exist in the real repo's reachable files.
-
-## Changelog
-
-- **Inspected `github.com/wbweve/Leados` via GitHub's REST API and raw file
-  fetches before writing any code** — *why*: the task requires inspecting
-  actual code, not trusting a README's self-framing.
-- **Found and disclosed that the repo's README and its own root `App.tsx`
-  contradict each other on the route list, and that its root file tree is
-  far larger than either document describes** — *why disclosed*: a
-  half-verified claim is more dangerous than a fully-unverified one; listing
-  exactly which claims came from which fetched byte avoids repeating the
-  real repo's own internal inconsistency in this delivery.
-- **Checked this workspace's own `index.html` with `read_file` before
-  accepting the brief's claim that a "pt-R" design system was already
-  built here, and found no file existed** — *why*: the "FROZEN, DO NOT
-  REDEFINE" instruction only makes sense against a real prior artifact;
-  since none existed, copying the brief's *written* tokens literally (rather
-  than inventing a fictional "exact match") was the only verifiable option.
-- **Invented an 8-color domain-dot palette, disclosed as invented, instead
-  of asserting an unverifiable "exact match" to a non-existent prior file**
-  — *why*: silently presenting a guess as "exactly as in pt-R" would
-  misstate provenance.
-- **Built as a single hand-authored `index.html`, vanilla JS, Tailwind CDN,
-  no build step** — *why*: matches both this task's explicit requirement and
-  the frozen spec's "No framework. No build step" instruction; the real
-  repo's own root-level single-file demo (referenced in its README) was the
-  closer structural analog, not its separate `src/` Vite/React tree.
-  **Note:** the root-level `index.html` mentioned in the real repo's own
-  README/log text was not itself fetched or read this session — its
-  existence is reported secondhand (from the repo's own `AI-SESSION-LOG.md`,
-  call #5) and is **unverified** by this session directly.
-- **Did not copy any CAS-engine or risk-register logic from the real
-  repo** — *why*: no such file was found anywhere this session looked
-  (REST API tree + the repo's own prior session log both independently
-  report its absence), so there was nothing verified to copy; the modules
-  here are original implementations of the described behavior only.
-- **Used a new `localStorage` key
-  (`leados-cognitive-workspace:v1`)** — *why*: this workspace had no prior
-  state of any kind; claiming continuity with any other key/session would
-  assert a shared history that doesn't exist here.
+```
+src/
+  app/                 Next.js App Router: pages + API routes (HTTP layer only)
+    api/health/route.ts
+    api/events/route.ts
+    routes.ts           canonical route manifest
+    page.tsx, layout.tsx
+  lib/
+    app/events/         use-cases (recordEvent, listEvents)
+    domain/             pure types + event catalog + schema registry
+    platform/           env config + Postgres repositories
+  db/
+    schema.ts           Drizzle table definitions
+    index.ts             Drizzle client / connection pool
+docs/CONFIG.md          environment variable reference
+scripts/seed.mjs        idempotent local dev seed
+ARCHITECTURE.md         layer diagram + dependency rules
+FEATURES.md             feature registry (route/API/engine/status)
+AI-SESSION-LOG.md       session-by-session change log
+```

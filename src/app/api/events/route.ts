@@ -1,46 +1,46 @@
-import { appendEvent, listEvents } from "@/lib/eventStore";
-import type { Domain } from "@/lib/types";
+import { recordEvent } from "@/lib/app/events/recordEvent";
+import { getEventsOverview } from "@/lib/app/events/listEvents";
+import { EventPayloadValidationError, UnknownEventTypeError } from "@/lib/domain/eventSchema";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  try {
-    const events = await listEvents();
-    return Response.json({ events });
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
-  }
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get("limit");
+  const limit = limitParam ? Math.min(Math.max(Number(limitParam) || 20, 1), 200) : 20;
+
+  const overview = await getEventsOverview(limit);
+  return Response.json(overview);
 }
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
+  let body: unknown;
   try {
-    const body = await req.json();
-    if (Array.isArray(body)) {
-      const results = [];
-      for (const e of body) {
-        results.push(
-          await appendEvent({
-            type: e.type,
-            domain: (e.domain ?? "execution") as Domain,
-            entityId: e.entityId ?? null,
-            ts: e.ts ?? new Date().toISOString(),
-            data: e.data ?? {},
-            source: e.source ?? "user",
-          })
-        );
-      }
-      return Response.json({ events: results });
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
+  }
+
+  if (typeof body !== "object" || body === null) {
+    return Response.json({ error: "Request body must be a JSON object." }, { status: 400 });
+  }
+
+  const { type, version, payload } = body as Record<string, unknown>;
+
+  if (typeof type !== "string" || typeof version !== "number") {
+    return Response.json(
+      { error: "Request body must include a string 'type' and a numeric 'version'." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const event = await recordEvent({ type, version, payload });
+    return Response.json(event, { status: 201 });
+  } catch (error) {
+    if (error instanceof UnknownEventTypeError || error instanceof EventPayloadValidationError) {
+      return Response.json({ error: error.message }, { status: 400 });
     }
-    const event = await appendEvent({
-      type: body.type,
-      domain: (body.domain ?? "execution") as Domain,
-      entityId: body.entityId ?? null,
-      ts: body.ts ?? new Date().toISOString(),
-      data: body.data ?? {},
-      source: body.source ?? "user",
-    });
-    return Response.json({ event });
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
+    throw error;
   }
 }

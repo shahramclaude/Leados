@@ -1,26 +1,49 @@
-// Route registry / manifest.
-//
-// IMPORTANT: Next.js App Router performs the ACTUAL routing via
-// file-based conventions under `src/app/**/page.tsx` (this project
-// does not use a client-side router library). This file is a small
-// manifest consumed by the NavBar and CommandPalette so navigation
-// links and the command palette's fuzzy search stay in sync with the
-// routes that actually exist on disk.
-export type RouteDescriptor = {
+/**
+ * src/app/routes.ts
+ *
+ * Canonical route manifest for LEADOS. This is the single source of truth
+ * that README.md and FEATURES.md are generated from by hand — if you add,
+ * remove, or change the status of a route, update it here first.
+ *
+ * `status`:
+ *  - "live": fully implemented, reads/writes real data, no placeholders.
+ *  - "partial": implemented but intentionally narrow in scope (documented
+ *    in FEATURES.md).
+ *  - "stub": renders but does not yet do real work (none exist today —
+ *    this codebase does not ship ComingSoon placeholders).
+ */
+export interface RouteDescriptor {
   path: string;
+  kind: "page" | "api";
   label: string;
   description: string;
-};
+  status: "live" | "partial" | "stub";
+}
 
-export const ROUTES: RouteDescriptor[] = [
-  { path: "/", label: "Cockpit", description: "Command center overview" },
-  { path: "/people", label: "People", description: "People intelligence, flight risk, nine-box" },
-  { path: "/strategic", label: "Strategic", description: "War room, scenarios, critical path" },
-  { path: "/financial", label: "Financial", description: "Runway, fundraising readiness" },
-  { path: "/execution", label: "Execution", description: "Projects, delivery confidence" },
-  { path: "/signals", label: "Signals", description: "Findings & playbook instances" },
-  { path: "/metrics", label: "Metrics", description: "Forecasts, anomalies, correlations" },
-  { path: "/knowledge", label: "Knowledge", description: "Root causes & knowledge graph" },
-  { path: "/hypotheses", label: "Hypotheses", description: "Open bets and their resolution" },
-  { path: "/about", label: "About", description: "System health & self-tests" },
-];
+export const ROUTES = [
+  {
+    path: "/",
+    kind: "page",
+    label: "System Status",
+    description:
+      "Server-rendered home page: confirms the Postgres connection via Drizzle and shows the live event log.",
+    status: "live",
+  },
+  {
+    path: "/api/health",
+    kind: "api",
+    label: "Health Check",
+    description: "Liveness/readiness probe used by build_and_start and deployment platforms.",
+    status: "live",
+  },
+  {
+    path: "/api/events",
+    kind: "api",
+    label: "Event Ingestion & Log API",
+    description:
+      "GET returns a paginated recent event list + total count. POST validates a payload against the versioned event schema registry and appends it to the `events` table.",
+    status: "live",
+  },
+] as const satisfies readonly RouteDescriptor[];
+
+export type RoutePath = (typeof ROUTES)[number]["path"];
