@@ -1,134 +1,19 @@
 @import "tailwindcss";
 
-/* ==========================================================================
-   LEADOS DESIGN SYSTEM — mission-control / premium analytics dark theme.
-   This file is the single source of truth for color, spacing and type
-   tokens. Components must reference these custom properties instead of
-   inventing new colors. Dark is the only theme — there is no light mode.
-   ========================================================================== */
+/* Part 8 — Knowledge Architecture: node/edge color tokens used by the
+   force-directed Graph Explorer in src/views/KnowledgeView.tsx. */
 :root {
-  /* --- Surfaces -------------------------------------------------------- */
-  --bg-app: #05070a;        /* root app background */
-  --bg-panel: #0d1016;      /* nav rail, cards, drawers */
-  --bg-panel-raised: #11151d; /* cards sitting on top of panel bg */
-  --bg-glass: rgba(16, 19, 26, 0.95); /* command palette / modal glass */
-  --border-subtle: #1c2230;
-  --border-strong: #2a3344;
+  --node-person: #2563eb;
+  --node-decision: #7c3aed;
+  --node-finding: #dc2626;
+  --node-insight: #0d9488;
+  --node-playbook: #16a34a;
+  --node-domain: #475569;
 
-  /* --- Text -------------------------------------------------------------*/
-  --text-primary: #e5e9f0;
-  --text-secondary: #94a3b8;
-  --text-dim: #5b6576;
-
-  /* --- Brand / accent ---------------------------------------------------*/
-  --accent-indigo: #6366f1;
-  --accent-indigo-400: #818cf8;
-  --accent-indigo-700: #4338ca;
-  --accent-amber: #f59e0b;
-
-  /* --- Severity scale (findings, badges) ---------------------------------*/
-  --sev-5: #ef4444; /* critical */
-  --sev-4: #f59e0b; /* urgent */
-  --sev-3: #eab308; /* elevated */
-  --sev-low: #64748b; /* informational */
-  --good: #22c55e;
-
-  /* --- Domain colors (radar axes, nav badges, dots) ----------------------*/
-  --domain-people: #38bdf8;
-  --domain-strategic: #a78bfa;
-  --domain-financial: #34d399;
-  --domain-execution: #f59e0b;
-  --domain-signals: #f472b6;
-  --domain-legal: #94a3b8;
-  --domain-product: #60a5fa;
-  --domain-culture: #fb923c;
-
-  /* --- Spacing scale (4px base, used by inline styles / svg) -------------*/
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-6: 24px;
-  --space-8: 32px;
-
-  /* --- Typography ---------------------------------------------------------*/
-  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --text-micro: 9px;
-  --text-xs: 10px;
-  --text-sm: 12px;
-  --text-base: 14px;
-  --text-lg: 18px;
-  --text-xl: 24px;
-  --text-2xl: 32px;
-  --text-3xl: 48px;
-}
-
-html,
-body {
-  background: var(--bg-app);
-  color: var(--text-primary);
-  height: 100%;
-  overscroll-behavior: none;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 4px;
-}
-
-@keyframes leados-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-@keyframes leados-pulse-bg {
-  0%, 100% { background-color: rgba(239, 68, 68, 0.12); }
-  50% { background-color: rgba(239, 68, 68, 0.28); }
-}
-
-@keyframes leados-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes leados-axis-flash {
-  0% { stroke-opacity: 1; stroke-width: 3; }
-  100% { stroke-opacity: 0.6; stroke-width: 1.5; }
-}
-
-@keyframes leados-slide-in {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-
-.leados-pulse-dot {
-  animation: leados-pulse 1.6s ease-in-out infinite;
-}
-
-.leados-pulse-card {
-  animation: leados-pulse-bg 2s ease-in-out infinite;
-}
-
-.leados-spin {
-  animation: leados-spin 0.8s linear infinite;
-}
-
-.leados-slide-in {
-  animation: leados-slide-in 0.2s ease-out;
-}
-
-.leados-axis-flash {
-  animation: leados-axis-flash 1.2s ease-out 1;
+  --edge-caused: #dc2626;
+  --edge-resolved: #16a34a;
+  --edge-informed: #2563eb;
+  --edge-triggered: #d97706;
+  --edge-blocked: #ea580c;
+  --edge-created: #94a3b8;
 }

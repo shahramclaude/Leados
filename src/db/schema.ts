@@ -1,105 +1,100 @@
+// Keep the schema entrypoint present so models can define tables and run
+// `npx drizzle-kit push` without bootstrapping Drizzle config first.
+//
+// Part 8 — Knowledge Architecture
+// ---------------------------------------------------------------------------
+// This introduces the Leados "knowledge graph" persistence layer: a generic
+// node/edge store that every agent cycle writes into, plus two supporting
+// ledgers (findings + decisions) that the knowledge graph functions read
+// from when computing root-cause chains, pattern matches, and the
+// institutional memory digest.
+
 import {
   boolean,
-  doublePrecision,
+  integer,
   jsonb,
   pgTable,
+  real,
+  serial,
   text,
   timestamp,
-  uuid,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
-import type { Domain } from "@/lib/types";
 
-// All domain-ish columns are stored as text and typed via $type<Domain>()
-// rather than a pg enum, so adding new domains never requires a migration.
+// ---------------------------------------------------------------------------
+// Knowledge graph: nodes
+// ---------------------------------------------------------------------------
+export const leadosMemoryNodes = pgTable(
+  "leados_memory_nodes",
+  {
+    id: serial("id").primaryKey(),
+    key: text("key").notNull(),
+    type: text("type").notNull(), // person | decision | finding | insight | belief | playbook | domain
+    label: text("label").notNull(),
+    domain: text("domain").notNull(), // people | risk | finance | strategy | operations | culture | customer | compliance
+    severity: integer("severity"), // 1-5, null for non-finding nodes
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    importance: real("importance").notNull().default(0.1), // pagerank-ish 0..1
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("leados_memory_nodes_key_idx").on(table.key)],
+);
 
-export const people = pgTable("people", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  role: text("role").notNull(),
-  domain: text("domain").$type<Domain>().notNull(),
-  riskScore: doublePrecision("risk_score").notNull().default(0),
-  notes: text("notes").notNull().default(""),
+// ---------------------------------------------------------------------------
+// Knowledge graph: edges
+// ---------------------------------------------------------------------------
+export const leadosMemoryEdges = pgTable("leados_memory_edges", {
+  id: serial("id").primaryKey(),
+  sourceId: integer("source_id")
+    .notNull()
+    .references(() => leadosMemoryNodes.id, { onDelete: "cascade" }),
+  targetId: integer("target_id")
+    .notNull()
+    .references(() => leadosMemoryNodes.id, { onDelete: "cascade" }),
+  relation: text("relation").notNull(), // caused | resolved | informed | triggered | blocked | created
+  weight: real("weight").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const decisions = pgTable("decisions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  title: text("title").notNull(),
-  domain: text("domain").$type<Domain>().notNull(),
-  deadline: timestamp("deadline", { withTimezone: true }),
-  status: text("status").$type<"open" | "done">().notNull().default("open"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// ---------------------------------------------------------------------------
+// Findings ledger (source of "finding" nodes in the graph)
+// ---------------------------------------------------------------------------
+export const leadosFindings = pgTable(
+  "leados_findings",
+  {
+    id: serial("id").primaryKey(),
+    key: text("key").notNull(),
+    ruleKey: text("rule_key").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    domain: text("domain").notNull(),
+    severity: integer("severity").notNull().default(3),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    status: text("status").notNull().default("open"), // open | resolved
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("leados_findings_key_idx").on(table.key)],
+);
 
-export const hypotheses = pgTable("hypotheses", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  title: text("title").notNull(),
-  domain: text("domain").$type<Domain>().notNull(),
-  status: text("status").$type<"open" | "confirmed" | "refuted">().notNull().default("open"),
-  resolvesAt: timestamp("resolves_at", { withTimezone: true }),
-  confidence: doublePrecision("confidence").notNull().default(0.5),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// ---------------------------------------------------------------------------
+// Decision ledger (source of "decision" nodes + the Decision Ledger view)
+// ---------------------------------------------------------------------------
+export const leadosDecisions = pgTable(
+  "leados_decisions",
+  {
+    id: serial("id").primaryKey(),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    domain: text("domain").notNull(),
+    confidenceAtDecision: real("confidence_at_decision").notNull().default(0.5),
+    outcome: boolean("outcome"), // null = pending, true = good outcome, false = bad outcome
+    decidedAt: timestamp("decided_at", { withTimezone: true }).notNull().defaultNow(),
+    outcomeAt: timestamp("outcome_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("leados_decisions_key_idx").on(table.key)],
+);
 
-export const playbooks = pgTable("playbooks", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  title: text("title").notNull(),
-  domain: text("domain").$type<Domain>().notNull(),
-  status: text("status").$type<"triggered" | "in_progress" | "done">().notNull().default("triggered"),
-  findingId: uuid("finding_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const findings = pgTable("findings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  domain: text("domain").$type<Domain>().notNull(),
-  severity: doublePrecision("severity").notNull(),
-  title: text("title").notNull(),
-  detail: text("detail").notNull(),
-  probability: doublePrecision("probability"),
-  confidence: doublePrecision("confidence").notNull().default(0.6),
-  playbookId: uuid("playbook_id"),
-  dismissed: boolean("dismissed").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const latentNodes = pgTable("latent_nodes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  label: text("label").notNull(),
-  domain: text("domain").$type<Domain>().notNull(),
-  posterior: doublePrecision("posterior").notNull().default(0.2),
-  confidence: doublePrecision("confidence").notNull().default(0.5),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const briefings = pgTable("briefings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  date: text("date").notNull(),
-  executiveSummary: text("executive_summary").notNull(),
-  bullets: jsonb("bullets").$type<string[]>().notNull().default([]),
-  fullText: text("full_text").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const notifications = pgTable("notifications", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  domain: text("domain").$type<Domain>().notNull(),
-  severity: doublePrecision("severity").notNull(),
-  title: text("title").notNull(),
-  message: text("message").notNull(),
-  read: boolean("read").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const domainHealthHistory = pgTable("domain_health_history", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  domain: text("domain").$type<Domain>().notNull(),
-  score: doublePrecision("score").notNull(),
-  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const agentRuns = pgTable("agent_runs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  status: text("status").$type<"running" | "idle" | "degraded">().notNull().default("idle"),
-  runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export {};

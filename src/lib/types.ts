@@ -1,177 +1,185 @@
-// Shared type contracts for the Leados command-center intelligence layer.
-// These types are used on both server (engine, API routes) and client
-// (hooks, components) — keep this file free of server-only imports.
+// Part 8 — Knowledge Architecture
+// Shared types for the knowledge graph, institutional memory digest, and the
+// adaptive playbooks engine. Kept framework-agnostic so both server (API
+// routes) and client (views) can import from here.
+
+export type NodeType =
+  | "person"
+  | "decision"
+  | "finding"
+  | "insight"
+  | "belief"
+  | "playbook"
+  | "domain";
+
+export type RelationType =
+  | "caused"
+  | "resolved"
+  | "informed"
+  | "triggered"
+  | "blocked"
+  | "created";
 
 export type Domain =
   | "people"
-  | "strategic"
-  | "financial"
-  | "execution"
-  | "signals"
-  | "legal"
-  | "product"
-  | "culture";
+  | "risk"
+  | "finance"
+  | "strategy"
+  | "operations"
+  | "culture"
+  | "customer"
+  | "compliance";
 
-export const DOMAINS: Domain[] = [
+export const ALL_DOMAINS: Domain[] = [
   "people",
-  "strategic",
-  "financial",
-  "execution",
-  "signals",
-  "legal",
-  "product",
+  "risk",
+  "finance",
+  "strategy",
+  "operations",
   "culture",
+  "customer",
+  "compliance",
 ];
 
-export type Severity = 1 | 2 | 3 | 4 | 5;
-
-export interface Finding {
-  id: string;
-  domain: Domain;
-  severity: Severity;
-  title: string;
-  detail: string;
-  probability: number | null;
-  confidence: number;
-  createdAt: string; // ISO timestamp
-  playbookId: string | null;
-  dismissed: boolean;
-}
-
-export interface Decision {
-  id: string;
-  title: string;
-  domain: Domain;
-  deadline: string | null; // ISO timestamp
-  status: "open" | "done";
-}
-
-export interface Hypothesis {
-  id: string;
-  title: string;
-  domain: Domain;
-  status: "open" | "confirmed" | "refuted";
-  resolvesAt: string | null;
-  confidence: number;
-}
-
-export interface Playbook {
-  id: string;
-  title: string;
-  domain: Domain;
-  status: "triggered" | "in_progress" | "done";
-  findingId: string | null;
-}
-
-export interface Person {
-  id: string;
-  name: string;
-  role: string;
-  domain: Domain;
-  riskScore: number;
-  notes: string;
-}
-
-export interface LatentNode {
-  id: string;
+export interface MemoryNode {
+  id: number;
+  key: string;
+  type: NodeType;
   label: string;
-  domain: Domain;
-  posterior: number;
-  confidence: number;
-  updatedAt: string;
-}
-
-export interface Briefing {
-  id: string;
-  date: string;
-  executiveSummary: string;
-  bullets: string[];
-  fullText: string;
-}
-
-export interface NotificationItem {
-  id: string;
-  domain: Domain;
-  severity: Severity;
-  title: string;
-  message: string;
-  createdAt: string;
-  read: boolean;
-}
-
-export interface OrchestratorResult {
-  generatedAt: string;
-  domainHealth: Record<Domain, number>;
-  priorDomainHealth: Record<Domain, number>;
-  findings: Finding[];
-  decisions: Decision[];
-  hypotheses: Hypothesis[];
-  playbooks: Playbook[];
-  people: Person[];
-  latentNodes: LatentNode[];
-  cascadeRisk: number;
-  orgHealthScore: number;
-  systemConfidence: number;
-  situationalAssessment: string;
-  briefing: Briefing | null;
-}
-
-export type AgentStatus = "running" | "idle" | "degraded";
-
-export interface AgentCycleResult {
-  status: AgentStatus;
-  lastRun: string;
-  nextRun: string;
-  playbooksTriggeredThisWeek: number;
-  hypothesesOpen: number;
-  hypothesesConfirmed: number;
-  hypothesesRefuted: number;
-}
-
-export interface CommandPaletteItem {
-  type: "route" | "person" | "decision" | "blocker" | "finding" | "hypothesis";
-  id: string;
-  label: string;
-  sublabel: string;
+  domain: Domain | string;
   severity: number | null;
-  route: string;
+  tags: string[];
+  importance: number;
+  metadata: Record<string, unknown>;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 }
 
-export type SidePanelType =
-  | "person"
-  | "project"
-  | "finding"
-  | "decision"
-  | "hypothesis"
-  | null;
-
-export interface SidePanelState {
-  type: SidePanelType;
-  entityId: string | null;
+export interface MemoryEdge {
+  id: number;
+  sourceId: number;
+  targetId: number;
+  relation: RelationType;
+  weight: number;
+  createdAt: string; // ISO
 }
 
-// SSE event payload shapes -----------------------------------------------
-
-export interface FindingsDeltaEvent {
-  type: "findings_delta";
-  findings: Finding[];
-  domainHealth: Record<Domain, number>;
-  orgHealthScore: number;
+export interface GraphSubgraph {
+  nodes: MemoryNode[];
+  edges: MemoryEdge[];
+  generatedAt: string;
+  windowDays: number;
 }
 
-export interface BeliefUpdateEvent {
-  type: "belief_update";
-  cascadeRisk: number;
-  systemConfidence: number;
-  latentNodes: LatentNode[];
+// ---------------------------------------------------------------------------
+// Findings / beliefs (minimal shapes — these would normally come from the
+// earlier parts of the Leados pipeline: rule evaluation + belief fabric).
+// ---------------------------------------------------------------------------
+export interface Finding {
+  id: number;
+  key: string;
+  ruleKey: string;
+  title: string;
+  description: string;
+  domain: Domain | string;
+  severity: number; // 1-5
+  tags: string[];
+  status: "open" | "resolved";
+  createdAt: string;
+  resolvedAt: string | null;
 }
 
-export interface AgentCycleCompleteEvent {
-  type: "agent_cycle_complete";
-  agentStatus: AgentCycleResult;
+export interface BeliefFabricResult {
+  posteriors: Record<string, number>;
+  priorShift?: number;
+  cascadeRisk?: { p: number; description?: string };
 }
 
-export type RealtimeServerEvent =
-  | FindingsDeltaEvent
-  | BeliefUpdateEvent
-  | AgentCycleCompleteEvent;
+// ---------------------------------------------------------------------------
+// Root cause analysis
+// ---------------------------------------------------------------------------
+export interface RootCauseAnalysis {
+  finding: MemoryNode;
+  causalChain: MemoryNode[];
+  rootNodes: MemoryNode[];
+  contributingDecisions: MemoryNode[];
+  affectedPeople: MemoryNode[];
+  confidenceDecay: number;
+  narrative: string;
+}
+
+// ---------------------------------------------------------------------------
+// Pattern matching
+// ---------------------------------------------------------------------------
+export interface PatternMatch {
+  node: MemoryNode;
+  similarity: number;
+  resolvedHow: string | null;
+  resolutionDays: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Institutional memory digest
+// ---------------------------------------------------------------------------
+export interface DecisionLedgerEntry {
+  id: number;
+  key: string;
+  label: string;
+  domain: Domain | string;
+  outcome: boolean | null;
+  daysToOutcome: number | null;
+  confidenceAtDecision: number;
+  confidenceError: number | null; // |actual - predicted|
+}
+
+export interface RepeatingPattern {
+  ruleKey: string;
+  label: string;
+  domain: Domain | string;
+  occurrences: number;
+  avgSeverity: number;
+  avgResolutionDays: number | null;
+  trend: "worsening" | "improving" | "flat";
+}
+
+export interface KnowledgeGap {
+  domain: Domain | string;
+  nodeCount: number;
+  mostRecentNodeAgeDays: number | null;
+  reason: "too_few_nodes" | "stale" | "both";
+}
+
+export interface InstitutionalMemoryDigest {
+  decisionsWithOutcomes: DecisionLedgerEntry[];
+  repeatingPatterns: RepeatingPattern[];
+  unresolvedChronicIssues: MemoryNode[];
+  knowledgeHalfLife: number; // days
+  topKnowledgeGaps: KnowledgeGap[];
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive playbooks
+// ---------------------------------------------------------------------------
+export type PlaybookUrgency = "immediate" | "this_week" | "this_month";
+export type ResponsibleParty = "leader" | "manager" | "hr" | "finance" | "system";
+
+export interface AdaptiveStep {
+  order: number;
+  title: string;
+  responsible: ResponsibleParty;
+  timeboxDays: number;
+  automaticallyDone: boolean;
+  automationAction: string | null;
+}
+
+export interface AdaptivePlaybook {
+  name: string;
+  description: string;
+  urgency: PlaybookUrgency;
+  steps: AdaptiveStep[];
+  expectedOutcome: string;
+  successMetric: string;
+  failureSignal: string;
+  basedOnPastPattern: PatternMatch | null;
+  confidenceScore: number;
+}
