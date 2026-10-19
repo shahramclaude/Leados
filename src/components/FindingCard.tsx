@@ -1,122 +1,72 @@
-"use client";
+import type { Finding } from "../lib/types";
+import { domainColorVar, domainName, scoreMath, timeAgo } from "../lib/shared";
+import { cn } from "../utils/cn";
+import { DomainBadge, SevBadge, sevColorVar } from "./primitives";
 
-import { DOMAIN_LABELS, type Finding } from "@/lib/types";
-
-/**
- * Type contract: `Finding` from src/lib/types.ts, which mirrors
- * `OrchestratorResult.findings[number]` (see `OrchestratorResult.findings`
- * field path in src/lib/types.ts). Every finding list in the app (Cockpit
- * live feed, Signal Board) should render through this one component.
- */
-export interface FindingCardProps {
-  finding: Finding;
-  playbookExists: boolean;
-  onDismiss?: (id: string) => void;
-  /** Optional human-readable description of the causal chain this finding belongs to. */
-  causalChainDescription?: string | null;
-  /** Adds the `leados-pulse` animation class (used for pinned sev-5 criticals). */
-  pulse?: boolean;
-}
-
-const SEVERITY_STYLES: Record<Finding["severity"], { bg: string; label: string }> = {
-  5: { bg: "bg-red-600", label: "SEV 5 · CRITICAL" },
-  4: { bg: "bg-amber-600", label: "SEV 4 · WARNING" },
-  3: { bg: "bg-yellow-500", label: "SEV 3 · WARNING" },
-  2: { bg: "bg-slate-400", label: "SEV 2 · INFO" },
-  1: { bg: "bg-slate-400", label: "SEV 1 · INFO" },
-};
-
-export default function FindingCard({
-  finding,
-  playbookExists,
-  onDismiss,
-  causalChainDescription,
-  pulse = false,
-}: FindingCardProps) {
-  const severityStyle = SEVERITY_STYLES[finding.severity];
-  const domainColor = `var(--domain-${finding.domain})`;
-
+// ─────────────────────────────────────────────────────────────
+// FindingCard — the atomic unit of the entire workspace.
+// Left border color = severity (var(--sev-N)).
+// sev-5 cards get the sev5-pulse ring: this is the single most
+// aggressive animation in the app, reserved for the single most
+// urgent class of information.
+// ─────────────────────────────────────────────────────────────
+export function FindingCard({ finding, compact = false }: { finding: Finding; compact?: boolean }) {
+  const sevVar = sevColorVar(finding.sev);
   return (
     <div
-      className={`group relative flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 ${
-        pulse ? "leados-pulse border-red-700/60" : ""
-      }`}
-      style={{ fontFamily: "system-ui" }}
-      data-rule-key={finding.ruleKey}
+      className={cn(
+        "relative rounded-lg border border-[color:var(--border-subtle)] bg-[color:var(--bg-card)] pl-3 pr-3 py-2.5",
+        finding.sev === 5 && "sev5-pulse"
+      )}
+      style={{ borderLeft: `3px solid var(${sevVar})` }}
     >
+      {/* Row 1: sev badge, domain, rule id, time */}
       <div className="flex flex-wrap items-center gap-2">
-        <span
-          className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white ${severityStyle.bg}`}
-          style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
-        >
-          {severityStyle.label}
-        </span>
-
-        <span
-          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: domainColor }}
-          title={DOMAIN_LABELS[finding.domain]}
-          aria-hidden
-        />
-        <span className="text-xs text-slate-400">{DOMAIN_LABELS[finding.domain]}</span>
-
-        {finding.causalChainId && (
-          <span
-            className="inline-flex cursor-help items-center gap-1 rounded bg-indigo-500/10 px-1.5 py-0.5 text-[10px] text-indigo-300"
-            title={causalChainDescription ?? `Part of causal chain ${finding.causalChainId}`}
-          >
-            ⛓ chain
-            {finding.amplificationFactor ? ` ×${finding.amplificationFactor.toFixed(2)}` : ""}
-          </span>
-        )}
-
-        <span
-          className="ml-auto shrink-0 text-[10px] text-slate-500"
-          style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
-        >
-          {new Date(finding.createdAt).toLocaleTimeString()}
+        <SevBadge sev={finding.sev} />
+        <DomainBadge name={domainName(finding.domain)} colorVar={domainColorVar(finding.domain)} />
+        <span className="font-mono text-[10px] text-[color:var(--text-muted)]">{finding.ruleId}</span>
+        <span className="ml-auto font-mono text-[10px] text-[color:var(--text-muted)]">
+          {timeAgo(finding.timestamp)}
         </span>
       </div>
 
-      <p className="text-sm font-medium leading-snug text-slate-100">{finding.title}</p>
-      <p className="text-xs leading-snug text-slate-400">{finding.description}</p>
+      {/* Row 2: title */}
+      <div className="mt-1.5 text-sm font-medium leading-snug text-[color:var(--text-primary)]">
+        {finding.title}
+      </div>
 
-      {typeof finding.probability === "number" && (
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-            <div
-              className="h-full rounded-full bg-indigo-500 transition-[width] duration-500"
-              style={{ width: `${Math.round(finding.probability * 100)}%` }}
-            />
-          </div>
-          <span
-            className="shrink-0 text-[10px] text-slate-400"
-            style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
-          >
-            {Math.round(finding.probability * 100)}%
-          </span>
+      {/* Row 3: cascade annotation, if an upstream finding is amplifying this one */}
+      {finding.cascadeFromRuleId && finding.amplificationFactor && (
+        <div className="mt-1 font-mono text-[10px] text-[color:var(--health-amber)]">
+          ⟶ CASCADE: {finding.cascadeFromRuleId} is amplifying this finding by {finding.amplificationFactor}×
         </div>
       )}
 
-      <div className="flex items-center gap-3 pt-1">
-        {playbookExists && (
-          <a
-            href={`/playbooks/${finding.ruleKey}`}
-            className="min-h-[28px] text-xs font-medium text-indigo-400 hover:text-indigo-300"
-          >
-            → playbook
-          </a>
-        )}
-        {onDismiss && (
-          <button
-            type="button"
-            onClick={() => onDismiss(finding.id)}
-            className="ml-auto min-h-[28px] rounded px-2 text-xs text-slate-500 hover:bg-slate-800 hover:text-slate-300"
-          >
-            Dismiss
-          </button>
-        )}
-      </div>
+      {!compact && (
+        <>
+          {/* Row 4: score math transparency */}
+          <div className="mt-1.5 font-mono text-[11px] text-[color:var(--text-code)]">
+            {scoreMath(finding.sev, finding.confidence)}
+          </div>
+
+          {/* Row 5: basis */}
+          <div className="mt-1 truncate text-xs text-[color:var(--text-secondary)]" title={finding.basis}>
+            {finding.basis}
+          </div>
+
+          {/* Row 6: playbook link */}
+          {finding.suggestedPlaybook && (
+            <div className="mt-1.5">
+              <a
+                href="#intelligence"
+                className="font-mono text-[11px] text-[color:var(--text-accent)] hover:underline"
+              >
+                → Playbook: {finding.suggestedPlaybook}
+              </a>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

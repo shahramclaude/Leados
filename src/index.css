@@ -1,1 +1,160 @@
 @import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   LEADOS design tokens — the living dark interface.
+   DARK ALWAYS. No light mode, no toggle.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  /* Absolute black background stack */
+  --bg-void: #080a0e;
+  --bg-surface: #0d1016;
+  --bg-panel: #10131a;
+  --bg-card: #141820;
+  --bg-elevated: #1a1f2b;
+  --bg-input: #0a0d14;
+
+  /* Text hierarchy */
+  --text-primary: #e8ecf0;
+  --text-secondary: #7a8599;
+  --text-muted: #3d4658;
+  --text-accent: #818cf8; /* indigo-400 */
+  --text-code: #a78bfa; /* violet-400, used for numeric values */
+
+  /* Border hierarchy */
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-default: rgba(255, 255, 255, 0.08);
+  --border-active: rgba(129, 140, 248, 0.4);
+
+  /* Severity palette */
+  --sev-5: #ef4444; /* red-500: critical severity */
+  --sev-4: #f59e0b; /* amber-500: high severity */
+  --sev-3: #eab308; /* yellow-500: medium severity */
+  --sev-2: #64748b; /* slate-500: low severity */
+  --sev-1: #334155; /* slate-700: informational */
+  --sev-5-bg: rgba(239, 68, 68, 0.08);
+  --sev-4-bg: rgba(245, 158, 11, 0.08);
+  --sev-5-border: rgba(239, 68, 68, 0.3);
+  --sev-4-border: rgba(245, 158, 11, 0.25);
+
+  /* Domain palette (8 fixed hues, never change) */
+  --dc-finance: #06b6d4; /* cyan-500: Finance */
+  --dc-people: #8b5cf6; /* violet-500: People */
+  --dc-strategy: #f59e0b; /* amber-500: Strategy */
+  --dc-ops: #10b981; /* emerald-500: Operations */
+  --dc-rd: #3b82f6; /* blue-500: R&D */
+  --dc-compliance: #f97316; /* orange-500: Compliance */
+  --dc-manufacturing: #84cc16; /* lime-500: Manufacturing */
+  --dc-cs: #ec4899; /* pink-500: Customer Success */
+
+  /* Health states */
+  --health-critical: #ef4444;
+  --health-red: #f87171;
+  --health-amber: #f59e0b;
+  --health-yellow: #eab308;
+  --health-green: #10b981;
+  --health-unknown: #475569;
+
+  /* Typography */
+  --font-mono: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  --font-ui: system-ui, -apple-system, sans-serif;
+  --font-display: "SF Pro Display", system-ui, sans-serif;
+
+  /* Layout */
+  --rail-w: 3.5rem; /* 56px nav rail */
+  --sidebar-w: 17.5rem; /* 280px right intel rail */
+  --header-h: 2.75rem; /* 44px header */
+  --card-radius: 0.5rem;
+  --card-pad: 0.75rem 1rem;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: var(--bg-void);
+}
+
+body {
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+}
+
+/* Dark scrollbars everywhere */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Severity pulse — communicates "this is still live and urgent".
+   Used only on sev-5 cards / panels so it never becomes noise.
+   ───────────────────────────────────────────────────────────── */
+@keyframes sev5pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
+}
+.sev5-pulse {
+  animation: sev5pulse 2s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Live indicator — communicates "the analysis engine is connected
+   and the data on screen is a live read, not a static export".
+   ───────────────────────────────────────────────────────────── */
+@keyframes livebeat {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.live-dot {
+  animation: livebeat 1.5s ease-in-out infinite;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Physics spinner — slow, continuous rotation communicates
+   "the physics engine is always running in the background",
+   not a loading state. 12s period = deliberately not a spinner.
+   ───────────────────────────────────────────────────────────── */
+@keyframes physicspin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.physics-spin {
+  animation: physicspin 12s linear infinite;
+  display: inline-block;
+}
+
+/* Slide-in used for mobile intel rail drawer */
+.drawer-enter {
+  transform: translateX(0);
+  transition: transform 0.2s ease-out;
+}
+.drawer-exit {
+  transform: translateX(100%);
+  transition: transform 0.2s ease-out;
+}

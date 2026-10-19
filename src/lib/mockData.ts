@@ -1,138 +1,207 @@
-// src/lib/mockData.ts
-// Deterministic demo data generator feeding the Strategic War Room when no
-// live backend is attached. All data is seeded so the UI is stable across
-// reloads within the same day.
+import type {
+  CausalLink,
+  Decision,
+  Domain,
+  DomainKey,
+  Finding,
+  Hypothesis,
+  OrgDataset,
+  Severity,
+} from "./types";
 
-import { ALL_METRIC_KEYS, type LeadosEvent, type MetricValue, type SavedScenario, type MetricDef } from './types';
-import { METRIC_DEFINITIONS, defaultBaselineState } from './scenarioEngine';
-import type { Decision } from './decisionTypes';
-import type { CompetitorProfile } from './wargameEngine';
-import { generateCompetitorProfile } from './wargameEngine';
-import { mulberry32 } from './monteCarlo';
+// ─────────────────────────────────────────────────────────────
+// Seeded PRNG (mulberry32) — deterministic so the workspace feels
+// stable across re-renders, but reseedable on "RUN ANALYSIS".
+// ─────────────────────────────────────────────────────────────
+function mulberry32(seed: number) {
+  let a = seed;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), a | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
-const rand = mulberry32(20240617);
-
-// Deliberate stress scenarios baked into the demo data so the surveillance
-// system has something interesting to activate on load.
-const STRESS_FACTORS: Partial<Record<keyof typeof defaultBaselineState, number>> = {
-  churnRate: 1.9, // churn running ~90% above baseline
-  revenue: 0.86, // revenue ~14% below baseline
-  runwayMonths: 0.72,
-  nps: 0.8,
+export const DOMAIN_META: Record<DomainKey, { name: string; colorVar: string }> = {
+  finance: { name: "Finance", colorVar: "--dc-finance" },
+  people: { name: "People", colorVar: "--dc-people" },
+  strategy: { name: "Strategy", colorVar: "--dc-strategy" },
+  ops: { name: "Operations", colorVar: "--dc-ops" },
+  rd: { name: "R&D", colorVar: "--dc-rd" },
+  compliance: { name: "Compliance", colorVar: "--dc-compliance" },
+  manufacturing: { name: "Manufacturing", colorVar: "--dc-manufacturing" },
+  cs: { name: "Customer Success", colorVar: "--dc-cs" },
 };
 
-export function generateMetricHistory(now: Date): MetricValue[] {
-  const out: MetricValue[] = [];
-  for (const key of ALL_METRIC_KEYS) {
-    const def = METRIC_DEFINITIONS[key];
-    const baseline = defaultBaselineState[key];
-    const stressTarget = baseline * (STRESS_FACTORS[key] ?? 1);
-    for (let d = 90; d >= 0; d -= 3) {
-      const date = new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
-      const progress = 1 - d / 90; // 0 -> 1 as we approach "now"
-      const trendValue = baseline + (stressTarget - baseline) * progress;
-      const noise = (rand() * 2 - 1) * def.volatility * baseline * 0.3;
-      out.push({ metricKey: key, date: date.toISOString(), value: Math.max(0, trendValue + noise) });
-    }
-  }
-  return out;
+export const DOMAIN_KEYS = Object.keys(DOMAIN_META) as DomainKey[];
+
+const RULE_BANK: { ruleId: string; title: string; basis: string; domain: DomainKey }[] = [
+  { ruleId: "PPL-014", title: "Regret-attrition clustering in Platform org", basis: "3 of last 5 voluntary exits scored high-regret; manager span exceeds 9 direct reports", domain: "people" },
+  { ruleId: "PPL-007", title: "Engagement velocity negative for 2nd consecutive cycle", basis: "pulse survey sentiment delta -0.6 vs prior quarter, response rate held at 81%", domain: "people" },
+  { ruleId: "FIN-022", title: "Burn multiple drifting above plan", basis: "net new ARR growth slowed to 1.1x burn vs 1.6x target over trailing 3 months", domain: "finance" },
+  { ruleId: "FIN-009", title: "Customer concentration risk in top account", basis: "single account now 18.4% of ARR, up from 11% two quarters ago", domain: "finance" },
+  { ruleId: "STR-031", title: "Strategic initiative drift: Horizon-3 bet under-resourced", basis: "allocated headcount 40% below approved plan for 2 consecutive quarters", domain: "strategy" },
+  { ruleId: "STR-012", title: "Competitive response window narrowing", basis: "2 competitor launches in adjacent category within 45 days", domain: "strategy" },
+  { ruleId: "OPS-018", title: "Fulfillment SLA breach pattern", basis: "on-time-in-full fell below 92% threshold in 4 of last 6 weeks", domain: "ops" },
+  { ruleId: "OPS-004", title: "Vendor single point of failure", basis: "primary logistics vendor represents 71% of shipped volume with no qualified backup", domain: "ops" },
+  { ruleId: "RD-027", title: "R&D cycle time regression", basis: "median ship cycle extended from 11d to 19d over trailing 6 sprints", domain: "rd" },
+  { ruleId: "RD-003", title: "Technical debt interest rate rising", basis: "bug-to-feature ratio crossed 1.4, up from 0.9 baseline", domain: "rd" },
+  { ruleId: "CMP-011", title: "Regulatory filing deadline exposure", basis: "2 of 5 required filings lack assigned owner with 21 days remaining", domain: "compliance" },
+  { ruleId: "CMP-002", title: "Access control drift detected", basis: "14 privileged accounts outside last quarterly access review", domain: "compliance" },
+  { ruleId: "MFG-016", title: "Yield variance exceeding control limits", basis: "line 3 yield dropped to 87.2%, outside ±2σ control band", domain: "manufacturing" },
+  { ruleId: "MFG-005", title: "Supplier lead-time inflation", basis: "average component lead time up 34% quarter over quarter", domain: "manufacturing" },
+  { ruleId: "CS-021", title: "Support ticket severity mix worsening", basis: "sev-1 ticket share rose from 6% to 13% of volume month over month", domain: "cs" },
+  { ruleId: "CS-008", title: "NPS detractor cluster in enterprise tier", basis: "detractor rate in accounts >$250k ARR up 9pts versus SMB tier", domain: "cs" },
+];
+
+const PLAYBOOKS: Record<string, string> = {
+  "PPL-014": "Manager Span Rebalance",
+  "FIN-022": "Burn Multiple Recovery",
+  "STR-031": "Resourcing Realignment",
+  "OPS-018": "SLA Recovery Sprint",
+  "RD-027": "Cycle Time Reset",
+  "CMP-011": "Filing Owner Assignment",
+  "MFG-016": "Yield Root-Cause Drill",
+  "CS-021": "Severity Triage Overhaul",
+};
+
+function sevFromRoll(r: number): Severity {
+  if (r > 0.93) return 5;
+  if (r > 0.78) return 4;
+  if (r > 0.55) return 3;
+  if (r > 0.3) return 2;
+  return 1;
 }
 
-export function generateEvents(now: Date): LeadosEvent[] {
-  const mk = (daysAgo: number, type: string, description: string): LeadosEvent => ({
-    id: `${type}_${daysAgo}`,
-    type,
-    timestamp: new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString(),
-    description,
+function buildHistory(rng: () => number, currentScore: number, velocity: number): Domain["history"] {
+  const points: Domain["history"] = [];
+  const checkpoints = [0, 7, 14, 30, 60, 90];
+  for (const d of checkpoints) {
+    const noise = (rng() - 0.5) * 0.6;
+    const score = Math.min(10, Math.max(0, currentScore - (velocity * d) / 7 + noise));
+    points.push({ daysAgo: d, score });
+  }
+  return points;
+}
+
+function makeDomains(rng: () => number): Domain[] {
+  return DOMAIN_KEYS.map((key) => {
+    const score = Math.round((3.5 + rng() * 6) * 10) / 10;
+    const velocity = Math.round((rng() - 0.55) * 2.4 * 10) / 10;
+    const dataDensity90d = Math.floor(rng() * 32);
+    const meta = DOMAIN_META[key];
+    return {
+      key,
+      name: meta.name,
+      colorVar: meta.colorVar,
+      score,
+      velocity,
+      dataDensity90d,
+      history: buildHistory(rng, score, velocity),
+    };
+  });
+}
+
+function makeFindings(rng: () => number): Finding[] {
+  const now = Date.now();
+  const findings: Finding[] = RULE_BANK.map((r, i) => {
+    const sev = sevFromRoll(rng());
+    const confidence = Math.round((0.55 + rng() * 0.4) * 100) / 100;
+    const hoursAgo = Math.floor(rng() * 96) + i;
+    return {
+      id: `fnd-${r.ruleId}`,
+      domain: r.domain,
+      sev,
+      ruleId: r.ruleId,
+      title: r.title,
+      basis: r.basis,
+      confidence,
+      timestamp: new Date(now - hoursAgo * 3600_000).toISOString(),
+      suggestedPlaybook: PLAYBOOKS[r.ruleId],
+    };
   });
 
-  return [
-    mk(2, 'competitive.signal', 'Rival "Northwind" announced an aggressive price cut on the mid-tier plan.'),
-    mk(5, 'customer.churn.to_competitor', 'Enterprise account "Vantage Co" cited Northwind pricing in their cancellation call.'),
-    mk(8, 'talent.poach', 'Northwind extended an above-market offer to a senior engineer on the platform team.'),
-    mk(11, 'pricing.pressure', 'Three active deals paused pending a competitor price-match request.'),
-    mk(20, 'product.launch', 'Shipped the v4 onboarding flow.'),
-    mk(35, 'market.move', 'Northwind raised a $40M Series C, earmarked for go-to-market expansion.'),
+  // Wire up one deterministic cascade: PPL-014 amplifies CS-021
+  const target = findings.find((f) => f.ruleId === "CS-021");
+  if (target) {
+    target.cascadeFromRuleId = "PPL-014";
+    target.amplificationFactor = 1.6;
+  }
+  const target2 = findings.find((f) => f.ruleId === "OPS-018");
+  if (target2) {
+    target2.cascadeFromRuleId = "MFG-016";
+    target2.amplificationFactor = 1.3;
+  }
+
+  return findings.filter(() => rng() > 0.08); // drop a few so count feels live
+}
+
+function makeDecisions(rng: () => number, domains: Domain[]): Decision[] {
+  const now = Date.now();
+  const titles = [
+    "Approve manager span rebalance for Platform org",
+    "Sign off on Q3 burn containment plan",
+    "Reallocate 4 FTE to Horizon-3 initiative",
+    "Select backup logistics vendor",
+    "Assign owners to outstanding regulatory filings",
+    "Greenlight yield root-cause investigation on Line 3",
   ];
+  return titles.map((title, i) => ({
+    id: `dec-${i}`,
+    title,
+    domain: domains[i % domains.length].key,
+    deadline: new Date(now + (rng() * 96 - 12) * 3600_000).toISOString(),
+  }));
 }
 
-export function generateDecisions(now: Date): Decision[] {
-  const inDays = (n: number) => new Date(now.getTime() + n * 24 * 60 * 60 * 1000).toISOString();
-  return [
-    {
-      id: 'd1',
-      title: 'Respond to Northwind price cut',
-      domain: 'revenue',
-      status: 'proposed',
-      impact: 5,
-      confidence: 0.72,
-      deadline: inDays(7),
-      options: ['Match price selectively for at-risk accounts', 'Hold price and compete on value'],
-      recommendation: 'Match price selectively for the top 20 at-risk accounts while holding list price broadly.',
-      stakes: 'Roughly $1.1M in ARR is currently exposed to competitive displacement this quarter.',
-      estimatedValue: 1100000,
-    },
-    {
-      id: 'd2',
-      title: 'Backfill platform engineering seat',
-      domain: 'people',
-      status: 'proposed',
-      impact: 4,
-      confidence: 0.65,
-      deadline: inDays(21),
-      options: ['Hire immediately at above-market comp', 'Hold and redistribute workload'],
-      recommendation: 'Hire immediately — the roadmap has no slack to absorb another departure this quarter.',
-      stakes: 'Platform velocity is already the binding constraint on the Q3 roadmap.',
-      estimatedValue: 300000,
-    },
-    {
-      id: 'd3',
-      title: 'Extend runway via targeted cost reduction',
-      domain: 'capital',
-      status: 'proposed',
-      impact: 5,
-      confidence: 0.6,
-      deadline: inDays(25),
-      options: ['Cut non-essential vendor spend now', 'Wait for next board cycle'],
-      recommendation: 'Cut non-essential vendor spend now; the model shows a materially better runway outcome than waiting.',
-      stakes: 'Current burn trajectory shortens the runway below the comfort threshold ahead of the next raise window.',
-      estimatedValue: 450000,
-    },
-    {
-      id: 'd4',
-      title: 'Launch enterprise security tier',
-      domain: 'product',
-      status: 'proposed',
-      impact: 3,
-      confidence: 0.58,
-      deadline: inDays(60),
-      options: ['Ship now', 'Delay for polish'],
-      recommendation: 'Delay one sprint to close two compliance gaps flagged by enterprise prospects.',
-      stakes: 'Unblocks roughly $600K of stalled enterprise pipeline.',
-      estimatedValue: 600000,
-    },
+function makeHypotheses(rng: () => number): Hypothesis[] {
+  const now = Date.now();
+  const bank: { title: string; status: Hypothesis["status"] }[] = [
+    { title: "Span-of-control >8 correlates with regret attrition", status: "confirmed" },
+    { title: "Burn multiple above 1.5x predicts runway miss within 2Q", status: "confirmed" },
+    { title: "Vendor concentration >60% predicts SLA breach under demand shock", status: "open" },
+    { title: "R&D cycle time regression is seasonal, not structural", status: "refuted" },
+    { title: "NPS detractors in enterprise tier precede churn by 45-60 days", status: "open" },
+    { title: "Filing delays cluster around leadership transitions", status: "confirmed" },
+    { title: "Yield variance is supplier-driven, not process-driven", status: "open" },
   ];
+  return bank.map((h, i) => ({
+    id: `hyp-${i}`,
+    title: h.title,
+    status: h.status,
+    createdAt: new Date(now - rng() * 60 * 86400_000).toISOString(),
+    resolvedAt: h.status === "open" ? undefined : new Date(now - rng() * 20 * 86400_000).toISOString(),
+  }));
 }
 
-export function generateCompetitors(): CompetitorProfile[] {
-  const base = generateCompetitorProfile(
-    'Northwind',
-    'Northwind cut prices aggressively, raised a large funding round, and is poaching engineering talent with above-market offers.',
-  );
-  const base2 = generateCompetitorProfile(
-    'Fieldstone Labs',
-    'Fieldstone Labs has been cautious and conservative, focused on a slow enterprise feature launch.',
-  );
-  return [base, base2];
-}
-
-export function generateSavedScenarios(now: Date): SavedScenario[] {
-  return [
-    { id: 's1', name: 'Competitive price war', metricKey: 'revenue', createdAt: new Date(now.getTime() - 40 * 86400000).toISOString() },
-    { id: 's2', name: 'Retention loop breakdown', metricKey: 'churnRate', createdAt: new Date(now.getTime() - 25 * 86400000).toISOString() },
+function makeCausalLinks(rng: () => number): CausalLink[] {
+  const defs = [
+    { fromRuleId: "PPL-014", fromRuleLabel: "Regret-attrition clustering", toRuleId: "CS-021", toRuleLabel: "Support severity mix worsening", lagDays: 12, amplificationFactor: 1.6 },
+    { fromRuleId: "MFG-016", fromRuleLabel: "Yield variance", toRuleId: "OPS-018", toRuleLabel: "Fulfillment SLA breach", lagDays: 6, amplificationFactor: 1.3 },
+    { fromRuleId: "FIN-022", fromRuleLabel: "Burn multiple drift", toRuleId: "STR-031", toRuleLabel: "Horizon-3 under-resourced", lagDays: 21, amplificationFactor: 1.15 },
   ];
+  return defs.map((d) => ({
+    ...d,
+    confidence: Math.round((0.6 + rng() * 0.3) * 100) / 100,
+    strength: Math.round((0.4 + rng() * 0.55) * 100) / 100,
+  }));
 }
 
-export function generateMetricDefs(): MetricDef[] {
-  return ALL_METRIC_KEYS.map((key) => ({ key, label: METRIC_DEFINITIONS[key].label, unit: METRIC_DEFINITIONS[key].unit, direction: METRIC_DEFINITIONS[key].direction }));
+export function generateDataset(seed = 42): OrgDataset {
+  const rng = mulberry32(seed);
+  const domains = makeDomains(rng);
+  const findings = makeFindings(rng);
+  const decisions = makeDecisions(rng, domains);
+  const hypotheses = makeHypotheses(rng);
+  const causalLinks = makeCausalLinks(rng);
+  return {
+    domains,
+    findings,
+    decisions,
+    hypotheses,
+    causalLinks,
+    lastRunAt: new Date(Date.now() - Math.floor(rng() * 5) * 60_000).toISOString(),
+  };
 }

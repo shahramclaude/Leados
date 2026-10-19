@@ -1,109 +1,83 @@
-"use client";
+import { useEffect, useRef, useState } from "react";
+import { PALETTE_ROUTES, type RouteKey } from "./routes";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAppData } from "@/context/AppContext";
-import { ROUTES } from "@/app/routes";
-
-type PaletteItem = { id: string; label: string; sublabel: string; href: string };
-
-/**
- * Opens instantly because it only filters data that is already in
- * memory (AppContext + the static route manifest) — there is no
- * network fetch on open, so the palette can render well within a
- * single animation frame (<16ms).
- */
-export function CommandPalette() {
-  const [open, setOpen] = useState(false);
+// ─────────────────────────────────────────────────────────────
+// CommandPalette — ⌘K style route switcher. Opened from the nav
+// rail's ⌘ icon or Cmd/Ctrl+K anywhere in the app.
+// ─────────────────────────────────────────────────────────────
+export function CommandPalette({
+  open,
+  onClose,
+  onNavigate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onNavigate: (route: RouteKey) => void;
+}) {
   const [query, setQuery] = useState("");
-  const router = useRouter();
-  const { data } = useAppData();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setOpen((o) => !o);
-      }
-      if (e.key === "Escape") setOpen(false);
+    if (open) {
+      setQuery("");
+      setTimeout(() => inputRef.current?.focus(), 10);
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [open]);
 
-  const items: PaletteItem[] = useMemo(() => {
-    const routeItems: PaletteItem[] = ROUTES.map((r) => ({
-      id: `route:${r.path}`,
-      label: r.label,
-      sublabel: r.description,
-      href: r.path,
-    }));
-    const peopleItems: PaletteItem[] =
-      data?.people.map((p) => ({
-        id: `person:${p.id}`,
-        label: p.name,
-        sublabel: `${p.role} · ${p.department}`,
-        href: "/people",
-      })) ?? [];
-    const findingItems: PaletteItem[] =
-      data?.findings.map((f) => ({
-        id: `finding:${f.id}`,
-        label: f.title,
-        sublabel: `${f.domain} · ${f.severity}`,
-        href: "/signals",
-      })) ?? [];
-    return [...routeItems, ...peopleItems, ...findingItems];
-  }, [data]);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return items.slice(0, 8);
-    const q = query.toLowerCase();
-    return items.filter((i) => i.label.toLowerCase().includes(q) || i.sublabel.toLowerCase().includes(q)).slice(0, 8);
-  }, [items, query]);
+  if (!open) return null;
 
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-md border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
-        aria-label="Open command palette"
-      >
-        ⌘K Search
-      </button>
-    );
-  }
+  const filtered = PALETTE_ROUTES.filter(
+    (r) => r.hint.toLowerCase().includes(query.toLowerCase()) || r.key.includes(query.toLowerCase())
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24" onClick={() => setOpen(false)}>
+    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 pt-[14vh]" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-xl bg-slate-900 p-3 shadow-2xl ring-1 ring-slate-700"
+        className="w-full max-w-md rounded-lg border border-[color:var(--border-default)] bg-[color:var(--bg-panel)] shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search people, findings, pages…"
-          className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
-        />
-        <ul className="mt-2 max-h-80 overflow-y-auto">
-          {filtered.map((item) => (
-            <li key={item.id}>
-              <button
-                className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left hover:bg-slate-800"
-                onClick={() => {
-                  setOpen(false);
-                  setQuery("");
-                  router.push(item.href);
-                }}
-              >
-                <span className="text-sm text-slate-100">{item.label}</span>
-                <span className="text-xs text-slate-500">{item.sublabel}</span>
-              </button>
-            </li>
+        <div className="flex items-center gap-2 border-b border-[color:var(--border-subtle)] px-3 py-2">
+          <span className="font-mono text-[color:var(--text-accent)]">⌘</span>
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Jump to module…"
+            className="w-full bg-transparent font-mono text-sm text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-muted)]"
+          />
+          <kbd className="rounded border border-[color:var(--border-default)] px-1 font-mono text-[9px] text-[color:var(--text-muted)]">
+            ESC
+          </kbd>
+        </div>
+        <div className="max-h-80 overflow-y-auto p-1">
+          {filtered.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => {
+                onNavigate(r.key);
+                onClose();
+              }}
+              className="flex w-full items-center gap-3 rounded px-3 py-2 text-left font-mono text-sm text-[color:var(--text-secondary)] hover:bg-[color:var(--bg-elevated)] hover:text-[color:var(--text-primary)]"
+            >
+              <span className="w-5 text-center text-[color:var(--text-accent)]">{r.glyph}</span>
+              {r.hint}
+              <span className="ml-auto text-[10px] text-[color:var(--text-muted)]">#{r.key}</span>
+            </button>
           ))}
-          {filtered.length === 0 && <li className="px-3 py-2 text-sm text-slate-500">No results</li>}
-        </ul>
+          {!filtered.length && (
+            <div className="px-3 py-6 text-center font-mono text-xs text-[color:var(--text-muted)]">
+              No module matches "{query}"
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
