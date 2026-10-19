@@ -1,48 +1,27 @@
-import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { decisions as decisionsTable } from "@/db/schema";
+import { decisions } from "@/db/schema";
+import { ensureSeeded } from "@/lib/seed";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const rows = await db.select().from(decisionsTable);
-  return NextResponse.json({ decisions: rows });
-}
-
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  const {
-    title,
-    description,
-    domain,
-    status,
-    impact,
-    probability,
-    deadline,
-    optionCostToDecide,
-    optionVolatility,
-    context,
-  } = body as Record<string, unknown>;
+  await ensureSeeded();
+  const body = await request.json();
 
-  if (!title) {
-    return NextResponse.json({ error: "title is required" }, { status: 400 });
+  const title = typeof body.title === "string" ? body.title.trim() : "";
+  const owner = typeof body.owner === "string" ? body.owner.trim() : "";
+  const severity = typeof body.severity === "string" ? body.severity : "info";
+  const description = typeof body.description === "string" ? body.description.trim() : "";
+  const dueDate = typeof body.dueDate === "string" && body.dueDate ? new Date(body.dueDate) : new Date();
+
+  if (!title || !owner) {
+    return Response.json({ error: "Title and owner are required." }, { status: 400 });
   }
 
   const [created] = await db
-    .insert(decisionsTable)
-    .values({
-      title: String(title),
-      description: description ? String(description) : null,
-      domain: domain ? String(domain) : "general",
-      status: status ? String(status) : "open",
-      impact: impact !== undefined ? Number(impact) : 3,
-      probability: probability !== undefined ? String(probability) : "0.5",
-      deadline: deadline ? new Date(String(deadline)) : null,
-      optionCostToDecide: optionCostToDecide !== undefined ? String(optionCostToDecide) : "10000",
-      optionVolatility: optionVolatility !== undefined ? String(optionVolatility) : "0.35",
-      context: (context as Record<string, unknown>) ?? {},
-    })
+    .insert(decisions)
+    .values({ title, owner, severity, description: description || "No additional context provided.", status: "pending", dueDate })
     .returning();
 
-  return NextResponse.json({ decision: created }, { status: 201 });
+  return Response.json({ decision: created }, { status: 201 });
 }

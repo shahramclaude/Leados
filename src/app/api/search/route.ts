@@ -1,50 +1,70 @@
-import { listEvents } from "@/lib/eventStore";
-import { project } from "@/lib/eventBrain";
-import { buildRuleContext, runRuleEngine } from "@/lib/ruleEngine";
+import { ilike, or } from "drizzle-orm";
+import { db } from "@/db";
+import { decisions, people, projects } from "@/db/schema";
+import { ensureSeeded } from "@/lib/seed";
 
 export const dynamic = "force-dynamic";
 
-export interface SearchItem {
-  kind: "finding" | "person" | "decision" | "hypothesis" | "rule";
+export type SearchResult = {
   id: string;
+  type: "person" | "project" | "decision";
   title: string;
   subtitle: string;
-  view: string;
-}
+  href: string;
+};
 
-export async function GET() {
-  try {
-    const events = await listEvents();
-    const projection = project(events);
-    const now = new Date();
-    const ctx = buildRuleContext(projection, now);
-    const evaluations = runRuleEngine(ctx);
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const q = (searchParams.get("q") ?? "").trim();
 
-    const items: SearchItem[] = [];
-
-    for (const e of evaluations) {
-      if (e.firing) {
-        items.push({ kind: "finding", id: e.ruleId, title: e.name, subtitle: `Sev ${e.severity ?? "n/a"} · ${e.domain}`, view: "signals" });
-      }
-      items.push({ kind: "rule", id: e.ruleId, title: e.name, subtitle: e.firing ? "firing" : "inactive", view: "signals" });
-    }
-
-    for (const p of projection.people) {
-      const level = p.flightRisk > 0.6 ? "high" : p.flightRisk > 0.35 ? "medium" : "low";
-      items.push({ kind: "person", id: p.id, title: p.name, subtitle: `Flight risk: ${level}`, view: "people" });
-    }
-
-    for (const d of projection.decisions) {
-      const daysOpen = Math.round((now.getTime() - new Date(d.openedAt).getTime()) / 86400000);
-      items.push({ kind: "decision", id: d.id, title: d.title, subtitle: `${d.outcome ? "closed" : `${daysOpen}d open`}`, view: "strategy" });
-    }
-
-    for (const h of projection.hypotheses) {
-      items.push({ kind: "hypothesis", id: h.id, title: h.statement || h.ruleId, subtitle: `${h.status} · resolve by ${new Date(h.resolveBy).toLocaleDateString()}`, view: "knowledge" });
-    }
-
-    return Response.json({ items });
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
+  if (q.length < 2) {
+    return Response.json({ results: [] satisfies SearchResult[] });
   }
+
+  await ensureSeeded();
+  const like = `%${q}%`;
+
+  const [peopleRows, projectRows, decisionRows] = await Promise.all([
+    db
+      .select()
+      .from(people)
+      .where(or(ilike(people.name, like), ilike(people.team, like), ilike(people.role, like)))
+      .limit(6),
+    db
+      .select()
+      .from(projects)
+      .where(or(ilike(projects.name, like), ilike(projects.owner, like), ilike(projects.team, like)))
+      .limit(6),
+    db
+      .select()
+      .from(decisions)
+      .where(or(ilike(decisions.title, like), ilike(decisions.owner, like)))
+      .limit(6),
+  ]);
+
+  const results: SearchResult[] = [
+    ...peopleRows.map((p) => ({
+      id: `person-${p.id}`,
+      type: "person" as const,
+      title: p.name,
+      subtitle: `${p.role} · ${p.team}`,
+      href: `/understand/people?highlight=${p.id}`,
+    })),
+    ...projectRows.map((p) => ({
+      id: `project-${p.id}`,
+      type: "project" as const,
+      title: p.name,
+      subtitle: `${p.team} · ${p.status.replace("-", " ")}`,
+      href: `/act/strategic?highlight=${p.id}`,
+    })),
+    ...decisionRows.map((d) => ({
+      id: `decision-${d.id}`,
+      type: "decision" as const,
+      title: d.title,
+      subtitle: `${d.owner} · ${d.status}`,
+      href: `/act/decisions?highlight=${d.id}`,
+    })),
+  ];
+
+  return Response.json({ results });
 }

@@ -1,32 +1,34 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import type { ReactNode } from "react";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/leados/ui/theme";
+import { ToastProvider } from "@/components/leados/ui/Toast";
+import { Shell } from "@/components/Shell";
 import "./globals.css";
 
-const title = "LEADOS — Leadership Intelligence Operating System";
-const description =
-  "LEADOS is an autonomous leadership-intelligence operating system. This build is the Part 0 ground-truth foundation: Next.js App Router, Postgres via Drizzle, a layered src/lib architecture, and a versioned event schema registry.";
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans-loaded", display: "swap" });
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-loaded", display: "swap" });
 
 export const metadata: Metadata = {
-  title,
-  description,
-  applicationName: "LEADOS",
-  openGraph: {
-    title,
-    description,
-    siteName: "LEADOS",
-    type: "website",
-  },
-  twitter: {
-    card: "summary",
-    title,
-    description,
-  },
+  title: "LEADOS — Leadership Operating System",
+  description: "A calm, information-dense leadership OS: today's decisions, org signals, and execution in one place.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-slate-100 text-slate-900 antialiased">{children}</body>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
+      <head>
+        {/* Blocking, inline, and tiny: sets data-theme before first paint so there is never a
+            flash of the wrong theme when a user has a persisted preference. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body className="antialiased" suppressHydrationWarning>
+        <ThemeProvider>
+          <ToastProvider>
+            <Shell>{children}</Shell>
+          </ToastProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

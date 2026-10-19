@@ -1,28 +1,14 @@
-export { default as Badge } from "./Badge";
-export type { BadgeProps } from "./Badge";
-export { default as StatTile } from "./StatTile";
-export type { StatTileProps } from "./StatTile";
-export { default as Panel } from "./Panel";
-export type { PanelProps } from "./Panel";
-export { default as Drawer } from "./Drawer";
-export type { DrawerProps } from "./Drawer";
-export { default as DataTable } from "./DataTable";
-export type { ColDef, DataTableProps } from "./DataTable";
-export { default as CommandPalette } from "./CommandPalette";
-export type { CommandItem, CommandPaletteProps } from "./CommandPalette";
-export { default as ToastStack } from "./ToastStack";
-export type { ToastItem, ToastStackProps, ToastVariant } from "./ToastStack";
-export { default as GaugeArc } from "./GaugeArc";
-export type { GaugeArcProps } from "./GaugeArc";
-export { default as ProgressRing } from "./ProgressRing";
-export type { ProgressRingProps } from "./ProgressRing";
-export { default as Tooltip } from "./Tooltip";
-export type { TooltipProps } from "./Tooltip";
-export { default as PageHeader } from "./PageHeader";
-export type { PageHeaderProps } from "./PageHeader";
-export { default as EmptyState } from "./EmptyState";
-export type { EmptyStateProps } from "./EmptyState";
-export { default as ErrorState } from "./ErrorState";
-export type { ErrorStateProps } from "./ErrorState";
-export { default as useSimulatedLoad } from "./useSimulatedLoad";
+// Single entry point for the LEADOS primitives kit — consolidates what used
+// to be scattered across ui.tsx / primitives.tsx / shared.tsx / Card.tsx /
+// DimensionCard.tsx into one coherent, token-driven library.
+
 export * from "./tokens";
+export * from "./utils";
+export * from "./theme";
+export * from "./Toast";
+export * from "./Primitives";
+export * from "./Forms";
+export * from "./Overlays";
+export * from "./Tabs";
+export * from "./Table";
+export * from "./Charts";
