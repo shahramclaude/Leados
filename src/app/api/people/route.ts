@@ -1,24 +1,12 @@
 import { db } from "@/db";
-import { people, oneOnOnes } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { people as peopleTable } from "@/db/schema";
 import { cachedJson, jsonError, isRecord } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
-  const rows = await db.select().from(people).orderBy(people.name);
-  const withOneOnOnes = await Promise.all(
-    rows.map(async (p) => {
-      const last = await db
-        .select()
-        .from(oneOnOnes)
-        .where(eq(oneOnOnes.personId, p.id))
-        .orderBy(desc(oneOnOnes.occurredAt))
-        .limit(3);
-      return { ...p, recentOneOnOnes: last };
-    })
-  );
-  return cachedJson(withOneOnOnes);
+  const rows = await db.select().from(peopleTable).orderBy(peopleTable.name);
+  return cachedJson(rows);
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -29,13 +17,14 @@ export async function POST(request: Request): Promise<Response> {
   if (typeof body.role !== "string" || body.role.trim() === "") {
     return jsonError("role is required");
   }
-  if (typeof body.team !== "string" || body.team.trim() === "") {
-    return jsonError("team is required");
-  }
-  const managerId = typeof body.managerId === "number" ? body.managerId : null;
   const [created] = await db
-    .insert(people)
-    .values({ name: body.name, role: body.role, team: body.team, managerId })
+    .insert(peopleTable)
+    .values({
+      name: body.name,
+      role: body.role,
+      team: typeof body.team === "string" && body.team.trim() ? body.team : "General",
+      managerId: typeof body.managerId === "number" ? body.managerId : null,
+    })
     .returning();
   return cachedJson(created, { status: 201 });
 }

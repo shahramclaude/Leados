@@ -1,6 +1,12 @@
 // Performance, engagement, burnout and growth-velocity scoring. Pure
 // functions over the event log + snapshot history so they can be unit
 // tested and re-run on demand (no hidden state).
+//
+// SOURCE: computeBurnoutIndex's component weights (0.45 workload /
+// 0.25 after-hours / 0.15 cadence / 0.15 conflict, expressed below as
+// 45/25/15/15 point allocations) are the named weights that
+// src/lib/peopleIntelligence.ts's explainBurnout() cites when ranking
+// drivers — keep the two in sync if these change.
 
 import type { PersonEvent } from "./flightRisk";
 
@@ -78,6 +84,57 @@ export function computeBurnoutIndex(events: PersonEvent[], today: Date): number 
   const conflictComponent = Math.min(1, conflicts / 3) * 15;
 
   return Math.round(Math.max(0, Math.min(100, loadComponent + afterHoursComponent + cadenceComponent + conflictComponent)));
+}
+
+/** Component breakdown behind computeBurnoutIndex, used by peopleIntelligence.ts
+ *  to rank the top burnout drivers for a person (same weights/components as
+ *  computeBurnoutIndex above, kept separate so the aggregate function stays
+ *  a pure number but callers that need "why" can still get it). */
+export function explainBurnoutComponents(
+  events: PersonEvent[],
+  today: Date
+): { factor: string; points: number; detail: string }[] {
+  const pulses = events.filter(
+    (e) => e.type === "pulse.mood.logged" && daysBetween(today, toDate(e.occurredAt)) <= 45
+  );
+  const loads = pulses.filter((p) => p.data.load !== undefined).map((p) => Number(p.data.load));
+  const meanLoad = loads.length ? loads.reduce((a, b) => a + b, 0) / loads.length : 5;
+
+  const afterHours = events.filter(
+    (e) => e.type === "activity.after_hours" && daysBetween(today, toDate(e.occurredAt)) <= 30
+  ).length;
+
+  const oneOnOnes = events
+    .filter((e) => e.type === "oneonone.logged")
+    .sort((a, b) => toDate(b.occurredAt).getTime() - toDate(a.occurredAt).getTime());
+  const daysSinceOneOnOne = oneOnOnes.length ? daysBetween(today, toDate(oneOnOnes[0].occurredAt)) : 30;
+
+  const conflicts = events.filter(
+    (e) => e.type === "conflict.logged" && daysBetween(today, toDate(e.occurredAt)) <= 45
+  ).length;
+
+  return [
+    {
+      factor: "Sustained high workload",
+      points: Math.max(0, (meanLoad - 5) / 5) * 45,
+      detail: `mean self-reported load ${meanLoad.toFixed(1)}/10`,
+    },
+    {
+      factor: "After-hours activity",
+      points: Math.min(1, afterHours / 10) * 25,
+      detail: `${afterHours} after-hours events in 30d`,
+    },
+    {
+      factor: "1:1 recovery gap",
+      points: Math.min(1, Math.max(0, daysSinceOneOnOne - 14) / 30) * 15,
+      detail: `${daysSinceOneOnOne}d since last 1:1`,
+    },
+    {
+      factor: "Conflict load",
+      points: Math.min(1, conflicts / 3) * 15,
+      detail: `${conflicts} conflicts in 45d`,
+    },
+  ].sort((a, b) => b.points - a.points);
 }
 
 /** 0-100 engagement: pulse levels + participation (1:1s, feedback given/received, meetings). */

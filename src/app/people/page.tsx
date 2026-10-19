@@ -1,11 +1,7 @@
-import PeopleView from "@/components/leados/views/PeopleView";
+import PeopleIntelligenceView from "@/views/PeopleIntelligenceView";
 
 export const dynamic = "force-dynamic";
 
 export default function PeoplePage() {
-  return (
-    <main className="min-h-screen bg-slate-100">
-      <PeopleView />
-    </main>
-  );
+  return <PeopleIntelligenceView />;
 }

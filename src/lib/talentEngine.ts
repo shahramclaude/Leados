@@ -1,7 +1,11 @@
-// Talent Science Engine — turns the raw roster + event log + weekly
-// snapshots into predictive, explainable people-intelligence: flight risk,
-// burnout, performance trend, promotion readiness, 9-box placement, key
-// person concentration risk and succession pipelines.
+// Talent Science Engine — turns the raw roster + event log + (optional)
+// weekly snapshots into predictive, explainable people-intelligence: flight
+// risk, burnout, performance trend, promotion readiness, 9-box placement,
+// key person concentration risk and succession pipelines.
+//
+// WIRED: src/lib/peopleIntelligence.ts is the canonical caller of
+// computePersonProfile / identifyHighPotentials / computeKeyPersonConcentration
+// / buildSuccessionMap — this engine is no longer orphaned.
 
 import { computeFlightRisk, type FlightRiskScore, type PersonEvent } from "./flightRisk";
 import {
@@ -401,9 +405,9 @@ export function buildSuccessionMap(
       readyNow,
       readyIn1Year,
       readyIn2Years,
-      gap: readyNow.length === 0,
+      gap: readyNow.length === 0 && readyIn1Year.length === 0,
     });
   });
 
-  return maps.sort((a, b) => Number(b.gap) - Number(a.gap));
+  return maps;
 }

@@ -1,11 +1,16 @@
-// fatigue.ts — session-scoped decision-fatigue heuristic.
-// ORIGINAL to this build. Decision fatigue (the idea that decision QUALITY
-// degrades after many consecutive choices) is a real, studied phenomenon in
-// the psychology literature in general terms, but the specific per-type
-// weights below are illustrative, not measured — labeled explicitly as a
-// HEURISTIC, reset every session, not a clinical or validated instrument.
+// fatigue.ts — decision/signal-fatigue heuristic.
+// Decision fatigue (decision QUALITY degrading after many consecutive
+// choices) is a studied phenomenon in the psychology literature in general
+// terms, but the specific per-type weights and thresholds below are
+// illustrative, not measured — labeled explicitly as a HEURISTIC, not a
+// clinical or validated instrument.
+//
+// WIRED: src/lib/peopleIntelligence.ts reuses `levelFor` to translate a
+// person's 0-100 burnout score into the same LOW/MODERATE/HIGH/CRITICAL
+// taxonomy used elsewhere in the app, and `clampScore` for generic 0-100
+// clamping, instead of re-declaring clamp logic.
 
-import type { DecisionType } from "./types";
+export type DecisionType = "termination-prep" | "hire" | "strategy.decision" | "budget" | "vendor" | "other";
 
 export const DECISION_WEIGHTS: Record<DecisionType, number> = {
   "termination-prep": 12,

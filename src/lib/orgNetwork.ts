@@ -1,10 +1,17 @@
 // Org Network Analysis — models the organisation as a live, weighted graph
-// built from explicit `leados_relationships` edges plus *implicit* edges
-// derived from event co-occurrence (people who show up in the same
+// built from explicit `relationships` edges plus *implicit* edges derived
+// from event co-occurrence (people who show up in the same
 // `meeting.attended` event are linked). Implements PageRank (influence),
 // Brandes' betweenness centrality (information brokers), Bron–Kerbosch
 // maximal cliques (tightly-knit groups) and isolation-risk detection — all
 // from scratch, no graph library dependency.
+//
+// COST NOTE: betweennessCentrality is O(V*E log V)-ish (per-source
+// Dijkstra-style relaxation) and findCliques (Bron–Kerbosch) is worst-case
+// exponential. Both are fine for the handful-of-seconds "full report" path
+// (src/lib/peopleIntelligence.ts calls analyzeOrgNetwork once per request)
+// but are deliberately NOT used by orgODE.ts's fastOrgDynamics, which has a
+// hard <500ms budget — see the Big-O note in orgODE.ts.
 
 import type { PersonEvent } from "./flightRisk";
 import type { PersonId, PersonRecord, RelationshipRecord } from "./talentEngine";

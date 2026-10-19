@@ -3,6 +3,12 @@
 // growth plans, tenure-since-promotion) and turns it into a 0-100 score with
 // a human-readable explanation. No ML dependency: this is an explicit,
 // auditable heuristic model a manager can trust and override.
+//
+// SOURCE: this is the canonical flight-risk model for the People
+// Intelligence Engine. src/lib/talentEngine.ts and
+// src/lib/peopleIntelligence.ts both call computeFlightRisk() rather than
+// re-deriving risk — this file is the single source of truth for the
+// flight-risk formula.
 
 export type PersonEvent = {
   id: number;

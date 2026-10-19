@@ -1,28 +1,45 @@
-// Organizational Physics ODE System — original TypeScript implementing the
-// functional ideas in the task's pasted "Part 8" brief (5-variable state vector,
-// hand-written derivatives, RK4 numerical integration). Unverified external
-// spec — no ODE/physics engine of this kind was found in the real repo (the
-// repo does have an unrelated orphaned src/lib/physics.ts, not read in full
-// this session — not claimed as a match, see AI-SESSION-LOG.md).
-import type { AppState } from "./types";
-import { daysBetween } from "./store";
+// Organizational Physics ODE System — a 5-variable state vector
+// (Engagement, Velocity, Trust, Capacity, Morale), hand-written derivatives,
+// and RK4 numerical integration. This is the EXPENSIVE, full-fidelity
+// simulation (12-week horizon, 4 derivative evaluations per week via RK4 =
+// up to 48 derivative evaluations per call) — intentionally NOT called from
+// the orchestrator's request-path pipeline (see fastOrgDynamics below for
+// the version that is).
+//
+// Model structure loosely inspired by system-dynamics literature
+// (Sterman, 2000, "Business Dynamics"); the specific coefficients are
+// original, disclosed heuristics, not empirically fitted.
+
+import type { PersonEvent } from "./flightRisk";
 
 export type OrgState = { E: number; V: number; T: number; C: number; M: number };
 export type Interventions = { oneOnOneImproved?: number; debtResolved?: number; conflictResolved?: number };
 
+function daysBetween(a: Date, b: Date): number {
+  return Math.round((a.getTime() - b.getTime()) / 86_400_000);
+}
+function toDate(v: string | Date): Date {
+  return v instanceof Date ? v : new Date(v);
+}
+
 export const orgODE = {
-  buildStateVector(P: AppState, today: Date): OrgState {
-    const pulses = P.events.filter((e) => e.type === "pulse.recorded" && daysBetween(e.ts, today) <= 30);
-    const meanMood = pulses.length ? pulses.reduce((a, e) => a + e.data.mood, 0) / pulses.length : 6;
+  /** Builds the initial 5-variable state vector from the raw people event log. */
+  buildStateVector(events: PersonEvent[], today: Date): OrgState {
+    const pulses = events.filter((e) => e.type === "pulse.mood.logged" && daysBetween(today, toDate(e.occurredAt)) <= 30);
+    const meanMood = pulses.length
+      ? pulses.reduce((a, e) => a + Number(e.data.mood ?? 6), 0) / pulses.length
+      : 6;
 
-    const deals = P.events.filter((e) => e.type === "sales.deal.closed" && daysBetween(e.ts, today) <= 60).length;
-    const V = Math.min(10, 4 + deals * 0.5); // simple activity-based proxy, disclosed heuristic
+    const milestones = events.filter(
+      (e) => e.type === "milestone.delivered" && daysBetween(today, toDate(e.occurredAt)) <= 60
+    ).length;
+    const V = Math.min(10, 4 + milestones * 0.5); // simple activity-based proxy, disclosed heuristic
 
-    const conflictsLogged = P.events.filter((e) => e.type === "conflict.logged" && daysBetween(e.ts, today) <= 90).length;
-    const conflictsResolved = P.events.filter((e) => e.type === "conflict.resolved" && daysBetween(e.ts, today) <= 90).length;
+    const conflictsLogged = events.filter((e) => e.type === "conflict.logged" && daysBetween(today, toDate(e.occurredAt)) <= 90).length;
+    const conflictsResolved = events.filter((e) => e.type === "conflict.resolved" && daysBetween(today, toDate(e.occurredAt)) <= 90).length;
     const T = conflictsLogged ? Math.min(10, (conflictsResolved / conflictsLogged) * 10) : 7;
 
-    const C = 7; // neutral capacity prior — no sev-5 findings engine wired into this module (disclosed simplification)
+    const C = 7; // neutral capacity prior — disclosed simplification, no workload-forecasting engine wired in here
 
     return { E: meanMood, V, T, C, M: 5 };
   },
@@ -40,9 +57,15 @@ export const orgODE = {
     return { dE, dV, dT, dC, dM };
   },
 
-  integrate(P: AppState, today: Date, horizonWeeks = 12, interventions: Interventions = {}, initialStateOverride?: OrgState) {
+  integrate(
+    events: PersonEvent[],
+    today: Date,
+    horizonWeeks = 12,
+    interventions: Interventions = {},
+    initialStateOverride?: OrgState
+  ) {
     const dt = 1;
-    let state = initialStateOverride ?? this.buildStateVector(P, today);
+    let state = initialStateOverride ?? this.buildStateVector(events, today);
     const trajectory: (OrgState & { week: number })[] = [{ week: 0, ...state }];
 
     const keys: (keyof OrgState)[] = ["E", "V", "T", "C", "M"];
@@ -51,23 +74,28 @@ export const orgODE = {
     for (let week = 1; week <= horizonWeeks; week++) {
       const k1 = this.derivatives(state, interventions);
       const s2 = { ...state };
-      keys.forEach((k) => (s2[k] = state[k] + (dt / 2) * (k1 as any)[dKey[k]]));
+      keys.forEach((k) => (s2[k] = state[k] + (dt / 2) * (k1 as Record<string, number>)[dKey[k]]));
       const k2 = this.derivatives(s2, interventions);
       const s3 = { ...state };
-      keys.forEach((k) => (s3[k] = state[k] + (dt / 2) * (k2 as any)[dKey[k]]));
+      keys.forEach((k) => (s3[k] = state[k] + (dt / 2) * (k2 as Record<string, number>)[dKey[k]]));
       const k3 = this.derivatives(s3, interventions);
       const s4 = { ...state };
-      keys.forEach((k) => (s4[k] = state[k] + dt * (k3 as any)[dKey[k]]));
+      keys.forEach((k) => (s4[k] = state[k] + dt * (k3 as Record<string, number>)[dKey[k]]));
       const k4 = this.derivatives(s4, interventions);
 
       const next = { ...state };
       keys.forEach((k) => {
         const d = dKey[k];
-        const slope = ((k1 as any)[d] + 2 * (k2 as any)[d] + 2 * (k3 as any)[d] + (k4 as any)[d]) / 6;
+        const slope =
+          ((k1 as Record<string, number>)[d] +
+            2 * (k2 as Record<string, number>)[d] +
+            2 * (k3 as Record<string, number>)[d] +
+            (k4 as Record<string, number>)[d]) /
+          6;
         next[k] = Math.max(0, Math.min(10, state[k] + dt * slope));
       });
       state = next;
-      trajectory.push({ week, ...Object.fromEntries(keys.map((k) => [k, Math.round(state[k] * 10) / 10])) } as any);
+      trajectory.push({ week, ...(Object.fromEntries(keys.map((k) => [k, Math.round(state[k] * 10) / 10])) as OrgState) });
     }
 
     return {
@@ -93,3 +121,96 @@ export const orgODE = {
     return { type: "STABLE", description: `Stabilizes at engagement≈${finalE}, velocity≈${finalV}.` };
   },
 };
+
+// ---------------------------------------------------------------------------
+// fastOrgDynamics — the lightweight version the orchestrator actually calls.
+//
+// Instead of a 12-week RK4 integration (up to 48 derivative evaluations),
+// this takes exactly ONE explicit Euler step (dt = 1) of the same dE
+// differential structure used in `derivatives()` above, vectorized across
+// the whole roster instead of one scalar engagement value, plus O(V+E)
+// graph-degree bookkeeping for cohesion/isolation. No iteration, no
+// recursion, no RK4 sub-steps.
+//
+// COMPLEXITY: O(V + E)
+//   - one pass over `people`            -> O(V)   (risk mean/variance)
+//   - one pass over `edges`             -> O(E)   (degree map, density)
+//   - one constant-time Euler update    -> O(1)
+//   total: O(V + E), no nested loops over people or edges.
+// For the stated bound (V <= 100, and E <= V*(V-1)/2 <= ~4950 in the
+// pathological complete-graph case, realistically E << V for an org chart),
+// this is a few thousand primitive arithmetic ops — sub-millisecond in
+// Node, comfortably inside the 500ms budget for 50 people.
+// ---------------------------------------------------------------------------
+
+export interface FastDynamicsPerson {
+  id: number;
+  flightRiskScore: number; // 0-1
+  burnoutRiskScore: number; // 0-1
+}
+
+export interface FastDynamicsEdge {
+  a: number;
+  b: number;
+  weight: number;
+}
+
+export interface FastOrgDynamicsResult {
+  /** One-Euler-step delta of the network "disorder" proxy. Positive = destabilizing. */
+  entropyTrend: number;
+  /** 0-100, derived from graph density (edges / possible edges). */
+  cohesionScore: number;
+  isolationRisk: { id: number; connections: number }[];
+}
+
+function clamp01to100(v: number): number {
+  return Math.max(0, Math.min(100, v));
+}
+
+export function fastOrgDynamics(people: FastDynamicsPerson[], edges: FastDynamicsEdge[]): FastOrgDynamicsResult {
+  const n = people.length || 1;
+
+  // --- O(V): risk mean + variance -> "current entropy" proxy ---
+  let sumRisk = 0;
+  let sumRiskSq = 0;
+  for (const p of people) {
+    const risk = (p.flightRiskScore + p.burnoutRiskScore) / 2;
+    sumRisk += risk;
+    sumRiskSq += risk * risk;
+  }
+  const meanRisk = sumRisk / n;
+  const variance = Math.max(0, sumRiskSq / n - meanRisk * meanRisk);
+  const stdev = Math.sqrt(variance);
+  // OWN DERIVATION: risk values live in [0,1], so stdev is bounded by 0.5;
+  // scale by 200 so a maximally-polarized team (half at 0, half at 1) reads 100.
+  const currentEntropy = clamp01to100(stdev * 200);
+
+  // --- O(E): degree map for cohesion + isolation risk ---
+  const degree = new Map<number, number>();
+  people.forEach((p) => degree.set(p.id, 0));
+  for (const e of edges) {
+    degree.set(e.a, (degree.get(e.a) ?? 0) + 1);
+    degree.set(e.b, (degree.get(e.b) ?? 0) + 1);
+  }
+  const maxPossibleEdges = Math.max(1, (n * (n - 1)) / 2);
+  const density = edges.length / maxPossibleEdges;
+  const cohesionScore = Math.round(clamp01to100(density * 100));
+
+  const isolationRisk = people
+    .map((p) => ({ id: p.id, connections: degree.get(p.id) ?? 0 }))
+    .filter((d) => d.connections < 2);
+
+  // --- O(1): single explicit Euler step of orgODE.derivatives()'s dE form ---
+  // Source: orgODE.derivatives(): dE = (T - E)*0.1 + (C - E)*0.05 + ...
+  // Here the "target" T is a cohesion-adjusted healthy-disorder baseline
+  // (more cohesive network -> lower expected disorder) and C is the same
+  // neutral capacity prior (7/10 -> 70/100) used in buildStateVector above.
+  const targetEntropy = clamp01to100(30 - cohesionScore * 0.2);
+  const capacityPrior = 70;
+  const isolationPenalty = (isolationRisk.length / n) * 10;
+  const dt = 1;
+  const dE = (targetEntropy - currentEntropy) * 0.1 + (capacityPrior - currentEntropy) * 0.05 - isolationPenalty;
+  const entropyTrend = Math.round(dE * dt * 10) / 10;
+
+  return { entropyTrend, cohesionScore, isolationRisk };
+}

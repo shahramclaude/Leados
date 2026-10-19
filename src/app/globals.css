@@ -1,70 +1,14 @@
 @import "tailwindcss";
 
-/*
- * Leados design tokens. These CSS custom properties are the single source
- * of truth for domain colors and the dark "command center" background
- * stack. Components read these vars directly (via inline style or
- * `var(--domain-people)` style references) instead of re-declaring hues.
- */
 :root {
-  --bg-app: #0a0c10;
-  --bg-panel: #0d1016;
-  --bg-surface: #10131a;
-
-  /* 8 fixed domain hues, one per Domain enum member. */
-  --domain-people: #6366f1; /* indigo */
-  --domain-risk: #ef4444; /* red */
-  --domain-pipeline: #22c55e; /* green */
-  --domain-finance: #eab308; /* yellow */
-  --domain-product: #06b6d4; /* cyan */
-  --domain-customer: #ec4899; /* pink */
-  --domain-strategy: #a855f7; /* purple */
-  --domain-operations: #f97316; /* orange */
-
-  /* Severity scale 1-5 */
-  --severity-5: #dc2626;
-  --severity-4: #d97706;
-  --severity-3: #eab308;
-  --severity-2: #94a3b8;
-  --severity-1: #94a3b8;
-
   color-scheme: dark;
 }
 
-html,
 body {
-  background-color: var(--bg-app);
-  overflow-x: hidden;
+  background: #0a0c10;
+  color: #f1f5f9;
 }
 
 * {
   box-sizing: border-box;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-panel);
-}
-
-::-webkit-scrollbar-thumb {
-  background: #1e2230;
-  border-radius: 9999px;
-}
-
-@keyframes leados-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.55;
-  }
-}
-
-.leados-pulse {
-  animation: leados-pulse 1.6s ease-in-out infinite;
 }

@@ -1,16 +1,22 @@
-// org_design — organizational design simulation.
-//
-// PROVENANCE: pasted "pt-O" brief names `js/org_design.js`. Not found in
-// github.com/wbweve/Leados this session. Built from scratch.
+// org_design — organizational design efficiency model.
 //
 // Uses one verifiable, citable piece of real management theory — Graicunas'
-// (1933) formula for the number of possible superior-subordinate relationship
-// permutations as a function of span of control — plus original, disclosed
-// heuristics for coordination cost and decision latency (not citable to a
-// specific paper; clearly labeled as such).
+// (1933) formula for the number of possible superior-subordinate
+// relationship permutations as a function of span of control — plus
+// original, disclosed heuristics for coordination cost and decision
+// latency (not citable to a specific paper; clearly labeled as such).
+//
+// WIRED: src/lib/peopleIntelligence.ts derives headcount/layers/avgSpan from
+// the live roster + relationships graph and folds `efficiencyScore` into
+// TeamDynamicsReport.orgDesignEfficiency — no longer orphaned.
 
-import type { OrgDesignInputs } from "./types";
-import { clamp, round1 } from "./prng";
+import { clamp, round1 } from "./mathUtils";
+
+export interface OrgDesignInputs {
+  headcount: number;
+  layers: number;
+  avgSpan: number;
+}
 
 export interface OrgDesignResult {
   layers: number;
