@@ -1,5 +1,7 @@
-import PeopleView from "@/views/PeopleView";
+import PeopleIntelligenceView from "@/views/PeopleIntelligenceView";
+
+export const dynamic = "force-dynamic";
 
 export default function PeoplePage() {
-  return <PeopleView />;
+  return <PeopleIntelligenceView />;
 }

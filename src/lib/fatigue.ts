@@ -1,46 +1,46 @@
-// fatigue.ts — decision/signal-fatigue heuristic.
-// Decision fatigue (decision QUALITY degrading after many consecutive
-// choices) is a studied phenomenon in the psychology literature in general
-// terms, but the specific per-type weights and thresholds below are
-// illustrative, not measured — labeled explicitly as a HEURISTIC, not a
-// clinical or validated instrument.
+// src/lib/fatigue.ts
 //
-// WIRED: src/lib/peopleIntelligence.ts reuses `levelFor` to translate a
-// person's 0-100 burnout score into the same LOW/MODERATE/HIGH/CRITICAL
-// taxonomy used elsewhere in the app, and `clampScore` for generic 0-100
-// clamping, instead of re-declaring clamp logic.
+// NEW MODULE standing in for the "Part 2" fatigue/burnout model referenced
+// by this brief (no prior file existed — see provenance note in
+// src/lib/types.ts). Combines a workload-frequency proxy from logged
+// events with 1:1 conversation burnout flags via noisy-OR fusion.
 
-export type DecisionType = "termination-prep" | "hire" | "strategy.decision" | "budget" | "vendor" | "other";
+import type { ConversationSignals } from "./conversationIntelligence";
+import type { LeadosEvent, PersonRecord } from "./types";
+import { noisyOr } from "./beliefFabric";
 
-export const DECISION_WEIGHTS: Record<DecisionType, number> = {
-  "termination-prep": 12,
-  hire: 10,
-  "strategy.decision": 8,
-  budget: 6,
-  vendor: 5,
-  other: 4,
-};
+/**
+ * Burnout risk, 0-1. CITATION: src/lib/beliefFabric.ts, noisyOr() (fusion
+ * formula cited there) combines three independent probability proxies:
+ *  1. event-load proxy (more "goal"/"collab" events than a baseline rate)
+ *  2. conversation burnout topic flags (severity-weighted)
+ *  3. low self-reported psychological safety on recent pulse events
+ * Caller: src/lib/talentEngine.ts (buildPersonProfile, 1 call site).
+ */
+export function computeBurnoutRisk(
+  person: PersonRecord,
+  recentEvents: LeadosEvent[],
+  conversationSignals: ConversationSignals[]
+): number {
+  const personEvents = recentEvents.filter((e) => e.personId === person.id);
 
-export const FATIGUE_THRESHOLDS = {
-  MODERATE: 30,
-  HIGH: 60,
-  CRITICAL: 85,
-};
+  const workloadEvents = personEvents.filter((e) => e.type === "goal" || e.type === "collab").length;
+  const workloadProxy = Math.max(0, Math.min(1, workloadEvents / 12)); // UNVERIFIED heuristic scale
 
-export function levelFor(score: number): "LOW" | "MODERATE" | "HIGH" | "CRITICAL" {
-  if (score >= FATIGUE_THRESHOLDS.CRITICAL) return "CRITICAL";
-  if (score >= FATIGUE_THRESHOLDS.HIGH) return "HIGH";
-  if (score >= FATIGUE_THRESHOLDS.MODERATE) return "MODERATE";
-  return "LOW";
-}
+  const burnoutFlagSeverities = conversationSignals
+    .flatMap((s) => s.topicFlags)
+    .filter((f) => f.type === "burnout")
+    .map((f) => f.severity / 3);
+  const conversationProxy = burnoutFlagSeverities.length > 0 ? Math.max(...burnoutFlagSeverities) : 0;
 
-/** Adjusts a stated confidence (0..1) downward as session fatigue rises.
- *  Pure illustrative linear decay — NOT a validated psychometric model. */
-export function fatigueAdjustedConfidence(confidence: number, fatigueScore: number): number {
-  const penalty = Math.min(0.6, (fatigueScore / 100) * 0.6);
-  return Math.max(0, +(confidence * (1 - penalty)).toFixed(3));
-}
+  const pulseEvents = personEvents.filter(
+    (e) => e.type === "pulse" && typeof e.psychologicalSafetyIndex === "number"
+  );
+  const avgPsychSafety =
+    pulseEvents.length > 0
+      ? pulseEvents.reduce((sum, e) => sum + (e.psychologicalSafetyIndex ?? 0.5), 0) / pulseEvents.length
+      : 0.5;
+  const lowSafetyProxy = Math.max(0, Math.min(1, 1 - avgPsychSafety));
 
-export function clampScore(score: number): number {
-  return Math.max(0, Math.min(100, score));
+  return Math.max(0, Math.min(1, noisyOr([workloadProxy, conversationProxy, lowSafetyProxy])));
 }

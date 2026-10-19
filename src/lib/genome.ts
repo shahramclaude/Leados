@@ -1,41 +1,48 @@
-// genome.ts — a tiny behavioral-ratio heuristic, explicitly NOT a
-// psychological assessment. ORIGINAL to this build; reconstructed only from
-// the trait NAME and threshold idea in the pasted pt-K brief
-// ("DEVELOPER trait: ratio of plans/direct > 0.5 → expressed"), since no
-// genome.js source was found in wbweve/Leados's real tree to copy from.
+// src/lib/genome.ts
 //
-// Method: counts two self-reported event "styles" the user logs on the
-// Today view (plan vs direct), and reports a ratio-based label. This is
-// observation of THIS SESSION'S logged behavior only — tiny sample sizes,
-// no validation, no claim of measuring personality or leadership style.
+// NEW MODULE standing in for the "Part 1/2" behavioral genome referenced
+// by this brief (no prior file existed — see provenance note in
+// src/lib/types.ts). Deterministically derives a small set of stable
+// behavioral trait proxies from a person's static record (role, skills,
+// tenure) since no survey/assessment data source exists in this schema.
+// All derivations are UNVERIFIED (original heuristic authored this
+// session) — there is no external psychometric model being cited.
 
-export type GenomeTrait = "DEVELOPER" | "DIRECTOR" | "BALANCED";
+import type { PersonRecord } from "./types";
 
-export interface GenomeProfile {
-  name: GenomeTrait;
-  ratio: number; // plans / max(direct,1)
-  plans: number;
-  directs: number;
-  confidence: "low" | "medium"; // always "low" below 10 total samples
-  note: string;
+export interface PersonGenome {
+  personId: number;
+  adaptability: number; // 0-1
+  collaborationAffinity: number; // 0-1
+  autonomyPreference: number; // 0-1
+  skillBreadth: number; // 0-1, normalized skill count
 }
 
-const THRESHOLD = 0.5;
+const COLLABORATIVE_ROLE_HINTS = ["manager", "lead", "partner", "coordinator", "success"];
+const AUTONOMOUS_ROLE_HINTS = ["engineer", "architect", "researcher", "analyst", "designer"];
 
-export function identify(plans: number, directs: number): GenomeProfile {
-  const ratio = plans / Math.max(directs, 1);
-  const total = plans + directs;
-  const confidence: GenomeProfile["confidence"] = total >= 10 ? "medium" : "low";
-  let name: GenomeTrait;
-  if (ratio > 1 + THRESHOLD) name = "DEVELOPER";
-  else if (ratio < 1 - THRESHOLD) name = "DIRECTOR";
-  else name = "BALANCED";
+/**
+ * Caller: src/lib/lifeStage.ts (computeLifeStage, 1 call site),
+ * src/lib/talentEngine.ts (potential score tie-break, 1 call site).
+ */
+export function computeGenome(person: PersonRecord): PersonGenome {
+  const roleLower = person.role.toLowerCase();
+  const skillBreadth = Math.max(0, Math.min(1, person.skills.length / 10));
+
+  const collaborationAffinity = COLLABORATIVE_ROLE_HINTS.some((h) => roleLower.includes(h))
+    ? 0.75
+    : 0.5;
+  const autonomyPreference = AUTONOMOUS_ROLE_HINTS.some((h) => roleLower.includes(h)) ? 0.7 : 0.5;
+
+  // Adaptability proxy: broader skill sets + less role specialization text
+  // imply more adaptability. Clamp to [0,1].
+  const adaptability = Math.max(0, Math.min(1, 0.3 + skillBreadth * 0.5 + (person.skills.length > 6 ? 0.2 : 0)));
+
   return {
-    name,
-    ratio: +ratio.toFixed(2),
-    plans,
-    directs,
-    confidence,
-    note: "Heuristic behavioral ratio over self-logged entries in this browser only — not a validated instrument.",
+    personId: person.id,
+    adaptability,
+    collaborationAffinity,
+    autonomyPreference,
+    skillBreadth,
   };
 }

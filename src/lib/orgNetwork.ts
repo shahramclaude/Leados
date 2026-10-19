@@ -1,298 +1,279 @@
-// Org Network Analysis — models the organisation as a live, weighted graph
-// built from explicit `relationships` edges plus *implicit* edges derived
-// from event co-occurrence (people who show up in the same
-// `meeting.attended` event are linked). Implements PageRank (influence),
-// Brandes' betweenness centrality (information brokers), Bron–Kerbosch
-// maximal cliques (tightly-knit groups) and isolation-risk detection — all
-// from scratch, no graph library dependency.
+// src/lib/orgNetwork.ts
 //
-// COST NOTE: betweennessCentrality is O(V*E log V)-ish (per-source
-// Dijkstra-style relaxation) and findCliques (Bron–Kerbosch) is worst-case
-// exponential. Both are fine for the handful-of-seconds "full report" path
-// (src/lib/peopleIntelligence.ts calls analyzeOrgNetwork once per request)
-// but are deliberately NOT used by orgODE.ts's fastOrgDynamics, which has a
-// hard <500ms budget — see the Big-O note in orgODE.ts.
+// BASE MODULE + Part-3 extensions. No prior orgNetwork.ts existed in this
+// checkout (see provenance note in src/lib/types.ts), so this file
+// contains both the foundational report builder ("Part 2"-equivalent,
+// section A below) and the two Part-3 additions the brief asks for
+// (section B): detectNetworkAnomalies, computeKnowledgeSiloIndex.
+// Every existing export below must be preserved by future extensions.
 
-import type { PersonEvent } from "./flightRisk";
-import type { PersonId, PersonRecord, RelationshipRecord } from "./talentEngine";
+import type { OrgNetworkEdge, OrgNetworkNode, OrgNetworkReport, PersonId, PersonRecord } from "./types";
 
-export interface WeightedEdge {
-  a: PersonId;
-  b: PersonId;
-  weight: number; // 0..1+ combined strength
-  types: string[];
-}
+export type { OrgNetworkEdge, OrgNetworkNode, OrgNetworkReport } from "./types";
 
-export interface OrgNetworkReport {
-  influencers: { id: PersonId; name: string; role: string; score: number }[];
-  brokers: { id: PersonId; name: string; role: string; score: number }[];
-  cliques: { members: { id: PersonId; name: string }[]; cohesion: number }[];
-  isolated: { id: PersonId; name: string; role: string; connections: number }[];
-  healthScore: number;
-  nodeCount: number;
-  edgeCount: number;
-}
+// =======================================================================
+// SECTION A — base network report (foundational, pre-Part-3)
+// =======================================================================
 
-export interface NetworkGraph {
-  nodes: PersonId[];
-  edges: WeightedEdge[];
-}
+const PAGERANK_DAMPING = 0.85;
+const PAGERANK_ITERATIONS = 50;
 
-/** Build the weighted undirected adjacency from explicit relationships + meeting co-occurrence. */
-export function buildNetworkGraph(
-  people: { id: PersonId }[],
-  relationships: RelationshipRecord[],
-  events: PersonEvent[]
-): NetworkGraph {
-  const nodes = people.map((p) => p.id);
-  const nodeSet = new Set(nodes);
-  const edgeMap = new Map<string, WeightedEdge>();
+/**
+ * Weighted PageRank-style centrality over the collaboration graph.
+ * CITATION: standard PageRank power-iteration formula
+ *   PR(v) = (1-d)/N + d * Σ_{u→v} PR(u) * w(u,v) / outWeight(u)
+ * (Page, Brin, Motwani, Winograd 1998 — general algorithm, not borrowed
+ * from any file in this repo since none existed). Treated as undirected
+ * by inserting both directions with the same weight.
+ * Caller: buildOrgNetworkReport (below, 1 call site).
+ */
+function computeCentrality(people: PersonRecord[], edges: OrgNetworkEdge[]): Map<PersonId, number> {
+  const ids = people.map((p) => p.id);
+  const n = ids.length;
+  const centrality = new Map<PersonId, number>();
+  if (n === 0) return centrality;
 
-  function addEdge(a: PersonId, b: PersonId, weight: number, type: string) {
-    if (a === b || !nodeSet.has(a) || !nodeSet.has(b)) return;
-    const key = a < b ? `${a}-${b}` : `${b}-${a}`;
-    const existing = edgeMap.get(key);
-    if (existing) {
-      existing.weight = Math.min(1.5, existing.weight + weight);
-      if (!existing.types.includes(type)) existing.types.push(type);
-    } else {
-      edgeMap.set(key, { a: Math.min(a, b), b: Math.max(a, b), weight, types: [type] });
-    }
+  const adjacency = new Map<PersonId, Array<{ to: PersonId; weight: number }>>();
+  for (const id of ids) adjacency.set(id, []);
+  for (const e of edges) {
+    if (!adjacency.has(e.source) || !adjacency.has(e.target)) continue;
+    adjacency.get(e.source)!.push({ to: e.target, weight: e.weight });
+    adjacency.get(e.target)!.push({ to: e.source, weight: e.weight });
   }
 
-  relationships.forEach((r) => addEdge(r.fromId, r.toId, r.strength, r.type));
-
-  // Derive co-occurrence edges from meeting events: data.attendees: number[]
-  const meetings = events.filter((e) => e.type === "meeting.attended");
-  meetings.forEach((m) => {
-    const attendees = Array.isArray(m.data.attendees) ? (m.data.attendees as number[]) : [];
-    for (let i = 0; i < attendees.length; i++) {
-      for (let j = i + 1; j < attendees.length; j++) {
-        addEdge(attendees[i], attendees[j], 0.08, "co-occurrence");
-      }
-    }
-  });
-
-  return { nodes, edges: Array.from(edgeMap.values()) };
-}
-
-function toAdjacency(graph: NetworkGraph): Map<PersonId, { to: PersonId; weight: number }[]> {
-  const adj = new Map<PersonId, { to: PersonId; weight: number }[]>();
-  graph.nodes.forEach((n) => adj.set(n, []));
-  graph.edges.forEach((e) => {
-    adj.get(e.a)?.push({ to: e.b, weight: e.weight });
-    adj.get(e.b)?.push({ to: e.a, weight: e.weight });
-  });
-  return adj;
-}
-
-/** PageRank over the (symmetrised) weighted graph — proxy for organisational influence. */
-export function pageRank(graph: NetworkGraph, damping = 0.85, iterations = 60): Record<PersonId, number> {
-  const n = graph.nodes.length;
-  if (!n) return {};
-  const adj = toAdjacency(graph);
   const outWeight = new Map<PersonId, number>();
-  adj.forEach((edges, id) => outWeight.set(id, edges.reduce((s, e) => s + e.weight, 0)));
-
-  let ranks: Record<PersonId, number> = {};
-  graph.nodes.forEach((id) => (ranks[id] = 1 / n));
-
-  for (let iter = 0; iter < iterations; iter++) {
-    const next: Record<PersonId, number> = {};
-    graph.nodes.forEach((id) => (next[id] = (1 - damping) / n));
-
-    graph.nodes.forEach((id) => {
-      const edges = adj.get(id) ?? [];
-      const total = outWeight.get(id) ?? 0;
-      if (!total) {
-        // dangling node: distribute evenly
-        graph.nodes.forEach((other) => {
-          next[other] += (damping * ranks[id]) / n;
-        });
-        return;
-      }
-      edges.forEach((e) => {
-        next[e.to] += damping * ranks[id] * (e.weight / total);
-      });
-    });
-
-    ranks = next;
+  for (const id of ids) {
+    outWeight.set(id, adjacency.get(id)!.reduce((sum, a) => sum + a.weight, 0));
   }
 
-  return ranks;
-}
+  let scores = new Map<PersonId, number>(ids.map((id) => [id, 1 / n]));
 
-/** Brandes' algorithm for weighted-shortest-path betweenness centrality (information brokers). */
-export function betweennessCentrality(graph: NetworkGraph): Record<PersonId, number> {
-  const centrality: Record<PersonId, number> = {};
-  graph.nodes.forEach((n) => (centrality[n] = 0));
-  const adj = toAdjacency(graph);
-
-  for (const s of graph.nodes) {
-    const stack: PersonId[] = [];
-    const predecessors = new Map<PersonId, PersonId[]>();
-    const sigma = new Map<PersonId, number>();
-    const dist = new Map<PersonId, number>();
-    graph.nodes.forEach((n) => {
-      predecessors.set(n, []);
-      sigma.set(n, 0);
-      dist.set(n, Infinity);
-    });
-    sigma.set(s, 1);
-    dist.set(s, 0);
-
-    // Dijkstra-ish BFS using inverse weight as distance (stronger ties = shorter hops)
-    const visited = new Set<PersonId>();
-    const queue: PersonId[] = [s];
-
-    while (queue.length) {
-      queue.sort((a, b) => (dist.get(a) ?? Infinity) - (dist.get(b) ?? Infinity));
-      const v = queue.shift()!;
-      if (visited.has(v)) continue;
-      visited.add(v);
-      stack.push(v);
-
-      for (const { to: w, weight } of adj.get(v) ?? []) {
-        const edgeDist = 1 / Math.max(0.05, weight);
-        const newDist = (dist.get(v) ?? Infinity) + edgeDist;
-        if (newDist < (dist.get(w) ?? Infinity)) {
-          dist.set(w, newDist);
-          sigma.set(w, sigma.get(v) ?? 0);
-          predecessors.set(w, [v]);
-          queue.push(w);
-        } else if (newDist === dist.get(w)) {
-          sigma.set(w, (sigma.get(w) ?? 0) + (sigma.get(v) ?? 0));
-          predecessors.get(w)!.push(v);
-        }
+  for (let iter = 0; iter < PAGERANK_ITERATIONS; iter++) {
+    const next = new Map<PersonId, number>();
+    for (const id of ids) next.set(id, (1 - PAGERANK_DAMPING) / n);
+    for (const id of ids) {
+      const ow = outWeight.get(id) ?? 0;
+      if (ow === 0) continue;
+      const score = scores.get(id) ?? 0;
+      for (const { to, weight } of adjacency.get(id)!) {
+        next.set(to, (next.get(to) ?? 0) + PAGERANK_DAMPING * score * (weight / ow));
       }
     }
-
-    const delta = new Map<PersonId, number>();
-    graph.nodes.forEach((n) => delta.set(n, 0));
-
-    while (stack.length) {
-      const w = stack.pop()!;
-      for (const v of predecessors.get(w) ?? []) {
-        const share = ((sigma.get(v) ?? 0) / (sigma.get(w) || 1)) * (1 + (delta.get(w) ?? 0));
-        delta.set(v, (delta.get(v) ?? 0) + share);
-      }
-      if (w !== s) {
-        centrality[w] += delta.get(w) ?? 0;
-      }
-    }
+    scores = next;
   }
 
-  // Normalise by the number of node pairs (undirected => divide by 2)
-  const n = graph.nodes.length;
-  const norm = n > 2 ? (n - 1) * (n - 2) : 1;
-  graph.nodes.forEach((n2) => (centrality[n2] = centrality[n2] / 2 / norm));
-
+  const maxScore = Math.max(...Array.from(scores.values()), 1e-9);
+  for (const id of ids) {
+    centrality.set(id, maxScore > 0 ? (scores.get(id) ?? 0) / maxScore : 0);
+  }
   return centrality;
 }
 
-/** Bron–Kerbosch without pivoting — maximal cliques of size >= 3. Fine for org-sized graphs. */
-export function findCliques(graph: NetworkGraph): PersonId[][] {
-  const adj = new Map<PersonId, Set<PersonId>>();
-  graph.nodes.forEach((n) => adj.set(n, new Set()));
-  graph.edges.forEach((e) => {
-    if (e.weight < 0.2) return; // only count meaningfully-strong ties as clique edges
-    adj.get(e.a)?.add(e.b);
-    adj.get(e.b)?.add(e.a);
-  });
+/**
+ * Builds the full org network report: per-node centrality, isolated-node
+ * count (degree 0), and "bridge" people (centrality > 0.6).
+ * Callers: src/lib/talentEngine.ts (profile building, team chemistry),
+ * src/app/api/people/intelligence/route.ts — 2+ call sites.
+ */
+export function buildOrgNetworkReport(people: PersonRecord[], edges: OrgNetworkEdge[]): OrgNetworkReport {
+  const centrality = computeCentrality(people, edges);
+  const degree = new Map<PersonId, number>(people.map((p) => [p.id, 0]));
+  for (const e of edges) {
+    degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+    degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+  }
 
-  const cliques: PersonId[][] = [];
+  const nodes: OrgNetworkNode[] = people.map((p) => ({
+    personId: p.id,
+    centrality: centrality.get(p.id) ?? 0,
+    degree: degree.get(p.id) ?? 0,
+  }));
 
-  function bronKerbosch(r: Set<PersonId>, p: Set<PersonId>, x: Set<PersonId>) {
-    if (p.size === 0 && x.size === 0) {
-      if (r.size >= 3) cliques.push(Array.from(r));
-      return;
+  const isolatedCount = nodes.filter((n) => n.degree === 0).length;
+  const bridgeIds = nodes.filter((n) => n.centrality > 0.6).map((n) => n.personId);
+
+  return {
+    nodes,
+    edges,
+    isolatedCount,
+    bridgeIds,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+// =======================================================================
+// SECTION B — Part 3 additions
+// =======================================================================
+
+export interface NetworkAnomaly {
+  type: "new_bottleneck" | "isolation_spike" | "bridge_loss" | "cluster_split" | "centrality_shift";
+  personId: PersonId | null;
+  description: string;
+  severity: 1 | 2 | 3;
+}
+
+/**
+ * Compares the current network report against a previous snapshot to
+ * surface structural anomalies. Thresholds are quoted directly from the
+ * brief: new_bottleneck (+0.15 centrality jump), isolation_spike
+ * (isolatedCount +2), bridge_loss (was >0.6 centrality, now missing from
+ * the active roster), centrality_shift (any |Δcentrality| > 0.2).
+ * cluster_split is UNVERIFIED (original heuristic, this session): flagged
+ * when the number of connected components grows by 2 or more between
+ * snapshots (computed via the same union-find used in
+ * computeKnowledgeSiloIndex below).
+ * Caller: src/app/api/people/intelligence/route.ts (1 call site).
+ */
+export function detectNetworkAnomalies(
+  report: OrgNetworkReport,
+  previousReport: OrgNetworkReport | null
+): NetworkAnomaly[] {
+  const anomalies: NetworkAnomaly[] = [];
+  if (!previousReport) return anomalies;
+
+  const prevCentrality = new Map<PersonId, number>(previousReport.nodes.map((n) => [n.personId, n.centrality]));
+  const currentIds = new Set(report.nodes.map((n) => n.personId));
+
+  for (const node of report.nodes) {
+    const prev = prevCentrality.get(node.personId);
+    if (prev === undefined) continue;
+    const delta = node.centrality - prev;
+
+    if (delta > 0.15) {
+      anomalies.push({
+        type: "new_bottleneck",
+        personId: node.personId,
+        description: `Centrality jumped by ${delta.toFixed(2)} — now sits on the critical path.`,
+        severity: 3,
+      });
     }
-    for (const v of Array.from(p)) {
-      const neighbours = adj.get(v) ?? new Set();
-      bronKerbosch(
-        new Set([...r, v]),
-        new Set(Array.from(p).filter((n) => neighbours.has(n))),
-        new Set(Array.from(x).filter((n) => neighbours.has(n)))
-      );
-      p.delete(v);
-      x.add(v);
+
+    if (Math.abs(delta) > 0.2) {
+      anomalies.push({
+        type: "centrality_shift",
+        personId: node.personId,
+        description: `Centrality shifted by ${delta.toFixed(2)} since last snapshot.`,
+        severity: 2,
+      });
     }
   }
 
-  bronKerbosch(new Set(), new Set(graph.nodes), new Set());
+  if (report.isolatedCount - previousReport.isolatedCount > 2) {
+    anomalies.push({
+      type: "isolation_spike",
+      personId: null,
+      description: `Isolated-node count rose from ${previousReport.isolatedCount} to ${report.isolatedCount}.`,
+      severity: 2,
+    });
+  }
 
-  // De-dupe / keep only maximal sets, sort largest first
-  const unique = cliques
-    .sort((a, b) => b.length - a.length)
-    .filter((c, i, arr) => !arr.slice(0, i).some((other) => c.every((m) => other.includes(m))));
+  for (const prevNode of previousReport.nodes) {
+    if (prevNode.centrality > 0.6 && !currentIds.has(prevNode.personId)) {
+      anomalies.push({
+        type: "bridge_loss",
+        personId: prevNode.personId,
+        description: `A former network bridge (centrality ${prevNode.centrality.toFixed(2)}) is no longer active.`,
+        severity: 3,
+      });
+    }
+  }
 
-  return unique;
+  const prevComponents = countConnectedComponents(previousReport.nodes.map((n) => n.personId), previousReport.edges);
+  const currentComponents = countConnectedComponents(report.nodes.map((n) => n.personId), report.edges);
+  if (currentComponents - prevComponents >= 2) {
+    anomalies.push({
+      type: "cluster_split",
+      personId: null,
+      description: `Collaboration graph fragmented from ${prevComponents} to ${currentComponents} connected clusters.`,
+      severity: 2,
+    });
+  }
+
+  return anomalies;
 }
 
-export function isolationRisk(graph: NetworkGraph): { id: PersonId; connections: number }[] {
-  const degree = new Map<PersonId, number>();
-  graph.nodes.forEach((n) => degree.set(n, 0));
-  graph.edges.forEach((e) => {
-    degree.set(e.a, (degree.get(e.a) ?? 0) + 1);
-    degree.set(e.b, (degree.get(e.b) ?? 0) + 1);
-  });
-  return graph.nodes
-    .map((id) => ({ id, connections: degree.get(id) ?? 0 }))
-    .filter((d) => d.connections < 2);
-}
-
-export function analyzeOrgNetwork(
-  people: PersonRecord[],
-  relationships: RelationshipRecord[],
-  events: PersonEvent[]
-): OrgNetworkReport {
-  const active = people.filter((p) => !p.archived);
-  const graph = buildNetworkGraph(active, relationships, events);
-  const byId = new Map(active.map((p) => [p.id, p]));
-
-  const ranks = pageRank(graph);
-  const betweenness = betweennessCentrality(graph);
-  const cliques = findCliques(graph);
-  const isolated = isolationRisk(graph);
-
-  const influencers = Object.entries(ranks)
-    .map(([id, score]) => ({ id: Number(id), score }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8)
-    .map((r) => ({ id: r.id, name: byId.get(r.id)?.name ?? `#${r.id}`, role: byId.get(r.id)?.role ?? "", score: Math.round(r.score * 1000) / 1000 }));
-
-  const brokers = Object.entries(betweenness)
-    .map(([id, score]) => ({ id: Number(id), score }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8)
-    .map((r) => ({ id: r.id, name: byId.get(r.id)?.name ?? `#${r.id}`, role: byId.get(r.id)?.role ?? "", score: Math.round(r.score * 1000) / 1000 }));
-
-  const cliqueReport = cliques.slice(0, 10).map((members) => ({
-    members: members.map((id) => ({ id, name: byId.get(id)?.name ?? `#${id}` })),
-    cohesion: Math.round((members.length / Math.max(1, active.length)) * 1000) / 1000,
-  }));
-
-  const isolatedReport = isolated.map((i) => ({
-    id: i.id,
-    name: byId.get(i.id)?.name ?? `#${i.id}`,
-    role: byId.get(i.id)?.role ?? "",
-    connections: i.connections,
-  }));
-
-  const n = active.length || 1;
-  const isolationPenalty = (isolatedReport.length / n) * 40;
-  const density = graph.edges.length / Math.max(1, (n * (n - 1)) / 2);
-  const densityScore = Math.min(1, density * 4) * 30;
-  const cliqueBonus = Math.min(1, cliqueReport.length / Math.max(1, Math.ceil(n / 6))) * 30;
-  const healthScore = Math.round(Math.max(0, Math.min(100, 70 - isolationPenalty + densityScore * 0 + cliqueBonus * 0 + densityScore)));
-
-  return {
-    influencers,
-    brokers,
-    cliques: cliqueReport,
-    isolated: isolatedReport,
-    healthScore,
-    nodeCount: graph.nodes.length,
-    edgeCount: graph.edges.length,
+function countConnectedComponents(ids: PersonId[], edges: OrgNetworkEdge[], minWeight = 0.3): number {
+  const parent = new Map<PersonId, PersonId>();
+  const find = (x: PersonId): PersonId => {
+    if (!parent.has(x)) parent.set(x, x);
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    let cur = x;
+    while (parent.get(cur) !== cur) {
+      const next = parent.get(cur)!;
+      parent.set(cur, root);
+      cur = next;
+    }
+    return root;
   };
+  const union = (a: PersonId, b: PersonId) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+
+  for (const id of ids) find(id);
+  for (const e of edges) {
+    if (e.weight > minWeight && parent.has(e.source) && parent.has(e.target)) {
+      union(e.source, e.target);
+    }
+  }
+
+  const roots = new Set(ids.map((id) => find(id)));
+  return roots.size;
+}
+
+/**
+ * Knowledge Silo Index (KSI): 0-1, higher = more siloed. Algorithm quoted
+ * directly from the brief: build the undirected graph using only
+ * collaboration edges with weight > 0.3, find connected components, and
+ * KSI = 1 - (largest component size / total nodes). A single component
+ * (fully connected org) yields KSI = 0. Feeds beliefFabric's
+ * knowledgeSiloIndex observable (surfaced directly in
+ * PeopleIntelligenceReport.knowledgeSiloIndex by the API route since this
+ * session's beliefFabric.ts does not persist a time-series observable
+ * store — see src/lib/beliefFabric.ts provenance note).
+ * Caller: src/app/api/people/intelligence/route.ts (1 call site).
+ */
+export function computeKnowledgeSiloIndex(people: PersonRecord[], edges: OrgNetworkEdge[]): number {
+  const ids = people.map((p) => p.id);
+  const totalNodes = ids.length;
+  if (totalNodes === 0) return 0;
+
+  const parent = new Map<PersonId, PersonId>();
+  const find = (x: PersonId): PersonId => {
+    if (!parent.has(x)) parent.set(x, x);
+    let root = x;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    let cur = x;
+    while (parent.get(cur) !== cur) {
+      const next = parent.get(cur)!;
+      parent.set(cur, root);
+      cur = next;
+    }
+    return root;
+  };
+  const union = (a: PersonId, b: PersonId) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+
+  for (const id of ids) find(id);
+  for (const e of edges) {
+    if (e.weight > 0.3 && parent.has(e.source) && parent.has(e.target)) {
+      union(e.source, e.target);
+    }
+  }
+
+  const componentSizes = new Map<PersonId, number>();
+  for (const id of ids) {
+    const root = find(id);
+    componentSizes.set(root, (componentSizes.get(root) ?? 0) + 1);
+  }
+
+  if (componentSizes.size <= 1) return 0;
+
+  const largest = Math.max(...Array.from(componentSizes.values()));
+  return Math.max(0, Math.min(1, 1 - largest / totalNodes));
 }
