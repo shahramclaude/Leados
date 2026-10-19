@@ -1,55 +1,50 @@
-import { db } from "@/db";
-import { people, decisions, metricDefs, playbooks, insights } from "@/db/schema";
-import { cachedJson } from "@/lib/api";
+import { listEvents } from "@/lib/eventStore";
+import { project } from "@/lib/eventBrain";
+import { buildRuleContext, runRuleEngine } from "@/lib/ruleEngine";
 
 export const dynamic = "force-dynamic";
 
-export interface SearchResultItem {
+export interface SearchItem {
+  kind: "finding" | "person" | "decision" | "hypothesis" | "rule";
   id: string;
-  type: "person" | "decision" | "metric" | "playbook" | "insight";
   title: string;
   subtitle: string;
+  view: string;
 }
 
-export async function GET(request: Request): Promise<Response> {
-  const url = new URL(request.url);
-  const q = (url.searchParams.get("q") ?? "").toLowerCase();
+export async function GET() {
+  try {
+    const events = await listEvents();
+    const projection = project(events);
+    const now = new Date();
+    const ctx = buildRuleContext(projection, now);
+    const evaluations = runRuleEngine(ctx);
 
-  const [peopleRows, decisionRows, metricRows, playbookRows, insightRows] = await Promise.all([
-    db.select().from(people),
-    db.select().from(decisions),
-    db.select().from(metricDefs),
-    db.select().from(playbooks),
-    db.select().from(insights),
-  ]);
+    const items: SearchItem[] = [];
 
-  const results: SearchResultItem[] = [];
+    for (const e of evaluations) {
+      if (e.firing) {
+        items.push({ kind: "finding", id: e.ruleId, title: e.name, subtitle: `Sev ${e.severity ?? "n/a"} · ${e.domain}`, view: "signals" });
+      }
+      items.push({ kind: "rule", id: e.ruleId, title: e.name, subtitle: e.firing ? "firing" : "inactive", view: "signals" });
+    }
 
-  peopleRows.forEach((p) => {
-    if (!q || p.name.toLowerCase().includes(q) || p.role.toLowerCase().includes(q)) {
-      results.push({ id: String(p.id), type: "person", title: p.name, subtitle: `${p.role} · ${p.team}` });
+    for (const p of projection.people) {
+      const level = p.flightRisk > 0.6 ? "high" : p.flightRisk > 0.35 ? "medium" : "low";
+      items.push({ kind: "person", id: p.id, title: p.name, subtitle: `Flight risk: ${level}`, view: "people" });
     }
-  });
-  decisionRows.forEach((d) => {
-    if (!q || d.title.toLowerCase().includes(q) || d.owner.toLowerCase().includes(q)) {
-      results.push({ id: String(d.id), type: "decision", title: d.title, subtitle: `Owner: ${d.owner} · ${d.status}` });
-    }
-  });
-  metricRows.forEach((m) => {
-    if (!q || m.label.toLowerCase().includes(q) || m.key.toLowerCase().includes(q)) {
-      results.push({ id: m.key, type: "metric", title: m.label, subtitle: `${m.domain}` });
-    }
-  });
-  playbookRows.forEach((p) => {
-    if (!q || p.name.toLowerCase().includes(q)) {
-      results.push({ id: String(p.id), type: "playbook", title: p.name, subtitle: `${p.domain} · ${p.status}` });
-    }
-  });
-  insightRows.forEach((i) => {
-    if (!q || i.title.toLowerCase().includes(q)) {
-      results.push({ id: String(i.id), type: "insight", title: i.title, subtitle: i.domain });
-    }
-  });
 
-  return cachedJson(results.slice(0, 50));
+    for (const d of projection.decisions) {
+      const daysOpen = Math.round((now.getTime() - new Date(d.openedAt).getTime()) / 86400000);
+      items.push({ kind: "decision", id: d.id, title: d.title, subtitle: `${d.outcome ? "closed" : `${daysOpen}d open`}`, view: "strategy" });
+    }
+
+    for (const h of projection.hypotheses) {
+      items.push({ kind: "hypothesis", id: h.id, title: h.statement || h.ruleId, subtitle: `${h.status} · resolve by ${new Date(h.resolveBy).toLocaleDateString()}`, view: "knowledge" });
+    }
+
+    return Response.json({ items });
+  } catch (err) {
+    return Response.json({ error: (err as Error).message }, { status: 500 });
+  }
 }

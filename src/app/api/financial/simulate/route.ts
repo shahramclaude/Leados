@@ -1,88 +1,40 @@
-// src/app/api/financial/simulate/route.ts
-//
-// POST /api/financial/simulate
-// Body: { burnRate, revenue, revenueGrowth, cashBalance }
-// Runs a faster (n=2000) Monte Carlo runway simulation against
-// what-if inputs supplied by the user in the Financial view, instead of
-// the persisted actuals used by GET /api/financial.
-
-import { runMonteCarloRunway } from "@/lib/financialOS";
+import { runMonteCarloRunway, computeFundraisingReadiness, computeUnitEconomics } from "@/lib/financialOS";
+import type { FinanceSnapshotState } from "@/lib/eventBrain";
 
 export const dynamic = "force-dynamic";
 
-interface SimulateBody {
-  burnRate?: unknown;
-  revenue?: unknown;
-  revenueGrowth?: unknown;
-  cashBalance?: unknown;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-export async function POST(request: Request) {
-  let body: SimulateBody;
+// What-if simulator: 4 number inputs -> immediate recalculation.
+export async function POST(req: Request) {
   try {
-    body = (await request.json()) as SimulateBody;
-  } catch {
-    return Response.json(
-      { error: "Request body must be valid JSON." },
-      { status: 400 }
-    );
-  }
+    const body = await req.json();
+    const cash = Number(body.cash ?? 1000000);
+    const monthlyBurn = Number(body.monthlyBurn ?? 150000);
+    const arrGrowthRate = Number(body.arrGrowthRate ?? 0.05);
+    const newCustomers = Number(body.newCustomers ?? 5);
 
-  const { burnRate, revenue, revenueGrowth, cashBalance } = body;
+    const snapshot: FinanceSnapshotState = {
+      ts: new Date().toISOString(),
+      cash,
+      monthlyBurn,
+      mrr: Number(body.mrr ?? 80000),
+      newArr: Number(body.newArr ?? 150000),
+      churnedArr: Number(body.churnedArr ?? 30000),
+      customers: Number(body.customers ?? 40),
+      newCustomers,
+      cac: Number(body.cac ?? 8000),
+      grossMarginPct: Number(body.grossMarginPct ?? 0.7),
+      headcount: Number(body.headcount ?? 20),
+      rdHeadcountCost: Number(body.rdHeadcountCost ?? 900000),
+      totalPayroll: Number(body.totalPayroll ?? 1700000),
+      salesSpend: Number(body.salesSpend ?? newCustomers * Number(body.cac ?? 8000)),
+    };
 
-  if (!isFiniteNumber(cashBalance) || cashBalance <= 0) {
-    return Response.json(
-      { error: "cashBalance must be a positive number." },
-      { status: 400 }
-    );
-  }
-  if (!isFiniteNumber(burnRate) || burnRate <= 0) {
-    return Response.json(
-      { error: "burnRate must be a positive number." },
-      { status: 400 }
-    );
-  }
-  if (!isFiniteNumber(revenue) || revenue < 0) {
-    return Response.json(
-      { error: "revenue must be a non-negative number." },
-      { status: 400 }
-    );
-  }
-  if (
-    !isFiniteNumber(revenueGrowth) ||
-    revenueGrowth < -0.5 ||
-    revenueGrowth > 0.5
-  ) {
-    return Response.json(
-      { error: "revenueGrowth must be a number between -0.5 and 0.5." },
-      { status: 400 }
-    );
-  }
+    const runway = runMonteCarloRunway(cash, monthlyBurn, arrGrowthRate, 4242);
+    const unitEconomics = computeUnitEconomics(snapshot);
+    const fundraising = computeFundraisingReadiness(runway, unitEconomics, arrGrowthRate, 12);
 
-  try {
-    const runway = runMonteCarloRunway({
-      cashBalance,
-      burnRate,
-      revenue,
-      revenueGrowth,
-      paths: 2000, // faster, interactive what-if run
-      maxMonths: 60,
-      // Seed is derived from the full scenario so identical what-if inputs
-      // always reproduce the same simulated distribution, while different
-      // inputs get an independent, still-deterministic stream.
-      seedKey: `${cashBalance}:${burnRate}:${revenue}:${revenueGrowth}`,
-    });
-
-    return Response.json(runway);
-  } catch (error) {
-    console.error("POST /api/financial/simulate failed", error);
-    return Response.json(
-      { error: "Failed to run the what-if simulation." },
-      { status: 500 }
-    );
+    return Response.json({ runway, unitEconomics, fundraising });
+  } catch (err) {
+    return Response.json({ error: (err as Error).message }, { status: 500 });
   }
 }

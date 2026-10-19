@@ -1,82 +1,112 @@
-import { useEffect, useRef, useState } from "react";
-import { PALETTE_ROUTES, type RouteKey } from "./routes";
+"use client";
+import React, { useEffect, useMemo, useState } from "react";
+import type { SearchItem } from "@/app/api/search/route";
 
-// ─────────────────────────────────────────────────────────────
-// CommandPalette — ⌘K style route switcher. Opened from the nav
-// rail's ⌘ icon or Cmd/Ctrl+K anywhere in the app.
-// ─────────────────────────────────────────────────────────────
-export function CommandPalette({
-  open,
-  onClose,
-  onNavigate,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onNavigate: (route: RouteKey) => void;
-}) {
+// CommandPalette — Cmd/Ctrl+K opens, ↑↓ navigate, Enter navigates to the
+// relevant view (via onNavigate(hash)), Esc closes.
+export function CommandPalette({ onNavigate }: { onNavigate: (view: string) => void }) {
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setTimeout(() => inputRef.current?.focus(), 10);
-    }
-  }, [open]);
+  const [items, setItems] = useState<SearchItem[]>([]);
+  const [cursor, setCursor] = useState(0);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setOpen((o) => !o);
+      } else if (e.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    function onOpen() {
+      setOpen(true);
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    window.addEventListener("leados:open-palette", onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("leados:open-palette", onOpen);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (open && items.length === 0) {
+      fetch("/api/search").then((r) => r.json()).then((d) => setItems(d.items ?? []));
+    }
+  }, [open, items.length]);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return items.slice(0, 20);
+    return items.filter((i) => i.title.toLowerCase().includes(q) || i.subtitle.toLowerCase().includes(q) || i.kind.includes(q)).slice(0, 20);
+  }, [items, query]);
+
+  useEffect(() => setCursor(0), [query]);
 
   if (!open) return null;
 
-  const filtered = PALETTE_ROUTES.filter(
-    (r) => r.hint.toLowerCase().includes(query.toLowerCase()) || r.key.includes(query.toLowerCase())
-  );
+  function go(item: SearchItem) {
+    onNavigate(item.view);
+    setOpen(false);
+    setQuery("");
+  }
+
+  const kindLabel: Record<SearchItem["kind"], string> = {
+    finding: "Finding",
+    person: "Person",
+    decision: "Decision",
+    hypothesis: "Hypothesis",
+    rule: "Rule",
+  };
+  const kindColor: Record<SearchItem["kind"], string> = {
+    finding: "text-amber-400",
+    person: "text-sky-400",
+    decision: "text-violet-400",
+    hypothesis: "text-emerald-400",
+    rule: "text-slate-400",
+  };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-start justify-center bg-black/60 pt-[14vh]" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-lg border border-[color:var(--border-default)] bg-[color:var(--bg-panel)] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 border-b border-[color:var(--border-subtle)] px-3 py-2">
-          <span className="font-mono text-[color:var(--text-accent)]">⌘</span>
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Jump to module…"
-            className="w-full bg-transparent font-mono text-sm text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-muted)]"
-          />
-          <kbd className="rounded border border-[color:var(--border-default)] px-1 font-mono text-[9px] text-[color:var(--text-muted)]">
-            ESC
-          </kbd>
-        </div>
-        <div className="max-h-80 overflow-y-auto p-1">
-          {filtered.map((r) => (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-24" onClick={() => setOpen(false)}>
+      <div className="w-full max-w-xl rounded-xl border border-slate-700 bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <input
+          autoFocus
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setCursor((c) => Math.min(filtered.length - 1, c + 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setCursor((c) => Math.max(0, c - 1));
+            } else if (e.key === "Enter" && filtered[cursor]) {
+              go(filtered[cursor]);
+            }
+          }}
+          placeholder="Search findings, people, decisions, hypotheses, rules…"
+          className="w-full rounded-t-xl border-b border-slate-700 bg-transparent px-4 py-3 text-sm text-slate-100 outline-none placeholder:text-slate-500"
+        />
+        <div className="max-h-96 overflow-y-auto py-1">
+          {filtered.length === 0 && <div className="px-4 py-6 text-center text-sm text-slate-500">No results.</div>}
+          {filtered.map((item, i) => (
             <button
-              key={r.key}
-              onClick={() => {
-                onNavigate(r.key);
-                onClose();
-              }}
-              className="flex w-full items-center gap-3 rounded px-3 py-2 text-left font-mono text-sm text-[color:var(--text-secondary)] hover:bg-[color:var(--bg-elevated)] hover:text-[color:var(--text-primary)]"
+              key={`${item.kind}-${item.id}-${i}`}
+              onClick={() => go(item)}
+              className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm ${i === cursor ? "bg-slate-800" : "hover:bg-slate-800/60"}`}
             >
-              <span className="w-5 text-center text-[color:var(--text-accent)]">{r.glyph}</span>
-              {r.hint}
-              <span className="ml-auto text-[10px] text-[color:var(--text-muted)]">#{r.key}</span>
+              <div className="flex items-center gap-2 truncate">
+                <span className={`text-[10px] font-semibold uppercase tracking-wide ${kindColor[item.kind]}`}>{kindLabel[item.kind]}</span>
+                <span className="truncate text-slate-100">{item.title}</span>
+              </div>
+              <span className="shrink-0 pl-3 text-xs text-slate-500">{item.subtitle}</span>
             </button>
           ))}
-          {!filtered.length && (
-            <div className="px-3 py-6 text-center font-mono text-xs text-[color:var(--text-muted)]">
-              No module matches "{query}"
-            </div>
-          )}
+        </div>
+        <div className="flex items-center justify-between border-t border-slate-800 px-4 py-2 text-[10px] text-slate-500">
+          <span>↑↓ navigate · Enter open · Esc close</span>
+          <span>⌘K</span>
         </div>
       </div>
     </div>

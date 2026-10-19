@@ -1,39 +1,78 @@
-import { useEffect, useState } from 'react';
-import { PeopleDashboard } from './components/people/PeopleDashboard';
+"use client";
+import React, { useEffect, useState, useCallback } from "react";
+import { Shell } from "@/components/Shell";
+import { OrgProfileWizard } from "@/components/OrgProfileWizard";
+import { CockpitView } from "@/views/CockpitView";
+import { IntelligenceView } from "@/views/IntelligenceView";
+import { PeopleView } from "@/views/PeopleView";
+import { StrategyView } from "@/views/StrategyView";
+import { FinancialView } from "@/views/FinancialView";
+import { ExecutionView } from "@/views/ExecutionView";
+import { SignalBoardView } from "@/views/SignalBoardView";
+import { KnowledgeView } from "@/views/KnowledgeView";
+import { DataView } from "@/views/DataView";
+import { HealthView } from "@/views/HealthView";
+import { AboutView } from "@/views/AboutView";
 
-function useHashRoute() {
-  const [hash, setHash] = useState(() => window.location.hash || '#/people');
-  useEffect(() => {
-    if (!window.location.hash) window.location.hash = '#/people';
-    const onChange = () => setHash(window.location.hash || '#/people');
-    window.addEventListener('hashchange', onChange);
-    return () => window.removeEventListener('hashchange', onChange);
-  }, []);
-  return hash;
+const VALID_ROUTES = ["today", "intelligence", "people", "strategy", "finance", "execution", "signals", "knowledge", "data", "health", "about"];
+
+function getHashRoute(): string {
+  if (typeof window === "undefined") return "today";
+  const h = window.location.hash.replace("#", "");
+  return VALID_ROUTES.includes(h) ? h : "today";
 }
 
 export default function App() {
-  const hash = useHashRoute();
+  const [route, setRoute] = useState("today");
+  const [checking, setChecking] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
-  if (hash.startsWith('#/people')) {
-    return <PeopleDashboard />;
+  useEffect(() => {
+    setRoute(getHashRoute());
+    function onHashChange() {
+      setRoute(getHashRoute());
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/onboarding")
+      .then((r) => r.json())
+      .then((d) => setNeedsOnboarding(Boolean(d.needsOnboarding)))
+      .finally(() => setChecking(false));
+  }, []);
+
+  const navigate = useCallback((v: string) => {
+    window.location.hash = `#${v}`;
+    setRoute(v);
+  }, []);
+
+  if (checking) {
+    return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-500">Loading Leados…</div>;
+  }
+
+  if (needsOnboarding) {
+    return (
+      <div className="min-h-screen bg-slate-950">
+        <OrgProfileWizard onComplete={() => setNeedsOnboarding(false)} />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-8">
-      <div className="text-center space-y-4">
-        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20 text-white font-bold text-2xl">
-          L
-        </div>
-        <h1 className="text-3xl font-semibold tracking-tight text-white">Leados</h1>
-        <p className="text-slate-400">The People Intelligence Engine is ready.</p>
-        <a
-          href="#/people"
-          className="inline-block mt-2 px-5 py-2.5 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-semibold transition-colors"
-        >
-          Open People Dashboard →
-        </a>
-      </div>
-    </div>
+    <Shell active={route} onNavigate={navigate}>
+      {route === "today" && <CockpitView onNavigate={navigate} />}
+      {route === "intelligence" && <IntelligenceView />}
+      {route === "people" && <PeopleView />}
+      {route === "strategy" && <StrategyView />}
+      {route === "finance" && <FinancialView />}
+      {route === "execution" && <ExecutionView />}
+      {route === "signals" && <SignalBoardView />}
+      {route === "knowledge" && <KnowledgeView />}
+      {route === "data" && <DataView />}
+      {route === "health" && <HealthView />}
+      {route === "about" && <AboutView />}
+    </Shell>
   );
 }

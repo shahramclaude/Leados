@@ -1,40 +1,61 @@
-import type { LeadosEvent } from './types';
-import { buildSeedEvents } from './seed';
+import { db } from "@/db";
+import { events } from "@/db/schema";
+import { asc } from "drizzle-orm";
+import type { Domain, LeadosEvent, NewLeadosEvent } from "@/lib/types";
 
-const STORAGE_KEY = 'leados.events.v1';
-
-export function loadEvents(): LeadosEvent[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as LeadosEvent[];
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-    }
-  } catch {
-    // fall through to reseed
-  }
-  const seeded = buildSeedEvents();
-  saveEvents(seeded);
-  return seeded;
+function rowToEvent(row: typeof events.$inferSelect): LeadosEvent {
+  return {
+    id: row.id,
+    type: row.type,
+    domain: row.domain as Domain,
+    entityId: row.entityId,
+    ts: (row.ts instanceof Date ? row.ts : new Date(row.ts)).toISOString(),
+    data: (row.data ?? {}) as Record<string, unknown>,
+    source: row.source,
+  };
 }
 
-export function saveEvents(events: LeadosEvent[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-  } catch {
-    // ignore quota errors in demo context
-  }
+// APPEND ONLY — there is no update/delete path. This is the single write
+// primitive for the whole system (self-test T02_APPEND_ONLY asserts this).
+export async function appendEvent(e: NewLeadosEvent): Promise<LeadosEvent> {
+  const [row] = await db
+    .insert(events)
+    .values({
+      type: e.type,
+      domain: e.domain,
+      entityId: e.entityId ?? null,
+      ts: new Date(e.ts),
+      data: e.data as Record<string, unknown>,
+      source: e.source ?? "system",
+    })
+    .returning();
+  return rowToEvent(row);
 }
 
-export function appendEvent(evt: LeadosEvent): LeadosEvent[] {
-  const events = loadEvents();
-  const next = [...events, evt];
-  saveEvents(next);
-  return next;
+export async function appendEvents(es: NewLeadosEvent[]): Promise<LeadosEvent[]> {
+  if (es.length === 0) return [];
+  const rows = await db
+    .insert(events)
+    .values(
+      es.map((e) => ({
+        type: e.type,
+        domain: e.domain,
+        entityId: e.entityId ?? null,
+        ts: new Date(e.ts),
+        data: e.data as Record<string, unknown>,
+        source: e.source ?? "system",
+      }))
+    )
+    .returning();
+  return rows.map(rowToEvent);
 }
 
-export function resetToSeed(): LeadosEvent[] {
-  const seeded = buildSeedEvents();
-  saveEvents(seeded);
-  return seeded;
+export async function listEvents(): Promise<LeadosEvent[]> {
+  const rows = await db.select().from(events).orderBy(asc(events.ts), asc(events.id));
+  return rows.map(rowToEvent);
+}
+
+export async function countEvents(): Promise<number> {
+  const rows = await db.select().from(events);
+  return rows.length;
 }

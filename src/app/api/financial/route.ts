@@ -1,28 +1,25 @@
-import { db } from "@/db";
-import { ensureBaselineData } from "@/lib/seed";
-import { withErrorHandling, jsonOk } from "@/lib/api";
-import { runMonteCarloRunway, computeFundraisingReadiness } from "@/lib/financialIntel";
+import { listEvents } from "@/lib/eventStore";
+import { project, latestFinance } from "@/lib/eventBrain";
+import { runMonteCarloRunway, computeUnitEconomics, computeFundraisingReadiness, computeCapitalEfficiency } from "@/lib/financialOS";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withErrorHandling("financial", async (req, requestId) => {
-  await ensureBaselineData(db);
-  const url = new URL(req.url);
-  const cashBalance = Number(url.searchParams.get("cashBalance") ?? 1_800_000);
-  const burnRate = Number(url.searchParams.get("burnRate") ?? 180_000);
-  const revenue = Number(url.searchParams.get("revenue") ?? 70_000);
-  const revenueGrowth = Number(url.searchParams.get("revenueGrowth") ?? 0.04);
-
-  const runway = runMonteCarloRunway({ cashBalance, burnRate, revenue, revenueGrowth }, 500, 42);
-  const readiness = computeFundraisingReadiness({
-    revenueGrowthRate: revenueGrowth,
-    runwayMonths: runway.p50,
-    grossMargin: 0.72,
-    customerChurnRate: 0.025,
-    teamCompleteness: 0.8,
-    marketSizeScore: 0.75,
-    existingInvestorSupport: 0.6,
-  });
-
-  return jsonOk({ inputs: { cashBalance, burnRate, revenue, revenueGrowth }, runway, readiness }, requestId);
-});
+export async function GET() {
+  try {
+    const events = await listEvents();
+    const projection = project(events);
+    const snapshot = latestFinance(projection);
+    if (!snapshot) {
+      return Response.json({ snapshot: null, message: "No finance.snapshot events recorded yet." });
+    }
+    const arrGrowthSeries = projection.metrics["arr_growth_rate"];
+    const arrGrowthRate = arrGrowthSeries?.length ? arrGrowthSeries[arrGrowthSeries.length - 1].value : 0.05;
+    const runway = runMonteCarloRunway(snapshot.cash, snapshot.monthlyBurn, arrGrowthRate);
+    const unitEconomics = computeUnitEconomics(snapshot);
+    const capitalEfficiency = computeCapitalEfficiency(snapshot, unitEconomics);
+    const fundraising = computeFundraisingReadiness(runway, unitEconomics, arrGrowthRate, 14);
+    return Response.json({ snapshot, runway, unitEconomics, capitalEfficiency, fundraising, arrGrowthRate });
+  } catch (err) {
+    return Response.json({ error: (err as Error).message }, { status: 500 });
+  }
+}

@@ -1,35 +1,53 @@
-import { db } from "@/db";
-import * as schema from "@/db/schema";
-import { ensureBaselineData } from "@/lib/seed";
-import { withErrorHandling, jsonOk } from "@/lib/api";
-import { findRootCauses, knowledgeHalfLife, jaccardPatternMatch, type KnowledgeGraph } from "@/lib/knowledgeGraph";
+import { listEvents } from "@/lib/eventStore";
+import { project } from "@/lib/eventBrain";
+import { buildRuleContext, runRuleEngine } from "@/lib/ruleEngine";
+import { buildGraphNodes, buildGraphEdges, forceDirectedLayout, findRootCauses, buildInstitutionalMemoryDigest, type FiringSnapshot } from "@/lib/knowledgeGraph";
+import { buildAdaptivePlaybook } from "@/lib/playbooksIntelligence";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withErrorHandling("knowledge", async (_req, requestId) => {
-  await ensureBaselineData(db);
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const rootCauseOf = url.searchParams.get("rootCauseOf");
+    const playbookFor = url.searchParams.get("playbookFor");
 
-  const nodeRows = await db.select().from(schema.knowledgeNodes);
-  const edgeRows = await db.select().from(schema.knowledgeEdges);
+    const events = await listEvents();
+    const projection = project(events);
+    const now = new Date();
+    const ctx = buildRuleContext(projection, now);
+    const evaluations = runRuleEngine(ctx);
 
-  const graph: KnowledgeGraph = {
-    nodes: nodeRows.map((n) => ({ id: n.id, label: n.label, domain: n.domain, severity: n.severity, tags: n.tags })),
-    edges: edgeRows.map((e) => ({ fromId: e.fromId, toId: e.toId, relation: e.relation, weight: e.weight })),
-  };
+    const nodes = forceDirectedLayout(buildGraphNodes(evaluations), buildGraphEdges(evaluations));
+    const edges = buildGraphEdges(evaluations);
 
-  const rootCausesByNode = graph.nodes.map((n) => ({
-    nodeId: n.id,
-    rootCauses: findRootCauses(graph, n.id).map((r) => r.id),
-  }));
-
-  const halfLife = knowledgeHalfLife(graph);
-
-  const similarPairs: { a: number; b: number; similarity: number }[] = [];
-  for (let i = 0; i < graph.nodes.length; i++) {
-    for (let j = i + 1; j < graph.nodes.length; j++) {
-      similarPairs.push({ a: graph.nodes[i].id, b: graph.nodes[j].id, similarity: jaccardPatternMatch(graph.nodes[i], graph.nodes[j]) });
+    // Build a pseudo firing-history by bucketing hypothesis creation dates
+    // per day, using each hypothesis's ruleId as a proxy "firing" event —
+    // this is institutional memory derived from the actual hypothesis log.
+    const byDay = new Map<string, Set<string>>();
+    for (const h of projection.hypotheses) {
+      const day = h.createdAt.slice(0, 10);
+      const set = byDay.get(day) ?? new Set<string>();
+      set.add(h.ruleId);
+      byDay.set(day, set);
     }
-  }
+    for (const e of evaluations.filter((ev) => ev.firing)) {
+      const day = now.toISOString().slice(0, 10);
+      const set = byDay.get(day) ?? new Set<string>();
+      set.add(e.ruleId);
+      byDay.set(day, set);
+    }
+    const history: FiringSnapshot[] = [...byDay.entries()].map(([ts, set]) => ({ ts, firingRuleIds: [...set] }));
+    const ruleDomain = new Map(evaluations.map((e) => [e.ruleId, e.domain]));
+    const institutionalMemory = buildInstitutionalMemoryDigest(history, ruleDomain);
 
-  return jsonOk({ graph, rootCausesByNode, halfLife, similarPairs }, requestId);
-});
+    const rootCauses = rootCauseOf ? findRootCauses(rootCauseOf) : null;
+    const playbook = playbookFor ? buildAdaptivePlaybook(evaluations.find((e) => e.ruleId === playbookFor) ?? evaluations[0]) : null;
+
+    const firingPlaybooks = evaluations.filter((e) => e.firing).slice(0, 6).map(buildAdaptivePlaybook);
+
+    return Response.json({ nodes, edges, institutionalMemory, rootCauses, playbook, firingPlaybooks, decisions: projection.decisions, rootCausesLogged: projection.rootCauses });
+  } catch (err) {
+    return Response.json({ error: (err as Error).message }, { status: 500 });
+  }
+}

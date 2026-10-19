@@ -1,121 +1,51 @@
-// causalInference.ts
-//
-// NOTE: recreated for this sandbox — see the comment at the top of
-// src/db/schema.ts.
-//
-// detectAll(P, findings) -> CausalCascade[]
-//
-// We model cross-domain causality with a small, static directed graph of
-// plausible organisational cause/effect edges (DESIGN PARAMETER — these
-// weights encode domain expertise, not a learned model). A cascade is
-// considered "active" when the upstream ("from") domain is unhealthy and the
-// downstream ("to") domain is not improving fast enough to offset it.
+import type { CausalLink, Cascade, RuleEvaluation, Severity } from "@/lib/types";
 
-import type {
-  BrainFindings,
-  CausalCascade,
-  Domain,
-  Finding,
-  Projection,
-} from "./types";
+// ─────────────────────────────────────────────────────────────────────────
+// causalInference — 12 hardcoded causal links between rules, representing
+// plausible cross-domain cascades observed in practice (e.g. flight risk
+// in key people cascading into delivery confidence). This is a *declared*
+// causal graph (expert-encoded), not a statistically inferred one — labeled
+// here for honesty. DESIGN PARAMETER: amplification multipliers below.
+// ─────────────────────────────────────────────────────────────────────────
 
-interface CascadeEdge {
-  from: Domain;
-  to: Domain;
-  amplificationFactor: number; // DESIGN PARAMETER
-  baseConfidence: number; // DESIGN PARAMETER
-  lagDays: { min: number; max: number };
-  description: string;
-}
-
-const CASCADE_GRAPH: CascadeEdge[] = [
-  {
-    from: "financial",
-    to: "morale",
-    amplificationFactor: 1.3,
-    baseConfidence: 0.55,
-    lagDays: { min: 7, max: 21 },
-    description: "Financial stress tends to erode morale within weeks.",
-  },
-  {
-    from: "morale",
-    to: "attrition",
-    amplificationFactor: 1.4,
-    baseConfidence: 0.6,
-    lagDays: { min: 14, max: 45 },
-    description: "Sustained low morale increases flight risk.",
-  },
-  {
-    from: "attrition",
-    to: "execution",
-    amplificationFactor: 1.25,
-    baseConfidence: 0.5,
-    lagDays: { min: 7, max: 30 },
-    description: "Regretted attrition slows delivery execution.",
-  },
-  {
-    from: "execution",
-    to: "growth",
-    amplificationFactor: 1.2,
-    baseConfidence: 0.5,
-    lagDays: { min: 14, max: 60 },
-    description: "Execution slippage stalls downstream growth metrics.",
-  },
-  {
-    from: "culture",
-    to: "morale",
-    amplificationFactor: 1.15,
-    baseConfidence: 0.45,
-    lagDays: { min: 7, max: 30 },
-    description: "Culture erosion depresses team morale.",
-  },
+export const CAUSAL_LINKS: CausalLink[] = [
+  { id: "cl1", fromRuleId: "people.flight_risk_spike", toRuleId: "execution.low_confidence", description: "Key-person flight risk erodes delivery confidence.", amplification: 1.25 },
+  { id: "cl2", fromRuleId: "people.org_wide_disengagement", toRuleId: "execution.momentum_stalled", description: "Disengagement slows delivery momentum.", amplification: 1.2 },
+  { id: "cl3", fromRuleId: "finance.runway_critical", toRuleId: "people.org_wide_disengagement", description: "Runway anxiety increases org-wide disengagement.", amplification: 1.3 },
+  { id: "cl4", fromRuleId: "finance.bankruptcy_risk", toRuleId: "strategy.okr_off_track", description: "Cash anxiety derails OKR execution focus.", amplification: 1.4 },
+  { id: "cl5", fromRuleId: "sales.pipeline_coverage_low", toRuleId: "finance.runway_critical", description: "Weak pipeline shortens effective runway.", amplification: 1.2 },
+  { id: "cl6", fromRuleId: "sales.churn_elevated", toRuleId: "finance.unit_economics_broken", description: "Elevated churn breaks unit economics.", amplification: 1.3 },
+  { id: "cl7", fromRuleId: "execution.blocked_projects", toRuleId: "rd.confidence_low", description: "Portfolio blockers reduce R&D delivery confidence.", amplification: 1.2 },
+  { id: "cl8", fromRuleId: "rd.support_ticket_surge", toRuleId: "sales.nps_declining", description: "Quality regressions surface as falling NPS.", amplification: 1.25 },
+  { id: "cl9", fromRuleId: "strategy.competitive_pressure", toRuleId: "sales.new_logo_growth_stalled", description: "Competitive pressure stalls new logo growth.", amplification: 1.2 },
+  { id: "cl10", fromRuleId: "execution.critical_path_risk", toRuleId: "strategy.velocity_negative", description: "A critical-path bottleneck drags OKR velocity negative.", amplification: 1.3 },
+  { id: "cl11", fromRuleId: "manufacturing.critical_blocker", toRuleId: "execution.open_blocker_backlog", description: "Critical ops blockers spill into the wider blocker backlog.", amplification: 1.15 },
+  { id: "cl12", fromRuleId: "knowledge.low_confirmation_rate", toRuleId: "knowledge.stale_playbooks", description: "Miscalibrated rules reduce trust and playbook adoption.", amplification: 1.1 },
 ];
 
-function topFindingForDomain(findings: Finding[], domain: Domain): Finding | null {
-  const matches = findings.filter((f) => f.domain === domain);
-  return matches.length ? matches[0] : null;
+function severityScore(sev: Severity | null): number {
+  if (!sev) return 0;
+  return { low: 1, medium: 2, high: 3, critical: 4 }[sev];
 }
 
-export function detectAll(
-  P: Projection,
-  findings: BrainFindings | Finding[],
-): CausalCascade[] {
-  const allFindings = Array.isArray(findings) ? findings : findings.findings;
-  const cascades: CausalCascade[] = [];
-
-  for (const edge of CASCADE_GRAPH) {
-    const fromDomain = P.domains[edge.from];
-    const toDomain = P.domains[edge.to];
-    if (!fromDomain || !toDomain) continue;
-
-    const fromRisk = 10 - fromDomain.score; // 0..10, higher = worse
-    const fromUnhealthy = fromRisk >= 4; // DESIGN PARAMETER threshold
-    const toNotImproving = toDomain.velocity >= -0.02; // DESIGN PARAMETER threshold
-
-    if (!fromUnhealthy || !toNotImproving) continue;
-
-    const confidence = Math.max(
-      0,
-      Math.min(1, edge.baseConfidence * (fromRisk / 10) * (1 + Math.max(0, toDomain.velocity))),
-    );
-
-    const fromFinding = topFindingForDomain(allFindings, edge.from);
-    const toFinding = topFindingForDomain(allFindings, edge.to);
-
-    cascades.push({
-      from: edge.from,
-      to: edge.to,
-      fromRuleId: fromFinding?.ruleId ?? null,
-      toRuleId: toFinding?.ruleId ?? null,
-      amplificationFactor: edge.amplificationFactor,
-      confidence,
-      lagDays: edge.lagDays,
-      description: edge.description,
-    });
-  }
-
-  return cascades.sort((a, b) => b.confidence - a.confidence);
+/**
+ * Detect active cascades: a link is "active" when both its source and
+ * target rules are currently firing. Effective severity on the target is
+ * amplified by the link's multiplier (self-test T28 asserts
+ * effectiveSeverity > originalSeverity whenever a cascade is active).
+ */
+export function detectCascades(evaluations: RuleEvaluation[]): Cascade[] {
+  const byId = new Map(evaluations.map((e) => [e.ruleId, e]));
+  return CAUSAL_LINKS.map((link) => {
+    const from = byId.get(link.fromRuleId);
+    const to = byId.get(link.toRuleId);
+    const active = Boolean(from?.firing && to?.firing);
+    const originalSeverityScore = severityScore(to?.severity ?? null);
+    const effectiveSeverityScore = active ? originalSeverityScore * link.amplification : originalSeverityScore;
+    return { link, active, originalSeverityScore, effectiveSeverityScore };
+  });
 }
 
-const causalInference = { detectAll };
-export default causalInference;
+export function activeCascadeCount(cascades: Cascade[]): number {
+  return cascades.filter((c) => c.active).length;
+}
