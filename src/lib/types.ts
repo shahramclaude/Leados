@@ -1,10 +1,8 @@
 // src/lib/types.ts
 //
-// BOOTSTRAP NOTE (Part 1): this repository contained no src/lib directory at
-// all prior to this change (verified via list_files/read_file — see task
-// response). There is therefore no pre-existing type hierarchy to import
-// from. This file is the single shared type root; every other lib/* file
-// imports from here and nothing else defines a parallel hierarchy.
+// Single shared type root for the Leados intelligence layer.
+// Part 1: belief fabric (10 latent / 22 observable Bayesian network).
+// Part 2: autonomous agent orchestration types.
 
 // ─────────────────────────────────────────────────────────────────────────
 // Primitive domain types
@@ -12,17 +10,15 @@
 
 export type ISODateString = string;
 
-/** A raw, immutable fact ingested from any connected system (HRIS, calendar,
- * ticketing, decision log, finance, board deck parser, pulse survey, etc).
- * `type` is a dotted namespace, e.g. "decision.action_item.overdue".
- */
 export interface LeadosEvent {
   id: string;
   type: string;
   occurredAt: Date | ISODateString;
-  personId?: string;
+  personId?: string | number;
   teamId?: string;
-  projectId?: string;
+  projectId?: string | number;
+  domain?: string;
+  weight?: number;
   data?: Record<string, unknown>;
 }
 
@@ -32,11 +28,12 @@ export interface LeadosPerson {
   id: string;
   name: string;
   teamId?: string;
-  level?: SeniorityLevel;
+  level?: SeniorityLevel | string;
   startDate?: Date | ISODateString;
   hasSuccessor?: boolean;
-  /** Percent of working calendar booked in meetings, 0-100. */
   calendarLoadPct?: number;
+  status?: string;
+  flightRiskScore?: number;
 }
 
 export interface DecisionHealthIndex {
@@ -57,7 +54,6 @@ export interface OrgNetwork {
 export interface ProjectConfidenceSnapshot {
   projectId: string;
   takenAt: Date | ISODateString;
-  /** Delivery confidence, 0-1. */
   confidence: number;
 }
 
@@ -66,9 +62,6 @@ export interface NpsSnapshot {
   score: number;
 }
 
-/** Aggregated/derived metrics that are not reasonably reconstructed from a
- * single event by itself (rollups owned by other subsystems).
- */
 export interface LeadosMetrics {
   decisionHealthIndex: DecisionHealthIndex;
   orgNetwork: OrgNetwork;
@@ -77,16 +70,26 @@ export interface LeadosMetrics {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Bayesian network node identifiers
+// Domains
 // ─────────────────────────────────────────────────────────────────────────
 
-/** Original 2-node latent set (baseline network, bootstrapped in this PR
- * because no prior bayesianNetwork.ts existed in the repository).
- */
+export const DOMAINS = [
+  "people",
+  "execution",
+  "culture",
+  "finance",
+  "innovation",
+  "strategy",
+] as const;
+export type Domain = (typeof DOMAINS)[number];
+
+// ─────────────────────────────────────────────────────────────────────────
+// Bayesian network node identifiers (Part 1)
+// ─────────────────────────────────────────────────────────────────────────
+
 export const LEGACY_LATENT_NODES = ["flightRisk", "strategyRisk"] as const;
 export type LegacyLatentNodeId = (typeof LEGACY_LATENT_NODES)[number];
 
-/** Part-1 expansion: 8 additional latent nodes -> 10 total. */
 export const NEW_LATENT_NODES = [
   "burnoutRisk",
   "executionRisk",
@@ -102,7 +105,6 @@ export type NewLatentNodeId = (typeof NEW_LATENT_NODES)[number];
 export const LATENT_NODES = [...LEGACY_LATENT_NODES, ...NEW_LATENT_NODES] as const;
 export type LatentNodeId = (typeof LATENT_NODES)[number];
 
-/** Original 6-node observable set (bootstrapped, see note above). */
 export const LEGACY_OBSERVABLE_NODES = [
   "cadenceSlip",
   "moralePulse",
@@ -113,7 +115,6 @@ export const LEGACY_OBSERVABLE_NODES = [
 ] as const;
 export type LegacyObservableNodeId = (typeof LEGACY_OBSERVABLE_NODES)[number];
 
-/** Part-1 expansion: 16 additional observable nodes -> 22 total. */
 export const NEW_OBSERVABLE_NODES = [
   "actionItemSlipRate",
   "decisionCycleBloom",
@@ -137,47 +138,42 @@ export type NewObservableNodeId = (typeof NEW_OBSERVABLE_NODES)[number];
 export const OBSERVABLE_NODES = [...LEGACY_OBSERVABLE_NODES, ...NEW_OBSERVABLE_NODES] as const;
 export type ObservableNodeId = (typeof OBSERVABLE_NODES)[number];
 
+/** Maps every PRIMARY latent node (i.e. excluding the cascadeRisk
+ * aggregate) to the business domain it belongs to. Used for domain health
+ * rollups and for routing findings/playbooks. */
+export const LATENT_NODE_DOMAIN: Record<Exclude<LatentNodeId, "cascadeRisk">, Domain> = {
+  flightRisk: "people",
+  strategyRisk: "strategy",
+  burnoutRisk: "people",
+  executionRisk: "execution",
+  cultureRisk: "culture",
+  financialRisk: "finance",
+  innovationStall: "innovation",
+  decisionParalysis: "strategy",
+  leadershipEnergyDepletion: "people",
+};
+
 // ─────────────────────────────────────────────────────────────────────────
 // Bayesian network primitives
 // ─────────────────────────────────────────────────────────────────────────
 
-/** Marginal belief for a single node after noisy-OR propagation. */
 export interface NodeMarginal {
-  /** Posterior probability the node is in its "elevated/true" state, 0-1. */
   p: number;
-  /** Evidentiary confidence in that estimate, 0-1 (see bayesianNetwork.ts). */
   confidence: number;
 }
 
-/** A causal-power edge into a noisy-OR node. `q` is the probability that
- * this parent alone, if present, would activate the child ("causal power",
- * Pearl 1988 §4.3.2). Every q value in this codebase is a DESIGN PARAMETER
- * unless otherwise cited.
- */
 export interface CausalParent<TParentId extends string = string> {
   nodeId: TParentId;
   q: number;
 }
 
-export interface NoisyOrNode<
-  TId extends string = string,
-  TParentId extends string = string,
-> {
+export interface NoisyOrNode<TId extends string = string, TParentId extends string = string> {
   id: TId;
-  /** Leak probability: P(child=1) when every parent is absent. */
   leak: number;
   prior: number;
   parents: CausalParent<TParentId>[];
 }
 
-/** Original (legacy) 2-node posterior shape, preserved for callers that
- * only know about the pre-expansion network.
- */
-export type BeliefNetworkPosteriors = Record<LegacyLatentNodeId, NodeMarginal>;
-
-/** Full Part-1 belief-fabric result. Every subsequent stage of the
- * orchestrator consumes this object.
- */
 export interface BeliefFabricResult {
   posteriors: Record<LatentNodeId, NodeMarginal>;
   observables: Record<ObservableNodeId, number>;
@@ -185,60 +181,6 @@ export interface BeliefFabricResult {
   dominantRisk: LatentNodeId;
   dominantRiskDetail: string;
   generatedAt: ISODateString;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Causal chain (Markov) types
-// ─────────────────────────────────────────────────────────────────────────
-
-export interface CausalEdge {
-  from: string;
-  to: string;
-  /** Empirical transition probability P(next=to | current=from). */
-  probability: number;
-  /** Number of observed transitions backing this edge. */
-  support: number;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Knowledge graph taxonomy
-// ─────────────────────────────────────────────────────────────────────────
-
-export type MemoryNodeType =
-  | "person"
-  | "team"
-  | "insight"
-  | "finding"
-  | "risk"
-  | "decision"
-  | "project";
-
-export type RelationType =
-  | "triggered"
-  | "caused"
-  | "correlates"
-  | "mitigates"
-  | "supports"
-  | "contradicts"
-  | "reportsTo"
-  | "memberOf";
-
-export interface MemoryNode {
-  id: number;
-  type: MemoryNodeType;
-  key: string;
-  label: string;
-  metadata: Record<string, unknown>;
-  createdAt: Date | ISODateString;
-}
-
-export interface MemoryEdge {
-  id: number;
-  fromNodeId: number;
-  toNodeId: number;
-  relation: RelationType;
-  metadata: Record<string, unknown>;
-  createdAt: Date | ISODateString;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -251,28 +193,283 @@ export interface BeliefTrajectoryPoint {
   confidence: number;
 }
 
-export interface BeliefDriftResult {
+export interface BeliefDrift {
+  node: LatentNodeId;
   drifting: boolean;
   ratePerDay: number;
   projectedCrossing: Date | null;
 }
 
+// Alias retained for modules that only care about the raw regression
+// output without the node id attached.
+export type BeliefDriftResult = Omit<BeliefDrift, "node">;
+
 // ─────────────────────────────────────────────────────────────────────────
-// Orchestrator-level result
+// Findings / notifications
 // ─────────────────────────────────────────────────────────────────────────
 
-export interface IntelligenceSynthesis {
+export interface Finding {
+  id: string;
+  ruleKey: string;
+  domain: Domain | string;
+  severity: number; // 1-5
+  title: string;
+  description: string;
+  createdAt: ISODateString;
+  cycleId?: string | null;
+}
+
+export interface NotificationPayload {
+  severity: number;
+  title: string;
+  message: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Rules
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface RuleDefinition {
+  key: string;
+  name: string;
+  domain: Domain | string;
+  baseSeverity: number;
+  evaluate: (ctx: RuleEvalContext) => RuleEvalOutcome;
+}
+
+export interface RuleEvalContext {
   beliefs: BeliefFabricResult;
-  causalEdges: CausalEdge[];
-  fusedSignals: Record<string, number>;
-  // Intentionally loosely typed here (unknown shape at the types-root
-  // level) to avoid a parallel type hierarchy with talentEngine.ts /
-  // financeEngine.ts / executionEngine.ts, which own their concrete result
-  // shapes. orchestrator.ts assigns the concrete engine result types,
-  // which are structurally compatible records of primitives.
-  talent: object;
-  finance: object;
-  execution: object;
+  events: LeadosEvent[];
+  now: Date;
+}
+
+export interface RuleEvalOutcome {
+  fired: boolean;
+  probability: number; // predicted probability of the underlying bad outcome
+  detail?: string;
+}
+
+export interface EvaluatedRule {
+  ruleKey: string;
+  name: string;
+  domain: Domain | string;
+  fired: boolean;
+  severity: number;
+  weight: number;
+  probability: number;
+  finding: Finding | null;
+}
+
+export interface RuleAccuracyReport {
+  ruleKey: string;
+  name: string;
+  domain: Domain | string;
+  brierScore: number | null;
+  calibration: number | null;
+  truePositives: number;
+  falsePositives: number;
+  totalEvaluations: number;
+  recommendedWeightAdjustment: "increase" | "decrease" | "none";
+  reason: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Playbooks
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface PlaybookDefinition {
+  key: string;
+  name: string;
+  domain: Domain | string;
+  ruleKey: string;
+  steps: string[];
+}
+
+export interface TriggeredPlaybook {
+  instanceId: number;
+  playbookKey: string;
+  playbookName: string;
+  domain: Domain | string;
+  triggerFindingId: string;
+  assignedTo: number | null;
+  status: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Hypotheses
+// ─────────────────────────────────────────────────────────────────────────
+
+export type HypothesisStatus = "open" | "confirmed" | "refuted";
+
+export interface Hypothesis {
+  id: string;
+  key: string;
+  entityId: string;
+  entityType: string;
+  claim: string;
+  predictedBy: ISODateString;
+  resolveBy: ISODateString;
+  status: HypothesisStatus;
+  outcomeNote: string | null;
+  outcomeValue: number | null;
+  metricToCheck: string | null;
+  threshold: number | null;
+  ruleKey?: string | null;
+}
+
+export interface HypothesisResolution {
+  hypothesisId: string;
+  key: string;
+  status: "confirmed" | "refuted";
+  outcomeNote: string;
+  actualValue: number;
+  threshold: number;
+  ruleKey: string | null;
+}
+
+export interface RuleCalibrationRecord {
+  ruleKey: string;
+  oldWeight: number;
+  newWeight: number;
+  reason: "hypothesis_confirmed" | "hypothesis_refuted" | "brier_audit";
+  hypothesisId?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Orchestrator result
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface DomainHealthScore {
+  domain: Domain | string;
+  score: number; // 0-100
+  trend: "improving" | "stable" | "declining";
+}
+
+export interface ProjectSummary {
+  id: number;
+  name: string;
+  domain: Domain | string;
+  deliveryConfidence: number;
+  previousDeliveryConfidence: number;
+  targetDate: ISODateString | null;
+}
+
+export interface DecisionSummary {
+  id: number;
+  title: string;
+  domain: Domain | string;
+  confidence: number;
+  deadline: ISODateString | null;
+  status: string;
+}
+
+export interface OrchestratorResult {
+  beliefs: BeliefFabricResult;
+  findings: Finding[];
+  domainHealth: Record<string, DomainHealthScore>;
+  projects: ProjectSummary[];
+  decisions: DecisionSummary[];
+  flightRiskByPerson: Record<string, { personId: string; name: string; p: number }>;
   narrative: string[];
   generatedAt: ISODateString;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Agent cycle (Part 2)
+// ─────────────────────────────────────────────────────────────────────────
+
+export type AgentPriority = "normal" | "elevated" | "critical";
+
+export interface DomainDropEvent {
+  domain: Domain | string;
+  previousScore: number;
+  currentScore: number;
+  drop: number;
+}
+
+export interface MetricBreachEvent {
+  metric: string;
+  target: number;
+  actual: number;
+  deviationPct: number;
+}
+
+export interface CycleDelta {
+  newCritical: Finding[];
+  scoreDrop: DomainDropEvent[];
+  beliefCrossings: LatentNodeId[];
+  metricBreaches: MetricBreachEvent[];
+}
+
+export interface UncertaintyFlag {
+  node: LatentNodeId;
+  confidence: number;
+  missingSignals: ObservableNodeId[];
+  recommendation: string;
+}
+
+export interface WeeklyBriefing {
+  briefingDate: string; // YYYY-MM-DD
+  executiveSummary: string;
+  top3Priorities: Finding[];
+  top3Risks: BeliefDrift[];
+  decisionsNeeded: DecisionSummary[];
+  playbooksActive: number;
+  hypothesesPending: number;
+  uncertaintyStatement: string;
+}
+
+export interface AgentCycleResult {
+  cycleId: string;
+  startedAt: Date;
+  completedAt: Date;
+  priority: AgentPriority;
+  beliefResult: BeliefFabricResult;
+  orchestratorResult: OrchestratorResult;
+  driftsDetected: BeliefDrift[];
+  playbooksTriggered: TriggeredPlaybook[];
+  hypothesesCreated: Hypothesis[];
+  hypothesesResolved: HypothesisResolution[];
+  rulesCalibrated: RuleCalibrationRecord[];
+  briefingUpdated: boolean;
+  uncertaintyFlags: UncertaintyFlag[];
+  deltaVsPrevious: CycleDelta | null;
+  stepTimingsMs: Record<string, number>;
+  warnings: string[];
+}
+
+export interface AgentCycleInput {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;
+  now: Date;
+  previousCycle: AgentCycleResult | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Scheduler (Part 2)
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface SchedulerConfig {
+  normalIntervalMs: number;
+  criticalIntervalMs: number;
+  morningBriefingHour: number;
+}
+
+export interface SchedulerStatus {
+  running: boolean;
+  lastRunAt: ISODateString | null;
+  nextRunAt: ISODateString | null;
+  currentIntervalMs: number;
+  lastCycleId: string | null;
+  consecutiveErrors: number;
+  degradedMode: boolean;
+}
+
+export interface AgentCycleSummary {
+  cycleId: string;
+  startedAt: ISODateString;
+  durationMs: number;
+  findingsDelta: number;
+  playbooksTriggered: number;
+  cascadeRiskAtCompletion: number;
 }

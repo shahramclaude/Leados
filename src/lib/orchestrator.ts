@@ -1,103 +1,133 @@
 // src/lib/orchestrator.ts
 //
-// Part 1 deliverable: wires the belief fabric in as Stage 0, ahead of every
-// other engine, and threads its output through the rest of the pipeline.
-//
-// Stage order (per task spec):
-//   runBeliefFabric -> updateBeliefNodes -> evaluateRules ->
-//   detectCausalChains -> fuseSignals -> talent + finance + execution
-//   intelligence -> synthesize -> broadcast
+// Full orchestration pass: takes an already-computed BeliefFabricResult
+// (produced by beliefFabric.runBeliefFabric in agentCore STEP 1) and layers
+// rule evaluation, domain health rollups, project/decision summaries, and
+// per-person flight-risk scoring on top of it.
 
+import { gte } from "drizzle-orm";
+import type { db as defaultDb } from "@/db";
+import { decisions as decisionsTable, events as eventsTable, people as peopleTable, projects as projectsTable } from "@/db/schema";
 import type {
-  IntelligenceSynthesis,
+  BeliefFabricResult,
+  DecisionSummary,
+  Domain,
+  DomainHealthScore,
   LeadosEvent,
-  LeadosMetrics,
-  LeadosPerson,
+  OrchestratorResult,
+  ProjectSummary,
 } from "./types";
-import { runBeliefFabric } from "./beliefFabric";
-import { queueBeliefSnapshotPersist } from "./temporalBeliefTracker";
-import { updateBeliefNodes } from "./knowledgeGraph";
-import { evaluateRules, type EvaluatedRule } from "./rulesEngine";
-import { detectCausalChains } from "./causalChain";
-import { fuseSignals } from "./signalFusion";
-import { analyzeTalent } from "./talentEngine";
-import { analyzeFinance } from "./financeEngine";
-import { analyzeExecution } from "./executionEngine";
-import { generateNarrative } from "./narrativeIntel";
+import { DOMAINS, LATENT_NODE_DOMAIN } from "./types";
+import { evaluateRules } from "./ruleEngine";
+import { daysBetween } from "./temporal";
 
-export interface OrchestratorResult extends IntelligenceSynthesis {
-  rules: EvaluatedRule[];
-}
+type Database = typeof defaultDb;
 
-/** Stage "broadcast": in this bootstrap there is no external pub/sub, so
- * broadcasting means logging a structured line other services can tail.
- * Kept side-effect-only and non-throwing so it never blocks the response.
- */
-function broadcast(result: OrchestratorResult): void {
-  try {
-    console.log(
-      `[orchestrator] dominantRisk=${result.beliefs.dominantRisk} ` +
-        `cascadeRisk=${result.beliefs.cascadeRisk.p.toFixed(3)} ` +
-        `rulesFired=${result.rules.length}`,
+function computeDomainHealth(beliefs: BeliefFabricResult): Record<string, DomainHealthScore> {
+  const result: Record<string, DomainHealthScore> = {};
+  for (const domain of DOMAINS) {
+    const nodesInDomain = (Object.keys(LATENT_NODE_DOMAIN) as Array<keyof typeof LATENT_NODE_DOMAIN>).filter(
+      (node) => LATENT_NODE_DOMAIN[node] === domain,
     );
-  } catch {
-    // broadcasting must never throw into the caller's critical path
+    const maxP = nodesInDomain.reduce((acc, node) => Math.max(acc, beliefs.posteriors[node].p), 0);
+    const score = Math.round(Math.max(0, Math.min(100, (1 - maxP) * 100)));
+    result[domain] = { domain, score, trend: "stable" };
   }
+  return result;
 }
 
-export async function runOrchestrator(
+async function loadRecentEvents(db: Database, now: Date, days = 30): Promise<LeadosEvent[]> {
+  const cutoff = new Date(now.getTime() - days * 86_400_000);
+  const rows = await db.select().from(eventsTable).where(gte(eventsTable.occurredAt, cutoff));
+  return rows.map((r) => ({
+    id: String(r.id),
+    type: r.type,
+    occurredAt: r.occurredAt,
+    personId: r.personId ?? undefined,
+    teamId: r.teamId ?? undefined,
+    projectId: r.projectId ?? undefined,
+    domain: r.domain ?? undefined,
+    weight: r.weight ?? 1,
+    data: (r.data as Record<string, unknown>) ?? undefined,
+  }));
+}
+
+function computePersonFlightRisk(
+  personId: string,
   events: LeadosEvent[],
-  people: LeadosPerson[],
-  metrics: LeadosMetrics,
-  now: Date = new Date(),
+  basePosterior: number,
+  now: Date,
+): number {
+  const personEvents = events.filter(
+    (e) => String(e.personId) === personId && daysBetween(e.occurredAt, now) <= 30,
+  );
+  const negativeSignals = personEvents.filter((e) =>
+    ["sentiment.negative", "comp.flag", "attrition.peer_departure", "negative_sentiment", "compensation_flag"].some(
+      (t) => e.type.includes(t),
+    ),
+  ).length;
+  // Each negative signal nudges this person's individual estimate above the
+  // org-wide base posterior; capped at 0.95.
+  const adjusted = basePosterior + negativeSignals * 0.08;
+  return Math.min(0.95, Math.max(0, adjusted));
+}
+
+export async function runFullOrchestration(
+  db: Database,
+  beliefs: BeliefFabricResult,
+  now: Date,
+  cycleId?: string | null,
 ): Promise<OrchestratorResult> {
-  // ---- Stage 0: belief fabric (must run before everything else) ----
-  const beliefs = runBeliefFabric(events, people, metrics, now);
+  const events = await loadRecentEvents(db, now);
 
-  // Fire-and-forget persistence + knowledge-graph refresh. Per the task's
-  // non-blocking constraint, neither of these is awaited on the critical
-  // path — the caller gets `beliefs` (already computed, in-memory)
-  // immediately, and the DB writes happen in the background.
-  queueBeliefSnapshotPersist(beliefs);
-  void updateBeliefNodes(beliefs).catch((err) => {
-    console.error("[orchestrator] updateBeliefNodes failed", err);
-  });
+  const evaluated = await evaluateRules(db, beliefs, events, now, { cycleId });
+  const findings = evaluated.map((e) => e.finding).filter((f): f is NonNullable<typeof f> => f !== null);
 
-  // ---- Stage: evaluateRules (cascadeRisk.p folded into severity) ----
-  const rules = evaluateRules(events, now, beliefs.cascadeRisk.p);
+  const domainHealth = computeDomainHealth(beliefs);
 
-  // ---- Stage: detectCausalChains ----
-  const causalEdges = detectCausalChains(events, now);
+  const peopleRows = await db.select().from(peopleTable);
+  const flightRiskByPerson: OrchestratorResult["flightRiskByPerson"] = {};
+  for (const person of peopleRows) {
+    const p = computePersonFlightRisk(String(person.id), events, beliefs.posteriors.flightRisk.p, now);
+    flightRiskByPerson[String(person.id)] = { personId: String(person.id), name: person.name, p };
+  }
 
-  // ---- Stage: fuseSignals (domain-level recency-weighted fusion; the
-  // observable map itself was already pre-computed once, inside
-  // runBeliefFabric, and is reused below instead of being recomputed) ----
-  const fusedSignals = fuseSignals(events, now);
+  const projectRows = await db.select().from(projectsTable);
+  const projects: ProjectSummary[] = projectRows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    domain: (p.domain ?? "execution") as Domain,
+    deliveryConfidence: p.deliveryConfidence ?? 80,
+    previousDeliveryConfidence: p.previousDeliveryConfidence ?? 80,
+    targetDate: p.targetDate ? new Date(p.targetDate).toISOString() : null,
+  }));
 
-  // ---- Stage: talent + finance + execution intelligence, each primed with
-  // its corresponding belief posterior as a prior multiplier, and all
-  // reusing beliefs.observables instead of recomputing from raw events ----
-  const talent = analyzeTalent(people, beliefs.posteriors.flightRisk);
-  const finance = analyzeFinance(beliefs.observables, beliefs.posteriors.financialRisk);
-  const execution = analyzeExecution(beliefs.observables, beliefs.posteriors.executionRisk);
+  const decisionRows = await db.select().from(decisionsTable);
+  const decisions: DecisionSummary[] = decisionRows.map((d) => ({
+    id: d.id,
+    title: d.title,
+    domain: (d.domain ?? "strategy") as Domain,
+    confidence: d.confidence ?? 50,
+    deadline: d.deadline ? new Date(d.deadline).toISOString() : null,
+    status: d.status ?? "open",
+  }));
 
-  // ---- Stage: synthesize ----
-  const narrative = generateNarrative(beliefs, causalEdges);
+  const narrative = [
+    beliefs.dominantRiskDetail,
+    `Cascade risk is at ${Math.round(beliefs.cascadeRisk.p * 100)}% (confidence ${Math.round(
+      beliefs.cascadeRisk.confidence * 100,
+    )}%).`,
+    `${findings.length} finding(s) generated this cycle across ${new Set(findings.map((f) => f.domain)).size} domain(s).`,
+  ];
 
-  const result: OrchestratorResult = {
+  return {
     beliefs,
-    causalEdges,
-    fusedSignals,
-    talent,
-    finance,
-    execution,
+    findings,
+    domainHealth,
+    projects,
+    decisions,
+    flightRiskByPerson,
     narrative,
-    rules,
     generatedAt: now.toISOString(),
   };
-
-  // ---- Stage: broadcast ----
-  broadcast(result);
-
-  return result;
 }

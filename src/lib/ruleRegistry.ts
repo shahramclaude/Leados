@@ -1,55 +1,66 @@
-// Static registry of rule *definitions*. These describe the shape and
-// starting weight of every rule the orchestrator can evaluate. Live,
-// self-calibrated weights are persisted in the `rules` table (see
-// ruleStore.ts) and drift away from `baseWeight` over time via
-// selfImprove.ts — the registry below is only the seed/reset source of
-// truth, it is never mutated at runtime.
+// src/lib/ruleRegistry.ts
+//
+// Canonical catalog of detection rules. Each rule reads from the belief
+// fabric's posteriors (primarily) to decide whether it "fires". This is the
+// single source of truth for rule logic — ruleEngine.ts evaluates these
+// definitions against live data; ruleStore.ts persists/loads their
+// calibrated weights.
 
-export type RuleCategory = "flight_risk" | "domain_health" | "causal_chain";
+import type { LatentNodeId, RuleDefinition } from "./types";
 
-export interface RuleDefinition {
-  key: string;
-  name: string;
-  description: string;
-  category: RuleCategory;
-  baseWeight: number;
+function thresholdRule(
+  key: string,
+  name: string,
+  domain: RuleDefinition["domain"],
+  baseSeverity: number,
+  node: LatentNodeId,
+  threshold: number,
+): RuleDefinition {
+  return {
+    key,
+    name,
+    domain,
+    baseSeverity,
+    evaluate: (ctx) => {
+      const marginal = ctx.beliefs.posteriors[node];
+      return {
+        fired: marginal.p >= threshold,
+        probability: marginal.p,
+        detail: `${String(node)} posterior p=${marginal.p.toFixed(2)} (threshold ${threshold})`,
+      };
+    },
+  };
 }
 
-export const RULE_REGISTRY: RuleDefinition[] = [
-  {
-    key: "FLIGHT_RISK_THRESHOLD",
-    name: "Flight risk threshold",
-    description:
-      "Flags a person as a retention risk when their flight risk score exceeds 0.6.",
-    category: "flight_risk",
-    baseWeight: 1.0,
-  },
-  {
-    key: "DOMAIN_HEALTH_DROP",
-    name: "Domain health regression",
-    description:
-      "Flags a domain whose health score has dropped more than 15 points versus the prior run.",
-    category: "domain_health",
-    baseWeight: 1.0,
-  },
-  {
-    key: "CAUSAL_CHAIN_CONFIDENCE",
-    name: "Causal chain confidence",
-    description:
-      "Flags causal chains between domains whose inferred confidence exceeds 0.7.",
-    category: "causal_chain",
-    baseWeight: 1.0,
-  },
-  {
-    key: "METRIC_ANOMALY_ZSCORE",
-    name: "Metric anomaly (z-score)",
-    description:
-      "Flags a metric reading as anomalous when its z-score versus trailing history exceeds 2.5.",
-    category: "domain_health",
-    baseWeight: 1.0,
-  },
+export const RULE_DEFINITIONS: RuleDefinition[] = [
+  thresholdRule("FLIGHT_RISK_ELEVATED", "Flight risk elevated", "people", 3, "flightRisk", 0.55),
+  thresholdRule("FLIGHT_RISK_CRITICAL", "Flight risk critical", "people", 4, "flightRisk", 0.75),
+  thresholdRule("BURNOUT_RISK_ELEVATED", "Burnout risk elevated", "people", 3, "burnoutRisk", 0.55),
+  thresholdRule("BURNOUT_RISK_CRITICAL", "Burnout risk critical", "people", 4, "burnoutRisk", 0.75),
+  thresholdRule("EXECUTION_RISK_ELEVATED", "Execution risk elevated", "execution", 3, "executionRisk", 0.55),
+  thresholdRule("EXECUTION_RISK_CRITICAL", "Execution risk critical", "execution", 4, "executionRisk", 0.75),
+  thresholdRule("CULTURE_RISK_ELEVATED", "Culture risk elevated", "culture", 3, "cultureRisk", 0.55),
+  thresholdRule("CULTURE_RISK_CRITICAL", "Culture risk critical", "culture", 4, "cultureRisk", 0.75),
+  thresholdRule("FINANCIAL_RISK_ELEVATED", "Financial risk elevated", "finance", 3, "financialRisk", 0.55),
+  thresholdRule("FINANCIAL_RISK_CRITICAL", "Financial risk critical", "finance", 4, "financialRisk", 0.75),
+  thresholdRule("INNOVATION_STALL_ELEVATED", "Innovation stall elevated", "innovation", 3, "innovationStall", 0.55),
+  thresholdRule("DECISION_PARALYSIS_ELEVATED", "Decision paralysis elevated", "strategy", 3, "decisionParalysis", 0.55),
+  thresholdRule("STRATEGY_RISK_ELEVATED", "Strategy risk elevated", "strategy", 3, "strategyRisk", 0.55),
+  thresholdRule(
+    "LEADERSHIP_ENERGY_DEPLETION_ELEVATED",
+    "Leadership energy depletion elevated",
+    "people",
+    3,
+    "leadershipEnergyDepletion",
+    0.55,
+  ),
+  thresholdRule("CASCADE_RISK_CRITICAL", "Cascade risk critical", "strategy", 5, "cascadeRisk", 0.6),
 ];
 
 export function getRuleDefinition(key: string): RuleDefinition | undefined {
-  return RULE_REGISTRY.find((rule) => rule.key === key);
+  return RULE_DEFINITIONS.find((r) => r.key === key);
+}
+
+export function allRuleDefinitions(): RuleDefinition[] {
+  return RULE_DEFINITIONS;
 }

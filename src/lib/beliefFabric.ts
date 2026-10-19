@@ -1,9 +1,7 @@
 // src/lib/beliefFabric.ts
 //
 // Part 1 deliverable: the extended (10 latent / 22 observable) belief
-// network. Imports `noisyOrPosterior`/`updateBeliefs` from
-// bayesianNetwork.ts UNCHANGED (see constraint in task + comment in that
-// file) and only adds topology on top.
+// network. Builds topology on top of bayesianNetwork.ts's noisy-OR engine.
 
 import type {
   BeliefFabricResult,
@@ -18,12 +16,15 @@ import type {
 import { BASE_NETWORK, noisyOrPosterior, updateBeliefs, evidenceConfidence } from "./bayesianNetwork";
 import { computeObservableLikelihoods } from "./signalFusion";
 
-// ─────────────────────────────────────────────────────────────────────────
-// New latent-node priors (task spec, section "NEW PRIORS")
-// ─────────────────────────────────────────────────────────────────────────
-
 export const NEW_LATENT_PRIORS: Record<
-  "burnoutRisk" | "executionRisk" | "cultureRisk" | "financialRisk" | "innovationStall" | "decisionParalysis" | "cascadeRisk" | "leadershipEnergyDepletion",
+  | "burnoutRisk"
+  | "executionRisk"
+  | "cultureRisk"
+  | "financialRisk"
+  | "innovationStall"
+  | "decisionParalysis"
+  | "cascadeRisk"
+  | "leadershipEnergyDepletion",
   number
 > = {
   burnoutRisk: 0.2,
@@ -36,24 +37,10 @@ export const NEW_LATENT_PRIORS: Record<
   leadershipEnergyDepletion: 0.2,
 };
 
-/** All new observables default prior 0.2 (task spec). Used by
- * signalFusion.computeObservableLikelihoods as the neutral default when a
- * node has no supporting event data (see NEUTRAL_DEFAULT there, kept in
- * sync intentionally).
- */
 export const NEW_OBSERVABLE_PRIOR = 0.2;
-
-// ─────────────────────────────────────────────────────────────────────────
-// Extended network topology — all `q` values are DESIGN PARAMETERS taken
-// verbatim from the task specification's "EDGE ADDITIONS" section.
-// ─────────────────────────────────────────────────────────────────────────
 
 type ObsOnlyNode = NoisyOrNode<string, ObservableNodeId>;
 
-/** Layer A: latent nodes whose parents are purely observable nodes. These
- * can all be computed in a single `updateBeliefs` pass together with the
- * legacy network.
- */
 const LAYER_A_NETWORK: Record<string, ObsOnlyNode> = {
   ...BASE_NETWORK,
   burnoutRisk: {
@@ -113,12 +100,6 @@ const LAYER_A_NETWORK: Record<string, ObsOnlyNode> = {
 
 const LAYER_A_IDS = Object.keys(LAYER_A_NETWORK) as LatentNodeId[];
 
-/** Layer B: leadershipEnergyDepletion — depends on observables PLUS the
- * Layer-A posterior of `burnoutRisk` (a latent feeding a latent). Per
- * Díez & Druzdzel's soft-evidence generalization, the parent latent's
- * posterior probability is used directly as the soft-evidence input `p_i`
- * to the same noisy-OR gate (no formula change — see bayesianNetwork.ts).
- */
 function buildLeadershipEnergyDepletionNode(): ObsOnlyNode {
   return {
     id: "leadershipEnergyDepletion",
@@ -126,8 +107,6 @@ function buildLeadershipEnergyDepletionNode(): ObsOnlyNode {
     prior: NEW_LATENT_PRIORS.leadershipEnergyDepletion,
     parents: [
       { nodeId: "meetingLoadIndex", q: 0.5 },
-      // burnoutRisk posterior injected as a synthetic "observable" entry in
-      // the likelihoods map at call time (key: "burnoutRisk").
       { nodeId: "burnoutRisk" as ObservableNodeId, q: 0.7 },
       { nodeId: "decisionCycleBloom", q: 0.3 },
       { nodeId: "moralePulse", q: 0.45 },
@@ -135,9 +114,6 @@ function buildLeadershipEnergyDepletionNode(): ObsOnlyNode {
   };
 }
 
-/** Layer C: decisionParalysis — depends on observables PLUS the Layer-B
- * posterior of leadershipEnergyDepletion.
- */
 function buildDecisionParalysisNode(): ObsOnlyNode {
   return {
     id: "decisionParalysis",
@@ -151,10 +127,6 @@ function buildDecisionParalysisNode(): ObsOnlyNode {
   };
 }
 
-/** cascadeRisk second-order aggregation order + causal power weights, taken
- * verbatim from the task spec ("flightRisk first"). All weights are DESIGN
- * PARAMETERS specified by the task, leak = 0.05.
- */
 const CASCADE_PARENT_ORDER: Exclude<LatentNodeId, "cascadeRisk">[] = [
   "flightRisk",
   "burnoutRisk",
@@ -181,38 +153,22 @@ export function computeCascadeRisk(
   return { p, confidence };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Belief revision pipeline
-// ─────────────────────────────────────────────────────────────────────────
-
 function dominantRiskNarrative(nodeId: LatentNodeId, marginal: NodeMarginal): string {
   const pct = Math.round(marginal.p * 100);
   const confidencePct = Math.round(marginal.confidence * 100);
   return `${nodeId} is the dominant primary risk at p=${pct}% (confidence ${confidencePct}%).`;
 }
 
-/**
- * Step 1: computeObservableLikelihoods → Record<ObsNodeId, p>
- * Step 2: updateBeliefs with all 22 observables, in topological layers
- *         (Layer A: obs-only, Layer B: leadershipEnergyDepletion depends on
- *         burnoutRisk posterior, Layer C: decisionParalysis depends on
- *         leadershipEnergyDepletion posterior)
- * Step 3: computeCascadeRisk from the 9 primary latent posteriors
- * Step 4: Return BeliefFabricResult
- */
 export function runBeliefFabric(
   events: LeadosEvent[],
   people: LeadosPerson[],
   metrics: LeadosMetrics,
   now: Date,
 ): BeliefFabricResult {
-  // Step 1
   const observables = computeObservableLikelihoods(events, people, metrics, now);
 
-  // Step 2a — Layer A (legacy network + 5 obs-only new latents)
   const layerAPosteriors = updateBeliefs(LAYER_A_NETWORK, observables);
 
-  // Step 2b — Layer B (leadershipEnergyDepletion, soft-evidence from burnoutRisk)
   const layerBLikelihoods: Record<string, number> = {
     ...observables,
     burnoutRisk: layerAPosteriors.burnoutRisk.p,
@@ -223,7 +179,6 @@ export function runBeliefFabric(
     layerBLikelihoods,
   );
 
-  // Step 2c — Layer C (decisionParalysis, soft-evidence from leadershipEnergyDepletion)
   const layerCLikelihoods: Record<string, number> = {
     ...observables,
     leadershipEnergyDepletion: layerBPosteriors.leadershipEnergyDepletion.p,
@@ -240,7 +195,6 @@ export function runBeliefFabric(
     ...layerCPosteriors,
   } as Record<Exclude<LatentNodeId, "cascadeRisk">, NodeMarginal>;
 
-  // Step 3
   const cascadeRisk = computeCascadeRisk(primaryPosteriors);
 
   const posteriors = {
@@ -248,10 +202,6 @@ export function runBeliefFabric(
     cascadeRisk,
   } as Record<LatentNodeId, NodeMarginal>;
 
-  // Dominant risk = argmax over the 9 PRIMARY latents (cascadeRisk is an
-  // aggregate "meta" signal, not a primary driver — DESIGN DECISION, see
-  // task framing of cascadeRisk as "the system's master risk aggregator"
-  // rather than a root cause in its own right).
   let dominantRisk: LatentNodeId = CASCADE_PARENT_ORDER[0];
   for (const nodeId of CASCADE_PARENT_ORDER) {
     if (primaryPosteriors[nodeId].p > primaryPosteriors[dominantRisk as typeof nodeId].p) {
@@ -269,4 +219,20 @@ export function runBeliefFabric(
   };
 }
 
-export { LAYER_A_IDS };
+/** Observable parents feeding each PRIMARY latent node (excluding
+ * cascadeRisk, which aggregates latents rather than observables directly).
+ * Used by agentCore's uncertainty-flagging step to recommend which signal
+ * type to collect more of. */
+export const LATENT_NODE_OBSERVABLES: Record<Exclude<LatentNodeId, "cascadeRisk">, ObservableNodeId[]> = {
+  flightRisk: ["sentimentDrop", "compGapSignal", "peerAttritionSignal", "cadenceSlip"],
+  strategyRisk: ["moralePulse", "runwayMonths", "cadenceSlip"],
+  burnoutRisk: ["cadenceSlip", "moralePulse", "meetingLoadIndex", "actionItemSlipRate"],
+  executionRisk: ["actionItemSlipRate", "deliveryConfidenceDrop", "techDebtVelocity", "decisionCycleBloom"],
+  cultureRisk: ["conflictFrequency", "psychologicalSafetyIndex", "retrospectiveHealth", "onboardingCohortDrop"],
+  financialRisk: ["runwayMonths", "budgetDeviationPct", "boardSentiment"],
+  innovationStall: ["knowledgeSiloIndex", "techDebtVelocity", "talentBenchDepth"],
+  decisionParalysis: ["decisionCycleBloom", "conflictFrequency"],
+  leadershipEnergyDepletion: ["meetingLoadIndex", "decisionCycleBloom", "moralePulse"],
+};
+
+export { LAYER_A_IDS, CASCADE_PARENT_ORDER };

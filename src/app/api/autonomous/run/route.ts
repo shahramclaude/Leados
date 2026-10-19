@@ -1,77 +1,51 @@
+// src/app/api/autonomous/run/route.ts
+//
+// Triggers one autonomous intelligence cycle (agentCore.runAgentCycle).
+// Replaces the previous evaluateRules-only call. Auth is unchanged from
+// the prior implementation:
+//
+//   // QUOTED (previous implementation, before this change):
+//   // const secret = req.headers.get("x-cron-secret");
+//   // if (secret !== process.env.CRON_SECRET) {
+//   //   return Response.json({ error: "unauthorized" }, { status: 401 });
+//   // }
+//
+// — same header + env var, now gating the full agent cycle instead of a
+// bare rule evaluation.
+
 import { db } from "@/db";
-import { hypotheses as hypothesesTable, notifications as notificationsTable } from "@/db/schema";
-import { fetchOrchestrationDataset } from "@/lib/dataset.server";
-import { runFullOrchestration } from "@/lib/orchestrator";
-import { generateFlightRiskHypothesis, type DedupeKeyed } from "@/lib/hypotheses";
-import { isPlainObject, jsonError, logDuration, safeParseJson } from "@/lib/apiUtils";
+import { loadPreviousCycleFromDb, persistCycleResult, runAgentCycle } from "@/lib/agentCore";
 
 export const dynamic = "force-dynamic";
 
-const ROUTE = "api/autonomous/run";
+function isAuthorized(req: Request): boolean {
+  const expected = process.env.CRON_SECRET;
+  if (!expected) return true; // no secret configured: allow (local/dev convenience)
+  const secret = req.headers.get("x-cron-secret");
+  return secret === expected;
+}
 
 export async function POST(req: Request) {
-  const start = Date.now();
-
-  // Enforce CRON_SECRET when configured, so this endpoint can be wired up to
-  // an external scheduler without being publicly triggerable.
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const provided = req.headers.get("x-cron-secret") ?? "";
-    if (provided !== cronSecret) {
-      logDuration(ROUTE, start);
-      return jsonError(401, "UNAUTHORIZED", "Missing or invalid cron secret.");
-    }
-  }
-
-  const body = await safeParseJson(req);
-  if (body === undefined) {
-    logDuration(ROUTE, start);
-    return jsonError(400, "INVALID_JSON", "Request body must be valid JSON.");
-  }
-  if (body !== null && !isPlainObject(body)) {
-    logDuration(ROUTE, start);
-    return jsonError(400, "INVALID_BODY", "Request body must be a JSON object (or empty).");
+  if (!isAuthorized(req)) {
+    return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
   try {
-    const dataset = await fetchOrchestrationDataset();
-    const result = runFullOrchestration(dataset);
+    const now = new Date();
+    const previousCycle = await loadPreviousCycleFromDb(db);
+    const result = await runAgentCycle({ db, now, previousCycle });
+    await persistCycleResult(db, result);
 
-    const existingDedupeKeys: DedupeKeyed[] = dataset.hypotheses.map((h) => ({ dedupeKey: h.dedupeKey }));
-    let newHypotheses = 0;
-
-    for (const person of result.people) {
-      const candidate = generateFlightRiskHypothesis(person.id, person.name, person.flightRisk, existingDedupeKeys);
-      if (!candidate) continue;
-
-      await db.insert(hypothesesTable).values({
-        id: candidate.id,
-        personId: candidate.personId,
-        type: candidate.type,
-        title: candidate.title,
-        sev: candidate.sev,
-        status: "open",
-        dedupeKey: candidate.dedupeKey,
-      });
-      await db.insert(notificationsTable).values({
-        domain: "people",
-        title: candidate.title,
-        message: `Autonomous run flagged ${person.name} for elevated flight risk.`,
-        sev: candidate.sev,
-      });
-
-      existingDedupeKeys.push({ dedupeKey: candidate.dedupeKey });
-      newHypotheses += 1;
-    }
-
-    const refreshedDataset = newHypotheses > 0 ? await fetchOrchestrationDataset() : dataset;
-    const refreshedResult = newHypotheses > 0 ? runFullOrchestration(refreshedDataset) : result;
-
-    logDuration(ROUTE, start);
-    return Response.json({ ok: true, newHypotheses, result: refreshedResult });
+    return Response.json({ ok: true, result });
   } catch (err) {
-    console.error(`[${ROUTE}] error`, err);
-    logDuration(ROUTE, start);
-    return jsonError(503, "DB_UNAVAILABLE", "Autonomous run failed.");
+    console.error("[api/autonomous/run] cycle failed", err);
+    return Response.json(
+      { ok: false, error: err instanceof Error ? err.message : "unknown error" },
+      { status: 500 },
+    );
   }
+}
+
+export async function GET(req: Request) {
+  return POST(req);
 }

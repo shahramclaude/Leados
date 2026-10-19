@@ -3,15 +3,17 @@
 // Part 1 deliverable: persistence + drift detection for belief history.
 
 import { and, asc, gte } from "drizzle-orm";
-import { db } from "@/db";
+import type { db as defaultDb } from "@/db";
 import { beliefSnapshots } from "@/db/schema";
 import type {
-  BeliefDriftResult,
+  BeliefDrift,
   BeliefFabricResult,
   BeliefTrajectoryPoint,
   LatentNodeId,
 } from "./types";
 import { daysBetween } from "./temporal";
+
+type Database = typeof defaultDb;
 
 const ALERT_THRESHOLD = 0.7;
 /** DESIGN PARAMETER: minimum slope (probability/day) to call a trend
@@ -19,10 +21,13 @@ const ALERT_THRESHOLD = 0.7;
 const DRIFT_SLOPE_THRESHOLD = 0.005;
 
 // ---------------------------------------------------------------------------
-// Persistence (fire-and-forget from the orchestrator's critical path)
+// Persistence
 // ---------------------------------------------------------------------------
 
-export async function persistBeliefSnapshot(result: BeliefFabricResult): Promise<void> {
+export async function persistBeliefSnapshot(
+  result: BeliefFabricResult,
+  db: Database,
+): Promise<void> {
   await db.insert(beliefSnapshots).values({
     snapshotAt: new Date(result.generatedAt),
     posteriors: result.posteriors,
@@ -33,12 +38,9 @@ export async function persistBeliefSnapshot(result: BeliefFabricResult): Promise
   });
 }
 
-/** Non-blocking wrapper: callers should NOT await this on the critical
- * path (see orchestrator.ts Stage 0). Errors are swallowed/logged so a DB
- * hiccup never breaks the synchronous belief-revision response.
- */
-export function queueBeliefSnapshotPersist(result: BeliefFabricResult): void {
-  void persistBeliefSnapshot(result).catch((err) => {
+/** Non-blocking wrapper for callers on a critical path. */
+export function queueBeliefSnapshotPersist(result: BeliefFabricResult, db: Database): void {
+  void persistBeliefSnapshot(result, db).catch((err) => {
     console.error("[temporalBeliefTracker] failed to persist belief snapshot", err);
   });
 }
@@ -48,6 +50,7 @@ export function queueBeliefSnapshotPersist(result: BeliefFabricResult): void {
 // ---------------------------------------------------------------------------
 
 export async function getBeliefTrajectory(
+  db: Database,
   latentNode: LatentNodeId,
   days: number,
 ): Promise<BeliefTrajectoryPoint[]> {
@@ -79,15 +82,8 @@ export async function getBeliefTrajectory(
 // ---------------------------------------------------------------------------
 // Belief drift detection — OLS linear regression, from scratch.
 //
-// Derivation (standard ordinary-least-squares slope/intercept for simple
-// linear regression y = α + β·x; original derivation, no external stats
-// library used, as required):
-//
 //   β = (n·Σxy - Σx·Σy) / (n·Σx² - (Σx)²)
 //   α = (Σy - β·Σx) / n
-//
-// x_i is measured in days-since-first-sample (handles uneven snapshot
-// cadence); y_i is the posterior probability p at that sample.
 // ---------------------------------------------------------------------------
 
 function olsFit(points: { x: number; y: number }[]): { alpha: number; beta: number } {
@@ -111,13 +107,12 @@ function olsFit(points: { x: number; y: number }[]): { alpha: number; beta: numb
 export function detectBeliefDrift(
   node: LatentNodeId,
   trajectory: BeliefTrajectoryPoint[],
-): BeliefDriftResult {
-  // Use only the last 14 days of posteriors, per task spec.
+): BeliefDrift {
   const now = trajectory.length > 0 ? new Date(trajectory[trajectory.length - 1].date) : new Date();
   const windowed = trajectory.filter((pt) => daysBetween(pt.date, now) <= 14);
 
   if (windowed.length < 2) {
-    return { drifting: false, ratePerDay: 0, projectedCrossing: null };
+    return { node, drifting: false, ratePerDay: 0, projectedCrossing: null };
   }
 
   const firstDate = new Date(windowed[0].date);
@@ -133,13 +128,9 @@ export function detectBeliefDrift(
   let projectedCrossing: Date | null = null;
   if (beta > 0) {
     const xCross = (ALERT_THRESHOLD - alpha) / beta;
-    // Only report a future crossing; if the trend line already crosses
-    // 0.7 at/ before the most recent sample, treat the crossing as "now".
     const effectiveX = Math.max(xCross, lastX);
     projectedCrossing = new Date(firstDate.getTime() + effectiveX * 86_400_000);
   }
-  // beta <= 0: trend flat or falling, never (newly) crosses 0.7 -> stays null.
 
-  void node; // node id kept in signature for API symmetry / future per-node tuning
-  return { drifting, ratePerDay: beta, projectedCrossing };
+  return { node, drifting, ratePerDay: beta, projectedCrossing };
 }

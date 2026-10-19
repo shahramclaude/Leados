@@ -1,139 +1,111 @@
 // src/lib/playbooksEngine.ts
-// -----------------------------------------------------------------------
-// LEADOS Part 9 — Playbooks Engine upgrade.
 //
-// Matches active findings to the best-fitting playbook, tracks step-by-step
-// execution of a playbook run, and reports on how effective each playbook
-// has historically been.
-// -----------------------------------------------------------------------
-import type { LeadosFinding, LeadosPlaybook, LeadosPlaybookRun } from "@/db/schema";
+// Persistence + activation logic for playbooks. agentCore.ts (STEP 5) is
+// the primary caller for autonomous triggering; a future UI can call the
+// read helpers to render active/triggered playbook instances.
 
-export interface PlaybookMatch {
-  findingId: number;
-  findingTitle: string;
-  playbookId: number;
-  playbookName: string;
-  score: number;
-  reasons: string[];
+import { and, eq, inArray } from "drizzle-orm";
+import type { db as defaultDb } from "@/db";
+import { playbookInstances, playbooks, settings } from "@/db/schema";
+import type { Finding, TriggeredPlaybook } from "./types";
+import { getPlaybookForRuleKey, PLAYBOOK_CATALOG } from "./playbooks";
+
+type Database = typeof defaultDb;
+
+const ACTIVE_STATUSES = ["active", "pending", "triggered"];
+
+export async function ensurePlaybooksSeeded(db: Database): Promise<void> {
+  for (const def of PLAYBOOK_CATALOG) {
+    await db
+      .insert(playbooks)
+      .values({ key: def.key, name: def.name, domain: def.domain, ruleKey: def.ruleKey, steps: def.steps })
+      .onConflictDoNothing({ target: playbooks.key });
+  }
+}
+
+export async function getPlaybookRowByKey(db: Database, key: string) {
+  const [row] = await db.select().from(playbooks).where(eq(playbooks.key, key)).limit(1);
+  return row ?? null;
+}
+
+/** Returns true if an instance of `playbookId` is already active/pending. */
+export async function hasActiveInstance(db: Database, playbookId: number): Promise<boolean> {
+  const rows = await db
+    .select()
+    .from(playbookInstances)
+    .where(and(eq(playbookInstances.playbookId, playbookId), inArray(playbookInstances.status, ACTIVE_STATUSES)));
+  return rows.length > 0;
+}
+
+export async function getDomainOwner(db: Database, domain: string): Promise<number | null> {
+  const [row] = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.key, `domain_owner.${domain}`))
+    .limit(1);
+  if (!row) return null;
+  const parsed = Number(row.value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**
- * For each active finding above severity 3, find the best matching playbook.
- * Score components: exact trigger-rule match (0.5), domain match (0.3),
- * historical success rate (up to 0.2).
+ * Finds a matching playbook for `finding.ruleKey`/`finding.domain` and, if
+ * none is already active, inserts a triggered playbook_instances row and
+ * returns a TriggeredPlaybook. Returns null if no playbook is defined for
+ * this rule, or if one is already active (caller decides what notification
+ * to emit in either case).
  */
-export function matchPlaybook(findings: LeadosFinding[], availablePlaybooks: LeadosPlaybook[]): PlaybookMatch[] {
-  const matches: PlaybookMatch[] = [];
-  const activeFindings = findings.filter((f) => f.status === "open" && f.severity > 3);
-
-  for (const finding of activeFindings) {
-    let best: PlaybookMatch | null = null;
-
-    for (const pb of availablePlaybooks) {
-      let score = 0;
-      const reasons: string[] = [];
-
-      if (finding.ruleId && pb.triggerRule && finding.ruleId === pb.triggerRule) {
-        score += 0.5;
-        reasons.push("exact rule match");
-      }
-      if (finding.domain === pb.domain) {
-        score += 0.3;
-        reasons.push("domain match");
-      }
-      const successContribution = pb.successRate * 0.2;
-      score += successContribution;
-      reasons.push(`historical success rate ${(pb.successRate * 100).toFixed(0)}%`);
-
-      if (!best || score > best.score) {
-        best = {
-          findingId: finding.id,
-          findingTitle: finding.title,
-          playbookId: pb.id,
-          playbookName: pb.name,
-          score: Math.round(score * 100) / 100,
-          reasons,
-        };
-      }
-    }
-
-    if (best && best.score > 0) matches.push(best);
+export async function triggerPlaybookForFinding(
+  db: Database,
+  finding: Finding,
+): Promise<{ triggered: TriggeredPlaybook | null; matched: boolean; alreadyActive: boolean }> {
+  await ensurePlaybooksSeeded(db);
+  const def = getPlaybookForRuleKey(finding.ruleKey);
+  if (!def) {
+    return { triggered: null, matched: false, alreadyActive: false };
   }
 
-  return matches.sort((a, b) => b.score - a.score);
-}
+  const row = await getPlaybookRowByKey(db, def.key);
+  if (!row) {
+    return { triggered: null, matched: false, alreadyActive: false };
+  }
 
-/**
- * Records completion of a single playbook step, updating run progress,
- * running outcome score (average of per-step outcomes), and overall status.
- */
-export function executePlaybookStep(
-  run: LeadosPlaybookRun,
-  stepIndex: number,
-  outcome: "success" | "partial" | "failed",
-): LeadosPlaybookRun {
-  const stepsDone = Math.max(run.stepsDone, Math.min(run.stepsTotal, stepIndex + 1));
-  const delta = outcome === "success" ? 1 : outcome === "partial" ? 0.5 : 0;
-  const priorWeight = run.stepsDone;
-  const newOutcomeScore = run.outcomeScore == null ? delta : (run.outcomeScore * priorWeight + delta) / (priorWeight + 1);
-  const completed = stepsDone >= run.stepsTotal;
-  const abandoned = !completed && outcome === "failed" && stepIndex === run.stepsTotal - 1;
+  const alreadyActive = await hasActiveInstance(db, row.id);
+  if (alreadyActive) {
+    return { triggered: null, matched: true, alreadyActive: true };
+  }
+
+  const assignedTo = await getDomainOwner(db, String(finding.domain));
+
+  const [inserted] = await db
+    .insert(playbookInstances)
+    .values({
+      playbookId: row.id,
+      status: "triggered",
+      source: "autonomous_agent",
+      triggerFindingId: finding.id,
+      assignedTo: assignedTo ?? null,
+    })
+    .returning();
 
   return {
-    ...run,
-    stepsDone,
-    outcomeScore: Math.round(newOutcomeScore * 100) / 100,
-    status: completed ? "completed" : abandoned ? "abandoned" : run.status,
-    completedAt: completed ? new Date() : run.completedAt,
-    notes: `${run.notes ? `${run.notes} | ` : ""}Step ${stepIndex + 1}: ${outcome}`.slice(0, 4000),
+    matched: true,
+    alreadyActive: false,
+    triggered: {
+      instanceId: inserted.id,
+      playbookKey: row.key,
+      playbookName: row.name,
+      domain: row.domain,
+      triggerFindingId: finding.id,
+      assignedTo: assignedTo ?? null,
+      status: inserted.status,
+    },
   };
 }
 
-export interface PlaybookStats {
-  playbookId: number;
-  playbookName: string;
-  runs: number;
-  avgCompletionRate: number;
-  avgOutcomeScore: number;
-  avgTimeToCompleteMs: number | null;
-  frequencyTriggered: number;
-  underperforming: boolean;
-}
-
-/**
- * For each playbook: average completion rate, average outcome score, average
- * time to complete, and how often it's been triggered. Flags underperformers.
- */
-export function computePlaybookEffectiveness(runHistory: LeadosPlaybookRun[], playbooks: LeadosPlaybook[]): PlaybookStats[] {
-  const byPlaybook = new Map<number, LeadosPlaybookRun[]>();
-  for (const run of runHistory) {
-    if (!byPlaybook.has(run.playbookId)) byPlaybook.set(run.playbookId, []);
-    byPlaybook.get(run.playbookId)!.push(run);
-  }
-
-  const stats: PlaybookStats[] = [];
-  for (const [playbookId, runs] of byPlaybook) {
-    const pb = playbooks.find((p) => p.id === playbookId);
-    const completionRates = runs.map((r) => (r.stepsTotal > 0 ? r.stepsDone / r.stepsTotal : 0));
-    const outcomeScores = runs.filter((r) => r.outcomeScore != null).map((r) => r.outcomeScore as number);
-    const completedRuns = runs.filter((r) => r.completedAt);
-    const times = completedRuns.map((r) => new Date(r.completedAt as Date).getTime() - new Date(r.startedAt).getTime());
-
-    const avgCompletionRate = completionRates.reduce((a, b) => a + b, 0) / (completionRates.length || 1);
-    const avgOutcomeScore = outcomeScores.length ? outcomeScores.reduce((a, b) => a + b, 0) / outcomeScores.length : 0;
-    const avgTimeToCompleteMs = times.length ? times.reduce((a, b) => a + b, 0) / times.length : null;
-
-    stats.push({
-      playbookId,
-      playbookName: pb?.name ?? `Playbook #${playbookId}`,
-      runs: runs.length,
-      avgCompletionRate: Math.round(avgCompletionRate * 100) / 100,
-      avgOutcomeScore: Math.round(avgOutcomeScore * 100) / 100,
-      avgTimeToCompleteMs,
-      frequencyTriggered: runs.length,
-      underperforming: avgOutcomeScore < 0.5 || avgCompletionRate < 0.6,
-    });
-  }
-
-  return stats.sort((a, b) => b.frequencyTriggered - a.frequencyTriggered);
+/** Count of playbook instances triggered since `since` (used by the
+ * morning briefing's `playbooksActive` metric). */
+export async function countPlaybooksTriggeredSince(db: Database, since: Date): Promise<number> {
+  const rows = await db.select().from(playbookInstances);
+  return rows.filter((r) => r.triggeredAt && new Date(r.triggeredAt) >= since).length;
 }

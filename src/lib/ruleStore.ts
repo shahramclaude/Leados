@@ -1,125 +1,128 @@
-// DB-backed access layer for rules + their evaluation history. This is the
-// bridge between the static RULE_REGISTRY (definitions) and the live,
-// self-calibrated weights that selfImprove.ts adjusts over time.
+// src/lib/ruleStore.ts
+//
+// DB persistence for rule weights + evaluation history. ruleEngine.ts and
+// agentCore.ts are the only callers.
 
 import { and, desc, eq, gte, isNotNull } from "drizzle-orm";
-import type { db as DbClient } from "@/db";
-import { decisionOutcomes, ruleEvaluations, rules } from "@/db/schema";
-import { RULE_REGISTRY } from "./ruleRegistry";
+import type { db as defaultDb } from "@/db";
+import { ruleEvaluations, rules } from "@/db/schema";
+import { allRuleDefinitions } from "./ruleRegistry";
 
-type Database = typeof DbClient;
+type Database = typeof defaultDb;
 
-export interface RuleRow {
+export interface StoredRule {
   id: number;
   key: string;
   name: string;
-  description: string | null;
-  category: string;
+  domain: string;
+  baseSeverity: number;
   weight: number;
-  baseWeight: number;
-  enabled: boolean;
 }
 
-/** Ensures every rule in RULE_REGISTRY has a corresponding row in `rules`. */
+/** Ensures every rule in the registry has a corresponding row (idempotent
+ * upsert on first run / whenever a new rule is added to the registry). */
 export async function ensureRulesSeeded(db: Database): Promise<void> {
-  for (const def of RULE_REGISTRY) {
+  for (const def of allRuleDefinitions()) {
     await db
       .insert(rules)
       .values({
         key: def.key,
         name: def.name,
-        description: def.description,
-        category: def.category,
-        weight: def.baseWeight,
-        baseWeight: def.baseWeight,
+        domain: def.domain,
+        baseSeverity: def.baseSeverity,
+        weight: 1,
       })
       .onConflictDoNothing({ target: rules.key });
   }
 }
 
-export async function getAllRules(db: Database): Promise<RuleRow[]> {
-  return db.select().from(rules).orderBy(rules.key);
+export async function getAllRules(db: Database): Promise<StoredRule[]> {
+  await ensureRulesSeeded(db);
+  const rows = await db.select().from(rules);
+  return rows.map((r) => ({
+    id: r.id,
+    key: r.key,
+    name: r.name,
+    domain: r.domain,
+    baseSeverity: r.baseSeverity,
+    weight: r.weight,
+  }));
 }
 
-export async function getRuleByKey(db: Database, key: string): Promise<RuleRow | undefined> {
-  const rows = await db.select().from(rules).where(eq(rules.key, key)).limit(1);
-  return rows[0];
+export async function getRuleByKey(db: Database, key: string): Promise<StoredRule | null> {
+  const [row] = await db.select().from(rules).where(eq(rules.key, key)).limit(1);
+  if (!row) return null;
+  return {
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    domain: row.domain,
+    baseSeverity: row.baseSeverity,
+    weight: row.weight,
+  };
 }
 
-export async function updateRuleWeight(
-  db: Database,
-  key: string,
-  newWeight: number,
-): Promise<void> {
-  await db
-    .update(rules)
-    .set({ weight: newWeight, updatedAt: new Date() })
-    .where(eq(rules.key, key));
+export async function updateRuleWeight(db: Database, key: string, newWeight: number): Promise<void> {
+  await db.update(rules).set({ weight: newWeight, updatedAt: new Date() }).where(eq(rules.key, key));
 }
 
 export async function recordRuleEvaluation(
   db: Database,
-  params: {
-    ruleId: number;
-    runId: string;
+  evaluation: {
+    ruleKey: string;
+    domain: string;
+    fired: boolean;
+    severity: number;
     predictedProbability: number;
-    outcome?: boolean | null;
-    context?: unknown;
+    evaluatedAt: Date;
   },
 ): Promise<void> {
-  await db.insert(ruleEvaluations).values({
-    ruleId: params.ruleId,
-    runId: params.runId,
-    predictedProbability: params.predictedProbability,
-    outcome: params.outcome ?? null,
-    context: (params.context ?? null) as never,
-  });
+  await db.insert(ruleEvaluations).values(evaluation);
 }
 
-/**
- * Fetches the last `windowDays` of resolved (outcome IS NOT NULL) rule
- * evaluations AND decision outcomes for a given rule, pooled together, as
- * required by the calibration spec ("reads the last 30 days of
- * rule_evaluations + decision outcomes from DB").
- */
+/** Resolves outcomes for Brier-score calibration: evaluations that have had
+ * an outcome recorded (via markRuleEvaluationOutcome), within the lookback
+ * window. */
 export async function getResolvedOutcomesForRule(
   db: Database,
-  ruleId: number,
-  windowDays = 30,
+  ruleKey: string,
+  lookbackDays: number,
 ): Promise<Array<{ predicted: number; outcome: boolean }>> {
-  const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
-
-  const evalRows = await db
-    .select({
-      predicted: ruleEvaluations.predictedProbability,
-      outcome: ruleEvaluations.outcome,
-    })
+  const cutoff = new Date(Date.now() - lookbackDays * 86_400_000);
+  const rows = await db
+    .select()
     .from(ruleEvaluations)
     .where(
       and(
-        eq(ruleEvaluations.ruleId, ruleId),
+        eq(ruleEvaluations.ruleKey, ruleKey),
+        gte(ruleEvaluations.evaluatedAt, cutoff),
+        eq(ruleEvaluations.outcomeRecorded, true),
         isNotNull(ruleEvaluations.outcome),
-        gte(ruleEvaluations.evaluatedAt, since),
       ),
-    )
+    );
+  return rows.map((r) => ({ predicted: r.predictedProbability, outcome: Boolean(r.outcome) }));
+}
+
+export async function getRecentEvaluations(
+  db: Database,
+  ruleKey: string,
+  lookbackDays: number,
+) {
+  const cutoff = new Date(Date.now() - lookbackDays * 86_400_000);
+  return db
+    .select()
+    .from(ruleEvaluations)
+    .where(and(eq(ruleEvaluations.ruleKey, ruleKey), gte(ruleEvaluations.evaluatedAt, cutoff)))
     .orderBy(desc(ruleEvaluations.evaluatedAt));
+}
 
-  const decisionRows = await db
-    .select({
-      predicted: decisionOutcomes.predictedProbability,
-      outcome: decisionOutcomes.outcome,
-    })
-    .from(decisionOutcomes)
-    .where(
-      and(
-        eq(decisionOutcomes.ruleId, ruleId),
-        isNotNull(decisionOutcomes.outcome),
-        gte(decisionOutcomes.createdAt, since),
-      ),
-    )
-    .orderBy(desc(decisionOutcomes.createdAt));
-
-  return [...evalRows, ...decisionRows]
-    .filter((row): row is { predicted: number; outcome: boolean } => row.outcome !== null)
-    .map((row) => ({ predicted: row.predicted, outcome: row.outcome }));
+export async function markRuleEvaluationOutcome(
+  db: Database,
+  evaluationId: number,
+  outcome: boolean,
+): Promise<void> {
+  await db
+    .update(ruleEvaluations)
+    .set({ outcomeRecorded: true, outcome, resolvedAt: new Date() })
+    .where(eq(ruleEvaluations.id, evaluationId));
 }

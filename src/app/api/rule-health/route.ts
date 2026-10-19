@@ -1,9 +1,9 @@
-import { getRuleHealthMap } from "@/lib/engine";
-import { cachedJson } from "@/lib/api";
+import { db } from "@/db";
+import { auditRuleAccuracy } from "@/lib/ruleEngine";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
-  const map = await getRuleHealthMap();
-  return cachedJson(map);
+export async function GET() {
+  const reports = await auditRuleAccuracy(db, 90);
+  return Response.json(reports);
 }
