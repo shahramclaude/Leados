@@ -1,88 +1,72 @@
-import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { hypotheses as hypothesesTable } from "@/db/schema";
-import { DOMAINS, type Domain, type Hypothesis } from "@/lib/types";
+import * as schema from "@/db/schema";
+import { ensureBaselineData } from "@/lib/seed";
+import { withErrorHandling, jsonOk, validateBody, isValidationFailure, jsonError } from "@/lib/api";
+import { eq, asc } from "drizzle-orm";
+import { calibrateRule } from "@/lib/agentCycle";
 
 export const dynamic = "force-dynamic";
 
-function toHypothesis(row: typeof hypothesesTable.$inferSelect): Hypothesis {
-  const now = Date.now();
-  const resolveBy = row.resolveBy.getTime();
-  const daysToResolve = Math.ceil((resolveBy - now) / 86400000);
-  return {
-    id: row.id,
-    statement: row.statement,
-    domain: row.domain,
-    status: row.status,
-    openedAt: row.openedAt.toISOString(),
-    resolveBy: row.resolveBy.toISOString(),
-    resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
-    outcome: row.outcome,
-    daysToResolve,
-  };
-}
+export const GET = withErrorHandling("hypothesis", async (_req, requestId) => {
+  await ensureBaselineData(db);
+  const hypotheses = await db.select().from(schema.hypotheses).orderBy(asc(schema.hypotheses.resolveBy));
+  return jsonOk({ hypotheses }, requestId);
+});
 
-export async function GET() {
-  try {
-    const rows = await db.select().from(hypothesesTable).orderBy(desc(hypothesesTable.openedAt));
-    return NextResponse.json(rows.map(toHypothesis));
-  } catch (error) {
-    console.error("GET /api/hypothesis failed", error);
-    return NextResponse.json({ error: "Failed to load hypotheses" }, { status: 500 });
-  }
-}
+type CreateHypothesisBody = {
+  entity: string;
+  claim: string;
+  resolveBy: string;
+  confidence?: number;
+  ruleId?: number;
+};
 
-export async function POST(request: Request) {
-  try {
-    const body = (await request.json()) as {
-      statement?: string;
-      domain?: Domain;
-      resolveInDays?: number;
-    };
-    if (!body.statement || !body.domain || !DOMAINS.includes(body.domain)) {
-      return NextResponse.json({ error: "statement and domain are required" }, { status: 400 });
-    }
-    const resolveInDays = body.resolveInDays ?? 7;
-    const now = new Date();
-    const [row] = await db
-      .insert(hypothesesTable)
-      .values({
-        statement: body.statement,
-        domain: body.domain,
-        status: "open",
-        openedAt: now,
-        resolveBy: new Date(now.getTime() + resolveInDays * 86400000),
-      })
-      .returning();
-    return NextResponse.json(toHypothesis(row), { status: 201 });
-  } catch (error) {
-    console.error("POST /api/hypothesis failed", error);
-    return NextResponse.json({ error: "Failed to create hypothesis" }, { status: 500 });
+export const POST = withErrorHandling("hypothesis", async (req, requestId) => {
+  const body = await req.json().catch(() => null);
+  const validated = validateBody<CreateHypothesisBody>(body, ["entity", "claim", "resolveBy"]);
+  if (isValidationFailure(validated)) {
+    return jsonError(`Missing required fields: ${validated.missing.join(", ")}`, "VALIDATION_ERROR", 400, requestId);
   }
-}
 
-export async function PATCH(request: Request) {
-  try {
-    const body = (await request.json()) as {
-      id?: number;
-      status?: "confirmed" | "refuted";
-      outcome?: string;
-    };
-    if (!body.id || !body.status) {
-      return NextResponse.json({ error: "id and status are required" }, { status: 400 });
-    }
-    const [row] = await db
-      .update(hypothesesTable)
-      .set({ status: body.status, outcome: body.outcome ?? null, resolvedAt: new Date() })
-      .where(eq(hypothesesTable.id, body.id))
-      .returning();
-    if (!row) {
-      return NextResponse.json({ error: "Hypothesis not found" }, { status: 404 });
-    }
-    return NextResponse.json(toHypothesis(row));
-  } catch (error) {
-    console.error("PATCH /api/hypothesis failed", error);
-    return NextResponse.json({ error: "Failed to update hypothesis" }, { status: 500 });
+  const resolveByDate = new Date(validated.resolveBy);
+  if (Number.isNaN(resolveByDate.getTime())) {
+    return jsonError("resolveBy must be a valid date", "VALIDATION_ERROR", 400, requestId);
   }
-}
+
+  const [row] = await db
+    .insert(schema.hypotheses)
+    .values({
+      entity: validated.entity,
+      claim: validated.claim,
+      resolveBy: resolveByDate,
+      confidence: validated.confidence ?? 0.5,
+      ruleId: validated.ruleId ?? null,
+      status: "open",
+    })
+    .returning();
+
+  return jsonOk({ hypothesis: row }, requestId, 201);
+});
+
+type PatchHypothesisBody = { id: number; status: "confirmed" | "refuted" | "open" };
+
+export const PATCH = withErrorHandling("hypothesis", async (req, requestId) => {
+  const body = await req.json().catch(() => null);
+  const validated = validateBody<PatchHypothesisBody>(body, ["id", "status"]);
+  if (isValidationFailure(validated)) {
+    return jsonError(`Missing required fields: ${validated.missing.join(", ")}`, "VALIDATION_ERROR", 400, requestId);
+  }
+
+  const [existing] = await db.select().from(schema.hypotheses).where(eq(schema.hypotheses.id, validated.id)).limit(1);
+  if (!existing) {
+    return jsonError(`Hypothesis ${validated.id} not found`, "NOT_FOUND", 404, requestId);
+  }
+
+  await db.update(schema.hypotheses).set({ status: validated.status }).where(eq(schema.hypotheses.id, validated.id));
+
+  if (existing.ruleId != null && (validated.status === "confirmed" || validated.status === "refuted")) {
+    await calibrateRule(db, existing.ruleId, validated.status);
+  }
+
+  return jsonOk({ ok: true }, requestId);
+});

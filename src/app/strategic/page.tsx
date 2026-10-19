@@ -1,5 +1,5 @@
-import StrategicView from "@/views/StrategicView";
+import StrategicWarRoomView from "@/views/StrategicWarRoomView";
 
 export default function StrategicPage() {
-  return <StrategicView />;
+  return <StrategicWarRoomView />;
 }

@@ -1,105 +1,78 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useApp } from "@/lib/AppContext";
-import { useNowTick } from "@/lib/useNowTick";
-import { DOMAIN_META, timeUntil } from "@/lib/domains";
-import type { Hypothesis } from "@/lib/types";
+import { useEffect, useState } from "react";
+import type { HypothesisRow } from "@/lib/clientTypes";
 
-const STATUS_COLOR: Record<Hypothesis["status"], string> = {
-  open: "var(--accent-indigo-400)",
-  confirmed: "var(--good)",
-  refuted: "var(--sev-5)",
-};
+function daysRemaining(resolveBy: string): number {
+  const ms = new Date(resolveBy).getTime() - Date.now();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+function rowTone(h: HypothesisRow): string {
+  const remaining = daysRemaining(h.resolveBy);
+  if (h.status === "confirmed") return "text-emerald-400";
+  if (h.status === "refuted") return "text-slate-600";
+  if (h.status === "open" && remaining < 0) return "text-red-400";
+  return "text-slate-200";
+}
 
 export default function HypothesesView() {
-  const { orchestratorResult, openSidePanel, agentStatus } = useApp();
-  const now = useNowTick();
-  const [filter, setFilter] = useState<"all" | Hypothesis["status"]>("all");
+  const [hypotheses, setHypotheses] = useState<HypothesisRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const hypotheses = useMemo(() => {
-    if (!orchestratorResult) return [];
-    return orchestratorResult.hypotheses.filter((h) => filter === "all" || h.status === filter);
-  }, [orchestratorResult, filter]);
+  useEffect(() => {
+    fetch("/api/hypothesis")
+      .then((r) => r.json())
+      .then((json) => setHypotheses(json.hypotheses))
+      .catch((e) => setError(String(e)));
+  }, []);
 
-  if (!orchestratorResult) {
-    return <div className="p-4 font-mono text-xs text-slate-500">LOADING…</div>;
-  }
-
-  const accuracy =
-    agentStatus && agentStatus.hypothesesConfirmed + agentStatus.hypothesesRefuted > 0
-      ? Math.round((agentStatus.hypothesesConfirmed / (agentStatus.hypothesesConfirmed + agentStatus.hypothesesRefuted)) * 100)
-      : null;
+  if (error) return <div className="text-sm text-red-400">Failed to load: {error}</div>;
+  if (!hypotheses) return <div className="animate-pulse text-sm text-slate-500">Loading hypotheses…</div>;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 p-4">
-      <header className="rounded border border-[var(--border-subtle)] bg-[var(--bg-panel-raised)] p-4">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xl text-indigo-400">⍺</span>
-          <h1 className="text-lg font-semibold text-slate-100">Hypothesis Testing</h1>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">
-          Every hypothesis the system is actively testing against incoming evidence, with resolution state and
-          confidence.
-        </p>
-        {accuracy != null && (
-          <div className="mt-2 font-mono text-[10px] text-slate-400">
-            HISTORICAL ACCURACY: <span className="text-emerald-400">{accuracy}%</span> ({agentStatus?.hypothesesConfirmed} confirmed /{" "}
-            {agentStatus?.hypothesesRefuted} refuted)
-          </div>
-        )}
-      </header>
-
-      <div className="flex gap-2">
-        {(["all", "open", "confirmed", "refuted"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={`min-h-9 rounded px-3 py-1.5 font-mono text-[10px] tracking-wider ${
-              filter === s ? "bg-indigo-700 text-white" : "bg-slate-800 text-slate-400 hover:bg-slate-700"
-            }`}
-          >
-            {s.toUpperCase()}
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        {hypotheses.length === 0 ? (
-          <div className="rounded border border-[var(--border-subtle)] bg-[var(--bg-panel-raised)] p-4 text-center font-mono text-xs text-slate-500">
-            NO HYPOTHESES IN THIS STATE
-          </div>
-        ) : (
-          hypotheses.map((h) => (
-            <button
-              key={h.id}
-              onClick={() => openSidePanel("hypothesis", h.id)}
-              className="block w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-panel-raised)] p-3 text-left"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: DOMAIN_META[h.domain].color }} />
-                  <span className="text-sm text-slate-100">{h.title}</span>
-                </div>
-                <span
-                  className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold text-black"
-                  style={{ backgroundColor: STATUS_COLOR[h.status] }}
-                >
-                  {h.status.toUpperCase()}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center gap-3">
-                <div className="h-1.5 w-32 overflow-hidden rounded bg-slate-800">
-                  <div className="h-full bg-indigo-500" style={{ width: `${h.confidence * 100}%` }} />
-                </div>
-                <span className="font-mono text-[9px] text-slate-500">{Math.round(h.confidence * 100)}% confidence</span>
-                <span className="font-mono text-[9px] text-slate-500">
-                  {h.resolvesAt ? `resolves ${timeUntil(h.resolvesAt, now)}` : ""}
-                </span>
-              </div>
-            </button>
-          ))
-        )}
+    <div className="space-y-4">
+      <h1 className="text-xl font-semibold">Hypotheses</h1>
+      <div className="overflow-x-auto rounded-lg border border-slate-800">
+        <table className="w-full text-left text-xs">
+          <thead className="bg-slate-900 text-slate-500">
+            <tr>
+              <th className="px-3 py-2">Hypothesis</th>
+              <th className="px-3 py-2">Entity</th>
+              <th className="px-3 py-2">Claim</th>
+              <th className="px-3 py-2">Resolve By</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Days Remaining</th>
+              <th className="px-3 py-2">Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {hypotheses.map((h) => {
+              const remaining = daysRemaining(h.resolveBy);
+              const tone = rowTone(h);
+              return (
+                <tr key={h.id} className="border-t border-slate-800">
+                  <td className={`px-3 py-1.5 font-medium ${tone}`}>#{h.id}</td>
+                  <td className="px-3 py-1.5 text-slate-300">{h.entity}</td>
+                  <td className="px-3 py-1.5 text-slate-400">{h.claim}</td>
+                  <td className="px-3 py-1.5 text-slate-500">{new Date(h.resolveBy).toLocaleDateString()}</td>
+                  <td className={`px-3 py-1.5 uppercase ${tone}`}>{h.status}</td>
+                  <td className={`px-3 py-1.5 ${remaining < 0 && h.status === "open" ? "text-red-400" : "text-slate-400"}`}>
+                    {remaining}
+                  </td>
+                  <td className="px-3 py-1.5 text-slate-400">{Math.round(h.confidence * 100)}%</td>
+                </tr>
+              );
+            })}
+            {hypotheses.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-4 text-center text-slate-500">
+                  No open hypotheses.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

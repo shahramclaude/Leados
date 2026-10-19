@@ -2,85 +2,155 @@ import {
   pgTable,
   serial,
   text,
-  doublePrecision,
-  boolean,
+  integer,
+  real,
   timestamp,
   jsonb,
+  boolean,
 } from "drizzle-orm/pg-core";
 
-// ---------------------------------------------------------------------------
-// Metrics Intelligence OS — core tables.
-//
-// NOTE: this is a greenfield bootstrap of the schema for this sandbox. The
-// task brief references "Part 1" artifacts (metric_defs, metric_values,
-// beliefFabric, etc.) that do not exist in this repository snapshot, so the
-// tables below define the minimal real shape needed to support Part 9
-// (Metrics Intelligence OS) end-to-end.
-// ---------------------------------------------------------------------------
-
-export const metricDefs = pgTable("metric_defs", {
+// ── People Intelligence ──────────────────────────────────────────
+export const people = pgTable("people", {
   id: serial("id").primaryKey(),
-  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  role: text("role").notNull(),
+  department: text("department").notNull(),
+  managerId: integer("manager_id"),
+  performanceScore: real("performance_score").notNull().default(0.5),
+  potentialScore: real("potential_score").notNull().default(0.5),
+  flightRiskScore: real("flight_risk_score").notNull().default(0.2),
+  burnoutRiskScore: real("burnout_risk_score").notNull().default(0.2),
+  tenureMonths: integer("tenure_months").notNull().default(12),
+  skills: jsonb("skills").$type<string[]>().notNull().default([]),
+  isCritical: boolean("is_critical").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const oneOnOnes = pgTable("one_on_ones", {
+  id: serial("id").primaryKey(),
+  personId: integer("person_id").notNull(),
+  notes: text("notes").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ── Execution / Projects ─────────────────────────────────────────
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  status: text("status").notNull().default("active"),
+  durationDays: integer("duration_days").notNull().default(14),
+  dependencies: jsonb("dependencies").$type<number[]>().notNull().default([]),
+  ownerId: integer("owner_id"),
+  deliveryConfidence: real("delivery_confidence").notNull().default(0.7),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ── Findings / Hypotheses / Rules / Playbooks ────────────────────
+export const findings = pgTable("findings", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  domain: text("domain").notNull(),
+  severity: text("severity").notNull().default("medium"),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  description: text("description").notNull().default(""),
+  status: text("status").notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const rules = pgTable("rules", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  domain: text("domain").notNull().default("general"),
+  weight: real("weight").notNull().default(1.0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const hypotheses = pgTable("hypotheses", {
+  id: serial("id").primaryKey(),
+  entity: text("entity").notNull(),
+  claim: text("claim").notNull(),
+  resolveBy: timestamp("resolve_by", { withTimezone: true }).notNull(),
+  status: text("status").notNull().default("open"), // open|confirmed|refuted
+  confidence: real("confidence").notNull().default(0.5),
+  ruleId: integer("rule_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const playbooks = pgTable("playbooks", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
   domain: text("domain").notNull(),
-  unit: text("unit").default("").notNull(),
-  higherIsBetter: boolean("higher_is_better").default(true).notNull(),
-  target: doublePrecision("target"),
-  weight: doublePrecision("weight").default(1).notNull(),
-  description: text("description").default("").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  triggerCondition: text("trigger_condition").notNull().default(""),
 });
 
-export const metricValues = pgTable("metric_values", {
+export const playbookInstances = pgTable("playbook_instances", {
   id: serial("id").primaryKey(),
-  metricKey: text("metric_key")
-    .notNull()
-    .references(() => metricDefs.key),
-  value: doublePrecision("value").notNull(),
-  recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  playbookId: integer("playbook_id").notNull(),
+  findingId: integer("finding_id").notNull(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Generic event stream ("LeadosEvent") that the orchestrator / metrics
-// intelligence pipeline can read context from (e.g. campaign launches,
-// pricing changes) when explaining anomalies or causal hypotheses.
+// ── Belief Fabric ─────────────────────────────────────────────────
+export const beliefSnapshots = pgTable("belief_snapshots", {
+  id: serial("id").primaryKey(),
+  entityType: text("entity_type").notNull(),
+  entityId: integer("entity_id").notNull(),
+  node: text("node").notNull(),
+  value: real("value").notNull(),
+  snapshotAt: timestamp("snapshot_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ── Metrics ───────────────────────────────────────────────────────
+export const metrics = pgTable("metrics", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  unit: text("unit").notNull().default("count"),
+  baseline: real("baseline").notNull().default(0),
+  stdDev: real("std_dev").notNull().default(1),
+});
+
+export const metricPoints = pgTable("metric_points", {
+  id: serial("id").primaryKey(),
+  metricId: integer("metric_id").notNull(),
+  ts: timestamp("ts", { withTimezone: true }).notNull().defaultNow(),
+  value: real("value").notNull(),
+});
+
+// ── Knowledge Graph ───────────────────────────────────────────────
+export const knowledgeNodes = pgTable("knowledge_nodes", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull().default("finding"),
+  label: text("label").notNull(),
+  domain: text("domain").notNull().default("general"),
+  severity: text("severity").notNull().default("medium"),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const knowledgeEdges = pgTable("knowledge_edges", {
+  id: serial("id").primaryKey(),
+  fromId: integer("from_id").notNull(),
+  toId: integer("to_id").notNull(),
+  relation: text("relation").notNull().default("caused_by"),
+  weight: real("weight").notNull().default(1),
+});
+
+// ── Agent Cycle Runs ─────────────────────────────────────────────
+export const agentCycleRuns = pgTable("agent_cycle_runs", {
+  id: serial("id").primaryKey(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  summary: jsonb("summary").$type<Record<string, unknown>>().notNull().default({}),
+  status: text("status").notNull().default("ok"),
+});
+
 export const events = pgTable("events", {
   id: serial("id").primaryKey(),
   type: text("type").notNull(),
-  metricKey: text("metric_key"),
-  domain: text("domain"),
-  payload: jsonb("payload").$type<Record<string, unknown>>().default({}).notNull(),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  entityType: text("entity_type").notNull().default("system"),
+  entityId: integer("entity_id"),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
-
-// Minimal knowledge-graph node table so the metric detail panel can surface
-// "context from knowledge graph" for a metric key.
-export const memoryNodes = pgTable("memory_nodes", {
-  id: serial("id").primaryKey(),
-  key: text("key").notNull().unique(),
-  label: text("label").notNull(),
-  domain: text("domain").default("").notNull(),
-  linkedMetricKeys: jsonb("linked_metric_keys").$type<string[]>().default([]).notNull(),
-  content: text("content").default("").notNull(),
-  importance: doublePrecision("importance").default(0).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// Belief Fabric observable log — append-only record of observables ingested
-// from the orchestrator pipeline (e.g. composite domain scores) so beliefs
-// can be reconstructed / audited.
-export const beliefObservables = pgTable("belief_observables", {
-  id: serial("id").primaryKey(),
-  key: text("key").notNull(),
-  value: doublePrecision("value").notNull(),
-  confidence: doublePrecision("confidence").notNull(),
-  source: text("source").notNull(),
-  observedAt: timestamp("observed_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-export type MetricDefRow = typeof metricDefs.$inferSelect;
-export type MetricValueRow = typeof metricValues.$inferSelect;
-export type EventRow = typeof events.$inferSelect;
-export type MemoryNodeRow = typeof memoryNodes.$inferSelect;
-export type BeliefObservableRow = typeof beliefObservables.$inferSelect;

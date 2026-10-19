@@ -1,5 +1,5 @@
-import PeopleView from "@/views/PeopleView";
+import PeopleIntelligenceView from "@/views/PeopleIntelligenceView";
 
 export default function PeoplePage() {
-  return <PeopleView />;
+  return <PeopleIntelligenceView />;
 }

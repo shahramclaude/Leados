@@ -1,30 +1,49 @@
 import { db } from "@/db";
-import { people as peopleTable } from "@/db/schema";
-import { cachedJson, jsonError, isRecord } from "@/lib/api";
+import * as schema from "@/db/schema";
+import { ensureBaselineData } from "@/lib/seed";
+import { withErrorHandling, jsonOk } from "@/lib/api";
+import {
+  computeFlightRisk,
+  buildNineBox,
+  computeSuccessionRisk,
+  buildTeamChemistryReport,
+  type Person,
+} from "@/lib/peopleIntel";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
-  const rows = await db.select().from(peopleTable).orderBy(peopleTable.name);
-  return cachedJson(rows);
-}
+export const GET = withErrorHandling("people", async (_req, requestId) => {
+  await ensureBaselineData(db);
+  const rows = await db.select().from(schema.people);
 
-export async function POST(request: Request): Promise<Response> {
-  const body: unknown = await request.json();
-  if (!isRecord(body) || typeof body.name !== "string" || body.name.trim() === "") {
-    return jsonError("name is required");
-  }
-  if (typeof body.role !== "string" || body.role.trim() === "") {
-    return jsonError("role is required");
-  }
-  const [created] = await db
-    .insert(peopleTable)
-    .values({
-      name: body.name,
-      role: body.role,
-      team: typeof body.team === "string" && body.team.trim() ? body.team : "General",
-      managerId: typeof body.managerId === "number" ? body.managerId : null,
-    })
-    .returning();
-  return cachedJson(created, { status: 201 });
-}
+  const people: Person[] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    role: r.role,
+    department: r.department,
+    managerId: r.managerId,
+    performanceScore: r.performanceScore,
+    potentialScore: r.potentialScore,
+    flightRiskScore: r.flightRiskScore,
+    burnoutRiskScore: r.burnoutRiskScore,
+    tenureMonths: r.tenureMonths,
+    skills: r.skills,
+    isCritical: r.isCritical,
+  }));
+
+  const nineBox = buildNineBox(people);
+  const succession = people.map((p) => computeSuccessionRisk(p, people));
+  const chemistry = buildTeamChemistryReport(people);
+  const computedFlightRisk = people.map((p) => ({ id: p.id, flightRisk: computeFlightRisk(p) }));
+
+  return jsonOk(
+    {
+      people,
+      nineBox,
+      succession,
+      chemistry,
+      computedFlightRisk,
+    },
+    requestId,
+  );
+});
