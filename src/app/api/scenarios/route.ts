@@ -1,48 +1,50 @@
 import { db } from "@/db";
 import { scenarios } from "@/db/schema";
 import { desc } from "drizzle-orm";
-import { cachedJson, jsonError, isRecord, parseNumber } from "@/lib/api";
-import { runMonteCarloScenario } from "@/lib/scenario";
+import { jsonError, isRecord, parseNumber, parseString, readJsonBody } from "@/lib/api";
+import { runScenario, deriveEarlyWarningIndicators, type ScenarioAssumptions } from "@/lib/scenarioEngine";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(): Promise<Response> {
   const rows = await db.select().from(scenarios).orderBy(desc(scenarios.createdAt));
-  return cachedJson(rows);
+  return Response.json(rows);
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const body: unknown = await request.json();
-  if (!isRecord(body) || typeof body.name !== "string" || body.name.trim() === "") {
-    return jsonError("name is required");
-  }
-  const assumptions = {
-    startingCash: parseNumber(isRecord(body.assumptions) ? body.assumptions.startingCash : undefined, 1500000),
-    monthlyBurn: parseNumber(isRecord(body.assumptions) ? body.assumptions.monthlyBurn : undefined, 120000),
-    monthlyRevenue: parseNumber(isRecord(body.assumptions) ? body.assumptions.monthlyRevenue : undefined, 40000),
-    revenueGrowthRate: parseNumber(isRecord(body.assumptions) ? body.assumptions.revenueGrowthRate : undefined, 0.04),
-    burnVolatility: parseNumber(isRecord(body.assumptions) ? body.assumptions.burnVolatility : undefined, 0.1),
-    headcountDelta: parseNumber(isRecord(body.assumptions) ? body.assumptions.headcountDelta : undefined, 0),
-    monthlyBurnDelta: parseNumber(isRecord(body.assumptions) ? body.assumptions.monthlyBurnDelta : undefined, 0),
-    months: parseNumber(isRecord(body.assumptions) ? body.assumptions.months : undefined, 18),
+  const body = await readJsonBody(request);
+  if (typeof body.name !== "string" || body.name.trim() === "") return jsonError("name is required");
+
+  const rawAssumptions = isRecord(body.assumptions) ? body.assumptions : {};
+  const assumptions: ScenarioAssumptions = {
+    startingCash: parseNumber(rawAssumptions.startingCash, 1500000),
+    monthlyBurn: parseNumber(rawAssumptions.monthlyBurn, 180000),
+    monthlyRevenue: parseNumber(rawAssumptions.monthlyRevenue, 90000),
+    revenueGrowthRate: parseNumber(rawAssumptions.revenueGrowthRate, 0.04),
+    burnVolatility: parseNumber(rawAssumptions.burnVolatility, 0.18),
+    headcountDelta: parseNumber(rawAssumptions.headcountDelta, 0),
+    monthlyBurnDelta: parseNumber(rawAssumptions.monthlyBurnDelta, 0),
+    months: parseNumber(rawAssumptions.months, 24),
+    seed: parseNumber(rawAssumptions.seed, 1337),
   };
 
-  const results = runMonteCarloScenario(assumptions);
+  const kind = parseString(body.kind, "finance");
+  const result = runScenario(assumptions);
+  const earlyWarningIndicators = deriveEarlyWarningIndicators(body.name, assumptions);
 
   const [created] = await db
     .insert(scenarios)
     .values({
       name: body.name,
+      description: typeof body.description === "string" ? body.description : null,
+      kind,
       assumptions,
-      results: {
-        projectedRunwayMonths: results.projectedRunwayMonths,
-        runwayP10: results.runwayP10,
-        runwayP90: results.runwayP90,
-        probabilityOfRunningOutWithinHorizon: results.probabilityOfRunningOutWithinHorizon,
-        projectedMrrDelta: results.projectedMrrDelta,
-        simulations: results.simulations,
-      },
+      results: result.runway,
+      earlyWarningIndicators,
+      version: 1,
+      parentScenarioId: null,
+      decisionId: body.decisionId != null ? parseNumber(body.decisionId, 0) : null,
     })
     .returning();
-  return cachedJson(created, { status: 201 });
+  return Response.json(created, { status: 201 });
 }

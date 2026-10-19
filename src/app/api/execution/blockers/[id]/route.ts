@@ -1,44 +1,32 @@
 import { db } from "@/db";
-import { blockers as blockersTable } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { execBlockers } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { jsonError, readJsonBody } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const { id } = await params;
-    const blockerId = Number(id);
-    if (!Number.isFinite(blockerId)) {
-      return Response.json({ error: "Invalid blocker id" }, { status: 400 });
-    }
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const blockerId = Number(id);
+  if (!Number.isFinite(blockerId)) return jsonError("Invalid blocker id");
+  const [row] = await db.select().from(execBlockers).where(eq(execBlockers.id, blockerId)).limit(1);
+  if (!row) return jsonError("Blocker not found", 404);
+  return Response.json(row);
+}
 
-    const body = await req.json().catch(() => ({}));
-    const patch: Record<string, unknown> = {};
+// PATCH { action: "resolve" } to resolve a blocker.
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const blockerId = Number(id);
+  if (!Number.isFinite(blockerId)) return jsonError("Invalid blocker id");
+  const body = await readJsonBody(request);
 
-    // Default action for this route per spec: resolve the blocker.
-    if (body?.resolve !== false) {
-      patch.resolvedAt = sql`now()`;
-    }
-    if ("severity" in (body ?? {})) patch.severity = body.severity;
-    if ("assignedTo" in (body ?? {})) patch.assignedTo = body.assignedTo;
-    if ("description" in (body ?? {})) patch.description = body.description;
+  const update: Partial<typeof execBlockers.$inferInsert> = {};
+  if (body.action === "resolve") update.resolvedAt = new Date();
+  if (typeof body.severity === "string") update.severity = body.severity;
+  if (body.impactDays != null) update.impactDays = Number(body.impactDays);
 
-    const [updated] = await db
-      .update(blockersTable)
-      .set(patch)
-      .where(eq(blockersTable.id, blockerId))
-      .returning();
-
-    if (!updated) {
-      return Response.json({ error: "Blocker not found" }, { status: 404 });
-    }
-
-    return Response.json(updated);
-  } catch (err) {
-    console.error("PATCH /api/execution/blockers/[id] failed", err);
-    return Response.json({ error: "Failed to update blocker" }, { status: 500 });
-  }
+  const [updated] = await db.update(execBlockers).set(update).where(eq(execBlockers.id, blockerId)).returning();
+  if (!updated) return jsonError("Blocker not found", 404);
+  return Response.json(updated);
 }

@@ -1,40 +1,43 @@
-import { runMonteCarloRunway, computeFundraisingReadiness, computeUnitEconomics } from "@/lib/financialOS";
-import type { FinanceSnapshotState } from "@/lib/eventBrain";
+import { jsonError, parseNumber, readJsonBody } from "@/lib/api";
+import { runMonteCarloRunway, computeFundraisingReadiness, computeCovenantStatus, computeBurnTrend } from "@/lib/financialOS";
 
 export const dynamic = "force-dynamic";
 
-// What-if simulator: 4 number inputs -> immediate recalculation.
+// What-if simulator: returns a full distribution (p10/p50/p90 + histogram),
+// never a single number. Deterministic given the same body (including
+// `seed`) — this is what the reproducibility test suite exercises.
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const cash = Number(body.cash ?? 1000000);
-    const monthlyBurn = Number(body.monthlyBurn ?? 150000);
-    const arrGrowthRate = Number(body.arrGrowthRate ?? 0.05);
-    const newCustomers = Number(body.newCustomers ?? 5);
+    const body = await readJsonBody(req);
+    const currentCash = parseNumber(body.currentCash, 1500000);
+    const baselineMonthlyBurn = parseNumber(body.monthlyBurn, 180000);
+    const baselineMonthlyRevenue = parseNumber(body.monthlyRevenue, 90000);
+    const revenueGrowthRate = parseNumber(body.revenueGrowthRate, 0.04);
+    const burnVolatility = parseNumber(body.burnVolatility, 0.18);
+    const horizonMonths = parseNumber(body.horizonMonths, 24);
+    const seed = parseNumber(body.seed, 1337);
+    const n = parseNumber(body.n, 2000);
 
-    const snapshot: FinanceSnapshotState = {
-      ts: new Date().toISOString(),
-      cash,
-      monthlyBurn,
-      mrr: Number(body.mrr ?? 80000),
-      newArr: Number(body.newArr ?? 150000),
-      churnedArr: Number(body.churnedArr ?? 30000),
-      customers: Number(body.customers ?? 40),
-      newCustomers,
-      cac: Number(body.cac ?? 8000),
-      grossMarginPct: Number(body.grossMarginPct ?? 0.7),
-      headcount: Number(body.headcount ?? 20),
-      rdHeadcountCost: Number(body.rdHeadcountCost ?? 900000),
-      totalPayroll: Number(body.totalPayroll ?? 1700000),
-      salesSpend: Number(body.salesSpend ?? newCustomers * Number(body.cac ?? 8000)),
-    };
+    const runway = runMonteCarloRunway({ currentCash, baselineMonthlyBurn, baselineMonthlyRevenue, revenueGrowthRate, burnVolatility, horizonMonths, seed, n });
+    const syntheticBurnTrend = computeBurnTrend([
+      { month: "prior", revenue: baselineMonthlyRevenue, expensesByCategory: {}, totalExpenses: baselineMonthlyBurn + baselineMonthlyRevenue, grossProfit: 0, netIncome: 0 },
+      { month: "recent", revenue: baselineMonthlyRevenue, expensesByCategory: {}, totalExpenses: baselineMonthlyBurn + baselineMonthlyRevenue, grossProfit: 0, netIncome: 0 },
+    ]);
+    const fundraising = computeFundraisingReadiness(runway, revenueGrowthRate, syntheticBurnTrend);
+    const covenant = computeCovenantStatus(
+      {
+        currentCashBalance: currentCash,
+        baselineMonthlyRevenue,
+        baselineRevenueGrowthRate: revenueGrowthRate,
+        grossMarginPct: 0.7,
+        covenantMinCashMonths: parseNumber(body.covenantMinCashMonths, 3),
+        covenantMinCashBalance: parseNumber(body.covenantMinCashBalance, 250000),
+      },
+      runway,
+    );
 
-    const runway = runMonteCarloRunway(cash, monthlyBurn, arrGrowthRate, 4242);
-    const unitEconomics = computeUnitEconomics(snapshot);
-    const fundraising = computeFundraisingReadiness(runway, unitEconomics, arrGrowthRate, 12);
-
-    return Response.json({ runway, unitEconomics, fundraising });
+    return Response.json({ runway, fundraising, covenant });
   } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 500 });
+    return jsonError((err as Error).message, 500);
   }
 }

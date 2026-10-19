@@ -1,73 +1,124 @@
-import type { Domain, MetricDefinition, MonteCarloResult } from "@/lib/types";
-import { mulberry32, makeGaussian, percentile, buildHistogram } from "@/lib/prng";
+// scenarioEngine — the finance/market scenario studio. Wraps financialOS's
+// Monte Carlo runway model with a named, versionable, comparable scenario
+// abstraction, plus an early-warning indicator derivation: "if this metric
+// crosses X, scenario B becomes likely."
+import { runMonteCarloRunway, type HiringPlanItem, type RunwayMonteCarloResult } from "@/lib/financialOS";
 
-// ─────────────────────────────────────────────────────────────────────────
-// scenarioEngine — baseline metric definitions + Monte Carlo surface used
-// by strategicIntelligence.runScenarioSurveillance().
-// DESIGN PARAMETER: deviation threshold for scenario activation = 2σ.
-// DESIGN PARAMETER: Monte Carlo sample size n = 1000.
-// ─────────────────────────────────────────────────────────────────────────
+export interface ScenarioAssumptions {
+  startingCash: number;
+  monthlyBurn: number;
+  monthlyRevenue: number;
+  revenueGrowthRate: number;
+  burnVolatility: number;
+  headcountDelta: number;
+  monthlyBurnDelta: number;
+  months: number;
+  seed?: number;
+  hiringPlan?: HiringPlanItem[];
+}
 
-export const METRIC_DEFINITIONS: MetricDefinition[] = [
-  { key: "arr_growth_rate", label: "ARR Growth Rate", baseline: 0.08, stdev: 0.02, unit: "ratio/mo", domain: "finance" },
-  { key: "net_burn", label: "Net Burn", baseline: 250000, stdev: 40000, unit: "$/mo", domain: "finance" },
-  { key: "logo_churn_rate", label: "Logo Churn Rate", baseline: 0.02, stdev: 0.01, unit: "ratio/mo", domain: "sales" },
-  { key: "nps", label: "Net Promoter Score", baseline: 42, stdev: 8, unit: "score", domain: "people" },
-  { key: "pipeline_coverage", label: "Pipeline Coverage", baseline: 3.2, stdev: 0.6, unit: "x", domain: "sales" },
-  { key: "deal_cycle_days", label: "Deal Cycle Length", baseline: 34, stdev: 6, unit: "days", domain: "sales" },
-  { key: "support_ticket_volume", label: "Support Ticket Volume", baseline: 120, stdev: 25, unit: "tickets/wk", domain: "execution" },
-  { key: "headcount_growth_rate", label: "Headcount Growth Rate", baseline: 0.03, stdev: 0.015, unit: "ratio/mo", domain: "people" },
-];
+export interface ScenarioRunResult {
+  runway: RunwayMonteCarloResult;
+  effectiveMonthlyBurn: number;
+  assumptions: ScenarioAssumptions;
+}
 
-export const DEVIATION_THRESHOLD_SIGMA = 2;
-export const MONTE_CARLO_N = 1000;
+/** Runs one named scenario end-to-end through the Monte Carlo runway model. */
+export function runScenario(assumptions: ScenarioAssumptions): ScenarioRunResult {
+  const effectiveMonthlyBurn = Math.max(0, assumptions.monthlyBurn + assumptions.monthlyBurnDelta);
+  const runway = runMonteCarloRunway({
+    currentCash: assumptions.startingCash,
+    baselineMonthlyBurn: effectiveMonthlyBurn,
+    baselineMonthlyRevenue: assumptions.monthlyRevenue,
+    revenueGrowthRate: assumptions.revenueGrowthRate,
+    burnVolatility: assumptions.burnVolatility,
+    hiringPlan: assumptions.hiringPlan,
+    horizonMonths: Math.max(assumptions.months, 6),
+    seed: assumptions.seed ?? 1337,
+  });
+  return { runway, effectiveMonthlyBurn, assumptions };
+}
 
-export function deviationSigma(actual: number, def: MetricDefinition): number {
-  if (def.stdev === 0) return 0;
-  return (actual - def.baseline) / def.stdev;
+export interface ScenarioComparisonRow {
+  id: number | string;
+  name: string;
+  p10RunwayMonths: number;
+  p50RunwayMonths: number;
+  p90RunwayMonths: number;
+  bankruptcyRiskWithin12Months: number;
+}
+
+/** Side-by-side comparison view across any number of persisted scenarios. */
+export function compareScenarios(
+  scenarios: { id: number | string; name: string; results: { monthsToBankruptcy: { p10: number; p50: number; p90: number }; bankruptcyRiskWithin12Months: number } }[],
+): ScenarioComparisonRow[] {
+  return scenarios.map((s) => ({
+    id: s.id,
+    name: s.name,
+    p10RunwayMonths: s.results.monthsToBankruptcy.p10,
+    p50RunwayMonths: s.results.monthsToBankruptcy.p50,
+    p90RunwayMonths: s.results.monthsToBankruptcy.p90,
+    bankruptcyRiskWithin12Months: s.results.bankruptcyRiskWithin12Months,
+  }));
+}
+
+export interface EarlyWarningIndicator {
+  metric: "monthly_burn" | "monthly_revenue" | "revenue_growth_rate";
+  comparator: "above" | "below";
+  threshold: number;
+  impliesScenario: string;
+  rationale: string;
 }
 
 /**
- * Monte Carlo simulation of a metric's near-term trajectory, modeled as a
- * random walk around the current actual value with volatility = metric
- * stdev (i.e. a discrete analogue of geometric Brownian motion for
- * dimensionless/ratio metrics). Returns percentile bands + histogram.
+ * Searches (via bisection over a bounded multiplier range, not random search
+ * — so this is itself deterministic) for the burn level and the revenue
+ * growth level at which this scenario's median runway crosses into
+ * "critical" (<6 months), and expresses those as monitorable thresholds.
+ * This is what powers "if this metric crosses X, scenario B becomes likely."
  */
-export function monteCarloMetric(
-  actual: number,
-  def: MetricDefinition,
-  seed: number,
-  n: number = MONTE_CARLO_N,
-  steps = 12
-): MonteCarloResult {
-  const rng = mulberry32(seed);
-  const gaussian = makeGaussian(rng);
-  const outcomes: number[] = [];
-  const driftPerStep = (def.baseline - actual) / steps / 4; // gentle mean reversion
-  for (let i = 0; i < n; i++) {
-    let v = actual;
-    for (let s = 0; s < steps; s++) {
-      v = v + driftPerStep + gaussian() * (def.stdev / Math.sqrt(steps));
-    }
-    outcomes.push(v);
-  }
-  outcomes.sort((a, b) => a - b);
-  const mean = outcomes.reduce((a, b) => a + b, 0) / outcomes.length;
-  return {
-    n,
-    p5: percentile(outcomes, 5),
-    p10: percentile(outcomes, 10),
-    p25: percentile(outcomes, 25),
-    p50: percentile(outcomes, 50),
-    p75: percentile(outcomes, 75),
-    p90: percentile(outcomes, 90),
-    p95: percentile(outcomes, 95),
-    mean,
-    histogram: buildHistogram(outcomes, 24),
-    seed,
-  };
-}
+export function deriveEarlyWarningIndicators(name: string, assumptions: ScenarioAssumptions): EarlyWarningIndicator[] {
+  const indicators: EarlyWarningIndicator[] = [];
+  const CRITICAL_RUNWAY_MONTHS = 6;
 
-export function metricDomainLabel(domain: Domain): string {
-  return domain.charAt(0).toUpperCase() + domain.slice(1);
+  // Burn threshold: bisection on a multiplier in [1, 3]x current burn.
+  {
+    let lo = 1;
+    let hi = 3;
+    for (let i = 0; i < 16; i++) {
+      const mid = (lo + hi) / 2;
+      const result = runScenario({ ...assumptions, monthlyBurn: assumptions.monthlyBurn * mid, monthlyBurnDelta: 0 });
+      if (result.runway.monthsToBankruptcy.p50 <= CRITICAL_RUNWAY_MONTHS) hi = mid;
+      else lo = mid;
+    }
+    const thresholdBurn = assumptions.monthlyBurn * hi;
+    indicators.push({
+      metric: "monthly_burn",
+      comparator: "above",
+      threshold: Math.round(thresholdBurn),
+      impliesScenario: name,
+      rationale: `If monthly burn crosses $${Math.round(thresholdBurn).toLocaleString()} (vs $${Math.round(assumptions.monthlyBurn).toLocaleString()} today) with revenue/growth held constant, median runway falls to ${CRITICAL_RUNWAY_MONTHS} months or less under "${name}".`,
+    });
+  }
+
+  // Revenue growth threshold: bisection on growth rate in [-0.1, baseline].
+  {
+    let lo = -0.1;
+    let hi = Math.max(assumptions.revenueGrowthRate, 0);
+    for (let i = 0; i < 16; i++) {
+      const mid = (lo + hi) / 2;
+      const result = runScenario({ ...assumptions, revenueGrowthRate: mid });
+      if (result.runway.monthsToBankruptcy.p50 <= CRITICAL_RUNWAY_MONTHS) hi = mid;
+      else lo = mid;
+    }
+    indicators.push({
+      metric: "revenue_growth_rate",
+      comparator: "below",
+      threshold: Math.round(hi * 1000) / 1000,
+      impliesScenario: name,
+      rationale: `If revenue growth falls below ${(hi * 100).toFixed(1)}%/mo (vs ${(assumptions.revenueGrowthRate * 100).toFixed(1)}%/mo today), median runway falls to ${CRITICAL_RUNWAY_MONTHS} months or less under "${name}".`,
+    });
+  }
+
+  return indicators;
 }
