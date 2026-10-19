@@ -1,10 +1,11 @@
-import { db } from "@/db";
-import { leados_audit } from "@/db/schema";
-import { desc } from "drizzle-orm";
+// GET /api/audit — read-only, immutable audit log. No update/delete route exists.
+import { listAuditLog } from "@/lib/kernel/audit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const rows = await db.select().from(leados_audit).orderBy(desc(leados_audit.createdAt)).limit(200);
-  return Response.json(rows);
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const limit = Number(searchParams.get("limit") ?? 100);
+  const entries = await listAuditLog(limit);
+  return Response.json({ ok: true, entries });
 }
