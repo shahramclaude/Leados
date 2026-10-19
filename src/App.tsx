@@ -1,5 +1,5 @@
-import SignalBoardView from "./components/leados/views/SignalBoardView";
+import StrategicWarRoomView from './views/StrategicWarRoomView';
 
 export default function App() {
-  return <SignalBoardView />;
+  return <StrategicWarRoomView />;
 }

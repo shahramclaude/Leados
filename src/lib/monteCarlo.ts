@@ -1,52 +1,66 @@
-import type { MonteCarloResult } from "./types";
+// src/lib/monteCarlo.ts
+// Generic Monte Carlo runner used by scenarioEngine.ts.
+// Exported function: `runMonteCarlo` (line 15).
+
+export interface MonteCarloBand {
+  p10: number[];
+  p50: number[];
+  p90: number[];
+  paths: number[][];
+}
 
 /**
- * Monte Carlo runway simulator.
- *
- * Models runway (months until cash runs out) as a base deterministic runway
- * (cash / net monthly burn) perturbed per-iteration by a continuous,
- * normally-distributed relative shock to burn, with a modest extension for
- * revenue growth. This keeps the output a smooth continuous distribution
- * (no "cap hit" ties), which is required for the p10 < p50 < p90 guarantee.
+ * runMonteCarlo
+ * Runs `trials` simulated paths (each produced by `simulateOnePath`) and
+ * returns the p10 / p50 / p90 band across the horizon, plus the raw paths
+ * (capped) for downstream histogram rendering.
  */
-export function runMonteCarloRunway(
-  startingCash: number,
-  monthlyBurn: number,
-  burnStdDev: number,
-  monthlyRevenue: number,
-  revenueGrowthRate: number,
-  iterations: number
-): MonteCarloResult {
-  const netBurn = Math.max(1, monthlyBurn - monthlyRevenue);
-  const baseRunwayMonths = startingCash / netBurn;
-  const volatilityRatio = burnStdDev / Math.max(1, monthlyBurn);
-  const growthRelief = 1 + Math.max(0, revenueGrowthRate) * 2;
+export function runMonteCarlo(
+  simulateOnePath: (trialIndex: number) => number[],
+  trials = 1000,
+): MonteCarloBand {
+  const paths: number[][] = [];
+  for (let t = 0; t < trials; t++) {
+    paths.push(simulateOnePath(t));
+  }
+  const horizon = paths[0]?.length ?? 0;
+  const p10: number[] = [];
+  const p50: number[] = [];
+  const p90: number[] = [];
 
-  const runways: number[] = [];
-  for (let i = 0; i < iterations; i++) {
-    const shock = sampleNormal(0, volatilityRatio);
-    const burnFactor = Math.max(0.05, 1 + shock);
-    const runway = (baseRunwayMonths * growthRelief) / burnFactor;
-    runways.push(Math.max(0.1, runway));
+  for (let m = 0; m < horizon; m++) {
+    const slice = paths.map((p) => p[m]).sort((a, b) => a - b);
+    p10.push(percentile(slice, 0.1));
+    p50.push(percentile(slice, 0.5));
+    p90.push(percentile(slice, 0.9));
   }
 
-  runways.sort((a, b) => a - b);
-  return {
-    p10: percentile(runways, 10),
-    p50: percentile(runways, 50),
-    p90: percentile(runways, 90),
+  return { p10, p50, p90, paths: paths.slice(0, 200) };
+}
+
+function percentile(sortedAsc: number[], p: number): number {
+  if (sortedAsc.length === 0) return 0;
+  const idx = Math.min(sortedAsc.length - 1, Math.max(0, Math.floor(p * sortedAsc.length)));
+  return sortedAsc[idx];
+}
+
+/** Box-Muller normal sample, mean 0 stdev 1 */
+export function sampleNormal(rand: () => number = Math.random): number {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rand();
+  while (v === 0) v = rand();
+  return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+/** Simple deterministic mulberry32 PRNG so repeated runs can be seeded */
+export function mulberry32(seed: number): () => number {
+  let a = seed;
+  return function () {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-}
-
-function sampleNormal(mean: number, stdDev: number): number {
-  const u1 = Math.random() || Number.EPSILON;
-  const u2 = Math.random();
-  const z0 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  return mean + z0 * stdDev;
-}
-
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
-  return sorted[idx];
 }

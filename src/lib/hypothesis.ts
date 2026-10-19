@@ -1,104 +1,47 @@
 // src/lib/hypothesis.ts
+// Lightweight hypothesis tracking (Part 2/3 prerequisite). Each hypothesis
+// ties a belief-fabric latent node to a falsifiable prediction so the org
+// can see what evidence would change the model's mind.
 //
-// Generic hypothesis lifecycle helpers: creation (with dedup), lookup of
-// past-due open hypotheses, and resolution. agentCore.ts is the primary
-// caller (Part 2, STEPS 6 + 7).
+// Exported: Hypothesis (interface, line 15), DEFAULT_HYPOTHESES (const, line 24),
+//           getActiveHypotheses (function, line 40)
 
-import { and, eq, lte } from "drizzle-orm";
-import type { db as defaultDb } from "@/db";
-import { hypotheses } from "@/db/schema";
-import type { Hypothesis, HypothesisStatus } from "./types";
-import { randomUUID } from "crypto";
-
-type Database = typeof defaultDb;
-
-export interface HypothesisCandidate {
-  key: string;
-  entityId: string;
-  entityType: string;
-  claim: string;
-  predictedBy: Date;
-  resolveBy: Date;
-  metricToCheck?: string | null;
-  threshold?: number | null;
-  ruleKey?: string | null;
+export interface Hypothesis {
+  id: string;
+  nodeId: string;
+  statement: string;
+  confidence: number;
+  status: 'open' | 'confirmed' | 'rejected';
+  evidenceNeeded: string;
 }
 
-function rowToHypothesis(row: typeof hypotheses.$inferSelect): Hypothesis {
-  return {
-    id: row.id,
-    key: row.key,
-    entityId: row.entityId,
-    entityType: row.entityType,
-    claim: row.claim,
-    predictedBy: new Date(row.predictedBy).toISOString(),
-    resolveBy: new Date(row.resolveBy).toISOString(),
-    status: row.status as HypothesisStatus,
-    outcomeNote: row.outcomeNote,
-    outcomeValue: row.outcomeValue,
-    metricToCheck: row.metricToCheck,
-    threshold: row.threshold,
-    ruleKey: row.ruleKey,
-  };
-}
+export const DEFAULT_HYPOTHESES: Hypothesis[] = [
+  {
+    id: 'h_churn_competitive',
+    nodeId: 'competitive_pressure',
+    statement: 'Elevated churn is competitor-driven rather than product-driven.',
+    confidence: 0.55,
+    status: 'open',
+    evidenceNeeded: 'win/loss interviews tagged with a named competitor',
+  },
+  {
+    id: 'h_morale_attrition',
+    nodeId: 'team_morale',
+    statement: 'Recent attrition reflects compensation gaps, not culture/strategy concerns.',
+    confidence: 0.48,
+    status: 'open',
+    evidenceNeeded: 'structured exit interview data',
+  },
+  {
+    id: 'h_runway_recoverable',
+    nodeId: 'capital_runway',
+    statement: 'Runway compression can be reversed by Q+1 via burn reduction alone, without a raise.',
+    confidence: 0.6,
+    status: 'open',
+    evidenceNeeded: 'updated cohort-level unit economics',
+  },
+];
 
-/**
- * Inserts a new OPEN hypothesis unless one with the same (key, entityId,
- * status='open') already exists — enforced by the DB unique index
- * `hypotheses_key_entity_status_idx` via ON CONFLICT DO NOTHING.
- * Returns the created Hypothesis, or null if it was a duplicate.
- */
-export async function createHypothesisIfAbsent(
-  db: Database,
-  candidate: HypothesisCandidate,
-): Promise<Hypothesis | null> {
-  const id = randomUUID();
-  const inserted = await db
-    .insert(hypotheses)
-    .values({
-      id,
-      key: candidate.key,
-      entityId: candidate.entityId,
-      entityType: candidate.entityType,
-      claim: candidate.claim,
-      predictedBy: candidate.predictedBy,
-      resolveBy: candidate.resolveBy,
-      status: "open",
-      metricToCheck: candidate.metricToCheck ?? null,
-      threshold: candidate.threshold ?? null,
-      ruleKey: candidate.ruleKey ?? null,
-    })
-    .onConflictDoNothing({ target: [hypotheses.key, hypotheses.entityId, hypotheses.status] })
-    .returning();
-
-  if (inserted.length === 0) return null;
-  return rowToHypothesis(inserted[0]);
-}
-
-export async function getOpenHypothesesPastDue(db: Database, now: Date): Promise<Hypothesis[]> {
-  const horizon = new Date(now.getTime() + 24 * 3_600_000);
-  const rows = await db
-    .select()
-    .from(hypotheses)
-    .where(and(eq(hypotheses.status, "open"), lte(hypotheses.resolveBy, horizon)));
-  return rows.map(rowToHypothesis);
-}
-
-export async function countOpenHypotheses(db: Database): Promise<number> {
-  const rows = await db.select().from(hypotheses).where(eq(hypotheses.status, "open"));
-  return rows.length;
-}
-
-export async function resolveHypothesis(
-  db: Database,
-  id: string,
-  status: Extract<HypothesisStatus, "confirmed" | "refuted">,
-  outcomeNote: string,
-  outcomeValue: number,
-  resolvedAt: Date,
-): Promise<void> {
-  await db
-    .update(hypotheses)
-    .set({ status, outcomeNote, outcomeValue, resolvedAt })
-    .where(eq(hypotheses.id, id));
+export function getActiveHypotheses(): Hypothesis[] {
+  return DEFAULT_HYPOTHESES.filter((h) => h.status === 'open');
 }

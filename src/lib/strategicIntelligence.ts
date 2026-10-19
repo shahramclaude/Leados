@@ -1,335 +1,450 @@
-// Strategic Intelligence Layer — orchestrates every strategy-adjacent engine
-// (scenarios, wargaming, real options, Monte Carlo, OKRs) into one report.
+// src/lib/strategicIntelligence.ts
+// Part 4 — Strategic War Room synthesis layer.
 //
-// Wiring map (Part 5):
-//   scenarioEngine.ts   -> now rerun automatically every pass (previously only
-//                          triggered from a manual scenario-planning view)
-//   wargameEngine.ts    -> now auto-run against every critical finding
-//                          (severity >= 4) instead of being a standalone tool
-//   realOptions.ts      -> previously orphaned; now values every deferred /
-//                          pending decision with a deadline
-//   monteCarlo.ts       -> reused (not just for scenario probability) to
-//                          produce outcome distributions for the top 3 open
-//                          strategic decisions by impact x probability
-//   okrs                -> new table (see src/db/schema.ts); health computed
-//                          via src/lib/okr.ts, null when no OKRs exist yet
-//
-// Option-pricing formulas used below are derived from realOptions.ts:
-//   - Black-Scholes call value & greeks: realOptions.ts line 56 (blackScholesCall)
-//   - Decision-option wrapper (decide/wait/monitor logic): realOptions.ts line 110 (valueDecisionOption)
+// Calls (exact export names, with the line number they are defined at in
+// this checkout):
+//   scenarioEngine.ts   → METRIC_DEFINITIONS (29), defaultBaselineState (44),
+//                         projectScenario (85), olsTrend (160)
+//   wargameEngine.ts    → generateCompetitorProfile (74), pickLikelyCounterMove (112),
+//                         scoreWargameRound (129), describeMoveOutcome (150)
+//   realOptions.ts      → calculateRealOptionValue (23)
+//   narrativeIntel.ts   → buildDomainHealthNarrative (43)
+//   synthesis.ts        → getOrganizationalMoment (46)
+//   beliefFabric.ts     → BeliefFabricResult (type, Part 1)
 
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { events as eventsTable, okrs as okrsTable, scenarios as scenariosTable } from "@/db/schema";
-import { buildOkrHealthReport, type OKRHealthReport } from "./okr";
-import { runScenarioEngine, SCENARIO_ACTIVATION_THRESHOLD, type ScenarioResult } from "./scenarioEngine";
-import { runWargamePass, type WargameResult, type WargameUrgency } from "./wargameEngine";
-import { valueDecisionOption } from "./realOptions";
-import { simulateDecisionOutcomes, type MonteCarloResult } from "./monteCarlo";
-import type { Decision, LeadosEvent, MetricValue } from "./types";
-import { toNumber } from "./types";
+import {
+  METRIC_DEFINITIONS,
+  defaultBaselineState,
+  projectScenario,
+  olsTrend,
+} from './scenarioEngine';
+import {
+  generateCompetitorProfile,
+  pickLikelyCounterMove,
+  scoreWargameRound,
+  describeMoveOutcome,
+  MOVE_CATALOG,
+  type CompetitorProfile,
+  type Move,
+} from './wargameEngine';
+import { calculateRealOptionValue } from './realOptions';
+import { buildDomainHealthNarrative } from './narrativeIntel';
+import { getOrganizationalMoment } from './synthesis';
+import type { BeliefFabricResult } from './beliefFabric';
+import type { Decision, DecisionDomain } from './decisionTypes';
+import {
+  ALL_METRIC_KEYS,
+  type MetricDef,
+  type MetricKey,
+  type MetricValue,
+  type LeadosEvent,
+  type SavedScenario,
+  type ActivatedScenario,
+  type WargameAutoResult,
+  type StrategicRisk,
+  type BoardDecision,
+  type BoardIntelligencePack,
+  type StrategicIntelligenceReport,
+  type MetricSurveillanceEntry,
+  type Urgency,
+} from './types';
 
-export interface DecisionIntelligence {
-  decisionId: string;
-  title: string;
-  domain: string;
-  impact: number;
-  probability: number;
-  priorityScore: number;
-  outcomeDistribution: MonteCarloResult;
-  recommendation: string;
+export interface StrategicIntelligenceInput {
+  beliefResult: BeliefFabricResult;
+  decisions: Decision[];
+  metrics: MetricValue[];
+  metricDefs: MetricDef[];
+  events: LeadosEvent[];
+  existingScenarios: SavedScenario[];
+  competitors: CompetitorProfile[];
+  now: Date;
 }
 
-export interface RealOptionSummary {
-  decisionId: string;
-  title: string;
-  daysRemaining: number;
-  optionValue: number;
-  theta: number;
-  thetaPerDay: number;
-  isDecayingFast: boolean;
-  recommendation: "decide_now" | "wait" | "monitor";
+const COMPETITIVE_EVENT_TYPES = [
+  'competitive.signal',
+  'market.move',
+  'talent.poach',
+  'customer.churn.to_competitor',
+  'pricing.pressure',
+];
+
+// ---------------------------------------------------------------------------
+// A. SCENARIO SURVEILLANCE
+// ---------------------------------------------------------------------------
+
+type MetricSurveillance = MetricSurveillanceEntry;
+
+function daysBetween(a: Date, b: Date): number {
+  return (a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24);
 }
 
-export interface WargameAlert extends WargameResult {
-  findingId: string;
+function last90DaysValues(metrics: MetricValue[], key: MetricKey, now: Date): MetricValue[] {
+  return metrics
+    .filter((m) => m.metricKey === key && daysBetween(now, new Date(m.date)) <= 90 && daysBetween(now, new Date(m.date)) >= 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export interface StrategicIntelligenceReport {
-  strategicHealthScore: number;
-  activeScenarios: ScenarioResult[];
-  criticalDecisions: DecisionIntelligence[];
-  realOptionsValuation: RealOptionSummary[];
-  okrHealth: OKRHealthReport | null;
-  wargameAlerts: WargameAlert[];
-  strategicNarratives: string[];
-  generatedAt: string;
-}
-
-const CRITICAL_SEVERITY_THRESHOLD = 4;
-const WARGAME_CONFIDENCE_THRESHOLD = 0.6;
-const HIGH_URGENCY: WargameUrgency[] = ["high", "critical"];
-
-/** Estimate the value of exercising a decision's opportunity today (heuristic baseline, UNVERIFIED). */
-function estimateOpportunityValue(decision: Decision): number {
-  const impact = toNumber(decision.impact, 3);
-  const probability = toNumber(decision.probability, 0.5);
-  return impact * 25000 * probability;
-}
-
-function daysUntil(deadline: Date | string | null, now: Date): number | null {
-  if (!deadline) return null;
-  const d = new Date(deadline).getTime();
-  return Math.max(0, Math.round((d - now.getTime()) / 86_400_000));
-}
-
-async function reconcileScenarios(events: LeadosEvent[], now: Date): Promise<ScenarioResult[]> {
-  const activeScenarios = await db.select().from(scenariosTable).where(eq(scenariosTable.isActive, true));
-  if (activeScenarios.length === 0) return [];
-
-  const results = runScenarioEngine(activeScenarios, events, now);
-
-  await Promise.all(
-    results.map(async (result) => {
-      const scenario = activeScenarios.find((s) => s.id === result.id);
-      if (!scenario) return;
-
-      const nextStatus = result.activated ? "activated" : scenario.status === "activated" ? "monitoring" : scenario.status;
-
-      await db
-        .update(scenariosTable)
-        .set({
-          previousProbability: result.previousProbability.toFixed(4),
-          probability: result.probability.toFixed(4),
-          status: nextStatus,
-          lastRunAt: now,
-        })
-        .where(eq(scenariosTable.id, scenario.id));
-
-      if (result.activated) {
-        await db.insert(eventsTable).values({
-          type: "strategy.scenario.shift",
-          domain: result.domain,
-          severity: Math.min(5, Math.max(3, Math.round(Math.abs(result.delta) * 10))),
-          payload: {
-            scenarioId: result.id,
-            scenarioName: result.name,
-            from: result.previousProbability,
-            to: result.probability,
-            delta: result.delta,
-            threshold: SCENARIO_ACTIVATION_THRESHOLD,
-            narrative: result.narrative,
-          },
-        });
-      }
-    }),
-  );
-
-  return results;
-}
-
-function rankStrategicDecisions(decisions: Decision[]): Decision[] {
-  return [...decisions]
-    .filter((d) => d.status === "open" || d.status === "pending")
-    .sort((a, b) => {
-      const scoreA = toNumber(a.impact, 0) * toNumber(a.probability, 0);
-      const scoreB = toNumber(b.impact, 0) * toNumber(b.probability, 0);
-      return scoreB - scoreA;
-    })
-    .slice(0, 3);
-}
-
-function buildDecisionIntelligence(decisions: Decision[]): DecisionIntelligence[] {
-  return rankStrategicDecisions(decisions).map((decision) => {
-    const impact = toNumber(decision.impact, 3);
-    const probability = toNumber(decision.probability, 0.5);
-    const outcomeDistribution = simulateDecisionOutcomes(decision, 1000);
-    const priorityScore = impact * probability;
-
-    let recommendation = "Monitor and gather more evidence before committing.";
-    if (priorityScore >= 3.5) {
-      recommendation = "High priority: escalate for an executive decision this week.";
-    } else if (priorityScore >= 2) {
-      recommendation = "Moderate priority: assign an owner and set a decision date.";
-    }
+function runMetricSurveillance(metrics: MetricValue[], now: Date): MetricSurveillance[] {
+  return ALL_METRIC_KEYS.map((key) => {
+    const rows = last90DaysValues(metrics, key, now);
+    const def = METRIC_DEFINITIONS[key];
+    const baseline = defaultBaselineState[key];
+    const actual = rows.length ? rows[rows.length - 1].value : baseline;
+    const trendPerMonth = olsTrend(rows.map((r) => ({ date: r.date, value: r.value })));
+    const monthlyVolatility = def.volatility * baseline;
+    const deviationSigmas = monthlyVolatility === 0 ? 0 : Math.abs(actual - baseline) / monthlyVolatility;
 
     return {
-      decisionId: decision.id,
-      title: decision.title,
-      domain: decision.domain ?? "general",
-      impact,
-      probability,
-      priorityScore,
-      outcomeDistribution,
-      recommendation,
+      metricKey: key,
+      actualValue: actual,
+      baselineValue: baseline,
+      deviationSigmas,
+      trendPerMonth,
+      urgency: 'watch' as Urgency, // filled in once projection is known for activated metrics
     };
   });
 }
 
-/**
- * Value the "option to wait" for deferred/pending decisions with a deadline.
- * Formula: realOptions.ts line 110 (valueDecisionOption), which itself calls
- * the Black-Scholes closed form at realOptions.ts line 56.
- */
-function buildRealOptionsValuation(decisions: Decision[], now: Date): RealOptionSummary[] {
-  return decisions
-    .filter((d) => (d.status === "deferred" || d.status === "pending") && d.deadline)
-    .map((decision) => {
-      const daysRemaining = daysUntil(decision.deadline, now) ?? 0;
-      const valuation = valueDecisionOption({
-        spot: estimateOpportunityValue(decision),
-        strike: toNumber(decision.optionCostToDecide, 10000),
-        daysRemaining,
-        volatility: toNumber(decision.optionVolatility, 0.35),
-      });
+function implicationFor(key: MetricKey, actual: number, baseline: number, dev: number, criticalMonth: number | null): string {
+  const worse = isWorseDirection(key, actual, baseline);
+  const devStr = dev.toFixed(1);
+  const criticalPhrase = criticalMonth ? `month ${criticalMonth}` : 'beyond the 12-month horizon';
 
-      return {
-        decisionId: decision.id,
-        title: decision.title,
-        daysRemaining,
-        optionValue: Number(valuation.value.toFixed(2)),
-        theta: Number(valuation.theta.toFixed(2)),
-        thetaPerDay: Number(valuation.thetaPerDay.toFixed(2)),
-        isDecayingFast: valuation.isDecayingFast,
-        recommendation: valuation.recommendation,
-      };
-    })
-    .sort((a, b) => a.thetaPerDay - b.thetaPerDay); // fastest-decaying first
+  const templates: Record<MetricKey, { worse: string; better: string }> = {
+    revenue: {
+      worse: `Revenue is ${devStr}σ below model — at current trajectory, cash position reaches critical in ${criticalPhrase}.`,
+      better: `Revenue is ${devStr}σ above model — the business is outperforming plan and may support accelerated investment.`,
+    },
+    churnRate: {
+      worse: `Churn is running ${devStr}σ above baseline — the customer retention loop is breaking faster than the model assumed.`,
+      better: `Churn is ${devStr}σ below baseline — retention is outperforming plan, a potential leading indicator of durable product-market fit.`,
+    },
+    cac: {
+      worse: `Customer acquisition cost is ${devStr}σ above baseline — go-to-market efficiency is degrading faster than planned.`,
+      better: `Customer acquisition cost is ${devStr}σ below baseline — acquisition is more efficient than modeled, a candidate for reinvestment.`,
+    },
+    burnRate: {
+      worse: `Burn rate is ${devStr}σ above baseline — runway is compressing faster than the plan assumed, reaching critical in ${criticalPhrase}.`,
+      better: `Burn rate is ${devStr}σ below baseline — the organization is spending more conservatively than modeled.`,
+    },
+    runwayMonths: {
+      worse: `Runway is ${devStr}σ below baseline — the model now treats a financing or cost decision as time-sensitive, critical in ${criticalPhrase}.`,
+      better: `Runway is ${devStr}σ above baseline — more flexibility than modeled to make offensive, non-defensive bets.`,
+    },
+    nps: {
+      worse: `NPS is ${devStr}σ below baseline — product sentiment is degrading, a likely leading indicator for the churn model.`,
+      better: `NPS is ${devStr}σ above baseline — product sentiment is outperforming plan.`,
+    },
+    headcount: {
+      worse: `Headcount is ${devStr}σ below baseline — execution capacity is lagging the plan the roadmap assumes.`,
+      better: `Headcount is ${devStr}σ above baseline — org is scaling faster than modeled; watch burn rate in tandem.`,
+    },
+    pipelineCoverage: {
+      worse: `Pipeline coverage is ${devStr}σ below baseline — forward revenue is under-covered relative to target.`,
+      better: `Pipeline coverage is ${devStr}σ above baseline — more forward revenue visibility than modeled.`,
+    },
+    conversionRate: {
+      worse: `Conversion rate is ${devStr}σ below baseline — the funnel is leaking more than the model assumed.`,
+      better: `Conversion rate is ${devStr}σ above baseline — the funnel is outperforming plan.`,
+    },
+    grossMargin: {
+      worse: `Gross margin is ${devStr}σ below baseline — unit economics are eroding faster than modeled.`,
+      better: `Gross margin is ${devStr}σ above baseline — unit economics are stronger than modeled.`,
+    },
+    productUsage: {
+      worse: `Product usage is ${devStr}σ below baseline — engagement is falling faster than the model assumed, a leading indicator for churn.`,
+      better: `Product usage is ${devStr}σ above baseline — engagement is outperforming plan.`,
+    },
+  };
+
+  const t = templates[key];
+  return worse ? t.worse : t.better;
 }
 
-async function buildWargameAlerts(events: LeadosEvent[], now: Date): Promise<WargameAlert[]> {
-  const criticalFindings = events.filter((e) => e.severity >= CRITICAL_SEVERITY_THRESHOLD);
-  const results = runWargamePass(criticalFindings, now, CRITICAL_SEVERITY_THRESHOLD);
-
-  return results
-    .map((result, idx) => ({ ...result, findingId: criticalFindings[idx]?.id ?? "" }))
-    .filter((alert) => alert.confidence > WARGAME_CONFIDENCE_THRESHOLD);
+function isWorseDirection(key: MetricKey, actual: number, baseline: number): boolean {
+  const direction = METRIC_DEFINITIONS[key].direction;
+  if (direction === 'higher_better') return actual < baseline;
+  return actual > baseline;
 }
 
-function computeStrategicHealthScore(params: {
-  scenarios: ScenarioResult[];
-  criticalDecisions: DecisionIntelligence[];
-  realOptions: RealOptionSummary[];
-  okrHealth: OKRHealthReport | null;
-  wargameAlerts: WargameAlert[];
-}): number {
-  const { scenarios, realOptions, okrHealth, wargameAlerts } = params;
-
-  const activatedScenarios = scenarios.filter((s) => s.activated).length;
-  const scenarioComponent = Math.max(0, 100 - activatedScenarios * 15);
-
-  const decayingOptions = realOptions.filter((o) => o.isDecayingFast).length;
-  const decisionComponent = Math.max(0, 100 - decayingOptions * 20);
-
-  const okrComponent = okrHealth ? okrHealth.onTrackPct : 70; // neutral default when no OKRs tracked
-
-  const severeAlerts = wargameAlerts.filter((a) => HIGH_URGENCY.includes(a.urgency)).length;
-  const wargameComponent = Math.max(0, 100 - severeAlerts * 15);
-
-  const weighted =
-    scenarioComponent * 0.25 + decisionComponent * 0.25 + okrComponent * 0.3 + wargameComponent * 0.2;
-
-  return Math.round(Math.min(100, Math.max(0, weighted)));
+function urgencyFor(deviationSigmas: number, p10RunwayMonths: number): Urgency {
+  if (deviationSigmas >= 3 || p10RunwayMonths < 6) return 'act';
+  if (deviationSigmas >= 2 || p10RunwayMonths < 12) return 'plan';
+  return 'watch';
 }
 
-function buildNarratives(params: {
-  healthScore: number;
-  scenarios: ScenarioResult[];
-  realOptions: RealOptionSummary[];
-  wargameAlerts: WargameAlert[];
-  okrHealth: OKRHealthReport | null;
-}): string[] {
-  const { healthScore, scenarios, realOptions, wargameAlerts, okrHealth } = params;
-  const narratives: string[] = [];
-
-  const tone = healthScore >= 75 ? "healthy" : healthScore >= 50 ? "mixed" : "under pressure";
-  narratives.push(`Strategic posture is ${tone} at ${healthScore}/100.`);
-
-  const activated = scenarios.filter((s) => s.activated);
-  if (activated.length > 0) {
-    const top = activated.sort((a, b) => b.probability - a.probability)[0];
-    narratives.push(
-      `${activated.length} scenario(s) just activated; "${top.name}" is now at ${(top.probability * 100).toFixed(0)}% probability.`,
-    );
-  } else {
-    narratives.push("No scenarios have crossed the activation threshold this pass.");
-  }
-
-  const urgentDecisions = realOptions.filter((o) => o.isDecayingFast);
-  if (urgentDecisions.length > 0) {
-    narratives.push(
-      `${urgentDecisions.length} deferred decision(s) are losing option value faster than they gain from waiting — decide now rather than later.`,
-    );
-  } else if (wargameAlerts.length > 0) {
-    narratives.push(
-      `${wargameAlerts.length} wargame alert(s) flagged with confidence above ${(WARGAME_CONFIDENCE_THRESHOLD * 100).toFixed(0)}% — review suggested responses.`,
-    );
-  } else if (okrHealth) {
-    narratives.push(`OKR execution is ${okrHealth.onTrackPct}% on-track across ${okrHealth.totalOkrs} tracked objectives/key results.`);
-  }
-
-  return narratives.slice(0, 3);
-}
-
-export async function runStrategicIntelligence(
-  decisions: Decision[],
-  events: LeadosEvent[],
+function runScenarioSurveillance(
   metrics: MetricValue[],
   now: Date,
-): Promise<StrategicIntelligenceReport> {
-  void metrics; // reserved for future metric-driven scenario weighting
+): { all: MetricSurveillance[]; activated: ActivatedScenario[] } {
+  const all = runMetricSurveillance(metrics, now);
+  const activated: ActivatedScenario[] = [];
 
-  const [activeScenarios, okrRows] = await Promise.all([
-    reconcileScenarios(events, now),
-    db.select().from(okrsTable),
-  ]);
+  for (const s of all) {
+    if (s.deviationSigmas <= 2) continue; // not activated by data
 
-  const criticalDecisions = buildDecisionIntelligence(decisions);
-  const realOptionsValuation = buildRealOptionsValuation(decisions, now);
-  const wargameAlerts = await buildWargameAlerts(events, now);
-  const okrHealth = buildOkrHealthReport(okrRows, now);
+    const projection = projectScenario(defaultBaselineState, { [s.metricKey]: s.actualValue } as Partial<typeof defaultBaselineState>, s.metricKey, 12, 1000);
+    const urgency = urgencyFor(s.deviationSigmas, projection.p10RunwayMonths);
+    s.urgency = urgency;
 
-  const strategicHealthScore = computeStrategicHealthScore({
-    scenarios: activeScenarios,
-    criticalDecisions,
-    realOptions: realOptionsValuation,
-    okrHealth,
-    wargameAlerts,
-  });
+    activated.push({
+      metricKey: s.metricKey,
+      actualValue: s.actualValue,
+      baselineValue: s.baselineValue,
+      deviationSigmas: s.deviationSigmas,
+      trendPerMonth: s.trendPerMonth,
+      projection,
+      implication: implicationFor(s.metricKey, s.actualValue, s.baselineValue, s.deviationSigmas, projection.p10CriticalMonth),
+      urgency,
+    });
+  }
 
-  const strategicNarratives = buildNarratives({
-    healthScore: strategicHealthScore,
-    scenarios: activeScenarios,
-    realOptions: realOptionsValuation,
-    wargameAlerts,
-    okrHealth,
-  });
+  activated.sort((a, b) => b.deviationSigmas - a.deviationSigmas);
+  return { all, activated };
+}
+
+// ---------------------------------------------------------------------------
+// B. WAR GAME AUTO-ANALYSIS
+// ---------------------------------------------------------------------------
+
+function decisionToMove(decision: Decision): Move {
+  const axisByDomain: Record<DecisionDomain, Move['axis']> = {
+    revenue: 'market',
+    product: 'momentum',
+    people: 'talent',
+    capital: 'capital',
+    gtm: 'market',
+    operations: 'momentum',
+  };
+  return {
+    id: `decision_${decision.id}`,
+    name: decision.title,
+    axis: axisByDomain[decision.domain] ?? 'momentum',
+    impact: 10 + decision.impact * 3,
+    description: decision.recommendation ?? decision.description ?? decision.title,
+  };
+}
+
+function detectWargameTrigger(events: LeadosEvent[], now: Date): string[] {
+  const recent = events.filter((e) => daysBetween(now, new Date(e.timestamp)) <= 14 && daysBetween(now, new Date(e.timestamp)) >= 0);
+  const triggered = Array.from(new Set(recent.filter((e) => COMPETITIVE_EVENT_TYPES.includes(e.type)).map((e) => e.type)));
+  return triggered;
+}
+
+function runWargameAutoAnalysis(input: StrategicIntelligenceInput, trigger: string[]): WargameAutoResult | null {
+  if (trigger.length === 0 || input.competitors.length === 0) return null;
+
+  const recentCompetitiveText = input.events
+    .filter((e) => daysBetween(input.now, new Date(e.timestamp)) <= 14)
+    .filter((e) => COMPETITIVE_EVENT_TYPES.includes(e.type))
+    .map((e) => e.description ?? e.type)
+    .join('. ');
+
+  const proposed = input.decisions
+    .filter((d) => d.status === 'proposed')
+    .sort((a, b) => b.impact - a.impact);
+  const ourBestMove: Move = proposed.length ? decisionToMove(proposed[0]) : MOVE_CATALOG[2];
+
+  const competitorCounters: Record<string, Move> = {};
+  const roundScores: Record<string, ReturnType<typeof scoreWargameRound>> = {};
+
+  let topCompetitorName = input.competitors[0]?.name ?? 'the leading competitor';
+  let topCounter: Move | null = null;
+
+  for (const comp of input.competitors) {
+    const refreshedProfile = generateCompetitorProfile(comp.name, `${recentCompetitiveText} ${comp.name}`);
+    const counter = pickLikelyCounterMove(refreshedProfile, ourBestMove);
+    const score = scoreWargameRound(ourBestMove, counter, refreshedProfile);
+    competitorCounters[comp.name] = counter;
+    roundScores[comp.name] = score;
+    if (!topCounter || refreshedProfile.aggressiveness > 0.6) {
+      topCounter = counter;
+      topCompetitorName = comp.name;
+    }
+  }
+
+  const blindspots = (input.beliefResult.uncertaintyFlags.length
+    ? input.beliefResult.uncertaintyFlags
+    : [{ node: 'Competitive Pressure', confidence: 0.5, signalDescription: 'win/loss call notes' }]
+  )
+    .slice(0, 3)
+    .map((f) => `Limited visibility into ${f.node} (${Math.round(f.confidence * 100)}% confidence) — ${f.signalDescription} would sharpen this read.`);
+
+  while (blindspots.length < 3) {
+    blindspots.push('No additional blindspot identified beyond the standard model uncertainty.');
+  }
+
+  const outcomeText = describeMoveOutcome(ourBestMove);
+  const recommendation = `Our highest-leverage move is ${ourBestMove.name}, which ${outcomeText}. Watch for ${topCompetitorName}'s likely counter: ${topCounter ? topCounter.name : 'an uncommitted response'}.`;
+
+  return { trigger, ourBestMove, competitorCounters, roundScores, blindspots, recommendation };
+}
+
+// ---------------------------------------------------------------------------
+// C. BOARD INTELLIGENCE
+// ---------------------------------------------------------------------------
+
+function buildKeyMetricTableHTML(surveillance: MetricSurveillance[]): string {
+  const rowStyle = 'style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:13px;"';
+  const headStyle = 'style="padding:6px 10px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #111827;"';
+
+  const rows = surveillance
+    .map((s) => {
+      const delta = s.actualValue - s.baselineValue;
+      const status = s.deviationSigmas >= 3 ? { color: '#991b1b', bg: '#fee2e2', label: 'Red' } : s.deviationSigmas >= 2 ? { color: '#92400e', bg: '#fef3c7', label: 'Yellow' } : { color: '#065f46', bg: '#d1fae5', label: 'Green' };
+      const def = METRIC_DEFINITIONS[s.metricKey];
+      return `<tr>
+        <td ${rowStyle}>${def.label}</td>
+        <td ${rowStyle}>${formatMetricValue(s.actualValue, def.unit)}</td>
+        <td ${rowStyle}>${formatMetricValue(s.baselineValue, def.unit)}</td>
+        <td ${rowStyle}>${delta >= 0 ? '+' : ''}${formatMetricValue(delta, def.unit)}</td>
+        <td ${rowStyle}>${s.trendPerMonth >= 0 ? '▲' : '▼'} ${Math.abs(s.trendPerMonth).toFixed(1)}/mo</td>
+        <td ${rowStyle}><span style="background:${status.bg};color:${status.color};padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;">${status.label}</span></td>
+      </tr>`;
+    })
+    .join('');
+
+  return `<table style="width:100%;border-collapse:collapse;font-family:inherit;">
+    <thead><tr>
+      <th ${headStyle}>Metric</th>
+      <th ${headStyle}>Current</th>
+      <th ${headStyle}>Baseline</th>
+      <th ${headStyle}>Delta</th>
+      <th ${headStyle}>Trend</th>
+      <th ${headStyle}>Status</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function formatMetricValue(v: number, unit: string): string {
+  if (unit === '$') return `$${Math.round(v).toLocaleString()}`;
+  if (unit === '%' || unit === 'pts') return `${v.toFixed(1)}${unit === '%' ? '%' : ''}`;
+  return `${v.toFixed(1)}${unit ? ' ' + unit : ''}`;
+}
+
+function severityForState(state: 'healthy' | 'at_risk' | 'critical'): number {
+  return state === 'critical' ? 90 : state === 'at_risk' ? 55 : 15;
+}
+
+function implicationForNode(nodeId: string, domain: string): string {
+  const map: Record<string, string> = {
+    customer_trust: 'If left unaddressed, erosion in customer trust compounds directly into churn and ultimately revenue. Early intervention via proactive outreach is materially cheaper than win-back later.',
+    team_morale: 'Low morale precedes attrition of the people closest to the roadmap and customers. This risk is hard to observe directly, so it is likely under-weighted in current plans.',
+    product_momentum: 'Stalling product momentum reduces differentiation just as competitive pressure increases, creating a compounding gap in win rate.',
+    capital_runway: 'A compressing runway narrows the set of strategic options available and forces reactive rather than proactive decisions.',
+    competitive_pressure: 'Rising competitive pressure typically shows up first in churn and deal cycle length before it is visible in win/loss reporting.',
+    operational_debt: 'Accumulating operational debt increases the blast radius of any single incident and slows the org\'s ability to respond to the other risks on this list.',
+  };
+  return map[nodeId] ?? `This risk in ${domain} warrants monitoring alongside the organization's other strategic priorities.`;
+}
+
+function buildTop3StrategicRisks(belief: BeliefFabricResult): StrategicRisk[] {
+  return [...belief.latentNodes]
+    .sort((a, b) => severityForState(b.state) - severityForState(a.state))
+    .slice(0, 3)
+    .map((n) => ({
+      title: n.name,
+      domain: n.domain,
+      severity: severityForState(n.state),
+      confidence: n.confidence,
+      implication: implicationForNode(n.id, n.domain),
+    }));
+}
+
+function buildDecisionsForBoard(decisions: Decision[], now: Date): BoardDecision[] {
+  const horizon = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  return decisions
+    .filter((d) => d.status === 'proposed' && d.impact >= 4 && new Date(d.deadline) < horizon)
+    .sort((a, b) => b.impact * b.confidence - a.impact * a.confidence)
+    .slice(0, 3)
+    .map((d) => ({
+      id: d.id,
+      title: d.title,
+      domain: d.domain,
+      stakes: d.stakes ?? `Impact ${d.impact}/5 at ${Math.round(d.confidence * 100)}% model confidence.`,
+      options: d.options,
+      recommendation: d.recommendation ?? `Proceed with ${d.options[0] ?? 'the leading option'} given current signal strength.`,
+      deadline: d.deadline,
+      optionValue: calculateRealOptionValue({ estimatedValue: d.estimatedValue ?? 0, deadline: d.deadline, now }),
+    }));
+}
+
+function buildConfidenceStatement(belief: BeliefFabricResult): string {
+  const lowest = [...belief.uncertaintyFlags].sort((a, b) => a.confidence - b.confidence)[0];
+  if (!lowest) {
+    return 'The system has high confidence across all tracked latent nodes at this time.';
+  }
+  return `The system has lowest confidence in ${lowest.node} (confidence: ${Math.round(lowest.confidence * 100)}%) — additional ${lowest.signalDescription} data would improve prediction accuracy most.`;
+}
+
+function buildExecutiveSummary(
+  belief: BeliefFabricResult,
+  activated: ActivatedScenario[],
+  decisions: Decision[],
+  now: Date,
+  confidenceStatement: string,
+): string {
+  const s1 = `Organizational health is at ${belief.orgHealthScore}/100, with ${belief.dominantRisk.label} the dominant signal the model is tracking in the ${belief.dominantRisk.domain} domain.`;
+
+  const topChain = [...belief.causalChains].sort((a, b) => b.confidence - a.confidence)[0];
+  const s2 = topChain
+    ? `The highest-confidence causal read (${Math.round(topChain.confidence * 100)}%): ${topChain.description}`
+    : 'No dominant causal chain has been detected across tracked domains.';
+
+  const urgent = [...activated].sort((a, b) => {
+    const order: Record<Urgency, number> = { act: 2, plan: 1, watch: 0 };
+    return order[b.urgency] - order[a.urgency] || b.deviationSigmas - a.deviationSigmas;
+  })[0];
+  const s3 = urgent
+    ? `The most urgent activated scenario is ${METRIC_DEFINITIONS[urgent.metricKey].label} (${urgent.deviationSigmas.toFixed(1)}σ from plan, status: ${urgent.urgency}) — ${urgent.implication}`
+    : 'No scenario has deviated far enough from the modeled baseline to activate this period.';
+
+  const upcoming = decisions
+    .filter((d) => daysBetween(new Date(d.deadline), now) <= 0 && daysBetween(new Date(d.deadline), now) >= -14)
+    .sort((a, b) => b.impact - a.impact)[0];
+  const s4 = upcoming
+    ? `The most important near-term call is "${upcoming.title}" (${upcoming.domain}), due within ${Math.max(0, Math.round(daysBetween(new Date(upcoming.deadline), now) * -1))} days.`
+    : 'No high-impact decision is due within the next 14 days.';
+
+  const s5 = `${confidenceStatement} Treat all projections here as directional, not exact.`;
+
+  return [s1, s2, s3, s4, s5].join(' ');
+}
+
+function buildBoardPack(input: StrategicIntelligenceInput, surveillance: MetricSurveillance[], activated: ActivatedScenario[], wargame: WargameAutoResult | null): BoardIntelligencePack {
+  const confidenceStatement = buildConfidenceStatement(input.beliefResult);
+  return {
+    executiveSummary: buildExecutiveSummary(input.beliefResult, activated, input.decisions, input.now, confidenceStatement),
+    organizationalMoment: getOrganizationalMoment(input.beliefResult),
+    domainHealthNarrative: buildDomainHealthNarrative(input.beliefResult),
+    top3StrategicRisks: buildTop3StrategicRisks(input.beliefResult),
+    activatedScenarios: activated,
+    decisionsForBoard: buildDecisionsForBoard(input.decisions, input.now),
+    keyMetricTableHTML: buildKeyMetricTableHTML(surveillance),
+    wargameInsight: wargame ? wargame.recommendation : null,
+    confidenceStatement,
+    generatedAt: input.now.toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+export function runStrategicIntelligence(input: StrategicIntelligenceInput): StrategicIntelligenceReport {
+  const { all, activated } = runScenarioSurveillance(input.metrics, input.now);
+  const trigger = detectWargameTrigger(input.events, input.now);
+  const wargameAutoResult = runWargameAutoAnalysis(input, trigger);
+  const boardPack = buildBoardPack(input, all, activated, wargameAutoResult);
 
   return {
-    strategicHealthScore,
-    activeScenarios,
-    criticalDecisions,
-    realOptionsValuation,
-    okrHealth,
-    wargameAlerts,
-    strategicNarratives,
-    generatedAt: now.toISOString(),
+    activatedScenarios: activated,
+    metricSurveillance: all,
+    wargameAutoResult,
+    boardPack,
+    generatedAt: input.now.toISOString(),
   };
 }
 
-/** Run a wargame simulation for a single decision (used by the manual trigger API). */
-export async function runWargameForDecision(decisionId: string, decision: Decision, now: Date): Promise<WargameAlert> {
-  const syntheticFinding: LeadosEvent = {
-    id: decisionId,
-    type: "decision.wargame.manual",
-    domain: decision.domain ?? "general",
-    severity: Math.max(4, toNumber(decision.impact, 4)),
-    payload: { description: decision.description ?? decision.title },
-    createdAt: now,
-  };
-  const [result] = runWargamePass([syntheticFinding], now, 1);
-  return { ...result, findingId: decisionId };
-}
-
-// Re-exported so API routes/views don't need to reach across three modules.
-export { CRITICAL_SEVERITY_THRESHOLD as WARGAME_SEVERITY_THRESHOLD };
+export type { ActivatedScenario, WargameAutoResult, BoardIntelligencePack, StrategicRisk, BoardDecision, StrategicIntelligenceReport };

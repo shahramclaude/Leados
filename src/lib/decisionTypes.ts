@@ -1,39 +1,39 @@
-// Shared type definitions for the Decision Intelligence module.
-// Kept in their own file (rather than inside schema.ts or decisionEngine.ts)
-// so that both the Drizzle schema (for jsonb typing) and the engine/UI code
-// can import them without creating circular module dependencies.
+// src/lib/decisionTypes.ts
+// Core decision model shared across the Leados strategic layer.
+// (Part 1-3 prerequisite — authored here because it did not yet exist
+// in this environment's checkout of the repo.)
 
-/** A single candidate option attached to a decision. */
-export interface DecisionOption {
+export type DecisionDomain =
+  | 'revenue'
+  | 'product'
+  | 'people'
+  | 'capital'
+  | 'gtm'
+  | 'operations';
+
+export type DecisionStatus = 'proposed' | 'approved' | 'rejected' | 'deferred' | 'executed';
+
+export interface Decision {
   id: string;
-  label: string;
-  description: string;
-  /** Relative cost of pursuing this option, 0 (free) - 10 (very costly). */
-  cost: number;
-  /** Expected positive impact if this option succeeds, 0 - 10. */
+  title: string;
+  domain: DecisionDomain;
+  status: DecisionStatus;
+  /** 1 (low) - 5 (critical) strategic impact if acted on */
   impact: number;
-  /** How easy it would be to reverse this option later, 0 (irreversible) - 10 (trivial). */
-  reversibility: number;
-  /** How quickly this option can be executed, 0 (very slow) - 10 (immediate). */
-  speed: number;
-  /** Inherent risk / uncertainty of this option, 0 (safe) - 10 (very risky). */
-  risk: number;
-  createdAt: string;
+  /** 0-1 model confidence that the recommended option is correct */
+  confidence: number;
+  /** ISO date string — when a call must be made */
+  deadline: string;
+  options: string[];
+  recommendation?: string;
+  description?: string;
+  stakes?: string;
+  /** rough dollar value at stake, used by realOptions.ts */
+  estimatedValue?: number;
 }
 
-/** Free-form extra data attached to a decision. */
-export interface DecisionOutcomeMetric {
-  metric: string;
-  expected: number;
-  actual: number;
+export interface CascadeRisk {
+  /** probability (0-1) that a negative outcome cascades into adjacent domains */
+  p: number;
+  description: string;
 }
-
-export interface DecisionData {
-  ownerName?: string;
-  stakeholderNames?: string[];
-  tags?: string[];
-  notes?: string;
-  outcomeMetrics?: DecisionOutcomeMetric[];
-}
-
-export type DecisionStatus = "open" | "decided" | "reversed" | "archived";

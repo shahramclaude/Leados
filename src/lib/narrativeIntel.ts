@@ -1,75 +1,62 @@
 // src/lib/narrativeIntel.ts
+// Narrative generation templates for domain health reporting.
 //
-// BOOTSTRAP NOTE: no prior narrativeIntel.ts existed in the repository.
-// Template-based narrative generation: turns belief-fabric + causal-chain
-// output into plain-English findings. Original derivation; no external NLG
-// library, just string templates gated on thresholds (DESIGN PARAMETERS).
+// Exported: DOMAIN_HEALTH_TEMPLATES (const, line 13), buildDomainHealthNarrative
+//           (function, line 46) — called by strategicIntelligence.ts for
+//           BoardIntelligencePack.domainHealthNarrative.
 
-import type { BeliefFabricResult, CausalEdge, LatentNodeId } from "./types";
+import type { BeliefFabricResult } from './beliefFabric';
 
-const SEVERITY_LABEL = (p: number): string => {
-  if (p >= 0.7) return "critical";
-  if (p >= 0.5) return "elevated";
-  if (p >= 0.3) return "watch";
-  return "nominal";
+type NarrativeTone = 'strong' | 'steady' | 'strained' | 'critical';
+
+const DOMAIN_HEALTH_TEMPLATES: Record<NarrativeTone, string[]> = {
+  strong: [
+    'Across the fabric of latent signals, the organization is compounding strength rather than managing fragility.',
+    'Every domain we track is reinforcing the others — a rare, genuinely low-risk posture.',
+  ],
+  steady: [
+    'The organization is holding its line: no domain is in free-fall, but {domain} deserves a closer look before it drifts.',
+    'Overall health is steady; the center of gravity is {domain}, where confidence is still being built.',
+  ],
+  strained: [
+    '{domain} is the clearest source of strain right now, and it is already pulling on adjacent domains — this is the moment to intervene, not monitor.',
+    'The fabric shows real stress concentrated in {domain}; left alone, this compounds within a quarter.',
+  ],
+  critical: [
+    '{domain} has crossed from "watch" to "act": the model treats this as a near-term threat to the operating plan, not a trend to track.',
+    'This is a critical read on {domain} — the kind of signal that should change what gets discussed in the next leadership meeting, not just the next board deck.',
+  ],
 };
 
-const RISK_LABELS: Record<LatentNodeId, string> = {
-  flightRisk: "key-person flight risk",
-  burnoutRisk: "team burnout risk",
-  strategyRisk: "strategic drift risk",
-  executionRisk: "execution/delivery risk",
-  cultureRisk: "culture & psychological-safety risk",
-  financialRisk: "financial/runway risk",
-  innovationStall: "innovation stall risk",
-  decisionParalysis: "decision paralysis risk",
-  cascadeRisk: "cross-domain cascade risk",
-  leadershipEnergyDepletion: "leadership energy depletion",
-};
-
-export function generateNarrative(
-  beliefs: BeliefFabricResult,
-  causalEdges: CausalEdge[],
-): string[] {
-  const lines: string[] = [];
-
-  lines.push(
-    `Dominant risk: ${RISK_LABELS[beliefs.dominantRisk]} is ${SEVERITY_LABEL(
-      beliefs.posteriors[beliefs.dominantRisk].p,
-    )} (p=${(beliefs.posteriors[beliefs.dominantRisk].p * 100).toFixed(0)}%).`,
-  );
-
-  if (beliefs.cascadeRisk.p >= 0.5) {
-    lines.push(
-      `Cascade alert: multiple latent risks are compounding — cascade risk is ${SEVERITY_LABEL(
-        beliefs.cascadeRisk.p,
-      )} at p=${(beliefs.cascadeRisk.p * 100).toFixed(0)}%.`,
-    );
-  }
-
-  for (const nodeId of Object.keys(beliefs.posteriors) as LatentNodeId[]) {
-    if (nodeId === beliefs.dominantRisk || nodeId === "cascadeRisk") continue;
-    const marginal = beliefs.posteriors[nodeId];
-    if (marginal.p >= 0.6) {
-      lines.push(
-        `Secondary signal: ${RISK_LABELS[nodeId]} is also ${SEVERITY_LABEL(marginal.p)} (p=${(
-          marginal.p * 100
-        ).toFixed(0)}%).`,
-      );
-    }
-  }
-
-  for (const edge of causalEdges.slice(0, 5)) {
-    lines.push(
-      `Pattern: "${edge.from}" is empirically followed by "${edge.to}" ${(edge.probability * 100).toFixed(
-        0,
-      )}% of the time (n=${edge.support}).`,
-    );
-  }
-
-  if (lines.length === 1) {
-    lines.push("No elevated secondary risks or recurring causal patterns detected in this window.");
-  }
-
-  return lines;
+function toneFromScore(score: number): NarrativeTone {
+  if (score >= 78) return 'strong';
+  if (score >= 55) return 'steady';
+  if (score >= 35) return 'strained';
+  return 'critical';
 }
+
+/**
+ * buildDomainHealthNarrative
+ * Produces a 1-2 sentence narrative describing overall organizational health,
+ * anchored to the belief fabric's dominant risk domain.
+ */
+export function buildDomainHealthNarrative(belief: BeliefFabricResult): string {
+  const tone = toneFromScore(belief.orgHealthScore);
+  const templates = DOMAIN_HEALTH_TEMPLATES[tone];
+  const template = templates[belief.dominantRisk.domain.length % templates.length];
+  return template.replace(/{domain}/g, prettyDomain(belief.dominantRisk.domain));
+}
+
+function prettyDomain(domain: string): string {
+  const map: Record<string, string> = {
+    revenue: 'the revenue engine',
+    product: 'product momentum',
+    people: 'team health',
+    capital: 'capital position',
+    gtm: 'go-to-market',
+    operations: 'operational resilience',
+  };
+  return map[domain] ?? domain;
+}
+
+export { DOMAIN_HEALTH_TEMPLATES };
