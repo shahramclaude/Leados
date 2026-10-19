@@ -1,62 +1,101 @@
-// src/app/api/autonomous/status/route.ts
+// GET /api/autonomous/status
 //
-// GET -> SchedulerStatus + last 5 AgentCycleResult summaries.
+// Read-only health/summary view over the autonomous agent: the last cycle,
+// a short history, when the next cycle is expected, and rollups useful for
+// a dashboard widget.
 
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
-import { agentAuditLog, agentCycles, settings } from "@/db/schema";
-import type { AgentCycleSummary, SchedulerStatus } from "@/lib/types";
-import { DEFAULT_SCHEDULER_CONFIG } from "@/lib/agentScheduler";
+import {
+  agentCycles,
+  hypotheses,
+  hypothesisResolutions,
+  notifications,
+  playbookInstances,
+} from "@/db/schema";
+import { computeNextRunAt, getScheduleStatus, DEFAULT_AGENT_CONFIG } from "../../../../../schedule";
 
 export const dynamic = "force-dynamic";
 
-async function getSettingValue(key: string): Promise<string | null> {
-  const [row] = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
-  return row?.value ?? null;
+function summarizeCycle(row: typeof agentCycles.$inferSelect) {
+  return {
+    cycleId: row.id,
+    startedAt: row.startedAt,
+    completedAt: row.completedAt,
+    status: row.status,
+    orgHealthScore: row.orgHealthScore,
+    riskProfile: row.riskProfile,
+    criticalCount: row.criticalCount,
+    cascadeCount: row.cascadeCount,
+    playbooksTriggered: row.playbooksTriggered,
+    hypothesesCreated: row.hypothesesCreated,
+    hypothesesResolved: row.hypothesesResolved,
+    adaptedInterval: row.adaptedInterval,
+    totalDurationMs: row.totalDurationMs,
+  };
 }
 
 export async function GET() {
-  const recentCycles = await db.select().from(agentCycles).orderBy(desc(agentCycles.startedAt)).limit(5);
+  try {
+    const recentCycles = await db
+      .select()
+      .from(agentCycles)
+      .orderBy(desc(agentCycles.startedAt))
+      .limit(5);
 
-  const priority = (await getSettingValue("agent.priority")) ?? "normal";
-  const nextIntervalMsRaw = await getSettingValue("agent.next_interval_ms");
-  const degradedModeRaw = await getSettingValue("agent.degraded_mode");
+    const lastCycle = recentCycles[0] ? summarizeCycle(recentCycles[0]) : null;
+    const lastFiveCycles = recentCycles.map(summarizeCycle);
 
-  const currentIntervalMs = nextIntervalMsRaw
-    ? Number(nextIntervalMsRaw)
-    : DEFAULT_SCHEDULER_CONFIG.normalIntervalMs;
+    const intervalMs = lastCycle?.adaptedInterval
+      ? DEFAULT_AGENT_CONFIG.criticalIntervalMs
+      : DEFAULT_AGENT_CONFIG.normalIntervalMs;
 
-  const lastCycle = recentCycles[0] ?? null;
-  const lastRunAt = lastCycle ? new Date(lastCycle.startedAt).toISOString() : null;
-  const nextRunAt = lastCycle
-    ? new Date(new Date(lastCycle.startedAt).getTime() + currentIntervalMs).toISOString()
-    : null;
+    const lastRunAt = lastCycle?.completedAt ?? lastCycle?.startedAt ?? null;
+    const nextRunAt = computeNextRunAt(lastRunAt, intervalMs);
+    const scheduleStatus = getScheduleStatus(lastRunAt, intervalMs);
 
-  const errorsSince = lastCycle ? new Date(lastCycle.completedAt) : new Date(0);
-  const recentErrors = await db
-    .select()
-    .from(agentAuditLog)
-    .where(and(eq(agentAuditLog.level, "error"), gt(agentAuditLog.at, errorsSince)));
+    const openHypothesesRows = await db
+      .select({ id: hypotheses.id })
+      .from(hypotheses)
+      .where(eq(hypotheses.status, "open"));
 
-  const status: SchedulerStatus & { priority: string } = {
-    running: true,
-    lastRunAt,
-    nextRunAt,
-    currentIntervalMs,
-    lastCycleId: lastCycle?.id ?? null,
-    consecutiveErrors: recentErrors.length,
-    degradedMode: degradedModeRaw === "true",
-    priority,
-  };
+    const weekAgo = new Date(Date.now() - 7 * 86400000);
 
-  const cycleSummaries: AgentCycleSummary[] = recentCycles.map((c) => ({
-    cycleId: c.id,
-    startedAt: new Date(c.startedAt).toISOString(),
-    durationMs: new Date(c.completedAt).getTime() - new Date(c.startedAt).getTime(),
-    findingsDelta: c.findingsDelta,
-    playbooksTriggered: c.playbooksTriggered,
-    cascadeRiskAtCompletion: c.cascadeRisk,
-  }));
+    const playbooksTriggeredWeekRows = await db
+      .select({ id: playbookInstances.id })
+      .from(playbookInstances)
+      .where(and(eq(playbookInstances.source, "autonomous_agent"), gte(playbookInstances.triggeredAt, weekAgo)));
 
-  return Response.json({ status, recentCycles: cycleSummaries });
+    const hypothesesResolvedWeekRows = await db
+      .select({ id: hypothesisResolutions.id })
+      .from(hypothesisResolutions)
+      .where(gte(hypothesisResolutions.resolvedAt, weekAgo));
+
+    const rulesCalibratedWeek = recentCycles
+      .filter((c) => c.startedAt >= weekAgo)
+      .length; // calibration happens every cycle; count cycles as a proxy
+
+    const criticalFindingsNewWeekRows = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(gte(notifications.createdAt, weekAgo));
+
+    return Response.json({
+      ok: true,
+      lastCycle,
+      lastFiveCycles,
+      nextRunAt,
+      scheduleStatus,
+      openHypotheses: openHypothesesRows.length,
+      weeklyStats: {
+        playbooksTriggered: playbooksTriggeredWeekRows.length,
+        hypothesesResolved: hypothesesResolvedWeekRows.length,
+        rulesCalibrated: rulesCalibratedWeek,
+        criticalFindingsNew: criticalFindingsNewWeekRows.length,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return Response.json({ ok: false, error: message }, { status: 500 });
+  }
 }
