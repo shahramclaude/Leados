@@ -1,74 +1,39 @@
-import { useEffect, useState } from "react";
-import { IntelligenceView } from "./components/IntelligenceView";
-import { PROJECTION, TODAY } from "./lib/sampleData";
+import { useEffect, useState } from 'react';
+import { PeopleDashboard } from './components/people/PeopleDashboard';
 
-function useHashRoute(defaultRoute: string) {
-  const [route, setRoute] = useState(() => window.location.hash.replace(/^#/, "") || defaultRoute);
-
+function useHashRoute() {
+  const [hash, setHash] = useState(() => window.location.hash || '#/people');
   useEffect(() => {
-    if (!window.location.hash) window.location.hash = defaultRoute;
-    const onHashChange = () => setRoute(window.location.hash.replace(/^#/, "") || defaultRoute);
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, [defaultRoute]);
-
-  return route;
+    if (!window.location.hash) window.location.hash = '#/people';
+    const onChange = () => setHash(window.location.hash || '#/people');
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+  return hash;
 }
 
 export default function App() {
-  const route = useHashRoute("/intelligence");
+  const hash = useHashRoute();
+
+  if (hash.startsWith('#/people')) {
+    return <PeopleDashboard />;
+  }
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--bg)" }}>
-      <TopBar route={route} />
-      <main>
-        {route === "/intelligence" ? (
-          <IntelligenceView P={PROJECTION} today={TODAY} />
-        ) : (
-          <IntelligenceView P={PROJECTION} today={TODAY} />
-        )}
-      </main>
-    </div>
-  );
-}
-
-function TopBar({ route }: { route: string }) {
-  return (
-    <header
-      className="sticky top-0 z-40 border-b backdrop-blur"
-      style={{ borderColor: "var(--line)", background: "rgba(7,9,12,.82)" }}
-    >
-      <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-5 py-3">
-        <div className="flex items-center gap-2.5">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg font-mono-ui text-sm font-bold"
-            style={{ background: "rgba(110,168,254,.12)", color: "var(--accent)", border: "1px solid rgba(110,168,254,.3)" }}
-          >
-            L
-          </div>
-          <div>
-            <div className="text-sm font-semibold leading-tight" style={{ color: "var(--text)" }}>
-              LEADOS
-            </div>
-            <div className="font-mono-ui text-[10px] uppercase tracking-[0.16em]" style={{ color: "var(--text-dim)" }}>
-              Organizational Physics
-            </div>
-          </div>
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-8">
+      <div className="text-center space-y-4">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/20 text-white font-bold text-2xl">
+          L
         </div>
-        <nav className="flex items-center gap-1">
-          <a
-            href="#/intelligence"
-            className="rounded-lg border px-3 py-1.5 font-mono-ui text-xs"
-            style={{
-              borderColor: route === "/intelligence" ? "var(--line2)" : "transparent",
-              background: route === "/intelligence" ? "var(--panel)" : "transparent",
-              color: route === "/intelligence" ? "var(--text)" : "var(--text-muted)",
-            }}
-          >
-            ⟶ Intelligence
-          </a>
-        </nav>
+        <h1 className="text-3xl font-semibold tracking-tight text-white">Leados</h1>
+        <p className="text-slate-400">The People Intelligence Engine is ready.</p>
+        <a
+          href="#/people"
+          className="inline-block mt-2 px-5 py-2.5 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-semibold transition-colors"
+        >
+          Open People Dashboard →
+        </a>
       </div>
-    </header>
+    </div>
   );
 }

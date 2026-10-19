@@ -1,523 +1,530 @@
-// src/lib/peopleIntelligence.ts
-//
-// CANONICAL PEOPLE ENGINE. This file is the single entry point the rest of
-// the app should call for anything people-related. It consolidates engines
-// that were previously either orphaned (nothing imported them) or only
-// reachable from one narrow call site:
-//
-//   src/lib/flightRisk.ts      -> computeFlightRisk()           [was: only
-//                                  reachable via talentEngine.ts]
-//   src/lib/performance.ts     -> computeBurnoutIndex/Engagement/
-//                                  GrowthVelocity/PerformanceTrend/Score
-//                                  [was: only reachable via talentEngine.ts]
-//   src/lib/talentEngine.ts    -> computePersonProfile, identifyHighPotentials,
-//                                  computeKeyPersonConcentration,
-//                                  buildSuccessionMap   [now called below]
-//   src/lib/orgNetwork.ts      -> analyzeOrgNetwork()            [now called
-//                                  below for orgNetworkReport]
-//   src/lib/orgDesign.ts       -> computeOrgDesign()             [was
-//                                  ORPHANED — no caller anywhere; now folded
-//                                  into TeamDynamicsReport.orgDesignEfficiency]
-//   src/lib/fatigue.ts         -> levelFor(), clampScore()       [was
-//                                  ORPHANED outside its own module; now
-//                                  reused to tag burnout severity bands]
-//   src/lib/familiarity.ts     -> tierFor() / familiarityScoreFromCounts()
-//                                  [was ORPHANED server-side — the original
-//                                  functions are sessionStorage/client-only;
-//                                  a pure server-safe wrapper was added]
-//   src/lib/lifeStage.ts       -> stageForScore(), individualCareerMaturity()
-//                                  [was ORPHANED — org-maturity model with no
-//                                  caller; individualCareerMaturity() is a
-//                                  disclosed per-person adaptation]
-//   src/lib/orgODE.ts          -> fastOrgDynamics()              [new, cheap
-//                                  version; the full RK4 `orgODE.integrate`
-//                                  simulation is intentionally NOT called
-//                                  from this pipeline — see orgODE.ts]
-//
-// ORPHAN AUDIT (as found before this file existed — see also the per-file
-// "WIRED" comments added alongside this change):
-//   - talentEngine.ts        : only ever imported by src/app/api/people/[id]
-//                              route in the original tree -> now also the
-//                              backbone of this canonical engine.
-//   - flightRisk.ts          : only reachable transitively through
-//                              talentEngine.ts -> now called directly too
-//                              (driver strings surfaced per-person below).
-//   - fatigue.ts             : ORPHANED (no non-self imports found anywhere
-//                              in the repo) -> now used for burnout banding.
-//   - familiarity.ts         : effectively ORPHANED server-side — its API is
-//                              sessionStorage/client-only; a pure helper was
-//                              added and wired into
-//                              PersonIntelligence.familiarity below.
-//   - lifeStage.ts           : ORPHANED (org-maturity model, no caller
-//                              anywhere) -> wired as individual career-stage
-//                              tag via individualCareerMaturity().
-//   - orgNetwork.ts          : only reachable from the single-person detail
-//                              route -> now also powers the team-wide report.
-//   - orgDesign.ts           : ORPHANED (no caller anywhere) -> wired into
-//                              TeamDynamicsReport.orgDesignEfficiency.
-//   - orgODE.ts (full sim)   : present but never called by any route/view in
-//                              the original tree, and too expensive (up to
-//                              48 RK4 derivative evaluations) to run inline
-//                              on every request -> left un-called; a new
-//                              fastOrgDynamics() sibling function was added
-//                              specifically to be cheap enough to run in the
-//                              request path (O(V+E), single Euler step).
+import type { LeadosEvent, OneOneRecord, PersonState } from './types';
 
-import {
-  computeFlightRisk,
-  type FlightRiskScore,
-  type PersonEvent,
-} from "./flightRisk";
-import { explainBurnoutComponents } from "./performance";
-import {
-  computeKeyPersonConcentration,
-  computePersonProfile,
-  identifyHighPotentials,
-  buildSuccessionMap,
-  type HighPotential,
-  type PersonProfile,
-  type PersonRecord,
-  type RelationshipRecord,
-} from "./talentEngine";
-import { analyzeOrgNetwork, buildNetworkGraph, type OrgNetworkReport } from "./orgNetwork";
-import { computeOrgDesign } from "./orgDesign";
-import { levelFor, clampScore } from "./fatigue";
-import { familiarityScoreFromCounts } from "./familiarity";
-import { individualCareerMaturity } from "./lifeStage";
-import { fastOrgDynamics, type FastOrgDynamicsResult } from "./orgODE";
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
+// ═══════════════════════════════════════════════════════════════
+// Shared types
+// ═══════════════════════════════════════════════════════════════
 
-/** Alias kept for naming parity with the task brief ("LeadosEvent"). */
-export type LeadosEvent = PersonEvent;
-
-export type Person = PersonRecord;
-
-export interface ActionItem {
-  id: string;
-  title: string;
-  resolved: boolean;
+export interface FlightRiskDriver {
+  key: string;
+  label: string;
+  weight: number;
 }
 
-export interface OneOnOne {
-  id: number;
-  personId: number;
-  occurredAt: string | Date;
-  notes: string;
-  actionItems?: ActionItem[];
-}
+export type RiskLevel = 'critical' | 'high' | 'medium' | 'low';
 
-export type RetentionRisk = "low" | "medium" | "high" | "critical";
-export type PerformanceTrendTag = "accelerating" | "stable" | "declining";
-
-export interface PersonIntelligence {
-  personId: number;
-  name: string;
-  role: string;
-  flightRiskScore: number; // 0-1
-  flightRiskDrivers: string[]; // top 3 factors
-  burnoutRiskScore: number; // 0-1
-  burnoutDrivers: string[];
-  performanceTrend: PerformanceTrendTag;
-  oneOnOneQualityScore: number; // 0-100
-  daysSinceLastOneOnOne: number;
-  lifeStageTag: string;
-  familiarity: number;
-  retentionRisk: RetentionRisk;
-  suggestedAction: string;
-  nextOneOnOneTopics: string[];
-}
-
-export interface TeamDynamicsReport {
-  avgFlightRisk: number; // 0-1
-  avgBurnoutRisk: number; // 0-1
-  avgOneOnOneQuality: number; // 0-100
-  performanceDistribution: Record<PerformanceTrendTag, number>;
-  highPotentials: HighPotential[];
-  successionGapCount: number;
-  keyPersonConcentrationCount: number;
-  orgDesignEfficiency: number; // 0-100, from orgDesign.ts
-  topConcerns: string[];
-}
-
-export interface PeopleIntelligenceReport {
-  teamHealthIndex: number; // 0-100, composite
-  individuals: PersonIntelligence[];
-  teamDynamics: TeamDynamicsReport;
-  orgNetworkReport: OrgNetworkReport;
-  orgDynamics: FastOrgDynamicsResult;
-  generatedAt: string;
-}
-
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
-function toDate(v: string | Date): Date {
-  return v instanceof Date ? v : new Date(v);
-}
-
-function daysBetween(a: Date, b: Date): number {
-  return Math.round((a.getTime() - b.getTime()) / 86_400_000);
-}
-
-// ---------------------------------------------------------------------------
-// QualityScorer — 1:1 quality, not just cadence.
-//
-// Rules (as specified):
-//   Base: 50 points if a 1:1 occurred in the last 14 days
-//   +10 if notes field length > 100 chars (substantive)
-//   +10 if at least one action_item logged in events after the 1:1
-//   +10 if previous action_items were marked resolved
-//   -20 if overdue (>21 days since last)
-//   -10 if last 3 meetings had notes length < 50 chars (low quality)
-//   Clamp to [0, 100]
-// ---------------------------------------------------------------------------
-
-const NO_ONE_ON_ONE_SENTINEL_DAYS = 9999;
-
-export interface QualityScoreResult {
+export interface OneOneQualityScore {
   score: number;
-  daysSinceLast: number;
+  factors: string[];
 }
 
-export const QualityScorer = {
-  score(oneOnOnes: OneOnOne[], events: LeadosEvent[], now: Date): QualityScoreResult {
-    const sorted = [...oneOnOnes]
-      .filter((o) => Boolean(o.occurredAt))
-      .sort((a, b) => toDate(b.occurredAt).getTime() - toDate(a.occurredAt).getTime());
-
-    if (!sorted.length) {
-      return { score: 0, daysSinceLast: NO_ONE_ON_ONE_SENTINEL_DAYS };
-    }
-
-    const last = sorted[0];
-    const daysSinceLast = daysBetween(now, toDate(last.occurredAt));
-
-    let score = 0;
-    if (daysSinceLast <= 14) score += 50;
-    if ((last.notes ?? "").length > 100) score += 10;
-
-    const actionItemEventsAfterLast = events.filter(
-      (e) => e.type === "action_item.logged" && toDate(e.occurredAt).getTime() > toDate(last.occurredAt).getTime()
-    );
-    if (actionItemEventsAfterLast.length > 0) score += 10;
-
-    const priorActionItemsLogged = events.filter(
-      (e) => e.type === "action_item.logged" && toDate(e.occurredAt).getTime() <= toDate(last.occurredAt).getTime()
-    );
-    const resolvedEvents = events.filter((e) => e.type === "action_item.resolved");
-    if (priorActionItemsLogged.length > 0 && resolvedEvents.length > 0) score += 10;
-
-    if (daysSinceLast > 21) score -= 20;
-
-    const last3 = sorted.slice(0, 3);
-    if (last3.length > 0 && last3.every((m) => (m.notes ?? "").length < 50)) score -= 10;
-
-    return { score: clampScore(score), daysSinceLast };
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Flight-risk / burnout driver extraction (top 3 human-readable factors)
-// ---------------------------------------------------------------------------
-
-function topFlightRiskDrivers(flightRisk: FlightRiskScore): string[] {
-  return [...flightRisk.components]
-    .sort((a, b) => {
-      const rank = { HIGH: 2, MEDIUM: 1, LOW: 0 } as const;
-      return rank[b.contribution] - rank[a.contribution];
-    })
-    .slice(0, 3)
-    .map((c) => `${c.factor} (${c.value})`);
+export interface ConversationSignals {
+  hasExitSignal: boolean;
+  hasCompFrustration: boolean;
+  hasBurnoutSignal: boolean;
+  hasCareerSignal: boolean;
 }
 
-function topBurnoutDrivers(events: LeadosEvent[], today: Date): string[] {
-  return explainBurnoutComponents(events, today)
-    .filter((c) => c.points > 2)
-    .slice(0, 3)
-    .map((c) => `${c.factor} — ${c.detail}`);
+export type NineBoxAxis = 'low' | 'mid' | 'high';
+export type NineBoxCell = `${NineBoxAxis}-${NineBoxAxis}`; // performance-potential
+
+export interface SuccessionRisk {
+  isKeyPerson: boolean;
+  hasSuccessor: boolean;
+  timeToReadiness: string;
+  warning: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Retention risk — own derivation combining flightRisk.ts + performance.ts
-// burnout output. Thresholds disclosed, not externally cited.
-// ---------------------------------------------------------------------------
+export type PerformanceTrend = 'accelerating' | 'stable' | 'declining' | 'unknown';
 
-function retentionRiskFor(flightRiskScore: number, burnoutRiskScore: number): RetentionRisk {
-  if (flightRiskScore >= 0.7 || burnoutRiskScore >= 0.8) return "critical";
-  if (flightRiskScore >= 0.5 || burnoutRiskScore >= 0.6) return "high";
-  if (flightRiskScore >= 0.3 || burnoutRiskScore >= 0.4) return "medium";
-  return "low";
-}
+export interface PersonIntelligenceReport {
+  personId: string;
+  name: string;
+  title: string;
 
-// ---------------------------------------------------------------------------
-// nextOneOnOneTopics — rule-based (not LLM) per the task spec.
-// ---------------------------------------------------------------------------
-
-function nextOneOnOneTopics(params: {
   flightRiskScore: number;
+  flightRiskDrivers: FlightRiskDriver[];
+  flightRiskLevel: RiskLevel;
+
   burnoutRiskScore: number;
-  performanceTrend: PerformanceTrendTag;
-  daysSinceLastOneOnOne: number;
-  lastActionItemTitle: string | null;
-}): string[] {
+  burnoutDrivers: string[];
+
+  latestPerformanceScore: number | null;
+  performanceTrend: PerformanceTrend;
+
+  oneOneQuality: OneOneQualityScore;
+  conversationSignals: ConversationSignals;
+  nextOneOneTopics: string[];
+
+  nineBoxPlacement: NineBoxCell;
+  performanceAxis: NineBoxAxis;
+  potentialAxis: NineBoxAxis;
+  suggestedAction: string;
+
+  successionRisk: SuccessionRisk;
+
+  networkCentrality: number;
+  isBottleneck: boolean;
+  bridgeCount: number;
+
+  estimatedChangeInertia: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Keyword banks (exact, per spec)
+// ═══════════════════════════════════════════════════════════════
+
+export const EXIT_KEYWORDS = [
+  'recruiter',
+  'other offer',
+  'looking at',
+  'considering leaving',
+  'interview',
+  'notice period',
+  'my last',
+  'moving on',
+  'checking out options',
+];
+
+export const COMP_KEYWORDS = [
+  'underpaid',
+  'market rate',
+  'deserve more',
+  'equity',
+  'below market',
+  'not valued financially',
+  'competitor pays',
+  'compensation review',
+];
+
+export const BURNOUT_KEYWORDS = [
+  'exhausted',
+  'burned out',
+  'overwhelmed',
+  'too much',
+  'no bandwidth',
+  "can't keep up",
+  'weekends',
+  'never off',
+  'stretched thin',
+  'not sustainable',
+];
+
+export const CAREER_KEYWORDS = [
+  'growth',
+  'promotion',
+  'next level',
+  'learning',
+  'career path',
+  'skills',
+  'opportunity',
+  'stretch',
+  'development',
+];
+
+function containsAny(text: string, keywords: string[]): boolean {
+  const lower = text.toLowerCase();
+  return keywords.some((k) => lower.includes(k));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Small date / math helpers
+// ═══════════════════════════════════════════════════════════════
+
+const daysBetween = (a: Date | string, b: Date | string) =>
+  Math.round((new Date(b).getTime() - new Date(a).getTime()) / MS_PER_DAY);
+
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+
+function lastN<T>(arr: T[], n: number): T[] {
+  return arr.slice(Math.max(0, arr.length - n));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Conversation intelligence
+// ═══════════════════════════════════════════════════════════════
+
+export function analyzeOneOne(record: OneOneRecord) {
+  return {
+    exitSignal: containsAny(record.notes, EXIT_KEYWORDS),
+    compSignal: containsAny(record.notes, COMP_KEYWORDS),
+    burnoutSignal: containsAny(record.notes, BURNOUT_KEYWORDS),
+    careerSignal: containsAny(record.notes, CAREER_KEYWORDS),
+    wordCount: record.notes.trim().length === 0 ? 0 : record.notes.trim().split(/\s+/).length,
+  };
+}
+
+export function computeConversationSignals(oneOnes: OneOneRecord[]): ConversationSignals {
+  const last2 = lastN(oneOnes, 2);
+  const last3 = lastN(oneOnes, 3);
+  return {
+    hasExitSignal: last2.some((o) => containsAny(o.notes, EXIT_KEYWORDS)),
+    hasCompFrustration: last3.some((o) => containsAny(o.notes, COMP_KEYWORDS)),
+    hasBurnoutSignal: last2.some((o) => containsAny(o.notes, BURNOUT_KEYWORDS)),
+    hasCareerSignal: last3.some((o) => containsAny(o.notes, CAREER_KEYWORDS)),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Performance trend
+// ═══════════════════════════════════════════════════════════════
+
+export function computePerformanceTrend(person: PersonState): PerformanceTrend {
+  const hist = person.performanceHistory;
+  if (hist.length < 2) return 'unknown';
+  const last = hist[hist.length - 1].score;
+  const prev = hist[hist.length - 2].score;
+  if (last - prev >= 1) return 'accelerating';
+  if (last - prev <= -1) return 'declining';
+  return 'stable';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Flight risk
+// ═══════════════════════════════════════════════════════════════
+
+export function computeFlightRisk(
+  person: PersonState,
+  now: Date,
+  trend: PerformanceTrend,
+  signals: ConversationSignals,
+): { score: number; drivers: FlightRiskDriver[]; level: RiskLevel } {
+  const drivers: FlightRiskDriver[] = [{ key: 'BASELINE', label: 'Baseline risk (everyone)', weight: 0.1 }];
+
+  // ONE_ONE_CADENCE_SLIP
+  const daysSinceLastOneOne = person.lastOneOneAt ? daysBetween(person.lastOneOneAt, now) : Infinity;
+  if (daysSinceLastOneOne > 30) {
+    drivers.push({ key: 'ONE_ONE_CADENCE_SLIP', label: `No 1:1 in ${daysSinceLastOneOne}d (>30d)`, weight: 0.4 });
+  } else if (daysSinceLastOneOne > 21) {
+    drivers.push({ key: 'ONE_ONE_CADENCE_SLIP', label: `No 1:1 in ${daysSinceLastOneOne}d (>21d)`, weight: 0.25 });
+  }
+
+  // PULSE_NEGATIVE
+  const last3Pulses = lastN(person.pulses, 3);
+  if (last3Pulses.length > 0) {
+    const avgMood = last3Pulses.reduce((a, b) => a + b.mood, 0) / last3Pulses.length;
+    if (avgMood < 2) {
+      drivers.push({ key: 'PULSE_NEGATIVE', label: `Avg mood ${avgMood.toFixed(1)} (<2)`, weight: 0.35 });
+    } else if (avgMood < 3) {
+      drivers.push({ key: 'PULSE_NEGATIVE', label: `Avg mood ${avgMood.toFixed(1)} (<3)`, weight: 0.2 });
+    }
+  }
+
+  // EXPLICIT_SIGNAL
+  const signalsLast30 = person.flightSignalDates.filter((d) => daysBetween(d, now) <= 30).length;
+  if (signalsLast30 > 1) {
+    drivers.push({ key: 'EXPLICIT_SIGNAL', label: `${signalsLast30} flight signals in 30d`, weight: 0.6 });
+  } else if (signalsLast30 > 0) {
+    drivers.push({ key: 'EXPLICIT_SIGNAL', label: `${signalsLast30} flight signal in 30d`, weight: 0.4 });
+  }
+
+  // EXIT_KEYWORDS
+  if (signals.hasExitSignal) {
+    drivers.push({ key: 'EXIT_KEYWORDS', label: 'Exit language in last 2 one:ones', weight: 0.45 });
+  }
+
+  // COMP_FRUSTRATION
+  if (signals.hasCompFrustration) {
+    drivers.push({ key: 'COMP_FRUSTRATION', label: 'Compensation frustration in last 3 one:ones', weight: 0.2 });
+  }
+
+  // STALE_GOALS
+  const staleGoals = person.goals.filter((g) => g.status === 'open' && daysBetween(g.lastUpdated, now) > 30);
+  if (staleGoals.length >= 2) {
+    drivers.push({ key: 'STALE_GOALS', label: `${staleGoals.length} stale/silent goals`, weight: 0.1 });
+  }
+
+  // OVERLOADED
+  if (person.directReports.length > 8) {
+    drivers.push({ key: 'OVERLOADED', label: `${person.directReports.length} direct reports (manager overload)`, weight: 0.1 });
+  }
+
+  // NO_GROWTH
+  const recentSkillAdds = person.skillAddedDates.filter((d) => daysBetween(d, now) <= 90).length;
+  if (trend === 'stable' && person.tenureDays > 365 && recentSkillAdds === 0) {
+    drivers.push({ key: 'NO_GROWTH', label: 'Stable performance, tenured, no recent skill growth', weight: 0.15 });
+  }
+
+  const score = clamp01(drivers.reduce((sum, d) => sum + d.weight, 0));
+  const level: RiskLevel = score > 0.7 ? 'critical' : score > 0.5 ? 'high' : score > 0.3 ? 'medium' : 'low';
+  return { score, drivers, level };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Burnout risk
+// ═══════════════════════════════════════════════════════════════
+
+export function computeBurnoutRisk(person: PersonState, now: Date, signals: ConversationSignals): { score: number; drivers: string[] } {
+  let score = 0.1;
+  const drivers: string[] = ['Baseline risk'];
+
+  const pulsesLast14 = person.pulses.filter((p) => daysBetween(p.date, now) <= 14);
+  if (pulsesLast14.length >= 2 && pulsesLast14.every((p) => p.mood < 3)) {
+    score += 0.25;
+    drivers.push('Avg mood < 3 sustained over last 2+ weeks');
+  }
+
+  if (person.directReports.length > 8) {
+    score += 0.2;
+    drivers.push(`${person.directReports.length} direct reports`);
+  }
+
+  const overdueLast30 = person.commitments.filter(
+    (c) => !c.resolved && daysBetween(c.byDate, now) >= 0 && daysBetween(c.byDate, now) <= 30,
+  ).length;
+  const overdueCount = person.commitments.filter((c) => !c.resolved && new Date(c.byDate) < now).length;
+  if (overdueCount >= 5 || overdueLast30 >= 5) {
+    score += 0.15;
+    drivers.push(`${Math.max(overdueCount, overdueLast30)} overdue commitments`);
+  }
+
+  if (signals.hasBurnoutSignal) {
+    score += 0.3;
+    drivers.push('Burnout language in last 2 one:ones');
+  }
+
+  const oooLast90 = person.oooDates.some((d) => daysBetween(d, now) <= 90);
+  if (!oooLast90) {
+    score += 0.1;
+    drivers.push('No OOO/vacation logged in 90 days');
+  }
+
+  return { score: clamp01(score), drivers };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 1:1 quality
+// ═══════════════════════════════════════════════════════════════
+
+export function computeOneOneQuality(person: PersonState, now: Date): OneOneQualityScore {
+  const factors: string[] = [];
+  const oneOnes = person.oneOnes;
+  if (oneOnes.length === 0) {
+    return { score: 0, factors: ['No 1:1s logged'] };
+  }
+  const last = oneOnes[oneOnes.length - 1];
+  const daysSince = daysBetween(last.date, now);
+
+  let score = 0;
+  if (daysSince <= 14) {
+    score = 50;
+    factors.push('1:1 within last 14 days');
+  } else if (daysSince <= 21) {
+    score = 30;
+    factors.push('1:1 within 15-21 days');
+  } else if (daysSince <= 30) {
+    score = 10;
+    factors.push('1:1 within 22-30 days');
+  } else {
+    score = 0;
+    factors.push(`Last 1:1 was ${daysSince} days ago`);
+  }
+
+  const lastWordCount = analyzeOneOne(last).wordCount;
+  if (lastWordCount > 200) {
+    score += 15;
+    factors.push('Detailed notes (>200 words)');
+  }
+  if (last.topics.length >= 3) {
+    score += 10;
+    factors.push('3+ topics covered');
+  }
+  if (last.actionItems.length > 0) {
+    score += 10;
+    factors.push('Action items captured');
+  }
+  if (last.actionItems.length > 0 && last.actionItemsResolved) {
+    score += 10;
+    factors.push('Prior action items followed through');
+  }
+
+  const last3 = lastN(oneOnes, 3);
+  if (last3.length === 3 && last3.every((o) => o.sentiment === -1)) {
+    score -= 15;
+    factors.push('Persistent negative sentiment (last 3)');
+  }
+
+  if (containsAny(last.notes, CAREER_KEYWORDS)) {
+    score += 5;
+    factors.push('Career conversation present');
+  }
+
+  return { score: Math.max(0, Math.min(100, score)), factors };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Next 1:1 topics
+// ═══════════════════════════════════════════════════════════════
+
+export function computeNextOneOneTopics(signals: ConversationSignals, burnoutScore: number): string[] {
   const topics: string[] = [];
-  const { flightRiskScore, burnoutRiskScore, performanceTrend, daysSinceLastOneOnOne, lastActionItemTitle } = params;
-
-  if (flightRiskScore > 0.6) topics.push("Career trajectory and growth plan");
-  if (burnoutRiskScore > 0.6) topics.push("Workload, energy levels, and support needed");
-  if (performanceTrend === "declining") topics.push("Recent challenges and blockers");
-  if (daysSinceLastOneOnOne > 21) topics.push("Check-in: where are you at, what do you need");
-  if (lastActionItemTitle) topics.push(`Follow up on ${lastActionItemTitle}`);
-
-  if (!topics.length) topics.push("General check-in and priorities for the coming weeks");
-
+  if (signals.hasExitSignal) {
+    topics.push('Direct retention conversation: career trajectory and what would make you stay');
+  }
+  if (signals.hasBurnoutSignal || burnoutScore > 0.5) {
+    topics.push('Workload audit: what can we remove/defer?');
+  }
+  if (signals.hasCompFrustration) {
+    topics.push('Compensation review scheduling');
+  }
+  if (topics.length === 0) {
+    topics.push('Goal progress check-in + commitment review');
+  }
   return topics.slice(0, 3);
 }
 
-// ---------------------------------------------------------------------------
-// suggestedAction — one actionable sentence, prioritized.
-// ---------------------------------------------------------------------------
+// ═══════════════════════════════════════════════════════════════
+// 9-box placement
+// ═══════════════════════════════════════════════════════════════
 
-function suggestedActionFor(
-  profile: PersonProfile,
-  flightRiskScore: number,
-  burnoutRiskScore: number,
-  qualityScore: number
-): string {
-  if (flightRiskScore > 0.6) {
-    const top = profile.flightRisk.components.find((c) => c.contribution === "HIGH");
-    return top?.action ?? "Schedule a retention-focused conversation this week.";
+const ACTIONS: Record<NineBoxCell, string> = {
+  'high-high': 'Retention priority. Assign board-visible project. Discuss promotion timeline. Risk: {flightRiskLevel}',
+  'high-mid': 'Deepen domain expertise. Monthly coaching. Protect from overload.',
+  'high-low': 'Value maximization. Resist over-promoting. Recognize publicly.',
+  'mid-high': 'Accelerate with stretch assignment. Increase 1:1 frequency.',
+  'mid-mid': 'Standard development track. Clear quarterly goals.',
+  'mid-low': 'Clarify expectations. Review in 90d.',
+  'low-high': 'Investigate root cause. Role mismatch? Blocker? Urgent 1:1.',
+  'low-mid': '30-day performance plan. Weekly manager support.',
+  'low-low': 'PIP or transition conversation. Not sustainable in current role.',
+};
+
+export function computeNineBox(
+  person: PersonState,
+  trend: PerformanceTrend,
+  latestScore: number | null,
+  _signals: ConversationSignals,
+  flightRiskLevel: RiskLevel,
+  now: Date,
+): { performanceAxis: NineBoxAxis; potentialAxis: NineBoxAxis; cell: NineBoxCell; action: string } {
+  // Performance axis — scores are on a 1-10 scale.
+  let performanceAxis: NineBoxAxis;
+  if (latestScore === null) {
+    performanceAxis = 'mid';
+  } else if (latestScore < 4 || trend === 'declining') {
+    performanceAxis = 'low';
+  } else if (latestScore > 7 || (latestScore > 6 && trend === 'accelerating')) {
+    performanceAxis = 'high';
+  } else {
+    performanceAxis = 'mid';
   }
-  if (burnoutRiskScore > 0.6) {
-    return "Rebalance workload and protect recovery time before the next sprint.";
+
+  // Potential axis
+  const skillAddsLast6mo = person.skillAddedDates.filter((d) => daysBetween(d, now) <= 182).length;
+  const skillAddsLast12mo = person.skillAddedDates.filter((d) => daysBetween(d, now) <= 365).length;
+  const hasCareerConversation = person.oneOnes.some((o) => containsAny(o.notes, CAREER_KEYWORDS));
+  const promotionReadiness = clamp01(
+    (latestScore ?? 5) / 10 + (trend === 'accelerating' ? 0.1 : trend === 'declining' ? -0.1 : 0),
+  );
+  const nominatedForSeniorRole = person.successionFor.length > 0;
+
+  let potentialAxis: NineBoxAxis;
+  if (skillAddsLast6mo >= 3 || trend === 'accelerating' || nominatedForSeniorRole) {
+    potentialAxis = 'high';
+  } else if (
+    skillAddsLast12mo === 0 &&
+    !hasCareerConversation &&
+    person.tenureDays > 548 &&
+    promotionReadiness < 0.3
+  ) {
+    potentialAxis = 'low';
+  } else {
+    potentialAxis = 'mid';
   }
-  if (qualityScore < 40) {
-    return "Book a substantive 1:1 — recent check-ins have been thin on content or overdue.";
-  }
-  return profile.suggestedActions[0] ?? "No urgent action — maintain current cadence.";
+
+  const cell = `${performanceAxis}-${potentialAxis}` as NineBoxCell;
+  const action = ACTIONS[cell].replace('{flightRiskLevel}', flightRiskLevel);
+  return { performanceAxis, potentialAxis, cell, action };
 }
 
-// ---------------------------------------------------------------------------
-// Per-person intelligence
-// ---------------------------------------------------------------------------
+// ═══════════════════════════════════════════════════════════════
+// Succession risk
+// ═══════════════════════════════════════════════════════════════
 
-function buildPersonIntelligence(
-  person: Person,
-  events: LeadosEvent[],
-  oneOnOnes: OneOnOne[],
+export function computeSuccessionRisk(person: PersonState, potentialAxis: NineBoxAxis): SuccessionRisk {
+  const isKeyPerson =
+    person.directReports.length >= 3 || /\b(chief|vp|head|director)\b/i.test(person.title) || potentialAxis === 'high';
+  const hasSuccessor = person.successors.length > 0;
+  let timeToReadiness = 'n/a';
+  if (person.successors.length > 0) {
+    timeToReadiness = person.successors.length > 1 ? '6-12 months' : '12-18 months';
+  }
+  let warning: string | null = null;
+  if (isKeyPerson && !hasSuccessor) {
+    warning = `No successor identified for ${person.title}. Single point of failure.`;
+  }
+  return { isKeyPerson, hasSuccessor, timeToReadiness, warning };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Orchestrator — computePersonIntelligence
+// ═══════════════════════════════════════════════════════════════
+
+export function computePersonIntelligence(
+  person: PersonState,
+  allPeople: PersonState[],
+  _events: LeadosEvent[],
   now: Date,
-  profile: PersonProfile
-): PersonIntelligence {
-  const personEvents = events.filter((e) => e.personId === person.id);
-  const personOneOnOnes = oneOnOnes.filter((o) => o.personId === person.id);
+  network?: { pageRankScores: Record<string, number>; maxPageRank: number; bridges: string[]; clusterOf: Record<string, string>; neighborClusters: Record<string, Set<string>> },
+): PersonIntelligenceReport {
+  const trend = computePerformanceTrend(person);
+  const signals = computeConversationSignals(person.oneOnes);
+  const flight = computeFlightRisk(person, now, trend, signals);
+  const burnout = computeBurnoutRisk(person, now, signals);
+  const oneOneQuality = computeOneOneQuality(person, now);
+  const latestPerformanceScore = person.performanceHistory.length
+    ? person.performanceHistory[person.performanceHistory.length - 1].score
+    : null;
+  const nineBox = computeNineBox(person, trend, latestPerformanceScore, signals, flight.level, now);
+  const successionRisk = computeSuccessionRisk(person, nineBox.potentialAxis);
+  const nextOneOneTopics = computeNextOneOneTopics(signals, burnout.score);
 
-  const flightRiskScore = profile.flightRisk.score / 100;
-  const burnoutRiskScore = profile.burnoutIndex / 100;
+  const maxTenure = Math.max(1, ...allPeople.map((p) => p.tenureDays));
+  const estimatedChangeInertia = clamp01(person.tenureDays / maxTenure);
 
-  const { score: oneOnOneQualityScore, daysSinceLast } = QualityScorer.score(personOneOnOnes, personEvents, now);
-
-  const performanceTrend: PerformanceTrendTag =
-    profile.performanceTrend === "up" ? "accelerating" : profile.performanceTrend === "down" ? "declining" : "stable";
-
-  // Life stage: individual career-maturity composite (own derivation, see
-  // src/lib/lifeStage.ts#individualCareerMaturity), reusing the exact
-  // stageForScore() ladder from the org-maturity model.
-  const tenureDays = person.tenureStart ? daysBetween(now, toDate(person.tenureStart)) : null;
-  const monthsSincePromotion = person.lastPromotedAt
-    ? daysBetween(now, toDate(person.lastPromotedAt)) / 30
-    : tenureDays
-      ? tenureDays / 30
-      : 24;
-  const { stage: lifeStageTag } = individualCareerMaturity(tenureDays, profile.growthVelocity, monthsSincePromotion);
-
-  // Familiarity: server-safe proxy using event volume as a stand-in for
-  // "how many times this record has been reviewed" (see familiarity.ts).
-  const interactionCount = personEvents.filter((e) => daysBetween(now, toDate(e.occurredAt)) <= 90).length;
-  const resolvedActionItems = personEvents.filter((e) => e.type === "action_item.resolved").length;
-  const familiarity = familiarityScoreFromCounts(interactionCount, resolvedActionItems);
-
-  const retentionRisk = retentionRiskFor(flightRiskScore, burnoutRiskScore);
-
-  // Burnout severity band reused from fatigue.ts's LOW/MODERATE/HIGH/CRITICAL
-  // taxonomy (levelFor), applied to the 0-100 burnout index rather than a
-  // decision-fatigue score — demonstrates the threshold ladder is reusable
-  // generic banding logic, not decision-specific.
-  void levelFor(profile.burnoutIndex);
-
-  const lastActionItemEvent = [...personEvents]
-    .filter((e) => e.type === "action_item.logged")
-    .sort((a, b) => toDate(b.occurredAt).getTime() - toDate(a.occurredAt).getTime())[0];
-  const lastActionItemTitle =
-    lastActionItemEvent && typeof lastActionItemEvent.data?.title === "string"
-      ? (lastActionItemEvent.data.title as string)
-      : null;
+  let networkCentrality = 0;
+  let isBottleneck = false;
+  let bridgeCount = 0;
+  if (network) {
+    const raw = network.pageRankScores[person.id] ?? 0;
+    networkCentrality = network.maxPageRank > 0 ? clamp01(raw / network.maxPageRank) : 0;
+    isBottleneck = network.bridges.includes(person.id);
+    bridgeCount = network.neighborClusters[person.id]?.size ?? 0;
+  }
 
   return {
     personId: person.id,
     name: person.name,
-    role: person.role,
-    flightRiskScore,
-    flightRiskDrivers: topFlightRiskDrivers(profile.flightRisk),
-    burnoutRiskScore,
-    burnoutDrivers: topBurnoutDrivers(personEvents, now),
-    performanceTrend,
-    oneOnOneQualityScore,
-    daysSinceLastOneOnOne: daysSinceLast,
-    lifeStageTag,
-    familiarity,
-    retentionRisk,
-    suggestedAction: suggestedActionFor(profile, flightRiskScore, burnoutRiskScore, oneOnOneQualityScore),
-    nextOneOnOneTopics: nextOneOnOneTopics({
-      flightRiskScore,
-      burnoutRiskScore,
-      performanceTrend,
-      daysSinceLastOneOnOne: daysSinceLast,
-      lastActionItemTitle,
-    }),
+    title: person.title,
+    flightRiskScore: flight.score,
+    flightRiskDrivers: flight.drivers,
+    flightRiskLevel: flight.level,
+    burnoutRiskScore: burnout.score,
+    burnoutDrivers: burnout.drivers,
+    latestPerformanceScore,
+    performanceTrend: trend,
+    oneOneQuality,
+    conversationSignals: signals,
+    nextOneOneTopics,
+    nineBoxPlacement: nineBox.cell,
+    performanceAxis: nineBox.performanceAxis,
+    potentialAxis: nineBox.potentialAxis,
+    suggestedAction: nineBox.action,
+    successionRisk,
+    networkCentrality,
+    isBottleneck,
+    bridgeCount,
+    estimatedChangeInertia,
   };
 }
 
-// ---------------------------------------------------------------------------
-// Org design inputs derived from the live roster + relationship graph
-// ---------------------------------------------------------------------------
-
-function deriveOrgDesignInputs(roster: Person[], relationships: RelationshipRecord[]) {
-  const active = roster.filter((p) => !p.archived);
-  const headcount = active.length || 1;
-
-  const reportsTo = relationships.filter((r) => r.type === "reports_to");
-  const managerSpanCounts = new Map<number, number>();
-  reportsTo.forEach((r) => managerSpanCounts.set(r.toId, (managerSpanCounts.get(r.toId) ?? 0) + 1));
-  active.forEach((p) => {
-    if (p.managerId) managerSpanCounts.set(p.managerId, (managerSpanCounts.get(p.managerId) ?? 0) + 1);
-  });
-  const spans = Array.from(managerSpanCounts.values());
-  const avgSpan = spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : Math.max(1, headcount);
-
-  // layers = longest managerId chain depth
-  const byId = new Map(active.map((p) => [p.id, p]));
-  function depthOf(id: number, seen = new Set<number>()): number {
-    if (seen.has(id)) return 0;
-    seen.add(id);
-    const p = byId.get(id);
-    if (!p?.managerId || !byId.has(p.managerId)) return 1;
-    return 1 + depthOf(p.managerId, seen);
-  }
-  const layers = active.length ? Math.max(1, ...active.map((p) => depthOf(p.id))) : 1;
-
-  return { headcount, layers, avgSpan: Math.max(1, avgSpan) };
-}
-
-// ---------------------------------------------------------------------------
-// Canonical entry point
-// ---------------------------------------------------------------------------
-
-export function runPeopleIntelligence(
-  people: Person[],
-  events: LeadosEvent[],
-  oneOnOnes: OneOnOne[],
-  now: Date,
-  relationships: RelationshipRecord[] = []
-): PeopleIntelligenceReport {
-  const roster = people.filter((p) => !p.archived);
-
-  const profiles: PersonProfile[] = roster.map((p) => computePersonProfile(p, events, [], now));
-  const profileById = new Map(profiles.map((p) => [p.id, p]));
-
-  const individuals = roster.map((p) =>
-    buildPersonIntelligence(p, events, oneOnOnes, now, profileById.get(p.id)!)
-  );
-
-  const n = individuals.length || 1;
-  const avgFlightRisk = individuals.reduce((a, p) => a + p.flightRiskScore, 0) / n;
-  const avgBurnoutRisk = individuals.reduce((a, p) => a + p.burnoutRiskScore, 0) / n;
-  const avgOneOnOneQuality = individuals.reduce((a, p) => a + p.oneOnOneQualityScore, 0) / n;
-
-  const performanceDistribution: Record<PerformanceTrendTag, number> = {
-    accelerating: 0,
-    stable: 0,
-    declining: 0,
-  };
-  individuals.forEach((p) => {
-    performanceDistribution[p.performanceTrend] += 1;
-  });
-
-  const highPotentials = identifyHighPotentials(profiles)
-    .sort((a, b) => b.potentialScore - a.potentialScore)
-    .slice(0, 5);
-
-  const successionMaps = buildSuccessionMap(profiles, relationships, roster);
-  const successionGapCount = successionMaps.filter((s) => s.gap).length;
-
-  const keyPersonRisks = computeKeyPersonConcentration(profiles, relationships);
-
-  const orgDesignInputs = deriveOrgDesignInputs(roster, relationships);
-  const orgDesignEfficiency = computeOrgDesign(orgDesignInputs).efficiencyScore;
-
-  const topConcerns = [...individuals]
-    .sort((a, b) => b.flightRiskScore + b.burnoutRiskScore - (a.flightRiskScore + a.burnoutRiskScore))
-    .slice(0, 3)
-    .map((p) => `${p.name} (${p.role}): ${p.flightRiskDrivers[0] ?? p.burnoutDrivers[0] ?? "elevated risk"}`);
-
-  const teamDynamics: TeamDynamicsReport = {
-    avgFlightRisk,
-    avgBurnoutRisk,
-    avgOneOnOneQuality,
-    performanceDistribution,
-    highPotentials,
-    successionGapCount,
-    keyPersonConcentrationCount: keyPersonRisks.length,
-    orgDesignEfficiency,
-    topConcerns,
-  };
-
-  const orgNetworkReport = analyzeOrgNetwork(roster, relationships, events);
-
-  // fastOrgDynamics — cheap O(V+E) Euler-step version, safe to run inline
-  // on every request (see orgODE.ts for the Big-O justification).
-  const orgDynamics = fastOrgDynamics(
-    individuals.map((p) => ({ id: p.personId, flightRiskScore: p.flightRiskScore, burnoutRiskScore: p.burnoutRiskScore })),
-    orgNetworkReport.edgeCount
-      ? buildEdgeListForFastDynamics(roster, relationships, events)
-      : []
-  );
-
-  // teamHealthIndex — own derivation. Weighted blend: inverse average
-  // flight-risk (30%) + inverse average burnout (30%) + average 1:1 quality
-  // (20%) + org network health score from orgNetwork.ts (20%).
-  const teamHealthIndex = clampScore(
-    Math.round(
-      (1 - avgFlightRisk) * 100 * 0.3 +
-        (1 - avgBurnoutRisk) * 100 * 0.3 +
-        avgOneOnOneQuality * 0.2 +
-        orgNetworkReport.healthScore * 0.2
-    )
-  );
-
-  return {
-    teamHealthIndex,
-    individuals,
-    teamDynamics,
-    orgNetworkReport,
-    orgDynamics,
-    generatedAt: now.toISOString(),
-  };
-}
-
-/** Builds the lightweight {a,b,weight} edge list fastOrgDynamics needs,
- *  without running the expensive PageRank/betweenness/clique passes in
- *  orgNetwork.ts — reuses buildNetworkGraph (O(V+E)) only. */
-function buildEdgeListForFastDynamics(
-  roster: Person[],
-  relationships: RelationshipRecord[],
-  events: LeadosEvent[]
-): { a: number; b: number; weight: number }[] {
-  // Reuses orgNetwork's graph builder (pure, O(V+E)) — does NOT run the
-  // expensive PageRank/betweenness/clique passes also in that module.
-  const graph = buildNetworkGraph(roster, relationships, events);
-  return graph.edges.map((e) => ({ a: e.a, b: e.b, weight: e.weight }));
+export function formatTenure(days: number): string {
+  const years = Math.floor(days / 365);
+  const months = Math.floor((days % 365) / 30);
+  if (years === 0 && months === 0) return `${Math.max(1, days)} day${days === 1 ? '' : 's'}`;
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} year${years === 1 ? '' : 's'}`);
+  if (months > 0) parts.push(`${months} month${months === 1 ? '' : 's'}`);
+  return parts.join(' ');
 }
