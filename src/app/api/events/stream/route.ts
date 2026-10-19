@@ -1,80 +1,46 @@
-import { pickRuleSubset, runOrchestrator } from "@/lib/orchestrator";
-import type { FindingsDeltaEvent } from "@/lib/types";
+import { logDuration } from "@/lib/apiUtils";
 
 export const dynamic = "force-dynamic";
 
-const TICK_MS = 10_000;
+const ROUTE = "api/events/stream";
 const HEARTBEAT_MS = 15_000;
 
-function sseFrame(event: string, data: unknown): string {
-  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-}
-
-export async function GET(request: Request) {
+/**
+ * Minimal Server-Sent-Events endpoint. Pushes a `connected` event immediately
+ * and a `heartbeat` event on an interval, so clients (see useOrchestrator)
+ * can show a live/offline indicator without needing a message broker.
+ */
+export async function GET() {
+  const start = Date.now();
   const encoder = new TextEncoder();
-  let tickTimer: ReturnType<typeof setInterval> | undefined;
-  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
 
-  const stream = new ReadableStream<Uint8Array>({
+  const stream = new ReadableStream({
     start(controller) {
-      const safeEnqueue = (chunk: string) => {
+      controller.enqueue(
+        encoder.encode(`event: connected\ndata: ${JSON.stringify({ connectedAt: new Date().toISOString() })}\n\n`)
+      );
+      heartbeat = setInterval(() => {
         try {
-          controller.enqueue(encoder.encode(chunk));
+          controller.enqueue(
+            encoder.encode(`event: heartbeat\ndata: ${JSON.stringify({ ts: new Date().toISOString() })}\n\n`)
+          );
         } catch {
-          // controller already closed; ignore.
+          clearInterval(heartbeat);
         }
-      };
-
-      safeEnqueue(sseFrame("connected", { ok: true, at: new Date().toISOString() }));
-
-      tickTimer = setInterval(async () => {
-        try {
-          const subset = pickRuleSubset(3);
-          const result = await runOrchestrator({ ruleSubset: subset });
-          const delta: FindingsDeltaEvent = {
-            type: "findings_delta",
-            generatedAt: result.generatedAt,
-            orgHealthScore: result.orgHealthScore,
-            priorOrgHealthScore: result.priorOrgHealthScore,
-            domainScores: result.domainScores,
-            findings: result.findings,
-            ruleEvaluations: result.ruleEvaluations,
-            heatmap: result.heatmap,
-          };
-          safeEnqueue(sseFrame("findings_delta", delta));
-        } catch (error) {
-          console.error("SSE tick failed", error);
-        }
-      }, TICK_MS);
-
-      heartbeatTimer = setInterval(() => {
-        safeEnqueue(`: heartbeat ${Date.now()}\n\n`);
       }, HEARTBEAT_MS);
-
-      const abort = () => {
-        if (tickTimer) clearInterval(tickTimer);
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
-        try {
-          controller.close();
-        } catch {
-          // already closed
-        }
-      };
-
-      request.signal.addEventListener("abort", abort);
     },
     cancel() {
-      if (tickTimer) clearInterval(tickTimer);
-      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (heartbeat) clearInterval(heartbeat);
     },
   });
 
+  logDuration(ROUTE, start);
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
     },
   });
 }

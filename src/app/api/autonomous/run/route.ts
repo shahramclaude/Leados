@@ -1,44 +1,77 @@
 import { db } from "@/db";
-import { runAgentCycle } from "@/lib/autonomousAgent";
+import { hypotheses as hypothesesTable, notifications as notificationsTable } from "@/db/schema";
+import { fetchOrchestrationDataset } from "@/lib/dataset.server";
+import { runFullOrchestration } from "@/lib/orchestrator";
+import { generateFlightRiskHypothesis, type DedupeKeyed } from "@/lib/hypotheses";
+import { isPlainObject, jsonError, logDuration, safeParseJson } from "@/lib/apiUtils";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/autonomous/run
-// Triggers one full agent cycle on demand: orchestration -> rule
-// calibration -> hypothesis generation -> hypothesis resolution. Returns
-// the structured agent audit log entry plus a summary of the run.
-//
-// Note: this on-demand endpoint complements (not replaces) the true
-// interval-based schedule started via `scheduleLoop()` in
-// src/lib/autonomousAgent.ts.
-export async function POST() {
-  try {
-    const cycle = await runAgentCycle(db);
+const ROUTE = "api/autonomous/run";
 
-    return Response.json({
-      ok: true,
-      audit: cycle.audit,
-      orchestration: {
-        runId: cycle.orchestration.runId,
-        startedAt: cycle.orchestration.startedAt,
-        durationMs: cycle.orchestration.durationMs,
-        stagesCompleted: cycle.orchestration.stagesCompleted,
-        findingsCount: cycle.orchestration.findingsCount,
-        findings: cycle.orchestration.findings,
-      },
-      calibration: cycle.calibration,
-      hypothesesGenerated: cycle.hypothesesGenerated,
-      hypothesesResolved: cycle.hypothesesResolved,
-    });
-  } catch (error) {
-    console.error("[api/autonomous/run] failed", error);
-    return Response.json(
-      { ok: false, error: error instanceof Error ? error.message : "unknown error" },
-      { status: 500 },
-    );
+export async function POST(req: Request) {
+  const start = Date.now();
+
+  // Enforce CRON_SECRET when configured, so this endpoint can be wired up to
+  // an external scheduler without being publicly triggerable.
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const provided = req.headers.get("x-cron-secret") ?? "";
+    if (provided !== cronSecret) {
+      logDuration(ROUTE, start);
+      return jsonError(401, "UNAUTHORIZED", "Missing or invalid cron secret.");
+    }
   }
-}
 
-export async function GET() {
-  return POST();
+  const body = await safeParseJson(req);
+  if (body === undefined) {
+    logDuration(ROUTE, start);
+    return jsonError(400, "INVALID_JSON", "Request body must be valid JSON.");
+  }
+  if (body !== null && !isPlainObject(body)) {
+    logDuration(ROUTE, start);
+    return jsonError(400, "INVALID_BODY", "Request body must be a JSON object (or empty).");
+  }
+
+  try {
+    const dataset = await fetchOrchestrationDataset();
+    const result = runFullOrchestration(dataset);
+
+    const existingDedupeKeys: DedupeKeyed[] = dataset.hypotheses.map((h) => ({ dedupeKey: h.dedupeKey }));
+    let newHypotheses = 0;
+
+    for (const person of result.people) {
+      const candidate = generateFlightRiskHypothesis(person.id, person.name, person.flightRisk, existingDedupeKeys);
+      if (!candidate) continue;
+
+      await db.insert(hypothesesTable).values({
+        id: candidate.id,
+        personId: candidate.personId,
+        type: candidate.type,
+        title: candidate.title,
+        sev: candidate.sev,
+        status: "open",
+        dedupeKey: candidate.dedupeKey,
+      });
+      await db.insert(notificationsTable).values({
+        domain: "people",
+        title: candidate.title,
+        message: `Autonomous run flagged ${person.name} for elevated flight risk.`,
+        sev: candidate.sev,
+      });
+
+      existingDedupeKeys.push({ dedupeKey: candidate.dedupeKey });
+      newHypotheses += 1;
+    }
+
+    const refreshedDataset = newHypotheses > 0 ? await fetchOrchestrationDataset() : dataset;
+    const refreshedResult = newHypotheses > 0 ? runFullOrchestration(refreshedDataset) : result;
+
+    logDuration(ROUTE, start);
+    return Response.json({ ok: true, newHypotheses, result: refreshedResult });
+  } catch (err) {
+    console.error(`[${ROUTE}] error`, err);
+    logDuration(ROUTE, start);
+    return jsonError(503, "DB_UNAVAILABLE", "Autonomous run failed.");
+  }
 }

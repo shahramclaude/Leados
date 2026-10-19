@@ -1,7 +1,5 @@
-import SignalBoardView from "@/views/SignalBoardView";
-
-export const dynamic = "force-dynamic";
+import SignalsView from "@/views/SignalsView";
 
 export default function SignalsPage() {
-  return <SignalBoardView />;
+  return <SignalsView />;
 }

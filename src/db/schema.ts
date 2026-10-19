@@ -1,122 +1,118 @@
-// ---------------------------------------------------------------------------
-// Leados schema
-// ---------------------------------------------------------------------------
-// NOTE ON THIS SNAPSHOT: Part 7 ("Execution Intelligence") asks us to read
-// src/lib/metricsEngine.ts, predictiveScoring.ts, simulation.ts, physics.ts,
-// emergent.ts, riskIntelligence.ts, stakeholders.ts and the existing
-// project/task/sprint tables before writing. None of those files/tables
-// exist in this repository snapshot (the project only contains the base
-// Next.js + Drizzle starter) — there is no prior "org physics" model to
-// reuse, so the delivery-confidence formula below implements the literal
-// fallback spec from the task description. The `people` and `events`
-// tables are added here as the minimal shared primitives those future
-// engines (and this one) depend on.
-// ---------------------------------------------------------------------------
-
-import {
-  pgEnum,
-  pgTable,
-  serial,
-  integer,
-  text,
-  real,
-  timestamp,
-  jsonb,
-} from "drizzle-orm/pg-core";
-
-// ---------------------------------------------------------------------------
-// Shared primitives
-// ---------------------------------------------------------------------------
+import { pgTable, text, real, boolean, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
+import { randomUUID } from "crypto";
 
 export const people = pgTable("people", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
   name: text("name").notNull(),
-  email: text("email"),
-  role: text("role"),
-  domain: text("domain"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  role: text("role").notNull(),
+  team: text("team").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Generic event log used by the various intelligence engines (metrics,
-// risk, execution, ...) to reason about recency/velocity of activity.
 export const events = pgTable("events", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  personId: text("person_id")
+    .notNull()
+    .references(() => people.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
-  domain: text("domain"),
-  projectId: integer("project_id"),
-  personId: integer("person_id").references(() => people.id),
-  payload: jsonb("payload"),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+  weight: real("weight").notNull().default(1),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ---------------------------------------------------------------------------
-// Execution Intelligence tables
-// ---------------------------------------------------------------------------
+export const oneOnOnes = pgTable("one_on_ones", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  personId: text("person_id")
+    .notNull()
+    .references(() => people.id, { onDelete: "cascade" }),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  actionItemsTotal: integer("action_items_total").notNull().default(0),
+  actionItemsCompleted: integer("action_items_completed").notNull().default(0),
+});
 
-export const projectStatusEnum = pgEnum("project_status", [
-  "planning",
-  "active",
-  "blocked",
-  "complete",
-]);
+export const decisions = pgTable("decisions", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  title: text("title").notNull(),
+  domain: text("domain").notNull(),
+  status: text("status").notNull().default("open"),
+  sev: integer("sev").notNull().default(3),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
-export const milestoneStatusEnum = pgEnum("milestone_status", [
-  "pending",
-  "done",
-  "overdue",
-]);
-
-export const dependencyTypeEnum = pgEnum("dependency_type", [
-  "blocks",
-  "enables",
-  "shares_resource",
-]);
+export const scenarios = pgTable("scenarios", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  title: text("title").notNull(),
+  domain: text("domain").notNull(),
+  status: text("status").notNull().default("active"),
+  sev: integer("sev").notNull().default(3),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const projects = pgTable("projects", {
-  id: serial("id").primaryKey(),
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
   name: text("name").notNull(),
-  domain: text("domain").notNull(),
-  ownerId: integer("owner_id").references(() => people.id),
-  startDate: timestamp("start_date", { withTimezone: true }),
-  targetDate: timestamp("target_date", { withTimezone: true }),
-  status: projectStatusEnum("status").notNull().default("planning"),
-  confidence: integer("confidence").notNull().default(100),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  dependsOn: jsonb("depends_on").$type<string[]>().notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const milestones = pgTable("milestones", {
-  id: serial("id").primaryKey(),
-  projectId: integer("project_id")
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  projectId: text("project_id")
     .notNull()
-    .references(() => projects.id),
+    .references(() => projects.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
-  dueDate: timestamp("due_date", { withTimezone: true }),
-  status: milestoneStatusEnum("status").notNull().default("pending"),
-  completedAt: timestamp("completed_at", { withTimezone: true }),
+  dueDate: timestamp("due_date", { withTimezone: true }).notNull(),
+  completed: boolean("completed").notNull().default(false),
 });
 
 export const blockers = pgTable("blockers", {
-  id: serial("id").primaryKey(),
-  projectId: integer("project_id")
-    .notNull()
-    .references(() => projects.id),
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
   title: text("title").notNull(),
-  severity: integer("severity").notNull(),
-  reportedBy: integer("reported_by").references(() => people.id),
-  assignedTo: integer("assigned_to").references(() => people.id),
-  domain: text("domain"),
-  reportedAt: timestamp("reported_at", { withTimezone: true }).defaultNow().notNull(),
-  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  domain: text("domain").notNull(),
+  projectId: text("project_id").references(() => projects.id, { onDelete: "set null" }),
+  status: text("status").notNull().default("open"),
+  sev: integer("sev").notNull().default(3),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const crossDependencies = pgTable("cross_dependencies", {
-  id: serial("id").primaryKey(),
-  fromProject: integer("from_project")
+export const hypotheses = pgTable("hypotheses", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  personId: text("person_id")
     .notNull()
-    .references(() => projects.id),
-  toProject: integer("to_project")
-    .notNull()
-    .references(() => projects.id),
-  type: dependencyTypeEnum("type").notNull(),
-  strength: real("strength").notNull().default(1),
+    .references(() => people.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  sev: integer("sev").notNull().default(3),
+  status: text("status").notNull().default("open"),
+  dedupeKey: text("dedupe_key").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const okrs = pgTable("okrs", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  title: text("title").notNull(),
+  domain: text("domain").notNull(),
+  progress: real("progress").notNull().default(0),
+  timeElapsed: real("time_elapsed").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const notifications = pgTable("notifications", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  domain: text("domain").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  sev: integer("sev").notNull().default(3),
+  read: boolean("read").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const financeSnapshots = pgTable("finance_snapshots", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  startingCash: real("starting_cash").notNull(),
+  monthlyBurn: real("monthly_burn").notNull(),
+  burnStdDev: real("burn_std_dev").notNull(),
+  monthlyRevenue: real("monthly_revenue").notNull(),
+  revenueGrowthRate: real("revenue_growth_rate").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

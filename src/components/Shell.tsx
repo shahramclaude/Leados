@@ -1,110 +1,131 @@
-import type { ReactNode } from 'react';
-import type { CognitiveLoadResult } from '../lib/cognitiveLoad';
+"use client";
 
-export type Route = 'today' | 'hypothesis' | 'emergent' | 'agent' | 'log' | 'about';
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState, type ReactNode } from "react";
+import { useAppContext } from "@/lib/AppContext";
+import { NAV_ITEMS } from "@/lib/nav";
+import CommandPalette from "./CommandPalette";
+import NotificationTray from "./NotificationTray";
 
-const NAV: { id: Route; label: string }[] = [
-  { id: 'today', label: 'Today' },
-  { id: 'hypothesis', label: 'Hypothesis Engine' },
-  { id: 'emergent', label: 'Emergent Patterns' },
-  { id: 'agent', label: 'Autonomous Agent' },
-  { id: 'log', label: 'Event Log' },
-  { id: 'about', label: 'About / Provenance' },
-];
-
-function loadBadgeClasses(level: CognitiveLoadResult['level']) {
-  if (level === 'HIGH') return 'bg-rose-50 text-rose-700 border-rose-200';
-  if (level === 'MEDIUM') return 'bg-amber-50 text-amber-700 border-amber-200';
-  return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+function isActiveRoute(pathname: string | null, href: string): boolean {
+  if (!pathname) return false;
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function Shell({
-  route,
-  onNavigate,
-  cognitiveLoad,
-  children,
-}: {
-  route: Route;
-  onNavigate: (r: Route) => void;
-  cognitiveLoad: CognitiveLoadResult;
-  children: ReactNode;
-}) {
+export default function Shell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  // Shell must render cleanly even before the first orchestrator fetch
+  // resolves — `result` starts out null and every read below is guarded.
+  const { result, lastUpdated, sseConnected, isRunning, triggerRun } = useAppContext();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [trayOpen, setTrayOpen] = useState(false);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+      if (e.key === "Escape") {
+        setPaletteOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const unreadCount = result ? result.notifications.filter((n) => !n.read).length : 0;
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
-              pt-V
-            </div>
-            <div>
-              <div className="text-sm font-semibold leading-tight text-slate-900">LeadOS · Self-Sovereign Intelligence</div>
-              <div className="text-xs leading-tight text-slate-500">Sandbox build — see About for provenance</div>
-            </div>
-          </div>
-          <div
-            className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${loadBadgeClasses(cognitiveLoad.level)}`}
-            title={cognitiveLoad.label}
-          >
-            <span className="relative flex h-2 w-2">
-              <span
-                className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  cognitiveLoad.level === 'HIGH' ? 'animate-ping bg-rose-500' : ''
-                }`}
-              />
-              <span
-                className={`relative inline-flex h-2 w-2 rounded-full ${
-                  cognitiveLoad.level === 'HIGH' ? 'bg-rose-500' : cognitiveLoad.level === 'MEDIUM' ? 'bg-amber-500' : 'bg-emerald-500'
-                }`}
-              />
-            </span>
-            Cognitive load: {cognitiveLoad.level} ({cognitiveLoad.score})
-          </div>
+    <div className="flex min-h-screen bg-[#0a0c10] text-slate-100">
+      <nav className="sticky top-0 flex h-screen w-16 flex-col items-center justify-between border-r border-slate-800 bg-[#0d1016] py-4">
+        <div className="flex flex-col items-center gap-3">
+          {NAV_ITEMS.map((item) => {
+            const active = isActiveRoute(pathname, item.href);
+            const badge = result?.domainHealth[item.domain]?.criticalFindings ?? 0;
+            return (
+              <div key={item.href} className="group relative flex flex-col items-center">
+                <Link
+                  href={item.href}
+                  className={`relative flex h-10 w-10 items-center justify-center rounded-lg text-lg transition-colors ${
+                    active ? "bg-indigo-500/10 text-indigo-400" : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <span aria-hidden>{item.icon}</span>
+                  {badge > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+                      {badge}
+                    </span>
+                  )}
+                  <span className="sr-only">{item.label}</span>
+                </Link>
+                <span className={`mt-1 h-1.5 w-1.5 rounded-full ${active ? "bg-indigo-400" : "bg-transparent"}`} />
+                <span className="pointer-events-none absolute left-14 z-20 whitespace-nowrap rounded bg-slate-800 px-2 py-1 text-xs text-slate-100 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
         </div>
-        <nav className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6 pb-2">
-          {NAV.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => onNavigate(n.id)}
-              className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                route === n.id ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {n.label}
-            </button>
-          ))}
-        </nav>
-      </header>
-      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
-      <footer className="mx-auto max-w-7xl px-6 pb-10 pt-4 text-xs text-slate-400">
-        State lives only in this browser's localStorage (key <code className="rounded bg-slate-100 px-1 py-0.5">leados-ptv:v1</code>). No network calls, no accounts.
-      </footer>
-    </div>
-  );
-}
+        <div className="flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void triggerRun()}
+            disabled={isRunning}
+            title="Trigger autonomous run"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-lg text-amber-400 hover:bg-amber-500/10 disabled:opacity-40"
+          >
+            <span aria-hidden>{isRunning ? "\u2026" : "\u26A1"}</span>
+            <span className="sr-only">Trigger autonomous run</span>
+          </button>
+          <Link
+            href="/about"
+            title="Settings"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-lg text-slate-400 hover:text-slate-200"
+          >
+            <span aria-hidden>{"\u2699"}</span>
+            <span className="sr-only">Settings</span>
+          </Link>
+        </div>
+      </nav>
 
-export function Panel({ title, subtitle, children, dense }: { title: string; subtitle?: string; children: ReactNode; dense?: boolean }) {
-  return (
-    <section className={`rounded-xl border border-slate-200 bg-white shadow-sm ${dense ? 'p-4' : 'p-6'}`}>
-      <div className="mb-3">
-        <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-        {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
+      <div className="flex min-h-screen flex-1 flex-col">
+        <header className="flex items-center justify-end gap-3 border-b border-slate-800 bg-[#0d1016] px-6 py-3">
+          <span className="text-xs text-slate-500">
+            {sseConnected ? "\u25CF live" : "\u25CB offline"}
+            {lastUpdated ? ` \u00b7 updated ${lastUpdated.toLocaleTimeString()}` : " \u00b7 loading\u2026"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:border-slate-500"
+          >
+            {"\u2318K search"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setTrayOpen((v) => !v)}
+            className="relative flex h-9 w-9 items-center justify-center rounded-lg text-lg text-slate-300 hover:bg-slate-800"
+            aria-label="Notifications"
+          >
+            <span aria-hidden>{"\uD83D\uDD14"}</span>
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        </header>
+        <main className="flex-1 bg-[#10131a] p-6">{children}</main>
       </div>
-      {children}
-    </section>
-  );
-}
 
-export function Label({ children }: { children: ReactNode }) {
-  return <p className="mt-2 rounded-md bg-slate-50 px-2 py-1.5 text-xs leading-relaxed text-slate-500">{children}</p>;
-}
-
-export function Stat({ label, value, tone }: { label: string; value: string | number; tone?: 'ok' | 'warn' | 'bad' }) {
-  const color = tone === 'bad' ? 'text-rose-600' : tone === 'warn' ? 'text-amber-600' : 'text-slate-900';
-  return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${color}`}>{value}</div>
+      {paletteOpen && (
+        <CommandPalette onClose={() => setPaletteOpen(false)} onNavigate={(href) => router.push(href)} />
+      )}
+      <NotificationTray open={trayOpen} onClose={() => setTrayOpen(false)} />
     </div>
   );
 }

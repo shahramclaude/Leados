@@ -1,136 +1,98 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { FindingsDeltaEvent, OrchestratorResult } from "@/lib/types";
-
-const RECONNECT_BASE_MS = 1_000;
-const RECONNECT_CAP_MS = 30_000;
+import { useCallback, useEffect, useState } from "react";
+import type { OrchestratorResult } from "./types";
 
 export interface UseOrchestratorState {
-  /** Full orchestrator payload — see `OrchestratorResult` in src/lib/types.ts */
   result: OrchestratorResult | null;
   lastUpdated: Date | null;
-  connected: boolean;
-  running: boolean;
+  sseConnected: boolean;
+  isRunning: boolean;
   error: string | null;
+  refresh: () => Promise<void>;
   triggerRun: () => Promise<void>;
 }
 
-async function fetchFullResult(): Promise<OrchestratorResult> {
-  const res = await fetch("/api/orchestrate", { cache: "no-store" });
-  if (!res.ok) throw new Error(`GET /api/orchestrate failed (${res.status})`);
-  return (await res.json()) as OrchestratorResult;
+interface ApiErrorBody {
+  error?: string;
 }
 
+async function readErrorMessage(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as ApiErrorBody;
+    return body?.error ?? `Request failed with status ${res.status}`;
+  } catch {
+    return `Request failed with status ${res.status}`;
+  }
+}
+
+const POLL_INTERVAL_MS = 30_000;
+
 /**
- * Connects to the Part 1 SSE endpoint (`/api/events/stream`), keeps a live
- * `OrchestratorResult` in memory, and merges `findings_delta` events into it.
- * Auto-reconnects with exponential backoff (capped at 30s) and re-fetches
- * the full result on mount and on every reconnect.
+ * Single hook that owns all orchestrator data-fetching for the whole app.
+ * Every view and the Shell read from AppContext (which wraps this hook) —
+ * no view fetches /api/orchestrator on its own.
  */
 export function useOrchestrator(): UseOrchestratorState {
   const [result, setResult] = useState<OrchestratorResult | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [running, setRunning] = useState(false);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sourceRef = useRef<EventSource | null>(null);
-  const reconnectDelayRef = useRef(RECONNECT_BASE_MS);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef(true);
-
-  const refetchFull = useCallback(async () => {
+  const refresh = useCallback(async () => {
     try {
-      const data = await fetchFullResult();
-      if (!mountedRef.current) return;
+      const res = await fetch("/api/orchestrator", { cache: "no-store" });
+      if (!res.ok) throw new Error(await readErrorMessage(res));
+      const data = (await res.json()) as OrchestratorResult;
       setResult(data);
-      setLastUpdated(new Date(data.generatedAt));
+      setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load orchestrator result");
+      setError(err instanceof Error ? err.message : "Failed to load orchestrator data.");
+    }
+  }, []);
+
+  const triggerRun = useCallback(async () => {
+    setIsRunning(true);
+    try {
+      const res = await fetch("/api/autonomous/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "manual" }),
+      });
+      if (!res.ok) throw new Error(await readErrorMessage(res));
+      const data = (await res.json()) as { result: OrchestratorResult };
+      setResult(data.result);
+      setLastUpdated(new Date());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to trigger autonomous run.");
+    } finally {
+      setIsRunning(false);
     }
   }, []);
 
   useEffect(() => {
-    mountedRef.current = true;
+    void refresh();
+    const id = setInterval(() => void refresh(), POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [refresh]);
 
-    const connect = () => {
-      if (!mountedRef.current) return;
-      const source = new EventSource("/api/events/stream");
-      sourceRef.current = source;
-
-      source.addEventListener("connected", () => {
-        if (!mountedRef.current) return;
-        setConnected(true);
-        reconnectDelayRef.current = RECONNECT_BASE_MS;
-        // Re-fetch the full result on every (re)connect.
-        void refetchFull();
-      });
-
-      source.addEventListener("findings_delta", (event) => {
-        if (!mountedRef.current) return;
-        try {
-          const payload = JSON.parse((event as MessageEvent).data) as FindingsDeltaEvent;
-          setResult((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              generatedAt: payload.generatedAt,
-              orgHealthScore: payload.orgHealthScore,
-              priorOrgHealthScore: payload.priorOrgHealthScore,
-              domainScores: payload.domainScores,
-              findings: payload.findings,
-              ruleEvaluations: payload.ruleEvaluations,
-              heatmap: payload.heatmap,
-            };
-          });
-          setLastUpdated(new Date(payload.generatedAt));
-        } catch (err) {
-          console.error("Failed to parse findings_delta payload", err);
-        }
-      });
-
-      source.onerror = () => {
-        if (!mountedRef.current) return;
-        setConnected(false);
-        source.close();
-        if (sourceRef.current === source) sourceRef.current = null;
-
-        const delay = reconnectDelayRef.current;
-        reconnectDelayRef.current = Math.min(delay * 2, RECONNECT_CAP_MS);
-        reconnectTimerRef.current = setTimeout(connect, delay);
-      };
-    };
-
-    // Initial full fetch (so the UI has data even before the stream opens).
-    void refetchFull();
-    connect();
-
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof EventSource === "undefined") return;
+    const source = new EventSource("/api/events/stream");
+    const markConnected = () => setSseConnected(true);
+    const markDisconnected = () => setSseConnected(false);
+    source.addEventListener("connected", markConnected);
+    source.addEventListener("heartbeat", markConnected);
+    source.onerror = markDisconnected;
     return () => {
-      mountedRef.current = false;
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      sourceRef.current?.close();
-      sourceRef.current = null;
+      source.removeEventListener("connected", markConnected);
+      source.removeEventListener("heartbeat", markConnected);
+      source.close();
     };
-  }, [refetchFull]);
-
-  const triggerRun = useCallback(async () => {
-    setRunning(true);
-    try {
-      const res = await fetch("/api/orchestrate", { method: "POST" });
-      if (!res.ok) throw new Error(`POST /api/orchestrate failed (${res.status})`);
-      const data = (await res.json()) as OrchestratorResult;
-      setResult(data);
-      setLastUpdated(new Date(data.generatedAt));
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to run orchestrator");
-    } finally {
-      setRunning(false);
-    }
   }, []);
 
-  return { result, lastUpdated, connected, running, error, triggerRun };
+  return { result, lastUpdated, sseConnected, isRunning, error, refresh, triggerRun };
 }

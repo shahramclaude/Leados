@@ -1,79 +1,139 @@
-// ---------------------------------------------------------------------------
-// Shared domain types for the Leados intelligence engines.
-//
-// This snapshot does not contain src/lib/metricsEngine.ts, predictiveScoring.ts,
-// simulation.ts, physics.ts, emergent.ts, riskIntelligence.ts or
-// stakeholders.ts — those engines from earlier parts are not present in this
-// repository, so these types are defined fresh to match the shapes described
-// in the Part 7 task spec (Project/Milestone/Blocker/CrossDependency/Person/
-// LeadosEvent).
-// ---------------------------------------------------------------------------
+// Shared, view-facing domain types for the Leados cognitive workspace.
+// These types are intentionally free of any Node/DB imports so they can be
+// safely imported from client components and from src/lib/selfTest.ts.
 
-export type Domain = string;
+export const DOMAINS = [
+  "cockpit",
+  "people",
+  "strategic",
+  "financial",
+  "execution",
+  "signals",
+  "hypotheses",
+  "about",
+] as const;
 
-export type ProjectId = number;
+export type DomainKey = (typeof DOMAINS)[number];
 
-export interface Person {
-  id: number;
-  name: string;
-  email: string | null;
-  role: string | null;
-  domain: Domain | null;
-}
+export type Severity = 1 | 2 | 3 | 4 | 5;
 
-export interface LeadosEvent {
-  id: number;
-  type: string;
-  domain: Domain | null;
-  projectId: number | null;
-  personId: number | null;
-  payload: unknown;
-  occurredAt: string;
-}
+export type HealthStatus = "healthy" | "at_risk" | "critical";
 
-export type ProjectStatus = "planning" | "active" | "blocked" | "complete";
-
-export interface Project {
-  id: ProjectId;
-  name: string;
-  domain: Domain;
-  ownerId: number | null;
-  startDate: string | null;
-  targetDate: string | null;
-  status: ProjectStatus;
-  confidence: number;
+export interface Finding {
+  id: string;
+  domain: DomainKey;
+  sev: Severity;
+  title: string;
+  detail: string;
+  status: "open" | "resolved";
   createdAt: string;
 }
 
-export type MilestoneStatus = "pending" | "done" | "overdue";
-
-export interface Milestone {
-  id: number;
-  projectId: ProjectId;
-  title: string;
-  dueDate: string | null;
-  status: MilestoneStatus;
-  completedAt: string | null;
+export interface DomainHealth {
+  domain: DomainKey;
+  score: number;
+  status: HealthStatus;
+  criticalFindings: number;
+  findingCount: number;
 }
 
-export interface Blocker {
-  id: number;
-  projectId: ProjectId;
-  title: string;
-  severity: number;
-  reportedBy: number | null;
-  assignedTo: number | null;
-  domain: Domain | null;
-  reportedAt: string;
-  resolvedAt: string | null;
+export interface PersonSummary {
+  id: string;
+  name: string;
+  role: string;
+  team: string;
+  flightRisk: number;
+  oneOnOneQuality: number;
+  daysSinceLastOneOnOne: number | null;
 }
 
-export type DependencyType = "blocks" | "enables" | "shares_resource";
+export interface DecisionSummary {
+  id: string;
+  title: string;
+  domain: DomainKey;
+  status: "open" | "closed";
+  sev: Severity;
+  createdAt: string;
+}
 
-export interface CrossDependency {
-  id: number;
-  fromProject: ProjectId;
-  toProject: ProjectId;
-  type: DependencyType;
-  strength: number;
+export interface ScenarioSummary {
+  id: string;
+  title: string;
+  domain: DomainKey;
+  status: "active" | "archived";
+  sev: Severity;
+  createdAt: string;
+}
+
+export interface BlockerSummary {
+  id: string;
+  title: string;
+  domain: DomainKey;
+  projectId: string | null;
+  status: "open" | "resolved";
+  sev: Severity;
+  createdAt: string;
+}
+
+export interface HypothesisSummary {
+  id: string;
+  personId: string;
+  personName: string;
+  type: string;
+  title: string;
+  sev: Severity;
+  status: "open" | "dismissed" | "confirmed";
+  createdAt: string;
+}
+
+export type OkrStatus = "on_track" | "at_risk" | "off_track";
+
+export interface OkrSummary {
+  id: string;
+  title: string;
+  domain: DomainKey;
+  progress: number;
+  timeElapsed: number;
+  score: number;
+  status: OkrStatus;
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  deliveryConfidence: number;
+  overdueMilestones: number;
+  criticalBlockers: number;
+}
+
+export interface NotificationSummary {
+  id: string;
+  domain: DomainKey;
+  title: string;
+  message: string;
+  sev: Severity;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface MonteCarloResult {
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
+export interface OrchestratorResult {
+  generatedAt: string;
+  domainHealth: Record<DomainKey, DomainHealth>;
+  findings: Finding[];
+  people: PersonSummary[];
+  decisions: DecisionSummary[];
+  scenarios: ScenarioSummary[];
+  blockers: BlockerSummary[];
+  hypotheses: HypothesisSummary[];
+  okrs: OkrSummary[];
+  projects: ProjectSummary[];
+  criticalPath: string[];
+  notifications: NotificationSummary[];
+  monteCarlo: MonteCarloResult | null;
 }
