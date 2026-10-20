@@ -1,78 +1,113 @@
-export type RouteDef = {
-  key: string;
-  label: string;
-  href: string;
-  description: string;
-  icon: string;
-};
+// LEADOS route registry — the single source of truth for every page route
+// and API route in the application.
+//
+// RULE (enforced by process, checked by docs/AUDIT-2026.md and by eye on
+// every PR until a lint rule can walk the `app/` directory tree): every
+// entry in `src/app/**/page.tsx` and `src/app/**/route.ts` MUST have a
+// matching row here, and every row here MUST have a matching file on disk.
+// README.md's route tables are generated from this file's data, not typed
+// by hand, so they cannot drift from it.
+//
+// status:
+//   "live"    — renders/returns real data backed by a repository + use case
+//   "partial" — renders real data for some but not all of its surface
+//   "stub"    — placeholder only, no backing engine
+export type RouteStatus = "live" | "partial" | "stub";
 
-export type RouteSection = {
-  key: "now" | "understand" | "act";
-  label: string;
+export interface PageRouteEntry {
+  kind: "page";
+  path: string;
+  file: string;
+  domain: string;
+  status: RouteStatus;
   description: string;
-  routes: RouteDef[];
-};
+}
 
-/**
- * The entire information architecture in one place: three tiers (Now /
- * Understand / Act), each a real, data-backed view — nothing here points at
- * a ComingSoon stub. NavBar, the command palette and breadcrumbs all read
- * from this single source so IA changes never drift out of sync.
- */
-export const ROUTE_SECTIONS: RouteSection[] = [
+export interface ApiRouteEntry {
+  kind: "api";
+  path: string;
+  file: string;
+  methods: Array<"GET" | "POST" | "PUT" | "PATCH" | "DELETE">;
+  domain: string;
+  status: RouteStatus;
+  description: string;
+}
+
+export type RouteEntry = PageRouteEntry | ApiRouteEntry;
+
+export const routes: RouteEntry[] = [
   {
-    key: "now",
-    label: "Now",
-    description: "Today's decisions and attention",
-    routes: [
-      {
-        key: "now",
-        label: "Today",
-        href: "/now",
-        description: "The highest-severity decisions, signals and blockers that need you today.",
-        icon: "☀️",
-      },
-    ],
+    kind: "page",
+    path: "/",
+    file: "src/app/page.tsx",
+    domain: "dashboard",
+    status: "live",
+    description:
+      "Operating-system home: organization/leader counts and recent event log, read from Postgres via getDashboardSummary().",
   },
   {
-    key: "understand",
-    label: "Understand",
-    description: "People, metrics, signals, knowledge, hypotheses",
-    routes: [
-      { key: "people", label: "People", href: "/understand/people", description: "Sentiment, engagement and flight risk across the org.", icon: "🧑‍🤝‍🧑" },
-      { key: "metrics", label: "Metrics", href: "/understand/metrics", description: "Core leading and lagging indicators with forecasts.", icon: "📊" },
-      { key: "signals", label: "Signals", href: "/understand/signals", description: "Anomalies and emerging risks detected across sources.", icon: "📡" },
-      { key: "knowledge", label: "Knowledge", href: "/understand/knowledge", description: "The collaboration network and how work really flows.", icon: "🧠" },
-      { key: "hypotheses", label: "Hypotheses", href: "/understand/hypotheses", description: "Standing beliefs about the business and their evidence.", icon: "🔬" },
-    ],
+    kind: "page",
+    path: "/organizations",
+    file: "src/app/organizations/page.tsx",
+    domain: "organizations",
+    status: "live",
+    description: "List existing organizations and create a new one (server action).",
   },
   {
-    key: "act",
-    label: "Act",
-    description: "Execution, strategy, financials, playbooks, decisions",
-    routes: [
-      { key: "execution", label: "Execution", href: "/act/execution", description: "Cross-team delivery status and blockers.", icon: "🚀" },
-      { key: "strategic", label: "Strategic", href: "/act/strategic", description: "Portfolio health against strategic bets.", icon: "🧭" },
-      { key: "financial", label: "Financial", href: "/act/financial", description: "Revenue bridge, budget and burn.", icon: "💰" },
-      { key: "playbooks", label: "Playbooks", href: "/act/playbooks", description: "Automated responses to recurring situations.", icon: "📘" },
-      { key: "decisions", label: "Decisions", href: "/act/decisions", description: "Open decisions awaiting a leadership call.", icon: "✅" },
-    ],
+    kind: "page",
+    path: "/leaders",
+    file: "src/app/leaders/page.tsx",
+    domain: "leaders",
+    status: "live",
+    description: "List registered leaders with their computed readiness score and band.",
+  },
+  {
+    kind: "page",
+    path: "/leaders/new",
+    file: "src/app/leaders/new/page.tsx",
+    domain: "leaders",
+    status: "live",
+    description:
+      "Register a leader: form inputs feed the pure readinessEngine via the registerLeader use case.",
+  },
+  {
+    kind: "api",
+    path: "/api/health",
+    file: "src/app/api/health/route.ts",
+    methods: ["GET"],
+    domain: "platform",
+    status: "live",
+    description: "Liveness probe: validates config and runs `select 1` against Postgres.",
+  },
+  {
+    kind: "api",
+    path: "/api/organizations",
+    file: "src/app/api/organizations/route.ts",
+    methods: ["GET", "POST"],
+    domain: "organizations",
+    status: "live",
+    description: "List/create organizations. Thin wrapper over the organizations use cases.",
+  },
+  {
+    kind: "api",
+    path: "/api/leaders",
+    file: "src/app/api/leaders/route.ts",
+    methods: ["GET", "POST"],
+    domain: "leaders",
+    status: "live",
+    description: "List/register leaders. Thin wrapper over the leaders use cases.",
   },
 ];
 
-export const ALL_ROUTES: RouteDef[] = ROUTE_SECTIONS.flatMap((s) => s.routes);
+export function findMismatches(onDiskPaths: string[]): {
+  missingOnDisk: RouteEntry[];
+  undocumented: string[];
+} {
+  const registered = new Set(routes.map((r) => r.file));
+  const onDisk = new Set(onDiskPaths);
 
-export function findRouteByHref(href: string): RouteDef | undefined {
-  return ALL_ROUTES.find((r) => href === r.href || href.startsWith(`${r.href}/`));
-}
-
-export function breadcrumbsFor(href: string): { label: string; href?: string }[] {
-  const route = findRouteByHref(href);
-  if (!route) return [{ label: "LEADOS" }];
-  const section = ROUTE_SECTIONS.find((s) => s.routes.some((r) => r.key === route.key));
-  return [
-    { label: "LEADOS", href: "/now" },
-    ...(section ? [{ label: section.label }] : []),
-    { label: route.label, href: route.href },
-  ];
+  return {
+    missingOnDisk: routes.filter((r) => !onDisk.has(r.file)),
+    undocumented: onDiskPaths.filter((p) => !registered.has(p)),
+  };
 }
