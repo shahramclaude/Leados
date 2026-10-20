@@ -1,27 +1,18 @@
-// src/instrumentation.ts
-//
-// Starts the autonomous agent scheduler once per server process. Next.js
-// calls `register()` a single time when the server boots (Node.js runtime
-// only — guarded below since this file also loads under the edge runtime
-// during build analysis).
-
+// Runs once when the Next.js server starts (Node runtime only). We use it to
+// drive the webhook retry/backoff loop so deliveries that failed actually
+// get retried without requiring an external cron in local/dev/demo mode.
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  if (process.env.AGENT_SCHEDULER_DISABLED === "true") return;
 
-  const globalForScheduler = globalThis as typeof globalThis & {
-    __leadosAgentSchedulerStarted?: boolean;
+  const globalForTimers = globalThis as typeof globalThis & {
+    __leadosWebhookRetryTimer?: ReturnType<typeof setInterval>;
   };
-  if (globalForScheduler.__leadosAgentSchedulerStarted) return;
-  globalForScheduler.__leadosAgentSchedulerStarted = true;
 
-  const { db } = await import("@/db");
-  const { start, DEFAULT_SCHEDULER_CONFIG } = await import("@/lib/agentScheduler");
+  if (globalForTimers.__leadosWebhookRetryTimer) return;
 
-  try {
-    start(DEFAULT_SCHEDULER_CONFIG, db);
-    console.log("[instrumentation] autonomous agent scheduler started");
-  } catch (err) {
-    console.error("[instrumentation] failed to start autonomous agent scheduler", err);
-  }
+  const { processDueRetries } = await import("@/lib/platform/webhooks");
+
+  globalForTimers.__leadosWebhookRetryTimer = setInterval(() => {
+    processDueRetries().catch((err) => console.error("webhook retry loop failed", err));
+  }, 5_000);
 }

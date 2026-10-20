@@ -1,21 +1,12 @@
-// LEADOS — Part 9: Universality (i18n, multi-tenant, RBAC, PWA, inclusive access)
+// LEADOS Platform schema — Part 10: API, Webhooks, Integrations & SDK.
 //
-// This sandbox starts from the bare `nextjs-postgresql-template` (no
-// earlier-part tables exist here — same situation Part 8's own schema
-// comment describes). The slice below is deep enough to prove every Part 9
-// mechanism for real against Postgres:
-//   - multi-tenant isolation (every domain row carries `orgId`)
-//   - RBAC (role lives on the membership, not on the user)
-//   - per-org theming / terminology / feature flags
-//   - offline queue idempotency + optimistic-concurrency conflict detection
-//   - push notification subscriptions
-//
-// Every future table that holds tenant data MUST include `orgId` and every
-// repository function MUST take `orgId` as a mandatory (not optional)
-// parameter — enforced by convention here and by
-// `scripts/test-tenant-isolation.ts`.
-
+// This introduces the persistence primitives the public API surface needs:
+// API tokens (auth + scopes + rate limits), idempotency records, webhook
+// subscriptions/deliveries, the automation "runs" job kernel, and a small
+// representative domain (decisions / findings) + an append-only event log
+// that both the realtime (SSE) API and the webhook dispatcher read from.
 import {
+  bigserial,
   boolean,
   index,
   integer,
@@ -24,133 +15,180 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-
-const id = () =>
-  text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID());
 
 // ---------------------------------------------------------------------------
-// Organizations (tenants) — white-label + i18n + feature-flag anchor
+// Auth: API tokens scoped per organisation.
 // ---------------------------------------------------------------------------
-
-export const organizations = pgTable("organizations", {
-  id: id(),
-  slug: text("slug").notNull().unique(),
-  name: text("name").notNull(),
-  logoUrl: text("logo_url"),
-  accentColor: text("accent_color").notNull().default("#4f46e5"),
-  // Glossary overrides, e.g. { "team": "Squad", "manager": "Lead" }.
-  terminology: jsonb("terminology").$type<Record<string, string>>().notNull().default({}),
-  defaultLocale: text("default_locale").notNull().default("en-US"),
-  timezone: text("timezone").notNull().default("UTC"),
-  currency: text("currency").notNull().default("USD"),
-  sampleDataEnabled: boolean("sample_data_enabled").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const orgFeatureFlags = pgTable(
-  "org_feature_flags",
+export const apiTokens = pgTable(
+  "api_tokens",
   {
-    id: id(),
-    orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    key: text("key").notNull(),
-    enabled: boolean("enabled").notNull().default(true),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("org_feature_flags_org_key_idx").on(table.orgId, table.key)],
-);
-
-// ---------------------------------------------------------------------------
-// Identity & RBAC — role lives on the membership (one user, many orgs)
-// ---------------------------------------------------------------------------
-
-export const users = pgTable("users", {
-  id: id(),
-  email: text("email").notNull().unique(),
-  name: text("name").notNull(),
-  locale: text("locale").notNull().default("en-US"),
-  highContrast: boolean("high_contrast").notNull().default(false),
-  textScale: integer("text_scale").notNull().default(100), // percent, 100-200
-  plainLanguage: boolean("plain_language").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// admin | executive | hr | manager | contributor | viewer — see src/lib/domain/rbac.ts
-export const memberships = pgTable(
-  "memberships",
-  {
-    id: id(),
-    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    role: text("role").notNull().default("viewer"),
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: text("org_id").notNull(),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    tokenPrefix: text("token_prefix").notNull(),
+    scopes: text("scopes").array().notNull().default(["read"]),
+    rateLimitPerMinute: integer("rate_limit_per_minute").notNull().default(120),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("memberships_user_org_idx").on(table.userId, table.orgId),
-    index("memberships_org_idx").on(table.orgId),
+    uniqueIndex("api_tokens_token_hash_idx").on(table.tokenHash),
+    index("api_tokens_org_idx").on(table.orgId),
   ],
 );
 
 // ---------------------------------------------------------------------------
-// Findings — a minimal tenant-scoped domain table used to prove isolation,
-// RBAC, offline idempotency (clientMutationId) and optimistic concurrency.
+// Idempotency: dedupes writes made with the same Idempotency-Key header.
 // ---------------------------------------------------------------------------
+export const idempotencyRecords = pgTable(
+  "idempotency_records",
+  {
+    key: text("key").notNull(),
+    orgId: text("org_id").notNull(),
+    route: text("route").notNull(),
+    requestHash: text("request_hash").notNull(),
+    statusCode: integer("status_code").notNull(),
+    responseBody: jsonb("response_body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("idempotency_org_key_idx").on(table.orgId, table.key)],
+);
+
+// ---------------------------------------------------------------------------
+// Core representative domain: decisions & findings.
+// ---------------------------------------------------------------------------
+export const decisions = pgTable(
+  "decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: text("org_id").notNull(),
+    title: text("title").notNull(),
+    status: text("status").notNull().default("open"),
+    owner: text("owner"),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("decisions_org_idx").on(table.orgId),
+    index("decisions_org_created_idx").on(table.orgId, table.createdAt),
+  ],
+);
 
 export const findings = pgTable(
   "findings",
   {
-    id: id(),
-    orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    domain: text("domain").notNull().default("general"),
-    team: text("team").notNull().default("General"),
-    severity: integer("severity").notNull().default(1), // 1 (low) .. 5 (critical)
-    status: text("status").notNull().default("open"), // open | resolved
-    summary: text("summary").notNull().default(""),
-    isSample: boolean("is_sample").notNull().default(false),
-    // Idempotency key supplied by the offline write queue so a replayed
-    // mutation never creates a duplicate row.
-    clientMutationId: text("client_mutation_id"),
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: text("org_id").notNull(),
+    decisionId: uuid("decision_id").references(() => decisions.id, { onDelete: "set null" }),
+    summary: text("summary").notNull(),
+    severity: text("severity").notNull().default("info"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("findings_org_idx").on(table.orgId),
-    uniqueIndex("findings_org_mutation_idx")
-      .on(table.orgId, table.clientMutationId)
-      .where(sql`${table.clientMutationId} is not null`),
+    index("findings_org_created_idx").on(table.orgId, table.createdAt),
   ],
 );
 
 // ---------------------------------------------------------------------------
-// Push notification subscriptions (Web Push / PWA)
+// Automation API: idempotent job/run kernel used for external orchestration.
 // ---------------------------------------------------------------------------
-
-export const pushSubscriptions = pgTable(
-  "push_subscriptions",
+export const runs = pgTable(
+  "runs",
   {
-    id: id(),
-    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
-    endpoint: text("endpoint").notNull().unique(),
-    p256dh: text("p256dh").notNull(),
-    auth: text("auth").notNull(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: text("org_id").notNull(),
+    type: text("type").notNull(),
+    status: text("status").notNull().default("queued"),
+    idempotencyKey: text("idempotency_key"),
+    input: jsonb("input").notNull().default({}),
+    output: jsonb("output"),
+    error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
   },
-  (table) => [index("push_subscriptions_user_idx").on(table.userId)],
+  (table) => [
+    uniqueIndex("runs_org_idempotency_idx").on(table.orgId, table.idempotencyKey),
+    index("runs_org_created_idx").on(table.orgId, table.createdAt),
+  ],
 );
 
-export type Organization = typeof organizations.$inferSelect;
-export type NewOrganization = typeof organizations.$inferInsert;
-export type OrgFeatureFlag = typeof orgFeatureFlags.$inferSelect;
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
-export type Membership = typeof memberships.$inferSelect;
-export type NewMembership = typeof memberships.$inferInsert;
-export type Finding = typeof findings.$inferSelect;
-export type NewFinding = typeof findings.$inferInsert;
-export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+// ---------------------------------------------------------------------------
+// Append-only event log — backs the realtime SSE API and webhook dispatch.
+// ---------------------------------------------------------------------------
+export const platformEvents = pgTable(
+  "platform_events",
+  {
+    seq: bigserial("seq", { mode: "number" }).primaryKey(),
+    id: uuid("id").notNull().defaultRandom(),
+    orgId: text("org_id").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("platform_events_org_seq_idx").on(table.orgId, table.seq)],
+);
+
+// ---------------------------------------------------------------------------
+// Webhooks: subscriptions + delivery log with retry/backoff & dead letter.
+// ---------------------------------------------------------------------------
+export const webhookSubscriptions = pgTable(
+  "webhook_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: text("org_id").notNull(),
+    url: text("url").notNull(),
+    secret: text("secret").notNull(),
+    eventTypes: text("event_types").array().notNull(),
+    active: boolean("active").notNull().default(true),
+    description: text("description"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("webhook_subscriptions_org_idx").on(table.orgId)],
+);
+
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => webhookSubscriptions.id, { onDelete: "cascade" }),
+    orgId: text("org_id").notNull(),
+    eventType: text("event_type").notNull(),
+    eventId: uuid("event_id").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: text("status").notNull().default("pending"), // pending|delivered|retrying|dead_letter
+    attempt: integer("attempt").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(6),
+    responseStatus: integer("response_status"),
+    responseBody: text("response_body"),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("webhook_deliveries_sub_idx").on(table.subscriptionId),
+    index("webhook_deliveries_status_idx").on(table.status, table.nextRetryAt),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Reference integration: Slack notification bridge delivery log.
+// ---------------------------------------------------------------------------
+export const slackNotifications = pgTable("slack_notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: text("org_id").notNull(),
+  channelOverride: text("channel_override"),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("sent"),
+  responseStatus: integer("response_status"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

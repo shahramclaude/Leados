@@ -1,0 +1,665 @@
+{
+  "info": {
+    "name": "LEADOS Platform API",
+    "description": "LEADOS public API v1. See docs/API.md for the full guide (auth, pagination, idempotency, webhooks, realtime, automation, deprecation policy).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "leados_token",
+      "value": "lead_sk_replace_with_real_token"
+    }
+  ],
+  "item": [
+    {
+      "name": "GET /api/v1/decisions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/decisions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "decisions"
+          ]
+        },
+        "description": "List decisions (cursor-paginated)"
+      }
+    },
+    {
+      "name": "POST /api/v1/decisions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/decisions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "decisions"
+          ]
+        },
+        "description": "Create a decision",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Adopt the new pricing tier\",\n  \"status\": \"open\",\n  \"owner\": \"vp-sales\"\n}"
+        }
+      }
+    },
+    {
+      "name": "GET /api/v1/decisions/{id}",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/decisions/:id",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "decisions",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "REPLACE_ME"
+            }
+          ]
+        },
+        "description": "Get a decision (supports ETag / If-None-Match)"
+      }
+    },
+    {
+      "name": "PATCH /api/v1/decisions/{id}",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/decisions/:id",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "decisions",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "REPLACE_ME"
+            }
+          ]
+        },
+        "description": "Update a decision"
+      }
+    },
+    {
+      "name": "DELETE /api/v1/decisions/{id}",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/decisions/:id",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "decisions",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "REPLACE_ME"
+            }
+          ]
+        },
+        "description": "Delete a decision"
+      }
+    },
+    {
+      "name": "GET /api/v1/findings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/findings",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "findings"
+          ]
+        },
+        "description": "List findings (cursor-paginated)"
+      }
+    },
+    {
+      "name": "POST /api/v1/findings",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/findings",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "findings"
+          ]
+        },
+        "description": "Create a finding",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"summary\": \"Churn risk detected in enterprise segment\",\n  \"severity\": \"warning\"\n}"
+        }
+      }
+    },
+    {
+      "name": "POST /api/v1/runs",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/runs",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "runs"
+          ]
+        },
+        "description": "Trigger an automation run (idempotent on Idempotency-Key)",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"digest_summary\",\n  \"input\": {}\n}"
+        }
+      }
+    },
+    {
+      "name": "GET /api/v1/runs",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/runs",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "runs"
+          ]
+        },
+        "description": "List runs"
+      }
+    },
+    {
+      "name": "GET /api/v1/runs/{id}",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/runs/:id",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "runs",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "REPLACE_ME"
+            }
+          ]
+        },
+        "description": "Poll a run's status"
+      }
+    },
+    {
+      "name": "GET /api/v1/events/stream",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/events/stream",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "events",
+            "stream"
+          ]
+        },
+        "description": "Server-Sent Events stream of platform events, resumable via Last-Event-ID"
+      }
+    },
+    {
+      "name": "GET /api/v1/webhooks/subscriptions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "subscriptions"
+          ]
+        },
+        "description": "List webhook subscriptions"
+      }
+    },
+    {
+      "name": "POST /api/v1/webhooks/subscriptions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "subscriptions"
+          ]
+        },
+        "description": "Create a webhook subscription",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://example.com/webhooks/leados\",\n  \"eventTypes\": [\n    \"decision.created\",\n    \"run.completed\"\n  ]\n}"
+        }
+      }
+    },
+    {
+      "name": "DELETE /api/v1/webhooks/subscriptions/{id}",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions/:id",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "subscriptions",
+            ":id"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "REPLACE_ME"
+            }
+          ]
+        },
+        "description": "Deactivate a webhook subscription"
+      }
+    },
+    {
+      "name": "GET /api/v1/webhooks/deliveries",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/deliveries",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "deliveries"
+          ]
+        },
+        "description": "List webhook delivery attempts (delivery log)"
+      }
+    },
+    {
+      "name": "POST /api/v1/webhooks/deliveries/{id}/retry",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/deliveries/:id/retry",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "deliveries",
+            ":id",
+            "retry"
+          ],
+          "variable": [
+            {
+              "key": "id",
+              "value": "REPLACE_ME"
+            }
+          ]
+        },
+        "description": "Force an immediate retry of a delivery"
+      }
+    },
+    {
+      "name": "POST /api/v1/webhooks/sandbox",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/sandbox",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "sandbox"
+          ]
+        },
+        "description": "Sandbox endpoint for testing webhook delivery + HMAC signatures (no auth required)"
+      }
+    },
+    {
+      "name": "POST /api/v1/integrations/slack/notify",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{leados_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/integrations/slack/notify",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "integrations",
+            "slack",
+            "notify"
+          ]
+        },
+        "description": "Send a Slack notification via the actuation layer (reference integration)",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message\": \"LEADOS: new critical finding raised\"\n}"
+        }
+      }
+    },
+    {
+      "name": "POST /api/v1/tokens",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/tokens",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "tokens"
+          ]
+        },
+        "description": "Create an API token (dev/bootstrap helper — protect this route in production)",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orgId\": \"org_demo\",\n  \"name\": \"CI token\",\n  \"scopes\": [\n    \"read\",\n    \"write\",\n    \"automation\",\n    \"webhooks\",\n    \"realtime\"\n  ]\n}"
+        }
+      }
+    },
+    {
+      "name": "GET /api/health",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        },
+        "description": "Liveness/readiness probe"
+      }
+    },
+    {
+      "name": "GET /api/stats",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/stats",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "stats"
+          ]
+        },
+        "description": "Public aggregate stats that power the status page"
+      }
+    }
+  ]
+}
