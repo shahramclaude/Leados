@@ -1,101 +1,174 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useApp } from "@/lib/AppContext";
-import { DOMAIN_META, severityColor, timeAgo } from "@/lib/domains";
-import type { NotificationItem } from "@/lib/types";
+// Slide-over notification list. Implements a minimal windowed/virtualized
+// list (fixed row height, render only the visible slice + overscan) so the
+// DOM node count stays flat regardless of history size — required by the
+// performance budget ("virtualize notification lists").
 
-export default function NotificationDrawer() {
-  const { notificationDrawerOpen, setNotificationDrawerOpen, lastUpdated } = useApp();
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+import { useMemo, useRef, useState } from "react";
+import { useNotificationStoreState } from "@/hooks/useNotificationStoreState";
+import { patchNotificationStatus, type StoreNotification } from "@/lib/store/notificationStore";
+import { useNowTick, formatRelativeTime } from "@/hooks/useNowTick";
 
-  useEffect(() => {
-    if (!notificationDrawerOpen) return;
-    setLoading(true);
-    fetch("/api/notifications")
-      .then((r) => r.json())
-      .then((data: { notifications: NotificationItem[] }) => setNotifications(data.notifications))
-      .finally(() => setLoading(false));
-  }, [notificationDrawerOpen, lastUpdated]);
+const ROW_HEIGHT = 112;
+const VIEWPORT_HEIGHT = 480;
+const OVERSCAN = 4;
 
-  if (!notificationDrawerOpen) return null;
+const SEVERITY_LABEL: Record<number, string> = {
+  1: "Low",
+  2: "Minor",
+  3: "Moderate",
+  4: "High",
+  5: "Critical",
+};
 
-  async function markAllRead() {
-    await fetch("/api/notifications/read-all", { method: "PATCH" });
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }
+const DELIVERY_LABEL: Record<string, string> = {
+  interrupt: "Interrupted you",
+  digest: "Batched to digest",
+  suppressed: "Suppressed",
+  in_app: "In-app",
+};
 
-  const grouped = new Map<string, NotificationItem[]>();
-  for (const n of notifications) {
-    const list = grouped.get(n.domain) ?? [];
-    list.push(n);
-    grouped.set(n.domain, list);
-  }
+async function patchNotification(id: string, body: Record<string, unknown>) {
+  await fetch(`/api/notifications/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function NotificationDrawer({ onClose }: { onClose: () => void }) {
+  const { byId, order, unreadCount } = useNotificationStoreState();
+  const [filter, setFilter] = useState<"all" | "unread" | "archived">("unread");
+  const [scrollTop, setScrollTop] = useState(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const now = useNowTick(15_000);
+
+  const items = useMemo(() => {
+    const all = order.map((id) => byId[id]).filter(Boolean) as StoreNotification[];
+    if (filter === "unread") return all.filter((n) => n.status === "unread");
+    if (filter === "archived") return all.filter((n) => n.status === "archived");
+    return all;
+  }, [byId, order, filter]);
+
+  const totalHeight = items.length * ROW_HEIGHT;
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const visibleCount = Math.ceil(VIEWPORT_HEIGHT / ROW_HEIGHT) + OVERSCAN * 2;
+  const endIndex = Math.min(items.length, startIndex + visibleCount);
+  const visibleItems = items.slice(startIndex, endIndex);
+
+  const markRead = async (n: StoreNotification) => {
+    patchNotificationStatus(n.id, "read");
+    await patchNotification(n.id, { status: "read", feedback: "opened" });
+  };
+  const archive = async (n: StoreNotification) => {
+    patchNotificationStatus(n.id, "archived");
+    await patchNotification(n.id, { status: "archived", feedback: "dismissed" });
+  };
+  const act = async (n: StoreNotification) => {
+    patchNotificationStatus(n.id, "read");
+    await patchNotification(n.id, { status: "read", feedback: "acted" });
+  };
+
+  const readAll = async () => {
+    for (const n of items) if (n.status === "unread") patchNotificationStatus(n.id, "read");
+    await fetch("/api/notifications/read-all", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  };
 
   return (
-    <div className="fixed inset-0 z-[65]">
-      <div className="absolute inset-0 bg-black/50" onClick={() => setNotificationDrawerOpen(false)} />
-      <div className="leados-slide-in absolute right-0 top-0 h-full w-full border-l border-slate-700 bg-[#0d1016] shadow-2xl sm:w-[360px]">
-        <div className="flex h-10 items-center justify-between border-b border-slate-800 px-3">
-          <span className="font-mono text-xs tracking-widest text-slate-300">NOTIFICATIONS</span>
-          <div className="flex items-center gap-3">
-            <button onClick={markAllRead} className="font-mono text-[10px] text-indigo-400 hover:text-indigo-300">
-              MARK ALL READ
-            </button>
-            <button
-              onClick={() => setNotificationDrawerOpen(false)}
-              className="flex h-8 w-8 items-center justify-center text-slate-400 hover:text-slate-100"
-              aria-label="Close"
-            >
-              ✕
-            </button>
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30" onClick={onClose}>
+      <div
+        className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Notifications</h2>
+            <p className="text-xs text-slate-500">{unreadCount} unread</p>
           </div>
+          <button onClick={onClose} aria-label="Close" className="rounded-full p-2 text-slate-500 hover:bg-slate-100">
+            ✕
+          </button>
         </div>
-        <div className="h-[calc(100%-2.5rem)] overflow-y-auto">
-          {loading && <div className="p-4 font-mono text-xs text-slate-500">LOADING…</div>}
-          {!loading && notifications.length === 0 && (
-            <div className="p-6 text-center font-mono text-xs text-slate-500">NO NOTIFICATIONS</div>
-          )}
-          {Array.from(grouped.entries()).map(([domain, items]) => (
-            <div key={domain}>
-              <div className="sticky top-0 bg-[#0d1016] px-3 py-1.5 font-mono text-[9px] tracking-widest text-slate-500">
-                {DOMAIN_META[domain as keyof typeof DOMAIN_META]?.label.toUpperCase() ?? domain.toUpperCase()}
-              </div>
-              {items.map((n) => {
-                const expanded = expandedId === n.id;
+
+        <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-2">
+          {(["unread", "all", "archived"] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                filter === f ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {f[0].toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+          <button onClick={readAll} className="ml-auto text-xs font-medium text-indigo-600 hover:underline">
+            Mark all read
+          </button>
+        </div>
+
+        <div
+          ref={containerRef}
+          onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+          className="relative flex-1 overflow-y-auto"
+          style={{ height: VIEWPORT_HEIGHT }}
+        >
+          {items.length === 0 ? (
+            <p className="p-6 text-sm text-slate-500">Nothing here.</p>
+          ) : (
+            <div style={{ height: totalHeight, position: "relative" }}>
+              {visibleItems.map((n, i) => {
+                const index = startIndex + i;
                 return (
-                  <button
+                  <div
                     key={n.id}
-                    onClick={() => setExpandedId(expanded ? null : n.id)}
-                    className="block w-full border-b border-slate-800/70 px-3 py-2.5 text-left"
-                    style={{
-                      borderLeft: n.read ? "2px solid transparent" : `2px solid ${severityColor(n.severity)}`,
-                    }}
+                    style={{ position: "absolute", top: index * ROW_HEIGHT, left: 0, right: 0, height: ROW_HEIGHT }}
+                    className="border-b border-slate-100 px-5 py-3"
                   >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="rounded px-1.5 py-0.5 font-mono text-[9px] font-bold text-black"
-                        style={{ backgroundColor: severityColor(n.severity) }}
-                      >
-                        SEV {n.severity}
-                      </span>
-                      <span
-                        className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: DOMAIN_META[domain as keyof typeof DOMAIN_META]?.color }}
-                      />
-                      <span className="flex-1 truncate text-sm text-slate-100">{n.title}</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {n.status === "unread" && <span className="h-2 w-2 shrink-0 rounded-full bg-indigo-600" />}
+                          <p className="truncate text-sm font-medium text-slate-900">{n.title}</p>
+                          {n.occurrenceCount > 1 && (
+                            <span className="shrink-0 rounded-full bg-slate-100 px-1.5 text-[10px] font-semibold text-slate-600">
+                              ×{n.occurrenceCount}
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-xs text-slate-500">{n.body}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {SEVERITY_LABEL[n.severity] ?? n.severity} · {n.domain} · {DELIVERY_LABEL[n.delivery] ?? n.delivery} ·{" "}
+                          {formatRelativeTime(n.createdAt, now)}
+                        </p>
+                        <p className="mt-1 truncate text-[11px] italic text-slate-400" title={n.reason}>
+                          why: {n.reason || "default in-app delivery"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-1">
+                        {n.status !== "archived" && (
+                          <>
+                            {n.status === "unread" && (
+                              <button onClick={() => markRead(n)} className="text-[11px] font-medium text-indigo-600 hover:underline">
+                                Read
+                              </button>
+                            )}
+                            <button onClick={() => act(n)} className="text-[11px] font-medium text-emerald-600 hover:underline">
+                              Acted
+                            </button>
+                            <button onClick={() => archive(n)} className="text-[11px] font-medium text-slate-500 hover:underline">
+                              Archive
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-1 flex items-center justify-between gap-2">
-                      <p className={`text-xs text-slate-400 ${expanded ? "" : "truncate"}`}>{n.message}</p>
-                      <span className="shrink-0 font-mono text-[9px] text-slate-500">{timeAgo(n.createdAt)}</span>
-                    </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
-          ))}
+          )}
         </div>
       </div>
     </div>
