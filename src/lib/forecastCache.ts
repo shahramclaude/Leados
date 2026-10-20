@@ -1,53 +1,57 @@
-import type { Forecast } from "./types";
-
-// ---------------------------------------------------------------------------
-// forecastCache.ts — process-local memoization for forecasts.
+// src/lib/forecastCache.ts
 //
-// Forecasting (especially Holt-Winters) is the most expensive step in the
-// pipeline. Since `runMetricsIntelligence` can be invoked repeatedly within
-// a short window (API route + orchestrator), we cache the last computed
-// forecast per metric key for a short TTL keyed off the input data
-// fingerprint (point count + last value + last timestamp) so a cache hit is
-// only returned when nothing has actually changed.
-// ---------------------------------------------------------------------------
+// In-process cache for Monte Carlo forecast projections, keyed by a hash of
+// the forecast input. Forecasts are expensive (10k-trial simulations can
+// take tens of milliseconds — see docs/PERFORMANCE.md "Simulation
+// runtimes") and the same input is requested repeatedly as users revisit
+// the metrics dashboard, so caching the projection avoids recomputing it on
+// every page view.
+//
+// Invalidation is EXPLICIT, not time-based: `invalidateForecastCache()` is
+// called from `src/lib/events.ts#recordEvent()` every time a new event is
+// written, because a new event can change the inputs a forecast is derived
+// from (e.g. recomputed growth rate). This trades a slightly more
+// conservative cache (it clears more than strictly necessary) for a
+// guarantee that the dashboard never shows a forecast that is stale with
+// respect to the event log — the thing Part 12's brief explicitly asks for
+// ("cache projections with explicit invalidation on new events").
+import { hashString } from "./mathUtils";
+import type { ForecastInput, ForecastResult } from "./monteCarlo";
 
 interface CacheEntry {
-  fingerprint: string;
-  forecast: Forecast;
+  result: ForecastResult;
   cachedAt: number;
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
 const cache = new Map<string, CacheEntry>();
+let epoch = 0;
+let hits = 0;
+let misses = 0;
 
-export function buildFingerprint(
-  pointCount: number,
-  lastValue: number,
-  lastRecordedAt: Date,
-): string {
-  return `${pointCount}:${lastValue}:${lastRecordedAt.getTime()}`;
+export function forecastCacheKey(input: ForecastInput): string {
+  return `${epoch}:${hashString(JSON.stringify(input))}`;
 }
 
-export function getCachedForecast(
-  metricKey: string,
-  fingerprint: string,
-): Forecast | null {
-  const entry = cache.get(metricKey);
-  if (!entry) return null;
-  if (entry.fingerprint !== fingerprint) return null;
-  if (Date.now() - entry.cachedAt > CACHE_TTL_MS) return null;
-  return entry.forecast;
+export function getCachedForecast(input: ForecastInput): ForecastResult | null {
+  const entry = cache.get(forecastCacheKey(input));
+  if (!entry) {
+    misses += 1;
+    return null;
+  }
+  hits += 1;
+  return entry.result;
 }
 
-export function setCachedForecast(
-  metricKey: string,
-  fingerprint: string,
-  forecast: Forecast,
-): void {
-  cache.set(metricKey, { fingerprint, forecast, cachedAt: Date.now() });
+export function setCachedForecast(input: ForecastInput, result: ForecastResult): void {
+  cache.set(forecastCacheKey(input), { result, cachedAt: Date.now() });
 }
 
-export function clearForecastCache(): void {
+/** Called after every successful event write. Drops all cached projections. */
+export function invalidateForecastCache(): void {
+  epoch += 1;
   cache.clear();
+}
+
+export function forecastCacheStats() {
+  return { size: cache.size, epoch, hits, misses, hitRate: hits + misses === 0 ? 0 : +(hits / (hits + misses)).toFixed(3) };
 }

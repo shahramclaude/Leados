@@ -1,5 +1,4 @@
-import { createFinding, listFindings, ValidationError } from "@/lib/app/findings";
-import { checkAuth } from "@/lib/platform/auth";
+import { createFinding, listFindings, ValidationError } from "@/lib/findings";
 
 export const dynamic = "force-dynamic";
 
@@ -10,16 +9,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = checkAuth(request);
-  if (!auth.ok) return Response.json({ error: auth.message }, { status: auth.status });
-
   let body: unknown;
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
   }
-
   const { title, summary, impact, confidence, effort } = (body ?? {}) as Record<string, unknown>;
   try {
     const finding = await createFinding({
