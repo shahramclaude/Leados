@@ -1,25 +1,55 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { cx } from "./cx";
 
-export interface PageHeaderProps {
-  title: string;
-  subtitle?: string;
-  actions?: ReactNode;
+export interface Breadcrumb {
+  label: string;
+  href?: string;
 }
 
-export default function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
+export interface PageHeaderProps {
+  breadcrumb: Breadcrumb[];
+  title: string;
+  description?: string;
+  /** Exactly one primary action per page, per the IA contract — secondary
+   * actions should live in a DropdownMenu instead of multiplying buttons. */
+  primaryAction?: ReactNode;
+  secondaryActions?: ReactNode;
+  tabs?: ReactNode;
+}
+
+export function PageHeader({ breadcrumb, title, description, primaryAction, secondaryActions, tabs }: PageHeaderProps) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="font-semibold tracking-tight" style={{ color: "var(--text-primary)", fontSize: "var(--fs-2xl)" }}>
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="mt-1" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>
-            {subtitle}
-          </p>
-        )}
+    <header className="flex flex-col gap-[var(--space-4)] border-b border-[var(--border-subtle)] pb-[var(--space-4)]">
+      <nav aria-label="Breadcrumb">
+        <ol className="flex flex-wrap items-center gap-[var(--space-1)] text-[var(--text-xs)] text-[var(--text-muted)]">
+          {breadcrumb.map((crumb, i) => (
+            <li key={crumb.label} className="flex items-center gap-[var(--space-1)]">
+              {i > 0 && <span aria-hidden>/</span>}
+              {crumb.href ? (
+                <Link href={crumb.href} className="hover:text-[var(--text-primary)] hover:underline">
+                  {crumb.label}
+                </Link>
+              ) : (
+                <span aria-current={i === breadcrumb.length - 1 ? "page" : undefined} className={cx(i === breadcrumb.length - 1 && "text-[var(--text-secondary)]")}>
+                  {crumb.label}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </nav>
+      <div className="flex flex-wrap items-start justify-between gap-[var(--space-4)]">
+        <div className="flex flex-col gap-[var(--space-1)]">
+          <h1 className="text-[var(--text-xl)] font-semibold tracking-tight text-[var(--text-primary)]">{title}</h1>
+          {description && <p className="max-w-[var(--measure-prose)] text-[var(--text-sm)] text-[var(--text-muted)]">{description}</p>}
+        </div>
+        <div className="flex items-center gap-[var(--space-2)]">
+          {secondaryActions}
+          {primaryAction}
+        </div>
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
-    </div>
+      {tabs}
+    </header>
   );
 }

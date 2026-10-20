@@ -1,47 +1,39 @@
 import type { ReactNode } from "react";
+import { Button } from "./Button";
 
 export interface EmptyStateProps {
+  icon?: ReactNode;
   title: string;
-  description?: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  illustration?: ReactNode;
+  description: string;
+  action?: { label: string; onClick: () => void };
+  secondaryAction?: { label: string; href: string };
 }
 
-function DefaultIllustration() {
+/** Empty states always name a concrete next step — never a bare "No data." */
+export function EmptyState({ icon, title, description, action, secondaryAction }: EmptyStateProps) {
   return (
-    <svg width="96" height="72" viewBox="0 0 96 72" fill="none" aria-hidden>
-      <rect x="10" y="10" width="30" height="30" rx="4" stroke="var(--border-default)" strokeWidth="1.5" />
-      <circle cx="70" cy="22" r="14" stroke="var(--border-default)" strokeWidth="1.5" />
-      <path d="M20 54l18-18M56 50l20-20" stroke="var(--accent-indigo)" strokeWidth="1.5" strokeLinecap="round" />
-      <rect x="44" y="44" width="22" height="22" rx="4" stroke="var(--accent-blue)" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-export default function EmptyState({ title, description, actionLabel, onAction, illustration }: EmptyStateProps) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed px-6 py-14 text-center" style={{ borderColor: "var(--border-default)" }}>
-      {illustration ?? <DefaultIllustration />}
-      <div>
-        <p className="font-medium" style={{ color: "var(--text-primary)", fontSize: "var(--fs-base)" }}>
-          {title}
-        </p>
-        {description && (
-          <p className="mx-auto mt-1 max-w-sm" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>
-            {description}
-          </p>
+    <div className="flex flex-col items-center gap-[var(--space-3)] rounded-[var(--radius-lg)] border border-dashed border-[var(--border-subtle)] px-[var(--space-6)] py-[var(--space-10)] text-center">
+      {icon && (
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-sunken)] text-[var(--text-muted)]" aria-hidden>
+          {icon}
+        </div>
+      )}
+      <div className="flex flex-col gap-[var(--space-1)]">
+        <h3 className="text-[var(--text-sm)] font-semibold text-[var(--text-primary)]">{title}</h3>
+        <p className="max-w-[var(--measure-prose)] text-[var(--text-xs)] text-[var(--text-muted)]">{description}</p>
+      </div>
+      <div className="flex items-center gap-[var(--space-3)]">
+        {action && (
+          <Button size="sm" onClick={action.onClick}>
+            {action.label}
+          </Button>
+        )}
+        {secondaryAction && (
+          <a href={secondaryAction.href} className="text-[var(--text-xs)] font-medium text-[var(--accent-default)] hover:underline">
+            {secondaryAction.label}
+          </a>
         )}
       </div>
-      {actionLabel && onAction && (
-        <button
-          onClick={onAction}
-          className="rounded-lg px-3.5 py-2 font-medium transition-colors focus-visible:outline-none"
-          style={{ backgroundColor: "var(--accent-blue)", color: "#fff", fontSize: "var(--fs-sm)" }}
-        >
-          {actionLabel}
-        </button>
-      )}
     </div>
   );
 }

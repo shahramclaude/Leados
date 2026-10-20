@@ -1,29 +1,28 @@
 "use client";
 
-import { useRef } from "react";
-import { cn, useStableId } from "./utils";
+import { useRef, type ReactNode } from "react";
+import { cx } from "./cx";
 
 export interface TabItem {
-  key: string;
+  id: string;
   label: string;
-  badge?: string | number;
+  badge?: ReactNode;
 }
 
-export function Tabs({
-  items,
-  value,
-  onChange,
-  className,
-}: {
+export interface TabsProps {
   items: TabItem[];
-  value: string;
-  onChange: (key: string) => void;
-  className?: string;
-}) {
-  const groupId = useStableId("tabs");
-  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+  activeId: string;
+  onChange: (id: string) => void;
+  idPrefix?: string;
+}
 
-  function onKeyDown(e: React.KeyboardEvent, index: number) {
+/** WAI-ARIA tabs with roving tabindex: only the active tab is in the tab
+ * order; ArrowLeft/Right (and Home/End) move focus+selection between tabs. */
+export function Tabs({ items, activeId, onChange, idPrefix = "tabs" }: TabsProps) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    const index = items.findIndex((t) => t.id === activeId);
     let next = index;
     if (e.key === "ArrowRight") next = (index + 1) % items.length;
     else if (e.key === "ArrowLeft") next = (index - 1 + items.length) % items.length;
@@ -31,39 +30,41 @@ export function Tabs({
     else if (e.key === "End") next = items.length - 1;
     else return;
     e.preventDefault();
-    const key = items[next].key;
-    onChange(key);
-    refs.current[key]?.focus();
+    onChange(items[next].id);
+    const btn = listRef.current?.querySelector<HTMLButtonElement>(`#${idPrefix}-tab-${items[next].id}`);
+    btn?.focus();
   }
 
   return (
-    <div role="tablist" aria-label="Section tabs" className={cn("flex items-center gap-1 border-b border-border-subtle", className)}>
-      {items.map((item, i) => {
-        const selected = item.key === value;
+    <div
+      ref={listRef}
+      role="tablist"
+      aria-label="Sections"
+      onKeyDown={onKeyDown}
+      className="flex gap-[var(--space-1)] border-b border-[var(--border-subtle)]"
+    >
+      {items.map((item) => {
+        const selected = item.id === activeId;
         return (
           <button
-            key={item.key}
-            ref={(el) => {
-              refs.current[item.key] = el;
-            }}
+            key={item.id}
+            id={`${idPrefix}-tab-${item.id}`}
             role="tab"
-            id={`${groupId}-tab-${item.key}`}
-            aria-controls={`${groupId}-panel-${item.key}`}
+            type="button"
             aria-selected={selected}
+            aria-controls={`${idPrefix}-panel-${item.id}`}
             tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(item.key)}
-            onKeyDown={(e) => onKeyDown(e, i)}
-            className={cn(
-              "relative flex items-center gap-1.5 px-3 py-2.5 text-body-sm font-medium transition-colors",
-              "duration-[var(--motion-fast)] ease-[var(--ease-standard)]",
-              selected ? "text-accent" : "text-text-tertiary hover:text-text-primary",
+            onClick={() => onChange(item.id)}
+            className={cx(
+              "flex items-center gap-[var(--space-1)] border-b-2 px-[var(--space-3)] py-[var(--space-2)] text-[var(--text-sm)] font-medium transition-colors duration-[var(--duration-fast)]",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]",
+              selected
+                ? "border-[var(--accent-default)] text-[var(--text-primary)]"
+                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)]",
             )}
           >
             {item.label}
-            {item.badge !== undefined ? (
-              <span className="rounded-full bg-surface-sunken px-1.5 text-caption text-text-tertiary">{item.badge}</span>
-            ) : null}
-            {selected ? <span aria-hidden="true" className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent" /> : null}
+            {item.badge}
           </button>
         );
       })}
@@ -71,20 +72,10 @@ export function Tabs({
   );
 }
 
-export function TabPanel({
-  tabsId,
-  tabKey,
-  active,
-  children,
-}: {
-  tabsId: string;
-  tabKey: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  if (!active) return null;
+export function TabPanel({ id, activeId, idPrefix = "tabs", children }: { id: string; activeId: string; idPrefix?: string; children: ReactNode }) {
+  if (id !== activeId) return null;
   return (
-    <div role="tabpanel" id={`${tabsId}-panel-${tabKey}`} aria-labelledby={`${tabsId}-tab-${tabKey}`} tabIndex={0} className="pt-4">
+    <div id={`${idPrefix}-panel-${id}`} role="tabpanel" aria-labelledby={`${idPrefix}-tab-${id}`} tabIndex={0}>
       {children}
     </div>
   );

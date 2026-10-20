@@ -1,54 +1,22 @@
-import { getDecision, updateDecisionBelief, NotFoundError } from "@/lib/app/decisions";
-import { ValidationError } from "@/lib/app/findings";
-import { checkAuth } from "@/lib/platform/auth";
+import { db } from "@/db";
+import { decisions } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const numericId = Number(id);
-  if (!Number.isInteger(numericId)) {
-    return Response.json({ error: "id must be an integer" }, { status: 400 });
-  }
-  const decision = await getDecision(numericId);
-  if (!decision) {
-    return Response.json({ error: "Decision not found" }, { status: 404 });
-  }
-  return Response.json(decision);
-}
-
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = checkAuth(request);
-  if (!auth.ok) return Response.json({ error: auth.message }, { status: auth.status });
-
-  const { id } = await params;
-  const numericId = Number(id);
-  if (!Number.isInteger(numericId)) {
-    return Response.json({ error: "id must be an integer" }, { status: 400 });
-  }
-
-  let body: unknown;
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   try {
-    body = await request.json();
+    const body = await request.json();
+    const [row] = await db
+      .update(decisions)
+      .set({ status: body.status })
+      .where(eq(decisions.id, id))
+      .returning();
+    if (!row) return Response.json({ error: "Not found", errorId: randomUUID() }, { status: 404 });
+    return Response.json({ decision: row });
   } catch {
-    return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
-  }
-
-  const { successes, failures, decide } = (body ?? {}) as Record<string, unknown>;
-  try {
-    const decision = await updateDecisionBelief(numericId, {
-      successes: Number(successes ?? 0),
-      failures: Number(failures ?? 0),
-      decide: Boolean(decide),
-    });
-    return Response.json(decision);
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      return Response.json({ error: error.message }, { status: 400 });
-    }
-    if (error instanceof NotFoundError) {
-      return Response.json({ error: error.message }, { status: 404 });
-    }
-    throw error;
+    return Response.json({ error: "Failed to update decision", errorId: randomUUID() }, { status: 500 });
   }
 }

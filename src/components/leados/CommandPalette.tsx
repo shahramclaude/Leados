@@ -1,300 +1,164 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAppContext } from "@/lib/AppContext";
-import { postJson } from "@/lib/useFetch";
-import { SearchIcon, CloseIcon } from "@/components/leados/icons";
-import type { SearchResultItem } from "@/app/api/search/route";
+import { FLAT_ROUTES } from "@/app/routes";
+import type { SearchResult } from "@/app/api/search/route";
 
-interface PaletteEntry {
-  id: string;
-  group: "Navigate" | "Actions" | "People" | "Decisions" | "Metrics" | "Playbooks" | "Insights" | "Recent";
-  title: string;
-  subtitle?: string;
-  run: () => void;
-}
+const RECENTS_KEY = "leados.command.recents";
+const MAX_RECENTS = 5;
 
-interface RecentEntry {
-  id: string;
-  title: string;
-  subtitle: string;
-  href: string;
-  at: number;
-}
-
-const RECENTS_KEY = "leados.commandPalette.recents";
-const STATIC_VIEWS: Array<{ title: string; href: string; subtitle: string }> = [
-  { title: "Today (Command Center)", href: "/leados", subtitle: "Heads-up display" },
-  { title: "Intelligence", href: "/leados/intelligence", subtitle: "Org health & findings" },
-  { title: "Signal Board", href: "/leados/signals", subtitle: "Rule health across domains" },
-  { title: "People", href: "/leados/people", subtitle: "Org network & 1:1s" },
-  { title: "Decisions", href: "/leados/decisions", subtitle: "Decision log & health" },
-  { title: "Metrics", href: "/leados/metrics", subtitle: "KPI tracking" },
-  { title: "Scenarios", href: "/leados/scenarios", subtitle: "Monte Carlo planning" },
-  { title: "Memory & Insights", href: "/leados/memory", subtitle: "Knowledge graph" },
-  { title: "Playbooks", href: "/leados/playbooks", subtitle: "Standard response plans" },
-  { title: "Work Queue", href: "/leados/queue", subtitle: "Notifications & tasks" },
-  { title: "Settings", href: "/leados/settings", subtitle: "Org profile & preferences" },
-];
-
-function loadRecents(): RecentEntry[] {
-  if (typeof window === "undefined") return [];
+function readRecents(): string[] {
   try {
-    const raw = window.localStorage.getItem(RECENTS_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as RecentEntry[];
+    return JSON.parse(window.localStorage.getItem(RECENTS_KEY) ?? "[]");
   } catch {
     return [];
   }
 }
 
-function pushRecent(entry: RecentEntry) {
-  if (typeof window === "undefined") return;
-  const current = loadRecents().filter((r) => r.id !== entry.id);
-  const next = [entry, ...current].slice(0, 5);
-  window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+function pushRecent(href: string) {
+  const current = readRecents().filter((h) => h !== href);
+  current.unshift(href);
+  window.localStorage.setItem(RECENTS_KEY, JSON.stringify(current.slice(0, MAX_RECENTS)));
 }
 
-// Simple fuzzy scorer: subsequence match with bonus for contiguous runs.
-function fuzzyScore(query: string, target: string): number {
-  if (query === "") return 1;
-  const q = query.toLowerCase();
-  const t = target.toLowerCase();
-  if (t.includes(q)) return 100 - (t.indexOf(q) - 0);
-  let qi = 0;
-  let score = 0;
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) {
-      score += 1;
-      qi++;
-    }
-  }
-  return qi === q.length ? score : -1;
-}
-
-export default function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const router = useRouter();
-  const { toast, refetch } = useAppContext();
+/**
+ * Universal ⌘K entry point: fuzzy route matching, entity search via
+ * /api/search, recent items, fully keyboard-driven (arrow keys + Enter +
+ * Escape). Mounted once in the root layout so it works on every route,
+ * including every /leados/* page.
+ */
+export function CommandPalette() {
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResultItem[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [recents, setRecents] = useState<RecentEntry[]>([]);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [recents, setRecents] = useState<string[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setOpen((v) => !v);
+      } else if (e.key === "Escape" && open) {
+        setOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
 
   useEffect(() => {
     if (open) {
+      setRecents(readRecents());
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } else {
       setQuery("");
+      setResults([]);
       setActiveIndex(0);
-      setRecents(loadRecents());
-      setTimeout(() => inputRef.current?.focus(), 10);
     }
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!query.trim()) {
+      setResults(FLAT_ROUTES.map((r) => ({ id: `route-${r.href}`, kind: "route" as const, title: r.label, subtitle: r.description, href: r.href })));
+      return;
+    }
     const controller = new AbortController();
-    void (async () => {
+    const timeout = setTimeout(async () => {
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
-        if (res.ok) setResults((await res.json()) as SearchResultItem[]);
+        const data = await res.json();
+        setResults(data.results ?? []);
+        setActiveIndex(0);
       } catch {
-        // aborted or network error — ignore
+        // aborted — ignore
       }
-    })();
-    return () => controller.abort();
-  }, [query, open]);
-
-  const navigate = (href: string, title: string, subtitle: string) => {
-    pushRecent({ id: href, title, subtitle, href, at: Date.now() });
-    router.push(href);
-    onClose();
-  };
-
-  const runAction = async (label: string, fn: () => Promise<void>) => {
-    try {
-      await fn();
-      toast(`${label} — done`, 2);
-      refetch();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : `${label} failed`, 4);
-    }
-    onClose();
-  };
-
-  const entries: PaletteEntry[] = useMemo(() => {
-    const list: PaletteEntry[] = [];
-
-    STATIC_VIEWS.forEach((v) => {
-      list.push({
-        id: `view-${v.href}`,
-        group: "Navigate",
-        title: v.title,
-        subtitle: v.subtitle,
-        run: () => navigate(v.href, v.title, v.subtitle),
-      });
-    });
-
-    const trimmed = query.trim();
-    if (trimmed.length > 0) {
-      const lower = trimmed.toLowerCase();
-      if (lower.startsWith("log 1:1") || lower.startsWith("log 1-1") || lower.startsWith("log one")) {
-        list.push({
-          id: "action-log-1on1",
-          group: "Actions",
-          title: `Log 1:1: "${trimmed}"`,
-          subtitle: "Quick-capture as a 1:1 note",
-          run: () => runAction("Log 1:1", async () => { await postJson("/api/capture", { text: trimmed, type: "one_on_one" }); }),
-        });
-      }
-      if (lower.startsWith("add decision") || lower.includes("decide")) {
-        list.push({
-          id: "action-add-decision",
-          group: "Actions",
-          title: `Add decision from: "${trimmed}"`,
-          subtitle: "Create a new decision record",
-          run: () => runAction("Add decision", async () => { await postJson("/api/capture", { text: trimmed, type: "decision" }); }),
-        });
-      }
-      if (lower.startsWith("add metric") || lower.includes("metric")) {
-        list.push({
-          id: "action-add-metric",
-          group: "Actions",
-          title: `Add metric value from: "${trimmed}"`,
-          subtitle: "Route text as a metric update",
-          run: () => runAction("Add metric value", async () => { await postJson("/api/capture", { text: trimmed, type: "metric_update" }); }),
-        });
-      }
-      list.push({
-        id: "action-generate-briefing",
-        group: "Actions",
-        title: "Generate weekly briefing",
-        subtitle: "Recompute the executive summary now",
-        run: () => runAction("Generate briefing", async () => { await fetch("/api/briefing", { cache: "no-store" }); }),
-      });
-      list.push({
-        id: "action-run-playbook",
-        group: "Actions",
-        title: "Run autonomous intelligence pass",
-        subtitle: "Re-evaluate all rules now",
-        run: () => runAction("Autonomous run", async () => { await postJson("/api/autonomous/trigger", {}); }),
-      });
-      list.push({
-        id: "action-new-scenario",
-        group: "Actions",
-        title: "New scenario",
-        subtitle: "Go to Scenarios to model a new plan",
-        run: () => navigate("/leados/scenarios", "Scenarios", "Monte Carlo planning"),
-      });
-    }
-
-    results.forEach((r) => {
-      const group: PaletteEntry["group"] =
-        r.type === "person" ? "People" : r.type === "decision" ? "Decisions" : r.type === "metric" ? "Metrics" : r.type === "playbook" ? "Playbooks" : "Insights";
-      const href =
-        r.type === "person" ? "/leados/people" : r.type === "decision" ? "/leados/decisions" : r.type === "metric" ? "/leados/metrics" : r.type === "playbook" ? "/leados/playbooks" : "/leados/memory";
-      list.push({
-        id: `${r.type}-${r.id}`,
-        group,
-        title: r.title,
-        subtitle: r.subtitle,
-        run: () => navigate(href, r.title, r.subtitle),
-      });
-    });
-
-    if (trimmed.length === 0) {
-      recents.forEach((r) => {
-        list.push({ id: `recent-${r.id}`, group: "Recent", title: r.title, subtitle: r.subtitle, run: () => navigate(r.href, r.title, r.subtitle) });
-      });
-    }
-
-    const scored = list
-      .map((entry) => ({ entry, score: fuzzyScore(trimmed, `${entry.title} ${entry.subtitle ?? ""}`) }))
-      .filter((s) => s.score >= 0)
-      .sort((a, b) => b.score - a.score);
-
-    return scored.map((s) => s.entry);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, results, recents]);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [entries.length]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveIndex((i) => Math.min(entries.length - 1, i + 1));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveIndex((i) => Math.max(0, i - 1));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        entries[activeIndex]?.run();
-      }
+    }, 150);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [open, entries, activeIndex]);
+  }, [query]);
+
+  function go(href: string) {
+    pushRecent(href);
+    setOpen(false);
+    router.push(href);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(results.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter" && results[activeIndex]) {
+      e.preventDefault();
+      go(results[activeIndex].href);
+    }
+  }
 
   if (!open) return null;
 
-  const groups = Array.from(new Set(entries.map((e) => e.group)));
-
   return (
-    <div className="fixed inset-0 z-[300] flex items-start justify-center bg-black/60 pt-[12vh]" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-start justify-center pt-[12vh]">
+      <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-hidden />
       <div
-        className="w-full max-w-xl overflow-hidden rounded-xl border border-slate-700 bg-[#10131a] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-overlay)] shadow-[var(--shadow-lg)]"
       >
-        <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
-          <SearchIcon className="text-slate-500" />
+        <div className="flex items-center gap-[var(--space-2)] border-b border-[var(--border-subtle)] px-[var(--space-4)]">
+          <span aria-hidden className="text-[var(--text-muted)]">⌘K</span>
           <input
             ref={inputRef}
+            role="combobox"
+            aria-expanded
+            aria-controls="command-palette-list"
+            aria-activedescendant={results[activeIndex] ? `cmd-${results[activeIndex].id}` : undefined}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search views, people, decisions, metrics… or type an action"
-            className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+            onKeyDown={onKeyDown}
+            placeholder="Search routes, people, decisions…"
+            className="h-12 w-full bg-transparent text-[var(--text-sm)] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
           />
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200">
-            <CloseIcon className="h-4 w-4" />
-          </button>
+          <kbd className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] px-[var(--space-1)] text-[var(--text-xs)] text-[var(--text-muted)]">Esc</kbd>
         </div>
-        <div className="max-h-[50vh] overflow-y-auto py-2">
-          {entries.length === 0 && <p className="px-4 py-6 text-center text-sm text-slate-500">No matches.</p>}
-          {groups.map((group) => (
-            <div key={group} className="mb-1">
-              <p className="px-4 pb-1 pt-2 text-[10px] uppercase tracking-wider text-slate-500">{group}</p>
-              {entries
-                .filter((e) => e.group === group)
-                .map((entry) => {
-                  const globalIndex = entries.indexOf(entry);
-                  const active = globalIndex === activeIndex;
-                  return (
-                    <button
-                      key={entry.id}
-                      onMouseEnter={() => setActiveIndex(globalIndex)}
-                      onClick={() => entry.run()}
-                      className={`flex w-full flex-col items-start px-4 py-2 text-left text-sm ${
-                        active ? "bg-indigo-500/15 text-indigo-100" : "text-slate-300 hover:bg-slate-800/60"
-                      }`}
-                    >
-                      <span>{entry.title}</span>
-                      {entry.subtitle && <span className="text-xs text-slate-500">{entry.subtitle}</span>}
-                    </button>
-                  );
-                })}
-            </div>
+        {!query && recents.length > 0 && (
+          <div className="border-b border-[var(--border-subtle)] px-[var(--space-4)] py-[var(--space-2)] text-[var(--text-xs)] text-[var(--text-muted)]">
+            Recent: {recents.map((r) => FLAT_ROUTES.find((fr) => fr.href === r)?.label ?? r).join(" · ")}
+          </div>
+        )}
+        <ul id="command-palette-list" role="listbox" aria-label="Results" className="max-h-80 overflow-auto py-[var(--space-2)]">
+          {results.length === 0 && <li className="px-[var(--space-4)] py-[var(--space-3)] text-[var(--text-sm)] text-[var(--text-muted)]">No matches</li>}
+          {results.map((r, i) => (
+            <li
+              id={`cmd-${r.id}`}
+              key={r.id}
+              role="option"
+              aria-selected={i === activeIndex}
+              onMouseEnter={() => setActiveIndex(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                go(r.href);
+              }}
+              className={`flex cursor-pointer items-center justify-between gap-[var(--space-2)] px-[var(--space-4)] py-[var(--space-2)] text-[var(--text-sm)] ${
+                i === activeIndex ? "bg-[var(--accent-subtle)] text-[var(--accent-default)]" : "text-[var(--text-primary)]"
+              }`}
+            >
+              <span>
+                {r.title}
+                {r.subtitle && <span className="ml-[var(--space-2)] text-[var(--text-xs)] text-[var(--text-muted)]">{r.subtitle}</span>}
+              </span>
+              <span className="text-[var(--text-xs)] uppercase tracking-wide text-[var(--text-muted)]">{r.kind}</span>
+            </li>
           ))}
-        </div>
-        <div className="flex items-center justify-between border-t border-slate-800 px-4 py-2 text-[11px] text-slate-500">
-          <span>↑↓ navigate · Enter run · Esc close</span>
-          <span>⌘K to toggle</span>
-        </div>
+        </ul>
       </div>
     </div>
   );

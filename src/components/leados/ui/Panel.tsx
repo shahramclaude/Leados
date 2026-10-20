@@ -1,44 +1,65 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useState, type ReactNode } from "react";
+import { cx } from "./cx";
 
 export interface PanelProps {
-  title?: string;
-  subtitle?: string;
-  action?: ReactNode;
-  dense?: boolean;
-  children?: ReactNode;
-  className?: string;
+  id: string;
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  actions?: ReactNode;
 }
 
-export default function Panel({ title, subtitle, action, dense = false, children, className }: PanelProps) {
+/** Collapsible panel that remembers open/closed state per `id` across
+ * sessions (localStorage), so returning to a page doesn't re-expand
+ * something the user deliberately collapsed. */
+export function Panel({ id, title, children, defaultOpen = true, actions }: PanelProps) {
+  const storageKey = `leados.panel.${id}`;
+  const [open, setOpen] = useState(defaultOpen);
+  const contentId = `${id}-panel-content`;
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(storageKey);
+    if (stored !== null) setOpen(stored === "1");
+  }, [storageKey]);
+
+  function toggle() {
+    setOpen((v) => {
+      window.localStorage.setItem(storageKey, v ? "0" : "1");
+      return !v;
+    });
+  }
+
   return (
-    <section
-      className={`flex flex-col rounded-xl border ${className ?? ""}`}
-      style={{ backgroundColor: "var(--bg-elevated)", borderColor: "var(--border-default)" }}
-    >
-      {(title || action) && (
-        <header
-          className="flex items-start justify-between gap-3 border-b px-4"
-          style={{ borderColor: "var(--border-subtle)", paddingTop: dense ? 10 : 14, paddingBottom: dense ? 10 : 14 }}
+    <section className="rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-raised)]">
+      <div className="flex items-center justify-between gap-[var(--space-2)] p-[var(--card-padding)] pb-[var(--space-3)]">
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          aria-controls={contentId}
+          className="flex items-center gap-[var(--space-2)] text-left text-[var(--text-sm)] font-semibold text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         >
-          <div className="min-w-0">
-            {title && (
-              <h3
-                className="truncate font-semibold"
-                style={{ color: "var(--text-primary)", fontSize: "var(--fs-base)" }}
-              >
-                {title}
-              </h3>
-            )}
-            {subtitle && (
-              <p className="mt-0.5 truncate" style={{ color: "var(--text-secondary)", fontSize: "var(--fs-xs)" }}>
-                {subtitle}
-              </p>
-            )}
-          </div>
-          {action && <div className="shrink-0">{action}</div>}
-        </header>
+          <svg
+            aria-hidden
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            className={cx("transition-transform duration-[var(--duration-fast)] ease-[var(--ease-standard)]", open ? "rotate-90" : "rotate-0")}
+          >
+            <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {title}
+        </button>
+        {actions}
+      </div>
+      {open && (
+        <div id={contentId} className="border-t border-[var(--border-subtle)] p-[var(--card-padding)]">
+          {children}
+        </div>
       )}
-      <div className={dense ? "p-3" : "p-4"}>{children}</div>
     </section>
   );
 }

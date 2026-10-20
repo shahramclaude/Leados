@@ -1,27 +1,41 @@
-import { createDecision, listDecisions, ValidationError } from "@/lib/decisions";
+import { db } from "@/db";
+import { decisions } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const items = await listDecisions();
-  return Response.json({ items });
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get("status");
+  try {
+    const rows = status
+      ? await db.select().from(decisions).where(eq(decisions.status, status)).orderBy(desc(decisions.createdAt))
+      : await db.select().from(decisions).orderBy(desc(decisions.createdAt));
+    return Response.json({ decisions: rows });
+  } catch {
+    return Response.json({ error: "Failed to load decisions", errorId: randomUUID() }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
-  let body: unknown;
   try {
-    body = await request.json();
+    const body = await request.json();
+    const id = `d-${randomUUID().slice(0, 8)}`;
+    const [row] = await db
+      .insert(decisions)
+      .values({
+        id,
+        title: body.title,
+        summary: body.summary,
+        owner: body.owner,
+        status: "pending",
+        severity: Number(body.severity) || 3,
+        dueDate: body.dueDate,
+      })
+      .returning();
+    return Response.json({ decision: row }, { status: 201 });
   } catch {
-    return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
-  }
-  const { title, context } = (body ?? {}) as Record<string, unknown>;
-  try {
-    const decision = await createDecision({ title: String(title ?? ""), context: typeof context === "string" ? context : undefined });
-    return Response.json(decision, { status: 201 });
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      return Response.json({ error: error.message }, { status: 400 });
-    }
-    throw error;
+    return Response.json({ error: "Failed to create decision", errorId: randomUUID() }, { status: 500 });
   }
 }

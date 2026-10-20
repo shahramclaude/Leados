@@ -1,50 +1,53 @@
-"use client";
+import { SEVERITY_META, type SeverityLevel } from "./tokens";
 
-interface GaugeArcProps {
-  label: string;
+export interface GaugeArcProps {
   value: number; // 0-100
+  label: string;
+  severity?: SeverityLevel;
   size?: number;
 }
 
-function colorForValue(value: number): string {
-  if (value >= 75) return "#22c55e";
-  if (value >= 55) return "#eab308";
-  if (value >= 35) return "#f97316";
-  return "#ef4444";
-}
-
-export default function GaugeArc({ label, value, size = 96 }: GaugeArcProps) {
+/** Semicircular gauge. Color encodes severity but the numeric value and a
+ * text label are always rendered too (colorblind-safe). */
+export function GaugeArc({ value, label, severity = 3, size = 120 }: GaugeArcProps) {
   const clamped = Math.max(0, Math.min(100, value));
-  const radius = size / 2 - 8;
-  const circumference = Math.PI * radius; // half circle arc length
+  const radius = size / 2 - 10;
+  const circumference = Math.PI * radius;
   const offset = circumference * (1 - clamped / 100);
-  const color = colorForValue(clamped);
+  const stroke = `var(${SEVERITY_META[severity].var})`;
+  const cx = size / 2;
+  const cy = size / 2;
 
   return (
-    <div className="flex flex-col items-center gap-1" data-testid={`gauge-${label}`}>
-      <svg width={size} height={size / 2 + 10} viewBox={`0 0 ${size} ${size / 2 + 10}`}>
+    <figure className="flex flex-col items-center gap-[var(--space-1)]" role="img" aria-label={`${label}: ${clamped.toFixed(0)} of 100, ${SEVERITY_META[severity].label}`}>
+      <svg width={size} height={size / 2 + 12} viewBox={`0 0 ${size} ${size / 2 + 12}`}>
         <path
-          d={`M 8 ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 8} ${size / 2}`}
+          d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
           fill="none"
-          stroke="#1e293b"
-          strokeWidth={8}
+          stroke="var(--border-subtle)"
+          strokeWidth={10}
           strokeLinecap="round"
         />
         <path
-          d={`M 8 ${size / 2} A ${radius} ${radius} 0 0 1 ${size - 8} ${size / 2}`}
+          d={`M ${cx - radius} ${cy} A ${radius} ${radius} 0 0 1 ${cx + radius} ${cy}`}
           fill="none"
-          stroke={color}
-          strokeWidth={8}
+          stroke={stroke}
+          strokeWidth={10}
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 0.6s ease, stroke 0.6s ease" }}
+          style={{ transition: "stroke-dashoffset var(--duration-slow) var(--ease-decelerate)" }}
         />
-        <text x={size / 2} y={size / 2 - 2} textAnchor="middle" className="fill-slate-100" fontSize={18} fontWeight={700}>
-          {Math.round(clamped)}
+        <text x={cx} y={cy - 4} textAnchor="middle" className="font-mono-nums" fontSize={20} fill="var(--text-primary)">
+          {clamped.toFixed(0)}
         </text>
       </svg>
-      <span className="text-[11px] uppercase tracking-wide text-slate-400">{label}</span>
-    </div>
+      <figcaption className="flex items-center gap-[var(--space-1)] text-[var(--text-xs)] text-[var(--text-muted)]">
+        <span aria-hidden style={{ color: stroke }}>
+          {SEVERITY_META[severity].shape}
+        </span>
+        {label} · {SEVERITY_META[severity].label}
+      </figcaption>
+    </figure>
   );
 }

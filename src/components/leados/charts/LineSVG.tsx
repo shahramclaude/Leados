@@ -1,187 +1,143 @@
 "use client";
 
-export interface LineSVGHistoryPoint {
-  date: string | Date;
-  value: number;
-}
+import { useId, useState } from "react";
+import type { ReactElement } from "react";
+import type { Series } from "./types";
 
-export interface LineSVGForecastPoint {
-  date: string | Date;
-  p10: number;
-  p50: number;
-  p90: number;
-}
-
-export interface LineSVGAnomaly {
-  at: string | Date;
-  value: number;
-  type: "point" | "structural_break";
-}
-
-interface LineSVGProps {
-  history: LineSVGHistoryPoint[];
-  forecast?: LineSVGForecastPoint[];
-  anomalies?: LineSVGAnomaly[];
-  target?: number | null;
-  benchmark?: number | null;
+export interface LineSVGProps {
+  series: Series[];
   width?: number;
   height?: number;
-  unit?: string | null;
-  color?: string;
+  yFormatter?: (n: number) => string;
+  /** If true, the y-axis starts at zero (default). Set false only when the
+   * caller documents why in the chart's footnote — truncated axes can
+   * mislead, so this is opt-in and loud. */
+  zeroBaseline?: boolean;
 }
 
-function toTime(d: string | Date): number {
-  return typeof d === "string" ? new Date(d).getTime() : d.getTime();
-}
+const MARKER_PATHS: Record<NonNullable<Series["marker"]>, (x: number, y: number) => ReactElement> = {
+  circle: (x, y) => <circle cx={x} cy={y} r={3} />,
+  square: (x, y) => <rect x={x - 3} y={y - 3} width={6} height={6} />,
+  triangle: (x, y) => <polygon points={`${x},${y - 4} ${x - 4},${y + 3} ${x + 4},${y + 3}`} />,
+  diamond: (x, y) => <polygon points={`${x},${y - 4} ${x + 4},${y} ${x},${y + 4} ${x - 4},${y}`} />,
+};
 
-export function LineSVG({
-  history,
-  forecast = [],
-  anomalies = [],
-  target,
-  benchmark,
-  width = 720,
-  height = 280,
-  unit,
-  color = "#2563eb",
-}: LineSVGProps) {
-  const margin = { top: 18, right: 18, bottom: 28, left: 56 };
-  const innerW = width - margin.left - margin.right;
-  const innerH = height - margin.top - margin.bottom;
+/** Line chart with first-class uncertainty bands (low/high rendered as a
+ * translucent area behind the line) and shape markers per series so
+ * overlapping lines remain distinguishable without relying on color. */
+export function LineSVG({ series, width = 560, height = 220, yFormatter = (n) => n.toLocaleString(), zeroBaseline = true }: LineSVGProps) {
+  const id = useId();
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const padding = { top: 16, right: 16, bottom: 28, left: 48 };
+  const innerW = width - padding.left - padding.right;
+  const innerH = height - padding.top - padding.bottom;
 
-  const histSorted = [...history].sort((a, b) => toTime(a.date) - toTime(b.date));
-  const fcSorted = [...forecast].sort((a, b) => toTime(a.date) - toTime(b.date));
+  const allY = series.flatMap((s) => s.points.flatMap((p) => [p.y, p.low ?? p.y, p.high ?? p.y]));
+  const maxY = Math.max(...allY, 1);
+  const minY = zeroBaseline ? 0 : Math.min(...allY);
+  const n = series[0]?.points.length ?? 0;
 
-  if (!histSorted.length) {
-    return (
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-        <text x={width / 2} y={height / 2} textAnchor="middle" className="fill-slate-400 text-sm">
-          No history yet.
-        </text>
-      </svg>
-    );
+  function xAt(i: number) {
+    return padding.left + (n <= 1 ? 0 : (i / (n - 1)) * innerW);
   }
-
-  const allTimes = [...histSorted.map((p) => toTime(p.date)), ...fcSorted.map((p) => toTime(p.date))];
-  const minT = Math.min(...allTimes);
-  const maxT = Math.max(...allTimes);
-  const spanT = maxT - minT || 1;
-
-  const allValues = [
-    ...histSorted.map((p) => p.value),
-    ...fcSorted.flatMap((p) => [p.p10, p.p50, p.p90]),
-    ...(target != null ? [target] : []),
-    ...(benchmark != null ? [benchmark] : []),
-  ];
-  let minV = Math.min(...allValues);
-  let maxV = Math.max(...allValues);
-  if (minV === maxV) {
-    minV -= 1;
-    maxV += 1;
+  function yAt(v: number) {
+    const ratio = maxY === minY ? 0 : (v - minY) / (maxY - minY);
+    return padding.top + innerH - ratio * innerH;
   }
-  const padV = (maxV - minV) * 0.08;
-  minV -= padV;
-  maxV += padV;
-  const spanV = maxV - minV || 1;
-
-  const x = (t: number) => margin.left + ((t - minT) / spanT) * innerW;
-  const y = (v: number) => margin.top + innerH - ((v - minV) / spanV) * innerH;
-
-  const historyPath = histSorted
-    .map((p, i) => `${i === 0 ? "M" : "L"}${x(toTime(p.date)).toFixed(2)},${y(p.value).toFixed(2)}`)
-    .join(" ");
-
-  // Connect forecast to the last historical point so the dashed line is continuous.
-  const bridge = histSorted[histSorted.length - 1];
-  const forecastLinePts = bridge ? [{ date: bridge.date, p50: bridge.value }, ...fcSorted] : fcSorted;
-  const forecastPath = forecastLinePts
-    .map((p, i) => `${i === 0 ? "M" : "L"}${x(toTime(p.date)).toFixed(2)},${y(p.p50).toFixed(2)}`)
-    .join(" ");
-
-  const bandTop = fcSorted.map((p) => `${x(toTime(p.date)).toFixed(2)},${y(p.p90).toFixed(2)}`);
-  const bandBottom = fcSorted
-    .slice()
-    .reverse()
-    .map((p) => `${x(toTime(p.date)).toFixed(2)},${y(p.p10).toFixed(2)}`);
-  const bandStart = bridge ? `${x(toTime(bridge.date)).toFixed(2)},${y(bridge.value).toFixed(2)}` : "";
-  const bandPath =
-    fcSorted.length > 0 ? `M${bandStart} L${bandTop.join(" L")} L${bandBottom.join(" L")} Z` : "";
 
   const yTicks = 4;
-  const tickVals = Array.from({ length: yTicks + 1 }, (_, i) => minV + (spanV * i) / yTicks);
-
-  const anomalyDots = anomalies
-    .map((a) => {
-      const t = toTime(a.at);
-      if (t < minT || t > maxT) return null;
-      return { ...a, cx: x(t), cy: y(a.value) };
-    })
-    .filter((a): a is NonNullable<typeof a> => a !== null);
+  const ticks = Array.from({ length: yTicks + 1 }, (_, i) => minY + ((maxY - minY) * i) / yTicks);
 
   return (
-    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} role="img" className="overflow-visible">
-      {/* gridlines + y-axis labels */}
-      {tickVals.map((v, i) => (
-        <g key={i}>
-          <line x1={margin.left} x2={width - margin.right} y1={y(v)} y2={y(v)} stroke="#e2e8f0" strokeWidth={1} />
-          <text x={margin.left - 8} y={y(v)} textAnchor="end" dominantBaseline="middle" className="fill-slate-400" fontSize={10}>
-            {v.toFixed(v >= 100 ? 0 : 1)}
-          </text>
-        </g>
-      ))}
-
-      {/* benchmark + target reference lines */}
-      {benchmark != null && (
-        <g>
-          <line x1={margin.left} x2={width - margin.right} y1={y(benchmark)} y2={y(benchmark)} stroke="#a855f7" strokeDasharray="3 3" strokeWidth={1.5} />
-          <text x={width - margin.right} y={y(benchmark) - 4} textAnchor="end" fontSize={10} className="fill-purple-500">
-            benchmark {benchmark}
-            {unit ?? ""}
-          </text>
-        </g>
-      )}
-      {target != null && (
-        <g>
-          <line x1={margin.left} x2={width - margin.right} y1={y(target)} y2={y(target)} stroke="#f59e0b" strokeDasharray="5 3" strokeWidth={1.5} />
-          <text x={width - margin.right} y={y(target) - 4} textAnchor="end" fontSize={10} className="fill-amber-500">
-            target {target}
-            {unit ?? ""}
-          </text>
-        </g>
-      )}
-
-      {/* forecast confidence band */}
-      {bandPath && <path d={bandPath} fill={color} opacity={0.12} stroke="none" />}
-
-      {/* forecast dashed line */}
-      {forecastPath && <path d={forecastPath} fill="none" stroke={color} strokeWidth={2} strokeDasharray="6 4" opacity={0.85} />}
-
-      {/* historical solid line */}
-      <path d={historyPath} fill="none" stroke={color} strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" />
-
-      {/* anomaly markers */}
-      {anomalyDots.map((a, i) => (
-        <g key={i}>
-          <circle cx={a.cx} cy={a.cy} r={a.type === "structural_break" ? 6 : 4.5} fill="none" stroke="#dc2626" strokeWidth={2} />
-          <text x={a.cx} y={a.cy - 10} textAnchor="middle" fontSize={11}>
-            ⚠
-          </text>
-        </g>
-      ))}
-
-      {/* x-axis labels: first, mid, last of history + last forecast */}
-      {[histSorted[0], histSorted[Math.floor(histSorted.length / 2)], histSorted[histSorted.length - 1]]
-        .filter(Boolean)
-        .map((p, i) => (
-          <text key={i} x={x(toTime((p as LineSVGHistoryPoint).date))} y={height - 8} textAnchor="middle" fontSize={10} className="fill-slate-400">
-            {new Date((p as LineSVGHistoryPoint).date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-          </text>
+    <div className="relative">
+      <svg
+        role="img"
+        aria-label={`Line chart: ${series.map((s) => s.label).join(", ")}`}
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        onMouseLeave={() => setHoverIndex(null)}
+      >
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={padding.left} x2={width - padding.right} y1={yAt(t)} y2={yAt(t)} stroke="var(--border-subtle)" strokeWidth={1} />
+            <text x={padding.left - 8} y={yAt(t) + 3} textAnchor="end" fontSize={10} fill="var(--text-muted)">
+              {yFormatter(t)}
+            </text>
+          </g>
         ))}
-      {fcSorted.length > 0 && (
-        <text x={x(toTime(fcSorted[fcSorted.length - 1].date))} y={height - 8} textAnchor="middle" fontSize={10} className="fill-slate-400">
-          {new Date(fcSorted[fcSorted.length - 1].date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-        </text>
+
+        {series.map((s) => {
+          const hasBand = s.points.some((p) => p.low !== undefined && p.high !== undefined);
+          const areaPath = hasBand
+            ? `M ${s.points.map((p, i) => `${xAt(i)},${yAt(p.high ?? p.y)}`).join(" L ")} L ${s.points
+                .slice()
+                .reverse()
+                .map((p, i) => `${xAt(s.points.length - 1 - i)},${yAt(p.low ?? p.y)}`)
+                .join(" L ")} Z`
+            : null;
+          const linePath = `M ${s.points.map((p, i) => `${xAt(i)},${yAt(p.y)}`).join(" L ")}`;
+          return (
+            <g key={s.id}>
+              {areaPath && <path d={areaPath} fill={s.color} opacity={0.12} stroke="none" />}
+              <path d={linePath} fill="none" stroke={s.color} strokeWidth={2} />
+              {s.points.map((p, i) => (
+                <g key={i} fill={s.color}>
+                  {MARKER_PATHS[s.marker ?? "circle"](xAt(i), yAt(p.y))}
+                </g>
+              ))}
+            </g>
+          );
+        })}
+
+        {series[0]?.points.map((p, i) => (
+          <rect
+            key={i}
+            x={xAt(i) - innerW / Math.max(1, n) / 2}
+            y={padding.top}
+            width={innerW / Math.max(1, n)}
+            height={innerH}
+            fill="transparent"
+            onMouseEnter={() => setHoverIndex(i)}
+          />
+        ))}
+
+        {series[0]?.points.map(
+          (p, i) =>
+            i % Math.ceil(n / 6 || 1) === 0 && (
+              <text key={i} x={xAt(i)} y={height - 8} textAnchor="middle" fontSize={10} fill="var(--text-muted)">
+                {p.x}
+              </text>
+            ),
+        )}
+
+        {hoverIndex !== null && <line x1={xAt(hoverIndex)} x2={xAt(hoverIndex)} y1={padding.top} y2={height - padding.bottom} stroke="var(--border-strong)" strokeDasharray="2 2" />}
+      </svg>
+      {hoverIndex !== null && (
+        <div
+          role="status"
+          className="pointer-events-none absolute top-0 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-overlay)] p-[var(--space-2)] text-[var(--text-xs)] shadow-[var(--shadow-md)]"
+          style={{ left: Math.min(width - 160, Math.max(0, xAt(hoverIndex) - 60)) }}
+        >
+          <p className="font-medium text-[var(--text-primary)]">{series[0]?.points[hoverIndex]?.x}</p>
+          {series.map((s) => {
+            const p = s.points[hoverIndex];
+            if (!p) return null;
+            return (
+              <p key={s.id} className="flex items-center gap-1" style={{ color: s.color }}>
+                <span aria-hidden>●</span>
+                <span className="text-[var(--text-secondary)]">
+                  {s.label}: {yFormatter(p.y)}
+                  {p.low !== undefined && p.high !== undefined ? ` (${yFormatter(p.low)}–${yFormatter(p.high)})` : ""}
+                </span>
+              </p>
+            );
+          })}
+        </div>
       )}
-    </svg>
+      <p id={`${id}-note`} className="sr-only">
+        Use the &quot;view as table&quot; toggle for a screen-reader-friendly version of this chart.
+      </p>
+    </div>
   );
 }

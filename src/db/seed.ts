@@ -1,361 +1,115 @@
-// LEADOS Part 01 — synthetic seed data.
-//
-// *** EVERYTHING THIS SCRIPT WRITES IS SYNTHETIC / LABELLED FAKE DATA. ***
-// Names, ids, dollar amounts and dates below are invented for demonstration
-// and testing only (see honesty rule in AI-SESSION-LOG.md Part 01). The
-// dataset.label setting is set to "synthetic-seed" so any UI/API consuming
-// it can display that fact; see src/lib/dataset.server.ts.
-//
-// Run with: `npx tsx src/db/seed.ts` (there is no `npm run db:seed` script —
-// see AI-SESSION-LOG.md Part 01, "package.json constraint", for why).
-//
-// Every single row this script creates goes through `appendEvent()`
-// (src/lib/eventStore.ts) — the same single write path the API/UI use. There
-// is no raw SQL seed path (scripts/seed_financial.sql does not exist in this
-// repo on purpose; see the manifest notes in the Part 01 delivery).
+/**
+ * Deterministic seed data — no randomness, no lorem ipsum. Fixed values so
+ * `/styleguide` and the dashboards render identically on every run (a
+ * requirement for the Part 15 visual-regression target). Safe to re-run:
+ * every insert is an upsert keyed on primary id.
+ */
+import { db, pool } from "./index";
+import { decisions, financeLines, metricSnapshots, metrics, people } from "./schema";
 
-import "dotenv/config";
-import { appendEvent } from "@/lib/eventStore";
-import { setDatasetLabel } from "@/lib/dataset.server";
-import { countEvents } from "@/lib/platform/eventRepository";
-import { newUlid } from "@/lib/ulid";
-import type { EventTypeId } from "@/lib/events/eventCatalog";
+const PEOPLE = [
+  { id: "p1", name: "Amara Okafor", role: "VP Revenue", team: "Go-to-Market", email: "amara.okafor@leados.app", status: "active", severity: 2, startDate: "2021-03-01" },
+  { id: "p2", name: "Daniel Kwon", role: "Staff Engineer", team: "Platform", email: "daniel.kwon@leados.app", status: "active", severity: 1, startDate: "2020-07-14" },
+  { id: "p3", name: "Priya Natarajan", role: "Finance Director", team: "Finance", email: "priya.natarajan@leados.app", status: "active", severity: 1, startDate: "2019-11-04" },
+  { id: "p4", name: "Lucas Ferreira", role: "Account Executive", team: "Go-to-Market", email: "lucas.ferreira@leados.app", status: "active", severity: 4, startDate: "2023-01-09" },
+  { id: "p5", name: "Mei Lin Tan", role: "Product Manager", team: "Product", email: "mei.tan@leados.app", status: "active", severity: 2, startDate: "2022-05-23" },
+  { id: "p6", name: "Oluwaseun Adeyemi", role: "Customer Success Lead", team: "Customer Success", email: "seun.adeyemi@leados.app", status: "leave", severity: 3, startDate: "2021-09-13" },
+  { id: "p7", name: "Hannah Weiss", role: "Senior Engineer", team: "Platform", email: "hannah.weiss@leados.app", status: "active", severity: 1, startDate: "2022-02-28" },
+  { id: "p8", name: "Tomás Rivera", role: "Sales Development Rep", team: "Go-to-Market", email: "tomas.rivera@leados.app", status: "active", severity: 5, startDate: "2024-04-01" },
+  { id: "p9", name: "Grace Mensah", role: "People Partner", team: "People", email: "grace.mensah@leados.app", status: "active", severity: 2, startDate: "2020-10-19" },
+  { id: "p10", name: "Ivan Petrov", role: "Data Engineer", team: "Platform", email: "ivan.petrov@leados.app", status: "offboarding", severity: 4, startDate: "2021-06-07" },
+  { id: "p11", name: "Sofia Moretti", role: "Marketing Lead", team: "Go-to-Market", email: "sofia.moretti@leados.app", status: "active", severity: 2, startDate: "2022-08-15" },
+  { id: "p12", name: "Noah Fitzgerald", role: "Support Engineer", team: "Customer Success", email: "noah.fitzgerald@leados.app", status: "active", severity: 3, startDate: "2023-03-20" },
+] as const;
 
-const ORG_ID = "org_demo_synthetic";
-const SEED_ACTOR = { kind: "system" as const, id: "seed-script" };
+const DECISIONS = [
+  { id: "d1", title: "Approve Q2 enterprise pricing floor", summary: "Set the minimum discount floor for enterprise renewals above 200 seats.", owner: "Amara Okafor", status: "pending", severity: 4, dueDate: "2026-02-18" },
+  { id: "d2", title: "Backfill Platform data engineer role", summary: "Ivan Petrov's offboarding leaves one open req on the data pipeline team.", owner: "Daniel Kwon", status: "pending", severity: 3, dueDate: "2026-02-20" },
+  { id: "d3", title: "Extend Customer Success coverage during leave", summary: "Oluwaseun Adeyemi is on leave; reassign the top-20 account list for continuity.", owner: "Grace Mensah", status: "pending", severity: 3, dueDate: "2026-02-15" },
+  { id: "d4", title: "Sign off March marketing spend reallocation", summary: "Move $85k from paid social to the field-events budget for the March pipeline push.", owner: "Sofia Moretti", status: "approved", severity: 2, dueDate: "2026-02-10" },
+  { id: "d5", title: "Escalate SDR ramp risk", summary: "Tomás Rivera is tracking 40% below ramp target at week 10; decide on coaching plan vs. role change.", owner: "Amara Okafor", status: "pending", severity: 5, dueDate: "2026-02-14" },
+  { id: "d6", title: "Approve platform infra cost increase", summary: "Autoscaling changes raise monthly infra spend by $12k to resolve the Q1 latency incidents.", owner: "Priya Natarajan", status: "approved", severity: 3, dueDate: "2026-02-05" },
+  { id: "d7", title: "Reject duplicate CRM tooling request", summary: "A second CRM add-on was requested that overlaps with existing Salesforce coverage.", owner: "Priya Natarajan", status: "rejected", severity: 1, dueDate: "2026-01-28" },
+  { id: "d8", title: "Approve product roadmap reprioritization", summary: "Pull the usage-based billing epic forward a quarter in response to churn signal.", owner: "Mei Lin Tan", status: "pending", severity: 4, dueDate: "2026-02-22" },
+] as const;
 
-function daysAgo(n: number): string {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
-}
+const METRICS = [
+  { id: "arr", label: "Annual Recurring Revenue", unit: "$", category: "growth" },
+  { id: "nrr", label: "Net Revenue Retention", unit: "%", category: "retention" },
+  { id: "headcount", label: "Active Headcount", unit: "people", category: "ops" },
+] as const;
 
-async function emit(type: EventTypeId, entityId: string, payload: unknown, occurredAt: string, correlationId: string) {
-  return appendEvent({
-    type,
-    orgId: ORG_ID,
-    actor: SEED_ACTOR,
-    entityId,
-    occurredAt,
-    correlationId,
-    source: "migration",
-    payload,
-  });
-}
+const MONTHS = ["2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02"];
+
+const ARR_VALUES = [4.1, 4.3, 4.35, 4.5, 4.62, 4.7, 4.9, 5.05, 5.2, 5.4, 5.55, 5.7]; // $M
+const NRR_VALUES = [108, 109, 107, 110, 111, 109, 112, 113, 111, 114, 115, 116]; // %
+const HEADCOUNT_VALUES = [86, 88, 89, 91, 93, 94, 96, 97, 99, 101, 103, 104];
+
+const FINANCE_CATEGORIES = [
+  { category: "revenue", actuals: [820, 845, 860, 890, 915, 930, 955, 980, 1005, 1030, 1050, null], forecast: [810, 840, 858, 885, 912, 935, 958, 982, 1008, 1033, 1058, 1082], band: 35 },
+  { category: "cogs", actuals: [210, 214, 216, 219, 223, 226, 229, 233, 237, 240, 244, null], forecast: [208, 213, 217, 220, 224, 227, 230, 234, 238, 241, 245, 249], band: 10 },
+  { category: "opex", actuals: [305, 310, 312, 318, 322, 325, 330, 334, 338, 343, 347, null], forecast: [300, 308, 313, 318, 323, 327, 331, 335, 339, 344, 348, 353], band: 14 },
+  { category: "headcount_cost", actuals: [410, 418, 422, 430, 438, 443, 449, 455, 462, 469, 476, null], forecast: [405, 415, 423, 431, 439, 444, 450, 456, 463, 470, 477, 484], band: 18 },
+] as const;
 
 async function main() {
-  const existing = await countEvents(ORG_ID);
-  if (existing > 0 && !process.env.FORCE_SEED) {
-    console.log(
-      `[seed] org "${ORG_ID}" already has ${existing} events. Re-run with FORCE_SEED=1 to append more ` +
-        `synthetic data anyway, or run scripts/reset.ts first for a clean slate.`,
-    );
-    return;
-  }
+  await db.delete(people);
+  await db.insert(people).values(PEOPLE.map((p) => ({ ...p })));
 
-  console.log(`[seed] writing SYNTHETIC demo data for org "${ORG_ID}"...`);
+  await db.delete(decisions);
+  await db.insert(decisions).values(DECISIONS.map((d) => ({ ...d })));
 
-  // ---- people -----------------------------------------------------------
-  const people = [
-    { id: "person_synthetic_001", name: "Ada Example", role: "Staff Engineer", team: "Platform", start: 400 },
-    { id: "person_synthetic_002", name: "Grace Sample", role: "Product Manager", team: "Product", start: 300 },
-    { id: "person_synthetic_003", name: "Lin Fictitious", role: "Sales Lead", team: "Sales", start: 250 },
-    { id: "person_synthetic_004", name: "Omar Placeholder", role: "Ops Manager", team: "Operations", start: 200 },
-    { id: "person_synthetic_005", name: "Priya Demo", role: "Support Engineer", team: "Platform", start: 150 },
-  ];
-  for (const p of people) {
-    const corr = newUlid();
-    await emit(
-      "people.person_added",
-      p.id,
-      { personId: p.id, name: p.name, role: p.role, team: p.team, startDate: daysAgo(p.start) },
-      daysAgo(p.start),
-      corr,
-    );
-  }
-  await emit(
-    "people.role_changed",
-    "person_synthetic_001",
-    { personId: "person_synthetic_001", fromRole: "Senior Engineer", toRole: "Staff Engineer", effectiveDate: daysAgo(60) },
-    daysAgo(60),
-    newUlid(),
-  );
-  // Flight risk history for person_001: medium -> high (two events, so the
-  // upcast v1->v2 score mapping and projector historyCount both have
-  // something real to show).
-  // Note: writes always target the CURRENT schema version (v2 here), which
-  // is why `score`/`previousLevel` are present even though the v1 FIXTURE
-  // used by the upcaster test (eventSchema.ts) omits them — v1 only still
-  // exists for rows written before the v2 migration. See docs/DATA.md.
-  await emit(
-    "people.flight_risk_changed",
-    "person_synthetic_001",
-    {
-      personId: "person_synthetic_001",
-      riskLevel: "medium",
-      reason: "Synthetic: flagged in routine 1:1 notes",
-      score: 0.5,
-      previousLevel: null,
-    },
-    daysAgo(45),
-    newUlid(),
-  );
-  await emit(
-    "people.flight_risk_changed",
-    "person_synthetic_001",
-    {
-      personId: "person_synthetic_001",
-      riskLevel: "high",
-      reason: "Synthetic: declined synthetic retention offer",
-      score: 0.82,
-      previousLevel: "medium",
-    },
-    daysAgo(10),
-    newUlid(),
-  );
-  await emit(
-    "people.flight_risk_changed",
-    "person_synthetic_003",
-    {
-      personId: "person_synthetic_003",
-      riskLevel: "low",
-      reason: "Synthetic: stable, positive engagement signals",
-      score: 0.15,
-      previousLevel: null,
-    },
-    daysAgo(20),
-    newUlid(),
-  );
-  // Demonstrate erasure (tombstone) on person_005.
-  await emit(
-    "privacy.person_erased",
-    "person_synthetic_005",
-    { personId: "person_synthetic_005", requestedBy: "person_synthetic_admin", method: "tombstone-scrub" },
-    daysAgo(1),
-    newUlid(),
-  );
+  await db.delete(metricSnapshots);
+  await db.delete(metrics);
+  await db.insert(metrics).values(METRICS.map((m) => ({ ...m })));
 
-  // ---- finance ------------------------------------------------------------
-  await emit(
-    "finance.burn_updated",
-    ORG_ID,
-    { monthlyBurnUsd: 110000, cashOnHandUsd: 2200000, runwayMonths: 20 },
-    daysAgo(60),
-    newUlid(),
-  );
-  await emit(
-    "finance.burn_updated",
-    ORG_ID,
-    { monthlyBurnUsd: 128000, cashOnHandUsd: 1850000, runwayMonths: 14.5 },
-    daysAgo(5),
-    newUlid(),
-  );
-  await emit(
-    "finance.invoice_raised",
-    ORG_ID,
-    { invoiceId: "inv_synthetic_001", customerId: "cust_synthetic_001", amountUsd: 42000, dueDate: daysAgo(-25) },
-    daysAgo(30),
-    newUlid(),
-  );
-  await emit(
-    "finance.invoice_raised",
-    ORG_ID,
-    { invoiceId: "inv_synthetic_002", customerId: "cust_synthetic_002", amountUsd: 18000, dueDate: daysAgo(-10) },
-    daysAgo(12),
-    newUlid(),
-  );
-  await emit(
-    "finance.expense_recorded",
-    ORG_ID,
-    { expenseId: "exp_synthetic_001", category: "cloud_infra", amountUsd: 9400, incurredAt: daysAgo(14) },
-    daysAgo(14),
-    newUlid(),
-  );
-
-  // ---- strategy -----------------------------------------------------------
-  await emit(
-    "strategy.initiative_created",
-    "init_synthetic_001",
-    { initiativeId: "init_synthetic_001", title: "Synthetic market expansion", owner: "person_synthetic_002", quarter: "2026-Q1" },
-    daysAgo(90),
-    newUlid(),
-  );
-  await emit(
-    "strategy.initiative_status_changed",
-    "init_synthetic_001",
-    { initiativeId: "init_synthetic_001", status: "at_risk", note: "Synthetic: dependent hire slipped" },
-    daysAgo(7),
-    newUlid(),
-  );
-  await emit(
-    "strategy.okr_progress_recorded",
-    "init_synthetic_001",
-    { okrId: "okr_synthetic_001", initiativeId: "init_synthetic_001", progressPct: 55 },
-    daysAgo(7),
-    newUlid(),
-  );
-  await emit(
-    "strategy.initiative_created",
-    "init_synthetic_002",
-    { initiativeId: "init_synthetic_002", title: "Synthetic platform reliability push", owner: "person_synthetic_001", quarter: "2026-Q1" },
-    daysAgo(80),
-    newUlid(),
-  );
-  await emit(
-    "strategy.initiative_status_changed",
-    "init_synthetic_002",
-    { initiativeId: "init_synthetic_002", status: "on_track" },
-    daysAgo(3),
-    newUlid(),
-  );
-
-  // ---- execution ------------------------------------------------------------
-  const tasks = [
-    { id: "task_synthetic_001", title: "Synthetic: migrate billing job", assignee: "person_synthetic_001", done: true },
-    { id: "task_synthetic_002", title: "Synthetic: write onboarding doc", assignee: "person_synthetic_002", done: true },
-    { id: "task_synthetic_003", title: "Synthetic: fix flaky CI test", assignee: "person_synthetic_001", done: false },
-  ];
-  for (const t of tasks) {
-    const corr = newUlid();
-    await emit("execution.task_created", t.id, { taskId: t.id, title: t.title, assigneeId: t.assignee, dueDate: daysAgo(-5) }, daysAgo(21), corr);
-    if (t.done) {
-      await emit("execution.task_completed", t.id, { taskId: t.id, completedAt: daysAgo(2) }, daysAgo(2), corr);
-    }
-  }
-  await emit(
-    "execution.sprint_velocity_recorded",
-    "sprint_synthetic_12",
-    { teamId: "team_synthetic_platform", sprintId: "sprint_synthetic_12", velocityPoints: 31 },
-    daysAgo(4),
-    newUlid(),
-  );
-
-  // ---- rd_product -----------------------------------------------------------
-  await emit(
-    "rd_product.feature_proposed",
-    "feat_synthetic_001",
-    { featureId: "feat_synthetic_001", title: "Synthetic bulk CSV import", proposedBy: "person_synthetic_002" },
-    daysAgo(40),
-    newUlid(),
-  );
-  await emit(
-    "rd_product.experiment_result_logged",
-    "exp_rd_synthetic_001",
-    { experimentId: "exp_rd_synthetic_001", featureId: "feat_synthetic_001", outcome: "positive", metricDelta: 0.08 },
-    daysAgo(15),
-    newUlid(),
-  );
-  await emit(
-    "rd_product.roadmap_item_scheduled",
-    "road_synthetic_001",
-    { itemId: "road_synthetic_001", quarter: "2026-Q2", confidence: 0.65 },
-    daysAgo(10),
-    newUlid(),
-  );
-
-  // ---- sales_customers ----------------------------------------------------------
-  await emit(
-    "sales.deal_created",
-    "deal_synthetic_001",
-    { dealId: "deal_synthetic_001", customerId: "cust_synthetic_001", stage: "discovery", amountUsd: 54000 },
-    daysAgo(35),
-    newUlid(),
-  );
-  await emit(
-    "sales.deal_stage_changed",
-    "deal_synthetic_001",
-    { dealId: "deal_synthetic_001", fromStage: "discovery", toStage: "proposal" },
-    daysAgo(18),
-    newUlid(),
-  );
-  await emit(
-    "sales.deal_created",
-    "deal_synthetic_002",
-    { dealId: "deal_synthetic_002", customerId: "cust_synthetic_002", stage: "proposal", amountUsd: 21000 },
-    daysAgo(25),
-    newUlid(),
-  );
-  await emit(
-    "sales.customer_health_scored",
-    "cust_synthetic_001",
-    { customerId: "cust_synthetic_001", healthScore: 81, driver: "synthetic usage growth" },
-    daysAgo(6),
-    newUlid(),
-  );
-  await emit(
-    "sales.customer_health_scored",
-    "cust_synthetic_002",
-    { customerId: "cust_synthetic_002", healthScore: 38, driver: "synthetic support ticket spike" },
-    daysAgo(2),
-    newUlid(),
-  );
-
-  // ---- knowledge ------------------------------------------------------------
-  await emit(
-    "knowledge.doc_published",
-    "doc_synthetic_001",
-    { docId: "doc_synthetic_001", title: "Synthetic incident runbook", authorId: "person_synthetic_001", space: "engineering" },
-    daysAgo(50),
-    newUlid(),
-  );
-  for (let i = 0; i < 3; i += 1) {
-    await emit(
-      "knowledge.doc_viewed",
-      "doc_synthetic_001",
-      { docId: "doc_synthetic_001", viewerId: `person_synthetic_00${i + 2}` },
-      daysAgo(5 - i),
-      newUlid(),
-    );
-  }
-  await emit(
-    "knowledge.doc_flagged_outdated",
-    "doc_synthetic_001",
-    { docId: "doc_synthetic_001", flaggedBy: "person_synthetic_003", reason: "Synthetic: references a retired synthetic tool" },
-    daysAgo(1),
-    newUlid(),
-  );
-
-  // ---- manufacturing_ops ------------------------------------------------------
-  await emit(
-    "manufacturing.batch_started",
-    "batch_synthetic_001",
-    { batchId: "batch_synthetic_001", line: "line_synthetic_a", sku: "sku_synthetic_001", plannedUnits: 500 },
-    daysAgo(9),
-    newUlid(),
-  );
-  await emit(
-    "manufacturing.batch_completed",
-    "batch_synthetic_001",
-    { batchId: "batch_synthetic_001", actualUnits: 486, defectUnits: 7 },
-    daysAgo(8),
-    newUlid(),
-  );
-  await emit(
-    "manufacturing.downtime_logged",
-    "line_synthetic_a",
-    { line: "line_synthetic_a", minutes: 40, cause: "Synthetic: sensor recalibration" },
-    daysAgo(8),
-    newUlid(),
-  );
-  await emit(
-    "manufacturing.downtime_logged",
-    "line_synthetic_a",
-    { line: "line_synthetic_a", minutes: 15, cause: "Synthetic: scheduled changeover" },
-    daysAgo(3),
-    newUlid(),
-  );
-
-  await setDatasetLabel({
-    label: "synthetic-seed",
-    description:
-      "All data in this environment was generated by src/db/seed.ts for demonstration/testing. No real person, customer, or financial figure is represented.",
+  const snapshotRows = METRICS.flatMap((metric) => {
+    const values = metric.id === "arr" ? ARR_VALUES : metric.id === "nrr" ? NRR_VALUES : HEADCOUNT_VALUES;
+    return MONTHS.map((period, i) => {
+      const value = values[i];
+      const spread = metric.id === "arr" ? 0.15 : metric.id === "nrr" ? 2 : 1.5;
+      return {
+        id: `${metric.id}-${period}`,
+        metricId: metric.id,
+        period,
+        value: String(value),
+        low: String(Math.max(0, value - spread)),
+        high: String(value + spread),
+      };
+    });
   });
+  await db.insert(metricSnapshots).values(snapshotRows);
 
-  const total = await countEvents(ORG_ID);
-  console.log(`[seed] done. ${total} synthetic events now stored for org "${ORG_ID}".`);
+  await db.delete(financeLines);
+  const financeRows = FINANCE_CATEGORIES.flatMap((line) =>
+    MONTHS.map((month, i) => ({
+      id: `${line.category}-${month}`,
+      category: line.category,
+      month,
+      actual: line.actuals[i] === null ? null : String(line.actuals[i]),
+      forecast: String(line.forecast[i]),
+      forecastLow: String(line.forecast[i] - line.band),
+      forecastHigh: String(line.forecast[i] + line.band),
+    })),
+  );
+  await db.insert(financeLines).values(financeRows);
+
+  // eslint-disable-next-line no-console
+  console.log("Seed complete:", {
+    people: PEOPLE.length,
+    decisions: DECISIONS.length,
+    metrics: METRICS.length,
+    metricSnapshots: snapshotRows.length,
+    financeLines: financeRows.length,
+  });
 }
 
 main()
-  .then(() => process.exit(0))
   .catch((err) => {
-    console.error("[seed] failed:", err);
-    process.exit(1);
+    // eslint-disable-next-line no-console
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await pool.end();
   });

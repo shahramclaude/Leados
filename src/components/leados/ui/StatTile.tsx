@@ -1,152 +1,48 @@
-"use client";
-
-import { useId, useState } from "react";
-import type { StatusKey } from "./tokens";
-import { statusColor } from "./tokens";
+import type { ReactNode } from "react";
+import { cx } from "./cx";
+import { CountUp } from "./CountUp";
 
 export interface StatTileProps {
   label: string;
-  value: string | number;
+  value: number;
+  formatter?: (n: number) => string;
+  delta?: { value: number; direction: "up" | "down" | "flat"; isGood?: boolean };
+  sparkline?: ReactNode;
   unit?: string;
-  delta?: string | number;
-  deltaDir?: "up" | "down" | "flat";
-  status?: StatusKey;
-  sparklineData?: number[];
-  tooltip?: string;
 }
 
-function Sparkline({ data }: { data: number[] }) {
-  if (data.length < 2) return null;
-  const w = 72;
-  const h = 24;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const points = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * w;
-      const y = h - ((v - min) / range) * h;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="shrink-0" aria-hidden>
-      <polyline
-        points={points}
-        fill="none"
-        stroke="var(--accent-indigo)"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-const deltaGlyph: Record<"up" | "down" | "flat", string> = {
+const DIRECTION_GLYPH: Record<NonNullable<StatTileProps["delta"]>["direction"], string> = {
   up: "▲",
   down: "▼",
   flat: "▬",
 };
 
-const deltaColor: Record<"up" | "down" | "flat", string> = {
-  up: "var(--sev2)",
-  down: "var(--sev5)",
-  flat: "var(--text-tertiary)",
-};
-
-export default function StatTile({
-  label,
-  value,
-  unit,
-  delta,
-  deltaDir = "flat",
-  status,
-  sparklineData,
-  tooltip,
-}: StatTileProps) {
-  const id = useId();
-  const [hover, setHover] = useState(false);
-
+export function StatTile({ label, value, formatter, delta, sparkline, unit }: StatTileProps) {
+  const deltaGood = delta ? (delta.isGood ?? delta.direction !== "down") : true;
   return (
-    <div
-      className="relative flex flex-col gap-3 rounded-xl border p-4 transition-colors"
-      style={{
-        backgroundColor: "var(--bg-elevated)",
-        borderColor: "var(--border-default)",
-      }}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div
-          className="relative flex items-center gap-1.5 uppercase tracking-wide"
-          style={{ color: "var(--text-secondary)", fontSize: "var(--fs-xs)" }}
-          onMouseEnter={() => setHover(true)}
-          onMouseLeave={() => setHover(false)}
-        >
-          <span>{label}</span>
-          {tooltip && (
-            <>
-              <span
-                aria-describedby={id}
-                tabIndex={0}
-                className="flex h-3.5 w-3.5 items-center justify-center rounded-full border normal-case focus-visible:outline-none"
-                style={{ borderColor: "var(--border-default)", color: "var(--text-tertiary)", fontSize: 9 }}
-              >
-                i
-              </span>
-              {hover && (
-                <span
-                  id={id}
-                  role="tooltip"
-                  className="absolute left-0 top-5 z-20 w-48 rounded-md border px-2 py-1.5 normal-case shadow-lg"
-                  style={{
-                    backgroundColor: "var(--bg-overlay)",
-                    borderColor: "var(--border-default)",
-                    color: "var(--text-primary)",
-                    fontSize: "var(--fs-xs)",
-                    boxShadow: "var(--shadow-overlay)",
-                  }}
-                >
-                  {tooltip}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-        {status && (
-          <span
-            aria-hidden
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ backgroundColor: statusColor[status], boxShadow: `0 0 0 3px color-mix(in srgb, ${statusColor[status]} 20%, transparent)` }}
-          />
-        )}
+    <div className="flex flex-col gap-[var(--space-2)] rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-[var(--card-padding)]">
+      <p className="text-[var(--text-xs)] font-medium uppercase tracking-[0.04em] text-[var(--text-muted)]">{label}</p>
+      <div className="flex items-baseline gap-[var(--space-1)]">
+        <span className="text-[var(--text-2xl)] font-semibold text-[var(--text-primary)]">
+          <CountUp value={value} formatter={formatter} />
+        </span>
+        {unit && <span className="text-[var(--text-sm)] text-[var(--text-muted)]">{unit}</span>}
       </div>
-
-      <div className="flex items-end justify-between gap-3">
-        <div className="flex items-baseline gap-1">
+      <div className="flex items-center justify-between gap-[var(--space-2)]">
+        {delta && (
           <span
-            className="font-data tabular-nums font-semibold"
-            style={{ fontSize: "var(--fs-2xl)", color: "var(--text-primary)" }}
+            className={cx(
+              "inline-flex items-center gap-1 text-[var(--text-xs)] font-medium",
+              deltaGood ? "text-[var(--status-success)]" : "text-[var(--status-danger)]",
+            )}
           >
-            {value}
+            <span aria-hidden>{DIRECTION_GLYPH[delta.direction]}</span>
+            {Math.abs(delta.value).toFixed(1)}%
+            <span className="sr-only">{delta.direction === "up" ? "increase" : delta.direction === "down" ? "decrease" : "no change"}</span>
           </span>
-          {unit && (
-            <span style={{ color: "var(--text-secondary)", fontSize: "var(--fs-sm)" }}>{unit}</span>
-          )}
-        </div>
-        {sparklineData && <Sparkline data={sparklineData} />}
+        )}
+        {sparkline && <div className="ml-auto">{sparkline}</div>}
       </div>
-
-      {delta !== undefined && (
-        <div
-          className="font-data flex items-center gap-1"
-          style={{ fontSize: "var(--fs-xs)", color: deltaColor[deltaDir] }}
-        >
-          <span>{deltaGlyph[deltaDir]}</span>
-          <span>{delta}</span>
-        </div>
-      )}
     </div>
   );
 }

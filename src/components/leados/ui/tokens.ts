@@ -1,124 +1,94 @@
 /**
- * LEADOS design tokens — JS/TS mirror of the CSS custom properties defined in
- * `src/app/globals.css`. Components should prefer Tailwind utility classes
- * (which are generated from those same CSS variables via `@theme inline`),
- * but anything that needs a token value in JS (SVG charts, inline styles,
- * animation timing, sort orders) must read it from here — never hard-code a
- * hex/px value in a component.
+ * LEADOS token registry.
+ *
+ * This file is the typed mirror of the CSS custom properties defined in
+ * `src/app/globals.css`. It exists so that:
+ *  1. Components can reference token *names* instead of raw values
+ *     (`surface("raised")` -> `var(--surface-raised)`), which keeps
+ *     `npm run check:tokens` able to prove zero hard-coded colors/spacing.
+ *  2. `/styleguide` can enumerate every token programmatically instead of
+ *     hand-maintaining a list that drifts from the CSS.
+ *
+ * Three layers, per the design system brief:
+ *  - PRIMITIVE: raw scales (color ramps, 4px space grid, type scale, radii,
+ *    elevation, motion durations/easing). Never referenced directly by
+ *    product components — only by semantic tokens below and by the
+ *    styleguide's "primitive" tab.
+ *  - SEMANTIC: role-based tokens (surface, text, border, accent, severity,
+ *    status, focus). This is what components use.
+ *  - COMPONENT: a small number of component-specific dimensions that don't
+ *    fit a generic semantic name (card padding, table row height, control
+ *    heights).
  */
 
-export const colorVar = {
-  surfaceSunken: "var(--surface-sunken)",
-  surface: "var(--surface)",
-  surfaceRaised: "var(--surface-raised)",
-  surfaceOverlay: "var(--surface-overlay)",
-  borderSubtle: "var(--border-subtle)",
-  border: "var(--border)",
-  borderStrong: "var(--border-strong)",
-  textPrimary: "var(--text-primary)",
-  textSecondary: "var(--text-secondary)",
-  textTertiary: "var(--text-tertiary)",
-  textDisabled: "var(--text-disabled)",
-  textInverse: "var(--text-inverse)",
-  accent: "var(--accent)",
-  accentHover: "var(--accent-hover)",
-  accentActive: "var(--accent-active)",
-  accentSubtle: "var(--accent-subtle)",
-  accentSubtleText: "var(--accent-subtle-text)",
-  onAccent: "var(--on-accent)",
-  focusRing: "var(--focus-ring)",
-  scrim: "var(--scrim)",
-} as const;
+export const THEMES = ["light", "dark", "hc"] as const;
+export type ThemeName = (typeof THEMES)[number];
 
-export type Severity = "critical" | "warning" | "caution" | "good" | "info" | "neutral";
+export const DENSITIES = ["comfortable", "compact"] as const;
+export type DensityName = (typeof DENSITIES)[number];
 
-/** Severity ordering used for sorting attention queues (highest first). */
-export const SEVERITY_ORDER: Severity[] = ["critical", "warning", "caution", "info", "good", "neutral"];
-
-export const severityVar: Record<Severity, { fg: string; subtle: string }> = {
-  critical: { fg: "var(--severity-critical)", subtle: "var(--severity-critical-subtle)" },
-  warning: { fg: "var(--severity-warning)", subtle: "var(--severity-warning-subtle)" },
-  caution: { fg: "var(--severity-caution)", subtle: "var(--severity-caution-subtle)" },
-  good: { fg: "var(--severity-good)", subtle: "var(--severity-good-subtle)" },
-  info: { fg: "var(--severity-info)", subtle: "var(--severity-info-subtle)" },
-  neutral: { fg: "var(--severity-neutral)", subtle: "var(--severity-neutral-subtle)" },
-};
-
-export const severityLabel: Record<Severity, string> = {
-  critical: "Critical",
-  warning: "Warning",
-  caution: "Caution",
-  good: "On track",
-  info: "Informational",
-  neutral: "Neutral",
-};
-
-/** Categorical chart palette — six hues, color-blind safe at AA on both themes. */
-export const chartPalette = [
-  "var(--chart-1)",
-  "var(--chart-2)",
-  "var(--chart-3)",
-  "var(--chart-4)",
-  "var(--chart-5)",
-  "var(--chart-6)",
+export const PRIMITIVE_SPACE = [
+  "space-0", "space-1", "space-2", "space-3", "space-4", "space-5", "space-6",
+  "space-8", "space-10", "space-12", "space-16", "space-20", "space-24",
 ] as const;
 
-export const chartVar = {
-  grid: "var(--chart-grid)",
-  axis: "var(--chart-axis)",
-  band: "var(--chart-band)",
-};
-
-export const radius = {
-  xs: "var(--radius-xs)",
-  sm: "var(--radius-sm)",
-  md: "var(--radius-md)",
-  lg: "var(--radius-lg)",
-  xl: "var(--radius-xl)",
-  "2xl": "var(--radius-2xl)",
-};
-
-export const shadow = {
-  xs: "var(--shadow-xs)",
-  sm: "var(--shadow-sm)",
-  md: "var(--shadow-md)",
-  lg: "var(--shadow-lg)",
-  xl: "var(--shadow-xl)",
-};
-
-/** Motion durations in raw ms (for JS-driven animation / stagger math). */
-export const motionMs = {
-  instant: 80,
-  fast: 120,
-  base: 160,
-  slow: 200,
-  slower: 320,
-};
-
-export const easing = {
-  standard: "cubic-bezier(0.2, 0, 0, 1)",
-  decelerate: "cubic-bezier(0, 0, 0.2, 1)",
-  accelerate: "cubic-bezier(0.4, 0, 1, 1)",
-};
-
-/** 4px base spacing scale, mirrors Tailwind's default `--spacing` multiplier. */
-export const space = (n: number) => `${n * 0.25}rem`;
-
-export const typeScale = [
-  "caption",
-  "body-sm",
-  "body",
-  "body-lg",
-  "h4",
-  "h3",
-  "h2",
-  "h1",
-  "display",
+export const PRIMITIVE_TYPE = [
+  "text-xs", "text-sm", "text-base", "text-md", "text-lg", "text-xl", "text-2xl", "text-3xl",
 ] as const;
 
-export type TypeScaleToken = (typeof typeScale)[number];
+export const PRIMITIVE_RADII = ["radius-sm", "radius-md", "radius-lg", "radius-xl", "radius-full"] as const;
+export const PRIMITIVE_ELEVATION = ["shadow-sm", "shadow-md", "shadow-lg"] as const;
+export const PRIMITIVE_MOTION = ["duration-fast", "duration-base", "duration-slow"] as const;
 
-export function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+export const PRIMITIVE_RAMPS = ["gray", "blue", "green", "amber", "red", "violet"] as const;
+export const RAMP_STEPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950] as const;
+
+export const SEMANTIC_SURFACE = ["base", "raised", "overlay", "sunken"] as const;
+export const SEMANTIC_TEXT = ["primary", "secondary", "muted", "inverse"] as const;
+export const SEMANTIC_BORDER = ["subtle", "strong"] as const;
+export const SEMANTIC_ACCENT = ["default", "hover", "subtle"] as const;
+export const SEMANTIC_STATUS = ["success", "warning", "danger", "info"] as const;
+export const SEVERITY_LEVELS = [1, 2, 3, 4, 5] as const;
+export type SeverityLevel = (typeof SEVERITY_LEVELS)[number];
+
+/** Severity must never be color-only: every level carries a shape + label. */
+export const SEVERITY_META: Record<SeverityLevel, { label: string; shape: string; var: string }> = {
+  1: { label: "Nominal", shape: "●", var: "--severity-1" },
+  2: { label: "Watch", shape: "▲", var: "--severity-2" },
+  3: { label: "Elevated", shape: "■", var: "--severity-3" },
+  4: { label: "High", shape: "◆", var: "--severity-4" },
+  5: { label: "Critical", shape: "✕", var: "--severity-5" },
+};
+
+export const STATUS_META: Record<(typeof SEMANTIC_STATUS)[number], { label: string; shape: string }> = {
+  success: { label: "Success", shape: "✓" },
+  warning: { label: "Warning", shape: "▲" },
+  danger: { label: "Danger", shape: "✕" },
+  info: { label: "Info", shape: "ⓘ" },
+};
+
+export function cssvar(name: string): string {
+  return `var(--${name})`;
 }
+
+export function surface(role: (typeof SEMANTIC_SURFACE)[number]): string {
+  return cssvar(`surface-${role}`);
+}
+
+export function text(role: (typeof SEMANTIC_TEXT)[number]): string {
+  return cssvar(`text-${role}`);
+}
+
+export function severityVar(level: SeverityLevel): string {
+  return cssvar(SEVERITY_META[level].var.replace("--", ""));
+}
+
+/** Component tokens — dimensions that are product-specific, not role-based. */
+export const COMPONENT_TOKENS = [
+  "card-padding",
+  "control-height-sm",
+  "control-height-md",
+  "control-height-lg",
+  "table-row-height",
+  "table-header-height",
+] as const;

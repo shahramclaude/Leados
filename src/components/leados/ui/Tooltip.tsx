@@ -1,66 +1,83 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { cloneElement } from "react";
+import { cx } from "./cx";
 
 export interface TooltipProps {
   content: ReactNode;
-  children: ReactNode;
+  children: ReactElement<Record<string, unknown>>;
   side?: "top" | "bottom" | "left" | "right";
 }
 
-export default function Tooltip({ content, children, side = "top" }: TooltipProps) {
+const SIDE_CLASS: Record<NonNullable<TooltipProps["side"]>, string> = {
+  top: "bottom-full left-1/2 mb-[var(--space-2)] -translate-x-1/2",
+  bottom: "top-full left-1/2 mt-[var(--space-2)] -translate-x-1/2",
+  left: "right-full top-1/2 mr-[var(--space-2)] -translate-y-1/2",
+  right: "left-full top-1/2 ml-[var(--space-2)] -translate-y-1/2",
+};
+
+/** Keyboard-triggerable tooltip: shows on focus as well as hover, hides on
+ * Escape/blur, and is wired via aria-describedby rather than title so
+ * screen readers announce it predictably. */
+export function Tooltip({ content, children, side = "top" }: TooltipProps) {
   const [visible, setVisible] = useState(false);
-  const [resolvedSide, setResolvedSide] = useState(side);
-  const wrapRef = useRef<HTMLSpanElement>(null);
-  const bubbleRef = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useLayoutEffect(() => {
-    if (!visible || !wrapRef.current || !bubbleRef.current) return;
-    const wrapRect = wrapRef.current.getBoundingClientRect();
-    const bubbleRect = bubbleRef.current.getBoundingClientRect();
-    let next = side;
+  function show() {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setVisible(true);
+  }
+  function hide() {
+    setVisible(false);
+  }
 
-    if (side === "top" && wrapRect.top - bubbleRect.height < 8) next = "bottom";
-    if (side === "bottom" && wrapRect.bottom + bubbleRect.height > window.innerHeight - 8) next = "top";
-    if (side === "left" && wrapRect.left - bubbleRect.width < 8) next = "right";
-    if (side === "right" && wrapRect.right + bubbleRect.width > window.innerWidth - 8) next = "left";
-
-    setResolvedSide(next);
-  }, [visible, side]);
-
-  const positions: Record<string, string> = {
-    top: "bottom-full left-1/2 -translate-x-1/2 mb-2",
-    bottom: "top-full left-1/2 -translate-x-1/2 mt-2",
-    left: "right-full top-1/2 -translate-y-1/2 mr-2",
-    right: "left-full top-1/2 -translate-y-1/2 ml-2",
+  type AnyHandler = ((event: unknown) => void) | undefined;
+  const childProps = children.props as Record<string, unknown>;
+  const callHandler = (name: string, event: unknown) => {
+    const handler = childProps[name] as AnyHandler;
+    handler?.(event);
   };
 
+  const trigger = cloneElement(children, {
+    "aria-describedby": id,
+    onMouseEnter: (e: React.MouseEvent) => {
+      show();
+      callHandler("onMouseEnter", e);
+    },
+    onMouseLeave: (e: React.MouseEvent) => {
+      hide();
+      callHandler("onMouseLeave", e);
+    },
+    onFocus: (e: React.FocusEvent) => {
+      show();
+      callHandler("onFocus", e);
+    },
+    onBlur: (e: React.FocusEvent) => {
+      hide();
+      callHandler("onBlur", e);
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === "Escape") hide();
+      callHandler("onKeyDown", e);
+    },
+  });
+
   return (
-    <span
-      ref={wrapRef}
-      className="relative inline-flex"
-      onMouseEnter={() => setVisible(true)}
-      onMouseLeave={() => setVisible(false)}
-      onFocus={() => setVisible(true)}
-      onBlur={() => setVisible(false)}
-    >
-      {children}
-      {visible && (
-        <div
-          ref={bubbleRef}
-          role="tooltip"
-          className={`absolute z-50 whitespace-nowrap rounded-md border px-2.5 py-1.5 ${positions[resolvedSide]}`}
-          style={{
-            backgroundColor: "var(--bg-overlay)",
-            borderColor: "var(--border-default)",
-            color: "var(--text-primary)",
-            fontSize: "var(--fs-xs)",
-            boxShadow: "var(--shadow-overlay)",
-          }}
-        >
-          {content}
-        </div>
-      )}
+    <span className="relative inline-flex">
+      {trigger}
+      <span
+        role="tooltip"
+        id={id}
+        className={cx(
+          "pointer-events-none absolute z-30 whitespace-nowrap rounded-[var(--radius-sm)] bg-[var(--gray-900)] px-[var(--space-2)] py-1 text-[var(--text-xs)] text-white shadow-[var(--shadow-md)] transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-standard)]",
+          SIDE_CLASS[side],
+          visible ? "opacity-100" : "opacity-0",
+        )}
+      >
+        {content}
+      </span>
     </span>
   );
 }
