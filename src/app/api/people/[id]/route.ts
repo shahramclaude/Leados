@@ -1,34 +1,128 @@
-import { resolveViewer } from "@/lib/platform/auth";
-import { getPersonProfile, updatePersonProfile } from "@/lib/app/people/profile";
+import { NextRequest, NextResponse } from "next/server";
+import { and, eq, isNull } from "drizzle-orm";
+import { db } from "@/db";
+import { people } from "@/db/schema";
+import { ApiError, isAuthContext, jsonError, parseJsonBody, requireAuth } from "@/lib/apiUtils";
+import { personUpdateSchema, uuidSchema } from "@/lib/validation";
+import { PERMISSIONS } from "@/lib/permissions";
+import { recordAuditEvent } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const personId = Number(id);
-  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
-
-  const viewer = resolveViewer(request);
-  const result = await getPersonProfile(viewer, personId);
-  if (!result) return Response.json({ error: "not_found" }, { status: 404 });
-
-  return Response.json(result);
+async function loadScopedPerson(orgId: string, id: string) {
+  const [row] = await db
+    .select()
+    .from(people)
+    .where(and(eq(people.id, id), eq(people.orgId, orgId), isNull(people.deletedAt)))
+    .limit(1);
+  return row;
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+type RouteParams = { params: Promise<{ id: string }> };
+
+export async function GET(req: NextRequest, { params }: RouteParams) {
+  const auth = await requireAuth(req, { permission: PERMISSIONS.PEOPLE_READ });
+  if (!isAuthContext(auth)) return auth;
+
   const { id } = await params;
-  const personId = Number(id);
-  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
+  const parsedId = uuidSchema.safeParse(id);
+  if (!parsedId.success) return jsonError(400, "INVALID_ID", "Invalid person id.", auth.correlationId);
 
-  const viewer = resolveViewer(request);
-  const patch = await request.json().catch(() => null);
-  if (!patch) return Response.json({ error: "Request body must be JSON." }, { status: 400 });
+  // Scoping by org means a well-formed id belonging to another tenant
+  // behaves identically to a nonexistent id: 404, never 403 (which would
+  // leak existence) and never the data itself.
+  const row = await loadScopedPerson(auth.session.orgId, parsedId.data);
+  if (!row) return jsonError(404, "NOT_FOUND", "Person not found.", auth.correlationId);
 
-  const result = await updatePersonProfile(viewer, personId, patch);
-  if (!result.ok) {
-    const status = result.error === "forbidden" ? 403 : 404;
-    return Response.json({ error: result.error }, { status });
+  await recordAuditEvent({
+    correlationId: auth.correlationId,
+    orgId: auth.session.orgId,
+    actorUserId: auth.session.sub,
+    actorEmail: auth.session.email,
+    action: "people.read",
+    resourceType: "person",
+    resourceId: row.id,
+    ip: auth.ip,
+    userAgent: auth.userAgent,
+  });
+
+  return NextResponse.json({ person: row });
+}
+
+export async function PATCH(req: NextRequest, { params }: RouteParams) {
+  const auth = await requireAuth(req, { permission: PERMISSIONS.PEOPLE_WRITE });
+  if (!isAuthContext(auth)) return auth;
+
+  const { id } = await params;
+  const parsedId = uuidSchema.safeParse(id);
+  if (!parsedId.success) return jsonError(400, "INVALID_ID", "Invalid person id.", auth.correlationId);
+
+  try {
+    const body = await parseJsonBody(req, personUpdateSchema);
+    const existing = await loadScopedPerson(auth.session.orgId, parsedId.data);
+    if (!existing) return jsonError(404, "NOT_FOUND", "Person not found.", auth.correlationId);
+
+    const [row] = await db
+      .update(people)
+      .set({
+        ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
+        ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
+        ...(body.email !== undefined ? { email: body.email || null } : {}),
+        ...(body.phone !== undefined ? { phone: body.phone || null } : {}),
+        ...(body.notes !== undefined ? { notes: body.notes || null } : {}),
+        ...(body.sensitiveData !== undefined ? { sensitiveData: body.sensitiveData } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(people.id, parsedId.data), eq(people.orgId, auth.session.orgId)))
+      .returning();
+
+    await recordAuditEvent({
+      correlationId: auth.correlationId,
+      orgId: auth.session.orgId,
+      actorUserId: auth.session.sub,
+      actorEmail: auth.session.email,
+      action: "people.update",
+      resourceType: "person",
+      resourceId: row.id,
+      metadata: { fields: Object.keys(body) },
+      ip: auth.ip,
+      userAgent: auth.userAgent,
+    });
+
+    return NextResponse.json({ person: row });
+  } catch (err) {
+    if (err instanceof ApiError) return jsonError(err.status, err.code, err.message, auth.correlationId);
+    return jsonError(500, "INTERNAL_ERROR", "Failed to update person.", auth.correlationId);
   }
+}
 
-  return Response.json({ person: result.person });
+export async function DELETE(req: NextRequest, { params }: RouteParams) {
+  const auth = await requireAuth(req, { permission: PERMISSIONS.PEOPLE_DELETE });
+  if (!isAuthContext(auth)) return auth;
+
+  const { id } = await params;
+  const parsedId = uuidSchema.safeParse(id);
+  if (!parsedId.success) return jsonError(400, "INVALID_ID", "Invalid person id.", auth.correlationId);
+
+  const existing = await loadScopedPerson(auth.session.orgId, parsedId.data);
+  if (!existing) return jsonError(404, "NOT_FOUND", "Person not found.", auth.correlationId);
+
+  await db
+    .update(people)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(people.id, parsedId.data), eq(people.orgId, auth.session.orgId)));
+
+  await recordAuditEvent({
+    correlationId: auth.correlationId,
+    orgId: auth.session.orgId,
+    actorUserId: auth.session.sub,
+    actorEmail: auth.session.email,
+    action: "people.delete",
+    resourceType: "person",
+    resourceId: parsedId.data,
+    ip: auth.ip,
+    userAgent: auth.userAgent,
+  });
+
+  return NextResponse.json({ ok: true });
 }
