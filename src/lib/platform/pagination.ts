@@ -1,46 +1,31 @@
-// Cursor pagination convention shared by every v1 list route.
-// Cursor = base64url(JSON.stringify({ createdAt, id })) of the last row seen.
-import { ApiError } from "./envelope";
+export const DEFAULT_PAGE_LIMIT = 20;
+export const MAX_PAGE_LIMIT = 200;
 
-export interface CursorPage {
-  createdAt: Date;
-  id: string;
+export interface CursorPayload {
+  id: number;
 }
 
-export function encodeCursor(page: CursorPage): string {
-  const json = JSON.stringify({ createdAt: page.createdAt.toISOString(), id: page.id });
-  return Buffer.from(json, "utf8").toString("base64url");
+export function parseLimit(searchParams: URLSearchParams): number {
+  const raw = searchParams.get("limit");
+  if (!raw) return DEFAULT_PAGE_LIMIT;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_PAGE_LIMIT;
+  return Math.min(parsed, MAX_PAGE_LIMIT);
 }
 
-export function decodeCursor(cursor: string): CursorPage {
+export function encodeCursor(payload: CursorPayload): string {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
+export function decodeCursor(cursor: string | null): CursorPayload | null {
+  if (!cursor) return null;
   try {
-    const json = Buffer.from(cursor, "base64url").toString("utf8");
-    const parsed = JSON.parse(json) as { createdAt: string; id: string };
-    return { createdAt: new Date(parsed.createdAt), id: parsed.id };
+    const decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    if (typeof decoded === "object" && decoded !== null && typeof decoded.id === "number") {
+      return { id: decoded.id };
+    }
+    return null;
   } catch {
-    throw new ApiError("BAD_REQUEST", "Invalid cursor");
+    return null;
   }
-}
-
-export function parseLimit(raw: string | null, fallback = 25, max = 100): number {
-  if (!raw) return fallback;
-  const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n <= 0) {
-    throw new ApiError("BAD_REQUEST", "limit must be a positive integer");
-  }
-  return Math.min(n, max);
-}
-
-export function parseSort(
-  raw: string | null,
-  allowed: readonly string[],
-  fallback: string,
-): { field: string; direction: "asc" | "desc" } {
-  if (!raw) return { field: fallback, direction: "desc" };
-  const direction = raw.startsWith("-") ? "desc" : "asc";
-  const field = raw.replace(/^-/, "");
-  if (!allowed.includes(field)) {
-    throw new ApiError("BAD_REQUEST", `sort must be one of: ${allowed.join(", ")}`, { field });
-  }
-  return { field, direction };
 }

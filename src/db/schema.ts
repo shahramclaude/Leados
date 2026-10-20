@@ -1,194 +1,68 @@
-// LEADOS Platform schema — Part 10: API, Webhooks, Integrations & SDK.
+// LEADOS data model.
 //
-// This introduces the persistence primitives the public API surface needs:
-// API tokens (auth + scopes + rate limits), idempotency records, webhook
-// subscriptions/deliveries, the automation "runs" job kernel, and a small
-// representative domain (decisions / findings) + an append-only event log
-// that both the realtime (SSE) API and the webhook dispatcher read from.
+// This is intentionally a small, representative slice (events → findings →
+// decisions → automation runs → board packs) rather than the full historical
+// feature surface described in later-part specs. See AI-SESSION-LOG.md for
+// the provenance note explaining why.
 import {
-  bigserial,
-  boolean,
-  index,
-  integer,
-  jsonb,
   pgTable,
+  serial,
+  varchar,
   text,
+  integer,
+  numeric,
+  jsonb,
   timestamp,
-  uniqueIndex,
-  uuid,
 } from "drizzle-orm/pg-core";
 
-// ---------------------------------------------------------------------------
-// Auth: API tokens scoped per organisation.
-// ---------------------------------------------------------------------------
-export const apiTokens = pgTable(
-  "api_tokens",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: text("org_id").notNull(),
-    name: text("name").notNull(),
-    tokenHash: text("token_hash").notNull(),
-    tokenPrefix: text("token_prefix").notNull(),
-    scopes: text("scopes").array().notNull().default(["read"]),
-    rateLimitPerMinute: integer("rate_limit_per_minute").notNull().default(120),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("api_tokens_token_hash_idx").on(table.tokenHash),
-    index("api_tokens_org_idx").on(table.orgId),
-  ],
-);
+export const events = pgTable("events", {
+  id: serial("id").primaryKey(),
+  type: varchar("type", { length: 255 }).notNull(),
+  version: integer("version").notNull(),
+  payload: jsonb("payload").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
-// ---------------------------------------------------------------------------
-// Idempotency: dedupes writes made with the same Idempotency-Key header.
-// ---------------------------------------------------------------------------
-export const idempotencyRecords = pgTable(
-  "idempotency_records",
-  {
-    key: text("key").notNull(),
-    orgId: text("org_id").notNull(),
-    route: text("route").notNull(),
-    requestHash: text("request_hash").notNull(),
-    statusCode: integer("status_code").notNull(),
-    responseBody: jsonb("response_body").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("idempotency_org_key_idx").on(table.orgId, table.key)],
-);
+export const findings = pgTable("findings", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  summary: text("summary").notNull().default(""),
+  impact: integer("impact").notNull(),
+  confidence: integer("confidence").notNull(),
+  effort: integer("effort").notNull(),
+  score: numeric("score", { precision: 10, scale: 4 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
-// ---------------------------------------------------------------------------
-// Core representative domain: decisions & findings.
-// ---------------------------------------------------------------------------
-export const decisions = pgTable(
-  "decisions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: text("org_id").notNull(),
-    title: text("title").notNull(),
-    status: text("status").notNull().default("open"),
-    owner: text("owner"),
-    description: text("description"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("decisions_org_idx").on(table.orgId),
-    index("decisions_org_created_idx").on(table.orgId, table.createdAt),
-  ],
-);
+export const decisions = pgTable("decisions", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  context: text("context").notNull().default(""),
+  priorAlpha: numeric("prior_alpha", { precision: 10, scale: 4 }).notNull().default("1"),
+  priorBeta: numeric("prior_beta", { precision: 10, scale: 4 }).notNull().default("1"),
+  posteriorAlpha: numeric("posterior_alpha", { precision: 10, scale: 4 }).notNull().default("1"),
+  posteriorBeta: numeric("posterior_beta", { precision: 10, scale: 4 }).notNull().default("1"),
+  status: varchar("status", { length: 32 }).notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
-export const findings = pgTable(
-  "findings",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: text("org_id").notNull(),
-    decisionId: uuid("decision_id").references(() => decisions.id, { onDelete: "set null" }),
-    summary: text("summary").notNull(),
-    severity: text("severity").notNull().default("info"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    index("findings_org_idx").on(table.orgId),
-    index("findings_org_created_idx").on(table.orgId, table.createdAt),
-  ],
-);
+export const automationRuns = pgTable("automation_runs", {
+  id: serial("id").primaryKey(),
+  kind: varchar("kind", { length: 64 }).notNull(),
+  seed: integer("seed").notNull(),
+  trials: integer("trials").notNull(),
+  input: jsonb("input").notNull(),
+  result: jsonb("result").notNull(),
+  status: varchar("status", { length: 32 }).notNull().default("completed"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
-// ---------------------------------------------------------------------------
-// Automation API: idempotent job/run kernel used for external orchestration.
-// ---------------------------------------------------------------------------
-export const runs = pgTable(
-  "runs",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: text("org_id").notNull(),
-    type: text("type").notNull(),
-    status: text("status").notNull().default("queued"),
-    idempotencyKey: text("idempotency_key"),
-    input: jsonb("input").notNull().default({}),
-    output: jsonb("output"),
-    error: text("error"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
-  },
-  (table) => [
-    uniqueIndex("runs_org_idempotency_idx").on(table.orgId, table.idempotencyKey),
-    index("runs_org_created_idx").on(table.orgId, table.createdAt),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Append-only event log — backs the realtime SSE API and webhook dispatch.
-// ---------------------------------------------------------------------------
-export const platformEvents = pgTable(
-  "platform_events",
-  {
-    seq: bigserial("seq", { mode: "number" }).primaryKey(),
-    id: uuid("id").notNull().defaultRandom(),
-    orgId: text("org_id").notNull(),
-    type: text("type").notNull(),
-    payload: jsonb("payload").notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [index("platform_events_org_seq_idx").on(table.orgId, table.seq)],
-);
-
-// ---------------------------------------------------------------------------
-// Webhooks: subscriptions + delivery log with retry/backoff & dead letter.
-// ---------------------------------------------------------------------------
-export const webhookSubscriptions = pgTable(
-  "webhook_subscriptions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: text("org_id").notNull(),
-    url: text("url").notNull(),
-    secret: text("secret").notNull(),
-    eventTypes: text("event_types").array().notNull(),
-    active: boolean("active").notNull().default(true),
-    description: text("description"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [index("webhook_subscriptions_org_idx").on(table.orgId)],
-);
-
-export const webhookDeliveries = pgTable(
-  "webhook_deliveries",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    subscriptionId: uuid("subscription_id")
-      .notNull()
-      .references(() => webhookSubscriptions.id, { onDelete: "cascade" }),
-    orgId: text("org_id").notNull(),
-    eventType: text("event_type").notNull(),
-    eventId: uuid("event_id").notNull(),
-    payload: jsonb("payload").notNull(),
-    status: text("status").notNull().default("pending"), // pending|delivered|retrying|dead_letter
-    attempt: integer("attempt").notNull().default(0),
-    maxAttempts: integer("max_attempts").notNull().default(6),
-    responseStatus: integer("response_status"),
-    responseBody: text("response_body"),
-    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-  },
-  (table) => [
-    index("webhook_deliveries_sub_idx").on(table.subscriptionId),
-    index("webhook_deliveries_status_idx").on(table.status, table.nextRetryAt),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Reference integration: Slack notification bridge delivery log.
-// ---------------------------------------------------------------------------
-export const slackNotifications = pgTable("slack_notifications", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  orgId: text("org_id").notNull(),
-  channelOverride: text("channel_override"),
-  message: text("message").notNull(),
-  status: text("status").notNull().default("sent"),
-  responseStatus: integer("response_status"),
+export const boardPacks = pgTable("board_packs", {
+  id: serial("id").primaryKey(),
+  periodLabel: varchar("period_label", { length: 100 }).notNull(),
+  summary: jsonb("summary").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,106 +1,87 @@
-// src/lib/platform/db/findingsRepository.ts — the reference tenant-scoped
-// repository. EVERY exported function takes `orgId` as a required (not
-// optional) first-class argument and includes it in the WHERE clause. This
-// is the mechanism `scripts/test-tenant-isolation.ts` exercises directly:
-// calling `listFindings(orgB)` must never be able to see org A's rows no
-// matter what a caller does, because there is no code path that queries
-// `findings` without an `orgId` predicate.
-
-import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { findings, type Finding, type NewFinding } from "@/db/schema";
+import { findings } from "@/db/schema";
+import { and, count, desc, eq, lt } from "drizzle-orm";
+import type { Finding, Page } from "@/lib/domain/types";
+import { decodeCursor, encodeCursor, parseLimit } from "../pagination";
 
-export async function listFindings(orgId: string): Promise<Finding[]> {
-  return db.select().from(findings).where(eq(findings.orgId, orgId)).orderBy(desc(findings.createdAt));
+function toRecord(row: typeof findings.$inferSelect): Finding {
+  return {
+    id: row.id,
+    title: row.title,
+    summary: row.summary,
+    impact: row.impact,
+    confidence: row.confidence,
+    effort: row.effort,
+    score: Number(row.score),
+    status: row.status as Finding["status"],
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
-export async function getFinding(orgId: string, findingId: string): Promise<Finding | undefined> {
-  const [row] = await db
-    .select()
-    .from(findings)
-    .where(and(eq(findings.orgId, orgId), eq(findings.id, findingId)))
-    .limit(1);
-  return row;
-}
-
-/** Idempotent create: replaying the same `clientMutationId` (offline queue retry) returns the existing row instead of duplicating it. */
-export async function createFinding(
-  orgId: string,
-  input: Omit<NewFinding, "orgId">,
-): Promise<{ finding: Finding; wasExisting: boolean }> {
-  if (input.clientMutationId) {
-    const [existing] = await db
-      .select()
-      .from(findings)
-      .where(and(eq(findings.orgId, orgId), eq(findings.clientMutationId, input.clientMutationId)))
-      .limit(1);
-    if (existing) return { finding: existing, wasExisting: true };
-  }
+export async function insertFinding(input: {
+  title: string;
+  summary: string;
+  impact: number;
+  confidence: number;
+  effort: number;
+  score: number;
+}): Promise<Finding> {
   const [row] = await db
     .insert(findings)
-    .values({ ...input, orgId })
+    .values({
+      title: input.title,
+      summary: input.summary,
+      impact: input.impact,
+      confidence: input.confidence,
+      effort: input.effort,
+      score: input.score.toString(),
+    })
     .returning();
-  return { finding: row, wasExisting: false };
+  return toRecord(row);
 }
 
-export interface UpdateResult {
-  outcome: "updated" | "conflict" | "not_found";
-  finding?: Finding;
+export async function getFindingById(id: number): Promise<Finding | null> {
+  const [row] = await db.select().from(findings).where(eq(findings.id, id)).limit(1);
+  return row ? toRecord(row) : null;
 }
 
-/** Optimistic-concurrency update: the caller must supply the `updatedAt` it last read. If the row moved on, the current server copy is returned so the client can offer a merge/keep-mine choice. */
-export async function updateFindingStatus(
-  orgId: string,
-  findingId: string,
-  patch: { status?: string; summary?: string },
-  expectedUpdatedAt: string,
-): Promise<UpdateResult> {
-  const current = await getFinding(orgId, findingId);
-  if (!current) return { outcome: "not_found" };
+export async function listFindingsPage(searchParams: URLSearchParams): Promise<Page<Finding>> {
+  const limit = parseLimit(searchParams);
+  const cursor = decodeCursor(searchParams.get("cursor"));
+  const where = cursor ? lt(findings.id, cursor.id) : undefined;
 
-  if (new Date(current.updatedAt).getTime() !== new Date(expectedUpdatedAt).getTime()) {
-    return { outcome: "conflict", finding: current };
-  }
+  const [rows, totalRow] = await Promise.all([
+    db
+      .select()
+      .from(findings)
+      .where(where ? and(where) : undefined)
+      .orderBy(desc(findings.id))
+      .limit(limit + 1),
+    db.select({ value: count() }).from(findings),
+  ]);
 
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const items = page.map(toRecord);
+  const nextCursor = hasMore ? encodeCursor({ id: items[items.length - 1].id }) : null;
+
+  return { items, nextCursor, total: totalRow[0]?.value ?? 0 };
+}
+
+export async function listTopFindings(n: number): Promise<Finding[]> {
+  const rows = await db.select().from(findings).orderBy(desc(findings.score)).limit(n);
+  return rows.map(toRecord);
+}
+
+export async function countFindings(status?: Finding["status"]): Promise<number> {
   const [row] = await db
-    .update(findings)
-    .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(findings.orgId, orgId), eq(findings.id, findingId)))
-    .returning();
-  return { outcome: "updated", finding: row };
+    .select({ value: count() })
+    .from(findings)
+    .where(status ? eq(findings.status, status) : undefined);
+  return row?.value ?? 0;
 }
 
-export async function seedSampleFindings(orgId: string, team: string): Promise<void> {
-  const samples: Array<Omit<NewFinding, "orgId">> = [
-    {
-      title: "Sprint velocity dropped 30%",
-      domain: "delivery",
-      team,
-      severity: 3,
-      summary: "Synthetic sample finding for first-run exploration.",
-      isSample: true,
-    },
-    {
-      title: "Manager 1:1 cadence slipping",
-      domain: "people",
-      team,
-      severity: 2,
-      summary: "Synthetic sample finding for first-run exploration.",
-      isSample: true,
-    },
-    {
-      title: "Customer escalation unresolved 5 days",
-      domain: "customer",
-      team,
-      severity: 5,
-      summary: "Synthetic sample finding for first-run exploration.",
-      isSample: true,
-    },
-  ];
-  await db.insert(findings).values(samples.map((s) => ({ ...s, orgId })));
-}
-
-export async function countFindingsForOrg(orgId: string): Promise<number> {
-  const rows = await db.select({ id: findings.id }).from(findings).where(eq(findings.orgId, orgId));
-  return rows.length;
+export async function truncateFindings(): Promise<void> {
+  await db.delete(findings);
 }

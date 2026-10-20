@@ -1,114 +1,61 @@
 import { z } from "zod";
-import { findCatalogEntry } from "./eventCatalog";
+import { findEventDefinition } from "./eventCatalog";
 
-// Each schema below is the single source of truth for what a payload may
-// contain. Note what is deliberately absent: no `collaboration.*` schema has
-// a text field for message/meeting content, and no people-domain schema
-// accepts any of PROTECTED_ATTRIBUTES (see src/lib/domain/types.ts).
-
-const schemas: Record<string, z.ZodTypeAny> = {
-  "system.ping:1": z.object({ message: z.string() }),
-  "system.annotation:1": z.object({
-    title: z.string(),
-    body: z.string(),
+const schemas: Record<string, z.ZodType> = {
+  "system.ping@1": z.object({ message: z.string().min(1) }),
+  "onboarding.completed@1": z.object({ orgName: z.string().min(1) }),
+  "signal.captured@1": z.object({
+    title: z.string().min(1),
+    body: z.string().default(""),
     tags: z.array(z.string()).optional(),
   }),
-
-  "person.hired:1": z.object({
-    personId: z.number(),
-    title: z.string(),
-    teamId: z.number().nullable(),
-    managerId: z.number().nullable(),
-    hireDate: z.string(),
+  "finding.created@1": z.object({ findingId: z.number().int().positive(), title: z.string() }),
+  "decision.belief_updated@1": z.object({
+    decisionId: z.number().int().positive(),
+    successes: z.number().int().min(0),
+    failures: z.number().int().min(0),
   }),
-  "person.role_changed:1": z.object({
-    personId: z.number(),
-    fromTitle: z.string(),
-    toTitle: z.string(),
+  "automation.run_completed@1": z.object({
+    runId: z.number().int().positive(),
+    kind: z.string(),
   }),
-  "person.manager_changed:1": z.object({
-    personId: z.number(),
-    fromManagerId: z.number().nullable(),
-    toManagerId: z.number().nullable(),
-  }),
-  "person.compensation_reviewed:1": z.object({
-    personId: z.number(),
-    compaRatio: z.number().min(0).max(3),
-    bandMidpointDeltaPct: z.number().optional(),
-  }),
-  "person.skill_evidenced:1": z.object({
-    personId: z.number(),
-    skill: z.string(),
-    level: z.number().min(1).max(5),
-    evidence: z.string(),
-  }),
-  "person.growth_conversation_held:1": z.object({
-    personId: z.number(),
-    managerId: z.number(),
-    topics: z.array(z.string()),
-  }),
-
-  "oneonone.scheduled:1": z.object({
-    oneOnOneId: z.number(),
-    personId: z.number(),
-    managerId: z.number(),
-    scheduledAt: z.string(),
-  }),
-  "oneonone.completed:1": z.object({
-    oneOnOneId: z.number(),
-    personId: z.number(),
-    managerId: z.number(),
-    commitmentCount: z.number(),
-  }),
-  "oneonone.commitment_resolved:1": z.object({
-    oneOnOneId: z.number(),
-    commitmentId: z.string(),
-    status: z.enum(["done", "missed"]),
-  }),
-  "growth.milestone_completed:1": z.object({
-    personId: z.number(),
-    planId: z.number(),
-    milestoneId: z.number(),
-    skill: z.string(),
-    evidence: z.string(),
-  }),
-
-  "consent.recorded:1": z.object({
-    personId: z.number(),
-    scope: z.string(),
-    noticeVersion: z.string(),
-    granted: z.boolean(),
-  }),
-
-  "collaboration.meeting_logged:1": z.object({
-    meetingId: z.string(),
-    participantIds: z.array(z.number()).min(1),
-    organizerId: z.number(),
-    durationMinutes: z.number().positive(),
-    recurring: z.boolean(),
-    occurredAt: z.string(),
-  }),
-  "collaboration.message_logged:1": z.object({
-    fromId: z.number(),
-    toId: z.number(),
-    channel: z.enum(["chat", "email", "comment"]),
-    occurredAt: z.string(),
-  }),
+  "boardpack.generated@1": z.object({ boardPackId: z.number().int().positive() }),
 };
 
-export function schemaFor(type: string, version: number): z.ZodTypeAny | undefined {
-  if (!findCatalogEntry(type, version)) return undefined;
-  return schemas[`${type}:${version}`];
+export class UnknownEventTypeError extends Error {
+  constructor(type: string, version: number) {
+    super(`Unknown event type/version: ${type}@${version}`);
+    this.name = "UnknownEventTypeError";
+  }
 }
 
-export function validatePayload(type: string, version: number, payload: unknown) {
-  const schema = schemaFor(type, version);
+export class EventPayloadValidationError extends Error {
+  constructor(
+    type: string,
+    version: number,
+    public readonly issues: z.ZodIssue[],
+  ) {
+    super(`Invalid payload for ${type}@${version}: ${issues.map((i) => i.message).join("; ")}`);
+    this.name = "EventPayloadValidationError";
+  }
+}
+
+/** Validates `payload` against the registered schema for `type`/`version`. Throws on failure. */
+export function validateEventPayload(type: string, version: number, payload: unknown): unknown {
+  const definition = findEventDefinition(type, version);
+  if (!definition) {
+    throw new UnknownEventTypeError(type, version);
+  }
+  const schema = schemas[`${type}@${version}`];
+  /* v8 ignore next 3 -- defensive: every EVENT_CATALOG entry has a matching
+     schema here, enforced by the "every catalog entry has a resolvable
+     definition" test; this guards against the two registries drifting. */
   if (!schema) {
-    return { ok: false as const, error: `Unknown event type/version: ${type} v${version}` };
+    throw new UnknownEventTypeError(type, version);
   }
-  const parsed = schema.safeParse(payload);
-  if (!parsed.success) {
-    return { ok: false as const, error: parsed.error.message };
+  const result = schema.safeParse(payload);
+  if (!result.success) {
+    throw new EventPayloadValidationError(type, version, result.error.issues);
   }
-  return { ok: true as const, data: parsed.data };
+  return result.data;
 }

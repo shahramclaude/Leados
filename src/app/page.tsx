@@ -1,38 +1,71 @@
 import { db } from "@/db";
 import { sql } from "drizzle-orm";
 import Link from "next/link";
+import { countEvents } from "@/lib/platform/db/eventsRepository";
+import { countFindings } from "@/lib/platform/db/findingsRepository";
+import { countDecisions } from "@/lib/platform/db/decisionsRepository";
+import { countRuns } from "@/lib/platform/db/runsRepository";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  await db.execute(sql`select 1`);
+  let dbOk = true;
+  try {
+    await db.execute(sql`select 1`);
+  } catch {
+    dbOk = false;
+  }
+
+  const [events, findingsTotal, decisionsTotal, runsTotal] = await Promise.all([
+    countEvents(),
+    countFindings(),
+    countDecisions(),
+    countRuns(),
+  ]);
+
+  const cards = [
+    { href: "/onboarding", label: "Onboarding", value: "Start here" },
+    { href: "/events", label: "Events logged", value: events },
+    { href: "/findings", label: "Findings", value: findingsTotal },
+    { href: "/decisions", label: "Decisions", value: decisionsTotal },
+    { href: "/automation", label: "Automation runs", value: runsTotal },
+    { href: "/boardpack", label: "Board Pack", value: "Export" },
+  ];
 
   return (
-    <main className="grid min-h-screen place-items-center px-6 py-12">
-      <section className="w-full max-w-2xl rounded-3xl bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
-        <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">Part 10 — The Open Platform</p>
-        <h1 className="mt-4 text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.05] text-slate-950">
-          LEADOS Platform API
-        </h1>
-        <p className="mt-4 text-base text-slate-700">
-          A stable, versioned, documented programmatic surface: REST API v1, OpenAPI 3.1 spec, generated TypeScript
-          SDK, outbound webhooks with HMAC + retries, a realtime SSE API, and an automation job kernel.
+    <div className="space-y-10">
+      <section
+        className="ld-surface rounded-3xl border p-10 shadow-sm"
+        data-testid="system-status"
+      >
+        <p className="m-0 text-sm uppercase tracking-[0.08em]" style={{ color: "var(--muted)" }}>
+          System Status
         </p>
-        <div className="mt-6 flex flex-wrap gap-3 text-sm font-medium">
-          <Link className="rounded-lg bg-slate-900 px-4 py-2 text-white" href="/status">
-            Status page
-          </Link>
-          <Link className="rounded-lg border border-slate-300 px-4 py-2 text-slate-800" href="/platform/webhooks">
-            Webhook delivery log
-          </Link>
-          <a className="rounded-lg border border-slate-300 px-4 py-2 text-slate-800" href="/api-spec.yaml">
-            api-spec.yaml
-          </a>
-        </div>
-        <p className="mt-6 text-sm text-slate-500">
-          Full guide: <code>docs/API.md</code> · SDK: <code>sdk.ts</code> · Spec: <code>api-spec.yaml</code>
+        <h1 className="mt-4 text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.05]">
+          LEADOS
+        </h1>
+        <p className="mt-4 text-base" style={{ color: "var(--muted)" }}>
+          Autonomous leadership-intelligence operating system. Database:{" "}
+          <span data-testid="db-status" className={dbOk ? "font-semibold text-emerald-600" : "font-semibold text-red-600"}>
+            {dbOk ? "connected" : "unreachable"}
+          </span>
         </p>
       </section>
-    </main>
+
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((card) => (
+          <Link
+            key={card.href}
+            href={card.href}
+            className="ld-surface rounded-2xl border p-6 transition hover:-translate-y-0.5 hover:shadow-md"
+          >
+            <p className="text-sm" style={{ color: "var(--muted)" }}>
+              {card.label}
+            </p>
+            <p className="mt-2 text-2xl font-semibold">{card.value}</p>
+          </Link>
+        ))}
+      </section>
+    </div>
   );
 }

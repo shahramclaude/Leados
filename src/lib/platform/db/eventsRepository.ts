@@ -1,60 +1,61 @@
 import { db } from "@/db";
 import { events } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, count, desc, lt } from "drizzle-orm";
+import type { EventRecord, Page } from "@/lib/domain/types";
+import { decodeCursor, encodeCursor, parseLimit } from "../pagination";
 
-export interface RecordEventInput {
+function toRecord(row: typeof events.$inferSelect): EventRecord {
+  return {
+    id: row.id,
+    type: row.type,
+    version: row.version,
+    payload: row.payload,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export async function insertEvent(input: {
   type: string;
   version: number;
   payload: unknown;
-  actorId?: number | null;
-  subjectId?: number | null;
-  occurredAt?: Date;
+}): Promise<EventRecord> {
+  const [row] = await db
+    .insert(events)
+    .values({ type: input.type, version: input.version, payload: input.payload })
+    .returning();
+  return toRecord(row);
 }
 
-export const eventsRepository = {
-  async record(input: RecordEventInput) {
-    const [row] = await db
-      .insert(events)
-      .values({
-        type: input.type,
-        version: input.version,
-        payload: input.payload as object,
-        actorId: input.actorId ?? null,
-        subjectId: input.subjectId ?? null,
-        occurredAt: input.occurredAt ?? new Date(),
-      })
-      .returning();
-    return row;
-  },
+export async function listEventsPage(searchParams: URLSearchParams): Promise<Page<EventRecord>> {
+  const limit = parseLimit(searchParams);
+  const cursor = decodeCursor(searchParams.get("cursor"));
 
-  async listRecent(limit = 20) {
-    return db.select().from(events).orderBy(desc(events.occurredAt)).limit(limit);
-  },
+  const where = cursor ? lt(events.id, cursor.id) : undefined;
 
-  async count() {
-    const rows = await db.select().from(events);
-    return rows.length;
-  },
-
-  /** All events concerning a given person, oldest first — the raw feed a timeline projects. */
-  async listForSubject(subjectId: number) {
-    return db
+  const [rows, totalRow] = await Promise.all([
+    db
       .select()
       .from(events)
-      .where(eq(events.subjectId, subjectId))
-      .orderBy(events.occurredAt);
-  },
+      .where(where ? and(where) : undefined)
+      .orderBy(desc(events.id))
+      .limit(limit + 1),
+    db.select({ value: count() }).from(events),
+  ]);
 
-  async listForSubjectAndTypes(subjectId: number, types: string[]) {
-    const rows = await db
-      .select()
-      .from(events)
-      .where(eq(events.subjectId, subjectId))
-      .orderBy(events.occurredAt);
-    return rows.filter((r) => types.includes(r.type));
-  },
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const items = page.map(toRecord);
+  const nextCursor = hasMore ? encodeCursor({ id: items[items.length - 1].id }) : null;
 
-  async listByType(type: string) {
-    return db.select().from(events).where(eq(events.type, type)).orderBy(events.occurredAt);
-  },
-};
+  return { items, nextCursor, total: totalRow[0]?.value ?? 0 };
+}
+
+export async function countEvents(): Promise<number> {
+  const [row] = await db.select({ value: count() }).from(events);
+  return row?.value ?? 0;
+}
+
+/** Test/dev helper: removes all rows. Never exposed over HTTP. */
+export async function truncateEvents(): Promise<void> {
+  await db.delete(events);
+}

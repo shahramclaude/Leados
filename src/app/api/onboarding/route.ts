@@ -1,27 +1,33 @@
-import { runOnboarding } from "@/lib/app/onboarding";
-import { needsFirstRunOnboarding } from "@/lib/app/auth";
-import { SESSION_ORG_COOKIE, SESSION_USER_COOKIE } from "@/lib/platform/session";
-import type { OrgProfile } from "@/lib/domain/types";
-import { cookies } from "next/headers";
+import { completeOnboarding, getOnboardingStatus } from "@/lib/app/onboarding";
+import { ValidationError } from "@/lib/app/findings";
+import { checkAuth } from "@/lib/platform/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const needsOnboarding = await needsFirstRunOnboarding();
-  return Response.json({ needsOnboarding });
+  const status = await getOnboardingStatus();
+  return Response.json(status);
 }
 
 export async function POST(request: Request) {
+  const auth = checkAuth(request);
+  if (!auth.ok) return Response.json({ error: auth.message }, { status: auth.status });
+
+  let body: unknown;
   try {
-    const body = (await request.json()) as OrgProfile;
-    const result = await runOnboarding(body);
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
+  }
 
-    const store = await cookies();
-    store.set(SESSION_USER_COOKIE, result.userId, { httpOnly: true, sameSite: "lax", path: "/" });
-    store.set(SESSION_ORG_COOKIE, result.orgId, { httpOnly: true, sameSite: "lax", path: "/" });
-
-    return Response.json({ orgId: result.orgId, userId: result.userId }, { status: 201 });
-  } catch (err) {
-    return Response.json({ error: (err as Error).message }, { status: 400 });
+  const { orgName } = (body ?? {}) as Record<string, unknown>;
+  try {
+    const result = await completeOnboarding(String(orgName ?? ""));
+    return Response.json(result, { status: 201 });
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
   }
 }

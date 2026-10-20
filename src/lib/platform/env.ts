@@ -1,8 +1,7 @@
-// Fail-fast environment validation. Import this from anything that needs an
-// env var so a missing value produces one clear error at the call site
-// instead of a cryptic failure three layers down.
+// Fail-fast environment access: one clear error at boot instead of a
+// cryptic failure three layers down.
 
-function required(name: string): string {
+export function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(`Missing required environment variable: ${name}`);
@@ -10,8 +9,7 @@ function required(name: string): string {
   return value;
 }
 
-export const env = {
-  get databaseUrl() {
-    return required("DATABASE_URL");
-  },
-};
+/** The bearer token external API callers must present for mutating `/api/*` routes. */
+export function getApiToken(): string {
+  return process.env.API_TOKEN ?? "leados-dev-token";
+}

@@ -1,26 +1,36 @@
-// Generates api-spec.yaml / api-spec.json from the zod registry. Run via:
-//   npx tsx scripts/generate-openapi.ts
-// This is the only supported way to change the spec — never hand-edit the
-// generated files.
-import { mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
+// Regenerates api-spec.json / api-spec.yaml from the zod schemas in
+// src/lib/openapi/*. Run with: npx tsx scripts/generate-openapi.ts
+// CI runs this and fails the build if the committed spec is stale (see
+// .github/workflows/ci.yml, the "openapi spec is up to date" step).
+import { OpenApiGeneratorV31 } from "@asteasolutions/zod-to-openapi";
+import { writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { stringify } from "yaml";
-import { buildOpenApiDocument } from "../src/lib/openapi/registry";
+import { registry } from "../src/lib/openapi/registry";
+
+function buildDocument() {
+  const generator = new OpenApiGeneratorV31(registry.definitions);
+  return generator.generateDocument({
+    openapi: "3.1.0",
+    info: {
+      title: "LEADOS API",
+      version: "0.1.0",
+      description:
+        "Representative slice of the LEADOS API surface (events, findings, decisions, " +
+        "automation runs, board packs) used to prove out the Part 11 QE pipeline.",
+    },
+    servers: [{ url: "/" }],
+  });
+}
 
 function main() {
-  const document = buildOpenApiDocument();
-  const root = path.resolve(__dirname, "..");
-  const yamlStr = stringify(document);
-  const jsonStr = JSON.stringify(document, null, 2);
-
-  writeFileSync(path.join(root, "api-spec.yaml"), yamlStr, "utf8");
-  writeFileSync(path.join(root, "api-spec.json"), jsonStr, "utf8");
-
-  mkdirSync(path.join(root, "public"), { recursive: true });
-  writeFileSync(path.join(root, "public", "api-spec.yaml"), yamlStr, "utf8");
-  writeFileSync(path.join(root, "public", "api-spec.json"), jsonStr, "utf8");
-
-  console.log(`Generated api-spec.yaml and api-spec.json with ${Object.keys(document.paths ?? {}).length} paths.`);
+  const document = buildDocument();
+  const jsonPath = resolve(__dirname, "../api-spec.json");
+  const yamlPath = resolve(__dirname, "../api-spec.yaml");
+  writeFileSync(jsonPath, JSON.stringify(document, null, 2) + "\n", "utf8");
+  writeFileSync(yamlPath, stringify(document), "utf8");
+  // eslint-disable-next-line no-console
+  console.log(`Wrote ${jsonPath}\nWrote ${yamlPath}`);
 }
 
 main();

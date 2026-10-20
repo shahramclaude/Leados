@@ -1,48 +1,39 @@
-import { requireSession } from "@/lib/platform/session";
-import { errorToResponse } from "@/lib/platform/authz";
-import {
-  createFindingForSession,
-  listFindingsForSession,
-  resolveFindingForSession,
-} from "@/lib/app/findings";
-import type { FindingInput } from "@/lib/domain/types";
+import { createFinding, listFindings, ValidationError } from "@/lib/app/findings";
+import { checkAuth } from "@/lib/platform/auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  try {
-    const session = await requireSession();
-    const findings = await listFindingsForSession(session);
-    return Response.json({ findings });
-  } catch (err) {
-    return errorToResponse(err);
-  }
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const page = await listFindings(searchParams);
+  return Response.json(page);
 }
 
 export async function POST(request: Request) {
-  try {
-    const session = await requireSession();
-    const body = (await request.json()) as FindingInput;
-    const { finding, wasExisting } = await createFindingForSession(session, body);
-    return Response.json({ finding, wasExisting }, { status: wasExisting ? 200 : 201 });
-  } catch (err) {
-    return errorToResponse(err);
-  }
-}
+  const auth = checkAuth(request);
+  if (!auth.ok) return Response.json({ error: auth.message }, { status: auth.status });
 
-export async function PATCH(request: Request) {
+  let body: unknown;
   try {
-    const session = await requireSession();
-    const body = (await request.json()) as { id: string; expectedUpdatedAt: string };
-    const result = await resolveFindingForSession(session, body.id, body.expectedUpdatedAt);
-    if (result.outcome === "not_found") {
-      return Response.json({ error: "Finding not found" }, { status: 404 });
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
+  }
+
+  const { title, summary, impact, confidence, effort } = (body ?? {}) as Record<string, unknown>;
+  try {
+    const finding = await createFinding({
+      title: String(title ?? ""),
+      summary: typeof summary === "string" ? summary : undefined,
+      impact: Number(impact),
+      confidence: Number(confidence),
+      effort: Number(effort),
+    });
+    return Response.json(finding, { status: 201 });
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return Response.json({ error: error.message }, { status: 400 });
     }
-    if (result.outcome === "conflict") {
-      return Response.json({ outcome: "conflict", finding: result.finding }, { status: 409 });
-    }
-    return Response.json({ outcome: "updated", finding: result.finding });
-  } catch (err) {
-    return errorToResponse(err);
+    throw error;
   }
 }

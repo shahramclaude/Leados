@@ -1,40 +1,38 @@
-import { eventsRepository } from "@/lib/platform/db/eventsRepository";
-import { validatePayload } from "@/lib/domain/eventSchema";
+import { listEvents, recordEvent } from "@/lib/app/events";
+import { checkAuth } from "@/lib/platform/auth";
+import { UnknownEventTypeError, EventPayloadValidationError } from "@/lib/domain/eventSchema";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const limitParam = Number(url.searchParams.get("limit") ?? "20");
-  const limit = Math.min(200, Math.max(1, Number.isFinite(limitParam) ? limitParam : 20));
-
-  const [recent, total] = await Promise.all([eventsRepository.listRecent(limit), eventsRepository.count()]);
-  return Response.json({ total, recent });
+  const { searchParams } = new URL(request.url);
+  const page = await listEvents(searchParams);
+  return Response.json(page);
 }
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body !== "object") {
-    return Response.json({ error: "Request body must be JSON." }, { status: 400 });
+  const auth = checkAuth(request);
+  if (!auth.ok) return Response.json({ error: auth.message }, { status: auth.status });
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
   }
 
-  const { type, version, payload, actorId, subjectId } = body as Record<string, unknown>;
+  const { type, version, payload } = (body ?? {}) as Record<string, unknown>;
   if (typeof type !== "string" || typeof version !== "number") {
-    return Response.json({ error: "`type` (string) and `version` (number) are required." }, { status: 400 });
+    return Response.json({ error: "type (string) and version (number) are required" }, { status: 400 });
   }
 
-  const result = validatePayload(type, version, payload);
-  if (!result.ok) {
-    return Response.json({ error: result.error }, { status: 400 });
+  try {
+    const record = await recordEvent({ type, version, payload });
+    return Response.json(record, { status: 201 });
+  } catch (error) {
+    if (error instanceof UnknownEventTypeError || error instanceof EventPayloadValidationError) {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
+    throw error;
   }
-
-  const record = await eventsRepository.record({
-    type,
-    version,
-    payload: result.data,
-    actorId: typeof actorId === "number" ? actorId : null,
-    subjectId: typeof subjectId === "number" ? subjectId : null,
-  });
-
-  return Response.json(record, { status: 201 });
 }

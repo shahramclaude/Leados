@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { Nav } from "./nav";
 
 export const metadata: Metadata = {
-  title: "LEADOS Platform API",
-  description: "LEADOS — the open platform: API v1, webhooks, integrations, realtime & automation.",
+  title: "LEADOS",
+  description: "LEADOS — autonomous leadership-intelligence operating system.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-slate-100 text-slate-900 antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <Nav />
+        <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+      </body>
     </html>
   );
 }

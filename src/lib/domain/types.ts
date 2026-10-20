@@ -1,60 +1,75 @@
-// src/lib/domain/types.ts — the one canonical domain model file (see
-// ARCHITECTURE.md's "Where modules belong" table). Pure types only, no I/O,
-// no Drizzle row types leaking in from the platform layer.
+// Canonical domain types shared by the app and platform layers.
+// Pure types only — no imports from drizzle, next, or any I/O library.
 
-export type Role = "admin" | "executive" | "hr" | "manager" | "contributor" | "viewer";
-
-export type Permission =
-  | "findings:view"
-  | "findings:create"
-  | "findings:resolve"
-  | "settings:view"
-  | "settings:edit"
-  | "featureFlags:edit"
-  | "permissions:view"
-  | "onboarding:run"
-  | "push:manage";
-
-export interface SessionContext {
-  userId: string;
-  orgId: string;
-  role: Role;
-  locale: string;
+export interface EventRecord {
+  id: number;
+  type: string;
+  version: number;
+  payload: unknown;
+  createdAt: string;
 }
 
-export interface OrgProfile {
-  slug: string;
-  name: string;
-  industry: string;
-  defaultLocale: string;
-  timezone: string;
-  currency: string;
-  accentColor: string;
-  terminologyPreset: "default" | "startup" | "enterprise" | "nonprofit";
-  sampleDataEnabled: boolean;
-  adminName: string;
-  adminEmail: string;
-}
-
-export interface FindingInput {
+export interface Finding {
+  id: number;
   title: string;
-  domain: string;
-  team: string;
-  severity: number;
   summary: string;
-  clientMutationId?: string;
+  impact: number;
+  confidence: number;
+  effort: number;
+  score: number;
+  status: "open" | "resolved" | "dismissed";
+  createdAt: string;
+  updatedAt: string;
 }
 
-export const FEATURE_FLAG_KEYS = [
-  "pushNotifications",
-  "plainLanguageDefault",
-  "advancedNav",
-] as const;
+export interface Decision {
+  id: number;
+  title: string;
+  context: string;
+  priorAlpha: number;
+  priorBeta: number;
+  posteriorAlpha: number;
+  posteriorBeta: number;
+  beliefMean: number;
+  status: "open" | "decided" | "abandoned";
+  createdAt: string;
+  updatedAt: string;
+}
 
-export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
+export interface AutomationRun {
+  id: number;
+  kind: string;
+  seed: number;
+  trials: number;
+  input: unknown;
+  result: unknown;
+  status: "completed" | "failed";
+  createdAt: string;
+}
 
-export const DEFAULT_FEATURE_FLAGS: Record<FeatureFlagKey, boolean> = {
-  pushNotifications: false,
-  plainLanguageDefault: false,
-  advancedNav: false,
-};
+export interface BoardPack {
+  id: number;
+  periodLabel: string;
+  summary: BoardPackSummary;
+  createdAt: string;
+}
+
+export interface BoardPackSummary {
+  generatedAt: string;
+  totals: {
+    events: number;
+    findings: number;
+    openFindings: number;
+    decisions: number;
+    decidedDecisions: number;
+    automationRuns: number;
+  };
+  topFindings: Pick<Finding, "id" | "title" | "score">[];
+  recentDecisions: Pick<Decision, "id" | "title" | "beliefMean" | "status">[];
+}
+
+export interface Page<T> {
+  items: T[];
+  nextCursor: string | null;
+  total: number;
+}
