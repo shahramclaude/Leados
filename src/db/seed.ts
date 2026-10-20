@@ -1,189 +1,361 @@
-// src/db/seed.ts
+// LEADOS Part 01 — synthetic seed data.
 //
-// Idempotent demo-data seeding so the People Intelligence view has
-// something meaningful to show on a fresh database, without requiring a
-// manual seed step. Called lazily (and cheaply, via a COUNT check) from
-// the intelligence API route.
+// *** EVERYTHING THIS SCRIPT WRITES IS SYNTHETIC / LABELLED FAKE DATA. ***
+// Names, ids, dollar amounts and dates below are invented for demonstration
+// and testing only (see honesty rule in AI-SESSION-LOG.md Part 01). The
+// dataset.label setting is set to "synthetic-seed" so any UI/API consuming
+// it can display that fact; see src/lib/dataset.server.ts.
+//
+// Run with: `npx tsx src/db/seed.ts` (there is no `npm run db:seed` script —
+// see AI-SESSION-LOG.md Part 01, "package.json constraint", for why).
+//
+// Every single row this script creates goes through `appendEvent()`
+// (src/lib/eventStore.ts) — the same single write path the API/UI use. There
+// is no raw SQL seed path (scripts/seed_financial.sql does not exist in this
+// repo on purpose; see the manifest notes in the Part 01 delivery).
 
-import { db } from "@/db";
-import { leadosEvents, oneOnOnes, orgEdges, people } from "@/db/schema";
-import { sql } from "drizzle-orm";
+import "dotenv/config";
+import { appendEvent } from "@/lib/eventStore";
+import { setDatasetLabel } from "@/lib/dataset.server";
+import { countEvents } from "@/lib/platform/eventRepository";
+import { newUlid } from "@/lib/ulid";
+import type { EventTypeId } from "@/lib/events/eventCatalog";
 
-interface SeedPerson {
-  name: string;
-  role: string;
-  team: string;
-  manager?: string;
-  email: string;
-  startDate: string;
-  skills: string[];
-  performanceScore: number;
-  promotionReadiness: number;
-  growthVelocity: number;
-  compensationFlag: boolean;
+const ORG_ID = "org_demo_synthetic";
+const SEED_ACTOR = { kind: "system" as const, id: "seed-script" };
+
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 }
 
-const SEED_PEOPLE: SeedPerson[] = [
-  { name: "Ava Chen", role: "Engineering Manager", team: "Platform", email: "ava.chen@leados.dev", startDate: "2019-03-01", skills: ["leadership", "systems-design", "golang", "mentoring", "roadmapping"], performanceScore: 88, promotionReadiness: 70, growthVelocity: 0.7, compensationFlag: false },
-  { name: "Marcus Reed", role: "Staff Engineer", team: "Platform", manager: "Ava Chen", email: "marcus.reed@leados.dev", startDate: "2018-06-15", skills: ["golang", "distributed-systems", "kubernetes", "mentoring", "security", "observability"], performanceScore: 91, promotionReadiness: 40, growthVelocity: 0.5, compensationFlag: true },
-  { name: "Priya Nair", role: "Senior Engineer", team: "Platform", manager: "Ava Chen", email: "priya.nair@leados.dev", startDate: "2021-01-11", skills: ["golang", "kubernetes", "observability"], performanceScore: 76, promotionReadiness: 65, growthVelocity: 0.8, compensationFlag: false },
-  { name: "Jonas Keller", role: "Engineer II", team: "Platform", manager: "Ava Chen", email: "jonas.keller@leados.dev", startDate: "2022-09-01", skills: ["golang", "ci-cd"], performanceScore: 58, promotionReadiness: 35, growthVelocity: 0.3, compensationFlag: false },
-  { name: "Sofia Alvarez", role: "Product Manager", team: "Growth", email: "sofia.alvarez@leados.dev", startDate: "2020-02-20", skills: ["roadmapping", "experimentation", "analytics", "stakeholder-mgmt", "pricing"], performanceScore: 84, promotionReadiness: 75, growthVelocity: 0.75, compensationFlag: false },
-  { name: "Derek Owusu", role: "Senior PM", team: "Growth", manager: "Sofia Alvarez", email: "derek.owusu@leados.dev", startDate: "2017-11-05", skills: ["roadmapping", "analytics", "pricing", "stakeholder-mgmt"], performanceScore: 72, promotionReadiness: 25, growthVelocity: 0.2, compensationFlag: true },
-  { name: "Lena Novak", role: "Product Analyst", team: "Growth", manager: "Sofia Alvarez", email: "lena.novak@leados.dev", startDate: "2023-04-10", skills: ["analytics", "sql"], performanceScore: 66, promotionReadiness: 55, growthVelocity: 0.6, compensationFlag: false },
-  { name: "Omar Haddad", role: "Design Lead", team: "Design", email: "omar.haddad@leados.dev", startDate: "2016-08-01", skills: ["design-systems", "leadership", "research", "prototyping", "accessibility"], performanceScore: 80, promotionReadiness: 30, growthVelocity: 0.35, compensationFlag: false },
-  { name: "Yuki Tanaka", role: "Product Designer", team: "Design", manager: "Omar Haddad", email: "yuki.tanaka@leados.dev", startDate: "2022-01-17", skills: ["prototyping", "research"], performanceScore: 61, promotionReadiness: 45, growthVelocity: 0.55, compensationFlag: false },
-  { name: "Grace Kim", role: "Sales Director", team: "Revenue", email: "grace.kim@leados.dev", startDate: "2015-05-19", skills: ["leadership", "negotiation", "forecasting", "enterprise-sales", "coaching"], performanceScore: 90, promotionReadiness: 20, growthVelocity: 0.25, compensationFlag: false },
-  { name: "Tomas Horvat", role: "Account Executive", team: "Revenue", manager: "Grace Kim", email: "tomas.horvat@leados.dev", startDate: "2021-07-08", skills: ["negotiation", "enterprise-sales"], performanceScore: 54, promotionReadiness: 20, growthVelocity: 0.2, compensationFlag: true },
-  { name: "Nadia Petrova", role: "Account Executive", team: "Revenue", manager: "Grace Kim", email: "nadia.petrova@leados.dev", startDate: "2023-10-02", skills: ["enterprise-sales"], performanceScore: 48, promotionReadiness: 30, growthVelocity: 0.4, compensationFlag: false },
-];
-
-const ONE_ON_ONE_NOTES: Record<string, string[]> = {
-  "Marcus Reed": [
-    "Marcus mentioned he's been reached out to by a recruiter from a competitor and is considering the opportunity seriously; says the offer from them would be a competitive offer well above market rate. He feels undervalued here and brought up that he deserves more given his scope. Energy was flat for most of the call.",
-    "Still frustrated about the comp review outcome — feels he is below market compared to peers at other companies. Mentioned he is stretched thin covering two teams' on-call and it's not sustainable. No clear action items landed this time, ran out of time.",
-    "Good technical discussion about the new service mesh rollout, he's excited about the architecture direction and proud of the launch last week. Some mention of being tired from the on-call rotation but overall more energized than last time. We agreed on next steps: he'll draft the RFC by Friday.",
-  ],
-  "Derek Owusu": [
-    "Derek seems checking out lately — said he feels stuck and sees no growth path here after being passed over for the senior director role. Mentioned he's been thinking about leaving and has started a quiet job search. Very low energy on the call.",
-    "Talked about the roadmap slip; he's frustrated and feels ignored when he raises concerns about resourcing. Said the politics around the reorg have been exhausting. No action items agreed.",
-  ],
-  "Jonas Keller": [
-    "Jonas is new-ish and still ramping, mentioned he's been reading a lot and taking an online course on distributed systems to catch up, feeling motivated. We agreed he will pair with Priya on the next project as a stretch opportunity.",
-  ],
-  "Tomas Horvat": [
-    "Tomas said he's overwhelmed with the pipeline and has been working weekends to hit quota; says he can't keep up and is exhausted. Also unclear on how comp is calculated this quarter, feels not fairly compensated versus teammates.",
-    "Similar themes: overloaded, no time for the enablement training, mentioned he can't sleep before big calls. We agreed on reducing his account load by two logos as an action item.",
-  ],
-  "Omar Haddad": [
-    "Omar is proud of the design system adoption and feels aligned with the new product direction, good momentum this quarter. Brought up wanting more clarity on a path to a VP-level role — a career conversation about what's next for him specifically.",
-  ],
-  "Grace Kim": [
-    "Grace is energized about the new enterprise segment and feels supported by leadership. Great team spirit on her side, no concerns raised. We agreed on a follow up action item to finalize the territory plan by next week.",
-  ],
-};
-
-async function tableIsEmpty(): Promise<boolean> {
-  const result = await db.execute<{ count: string }>(sql`select count(*)::text as count from people`);
-  const row = result.rows[0] as { count: string } | undefined;
-  return !row || row.count === "0";
+async function emit(type: EventTypeId, entityId: string, payload: unknown, occurredAt: string, correlationId: string) {
+  return appendEvent({
+    type,
+    orgId: ORG_ID,
+    actor: SEED_ACTOR,
+    entityId,
+    occurredAt,
+    correlationId,
+    source: "migration",
+    payload,
+  });
 }
 
-export async function ensureSeedData(): Promise<void> {
-  const empty = await tableIsEmpty();
-  if (!empty) return;
-
-  const nameToId = new Map<string, number>();
-
-  for (const p of SEED_PEOPLE) {
-    const [inserted] = await db
-      .insert(people)
-      .values({
-        name: p.name,
-        role: p.role,
-        team: p.team,
-        managerId: null,
-        email: p.email,
-        startDate: p.startDate,
-        status: "active",
-        skills: p.skills,
-        performanceScore: p.performanceScore,
-        promotionReadiness: p.promotionReadiness,
-        growthVelocity: p.growthVelocity,
-        compensationFlag: p.compensationFlag,
-      })
-      .returning({ id: people.id });
-    nameToId.set(p.name, inserted.id);
+async function main() {
+  const existing = await countEvents(ORG_ID);
+  if (existing > 0 && !process.env.FORCE_SEED) {
+    console.log(
+      `[seed] org "${ORG_ID}" already has ${existing} events. Re-run with FORCE_SEED=1 to append more ` +
+        `synthetic data anyway, or run scripts/reset.ts first for a clean slate.`,
+    );
+    return;
   }
 
-  for (const p of SEED_PEOPLE) {
-    if (p.manager && nameToId.has(p.manager)) {
-      await db
-        .update(people)
-        .set({ managerId: nameToId.get(p.manager) })
-        .where(sql`${people.id} = ${nameToId.get(p.name)}`);
-    }
-  }
+  console.log(`[seed] writing SYNTHETIC demo data for org "${ORG_ID}"...`);
 
-  const today = new Date();
-  for (const [name, notesList] of Object.entries(ONE_ON_ONE_NOTES)) {
-    const personId = nameToId.get(name);
-    if (!personId) continue;
-    const managerId = SEED_PEOPLE.find((p) => p.name === name)?.manager
-      ? nameToId.get(SEED_PEOPLE.find((p) => p.name === name)!.manager!)
-      : null;
-
-    for (let i = 0; i < notesList.length; i++) {
-      const daysAgo = (notesList.length - i - 1) * 14;
-      const date = new Date(today.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-      await db.insert(oneOnOnes).values({
-        personId,
-        managerId: managerId ?? null,
-        date: date.toISOString().slice(0, 10),
-        notes: notesList[i],
-      });
-    }
-  }
-
-  // A light collaboration graph: within-team ties plus a couple of
-  // cross-team bridges, and some pulse/review events for burnout +
-  // performance-trend inputs.
-  const idFor = (n: string) => nameToId.get(n)!;
-  const edgePairs: Array<[string, string, number]> = [
-    ["Ava Chen", "Marcus Reed", 0.9],
-    ["Ava Chen", "Priya Nair", 0.7],
-    ["Ava Chen", "Jonas Keller", 0.6],
-    ["Marcus Reed", "Priya Nair", 0.5],
-    ["Priya Nair", "Jonas Keller", 0.4],
-    ["Sofia Alvarez", "Derek Owusu", 0.8],
-    ["Sofia Alvarez", "Lena Novak", 0.6],
-    ["Derek Owusu", "Lena Novak", 0.3],
-    ["Omar Haddad", "Yuki Tanaka", 0.7],
-    ["Grace Kim", "Tomas Horvat", 0.6],
-    ["Grace Kim", "Nadia Petrova", 0.5],
-    ["Tomas Horvat", "Nadia Petrova", 0.2],
-    ["Marcus Reed", "Sofia Alvarez", 0.3],
-    ["Ava Chen", "Grace Kim", 0.2],
+  // ---- people -----------------------------------------------------------
+  const people = [
+    { id: "person_synthetic_001", name: "Ada Example", role: "Staff Engineer", team: "Platform", start: 400 },
+    { id: "person_synthetic_002", name: "Grace Sample", role: "Product Manager", team: "Product", start: 300 },
+    { id: "person_synthetic_003", name: "Lin Fictitious", role: "Sales Lead", team: "Sales", start: 250 },
+    { id: "person_synthetic_004", name: "Omar Placeholder", role: "Ops Manager", team: "Operations", start: 200 },
+    { id: "person_synthetic_005", name: "Priya Demo", role: "Support Engineer", team: "Platform", start: 150 },
   ];
-  for (const [a, b, weight] of edgePairs) {
-    await db.insert(orgEdges).values({ sourceId: idFor(a), targetId: idFor(b), weight });
+  for (const p of people) {
+    const corr = newUlid();
+    await emit(
+      "people.person_added",
+      p.id,
+      { personId: p.id, name: p.name, role: p.role, team: p.team, startDate: daysAgo(p.start) },
+      daysAgo(p.start),
+      corr,
+    );
   }
+  await emit(
+    "people.role_changed",
+    "person_synthetic_001",
+    { personId: "person_synthetic_001", fromRole: "Senior Engineer", toRole: "Staff Engineer", effectiveDate: daysAgo(60) },
+    daysAgo(60),
+    newUlid(),
+  );
+  // Flight risk history for person_001: medium -> high (two events, so the
+  // upcast v1->v2 score mapping and projector historyCount both have
+  // something real to show).
+  // Note: writes always target the CURRENT schema version (v2 here), which
+  // is why `score`/`previousLevel` are present even though the v1 FIXTURE
+  // used by the upcaster test (eventSchema.ts) omits them — v1 only still
+  // exists for rows written before the v2 migration. See docs/DATA.md.
+  await emit(
+    "people.flight_risk_changed",
+    "person_synthetic_001",
+    {
+      personId: "person_synthetic_001",
+      riskLevel: "medium",
+      reason: "Synthetic: flagged in routine 1:1 notes",
+      score: 0.5,
+      previousLevel: null,
+    },
+    daysAgo(45),
+    newUlid(),
+  );
+  await emit(
+    "people.flight_risk_changed",
+    "person_synthetic_001",
+    {
+      personId: "person_synthetic_001",
+      riskLevel: "high",
+      reason: "Synthetic: declined synthetic retention offer",
+      score: 0.82,
+      previousLevel: "medium",
+    },
+    daysAgo(10),
+    newUlid(),
+  );
+  await emit(
+    "people.flight_risk_changed",
+    "person_synthetic_003",
+    {
+      personId: "person_synthetic_003",
+      riskLevel: "low",
+      reason: "Synthetic: stable, positive engagement signals",
+      score: 0.15,
+      previousLevel: null,
+    },
+    daysAgo(20),
+    newUlid(),
+  );
+  // Demonstrate erasure (tombstone) on person_005.
+  await emit(
+    "privacy.person_erased",
+    "person_synthetic_005",
+    { personId: "person_synthetic_005", requestedBy: "person_synthetic_admin", method: "tombstone-scrub" },
+    daysAgo(1),
+    newUlid(),
+  );
 
-  const pulseByName: Record<string, number> = {
-    "Marcus Reed": 0.35,
-    "Derek Owusu": 0.3,
-    "Tomas Horvat": 0.32,
-    "Ava Chen": 0.8,
-    "Priya Nair": 0.75,
-    "Jonas Keller": 0.6,
-    "Sofia Alvarez": 0.78,
-    "Lena Novak": 0.7,
-    "Omar Haddad": 0.72,
-    "Yuki Tanaka": 0.65,
-    "Grace Kim": 0.85,
-    "Nadia Petrova": 0.6,
-  };
-  for (const [name, psi] of Object.entries(pulseByName)) {
-    await db.insert(leadosEvents).values({
-      personId: idFor(name),
-      type: "pulse",
-      psychologicalSafetyIndex: psi,
-      payload: {},
-    });
-  }
+  // ---- finance ------------------------------------------------------------
+  await emit(
+    "finance.burn_updated",
+    ORG_ID,
+    { monthlyBurnUsd: 110000, cashOnHandUsd: 2200000, runwayMonths: 20 },
+    daysAgo(60),
+    newUlid(),
+  );
+  await emit(
+    "finance.burn_updated",
+    ORG_ID,
+    { monthlyBurnUsd: 128000, cashOnHandUsd: 1850000, runwayMonths: 14.5 },
+    daysAgo(5),
+    newUlid(),
+  );
+  await emit(
+    "finance.invoice_raised",
+    ORG_ID,
+    { invoiceId: "inv_synthetic_001", customerId: "cust_synthetic_001", amountUsd: 42000, dueDate: daysAgo(-25) },
+    daysAgo(30),
+    newUlid(),
+  );
+  await emit(
+    "finance.invoice_raised",
+    ORG_ID,
+    { invoiceId: "inv_synthetic_002", customerId: "cust_synthetic_002", amountUsd: 18000, dueDate: daysAgo(-10) },
+    daysAgo(12),
+    newUlid(),
+  );
+  await emit(
+    "finance.expense_recorded",
+    ORG_ID,
+    { expenseId: "exp_synthetic_001", category: "cloud_infra", amountUsd: 9400, incurredAt: daysAgo(14) },
+    daysAgo(14),
+    newUlid(),
+  );
 
-  for (const p of SEED_PEOPLE) {
-    await db.insert(leadosEvents).values({
-      personId: idFor(p.name),
-      type: "review",
-      psychologicalSafetyIndex: null,
-      payload: { rating: Math.max(0, p.performanceScore - 6) },
-    });
-    await db.insert(leadosEvents).values({
-      personId: idFor(p.name),
-      type: "review",
-      psychologicalSafetyIndex: null,
-      payload: { rating: p.performanceScore },
-    });
+  // ---- strategy -----------------------------------------------------------
+  await emit(
+    "strategy.initiative_created",
+    "init_synthetic_001",
+    { initiativeId: "init_synthetic_001", title: "Synthetic market expansion", owner: "person_synthetic_002", quarter: "2026-Q1" },
+    daysAgo(90),
+    newUlid(),
+  );
+  await emit(
+    "strategy.initiative_status_changed",
+    "init_synthetic_001",
+    { initiativeId: "init_synthetic_001", status: "at_risk", note: "Synthetic: dependent hire slipped" },
+    daysAgo(7),
+    newUlid(),
+  );
+  await emit(
+    "strategy.okr_progress_recorded",
+    "init_synthetic_001",
+    { okrId: "okr_synthetic_001", initiativeId: "init_synthetic_001", progressPct: 55 },
+    daysAgo(7),
+    newUlid(),
+  );
+  await emit(
+    "strategy.initiative_created",
+    "init_synthetic_002",
+    { initiativeId: "init_synthetic_002", title: "Synthetic platform reliability push", owner: "person_synthetic_001", quarter: "2026-Q1" },
+    daysAgo(80),
+    newUlid(),
+  );
+  await emit(
+    "strategy.initiative_status_changed",
+    "init_synthetic_002",
+    { initiativeId: "init_synthetic_002", status: "on_track" },
+    daysAgo(3),
+    newUlid(),
+  );
+
+  // ---- execution ------------------------------------------------------------
+  const tasks = [
+    { id: "task_synthetic_001", title: "Synthetic: migrate billing job", assignee: "person_synthetic_001", done: true },
+    { id: "task_synthetic_002", title: "Synthetic: write onboarding doc", assignee: "person_synthetic_002", done: true },
+    { id: "task_synthetic_003", title: "Synthetic: fix flaky CI test", assignee: "person_synthetic_001", done: false },
+  ];
+  for (const t of tasks) {
+    const corr = newUlid();
+    await emit("execution.task_created", t.id, { taskId: t.id, title: t.title, assigneeId: t.assignee, dueDate: daysAgo(-5) }, daysAgo(21), corr);
+    if (t.done) {
+      await emit("execution.task_completed", t.id, { taskId: t.id, completedAt: daysAgo(2) }, daysAgo(2), corr);
+    }
   }
+  await emit(
+    "execution.sprint_velocity_recorded",
+    "sprint_synthetic_12",
+    { teamId: "team_synthetic_platform", sprintId: "sprint_synthetic_12", velocityPoints: 31 },
+    daysAgo(4),
+    newUlid(),
+  );
+
+  // ---- rd_product -----------------------------------------------------------
+  await emit(
+    "rd_product.feature_proposed",
+    "feat_synthetic_001",
+    { featureId: "feat_synthetic_001", title: "Synthetic bulk CSV import", proposedBy: "person_synthetic_002" },
+    daysAgo(40),
+    newUlid(),
+  );
+  await emit(
+    "rd_product.experiment_result_logged",
+    "exp_rd_synthetic_001",
+    { experimentId: "exp_rd_synthetic_001", featureId: "feat_synthetic_001", outcome: "positive", metricDelta: 0.08 },
+    daysAgo(15),
+    newUlid(),
+  );
+  await emit(
+    "rd_product.roadmap_item_scheduled",
+    "road_synthetic_001",
+    { itemId: "road_synthetic_001", quarter: "2026-Q2", confidence: 0.65 },
+    daysAgo(10),
+    newUlid(),
+  );
+
+  // ---- sales_customers ----------------------------------------------------------
+  await emit(
+    "sales.deal_created",
+    "deal_synthetic_001",
+    { dealId: "deal_synthetic_001", customerId: "cust_synthetic_001", stage: "discovery", amountUsd: 54000 },
+    daysAgo(35),
+    newUlid(),
+  );
+  await emit(
+    "sales.deal_stage_changed",
+    "deal_synthetic_001",
+    { dealId: "deal_synthetic_001", fromStage: "discovery", toStage: "proposal" },
+    daysAgo(18),
+    newUlid(),
+  );
+  await emit(
+    "sales.deal_created",
+    "deal_synthetic_002",
+    { dealId: "deal_synthetic_002", customerId: "cust_synthetic_002", stage: "proposal", amountUsd: 21000 },
+    daysAgo(25),
+    newUlid(),
+  );
+  await emit(
+    "sales.customer_health_scored",
+    "cust_synthetic_001",
+    { customerId: "cust_synthetic_001", healthScore: 81, driver: "synthetic usage growth" },
+    daysAgo(6),
+    newUlid(),
+  );
+  await emit(
+    "sales.customer_health_scored",
+    "cust_synthetic_002",
+    { customerId: "cust_synthetic_002", healthScore: 38, driver: "synthetic support ticket spike" },
+    daysAgo(2),
+    newUlid(),
+  );
+
+  // ---- knowledge ------------------------------------------------------------
+  await emit(
+    "knowledge.doc_published",
+    "doc_synthetic_001",
+    { docId: "doc_synthetic_001", title: "Synthetic incident runbook", authorId: "person_synthetic_001", space: "engineering" },
+    daysAgo(50),
+    newUlid(),
+  );
+  for (let i = 0; i < 3; i += 1) {
+    await emit(
+      "knowledge.doc_viewed",
+      "doc_synthetic_001",
+      { docId: "doc_synthetic_001", viewerId: `person_synthetic_00${i + 2}` },
+      daysAgo(5 - i),
+      newUlid(),
+    );
+  }
+  await emit(
+    "knowledge.doc_flagged_outdated",
+    "doc_synthetic_001",
+    { docId: "doc_synthetic_001", flaggedBy: "person_synthetic_003", reason: "Synthetic: references a retired synthetic tool" },
+    daysAgo(1),
+    newUlid(),
+  );
+
+  // ---- manufacturing_ops ------------------------------------------------------
+  await emit(
+    "manufacturing.batch_started",
+    "batch_synthetic_001",
+    { batchId: "batch_synthetic_001", line: "line_synthetic_a", sku: "sku_synthetic_001", plannedUnits: 500 },
+    daysAgo(9),
+    newUlid(),
+  );
+  await emit(
+    "manufacturing.batch_completed",
+    "batch_synthetic_001",
+    { batchId: "batch_synthetic_001", actualUnits: 486, defectUnits: 7 },
+    daysAgo(8),
+    newUlid(),
+  );
+  await emit(
+    "manufacturing.downtime_logged",
+    "line_synthetic_a",
+    { line: "line_synthetic_a", minutes: 40, cause: "Synthetic: sensor recalibration" },
+    daysAgo(8),
+    newUlid(),
+  );
+  await emit(
+    "manufacturing.downtime_logged",
+    "line_synthetic_a",
+    { line: "line_synthetic_a", minutes: 15, cause: "Synthetic: scheduled changeover" },
+    daysAgo(3),
+    newUlid(),
+  );
+
+  await setDatasetLabel({
+    label: "synthetic-seed",
+    description:
+      "All data in this environment was generated by src/db/seed.ts for demonstration/testing. No real person, customer, or financial figure is represented.",
+  });
+
+  const total = await countEvents(ORG_ID);
+  console.log(`[seed] done. ${total} synthetic events now stored for org "${ORG_ID}".`);
 }
+
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("[seed] failed:", err);
+    process.exit(1);
+  });

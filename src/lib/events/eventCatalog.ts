@@ -1,394 +1,355 @@
-// src/lib/events/eventCatalog.ts
+// LEADOS Part 01 — the event catalog. This is the ontology: the complete,
+// documented list of every event type any domain may emit. Later parts
+// EXTEND this file (add new types, add new versions in eventSchema.ts); they
+// must never fork it into a second, competing list.
 //
-// The versioned schema registry for every event type LEADOS can append.
-// This is the single place that defines:
-//   - which domain an event belongs to (drives projector dispatch)
-//   - the zod payload schema for its current `schemaVersion`
-//   - which payload fields are personally identifying (drives the GDPR
-//     erasure/anonymization flow, docs/DATA.md §7)
-//   - the default retention policy seeded into `retention_policies`
+// Domains (from the Part 00/01 audit — see docs/AUDIT-2026.md):
+//   people, finance, strategy, execution, rd_product, sales_customers,
+//   knowledge, manufacturing_ops — plus two cross-cutting namespaces,
+//   `privacy` (erasure/compliance) and `system` (export/import/admin).
 //
-// Adding a new event TYPE: add an entry here with schemaVersion 1.
-// Changing the SHAPE of an existing event type: bump schemaVersion, add a
-// new zod schema keyed by the new version, and keep the old one so
-// historical events already on the log keep validating against the schema
-// they were written with (events are immutable — the registry must be
-// able to validate every version that ever shipped).
+// Every event type string is "<domain>.<past_tense_fact>" (never a command/
+// verb-first name — events describe something that already happened).
 
-import { z } from "zod";
+export const DOMAINS = [
+  "people",
+  "finance",
+  "strategy",
+  "execution",
+  "rd_product",
+  "sales_customers",
+  "knowledge",
+  "manufacturing_ops",
+  "privacy",
+  "system",
+] as const;
 
-export const DOMAINS = ["people", "execution", "strategy", "finance", "system"] as const;
 export type Domain = (typeof DOMAINS)[number];
 
-const personAddedV1 = z.object({
-  name: z.string().min(1).max(200),
-  email: z.string().email().optional(),
-  role: z.string().min(1).max(120),
-  team: z.string().min(1).max(120),
-});
+/** The complete, closed list of event type identifiers. */
+export const EVENT_TYPE_IDS = [
+  // ---- people ---------------------------------------------------------
+  "people.person_added",
+  "people.flight_risk_changed",
+  "people.role_changed",
+  // ---- finance ----------------------------------------------------------
+  "finance.burn_updated",
+  "finance.invoice_raised",
+  "finance.expense_recorded",
+  // ---- strategy -----------------------------------------------------
+  "strategy.initiative_created",
+  "strategy.initiative_status_changed",
+  "strategy.okr_progress_recorded",
+  // ---- execution ------------------------------------------------------
+  "execution.task_created",
+  "execution.task_completed",
+  "execution.sprint_velocity_recorded",
+  // ---- rd_product -----------------------------------------------------
+  "rd_product.feature_proposed",
+  "rd_product.experiment_result_logged",
+  "rd_product.roadmap_item_scheduled",
+  // ---- sales_customers --------------------------------------------------
+  "sales.deal_created",
+  "sales.deal_stage_changed",
+  "sales.customer_health_scored",
+  // ---- knowledge ------------------------------------------------------
+  "knowledge.doc_published",
+  "knowledge.doc_viewed",
+  "knowledge.doc_flagged_outdated",
+  // ---- manufacturing_ops ------------------------------------------------
+  "manufacturing.batch_started",
+  "manufacturing.batch_completed",
+  "manufacturing.downtime_logged",
+  // ---- privacy (cross-cutting) -----------------------------------------
+  "privacy.person_erased",
+  // ---- system (cross-cutting) --------------------------------------------
+  "system.export_performed",
+  "system.import_performed",
+] as const;
 
-const personUpdatedV1 = z.object({
-  name: z.string().min(1).max(200).optional(),
-  email: z.string().email().optional(),
-  role: z.string().min(1).max(120).optional(),
-  team: z.string().min(1).max(120).optional(),
-});
+export type EventTypeId = (typeof EVENT_TYPE_IDS)[number];
 
-const personCheckinV1 = z.object({
-  sentiment: z.number().min(0).max(1),
-  engagement: z.number().min(0).max(1),
-  flightRisk: z.number().min(0).max(1),
-});
+export type RetentionPolicy = {
+  /** How long the raw payload should remain fully readable before it becomes
+   * a candidate for PII redaction. Does NOT mean deletion — events are
+   * append-only; "retention" here means "candidate for a redaction
+   * tombstone", surfaced by src/lib/platform/retention.ts for human review.
+   */
+  redactAfterDays: number;
+  /** Whether this event type's payload can contain fields that identify a
+   * natural person (name, assigneeId, viewerId, authorId, …). Drives which
+   * projectors must implement erasure handling for `privacy.person_erased`.
+   */
+  containsPii: boolean;
+};
 
-const personExitSignalV1 = z.object({
-  note: z.string().min(1).max(2000),
-  severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
-});
-
-const projectCreatedV1 = z.object({
-  title: z.string().min(1).max(200),
-  owner: z.string().min(1).max(120),
-  domain: z.string().min(1).max(60).default("execution"),
-  confidence: z.number().min(0).max(1).default(0.5),
-  durationDays: z.number().int().min(0).default(30),
-});
-
-const projectUpdatedV1 = z.object({
-  status: z.enum(["backlog", "in_progress", "blocked", "done"]).optional(),
-  confidence: z.number().min(0).max(1).optional(),
-});
-
-const projectCompletedV1 = z.object({});
-
-const milestoneCreatedV1 = z.object({
-  projectId: z.string().min(1),
-  title: z.string().min(1).max(200),
-  dueDate: z.string().datetime(),
-});
-
-const milestoneCompletedV1 = z.object({});
-const milestoneOverdueV1 = z.object({});
-
-const blockerRaisedV1 = z.object({
-  projectId: z.string().min(1),
-  severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
-  description: z.string().min(1).max(2000),
-});
-
-const blockerResolvedV1 = z.object({});
-
-const decisionLoggedV1 = z.object({
-  title: z.string().min(1).max(200),
-  owner: z.string().min(1).max(120),
-  severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
-  dueDate: z.string().datetime().optional(),
-  description: z.string().max(4000).default(""),
-});
-
-const decisionOutcomeV1 = z.object({
-  status: z.enum(["open", "decided", "abandoned"]),
-  outcome: z.string().max(4000).optional(),
-});
-
-const okrSetV1 = z.object({
-  title: z.string().min(1).max(200),
-  owner: z.string().min(1).max(120),
-  quarterStart: z.string().datetime(),
-});
-
-const okrProgressV1 = z.object({
-  progress: z.number().min(0).max(1),
-  health: z.enum(["on_track", "at_risk", "off_track"]).default("on_track"),
-});
-
-const financeSnapshotV1 = z.object({
-  cash: z.number(),
-  mrr: z.number(),
-  burn: z.number(),
-  runwayMonths: z.number(),
-});
-
-const metricRecordedV1 = z.object({
-  metricKey: z.string().min(1).max(120),
-  value: z.number(),
-});
-
-const orgFactRecordedV1 = z.object({
-  subjectType: z.enum(["person", "project", "org"]),
-  subjectId: z.string().min(1),
-  attribute: z.string().min(1).max(120),
-  value: z.record(z.string(), z.unknown()),
-  validFrom: z.string().datetime(),
-  validTo: z.string().datetime().optional(),
-});
-
-export interface EventCatalogEntry<T extends z.ZodTypeAny = z.ZodTypeAny> {
-  type: string;
+export type EventCatalogEntry = {
   domain: Domain;
-  schemaVersion: number;
-  schema: T;
-  piiFields: string[];
   description: string;
-  /** null retentionDays = retained indefinitely (e.g. decisions, finance). */
-  retentionDays: number | null;
-  purgeable: boolean;
-  retentionRationale: string;
-}
+  /** Which UI surface or engine emits this event. */
+  emittedBy: string;
+  /** Which projector(s) fold this event into a read model. */
+  consumedBy: string[];
+  /** Name of the entity field in the payload that becomes `entityId`. */
+  entityIdField: string;
+  /** If true, every append of this type also writes an outbox row (Part 12
+   * realtime/notification consumer). */
+  notify: boolean;
+  retention: RetentionPolicy;
+};
 
-function entry<T extends z.ZodTypeAny>(e: EventCatalogEntry<T>): EventCatalogEntry<T> {
-  return e;
-}
-
-export const EVENT_CATALOG = {
-  "person.added": entry({
-    type: "person.added",
+export const EVENT_CATALOG: Record<EventTypeId, EventCatalogEntry> = {
+  "people.person_added": {
     domain: "people",
-    schemaVersion: 1,
-    schema: personAddedV1,
-    piiFields: ["name", "email"],
-    description: "A person was added to the roster.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Employment record; retained for the lifetime of the org relationship.",
-  }),
-  "person.updated": entry({
-    type: "person.updated",
+    description: "A new person was added to the roster.",
+    emittedBy: "People UI — Add Person form",
+    consumedBy: ["peopleRoster"],
+    entityIdField: "personId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 2, containsPii: true },
+  },
+  "people.flight_risk_changed": {
     domain: "people",
-    schemaVersion: 1,
-    schema: personUpdatedV1,
-    piiFields: ["name", "email"],
-    description: "A person's role/team/contact info changed.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Employment record; retained for the lifetime of the org relationship.",
-  }),
-  "person.checkin": entry({
-    type: "person.checkin",
+    description:
+      "A person's flight-risk assessment changed (manager judgement or model inference).",
+    emittedBy: "People UI — flight risk editor / retention risk model",
+    consumedBy: ["peopleFlightRisk", "cockpit"],
+    entityIdField: "personId",
+    notify: true,
+    retention: { redactAfterDays: 365 * 2, containsPii: false },
+  },
+  "people.role_changed": {
     domain: "people",
-    schemaVersion: 1,
-    schema: personCheckinV1,
-    piiFields: [],
-    description: "Sentiment/engagement/flight-risk pulse for a person.",
-    retentionDays: 730,
-    purgeable: true,
-    retentionRationale: "High-frequency sentiment telemetry; purged after 2 years, aggregates survive in projections.",
-  }),
-  "person.exit_signal": entry({
-    type: "person.exit_signal",
-    domain: "people",
-    schemaVersion: 1,
-    schema: personExitSignalV1,
-    piiFields: ["note"],
-    description: "A signal suggesting flight risk for a person.",
-    retentionDays: 730,
-    purgeable: true,
-    retentionRationale: "Sensitive free-text note; purged after 2 years.",
-  }),
-  "project.created": entry({
-    type: "project.created",
-    domain: "execution",
-    schemaVersion: 1,
-    schema: projectCreatedV1,
-    piiFields: [],
-    description: "A new project/initiative was created.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Execution history; retained indefinitely for retrospectives.",
-  }),
-  "project.updated": entry({
-    type: "project.updated",
-    domain: "execution",
-    schemaVersion: 1,
-    schema: projectUpdatedV1,
-    piiFields: [],
-    description: "Project status or confidence changed.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Execution history; retained indefinitely for retrospectives.",
-  }),
-  "project.completed": entry({
-    type: "project.completed",
-    domain: "execution",
-    schemaVersion: 1,
-    schema: projectCompletedV1,
-    piiFields: [],
-    description: "A project was marked complete.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Execution history; retained indefinitely for retrospectives.",
-  }),
-  "milestone.created": entry({
-    type: "milestone.created",
-    domain: "execution",
-    schemaVersion: 1,
-    schema: milestoneCreatedV1,
-    piiFields: [],
-    description: "A milestone was added to a project.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Execution history; retained indefinitely for retrospectives.",
-  }),
-  "milestone.completed": entry({
-    type: "milestone.completed",
-    domain: "execution",
-    schemaVersion: 1,
-    schema: milestoneCompletedV1,
-    piiFields: [],
-    description: "A milestone was completed.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Execution history; retained indefinitely for retrospectives.",
-  }),
-  "milestone.overdue": entry({
-    type: "milestone.overdue",
-    domain: "execution",
-    schemaVersion: 1,
-    schema: milestoneOverdueV1,
-    piiFields: [],
-    description: "A milestone passed its due date incomplete.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Execution history; retained indefinitely for retrospectives.",
-  }),
-  "blocker.raised": entry({
-    type: "blocker.raised",
-    domain: "execution",
-    schemaVersion: 1,
-    schema: blockerRaisedV1,
-    piiFields: [],
-    description: "A blocker was raised against a project.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Execution history; retained indefinitely for retrospectives.",
-  }),
-  "blocker.resolved": entry({
-    type: "blocker.resolved",
-    domain: "execution",
-    schemaVersion: 1,
-    schema: blockerResolvedV1,
-    piiFields: [],
-    description: "A blocker was resolved.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Execution history; retained indefinitely for retrospectives.",
-  }),
-  "decision.logged": entry({
-    type: "decision.logged",
-    domain: "strategy",
-    schemaVersion: 1,
-    schema: decisionLoggedV1,
-    piiFields: [],
-    description: "A decision was logged on the decision ledger.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Governance record; retained indefinitely.",
-  }),
-  "decision.outcome": entry({
-    type: "decision.outcome",
-    domain: "strategy",
-    schemaVersion: 1,
-    schema: decisionOutcomeV1,
-    piiFields: [],
-    description: "A decision's outcome was recorded.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Governance record; retained indefinitely.",
-  }),
-  "okr.set": entry({
-    type: "okr.set",
-    domain: "strategy",
-    schemaVersion: 1,
-    schema: okrSetV1,
-    piiFields: [],
-    description: "An objective was set for a quarter.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Strategic record; retained indefinitely.",
-  }),
-  "okr.progress": entry({
-    type: "okr.progress",
-    domain: "strategy",
-    schemaVersion: 1,
-    schema: okrProgressV1,
-    piiFields: [],
-    description: "Progress was recorded against an objective.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Strategic record; retained indefinitely.",
-  }),
-  "finance.snapshot": entry({
-    type: "finance.snapshot",
+    description: "A person's role or title changed.",
+    emittedBy: "People UI — role editor",
+    consumedBy: ["peopleRoster"],
+    entityIdField: "personId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 2, containsPii: false },
+  },
+  "finance.burn_updated": {
     domain: "finance",
-    schemaVersion: 1,
-    schema: financeSnapshotV1,
-    piiFields: [],
-    description: "A point-in-time financial snapshot (cash/MRR/burn/runway).",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Financial record; retained indefinitely for audit/compliance.",
-  }),
-  "metric.recorded": entry({
-    type: "metric.recorded",
+    description: "The org's monthly burn and cash-on-hand were updated.",
+    emittedBy: "Finance UI — burn entry / finance import",
+    consumedBy: ["financeBurn", "cockpit"],
+    entityIdField: "orgId",
+    notify: true,
+    retention: { redactAfterDays: 365 * 7, containsPii: false },
+  },
+  "finance.invoice_raised": {
+    domain: "finance",
+    description:
+      "An invoice was raised against a customer. The event's aggregate (entityId) is the org-level finance ledger (orgId); invoiceId is carried in the payload for reference/lookup, not used as the projection key, so this rolls up into the same financeBurn row as burn_updated.",
+    emittedBy: "Finance UI — invoicing",
+    consumedBy: ["financeBurn"],
+    entityIdField: "orgId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 7, containsPii: false },
+  },
+  "finance.expense_recorded": {
+    domain: "finance",
+    description:
+      "An expense was recorded. Aggregate (entityId) is the org-level finance ledger (orgId); expenseId is carried in the payload, not used as the projection key — see finance.invoice_raised for the same rationale.",
+    emittedBy: "Finance UI — expense entry",
+    consumedBy: ["financeBurn"],
+    entityIdField: "orgId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 7, containsPii: false },
+  },
+  "strategy.initiative_created": {
+    domain: "strategy",
+    description: "A strategic initiative was created.",
+    emittedBy: "Strategy UI — initiative planner",
+    consumedBy: ["strategyInitiative"],
+    entityIdField: "initiativeId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: false },
+  },
+  "strategy.initiative_status_changed": {
+    domain: "strategy",
+    description: "A strategic initiative's RAG status changed.",
+    emittedBy: "Strategy UI — initiative status update",
+    consumedBy: ["strategyInitiative", "cockpit"],
+    entityIdField: "initiativeId",
+    notify: true,
+    retention: { redactAfterDays: 365 * 3, containsPii: false },
+  },
+  "strategy.okr_progress_recorded": {
+    domain: "strategy",
+    description:
+      "Progress against an OKR tied to an initiative was recorded. Aggregate (entityId) is the parent initiativeId so progress rolls up into the initiative's projection row; okrId is carried in the payload to key the per-OKR map inside that row.",
+    emittedBy: "Strategy UI — OKR tracker",
+    consumedBy: ["strategyInitiative"],
+    entityIdField: "initiativeId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: false },
+  },
+  "execution.task_created": {
+    domain: "execution",
+    description: "A delivery task was created.",
+    emittedBy: "Execution UI — task board",
+    consumedBy: ["executionBoard"],
+    entityIdField: "taskId",
+    notify: false,
+    retention: { redactAfterDays: 365, containsPii: true },
+  },
+  "execution.task_completed": {
+    domain: "execution",
+    description: "A delivery task was completed.",
+    emittedBy: "Execution UI — task board",
+    consumedBy: ["executionBoard"],
+    entityIdField: "taskId",
+    notify: false,
+    retention: { redactAfterDays: 365, containsPii: false },
+  },
+  "execution.sprint_velocity_recorded": {
+    domain: "execution",
+    description: "A team's sprint velocity was recorded.",
+    emittedBy: "Execution UI — sprint retro form",
+    consumedBy: ["executionBoard"],
+    entityIdField: "sprintId",
+    notify: false,
+    retention: { redactAfterDays: 365, containsPii: false },
+  },
+  "rd_product.feature_proposed": {
+    domain: "rd_product",
+    description: "A product/R&D feature was proposed.",
+    emittedBy: "R&D UI — feature intake form",
+    consumedBy: ["rdProductRoadmap"],
+    entityIdField: "featureId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: true },
+  },
+  "rd_product.experiment_result_logged": {
+    domain: "rd_product",
+    description: "The result of a product experiment was logged.",
+    emittedBy: "R&D UI — experiment tracker",
+    consumedBy: ["rdProductRoadmap"],
+    entityIdField: "experimentId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: false },
+  },
+  "rd_product.roadmap_item_scheduled": {
+    domain: "rd_product",
+    description: "A roadmap item was scheduled into a quarter.",
+    emittedBy: "R&D UI — roadmap planner",
+    consumedBy: ["rdProductRoadmap"],
+    entityIdField: "itemId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: false },
+  },
+  "sales.deal_created": {
+    domain: "sales_customers",
+    description: "A sales deal entered the pipeline.",
+    emittedBy: "Sales UI — CRM pipeline",
+    consumedBy: ["salesPipeline"],
+    entityIdField: "dealId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 5, containsPii: false },
+  },
+  "sales.deal_stage_changed": {
+    domain: "sales_customers",
+    description: "A sales deal moved to a new pipeline stage.",
+    emittedBy: "Sales UI — CRM pipeline",
+    consumedBy: ["salesPipeline", "cockpit"],
+    entityIdField: "dealId",
+    notify: true,
+    retention: { redactAfterDays: 365 * 5, containsPii: false },
+  },
+  "sales.customer_health_scored": {
+    domain: "sales_customers",
+    description: "A customer's health score was (re)computed.",
+    emittedBy: "Sales UI — customer health model",
+    consumedBy: ["salesPipeline", "cockpit"],
+    entityIdField: "customerId",
+    notify: true,
+    retention: { redactAfterDays: 365 * 5, containsPii: false },
+  },
+  "knowledge.doc_published": {
+    domain: "knowledge",
+    description: "A knowledge-base document was published.",
+    emittedBy: "Knowledge UI — doc editor",
+    consumedBy: ["knowledgeActivity"],
+    entityIdField: "docId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: true },
+  },
+  "knowledge.doc_viewed": {
+    domain: "knowledge",
+    description:
+      "A document view was observed (analytics fact; carries confidence).",
+    emittedBy: "Knowledge UI — view beacon",
+    consumedBy: ["knowledgeActivity"],
+    entityIdField: "docId",
+    notify: false,
+    retention: { redactAfterDays: 180, containsPii: true },
+  },
+  "knowledge.doc_flagged_outdated": {
+    domain: "knowledge",
+    description: "A document was flagged as outdated.",
+    emittedBy: "Knowledge UI — flag action",
+    consumedBy: ["knowledgeActivity"],
+    entityIdField: "docId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: true },
+  },
+  "manufacturing.batch_started": {
+    domain: "manufacturing_ops",
+    description: "A production batch started on a line.",
+    emittedBy: "Ops UI — line control / MES import",
+    consumedBy: ["manufacturingThroughput"],
+    entityIdField: "batchId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: false },
+  },
+  "manufacturing.batch_completed": {
+    domain: "manufacturing_ops",
+    description: "A production batch completed on a line.",
+    emittedBy: "Ops UI — line control / MES import",
+    consumedBy: ["manufacturingThroughput"],
+    entityIdField: "batchId",
+    notify: false,
+    retention: { redactAfterDays: 365 * 3, containsPii: false },
+  },
+  "manufacturing.downtime_logged": {
+    domain: "manufacturing_ops",
+    description: "Unplanned downtime was logged against a line.",
+    emittedBy: "Ops UI — downtime log",
+    consumedBy: ["manufacturingThroughput", "cockpit"],
+    entityIdField: "line",
+    notify: true,
+    retention: { redactAfterDays: 365 * 3, containsPii: false },
+  },
+  "privacy.person_erased": {
+    domain: "privacy",
+    description:
+      "A person-level erasure request was carried out (payload-scrub tombstone, not a row delete).",
+    emittedBy: "Admin UI — privacy & erasure panel",
+    consumedBy: ["peopleRoster", "peopleFlightRisk"],
+    entityIdField: "personId",
+    notify: true,
+    retention: { redactAfterDays: 365 * 7, containsPii: false },
+  },
+  "system.export_performed": {
     domain: "system",
-    schemaVersion: 1,
-    schema: metricRecordedV1,
-    piiFields: [],
-    description: "A generic named metric value was recorded.",
-    retentionDays: 400,
-    purgeable: true,
-    retentionRationale: "High-volume operational telemetry; purged after ~13 months, rollups survive in metric_values.",
-  }),
-  "org.fact.recorded": entry({
-    type: "org.fact.recorded",
+    description: "A full data export was performed.",
+    emittedBy: "Admin UI / API — /api/export",
+    consumedBy: [],
+    entityIdField: "exportId",
+    notify: true,
+    retention: { redactAfterDays: 365 * 7, containsPii: false },
+  },
+  "system.import_performed": {
     domain: "system",
-    schemaVersion: 1,
-    schema: orgFactRecordedV1,
-    piiFields: [],
-    description: "A bitemporal fact about a person/project/org (e.g. manager, team) was recorded.",
-    retentionDays: null,
-    purgeable: false,
-    retentionRationale: "Org structure history; retained indefinitely to support asOf() retrospectives.",
-  }),
-} as const;
+    description: "A data import was committed.",
+    emittedBy: "Admin UI / API — /api/import",
+    consumedBy: [],
+    entityIdField: "importId",
+    notify: true,
+    retention: { redactAfterDays: 365 * 7, containsPii: false },
+  },
+};
 
-export type EventType = keyof typeof EVENT_CATALOG;
-
-export function isKnownEventType(type: string): type is EventType {
+export function isKnownEventType(type: string): type is EventTypeId {
   return Object.prototype.hasOwnProperty.call(EVENT_CATALOG, type);
 }
-
-export function getCatalogEntry(type: string): EventCatalogEntry {
-  if (!isKnownEventType(type)) {
-    throw new UnknownEventTypeError(type);
-  }
-  return EVENT_CATALOG[type];
-}
-
-export class UnknownEventTypeError extends Error {
-  constructor(type: string) {
-    super(`Unknown event type "${type}". Register it in src/lib/events/eventCatalog.ts first.`);
-    this.name = "UnknownEventTypeError";
-  }
-}
-
-export class EventPayloadValidationError extends Error {
-  issues: string[];
-  constructor(type: string, issues: string[]) {
-    super(`Event payload for "${type}" failed validation:\n` + issues.map((i) => `  - ${i}`).join("\n"));
-    this.name = "EventPayloadValidationError";
-    this.issues = issues;
-  }
-}
-
-/** Validate (and coerce defaults into) a payload for a given event type. */
-export function validateEventPayload(type: string, payload: unknown): Record<string, unknown> {
-  const catalogEntry = getCatalogEntry(type);
-  const result = catalogEntry.schema.safeParse(payload);
-  if (!result.success) {
-    const issues = result.error.issues.map((i: z.ZodIssue) => `${i.path.join(".") || "(root)"} - ${i.message}`);
-    throw new EventPayloadValidationError(type, issues);
-  }
-  return result.data as Record<string, unknown>;
-}
-
-export const ALL_EVENT_TYPES = Object.keys(EVENT_CATALOG) as EventType[];

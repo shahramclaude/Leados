@@ -1,61 +1,48 @@
+// LEADOS Part 01 — the event store. THIS IS THE SINGLE WRITE PATH.
+//
+// Every fact that enters the system — from UI actions, automations, imports,
+// or migrations — must go through `appendEvent()` here. Nothing else may
+// `db.insert(events)`. This function:
+//   1. Validates the payload against the CURRENT schema for the type
+//      (src/lib/events/eventSchema.ts) — bad payloads never reach storage.
+//   2. Mints a monotonic ULID eventId and stamps recordedAt = now().
+//   3. Inserts the event row, and — if the catalog marks the type
+//      `notify: true` — an outbox row, in the SAME transaction.
+//   4. Synchronously folds the event into every interested hot projector
+//      (src/lib/projections/engine.ts), in the SAME transaction, so a
+//      dashboard read immediately after a successful write always reflects
+//      it (read-your-writes), without a second round trip.
+//   5. After the transaction commits, publishes the envelope on the
+//      in-process eventBus for any best-effort, non-transactional listeners
+//      (e.g. a future dev-mode activity console). This step is NOT relied on
+//      for correctness — rebuildProjections() is the source of truth if it's
+//      ever missed (process crash between commit and publish, etc).
 import { db } from "@/db";
-import { events } from "@/db/schema";
-import { asc } from "drizzle-orm";
-import type { Domain, LeadosEvent, NewLeadosEvent } from "@/lib/types";
+import { insertEvent, type AppendResult } from "@/lib/platform/eventRepository";
+import { applyEnvelopeSync } from "@/lib/projections/engine";
+import { ensureProjectorsRegistered } from "@/lib/projections/registerAll";
+import { eventBus } from "@/lib/eventBus";
+import type { NewEventInput } from "@/lib/events/types";
+import type { EventTypeId } from "@/lib/events/eventCatalog";
 
-function rowToEvent(row: typeof events.$inferSelect): LeadosEvent {
-  return {
-    id: row.id,
-    type: row.type,
-    domain: row.domain as Domain,
-    entityId: row.entityId,
-    ts: (row.ts instanceof Date ? row.ts : new Date(row.ts)).toISOString(),
-    data: (row.data ?? {}) as Record<string, unknown>,
-    source: row.source,
-  };
+export type AppendEventInput = NewEventInput & { type: EventTypeId };
+
+export async function appendEvent(input: AppendEventInput): Promise<AppendResult> {
+  ensureProjectorsRegistered();
+
+  const result = await db.transaction(async (tx) => {
+    const appendResult = await insertEvent(tx, input);
+    if (!appendResult.deduped) {
+      await applyEnvelopeSync(tx, appendResult.envelope);
+    }
+    return appendResult;
+  });
+
+  // Best-effort, outside the transaction, never blocks/affects correctness.
+  await eventBus.publish(result.envelope);
+
+  return result;
 }
 
-// APPEND ONLY — there is no update/delete path. This is the single write
-// primitive for the whole system (self-test T02_APPEND_ONLY asserts this).
-export async function appendEvent(e: NewLeadosEvent): Promise<LeadosEvent> {
-  const [row] = await db
-    .insert(events)
-    .values({
-      type: e.type,
-      domain: e.domain,
-      entityId: e.entityId ?? null,
-      ts: new Date(e.ts),
-      data: e.data as Record<string, unknown>,
-      source: e.source ?? "system",
-    })
-    .returning();
-  return rowToEvent(row);
-}
-
-export async function appendEvents(es: NewLeadosEvent[]): Promise<LeadosEvent[]> {
-  if (es.length === 0) return [];
-  const rows = await db
-    .insert(events)
-    .values(
-      es.map((e) => ({
-        type: e.type,
-        domain: e.domain,
-        entityId: e.entityId ?? null,
-        ts: new Date(e.ts),
-        data: e.data as Record<string, unknown>,
-        source: e.source ?? "system",
-      }))
-    )
-    .returning();
-  return rows.map(rowToEvent);
-}
-
-export async function listEvents(): Promise<LeadosEvent[]> {
-  const rows = await db.select().from(events).orderBy(asc(events.ts), asc(events.id));
-  return rows.map(rowToEvent);
-}
-
-export async function countEvents(): Promise<number> {
-  const rows = await db.select().from(events);
-  return rows.length;
-}
+export { getEventStream, replayEvents, exportAllRawRows, countEvents } from "@/lib/platform/eventRepository";
+export { rebuildProjections, currentProjectionHash } from "@/lib/projections/engine";

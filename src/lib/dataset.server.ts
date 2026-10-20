@@ -1,184 +1,36 @@
-import "server-only";
+// LEADOS Part 01 — dataset provenance label.
+//
+// Server-only (imports `@/db`). Honesty-rule support: every environment must
+// be able to answer "is the data I'm looking at synthetic seed data or real
+// production data?" at a glance. src/db/seed.ts writes the `dataset.label`
+// setting; this module reads it. UI surfaces (and this part's API routes)
+// should show the label prominently whenever it is not "real".
+
+// Note: deliberately NOT importing the `server-only` package here. That
+// package throws if imported outside Next's bundler (e.g. from a plain
+// `tsx` script), and this module is imported by src/db/seed.ts and
+// scripts/*.ts as well as by Next.js server components/route handlers. It
+// already cannot run in the browser (it imports `@/db`, which needs
+// `pg`/`DATABASE_URL`), so the guard would be redundant safety for API
+// routes at the cost of breaking script usage — not a good trade here.
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import * as schema from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
-import { DOMAINS } from "./types";
-import type { DomainKey, Severity } from "./types";
-import type {
-  OrchestrationDataset,
-  PersonRow,
-  EventRow,
-  OneOnOneRow,
-  DecisionRow,
-  ScenarioRow,
-  ProjectRow,
-  MilestoneRow,
-  BlockerRow,
-  HypothesisRow,
-  OkrRow,
-  NotificationRow,
-  FinanceSnapshot,
-} from "./dataset";
+import { settings } from "@/db/schema";
+import type { DatasetLabelDTO } from "@/lib/events/clientTypes";
 
-const DEFAULT_FINANCE: FinanceSnapshot = {
-  startingCash: 1_000_000,
-  monthlyBurn: 100_000,
-  burnStdDev: 20_000,
-  monthlyRevenue: 50_000,
-  revenueGrowthRate: 0.05,
-};
+const SETTINGS_KEY = "dataset.label";
 
-function toDomainKey(value: string): DomainKey {
-  return (DOMAINS as readonly string[]).includes(value) ? (value as DomainKey) : "execution";
+export async function getDatasetLabel(): Promise<DatasetLabelDTO> {
+  const rows = await db.select().from(settings).where(eq(settings.key, SETTINGS_KEY)).limit(1);
+  if (rows.length === 0) {
+    return { label: "unknown", description: "No dataset label has been set. Run the seed script or mark this environment explicitly." };
+  }
+  return rows[0].value as DatasetLabelDTO;
 }
 
-function toSeverity(value: number): Severity {
-  const rounded = Math.round(value);
-  return rounded >= 1 && rounded <= 5 ? (rounded as Severity) : 3;
-}
-
-function toEnum<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
-  return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
-}
-
-/**
- * Fetches every table this app uses and maps raw Postgres rows into the pure,
- * validated OrchestrationDataset contract that runFullOrchestration expects.
- * Every "stringly typed" DB column (domain, status) is validated against its
- * known literal union here, at the one seam where untyped data enters the
- * typed core — nothing downstream ever has to guess about shape again.
- */
-export async function fetchOrchestrationDataset(): Promise<OrchestrationDataset> {
-  const [
-    peopleRows,
-    eventRows,
-    oneOnOneRows,
-    decisionRows,
-    scenarioRows,
-    projectRows,
-    milestoneRows,
-    blockerRows,
-    hypothesisRows,
-    okrRows,
-    notificationRows,
-    financeRows,
-  ] = await Promise.all([
-    db.select().from(schema.people),
-    db.select().from(schema.events),
-    db.select().from(schema.oneOnOnes),
-    db.select().from(schema.decisions),
-    db.select().from(schema.scenarios),
-    db.select().from(schema.projects),
-    db.select().from(schema.milestones),
-    db.select().from(schema.blockers),
-    db.select().from(schema.hypotheses),
-    db.select().from(schema.okrs),
-    db.select().from(schema.notifications),
-    db.select().from(schema.financeSnapshots).orderBy(desc(schema.financeSnapshots.createdAt)).limit(1),
-  ]);
-
-  const people: PersonRow[] = peopleRows.map((p) => ({ id: p.id, name: p.name, role: p.role, team: p.team }));
-
-  const events: EventRow[] = eventRows.map((e) => ({
-    id: e.id,
-    personId: e.personId,
-    type: e.type,
-    weight: e.weight,
-    createdAt: e.createdAt.toISOString(),
-  }));
-
-  const oneOnOnes: OneOnOneRow[] = oneOnOneRows.map((o) => ({
-    id: o.id,
-    personId: o.personId,
-    occurredAt: o.occurredAt.toISOString(),
-    actionItemsTotal: o.actionItemsTotal,
-    actionItemsCompleted: o.actionItemsCompleted,
-  }));
-
-  const decisions: DecisionRow[] = decisionRows.map((d) => ({
-    id: d.id,
-    title: d.title,
-    domain: toDomainKey(d.domain),
-    status: toEnum(d.status, ["open", "closed"] as const, "open"),
-    sev: toSeverity(d.sev),
-    createdAt: d.createdAt.toISOString(),
-  }));
-
-  const scenarios: ScenarioRow[] = scenarioRows.map((s) => ({
-    id: s.id,
-    title: s.title,
-    domain: toDomainKey(s.domain),
-    status: toEnum(s.status, ["active", "archived"] as const, "active"),
-    sev: toSeverity(s.sev),
-    createdAt: s.createdAt.toISOString(),
-  }));
-
-  const projects: ProjectRow[] = projectRows.map((p) => ({ id: p.id, name: p.name, dependsOn: p.dependsOn ?? [] }));
-
-  const milestones: MilestoneRow[] = milestoneRows.map((m) => ({
-    id: m.id,
-    projectId: m.projectId,
-    dueDate: m.dueDate.toISOString(),
-    completed: m.completed,
-  }));
-
-  const blockers: BlockerRow[] = blockerRows.map((b) => ({
-    id: b.id,
-    title: b.title,
-    domain: toDomainKey(b.domain),
-    projectId: b.projectId,
-    status: toEnum(b.status, ["open", "resolved"] as const, "open"),
-    sev: toSeverity(b.sev),
-    createdAt: b.createdAt.toISOString(),
-  }));
-
-  const hypotheses: HypothesisRow[] = hypothesisRows.map((h) => ({
-    id: h.id,
-    personId: h.personId,
-    type: h.type,
-    title: h.title,
-    sev: toSeverity(h.sev),
-    status: toEnum(h.status, ["open", "dismissed", "confirmed"] as const, "open"),
-    dedupeKey: h.dedupeKey,
-    createdAt: h.createdAt.toISOString(),
-  }));
-
-  const okrs: OkrRow[] = okrRows.map((o) => ({
-    id: o.id,
-    title: o.title,
-    domain: toDomainKey(o.domain),
-    progress: o.progress,
-    timeElapsed: o.timeElapsed,
-  }));
-
-  const notifications: NotificationRow[] = notificationRows.map((n) => ({
-    id: n.id,
-    domain: toDomainKey(n.domain),
-    title: n.title,
-    message: n.message,
-    sev: toSeverity(n.sev),
-    read: n.read,
-    createdAt: n.createdAt.toISOString(),
-  }));
-
-  const finance: FinanceSnapshot = financeRows[0]
-    ? {
-        startingCash: financeRows[0].startingCash,
-        monthlyBurn: financeRows[0].monthlyBurn,
-        burnStdDev: financeRows[0].burnStdDev,
-        monthlyRevenue: financeRows[0].monthlyRevenue,
-        revenueGrowthRate: financeRows[0].revenueGrowthRate,
-      }
-    : DEFAULT_FINANCE;
-
-  return { people, events, oneOnOnes, decisions, scenarios, projects, milestones, blockers, hypotheses, okrs, notifications, finance };
-}
-
-export async function markAllNotificationsRead(): Promise<number> {
-  const result = await db
-    .update(schema.notifications)
-    .set({ read: true })
-    .where(eq(schema.notifications.read, false))
-    .returning({ id: schema.notifications.id });
-  return result.length;
+export async function setDatasetLabel(value: DatasetLabelDTO): Promise<void> {
+  await db
+    .insert(settings)
+    .values({ key: SETTINGS_KEY, value: value as object, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: settings.key, set: { value: value as object, updatedAt: new Date() } });
 }
