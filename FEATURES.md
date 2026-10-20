@@ -1,47 +1,48 @@
-# LEADOS Feature Registry
+# Feature registry
 
-One row per user-facing capability. This is the contract every later part
-(1-14) moves rows on — when a capability goes from `partial`/`stub` to
-`live`, update this table in the same change that ships the code, and keep
-it in sync with `src/app/routes.ts`.
+Source of truth for what's live vs. planned. Every "live" row links to the
+file(s) that implement it; every row was verified by running the app
+against a real Postgres instance during this session (see
+`AI-SESSION-LOG.md` → Verification log), not just by reading the code.
 
-Status definitions:
-- **live** — fully implemented, reads/writes real data, no placeholder UI.
-- **partial** — implemented but intentionally narrow (narrowness explained
-  in the Notes column).
-- **stub** — renders but does not do real work yet.
-- **deprecated** — superseded, kept only for reference.
+## Live
 
-There are currently **no `ComingSoon.tsx` placeholders or stub views
-anywhere in this codebase** — grep confirms it (`grep -r "ComingSoon"
-src/` returns nothing). Every route below does exactly what its
-description says and nothing more.
-
-| Route | Backing API | Backing modules | Status | Notes |
-| --- | --- | --- | --- | --- |
-| `/` — System Status | `GET /api/health` (indirectly, via direct `db.execute`), `GET /api/events` (via `getEventsOverview`) | `src/app/page.tsx`, `src/lib/app/events/listEvents.ts`, `src/lib/platform/db/eventsRepository.ts` | **live** | Server component. Proves Postgres connectivity by executing a real query at render time and lists the real event log (empty state included, not faked data). |
-| Health check | `GET /api/health` | `src/app/api/health/route.ts` | **live** | Used by `build_and_start`/deployment platforms. Returns `{ok, service, database}` and a real error message on failure. |
-| Event ingestion & log | `GET /api/events`, `POST /api/events` | `src/app/api/events/route.ts`, `src/lib/app/events/{recordEvent,listEvents}.ts`, `src/lib/domain/{eventCatalog,eventSchema}.ts`, `src/lib/platform/db/eventsRepository.ts` | **live** | Platform infrastructure, not a leadership-intelligence feature in itself. This is the backbone (versioned schema registry + append-only log) that Parts 1-14's engines (Signal Board, Thermodynamics, CAS, Risk Register, Audit Log) will write to. Currently only two generic event types are registered (`system.ping`, `system.annotation`) because no domain engine exists yet to emit domain-specific events. |
-
-## Capabilities described in the Part 0 brief that do not exist in this codebase
-
-The brief referenced a Signal Board (50 rules / 8 domains), a
-Thermodynamics panel (entropy/SNR/bottlenecks), a CAS engine (feedback
-loops/bifurcations/attractors), an 8-category Risk Register, an audit log,
-and a command palette. **None of these are implemented here.** They are
-explicitly out of scope for Part 0 ("no new features, no new engines") and
-are not claimed as "stub" rows above because there is no route, API, or
-module for them at all yet — not even a placeholder component. When a
-later part implements one of these, add it to this table pointing at real
-files, not before.
-
-## Roadmap (honest, not aspirational)
-
-| Capability | Target part | Depends on |
+| Capability | Status | Evidence |
 | --- | --- | --- |
-| Signal Board (rule catalog, domains, toggles) | Part 1+ | `src/lib/domain/signals.ts` (new), new `signals`/`signal_events` tables, new event catalog entries |
-| Thermodynamics (entropy/SNR/bottlenecks) | Part 2+ | Signal Board data as input; pure functions in `src/lib/domain` |
-| CAS engine (loops/bifurcations/attractors) | Part 3+ | Signal Board recurrence history |
-| Risk Register (8 categories, amplification) | Part 4+ | Signal Board + CAS outputs |
-| Audit log UI | Part 5+ | Already has a data backbone today: every mutation already goes through the `events` table; this just needs a read-only UI route |
-| Command palette | Part 6+ | `src/app/routes.ts` already gives it a real route manifest to search over |
+| Next.js App Router app, single canonical entry point | live | `src/app/**`, no competing root app |
+| Postgres via Drizzle | live | `src/db/index.ts`, `src/db/schema.ts` |
+| Composite health check (db, schema version, automation queue/freshness, maintenance mode, process) | live | `src/lib/health/**`, `src/app/api/health/route.ts` |
+| Health dashboard with per-check drill-down + remediation hints | live | `src/app/health/page.tsx` |
+| Structured JSON logging with correlation IDs | live | `src/lib/observability/logger.ts`, `src/lib/observability/requestContext.ts`, `src/middleware.ts` |
+| Request metrics (latency p50/p95/p99, error rate, per route) | live | `src/lib/observability/metrics.ts`, `src/app/api/metrics/route.ts` |
+| Prometheus-format metrics export | live | `GET /api/metrics?format=prometheus` |
+| Error-tracking hook, env-configured, no vendor SDK | live | `src/lib/observability/errorTracking.ts` |
+| Automation run ledger (demonstration/test seam — synchronous, not a real queue) | live | `src/db/schema.ts` (`automationRuns`), `src/app/api/automation/runs/route.ts` |
+| Maintenance mode flag, surfaced in health | live | `src/app/api/admin/maintenance/route.ts` |
+| Graceful shutdown signal handling | live | `src/instrumentation.ts`, `src/lib/health/shutdown.ts` |
+| Schema-version drift detection | live | `src/db/schemaVersion.json`, `scripts/record-schema-version.mjs`, `checkSchemaVersion` |
+| Dependency-free secret scan gate | live | `scripts/scan-secrets.sh`, `npm run security:scan` |
+| Multi-stage Docker build, health-checked compose, nightly backup sidecar | live | `Dockerfile`, `docker-compose.production.yml` |
+| One-command deploy script (build + migrate + health-poll) | live | `scripts/deploy.sh` |
+| GitHub Actions release workflow (build image, attach OpenAPI spec) | live | `.github/workflows/release.yml` |
+| SLOs with error budgets and alert rules | live (as a policy document) | `docs/SLO.md` |
+| Runbooks for degraded DB, stuck automation, backup restore, schema rollback, data export, credential rotation, maintenance/shutdown | live | `docs/RUNBOOKS.md` |
+| Release checklist, expand/contract migration policy, rollback procedure | live | `docs/RELEASING.md` |
+
+## Roadmap (not implemented — do not assume these exist)
+
+| Capability | Status | Notes |
+| --- | --- | --- |
+| Auth / sessions / RBAC | not started | No `users`/`sessions` tables or login routes in this tree. |
+| Event log / event sourcing | not started | `automation_runs` is a flat ledger, not an append-only event log; no projections to rebuild. |
+| Orchestrator / agent runtime | not started | `POST /api/automation/runs` is synchronous and explicitly a demonstration seam (see ADR-0002), not a real worker/queue. |
+| Decisions, findings, metrics-definitions, knowledge graph, financial/strategy domains | not started | None of these tables or routes exist in this tree. |
+| Forecasting / calibration engine | not started | `GET /api/metrics` reserves a `forecastDrift` field that always reports `status: "not_implemented"` rather than a fabricated number. |
+| `eval:intelligence`, `perf:check`, `i18n:check` gates | not started | No corresponding engines exist yet to evaluate; not wired into `package.json` or `docs/RELEASING.md`'s checklist as pass/fail gates — explicitly listed there as "tracked, not skipped silently." |
+| Automated test suite (unit/integration/e2e) with coverage | not started | No test runner is configured. The release workflow does not fabricate a coverage report. |
+| Dedicated secret-scanning tool (gitleaks/trufflehog) | not started | `scripts/scan-secrets.sh` is a minimal stand-in, documented as such. |
+| Multi-instance / zero-downtime deploys | not started | `docker-compose.production.yml` targets a single `app` replica; see `docs/DEPLOYMENT.md` → "What this deployment story does not cover." |
+
+See `docs/adr/0001-scope-given-upstream-repo-state.md` for why this list is
+smaller than a casual look at the `shahramclaude/Leados` GitHub repository
+might suggest.

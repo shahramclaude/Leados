@@ -1,0 +1,78 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "LEADOS API",
+    "version": "14.0.0",
+    "description": "API surface that actually exists in this working tree. Generated/maintained by hand alongside src/app/api/** — keep in sync with any route change."
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Composite health check",
+        "responses": {
+          "200": { "description": "healthy or degraded" },
+          "503": { "description": "unhealthy (a critical dependency check failed)" }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "summary": "Request/latency/queue/automation metrics",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["json", "prometheus"] }
+          }
+        ],
+        "responses": {
+          "200": { "description": "JSON snapshot, or Prometheus text exposition format if format=prometheus" }
+        }
+      }
+    },
+    "/api/automation/runs": {
+      "get": {
+        "summary": "List recent automation runs",
+        "parameters": [
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 100 } }
+        ],
+        "responses": { "200": { "description": "{ total, runs[] }" } }
+      },
+      "post": {
+        "summary": "Record one automation run synchronously (demonstration/test endpoint — see ADR-0002)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "forceFailure": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "{ run }" } }
+      }
+    },
+    "/api/admin/maintenance": {
+      "get": {
+        "summary": "Read maintenance mode flag",
+        "responses": { "200": { "description": "{ enabled }" } }
+      },
+      "post": {
+        "summary": "Set maintenance mode flag (unauthenticated in this build — see docs/DEPLOYMENT.md)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "properties": { "enabled": { "type": "boolean" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "{ enabled }" } }
+      }
+    }
+  }
+}

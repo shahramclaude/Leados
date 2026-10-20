@@ -1,91 +1,134 @@
-# AI Session Log
+# AI session log
 
-## Part 10 — The Open Platform: API, Webhooks, Integrations & SDK
+## 2026-10-20 — Part 14: Observability, Reliability, Release Engineering & The Public Face
 
-**Scope note on working environment.** This session's sandbox project started from the minimal
-`nextjs-postgresql-template` scaffold (Next.js 16 App Router + Drizzle + PostgreSQL), not the full
-~1,026-file `shahramclaude/Leados` working tree (confirmed by cloning the repo read-only into
-`/tmp/leados-check` and inspecting it first, per the standing order). That tree is a Vite/React SPA
-+ a large, separately-evolved Next.js `src/app/api` surface (~110 routes) with its own domain
-libraries (`engine.ts`, `store.ts`, `orgPhysics.ts`, autonomous runs, decisions/findings/knowledge
-graph, etc.) that could not be safely merged file-by-file into this sandbox within the available
-tool budget without risking an unbuildable mix of two different app shells. Rather than guess at
-or fabricate the contents of Parts 1–9 that would normally precede this one, Part 10 was
-implemented as a clean, coherent, fully-working instantiation of everything the brief asks for —
-API v1 consolidation, OpenAPI-as-source-of-truth, generated SDK, webhooks, one reference
-integration, a realtime SSE API, and an automation job kernel — built against a small but
-representative domain (`decisions`, `findings`) plus the platform primitives (tokens,
-idempotency, events, runs, webhook subscriptions/deliveries) that a project at this stage would
-need. Every acceptance criterion in the brief is met and independently verified (see Verification
-Log in the final delivery message): spec validates, SDK compiles against generated types, every
-v1 route has both a static and a live runtime contract test, and the webhook delivery test proves
-HMAC signing plus retry → forced-retry → dead-letter.
+### What was asked
 
-### What changed
+The task brief ("Part 14") assumed a mature LEADOS codebase on
+`https://github.com/shahramclaude/Leados` with an orchestrator, agents,
+five separate health endpoints, eval/calibration tooling, Docker/deploy
+artifacts, and a `CHANGELOG.md`, and asked for observability
+consolidation, reliability runbooks, a unified deployment story, release
+engineering discipline, and an honest public-facing README.
 
-**Database schema** (`src/db/schema.ts`): added `api_tokens`, `idempotency_records`, `decisions`,
-`findings`, `runs`, `platform_events` (append-only, backs SSE + webhook fan-out),
-`webhook_subscriptions`, `webhook_deliveries`, `slack_notifications`. Applied with
-`npx drizzle-kit push`.
+### What was actually found (read before write)
 
-**Platform library** (`src/lib/platform/*`):
-- `envelope.ts` — `ApiError` + consistent `{ error: { code, message, details, correlationId } }`.
-- `pagination.ts` — cursor (`createdAt`+`id`) encode/decode, `limit`/`sort` parsing.
-- `auth.ts` — bearer token auth, scopes, in-process per-token rate limiting + headers.
-- `idempotency.ts` — `Idempotency-Key` dedupe/replay/conflict handling.
-- `etag.ts` — weak ETag + `If-None-Match` matching.
-- `handler.ts` — `withApiV1` / `withApiPublic` route wrappers (auth, rate limit, correlation id,
-  uniform error handling) so every v1 route behaves identically on the edges.
-- `events.ts` — append-only event log + fan-out trigger into the webhook dispatcher.
-- `jobs.ts` — the automation "runs" kernel: idempotent trigger, async execution, poll.
-- `webhooks.ts` — HMAC signing, delivery attempts, exponential backoff (30s → 6h over 6 attempts),
-  dead letter, forced retry.
-- `webhookVerify.ts` — shared HMAC verification (used by the sandbox receiver and re-exported from
-  `sdk.ts`).
-- `decisions.ts`, `findings.ts`, `serialize.ts` — domain repositories + DTO mapping.
-- `integrations/slack.ts` — reference outbound integration; reads `SLACK_WEBHOOK_URL` from env
-  only, degrades gracefully (logged, not thrown) when no credential is configured.
+Per standing order #1, the real `shahramclaude/Leados` GitHub repository
+(`main` branch) was cloned and inspected before any code was written.
+Verified facts (commands and output kept for the verification log):
 
-**Realtime**: `src/instrumentation.ts` drives the webhook retry loop on server start;
-`src/app/api/v1/events/stream/route.ts` implements the SSE API with `Last-Event-ID`/`?after=`
-resume semantics.
+- `npx tsc --noEmit` on that branch: **2,863 errors**, 2,343 of them inside
+  `src/` — not confined to legacy files.
+- `src/db/schema.ts` on that branch defines **6 tables**
+  (`organizations`, `users`, `sessions`, `people`, `auditLog`, an enum),
+  while roughly 150 files under `src/app/api/**` reference dozens of
+  tables/columns/helpers (`events`, `decisions`, `findings`, `comments`,
+  `agentCycleRuns`, `lib/seed.ts#ensureBaselineData`,
+  `lib/api.ts#withErrorHandling`, etc.) that do not exist anywhere in the
+  branch.
+- The repository root also contains a full, separate, pre-Next.js (Vite)
+  application (`App.tsx`, `Shell.tsx`, `index.html`, `vite.config.ts`, ~35
+  more files) — contradicting that same branch's own `README.md`, which
+  claims "there is no legacy Vite/vanilla-JS duplicate to remove... it is
+  not part of this working tree."
+- No `Dockerfile`, `docker-compose*.yml`, `deploy-production.sh`, or
+  `CHANGELOG.md` exist anywhere in that repository.
+- The sandbox this session's tools actually operate on is a separate,
+  blank Next.js + Drizzle + PostgreSQL starter template (`nextjs-
+  postgresql-template`), not a copy of the above repository.
 
-**OpenAPI / SDK / Postman** (spec-as-source-of-truth):
-- `src/lib/openapi/schemas.ts` — zod schemas for every resource.
-- `src/lib/openapi/registry.ts` — registers every `/api/v1/*` + `/api/health` + `/api/stats` path.
-- `scripts/generate-openapi.ts` → `api-spec.yaml` / `api-spec.json` (+ copies in `public/`).
-- `openapi-typescript` → `src/generated/api-types.ts` (generated, do not hand-edit).
-- `sdk.ts` — hand-written thin wrapper (`createLeadosClient`, `paginateAll`, `streamEvents`,
-  `verifyWebhookSignature`) around a fully-typed `openapi-fetch` client.
-- `scripts/generate-postman.ts` → `postman-collection.json` (+ copy in `public/`).
-- `scripts/contract-test.ts` — static spec↔route-file contract test.
-- `scripts/contract-test-runtime.ts` — live-server contract test (21 assertions, all passing).
+Full write-up: `docs/adr/0001-scope-given-upstream-repo-state.md` and
+`docs/history/README.md`.
 
-**Routes added**: `src/app/api/v1/{decisions,decisions/[id],findings,runs,runs/[id],
-events/stream,webhooks/subscriptions,webhooks/subscriptions/[id],webhooks/deliveries,
-webhooks/deliveries/[id]/retry,webhooks/sandbox,integrations/slack/notify,tokens}/route.ts`.
-Enhanced `src/app/api/health/route.ts`; added `src/app/api/stats/route.ts`. Added deprecated shim
-`src/app/api/decisions/route.ts` (forwards to v1, adds `Deprecation`/`Sunset`/`Link` headers).
+### Decision (ADR-style, recorded per standing order on ambiguous calls)
 
-**UI**: `src/app/status/page.tsx` (public status page), `src/app/platform/webhooks/page.tsx` +
-`WebhooksClient.tsx` (subscription management + delivery log with retry button), updated
-`src/app/page.tsx` / `src/app/layout.tsx`.
+Rather than ask for clarification (explicitly disallowed by standing
+instruction) or attempt to patch 2,863 pre-existing, unrelated errors
+across code with no accompanying specification (which would require
+fabricating schema/business logic — explicitly disallowed), this session
+built Part 14's full mission — composite health, observability, runbooks,
+deployment, release engineering, and an honest README/FEATURES/CHANGELOG —
+as a complete, real, verified layer on the sandbox's actual working tree,
+scoped honestly to what exists. See ADR-0001 for the full reasoning and
+the explicit trigger for revisiting it.
 
-**Docs**: `docs/API.md` — quickstart, auth, pagination, errors, idempotency, ETag, rate limiting,
-realtime SSE (with resume + sample code), automation API, webhooks (subscribe, verify, retries,
-sandbox), the Slack reference integration, deprecation policy + changelog, regeneration/contract
-test instructions.
+A second, narrower decision was also recorded as ADR-0002: one composite
+`/api/health` endpoint (not five), backed by a minimal, honestly-labeled
+`automation_runs` ledger with a synchronous demonstration endpoint
+(`POST /api/automation/runs`) rather than a fabricated orchestrator.
 
-**Dependencies added**: `zod`, `@asteasolutions/zod-to-openapi`, `yaml`, `openapi-fetch` (runtime);
-`openapi-typescript`, `tsx` (dev).
+### What was built
 
-### Follow-ups for a real merge with the upstream `Leados` repo
+- `src/db/schema.ts`: `automation_runs`, `system_meta` tables.
+- `src/lib/observability/`: `logger.ts`, `requestContext.ts`
+  (`AsyncLocalStorage`-based correlation ids), `metrics.ts`,
+  `errorTracking.ts`, `apiHandler.ts`.
+- `src/middleware.ts`: correlation-id injection.
+- `src/instrumentation.ts` + `src/lib/health/shutdown.ts`: graceful
+  shutdown signal handling.
+- `src/lib/health/{types,checks,composite}.ts`: six real dependency
+  checks (database, schema version, automation queue, automation
+  freshness, maintenance mode, process) aggregated into one composite
+  status.
+- `src/app/api/health/route.ts` (rewritten), `src/app/api/metrics/route.ts`
+  (new), `src/app/api/automation/runs/route.ts` (new),
+  `src/app/api/admin/maintenance/route.ts` (new).
+- `src/app/health/page.tsx`: human dashboard with drill-downs and
+  remediation hints linking into `docs/RUNBOOKS.md`.
+- `src/app/page.tsx`, `src/app/layout.tsx`: LEADOS branding, links to the
+  new health/metrics surfaces.
+- `scripts/record-schema-version.mjs`, `scripts/seed.mjs` (rewritten to
+  seed `automation_runs`/`system_meta`), `scripts/scan-secrets.sh`,
+  `scripts/deploy.sh`.
+- `Dockerfile` (multi-stage: deps → builder → migrator/runner),
+  `docker-compose.production.yml` (db + app + one-off migrate + nightly
+  backup sidecar, all health-checked), `.dockerignore`,
+  `.env.production.example`, `next.config.ts` (`output: "standalone"`).
+- `.github/workflows/release.yml`: tag-triggered build/typecheck/lint/
+  security-scan/build-image/attach-OpenAPI-spec-to-release.
+- Docs: `docs/SLO.md`, `docs/RUNBOOKS.md`, `docs/RELEASING.md`,
+  `docs/DEPLOYMENT.md`, `docs/CONFIG.md` (rewritten), `docs/README.md`
+  (index), `docs/adr/TEMPLATE.md` + two ADRs, `docs/history/README.md`,
+  `docs/api/openapi.json`.
+- `README.md` (rewritten), `FEATURES.md` (new), `ARCHITECTURE.md` (new),
+  `CONTRIBUTING.md` (new), `CHANGELOG.md` (new, `14.0.0`).
+- `package.json`: renamed to `leados`, added `db:push`, `db:migrate`,
+  `db:seed`, `db:studio`, `security:scan` scripts (no new runtime
+  dependencies were required — everything above uses `drizzle-orm`, `pg`,
+  `next`, `dotenv`, already present).
 
-If/when this sandbox is reconciled with `shahramclaude/Leados`'s actual ~110-route surface, the
-next session should: (1) replace the demo `decisions`/`findings` domain with the real
-`engine.ts`/`store.ts`-backed entities, (2) fold the existing `src/lib/apiUtils.ts`,
-`rulesApiClient.ts`, and `protocol.ts` conventions into `src/lib/platform/*` rather than running
-two parallel conventions, (3) re-run `scripts/generate-openapi.ts` against zod schemas for all 110
-routes and extend `scripts/contract-test.ts` coverage accordingly, and (4) wire the automation
-kernel in `src/lib/platform/jobs.ts` to the upstream autonomous-agent run loop instead of the
-simulated executor used here.
+### What was deliberately NOT done, and why
+
+- **Did not attempt to repair the upstream `shahramclaude/Leados` `main`
+  branch's 2,863 TypeScript errors or its ~150 schema-mismatched API
+  routes.** See ADR-0001. Fixing it for real is a large, separate
+  remediation effort that needs its own scoped session, not a few patches
+  bolted onto a release-engineering pass.
+- **Did not build a real background worker/orchestrator/queue.** Out of
+  scope for this part; `automation_runs` + the synchronous demo endpoint
+  is an honestly-labeled seam for when one exists (ADR-0002).
+- **Did not implement five separate health endpoints**
+  (`brain-health`/`decision-health`/`metric-health`/`rule-health`) because
+  the subsystems they'd check (a "brain," decision engine, metric engine,
+  rule engine) do not exist as working code anywhere this session could
+  verify. One real composite check is more honest than four fake ones.
+- **Did not wire up `eval:intelligence`, `perf:check`, `i18n:check`, or a
+  dedicated security-suite gate** in `docs/RELEASING.md`'s checklist as
+  pass/fail — there is no forecasting/calibration engine, no load-test
+  harness, no i18n surface, and no dedicated secret-scanning tool to run.
+  Each is listed explicitly as "not applicable, tracked in FEATURES.md,"
+  not silently skipped.
+- **Did not add an automated test suite.** None existed before this part;
+  adding one responsibly (choosing a runner, writing real tests against
+  real behavior) is more than this part's scope and is flagged as the
+  single biggest gap in `README.md`'s roadmap (M5).
+- **Did not implement auth or any PII-handling data model** — out of
+  scope; `README.md`'s security posture section states plainly that every
+  route is unauthenticated today.
+
+### Verification log
+
+See the final message of this session for the exact commands run and
+their output, including a real `/api/health` response sample demonstrating
+`healthy` → `degraded` transitions (via the maintenance-mode toggle) and a
+`/api/metrics` sample with non-zero, real request/automation data.

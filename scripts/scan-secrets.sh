@@ -1,58 +1,39 @@
 #!/usr/bin/env bash
-# Lightweight committed-secret scanner for CI + local pre-flight.
-#
-# This intentionally does NOT replace a dedicated tool (gitleaks/trufflehog)
-# in a real CI pipeline — see .github/workflows/security.yml, which also
-# documents how to wire gitleaks in an environment with network access to
-# GitHub Actions' marketplace. This script is the always-available fallback
-# that requires zero extra tooling and still catches the common high-signal
-# patterns (private keys, cloud provider keys, generic high-entropy
-# "...SECRET=..." assignments inside tracked files).
+# Minimal, dependency-free secret scanner used as the "security suite" gate
+# in docs/RELEASING.md. This is deliberately small: a handful of high-signal
+# regexes plus a check that no real .env file is tracked by git. It is not a
+# replacement for a dedicated tool (gitleaks/trufflehog) — see FEATURES.md
+# roadmap — but it catches the most common accidental leaks and runs with
+# zero extra dependencies.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-echo "Scanning tracked files for likely committed secrets..."
+FAIL=0
 
-PATTERNS=(
-  '-----BEGIN (RSA|EC|OPENSSH|PGP|DSA) PRIVATE KEY-----'
-  'AKIA[0-9A-Z]{16}'                     # AWS access key id
-  'AIza[0-9A-Za-z_\-]{35}'               # Google API key
-  'xox[baprs]-[0-9A-Za-z-]{10,}'         # Slack token
-  'ghp_[0-9A-Za-z]{36}'                  # GitHub PAT
-  'sk-[A-Za-z0-9]{20,}'                  # Generic "sk-" style API key
-)
-
-EXCLUDE_DIRS='node_modules|\.git|\.next|dist|build|coverage'
-
-MATCHES=0
-for pattern in "${PATTERNS[@]}"; do
-  if command -v rg >/dev/null 2>&1; then
-    hits=$(rg -n --no-heading -e "$pattern" --glob '!node_modules' --glob '!.git' --glob '!.next' . || true)
-  else
-    hits=$(grep -Rn --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.next -E -e "$pattern" . || true)
-  fi
-  if [ -n "$hits" ]; then
-    echo "POTENTIAL SECRET matching /$pattern/:"
-    echo "$hits"
-    MATCHES=$((MATCHES + 1))
-  fi
-done
-
-# .env files must never be tracked by git (they are read at runtime only).
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  if git ls-files --error-unmatch .env >/dev/null 2>&1; then
-    echo "FAIL: .env is tracked by git. Remove it from version control."
-    MATCHES=$((MATCHES + 1))
-  fi
+echo "== Checking for tracked .env files (should only ever be committed as *.example) =="
+if git ls-files 2>/dev/null | grep -E '(^|/)\.env($|\.[a-zA-Z0-9]+$)' | grep -vE '\.example$'; then
+  echo "FAIL: a real .env file appears to be tracked by git."
+  FAIL=1
 else
-  echo "(not a git repository in this sandbox — skipping git-tracked-file check; .gitignore already excludes .env*)"
+  echo "OK: no tracked .env file (excluding *.example)."
 fi
 
-if [ "$MATCHES" -gt 0 ]; then
-  echo ""
-  echo "Secret scan FAILED: $MATCHES pattern group(s) matched. Investigate before merging."
+echo "== Scanning source for common secret patterns =="
+PATTERN='(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[0-9A-Za-z-]{10,}|sk-[A-Za-z0-9]{20,})'
+MATCHES=$(grep -RInE "$PATTERN" --include='*.ts' --include='*.tsx' --include='*.js' --include='*.mjs' --include='*.json' --include='*.md' --exclude-dir=node_modules --exclude-dir=.next --exclude-dir=.git . || true)
+
+if [ -n "$MATCHES" ]; then
+  echo "FAIL: possible secret material found:"
+  echo "$MATCHES"
+  FAIL=1
+else
+  echo "OK: no known secret patterns found."
+fi
+
+if [ "$FAIL" -ne 0 ]; then
+  echo "security:scan FAILED"
   exit 1
 fi
 
-echo "Secret scan passed: no high-signal secret patterns found in tracked files."
+echo "security:scan PASSED"

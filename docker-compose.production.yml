@@ -1,0 +1,94 @@
+name: leados
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-leados}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-leados}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-leados} -d ${POSTGRES_DB:-leados}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # One-off container: `docker compose -f docker-compose.production.yml run --rm migrate`
+  # Runs `npm run db:migrate` (drizzle-kit push + schema-version record)
+  # against the `db` service using the exact dependency versions the app
+  # image was built with. Never started by `up`.
+  migrate:
+    build:
+      context: .
+      target: migrator
+    profiles: ["tools"]
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: ${PORT:-3000}
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Gives in-flight requests time to finish after SIGTERM before the
+    # container is killed — see src/instrumentation.ts and
+    # docs/RUNBOOKS.md "Maintenance mode & graceful shutdown".
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then(r => process.exit([200,503].includes(r.status) ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Nightly pg_dump into ./backups on the host, for docs/RUNBOOKS.md
+  # "Backup restore". Plain shell loop rather than a bespoke image, to
+  # avoid maintaining another thing to build for a single-instance
+  # deployment.
+  db-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-leados}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-leados}
+      PGHOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backups:/backups
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        echo "db-backup sidecar started; dumping every 24h into /backups"
+        while true; do
+          STAMP=$$(date +%Y%m%dT%H%M%S)
+          pg_dump -h "$$PGHOST" -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -F p > "/backups/leados-$$STAMP.sql" \
+            && echo "wrote /backups/leados-$$STAMP.sql" \
+            || echo "backup FAILED at $$STAMP" >&2
+          # Keep the 14 most recent dumps.
+          ls -1t /backups/leados-*.sql 2>/dev/null | tail -n +15 | xargs -r rm --
+          sleep 86400
+        done
+
+volumes:
+  db-data:

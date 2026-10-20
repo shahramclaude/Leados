@@ -1,18 +1,26 @@
-// Runs once when the Next.js server starts (Node runtime only). We use it to
-// drive the webhook retry/backoff loop so deliveries that failed actually
-// get retried without requiring an external cron in local/dev/demo mode.
+// Next.js instrumentation hook (runs once per server process on boot).
+// Used here purely for graceful shutdown: when the platform sends SIGTERM
+// (Docker stop, rolling deploy, Kubernetes pod termination), we flip a flag
+// that the composite health check reports as "warn" immediately, so a load
+// balancer / orchestrator stops routing new traffic while in-flight
+// requests finish. See docs/RUNBOOKS.md → "Maintenance mode & graceful
+// shutdown" for the full procedure and its honest limitations (this app has
+// no long-running background worker process to "drain" — only in-flight
+// HTTP requests, which Node's default server already finishes before
+// exiting on SIGTERM as long as the orchestrator gives it a grace period).
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const globalForTimers = globalThis as typeof globalThis & {
-    __leadosWebhookRetryTimer?: ReturnType<typeof setInterval>;
+  const { markShuttingDown } = await import("@/lib/health/shutdown");
+  const { logger } = await import("@/lib/observability/logger");
+
+  const handleSignal = (signal: NodeJS.Signals) => {
+    logger.warn("shutdown_signal_received", { signal });
+    markShuttingDown();
   };
 
-  if (globalForTimers.__leadosWebhookRetryTimer) return;
+  process.once("SIGTERM", () => handleSignal("SIGTERM"));
+  process.once("SIGINT", () => handleSignal("SIGINT"));
 
-  const { processDueRetries } = await import("@/lib/platform/webhooks");
-
-  globalForTimers.__leadosWebhookRetryTimer = setInterval(() => {
-    processDueRetries().catch((err) => console.error("webhook retry loop failed", err));
-  }, 5_000);
+  logger.info("process_started", { pid: process.pid, nodeVersion: process.version });
 }

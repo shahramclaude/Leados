@@ -1,0 +1,4 @@
+{
+  "version": "14.0.0",
+  "note": "Bumped by hand whenever src/db/schema.ts changes. npm run db:migrate writes this value into the system_meta table so /api/health can detect a running app that is older/newer than the database it is talking to."
+}

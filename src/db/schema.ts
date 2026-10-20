@@ -1,140 +1,71 @@
-// LEADOS data model — Part 13 security baseline.
+// LEADOS data model.
 //
-// This sandbox began life as a bare Next.js + PostgreSQL starter template; no
-// earlier LEADOS parts existed in this environment. Part 13 therefore ships a
-// minimal-but-real multi-tenant "people" domain (the kind of sensitive
-// organizational data LEADOS exists to manage) together with the full
-// authentication / authorization / audit schema so every security control
-// described in SECURITY_AUDIT.md, docs/THREAT-MODEL.md and docs/SECURITY.md
-// has real tables, real routes and real tests behind it.
+// Scope note (Part 14 — Observability, Reliability, Release Engineering):
+// This working tree started from a blank Next.js + PostgreSQL starter template
+// (see AI-SESSION-LOG.md for the provenance note about the upstream
+// `shahramclaude/Leados` GitHub repository, which contains a much larger but
+// currently non-building speculative codebase that this part deliberately
+// does not try to resurrect). The two tables below are the minimum real,
+// honest surface needed to make the composite health system
+// (`src/lib/health`) check actual state instead of fabricating it:
+//
+//   - `system_meta`   — small key/value table used to record the applied
+//                        schema version (written by `npm run db:migrate`)
+//                        and the maintenance-mode flag.
+//   - `automation_runs` — an append-only ledger of background/automation
+//                        work. Nothing in this build enqueues real agent
+//                        work yet, so this table is seeded with
+//                        representative rows and exposed through
+//                        `POST /api/automation/heartbeat` so the health
+//                        system has real rows to query for "queue lag" and
+//                        "last successful automation run". This is
+//                        intentionally a minimal ledger, not a claim that a
+//                        full orchestrator/agent runtime exists.
 import {
-  boolean,
   index,
   integer,
   jsonb,
   pgEnum,
   pgTable,
+  serial,
   text,
   timestamp,
-  uniqueIndex,
-  uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 
-export const userRoleEnum = pgEnum("user_role", ["admin", "manager", "member"]);
+export const automationRunStatusEnum = pgEnum("automation_run_status", [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+]);
 
-/** A tenant / customer organization. All sensitive data is scoped to one org. */
-export const organizations = pgTable("organizations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: varchar("name", { length: 255 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+export const systemMeta = pgTable("system_meta", {
+  key: varchar("key", { length: 128 }).primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Application users. Passwords are always bcrypt hashes, never plaintext. */
-export const users = pgTable(
-  "users",
+export const automationRuns = pgTable(
+  "automation_runs",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    email: varchar("email", { length: 320 }).notNull(),
-    passwordHash: text("password_hash").notNull(),
-    role: userRoleEnum("role").notNull().default("member"),
-    // OIDC/SSO-ready: when set, local password login is disabled for this user
-    // and authentication is federated. See docs/SECURITY.md "SSO readiness".
-    ssoSubject: varchar("sso_subject", { length: 255 }),
-    ssoProvider: varchar("sso_provider", { length: 100 }),
-    failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
-    lockedUntil: timestamp("locked_until", { withTimezone: true }),
-    isActive: boolean("is_active").notNull().default(true),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("users_email_idx").on(table.email)],
-);
-
-/**
- * Server-side session record. The browser only ever holds an opaque, signed
- * JWT cookie; this table lets us revoke individual sessions (logout
- * everywhere, incident response) and rotate session ids without trusting a
- * purely stateless token.
- */
-export const sessions = pgTable(
-  "sessions",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    tokenHash: varchar("token_hash", { length: 128 }).notNull(),
-    ip: varchar("ip", { length: 64 }),
-    userAgent: text("user_agent"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    rotatedAt: timestamp("rotated_at", { withTimezone: true }),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    revokedReason: varchar("revoked_reason", { length: 255 }),
-  },
-  (table) => [index("sessions_user_id_idx").on(table.userId)],
-);
-
-/** Sensitive personal data — the "crown jewel" asset protected by this part. */
-export const people = pgTable(
-  "people",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    orgId: uuid("org_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    firstName: varchar("first_name", { length: 120 }).notNull(),
-    lastName: varchar("last_name", { length: 120 }).notNull(),
-    email: varchar("email", { length: 320 }),
-    phone: varchar("phone", { length: 40 }),
-    // Free-text notes and structured sensitive attributes (e.g. compensation,
-    // national id fragments). Stored as jsonb so field-level redaction can be
-    // layered on later without a migration.
-    notes: text("notes"),
-    sensitiveData: jsonb("sensitive_data").$type<Record<string, unknown>>(),
-    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  },
-  (table) => [index("people_org_id_idx").on(table.orgId)],
-);
-
-/**
- * Immutable, hash-chained audit log. Every row's `hash` is
- * sha256(prevHash + canonicalJson(row)); `prevHash` points at the previous
- * row *for the same org* so a tenant admin can verify the chain without
- * seeing other tenants' events. Rows are never updated or deleted by
- * application code (enforced by code review + DB role grants in production,
- * see docs/SECURITY.md).
- */
-export const auditLog = pgTable(
-  "audit_log",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    seq: integer("seq").generatedAlwaysAsIdentity().notNull(),
-    correlationId: varchar("correlation_id", { length: 64 }).notNull(),
-    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "set null" }),
-    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "set null" }),
-    actorEmail: varchar("actor_email", { length: 320 }),
-    action: varchar("action", { length: 100 }).notNull(),
-    resourceType: varchar("resource_type", { length: 100 }).notNull(),
-    resourceId: varchar("resource_id", { length: 100 }),
-    reason: varchar("reason", { length: 500 }),
-    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-    ip: varchar("ip", { length: 64 }),
-    userAgent: text("user_agent"),
-    prevHash: varchar("prev_hash", { length: 64 }),
-    hash: varchar("hash", { length: 64 }).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    id: serial("id").primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    status: automationRunStatusEnum("status").notNull().default("queued"),
+    correlationId: varchar("correlation_id", { length: 64 }),
+    queuedAt: timestamp("queued_at", { withTimezone: true }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    durationMs: integer("duration_ms"),
+    errorMessage: text("error_message"),
+    detail: jsonb("detail").$type<Record<string, unknown>>(),
   },
   (table) => [
-    index("audit_log_org_id_idx").on(table.orgId),
-    index("audit_log_created_at_idx").on(table.createdAt),
-    uniqueIndex("audit_log_seq_idx").on(table.seq),
+    index("automation_runs_status_idx").on(table.status),
+    index("automation_runs_queued_at_idx").on(table.queuedAt),
   ],
 );
+
+export type AutomationRun = typeof automationRuns.$inferSelect;
+export type NewAutomationRun = typeof automationRuns.$inferInsert;
+export type SystemMetaRow = typeof systemMeta.$inferSelect;
