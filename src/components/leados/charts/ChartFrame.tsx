@@ -1,60 +1,80 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
-import { cx } from "../ui/cx";
+
+export interface ChartTableColumn {
+  key: string;
+  label: string;
+  numeric?: boolean;
+}
 
 export interface ChartFrameProps {
   title: string;
   description?: string;
-  legend?: { label: string; color: string; shape?: string }[];
   children: ReactNode;
-  /** Accessible alternative required by the design system: every chart can
-   * be viewed as a data table instead. */
-  table: ReactNode;
-  footnote?: string;
+  tableColumns: ChartTableColumn[];
+  tableRows: Array<Record<string, string | number>>;
+  sourceNote?: string;
 }
 
-/** Common chrome for every chart: title, optional legend (color + shape,
- * never color alone), a "view as table" toggle, and a footnote slot for
- * documenting empty/zero-state or axis-truncation caveats. */
-export function ChartFrame({ title, description, legend, children, table, footnote }: ChartFrameProps) {
+/**
+ * Every chart in LEADOS is wrapped in a ChartFrame so it ships with a
+ * same-information "view as table" fallback — the accessible alternative
+ * required by the chart grammar (Part 02-E).
+ */
+export function ChartFrame({ title, description, children, tableColumns, tableRows, sourceNote }: ChartFrameProps) {
   const [asTable, setAsTable] = useState(false);
-  const id = useId();
+  const titleId = useId();
 
   return (
-    <figure className="flex flex-col gap-[var(--space-3)] rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-[var(--card-padding)]">
-      <div className="flex flex-wrap items-start justify-between gap-[var(--space-2)]">
+    <section aria-labelledby={titleId} className="flex flex-col gap-3 rounded-[var(--comp-card-radius)] border border-border-subtle bg-surface-raised p-[var(--comp-card-padding)]">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-[var(--text-sm)] font-semibold text-[var(--text-primary)]">{title}</h3>
-          {description && <p className="text-[var(--text-xs)] text-[var(--text-muted)]">{description}</p>}
+          <h3 id={titleId} className="text-sm font-semibold text-text-primary">
+            {title}
+          </h3>
+          {description ? <p className="mt-0.5 max-w-[60ch] text-xs text-text-secondary">{description}</p> : null}
         </div>
         <button
           type="button"
-          aria-pressed={asTable}
           onClick={() => setAsTable((v) => !v)}
-          className="rounded-[var(--radius-sm)] border border-[var(--border-strong)] px-[var(--space-2)] py-1 text-[var(--text-xs)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+          aria-pressed={asTable}
+          className="shrink-0 rounded-[var(--radius-sm)] border border-border-subtle px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-sunken"
         >
           {asTable ? "View as chart" : "View as table"}
         </button>
       </div>
-      {legend && legend.length > 0 && (
-        <ul className="flex flex-wrap gap-[var(--space-3)]" aria-label="Legend">
-          {legend.map((l) => (
-            <li key={l.label} className="flex items-center gap-[var(--space-1)] text-[var(--text-xs)] text-[var(--text-secondary)]">
-              <span aria-hidden style={{ color: l.color }}>
-                {l.shape ?? "●"}
-              </span>
-              {l.label}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div id={`${id}-content`}>{asTable ? table : children}</div>
-      {footnote && <figcaption className="text-[var(--text-xs)] text-[var(--text-muted)]">{footnote}</figcaption>}
-    </figure>
-  );
-}
 
-export function chartTableClassName() {
-  return cx("w-full border-collapse text-[var(--text-xs)]");
+      {asTable ? (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <caption className="sr-only">{title} — tabular data</caption>
+            <thead>
+              <tr className="border-b border-border-subtle text-left text-xs uppercase tracking-wide text-text-muted">
+                {tableColumns.map((col) => (
+                  <th key={col.key} scope="col" className="py-2 pr-4 font-medium">
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.map((row, i) => (
+                <tr key={i} className="border-b border-border-subtle last:border-b-0">
+                  {tableColumns.map((col) => (
+                    <td key={col.key} className={["py-2 pr-4 text-text-primary", col.numeric ? "font-mono tabular-nums" : ""].join(" ")}>
+                      {row[col.key]}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">{children}</div>
+      )}
+      {sourceNote ? <p className="text-[11px] text-text-muted">{sourceNote}</p> : null}
+    </section>
+  );
 }

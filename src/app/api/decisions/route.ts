@@ -1,41 +1,36 @@
 import { db } from "@/db";
 import { decisions } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import { desc } from "drizzle-orm";
+import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status");
-  try {
-    const rows = status
-      ? await db.select().from(decisions).where(eq(decisions.status, status)).orderBy(desc(decisions.createdAt))
-      : await db.select().from(decisions).orderBy(desc(decisions.createdAt));
-    return Response.json({ decisions: rows });
-  } catch {
-    return Response.json({ error: "Failed to load decisions", errorId: randomUUID() }, { status: 500 });
-  }
+export async function GET() {
+  const rows = await db.select().from(decisions).orderBy(desc(decisions.severity));
+  return Response.json({ decisions: rows });
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const id = `d-${randomUUID().slice(0, 8)}`;
-    const [row] = await db
-      .insert(decisions)
-      .values({
-        id,
-        title: body.title,
-        summary: body.summary,
-        owner: body.owner,
-        status: "pending",
-        severity: Number(body.severity) || 3,
-        dueDate: body.dueDate,
-      })
-      .returning();
-    return Response.json({ decision: row }, { status: 201 });
-  } catch {
-    return Response.json({ error: "Failed to create decision", errorId: randomUUID() }, { status: 500 });
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body.title !== "string" || body.title.trim().length === 0) {
+    return Response.json({ error: "A title is required." }, { status: 400 });
   }
+
+  const dueDate = body.dueDate ? new Date(body.dueDate) : new Date(Date.now() + 7 * 86400000);
+  const [created] = await db
+    .insert(decisions)
+    .values({
+      title: body.title.trim(),
+      description: body.description?.trim() || "No additional context provided.",
+      track: body.track === "strategic" ? "strategic" : "execution",
+      category: body.category?.trim() || "General",
+      status: "pending",
+      owner: body.owner?.trim() || "Unassigned",
+      severity: Number.isFinite(body.severity) ? Math.min(5, Math.max(1, Math.round(body.severity))) : 3,
+      financialImpact: String(Number.isFinite(body.financialImpact) ? body.financialImpact : 0),
+      dueDate,
+    })
+    .returning();
+
+  return Response.json({ decision: created }, { status: 201 });
 }

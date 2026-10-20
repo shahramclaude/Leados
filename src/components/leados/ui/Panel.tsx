@@ -1,65 +1,61 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { cx } from "./cx";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 export interface PanelProps {
-  id: string;
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  /** When set, open/closed state persists across sessions under this key. */
+  persistKey?: string;
   actions?: ReactNode;
 }
 
-/** Collapsible panel that remembers open/closed state per `id` across
- * sessions (localStorage), so returning to a page doesn't re-expand
- * something the user deliberately collapsed. */
-export function Panel({ id, title, children, defaultOpen = true, actions }: PanelProps) {
-  const storageKey = `leados.panel.${id}`;
+export function Panel({ title, children, defaultOpen = true, persistKey, actions }: PanelProps) {
+  const id = useId();
+  const storageKey = persistKey ? `leados:panel:${persistKey}` : null;
   const [open, setOpen] = useState(defaultOpen);
-  const contentId = `${id}-panel-content`;
 
   useEffect(() => {
+    if (!storageKey) return;
     const stored = window.localStorage.getItem(storageKey);
     if (stored !== null) setOpen(stored === "1");
   }, [storageKey]);
 
   function toggle() {
-    setOpen((v) => {
-      window.localStorage.setItem(storageKey, v ? "0" : "1");
-      return !v;
+    setOpen((prev) => {
+      const next = !prev;
+      if (storageKey) window.localStorage.setItem(storageKey, next ? "1" : "0");
+      return next;
     });
   }
 
   return (
-    <section className="rounded-[var(--radius-lg)] border border-[var(--border-subtle)] bg-[var(--surface-raised)]">
-      <div className="flex items-center justify-between gap-[var(--space-2)] p-[var(--card-padding)] pb-[var(--space-3)]">
+    <section className="rounded-[var(--comp-card-radius)] border border-border-subtle bg-surface-raised">
+      <div className="flex items-center justify-between gap-3 px-[var(--comp-card-padding)] py-3">
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
-          aria-controls={contentId}
-          className="flex items-center gap-[var(--space-2)] text-left text-[var(--text-sm)] font-semibold text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+          aria-controls={id}
+          className="flex items-center gap-2 text-sm font-semibold text-text-primary"
         >
-          <svg
-            aria-hidden
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            className={cx("transition-transform duration-[var(--duration-fast)] ease-[var(--ease-standard)]", open ? "rotate-90" : "rotate-0")}
+          <span
+            aria-hidden="true"
+            className="inline-block transition-transform duration-[var(--duration-fast)] ease-[var(--ease-standard)]"
+            style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}
           >
-            <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+            ▸
+          </span>
           {title}
         </button>
         {actions}
       </div>
-      {open && (
-        <div id={contentId} className="border-t border-[var(--border-subtle)] p-[var(--card-padding)]">
+      {open ? (
+        <div id={id} className="border-t border-border-subtle px-[var(--comp-card-padding)] py-4">
           {children}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

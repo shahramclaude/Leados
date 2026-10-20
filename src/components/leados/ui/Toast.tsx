@@ -1,117 +1,94 @@
 "use client";
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
-import { cx } from "./cx";
 
-export type ToastTone = "neutral" | "success" | "warning" | "danger";
+export type ToastTone = "info" | "success" | "danger" | "warning";
 
-export interface ToastInput {
+export interface ToastOptions {
   title: string;
   description?: string;
   tone?: ToastTone;
-  /** polite = announced when the screen reader is idle; assertive =
-   * interrupts immediately. Use assertive sparingly (errors only). */
+  /** "assertive" interrupts the screen reader immediately; use sparingly for critical errors. */
   politeness?: "polite" | "assertive";
-  durationMs?: number;
-  action?: { label: string; onClick: () => void };
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
-interface ToastRecord extends ToastInput {
-  id: string;
+interface ToastRecord extends ToastOptions {
+  id: number;
 }
 
 interface ToastContextValue {
-  push: (toast: ToastInput) => string;
-  dismiss: (id: string) => void;
+  notify: (options: ToastOptions) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const TONE_CLASS: Record<ToastTone, string> = {
-  neutral: "border-[var(--border-subtle)]",
-  success: "border-[var(--status-success)]",
-  warning: "border-[var(--status-warning)]",
-  danger: "border-[var(--status-danger)]",
+  info: "border-status-info",
+  success: "border-status-success",
+  danger: "border-status-danger",
+  warning: "border-status-warning",
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastRecord[]>([]);
-  const counter = useRef(0);
+  const [polite, setPolite] = useState<ToastRecord[]>([]);
+  const [assertive, setAssertive] = useState<ToastRecord[]>([]);
+  const idRef = useRef(0);
 
-  const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+  const notify = useCallback((options: ToastOptions) => {
+    const id = ++idRef.current;
+    const record: ToastRecord = { id, politeness: "polite", tone: "info", ...options };
+    if (record.politeness === "assertive") {
+      setAssertive((prev) => [...prev, record]);
+    } else {
+      setPolite((prev) => [...prev, record]);
+    }
+    window.setTimeout(() => {
+      setPolite((prev) => prev.filter((t) => t.id !== id));
+      setAssertive((prev) => prev.filter((t) => t.id !== id));
+    }, 6000);
   }, []);
 
-  const push = useCallback(
-    (toast: ToastInput) => {
-      const id = `toast-${++counter.current}`;
-      setToasts((prev) => [...prev, { ...toast, id }]);
-      const duration = toast.durationMs ?? 5000;
-      if (duration > 0) {
-        setTimeout(() => dismiss(id), duration);
-      }
-      return id;
-    },
-    [dismiss],
-  );
+  const value = useMemo(() => ({ notify }), [notify]);
 
-  const value = useMemo(() => ({ push, dismiss }), [push, dismiss]);
-  const polite = toasts.filter((t) => (t.politeness ?? "polite") === "polite");
-  const assertive = toasts.filter((t) => t.politeness === "assertive");
+  function renderToast(toast: ToastRecord) {
+    return (
+      <div
+        key={toast.id}
+        className={[
+          "pointer-events-auto w-80 rounded-[var(--radius-md)] border-l-4 bg-surface-overlay p-3 shadow-[var(--elevation-3)]",
+          "animate-[leados-fade-in_var(--duration-base)_var(--ease-entrance)]",
+          TONE_CLASS[toast.tone ?? "info"],
+        ].join(" ")}
+      >
+        <p className="text-sm font-semibold text-text-primary">{toast.title}</p>
+        {toast.description ? <p className="mt-0.5 text-xs text-text-secondary">{toast.description}</p> : null}
+        {toast.actionLabel && toast.onAction ? (
+          <button
+            type="button"
+            onClick={toast.onAction}
+            className="mt-2 text-xs font-medium text-accent-default underline-offset-2 hover:underline"
+          >
+            {toast.actionLabel}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-[var(--space-4)] right-[var(--space-4)] z-[60] flex w-80 flex-col gap-[var(--space-2)]">
-        <div aria-live="polite" aria-atomic="false" className="flex flex-col gap-[var(--space-2)]">
-          {polite.map((t) => (
-            <ToastCard key={t.id} toast={t} onDismiss={() => dismiss(t.id)} />
-          ))}
+      <div className="pointer-events-none fixed bottom-4 right-4 z-[200] flex flex-col gap-2">
+        <div aria-live="polite" aria-atomic="true" className="flex flex-col gap-2">
+          {polite.map(renderToast)}
         </div>
-        <div aria-live="assertive" aria-atomic="false" className="flex flex-col gap-[var(--space-2)]">
-          {assertive.map((t) => (
-            <ToastCard key={t.id} toast={t} onDismiss={() => dismiss(t.id)} />
-          ))}
+        <div aria-live="assertive" aria-atomic="true" className="flex flex-col gap-2">
+          {assertive.map(renderToast)}
         </div>
       </div>
     </ToastContext.Provider>
-  );
-}
-
-function ToastCard({ toast, onDismiss }: { toast: ToastRecord; onDismiss: () => void }) {
-  return (
-    <div
-      role="status"
-      className={cx(
-        "pointer-events-auto rounded-[var(--radius-md)] border-l-4 bg-[var(--surface-overlay)] p-[var(--space-3)] shadow-[var(--shadow-lg)]",
-        "animate-[leados-fade-in_var(--duration-base)_var(--ease-decelerate)]",
-        TONE_CLASS[toast.tone ?? "neutral"],
-      )}
-    >
-      <div className="flex items-start justify-between gap-[var(--space-2)]">
-        <div>
-          <p className="text-[var(--text-sm)] font-semibold text-[var(--text-primary)]">{toast.title}</p>
-          {toast.description && <p className="mt-0.5 text-[var(--text-xs)] text-[var(--text-muted)]">{toast.description}</p>}
-          {toast.action && (
-            <button
-              type="button"
-              onClick={toast.action.onClick}
-              className="mt-[var(--space-2)] text-[var(--text-xs)] font-medium text-[var(--accent-default)] hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-            >
-              {toast.action.label}
-            </button>
-          )}
-        </div>
-        <button
-          type="button"
-          aria-label="Dismiss notification"
-          onClick={onDismiss}
-          className="text-[var(--text-muted)] hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-        >
-          ✕
-        </button>
-      </div>
-    </div>
   );
 }
 

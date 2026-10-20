@@ -1,9 +1,43 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { cx } from "./cx";
-import { IconButton } from "./IconButton";
+import { IconButton } from "./Button";
+
+function useFocusTrap(active: boolean, containerRef: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    if (!active) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const container = containerRef.current;
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
+    const firstFocusable = container?.querySelector<HTMLElement>(focusableSelector);
+    (firstFocusable ?? container)?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Tab" || !container) return;
+      const focusables = Array.from(container.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+        (el) => el.offsetParent !== null,
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [active, containerRef]);
+}
 
 export interface ModalProps {
   open: boolean;
@@ -13,110 +47,70 @@ export interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   size?: "sm" | "md" | "lg";
-  /** When set, renders as a side drawer instead of a centered dialog. */
-  side?: "right" | "left" | false;
 }
 
-const SIZE_CLASS = { sm: "max-w-md", md: "max-w-xl", lg: "max-w-3xl" };
-const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+const SIZE_CLASS: Record<string, string> = {
+  sm: "max-w-md",
+  md: "max-w-xl",
+  lg: "max-w-3xl",
+};
 
-/** Dialog with a real focus trap: Tab/Shift+Tab cycle within the panel,
- * Escape closes, and focus is restored to the element that opened it. Also
- * doubles as the Drawer implementation via the `side` prop. */
-export function Modal({ open, onClose, title, description, children, footer, size = "md", side = false }: ModalProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
+/** Modal with full focus trap, ESC-to-close, and focus restored to the trigger on close. */
+export function Modal({ open, onClose, title, description, children, footer, size = "md" }: ModalProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(open, containerRef);
 
   useEffect(() => {
     if (!open) return;
-    previouslyFocused.current = document.activeElement as HTMLElement;
-    const panel = panelRef.current;
-    const focusables = panel?.querySelectorAll<HTMLElement>(FOCUSABLE);
-    (focusables?.[0] ?? panel)?.focus();
-
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key !== "Tab" || !panel) return;
-      const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null);
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
     }
-    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("keydown", onKeyDown);
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = "";
-      previouslyFocused.current?.focus();
     };
   }, [open, onClose]);
 
-  if (!open || typeof document === "undefined") return null;
+  if (!open) return null;
 
-  const titleId = "modal-title";
-  const descId = description ? "modal-desc" : undefined;
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-stretch justify-end" aria-hidden={false}>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/40 transition-opacity duration-[var(--duration-base)] ease-[var(--ease-standard)]"
+        aria-hidden="true"
         onClick={onClose}
-        aria-hidden
+        className="absolute inset-0 bg-black/40 animate-[leados-fade-in_var(--duration-base)_var(--ease-standard)]"
       />
       <div
-        ref={panelRef}
+        ref={containerRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descId}
+        aria-labelledby="leados-modal-title"
+        aria-describedby={description ? "leados-modal-desc" : undefined}
         tabIndex={-1}
-        className={cx(
-          "relative flex max-h-screen flex-col bg-[var(--surface-raised)] shadow-[var(--shadow-lg)] outline-none",
-          side
-            ? cx("h-full w-full sm:max-w-md animate-[leados-fade-in_var(--duration-base)_var(--ease-decelerate)]", side === "left" && "order-first")
-            : cx("m-auto w-full rounded-[var(--radius-lg)] animate-[leados-fade-in_var(--duration-base)_var(--ease-decelerate)]", SIZE_CLASS[size]),
-        )}
+        className={[
+          "relative z-10 w-full rounded-[var(--radius-lg)] border border-border-subtle bg-surface-raised p-6 shadow-[var(--elevation-3)]",
+          "animate-[leados-fade-in_var(--duration-base)_var(--ease-entrance)]",
+          SIZE_CLASS[size],
+        ].join(" ")}
       >
-        <header className="flex items-start justify-between gap-[var(--space-4)] border-b border-[var(--border-subtle)] p-[var(--space-5)]">
+        <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h2 id={titleId} className="text-[var(--text-md)] font-semibold text-[var(--text-primary)]">
+            <h2 id="leados-modal-title" className="text-lg font-semibold text-text-primary">
               {title}
             </h2>
-            {description && (
-              <p id={descId} className="mt-1 max-w-[var(--measure-prose)] text-[var(--text-sm)] text-[var(--text-muted)]">
+            {description ? (
+              <p id="leados-modal-desc" className="mt-1 max-w-[60ch] text-sm text-text-secondary">
                 {description}
               </p>
-            )}
+            ) : null}
           </div>
-          <IconButton
-            label="Close"
-            onClick={onClose}
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            }
-          />
-        </header>
-        <div className="leados-scroll flex-1 overflow-auto p-[var(--space-5)]">{children}</div>
-        {footer && <footer className="flex justify-end gap-[var(--space-2)] border-t border-[var(--border-subtle)] p-[var(--space-4)]">{footer}</footer>}
+          <IconButton label="Close dialog" icon={<span aria-hidden="true">✕</span>} onClick={onClose} size="sm" />
+        </div>
+        <div>{children}</div>
+        {footer ? <div className="mt-6 flex justify-end gap-2">{footer}</div> : null}
       </div>
-    </div>,
-    document.body,
+    </div>
   );
-}
-
-export function Drawer(props: Omit<ModalProps, "side"> & { side?: "left" | "right" }) {
-  return <Modal {...props} side={props.side ?? "right"} />;
 }

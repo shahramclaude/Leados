@@ -1,74 +1,67 @@
-import type { HeatmapCell } from "./types";
-import { SEVERITY_META, type SeverityLevel } from "../ui/tokens";
+export interface HeatmapCell {
+  row: string;
+  col: string;
+  value: number; // 0-1 normalized intensity
+  label?: string;
+}
 
-export interface HeatmapSVGProps {
+/** Severity-style heatmap: intensity by color AND by printed value, never color alone. */
+export function HeatmapSVG({
+  rows,
+  cols,
+  cells,
+  cellSize = 36,
+}: {
   rows: string[];
   cols: string[];
   cells: HeatmapCell[];
-  /** Maps a raw value to a 1–5 severity bucket; color AND the severity
-   * glyph are both rendered per cell. */
-  toSeverity: (value: number) => SeverityLevel;
   cellSize?: number;
-}
-
-export function HeatmapSVG({ rows, cols, cells, toSeverity, cellSize = 34 }: HeatmapSVGProps) {
-  const lookup = new Map(cells.map((c) => [`${c.row}|${c.col}`, c.value]));
-  const labelColWidth = 120;
-  const width = labelColWidth + cols.length * cellSize;
+}) {
+  const labelWidth = 96;
+  const width = labelWidth + cols.length * cellSize;
   const height = 24 + rows.length * cellSize;
+  const lookup = new Map(cells.map((c) => [`${c.row}__${c.col}`, c]));
+
+  function colorFor(value: number) {
+    // Light-to-dark accent ramp driven by the semantic accent token via opacity (no raw hex).
+    const alpha = 0.12 + value * 0.72;
+    return `color-mix(in srgb, var(--accent-default) ${Math.round(alpha * 100)}%, var(--surface-base))`;
+  }
 
   return (
-    <svg role="img" aria-label="Heatmap" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      {cols.map((col, ci) => (
-        <text key={col} x={labelColWidth + ci * cellSize + cellSize / 2} y={14} textAnchor="middle" fontSize={10} fill="var(--text-muted)">
-          {col}
+    <svg width={width} height={height} role="img" aria-label="Heatmap">
+      {cols.map((c, ci) => (
+        <text key={c} x={labelWidth + ci * cellSize + cellSize / 2} y={14} textAnchor="middle" className="fill-text-muted text-[10px]">
+          {c}
         </text>
       ))}
-      {rows.map((row, ri) => (
-        <g key={row}>
-          <text x={labelColWidth - 8} y={24 + ri * cellSize + cellSize / 2 + 4} textAnchor="end" fontSize={11} fill="var(--text-secondary)">
-            {row}
+      {rows.map((r, ri) => (
+        <g key={r}>
+          <text x={labelWidth - 8} y={24 + ri * cellSize + cellSize / 2} dy="0.32em" textAnchor="end" className="fill-text-secondary text-[11px]">
+            {r}
           </text>
-          {cols.map((col, ci) => {
-            const value = lookup.get(`${row}|${col}`);
-            if (value === undefined) {
-              return (
-                <rect
-                  key={col}
-                  x={labelColWidth + ci * cellSize}
-                  y={24 + ri * cellSize}
-                  width={cellSize - 2}
-                  height={cellSize - 2}
-                  fill="var(--surface-sunken)"
-                />
-              );
-            }
-            const severity = toSeverity(value);
-            const meta = SEVERITY_META[severity];
+          {cols.map((c, ci) => {
+            const cell = lookup.get(`${r}__${c}`);
+            const value = cell?.value ?? 0;
             return (
-              <g key={col}>
+              <g key={c}>
                 <rect
-                  x={labelColWidth + ci * cellSize}
+                  x={labelWidth + ci * cellSize}
                   y={24 + ri * cellSize}
                   width={cellSize - 2}
                   height={cellSize - 2}
-                  fill={`var(${meta.var})`}
-                  opacity={0.85}
-                  rx={3}
-                >
-                  <title>
-                    {row} × {col}: {value} ({meta.label})
-                  </title>
-                </rect>
+                  rx={4}
+                  fill={colorFor(value)}
+                  stroke="var(--border-subtle)"
+                />
                 <text
-                  x={labelColWidth + ci * cellSize + (cellSize - 2) / 2}
-                  y={24 + ri * cellSize + (cellSize - 2) / 2 + 4}
+                  x={labelWidth + ci * cellSize + cellSize / 2}
+                  y={24 + ri * cellSize + cellSize / 2}
+                  dy="0.32em"
                   textAnchor="middle"
-                  fontSize={11}
-                  fill="var(--text-inverse)"
-                  aria-hidden
+                  className="fill-text-primary font-mono text-[10px] tabular-nums"
                 >
-                  {meta.shape}
+                  {cell?.label ?? Math.round(value * 100)}
                 </text>
               </g>
             );

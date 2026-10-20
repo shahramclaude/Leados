@@ -1,77 +1,80 @@
 /**
- * LEADOS information architecture — three tiers, decision-first:
- *  - Now: today's decisions, pending approvals, what changed.
- *  - Understand: people, metrics, signals, knowledge, hypotheses.
- *  - Act: execution, strategic, financial, playbooks, decisions.
+ * LEADOS information architecture — three decision-first tiers.
+ * Now: today's decisions, approvals, what changed.
+ * Understand: people, metrics, signals, knowledge, hypotheses.
+ * Act: execution, strategic, financial, playbooks, decisions.
  *
- * This file is the single source of truth for navigation (NavBar) and
- * search (command palette, /api/search route indexing). There are no
- * "coming soon" entries here — every route below renders a real view.
+ * NavBar, CommandPalette and PageHeader breadcrumbs are all derived from
+ * this single tree so the IA can't drift between surfaces.
  */
-export type Tier = "Now" | "Understand" | "Act";
+export type RouteTier = "now" | "understand" | "act";
 
-export interface RouteItem {
+export interface RouteNode {
+  id: string;
   label: string;
   href: string;
   description: string;
-  icon: string; // glyph, kept token-free (not a color)
+  tier: RouteTier;
+  /** Query param tabs available on this route, surfaced in the command palette. */
+  tabs?: { value: string; label: string }[];
+  keywords?: string[];
 }
 
-export interface RouteGroup {
-  tier: Tier;
-  items: RouteItem[];
-}
-
-export const ROUTES: RouteGroup[] = [
+export const ROUTES: RouteNode[] = [
   {
-    tier: "Now",
-    items: [
-      {
-        label: "Cockpit",
-        href: "/leados/now/cockpit",
-        description: "Today's decisions, pending approvals, and what changed since yesterday.",
-        icon: "◎",
-      },
-    ],
+    id: "now",
+    label: "Cockpit",
+    href: "/leados/now",
+    description: "Today's decisions, pending approvals, and what changed overnight.",
+    tier: "now",
+    keywords: ["home", "today", "overview", "approvals"],
   },
   {
-    tier: "Understand",
-    items: [
-      {
-        label: "People",
-        href: "/leados/understand/people",
-        description: "Headcount, teams, and attrition-risk severity across the org.",
-        icon: "◈",
-      },
-      {
-        label: "Metrics",
-        href: "/leados/understand/metrics",
-        description: "ARR, NRR, and headcount trends with forecast uncertainty bands.",
-        icon: "▤",
-      },
+    id: "understand",
+    label: "Understand",
+    href: "/leados/understand",
+    description: "People, metrics, signals, knowledge and hypotheses in one lens.",
+    tier: "understand",
+    tabs: [
+      { value: "people", label: "People" },
+      { value: "metrics", label: "Metrics" },
+      { value: "signals", label: "Signals" },
+      { value: "knowledge", label: "Knowledge" },
+      { value: "hypotheses", label: "Hypotheses" },
     ],
+    keywords: ["team", "org", "kpi", "trend", "research"],
   },
   {
-    tier: "Act",
-    items: [
-      {
-        label: "Decisions",
-        href: "/leados/act/decisions",
-        description: "Every open, approved, and rejected decision with owners and due dates.",
-        icon: "✓",
-      },
-      {
-        label: "Financial",
-        href: "/leados/act/financial",
-        description: "Revenue, COGS, opex, and headcount cost — actuals vs. forecast band.",
-        icon: "$",
-      },
+    id: "act",
+    label: "Act",
+    href: "/leados/act",
+    description: "Execution, strategic bets, financials, playbooks and decisions.",
+    tier: "act",
+    tabs: [
+      { value: "execution", label: "Execution" },
+      { value: "strategic", label: "Strategic" },
+      { value: "financial", label: "Financial" },
+      { value: "playbooks", label: "Playbooks" },
+      { value: "decisions", label: "Decisions" },
     ],
+    keywords: ["budget", "revenue", "cost", "runbook", "approve"],
+  },
+  {
+    id: "styleguide",
+    label: "Styleguide",
+    href: "/styleguide",
+    description: "Every primitive, chart mark and theme/density combination.",
+    tier: "understand",
+    keywords: ["design system", "tokens", "components", "docs"],
   },
 ];
 
-export const FLAT_ROUTES: RouteItem[] = ROUTES.flatMap((g) => g.items);
+export const TIER_META: Record<RouteTier, { label: string; description: string }> = {
+  now: { label: "Now", description: "What needs a decision today" },
+  understand: { label: "Understand", description: "Context before you act" },
+  act: { label: "Act", description: "Where decisions execute" },
+};
 
-export function findRouteByHref(href: string): RouteItem | undefined {
-  return FLAT_ROUTES.find((r) => r.href === href);
+export function findRouteByPath(pathname: string): RouteNode | undefined {
+  return ROUTES.find((route) => pathname === route.href || pathname.startsWith(`${route.href}/`));
 }

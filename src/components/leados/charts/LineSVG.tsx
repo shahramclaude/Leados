@@ -1,143 +1,131 @@
-"use client";
+import { CHART_DASH_PATTERNS, CHART_SERIES } from "../ui/tokens";
+import type { ChartSeries } from "./types";
 
-import { useId, useState } from "react";
-import type { ReactElement } from "react";
-import type { Series } from "./types";
+const MARKER_SHAPES = ["circle", "triangle", "diamond", "square", "cross"] as const;
 
-export interface LineSVGProps {
-  series: Series[];
-  width?: number;
-  height?: number;
-  yFormatter?: (n: number) => string;
-  /** If true, the y-axis starts at zero (default). Set false only when the
-   * caller documents why in the chart's footnote — truncated axes can
-   * mislead, so this is opt-in and loud. */
-  zeroBaseline?: boolean;
+function Marker({ shape, x, y, color }: { shape: (typeof MARKER_SHAPES)[number]; x: number; y: number; color: string }) {
+  const size = 3.2;
+  switch (shape) {
+    case "triangle":
+      return <polygon points={`${x},${y - size} ${x - size},${y + size} ${x + size},${y + size}`} fill={color} />;
+    case "diamond":
+      return <polygon points={`${x},${y - size} ${x + size},${y} ${x},${y + size} ${x - size},${y}`} fill={color} />;
+    case "square":
+      return <rect x={x - size} y={y - size} width={size * 2} height={size * 2} fill={color} />;
+    case "cross":
+      return (
+        <g stroke={color} strokeWidth={1.4}>
+          <line x1={x - size} y1={y - size} x2={x + size} y2={y + size} />
+          <line x1={x - size} y1={y + size} x2={x + size} y2={y - size} />
+        </g>
+      );
+    default:
+      return <circle cx={x} cy={y} r={size} fill={color} />;
+  }
 }
 
-const MARKER_PATHS: Record<NonNullable<Series["marker"]>, (x: number, y: number) => ReactElement> = {
-  circle: (x, y) => <circle cx={x} cy={y} r={3} />,
-  square: (x, y) => <rect x={x - 3} y={y - 3} width={6} height={6} />,
-  triangle: (x, y) => <polygon points={`${x},${y - 4} ${x - 4},${y + 3} ${x + 4},${y + 3}`} />,
-  diamond: (x, y) => <polygon points={`${x},${y - 4} ${x + 4},${y} ${x},${y + 4} ${x - 4},${y}`} />,
-};
+export interface LineSVGProps {
+  series: ChartSeries[];
+  width?: number;
+  height?: number;
+  yLabel?: string;
+  /** When true (default) draws the p10-p90 credible band behind the line, if present. */
+  showUncertainty?: boolean;
+  valueFormat?: (value: number) => string;
+}
 
-/** Line chart with first-class uncertainty bands (low/high rendered as a
- * translucent area behind the line) and shape markers per series so
- * overlapping lines remain distinguishable without relying on color. */
-export function LineSVG({ series, width = 560, height = 220, yFormatter = (n) => n.toLocaleString(), zeroBaseline = true }: LineSVGProps) {
-  const id = useId();
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const padding = { top: 16, right: 16, bottom: 28, left: 48 };
-  const innerW = width - padding.left - padding.right;
-  const innerH = height - padding.top - padding.bottom;
+/**
+ * Axis-labelled multi-series line chart. Each series is distinguished by
+ * color + dash pattern + marker shape (colorblind-safe) and a legend lists
+ * all three encodings. Credible bands (p10-p90) render as a hatched area so
+ * uncertainty reads even in grayscale printouts.
+ */
+export function LineSVG({ series, width = 560, height = 260, yLabel, showUncertainty = true, valueFormat }: LineSVGProps) {
+  const margin = { top: 16, right: 16, bottom: 28, left: 48 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
 
-  const allY = series.flatMap((s) => s.points.flatMap((p) => [p.y, p.low ?? p.y, p.high ?? p.y]));
-  const maxY = Math.max(...allY, 1);
-  const minY = zeroBaseline ? 0 : Math.min(...allY);
-  const n = series[0]?.points.length ?? 0;
+  const allValues = series.flatMap((s) => s.points.flatMap((p) => [p.v, p.p10 ?? p.v, p.p90 ?? p.v]));
+  const yMin = Math.min(...allValues, 0);
+  const yMax = Math.max(...allValues, 1);
+  const yPad = (yMax - yMin) * 0.1 || 1;
+  const domainMin = yMin - yPad;
+  const domainMax = yMax + yPad;
 
-  function xAt(i: number) {
-    return padding.left + (n <= 1 ? 0 : (i / (n - 1)) * innerW);
+  const pointCount = Math.max(...series.map((s) => s.points.length), 1);
+  const xStep = pointCount > 1 ? innerWidth / (pointCount - 1) : 0;
+
+  function yScale(v: number) {
+    return innerHeight - ((v - domainMin) / (domainMax - domainMin)) * innerHeight;
   }
-  function yAt(v: number) {
-    const ratio = maxY === minY ? 0 : (v - minY) / (maxY - minY);
-    return padding.top + innerH - ratio * innerH;
-  }
 
-  const yTicks = 4;
-  const ticks = Array.from({ length: yTicks + 1 }, (_, i) => minY + ((maxY - minY) * i) / yTicks);
+  const fmt = valueFormat ?? ((v: number) => v.toFixed(1));
+  const gridLines = 4;
 
   return (
-    <div className="relative">
-      <svg
-        role="img"
-        aria-label={`Line chart: ${series.map((s) => s.label).join(", ")}`}
-        width={width}
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
-        onMouseLeave={() => setHoverIndex(null)}
-      >
-        {ticks.map((t, i) => (
-          <g key={i}>
-            <line x1={padding.left} x2={width - padding.right} y1={yAt(t)} y2={yAt(t)} stroke="var(--border-subtle)" strokeWidth={1} />
-            <text x={padding.left - 8} y={yAt(t) + 3} textAnchor="end" fontSize={10} fill="var(--text-muted)">
-              {yFormatter(t)}
-            </text>
-          </g>
-        ))}
-
-        {series.map((s) => {
-          const hasBand = s.points.some((p) => p.low !== undefined && p.high !== undefined);
-          const areaPath = hasBand
-            ? `M ${s.points.map((p, i) => `${xAt(i)},${yAt(p.high ?? p.y)}`).join(" L ")} L ${s.points
-                .slice()
-                .reverse()
-                .map((p, i) => `${xAt(s.points.length - 1 - i)},${yAt(p.low ?? p.y)}`)
-                .join(" L ")} Z`
-            : null;
-          const linePath = `M ${s.points.map((p, i) => `${xAt(i)},${yAt(p.y)}`).join(" L ")}`;
-          return (
-            <g key={s.id}>
-              {areaPath && <path d={areaPath} fill={s.color} opacity={0.12} stroke="none" />}
-              <path d={linePath} fill="none" stroke={s.color} strokeWidth={2} />
-              {s.points.map((p, i) => (
-                <g key={i} fill={s.color}>
-                  {MARKER_PATHS[s.marker ?? "circle"](xAt(i), yAt(p.y))}
-                </g>
-              ))}
-            </g>
-          );
-        })}
-
-        {series[0]?.points.map((p, i) => (
-          <rect
-            key={i}
-            x={xAt(i) - innerW / Math.max(1, n) / 2}
-            y={padding.top}
-            width={innerW / Math.max(1, n)}
-            height={innerH}
-            fill="transparent"
-            onMouseEnter={() => setHoverIndex(i)}
-          />
-        ))}
-
-        {series[0]?.points.map(
-          (p, i) =>
-            i % Math.ceil(n / 6 || 1) === 0 && (
-              <text key={i} x={xAt(i)} y={height - 8} textAnchor="middle" fontSize={10} fill="var(--text-muted)">
-                {p.x}
-              </text>
-            ),
-        )}
-
-        {hoverIndex !== null && <line x1={xAt(hoverIndex)} x2={xAt(hoverIndex)} y1={padding.top} y2={height - padding.bottom} stroke="var(--border-strong)" strokeDasharray="2 2" />}
-      </svg>
-      {hoverIndex !== null && (
-        <div
-          role="status"
-          className="pointer-events-none absolute top-0 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-overlay)] p-[var(--space-2)] text-[var(--text-xs)] shadow-[var(--shadow-md)]"
-          style={{ left: Math.min(width - 160, Math.max(0, xAt(hoverIndex) - 60)) }}
-        >
-          <p className="font-medium text-[var(--text-primary)]">{series[0]?.points[hoverIndex]?.x}</p>
-          {series.map((s) => {
-            const p = s.points[hoverIndex];
-            if (!p) return null;
+    <figure className="flex flex-col gap-3">
+      <svg width={width} height={height} role="img" aria-label={`Line chart${yLabel ? ` of ${yLabel}` : ""} with ${series.length} series`}>
+        <g transform={`translate(${margin.left},${margin.top})`}>
+          {Array.from({ length: gridLines + 1 }).map((_, i) => {
+            const y = (innerHeight / gridLines) * i;
+            const value = domainMax - ((domainMax - domainMin) / gridLines) * i;
             return (
-              <p key={s.id} className="flex items-center gap-1" style={{ color: s.color }}>
-                <span aria-hidden>●</span>
-                <span className="text-[var(--text-secondary)]">
-                  {s.label}: {yFormatter(p.y)}
-                  {p.low !== undefined && p.high !== undefined ? ` (${yFormatter(p.low)}–${yFormatter(p.high)})` : ""}
-                </span>
-              </p>
+              <g key={i}>
+                <line x1={0} y1={y} x2={innerWidth} y2={y} stroke="var(--chart-grid)" strokeWidth={1} />
+                <text x={-8} y={y} dy="0.32em" textAnchor="end" className="fill-text-muted font-mono text-[10px] tabular-nums">
+                  {fmt(value)}
+                </text>
+              </g>
             );
           })}
-        </div>
-      )}
-      <p id={`${id}-note`} className="sr-only">
-        Use the &quot;view as table&quot; toggle for a screen-reader-friendly version of this chart.
-      </p>
-    </div>
+          <line x1={0} y1={innerHeight} x2={innerWidth} y2={innerHeight} stroke="var(--chart-axis)" strokeWidth={1} />
+
+          {series.map((s, sIndex) => {
+            const color = s.colorVar ? `var(${s.colorVar})` : CHART_SERIES[sIndex % CHART_SERIES.length];
+            const dash = s.dash ?? CHART_DASH_PATTERNS[sIndex % CHART_DASH_PATTERNS.length];
+            const shape = MARKER_SHAPES[sIndex % MARKER_SHAPES.length];
+            const linePoints = s.points.map((p, i) => `${i * xStep},${yScale(p.v)}`).join(" ");
+            const hasBand = showUncertainty && s.points.some((p) => p.p10 !== undefined && p.p90 !== undefined);
+            const bandPath = hasBand
+              ? `M ${s.points.map((p, i) => `${i * xStep},${yScale(p.p90 ?? p.v)}`).join(" L ")} L ${[...s.points]
+                  .reverse()
+                  .map((p, i) => `${(s.points.length - 1 - i) * xStep},${yScale(p.p10 ?? p.v)}`)
+                  .join(" L ")} Z`
+              : null;
+
+            return (
+              <g key={s.id}>
+                {bandPath ? (
+                  <path d={bandPath} fill="var(--chart-band)" stroke={color} strokeOpacity={0.25} strokeDasharray="2 2" />
+                ) : null}
+                <polyline fill="none" stroke={color} strokeWidth={2} strokeDasharray={dash} points={linePoints} />
+                {s.points.map((p, i) => (
+                  <Marker key={p.t} shape={shape} x={i * xStep} y={yScale(p.v)} color={color} />
+                ))}
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+      <ul className="flex flex-wrap gap-4" aria-label="Legend">
+        {series.map((s, sIndex) => {
+          const color = s.colorVar ? `var(${s.colorVar})` : CHART_SERIES[sIndex % CHART_SERIES.length];
+          return (
+            <li key={s.id} className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <svg width={18} height={10} aria-hidden="true">
+                <line x1={0} y1={5} x2={18} y2={5} stroke={color} strokeWidth={2} strokeDasharray={s.dash ?? CHART_DASH_PATTERNS[sIndex % CHART_DASH_PATTERNS.length]} />
+              </svg>
+              {s.label}
+            </li>
+          );
+        })}
+        {series.some((s) => s.points.some((p) => p.p10 !== undefined)) ? (
+          <li className="flex items-center gap-1.5 text-xs text-text-muted">
+            <span aria-hidden="true" className="inline-block h-2.5 w-4 rounded-sm" style={{ backgroundColor: "var(--chart-band)" }} />
+            p10–p90 credible band
+          </li>
+        ) : null}
+      </ul>
+    </figure>
   );
 }

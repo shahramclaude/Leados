@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Shell } from "@/components/leados/Shell";
+import { AppShell } from "@/components/leados/app/AppShell";
 
 export default function LeadosLayout({ children }: { children: ReactNode }) {
-  return <Shell>{children}</Shell>;
+  return <AppShell>{children}</AppShell>;
 }

@@ -1,286 +1,265 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { cx } from "./cx";
-import { EmptyState } from "./EmptyState";
+import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Input } from "./Input";
+import { DropdownMenu } from "./DropdownMenu";
+import { Button } from "./Button";
+import { EmptyState } from "./States";
 
 export interface DataTableColumn<T> {
-  id: string;
+  key: string;
   header: string;
-  accessor: (row: T) => ReactNode;
+  render: (row: T) => ReactNode;
   sortValue?: (row: T) => string | number;
-  filterValue?: (row: T) => string;
-  width?: number;
-  minWidth?: number;
-  align?: "left" | "right";
   numeric?: boolean;
+  defaultWidth?: number;
+  filterValue?: (row: T) => string;
 }
 
 export interface DataTableProps<T> {
-  caption: string;
   columns: DataTableColumn<T>[];
   rows: T[];
-  getRowId: (row: T) => string;
+  rowId: (row: T) => string;
   onRowActivate?: (row: T) => void;
+  searchPlaceholder?: string;
   emptyTitle?: string;
   emptyDescription?: string;
-  /** Rows above this count are windowed; keeps very large tables smooth
-   * while small tables (the common case) render normally with no
-   * virtualization overhead. */
+  /** Switch on virtualization once row count passes this threshold (default 30). */
   virtualizeThreshold?: number;
   rowHeight?: number;
+  caption: string;
 }
 
-type SortState = { columnId: string; direction: "asc" | "desc" } | null;
+type SortDir = "asc" | "desc" | null;
 
 /**
- * DataTable: sortable headers, global filter, column visibility toggle,
- * draggable column resize, windowed rendering past `virtualizeThreshold`
- * rows, and roving keyboard navigation (arrow keys move the active row,
- * Enter activates it). Headers stay sticky on scroll.
+ * DataTable: sort, global filter, column visibility, column resize,
+ * row-level keyboard navigation (roving tabindex + Enter to activate),
+ * and viewport virtualization for large row counts.
  */
 export function DataTable<T>({
-  caption,
   columns,
   rows,
-  getRowId,
+  rowId,
   onRowActivate,
-  emptyTitle = "No rows match",
-  emptyDescription = "Try clearing filters or widening your search.",
-  virtualizeThreshold = 150,
+  searchPlaceholder = "Filter rows…",
+  emptyTitle = "No matching rows",
+  emptyDescription = "Try clearing filters or search terms.",
+  virtualizeThreshold = 30,
   rowHeight = 44,
+  caption,
 }: DataTableProps<T>) {
-  const [sort, setSort] = useState<SortState>(null);
   const [query, setQuery] = useState("");
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [widths, setWidths] = useState<Record<string, number>>({});
+  const [sortKey, setSortKey] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>(null);
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
+  const [widths, setWidths] = useState<Record<string, number>>(() =>
+    Object.fromEntries(columns.map((c) => [c.key, c.defaultWidth ?? 160])),
+  );
   const [activeRow, setActiveRow] = useState(0);
-  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const resizeState = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
 
-  const visibleColumns = columns.filter((c) => !hidden.has(c.id));
+  const visibleColumns = columns.filter((c) => !hiddenCols.has(c.key));
 
-  const filtered = useMemo(() => {
+  const filteredRows = useMemo(() => {
     if (!query.trim()) return rows;
     const q = query.toLowerCase();
     return rows.filter((row) =>
-      columns.some((c) => {
-        const text = c.filterValue ? c.filterValue(row) : String(c.accessor(row) ?? "");
-        return text.toLowerCase().includes(q);
+      columns.some((col) => {
+        const value = col.filterValue ? col.filterValue(row) : String(col.render(row));
+        return value.toLowerCase().includes(q);
       }),
     );
   }, [rows, query, columns]);
 
-  const sorted = useMemo(() => {
-    if (!sort) return filtered;
-    const col = columns.find((c) => c.id === sort.columnId);
-    if (!col?.sortValue) return filtered;
-    const copy = [...filtered];
+  const sortedRows = useMemo(() => {
+    if (!sortKey || !sortDir) return filteredRows;
+    const col = columns.find((c) => c.key === sortKey);
+    if (!col?.sortValue) return filteredRows;
+    const copy = [...filteredRows];
     copy.sort((a, b) => {
       const av = col.sortValue!(a);
       const bv = col.sortValue!(b);
-      const cmp = typeof av === "number" && typeof bv === "number" ? av - bv : String(av).localeCompare(String(bv));
-      return sort.direction === "asc" ? cmp : -cmp;
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
     });
     return copy;
-  }, [filtered, sort, columns]);
+  }, [filteredRows, sortKey, sortDir, columns]);
 
-  const virtualize = sorted.length > virtualizeThreshold;
-  const containerHeight = Math.min(sorted.length, 14) * rowHeight;
-  const overscan = 6;
-  const startIndex = virtualize ? Math.max(0, Math.floor(scrollTop / rowHeight) - overscan) : 0;
-  const visibleCount = virtualize ? Math.ceil(containerHeight / rowHeight) + overscan * 2 : sorted.length;
-  const endIndex = virtualize ? Math.min(sorted.length, startIndex + visibleCount) : sorted.length;
-  const windowRows = sorted.slice(startIndex, endIndex);
-  const topSpacer = virtualize ? startIndex * rowHeight : 0;
-  const bottomSpacer = virtualize ? (sorted.length - endIndex) * rowHeight : 0;
-
-  function toggleSort(columnId: string) {
-    setSort((prev) => {
-      if (!prev || prev.columnId !== columnId) return { columnId, direction: "asc" };
-      if (prev.direction === "asc") return { columnId, direction: "desc" };
-      return null;
-    });
+  function toggleSort(key: string) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+    } else if (sortDir === "asc") {
+      setSortDir("desc");
+    } else {
+      setSortKey(null);
+      setSortDir(null);
+    }
   }
 
-  function onHeaderResizeStart(e: React.MouseEvent, columnId: string, currentWidth: number) {
-    e.preventDefault();
-    const startX = e.clientX;
-    function onMove(ev: MouseEvent) {
-      const delta = ev.clientX - startX;
-      setWidths((w) => ({ ...w, [columnId]: Math.max(60, currentWidth + delta) }));
+  function onHeaderResizeStart(key: string, event: React.PointerEvent) {
+    resizeState.current = { key, startX: event.clientX, startWidth: widths[key] };
+    function onMove(moveEvent: PointerEvent) {
+      if (!resizeState.current) return;
+      const delta = moveEvent.clientX - resizeState.current.startX;
+      setWidths((prev) => ({ ...prev, [resizeState.current!.key]: Math.max(80, resizeState.current!.startWidth + delta) }));
     }
     function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      resizeState.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
-  function onBodyKeyDown(e: React.KeyboardEvent) {
-    if (sorted.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveRow((i) => Math.min(sorted.length - 1, i + 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
+  const virtualize = sortedRows.length > virtualizeThreshold;
+  const containerHeight = Math.min(sortedRows.length, 12) * rowHeight;
+  const overscan = 4;
+  const startIndex = virtualize ? Math.max(0, Math.floor(scrollTop / rowHeight) - overscan) : 0;
+  const endIndex = virtualize
+    ? Math.min(sortedRows.length, Math.ceil((scrollTop + containerHeight) / rowHeight) + overscan)
+    : sortedRows.length;
+  const renderedRows = sortedRows.slice(startIndex, endIndex);
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (sortedRows.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveRow((i) => Math.min(sortedRows.length - 1, i + 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
       setActiveRow((i) => Math.max(0, i - 1));
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      setActiveRow(0);
-    } else if (e.key === "End") {
-      e.preventDefault();
-      setActiveRow(sorted.length - 1);
-    } else if (e.key === "Enter" && onRowActivate) {
-      e.preventDefault();
-      onRowActivate(sorted[activeRow]);
+    } else if (event.key === "Enter") {
+      const row = sortedRows[activeRow];
+      if (row) onRowActivate?.(row);
     }
   }
 
   return (
-    <div className="flex flex-col gap-[var(--space-2)]">
-      <div className="flex flex-wrap items-center justify-between gap-[var(--space-2)]">
-        <label className="flex items-center gap-[var(--space-2)]">
-          <span className="sr-only">Filter {caption}</span>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setActiveRow(0);
-            }}
-            placeholder="Filter rows…"
-            className="h-[var(--control-height-sm)] w-56 rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-[var(--space-2)] text-[var(--text-xs)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)]"
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Input
+          aria-label="Filter table rows"
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          size="sm"
+          className="w-56"
+        />
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs tabular-nums text-text-muted">
+            {sortedRows.length} of {rows.length}
+          </span>
+          <DropdownMenu
+            align="end"
+            trigger={({ onClick, ref, open }) => (
+              <Button ref={ref} size="sm" variant="outline" onClick={onClick} aria-expanded={open}>
+                Columns
+              </Button>
+            )}
+            items={columns.map((col) => ({
+              id: col.key,
+              label: `${hiddenCols.has(col.key) ? "Show" : "Hide"} ${col.header}`,
+              onSelect: () =>
+                setHiddenCols((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(col.key)) next.delete(col.key);
+                  else next.add(col.key);
+                  return next;
+                }),
+            }))}
           />
-        </label>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setColumnsMenuOpen((v) => !v)}
-            aria-expanded={columnsMenuOpen}
-            aria-haspopup="true"
-            className="h-[var(--control-height-sm)] rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-[var(--space-2)] text-[var(--text-xs)] text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)]"
-          >
-            Columns
-          </button>
-          {columnsMenuOpen && (
-            <div className="absolute right-0 z-20 mt-1 flex w-48 flex-col gap-1 rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-overlay)] p-[var(--space-2)] shadow-[var(--shadow-md)]">
-              {columns.map((c) => (
-                <label key={c.id} className="flex items-center gap-[var(--space-2)] text-[var(--text-xs)]">
-                  <input
-                    type="checkbox"
-                    checked={!hidden.has(c.id)}
-                    onChange={() =>
-                      setHidden((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(c.id)) next.delete(c.id);
-                        else next.add(c.id);
-                        return next;
-                      })
-                    }
-                  />
-                  {c.header}
-                </label>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      {sorted.length === 0 ? (
+      {sortedRows.length === 0 ? (
         <EmptyState title={emptyTitle} description={emptyDescription} />
       ) : (
         <div
-          ref={scrollRef}
+          ref={viewportRef}
+          role="table"
+          aria-label={caption}
+          tabIndex={0}
+          onKeyDown={onKeyDown}
           onScroll={(e) => virtualize && setScrollTop(e.currentTarget.scrollTop)}
-          className="leados-scroll overflow-auto rounded-[var(--radius-lg)] border border-[var(--border-subtle)]"
-          style={{ maxHeight: virtualize ? containerHeight + 40 : undefined }}
+          className="overflow-auto rounded-[var(--radius-md)] border border-border-subtle focus:outline focus:outline-2 focus:outline-offset-2 focus:outline-[var(--focus-ring)]"
+          style={{ maxHeight: virtualize ? containerHeight + rowHeight : undefined }}
         >
-          <table className="w-full border-collapse text-[var(--text-sm)]">
-            <caption className="sr-only">{caption}</caption>
-            <thead className="sticky top-0 z-10 bg-[var(--surface-raised)]">
-              <tr style={{ height: "var(--table-header-height)" }}>
-                {visibleColumns.map((c) => {
-                  const sortActive = sort?.columnId === c.id;
-                  return (
-                    <th
-                      key={c.id}
-                      scope="col"
-                      style={{ width: widths[c.id] ?? c.width, minWidth: c.minWidth ?? 80 }}
-                      className={cx(
-                        "relative border-b border-[var(--border-subtle)] px-[var(--space-3)] text-left text-[var(--text-xs)] font-semibold uppercase tracking-[0.04em] text-[var(--text-muted)]",
-                        c.align === "right" && "text-right",
-                      )}
-                    >
-                      {c.sortValue ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleSort(c.id)}
-                          className="inline-flex items-center gap-1 hover:text-[var(--text-primary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-                        >
-                          {c.header}
-                          <span aria-hidden>{sortActive ? (sort!.direction === "asc" ? "↑" : "↓") : "↕"}</span>
-                          <span className="sr-only">{sortActive ? `sorted ${sort!.direction}ending` : "not sorted"}</span>
-                        </button>
-                      ) : (
-                        c.header
-                      )}
-                      <span
-                        role="presentation"
-                        onMouseDown={(e) => onHeaderResizeStart(e, c.id, widths[c.id] ?? c.width ?? 160)}
-                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none hover:bg-[var(--accent-default)]"
-                      />
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody tabIndex={0} onKeyDown={onBodyKeyDown} aria-activedescendant={`row-${activeRow}`}>
-              {topSpacer > 0 && (
-                <tr aria-hidden style={{ height: topSpacer }}>
-                  <td colSpan={visibleColumns.length} />
-                </tr>
-              )}
-              {windowRows.map((row, i) => {
-                const index = startIndex + i;
-                const isActive = index === activeRow;
+          <div role="rowgroup" className="sticky top-0 z-10 flex bg-surface-sunken" style={{ height: "var(--comp-table-row-height)" }}>
+            {visibleColumns.map((col) => (
+              <div
+                key={col.key}
+                role="columnheader"
+                aria-sort={sortKey === col.key ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+                className="relative flex shrink-0 items-center gap-1 border-r border-border-subtle px-[var(--comp-table-cell-pad-x)] text-xs font-semibold uppercase tracking-wide text-text-muted last:border-r-0"
+                style={{ width: widths[col.key] }}
+              >
+                {col.sortValue ? (
+                  <button type="button" onClick={() => toggleSort(col.key)} className="flex items-center gap-1 hover:text-text-primary">
+                    {col.header}
+                    <span aria-hidden="true" className="text-[10px]">
+                      {sortKey === col.key ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+                    </span>
+                  </button>
+                ) : (
+                  <span>{col.header}</span>
+                )}
+                <span
+                  role="separator"
+                  aria-orientation="vertical"
+                  onPointerDown={(e) => onHeaderResizeStart(col.key, e)}
+                  className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div role="rowgroup" style={virtualize ? { height: sortedRows.length * rowHeight, position: "relative" } : undefined}>
+            <div style={virtualize ? { position: "absolute", top: startIndex * rowHeight, left: 0, right: 0 } : undefined}>
+              {renderedRows.map((row, i) => {
+                const absoluteIndex = startIndex + i;
+                const isActive = absoluteIndex === activeRow;
                 return (
-                  <tr
-                    id={`row-${index}`}
-                    key={getRowId(row)}
-                    onClick={() => setActiveRow(index)}
-                    onDoubleClick={() => onRowActivate?.(row)}
+                  <div
+                    key={rowId(row)}
+                    role="row"
+                    tabIndex={-1}
+                    aria-selected={isActive}
+                    onClick={() => {
+                      setActiveRow(absoluteIndex);
+                      onRowActivate?.(row);
+                    }}
+                    className={[
+                      "flex cursor-pointer border-b border-border-subtle text-[length:var(--comp-table-font-size)] last:border-b-0",
+                      isActive ? "bg-accent-subtle" : "hover:bg-surface-sunken",
+                    ].join(" ")}
                     style={{ height: rowHeight }}
-                    className={cx(
-                      "cursor-default border-b border-[var(--border-subtle)] last:border-0",
-                      isActive ? "bg-[var(--accent-subtle)]" : "hover:bg-[var(--surface-sunken)]",
-                    )}
                   >
-                    {visibleColumns.map((c) => (
-                      <td
-                        key={c.id}
-                        className={cx("px-[var(--space-3)] text-[var(--text-sm)] text-[var(--text-primary)]", c.align === "right" && "text-right", c.numeric && "font-mono-nums")}
+                    {visibleColumns.map((col) => (
+                      <div
+                        key={col.key}
+                        role="cell"
+                        className={[
+                          "flex shrink-0 items-center overflow-hidden text-ellipsis whitespace-nowrap px-[var(--comp-table-cell-pad-x)] text-text-primary",
+                          col.numeric ? "justify-end font-mono tabular-nums" : "",
+                        ].join(" ")}
+                        style={{ width: widths[col.key] }}
                       >
-                        {c.accessor(row)}
-                      </td>
+                        {col.render(row)}
+                      </div>
                     ))}
-                  </tr>
+                  </div>
                 );
               })}
-              {bottomSpacer > 0 && (
-                <tr aria-hidden style={{ height: bottomSpacer }}>
-                  <td colSpan={visibleColumns.length} />
-                </tr>
-              )}
-            </tbody>
-          </table>
+            </div>
+          </div>
         </div>
       )}
-      <p className="text-[var(--text-xs)] text-[var(--text-muted)]">
-        {sorted.length} of {rows.length} rows · Enter activates the focused row · Arrow keys move selection
-      </p>
     </div>
   );
 }

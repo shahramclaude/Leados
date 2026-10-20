@@ -1,49 +1,71 @@
 import { db } from "@/db";
-import { decisions, people } from "@/db/schema";
-import { ilike, or } from "drizzle-orm";
-import { ROUTES } from "@/app/routes";
+import { decisions, people, signals, metrics } from "@/db/schema";
+import { ilike, or, sql } from "drizzle-orm";
+import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export interface SearchResult {
+interface EntityResult {
   id: string;
-  kind: "route" | "person" | "decision";
+  type: "person" | "decision" | "signal" | "metric";
   title: string;
-  subtitle?: string;
+  subtitle: string;
   href: string;
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const q = (searchParams.get("q") ?? "").trim();
-  if (!q) {
-    return Response.json({ results: [] satisfies SearchResult[] });
+export async function GET(request: NextRequest) {
+  const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
+  if (q.length < 2) {
+    return Response.json({ results: [] });
   }
 
-  const routeMatches: SearchResult[] = ROUTES.flatMap((group) =>
-    group.items
-      .filter((item) => item.label.toLowerCase().includes(q.toLowerCase()))
-      .map((item) => ({ id: `route-${item.href}`, kind: "route" as const, title: item.label, subtitle: group.tier as string, href: item.href })),
-  );
+  try {
+    const like = `%${q}%`;
+    const [peopleRows, decisionRows, signalRows, metricRows] = await Promise.all([
+      db.select().from(people).where(or(ilike(people.name, like), ilike(people.role, like), ilike(people.team, like))).limit(5),
+      db
+        .select()
+        .from(decisions)
+        .where(or(ilike(decisions.title, like), ilike(decisions.owner, like), ilike(decisions.category, like)))
+        .limit(5),
+      db.select().from(signals).where(or(ilike(signals.label, like), ilike(signals.category, like))).limit(5),
+      db.select().from(metrics).where(or(ilike(metrics.name, like), ilike(metrics.category, like))).limit(5),
+    ]);
 
-  const [peopleMatches, decisionMatches] = await Promise.all([
-    db
-      .select({ id: people.id, name: people.name, role: people.role, team: people.team })
-      .from(people)
-      .where(or(ilike(people.name, `%${q}%`), ilike(people.role, `%${q}%`), ilike(people.team, `%${q}%`)))
-      .limit(6),
-    db
-      .select({ id: decisions.id, title: decisions.title, owner: decisions.owner })
-      .from(decisions)
-      .where(or(ilike(decisions.title, `%${q}%`), ilike(decisions.owner, `%${q}%`)))
-      .limit(6),
-  ]);
+    const results: EntityResult[] = [
+      ...peopleRows.map((p) => ({
+        id: String(p.id),
+        type: "person" as const,
+        title: p.name,
+        subtitle: `${p.role} · ${p.team}`,
+        href: `/leados/understand?tab=people&personId=${p.id}`,
+      })),
+      ...decisionRows.map((d) => ({
+        id: String(d.id),
+        type: "decision" as const,
+        title: d.title,
+        subtitle: `${d.track} · ${d.status}`,
+        href: `/leados/act?tab=decisions&decisionId=${d.id}`,
+      })),
+      ...signalRows.map((s) => ({
+        id: String(s.id),
+        type: "signal" as const,
+        title: s.label,
+        subtitle: `${s.category} · severity ${s.severity}`,
+        href: `/leados/understand?tab=signals&signalId=${s.id}`,
+      })),
+      ...metricRows.map((m) => ({
+        id: String(m.id),
+        type: "metric" as const,
+        title: m.name,
+        subtitle: m.category,
+        href: `/leados/understand?tab=metrics&metricId=${m.id}`,
+      })),
+    ];
 
-  const results: SearchResult[] = [
-    ...routeMatches.slice(0, 5),
-    ...peopleMatches.map((p) => ({ id: `person-${p.id}`, kind: "person" as const, title: p.name, subtitle: `${p.role} · ${p.team}`, href: `/leados/understand/people?focus=${p.id}` })),
-    ...decisionMatches.map((d) => ({ id: `decision-${d.id}`, kind: "decision" as const, title: d.title, subtitle: `Owner: ${d.owner}`, href: `/leados/now/cockpit?focus=${d.id}` })),
-  ];
-
-  return Response.json({ results });
+    return Response.json({ results });
+  } catch {
+    await db.execute(sql`select 1`).catch(() => null);
+    return Response.json({ results: [] }, { status: 200 });
+  }
 }

@@ -1,42 +1,34 @@
 /**
- * Shared uncertainty shape consumed by every chart in the grammar.
- * Part 04 (per the roadmap this session inherits) will standardize how
- * `monteCarlo`/`forecastCache` populate this; charts here already render
- * the band/range so no rework is needed when that data lands for real.
+ * Shared chart data shapes. `Explain<T>` is the forward-compatible envelope
+ * Part 04 will standardize for monteCarlo/forecastCache outputs — consuming
+ * it now means uncertainty bands are a first-class mark, not a bolt-on.
  */
 export interface Explain<T> {
-  /** Point estimate / best-known value. */
+  /** Point estimate / most likely value. */
   value: T;
-  /** Lower bound of the credible interval, if known. */
-  low?: T;
-  /** Upper bound of the credible interval, if known. */
-  high?: T;
-  /** 0–1 confidence in the estimate, if known. */
+  /** 10th percentile — lower bound of the credible band. */
+  p10?: T;
+  /** 50th percentile (median), when distinct from `value`. */
+  p50?: T;
+  /** 90th percentile — upper bound of the credible band. */
+  p90?: T;
+  /** 0-1 confidence in the estimate, surfaced in tooltips/tables. */
   confidence?: number;
-  /** How the value was derived — shown in the tooltip, never hidden. */
-  method?: string;
-  asOf?: string;
+  /** Where the number came from — always shown in the "view as table" fallback. */
+  source?: string;
 }
 
 export interface SeriesPoint {
-  x: string;
-  y: number;
-  low?: number;
-  high?: number;
+  t: string; // ISO date or category label
+  v: number;
+  p10?: number;
+  p90?: number;
 }
 
-export interface Series {
+export interface ChartSeries {
   id: string;
   label: string;
-  color: string;
   points: SeriesPoint[];
-  /** Shape marker drawn at each point in addition to color, so overlapping
-   * series stay distinguishable without relying on hue alone. */
-  marker?: "circle" | "square" | "triangle" | "diamond";
-}
-
-export interface HeatmapCell {
-  row: string;
-  col: string;
-  value: number;
+  colorVar?: string;
+  dash?: string;
 }

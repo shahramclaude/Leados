@@ -1,33 +1,24 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { ThemeBootstrapScript, ThemeProvider } from "@/components/leados/ui/ThemeProvider";
+import { ThemeProvider } from "@/components/leados/ui/ThemeProvider";
 import { ToastProvider } from "@/components/leados/ui/Toast";
-import { UndoRedoProvider } from "@/components/leados/UndoRedoProvider";
-import { CommandPalette } from "@/components/leados/CommandPalette";
-import { ShortcutsOverlay } from "@/components/leados/ShortcutsOverlay";
+import { UndoRedoProvider } from "@/components/leados/app/UndoRedoProvider";
+import { GlobalChrome } from "@/components/leados/app/GlobalChrome";
 
 export const metadata: Metadata = {
   title: "LEADOS",
-  description: "A decision-first operating cockpit — Now, Understand, Act.",
+  description: "Decision-first operating console: cockpit, understand and act in one coherent system.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <head>
-        <ThemeBootstrapScript />
-      </head>
+    <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        <a href="#main-content" className="skip-link">
-          Skip to main content
-        </a>
         <ThemeProvider>
           <ToastProvider>
             <UndoRedoProvider>
-              {children}
-              <CommandPalette />
-              <ShortcutsOverlay />
+              <GlobalChrome>{children}</GlobalChrome>
             </UndoRedoProvider>
           </ToastProvider>
         </ThemeProvider>

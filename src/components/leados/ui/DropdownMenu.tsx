@@ -1,91 +1,93 @@
 "use client";
 
-import { useRef } from "react";
-import { cx } from "./cx";
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Popover } from "./Popover";
 
 export interface DropdownItem {
   id: string;
   label: string;
   onSelect: () => void;
-  danger?: boolean;
+  destructive?: boolean;
   disabled?: boolean;
 }
 
 export interface DropdownMenuProps {
-  label: string;
+  trigger: (props: { onClick: () => void; ref: React.RefObject<HTMLButtonElement | null>; open: boolean }) => ReactNode;
   items: DropdownItem[];
-  triggerClassName?: string;
   align?: "start" | "end";
 }
 
-/** Menu with roving tabindex: ArrowUp/Down moves focus between items, Home/End
- * jump to the ends, Enter/Space activates, Escape closes via Popover. */
-export function DropdownMenu({ label, items, triggerClassName, align = "start" }: DropdownMenuProps) {
-  const listRef = useRef<HTMLUListElement>(null);
+/** DropdownMenu with arrow-key roving focus, Home/End, Escape-to-close and focus restore. */
+export function DropdownMenu({ trigger, items, align = "start" }: DropdownMenuProps) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  function onKeyDown(e: React.KeyboardEvent<HTMLUListElement>) {
-    const focusables = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>("[role='menuitem']") ?? []);
-    const currentIndex = focusables.findIndex((el) => el === document.activeElement);
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      focusables[(currentIndex + 1 + focusables.length) % focusables.length]?.focus();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      focusables[(currentIndex - 1 + focusables.length) % focusables.length]?.focus();
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      focusables[0]?.focus();
-    } else if (e.key === "End") {
-      e.preventDefault();
-      focusables[focusables.length - 1]?.focus();
+  function openMenu() {
+    setOpen(true);
+    setActiveIndex(0);
+    requestAnimationFrame(() => itemRefs.current[0]?.focus());
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const enabled = items.map((item, i) => ({ item, i })).filter(({ item }) => !item.disabled);
+    if (enabled.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      const pos = enabled.findIndex(({ i }) => i === activeIndex);
+      const next = enabled[(pos + 1) % enabled.length].i;
+      setActiveIndex(next);
+      itemRefs.current[next]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      const pos = enabled.findIndex(({ i }) => i === activeIndex);
+      const next = enabled[(pos - 1 + enabled.length) % enabled.length].i;
+      setActiveIndex(next);
+      itemRefs.current[next]?.focus();
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setActiveIndex(enabled[0].i);
+      itemRefs.current[enabled[0].i]?.focus();
+    } else if (event.key === "End") {
+      event.preventDefault();
+      const last = enabled[enabled.length - 1].i;
+      setActiveIndex(last);
+      itemRefs.current[last]?.focus();
     }
   }
 
   return (
-    <Popover
-      align={align}
-      trigger={(props) => (
-        <button
-          type="button"
-          {...props}
-          className={cx(
-            "inline-flex h-[var(--control-height-md)] items-center gap-[var(--space-2)] rounded-[var(--radius-md)] border border-[var(--border-strong)] bg-[var(--surface-raised)] px-[var(--space-3)] text-[var(--text-sm)] text-[var(--text-primary)] hover:bg-[var(--surface-sunken)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]",
-            triggerClassName,
-          )}
-        >
-          {label}
-          <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      )}
-    >
-      {(close) => (
-        <ul ref={listRef} role="menu" aria-label={label} onKeyDown={onKeyDown} className="flex flex-col gap-[2px]">
-          {items.map((item) => (
-            <li key={item.id} role="none">
-              <button
-                role="menuitem"
-                type="button"
-                disabled={item.disabled}
-                onClick={() => {
-                  item.onSelect();
-                  close();
-                }}
-                className={cx(
-                  "w-full rounded-[var(--radius-sm)] px-[var(--space-2)] py-[var(--space-2)] text-left text-[var(--text-sm)]",
-                  "hover:bg-[var(--surface-sunken)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]",
-                  item.danger ? "text-[var(--status-danger)]" : "text-[var(--text-primary)]",
-                  item.disabled && "cursor-not-allowed opacity-50",
-                )}
-              >
-                {item.label}
-              </button>
-            </li>
+    <div className="relative inline-block">
+      {trigger({ onClick: () => (open ? setOpen(false) : openMenu()), ref: buttonRef, open })}
+      <Popover open={open} onClose={() => setOpen(false)} anchorRef={buttonRef} align={align}>
+        <div role="menu" aria-orientation="vertical" onKeyDown={onKeyDown} className="flex min-w-[10rem] flex-col">
+          {items.map((item, index) => (
+            <button
+              key={item.id}
+              ref={(el) => {
+                itemRefs.current[index] = el;
+              }}
+              role="menuitem"
+              type="button"
+              disabled={item.disabled}
+              onClick={() => {
+                item.onSelect();
+                setOpen(false);
+                buttonRef.current?.focus();
+              }}
+              className={[
+                "rounded-[var(--radius-xs)] px-3 py-1.5 text-left text-sm",
+                "hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:outline-none",
+                item.destructive ? "text-status-danger" : "text-text-primary",
+                item.disabled ? "cursor-not-allowed opacity-50" : "",
+              ].join(" ")}
+            >
+              {item.label}
+            </button>
           ))}
-        </ul>
-      )}
-    </Popover>
+        </div>
+      </Popover>
+    </div>
   );
 }

@@ -1,18 +1,16 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
-import { cx } from "./cx";
+import type { ReactNode } from "react";
 
-export interface Breadcrumb {
+export interface Crumb {
   label: string;
   href?: string;
 }
 
 export interface PageHeaderProps {
-  breadcrumb: Breadcrumb[];
+  breadcrumb: Crumb[];
   title: string;
   description?: string;
-  /** Exactly one primary action per page, per the IA contract — secondary
-   * actions should live in a DropdownMenu instead of multiplying buttons. */
+  /** Exactly one primary action per page — enforced by convention, not just type. */
   primaryAction?: ReactNode;
   secondaryActions?: ReactNode;
   tabs?: ReactNode;
@@ -20,18 +18,22 @@ export interface PageHeaderProps {
 
 export function PageHeader({ breadcrumb, title, description, primaryAction, secondaryActions, tabs }: PageHeaderProps) {
   return (
-    <header className="flex flex-col gap-[var(--space-4)] border-b border-[var(--border-subtle)] pb-[var(--space-4)]">
+    <header className="flex flex-col gap-3 pb-5">
       <nav aria-label="Breadcrumb">
-        <ol className="flex flex-wrap items-center gap-[var(--space-1)] text-[var(--text-xs)] text-[var(--text-muted)]">
-          {breadcrumb.map((crumb, i) => (
-            <li key={crumb.label} className="flex items-center gap-[var(--space-1)]">
-              {i > 0 && <span aria-hidden>/</span>}
+        <ol className="flex flex-wrap items-center gap-1.5 text-xs text-text-muted">
+          {breadcrumb.map((crumb, index) => (
+            <li key={crumb.label} className="flex items-center gap-1.5">
+              {index > 0 ? (
+                <span aria-hidden="true" className="text-text-muted">
+                  /
+                </span>
+              ) : null}
               {crumb.href ? (
-                <Link href={crumb.href} className="hover:text-[var(--text-primary)] hover:underline">
+                <Link href={crumb.href} className="hover:text-text-primary hover:underline underline-offset-2">
                   {crumb.label}
                 </Link>
               ) : (
-                <span aria-current={i === breadcrumb.length - 1 ? "page" : undefined} className={cx(i === breadcrumb.length - 1 && "text-[var(--text-secondary)]")}>
+                <span aria-current="page" className="text-text-secondary">
                   {crumb.label}
                 </span>
               )}
@@ -39,12 +41,12 @@ export function PageHeader({ breadcrumb, title, description, primaryAction, seco
           ))}
         </ol>
       </nav>
-      <div className="flex flex-wrap items-start justify-between gap-[var(--space-4)]">
-        <div className="flex flex-col gap-[var(--space-1)]">
-          <h1 className="text-[var(--text-xl)] font-semibold tracking-tight text-[var(--text-primary)]">{title}</h1>
-          {description && <p className="max-w-[var(--measure-prose)] text-[var(--text-sm)] text-[var(--text-muted)]">{description}</p>}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-text-primary">{title}</h1>
+          {description ? <p className="mt-1 max-w-[70ch] text-sm text-text-secondary">{description}</p> : null}
         </div>
-        <div className="flex items-center gap-[var(--space-2)]">
+        <div className="flex items-center gap-2">
           {secondaryActions}
           {primaryAction}
         </div>

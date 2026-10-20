@@ -1,57 +1,71 @@
 import type { ReactNode } from "react";
-import { cx } from "./cx";
-import { SEVERITY_META, STATUS_META, type SeverityLevel } from "./tokens";
+import { SEVERITY_META, STATUS_META, type Severity, type Status } from "./tokens";
 
-export type BadgeTone = "neutral" | "success" | "warning" | "danger" | "info" | "accent";
-
-const TONE_CLASS: Record<BadgeTone, string> = {
-  neutral: "bg-[var(--surface-sunken)] text-[var(--text-secondary)]",
-  success: "bg-[var(--status-success-subtle)] text-[var(--status-success)]",
-  warning: "bg-[var(--status-warning-subtle)] text-[var(--status-warning)]",
-  danger: "bg-[var(--status-danger-subtle)] text-[var(--status-danger)]",
-  info: "bg-[var(--status-info-subtle)] text-[var(--status-info)]",
-  accent: "bg-[var(--accent-subtle)] text-[var(--accent-default)]",
+const SHAPE_GLYPH: Record<string, string> = {
+  circle: "●",
+  triangle: "▲",
+  diamond: "◆",
+  square: "■",
+  star: "★",
 };
 
-export function Badge({ tone = "neutral", children, icon }: { tone?: BadgeTone; children: ReactNode; icon?: ReactNode }) {
+export function Badge({
+  children,
+  tone = "neutral",
+  className = "",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "accent";
+  className?: string;
+}) {
   return (
     <span
-      className={cx(
-        "inline-flex items-center gap-[var(--space-1)] rounded-[var(--radius-full)] px-[var(--space-2)] py-[2px] text-[var(--text-xs)] font-medium",
-        TONE_CLASS[tone],
-      )}
+      className={[
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        tone === "accent" ? "bg-accent-subtle text-accent-default" : "bg-surface-sunken text-text-secondary",
+        className,
+      ].join(" ")}
     >
-      {icon && <span aria-hidden>{icon}</span>}
       {children}
     </span>
   );
 }
 
-const STATUS_TONE: Record<keyof typeof STATUS_META, BadgeTone> = {
-  success: "success",
-  warning: "warning",
-  danger: "danger",
-  info: "info",
-};
-
-/** Status is always encoded by color + icon glyph + text label — never
- * color alone (colorblind-safe requirement). */
-export function StatusBadge({ status }: { status: keyof typeof STATUS_META }) {
+/** Status is always encoded by color + glyph + text label — never color alone. */
+export function StatusBadge({ status }: { status: Status }) {
   const meta = STATUS_META[status];
   return (
-    <Badge tone={STATUS_TONE[status]} icon={meta.shape}>
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+      style={{ backgroundColor: meta.bg, color: meta.color }}
+    >
+      <span aria-hidden="true" className="font-mono">
+        {meta.glyph}
+      </span>
       {meta.label}
-    </Badge>
+    </span>
   );
 }
 
-/** Severity 1–5 is always encoded by color + shape + numeric level + label. */
-export function SeverityBadge({ level }: { level: SeverityLevel }) {
+/** Severity is always encoded by color + shape + numeric level + text label. */
+export function SeverityBadge({ level }: { level: Severity }) {
   const meta = SEVERITY_META[level];
-  const tone: BadgeTone = level <= 2 ? "success" : level === 3 ? "warning" : "danger";
   return (
-    <Badge tone={tone} icon={meta.shape}>
-      S{level} · {meta.label}
-    </Badge>
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+      style={{ backgroundColor: meta.bg, color: meta.color }}
+    >
+      <span aria-hidden="true">{SHAPE_GLYPH[meta.shape]}</span>
+      <span className="font-mono tabular-nums">S{level}</span>
+      {meta.label}
+    </span>
+  );
+}
+
+export function Tag({ children }: { children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-[var(--radius-xs)] border border-border-subtle bg-surface-base px-2 py-0.5 text-xs text-text-secondary">
+      {children}
+    </span>
   );
 }
