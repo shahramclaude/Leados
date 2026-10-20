@@ -1,23 +1,39 @@
-import { getNotificationsPage } from "@/lib/queries";
+import { z } from "zod";
+import { ApiError, ok, readJsonBody, withRouteErrors } from "@/lib/server/http";
+import { createNotification, listNotifications, type NotificationStatus } from "@/lib/server/repositories/notifications";
+import { findIdempotentResponse, getIdempotencyKey, recordIdempotentResponse } from "@/lib/server/idempotency";
 
 export const dynamic = "force-dynamic";
 
-const MAX_LIMIT = 100;
-const DEFAULT_LIMIT = 30;
+const STATUSES = new Set<NotificationStatus>(["unread", "read", "archived"]);
 
-/** Keyset-paginated, unbounded notification feed. Backed by notifications_created_at_id_idx. */
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const limit = Math.min(MAX_LIMIT, Math.max(1, Number(url.searchParams.get("limit")) || DEFAULT_LIMIT));
-  const cursorCreatedAt = url.searchParams.get("cursorCreatedAt");
-  const cursorId = url.searchParams.get("cursorId");
-  const since = url.searchParams.get("since"); // ISO timestamp, used by the realtime poller
+export const GET = withRouteErrors(async (req) => {
+  const sp = req.nextUrl.searchParams;
+  const statusParam = sp.get("status");
+  const status = statusParam && STATUSES.has(statusParam as NotificationStatus) ? (statusParam as NotificationStatus) : undefined;
+  const limit = sp.get("limit") ? Number(sp.get("limit")) : undefined;
+  const { rows, total, unreadCount } = await listNotifications({ status, limit });
+  return ok({ rows, total, unreadCount });
+});
 
-  const { items, nextCursor } = await getNotificationsPage({
-    limit,
-    since,
-    cursor: cursorCreatedAt && cursorId ? { createdAt: cursorCreatedAt, id: Number(cursorId) } : null,
-  });
+const createNotificationSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().max(2000).optional(),
+  domain: z.string().optional(),
+  severity: z.number().int().min(1).max(5).optional(),
+});
 
-  return Response.json({ items, nextCursor, serverTime: new Date().toISOString() });
-}
+export const POST = withRouteErrors(async (req) => {
+  const idempotencyKey = getIdempotencyKey(req);
+  const replay = await findIdempotentResponse(idempotencyKey);
+  if (replay) return replay;
+
+  const parsed = createNotificationSchema.safeParse(await readJsonBody(req));
+  if (!parsed.success) {
+    throw new ApiError(422, "VALIDATION_ERROR", "Invalid notification payload.", parsed.error.flatten());
+  }
+  const row = await createNotification(parsed.data);
+  const response = ok(row);
+  await recordIdempotentResponse(idempotencyKey, "/api/notifications", 200, await response.clone().json());
+  return response;
+});

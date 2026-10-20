@@ -1,78 +1,28 @@
-"use client";
-import React, { useEffect, useState, useCallback } from "react";
-import { Shell } from "@/components/Shell";
-import { OrgProfileWizard } from "@/components/OrgProfileWizard";
-import { CockpitView } from "@/views/CockpitView";
-import { IntelligenceView } from "@/views/IntelligenceView";
-import { PeopleView } from "@/views/PeopleView";
-import { StrategyView } from "@/views/StrategyView";
-import { FinancialView } from "@/views/FinancialView";
-import { ExecutionView } from "@/views/ExecutionView";
-import { SignalBoardView } from "@/views/SignalBoardView";
-import { KnowledgeView } from "@/views/KnowledgeView";
-import { DataView } from "@/views/DataView";
-import { HealthView } from "@/views/HealthView";
-import { AboutView } from "@/views/AboutView";
-
-const VALID_ROUTES = ["today", "intelligence", "people", "strategy", "finance", "execution", "signals", "knowledge", "data", "health", "about"];
-
-function getHashRoute(): string {
-  if (typeof window === "undefined") return "today";
-  const h = window.location.hash.replace("#", "");
-  return VALID_ROUTES.includes(h) ? h : "today";
-}
-
 export default function App() {
-  const [route, setRoute] = useState("today");
-  const [checking, setChecking] = useState(true);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
-
-  useEffect(() => {
-    setRoute(getHashRoute());
-    function onHashChange() {
-      setRoute(getHashRoute());
-    }
-    window.addEventListener("hashchange", onHashChange);
-    return () => window.removeEventListener("hashchange", onHashChange);
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/onboarding")
-      .then((r) => r.json())
-      .then((d) => setNeedsOnboarding(Boolean(d.needsOnboarding)))
-      .finally(() => setChecking(false));
-  }, []);
-
-  const navigate = useCallback((v: string) => {
-    window.location.hash = `#${v}`;
-    setRoute(v);
-  }, []);
-
-  if (checking) {
-    return <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-500">Loading Leados…</div>;
-  }
-
-  if (needsOnboarding) {
-    return (
-      <div className="min-h-screen bg-slate-950">
-        <OrgProfileWizard onComplete={() => setNeedsOnboarding(false)} />
-      </div>
-    );
-  }
-
   return (
-    <Shell active={route} onNavigate={navigate}>
-      {route === "today" && <CockpitView onNavigate={navigate} />}
-      {route === "intelligence" && <IntelligenceView />}
-      {route === "people" && <PeopleView />}
-      {route === "strategy" && <StrategyView />}
-      {route === "finance" && <FinancialView />}
-      {route === "execution" && <ExecutionView />}
-      {route === "signals" && <SignalBoardView />}
-      {route === "knowledge" && <KnowledgeView />}
-      {route === "data" && <DataView />}
-      {route === "health" && <HealthView />}
-      {route === "about" && <AboutView />}
-    </Shell>
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-zinc-100 p-8">
+      <div className="space-y-6 text-center">
+        <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-indigo-200">
+          <svg
+            className="h-8 w-8 text-white"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M10 4v4" />
+            <path d="M2 8h20" />
+            <path d="M6 4v4" />
+          </svg>
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Ready to build</h1>
+          <p className="text-slate-500">Start prompting to build your app.</p>
+        </div>
+      </div>
+    </div>
   );
 }
