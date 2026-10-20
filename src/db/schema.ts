@@ -1,17 +1,25 @@
-// LEADOS — Part 8: Realtime, Notifications & Attention Management
-// Full Drizzle schema for the realtime/attention slice. Earlier parts (auth,
-// projects, agents, etc.) are not present in this sandbox, so minimal stub
-// domain tables (findings/approvals/tasks/metric anomalies/agent runs) are
-// included here just deep enough to drive real events through the pipeline.
+// LEADOS — Part 9: Universality (i18n, multi-tenant, RBAC, PWA, inclusive access)
+//
+// This sandbox starts from the bare `nextjs-postgresql-template` (no
+// earlier-part tables exist here — same situation Part 8's own schema
+// comment describes). The slice below is deep enough to prove every Part 9
+// mechanism for real against Postgres:
+//   - multi-tenant isolation (every domain row carries `orgId`)
+//   - RBAC (role lives on the membership, not on the user)
+//   - per-org theming / terminology / feature flags
+//   - offline queue idempotency + optimistic-concurrency conflict detection
+//   - push notification subscriptions
+//
+// Every future table that holds tenant data MUST include `orgId` and every
+// repository function MUST take `orgId` as a mandatory (not optional)
+// parameter — enforced by convention here and by
+// `scripts/test-tenant-isolation.ts`.
 
 import {
-  bigint,
-  bigserial,
   boolean,
   index,
   integer,
   jsonb,
-  numeric,
   pgTable,
   text,
   timestamp,
@@ -19,255 +27,130 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-const id = () => text("id").primaryKey().$defaultFn(() => crypto.randomUUID());
+const id = () =>
+  text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID());
 
 // ---------------------------------------------------------------------------
-// Identity (minimal stub — Part 8 assumes auth exists upstream; we only need
-// enough of a user record to scope realtime channels & preferences)
+// Organizations (tenants) — white-label + i18n + feature-flag anchor
+// ---------------------------------------------------------------------------
+
+export const organizations = pgTable("organizations", {
+  id: id(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  logoUrl: text("logo_url"),
+  accentColor: text("accent_color").notNull().default("#4f46e5"),
+  // Glossary overrides, e.g. { "team": "Squad", "manager": "Lead" }.
+  terminology: jsonb("terminology").$type<Record<string, string>>().notNull().default({}),
+  defaultLocale: text("default_locale").notNull().default("en-US"),
+  timezone: text("timezone").notNull().default("UTC"),
+  currency: text("currency").notNull().default("USD"),
+  sampleDataEnabled: boolean("sample_data_enabled").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const orgFeatureFlags = pgTable(
+  "org_feature_flags",
+  {
+    id: id(),
+    orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("org_feature_flags_org_key_idx").on(table.orgId, table.key)],
+);
+
+// ---------------------------------------------------------------------------
+// Identity & RBAC — role lives on the membership (one user, many orgs)
 // ---------------------------------------------------------------------------
 
 export const users = pgTable("users", {
   id: id(),
-  name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  timezone: text("timezone").notNull().default("UTC"),
+  name: text("name").notNull(),
+  locale: text("locale").notNull().default("en-US"),
+  highContrast: boolean("high_contrast").notNull().default(false),
+  textScale: integer("text_scale").notNull().default(100), // percent, 100-200
+  plainLanguage: boolean("plain_language").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Tracks per-user cockpit visit so the Now surface can compute a delta
-// ("what changed since last visit") instead of a full history wall.
-export const userState = pgTable("user_state", {
-  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  lastVisitAt: timestamp("last_visit_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Domain stub tables — real signal producers that emit events
-// ---------------------------------------------------------------------------
-
-export const findings = pgTable("findings", {
-  id: id(),
-  title: text("title").notNull(),
-  domain: text("domain").notNull(),
-  severity: integer("severity").notNull(), // 1 (low) .. 5 (critical)
-  summary: text("summary").notNull(),
-  evidence: jsonb("evidence").$type<Record<string, unknown>>().notNull().default({}),
-  status: text("status").notNull().default("open"), // open | acknowledged | resolved
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const approvals = pgTable("approvals", {
-  id: id(),
-  title: text("title").notNull(),
-  domain: text("domain").notNull(),
-  severity: integer("severity").notNull(),
-  status: text("status").notNull().default("pending"), // pending | approved | rejected
-  entityType: text("entity_type").notNull(),
-  entityId: text("entity_id").notNull(),
-  requestedBy: text("requested_by").notNull(),
-  evidence: jsonb("evidence").$type<Record<string, unknown>>().notNull().default({}),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  decidedAt: timestamp("decided_at", { withTimezone: true }),
-});
-
-export const tasks = pgTable("tasks", {
-  id: id(),
-  title: text("title").notNull(),
-  domain: text("domain").notNull(),
-  severity: integer("severity").notNull().default(1),
-  status: text("status").notNull().default("open"), // open | in_progress | done
-  assigneeId: text("assignee_id").references(() => users.id, { onDelete: "set null" }),
-  dueAt: timestamp("due_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const metricAnomalies = pgTable("metric_anomalies", {
-  id: id(),
-  metric: text("metric").notNull(),
-  domain: text("domain").notNull(),
-  severity: integer("severity").notNull(),
-  delta: numeric("delta").notNull(),
-  description: text("description").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const agentRuns = pgTable("agent_runs", {
-  id: id(),
-  agentName: text("agent_name").notNull(),
-  domain: text("domain").notNull(),
-  status: text("status").notNull().default("running"), // running | completed | failed
-  progress: integer("progress").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Unified event stream (SSE backing store — enables Last-Event-ID resume)
-// ---------------------------------------------------------------------------
-
-export const events = pgTable(
-  "events",
+// admin | executive | hr | manager | contributor | viewer — see src/lib/domain/rbac.ts
+export const memberships = pgTable(
+  "memberships",
   {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
+    id: id(),
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    type: text("type").notNull(), // finding.created | approval.pending | task.updated | metric.anomaly | agent_run.progress | notification.created | presence.update | comment.created
-    domain: text("domain").notNull(),
-    severity: integer("severity").notNull().default(1),
-    entityType: text("entity_type"),
-    entityId: text("entity_id"),
-    dedupKey: text("dedup_key"),
-    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+    orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    role: text("role").notNull().default("viewer"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index("events_user_id_idx").on(table.userId),
-    index("events_user_created_idx").on(table.userId, table.id),
+    uniqueIndex("memberships_user_org_idx").on(table.userId, table.orgId),
+    index("memberships_org_idx").on(table.orgId),
   ],
 );
 
 // ---------------------------------------------------------------------------
-// Notifications
+// Findings — a minimal tenant-scoped domain table used to prove isolation,
+// RBAC, offline idempotency (clientMutationId) and optimistic concurrency.
 // ---------------------------------------------------------------------------
 
-export const notifications = pgTable(
-  "notifications",
+export const findings = pgTable(
+  "findings",
   {
     id: id(),
-    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    eventId: bigint("event_id", { mode: "number" }).references(() => events.id, { onDelete: "set null" }),
-    type: text("type").notNull(),
-    domain: text("domain").notNull(),
-    severity: integer("severity").notNull(),
+    orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
-    body: text("body").notNull(),
-    entityType: text("entity_type"),
-    entityId: text("entity_id"),
-    dedupKey: text("dedup_key").notNull(),
-    status: text("status").notNull().default("unread"), // unread | read | archived
-    delivery: text("delivery").notNull().default("in_app"), // in_app | interrupt | digest | suppressed
-    deliveredChannels: jsonb("delivered_channels").$type<string[]>().notNull().default(["in_app"]),
-    reason: text("reason").notNull().default(""), // explainability string
-    occurrenceCount: integer("occurrence_count").notNull().default(1),
-    digestBatchId: text("digest_batch_id"),
+    domain: text("domain").notNull().default("general"),
+    team: text("team").notNull().default("General"),
+    severity: integer("severity").notNull().default(1), // 1 (low) .. 5 (critical)
+    status: text("status").notNull().default("open"), // open | resolved
+    summary: text("summary").notNull().default(""),
+    isSample: boolean("is_sample").notNull().default(false),
+    // Idempotency key supplied by the offline write queue so a replayed
+    // mutation never creates a duplicate row.
+    clientMutationId: text("client_mutation_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    lastOccurrenceAt: timestamp("last_occurrence_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index("notifications_user_status_idx").on(table.userId, table.status),
-    // One root cause = one notification: a *partial* unique index enforces
-    // dedup at the database level (not just in application logic) while a
-    // root cause is still "live" (unread/read). Archiving frees the key so a
-    // genuinely new occurrence after archival starts a fresh notification.
-    // `createNotification` upserts against this exact index, which is also
-    // what makes concurrent "alarm storm" inserts collapse atomically
-    // instead of racing into duplicate rows.
-    uniqueIndex("notifications_dedup_live_idx")
-      .on(table.userId, table.dedupKey)
-      .where(sql`${table.status} <> 'archived'`),
+    index("findings_org_idx").on(table.orgId),
+    uniqueIndex("findings_org_mutation_idx")
+      .on(table.orgId, table.clientMutationId)
+      .where(sql`${table.clientMutationId} is not null`),
   ],
 );
 
-export const notificationFeedback = pgTable("notification_feedback", {
-  id: id(),
-  notificationId: text("notification_id").notNull().references(() => notifications.id, { onDelete: "cascade" }),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  action: text("action").notNull(), // opened | dismissed | acted | snoozed
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// ---------------------------------------------------------------------------
+// Push notification subscriptions (Web Push / PWA)
+// ---------------------------------------------------------------------------
 
-export const notificationPreferences = pgTable(
-  "notification_preferences",
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
   {
     id: id(),
     userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    domain: text("domain").notNull(),
-    channel: text("channel").notNull().default("in_app"), // in_app | email | webhook
-    enabled: boolean("enabled").notNull().default(true),
-    allowInterrupt: boolean("allow_interrupt").notNull().default(false), // opt-in to break focus for this domain
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("notification_prefs_unique").on(table.userId, table.domain, table.channel)],
-);
-
-export const quietHours = pgTable("quiet_hours", {
-  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  startMinute: integer("start_minute").notNull().default(1320), // 22:00
-  endMinute: integer("end_minute").notNull().default(420), // 07:00 (wraps midnight)
-  timezone: text("timezone").notNull().default("UTC"),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Attention budget & decision log (explainability trail)
-// ---------------------------------------------------------------------------
-
-export const attentionBudget = pgTable(
-  "attention_budget",
-  {
-    id: id(),
-    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    date: text("date").notNull(), // YYYY-MM-DD in user's timezone
-    budget: integer("budget").notNull().default(6),
-    used: integer("used").notNull().default(0),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("attention_budget_user_date_idx").on(table.userId, table.date)],
-);
-
-export const attentionDecisions = pgTable("attention_decisions", {
-  id: id(),
-  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  notificationId: text("notification_id").references(() => notifications.id, { onDelete: "cascade" }),
-  decision: text("decision").notNull(), // interrupt | digest | suppressed
-  severity: integer("severity").notNull(),
-  cognitiveLoad: integer("cognitive_load").notNull(),
-  fatigue: integer("fatigue").notNull(),
-  reason: text("reason").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Presence & collaboration (metadata only — no message-content analytics)
-// ---------------------------------------------------------------------------
-
-export const presence = pgTable(
-  "presence",
-  {
-    id: id(),
-    entityType: text("entity_type").notNull(),
-    entityId: text("entity_id").notNull(),
-    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    status: text("status").notNull().default("viewing"), // viewing | editing
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("presence_entity_user_idx").on(table.entityType, table.entityId, table.userId)],
-);
-
-export const comments = pgTable(
-  "comments",
-  {
-    id: id(),
-    entityType: text("entity_type").notNull(),
-    entityId: text("entity_id").notNull(),
-    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-    parentId: text("parent_id"),
-    kind: text("kind").notNull().default("comment"), // comment | handoff
-    body: text("body").notNull(),
-    mentions: jsonb("mentions").$type<string[]>().notNull().default([]),
+    orgId: text("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("comments_entity_idx").on(table.entityType, table.entityId)],
+  (table) => [index("push_subscriptions_user_idx").on(table.userId)],
 );
 
+export type Organization = typeof organizations.$inferSelect;
+export type NewOrganization = typeof organizations.$inferInsert;
+export type OrgFeatureFlag = typeof orgFeatureFlags.$inferSelect;
 export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type Membership = typeof memberships.$inferSelect;
+export type NewMembership = typeof memberships.$inferInsert;
+export type Finding = typeof findings.$inferSelect;
 export type NewFinding = typeof findings.$inferInsert;
-export type NewApproval = typeof approvals.$inferInsert;
-export type NewTask = typeof tasks.$inferInsert;
-export type NewMetricAnomaly = typeof metricAnomalies.$inferInsert;
-export type NewAgentRun = typeof agentRuns.$inferInsert;
-export type EventRow = typeof events.$inferSelect;
-export type NotificationRow = typeof notifications.$inferSelect;
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;

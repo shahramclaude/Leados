@@ -1,43 +1,48 @@
-import { db } from "@/db";
-import * as schema from "@/db/schema";
-import { ensureBaselineData } from "@/lib/seed";
-import { withErrorHandling, jsonOk, validateBody, isValidationFailure, jsonError } from "@/lib/api";
-import { desc } from "drizzle-orm";
+import { requireSession } from "@/lib/platform/session";
+import { errorToResponse } from "@/lib/platform/authz";
+import {
+  createFindingForSession,
+  listFindingsForSession,
+  resolveFindingForSession,
+} from "@/lib/app/findings";
+import type { FindingInput } from "@/lib/domain/types";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withErrorHandling("findings", async (_req, requestId) => {
-  await ensureBaselineData(db);
-  const findings = await db.select().from(schema.findings).orderBy(desc(schema.findings.createdAt));
-  return jsonOk({ findings }, requestId);
-});
-
-type CreateFindingBody = {
-  title: string;
-  domain: string;
-  severity?: string;
-  tags?: string[];
-  description?: string;
-};
-
-export const POST = withErrorHandling("findings", async (req, requestId) => {
-  const body = await req.json().catch(() => null);
-  const validated = validateBody<CreateFindingBody>(body, ["title", "domain"]);
-  if (isValidationFailure(validated)) {
-    return jsonError(`Missing required fields: ${validated.missing.join(", ")}`, "VALIDATION_ERROR", 400, requestId);
+export async function GET() {
+  try {
+    const session = await requireSession();
+    const findings = await listFindingsForSession(session);
+    return Response.json({ findings });
+  } catch (err) {
+    return errorToResponse(err);
   }
+}
 
-  const [row] = await db
-    .insert(schema.findings)
-    .values({
-      title: validated.title,
-      domain: validated.domain,
-      severity: validated.severity ?? "medium",
-      tags: validated.tags ?? [],
-      description: validated.description ?? "",
-      status: "open",
-    })
-    .returning();
+export async function POST(request: Request) {
+  try {
+    const session = await requireSession();
+    const body = (await request.json()) as FindingInput;
+    const { finding, wasExisting } = await createFindingForSession(session, body);
+    return Response.json({ finding, wasExisting }, { status: wasExisting ? 200 : 201 });
+  } catch (err) {
+    return errorToResponse(err);
+  }
+}
 
-  return jsonOk({ finding: row }, requestId, 201);
-});
+export async function PATCH(request: Request) {
+  try {
+    const session = await requireSession();
+    const body = (await request.json()) as { id: string; expectedUpdatedAt: string };
+    const result = await resolveFindingForSession(session, body.id, body.expectedUpdatedAt);
+    if (result.outcome === "not_found") {
+      return Response.json({ error: "Finding not found" }, { status: 404 });
+    }
+    if (result.outcome === "conflict") {
+      return Response.json({ outcome: "conflict", finding: result.finding }, { status: 409 });
+    }
+    return Response.json({ outcome: "updated", finding: result.finding });
+  } catch (err) {
+    return errorToResponse(err);
+  }
+}

@@ -1,26 +1,57 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
 import "./globals.css";
-import { RealtimeProvider } from "@/components/RealtimeProvider";
-import { NotificationTray } from "@/components/NotificationTray";
+import { LOCALE_COOKIE, normalizeLocale } from "@/lib/i18n";
+import { dirFor } from "@/i18n/locales";
+import { LocaleProvider } from "@/components/providers/LocaleProvider";
+import { A11yProvider } from "@/components/providers/A11yProvider";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { InstallPrompt } from "@/components/InstallPrompt";
+import { KeyboardShortcutsOverlay } from "@/components/KeyboardShortcutsOverlay";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { createTranslator } from "@/lib/i18n";
 
-export const metadata: Metadata = {
-  title: "LEADOS — Now",
-  description: "Decision-first cockpit with realtime notifications and attention management.",
+export async function generateMetadata(): Promise<Metadata> {
+  const store = await cookies();
+  const locale = normalizeLocale(store.get(LOCALE_COOKIE)?.value);
+  const t = createTranslator(locale);
+  return {
+    title: t("app.name"),
+    description: "LEADOS — leadership intelligence for any organization, in any language, on any device.",
+    applicationName: t("app.name"),
+    manifest: "/manifest.webmanifest",
+    icons: {
+      icon: "/icons/icon-192.png",
+      apple: "/icons/icon-192.png",
+    },
+  };
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#4f46e5",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const store = await cookies();
+  const locale = normalizeLocale(store.get(LOCALE_COOKIE)?.value);
+  const dir = dirFor(locale);
+
   return (
-    <html lang="en">
-      <body className="bg-slate-100 text-slate-900 antialiased">
-        <RealtimeProvider />
-        <div className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-            <span className="text-sm font-semibold tracking-tight text-slate-900">LEADOS</span>
-            <NotificationTray />
-          </div>
-        </div>
-        {children}
+    <html lang={locale} dir={dir}>
+      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+        <LocaleProvider initialLocale={locale}>
+          <A11yProvider>
+            <OfflineBanner />
+            {children}
+            <InstallPrompt />
+            <KeyboardShortcutsOverlay />
+            <ServiceWorkerRegistration />
+          </A11yProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

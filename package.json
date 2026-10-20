@@ -1,21 +1,25 @@
 {
-  "name": "nextjs-postgresql-template",
+  "name": "leados",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "test:isolation": "tsx scripts/test-tenant-isolation.ts"
   },
   "dependencies": {
+    "@types/web-push": "^3.6.4",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
     "next": "16.2.6",
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

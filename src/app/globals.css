@@ -1,1 +1,69 @@
 @import "tailwindcss";
+
+:root {
+  --leados-font-scale: 1;
+}
+
+html {
+  font-size: calc(100% * var(--leados-font-scale));
+}
+
+/* High-contrast theme: triggered by the A11yProvider via a data attribute
+   (persisted preference) OR the OS-level `prefers-contrast: more` media
+   query (see src/lib/a11y.ts) — either one is enough, they are not
+   mutually exclusive. */
+html[data-high-contrast="true"],
+html:has(body[data-force-contrast]) {
+  --tw-text-opacity: 1;
+}
+
+html[data-high-contrast="true"] body {
+  background: #000;
+  color: #fff;
+}
+
+html[data-high-contrast="true"] a,
+html[data-high-contrast="true"] button {
+  text-decoration: underline;
+}
+
+html[data-high-contrast="true"] .bg-white {
+  background-color: #000 !important;
+  color: #fff !important;
+  border-color: #fff !important;
+}
+
+html[data-high-contrast="true"] .text-slate-600,
+html[data-high-contrast="true"] .text-slate-500,
+html[data-high-contrast="true"] .text-slate-400 {
+  color: #f1f5f9 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.field {
+  min-height: 44px;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(203 213 225);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  background: white;
+}
+
+html.dark .field,
+html[data-high-contrast="true"] .field {
+  background: #0f172a;
+  border-color: rgb(71 85 105);
+  color: white;
+}
+
+:focus-visible {
+  outline: 3px solid #4f46e5;
+  outline-offset: 2px;
+}
