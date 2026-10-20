@@ -1,101 +1,75 @@
-import { db } from "@/db";
-import { forecastCache } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { getDailyBuckets, getEventCount, projectTrend } from "./stats";
+/**
+ * forecastCache.ts — in-process memoization for scenario/forecast
+ * computations, keyed by a content hash of (scenario spec + seed set +
+ * model version) so any change to the spec automatically invalidates the
+ * cache entry (no manual invalidation bookkeeping needed).
+ *
+ * This is intentionally a simple bounded LRU in module memory, NOT a
+ * distributed cache — adequate for a single Next.js server process. If
+ * Part 06 is later deployed with multiple server instances, swap the
+ * backing store for a shared cache (e.g. Redis) behind the same
+ * `get`/`set` contract.
+ */
+import { createHash } from "node:crypto";
 
-// ---------------------------------------------------------------------------
-// Forecast projections are expensive to compute (full-history aggregation +
-// trend fit) so they are cached in both process memory (fast path, survives
-// for the life of the server process / lambda instance) and in Postgres
-// (durable path, survives restarts / shared across instances).
-//
-// Invalidation is EXPLICIT: nothing polls. Any code path that writes new
-// events must call `invalidateForecastCache()` so the next read recomputes.
-// This keeps reads O(1) in the common case instead of re-aggregating the
-// events table on every dashboard load.
-// ---------------------------------------------------------------------------
+const MODEL_VERSION = "leados-sim-v1";
 
-type ForecastPayload = {
-  horizonDays: number;
-  computedAt: string;
-  eventCountAtCompute: number;
-  slope: number;
-  intercept: number;
-  noise: number;
-  projected: { day: number; expected: number; low: number; high: number }[];
-};
-
-type MemEntry = { value: ForecastPayload; eventCountAtCompute: number };
-
-const memCache = new Map<string, MemEntry>();
-let generation = 0;
-
-export function cacheKey(horizonDays: number): string {
-  return `trend:${horizonDays}d`;
+export function forecastCacheKey(spec: unknown, extra: Record<string, unknown> = {}): string {
+  const payload = JSON.stringify({ modelVersion: MODEL_VERSION, spec, extra });
+  return createHash("sha256").update(payload).digest("hex");
 }
 
-/** Bump this to invalidate every in-memory entry cheaply (O(1)) without a DB round trip. */
-export function invalidateForecastCache(): void {
-  generation += 1;
-  memCache.clear();
+interface CacheEntry<T> {
+  value: T;
+  insertedAt: number;
 }
 
-export function getCacheGeneration(): number {
-  return generation;
-}
+export class ForecastCache<T> {
+  private store = new Map<string, CacheEntry<T>>();
+  constructor(private maxEntries = 100, private ttlMs = 1000 * 60 * 30) {}
 
-async function computeForecast(horizonDays: number): Promise<ForecastPayload> {
-  const [buckets, eventCount] = await Promise.all([getDailyBuckets(90), getEventCount()]);
-  const { slope, intercept, noise, projected } = projectTrend(buckets, horizonDays);
-  return {
-    horizonDays,
-    computedAt: new Date().toISOString(),
-    eventCountAtCompute: eventCount,
-    slope,
-    intercept,
-    noise,
-    projected,
-  };
-}
-
-export async function getForecast(
-  horizonDays: number,
-  options?: { forceRecompute?: boolean },
-): Promise<{ payload: ForecastPayload; cache: "memory" | "db" | "miss" }> {
-  const key = cacheKey(horizonDays);
-
-  if (!options?.forceRecompute) {
-    const mem = memCache.get(key);
-    if (mem) return { payload: mem.value, cache: "memory" };
-
-    const [row] = await db.select().from(forecastCache).where(eq(forecastCache.key, key)).limit(1);
-    if (row) {
-      const payload = row.payload as unknown as ForecastPayload;
-      memCache.set(key, { value: payload, eventCountAtCompute: row.eventCountAtCompute });
-      return { payload, cache: "db" };
+  get(key: string): T | undefined {
+    const entry = this.store.get(key);
+    if (!entry) return undefined;
+    if (Date.now() - entry.insertedAt > this.ttlMs) {
+      this.store.delete(key);
+      return undefined;
     }
+    // refresh recency
+    this.store.delete(key);
+    this.store.set(key, entry);
+    return entry.value;
   }
 
-  const payload = await computeForecast(horizonDays);
-  memCache.set(key, { value: payload, eventCountAtCompute: payload.eventCountAtCompute });
+  set(key: string, value: T): void {
+    if (this.store.size >= this.maxEntries) {
+      const oldestKey = this.store.keys().next().value;
+      if (oldestKey !== undefined) this.store.delete(oldestKey);
+    }
+    this.store.set(key, { value, insertedAt: Date.now() });
+  }
 
-  await db
-    .insert(forecastCache)
-    .values({
-      key,
-      horizonDays,
-      eventCountAtCompute: payload.eventCountAtCompute,
-      payload: payload as unknown as Record<string, unknown>,
-    })
-    .onConflictDoUpdate({
-      target: forecastCache.key,
-      set: {
-        horizonDays,
-        computedAt: new Date(),
-        eventCountAtCompute: payload.eventCountAtCompute,
-        payload: payload as unknown as Record<string, unknown>,
-      },
-    });
+  has(key: string): boolean {
+    return this.get(key) !== undefined;
+  }
 
-  return { payload, cache: "miss" };
+  clear(): void {
+    this.store.clear();
+  }
+
+  get size(): number {
+    return this.store.size;
+  }
+}
+
+const globalForCache = globalThis as typeof globalThis & {
+  __leadosScenarioCache?: ForecastCache<unknown>;
+};
+
+/** Process-wide singleton cache for scenario run results. */
+export function getScenarioResultCache<T>(): ForecastCache<T> {
+  if (!globalForCache.__leadosScenarioCache) {
+    globalForCache.__leadosScenarioCache = new ForecastCache<unknown>();
+  }
+  return globalForCache.__leadosScenarioCache as ForecastCache<T>;
 }

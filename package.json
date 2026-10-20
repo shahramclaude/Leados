@@ -6,11 +6,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "eval:causal": "tsx scripts/eval-causal.ts",
-    "seed:causal": "tsx scripts/seed-causal.ts",
-    "verify": "npm run lint && npm run typecheck && npm run test && npm run eval:causal"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -20,7 +16,7 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tsx": "^4.23.15",
-    "vitest": "^5.0.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

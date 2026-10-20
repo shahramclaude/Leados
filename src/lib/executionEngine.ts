@@ -1,130 +1,75 @@
-// executionEngine — execution command: turns raw projects/milestones/
-// blockers into a probabilistic, explainable delivery-confidence score, a
-// critical path with float, Monte Carlo schedule risk, and a cross-project
-// dependency map that flags where one project's lateness will cascade.
-import {
-  computeCriticalPath,
-  simulateScheduleRisk,
-  probabilityOfOnTimeDelivery,
-  type ProjectNode,
-  type CpmReport,
-  type ScheduleRiskResult,
-} from "@/lib/criticalPath";
-import { computeDeliveryConfidence } from "@/lib/executionIntel";
-
-export interface ExecMilestone {
-  id: number;
-  projectId: number;
-  title: string;
-  durationDays: number;
-  durationP90Days: number | null;
-  dependsOn: number[];
-  dueDate: string | null;
-  status: "not_started" | "in_progress" | "done" | "blocked";
-  completedAt: string | null;
-}
-
-export interface ExecBlocker {
-  id: number;
-  projectId: number;
-  milestoneId: number | null;
-  title: string;
-  severity: "low" | "medium" | "high" | "critical";
-  impactDays: number;
-  raisedAt: string;
-  resolvedAt: string | null;
-}
-
-export interface ExecProjectRecord {
-  id: number;
-  name: string;
-  status: string;
-  startDate: string;
-  targetDate: string;
-}
-
-const SEVERITY_WEIGHT: Record<ExecBlocker["severity"], number> = { low: 0.1, medium: 0.3, high: 0.6, critical: 1 };
-
-function daysBetween(a: string | Date, b: string | Date): number {
-  return Math.max(0, (new Date(b).getTime() - new Date(a).getTime()) / 86400000);
-}
-
-export interface ProjectExecutionReport {
-  project: ExecProjectRecord;
-  cpm: CpmReport;
-  scheduleRisk: ScheduleRiskResult;
-  onTimeProbability: number;
-  deliveryConfidence: { score: number; contributions: Record<string, number> };
-  openBlockers: ExecBlocker[];
-  scopeCreepScore: number;
-  scheduleAdherence: number;
-  explanation: string[];
-}
-
 /**
- * Full execution analysis for a single project: CPM float, Monte Carlo
- * schedule risk, and a blended, explainable delivery-confidence score.
+ * executionEngine.ts — Part 06 execution/forecasting glue: combines the
+ * Critical Path Method (`criticalPath.ts`) deterministic baseline schedule,
+ * the constraint-satisfaction staffing plan (`cssolver.ts`), and the
+ * discrete-event Monte Carlo engine (`simulation.ts` + `monteCarlo.ts`) to
+ * answer "given this backlog, these dependencies, and this team, what's
+ * our plan AND how uncertain is it?"
+ *
+ * Pipeline:
+ *   1. CPM on task durations (point estimates) -> deterministic baseline
+ *      duration + critical path + slack per task.
+ *   2. cssolver assigns agents to tasks (skills + capacity balancing).
+ *   3. The same task set is handed to the discrete-event Monte Carlo model
+ *      to produce a *distributional* forecast (p10/p50/p90 completion),
+ *      which is what should actually be trusted for planning — the CPM
+ *      number is a useful deterministic anchor, not a promise.
  */
-export function analyzeProject(project: ExecProjectRecord, milestones: ExecMilestone[], blockers: ExecBlocker[], now: Date = new Date()): ProjectExecutionReport {
-  const nodes: ProjectNode[] = milestones.map((m) => ({
-    id: String(m.id),
-    durationDays: m.durationDays,
-    durationP90Days: m.durationP90Days ?? undefined,
-    dependsOn: m.dependsOn.map(String),
-  }));
-  const cpm = computeCriticalPath(nodes);
-  const scheduleRisk = simulateScheduleRisk(nodes);
-  const deadlineDays = daysBetween(project.startDate, project.targetDate);
-  const onTimeProbability = probabilityOfOnTimeDelivery(scheduleRisk, deadlineDays);
+import { computeCriticalPath, type CPMResult, type CPMTask } from "@/lib/criticalPath";
+import { solveAssignment, type CSAgent, type CSSolveResult, type CSTask } from "@/lib/cssolver";
+import { runDiscreteEventSimulation, type SimConfig } from "@/lib/simulation";
+import { createRng } from "@/lib/prng";
+import { quantile } from "@/lib/stats";
 
-  const openBlockers = blockers.filter((b) => !b.resolvedAt);
-  const blockerPressure = Math.min(
-    1,
-    openBlockers.reduce((sum, b) => sum + SEVERITY_WEIGHT[b.severity], 0) / 2,
-  );
-
-  const totalMilestones = milestones.length || 1;
-  const overdue = milestones.filter((m) => m.status !== "done" && m.dueDate && new Date(m.dueDate).getTime() < now.getTime()).length;
-  const scheduleAdherence = Math.max(0, 1 - overdue / totalMilestones);
-
-  // Scope creep proxy: milestones added/blocked relative to original plan isn't directly modeled,
-  // so we use the ratio of "blocked" status milestones as a visible, explainable proxy.
-  const blockedCount = milestones.filter((m) => m.status === "blocked").length;
-  const scopeCreepScore = Math.min(1, blockedCount / totalMilestones + openBlockers.length * 0.05);
-
-  const deliveryConfidence = computeDeliveryConfidence({ scopeCreepScore, blockerPressure, scheduleAdherence, onTimeProbability });
-
-  const explanation = [
-    `Monte Carlo schedule simulation (n=${scheduleRisk.completionDays.n}) gives a ${Math.round(onTimeProbability * 100)}% chance of finishing by the ${Math.round(deadlineDays)}-day target; median projected duration is ${Math.round(scheduleRisk.completionDays.p50)} days.`,
-    cpm.criticalPath.length ? `Critical path runs through ${cpm.criticalPath.length} milestone(s) with zero float: ${cpm.criticalPath.join(", ")}.` : "No critical path could be computed (empty or cyclic milestone graph).",
-    `${openBlockers.length} open blocker(s) contribute ${Math.round(blockerPressure * 100)}% blocker pressure.`,
-    `${overdue} of ${totalMilestones} milestones are overdue, giving ${Math.round(scheduleAdherence * 100)}% schedule adherence.`,
-  ];
-
-  return { project, cpm, scheduleRisk, onTimeProbability, deliveryConfidence, openBlockers, scopeCreepScore, scheduleAdherence, explanation };
+export interface ExecutionPlanInput {
+  tasks: Array<{ id: string; requiredSkill: string; estimatedHours: number; dependsOn: string[] }>;
+  agents: Array<{ id: string; skills: string[]; weeklyCapacityHours: number }>;
+  hoursPerDay?: number;
 }
 
-export interface CrossProjectDependency {
-  upstreamProjectId: number;
-  downstreamProjectId: number;
-  upstreamOnTimeProbability: number;
-  cascadeRisk: "low" | "medium" | "high";
-  note: string | null;
+export interface ExecutionPlanResult {
+  cpm: CPMResult;
+  staffing: CSSolveResult;
+  deterministicDurationDays: number;
+  distributionalForecast: { p10Days: number; p50Days: number; p90Days: number; replications: number };
+  caveat: string;
 }
 
-/**
- * Cross-project dependency map: for each declared upstream->downstream
- * edge, flags cascade risk based on the upstream project's own on-time
- * probability (a late upstream project drags its dependents with it).
- */
-export function buildDependencyMap(
-  dependencies: { upstreamProjectId: number; downstreamProjectId: number; note: string | null }[],
-  reports: Map<number, ProjectExecutionReport>,
-): CrossProjectDependency[] {
-  return dependencies.map((dep) => {
-    const upstream = reports.get(dep.upstreamProjectId);
-    const p = upstream?.onTimeProbability ?? 0.5;
-    const cascadeRisk: CrossProjectDependency["cascadeRisk"] = p < 0.4 ? "high" : p < 0.7 ? "medium" : "low";
-    return { ...dep, upstreamOnTimeProbability: p, cascadeRisk };
-  });
+export function buildExecutionPlan(input: ExecutionPlanInput, simConfig: SimConfig, opts: { replications?: number; seedRoot?: string } = {}): ExecutionPlanResult {
+  const hoursPerDay = input.hoursPerDay ?? 6;
+  const cpmTasks: CPMTask[] = input.tasks.map((t) => ({ id: t.id, durationDays: t.estimatedHours / hoursPerDay, dependsOn: t.dependsOn }));
+  const cpm = computeCriticalPath(cpmTasks);
+
+  const csTasks: CSTask[] = input.tasks.map((t) => ({ id: t.id, requiredSkill: t.requiredSkill, hours: t.estimatedHours }));
+  const csAgents: CSAgent[] = input.agents.map((a) => ({ id: a.id, skills: a.skills, capacityHours: a.weeklyCapacityHours * (cpm.projectDurationDays / 5) }));
+  const staffingRng = createRng(opts.seedRoot ?? "execution-plan-staffing");
+  const staffing = solveAssignment(csTasks, csAgents, staffingRng);
+
+  const replications = opts.replications ?? 200;
+  const seedRoot = opts.seedRoot ?? "execution-plan-forecast";
+  const completionDays: number[] = [];
+  for (let i = 0; i < replications; i++) {
+    const rng = createRng(seedRoot).substream(`rep#${i}`);
+    const result = runDiscreteEventSimulation(simConfig, rng);
+    const lastDone = result.dailySnapshots.filter((d) => d.doneCount > 0).map((d) => d.day);
+    const allDone = result.unfinishedCount === 0;
+    const completion = allDone && lastDone.length > 0 ? Math.max(...lastDone) + 1 : simConfig.horizonDays;
+    completionDays.push(completion);
+  }
+
+  return {
+    cpm,
+    staffing,
+    deterministicDurationDays: cpm.projectDurationDays,
+    distributionalForecast: {
+      p10Days: quantile(completionDays, 0.1),
+      p50Days: quantile(completionDays, 0.5),
+      p90Days: quantile(completionDays, 0.9),
+      replications,
+    },
+    caveat:
+      "The CPM duration is a deterministic point estimate assuming perfect staffing and no queueing/coordination overhead. " +
+      "The distributional forecast (p10/p50/p90) comes from the stochastic discrete-event model and includes WIP limits, " +
+      "Brooks's-law overhead, handoff latency and onboarding ramp — treat the distributional numbers as the operative forecast.",
+  };
 }

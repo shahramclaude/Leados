@@ -16,12 +16,6 @@ export default async function HomePage() {
         <p className="mt-4 text-base text-slate-700">
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
-        <a
-          href="/causal"
-          className="mt-6 inline-block rounded-full bg-slate-950 px-5 py-2 text-sm font-semibold text-white"
-        >
-          Open the causal reasoning layer &rarr;
-        </a>
       </section>
     </main>
   );

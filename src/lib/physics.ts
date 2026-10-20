@@ -1,96 +1,120 @@
-// =============================================================================
-// Leados — Org Physics primitives
-// -----------------------------------------------------------------------------
-// This file does not pre-exist in this checkout (Parts 1-5 are not present
-// in the sandbox). It is authored here as the canonical source so Part 6
-// can import real, non-reimplemented functions rather than mocking them.
-// Part 6 MUST call these two exports directly — do not reimplement entropy
-// or energy math inside executionIntelligence.ts.
-// =============================================================================
-
-import type { LeadosEvent, PersonRecord } from "./types";
-
 /**
- * measureOrgEntropy(events, people): number
- * Returns a 0-1 scalar. Shannon entropy of the distribution of event
- * `type` values over the trailing window, normalized by log2(distinctTypes),
- * blended with the dispersion of event activity across domains (an org
- * where all activity is concentrated in one domain/person is "ordered";
- * one where activity/noise is spread evenly across many types & domains
- * is "chaotic").
+ * physics.ts — facade + documentation table for the org-physics layer, plus
+ * two small emergent-dynamics models shared by `simulation.ts` and
+ * `orgPhysics.ts`:
  *
- * Signature: export function measureOrgEntropy(
- *   events: LeadosEvent[],
- *   people: PersonRecord[],
- * ): number
+ *   - onboarding ramp curve (new hires are not instantly 100% productive)
+ *   - context-switching penalty (Brooks/Weinberg-style concurrent-task cost)
+ *   - an `IAttentionModel` seam for Part 12's interruption/attention model
+ *
+ * HONESTY NOTE: the onboarding ramp curve and the context-switch penalty
+ * table below are *not yet fitted* to Leados event history — there is no
+ * recorded new-hire ramp data or interruption telemetry in this sandbox.
+ * They are widely-cited rule-of-thumb shapes (documented with source),
+ * explicitly labeled `provenance: "assumed"`, and are the first candidates
+ * to replace with fitted curves once Part 01 has enough new-hire /
+ * interruption events and Part 12 ships the real attention model.
  */
-export function measureOrgEntropy(
-  events: LeadosEvent[],
-  people: PersonRecord[],
+import { ORG_ODE_PARAM_DOCS, OrgODEParams } from "@/lib/orgODE";
+import type { Rng } from "@/lib/prng";
+
+export type Provenance = "fitted" | "default" | "assumed";
+
+export interface DocumentedParam {
+  name: string;
+  symbol: string;
+  unit: string;
+  range: [number, number];
+  value: number;
+  provenance: Provenance;
+  description: string;
+  source?: string;
+}
+
+/** Full documentation table for the physics layer, for UI/report rendering. */
+export function describeOrgODEParams(
+  params: OrgODEParams,
+  provenance: Provenance,
+): DocumentedParam[] {
+  return (Object.keys(params) as Array<keyof OrgODEParams>).map((key) => {
+    const doc = ORG_ODE_PARAM_DOCS[key];
+    return {
+      name: key,
+      symbol: doc.symbol,
+      unit: doc.unit,
+      range: doc.range,
+      value: params[key],
+      provenance,
+      description: doc.description,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding ramp curve
+// ---------------------------------------------------------------------------
+export interface OnboardingRampConfig {
+  /** Productivity fraction on day 0 of tenure. Range [0,1]. */
+  startFraction: number;
+  /** Days to reach ~63% of the remaining gap closed (exponential half-life-ish). */
+  rampDays: number;
+}
+
+export const DEFAULT_ONBOARDING_RAMP: OnboardingRampConfig = {
+  startFraction: 0.25,
+  rampDays: 45,
+};
+export const ONBOARDING_RAMP_PROVENANCE: Provenance = "assumed";
+export const ONBOARDING_RAMP_SOURCE =
+  "Rule-of-thumb 'full productivity in ~2-3 months' commonly cited in engineering-management " +
+  "literature (e.g. onboarding ramp studies summarized by LeadDev/Pragmatic Engineer surveys). " +
+  "Not yet fitted to Leados event history — replace via Part 01 new-hire throughput events.";
+
+/** Productivity multiplier in (0,1] given tenure in days. */
+export function onboardingRampFactor(
+  tenureDays: number,
+  cfg: OnboardingRampConfig = DEFAULT_ONBOARDING_RAMP,
 ): number {
-  if (events.length === 0) return 0;
+  if (tenureDays <= 0) return cfg.startFraction;
+  const gap = 1 - cfg.startFraction;
+  return Math.min(1, cfg.startFraction + gap * (1 - Math.exp(-tenureDays / cfg.rampDays)));
+}
 
-  const typeCounts = new Map<string, number>();
-  const domainCounts = new Map<string, number>();
-  for (const e of events) {
-    typeCounts.set(e.type, (typeCounts.get(e.type) ?? 0) + 1);
-    const d = e.domain ?? "unknown";
-    domainCounts.set(d, (domainCounts.get(d) ?? 0) + 1);
-  }
+// ---------------------------------------------------------------------------
+// Context-switching penalty
+// ---------------------------------------------------------------------------
+export const CONTEXT_SWITCH_PROVENANCE: Provenance = "assumed";
+export const CONTEXT_SWITCH_SOURCE =
+  "Widely-cited informal figures (Weinberg, 'Quality Software Management Vol.1', context " +
+  "switching cost table: 2 tasks ~20% loss, 3 ~40%, 4 ~60%, 5 ~75%). Treated as an assumed " +
+  "rule-of-thumb, not a Leados-fitted curve.";
 
-  const shannon = (counts: Map<string, number>, total: number) => {
-    const distinct = counts.size;
-    if (distinct <= 1) return 0;
-    let h = 0;
-    for (const c of counts.values()) {
-      const p = c / total;
-      h -= p * Math.log2(p);
-    }
-    return h / Math.log2(distinct); // normalized 0-1
-  };
+/** Fraction of nominal capacity retained when an agent juggles `n` concurrent items. */
+export function contextSwitchRetention(concurrentItems: number): number {
+  const lossTable: Record<number, number> = { 1: 0, 2: 0.2, 3: 0.4, 4: 0.6, 5: 0.75 };
+  const n = Math.max(1, Math.round(concurrentItems));
+  const loss = n in lossTable ? lossTable[n] : 0.85; // cap: diminishing but severe beyond 5
+  return Math.max(0.05, 1 - loss);
+}
 
-  const typeEntropy = shannon(typeCounts, events.length);
-  const domainEntropy = shannon(domainCounts, events.length);
-
-  // Burnout/flight-risk volatility in the workforce raises perceived entropy.
-  const avgRisk =
-    people.length > 0
-      ? people.reduce((s, p) => s + p.flightRisk + p.burnoutRisk, 0) /
-        (people.length * 2)
-      : 0;
-
-  const entropy = 0.45 * typeEntropy + 0.35 * domainEntropy + 0.2 * avgRisk;
-  return Math.max(0, Math.min(1, entropy));
+// ---------------------------------------------------------------------------
+// Attention model seam (Part 12)
+// ---------------------------------------------------------------------------
+export interface IAttentionModel {
+  /** Fractional capacity lost to interruptions for this agent on this day, in [0, 0.9]. */
+  interruptionLoad(agentId: string, day: number, rng: Rng): number;
 }
 
 /**
- * computeLeadershipEnergyBudget(events, people): number
- * Returns a 0-1 scalar representing remaining leadership capacity to absorb
- * shocks. Depleted by high burnout/flight risk concentration and by event
- * volume (load), replenished by headcount and lower recent event density.
- *
- * Signature: export function computeLeadershipEnergyBudget(
- *   events: LeadosEvent[],
- *   people: PersonRecord[],
- * ): number
+ * STAND-IN for Part 12's attention/interruption model. Returns a baseline
+ * interruption load plus seeded jitter. Replace with the real Part 12
+ * import once available — the call signature is intentionally minimal so
+ * swapping it in should not require changes to `simulation.ts`.
  */
-export function computeLeadershipEnergyBudget(
-  events: LeadosEvent[],
-  people: PersonRecord[],
-): number {
-  if (people.length === 0) return 0.5;
-
-  const avgBurnout =
-    people.reduce((s, p) => s + p.burnoutRisk, 0) / people.length;
-  const avgFlight =
-    people.reduce((s, p) => s + p.flightRisk, 0) / people.length;
-
-  // Load factor: events per person over trailing window, saturating.
-  const loadPerPerson = events.length / Math.max(1, people.length);
-  const loadFactor = 1 - Math.min(1, loadPerPerson / 25); // 25 events/person considered saturating
-
-  const reserves =
-    0.4 * (1 - avgBurnout) + 0.3 * (1 - avgFlight) + 0.3 * loadFactor;
-
-  return Math.max(0, Math.min(1, reserves));
+export class DefaultAttentionModel implements IAttentionModel {
+  constructor(private readonly baseline = 0.12, private readonly jitter = 0.05) {}
+  interruptionLoad(_agentId: string, _day: number, rng: Rng): number {
+    const draw = rng.normal(this.baseline, this.jitter);
+    return Math.max(0, Math.min(0.9, draw));
+  }
 }
