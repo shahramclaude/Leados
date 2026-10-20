@@ -1,57 +1,101 @@
-// src/lib/forecastCache.ts
+import { db } from "@/db";
+import { forecastCache } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { getDailyBuckets, getEventCount, projectTrend } from "./stats";
+
+// ---------------------------------------------------------------------------
+// Forecast projections are expensive to compute (full-history aggregation +
+// trend fit) so they are cached in both process memory (fast path, survives
+// for the life of the server process / lambda instance) and in Postgres
+// (durable path, survives restarts / shared across instances).
 //
-// In-process cache for Monte Carlo forecast projections, keyed by a hash of
-// the forecast input. Forecasts are expensive (10k-trial simulations can
-// take tens of milliseconds — see docs/PERFORMANCE.md "Simulation
-// runtimes") and the same input is requested repeatedly as users revisit
-// the metrics dashboard, so caching the projection avoids recomputing it on
-// every page view.
-//
-// Invalidation is EXPLICIT, not time-based: `invalidateForecastCache()` is
-// called from `src/lib/events.ts#recordEvent()` every time a new event is
-// written, because a new event can change the inputs a forecast is derived
-// from (e.g. recomputed growth rate). This trades a slightly more
-// conservative cache (it clears more than strictly necessary) for a
-// guarantee that the dashboard never shows a forecast that is stale with
-// respect to the event log — the thing Part 12's brief explicitly asks for
-// ("cache projections with explicit invalidation on new events").
-import { hashString } from "./mathUtils";
-import type { ForecastInput, ForecastResult } from "./monteCarlo";
+// Invalidation is EXPLICIT: nothing polls. Any code path that writes new
+// events must call `invalidateForecastCache()` so the next read recomputes.
+// This keeps reads O(1) in the common case instead of re-aggregating the
+// events table on every dashboard load.
+// ---------------------------------------------------------------------------
 
-interface CacheEntry {
-  result: ForecastResult;
-  cachedAt: number;
+type ForecastPayload = {
+  horizonDays: number;
+  computedAt: string;
+  eventCountAtCompute: number;
+  slope: number;
+  intercept: number;
+  noise: number;
+  projected: { day: number; expected: number; low: number; high: number }[];
+};
+
+type MemEntry = { value: ForecastPayload; eventCountAtCompute: number };
+
+const memCache = new Map<string, MemEntry>();
+let generation = 0;
+
+export function cacheKey(horizonDays: number): string {
+  return `trend:${horizonDays}d`;
 }
 
-const cache = new Map<string, CacheEntry>();
-let epoch = 0;
-let hits = 0;
-let misses = 0;
-
-export function forecastCacheKey(input: ForecastInput): string {
-  return `${epoch}:${hashString(JSON.stringify(input))}`;
-}
-
-export function getCachedForecast(input: ForecastInput): ForecastResult | null {
-  const entry = cache.get(forecastCacheKey(input));
-  if (!entry) {
-    misses += 1;
-    return null;
-  }
-  hits += 1;
-  return entry.result;
-}
-
-export function setCachedForecast(input: ForecastInput, result: ForecastResult): void {
-  cache.set(forecastCacheKey(input), { result, cachedAt: Date.now() });
-}
-
-/** Called after every successful event write. Drops all cached projections. */
+/** Bump this to invalidate every in-memory entry cheaply (O(1)) without a DB round trip. */
 export function invalidateForecastCache(): void {
-  epoch += 1;
-  cache.clear();
+  generation += 1;
+  memCache.clear();
 }
 
-export function forecastCacheStats() {
-  return { size: cache.size, epoch, hits, misses, hitRate: hits + misses === 0 ? 0 : +(hits / (hits + misses)).toFixed(3) };
+export function getCacheGeneration(): number {
+  return generation;
+}
+
+async function computeForecast(horizonDays: number): Promise<ForecastPayload> {
+  const [buckets, eventCount] = await Promise.all([getDailyBuckets(90), getEventCount()]);
+  const { slope, intercept, noise, projected } = projectTrend(buckets, horizonDays);
+  return {
+    horizonDays,
+    computedAt: new Date().toISOString(),
+    eventCountAtCompute: eventCount,
+    slope,
+    intercept,
+    noise,
+    projected,
+  };
+}
+
+export async function getForecast(
+  horizonDays: number,
+  options?: { forceRecompute?: boolean },
+): Promise<{ payload: ForecastPayload; cache: "memory" | "db" | "miss" }> {
+  const key = cacheKey(horizonDays);
+
+  if (!options?.forceRecompute) {
+    const mem = memCache.get(key);
+    if (mem) return { payload: mem.value, cache: "memory" };
+
+    const [row] = await db.select().from(forecastCache).where(eq(forecastCache.key, key)).limit(1);
+    if (row) {
+      const payload = row.payload as unknown as ForecastPayload;
+      memCache.set(key, { value: payload, eventCountAtCompute: row.eventCountAtCompute });
+      return { payload, cache: "db" };
+    }
+  }
+
+  const payload = await computeForecast(horizonDays);
+  memCache.set(key, { value: payload, eventCountAtCompute: payload.eventCountAtCompute });
+
+  await db
+    .insert(forecastCache)
+    .values({
+      key,
+      horizonDays,
+      eventCountAtCompute: payload.eventCountAtCompute,
+      payload: payload as unknown as Record<string, unknown>,
+    })
+    .onConflictDoUpdate({
+      target: forecastCache.key,
+      set: {
+        horizonDays,
+        computedAt: new Date(),
+        eventCountAtCompute: payload.eventCountAtCompute,
+        payload: payload as unknown as Record<string, unknown>,
+      },
+    });
+
+  return { payload, cache: "miss" };
 }

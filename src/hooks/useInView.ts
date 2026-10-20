@@ -1,39 +1,37 @@
 "use client";
-// src/hooks/useInView.ts
-//
-// Pure Web API (IntersectionObserver) lazy-mount hook. Spec: "charts
-// outside the viewport are not rendered until scrolled into view." Once a
-// panel has been shown once it stays mounted (avoids re-running force
-// layouts / histograms on every scroll tick). Used to defer mounting
-// dynamic-imported chart/network/metrics panels below the fold.
+
 import { useEffect, useRef, useState } from "react";
 
-export function useInView<T extends HTMLElement>(rootMargin = "200px") {
+/**
+ * Lazily mounts expensive panels (charts, network graph, heatmap) only once
+ * they scroll into the viewport, using IntersectionObserver. Once visible it
+ * stays mounted (no mount/unmount thrash while scrolling).
+ */
+export function useInView<T extends HTMLElement>(options?: IntersectionObserverInit) {
   const ref = useRef<T | null>(null);
   const [inView, setInView] = useState(false);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el || inView) return;
+    const node = ref.current;
+    if (!node || inView) return;
     if (typeof IntersectionObserver === "undefined") {
       setInView(true);
       return;
     }
+
     const observer = new IntersectionObserver(
       (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setInView(true);
-            observer.disconnect();
-          }
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setInView(true);
+          observer.disconnect();
         }
       },
-      { rootMargin },
+      { rootMargin: "200px", threshold: 0.01, ...options },
     );
-    observer.observe(el);
+
+    observer.observe(node);
     return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rootMargin]);
+  }, [inView, options]);
 
   return { ref, inView };
 }

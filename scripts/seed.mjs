@@ -1,40 +1,40 @@
 #!/usr/bin/env node
-// scripts/seed.mjs
+// Seeds the LEADOS schema. Usage:
+//   node scripts/seed.mjs            -> baseline volume (~50k events)
+//   node scripts/seed.mjs --scale 10 -> 10x volume (~500k events), for the
+//                                       "10x data day" performance rehearsal
 //
-// Deterministic data seeder used for both everyday dev seeding and the
-// "10x data day" rehearsal described in docs/PERFORMANCE.md. Talks to
-// Postgres directly via `pg` (not Drizzle) and uses multi-row batched
-// INSERTs so seeding 100k+ rows takes seconds, not minutes.
-//
-// Usage:
-//   node scripts/seed.mjs                 seed baseline volume (10,000 events)
-//   node scripts/seed.mjs --scale 10      seed 10x volume (100,000 events)
-//   node scripts/seed.mjs --reset         truncate tables before seeding
+// Uses batched multi-row INSERTs (1000 rows/statement) instead of one INSERT
+// per row — this script itself is a performance-sensitive tool and a naive
+// per-row insert loop would take an order of magnitude longer.
 import "dotenv/config";
-import { Pool } from "pg";
+import pg from "pg";
 
-const args = process.argv.slice(2);
-const scale = Number(args.find((a) => a.startsWith("--scale="))?.split("=")[1] ?? (args.includes("--scale") ? args[args.indexOf("--scale") + 1] : 1)) || 1;
-const reset = args.includes("--reset");
+const SCALE = Number(process.argv.find((a, i) => process.argv[i - 1] === "--scale")) || 1;
+const BASE_EVENTS = 50_000;
+const BASE_ENTITIES = 400;
+const BASE_NOTIFICATIONS = 3_000;
 
-const BASE_EVENTS = 10_000;
-const BASE_FINDINGS = 500;
-const BASE_DECISIONS = 50;
-const BASE_NOTIFICATIONS = 2_000;
+const TYPES = ["lead.created", "lead.converted", "risk.flag", "deal.won", "deal.lost", "churn.signal", "meeting.booked"];
+const SEVERITIES = ["info", "warning", "critical"];
+const SEVERITY_WEIGHTS = [0.7, 0.22, 0.08];
+const SOURCES = ["crm.sync", "web.tracker", "support.ticket", "billing.webhook", "api.manual"];
+const ENTITY_KINDS = ["account", "rep", "deal"];
 
-const EVENT_TYPES = ["page_view", "signal.ingested", "finding.created", "decision.updated", "automation.run", "login", "export.requested"];
+function weightedPick(items, weights) {
+  const r = Math.random();
+  let acc = 0;
+  for (let i = 0; i < items.length; i++) {
+    acc += weights[i];
+    if (r <= acc) return items[i];
+  }
+  return items[items.length - 1];
+}
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function next() {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+function randomPastDate(daysBack) {
+  const now = Date.now();
+  const offsetMs = Math.random() * daysBack * 24 * 60 * 60 * 1000;
+  return new Date(now - offsetMs);
 }
 
 async function batchInsert(client, table, columns, rows, batchSize = 1000) {
@@ -44,85 +44,97 @@ async function batchInsert(client, table, columns, rows, batchSize = 1000) {
     const placeholders = batch
       .map((row, rowIdx) => {
         const base = rowIdx * columns.length;
-        values.push(...row);
-        return `(${columns.map((_, colIdx) => `$${base + colIdx + 1}`).join(", ")})`;
+        row.forEach((v) => values.push(v));
+        return `(${columns.map((_, colIdx) => `$${base + colIdx + 1}`).join(",")})`;
       })
-      .join(", ");
-    await client.query(`INSERT INTO ${table} (${columns.join(", ")}) VALUES ${placeholders}`, values);
+      .join(",");
+    await client.query(
+      `insert into ${table} (${columns.join(",")}) values ${placeholders} on conflict do nothing`,
+      values,
+    );
+    if ((i / batchSize) % 20 === 0) {
+      process.stdout.write(`\r  ${table}: ${Math.min(i + batchSize, rows.length).toLocaleString()} / ${rows.length.toLocaleString()}`);
+    }
   }
+  console.log(`\r  ${table}: ${rows.length.toLocaleString()} / ${rows.length.toLocaleString()} done`);
 }
 
 async function main() {
-  const rand = mulberry32(1337);
-  const client = await pool.connect();
-  const totalEvents = Math.round(BASE_EVENTS * scale);
-  const totalFindings = Math.round(BASE_FINDINGS * Math.min(scale, 10));
-  const totalDecisions = Math.round(BASE_DECISIONS * Math.min(scale, 10));
-  const totalNotifications = Math.round(BASE_NOTIFICATIONS * Math.min(scale, 10));
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
 
-  try {
-    if (reset) {
-      console.log("[seed] truncating events, findings, decisions, notifications, automation_runs, board_packs ...");
-      await client.query("TRUNCATE TABLE events, findings, decisions, notifications, automation_runs, board_packs RESTART IDENTITY");
-    }
+  const started = Date.now();
+  console.log(`Seeding LEADOS at scale x${SCALE}...`);
 
-    console.log(`[seed] scale=${scale}x -> events=${totalEvents} findings=${totalFindings} decisions=${totalDecisions} notifications=${totalNotifications}`);
-
-    const t0 = Date.now();
-    const now = Date.now();
-    const spanMs = 1000 * 60 * 60 * 24 * 365; // spread across ~1 year
-
-    const eventRows = [];
-    for (let i = 0; i < totalEvents; i++) {
-      const type = EVENT_TYPES[Math.floor(rand() * EVENT_TYPES.length)];
-      const createdAt = new Date(now - rand() * spanMs).toISOString();
-      const payload = JSON.stringify({ seedIndex: i, value: Math.round(rand() * 1000) });
-      eventRows.push([type, 1, payload, createdAt]);
-    }
-    await batchInsert(client, "events", ["type", "version", "payload", "created_at"], eventRows);
-    console.log(`[seed] events inserted in ${Date.now() - t0}ms`);
-
-    const t1 = Date.now();
-    const findingRows = [];
-    for (let i = 0; i < totalFindings; i++) {
-      const impact = 1 + Math.floor(rand() * 9);
-      const confidence = 1 + Math.floor(rand() * 9);
-      const effort = 1 + Math.floor(rand() * 9);
-      const score = ((impact * confidence) / Math.max(1, effort)).toFixed(4);
-      const status = rand() < 0.6 ? "open" : "closed";
-      findingRows.push([`Finding #${i + 1}`, "Auto-generated seed finding.", impact, confidence, effort, score, status]);
-    }
-    await batchInsert(client, "findings", ["title", "summary", "impact", "confidence", "effort", "score", "status"], findingRows);
-    console.log(`[seed] findings inserted in ${Date.now() - t1}ms`);
-
-    const t2 = Date.now();
-    const decisionRows = [];
-    for (let i = 0; i < totalDecisions; i++) {
-      const status = rand() < 0.5 ? "open" : "resolved";
-      decisionRows.push([`Decision #${i + 1}`, "Auto-generated seed decision context.", status]);
-    }
-    await batchInsert(client, "decisions", ["title", "context", "status"], decisionRows);
-    console.log(`[seed] decisions inserted in ${Date.now() - t2}ms`);
-
-    const t3 = Date.now();
-    const notificationRows = [];
-    for (let i = 0; i < totalNotifications; i++) {
-      const severity = ["info", "warning", "critical"][Math.floor(rand() * 3)];
-      const read = rand() < 0.7;
-      const createdAt = new Date(now - rand() * spanMs).toISOString();
-      notificationRows.push([`Notification #${i + 1}`, "Auto-generated seed notification.", severity, read, createdAt]);
-    }
-    await batchInsert(client, "notifications", ["title", "body", "severity", "read", "created_at"], notificationRows);
-    console.log(`[seed] notifications inserted in ${Date.now() - t3}ms`);
-
-    console.log(`[seed] done in ${Date.now() - t0}ms total`);
-  } finally {
-    client.release();
-    await pool.end();
+  // --- entities -------------------------------------------------------
+  const entityCount = BASE_ENTITIES * Math.max(1, Math.sqrt(SCALE));
+  const entityIds = [];
+  const entityRows = [];
+  for (let i = 0; i < entityCount; i++) {
+    const kind = ENTITY_KINDS[i % ENTITY_KINDS.length];
+    const id = `${kind}_${i}`;
+    entityIds.push(id);
+    entityRows.push([id, `${kind} ${i}`, kind, (Math.random() * 10).toFixed(3)]);
   }
+  await client.query("truncate table edges, entities, events, notifications, forecast_cache restart identity cascade");
+  await batchInsert(client, "entities", ["id", "name", "kind", "risk_score"], entityRows);
+
+  // --- edges ------------------------------------------------------------
+  const edgeRows = [];
+  const edgeCount = Math.round(entityIds.length * 4);
+  for (let i = 0; i < edgeCount; i++) {
+    const source = entityIds[Math.floor(Math.random() * entityIds.length)];
+    const target = entityIds[Math.floor(Math.random() * entityIds.length)];
+    if (source === target) continue;
+    edgeRows.push(["relates_to", source, target, (Math.random() * 5).toFixed(3)]);
+  }
+  await batchInsert(client, "edges", ["kind", "source_id", "target_id", "weight"], edgeRows);
+
+  // --- events (the big one) ---------------------------------------------
+  const eventCount = Math.round(BASE_EVENTS * SCALE);
+  const eventRows = [];
+  for (let i = 0; i < eventCount; i++) {
+    const occurredAt = randomPastDate(120);
+    const type = TYPES[Math.floor(Math.random() * TYPES.length)];
+    const severity = weightedPick(SEVERITIES, SEVERITY_WEIGHTS);
+    const source = SOURCES[Math.floor(Math.random() * SOURCES.length)];
+    const entityId = Math.random() < 0.85 ? entityIds[Math.floor(Math.random() * entityIds.length)] : null;
+    const value = (Math.random() * 1000).toFixed(4);
+    eventRows.push([occurredAt.toISOString(), type, severity, source, entityId, value, JSON.stringify({})]);
+  }
+  await batchInsert(
+    client,
+    "events",
+    ["occurred_at", "type", "severity", "source", "entity_id", "value", "metadata"],
+    eventRows,
+    2000,
+  );
+
+  // --- notifications ------------------------------------------------------
+  const notificationCount = Math.round(BASE_NOTIFICATIONS * SCALE);
+  const notificationRows = [];
+  for (let i = 0; i < notificationCount; i++) {
+    const createdAt = randomPastDate(60);
+    const severity = weightedPick(SEVERITIES, SEVERITY_WEIGHTS);
+    notificationRows.push([
+      createdAt.toISOString(),
+      `${severity.toUpperCase()}: automated signal #${i}`,
+      `Detected on ${SOURCES[Math.floor(Math.random() * SOURCES.length)]}`,
+      severity,
+      Math.random() < 0.4,
+    ]);
+  }
+  await batchInsert(client, "notifications", ["created_at", "title", "body", "severity", "read"], notificationRows, 2000);
+
+  await client.query("analyze events, entities, edges, notifications");
+
+  const tookSec = ((Date.now() - started) / 1000).toFixed(1);
+  console.log(`\nDone in ${tookSec}s. entities=${entityIds.length} edges=${edgeRows.length} events=${eventCount} notifications=${notificationCount}`);
+
+  await client.end();
 }
 
 main().catch((err) => {
-  console.error("[seed] failed:", err);
+  console.error(err);
   process.exit(1);
 });

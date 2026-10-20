@@ -1,44 +1,38 @@
-// src/components/Skeletons.tsx
-//
-// Skeletons sized to match the real content exactly (same height, same
-// grid) so nothing shifts when data/charts arrive — i.e. no layout shift
-// (CLS) between skeleton and final render.
+// Skeletons mirror the exact pixel height of their real panel counterpart so
+// swapping skeleton -> real content never shifts layout (zero CLS).
+
 export function KpiTileSkeleton() {
   return (
-    <div className="flex h-[104px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="skeleton h-3 w-20 rounded" />
-      <div className="skeleton h-7 w-16 rounded" />
+    <div className="h-[104px] animate-pulse rounded-2xl border border-slate-200 bg-slate-100 p-4">
+      <div className="h-3 w-20 rounded bg-slate-200" />
+      <div className="mt-4 h-7 w-24 rounded bg-slate-200" />
     </div>
   );
 }
 
-export function ChartPanelSkeleton({ height = 260 }: { height?: number }) {
+export function ChartPanelSkeleton({ height = 280, title }: { height?: number; title: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="skeleton mb-3 h-3 w-32 rounded" />
-      <div className="skeleton rounded-xl" style={{ height }} />
+    <div style={{ height }} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="h-4 w-32 animate-pulse rounded bg-slate-200" />
+      <div className="mt-3 flex-1 animate-pulse rounded-xl bg-slate-100" />
+      <span className="sr-only">Loading {title}</span>
     </div>
   );
 }
 
-export function ListRowSkeleton() {
+export function TableSkeleton({ rows = 8, rowHeight = 36 }: { rows?: number; rowHeight?: number }) {
   return (
-    <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
-      <div className="skeleton h-8 w-8 shrink-0 rounded-full" />
-      <div className="flex-1 space-y-2">
-        <div className="skeleton h-3 w-1/3 rounded" />
-        <div className="skeleton h-2.5 w-1/2 rounded" />
-      </div>
-      <div className="skeleton h-3 w-14 rounded" />
-    </div>
-  );
-}
-
-export function ListSkeleton({ rows = 10 }: { rows?: number }) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <div className="rounded-2xl border border-slate-200 bg-white p-2">
       {Array.from({ length: rows }).map((_, i) => (
-        <ListRowSkeleton key={i} />
+        <div
+          key={i}
+          style={{ height: rowHeight }}
+          className="flex animate-pulse items-center gap-3 border-b border-slate-100 px-3 last:border-0"
+        >
+          <div className="h-3 w-20 rounded bg-slate-200" />
+          <div className="h-3 flex-1 rounded bg-slate-100" />
+          <div className="h-3 w-16 rounded bg-slate-200" />
+        </div>
       ))}
     </div>
   );

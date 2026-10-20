@@ -1,57 +1,83 @@
-// src/lib/stats.ts
-//
-// Distribution summaries built on top of mathUtils.ts. Used by the forecast
-// engine (src/lib/monteCarlo.ts) and the metrics view to turn a raw array of
-// simulated outcomes into the handful of numbers a chart or KPI tile needs.
-// Deliberately framework-free so it is cheap to unit test and safe to run
-// inside a Web Worker.
-import { mean, percentile, stddev } from "./mathUtils";
+import { db } from "@/db";
+import { sql } from "drizzle-orm";
+import { linearRegression, mean, stdDev } from "./mathUtils";
 
-export interface DistributionSummary {
-  n: number;
-  mean: number;
-  stddev: number;
-  min: number;
-  max: number;
-  p10: number;
-  p50: number;
-  p90: number;
+export type DailyBucket = {
+  day: string; // ISO date (yyyy-mm-dd)
+  total: number;
+  critical: number;
+  warning: number;
+  info: number;
+  value: number;
+};
+
+/**
+ * Aggregates events into daily buckets using a single indexed SQL query
+ * (GROUP BY day) instead of pulling raw rows into Node and reducing in JS.
+ * Uses events_occurred_at_id_idx via the range filter on occurred_at.
+ */
+export async function getDailyBuckets(days: number): Promise<DailyBucket[]> {
+  const result = await db.execute<{
+    day: string;
+    total: string;
+    critical: string;
+    warning: string;
+    info: string;
+    value: string;
+  }>(sql`
+    select
+      to_char(date_trunc('day', occurred_at), 'YYYY-MM-DD') as day,
+      count(*)::bigint as total,
+      count(*) filter (where severity = 'critical')::bigint as critical,
+      count(*) filter (where severity = 'warning')::bigint as warning,
+      count(*) filter (where severity = 'info')::bigint as info,
+      coalesce(sum(value), 0) as value
+    from events
+    where occurred_at >= now() - (${days} || ' days')::interval
+    group by 1
+    order by 1 asc
+  `);
+
+  return result.rows.map((row) => ({
+    day: row.day,
+    total: Number(row.total),
+    critical: Number(row.critical),
+    warning: Number(row.warning),
+    info: Number(row.info),
+    value: Number(row.value),
+  }));
 }
 
-export function summarizeDistribution(values: number[]): DistributionSummary {
-  if (values.length === 0) {
-    return { n: 0, mean: 0, stddev: 0, min: 0, max: 0, p10: 0, p50: 0, p90: 0 };
+/** Cheap, deterministic trend projection used for the fast/SSR forecast. */
+export function projectTrend(buckets: DailyBucket[], horizonDays: number) {
+  const xs = buckets.map((_, i) => i);
+  const ys = buckets.map((b) => b.total);
+  const { slope, intercept } = linearRegression(xs, ys);
+  const history = buckets.map((b) => b.total);
+  const residuals = history.map((y, i) => y - (slope * i + intercept));
+  const noise = stdDev(residuals) || Math.max(1, mean(history) * 0.1);
+
+  const projected: { day: number; expected: number; low: number; high: number }[] = [];
+  for (let d = 0; d < horizonDays; d++) {
+    const x = xs.length + d;
+    const expected = Math.max(0, slope * x + intercept);
+    projected.push({
+      day: d + 1,
+      expected,
+      low: Math.max(0, expected - 1.64 * noise),
+      high: expected + 1.64 * noise,
+    });
   }
-  const sorted = [...values].sort((a, b) => a - b);
-  return {
-    n: sorted.length,
-    mean: +mean(sorted).toFixed(4),
-    stddev: +stddev(sorted).toFixed(4),
-    min: sorted[0],
-    max: sorted[sorted.length - 1],
-    p10: +percentile(sorted, 0.1).toFixed(4),
-    p50: +percentile(sorted, 0.5).toFixed(4),
-    p90: +percentile(sorted, 0.9).toFixed(4),
-  };
+
+  return { slope, intercept, noise, projected };
 }
 
-export interface HistogramBucket {
-  bucketStart: number;
-  count: number;
+export async function getEventCount(): Promise<number> {
+  const result = await db.execute<{ count: string }>(sql`select count(*)::bigint as count from events`);
+  return Number(result.rows[0]?.count ?? 0);
 }
 
-/** Equal-width histogram across `bucketCount` buckets spanning [min, max]. */
-export function buildHistogram(values: number[], bucketCount = 12): HistogramBucket[] {
-  if (values.length === 0) return [];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const buckets = new Array(bucketCount).fill(0) as number[];
-  for (const v of values) {
-    let idx = Math.floor(((v - min) / span) * bucketCount);
-    if (idx >= bucketCount) idx = bucketCount - 1;
-    if (idx < 0) idx = 0;
-    buckets[idx] += 1;
-  }
-  return buckets.map((count, i) => ({ bucketStart: +(min + (i * span) / bucketCount).toFixed(2), count }));
+export async function getLatestEventId(): Promise<number> {
+  const result = await db.execute<{ id: string | null }>(sql`select max(id) as id from events`);
+  return Number(result.rows[0]?.id ?? 0);
 }

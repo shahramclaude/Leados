@@ -1,45 +1,11 @@
-// src/lib/mathUtils.ts
-//
-// Pure, dependency-free numeric helpers shared between the server (API
-// routes), the client (chart components) and the Web Worker compute pool
-// (src/workers/computeWorker.ts copies the two functions it needs verbatim
-// — see the header comment in that file for why workers can't just import
-// this module). Keeping this file pure (no I/O, no React, no DOM) means it
-// never pulls anything heavy into whichever bundle imports it.
+// Small, dependency-free numeric helpers shared by stats.ts, forecastCache.ts
+// and the Monte Carlo worker. Kept allocation-light because these run inside
+// hot loops (tens of thousands of simulation trials).
 
-export function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-export function mean(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
-}
-
-export function stddev(values: number[]): number {
-  if (values.length < 2) return 0;
-  const m = mean(values);
-  const variance = values.reduce((sum, v) => sum + (v - m) ** 2, 0) / (values.length - 1);
-  return Math.sqrt(variance);
-}
-
-/** Linear interpolation of the empirical CDF (NumPy default "linear" percentile method). */
-export function percentile(sortedAsc: number[], p: number): number {
-  if (sortedAsc.length === 0) return 0;
-  if (sortedAsc.length === 1) return sortedAsc[0];
-  const clampedP = clamp(p, 0, 1);
-  const rank = clampedP * (sortedAsc.length - 1);
-  const lowIndex = Math.floor(rank);
-  const highIndex = Math.ceil(rank);
-  if (lowIndex === highIndex) return sortedAsc[lowIndex];
-  const weight = rank - lowIndex;
-  return sortedAsc[lowIndex] * (1 - weight) + sortedAsc[highIndex] * weight;
-}
-
-/** Mulberry32 PRNG — small, fast, seedable. Used for reproducible simulations. */
+/** Deterministic, seedable PRNG (mulberry32) so simulations are reproducible. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
-  return function next() {
+  return function rand() {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -48,19 +14,60 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-/** Box-Muller transform: two Uniform(0,1) draws -> one standard-normal N(0,1) variate. */
-export function sampleStandardNormal(rand: () => number): number {
-  let u1 = rand();
-  const u2 = rand();
-  if (u1 < 1e-12) u1 = 1e-12;
-  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+/** Box-Muller transform using a supplied uniform RNG, for normal sampling. */
+export function sampleNormal(rand: () => number, mean: number, stdDev: number): number {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rand();
+  while (v === 0) v = rand();
+  const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  return mean + z * stdDev;
 }
 
-/** djb2 string hash — used to build stable cache keys from JSON-serializable inputs. */
-export function hashString(input: string): string {
-  let hash = 5381;
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash * 33) ^ input.charCodeAt(i);
+export function mean(values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < values.length; i++) sum += values[i];
+  return sum / values.length;
+}
+
+export function stdDev(values: readonly number[]): number {
+  if (values.length < 2) return 0;
+  const m = mean(values);
+  let sumSq = 0;
+  for (let i = 0; i < values.length; i++) sumSq += (values[i] - m) ** 2;
+  return Math.sqrt(sumSq / (values.length - 1));
+}
+
+/** Linear interpolation percentile over a pre-sorted ascending array. */
+export function percentileSorted(sorted: readonly number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+  const rank = (p / 100) * (sorted.length - 1);
+  const lower = Math.floor(rank);
+  const upper = Math.ceil(rank);
+  if (lower === upper) return sorted[lower];
+  const weight = rank - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+/** Ordinary least squares slope/intercept for a simple linear trend line. */
+export function linearRegression(xs: readonly number[], ys: readonly number[]): { slope: number; intercept: number } {
+  const n = xs.length;
+  if (n === 0) return { slope: 0, intercept: 0 };
+  const xMean = mean(xs);
+  const yMean = mean(ys);
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (xs[i] - xMean) * (ys[i] - yMean);
+    den += (xs[i] - xMean) ** 2;
   }
-  return (hash >>> 0).toString(36);
+  const slope = den === 0 ? 0 : num / den;
+  const intercept = yMean - slope * xMean;
+  return { slope, intercept };
+}
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

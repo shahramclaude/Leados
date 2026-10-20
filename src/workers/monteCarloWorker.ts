@@ -1,194 +1,212 @@
-/**
- * src/workers/monteCarloWorker.ts
- *
- * Client-side Web Worker that runs the exact same Monte Carlo runway
- * simulation as `src/lib/financialOS.ts#runMonteCarloRunway`, so the
- * what-if panel can recalculate live without ever blocking the main thread.
- *
- * IMPORTANT: Web Workers bundled by Next.js cannot import server-only
- * modules (and in general it's best for a worker script to be a fully
- * self-contained bundle entry). Everything below — the Mersenne Twister
- * PRNG, the Box-Muller normal sampler, the percentile function, and the
- * simulation loop itself — is therefore a direct line-for-line port of the
- * server implementation rather than a shared import. If you change the
- * simulation algorithm in financialOS.ts, mirror the change here too.
- */
+/// <reference lib="webworker" />
 
 // ---------------------------------------------------------------------------
-// Mersenne Twister (MT19937) PRNG — ported from src/lib/prng.ts
-// Reference: Matsumoto, M. and Nishimura, T., "Mersenne Twister: A
-// 623-dimensionally equidistributed uniform pseudo-random number generator",
-// ACM TOMACS, 8(1), 1998.
-// Math.random() is intentionally NOT used here: it is unseeded and not
-// reproducible, which would make slider-driven what-if comparisons noisy.
+// General-purpose compute worker. Runs off the main thread so heavy
+// simulation / layout work never blocks input (typing, scrolling, clicking)
+// on the dashboard. A single worker file handles multiple task types so the
+// pool (computeWorkerPool.ts) can round-robin arbitrary jobs across however
+// many workers it spins up.
+//
+// IMPORTANT: this file is intentionally self-contained (no imports from
+// app code) so bundlers that statically trace `new Worker(new URL(...))`
+// never see a cycle back to the component that spawns the worker.
 // ---------------------------------------------------------------------------
-const N = 624;
-const M = 397;
-const MATRIX_A = 0x9908b0df;
-const UPPER_MASK = 0x80000000;
-const LOWER_MASK = 0x7fffffff;
 
-class MersenneTwister {
-  private mt: Uint32Array = new Uint32Array(N);
-  private mti = N + 1;
+export type MonteCarloParams = {
+  trials: number;
+  days: number;
+  meanDaily: number;
+  stdDevDaily: number;
+};
 
-  constructor(seed: number) {
-    this.seedMt(seed >>> 0);
-  }
+export type NetworkLayoutParams = {
+  nodeIds: string[];
+  edges: { source: string; target: string; weight: number }[];
+  iterations: number;
+  width: number;
+  height: number;
+};
 
-  private seedMt(seed: number): void {
-    this.mt[0] = seed >>> 0;
-    for (this.mti = 1; this.mti < N; this.mti++) {
-      const s = this.mt[this.mti - 1] ^ (this.mt[this.mti - 1] >>> 30);
-      this.mt[this.mti] =
-        ((((s & 0xffff0000) >>> 16) * 1812433253) << 16) +
-        (s & 0x0000ffff) * 1812433253 +
-        this.mti;
-      this.mt[this.mti] >>>= 0;
-    }
-  }
+export type WorkerTask =
+  | { id: string; type: "monteCarlo"; params: MonteCarloParams }
+  | { id: string; type: "networkLayout"; params: NetworkLayoutParams }
+  | { id: string; type: "cancel"; targetId: string };
 
-  private nextUint32(): number {
-    let y: number;
-    const mag01 = [0x0, MATRIX_A];
+export type WorkerResponse =
+  | { id: string; type: "progress"; progress: number }
+  | { id: string; type: "result"; result: unknown }
+  | { id: string; type: "error"; message: string }
+  | { id: string; type: "cancelled" };
 
-    if (this.mti >= N) {
-      let kk: number;
-      for (kk = 0; kk < N - M; kk++) {
-        y = (this.mt[kk] & UPPER_MASK) | (this.mt[kk + 1] & LOWER_MASK);
-        this.mt[kk] = this.mt[kk + M] ^ (y >>> 1) ^ mag01[y & 0x1];
-      }
-      for (; kk < N - 1; kk++) {
-        y = (this.mt[kk] & UPPER_MASK) | (this.mt[kk + 1] & LOWER_MASK);
-        this.mt[kk] = this.mt[kk + (M - N)] ^ (y >>> 1) ^ mag01[y & 0x1];
-      }
-      y = (this.mt[N - 1] & UPPER_MASK) | (this.mt[0] & LOWER_MASK);
-      this.mt[N - 1] = this.mt[M - 1] ^ (y >>> 1) ^ mag01[y & 0x1];
-      this.mti = 0;
-    }
-
-    y = this.mt[this.mti++];
-    y ^= y >>> 11;
-    y ^= (y << 7) & 0x9d2c5680;
-    y ^= (y << 15) & 0xefc60000;
-    y ^= y >>> 18;
-
-    return y >>> 0;
-  }
-
-  random(): number {
-    return this.nextUint32() * (1.0 / 4294967296.0);
-  }
-}
-
-/** Box-Muller transform: two Uniform(0,1) draws -> one standard-normal N(0,1) variate. */
-function sampleStandardNormal(rng: MersenneTwister): number {
-  let u1 = rng.random();
-  const u2 = rng.random();
-  if (u1 < 1e-12) u1 = 1e-12;
-  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-}
-
-/** Compound (geometric) growth step: value(t) = value(t-1) * (1 + rate). */
-function compoundGrowthStep(previousValue: number, rate: number): number {
-  return previousValue * (1 + rate);
-}
-
-/** Linear interpolation of the empirical CDF (NumPy default `linear` percentile method). */
-function percentile(sortedAsc: number[], p: number): number {
-  if (sortedAsc.length === 0) return 0;
-  if (sortedAsc.length === 1) return sortedAsc[0];
-  const clampedP = Math.min(1, Math.max(0, p));
-  const rank = clampedP * (sortedAsc.length - 1);
-  const lowIndex = Math.floor(rank);
-  const highIndex = Math.ceil(rank);
-  if (lowIndex === highIndex) return sortedAsc[lowIndex];
-  const weight = rank - lowIndex;
-  return sortedAsc[lowIndex] * (1 - weight) + sortedAsc[highIndex] * weight;
-}
-
-const MAX_SIMULATED_MONTHS = 60;
-const HISTOGRAM_BUCKET_SIZE_MONTHS = 3;
-
-export interface RunwayParams {
-  currentBalance: number;
-  monthlyBurnMean: number;
-  monthlyBurnStdDev: number;
-  expectedMonthlyRevenue: number;
-  revenueGrowthRate: number;
-  n: number;
-  seed: number;
-  requestId: number;
-}
-
-export interface RunwayDistribution {
-  p10RunwayMonths: number;
-  p50RunwayMonths: number;
-  p90RunwayMonths: number;
-  probabilityOfRunwayAbove18Months: number;
-  probabilityOfRunwayAbove12Months: number;
-  pathsBelow6Months: number;
-  histogram: { bucketMonths: number; count: number }[];
-  requestId: number;
-}
-
-/** Direct port of financialOS.ts#runMonteCarloRunway — see that file for the full formula writeup. */
-function runMonteCarloRunway(params: RunwayParams): RunwayDistribution {
-  const { currentBalance, monthlyBurnMean, monthlyBurnStdDev, expectedMonthlyRevenue, revenueGrowthRate, n, seed } =
-    params;
-
-  const rng = new MersenneTwister(seed);
-  const runways = new Array<number>(n);
-
-  for (let i = 0; i < n; i++) {
-    let balance = currentBalance;
-    let revenue = expectedMonthlyRevenue;
-    let month = 0;
-
-    while (balance > 0 && month < MAX_SIMULATED_MONTHS) {
-      const z = sampleStandardNormal(rng);
-      const burnThisMonth = Math.max(0, monthlyBurnMean + z * monthlyBurnStdDev);
-      revenue = compoundGrowthStep(revenue, revenueGrowthRate);
-      const netBurn = burnThisMonth - revenue;
-      balance -= netBurn;
-      month += 1;
-    }
-
-    runways[i] = month;
-  }
-
-  runways.sort((a, b) => a - b);
-
-  const p10 = percentile(runways, 0.1);
-  const p50 = percentile(runways, 0.5);
-  const p90 = percentile(runways, 0.9);
-
-  const above18 = runways.filter((m) => m >= 18).length / n;
-  const above12 = runways.filter((m) => m >= 12).length / n;
-  const below6 = runways.filter((m) => m < 6).length / n;
-
-  const histogramMap = new Map<number, number>();
-  for (const m of runways) {
-    const bucket = Math.floor(m / HISTOGRAM_BUCKET_SIZE_MONTHS) * HISTOGRAM_BUCKET_SIZE_MONTHS;
-    histogramMap.set(bucket, (histogramMap.get(bucket) ?? 0) + 1);
-  }
-  const histogram = Array.from(histogramMap.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([bucketMonths, count]) => ({ bucketMonths, count }));
-
-  return {
-    p10RunwayMonths: p10,
-    p50RunwayMonths: p50,
-    p90RunwayMonths: p90,
-    probabilityOfRunwayAbove18Months: above18,
-    probabilityOfRunwayAbove12Months: above12,
-    pathsBelow6Months: below6,
-    histogram,
-    requestId: params.requestId,
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return function rand() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-addEventListener("message", (event: MessageEvent<RunwayParams>) => {
-  const result = runMonteCarloRunway(event.data);
-  postMessage(result);
+function sampleNormal(rand: () => number, mean: number, stdDev: number): number {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rand();
+  while (v === 0) v = rand();
+  const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  return mean + z * stdDev;
+}
+
+function percentileSorted(sorted: Float64Array, p: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+  const rank = (p / 100) * (sorted.length - 1);
+  const lower = Math.floor(rank);
+  const upper = Math.ceil(rank);
+  if (lower === upper) return sorted[lower];
+  const weight = rank - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+const cancelled = new Set<string>();
+
+function runMonteCarlo(id: string, params: MonteCarloParams) {
+  const { trials, days, meanDaily, stdDevDaily } = params;
+  const rand = mulberry32(42 + days);
+  const totals = new Float64Array(trials);
+
+  const PROGRESS_EVERY = Math.max(1, Math.floor(trials / 50));
+
+  for (let t = 0; t < trials; t++) {
+    if (cancelled.has(id)) {
+      cancelled.delete(id);
+      postMessage({ id, type: "cancelled" } satisfies WorkerResponse);
+      return;
+    }
+    let total = 0;
+    for (let d = 0; d < days; d++) {
+      total += Math.max(0, sampleNormal(rand, meanDaily, stdDevDaily));
+    }
+    totals[t] = total;
+
+    if (t % PROGRESS_EVERY === 0) {
+      postMessage({ id, type: "progress", progress: t / trials } satisfies WorkerResponse);
+    }
+  }
+
+  totals.sort();
+  const result = {
+    p10: percentileSorted(totals, 10),
+    p50: percentileSorted(totals, 50),
+    p90: percentileSorted(totals, 90),
+    mean: totals.reduce((a, b) => a + b, 0) / totals.length,
+    trials,
+    days,
+  };
+
+  postMessage({ id, type: "progress", progress: 1 } satisfies WorkerResponse);
+  postMessage({ id, type: "result", result } satisfies WorkerResponse);
+}
+
+function runNetworkLayout(id: string, params: NetworkLayoutParams) {
+  const { nodeIds, edges, iterations, width, height } = params;
+  const rand = mulberry32(7);
+  const n = nodeIds.length;
+  const posX = new Float64Array(n);
+  const posY = new Float64Array(n);
+  const index = new Map(nodeIds.map((nid, i) => [nid, i]));
+
+  for (let i = 0; i < n; i++) {
+    posX[i] = rand() * width;
+    posY[i] = rand() * height;
+  }
+
+  const k = Math.sqrt((width * height) / Math.max(1, n));
+  const PROGRESS_EVERY = Math.max(1, Math.floor(iterations / 20));
+
+  for (let iter = 0; iter < iterations; iter++) {
+    if (cancelled.has(id)) {
+      cancelled.delete(id);
+      postMessage({ id, type: "cancelled" } satisfies WorkerResponse);
+      return;
+    }
+
+    const dispX = new Float64Array(n);
+    const dispY = new Float64Array(n);
+
+    // Repulsive force between all pairs (fine for the limited node counts we
+    // render — see Network.tsx which caps nodes server-side).
+    for (let a = 0; a < n; a++) {
+      for (let b = a + 1; b < n; b++) {
+        let dx = posX[a] - posX[b];
+        let dy = posY[a] - posY[b];
+        let dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+        const force = (k * k) / dist;
+        dx = (dx / dist) * force;
+        dy = (dy / dist) * force;
+        dispX[a] += dx;
+        dispY[a] += dy;
+        dispX[b] -= dx;
+        dispY[b] -= dy;
+      }
+    }
+
+    // Attractive force along edges.
+    for (const edge of edges) {
+      const a = index.get(edge.source);
+      const b = index.get(edge.target);
+      if (a === undefined || b === undefined) continue;
+      let dx = posX[a] - posX[b];
+      let dy = posY[a] - posY[b];
+      const dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
+      const force = (dist * dist) / k * edge.weight;
+      dx = (dx / dist) * force;
+      dy = (dy / dist) * force;
+      dispX[a] -= dx;
+      dispY[a] -= dy;
+      dispX[b] += dx;
+      dispY[b] += dy;
+    }
+
+    const temp = width * 0.1 * (1 - iter / iterations);
+    for (let i = 0; i < n; i++) {
+      const dist = Math.sqrt(dispX[i] ** 2 + dispY[i] ** 2) || 0.01;
+      posX[i] = clamp(posX[i] + (dispX[i] / dist) * Math.min(dist, temp), 0, width);
+      posY[i] = clamp(posY[i] + (dispY[i] / dist) * Math.min(dist, temp), 0, height);
+    }
+
+    if (iter % PROGRESS_EVERY === 0) {
+      postMessage({ id, type: "progress", progress: iter / iterations } satisfies WorkerResponse);
+    }
+  }
+
+  const positions = nodeIds.map((nid, i) => ({ id: nid, x: posX[i], y: posY[i] }));
+  postMessage({ id, type: "progress", progress: 1 } satisfies WorkerResponse);
+  postMessage({ id, type: "result", result: { positions } } satisfies WorkerResponse);
+}
+
+function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
+}
+
+self.addEventListener("message", (event: MessageEvent<WorkerTask>) => {
+  const task = event.data;
+  try {
+    if (task.type === "cancel") {
+      cancelled.add(task.targetId);
+      return;
+    }
+    if (task.type === "monteCarlo") {
+      runMonteCarlo(task.id, task.params);
+    } else if (task.type === "networkLayout") {
+      runNetworkLayout(task.id, task.params);
+    }
+  } catch (err) {
+    postMessage({
+      id: "id" in task ? task.id : "unknown",
+      type: "error",
+      message: err instanceof Error ? err.message : String(err),
+    } satisfies WorkerResponse);
+  }
 });

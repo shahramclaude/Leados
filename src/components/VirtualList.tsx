@@ -1,71 +1,70 @@
 "use client";
-// src/components/VirtualList.tsx
-//
-// Generic windowed list used by every long/unbounded collection in the UI
-// (events, findings, notifications, roster). Only rows that are near the
-// viewport are ever mounted, so a 100,000-row page costs the same render
-// time as a 20-row page — see docs/PERFORMANCE.md "Rendering" for the
-// measured DOM node count / render time before and after.
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useRef, type ReactNode } from "react";
 
-interface VirtualListProps<T> {
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+
+type VirtualListProps<T> = {
   items: T[];
   rowHeight: number;
   height: number;
+  overscan?: number;
   renderRow: (item: T, index: number) => ReactNode;
-  onEndReached?: () => void;
-  endReachedThreshold?: number;
-  getKey: (item: T, index: number) => string | number;
-}
+  className?: string;
+  emptyState?: ReactNode;
+};
 
+/**
+ * Minimal fixed-row-height windowing list. Avoids pulling in a third-party
+ * virtualization dependency for the common "thousands of rows, fixed height
+ * row" case that covers the events table, notification feed, roster and
+ * findings list. Only the rows within the viewport (+ overscan) are mounted,
+ * so DOM node count stays constant regardless of dataset size.
+ */
 export function VirtualList<T>({
   items,
   rowHeight,
   height,
+  overscan = 6,
   renderRow,
-  onEndReached,
-  endReachedThreshold = 6,
-  getKey,
+  className,
+  emptyState,
 }: VirtualListProps<T>) {
-  const parentRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
 
-  const virtualizer = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => rowHeight,
-    overscan: 8,
-  });
+  const totalHeight = items.length * rowHeight;
+  const visibleCount = Math.ceil(height / rowHeight);
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const endIndex = Math.min(items.length, startIndex + visibleCount + overscan * 2);
 
-  const virtualItems = virtualizer.getVirtualItems();
-  const last = virtualItems[virtualItems.length - 1];
-  if (onEndReached && last && last.index >= items.length - 1 - endReachedThreshold) {
-    // Fire-and-forget: the caller is responsible for de-duping concurrent
-    // "load more" calls (see EventsClient.tsx / FindingsClient.tsx).
-    queueMicrotask(onEndReached);
+  const offsetY = startIndex * rowHeight;
+  const visibleItems = items.slice(startIndex, endIndex);
+
+  if (items.length === 0 && emptyState) {
+    return (
+      <div style={{ height }} className={className}>
+        {emptyState}
+      </div>
+    );
   }
 
   return (
-    <div ref={parentRef} style={{ height, overflow: "auto" }} className="rounded-2xl border border-slate-200 bg-white">
-      <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
-        {virtualItems.map((virtualRow) => {
-          const item = items[virtualRow.index];
-          return (
-            <div
-              key={getKey(item, virtualRow.index)}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: virtualRow.size,
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              {renderRow(item, virtualRow.index)}
+    <div
+      ref={containerRef}
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      style={{ height, overflowY: "auto", position: "relative" }}
+      className={className}
+      data-testid="virtual-list"
+      data-total={items.length}
+      data-rendered={visibleItems.length}
+    >
+      <div style={{ height: totalHeight, position: "relative" }}>
+        <div style={{ transform: `translateY(${offsetY}px)` } satisfies CSSProperties}>
+          {visibleItems.map((item, i) => (
+            <div key={startIndex + i} style={{ height: rowHeight }}>
+              {renderRow(item, startIndex + i)}
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );
