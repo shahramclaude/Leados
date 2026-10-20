@@ -1,33 +1,27 @@
 import { NextResponse } from "next/server";
-import { db } from "@/db";
-import { events as eventsTable, hypotheses as hypothesesTable } from "@/db/schema";
-import { updateAllHypotheses } from "@/lib/hypothesis";
+import { listHypotheses, registerHypothesis, scoreForecasters, type HypothesisStatus, type RegisterHypothesisInput } from "@/lib/hypotheses";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const [rows, events] = await Promise.all([
-    db.select().from(hypothesesTable),
-    db.select().from(eventsTable),
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get("status") as HypothesisStatus | null;
+  const [rows, forecasters] = await Promise.all([
+    listHypotheses(status ?? undefined),
+    scoreForecasters(),
   ]);
-  const updates = updateAllHypotheses(rows, events, new Date());
-  const merged = rows.map((row) => ({ ...row, inference: updates.find((u) => u.id === row.id) }));
-  return NextResponse.json({ hypotheses: merged });
+  return NextResponse.json({ hypotheses: rows, forecasters });
 }
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  const { statement, priorProbability } = body as Record<string, unknown>;
-  if (!statement) {
-    return NextResponse.json({ error: "statement is required" }, { status: 400 });
+  const body = (await request.json()) as RegisterHypothesisInput;
+  if (!body.key || !body.title || !body.ownerName) {
+    return NextResponse.json({ error: "key, title and ownerName are required" }, { status: 400 });
   }
-  const [created] = await db
-    .insert(hypothesesTable)
-    .values({
-      statement: String(statement),
-      priorProbability: priorProbability !== undefined ? String(priorProbability) : "0.5",
-      posteriorProbability: priorProbability !== undefined ? String(priorProbability) : "0.5",
-    })
-    .returning();
-  return NextResponse.json({ hypothesis: created }, { status: 201 });
+  try {
+    const row = await registerHypothesis(body);
+    return NextResponse.json(row, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+  }
 }

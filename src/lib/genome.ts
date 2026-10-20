@@ -1,48 +1,87 @@
 // src/lib/genome.ts
 //
-// NEW MODULE standing in for the "Part 1/2" behavioral genome referenced
-// by this brief (no prior file existed — see provenance note in
-// src/lib/types.ts). Deterministically derives a small set of stable
-// behavioral trait proxies from a person's static record (role, skills,
-// tenure) since no survey/assessment data source exists in this schema.
-// All derivations are UNVERIFIED (original heuristic authored this
-// session) — there is no external psychometric model being cited.
+// The organizational "genome": a compact, computed read-model of recurring
+// traits distilled from the knowledge graph + institutional memory +
+// playbook usage. It never stores anything itself — every call recomputes
+// from source tables — so it can never drift from ground truth. Consumed by
+// synthesis.ts (narrative framing) and the knowledge dashboard.
+import { sql } from "drizzle-orm";
+import { db } from "@/db";
+import { relations, retrospectives, playbookRuns, playbooks } from "@/db/schema";
+import { jaccard } from "@/lib/knowledgeGraph";
 
-import type { PersonRecord } from "./types";
-
-export interface PersonGenome {
-  personId: number;
-  adaptability: number; // 0-1
-  collaborationAffinity: number; // 0-1
-  autonomyPreference: number; // 0-1
-  skillBreadth: number; // 0-1, normalized skill count
+export interface RelationTypeMix {
+  type: string;
+  count: number;
+  share: number;
 }
 
-const COLLABORATIVE_ROLE_HINTS = ["manager", "lead", "partner", "coordinator", "success"];
-const AUTONOMOUS_ROLE_HINTS = ["engineer", "architect", "researcher", "analyst", "designer"];
+export interface GenomeTag {
+  tag: string;
+  count: number;
+}
 
-/**
- * Caller: src/lib/lifeStage.ts (computeLifeStage, 1 call site),
- * src/lib/talentEngine.ts (potential score tie-break, 1 call site).
- */
-export function computeGenome(person: PersonRecord): PersonGenome {
-  const roleLower = person.role.toLowerCase();
-  const skillBreadth = Math.max(0, Math.min(1, person.skills.length / 10));
+export interface OrganizationalGenome {
+  relationMix: RelationTypeMix[];
+  dominantValence: { valence: string; count: number }[];
+  topLessonTags: GenomeTag[];
+  decisionVelocityPerMonth: number; // retrospectives recorded per month, trailing 6 months
+  playbookAdoptionRate: number; // completed runs / total runs (0..1)
+  activePlaybookCount: number;
+}
 
-  const collaborationAffinity = COLLABORATIVE_ROLE_HINTS.some((h) => roleLower.includes(h))
-    ? 0.75
-    : 0.5;
-  const autonomyPreference = AUTONOMOUS_ROLE_HINTS.some((h) => roleLower.includes(h)) ? 0.7 : 0.5;
+export async function computeGenome(): Promise<OrganizationalGenome> {
+  const relationRows = await db.select({ type: relations.type }).from(relations);
+  const relationCounts = new Map<string, number>();
+  for (const r of relationRows) relationCounts.set(r.type, (relationCounts.get(r.type) ?? 0) + 1);
+  const totalRelations = relationRows.length || 1;
+  const relationMix = [...relationCounts.entries()]
+    .map(([type, count]) => ({ type, count, share: count / totalRelations }))
+    .sort((a, b) => b.count - a.count);
 
-  // Adaptability proxy: broader skill sets + less role specialization text
-  // imply more adaptability. Clamp to [0,1].
-  const adaptability = Math.max(0, Math.min(1, 0.3 + skillBreadth * 0.5 + (person.skills.length > 6 ? 0.2 : 0)));
+  const retroRows = await db.select().from(retrospectives);
+  const valenceCounts = new Map<string, number>();
+  const tagCounts = new Map<string, number>();
+  for (const r of retroRows) {
+    valenceCounts.set(r.outcomeValence, (valenceCounts.get(r.outcomeValence) ?? 0) + 1);
+    for (const tag of (r.tags as string[]) ?? []) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    }
+  }
+  const dominantValence = [...valenceCounts.entries()]
+    .map(([valence, count]) => ({ valence, count }))
+    .sort((a, b) => b.count - a.count);
+  const topLessonTags = [...tagCounts.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const recentRetros = retroRows.filter((r) => new Date(r.occurredAt) >= sixMonthsAgo);
+  const decisionVelocityPerMonth = recentRetros.length / 6;
+
+  const runRows = await db.select().from(playbookRuns);
+  const completed = runRows.filter((r) => r.status === "completed").length;
+  const playbookAdoptionRate = runRows.length === 0 ? 0 : completed / runRows.length;
+
+  const activeCountRows = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(playbooks)
+    .where(sql`${playbooks.status} = 'active'`);
+  const activePlaybookCount = Number(activeCountRows[0]?.count ?? 0);
 
   return {
-    personId: person.id,
-    adaptability,
-    collaborationAffinity,
-    autonomyPreference,
-    skillBreadth,
+    relationMix,
+    dominantValence,
+    topLessonTags,
+    decisionVelocityPerMonth,
+    playbookAdoptionRate,
+    activePlaybookCount,
   };
+}
+
+/** Jaccard-based check for whether two tag sets represent a recurring organizational pattern. */
+export function isRecurringPattern(tagsA: string[], tagsB: string[], threshold = 0.5): boolean {
+  return jaccard(new Set(tagsA), new Set(tagsB)) >= threshold;
 }

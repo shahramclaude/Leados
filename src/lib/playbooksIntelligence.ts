@@ -1,78 +1,133 @@
-import type { AdaptivePlaybook, Domain, RuleEvaluation } from "@/lib/types";
+// src/lib/playbooksIntelligence.ts
+//
+// Mines institutional memory (retrospectives) for new playbook candidates.
+// This module only ever SUGGESTS — candidates land in `playbook_candidates`
+// with status "suggested" and a human must explicitly accept one (which
+// calls `createPlaybook` in playbooks.ts) before it becomes a real,
+// invocable playbook. Nothing here auto-publishes.
+import { desc, eq } from "drizzle-orm";
+import { db } from "@/db";
+import { playbookCandidates, retrospectives } from "@/db/schema";
+import { jaccard } from "@/lib/knowledgeGraph";
+import { createPlaybook, type PlaybookStep } from "@/lib/playbooks";
 
-// ─────────────────────────────────────────────────────────────────────────
-// playbooksIntelligence — adaptive, domain-aware playbook generation.
-// Each domain has a template; buildAdaptivePlaybook() interpolates the
-// specific firing rule's basis/scoreMath into the template steps so the
-// playbook reads as "written for this finding" rather than generic advice.
-// ─────────────────────────────────────────────────────────────────────────
-
-const DOMAIN_TEMPLATES: Record<Domain, string[]> = {
-  people: [
-    "Schedule a 1:1 with the affected individual(s) within 48 hours.",
-    "Review compensation and growth trajectory against internal benchmarks.",
-    "Loop in the manager and HRBP to co-own a retention plan.",
-    "Re-check flight risk signal in 14 days to confirm resolution.",
-  ],
-  finance: [
-    "Convene finance leadership to review the triggering metric same-week.",
-    "Model 2-3 mitigation levers (spend cuts, pricing, collections) with owners.",
-    "Update the board on exposure and mitigation timeline.",
-    "Re-run the Monte Carlo after mitigation to confirm improvement.",
-  ],
-  strategy: [
-    "Bring the objective owner and leadership together to re-baseline the plan.",
-    "Decide: re-scope, re-resource, or retire the objective.",
-    "Log the decision in the decision ledger with an outcome owner.",
-    "Review OKR health again at the next weekly leadership sync.",
-  ],
-  execution: [
-    "Identify the single-owner accountable for unblocking the workstream.",
-    "Escalate cross-team dependencies that are the root blocker.",
-    "Set a recovery checkpoint date and track milestone burn-down.",
-    "Re-run critical path analysis once the blocker clears.",
-  ],
-  rd: [
-    "Triage the blocking issue with the engineering lead within 24 hours.",
-    "Assess whether scope reduction can protect the release date.",
-    "Pair a senior engineer on the critical path item.",
-    "Track confidence score daily until back above threshold.",
-  ],
-  sales: [
-    "Review the pipeline/funnel stage where the metric is degrading.",
-    "Align sales and marketing on a short-term generation or retention sprint.",
-    "Audit the 5 largest at-risk accounts for churn or slippage signals.",
-    "Re-measure the metric at the next weekly pipeline review.",
-  ],
-  knowledge: [
-    "Audit the rules/hypotheses contributing to this finding for calibration drift.",
-    "Assign an owner to resolve the oldest open hypotheses first.",
-    "Document the root cause once identified in the institutional memory log.",
-    "Review confirmation rate again after the next resolution cycle.",
-  ],
-  manufacturing: [
-    "Convene ops leadership to triage the blocking constraint.",
-    "Assess capacity reallocation to protect the critical path.",
-    "Confirm supplier/vendor dependencies are not the root cause.",
-    "Re-check milestone status at the next daily standup.",
-  ],
-};
-
-export function buildAdaptivePlaybook(rule: RuleEvaluation): AdaptivePlaybook {
-  const template = DOMAIN_TEMPLATES[rule.domain];
-  const steps = [
-    `Finding: "${rule.name}" is ${rule.firing ? "currently firing" : "inactive"} (${rule.scoreMath}).`,
-    ...template,
-    `Basis: ${rule.basis}`,
-  ];
-  return {
-    domain: rule.domain,
-    title: `Adaptive Playbook — ${rule.name}`,
-    steps,
-    basedOn: rule.ruleId,
-  };
+export interface MinedCandidate {
+  clusterTags: string[];
+  retrospectiveIds: number[];
+  suggestedTitle: string;
+  suggestedSteps: PlaybookStep[];
+  rationale: string;
 }
 
-export function allDomainTemplates(): Record<Domain, string[]> {
-  return DOMAIN_TEMPLATES;
+const MIN_CLUSTER_SIZE = 2;
+const SIMILARITY_THRESHOLD = 0.5;
+
+/**
+ * Greedy tag-similarity clustering over retrospectives with a lesson that
+ * implies a repeatable action (`playbookUpdate` populated and outcome not
+ * neutral). Clusters of >= MIN_CLUSTER_SIZE sharing >= SIMILARITY_THRESHOLD
+ * Jaccard tag overlap become playbook candidates.
+ */
+export async function mineCandidatesFromRetrospectives(): Promise<MinedCandidate[]> {
+  const rows = await db
+    .select()
+    .from(retrospectives)
+    .where(eq(retrospectives.outcomeValence, "negative")); // lessons from negative outcomes are the richest playbook source
+  const withPlaybookHint = rows.filter((r) => Boolean(r.playbookUpdate));
+  const positiveRows = await db.select().from(retrospectives).where(eq(retrospectives.outcomeValence, "positive"));
+  const candidates = [...withPlaybookHint, ...positiveRows.filter((r) => Boolean(r.playbookUpdate))];
+
+  const used = new Set<number>();
+  const clusters: MinedCandidate[] = [];
+
+  for (let i = 0; i < candidates.length; i++) {
+    if (used.has(candidates[i].id)) continue;
+    const base = candidates[i];
+    const baseTags = new Set((base.tags as string[]) ?? []);
+    const cluster = [base];
+    used.add(base.id);
+    for (let j = i + 1; j < candidates.length; j++) {
+      if (used.has(candidates[j].id)) continue;
+      const other = candidates[j];
+      const sim = jaccard(baseTags, new Set((other.tags as string[]) ?? []));
+      if (sim >= SIMILARITY_THRESHOLD) {
+        cluster.push(other);
+        used.add(other.id);
+      }
+    }
+    if (cluster.length >= MIN_CLUSTER_SIZE) {
+      const tags = [...new Set(cluster.flatMap((r) => (r.tags as string[]) ?? []))];
+      const steps: PlaybookStep[] = cluster.map((r, idx) => ({
+        order: idx + 1,
+        title: r.playbookUpdate ?? r.lesson,
+        description: `From retrospective "${r.title}" (${r.occurredAt}): ${r.lesson}`,
+      }));
+      clusters.push({
+        clusterTags: tags,
+        retrospectiveIds: cluster.map((r) => r.id),
+        suggestedTitle: `Playbook: ${base.title.replace(/^Retro:\s*/i, "")}`,
+        suggestedSteps: steps,
+        rationale: `${cluster.length} retrospectives tagged [${tags.join(", ")}] independently arrived at the same corrective action — strong signal this should be a standing playbook.`,
+      });
+    }
+  }
+  return clusters;
+}
+
+/** Run mining and persist any newly-found clusters as suggested candidates (idempotent per retrospective-id set). */
+export async function refreshPlaybookCandidates(): Promise<typeof playbookCandidates.$inferSelect[]> {
+  const mined = await mineCandidatesFromRetrospectives();
+  const existing = await db.select().from(playbookCandidates);
+  const existingKeys = new Set(existing.map((c) => c.sourceRetrospectiveId));
+  const created: typeof playbookCandidates.$inferSelect[] = [];
+  for (const candidate of mined) {
+    const primaryRetroId = candidate.retrospectiveIds[0];
+    if (existingKeys.has(primaryRetroId)) continue;
+    const [row] = await db
+      .insert(playbookCandidates)
+      .values({
+        sourceRetrospectiveId: primaryRetroId,
+        suggestedTitle: candidate.suggestedTitle,
+        suggestedSteps: candidate.suggestedSteps,
+        rationale: candidate.rationale,
+        status: "suggested",
+      })
+      .returning();
+    created.push(row);
+  }
+  return created;
+}
+
+export async function listCandidates(status?: "suggested" | "accepted" | "rejected") {
+  return status
+    ? db.select().from(playbookCandidates).where(eq(playbookCandidates.status, status)).orderBy(desc(playbookCandidates.createdAt))
+    : db.select().from(playbookCandidates).orderBy(desc(playbookCandidates.createdAt));
+}
+
+export async function rejectCandidate(id: number) {
+  const [row] = await db
+    .update(playbookCandidates)
+    .set({ status: "rejected", decidedAt: new Date() })
+    .where(eq(playbookCandidates.id, id))
+    .returning();
+  return row;
+}
+
+/** Human explicitly accepts a mined candidate -> becomes a real, invocable playbook (draft status). */
+export async function acceptCandidate(id: number, key: string) {
+  const [candidate] = await db.select().from(playbookCandidates).where(eq(playbookCandidates.id, id)).limit(1);
+  if (!candidate) throw new Error(`Playbook candidate ${id} not found`);
+  const playbook = await createPlaybook({
+    key,
+    title: candidate.suggestedTitle,
+    description: candidate.rationale,
+    steps: candidate.suggestedSteps as PlaybookStep[],
+    originRetrospectiveId: candidate.sourceRetrospectiveId,
+    status: "draft",
+  });
+  await db
+    .update(playbookCandidates)
+    .set({ status: "accepted", decidedAt: new Date() })
+    .where(eq(playbookCandidates.id, id));
+  return playbook;
 }

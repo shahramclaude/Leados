@@ -1,62 +1,102 @@
 // src/lib/narrativeIntel.ts
-// Narrative generation templates for domain health reporting.
 //
-// Exported: DOMAIN_HEALTH_TEMPLATES (const, line 13), buildDomainHealthNarrative
-//           (function, line 46) — called by strategicIntelligence.ts for
-//           BoardIntelligencePack.domainHealthNarrative.
+// Shared narrative-composition utilities: citation formatting, a stable
+// line-diff (so synthesis reports and living-doc versions are diffable week
+// over week / version over version), and the fixed section template that
+// keeps the weekly synthesis structurally identical across weeks.
+export interface Citation {
+  marker: string; // e.g. "[R12]"
+  sourceType: "retrospective" | "hypothesis" | "playbook_run" | "metric" | "entity";
+  sourceId: number | string;
+  label: string;
+}
 
-import type { BeliefFabricResult } from './beliefFabric';
-
-type NarrativeTone = 'strong' | 'steady' | 'strained' | 'critical';
-
-const DOMAIN_HEALTH_TEMPLATES: Record<NarrativeTone, string[]> = {
-  strong: [
-    'Across the fabric of latent signals, the organization is compounding strength rather than managing fragility.',
-    'Every domain we track is reinforcing the others — a rare, genuinely low-risk posture.',
-  ],
-  steady: [
-    'The organization is holding its line: no domain is in free-fall, but {domain} deserves a closer look before it drifts.',
-    'Overall health is steady; the center of gravity is {domain}, where confidence is still being built.',
-  ],
-  strained: [
-    '{domain} is the clearest source of strain right now, and it is already pulling on adjacent domains — this is the moment to intervene, not monitor.',
-    'The fabric shows real stress concentrated in {domain}; left alone, this compounds within a quarter.',
-  ],
-  critical: [
-    '{domain} has crossed from "watch" to "act": the model treats this as a near-term threat to the operating plan, not a trend to track.',
-    'This is a critical read on {domain} — the kind of signal that should change what gets discussed in the next leadership meeting, not just the next board deck.',
-  ],
+const MARKER_PREFIX: Record<Citation["sourceType"], string> = {
+  retrospective: "R",
+  hypothesis: "H",
+  playbook_run: "P",
+  metric: "M",
+  entity: "E",
 };
 
-function toneFromScore(score: number): NarrativeTone {
-  if (score >= 78) return 'strong';
-  if (score >= 55) return 'steady';
-  if (score >= 35) return 'strained';
-  return 'critical';
+export function makeCitation(sourceType: Citation["sourceType"], sourceId: number | string, label: string): Citation {
+  return { marker: `[${MARKER_PREFIX[sourceType]}${sourceId}]`, sourceType, sourceId, label };
+}
+
+export function renderCitationList(citations: Citation[]): string {
+  if (citations.length === 0) return "";
+  return ["", "---", "**Sources**", ...citations.map((c) => `${c.marker} ${c.label}`)].join("\n");
+}
+
+// Fixed section order so two consecutive weekly reports diff cleanly.
+export const WEEKLY_SYNTHESIS_TEMPLATE = [
+  "Highlights",
+  "Decisions & Outcomes",
+  "Hypotheses Resolved",
+  "Playbooks Invoked",
+  "Risks & Watch Items",
+  "Metrics Snapshot",
+] as const;
+export type WeeklySynthesisSection = (typeof WEEKLY_SYNTHESIS_TEMPLATE)[number];
+
+export interface NarrativeSection {
+  heading: WeeklySynthesisSection;
+  body: string;
+}
+
+/** Render sections in the fixed template order into one Markdown document, consistent tone (plain, declarative, past tense). */
+export function renderNarrative(title: string, sections: NarrativeSection[], citations: Citation[]): string {
+  const byHeading = new Map(sections.map((s) => [s.heading, s.body]));
+  const body = WEEKLY_SYNTHESIS_TEMPLATE.map((heading) => {
+    const content = byHeading.get(heading) ?? "_Nothing to report this period._";
+    return `## ${heading}\n\n${content}`;
+  }).join("\n\n");
+  return `# ${title}\n\n${body}${renderCitationList(citations)}`;
+}
+
+export interface DiffLine {
+  type: "same" | "added" | "removed";
+  text: string;
 }
 
 /**
- * buildDomainHealthNarrative
- * Produces a 1-2 sentence narrative describing overall organizational health,
- * anchored to the belief fabric's dominant risk domain.
+ * Line-based diff via longest-common-subsequence, sufficient for diffable
+ * narrative/doc text (no external diff dependency required).
  */
-export function buildDomainHealthNarrative(belief: BeliefFabricResult): string {
-  const tone = toneFromScore(belief.orgHealthScore);
-  const templates = DOMAIN_HEALTH_TEMPLATES[tone];
-  const template = templates[belief.dominantRisk.domain.length % templates.length];
-  return template.replace(/{domain}/g, prettyDomain(belief.dominantRisk.domain));
+export function diffLines(oldText: string, newText: string): DiffLine[] {
+  const a = oldText.split("\n");
+  const b = newText.split("\n");
+  const n = a.length;
+  const m = b.length;
+  const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+  const result: DiffLine[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      result.push({ type: "same", text: a[i] });
+      i++;
+      j++;
+    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      result.push({ type: "removed", text: a[i] });
+      i++;
+    } else {
+      result.push({ type: "added", text: b[j] });
+      j++;
+    }
+  }
+  while (i < n) {
+    result.push({ type: "removed", text: a[i] });
+    i++;
+  }
+  while (j < m) {
+    result.push({ type: "added", text: b[j] });
+    j++;
+  }
+  return result;
 }
-
-function prettyDomain(domain: string): string {
-  const map: Record<string, string> = {
-    revenue: 'the revenue engine',
-    product: 'product momentum',
-    people: 'team health',
-    capital: 'capital position',
-    gtm: 'go-to-market',
-    operations: 'operational resilience',
-  };
-  return map[domain] ?? domain;
-}
-
-export { DOMAIN_HEALTH_TEMPLATES };
