@@ -1,34 +1,32 @@
 "use client";
 
-// Canonical `useNowTick`. Upstream shahramclaude/Leados has two copies of
-// this (src/hooks/useNowTick.ts and src/lib/useNowTick.ts) with slightly
-// different default intervals and only one exporting `formatRelativeTime`.
-// This is the merged, single version — see docs/adr/0006 and MANIFEST
-// "delete" list. A single shared interval avoids every relative-time label
-// re-rendering on its own timer.
+// Cheap client clock used for relative-time display ("3m ago") and for
+// re-evaluating quiet-hours/local-hour-dependent UI without a full data
+// refetch. Deliberately ticks infrequently (30s) — this is a presentation
+// aid, not a realtime data source (that's useRealtimeIntelligence).
+
 import { useEffect, useState } from "react";
 
-const DEFAULT_INTERVAL_MS = 30_000;
-
-export function useNowTick(intervalMs: number = DEFAULT_INTERVAL_MS): number {
-  const [now, setNow] = useState(() => Date.now());
+export function useNowTick(intervalMs = 30_000): Date {
+  const [now, setNow] = useState<Date>(() => new Date());
 
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    const id = setInterval(() => setNow(new Date()), intervalMs);
     return () => clearInterval(id);
   }, [intervalMs]);
 
   return now;
 }
 
-export function formatRelativeTime(iso: string, nowMs: number): string {
-  const diffMs = nowMs - new Date(iso).getTime();
-  const diffSec = Math.max(0, Math.round(diffMs / 1000));
-  if (diffSec < 60) return "just now";
-  const diffMin = Math.round(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHour = Math.round(diffMin / 60);
-  if (diffHour < 24) return `${diffHour}h ago`;
-  const diffDay = Math.round(diffHour / 24);
-  return `${diffDay}d ago`;
+export function timeAgo(iso: string, now: Date): string {
+  const diffMs = now.getTime() - new Date(iso).getTime();
+  const sec = Math.round(diffMs / 1000);
+  if (sec < 5) return "just now";
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.round(hr / 24);
+  return `${day}d ago`;
 }

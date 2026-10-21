@@ -1,97 +1,127 @@
-// Unified SSE event stream — one channel per authenticated user.
-// Protocol documented in full at docs/REALTIME.md.
+// GET /api/events/stream
 //
-// - `id:` on every frame is the durable, monotonic `events.id` → clients set
-//   `Last-Event-ID` (native `EventSource` behaviour) on reconnect and we
-//   replay everything after it from Postgres before attaching live.
-// - `event: heartbeat` comment frames keep intermediaries from idling the
-//   connection out and let the client detect a silent drop.
-// - `?domains=a,b` scopes the subscription to a subset of domains (still the
-//   same per-user channel — filtering happens server-side before writing).
+// One authenticated SSE stream carrying typed frames (finding, approval,
+// work_queue, metric_anomaly, agent_run, notification). See docs/REALTIME.md
+// for the full frame-by-frame protocol. Summary of the guarantees this route
+// provides:
+//
+//   - Per-frame id is the outbox row's monotonically increasing bigserial id.
+//   - `Last-Event-ID` (header, standard SSE reconnect mechanism) OR a
+//     `?lastEventId=` query param (used by environments/tests that cannot
+//     set a custom header, e.g. the native browser EventSource API) causes
+//     a lossless backfill from the durable outbox before live frames start.
+//   - Heartbeats (`: hb` comments) every 15s keep intermediaries from idling
+///    the connection out and let clients detect a silently dead connection.
+//   - Role-based scoping: only rows whose `visibleRoles` intersects the
+//     caller's role are ever written to this connection (Part 09 seam).
+//   - Backoff/jitter is a client concern (see useRealtimeIntelligence.ts);
+//     this route just needs to be cheap to reconnect to.
 
-import { getCurrentUserId } from "@/lib/auth";
-import { getEventsSince, subscribe, type RealtimeEvent } from "@/lib/eventBus";
+import { resolveCurrentUser } from "@/lib/currentUser";
+import { readEventsSince, type StreamFrame } from "@/lib/eventStore";
+import { subscribe } from "@/lib/eventBus";
+import { runDueWork } from "@/lib/scheduler";
 
 export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
 
 const HEARTBEAT_MS = 15_000;
 
-function frame(event: RealtimeEvent): string {
-  return `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+function frameToSSE(frame: StreamFrame): string {
+  const data = JSON.stringify({
+    type: frame.type,
+    domain: frame.domain,
+    entityRef: frame.entityRef,
+    payload: frame.payload,
+    createdAt: frame.createdAt,
+  });
+  return `id: ${frame.id}\nevent: ${frame.type}\ndata: ${data}\n\n`;
 }
 
-export async function GET(request: Request) {
-  const userId = await getCurrentUserId(request);
-  const url = new URL(request.url);
-  const domainFilter = url.searchParams.get("domains")?.split(",").map((d) => d.trim()).filter(Boolean) ?? null;
+export async function GET(req: Request) {
+  const user = await resolveCurrentUser(req);
+  if (!user) {
+    return new Response(JSON.stringify({ error: "unauthenticated" }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
+  }
 
-  const lastEventIdHeader = request.headers.get("last-event-id") ?? url.searchParams.get("lastEventId");
-  const lastEventId = lastEventIdHeader ? Number(lastEventIdHeader) : 0;
+  const url = new URL(req.url);
+  const headerLastEventId = req.headers.get("last-event-id");
+  const queryLastEventId = url.searchParams.get("lastEventId");
+  const lastEventId = Number.parseInt(headerLastEventId ?? queryLastEventId ?? "0", 10) || 0;
 
-  const encoder = new TextEncoder();
+  const roles = [user.role];
+
+  // Best-effort, debounced: lets due digests fire even without an external
+  // scheduler hitting /api/cron/tick in this sandbox (see scheduler.ts).
+  runDueWork().catch(() => {});
+
+  let closed = false;
   let unsubscribe: (() => void) | null = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
-  let closed = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      const safeEnqueue = (chunk: string) => {
+      const enc = new TextEncoder();
+      const send = (chunk: string) => {
         if (closed) return;
         try {
-          controller.enqueue(encoder.encode(chunk));
+          controller.enqueue(enc.encode(chunk));
         } catch {
-          closed = true;
+          // controller already closed by client disconnect race; ignore
         }
       };
 
-      const passesFilter = (event: RealtimeEvent) => !domainFilter || domainFilter.includes(event.domain);
+      send(`retry: 2000\n\n`);
 
-      // Tell the client which connection it has and let it know resume
-      // point semantics up front (retry hint in ms for its backoff).
-      safeEnqueue(`retry: 2000\n`);
-      safeEnqueue(`event: connected\ndata: ${JSON.stringify({ userId, resumedFrom: lastEventId })}\n\n`);
-
-      // 1. Replay anything durable the client missed (resume semantics).
-      const missed = await getEventsSince(userId, lastEventId);
-      for (const event of missed) {
-        if (passesFilter(event)) safeEnqueue(frame(event));
+      // 1) Lossless backfill from the durable outbox.
+      try {
+        const backlog = await readEventsSince(lastEventId, { roles });
+        for (const frame of backlog) send(frameToSSE(frame));
+      } catch {
+        send(`event: stream_error\ndata: ${JSON.stringify({ message: "backfill failed" })}\n\n`);
       }
 
-      // 2. Attach to the live channel for anything new.
-      unsubscribe = subscribe(userId, (event) => {
-        if (passesFilter(event)) safeEnqueue(frame(event));
-      });
+      // 2) Live subscription for anything published after backfill started.
+      // A tiny race window between step 1 and step 2 is closed by re-reading
+      // the outbox once more for anything created in between.
+      let maxSeenId = lastEventId;
+      const seen = new Set<number>();
 
-      // 3. Heartbeats keep the connection alive and let clients detect drops.
-      heartbeat = setInterval(() => {
-        safeEnqueue(`: heartbeat ${Date.now()}\n\n`);
-      }, HEARTBEAT_MS);
+      const emit = (frame: StreamFrame) => {
+        if (frame.id <= maxSeenId || seen.has(frame.id)) return;
+        if (!frame.visibleRoles.includes("*") && !roles.some((r) => frame.visibleRoles.includes(r))) return;
+        seen.add(frame.id);
+        maxSeenId = Math.max(maxSeenId, frame.id);
+        send(frameToSSE(frame));
+      };
 
-      request.signal.addEventListener("abort", () => {
-        closed = true;
-        if (heartbeat) clearInterval(heartbeat);
-        if (unsubscribe) unsubscribe();
-        try {
-          controller.close();
-        } catch {
-          // already closed
-        }
-      });
+      unsubscribe = subscribe(emit);
+
+      try {
+        const gapFill = await readEventsSince(maxSeenId, { roles });
+        for (const frame of gapFill) emit(frame);
+      } catch {
+        // non-fatal; live subscription still works, worst case is a short
+        // delay until the next heartbeat-triggered client reconnect.
+      }
+
+      heartbeat = setInterval(() => send(`: hb ${Date.now()}\n\n`), HEARTBEAT_MS);
     },
     cancel() {
       closed = true;
-      if (heartbeat) clearInterval(heartbeat);
       if (unsubscribe) unsubscribe();
+      if (heartbeat) clearInterval(heartbeat);
     },
   });
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+      "content-type": "text/event-stream",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
     },
   });
 }

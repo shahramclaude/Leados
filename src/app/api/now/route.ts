@@ -1,20 +1,16 @@
-// GET /api/now — refreshable payload for the decision-first cockpit. The
-// server component on `/` renders the first paint; this endpoint lets the
-// client re-pull the delta/decisions after a realtime event arrives without
-// a full page reload. Visiting (GET) also stamps `lastVisitAt` for the *next*
-// delta — identical semantics to the server-rendered page.
+// GET /api/now — JSON form of the Now surface, used by client-side refresh
+// (e.g. after the realtime stream reports new events). The server-rendered
+// `/` page uses the same `loadNowSurface` function directly for first paint.
 
-import { getCurrentUserId } from "@/lib/auth";
-import { getNowSurface, markVisited } from "@/lib/now";
+import { resolveCurrentUser } from "@/lib/currentUser";
+import { loadNowSurface } from "@/lib/nowSurface";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const userId = await getCurrentUserId(request);
-  const surface = await getNowSurface(userId);
-  const url = new URL(request.url);
-  if (url.searchParams.get("stamp") !== "false") {
-    await markVisited(userId);
-  }
-  return Response.json(surface);
+export async function GET(req: Request) {
+  const user = await resolveCurrentUser(req);
+  if (!user) return Response.json({ error: "unauthenticated" }, { status: 401 });
+
+  const data = await loadNowSurface(user.id, user.role);
+  return Response.json(data);
 }

@@ -1,25 +1,27 @@
-import "@/lib/kernel/bootstrap";
-import { createWorkItem, getInbox, listWorkItems } from "@/lib/kernel/workQueue";
+// GET /api/work-queue — role-scoped work queue listing (Part 09 scoping
+// reused: a user only sees items in domains their role may see).
+
+import { db } from "@/db";
+import { workQueueItems } from "@/db/schema";
+import { resolveCurrentUser } from "@/lib/currentUser";
+import { visibleDomainsForRole } from "@/lib/scoping";
+import { asc, inArray, ne } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  if (searchParams.get("view") === "inbox") {
-    return Response.json({ inbox: await getInbox() });
-  }
-  return Response.json({ workItems: await listWorkItems() });
-}
+  const user = await resolveCurrentUser(req);
+  if (!user) return Response.json({ error: "unauthenticated" }, { status: 401 });
 
-export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as {
-    title?: string;
-    kind?: string;
-    assigneeKind?: "human" | "agent";
-    assigneeId?: string;
-    slaMs?: number;
-  };
-  if (!body.title || !body.kind) return Response.json({ error: "title and kind are required" }, { status: 400 });
-  const item = await createWorkItem(body as { title: string; kind: string; assigneeKind?: "human" | "agent"; assigneeId?: string; slaMs?: number });
-  return Response.json({ workItem: item }, { status: 201 });
+  const domains = await visibleDomainsForRole(user.role);
+  const domainList = [...domains];
+  if (domainList.length === 0) return Response.json({ items: [] });
+
+  const rows = await db
+    .select()
+    .from(workQueueItems)
+    .where(domainList.includes("*") ? ne(workQueueItems.status, "__never__") : inArray(workQueueItems.domain, domainList))
+    .orderBy(asc(workQueueItems.priority), asc(workQueueItems.createdAt));
+
+  return Response.json({ items: rows });
 }

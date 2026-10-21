@@ -1,52 +1,42 @@
-// LEADOS Part 01 — in-process synchronous event bus.
+// In-process pub/sub fan-out for live SSE subscribers.
 //
-// Scope and relationship to the outbox (src/db/schema.ts `outbox` table):
-//  - eventBus is IN-PROCESS and SYNCHRONOUS. It exists purely to decouple
-//    "an event was appended" from "projectors that react to it", so the
-//    projection engine (src/lib/projections/engine.ts) does not need to be
-//    imported by src/lib/eventStore.ts directly. It gives no durability, no
-//    cross-process delivery, and no retry — if the process crashes between
-//    commit and a subscriber running, the subscriber's work is simply re-run
-//    by the next `rebuildProjections()`.
-//  - outbox is DURABLE and CROSS-PROCESS. It is a real table, written in the
-//    same DB transaction as the event insert, and is the interface Part 12
-//    (realtime/notifications) will poll/drain. Nothing about its delivery
-//    depends on this process staying alive.
-//  - eventStore.ts uses eventBus for "run the hot projectors right now,
-//    inside today's request" and uses the outbox table for "tell whatever
-//    external system cares later".
-//
-// This is intentionally the *only* publish/subscribe mechanism in the repo;
-// do not add a second ad-hoc event emitter elsewhere.
+// This is deliberately NOT the source of truth (the outbox table is). It
+// exists purely so that already-connected streams get new frames without
+// polling the database on a tight loop. Every frame published here was
+// already durably committed to `event_outbox` by eventStore.appendEvent
+// before this function is called, so a process crash between "durable
+// write" and "in-memory publish" only ever costs a live push — the next
+// reconnect (or even the same connection's periodic backfill-check) will
+// still pick the frame up from the database. No event is ever lost, only
+// potentially delayed.
 
-import type { EventEnvelope } from "./events/types";
+import { EventEmitter } from "node:events";
+import type { StreamFrame } from "@/lib/eventStore";
 
-type Listener = (envelope: EventEnvelope) => void | Promise<void>;
+type Listener = (frame: StreamFrame) => void;
 
-class EventBus {
-  private listeners: Listener[] = [];
+const globalForBus = globalThis as typeof globalThis & {
+  __leadosEventBus?: EventEmitter;
+};
 
-  subscribe(listener: Listener): () => void {
-    this.listeners.push(listener);
-    return () => {
-      this.listeners = this.listeners.filter((l) => l !== listener);
-    };
-  }
+const emitter = globalForBus.__leadosEventBus ?? new EventEmitter();
+emitter.setMaxListeners(0); // many concurrent SSE connections expected
 
-  /** Publish is awaited by the caller (eventStore) so that "synchronous on
-   * write" projections are guaranteed to have run before the API response
-   * is sent, while still being a plain async function call rather than a
-   * second transaction. */
-  async publish(envelope: EventEnvelope): Promise<void> {
-    for (const listener of this.listeners) {
-      await listener(envelope);
-    }
-  }
-
-  /** Test-only: remove all listeners (used between vitest cases). */
-  reset(): void {
-    this.listeners = [];
-  }
+if (process.env.NODE_ENV !== "production") {
+  globalForBus.__leadosEventBus = emitter;
 }
 
-export const eventBus = new EventBus();
+const CHANNEL = "frame";
+
+export function publish(frame: StreamFrame): void {
+  emitter.emit(CHANNEL, frame);
+}
+
+export function subscribe(listener: Listener): () => void {
+  emitter.on(CHANNEL, listener);
+  return () => emitter.off(CHANNEL, listener);
+}
+
+export function listenerCount(): number {
+  return emitter.listenerCount(CHANNEL);
+}

@@ -1,46 +1,45 @@
-// src/lib/fatigue.ts
-//
-// NEW MODULE standing in for the "Part 2" fatigue/burnout model referenced
-// by this brief (no prior file existed — see provenance note in
-// src/lib/types.ts). Combines a workload-frequency proxy from logged
-// events with 1:1 conversation burnout flags via noisy-OR fusion.
+// Fatigue heuristic: how "spent" is this user's attention budget right now,
+// as a 0..1 score. Backed only by the interrupt_log ledger (observable,
+// auditable), not by any physiological or inferred-emotion signal — so the
+// claim here is strictly "spend rate relative to declared budget", not a
+// clinical fatigue measurement.
 
-import type { ConversationSignals } from "./conversationIntelligence";
-import type { LeadosEvent, PersonRecord } from "./types";
-import { noisyOr } from "./beliefFabric";
+export interface FatigueInput {
+  interruptsToday: number;
+  dailyBudget: number;
+  minutesSinceLastInterrupt: number | null;
+}
 
-/**
- * Burnout risk, 0-1. CITATION: src/lib/beliefFabric.ts, noisyOr() (fusion
- * formula cited there) combines three independent probability proxies:
- *  1. event-load proxy (more "goal"/"collab" events than a baseline rate)
- *  2. conversation burnout topic flags (severity-weighted)
- *  3. low self-reported psychological safety on recent pulse events
- * Caller: src/lib/talentEngine.ts (buildPersonProfile, 1 call site).
- */
-export function computeBurnoutRisk(
-  person: PersonRecord,
-  recentEvents: LeadosEvent[],
-  conversationSignals: ConversationSignals[]
-): number {
-  const personEvents = recentEvents.filter((e) => e.personId === person.id);
+export interface FatigueResult {
+  score: number; // 0 = fresh, 1 = fully spent
+  label: "fresh" | "moderate" | "high" | "exhausted";
+  explain: string;
+}
 
-  const workloadEvents = personEvents.filter((e) => e.type === "goal" || e.type === "collab").length;
-  const workloadProxy = Math.max(0, Math.min(1, workloadEvents / 12)); // UNVERIFIED heuristic scale
+export function computeFatigue(input: FatigueInput): FatigueResult {
+  const budget = Math.max(1, input.dailyBudget);
+  const spendRatio = Math.min(1, input.interruptsToday / budget);
 
-  const burnoutFlagSeverities = conversationSignals
-    .flatMap((s) => s.topicFlags)
-    .filter((f) => f.type === "burnout")
-    .map((f) => f.severity / 3);
-  const conversationProxy = burnoutFlagSeverities.length > 0 ? Math.max(...burnoutFlagSeverities) : 0;
+  // Rapid-fire interrupts (little recovery time) push fatigue up even below
+  // budget; a cool-down drags it back down.
+  const recencyPenalty =
+    input.minutesSinceLastInterrupt === null
+      ? 0
+      : Math.max(0, 0.2 - input.minutesSinceLastInterrupt / 150);
 
-  const pulseEvents = personEvents.filter(
-    (e) => e.type === "pulse" && typeof e.psychologicalSafetyIndex === "number"
-  );
-  const avgPsychSafety =
-    pulseEvents.length > 0
-      ? pulseEvents.reduce((sum, e) => sum + (e.psychologicalSafetyIndex ?? 0.5), 0) / pulseEvents.length
-      : 0.5;
-  const lowSafetyProxy = Math.max(0, Math.min(1, 1 - avgPsychSafety));
+  const score = Math.max(0, Math.min(1, spendRatio * 0.85 + recencyPenalty));
 
-  return Math.max(0, Math.min(1, noisyOr([workloadProxy, conversationProxy, lowSafetyProxy])));
+  let label: FatigueResult["label"] = "fresh";
+  if (score >= 0.95) label = "exhausted";
+  else if (score >= 0.66) label = "high";
+  else if (score >= 0.33) label = "moderate";
+
+  return {
+    score: Number(score.toFixed(2)),
+    label,
+    explain: `${input.interruptsToday}/${budget} interrupts spent today` +
+      (input.minutesSinceLastInterrupt !== null
+        ? `, last one ${Math.round(input.minutesSinceLastInterrupt)}m ago`
+        : ", none yet today"),
+  };
 }

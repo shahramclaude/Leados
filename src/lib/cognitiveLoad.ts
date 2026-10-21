@@ -1,50 +1,40 @@
-// The Cognitive Load Architecture — a small, concrete slice of the pasted
-// brief's "UI that manages its own cognitive impact": a load score derived
-// from how much is currently being asked of the user, mapped to a UI
-// density the Shell actually obeys (collapsing secondary detail at HIGH).
-//
-// Original implementation for this sandbox. Simplified relative to the
-// pasted brief (no continuous background timer / fatigue model — this is a
-// static build with no server, so load is recomputed on each render instead
-// of "continuously"), and that simplification is disclosed here rather than
-// implied away.
+// Cognitive-load awareness: never inject a non-critical interrupt into an
+// active deep-work block IF a signal for one exists. This sandbox has no
+// keystroke/calendar/IDE telemetry integration, so the only signal available
+// is an explicit client-reported "focus mode" flag plus meeting state from
+// circadian.ts. This is intentionally a thin, honest seam — see
+// docs/REALTIME.md "What we did not build" for the list of signals a real
+// deployment would add (calendar busy blocks, IDE/editor activity, do-not-
+// disturb OS state).
 
-import type { CognitiveLoadLevel } from './types';
+import { isInMeeting, type CalendarSignal } from "@/lib/circadian";
 
-export interface CognitiveLoadInput {
-  openFindings: number;
-  openHypotheses: number;
-  emergentAnomalies: number;
-  pendingProposals: number;
+export interface CognitiveLoadSignals {
+  focusModeUntil?: Date | null; // user explicitly started a focus block
+  calendar?: CalendarSignal | null;
 }
 
 export interface CognitiveLoadResult {
-  score: number; // 0-100
-  level: CognitiveLoadLevel;
-  label: string;
+  inDeepWork: boolean;
+  reason: string;
 }
 
-export function computeCognitiveLoad(input: CognitiveLoadInput): CognitiveLoadResult {
-  // Weighted sum, capped. Weights reflect rough "attention cost" per item type:
-  // a pending proposal demands a decision (heaviest), an anomaly demands
-  // interpretation, a finding/hypothesis is lighter (already triaged).
-  const raw =
-    input.openFindings * 3 +
-    input.openHypotheses * 4 +
-    input.emergentAnomalies * 6 +
-    input.pendingProposals * 10;
+// Degrades gracefully: with no signals at all, always reports "not in deep
+// work" rather than guessing, so the feature never silently blocks delivery
+// when it has no evidence to act on.
+export function assessCognitiveLoad(
+  signals: CognitiveLoadSignals | null | undefined,
+  now: Date = new Date(),
+): CognitiveLoadResult {
+  if (!signals) return { inDeepWork: false, reason: "no cognitive-load signal available" };
 
-  const score = Math.max(0, Math.min(100, raw));
-  const level: CognitiveLoadLevel = score < 30 ? 'LOW' : score < 65 ? 'MEDIUM' : 'HIGH';
+  if (signals.focusModeUntil && now.getTime() < signals.focusModeUntil.getTime()) {
+    return { inDeepWork: true, reason: "user-declared focus block active" };
+  }
 
-  return {
-    score,
-    level,
-    label:
-      level === 'HIGH'
-        ? 'High cognitive load: the interface is collapsing secondary detail so the highest-priority items stay reachable.'
-        : level === 'MEDIUM'
-        ? 'Moderate cognitive load: full detail is still shown, but new auto-generated items will be summarized first.'
-        : 'Low cognitive load: full detail shown everywhere.',
-  };
+  if (isInMeeting(signals.calendar, now)) {
+    return { inDeepWork: true, reason: "calendar shows an active meeting" };
+  }
+
+  return { inDeepWork: false, reason: "no active focus block or meeting signal" };
 }

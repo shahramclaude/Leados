@@ -1,48 +1,118 @@
-// LEADOS Part 01 — the event store. THIS IS THE SINGLE WRITE PATH.
+// Part 01 seam, reused: durable outbox-backed event store.
 //
-// Every fact that enters the system — from UI actions, automations, imports,
-// or migrations — must go through `appendEvent()` here. Nothing else may
-// `db.insert(events)`. This function:
-//   1. Validates the payload against the CURRENT schema for the type
-//      (src/lib/events/eventSchema.ts) — bad payloads never reach storage.
-//   2. Mints a monotonic ULID eventId and stamps recordedAt = now().
-//   3. Inserts the event row, and — if the catalog marks the type
-//      `notify: true` — an outbox row, in the SAME transaction.
-//   4. Synchronously folds the event into every interested hot projector
-//      (src/lib/projections/engine.ts), in the SAME transaction, so a
-//      dashboard read immediately after a successful write always reflects
-//      it (read-your-writes), without a second round trip.
-//   5. After the transaction commits, publishes the envelope on the
-//      in-process eventBus for any best-effort, non-transactional listeners
-//      (e.g. a future dev-mode activity console). This step is NOT relied on
-//      for correctness — rebuildProjections() is the source of truth if it's
-//      ever missed (process crash between commit and publish, etc).
+// Every realtime fact is written here FIRST (durable, monotonically
+// increasing `id`), then fanned out to live subscribers via eventBus. This
+// ordering is what makes Last-Event-ID resume lossless: a reconnecting
+// client replays everything with id > lastSeenId directly from this table,
+// so it is impossible to miss an event that was written before the
+// subscription existed, and impossible to see one twice (strictly > compare).
+
 import { db } from "@/db";
-import { insertEvent, type AppendResult } from "@/lib/platform/eventRepository";
-import { applyEnvelopeSync } from "@/lib/projections/engine";
-import { ensureProjectorsRegistered } from "@/lib/projections/registerAll";
-import { eventBus } from "@/lib/eventBus";
-import type { NewEventInput } from "@/lib/events/types";
-import type { EventTypeId } from "@/lib/events/eventCatalog";
+import { eventOutbox } from "@/db/schema";
+import { and, asc, gt, sql } from "drizzle-orm";
+import { publish } from "@/lib/eventBus";
 
-export type AppendEventInput = NewEventInput & { type: EventTypeId };
+export type StreamEventType =
+  | "finding"
+  | "approval"
+  | "work_queue"
+  | "metric_anomaly"
+  | "agent_run"
+  | "notification"
+  | "presence"
+  | "comment";
 
-export async function appendEvent(input: AppendEventInput): Promise<AppendResult> {
-  ensureProjectorsRegistered();
-
-  const result = await db.transaction(async (tx) => {
-    const appendResult = await insertEvent(tx, input);
-    if (!appendResult.deduped) {
-      await applyEnvelopeSync(tx, appendResult.envelope);
-    }
-    return appendResult;
-  });
-
-  // Best-effort, outside the transaction, never blocks/affects correctness.
-  await eventBus.publish(result.envelope);
-
-  return result;
+export interface StreamFrame {
+  id: number;
+  type: StreamEventType;
+  domain: string;
+  entityRef: string | null;
+  payload: unknown;
+  visibleRoles: string[];
+  createdAt: string;
 }
 
-export { getEventStream, replayEvents, exportAllRawRows, countEvents } from "@/lib/platform/eventRepository";
-export { rebuildProjections, currentProjectionHash } from "@/lib/projections/engine";
+export async function appendEvent(input: {
+  type: StreamEventType;
+  domain: string;
+  entityRef?: string | null;
+  payload: unknown;
+  visibleRoles: string[];
+}): Promise<StreamFrame> {
+  const [row] = await db
+    .insert(eventOutbox)
+    .values({
+      type: input.type,
+      domain: input.domain,
+      entityRef: input.entityRef ?? null,
+      payload: input.payload as object,
+      visibleRoles: input.visibleRoles,
+    })
+    .returning();
+
+  const frame: StreamFrame = {
+    id: row.id,
+    type: row.type as StreamEventType,
+    domain: row.domain,
+    entityRef: row.entityRef,
+    payload: row.payload,
+    visibleRoles: row.visibleRoles,
+    createdAt: row.createdAt.toISOString(),
+  };
+
+  // Fan out to any live in-process subscribers (realtime path). The outbox
+  // row above is the durable source of truth used for resume/backfill.
+  publish(frame);
+  return frame;
+}
+
+export async function readEventsSince(
+  lastEventId: number,
+  opts: { roles: string[]; limit?: number },
+): Promise<StreamFrame[]> {
+  const limit = opts.limit ?? 500;
+  const rows = await db
+    .select()
+    .from(eventOutbox)
+    .where(gt(eventOutbox.id, lastEventId))
+    .orderBy(asc(eventOutbox.id))
+    .limit(limit);
+
+  return rows
+    .filter((r) => roleSetCanSee(opts.roles, r.visibleRoles))
+    .map((r) => ({
+      id: r.id,
+      type: r.type as StreamEventType,
+      domain: r.domain,
+      entityRef: r.entityRef,
+      payload: r.payload,
+      visibleRoles: r.visibleRoles,
+      createdAt: r.createdAt.toISOString(),
+    }));
+}
+
+export function roleSetCanSee(roles: string[], visibleRoles: string[]): boolean {
+  if (visibleRoles.includes("*")) return true;
+  return roles.some((r) => visibleRoles.includes(r));
+}
+
+export async function latestEventId(): Promise<number> {
+  const [row] = await db
+    .select({ maxId: sql<number>`coalesce(max(${eventOutbox.id}), 0)` })
+    .from(eventOutbox);
+  return row?.maxId ?? 0;
+}
+
+// Used by the "what changed since last visit" delta on the Now surface.
+export async function countEventsSince(lastEventId: number, roles: string[], domain?: string) {
+  const rows = await db
+    .select()
+    .from(eventOutbox)
+    .where(
+      domain
+        ? and(gt(eventOutbox.id, lastEventId), sql`${eventOutbox.domain} = ${domain}`)
+        : gt(eventOutbox.id, lastEventId),
+    )
+    .orderBy(asc(eventOutbox.id));
+  return rows.filter((r) => roleSetCanSee(roles, r.visibleRoles));
+}

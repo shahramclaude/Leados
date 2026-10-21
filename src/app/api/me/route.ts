@@ -1,25 +1,15 @@
-import { requireSession } from "@/lib/platform/session";
-import { errorToResponse } from "@/lib/platform/authz";
-import { getOrganizationById } from "@/lib/platform/db/orgsRepository";
-import { getUserById } from "@/lib/platform/db/usersRepository";
-import { permissionsFor } from "@/lib/domain/rbac";
+// GET /api/me — resolves current dev-auth identity, and lists all seeded
+// users so the demo UI can offer a "view as" switcher (there is no real
+// login flow in this part; see src/lib/currentUser.ts).
+
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { resolveCurrentUser } from "@/lib/currentUser";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  try {
-    const session = await requireSession();
-    const [org, user] = await Promise.all([
-      getOrganizationById(session.orgId),
-      getUserById(session.userId),
-    ]);
-    return Response.json({
-      session,
-      org,
-      user,
-      permissions: permissionsFor(session.role),
-    });
-  } catch (err) {
-    return errorToResponse(err);
-  }
+export async function GET(req: Request) {
+  const user = await resolveCurrentUser(req);
+  const all = await db.select().from(users);
+  return Response.json({ user, users: all });
 }
