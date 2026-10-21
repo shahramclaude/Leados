@@ -1,22 +1,33 @@
 "use client";
 
-import { SUPPORTED_LOCALES } from "@/i18n/locales";
-import { useLocaleContext } from "@/components/providers/LocaleProvider";
+import { useLocale, useTranslations } from "next-intl";
+import { SUPPORTED_LOCALES, LOCALE_META, type AppLocale } from "@/i18n/locales";
 
-export function LocaleSwitcher() {
-  const { locale, setLocale, t } = useLocaleContext();
+export default function LocaleSwitcher() {
+  const locale = useLocale();
+  const t = useTranslations("common");
+
+  async function changeLocale(next: AppLocale) {
+    await fetch("/api/settings/locale", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locale: next }),
+    });
+    window.location.reload();
+  }
+
   return (
-    <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-      <span className="sr-only">{t("locale.switcher.label")}</span>
+    <label className="flex items-center gap-2 text-sm">
+      <span className="sr-only">{t("search")}</span>
       <select
+        aria-label="Language / Sprog"
         value={locale}
-        onChange={(e) => void setLocale(e.target.value)}
-        className="min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900"
-        aria-label={t("locale.switcher.label")}
+        onChange={(e) => changeLocale(e.target.value as AppLocale)}
+        className="touch-target rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
       >
         {SUPPORTED_LOCALES.map((l) => (
-          <option key={l.code} value={l.code}>
-            {l.nativeLabel}
+          <option key={l} value={l}>
+            {LOCALE_META[l].label}
           </option>
         ))}
       </select>

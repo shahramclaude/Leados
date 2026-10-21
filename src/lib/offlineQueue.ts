@@ -1,118 +1,119 @@
 "use client";
 
-// src/lib/offlineQueue.ts — queued writes with conflict resolution for the
-// PWA offline story.
-//
-// Implementation choice: a localStorage-backed queue (not IndexedDB) that
-// flushes on the browser `online` event and on next page load. This is a
-// deliberate simplification over the Background Sync API: Background Sync
-// has no Safari/iOS support at all (disclosed limitation, same pattern as
-// `src/lib/a11y.ts`'s screen-reader self-report), so a queue that only
-// flushes while the service worker is alive would silently fail to sync on
-// a large share of mobile devices. A `window`-event-driven flush works
-// everywhere a browser runs JavaScript, at the cost of not syncing while the
-// tab is fully closed — acceptable for this slice, and documented in
-// AI-SESSION-LOG.md and VERIFICATION LOG rather than silently claimed as
-// full Background Sync support.
+import { get, set } from "idb-keyval";
 
-export interface QueuedMutation {
-  id: string; // becomes clientMutationId
-  method: "POST" | "PATCH";
-  url: string;
-  body: Record<string, unknown>;
-  createdAt: string;
+/**
+ * Client-side offline write queue (Section D). Writes made while offline
+ * (or that fail with a network error) are appended here instead of lost,
+ * and flushed through `/api/sync` on reconnect. See `src/app/api/sync/route.ts`
+ * for the server-side conflict semantics this protocol implements.
+ */
+export type QueuedMutation = {
+  clientId: string;
+  entityType: "subject" | "briefing";
+  entityId: string;
+  patch: Record<string, unknown>;
+  baseVersion: number;
+  resolution?: "keepMine" | "keepTheirs";
+  label: string; // human-readable summary for the "queued changes" UI
+  queuedAt: string;
+};
+
+export type ConflictMutation = QueuedMutation & { server: Record<string, unknown> };
+
+const QUEUE_KEY = "leados.offline.queue.v1";
+const CONFLICT_KEY = "leados.offline.conflicts.v1";
+
+export async function getQueue(): Promise<QueuedMutation[]> {
+  return (await get(QUEUE_KEY)) ?? [];
 }
 
-export interface ConflictRecord {
-  mutation: QueuedMutation;
-  serverRecord: unknown;
+export async function enqueueMutation(mutation: QueuedMutation): Promise<void> {
+  const queue = await getQueue();
+  queue.push(mutation);
+  await set(QUEUE_KEY, queue);
 }
 
-const QUEUE_KEY = "leados_offline_queue";
-const CONFLICT_KEY = "leados_offline_conflicts";
-
-function readList<T>(key: string): T[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T[]) : [];
-  } catch {
-    return [];
-  }
+export async function clearQueueEntries(clientIds: string[]): Promise<void> {
+  const queue = await getQueue();
+  await set(QUEUE_KEY, queue.filter((m) => !clientIds.includes(m.clientId)));
 }
 
-function writeList<T>(key: string, list: T[]): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(list));
-  window.dispatchEvent(new CustomEvent("leados:offline-queue-changed"));
+export async function getConflicts(): Promise<ConflictMutation[]> {
+  return (await get(CONFLICT_KEY)) ?? [];
 }
 
-export function enqueueMutation(mutation: Omit<QueuedMutation, "createdAt">): void {
-  const list = readList<QueuedMutation>(QUEUE_KEY);
-  list.push({ ...mutation, createdAt: new Date().toISOString() });
-  writeList(QUEUE_KEY, list);
+export async function addConflict(conflict: ConflictMutation): Promise<void> {
+  const conflicts = await getConflicts();
+  await set(CONFLICT_KEY, [...conflicts.filter((c) => c.clientId !== conflict.clientId), conflict]);
 }
 
-export function getQueue(): QueuedMutation[] {
-  return readList<QueuedMutation>(QUEUE_KEY);
+export async function resolveConflict(clientId: string): Promise<void> {
+  const conflicts = await getConflicts();
+  await set(CONFLICT_KEY, conflicts.filter((c) => c.clientId !== clientId));
 }
 
-export function getConflicts(): ConflictRecord[] {
-  return readList<ConflictRecord>(CONFLICT_KEY);
-}
+export type SyncSummary = { applied: number; discarded: number; conflicts: number; forbidden: number; notFound: number };
 
-export function resolveConflict(mutationId: string, keep: "mine" | "server"): void {
-  const conflicts = getConflicts().filter((c) => c.mutation.id !== mutationId);
-  writeList(CONFLICT_KEY, conflicts);
-  if (keep === "mine") {
-    // Re-queue with a fresh mutation id so the retried write is treated as new.
-    const original = getConflicts().find((c) => c.mutation.id === mutationId);
-    if (original) enqueueMutation({ ...original.mutation, id: crypto.randomUUID() });
-  }
-}
+/**
+ * Flushes the queue against `/api/sync`. Conflicts are moved to the
+ * conflict bucket (not retried automatically) so a human resolves them —
+ * this is the "user-facing conflict resolution on reconnect" the mandate
+ * requires instead of last-writer-wins.
+ */
+export async function flushQueue(): Promise<SyncSummary> {
+  const queue = await getQueue();
+  const summary: SyncSummary = { applied: 0, discarded: 0, conflicts: 0, forbidden: 0, notFound: 0 };
+  if (queue.length === 0) return summary;
 
-export async function flushQueue(): Promise<{ flushed: number; conflicts: number }> {
-  if (typeof window === "undefined" || !navigator.onLine) return { flushed: 0, conflicts: 0 };
+  const response = await fetch("/api/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mutations: queue }),
+  });
+  if (!response.ok) return summary;
+  const { results } = (await response.json()) as {
+    results: { clientId: string; status: string; server?: Record<string, unknown> }[];
+  };
 
-  const queue = getQueue();
-  if (queue.length === 0) return { flushed: 0, conflicts: 0 };
-
-  const remaining: QueuedMutation[] = [];
-  const newConflicts: ConflictRecord[] = [];
-  let flushed = 0;
-
-  for (const mutation of queue) {
-    try {
-      const res = await fetch(mutation.url, {
-        method: mutation.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mutation.body),
-      });
-      if (res.status === 409) {
-        const serverRecord = await res.json();
-        newConflicts.push({ mutation, serverRecord });
-      } else if (!res.ok) {
-        remaining.push(mutation); // transient failure — retry next flush
-      } else {
-        flushed += 1;
-      }
-    } catch {
-      remaining.push(mutation); // offline again mid-flush
+  const toClear: string[] = [];
+  for (const result of results) {
+    const original = queue.find((m) => m.clientId === result.clientId);
+    if (!original) continue;
+    if (result.status === "applied") {
+      summary.applied += 1;
+      toClear.push(result.clientId);
+    } else if (result.status === "discarded") {
+      summary.discarded += 1;
+      toClear.push(result.clientId);
+    } else if (result.status === "conflict") {
+      summary.conflicts += 1;
+      await addConflict({ ...original, server: result.server ?? {} });
+      toClear.push(result.clientId);
+    } else if (result.status === "forbidden") {
+      summary.forbidden += 1;
+      toClear.push(result.clientId);
+    } else if (result.status === "not_found") {
+      summary.notFound += 1;
+      toClear.push(result.clientId);
     }
   }
-
-  writeList(QUEUE_KEY, remaining);
-  if (newConflicts.length > 0) {
-    writeList(CONFLICT_KEY, [...getConflicts(), ...newConflicts]);
-  }
-
-  return { flushed, conflicts: newConflicts.length };
+  await clearQueueEntries(toClear);
+  return summary;
 }
 
-export function initOfflineQueueAutoFlush(): () => void {
-  if (typeof window === "undefined") return () => {};
-  const handler = () => void flushQueue();
-  window.addEventListener("online", handler);
-  void flushQueue();
-  return () => window.removeEventListener("online", handler);
+/** Re-submits a resolved conflict with the user's chosen resolution. */
+export async function submitConflictResolution(conflict: ConflictMutation, resolution: "keepMine" | "keepTheirs") {
+  const response = await fetch("/api/sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mutations: [{ ...conflict, resolution }],
+    }),
+  });
+  const { results } = await response.json();
+  if (results?.[0]?.status === "applied" || results?.[0]?.status === "discarded") {
+    await resolveConflict(conflict.clientId);
+  }
+  return results?.[0];
 }

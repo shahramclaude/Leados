@@ -1,68 +1,69 @@
-import { createHash } from "node:crypto";
+import { LOCALE_META, type AppLocale } from "@/i18n/locales";
 
-export function money(n: number): string {
-  const sign = n < 0 ? "-" : "";
-  return `${sign}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/**
+ * Centralized locale-aware formatting. Everything here uses the platform
+ * `Intl` APIs (never hand-rolled date math) so da-DK gets correct Danish
+ * conventions (DD.MM.YYYY-style ordering, "kr." currency, 24-hour clock)
+ * for free, and so RTL-ready layout mechanics stay separate from number
+ * shaping.
+ */
+export function formatDate(date: Date | string, locale: AppLocale, opts?: Intl.DateTimeFormatOptions): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeZone: LOCALE_META[locale].timeZone,
+    ...opts,
+  }).format(d);
 }
 
-export function pct(n: number, digits = 1): string {
-  return `${(n * 100).toFixed(digits)}%`;
+export function formatDateTime(date: Date | string, locale: AppLocale): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: LOCALE_META[locale].timeZone,
+  }).format(d);
 }
 
-export function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
+export function formatNumber(value: number, locale: AppLocale, opts?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat(locale, opts).format(value);
 }
 
-export function num(v: unknown): number {
-  if (typeof v === "number") return v;
-  if (typeof v === "string") return parseFloat(v);
-  return 0;
+export function formatCurrency(value: number, locale: AppLocale, currency?: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currency ?? LOCALE_META[locale].currency,
+  }).format(value);
 }
 
-export function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+export function formatPercent(value: number, locale: AppLocale): string {
+  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(value);
 }
 
-export function addDays(d: Date, days: number): Date {
-  const out = new Date(d.getTime());
-  out.setDate(out.getDate() + Math.round(days));
-  return out;
-}
+const RELATIVE_UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
+  { unit: "year", ms: 1000 * 60 * 60 * 24 * 365 },
+  { unit: "month", ms: 1000 * 60 * 60 * 24 * 30 },
+  { unit: "week", ms: 1000 * 60 * 60 * 24 * 7 },
+  { unit: "day", ms: 1000 * 60 * 60 * 24 },
+  { unit: "hour", ms: 1000 * 60 * 60 },
+  { unit: "minute", ms: 1000 * 60 },
+];
 
-export function addMonths(d: Date, months: number): Date {
-  const out = new Date(d.getTime());
-  out.setMonth(out.getMonth() + months);
-  return out;
-}
+/**
+ * Produces "3 days ago" / "3 dage siden" from a single Intl call — no
+ * hand-written pluralization strings, so it is correct in every supported
+ * locale automatically, including ones added later.
+ */
+export function formatRelativeTime(date: Date | string, locale: AppLocale, now: Date = new Date()): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const diffMs = d.getTime() - now.getTime();
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
 
-export function monthKey(d: Date | string): string {
-  const dt = typeof d === "string" ? new Date(d) : d;
-  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-/** Deterministic stable-key JSON stringify used for content hashing (board pack determinism). */
-export function stableStringify(value: unknown): string {
-  return JSON.stringify(sortDeep(value));
-}
-
-function sortDeep(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortDeep);
-  if (value && typeof value === "object" && !(value instanceof Date)) {
-    const obj = value as Record<string, unknown>;
-    return Object.keys(obj)
-      .sort()
-      .reduce<Record<string, unknown>>((acc, k) => {
-        acc[k] = sortDeep(obj[k]);
-        return acc;
-      }, {});
+  for (const { unit, ms } of RELATIVE_UNITS) {
+    if (Math.abs(diffMs) >= ms || unit === "minute") {
+      const value = Math.round(diffMs / ms);
+      return rtf.format(value, unit);
+    }
   }
-  return value;
-}
-
-export function sha256(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
-}
-
-export function contentHash(value: unknown): string {
-  return sha256(stableStringify(value));
+  return rtf.format(0, "minute");
 }

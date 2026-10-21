@@ -1,71 +1,68 @@
-// Minimal auth stub for Part 8. Earlier parts of LEADOS own real
-// authentication; this sandbox only needs a stable way to resolve "the
-// current user" so realtime channels, notifications and attention state can
-// be scoped per-user. Resolution order:
-//   1. `x-user-id` header (used by tests / server-to-server calls)
-//   2. `leados_uid` cookie (used by the browser once seeded)
-//   3. Fall back to (and create, if missing) a demo user.
-//
-// Replace this module wholesale once real auth lands — nothing else in this
-// part should need to change, since everything downstream depends only on
-// `getCurrentUserId(request)`.
+import { cookies } from "next/headers";
+import { getOrgById, getUserInOrg, listPermissionOverrides } from "@/db/repositories/orgs";
+import { SESSION_COOKIE_NAME, decodeSession } from "@/lib/session";
+import { hasPermission, type Permission, type Role } from "@/lib/permissions";
 
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
+export type CurrentUser = {
+  id: string;
+  orgId: string;
+  email: string;
+  name: string;
+  role: Role;
+  managerOfTeamId: string | null;
+  financeRead: boolean;
+  locale: string | null;
+};
 
-export const DEMO_USER_EMAIL = "demo@leados.app";
-export const DEMO_USER_NAME = "Demo Operator";
-
-let demoUserPromise: Promise<string> | null = null;
-
-async function getOrCreateDemoUser(): Promise<string> {
-  const existing = await db.select().from(users).where(eq(users.email, DEMO_USER_EMAIL)).limit(1);
-  if (existing[0]) return existing[0].id;
-
-  const inserted = await db
-    .insert(users)
-    .values({ name: DEMO_USER_NAME, email: DEMO_USER_EMAIL, timezone: "UTC" })
-    .onConflictDoNothing()
-    .returning();
-
-  if (inserted[0]) return inserted[0].id;
-
-  const retry = await db.select().from(users).where(eq(users.email, DEMO_USER_EMAIL)).limit(1);
-  if (retry[0]) return retry[0].id;
-  throw new Error("Failed to resolve demo user");
+/**
+ * Loads the authenticated user fresh from the DB on every request (rather
+ * than trusting cached claims in the cookie) so role/permission changes made
+ * in the admin UI take effect immediately — no stale-privilege window.
+ */
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE_NAME)?.value;
+  const session = decodeSession(token);
+  if (!session) return null;
+  const user = await getUserInOrg(session.orgId, session.userId);
+  if (!user) return null;
+  return {
+    id: user.id,
+    orgId: user.orgId,
+    email: user.email,
+    name: user.name,
+    role: user.role as Role,
+    managerOfTeamId: user.managerOfTeamId,
+    financeRead: user.financeRead,
+    locale: user.locale,
+  };
 }
 
-function readCookie(request: Request, name: string): string | null {
-  const header = request.headers.get("cookie");
-  if (!header) return null;
-  const match = header.split(";").map((p) => p.trim()).find((p) => p.startsWith(`${name}=`));
-  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+export async function getCurrentOrg(orgId: string) {
+  return getOrgById(orgId);
 }
 
-export async function getCurrentUserId(request: Request): Promise<string> {
-  const headerUser = request.headers.get("x-user-id");
-  if (headerUser) return headerUser;
-
-  const cookieUser = readCookie(request, "leados_uid");
-  if (cookieUser) return cookieUser;
-
-  if (!demoUserPromise) demoUserPromise = getOrCreateDemoUser();
-  return demoUserPromise;
+export class ForbiddenError extends Error {
+  constructor(public permission: Permission) {
+    super(`Missing permission: ${permission}`);
+    this.name = "ForbiddenError";
+  }
 }
 
-export async function getDemoUserId(): Promise<string> {
-  if (!demoUserPromise) demoUserPromise = getOrCreateDemoUser();
-  return demoUserPromise;
+export class UnauthenticatedError extends Error {
+  constructor() {
+    super("Not authenticated");
+    this.name = "UnauthenticatedError";
+  }
 }
 
-/** Server Component variant — reads the same cookie via `next/headers`. */
-export async function getCurrentUserIdServer(): Promise<string> {
-  const { cookies } = await import("next/headers");
-  const store = await cookies();
-  const cookieUser = store.get("leados_uid")?.value;
-  if (cookieUser) return cookieUser;
-
-  if (!demoUserPromise) demoUserPromise = getOrCreateDemoUser();
-  return demoUserPromise;
+/** Throws UnauthenticatedError/ForbiddenError — route handlers translate to 401/403. */
+export async function requirePermission(permission: Permission): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) throw new UnauthenticatedError();
+  const overrides = await listPermissionOverrides(user.orgId);
+  if (!hasPermission(user.role, permission, overrides)) {
+    throw new ForbiddenError(permission);
+  }
+  return user;
 }

@@ -1,24 +1,56 @@
-import { AppState, Finding } from '../lib/types';
-import { getGuidance } from '../lib/onboarding';
-import { Card, Button, Pill } from './ui';
-import { Tab } from './Shell';
+"use client";
 
-export function OnboardingBanner({ state, findings, onNavigate }: { state: AppState; findings: Finding[]; onNavigate: (t: Tab) => void }) {
-  const { stage, guidance } = getGuidance(state, findings);
+import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
+import Link from "next/link";
+
+type OnboardingProgress = { completed: number; total: number; isComplete: boolean };
+
+/**
+ * First-run guidance banner (Section E). Shows real progress (not a vague
+ * "finish setup"), links straight to the wizard, and a session-scoped
+ * dismiss (it returns next visit until setup is actually complete — no
+ * permanent dead end).
+ */
+export default function OnboardingBanner({ orgName }: { orgName: string }) {
+  const t = useTranslations("onboarding");
+  const [progress, setProgress] = useState<OnboardingProgress | null>(null);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    setDismissed(sessionStorage.getItem("leados.onboarding.dismissed") === "1");
+    fetch("/api/onboarding/state")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setProgress(data.progress))
+      .catch(() => undefined);
+  }, []);
+
+  if (!progress || progress.isComplete || dismissed) return null;
+
   return (
-    <Card className="border-indigo-100 bg-indigo-50/60">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-2xl space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Pill tone="indigo">Stage: {stage}</Pill>
-            <span className="text-xs text-slate-400">Auto-detected from your data — advances as you use the system</span>
-          </div>
-          <h3 className="text-base font-semibold text-slate-900">{guidance.headline}</h3>
-          <p className="text-sm text-slate-600">{guidance.instruction}</p>
-          {guidance.whyItMatters && <p className="text-xs italic text-slate-400">Why this matters: {guidance.whyItMatters}</p>}
-        </div>
-        <Button onClick={() => onNavigate(guidance.actionTab)}>{guidance.actionLabel} →</Button>
+    <div className="mx-4 mt-4 flex flex-col gap-2 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="font-semibold">{t("bannerTitle", { orgName })}</p>
+        <p className="text-sm">{t("bannerBody", { completed: progress.completed, total: progress.total })}</p>
       </div>
-    </Card>
+      <div className="flex gap-2">
+        <Link
+          href="/onboarding"
+          className="touch-target inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+        >
+          {t("bannerCta")}
+        </Link>
+        <button
+          type="button"
+          onClick={() => {
+            sessionStorage.setItem("leados.onboarding.dismissed", "1");
+            setDismissed(true);
+          }}
+          className="touch-target inline-flex items-center justify-center rounded-lg border border-blue-300 px-4 py-2 text-sm text-blue-900"
+        >
+          {t("bannerDismiss")}
+        </button>
+      </div>
+    </div>
   );
 }

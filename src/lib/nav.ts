@@ -1,27 +1,50 @@
-import type { DomainKey } from "./types";
+import type { Permission } from "@/lib/permissions";
 
-export interface NavItem {
+/**
+ * Single source of truth for navigation (Section E: consistent navigation
+ * is a cognitive-accessibility requirement, and Section D: the same list
+ * renders as a sidebar ≥768px and a bottom tab bar on 360–430px screens).
+ *
+ * `coreForNewUsers` marks the "Now + 3 core views" progressive-disclosure
+ * set (Section E). Everything else unlocks after `unlockAfterUses` recorded
+ * uses of `unlockSignalKey` (tracked client-side in localStorage — see
+ * `useProgressiveNav`).
+ */
+export type NavItem = {
   href: string;
-  label: string;
-  domain: DomainKey;
-  icon: string;
-}
+  labelKey: string;
+  icon: string; // decorative emoji glyph kept out of generate_image budget
+  permission: Permission | null;
+  coreForNewUsers: boolean;
+  unlockSignalKey?: string;
+  unlockAfterUses?: number;
+};
 
-// Single source of truth for route <-> domain mapping, shared by Shell
-// (left nav rail) and CommandPalette (route search results) so the two can
-// never drift out of sync.
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Cockpit", domain: "cockpit", icon: "\u25CE" },
-  { href: "/people", label: "People", domain: "people", icon: "\u263A" },
-  { href: "/strategic", label: "Strategic", domain: "strategic", icon: "\u265F" },
-  { href: "/financial", label: "Financial", domain: "financial", icon: "$" },
-  { href: "/execution", label: "Execution", domain: "execution", icon: "\u25A3" },
-  { href: "/signals", label: "Signal Board", domain: "signals", icon: "\u25B2" },
-  { href: "/hypotheses", label: "Hypotheses", domain: "hypotheses", icon: "?" },
-  { href: "/about", label: "About", domain: "about", icon: "\u2139" },
+  { href: "/now", labelKey: "nav.now", icon: "🏠", permission: null, coreForNewUsers: true },
+  { href: "/subjects", labelKey: "nav.subjects", icon: "👥", permission: "subjects.read", coreForNewUsers: true },
+  { href: "/briefings", labelKey: "nav.briefings", icon: "📋", permission: "briefings.read", coreForNewUsers: true },
+  {
+    href: "/findings",
+    labelKey: "nav.findings",
+    icon: "🔎",
+    permission: "findings.read",
+    coreForNewUsers: false,
+    unlockSignalKey: "briefings",
+    unlockAfterUses: 3,
+  },
+  {
+    href: "/playbooks",
+    labelKey: "nav.playbooks",
+    icon: "🧭",
+    permission: "playbooks.read",
+    coreForNewUsers: false,
+    unlockSignalKey: "briefings",
+    unlockAfterUses: 3,
+  },
+  { href: "/admin", labelKey: "nav.admin", icon: "⚙️", permission: "permissions.manage", coreForNewUsers: false },
+  { href: "/settings", labelKey: "nav.settings", icon: "🛠️", permission: null, coreForNewUsers: false },
 ];
 
-export function domainHref(domain: DomainKey): string {
-  const match = NAV_ITEMS.find((item) => item.domain === domain);
-  return match ? match.href : "/";
-}
+/** Bottom-nav gets the four highest-priority, always-available items (thumb reach). */
+export const BOTTOM_NAV_HREFS = ["/now", "/subjects", "/briefings", "/settings"];

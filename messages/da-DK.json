@@ -1,0 +1,188 @@
+{
+  "app": {
+    "name": "LEADOS",
+    "tagline": "Ét samlet overblik over people leadership — på det sprog, din organisation taler."
+  },
+  "common": {
+    "save": "Gem",
+    "cancel": "Annuller",
+    "close": "Luk",
+    "loading": "Indlæser…",
+    "retry": "Prøv igen",
+    "back": "Tilbage",
+    "next": "Næste",
+    "done": "Færdig",
+    "remove": "Fjern",
+    "confirm": "Bekræft",
+    "edit": "Rediger",
+    "add": "Tilføj",
+    "search": "Søg",
+    "filter": "Filtrer",
+    "yes": "Ja",
+    "no": "Nej",
+    "enabled": "Aktiveret",
+    "disabled": "Deaktiveret",
+    "sampleBadge": "Eksempeldata",
+    "updatedRelative": "Opdateret {time}",
+    "requiredField": "Påkrævet"
+  },
+  "nav": {
+    "now": "Nu",
+    "subjects": "{teamTerm, select, department {Medarbejdere} afdeling {Medarbejdere} other {Medarbejdere}}",
+    "briefings": "Briefinger",
+    "playbooks": "Spilleplaner",
+    "findings": "Observationer",
+    "admin": "Administration",
+    "settings": "Indstillinger",
+    "signOut": "Log ud",
+    "skipToContent": "Spring til indhold"
+  },
+  "terms": {
+    "team": "team",
+    "department": "afdeling",
+    "afdeling": "afdeling"
+  },
+  "auth": {
+    "signInTitle": "Log ind på LEADOS",
+    "signInSubtitle": "Vælg en demokonto for at udforske en rolle og organisation.",
+    "chooseOrg": "Vælg organisation",
+    "chooseUser": "Vælg konto",
+    "signIn": "Log ind",
+    "signedInAs": "Logget ind som {name} ({role})"
+  },
+  "onboarding": {
+    "bannerTitle": "Færdiggør opsætningen af {orgName}",
+    "bannerBody": "{completed} af {total} opsætningstrin er udført. Eksempeldata er slået til — fjern det når som helst.",
+    "bannerCta": "Fortsæt opsætning",
+    "bannerDismiss": "Afvis",
+    "step.profile": "Organisationsprofil",
+    "step.terminology": "Terminologi",
+    "step.team": "Første team",
+    "step.sample": "Eksempeldata",
+    "step.invite": "Inviter roller",
+    "wizard.title": "Opsæt din organisation",
+    "wizard.step1.title": "Organisationsprofil",
+    "wizard.step1.body": "Navn, logo og accentfarve, der bruges i hele LEADOS.",
+    "wizard.step2.title": "Terminologi",
+    "wizard.step2.body": "Vælg det ord, din organisation bruger om en gruppe medarbejdere.",
+    "wizard.step3.title": "Domæner og roller",
+    "wizard.step3.body": "Tilladte e-maildomæner og de roller, I planlægger at bruge.",
+    "wizard.step4.title": "Eksempeldata",
+    "wizard.step4.body": "Start med tydeligt mærkede, syntetiske data, som kan fjernes med ét klik.",
+    "wizard.seedSample": "Tilføj eksempeldata",
+    "wizard.skipSample": "Start uden data",
+    "wizard.finish": "Afslut opsætning",
+    "emptyState.title": "Her er endnu intet",
+    "emptyState.body": "{view} fyldes ud, når dit team tilføjer data — eller tilføj eksempeldata for at se, hvordan det virker.",
+    "emptyState.cta": "Tilføj eksempeldata",
+    "removeSample.cta": "Fjern eksempeldata",
+    "removeSample.confirm": "Fjern alle eksempeldata for denne organisation?",
+    "whatIsThis": "Hvad er dette?",
+    "whatIsThisBody.now": "Nu er dit daglige overblik: de vigtigste briefinger og observationer på tværs af organisationen, afgrænset til det, din rolle må se.",
+    "whatIsThisBody.subjects": "Dette er listen over medarbejdere, din rolle kan se, med deres aktuelle risikosignal.",
+    "whatIsThisBody.briefings": "Briefinger er korte, genererede sammendrag om en person eller et team, baseret på observationer.",
+    "whatIsThisBody.playbooks": "Spilleplaner er foreslåede næste skridt knyttet til en observation eller briefing.",
+    "progressive.locked": "Låses op, når du har brugt {feature} nogle gange",
+    "progressive.unlockedToast": "Nyt: {feature} er nu tilgængelig i navigationen."
+  },
+  "subjects": {
+    "title": "Medarbejdere",
+    "listSubtitle": "{count, plural, =0 {Ingen medarbejdere endnu} one {# medarbejder} other {# medarbejdere}}",
+    "name": "Navn",
+    "role": "Rolle",
+    "team": "Team",
+    "risk": "Risiko",
+    "riskLevel.low": "Lav",
+    "riskLevel.medium": "Middel",
+    "riskLevel.high": "Høj",
+    "detailTitle": "{name}s profil",
+    "noTeam": "Ikke tildelt",
+    "version": "Version {version}"
+  },
+  "briefings": {
+    "title": "Briefinger",
+    "listSubtitle": "{count, plural, =0 {Ingen briefinger endnu} one {# briefing} other {# briefinger}}",
+    "severity.info": "Info",
+    "severity.watch": "Hold øje",
+    "severity.urgent": "Akut",
+    "generate": "Generer briefing",
+    "plainLanguageToggle": "Sammendrag i klarsprog",
+    "plainLanguageOn": "Viser en klarsprogsversion: kortere sætninger, hverdagsord.",
+    "narrativeHeading": "Fortælling"
+  },
+  "findings": {
+    "title": "Observationer",
+    "listSubtitle": "{count, plural, =0 {Ingen observationer endnu} one {# observation} other {# observationer}}"
+  },
+  "playbooks": {
+    "title": "Spilleplaner",
+    "listSubtitle": "{count, plural, =0 {Ingen spilleplaner endnu} one {# spilleplan} other {# spilleplaner}}",
+    "stepsHeading": "Anbefalede skridt"
+  },
+  "engine": {
+    "briefing.attritionRisk": "{name} har en {level, select, high {høj} medium {middel} other {lav}} risiko for at stoppe denne {period}, baseret på {reasonCount, plural, one {ét signal} other {# signaler}}.",
+    "briefing.engagementDrop": "{name}s engagementscore faldt {points, number} point siden {sinceRelative}.",
+    "briefing.teamPulse": "{teamName} {teamTerm}-pulsen er {direction, select, up {stigende} down {faldende} other {stabil}} sammenlignet med sidste {period}.",
+    "finding.missedOneOnOnes": "{name} har misset {count, plural, one {én planlagt 1:1-samtale} other {# planlagte 1:1-samtaler}} inden for de seneste {days, number} dage.",
+    "finding.workloadSpike": "{name}s arbejdsbyrde er {percent, number}% over deres gennemsnit for {period}.",
+    "finding.engagementSignal": "{name}s seneste trivselsmåling var {score, number} ud af 10.",
+    "playbook.stayInterview": "Book en fastholdelsessamtale med {name} inden for {days, plural, one {én dag} other {# dage}}.",
+    "playbook.workloadRebalance": "Omfordel {count, plural, one {én opgave} other {# opgaver}} fra {name} til resten af {teamTerm}et.",
+    "playbook.recognition": "Anerkend {name} offentligt for {achievement} i næste {teamTerm}-opdatering.",
+    "narrative.executiveSummary": "{orgName} har {atRiskCount, plural, =0 {ingen medarbejdere} one {én medarbejder} other {# medarbejdere}} markeret med høj risiko for afgang denne {period}."
+  },
+  "admin": {
+    "title": "Administration",
+    "featureFlags.title": "Funktionsflag",
+    "featureFlags.subtitle": "Indstillinger pr. organisation. Alle ændringer logges i revisionssporet.",
+    "permissionMatrix.title": "Rettighedsmatrix",
+    "permissionMatrix.subtitle": "Hvad hver rolle må i denne organisation. Overstyringer logges.",
+    "permissionMatrix.role": "Rolle",
+    "permissionMatrix.overrideNote": "Overstyret fra standard",
+    "audit.title": "Revisionslog",
+    "audit.empty": "Ingen revisionshændelser endnu.",
+    "orgProfile.title": "Organisationsprofil",
+    "users.title": "Personer med adgang"
+  },
+  "permission": {
+    "denied.title": "Du har ikke adgang",
+    "denied.subjects.read": "Visning af medarbejdere kræver rettigheden \"Se medarbejdere\".",
+    "denied.subjects.write": "Redigering af medarbejdere kræver rettigheden \"Rediger medarbejdere\".",
+    "denied.briefings.write": "Generering af briefinger kræver rettigheden \"Skriv briefinger\".",
+    "denied.playbooks.write": "Oprettelse af spilleplaner kræver rettigheden \"Skriv spilleplaner\".",
+    "denied.team.manage": "Denne handling er forbeholdt ledere af dette team.",
+    "denied.generic": "Din rolle ({role}) inkluderer ikke denne rettighed."
+  },
+  "errors": {
+    "unauthenticated": "Log venligst ind for at fortsætte.",
+    "forbidden": "Du har ikke rettigheder til at gøre det.",
+    "notFound": "Vi kunne ikke finde det — det tilhører muligvis en anden organisation.",
+    "validation": "Tjek venligst de markerede felter.",
+    "server": "Noget gik galt i vores ende. Prøv igen.",
+    "offline": "Du er offline. Ændringen er gemt og synkroniseres automatisk."
+  },
+  "pwa": {
+    "installTitle": "Installer LEADOS",
+    "installBody": "Føj LEADOS til din hjemmeskærm for adgang med ét tryk, også offline.",
+    "installCta": "Installer app",
+    "offlineBanner": "Du er offline — viser de sidst synkroniserede data.",
+    "queuedBanner": "{count, plural, =0 {Ingen ændringer i kø} one {1 ændring venter på synkronisering} other {# ændringer venter på synkronisering}}",
+    "syncingBanner": "Synkroniserer dine ændringer…",
+    "syncedBanner": "Alle ændringer er synkroniseret.",
+    "conflict.title": "Dette blev ændret af en anden",
+    "conflict.body": "{name} ændrede denne post, mens du var offline. Vælg hvilken version du vil beholde.",
+    "conflict.keepMine": "Behold min version",
+    "conflict.keepTheirs": "Behold deres version",
+    "conflict.merge": "Gennemgå begge"
+  },
+  "accessibility": {
+    "highContrast": "Højkontrasttema",
+    "textScale": "Tekststørrelse",
+    "plainLanguage": "Klarsprogstilstand",
+    "reduceMotion": "Reducer bevægelse",
+    "settingsTitle": "Tilgængelighed"
+  },
+  "time": {
+    "justNow": "lige nu"
+  }
+}

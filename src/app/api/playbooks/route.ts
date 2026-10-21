@@ -1,22 +1,29 @@
-import { NextResponse } from "next/server";
-import { createPlaybook, listPlaybooks, type CreatePlaybookInput } from "@/lib/playbooks";
-import { computeEffectiveness } from "@/lib/playbooksEngine";
+import { NextRequest, NextResponse } from "next/server";
+import { requirePermission } from "@/lib/auth";
+import { handleApiError } from "@/lib/apiErrors";
+import { createPlaybook, listPlaybooks } from "@/db/repositories/engineContent";
 
-export const dynamic = "force-dynamic";
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const status = searchParams.get("status") as "draft" | "active" | "deprecated" | null;
-  const rows = await listPlaybooks(status ?? undefined);
-  const withEffectiveness = await Promise.all(rows.map(async (p) => ({ ...p, effectiveness: await computeEffectiveness(p.id) })));
-  return NextResponse.json({ playbooks: withEffectiveness });
+export async function GET() {
+  try {
+    const user = await requirePermission("playbooks.read");
+    const playbooks = await listPlaybooks(user.orgId);
+    return NextResponse.json({ playbooks });
+  } catch (err) {
+    return handleApiError(err);
+  }
 }
 
-export async function POST(request: Request) {
-  const body = (await request.json()) as CreatePlaybookInput;
-  if (!body.key || !body.title || !body.steps?.length) {
-    return NextResponse.json({ error: "key, title and at least one step are required" }, { status: 400 });
+export async function POST(request: NextRequest) {
+  try {
+    const user = await requirePermission("playbooks.write");
+    const body = await request.json().catch(() => ({}));
+    const { templateKey, params } = body as { templateKey?: string; params?: Record<string, unknown> };
+    if (!templateKey || !params) {
+      return NextResponse.json({ error: "validation", messageKey: "errors.validation" }, { status: 400 });
+    }
+    const playbook = await createPlaybook(user.orgId, { templateKey, params });
+    return NextResponse.json({ playbook }, { status: 201 });
+  } catch (err) {
+    return handleApiError(err);
   }
-  const row = await createPlaybook(body);
-  return NextResponse.json(row, { status: 201 });
 }

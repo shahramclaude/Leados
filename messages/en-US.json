@@ -1,0 +1,188 @@
+{
+  "app": {
+    "name": "LEADOS",
+    "tagline": "One operating picture for people leadership, in every language your org speaks."
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "loading": "Loading…",
+    "retry": "Retry",
+    "back": "Back",
+    "next": "Next",
+    "done": "Done",
+    "remove": "Remove",
+    "confirm": "Confirm",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "filter": "Filter",
+    "yes": "Yes",
+    "no": "No",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "sampleBadge": "Sample data",
+    "updatedRelative": "Updated {time}",
+    "requiredField": "Required"
+  },
+  "nav": {
+    "now": "Now",
+    "subjects": "{teamTerm, select, department {People} afdeling {People} other {People}}",
+    "briefings": "Briefings",
+    "playbooks": "Playbooks",
+    "findings": "Findings",
+    "admin": "Admin",
+    "settings": "Settings",
+    "signOut": "Sign out",
+    "skipToContent": "Skip to main content"
+  },
+  "terms": {
+    "team": "team",
+    "department": "department",
+    "afdeling": "division"
+  },
+  "auth": {
+    "signInTitle": "Sign in to LEADOS",
+    "signInSubtitle": "Choose a demo account to explore a role and org.",
+    "chooseOrg": "Choose organization",
+    "chooseUser": "Choose account",
+    "signIn": "Sign in",
+    "signedInAs": "Signed in as {name} ({role})"
+  },
+  "onboarding": {
+    "bannerTitle": "Finish setting up {orgName}",
+    "bannerBody": "{completed} of {total} setup steps done. Sample data is on — remove it any time.",
+    "bannerCta": "Continue setup",
+    "bannerDismiss": "Dismiss",
+    "step.profile": "Organization profile",
+    "step.terminology": "Terminology",
+    "step.team": "First team",
+    "step.sample": "Sample data",
+    "step.invite": "Invite roles",
+    "wizard.title": "Set up your organization",
+    "wizard.step1.title": "Organization profile",
+    "wizard.step1.body": "Name, logo and accent color used across LEADOS.",
+    "wizard.step2.title": "Terminology",
+    "wizard.step2.body": "Choose the word your org uses for a group of people.",
+    "wizard.step3.title": "Domains & roles",
+    "wizard.step3.body": "Allowed email domains and the roles you plan to use.",
+    "wizard.step4.title": "Sample data",
+    "wizard.step4.body": "Start with clearly labeled synthetic data you can remove in one click.",
+    "wizard.seedSample": "Add sample data",
+    "wizard.skipSample": "Start empty",
+    "wizard.finish": "Finish setup",
+    "emptyState.title": "Nothing here yet",
+    "emptyState.body": "{view} will fill in once your team adds data — or add sample data to see how it works.",
+    "emptyState.cta": "Add sample data",
+    "removeSample.cta": "Remove sample data",
+    "removeSample.confirm": "Remove all sample data for this organization?",
+    "whatIsThis": "What is this?",
+    "whatIsThisBody.now": "Now is your daily operating view: the highest-priority briefings and findings across your org, scoped to what you're allowed to see.",
+    "whatIsThisBody.subjects": "This is the roster of people your role can see, with their current risk signal.",
+    "whatIsThisBody.briefings": "Briefings are short, generated summaries about a person or team, grounded in findings.",
+    "whatIsThisBody.playbooks": "Playbooks are suggested next actions tied to a finding or briefing.",
+    "progressive.locked": "Unlocks after you use {feature} a few times",
+    "progressive.unlockedToast": "New: {feature} is now available from the nav."
+  },
+  "subjects": {
+    "title": "People",
+    "listSubtitle": "{count, plural, =0 {No people yet} one {# person} other {# people}}",
+    "name": "Name",
+    "role": "Role",
+    "team": "Team",
+    "risk": "Risk",
+    "riskLevel.low": "Low",
+    "riskLevel.medium": "Medium",
+    "riskLevel.high": "High",
+    "detailTitle": "{name}'s profile",
+    "noTeam": "Unassigned",
+    "version": "Version {version}"
+  },
+  "briefings": {
+    "title": "Briefings",
+    "listSubtitle": "{count, plural, =0 {No briefings yet} one {# briefing} other {# briefings}}",
+    "severity.info": "Info",
+    "severity.watch": "Watch",
+    "severity.urgent": "Urgent",
+    "generate": "Generate briefing",
+    "plainLanguageToggle": "Plain-language summary",
+    "plainLanguageOn": "Showing a plain-language version: shorter sentences, everyday words.",
+    "narrativeHeading": "Narrative"
+  },
+  "findings": {
+    "title": "Findings",
+    "listSubtitle": "{count, plural, =0 {No findings yet} one {# finding} other {# findings}}"
+  },
+  "playbooks": {
+    "title": "Playbooks",
+    "listSubtitle": "{count, plural, =0 {No playbooks yet} one {# playbook} other {# playbooks}}",
+    "stepsHeading": "Recommended steps"
+  },
+  "engine": {
+    "briefing.attritionRisk": "{name} shows a {level, select, high {high} medium {medium} other {low}} attrition risk this {period}, based on {reasonCount, plural, one {one signal} other {# signals}}.",
+    "briefing.engagementDrop": "{name}'s engagement score fell {points, number} points since {sinceRelative}.",
+    "briefing.teamPulse": "{teamName} {teamTerm} pulse is {direction, select, up {trending up} down {trending down} other {steady}} compared to last {period}.",
+    "finding.missedOneOnOnes": "{name} has missed {count, plural, one {one scheduled one-on-one} other {# scheduled one-on-ones}} in the last {days, number} days.",
+    "finding.workloadSpike": "{name}'s workload is {percent, number}% above their {period} average.",
+    "finding.engagementSignal": "{name}'s latest pulse survey score was {score, number} out of 10.",
+    "playbook.stayInterview": "Schedule a stay interview with {name} within {days, plural, one {one day} other {# days}}.",
+    "playbook.workloadRebalance": "Rebalance {count, plural, one {one task} other {# tasks}} away from {name} toward the {teamTerm}.",
+    "playbook.recognition": "Recognize {name} publicly for {achievement} in the next {teamTerm} update.",
+    "narrative.executiveSummary": "{orgName} has {atRiskCount, plural, =0 {no people} one {one person} other {# people}} flagged at high attrition risk this {period}."
+  },
+  "admin": {
+    "title": "Admin",
+    "featureFlags.title": "Feature flags",
+    "featureFlags.subtitle": "Per-organization toggles. Every change is written to the audit log.",
+    "permissionMatrix.title": "Permission matrix",
+    "permissionMatrix.subtitle": "What each role can do in this organization. Overrides are audited.",
+    "permissionMatrix.role": "Role",
+    "permissionMatrix.overrideNote": "Overridden from default",
+    "audit.title": "Audit log",
+    "audit.empty": "No audit events yet.",
+    "orgProfile.title": "Organization profile",
+    "users.title": "People with access"
+  },
+  "permission": {
+    "denied.title": "You don't have access",
+    "denied.subjects.read": "Viewing people requires the \"View people\" permission.",
+    "denied.subjects.write": "Editing people requires the \"Edit people\" permission.",
+    "denied.briefings.write": "Generating briefings requires the \"Write briefings\" permission.",
+    "denied.playbooks.write": "Creating playbooks requires the \"Write playbooks\" permission.",
+    "denied.team.manage": "This action is limited to managers of this team.",
+    "denied.generic": "Your role ({role}) doesn't include this permission."
+  },
+  "errors": {
+    "unauthenticated": "Please sign in to continue.",
+    "forbidden": "You don't have permission to do that.",
+    "notFound": "We couldn't find that — it may belong to a different organization.",
+    "validation": "Please check the highlighted fields.",
+    "server": "Something went wrong on our side. Please try again.",
+    "offline": "You're offline. This change is saved and will sync automatically."
+  },
+  "pwa": {
+    "installTitle": "Install LEADOS",
+    "installBody": "Add LEADOS to your home screen for one-tap access, even offline.",
+    "installCta": "Install app",
+    "offlineBanner": "You're offline — showing the last synced data.",
+    "queuedBanner": "{count, plural, =0 {No changes queued} one {1 change waiting to sync} other {# changes waiting to sync}}",
+    "syncingBanner": "Syncing your changes…",
+    "syncedBanner": "All changes synced.",
+    "conflict.title": "This was changed by someone else",
+    "conflict.body": "{name} changed this record while you were offline. Choose which version to keep.",
+    "conflict.keepMine": "Keep my version",
+    "conflict.keepTheirs": "Keep their version",
+    "conflict.merge": "Review both"
+  },
+  "accessibility": {
+    "highContrast": "High-contrast theme",
+    "textScale": "Text size",
+    "plainLanguage": "Plain-language mode",
+    "reduceMotion": "Reduce motion",
+    "settingsTitle": "Accessibility"
+  },
+  "time": {
+    "justNow": "just now"
+  }
+}

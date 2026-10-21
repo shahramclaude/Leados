@@ -1,122 +1,50 @@
-import { PERMISSIONS, type Permission } from "@/lib/permissions";
+import type { Permission } from "@/lib/permissions";
 
 /**
- * THE route-permission registry.
+ * Route → permission registry. Both `middleware.ts` and
+ * `tests/permissionRegistry.test.ts` read this single source of truth so the
+ * enforced middleware behavior and the admin-facing permission matrix page
+ * can never drift apart silently (acceptance gate 5).
  *
- * Every API route handler in `src/app/api/**` MUST have a corresponding
- * entry here. `scripts/check-route-permissions.ts` (wired into `npm run
- * security:routes` and CI) statically scans the filesystem for route
- * modules + their exported HTTP methods and fails the build if it finds a
- * route/method pair with no registry entry, or a registry entry pointing at
- * a route that no longer exists. This makes "every route has an explicit,
- * reviewed permission decision" a structural property of the repo instead
- * of a convention someone can forget.
+ * `match` is a simple prefix+method matcher — good enough for this route
+ * tree and easy to audit by eye, which matters for a security-relevant list.
  */
-export type AccessLevel = "PUBLIC" | "AUTH_ONLY" | Permission;
-
-export interface RouteRegistryEntry {
-  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  /** Next.js app-router path, using `[param]` for dynamic segments. */
-  path: string;
-  access: AccessLevel;
+export type RoutePermissionRule = {
+  prefix: string;
+  method: "GET" | "POST" | "PATCH" | "DELETE" | "*";
+  permission: Permission | null; // null = authenticated only, no extra permission
   description: string;
-}
+};
 
-export const ROUTE_PERMISSION_REGISTRY: RouteRegistryEntry[] = [
-  { method: "GET", path: "/api/health", access: "PUBLIC", description: "Liveness/readiness probe." },
-  { method: "GET", path: "/api/csrf", access: "PUBLIC", description: "Issue a CSRF token/cookie pair." },
-  {
-    method: "POST",
-    path: "/api/auth/register",
-    access: "PUBLIC",
-    description: "Create the first admin for a new org. Rate-limited.",
-  },
-  {
-    method: "POST",
-    path: "/api/auth/login",
-    access: "PUBLIC",
-    description: "Password login. Rate-limited + account lockout.",
-  },
-  {
-    method: "POST",
-    path: "/api/auth/logout",
-    access: "AUTH_ONLY",
-    description: "Revoke the current session.",
-  },
-  {
-    method: "GET",
-    path: "/api/auth/session",
-    access: "PUBLIC",
-    description: "Return the current session (or null) — never throws on unauthenticated.",
-  },
-  {
-    method: "GET",
-    path: "/api/people",
-    access: PERMISSIONS.PEOPLE_READ,
-    description: "List people scoped to the caller's org.",
-  },
-  {
-    method: "POST",
-    path: "/api/people",
-    access: PERMISSIONS.PEOPLE_WRITE,
-    description: "Create a person record in the caller's org.",
-  },
-  {
-    method: "GET",
-    path: "/api/people/export",
-    access: PERMISSIONS.PEOPLE_EXPORT,
-    description: "Export all people in the caller's org as CSV. Fully audited.",
-  },
-  {
-    method: "GET",
-    path: "/api/people/[id]",
-    access: PERMISSIONS.PEOPLE_READ,
-    description: "Read a single person, scoped by org — 404s (not 403s) across tenants.",
-  },
-  {
-    method: "PATCH",
-    path: "/api/people/[id]",
-    access: PERMISSIONS.PEOPLE_WRITE,
-    description: "Update a person, scoped by org.",
-  },
-  {
-    method: "DELETE",
-    path: "/api/people/[id]",
-    access: PERMISSIONS.PEOPLE_DELETE,
-    description: "Soft-delete a person, scoped by org.",
-  },
-  {
-    method: "GET",
-    path: "/api/audit",
-    access: PERMISSIONS.AUDIT_READ,
-    description: "Query the audit log, scoped to the caller's org (admin only).",
-  },
-  {
-    method: "GET",
-    path: "/api/audit/export",
-    access: PERMISSIONS.AUDIT_EXPORT,
-    description: "Export the audit log as CSV (admin only). Self-auditing.",
-  },
-  {
-    method: "GET",
-    path: "/api/audit/verify",
-    access: PERMISSIONS.AUDIT_READ,
-    description: "Recompute and verify the audit hash chain for the caller's org.",
-  },
-  {
-    method: "GET",
-    path: "/api/sessions",
-    access: PERMISSIONS.SESSION_REVOKE,
-    description: "List active sessions in the caller's org (admin only).",
-  },
-  {
-    method: "POST",
-    path: "/api/sessions/revoke",
-    access: PERMISSIONS.SESSION_REVOKE,
-    description: "Revoke a specific session — used for incident response.",
-  },
+export const ROUTE_PERMISSIONS: RoutePermissionRule[] = [
+  { prefix: "/api/subjects", method: "GET", permission: "subjects.read", description: "List/read subjects" },
+  { prefix: "/api/subjects", method: "POST", permission: "subjects.write", description: "Create subject" },
+  { prefix: "/api/subjects", method: "PATCH", permission: "subjects.write", description: "Update subject" },
+  { prefix: "/api/briefings", method: "GET", permission: "briefings.read", description: "List briefings" },
+  { prefix: "/api/briefings", method: "POST", permission: "briefings.write", description: "Generate briefing" },
+  { prefix: "/api/briefings", method: "PATCH", permission: "briefings.write", description: "Edit briefing" },
+  { prefix: "/api/findings", method: "GET", permission: "findings.read", description: "List findings" },
+  { prefix: "/api/playbooks", method: "GET", permission: "playbooks.read", description: "List playbooks" },
+  { prefix: "/api/playbooks", method: "POST", permission: "playbooks.write", description: "Create playbook" },
+  { prefix: "/api/teams", method: "GET", permission: "subjects.read", description: "List teams" },
+  { prefix: "/api/teams", method: "POST", permission: "team.manage", description: "Create team" },
+  { prefix: "/api/org/profile", method: "GET", permission: null, description: "Read org profile" },
+  { prefix: "/api/org/profile", method: "PATCH", permission: "org.profile.manage", description: "Update org profile" },
+  { prefix: "/api/feature-flags", method: "GET", permission: null, description: "Read feature flags" },
+  { prefix: "/api/feature-flags", method: "PATCH", permission: "featureFlags.manage", description: "Toggle feature flag" },
+  { prefix: "/api/permissions/matrix", method: "GET", permission: null, description: "Read permission matrix" },
+  { prefix: "/api/permissions/matrix", method: "PATCH", permission: "permissions.manage", description: "Edit permission matrix" },
+  { prefix: "/api/users", method: "GET", permission: "users.manage", description: "List org users" },
+  { prefix: "/api/users", method: "POST", permission: "users.manage", description: "Create org user" },
+  { prefix: "/api/audit", method: "GET", permission: "audit.read", description: "Read audit log" },
+  { prefix: "/api/onboarding", method: "*", permission: null, description: "Onboarding state is self-service for any authenticated member" },
+  { prefix: "/api/sync", method: "POST", permission: null, description: "Offline write queue flush (per-item permission checked server-side)" },
 ];
 
-export function findRegistryEntry(method: string, path: string): RouteRegistryEntry | undefined {
-  return ROUTE_PERMISSION_REGISTRY.find((e) => e.method === method && e.path === path);
+export function findRouteRule(pathname: string, method: string): RoutePermissionRule | undefined {
+  const candidates = ROUTE_PERMISSIONS.filter((r) => pathname.startsWith(r.prefix));
+  if (candidates.length === 0) return undefined;
+  return (
+    candidates.find((r) => r.method === method) ?? candidates.find((r) => r.method === "*")
+  );
 }

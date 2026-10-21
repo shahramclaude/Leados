@@ -1,35 +1,24 @@
 {
-  "name": "LEADOS — Leadership Intelligence",
+  "name": "LEADOS — People Leadership Operating System",
   "short_name": "LEADOS",
-  "description": "An autonomous leadership-intelligence operating system, installable for offline access and push notifications.",
-  "start_url": "/dashboard",
-  "id": "/dashboard",
+  "description": "One operating picture for people leadership: briefings, findings and playbooks, in English or Danish, online or offline.",
+  "start_url": "/now",
   "scope": "/",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait-primary",
   "background_color": "#f8fafc",
-  "theme_color": "#4f46e5",
+  "theme_color": "#2563eb",
   "lang": "en-US",
   "dir": "ltr",
   "categories": ["business", "productivity"],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    {
-      "name": "Dashboard",
-      "short_name": "Dashboard",
-      "url": "/dashboard",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Settings",
-      "short_name": "Settings",
-      "url": "/admin/settings",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
-    }
+    { "name": "Now", "short_name": "Now", "url": "/now" },
+    { "name": "People", "short_name": "People", "url": "/subjects" },
+    { "name": "Briefings", "short_name": "Briefings", "url": "/briefings" }
   ]
 }

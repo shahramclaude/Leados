@@ -1,30 +1,61 @@
-// src/lib/time.ts — the one clock contract for the whole app.
-//
-//  - Every timestamp is stored as `timestamptz` in UTC (see src/db/schema.ts).
-//  - The user-facing timezone/locale is a *display* concern only, read from
-//    the organization (`organizations.timezone` / `defaultLocale`) or the
-//    user record. Nothing server-side does date arithmetic in local time —
-//    only formatting for display uses the org timezone + user locale.
-//  - `now()` is the single place that reads the wall clock.
+/**
+ * Small time utilities kept separate from `format.ts` (which is about
+ * locale-aware *display*). This module is about *behavior* — in particular
+ * the cognitive-accessibility requirement that no interaction may have a
+ * hard time limit without an extension path (WCAG 2.2.1 Timing Adjustable).
+ */
+export const SECOND = 1000;
+export const MINUTE = 60 * SECOND;
+export const HOUR = 60 * MINUTE;
+export const DAY = 24 * HOUR;
 
 export function now(): Date {
   return new Date();
 }
 
-export function toIso(d: Date | string | number): string {
-  return new Date(d).toISOString();
-}
+export type ExtendableTimer = {
+  remainingMs: number;
+  extend: (byMs?: number) => void;
+  cancel: () => void;
+};
 
-export function isValidIanaTimezone(tz: string): boolean {
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
+/**
+ * Any session/notice timeout in LEADOS must be created through this helper
+ * rather than a bare `setTimeout`, so it is always extendable and always
+ * warns before firing. Used by the (optional) idle-session notice; nothing
+ * in the app currently uses a hard, non-extendable timeout.
+ */
+export function createExtendableTimer(
+  initialMs: number,
+  onExpire: () => void,
+  onWarning?: (remainingMs: number) => void,
+  warnBeforeMs = 30 * SECOND,
+): ExtendableTimer {
+  let remaining = initialMs;
+  let expireHandle: ReturnType<typeof setTimeout> | undefined;
+  let warnHandle: ReturnType<typeof setTimeout> | undefined;
 
-export function daysBetween(a: Date | string | number, b: Date | string | number): number {
-  const ms = new Date(b).getTime() - new Date(a).getTime();
-  return Math.floor(ms / 86_400_000);
+  const schedule = () => {
+    if (expireHandle) clearTimeout(expireHandle);
+    if (warnHandle) clearTimeout(warnHandle);
+    expireHandle = setTimeout(onExpire, remaining);
+    if (onWarning && remaining > warnBeforeMs) {
+      warnHandle = setTimeout(() => onWarning(warnBeforeMs), remaining - warnBeforeMs);
+    }
+  };
+  schedule();
+
+  return {
+    get remainingMs() {
+      return remaining;
+    },
+    extend(byMs = initialMs) {
+      remaining = byMs;
+      schedule();
+    },
+    cancel() {
+      if (expireHandle) clearTimeout(expireHandle);
+      if (warnHandle) clearTimeout(warnHandle);
+    },
+  };
 }
