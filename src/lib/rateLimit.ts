@@ -1,57 +1,79 @@
-/**
- * In-memory fixed-window rate limiter.
- *
- * KNOWN LIMITATION (documented, not hidden): this limiter is per-process
- * memory. It is correct for a single-instance deployment (see
- * docker-compose.production.yml) but will under-count requests across a
- * horizontally scaled, multi-instance deployment because each instance keeps
- * its own counters. The production hardening follow-up is to swap this
- * module's storage for Redis (e.g. `INCR` + `EXPIRE`) behind the exact same
- * `consume()` interface — no call sites would need to change. Tracked in
- * docs/SECURITY.md "Known limitations".
- */
-interface Bucket {
-  count: number;
-  resetAt: number;
+// Login rate limiting + account lockout (Part 17-A).
+//
+// Two layers, both DB-backed so they work correctly across multiple app
+// instances (an in-memory map would not):
+//   1. Per-account lockout: `users.failed_login_count` / `locked_until`.
+//      After MAX_FAILED_ATTEMPTS consecutive failures the account is locked
+//      for LOCKOUT_MS, independent of source IP (protects against
+//      distributed / botnet credential stuffing of one account).
+//   2. Per-IP + per-email sliding-window throttle over `login_attempts`,
+//      independent of whether the account exists, so the endpoint cannot be
+//      used to enumerate valid emails at high speed or hammer a single IP
+//      across many accounts.
+import { and, eq, gt, sql } from "drizzle-orm";
+import { db } from "@/db";
+import { loginAttempts, users } from "@/db/schema";
+
+export const MAX_FAILED_ATTEMPTS = 5;
+export const LOCKOUT_MS = 15 * 60 * 1000;
+const WINDOW_MS = 5 * 60 * 1000;
+const MAX_ATTEMPTS_PER_WINDOW = 10;
+
+export type RateLimitResult = { allowed: true } | { allowed: false; retryAfterSeconds: number };
+
+export async function checkLoginRateLimit(email: string, ip: string | null): Promise<RateLimitResult> {
+  const since = new Date(Date.now() - WINDOW_MS);
+
+  const [{ count: byEmail }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(loginAttempts)
+    .where(and(eq(loginAttempts.email, email), gt(loginAttempts.createdAt, since)));
+
+  if (byEmail >= MAX_ATTEMPTS_PER_WINDOW) {
+    return { allowed: false, retryAfterSeconds: Math.ceil(WINDOW_MS / 1000) };
+  }
+
+  if (ip) {
+    const [{ count: byIp }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(loginAttempts)
+      .where(and(eq(loginAttempts.ip, ip), gt(loginAttempts.createdAt, since)));
+    if (byIp >= MAX_ATTEMPTS_PER_WINDOW * 3) {
+      return { allowed: false, retryAfterSeconds: Math.ceil(WINDOW_MS / 1000) };
+    }
+  }
+
+  const [user] = await db
+    .select({ lockedUntil: users.lockedUntil })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  if (user?.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    return { allowed: false, retryAfterSeconds: Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000) };
+  }
+
+  return { allowed: true };
 }
 
-const buckets = new Map<string, Bucket>();
+export async function recordLoginAttempt(email: string, ip: string | null, success: boolean): Promise<void> {
+  await db.insert(loginAttempts).values({ email, ip, success });
 
-// Periodically sweep expired buckets so the map can't grow unbounded.
-function sweep(now: number) {
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt <= now) buckets.delete(key);
+  if (success) {
+    await db.update(users).set({ failedLoginCount: 0, lockedUntil: null }).where(eq(users.email, email));
+    return;
   }
-}
 
-let lastSweep = 0;
+  const [user] = await db
+    .select({ id: users.id, failedLoginCount: users.failedLoginCount })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+  if (!user) return; // do not reveal account existence via side effects
 
-export interface RateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  resetAt: number;
-}
-
-export function consumeRateLimit(key: string, limit: number, windowMs: number): RateLimitResult {
-  const now = Date.now();
-  if (now - lastSweep > windowMs) {
-    sweep(now);
-    lastSweep = now;
-  }
-  const existing = buckets.get(key);
-  if (!existing || existing.resetAt <= now) {
-    const resetAt = now + windowMs;
-    buckets.set(key, { count: 1, resetAt });
-    return { allowed: true, remaining: limit - 1, resetAt };
-  }
-  if (existing.count >= limit) {
-    return { allowed: false, remaining: 0, resetAt: existing.resetAt };
-  }
-  existing.count += 1;
-  return { allowed: true, remaining: limit - existing.count, resetAt: existing.resetAt };
-}
-
-/** Test-only helper to reset state between test files. */
-export function __resetRateLimitsForTests() {
-  buckets.clear();
+  const nextCount = user.failedLoginCount + 1;
+  const lockedUntil = nextCount >= MAX_FAILED_ATTEMPTS ? new Date(Date.now() + LOCKOUT_MS) : null;
+  await db
+    .update(users)
+    .set({ failedLoginCount: lockedUntil ? 0 : nextCount, lockedUntil })
+    .where(eq(users.id, user.id));
 }

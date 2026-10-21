@@ -1,18 +1,28 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/apiUtils";
+import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { secureRoute, jsonError } from "@/lib/apiUtils";
 
-export const dynamic = "force-dynamic";
-
-/**
- * Deliberately public: it never reveals anything beyond "who, if anyone, is
- * currently signed in on this browser", which the browser already knows via
- * its own cookie jar. This lets the frontend bootstrap auth UI state without
- * a dedicated "am I logged in" throw-away 401.
- */
-export async function GET(req: NextRequest) {
-  const session = await getSession(req);
-  if (!session) return NextResponse.json({ user: null });
-  return NextResponse.json({
-    user: { id: session.sub, email: session.email, role: session.role, orgId: session.orgId },
-  });
-}
+// Returns only the caller's own identity — never trusts or echoes any
+// client-supplied identity claim (userId/orgId/role always come from the
+// server-verified session, see src/lib/session.ts).
+export const GET = secureRoute({
+  method: "GET",
+  path: "/api/auth/session",
+  handler: async ({ session }) => {
+    if (!session) return jsonError(401, "Authentication required");
+    const [user] = await db
+      .select({ email: users.email, mustChangePassword: users.mustChangePassword })
+      .from(users)
+      .where(eq(users.id, session.userId))
+      .limit(1);
+    return NextResponse.json({
+      userId: session.userId,
+      orgId: session.orgId,
+      role: session.role,
+      email: user?.email,
+      mustChangePassword: user?.mustChangePassword ?? false,
+    });
+  },
+});

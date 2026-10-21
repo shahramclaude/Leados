@@ -1,50 +1,75 @@
-import { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { people, actors, teams } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { resolveActor } from "@/lib/requestActor";
-import { toErrorResponse } from "@/lib/apiError";
-import { isHr, isExecutive } from "@/lib/accessControl";
+import { people } from "@/db/schema";
+import { jsonError, parseQuery, readJson, secureRoute } from "@/lib/apiUtils";
+import { peopleListQuerySchema, personCreateSchema } from "@/lib/validation/schemas";
+import { recordAuditEvent } from "@/lib/audit";
+import { getClientIp } from "@/lib/session";
 
-export const dynamic = "force-dynamic";
+// GET: org-scoped list. `session.orgId` (server-verified) is the ONLY source
+// of tenant scoping — never a client-supplied orgId/query param. This is
+// what makes horizontal (cross-tenant) escalation impossible from this
+// route: the WHERE clause always includes `eq(people.orgId, session.orgId)`.
+export const GET = secureRoute({
+  method: "GET",
+  path: "/api/people",
+  handler: async ({ request, session }) => {
+    if (!session) return jsonError(401, "Authentication required");
+    const parsedQuery = parseQuery(new URL(request.url), peopleListQuerySchema);
+    if (!parsedQuery.ok) return parsedQuery.response;
+    const { q, limit, offset } = parsedQuery.data;
 
-/**
- * Roster listing, scoped at the repository layer:
- *  - HR/executive: full roster.
- *  - Manager: direct reports only.
- *  - Employee: self only.
- */
-export async function GET(req: NextRequest) {
-  try {
-    const actor = await resolveActor(req);
-
-    const rows = await db
-      .select({
-        id: actors.id,
-        name: actors.name,
-        email: actors.email,
-        role: people.role,
-        title: people.title,
-        teamId: people.teamId,
-        teamName: teams.name,
-        managerId: people.managerId,
-        status: people.status,
-      })
-      .from(people)
-      .innerJoin(actors, eq(actors.id, people.id))
-      .leftJoin(teams, eq(teams.id, people.teamId));
-
-    let scoped = rows;
-    if (isHr(actor) || isExecutive(actor)) {
-      scoped = rows;
-    } else if (actor.globalRole === "manager") {
-      scoped = rows.filter((r) => r.managerId === actor.id || r.id === actor.id);
-    } else {
-      scoped = rows.filter((r) => r.id === actor.id);
+    const conditions = [eq(people.orgId, session.orgId), isNull(people.deletedAt)];
+    if (q) {
+      conditions.push(or(ilike(people.fullName, `%${q}%`), ilike(people.email, `%${q}%`))!);
     }
 
-    return Response.json({ actor: { id: actor.id, role: actor.globalRole }, people: scoped });
-  } catch (err) {
-    return toErrorResponse(err);
-  }
-}
+    const rows = await db
+      .select()
+      .from(people)
+      .where(and(...conditions))
+      .orderBy(desc(people.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    await recordAuditEvent({
+      orgId: session.orgId,
+      actorUserId: session.userId,
+      actorRole: session.role,
+      action: "people.list",
+      resourceType: "person",
+      ip: await getClientIp(),
+      metadata: { count: rows.length, q: q ?? null, limit, offset },
+    });
+
+    return NextResponse.json({ people: rows });
+  },
+});
+
+export const POST = secureRoute({
+  method: "POST",
+  path: "/api/people",
+  handler: async ({ request, session }) => {
+    if (!session) return jsonError(401, "Authentication required");
+    const parsed = await readJson(request, personCreateSchema);
+    if (!parsed.ok) return parsed.response;
+
+    const [row] = await db
+      .insert(people)
+      .values({ ...parsed.data, orgId: session.orgId, createdByUserId: session.userId })
+      .returning();
+
+    await recordAuditEvent({
+      orgId: session.orgId,
+      actorUserId: session.userId,
+      actorRole: session.role,
+      action: "people.create",
+      resourceType: "person",
+      resourceId: row.id,
+      ip: await getClientIp(),
+    });
+
+    return NextResponse.json({ person: row }, { status: 201 });
+  },
+});

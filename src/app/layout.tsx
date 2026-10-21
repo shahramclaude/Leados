@@ -1,20 +1,23 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 import "./globals.css";
-import Nav from "@/components/Nav";
 
 export const metadata: Metadata = {
   title: "LEADOS",
-  description: "LEADOS — capture, finding, decision, approval, automation, board pack.",
+  description: "LEADOS — Part 17: security-hardened foundation.",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Reading the nonce here is mostly illustrative: Next.js auto-applies the
+  // nonce from the `Content-Security-Policy` request header (set in
+  // src/proxy.ts) to its own framework-injected scripts. If this app adds a
+  // hand-written <script> tag in the future, pass `nonce={nonce}` on it.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
-        <Nav />
-        <div className="mx-auto max-w-6xl px-6 py-10">{children}</div>
-      </body>
+    <html lang="en" data-csp-nonce={nonce}>
+      <body className="bg-slate-50 text-slate-900 antialiased">{children}</body>
     </html>
   );
 }

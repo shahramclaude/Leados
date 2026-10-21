@@ -1,78 +1,104 @@
-import { NextRequest, NextResponse } from "next/server";
-import {
-  ApiError,
-  enforceRateLimit,
-  getClientIp,
-  getCorrelationId,
-  jsonError,
-  parseJsonBody,
-} from "@/lib/apiUtils";
-import { CSRF_COOKIE, CSRF_HEADER, csrfCookieOptions, generateCsrfToken, verifyCsrf } from "@/lib/csrf";
-import { loginSchema } from "@/lib/validation";
-import { AuthServiceError, authenticateUser, createSessionForUser } from "@/lib/authService";
+import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { jsonError, readJson, secureRoute } from "@/lib/apiUtils";
+import { loginSchema } from "@/lib/validation/schemas";
+import { verifyPassword } from "@/lib/crypto";
+import { checkLoginRateLimit, recordLoginAttempt } from "@/lib/rateLimit";
+import { createSession, getClientIp } from "@/lib/session";
+import { issueCsrfToken, verifyCsrf } from "@/lib/csrf";
 import { recordAuditEvent } from "@/lib/audit";
-import { sessionCookieOptions, SESSION_COOKIE } from "@/lib/session";
 
-export const dynamic = "force-dynamic";
+// Login is intentionally registered as `public` (unauthenticated by
+// definition) but still requires a valid CSRF token: the client must call
+// GET /api/auth/csrf first. This stops a cross-site form POST from driving
+// the login endpoint (login CSRF / session-fixation-via-forced-login) even
+// though no session exists yet.
+export const POST = secureRoute({
+  method: "POST",
+  path: "/api/auth/login",
+  handler: async ({ request }) => {
+    const csrfOk = await verifyCsrf(request);
+    if (!csrfOk) return jsonError(403, "CSRF validation failed");
 
-export async function POST(req: NextRequest) {
-  const correlationId = getCorrelationId(req);
-  const ip = getClientIp(req);
-  const userAgent = req.headers.get("user-agent");
+    const parsed = await readJson(request, loginSchema);
+    if (!parsed.ok) return parsed.response;
+    const { email, password } = parsed.data;
 
-  // Dual rate limit: per-IP (blunts distributed guessing against one IP) is
-  // intentionally tighter than typical traffic; account-level lockout in
-  // authenticateUser() covers credential stuffing across many IPs.
-  const limited = enforceRateLimit(req, "auth:login", 10, 60 * 1000);
-  if (limited) return limited;
+    const ip = await getClientIp();
 
-  const cookieToken = req.cookies.get(CSRF_COOKIE)?.value;
-  const headerToken = req.headers.get(CSRF_HEADER);
-  if (!verifyCsrf(cookieToken, headerToken)) {
-    return jsonError(403, "CSRF_REJECTED", "Missing or invalid CSRF token.", correlationId);
-  }
+    const rateLimit = await checkLoginRateLimit(email, ip);
+    if (!rateLimit.allowed) {
+      await recordAuditEvent({
+        orgId: null,
+        actorUserId: null,
+        action: "auth.lockout",
+        resourceType: "user",
+        resourceId: null,
+        reason: "rate limit or account lockout in effect",
+        ip,
+        metadata: { email },
+      });
+      return jsonError(429, "Too many attempts. Try again later.", {
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+      });
+    }
 
-  try {
-    const body = await parseJsonBody(req, loginSchema);
-    const user = await authenticateUser(body.email, body.password);
-    const { token, maxAgeSeconds } = await createSessionForUser(user, ip, userAgent);
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
-    await recordAuditEvent({
-      correlationId,
+    // Always run a hash verification, even for a non-existent user, against
+    // a fixed dummy hash so response timing does not reveal account
+    // existence (mitigates email enumeration via timing side channel).
+    const DUMMY_HASH =
+      "scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
+
+    if (!user || !passwordOk || user.status !== "active") {
+      await recordLoginAttempt(email, ip, false);
+      await recordAuditEvent({
+        orgId: user?.orgId ?? null,
+        actorUserId: user?.id ?? null,
+        action: "auth.login.failure",
+        resourceType: "user",
+        resourceId: user?.id ?? null,
+        reason: !user ? "unknown email" : user.status !== "active" ? "account disabled" : "bad password",
+        ip,
+        metadata: { email },
+      });
+      return jsonError(401, "Invalid email or password");
+    }
+
+    await recordLoginAttempt(email, ip, true);
+
+    const userAgent = request.headers.get("user-agent");
+    const session = await createSession({
+      userId: user.id,
       orgId: user.orgId,
-      actorUserId: user.id,
-      actorEmail: user.email,
-      action: "auth.login.success",
-      resourceType: "session",
+      role: user.role,
+      securityStamp: user.securityStamp,
       ip,
       userAgent,
     });
+    // Rotate the CSRF token on privilege boundary crossing (anonymous ->
+    // authenticated) so a pre-login token cannot be replayed post-login.
+    await issueCsrfToken();
 
-    const res = NextResponse.json({
-      user: { id: user.id, email: user.email, role: user.role, orgId: user.orgId },
+    await recordAuditEvent({
+      orgId: user.orgId,
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: "auth.login.success",
+      resourceType: "user",
+      resourceId: user.id,
+      ip,
+      userAgent,
+      metadata: {},
     });
-    res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(maxAgeSeconds));
-    res.cookies.set(CSRF_COOKIE, generateCsrfToken(), csrfCookieOptions());
-    return res;
-  } catch (err) {
-    if (err instanceof AuthServiceError) {
-      await recordAuditEvent({
-        correlationId,
-        orgId: null,
-        actorUserId: null,
-        actorEmail: null,
-        action: err.code === "ACCOUNT_LOCKED" ? "auth.lockout" : "auth.login.failure",
-        resourceType: "session",
-        reason: err.code,
-        ip,
-        userAgent,
-      });
-      const status = err.code === "INVALID_CREDENTIALS" ? 401 : 423;
-      return jsonError(status, err.code, err.message, correlationId);
-    }
-    if (err instanceof ApiError) {
-      return jsonError(err.status, err.code, err.message, correlationId);
-    }
-    return jsonError(500, "INTERNAL_ERROR", "Login failed.", correlationId);
-  }
-}
+
+    return NextResponse.json({
+      user: { id: session.userId, orgId: session.orgId, role: session.role, email: user.email },
+      mustChangePassword: user.mustChangePassword,
+    });
+  },
+});

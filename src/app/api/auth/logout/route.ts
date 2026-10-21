@@ -1,8 +1,23 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE_NAME } from "@/lib/session";
+import { secureRoute } from "@/lib/apiUtils";
+import { destroySession } from "@/lib/session";
+import { recordAuditEvent } from "@/lib/audit";
 
-export async function POST() {
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE_NAME, "", { path: "/", maxAge: 0 });
-  return response;
-}
+export const POST = secureRoute({
+  method: "POST",
+  path: "/api/auth/logout",
+  handler: async ({ session }) => {
+    if (session) {
+      await destroySession(session.sessionId);
+      await recordAuditEvent({
+        orgId: session.orgId,
+        actorUserId: session.userId,
+        actorRole: session.role,
+        action: "auth.logout",
+        resourceType: "user",
+        resourceId: session.userId,
+      });
+    }
+    return NextResponse.json({ ok: true });
+  },
+});
