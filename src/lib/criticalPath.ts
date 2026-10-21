@@ -1,108 +1,81 @@
-/**
- * criticalPath.ts — classical Critical Path Method (CPM) over a DAG of work
- * items, plus an optional PERT-style expected-duration input
- * (optimistic/likely/pessimistic -> beta-approximation mean & variance).
- * Used by `executionEngine.ts` to produce a deterministic baseline schedule
- * which the Monte Carlo / discrete-event layer then perturbs stochastically.
- */
+// C. Critical path method (CPM) with float — pure, deterministic graph math.
+// Used both for the "today's plan" critical path view and, sampled many times,
+// as the engine behind delivery.ts's Monte Carlo delivery-date distribution.
 
-export interface CPMTask {
-  id: string;
-  durationDays: number;
-  dependsOn: string[];
+export type CpmNode = { id: number; duration: number; dependsOn: number[] };
+
+export type CpmResult = {
+  finish: number;
+  schedule: Record<number, { ES: number; EF: number; LS: number; LF: number; float: number; critical: boolean }>;
+  criticalPath: number[];
+};
+
+export function computeCPM(nodes: CpmNode[]): CpmResult {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const ES = new Map<number, number>();
+  const EF = new Map<number, number>();
+
+  // Forward pass — topological by `dependsOn` since sequence ids are monotonic in seed data,
+  // but we resolve generically via repeated relaxation to stay correct for any ordering.
+  const order = topoSort(nodes);
+  for (const id of order) {
+    const n = byId.get(id)!;
+    const es = n.dependsOn.length === 0 ? 0 : Math.max(...n.dependsOn.map((d) => EF.get(d) ?? 0));
+    ES.set(id, es);
+    EF.set(id, es + n.duration);
+  }
+
+  const finish = Math.max(0, ...[...EF.values()]);
+
+  const hasSuccessor = new Set<number>();
+  for (const n of nodes) for (const d of n.dependsOn) hasSuccessor.add(d);
+
+  const LF = new Map<number, number>();
+  const LS = new Map<number, number>();
+  for (const id of [...order].reverse()) {
+    const n = byId.get(id)!;
+    const successors = nodes.filter((m) => m.dependsOn.includes(id));
+    const lf = successors.length === 0 ? finish : Math.min(...successors.map((s) => LS.get(s.id) ?? finish));
+    LF.set(id, lf);
+    LS.set(id, lf - n.duration);
+  }
+
+  const schedule: CpmResult["schedule"] = {};
+  const criticalPath: number[] = [];
+  for (const n of nodes) {
+    const es = ES.get(n.id)!;
+    const ef = EF.get(n.id)!;
+    const ls = LS.get(n.id)!;
+    const lf = LF.get(n.id)!;
+    const float = round(ls - es);
+    const critical = float <= 0.0001;
+    schedule[n.id] = { ES: es, EF: ef, LS: ls, LF: lf, float, critical };
+    if (critical) criticalPath.push(n.id);
+  }
+
+  return { finish, schedule, criticalPath };
 }
 
-export interface CPMResult {
-  earliestStart: Record<string, number>;
-  earliestFinish: Record<string, number>;
-  latestStart: Record<string, number>;
-  latestFinish: Record<string, number>;
-  slack: Record<string, number>;
-  criticalPath: string[];
-  projectDurationDays: number;
+function round(n: number) {
+  return Math.round(n * 100) / 100;
 }
 
-function topoSort(tasks: CPMTask[]): string[] {
-  const byId = new Map(tasks.map((t) => [t.id, t]));
-  const visited = new Set<string>();
-  const temp = new Set<string>();
-  const order: string[] = [];
+function topoSort(nodes: CpmNode[]): number[] {
+  const visited = new Set<number>();
+  const order: number[] = [];
+  const byId = new Map(nodes.map((n) => [n.id, n]));
 
-  function visit(id: string) {
+  function visit(id: number, stack: Set<number>) {
     if (visited.has(id)) return;
-    if (temp.has(id)) throw new Error(`Cycle detected in task graph at '${id}'`);
-    temp.add(id);
-    const t = byId.get(id);
-    if (t) for (const dep of t.dependsOn) visit(dep);
-    temp.delete(id);
+    if (stack.has(id)) return; // cycle guard — treat as resolved to avoid infinite loop
+    stack.add(id);
+    const n = byId.get(id);
+    if (n) for (const d of n.dependsOn) visit(d, stack);
+    stack.delete(id);
     visited.add(id);
     order.push(id);
   }
 
-  for (const t of tasks) visit(t.id);
+  for (const n of nodes) visit(n.id, new Set());
   return order;
-}
-
-export function computeCriticalPath(tasks: CPMTask[]): CPMResult {
-  if (tasks.length === 0) {
-    return {
-      earliestStart: {},
-      earliestFinish: {},
-      latestStart: {},
-      latestFinish: {},
-      slack: {},
-      criticalPath: [],
-      projectDurationDays: 0,
-    };
-  }
-  const byId = new Map(tasks.map((t) => [t.id, t]));
-  const order = topoSort(tasks);
-
-  const earliestStart: Record<string, number> = {};
-  const earliestFinish: Record<string, number> = {};
-  for (const id of order) {
-    const t = byId.get(id)!;
-    const es = t.dependsOn.length === 0 ? 0 : Math.max(...t.dependsOn.map((d) => earliestFinish[d] ?? 0));
-    earliestStart[id] = es;
-    earliestFinish[id] = es + t.durationDays;
-  }
-
-  const projectDurationDays = Math.max(0, ...Object.values(earliestFinish));
-
-  const successors = new Map<string, string[]>();
-  for (const t of tasks) {
-    for (const dep of t.dependsOn) {
-      const arr = successors.get(dep) ?? [];
-      arr.push(t.id);
-      successors.set(dep, arr);
-    }
-  }
-
-  const latestFinish: Record<string, number> = {};
-  const latestStart: Record<string, number> = {};
-  for (let i = order.length - 1; i >= 0; i--) {
-    const id = order[i];
-    const t = byId.get(id)!;
-    const succ = successors.get(id) ?? [];
-    const lf = succ.length === 0 ? projectDurationDays : Math.min(...succ.map((s) => latestStart[s] ?? projectDurationDays));
-    latestFinish[id] = lf;
-    latestStart[id] = lf - t.durationDays;
-  }
-
-  const slack: Record<string, number> = {};
-  const criticalPath: string[] = [];
-  for (const id of order) {
-    const s = latestStart[id] - earliestStart[id];
-    slack[id] = s;
-    if (Math.abs(s) < 1e-9) criticalPath.push(id);
-  }
-
-  return { earliestStart, earliestFinish, latestStart, latestFinish, slack, criticalPath, projectDurationDays };
-}
-
-/** PERT three-point estimate -> (mean, variance) via the standard beta approximation. */
-export function pertEstimate(optimistic: number, mostLikely: number, pessimistic: number) {
-  const mean = (optimistic + 4 * mostLikely + pessimistic) / 6;
-  const stdDev = (pessimistic - optimistic) / 6;
-  return { mean, stdDev, variance: stdDev * stdDev };
 }

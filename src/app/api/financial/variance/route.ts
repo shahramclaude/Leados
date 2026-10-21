@@ -1,26 +1,16 @@
-import { db } from "@/db";
-import { financialPlanLines, financialEvents } from "@/db/schema";
-import { jsonError } from "@/lib/api";
-import { buildVarianceReport, type PlanLine } from "@/lib/financeEngine";
-import type { FinancialEventRecord } from "@/lib/financialOS";
+import { varianceAnalysis, derivedHistoricalPnL } from "@/lib/financialOS";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const now = new Date();
-    const month = searchParams.get("month") ?? `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-
-    const planRows = await db.select().from(financialPlanLines);
-    const actualRows = await db.select().from(financialEvents);
-
-    const plan: PlanLine[] = planRows.map((p) => ({ periodMonth: p.periodMonth, domain: p.domain, team: p.team, category: p.category, type: p.type as PlanLine["type"], plannedAmount: p.plannedAmount }));
-    const actuals: FinancialEventRecord[] = actualRows.map((a) => ({ date: a.date, type: a.type as FinancialEventRecord["type"], domain: a.domain, team: a.team, amount: a.amount, category: a.category, description: a.description }));
-
-    const report = buildVarianceReport(plan, actuals, month);
-    return Response.json(report);
-  } catch (err) {
-    return jsonError((err as Error).message, 500);
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const month = searchParams.get("month");
+  if (!month) {
+    const pnl = await derivedHistoricalPnL();
+    const months = [...new Set(pnl.map((p) => p.month))].sort();
+    return Response.json({ availableMonths: months, hint: "Pass ?month=YYYY-MM (not the first available month — there is no prior month to build a counterfactual plan from)." });
   }
+  const result = await varianceAnalysis(month);
+  if (!result) return Response.json({ error: "No prior month available to compute a plan counterfactual for this month." }, { status: 400 });
+  return Response.json(result);
 }

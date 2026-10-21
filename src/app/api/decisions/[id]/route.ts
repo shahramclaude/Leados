@@ -1,33 +1,33 @@
-import { db } from "@/db";
-import { decisions } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { NextRequest } from "next/server";
+import { getDecisionDetail, criteriaScore, expectedValueDistribution, preMortemPrompts } from "@/lib/decisionEngine";
+import { num } from "@/lib/format";
+import type { Reversibility } from "@/lib/decisionTypes";
 
 export const dynamic = "force-dynamic";
 
-const VALID_STATUSES = new Set(["pending", "approved", "rejected", "scheduled"]);
-
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const decisionId = Number(id);
-  if (!Number.isInteger(decisionId)) {
-    return Response.json({ error: "Invalid decision id." }, { status: 400 });
-  }
+  const detail = await getDecisionDetail(Number(id));
+  if (!detail) return Response.json({ error: "not found" }, { status: 404 });
 
-  const body = await request.json().catch(() => null);
-  if (!body || typeof body.status !== "string" || !VALID_STATUSES.has(body.status)) {
-    return Response.json({ error: "A valid status is required." }, { status: 400 });
-  }
+  const options = detail.options.map((o) => {
+    const outcomes = detail.outcomesByOption.get(o.id) ?? [];
+    const ev = outcomes.length
+      ? expectedValueDistribution(outcomes.map((x) => ({ scenarioLabel: x.scenarioLabel, probability: num(x.probability), payoffLow: num(x.payoffLow), payoffBase: num(x.payoffBase), payoffHigh: num(x.payoffHigh) })))
+      : null;
+    return {
+      ...o,
+      scores: o.scores as Record<string, number>,
+      weightedCriteriaScore: criteriaScore(o.scores as Record<string, number>, detail.criteria.map((c) => ({ id: c.id, weight: num(c.weight) }))),
+      ev,
+      outcomes,
+    };
+  });
 
-  const [updated] = await db
-    .update(decisions)
-    .set({ status: body.status, decidedAt: body.status === "pending" ? null : new Date() })
-    .where(eq(decisions.id, decisionId))
-    .returning();
-
-  if (!updated) {
-    return Response.json({ error: "Decision not found.", errorId: `dec-${decisionId}-404` }, { status: 404 });
-  }
-
-  return Response.json({ decision: updated });
+  return Response.json({
+    decision: detail.decision,
+    criteria: detail.criteria,
+    options,
+    retrospective: detail.retro,
+    preMortemPrompts: preMortemPrompts(detail.decision.reversibility as Reversibility),
+  });
 }

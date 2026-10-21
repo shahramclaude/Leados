@@ -1,139 +1,126 @@
--- Demo/seed data for the Financial Operating System (Part 6).
--- Clears and repopulates people, financial_events, finance_assumptions,
--- financial_plan_lines, and hiring_plan_items with a plausible ~40-person,
--- 9-month-history seed-stage company, plus a forward hiring plan and a
--- monthly budget so variance analysis has something to compare against.
+-- LEADOS Part 10 — financial domain seed.
+-- Idempotent: truncates the financial tables it owns before inserting.
+-- This file seeds (1) the assumption registry, (2) raw actual ledger lines in
+-- `financial_events`, and (3) covenant thresholds. `reported_actuals` (the
+-- independent reconciliation ground truth) is intentionally NOT seeded here —
+-- scripts/seed.ts derives it by aggregating these same financial_events rows,
+-- which is what proves the aggregation logic in financialOS.ts is correct
+-- (see the reconciliation test). A real deployment would instead populate
+-- `reported_actuals` from the accounting system's ledger close export.
 
-TRUNCATE TABLE financial_events, financial_plan_lines, hiring_plan_items, people RESTART IDENTITY CASCADE;
+TRUNCATE TABLE financial_events RESTART IDENTITY CASCADE;
+TRUNCATE TABLE reported_actuals RESTART IDENTITY CASCADE;
+TRUNCATE TABLE covenants RESTART IDENTITY CASCADE;
+TRUNCATE TABLE assumptions RESTART IDENTITY CASCADE;
 
--- finance_assumptions (singleton, keep existing id if present)
-DELETE FROM finance_assumptions;
-INSERT INTO finance_assumptions (current_cash_balance, baseline_monthly_revenue, baseline_revenue_growth_rate, gross_margin_pct, covenant_min_cash_months, covenant_min_cash_balance)
-VALUES (3000000, 72000, 0.03, 0.72, 3, 500000);
+-- ---------------------------------------------------------------------------
+-- Assumption registry: every driver the model uses, owned + justified + ranged
+-- ---------------------------------------------------------------------------
+INSERT INTO assumptions (key, label, category, owner, rationale, unit, low, base, high, version, effective_date, active) VALUES
+('revenue_growth_monthly', 'Blended monthly revenue growth (new + expansion)', 'revenue_growth', 'VP Sales — Dana Reyes', 'Trailing 6-month pipeline coverage and win-rate analysis; range reflects pipeline coverage uncertainty for the next two quarters.', '%/mo', 0.0200, 0.0400, 0.0700, 1, '2026-01-15', true),
+('gross_churn_monthly', 'Gross revenue churn, monthly', 'churn', 'Head of CS — Priya Nair', 'Cohort churn analysis over trailing 12 months; high end reflects the competitive price-pressure scenario CS is tracking.', '%/mo', 0.0080, 0.0150, 0.0250, 1, '2026-01-15', true),
+('price_increase_annual', 'Annualized list price increase', 'price', 'CFO — Marcus Webb', 'Board-approved pricing committee range for FY26; low end assumes a price freeze if competitive pressure intensifies.', '%/yr', 0.0000, 0.0300, 0.0600, 1, '2026-01-15', true),
+('comp_inflation_annual', 'Fully-loaded comp inflation, annualized', 'comp_inflation', 'VP People — Jordan Lee', 'Benchmarked against Radford SaaS survey for our bands and geo mix; high end includes a retention-driven off-cycle adjustment.', '%/yr', 0.0300, 0.0450, 0.0700, 1, '2026-01-15', true),
+('hiring_plan_net_adds_monthly', 'Net headcount adds per month', 'hiring', 'VP People — Jordan Lee', 'Board-approved FY26 growth-investment hiring plan (pre-Series-B land grab), netted for planned attrition; range reflects hiring-manager capacity to onboard against an aggressive plan.', 'heads/mo', 4, 8, 14, 1, '2026-01-15', true),
+('fully_loaded_cost_per_head_monthly', 'Fully-loaded monthly cost per head', 'hiring', 'VP People — Jordan Lee', 'Blended OTE + benefits + payroll tax; FY26 plan skews senior (eng + enterprise sales), range reflects mix of IC vs. senior hires.', '$/head/mo', 12000, 13500, 16000, 1, '2026-01-15', true),
+('cogs_pct_of_revenue', 'COGS as % of revenue (hosting, support, payment processing)', 'other', 'CFO — Marcus Webb', 'Trailing 3-month actual ratio plus planned infra efficiency work; high end assumes efficiency work slips.', '% of revenue', 0.1800, 0.2200, 0.2700, 1, '2026-01-15', true),
+('opex_other_growth_monthly', 'Non-headcount opex growth, monthly', 'other', 'COO — Alicia Chen', 'Approved G&A/marketing program budget trend; high end includes a planned brand campaign that may be pulled forward.', '%/mo', 0.0050, 0.0150, 0.0300, 1, '2026-01-15', true),
+('payment_terms_days', 'Average customer payment terms (DSO proxy)', 'payment_terms', 'Controller — Sam Osei', 'Blended NET terms across current contract mix; high end reflects enterprise deals currently in negotiation requesting NET-60.', 'days', 30, 45, 60, 1, '2026-01-15', true),
+('min_runway_months_board_comfort', 'Board comfort threshold for cash runway', 'other', 'CFO — Marcus Webb', 'Board-stated minimum comfort level before requiring an active fundraising motion, set at last board meeting.', 'months', 9, 12, 15, 1, '2026-01-15', true),
+('fx_usd_eur', 'USD/EUR drift applied to EUR-denominated contracts', 'fx', 'CFO — Marcus Webb', 'Trailing 12-month volatility band from treasury forecast. REGISTERED BUT NOT YET WIRED into the projection model (EUR book is <5% of revenue) — see AI-SESSION-LOG.md honesty note.', '%/yr', -0.0500, 0.0000, 0.0500, 1, '2026-01-15', true),
+('ramp_productivity_months', 'Months for a new rep/engineer to reach full productivity', 'ramp', 'VP Sales — Dana Reyes', 'Onboarding cohort analysis, last 4 cohorts. REGISTERED BUT NOT YET WIRED into the dollar projection — used qualitatively in execution key-person-risk scoring today.', 'months', 2, 3, 5, 1, '2026-01-15', true);
 
--- people: ~40 across domains/teams. Some have monthlySalary on file; others
--- are left NULL on purpose to exercise the role-cost-fallback estimator.
-INSERT INTO people (name, role, domain, team, monthly_salary, active) VALUES
-('Ava Thompson', 'Engineering Manager', 'engineering', 'Platform Engineering', 22500, true),
-('Liam Chen', 'Senior Software Engineer', 'engineering', 'Platform Engineering', 19500, true),
-('Noah Patel', 'Software Engineer', 'engineering', 'Platform Engineering', NULL, true),
-('Mia Rodriguez', 'Software Engineer', 'engineering', 'Platform Engineering', NULL, true),
-('Ethan Kim', 'Staff Engineer', 'engineering', 'Platform Engineering', 24500, true),
-('Olivia Nguyen', 'Senior Software Engineer', 'engineering', 'Product Engineering', 19800, true),
-('Lucas Garcia', 'Software Engineer', 'engineering', 'Product Engineering', NULL, true),
-('Sophia Martin', 'Software Engineer', 'engineering', 'Product Engineering', NULL, true),
-('Mason Lee', 'Data Scientist', 'engineering', 'Product Engineering', 16800, true),
-('Isabella Brown', 'Principal Engineer', 'engineering', 'Product Engineering', 27500, true),
-('James Wilson', 'Product Manager', 'product', 'Core Product', 17500, true),
-('Amelia Davis', 'Senior Product Manager', 'product', 'Core Product', 20800, true),
-('Benjamin Moore', 'Product Manager', 'product', 'Core Product', NULL, true),
-('Charlotte Taylor', 'Designer', 'design', 'Design', 13800, true),
-('Henry Anderson', 'Senior Designer', 'design', 'Design', 16500, true),
-('Evelyn Thomas', 'Designer', 'design', 'Design', NULL, true),
-('Alexander Jackson', 'Account Executive', 'sales', 'Enterprise Sales', 13500, true),
-('Harper White', 'Account Executive', 'sales', 'Enterprise Sales', NULL, true),
-('Daniel Harris', 'Sales Manager', 'sales', 'Enterprise Sales', 18500, true),
-('Abigail Martinez', 'Sales Rep', 'sales', 'SMB Sales', NULL, true),
-('Matthew Thompson', 'Sales Rep', 'sales', 'SMB Sales', NULL, true),
-('Ella Robinson', 'Customer Success Manager', 'sales', 'SMB Sales', 11800, true),
-('Joseph Clark', 'VP Sales', 'sales', 'Enterprise Sales', 27500, true),
-('Avery Lewis', 'Marketing Manager', 'marketing', 'Growth Marketing', 14500, true),
-('Scarlett Walker', 'Marketing Specialist', 'marketing', 'Growth Marketing', NULL, true),
-('Jack Hall', 'Marketing Specialist', 'marketing', 'Growth Marketing', NULL, true),
-('Grace Allen', 'Data Analyst', 'marketing', 'Growth Marketing', 11900, true),
-('Samuel Young', 'Operations Manager', 'operations', 'Business Operations', 15400, true),
-('Victoria King', 'Customer Support', 'operations', 'Business Operations', NULL, true),
-('David Wright', 'Customer Support', 'operations', 'Business Operations', NULL, true),
-('Zoey Scott', 'Office Manager', 'operations', 'Business Operations', 8700, true),
-('Carter Green', 'Finance Analyst', 'finance', 'Finance & Accounting', 12800, true),
-('Luna Baker', 'Controller', 'finance', 'Finance & Accounting', 17900, true),
-('Wyatt Adams', 'CFO', 'finance', 'Finance & Accounting', 31000, true),
-('Chloe Nelson', 'HR Manager', 'people', 'People Ops', 13200, true),
-('Levi Hill', 'Recruiter', 'people', 'People Ops', NULL, true),
-('Aria Campbell', 'Recruiter', 'people', 'People Ops', NULL, true),
-('Leo Mitchell', 'CEO', 'other', 'Leadership', 29000, true),
-('Nora Roberts', 'COO', 'other', 'Leadership', 27500, true),
-('Hudson Carter', 'Software Engineer', 'engineering', 'Platform Engineering', NULL, false);
+-- ---------------------------------------------------------------------------
+-- Actual ledger lines (financial_events, source='actual'). 8 historical months.
+-- ---------------------------------------------------------------------------
 
--- financial_events: 9 months of per-team operating expense + monthly
--- revenue + one funding event + a latest P&L summary. Expenses step up
--- ~14% in the most recent 3 months to exercise the "accelerating burn"
--- trend classifier.
-WITH months AS (
-  SELECT gs AS month_offset, date_trunc('month', now()) - (gs || ' months')::interval + interval '14 days' AS event_date
-  FROM generate_series(0, 8) AS gs
-),
-teams AS (
-  SELECT * FROM (VALUES
-    ('engineering', 'Platform Engineering', 95000),
-    ('engineering', 'Product Engineering', 88000),
-    ('product',     'Core Product',        42000),
-    ('design',      'Design',              28000),
-    ('sales',       'Enterprise Sales',    46000),
-    ('sales',       'SMB Sales',           22000),
-    ('marketing',   'Growth Marketing',    34000),
-    ('operations',  'Business Operations', 26000),
-    ('finance',     'Finance & Accounting',24000),
-    ('people',      'People Ops',          16000)
-  ) AS t(domain, team, base_monthly_cost)
-)
-INSERT INTO financial_events (date, type, domain, team, amount, description, category)
-SELECT
-  m.event_date,
-  'expense',
-  t.domain,
-  t.team,
-  ROUND((t.base_monthly_cost * (CASE WHEN m.month_offset <= 2 THEN 1.14 ELSE 1.0 END)
-         * (0.95 + (('x' || substr(md5(t.team || m.month_offset::text), 1, 6))::bit(24)::int::numeric / 16777215 * 0.1)))::numeric, 2),
-  'Monthly operating expense — ' || t.team,
-  'opex'
-FROM months m
-CROSS JOIN teams t;
+-- Opening cash balance, carried as a financing inflow dated at the start of the tracked window.
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2025-06-01', 'financing', 'opening_cash_balance', 2500000.00, 'Cash on hand at the start of the tracked operating history (post Series A).', 'actual');
 
--- Monthly revenue, growing ~3%/month from a $55k base.
-INSERT INTO financial_events (date, type, domain, team, amount, description, category)
-SELECT
-  date_trunc('month', now()) - (gs || ' months')::interval + interval '20 days',
-  'revenue',
-  NULL,
-  NULL,
-  ROUND((55000 * POWER(1.03, 8 - gs))::numeric, 2),
-  'Monthly recurring revenue',
-  'revenue'
-FROM generate_series(0, 8) AS gs;
+-- NOTE ON SCALE: per-customer ACV is set at ~$26-27k/year (mid-market B2B SaaS,
+-- ~500-570 logos) so that revenue is in a realistic ratio to a 42-51 person
+-- headcount base. An earlier draft of this seed used SMB-style $295/mo pricing
+-- against the same headcount, which produced a historically-already-negative
+-- cash balance — an internally inconsistent "going concern" story. Fixed here.
 
--- One-time funding event 8 months ago.
-INSERT INTO financial_events (date, type, domain, team, amount, description, category)
-VALUES (date_trunc('month', now()) - interval '8 months' + interval '2 days', 'funding', NULL, NULL, 2500000, 'Seed extension round', 'funding');
+-- 2025-06
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source, units, unit_price) VALUES
+('2025-06-28', 'revenue', 'subscription', 1100000.00, '500 customers @ $2,200/mo', 'actual', 500, 2200.00);
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2025-06-28', 'cogs', 'hosting_support_payments', -253000.00, '23.0% of revenue', 'actual'),
+('2025-06-28', 'salaries', 'fully_loaded', -504000.00, '42 FTE @ $12,000/mo fully loaded', 'actual'),
+('2025-06-28', 'opex_other', 'ga_marketing', -60000.00, 'G&A + marketing programs', 'actual'),
+('2025-06-28', 'headcount', 'actual', 42, 'Headcount at month end (FTE)', 'actual');
 
--- Latest P&L summary (informational; excluded from burn-rate math by design).
-INSERT INTO financial_events (date, type, domain, team, amount, description, category)
-VALUES (date_trunc('month', now()) + interval '1 day', 'pl_summary', NULL, NULL, 1, 'Monthly P&L summary published to the board', 'reporting');
+-- 2025-07
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source, units, unit_price) VALUES
+('2025-07-28', 'revenue', 'subscription', 1131520.00, '512 customers @ $2,210/mo', 'actual', 512, 2210.00);
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2025-07-28', 'cogs', 'hosting_support_payments', -254592.00, '22.5% of revenue', 'actual'),
+('2025-07-28', 'salaries', 'fully_loaded', -518150.00, '43 FTE @ $12,050/mo fully loaded', 'actual'),
+('2025-07-28', 'opex_other', 'ga_marketing', -61000.00, 'G&A + marketing programs', 'actual'),
+('2025-07-28', 'headcount', 'actual', 43, 'Headcount at month end (FTE)', 'actual');
 
--- financial_plan_lines: current-month budget per team, set ~8% below what
--- actuals will land at so the variance report has a real, explainable
--- "we overspent engineering" story to tell.
-INSERT INTO financial_plan_lines (period_month, domain, team, category, type, planned_amount)
-SELECT date_trunc('month', now())::date, domain, team, 'opex', 'expense', base_monthly_cost * 0.92
-FROM (VALUES
-  ('engineering', 'Platform Engineering', 95000),
-  ('engineering', 'Product Engineering', 88000),
-  ('product',     'Core Product',        42000),
-  ('design',      'Design',              28000),
-  ('sales',       'Enterprise Sales',    46000),
-  ('sales',       'SMB Sales',           22000),
-  ('marketing',   'Growth Marketing',    34000),
-  ('operations',  'Business Operations', 26000),
-  ('finance',     'Finance & Accounting',24000),
-  ('people',      'People Ops',          16000)
-) AS t(domain, team, base_monthly_cost);
+-- 2025-08
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source, units, unit_price) VALUES
+('2025-08-28', 'revenue', 'subscription', 1157000.00, '520 customers @ $2,225/mo', 'actual', 520, 2225.00);
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2025-08-28', 'cogs', 'hosting_support_payments', -254540.00, '22.0% of revenue', 'actual'),
+('2025-08-28', 'salaries', 'fully_loaded', -532400.00, '44 FTE @ $12,100/mo fully loaded', 'actual'),
+('2025-08-28', 'opex_other', 'ga_marketing', -62500.00, 'G&A + marketing programs', 'actual'),
+('2025-08-28', 'headcount', 'actual', 44, 'Headcount at month end (FTE)', 'actual');
 
-INSERT INTO financial_plan_lines (period_month, domain, team, category, type, planned_amount)
-VALUES (date_trunc('month', now())::date, NULL, NULL, 'revenue', 'revenue', 68000);
+-- 2025-09 (includes a one-time legal cost)
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source, units, unit_price) VALUES
+('2025-09-28', 'revenue', 'subscription', 1180480.00, '527 customers @ $2,240/mo', 'actual', 527, 2240.00);
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2025-09-28', 'cogs', 'hosting_support_payments', -271510.40, '23.0% of revenue', 'actual'),
+('2025-09-28', 'salaries', 'fully_loaded', -546750.00, '45 FTE @ $12,150/mo fully loaded', 'actual'),
+('2025-09-28', 'opex_other', 'ga_marketing', -63000.00, 'G&A + marketing programs', 'actual'),
+('2025-09-28', 'one_time', 'legal', -25000.00, 'One-time legal cost, contract dispute settlement', 'actual'),
+('2025-09-28', 'headcount', 'actual', 45, 'Headcount at month end (FTE)', 'actual');
 
--- hiring_plan_items: a forward hiring plan so runway projections are
--- conditioned on planned headcount growth, not just historical burn.
-INSERT INTO hiring_plan_items (role, domain, team, start_month, monthly_cost_estimate, headcount_delta, scenario_tag) VALUES
-('Senior Software Engineer', 'engineering', 'Platform Engineering', date_trunc('month', now() + interval '1 month')::date, 19500, 1, 'base'),
-('Account Executive', 'sales', 'Enterprise Sales', date_trunc('month', now() + interval '2 months')::date, 13500, 1, 'base'),
-('Customer Success Manager', 'sales', 'SMB Sales', date_trunc('month', now() + interval '3 months')::date, 12500, 1, 'base');
+-- 2025-10
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source, units, unit_price) VALUES
+('2025-10-28', 'revenue', 'subscription', 1217250.00, '541 customers @ $2,250/mo', 'actual', 541, 2250.00);
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2025-10-28', 'cogs', 'hosting_support_payments', -273881.25, '22.5% of revenue', 'actual'),
+('2025-10-28', 'salaries', 'fully_loaded', -573400.00, '47 FTE @ $12,200/mo fully loaded', 'actual'),
+('2025-10-28', 'opex_other', 'ga_marketing', -64500.00, 'G&A + marketing programs', 'actual'),
+('2025-10-28', 'headcount', 'actual', 47, 'Headcount at month end (FTE)', 'actual');
+
+-- 2025-11 (includes a venture debt draw-down)
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source, units, unit_price) VALUES
+('2025-11-28', 'revenue', 'subscription', 1240740.00, '549 customers @ $2,260/mo', 'actual', 549, 2260.00);
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2025-11-28', 'cogs', 'hosting_support_payments', -272962.80, '22.0% of revenue', 'actual'),
+('2025-11-28', 'salaries', 'fully_loaded', -590400.00, '48 FTE @ $12,300/mo fully loaded', 'actual'),
+('2025-11-28', 'opex_other', 'ga_marketing', -66000.00, 'G&A + marketing programs', 'actual'),
+('2025-11-28', 'financing', 'venture_debt_drawdown', 500000.00, 'Venture debt tranche 2 draw-down', 'actual'),
+('2025-11-28', 'headcount', 'actual', 48, 'Headcount at month end (FTE)', 'actual');
+
+-- 2025-12 (holiday support cost bump)
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source, units, unit_price) VALUES
+('2025-12-28', 'revenue', 'subscription', 1266660.00, '558 customers @ $2,270/mo', 'actual', 558, 2270.00);
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2025-12-28', 'cogs', 'hosting_support_payments', -297765.10, '23.5% of revenue (holiday support coverage)', 'actual'),
+('2025-12-28', 'salaries', 'fully_loaded', -607600.00, '49 FTE @ $12,400/mo fully loaded', 'actual'),
+('2025-12-28', 'opex_other', 'ga_marketing', -67500.00, 'G&A + marketing programs', 'actual'),
+('2025-12-28', 'headcount', 'actual', 49, 'Headcount at month end (FTE)', 'actual');
+
+-- 2026-01
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source, units, unit_price) VALUES
+('2026-01-28', 'revenue', 'subscription', 1304160.00, '572 customers @ $2,280/mo', 'actual', 572, 2280.00);
+INSERT INTO financial_events (event_date, category, subcategory, amount, description, source) VALUES
+('2026-01-28', 'cogs', 'hosting_support_payments', -293436.00, '22.5% of revenue', 'actual'),
+('2026-01-28', 'salaries', 'fully_loaded', -637500.00, '51 FTE @ $12,500/mo fully loaded', 'actual'),
+('2026-01-28', 'opex_other', 'ga_marketing', -69000.00, 'G&A + marketing programs', 'actual'),
+('2026-01-28', 'headcount', 'actual', 51, 'Headcount at month end (FTE)', 'actual');
+
+-- ---------------------------------------------------------------------------
+-- Covenants
+-- ---------------------------------------------------------------------------
+INSERT INTO covenants (name, metric, operator, threshold, active) VALUES
+('Venture debt minimum cash covenant', 'min_cash', '>=', 1000000, true),
+('Board comfort runway covenant (informal)', 'cash_runway_months', '>=', 9, true);

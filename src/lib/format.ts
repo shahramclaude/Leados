@@ -1,34 +1,68 @@
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
+import { createHash } from "node:crypto";
 
-export function formatCurrency(value: number | string): string {
-  const n = typeof value === "string" ? Number(value) : value;
-  return currencyFormatter.format(n);
+export function money(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function formatPercent(value: number | string, digits = 1): string {
-  const n = typeof value === "string" ? Number(value) : value;
-  return `${n.toFixed(digits)}%`;
+export function pct(n: number, digits = 1): string {
+  return `${(n * 100).toFixed(digits)}%`;
 }
 
-export function formatNumber(value: number | string, digits = 0): string {
-  const n = typeof value === "string" ? Number(value) : value;
-  return n.toLocaleString("en-US", { maximumFractionDigits: digits });
+export function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-export function formatDate(value: string | Date): string {
-  const d = typeof value === "string" ? new Date(value) : value;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+export function num(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") return parseFloat(v);
+  return 0;
 }
 
-export function formatRelativeToAnchor(value: string | Date, anchor: Date): string {
-  const d = typeof value === "string" ? new Date(value) : value;
-  const diffDays = Math.round((d.getTime() - anchor.getTime()) / 86400000);
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Tomorrow";
-  if (diffDays === -1) return "Yesterday";
-  return diffDays > 0 ? `In ${diffDays} days` : `${Math.abs(diffDays)} days ago`;
+export function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+export function addDays(d: Date, days: number): Date {
+  const out = new Date(d.getTime());
+  out.setDate(out.getDate() + Math.round(days));
+  return out;
+}
+
+export function addMonths(d: Date, months: number): Date {
+  const out = new Date(d.getTime());
+  out.setMonth(out.getMonth() + months);
+  return out;
+}
+
+export function monthKey(d: Date | string): string {
+  const dt = typeof d === "string" ? new Date(d) : d;
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Deterministic stable-key JSON stringify used for content hashing (board pack determinism). */
+export function stableStringify(value: unknown): string {
+  return JSON.stringify(sortDeep(value));
+}
+
+function sortDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortDeep);
+  if (value && typeof value === "object" && !(value instanceof Date)) {
+    const obj = value as Record<string, unknown>;
+    return Object.keys(obj)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, k) => {
+        acc[k] = sortDeep(obj[k]);
+        return acc;
+      }, {});
+  }
+  return value;
+}
+
+export function sha256(input: string): string {
+  return createHash("sha256").update(input).digest("hex");
+}
+
+export function contentHash(value: unknown): string {
+  return sha256(stableStringify(value));
 }

@@ -1,139 +1,160 @@
-// decisionEngine — the decision intelligence workspace: weighted-criteria
-// scoring, expected-value under uncertainty (Monte Carlo, not a point
-// guess), reversible/irreversible ("one-way door" / "two-way door") framing,
-// pre-mortems, and automatic retrospective scoring once a decision's
-// deadline has passed.
-import { mulberry32 } from "@/lib/prng";
-import { calculateRealOptionValue } from "@/lib/realOptions";
-import {
-  DEFAULT_PRE_MORTEM_PROMPTS,
-  type Decision,
-  type DecisionCriterion,
-  type DecisionOption,
-  type PreMortemPrompt,
-} from "@/lib/decisionTypes";
+// D. Decision intelligence workspace — structured decision records, EV with
+// uncertainty (distributions, not points), reversibility classification,
+// pre-mortems, a hard "look at the downside before you decide" gate, and
+// automatic retrospectives at the review date.
+import { db } from "@/db";
+import { decisions, decisionOptions, decisionCriteria, decisionOutcomes, decisionRetrospectives } from "@/db/schema";
+import { eq, and, lte, isNull } from "drizzle-orm";
+import { num, round2 } from "@/lib/format";
+import { explain, type Explain } from "@/lib/explain";
+import { makeRng, sampleTriangular, distributionSummary } from "@/lib/simulation";
+import { recordCalibration } from "@/lib/calibration";
+import { PRE_MORTEM_PROMPTS_CORE, PRE_MORTEM_PROMPTS_ONE_WAY_DOOR, type Reversibility } from "@/lib/decisionTypes";
 
-export function generatePreMortem(): PreMortemPrompt[] {
-  return DEFAULT_PRE_MORTEM_PROMPTS.map((prompt) => ({ prompt }));
+export async function listDecisions() {
+  return db.select().from(decisions);
 }
 
-/** Weighted-criteria score in 0..1, normalizing weights so they don't need to sum to exactly 1. */
-export function computeWeightedScore(option: Pick<DecisionOption, "criteriaScores">, criteria: DecisionCriterion[]): number {
-  const totalWeight = criteria.reduce((s, c) => s + c.weight, 0) || 1;
-  const sum = criteria.reduce((s, c) => s + (option.criteriaScores[c.name] ?? 0) * c.weight, 0);
-  return sum / totalWeight;
+export async function getDecisionDetail(decisionId: number) {
+  const [decision] = await db.select().from(decisions).where(eq(decisions.id, decisionId));
+  if (!decision) return null;
+  const options = await db.select().from(decisionOptions).where(eq(decisionOptions.decisionId, decisionId));
+  const criteria = await db.select().from(decisionCriteria).where(eq(decisionCriteria.decisionId, decisionId));
+  const outcomeRows = await Promise.all(options.map((o) => db.select().from(decisionOutcomes).where(eq(decisionOutcomes.optionId, o.id))));
+  const outcomesByOption = new Map<number, (typeof outcomeRows)[number]>();
+  options.forEach((o, i) => outcomesByOption.set(o.id, outcomeRows[i]));
+  const retro = await db.select().from(decisionRetrospectives).where(eq(decisionRetrospectives.decisionId, decisionId));
+  return { decision, options, criteria, outcomesByOption, retro: retro[0] ?? null };
 }
 
-export interface ExpectedValueResult {
-  pointEstimate: number; // probabilityOfSuccess * estimatedValue
-  distribution: { p10: number; p50: number; p90: number; mean: number };
+/** Multi-criteria weighted score (0-10 scale per criterion). */
+export function criteriaScore(scores: Record<string, number>, criteria: { id: number; weight: number }[]): number {
+  let weighted = 0;
+  let totalWeight = 0;
+  for (const c of criteria) {
+    const s = scores[String(c.id)] ?? scores[c.id as unknown as string];
+    if (s == null) continue;
+    weighted += s * c.weight;
+    totalWeight += c.weight;
+  }
+  return totalWeight > 0 ? weighted / totalWeight : 0;
 }
 
 /**
- * Monte Carlo expected value: draws the realized value from a triangular
- * distribution (low, estimate, high) each trial, gates it on a Bernoulli
- * success draw at `probabilityOfSuccess`, and reports the resulting
- * distribution rather than a single number.
+ * EV with uncertainty: for each trial, draw which scenario occurs (weighted by
+ * probability) THEN sample a triangular payoff within that scenario's
+ * low/base/high. Returns a distribution, not a single number.
  */
-export function computeExpectedValue(option: Pick<DecisionOption, "estimatedValue" | "uncertaintyLow" | "uncertaintyHigh" | "probabilityOfSuccess">, seed = 7, n = 4000): ExpectedValueResult {
-  const rng = mulberry32(seed);
-  const { estimatedValue, uncertaintyLow, uncertaintyHigh, probabilityOfSuccess } = option;
-  const low = Math.min(uncertaintyLow || estimatedValue * 0.5, estimatedValue);
-  const high = Math.max(uncertaintyHigh || estimatedValue * 1.5, estimatedValue);
+export function expectedValueDistribution(
+  outcomes: { scenarioLabel: string; probability: number; payoffLow: number; payoffBase: number; payoffHigh: number }[],
+  trials = 5000,
+  seed = 17,
+): Explain<{ p10: number; p50: number; p90: number; mean: number }> {
+  const rng = makeRng(seed);
+  const totalProb = outcomes.reduce((a, o) => a + o.probability, 0) || 1;
+  const cumulative: { upTo: number; outcome: (typeof outcomes)[number] }[] = [];
+  let acc = 0;
+  for (const o of outcomes) {
+    acc += o.probability / totalProb;
+    cumulative.push({ upTo: acc, outcome: o });
+  }
+
   const samples: number[] = [];
-  for (let i = 0; i < n; i++) {
+  for (let t = 0; t < trials; t++) {
     const u = rng();
-    // Inverse-CDF sampling of a triangular distribution with mode = estimatedValue.
-    const fc = (estimatedValue - low) / (high - low || 1);
-    let value: number;
-    if (u < fc) value = low + Math.sqrt(u * (high - low) * (estimatedValue - low));
-    else value = high - Math.sqrt((1 - u) * (high - low) * (high - estimatedValue));
-    const succeeds = rng() < probabilityOfSuccess;
-    samples.push(succeeds ? value : 0);
+    const bucket = cumulative.find((c) => u <= c.upTo) ?? cumulative[cumulative.length - 1];
+    samples.push(sampleTriangular(bucket.outcome.payoffLow, bucket.outcome.payoffBase, bucket.outcome.payoffHigh, rng));
   }
-  samples.sort((a, b) => a - b);
-  const pct = (p: number) => samples[Math.min(samples.length - 1, Math.floor((p / 100) * samples.length))];
-  const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
-  return { pointEstimate: Math.round(probabilityOfSuccess * estimatedValue), distribution: { p10: Math.round(pct(10)), p50: Math.round(pct(50)), p90: Math.round(pct(90)), mean: Math.round(mean) } };
+
+  const summary = distributionSummary(samples);
+  return explain(
+    { p10: round2(summary.p10), p50: round2(summary.p50), p90: round2(summary.p90), mean: round2(summary.mean) },
+    {
+      confidence: outcomes.length >= 2 ? 0.7 : 0.4,
+      method: `Monte Carlo (${trials} trials): draw scenario by probability weight, then triangular(low/base/high) payoff within it`,
+      drivers: outcomes.map((o) => ({ name: o.scenarioLabel, contribution: round2(o.payoffBase * (o.probability / totalProb)), direction: o.payoffBase >= 0 ? "positive" : "negative" })),
+      caveats: outcomes.length < 2 ? ["Only one scenario supplied — this is not a real probability-weighted EV, just that scenario's own distribution."] : [],
+    },
+  );
 }
 
-export interface RankedOption {
-  option: DecisionOption;
-  weightedCriteriaScore: number;
-  expectedValue: ExpectedValueResult;
-  optionValue: number | null;
-  isRecommended: boolean;
+export function preMortemPrompts(reversibility: Reversibility) {
+  return reversibility === "one-way-door" ? [...PRE_MORTEM_PROMPTS_CORE, ...PRE_MORTEM_PROMPTS_ONE_WAY_DOOR] : PRE_MORTEM_PROMPTS_CORE;
 }
 
-/** Ranks a decision's options by a blend of weighted-criteria fit and expected value. */
-export function rankOptions(decision: Pick<Decision, "deadline">, options: DecisionOption[], criteria: DecisionCriterion[]): RankedOption[] {
-  const ranked = options.map((option) => {
-    const weightedCriteriaScore = computeWeightedScore(option, criteria);
-    const expectedValue = computeExpectedValue(option);
-    const optionValueResult = decision.deadline ? calculateRealOptionValue({ estimatedValue: option.estimatedValue, deadline: decision.deadline }) : null;
-    return { option, weightedCriteriaScore, expectedValue, optionValue: optionValueResult?.optionValue ?? null, isRecommended: false };
-  });
-  // Blended rank: normalize EV p50 to 0..1 within this option set, blend 50/50 with criteria score.
-  const maxEv = Math.max(1, ...ranked.map((r) => r.expectedValue.distribution.p50));
-  ranked.forEach((r) => {
-    (r as { blended?: number }).blended = 0.5 * r.weightedCriteriaScore + 0.5 * (r.expectedValue.distribution.p50 / maxEv);
-  });
-  ranked.sort((a, b) => (b as { blended?: number }).blended! - (a as { blended?: number }).blended!);
-  if (ranked.length) ranked[0].isRecommended = true;
-  return ranked;
-}
-
-export interface DoorGuidance {
-  label: string;
-  guidance: string;
-}
-
-/** Reversible vs. irreversible framing: how much process a decision deserves. */
-export function doorGuidance(doorType: Decision["doorType"], impact: number): DoorGuidance {
-  if (doorType === "one_way") {
-    return {
-      label: "One-way door",
-      guidance:
-        impact >= 4
-          ? "High-impact and irreversible: slow down, widen the input group, write a pre-mortem, and consider a reversible pilot before committing fully."
-          : "Irreversible but lower-impact: a lightweight pre-mortem and a single accountable owner is enough ceremony.",
-    };
-  }
-  return {
-    label: "Two-way door",
-    guidance: "Reversible: a single owner should decide quickly and cheaply; the cost of being wrong is a correction, not a crisis. Don't over-process this.",
-  };
-}
-
-export function isRetrospectiveDue(decision: Pick<Decision, "deadline" | "retrospectiveScore" | "status">, now: Date = new Date()): boolean {
-  if (decision.retrospectiveScore !== null) return false;
-  if (decision.status !== "executed" && decision.status !== "approved") return false;
-  if (!decision.deadline) return false;
-  return new Date(decision.deadline).getTime() <= now.getTime();
-}
-
-export interface RetrospectiveResult {
-  score: number; // 0..100 calibration score
-  notes: string;
-}
+export class DecisionGateError extends Error {}
 
 /**
- * Automatic retrospective scoring: compares the chosen option's *predicted*
- * expected value and success probability against the *actual* outcome once
- * the deadline has passed. This feeds the same 0-100 calibration convention
- * used elsewhere in LEADOS for "how well-calibrated were our confidence
- * estimates" tracking — a well-calibrated decision-maker who said "60%
- * likely" should be right about 60% of the time across many decisions.
+ * The "decide" action. Deliberately HARD-GATES on `downsideAcknowledged` to
+ * counter the #1 usability trap identified in self-review: an executive under
+ * time pressure anchoring on the headline EV number and skipping the p10 tail.
  */
-export function scoreRetrospective(chosenOption: Pick<DecisionOption, "estimatedValue" | "probabilityOfSuccess">, actualOutcomeValue: number, actualSucceeded: boolean): RetrospectiveResult {
-  const probabilityError = Math.abs((actualSucceeded ? 1 : 0) - chosenOption.probabilityOfSuccess);
-  const probabilityComponent = (1 - probabilityError) * 60; // 0..60
+export async function decide(decisionId: number, chosenOptionId: number, downsideAcknowledged: boolean, reviewInDays = 90) {
+  if (!downsideAcknowledged) {
+    throw new DecisionGateError("Cannot record a decision without acknowledging the downside (p10) case. Review the EV distribution's low tail first.");
+  }
+  const reviewDate = new Date();
+  reviewDate.setDate(reviewDate.getDate() + reviewInDays);
+  const [row] = await db
+    .update(decisions)
+    .set({ status: "decided", decidedAt: new Date(), chosenOptionId, downsideAcknowledged: true, reviewDate: reviewDate.toISOString().slice(0, 10) })
+    .where(eq(decisions.id, decisionId))
+    .returning();
+  return row;
+}
 
-  const valueError =
-    chosenOption.estimatedValue > 0 ? Math.min(1, Math.abs(actualOutcomeValue - chosenOption.estimatedValue) / chosenOption.estimatedValue) : actualOutcomeValue === 0 ? 0 : 1;
-  const valueComponent = (1 - valueError) * 40; // 0..40
+/** Automation mandate: decisions past their review date automatically open a retrospective. */
+export async function openDueRetrospectives() {
+  const today = new Date().toISOString().slice(0, 10);
+  const due = await db
+    .select()
+    .from(decisions)
+    .where(and(eq(decisions.status, "decided"), lte(decisions.reviewDate, today)));
 
-  const score = Math.round(Math.max(0, Math.min(100, probabilityComponent + valueComponent)));
-  const notes = `Predicted ${Math.round(chosenOption.probabilityOfSuccess * 100)}% success / $${Math.round(chosenOption.estimatedValue).toLocaleString()} value; actual outcome was ${actualSucceeded ? "a success" : "not a success"} worth $${Math.round(actualOutcomeValue).toLocaleString()}. Calibration score ${score}/100.`;
-  return { score, notes };
+  const opened: number[] = [];
+  for (const d of due) {
+    const existing = await db.select().from(decisionRetrospectives).where(eq(decisionRetrospectives.decisionId, d.id));
+    if (existing.length > 0) continue;
+    const detail = d.chosenOptionId ? await getDecisionDetail(d.id) : null;
+    const outcomes = detail && d.chosenOptionId ? detail.outcomesByOption.get(d.chosenOptionId) ?? [] : [];
+    const predictedEv = outcomes.length
+      ? expectedValueDistribution(outcomes.map((o) => ({ scenarioLabel: o.scenarioLabel, probability: num(o.probability), payoffLow: num(o.payoffLow), payoffBase: num(o.payoffBase), payoffHigh: num(o.payoffHigh) })))
+      : null;
+    await db.insert(decisionRetrospectives).values({
+      decisionId: d.id,
+      dueAt: d.reviewDate!,
+      predicted: { chosenOptionId: d.chosenOptionId, evDistribution: predictedEv?.value ?? null },
+    });
+    await db.update(decisions).set({ status: "retrospective_due" }).where(eq(decisions.id, d.id));
+    opened.push(d.id);
+  }
+  return opened;
+}
+
+export async function completeRetrospective(decisionId: number, actual: { whatHappened: string; actualPayoff: number }, lessons: string) {
+  const [retro] = await db.select().from(decisionRetrospectives).where(eq(decisionRetrospectives.decisionId, decisionId));
+  if (!retro) return null;
+  const predicted = retro.predicted as { evDistribution: { p50: number } | null };
+  const predictedP50 = predicted?.evDistribution?.p50 ?? 0;
+  const errorValue = round2(actual.actualPayoff - predictedP50);
+
+  const [row] = await db
+    .update(decisionRetrospectives)
+    .set({ completedAt: new Date(), actual, lessons, calibrationErrorNotes: `Predicted EV p50 ${predictedP50}, actual ${actual.actualPayoff}, error ${errorValue}` })
+    .where(eq(decisionRetrospectives.decisionId, decisionId))
+    .returning();
+
+  await recordCalibration({
+    domain: "decision",
+    refType: "decision",
+    refId: decisionId,
+    predictedP50: String(predictedP50),
+    predictedDistribution: predicted?.evDistribution ?? {},
+    actualValue: String(actual.actualPayoff),
+    actualDate: new Date().toISOString().slice(0, 10),
+    errorValue,
+  });
+
+  await db.update(decisions).set({ status: "reviewed" }).where(eq(decisions.id, decisionId));
+  return row;
 }

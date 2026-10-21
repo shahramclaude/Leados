@@ -1,92 +1,37 @@
-import { createDecision, listDecisions, updateDecisionBelief } from "@/lib/app/decisions";
-import { revalidatePath } from "next/cache";
+import Link from "next/link";
+import { listDecisions } from "@/lib/decisionEngine";
 
 export const dynamic = "force-dynamic";
 
-async function createAction(formData: FormData) {
-  "use server";
-  await createDecision({
-    title: String(formData.get("title") ?? ""),
-    context: String(formData.get("context") ?? ""),
-  });
-  revalidatePath("/decisions");
-}
-
-async function updateBeliefAction(formData: FormData) {
-  "use server";
-  const id = Number(formData.get("id"));
-  await updateDecisionBelief(id, {
-    successes: Number(formData.get("successes") ?? 0),
-    failures: Number(formData.get("failures") ?? 0),
-  });
-  revalidatePath("/decisions");
-}
-
 export default async function DecisionsPage() {
-  const page = await listDecisions(new URLSearchParams({ limit: "50" }));
+  const decisions = await listDecisions();
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-semibold">Decisions</h1>
-
-      <form action={createAction} className="ld-surface grid gap-3 rounded-xl border p-6">
-        <input
-          name="title"
-          required
-          placeholder="Decision title"
-          data-testid="decision-title"
-          className="rounded-lg border px-3 py-2"
-        />
-        <input name="context" placeholder="Context" className="rounded-lg border px-3 py-2" />
-        <button
-          type="submit"
-          data-testid="submit-decision"
-          className="rounded-lg px-4 py-2 font-medium text-white"
-          style={{ backgroundColor: "var(--accent)" }}
-        >
-          Create decision
-        </button>
-      </form>
-
-      <ul className="space-y-3" data-testid="decisions-list">
-        {page.items.map((decision) => (
-          <li key={decision.id} className="ld-surface space-y-3 rounded-xl border p-4">
+    <main className="min-h-screen bg-slate-50 pb-20">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-5xl px-6 py-6">
+          <Link href="/" className="text-sm font-medium text-indigo-600 hover:underline">← Cockpit</Link>
+          <h1 className="mt-2 text-2xl font-bold text-slate-900">Decision Workspace</h1>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+            Structured decisions with weighted criteria, EV as a distribution (p10/p50/p90 — never a single point), reversibility classification, pre-mortem prompts, and a hard gate: you cannot record a decision without acknowledging the downside case.
+          </p>
+        </div>
+      </header>
+      <div className="mx-auto mt-6 max-w-5xl space-y-3 px-6">
+        {decisions.map((d) => (
+          <Link key={d.id} href={`/decisions/${d.id}`} className="block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-indigo-300">
             <div className="flex items-center justify-between">
-              <p className="font-medium">{decision.title}</p>
-              <span className="text-sm" style={{ color: "var(--muted)" }}>
-                belief {(decision.beliefMean * 100).toFixed(1)}% · {decision.status}
-              </span>
+              <p className="font-semibold text-slate-900">{d.title}</p>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{d.status}</span>
             </div>
-            <form action={updateBeliefAction} className="flex flex-wrap items-center gap-2">
-              <input type="hidden" name="id" value={decision.id} />
-              <input
-                name="successes"
-                type="number"
-                min={0}
-                defaultValue={1}
-                className="w-24 rounded-lg border px-2 py-1 text-sm"
-                aria-label="successes"
-              />
-              <input
-                name="failures"
-                type="number"
-                min={0}
-                defaultValue={0}
-                className="w-24 rounded-lg border px-2 py-1 text-sm"
-                aria-label="failures"
-              />
-              <button
-                type="submit"
-                data-testid={`update-belief-${decision.id}`}
-                className="rounded-lg border px-3 py-1 text-sm"
-              >
-                Update belief
-              </button>
-            </form>
-          </li>
+            <p className="mt-1 text-sm text-slate-600">{d.context}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              {d.reversibility === "one-way-door" ? "⚠ One-way door — harder to reverse" : "Two-way door — reversible"} · owner {d.ownerId}
+              {d.reviewDate ? ` · review date ${d.reviewDate}` : ""}
+            </p>
+          </Link>
         ))}
-        {page.items.length === 0 && <p>No decisions yet.</p>}
-      </ul>
-    </div>
+      </div>
+    </main>
   );
 }

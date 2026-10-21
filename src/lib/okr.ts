@@ -1,278 +1,232 @@
-// OKR cascade engine: objectives → key results → initiatives → projects.
+// B. OKR cascade with reality checks.
 //
-// Nothing here is a free-standing "status" field — every status, score, and
-// progress percentage is *derived* from inputs (check-ins, linked metric
-// events, linked execution-project confidence) each time it's requested, so
-// the cascade can never silently drift from reality the way a manually
-// edited status field would.
+// Roll-up math (documented):
+//   KR attainment   = clamp01((current - start) / (target - start)), inverted for
+//                      "decrease" direction metrics.
+//   confidence factor = 1.0 if checked in within the last 14 days, else 0.6
+//                      ("confidence discounting" — stale self-reports count less).
+//   Objective attainment = Σ(KR attainment × KR weight × confidence factor)
+//                           ÷ Σ(KR weight × confidence factor)
+// Status derivation is PURELY a function of execution data (milestones/blockers
+// via executionEngine) — it never reads `selfReportedStatus`. The two are then
+// reconciled and disagreement is surfaced, never hidden.
+import { db } from "@/db";
+import { okrObjectives, okrKeyResults, okrInitiatives } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { num } from "@/lib/format";
+import { explain, type Explain } from "@/lib/explain";
+import { allProjectStatuses, projectProgress, type DerivedProjectStatus } from "@/lib/executionEngine";
 
-export type OkrLevel = "company" | "team" | "individual";
-export type OkrStatus = "on_track" | "at_risk" | "off_track" | "done";
-export type CheckInCadence = "weekly" | "biweekly" | "monthly";
+export type StatusLevel = "green" | "yellow" | "red";
+const LEVEL_RANK: Record<StatusLevel, number> = { red: 0, yellow: 1, green: 2 };
 
-export interface Objective {
-  id: number;
+export function statusFromAttainment(attainment: number): StatusLevel {
+  if (attainment >= 0.9) return "green";
+  if (attainment >= 0.6) return "yellow";
+  return "red";
+}
+
+function confidenceFactor(lastCheckIn: Date | null): number {
+  if (!lastCheckIn) return 0.5;
+  const ageDays = (Date.now() - lastCheckIn.getTime()) / 86400000;
+  return ageDays <= 14 ? 1.0 : 0.6;
+}
+
+export function krAttainment(kr: { startValue: number; targetValue: number; currentValue: number; direction: string }): number {
+  const { startValue, targetValue, currentValue, direction } = kr;
+  const span = targetValue - startValue;
+  if (span === 0) return currentValue >= targetValue ? 1 : 0;
+  let raw = (currentValue - startValue) / span;
+  if (direction === "decrease") raw = 1 - raw;
+  return Math.max(0, Math.min(1, raw));
+}
+
+export type KrDerived = {
+  keyResultId: number;
   title: string;
-  description?: string | null;
-  level: OkrLevel;
+  attainment: number;
+  confidence: number;
+  derivedStatus: StatusLevel;
+  selfReportedStatus: StatusLevel;
+  disagreement: boolean;
+  disagreementSeverity: number;
+  initiativeIds: number[];
+  orphan: boolean; // no initiatives at all
+};
+
+export type ObjectiveDerived = {
+  objectiveId: number;
+  title: string;
   owner: string;
-  parentId: number | null;
   period: string;
-  weight: number;
-}
+  attainment: number;
+  derivedStatus: StatusLevel;
+  keyResults: KrDerived[];
+  uncovered: boolean; // objective has zero key results
+};
 
-export interface KeyResult {
-  id: number;
-  objectiveId: number;
-  title: string;
-  metricKey?: string | null;
-  startValue: number;
-  targetValue: number;
-  currentValue: number;
-  unit: string;
-  weight: number;
-  confidence: number;
-  checkInCadence: CheckInCadence;
-  lastCheckInAt: Date | string | null;
-}
-
-export interface Initiative {
-  id: number;
-  keyResultId: number;
-  title: string;
-  status: OkrStatus | "unknown";
-  contributionWeight: number;
-  executionProjectId: number | null;
-}
-
-export interface CheckIn {
-  id: number;
-  keyResultId: number;
-  value: number;
-  confidence: number;
-  note?: string | null;
-  createdAt: Date | string;
-}
-
-/** DESIGN PARAMETER: pacing-score thresholds for status derivation. */
-const STATUS_THRESHOLDS = { onTrack: 0.85, atRisk: 0.55 };
-
-/** 0..1 fraction of target achieved. Direction-aware (targets can decrease, e.g. churn). */
-export function computeKeyResultProgress(kr: Pick<KeyResult, "startValue" | "targetValue" | "currentValue">): number {
-  const span = kr.targetValue - kr.startValue;
-  if (span === 0) return kr.currentValue >= kr.targetValue ? 1 : 0;
-  const raw = (kr.currentValue - kr.startValue) / span;
-  return Math.max(0, Math.min(1.2, raw)); // allow slight over-achievement signal, cap at 120%
-}
-
-/** Pacing score = progress achieved / time elapsed through the period. 1.0 = exactly on pace. */
-export function computeOkrScore(progress: number, timeElapsedFraction: number): number {
-  if (timeElapsedFraction <= 0) return progress > 0 ? 1.2 : 1;
-  return progress / timeElapsedFraction;
-}
-
-export function computeOkrStatus(score: number, progress: number): OkrStatus {
-  if (progress >= 1) return "done";
-  if (score >= STATUS_THRESHOLDS.onTrack) return "on_track";
-  if (score >= STATUS_THRESHOLDS.atRisk) return "at_risk";
-  return "off_track";
-}
-
-/** Parses a "YYYY-Qn" period label into a concrete [start, end) date range. */
-export function periodToRange(period: string, now: Date = new Date()): { start: Date; end: Date } {
-  const match = /^(\d{4})-Q([1-4])$/.exec(period);
-  if (!match) {
-    // Fallback: treat as a 90-day rolling window ending "now" so the engine
-    // never throws on an unrecognized period label.
-    const end = now;
-    const start = new Date(now.getTime() - 90 * 86400000);
-    return { start, end };
-  }
-  const year = Number(match[1]);
-  const q = Number(match[2]);
-  const start = new Date(Date.UTC(year, (q - 1) * 3, 1));
-  const end = new Date(Date.UTC(year, q * 3, 1));
-  return { start, end };
-}
-
-export function timeElapsedFraction(period: string, now: Date = new Date()): number {
-  const { start, end } = periodToRange(period, now);
-  const total = end.getTime() - start.getTime();
-  if (total <= 0) return 1;
-  const elapsed = now.getTime() - start.getTime();
-  return Math.max(0, Math.min(1, elapsed / total));
-}
-
-export interface KeyResultHealth {
-  keyResult: KeyResult;
-  progress: number;
-  score: number;
-  status: OkrStatus;
-  daysSinceCheckIn: number | null;
-  checkInOverdue: boolean;
-}
-
-const CADENCE_DAYS: Record<CheckInCadence, number> = { weekly: 7, biweekly: 14, monthly: 30 };
+export type CascadeHealth = {
+  objectives: ObjectiveDerived[];
+  orphanKeyResults: { keyResultId: number; title: string }[];
+  uncoveredObjectives: { objectiveId: number; title: string }[];
+  orphanInitiatives: { initiativeId: number; title: string }[];
+  statusDisagreements: { keyResultId: number; title: string; selfReported: StatusLevel; derived: StatusLevel; severity: number }[];
+  healthScore: number; // 0..100
+};
 
 /**
- * Recomputes a key result's currentValue from the latest matching event
- * (metric reading or manual check-in) rather than trusting whatever is
- * cached on the row — this is the "every KR's progress recomputes from real
- * events/metrics" requirement.
+ * Pure function: given raw rows + a map of initiative derived status, computes
+ * the whole cascade deterministically. No DB calls, no hidden state — this is
+ * what the "recomputes purely from events" test exercises directly.
  */
-export function recomputeKeyResultCurrentValue(
-  kr: Pick<KeyResult, "currentValue" | "startValue">,
-  latestEventValue: number | null,
-): number {
-  if (latestEventValue === null || Number.isNaN(latestEventValue)) return kr.currentValue;
-  return latestEventValue;
-}
-
-export function evaluateKeyResult(
-  kr: KeyResult,
-  objectivePeriod: string,
-  now: Date = new Date(),
-): KeyResultHealth {
-  const progress = computeKeyResultProgress(kr);
-  const elapsed = timeElapsedFraction(objectivePeriod, now);
-  const score = computeOkrScore(progress, elapsed);
-  const status = computeOkrStatus(score, progress);
-  const last = kr.lastCheckInAt ? new Date(kr.lastCheckInAt) : null;
-  const daysSinceCheckIn = last ? Math.round((now.getTime() - last.getTime()) / 86400000) : null;
-  const cadenceDays = CADENCE_DAYS[kr.checkInCadence] ?? 7;
-  const checkInOverdue = daysSinceCheckIn === null ? true : daysSinceCheckIn > cadenceDays * 1.5;
-  return { keyResult: kr, progress, score, status, daysSinceCheckIn, checkInOverdue };
-}
-
-export interface ObjectiveHealth {
-  objective: Objective;
-  keyResultHealths: KeyResultHealth[];
-  weightedProgress: number;
-  weightedScore: number;
-  weightedConfidence: number;
-  status: OkrStatus;
-}
-
-/** Weighted roll-up of an objective's key results. */
-export function rollUpObjective(objective: Objective, keyResults: KeyResult[], now: Date = new Date()): ObjectiveHealth {
-  const healths = keyResults
-    .filter((kr) => kr.objectiveId === objective.id)
-    .map((kr) => evaluateKeyResult(kr, objective.period, now));
-  const totalWeight = healths.reduce((sum, h) => sum + (h.keyResult.weight || 1), 0) || 1;
-  const weightedProgress = healths.reduce((sum, h) => sum + h.progress * (h.keyResult.weight || 1), 0) / totalWeight;
-  const weightedScore = healths.reduce((sum, h) => sum + h.score * (h.keyResult.weight || 1), 0) / totalWeight;
-  const weightedConfidence =
-    healths.reduce((sum, h) => sum + h.keyResult.confidence * (h.keyResult.weight || 1), 0) / totalWeight;
-  const status = healths.length === 0 ? "at_risk" : computeOkrStatus(weightedScore, weightedProgress);
-  return { objective, keyResultHealths: healths, weightedProgress, weightedScore, weightedConfidence, status };
-}
-
-/** Maps an execution project's derived delivery confidence onto an initiative status. */
-export function deriveInitiativeStatus(deliveryConfidence: number | null): OkrStatus {
-  if (deliveryConfidence === null) return "at_risk";
-  if (deliveryConfidence >= 0.7) return "on_track";
-  if (deliveryConfidence >= 0.4) return "at_risk";
-  return "off_track";
-}
-
-export interface CascadeMisalignment {
-  type: "status_gap" | "confidence_overstated" | "stale_check_in" | "orphan_initiative";
-  severity: "low" | "medium" | "high";
-  objectiveId: number;
-  keyResultId?: number;
-  initiativeId?: number;
-  message: string;
-}
-
-export interface CascadeNode {
-  objective: Objective;
-  health: ObjectiveHealth;
-  children: CascadeNode[];
-  initiatives: Initiative[];
-}
-
-/**
- * Builds the objective tree (company → team → individual) and detects
- * misalignment between levels: a child claiming "on_track" while its parent
- * is "off_track" (or vice versa — a child silently absorbing a parent's
- * risk), initiatives that report healthier status than the execution data
- * underneath them supports, and stale/overdue check-ins.
- */
-export function buildCascadeMap(
-  objectives: Objective[],
-  keyResults: KeyResult[],
-  initiatives: Initiative[],
-  now: Date = new Date(),
-): { roots: CascadeNode[]; misalignments: CascadeMisalignment[] } {
-  const healthById = new Map<number, ObjectiveHealth>();
-  for (const o of objectives) healthById.set(o.id, rollUpObjective(o, keyResults, now));
-
-  const childrenByParent = new Map<number | null, Objective[]>();
-  for (const o of objectives) {
-    const key = o.parentId ?? null;
-    if (!childrenByParent.has(key)) childrenByParent.set(key, []);
-    childrenByParent.get(key)!.push(o);
+export function buildCascade(
+  objectives: { id: number; title: string; owner: string; period: string; weight: number }[],
+  keyResults: {
+    id: number;
+    objectiveId: number;
+    title: string;
+    startValue: number;
+    targetValue: number;
+    currentValue: number;
+    direction: string;
+    weight: number;
+    selfReportedStatus: StatusLevel;
+    lastCheckIn: Date | null;
+  }[],
+  initiatives: { id: number; keyResultId: number; title: string; weight: number; projectId: number | null }[],
+  initiativeDerivedStatus: Map<number, DerivedProjectStatus>,
+): CascadeHealth {
+  const initiativesByKr = new Map<number, typeof initiatives>();
+  for (const init of initiatives) {
+    const arr = initiativesByKr.get(init.keyResultId) ?? [];
+    arr.push(init);
+    initiativesByKr.set(init.keyResultId, arr);
   }
 
-  const misalignments: CascadeMisalignment[] = [];
-  const STATUS_RANK: Record<OkrStatus, number> = { off_track: 0, at_risk: 1, on_track: 2, done: 3 };
+  const orphanInitiatives = initiatives
+    .filter((i) => i.projectId == null)
+    .map((i) => ({ initiativeId: i.id, title: i.title }));
 
-  function buildNode(o: Objective): CascadeNode {
-    const health = healthById.get(o.id)!;
-    const kids = (childrenByParent.get(o.id) ?? []).map(buildNode);
-    const nodeInitiatives = initiatives.filter((i) => health.keyResultHealths.some((h) => h.keyResult.id === i.keyResultId));
+  const krDerivedList: KrDerived[] = keyResults.map((kr) => {
+    const attainment = krAttainment(kr);
+    const conf = confidenceFactor(kr.lastCheckIn);
+    const linkedInitiatives = initiativesByKr.get(kr.id) ?? [];
 
-    // status_gap: a child objective materially healthier than its struggling parent
-    for (const child of kids) {
-      const parentRank = STATUS_RANK[health.status];
-      const childRank = STATUS_RANK[child.health.status];
-      if (parentRank <= STATUS_RANK.at_risk && childRank >= STATUS_RANK.on_track) {
-        misalignments.push({
-          type: "status_gap",
-          severity: "medium",
-          objectiveId: o.id,
-          message: `Parent "${o.title}" is ${health.status} while child "${child.objective.title}" reports ${child.health.status} — roll-up may be hiding risk.`,
-        });
-      }
+    // Derived status blends metric attainment with execution reality (if any
+    // linked initiative's project is blocked/at_risk, that caps the derived status).
+    let execFloor: StatusLevel = "green";
+    for (const init of linkedInitiatives) {
+      const s = init.projectId != null ? initiativeDerivedStatus.get(init.projectId) : undefined;
+      if (s === "blocked") execFloor = "red";
+      else if (s === "at_risk" && execFloor !== "red") execFloor = "yellow";
     }
+    const metricStatus = statusFromAttainment(attainment);
+    const derivedStatus: StatusLevel =
+      LEVEL_RANK[execFloor] < LEVEL_RANK[metricStatus] ? execFloor : metricStatus;
 
-    // confidence_overstated: KR confidence high but pacing score says off-track
-    for (const h of health.keyResultHealths) {
-      if (h.keyResult.confidence >= 0.75 && h.status === "off_track") {
-        misalignments.push({
-          type: "confidence_overstated",
-          severity: "high",
-          objectiveId: o.id,
-          keyResultId: h.keyResult.id,
-          message: `"${h.keyResult.title}" is reported at ${Math.round(h.keyResult.confidence * 100)}% confidence but pacing data shows it off-track.`,
-        });
-      }
-      if (h.checkInOverdue) {
-        misalignments.push({
-          type: "stale_check_in",
-          severity: h.daysSinceCheckIn === null ? "high" : "low",
-          objectiveId: o.id,
-          keyResultId: h.keyResult.id,
-          message: `"${h.keyResult.title}" has ${h.daysSinceCheckIn === null ? "no" : `a ${h.daysSinceCheckIn}-day-old`} check-in against a ${h.keyResult.checkInCadence} cadence.`,
-        });
-      }
+    const selfLevel = LEVEL_RANK[kr.selfReportedStatus];
+    const derivedLevel = LEVEL_RANK[derivedStatus];
+    const disagreement = selfLevel !== derivedLevel;
+
+    return {
+      keyResultId: kr.id,
+      title: kr.title,
+      attainment,
+      confidence: conf,
+      derivedStatus,
+      selfReportedStatus: kr.selfReportedStatus,
+      disagreement,
+      disagreementSeverity: Math.abs(selfLevel - derivedLevel),
+      initiativeIds: linkedInitiatives.map((i) => i.id),
+      orphan: linkedInitiatives.length === 0,
+    };
+  });
+
+  const krById = new Map(krDerivedList.map((k) => [k.keyResultId, k]));
+  const krRowById = new Map(keyResults.map((k) => [k.id, k]));
+
+  const objectivesDerived: ObjectiveDerived[] = objectives.map((o) => {
+    const krs = keyResults.filter((k) => k.objectiveId === o.id).map((k) => krById.get(k.id)!);
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (const k of krs) {
+      const row = krRowById.get(k.keyResultId)!;
+      const w = row.weight * k.confidence;
+      weightedSum += k.attainment * w;
+      weightTotal += w;
     }
+    const attainment = weightTotal > 0 ? weightedSum / weightTotal : 0;
+    return {
+      objectiveId: o.id,
+      title: o.title,
+      owner: o.owner,
+      period: o.period,
+      attainment,
+      derivedStatus: statusFromAttainment(attainment),
+      keyResults: krs,
+      uncovered: krs.length === 0,
+    };
+  });
 
-    for (const init of nodeInitiatives) {
-      if (!init.executionProjectId) {
-        misalignments.push({
-          type: "orphan_initiative",
-          severity: "low",
-          objectiveId: o.id,
-          initiativeId: init.id,
-          message: `Initiative "${init.title}" has no linked execution project — status cannot be derived from real delivery data.`,
-        });
-      }
-    }
+  const orphanKeyResults = krDerivedList.filter((k) => k.orphan).map((k) => ({ keyResultId: k.keyResultId, title: k.title }));
+  const uncoveredObjectives = objectivesDerived.filter((o) => o.uncovered).map((o) => ({ objectiveId: o.objectiveId, title: o.title }));
+  const statusDisagreements = krDerivedList
+    .filter((k) => k.disagreement)
+    .map((k) => ({ keyResultId: k.keyResultId, title: k.title, selfReported: k.selfReportedStatus, derived: k.derivedStatus, severity: k.disagreementSeverity }));
 
-    return { objective: o, health, children: kids, initiatives: nodeInitiatives };
-  }
+  const totalKrs = krDerivedList.length || 1;
+  const coveragePenalty = (orphanKeyResults.length + uncoveredObjectives.length + orphanInitiatives.length) * 5;
+  const disagreementPenalty = statusDisagreements.reduce((a, d) => a + d.severity * 5, 0);
+  const avgAttainment = objectivesDerived.reduce((a, o) => a + o.attainment, 0) / (objectivesDerived.length || 1);
+  const healthScore = Math.max(0, Math.min(100, Math.round(avgAttainment * 100 - coveragePenalty - disagreementPenalty)));
 
-  const roots = (childrenByParent.get(null) ?? []).map(buildNode);
-  return { roots, misalignments };
+  return { objectives: objectivesDerived, orphanKeyResults, uncoveredObjectives, orphanInitiatives, statusDisagreements, healthScore };
+}
+
+export async function getCascade(): Promise<Explain<CascadeHealth>> {
+  const objectives = await db.select().from(okrObjectives);
+  const keyResults = await db.select().from(okrKeyResults);
+  const initiatives = await db.select().from(okrInitiatives);
+  const projectStatuses = await allProjectStatuses();
+  const derivedByProjectId = new Map(projectStatuses.map((p) => [p.project.id, p.derivedStatus]));
+
+  const cascade = buildCascade(
+    objectives.map((o) => ({ id: o.id, title: o.title, owner: o.owner, period: o.period, weight: num(o.weight) })),
+    keyResults.map((k) => ({
+      id: k.id,
+      objectiveId: k.objectiveId,
+      title: k.title,
+      startValue: num(k.startValue),
+      targetValue: num(k.targetValue),
+      currentValue: num(k.currentValue),
+      direction: k.direction,
+      weight: num(k.weight),
+      selfReportedStatus: k.selfReportedStatus as StatusLevel,
+      lastCheckIn: k.lastCheckIn ? new Date(k.lastCheckIn) : null,
+    })),
+    initiatives.map((i) => ({ id: i.id, keyResultId: i.keyResultId, title: i.title, weight: num(i.weight), projectId: i.projectId })),
+    derivedByProjectId,
+  );
+
+  return explain(cascade, {
+    confidence: 0.9,
+    method: "weighted attainment roll-up with confidence discounting; derived status computed from execution data only, then reconciled against self-reported status",
+    assumptionsUsed: [],
+    evidence: [
+      { table: "okr_objectives", id: "all" },
+      { table: "okr_key_results", id: "all" },
+      { table: "okr_initiatives", id: "all" },
+      { table: "exec_projects", id: "all" },
+    ],
+    caveats: cascade.statusDisagreements.length > 0 ? [`${cascade.statusDisagreements.length} key result(s) show self-reported vs. derived status disagreement — see statusDisagreements.`] : [],
+  });
+}
+
+export async function recordCheckIn(keyResultId: number, currentValue: number, selfReportedStatus: StatusLevel, selfReportedConfidence: number) {
+  const [row] = await db
+    .update(okrKeyResults)
+    .set({ currentValue: String(currentValue), selfReportedStatus, selfReportedConfidence: String(selfReportedConfidence), lastCheckIn: new Date() })
+    .where(eq(okrKeyResults.id, keyResultId))
+    .returning();
+  return row;
 }
