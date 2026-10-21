@@ -1,18 +1,12 @@
-// GET  /api/briefing — latest stored briefing (or ?date=YYYY-MM-DD).
-// POST /api/briefing — generate + store a fresh briefing now.
-import { generateAndStoreBriefing, getBriefingForDate, getLatestBriefing } from "@/lib/kernel/briefing";
+import { getExecutiveBriefing } from "@/lib/briefing";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const date = searchParams.get("date");
-  const row = date ? await getBriefingForDate(date) : await getLatestBriefing();
-  if (!row) return Response.json({ ok: true, briefing: null });
-  return Response.json({ ok: true, briefing: row });
-}
-
-export async function POST() {
-  const briefing = await generateAndStoreBriefing();
-  return Response.json({ ok: true, briefing });
+export async function GET() {
+  try {
+    const briefing = await getExecutiveBriefing();
+    return Response.json({ ok: true, briefing });
+  } catch (err) {
+    return Response.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
 }

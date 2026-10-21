@@ -6,9 +6,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:push": "drizzle-kit push --config drizzle.config.json && tsx scripts/ensure-extensions.ts",
+    "db:seed": "tsx scripts/seed.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "eval:llm": "tsx scripts/eval-llm.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.137.0",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
     "next": "16.2.6",
@@ -16,7 +22,6 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tsx": "^4.23.15",
-    "vitest": "^5.0.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {

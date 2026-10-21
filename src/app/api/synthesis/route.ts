@@ -1,18 +1,14 @@
-import { NextResponse } from "next/server";
-import { generateWeeklySynthesis, listSynthesisReports } from "@/lib/synthesis";
+import { generateWeeklySynthesis } from "@/lib/synthesis";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const reports = await listSynthesisReports();
-  return NextResponse.json({ reports });
-}
-
-export async function POST(request: Request) {
-  const body = (await request.json()) as { periodStart: string; periodEnd: string };
-  if (!body.periodStart || !body.periodEnd) {
-    return NextResponse.json({ error: "periodStart and periodEnd are required" }, { status: 400 });
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const periodDays = Number(searchParams.get("days") ?? "7");
+  try {
+    const synthesis = await generateWeeklySynthesis(Number.isFinite(periodDays) ? periodDays : 7);
+    return Response.json({ ok: true, synthesis });
+  } catch (err) {
+    return Response.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
-  const report = await generateWeeklySynthesis(body);
-  return NextResponse.json(report, { status: 201 });
 }

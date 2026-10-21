@@ -1,102 +1,100 @@
-// src/lib/narrativeIntel.ts
-//
-// Shared narrative-composition utilities: citation formatting, a stable
-// line-diff (so synthesis reports and living-doc versions are diffable week
-// over week / version over version), and the fixed section template that
-// keeps the weekly synthesis structurally identical across weeks.
-export interface Citation {
-  marker: string; // e.g. "[R12]"
-  sourceType: "retrospective" | "hypothesis" | "playbook_run" | "metric" | "entity";
-  sourceId: number | string;
-  label: string;
-}
+// narrativeIntel.ts — gathers structured inputs (metric deltas, recent
+// events, open findings) for narrative synthesis. Pure data access + math;
+// no model calls. synthesis.ts, livingDocs.ts and briefing.ts all read from
+// here so the "what happened" facts are computed exactly once and the same
+// way everywhere.
+import { db } from "@/db";
+import { entities, events, metrics, findings } from "@/db/schema";
+import { and, desc, eq, gte } from "drizzle-orm";
 
-const MARKER_PREFIX: Record<Citation["sourceType"], string> = {
-  retrospective: "R",
-  hypothesis: "H",
-  playbook_run: "P",
-  metric: "M",
-  entity: "E",
+export type MetricDelta = {
+  id: string;
+  entityId: string | null;
+  entityName: string;
+  metricName: string;
+  from: number;
+  to: number;
+  deltaPct: number;
+  asOf: string;
 };
 
-export function makeCitation(sourceType: Citation["sourceType"], sourceId: number | string, label: string): Citation {
-  return { marker: `[${MARKER_PREFIX[sourceType]}${sourceId}]`, sourceType, sourceId, label };
+export type RecentEvent = {
+  id: string;
+  entityId: string | null;
+  entityName: string | null;
+  type: string;
+  summary: string;
+  occurredAt: string;
+};
+
+export async function getRecentEvents(sinceDays: number, entityId?: string): Promise<RecentEvent[]> {
+  const since = new Date(Date.now() - sinceDays * 86_400_000);
+  const rows = await db
+    .select({
+      id: events.id,
+      entityId: events.entityId,
+      entityName: entities.name,
+      type: events.type,
+      summary: events.summary,
+      occurredAt: events.occurredAt,
+    })
+    .from(events)
+    .leftJoin(entities, eq(events.entityId, entities.id))
+    .where(and(gte(events.occurredAt, since), entityId ? eq(events.entityId, entityId) : undefined))
+    .orderBy(desc(events.occurredAt))
+    .limit(50);
+
+  return rows.map((r) => ({ ...r, occurredAt: r.occurredAt.toISOString() }));
 }
 
-export function renderCitationList(citations: Citation[]): string {
-  if (citations.length === 0) return "";
-  return ["", "---", "**Sources**", ...citations.map((c) => `${c.marker} ${c.label}`)].join("\n");
-}
+export async function getMetricDeltas(sinceDays: number, entityId?: string): Promise<MetricDelta[]> {
+  const since = new Date(Date.now() - sinceDays * 86_400_000);
+  const rows = await db
+    .select({
+      id: metrics.id,
+      entityId: metrics.entityId,
+      entityName: entities.name,
+      metricName: metrics.name,
+      value: metrics.value,
+      asOf: metrics.asOf,
+    })
+    .from(metrics)
+    .leftJoin(entities, eq(metrics.entityId, entities.id))
+    .where(entityId ? eq(metrics.entityId, entityId) : undefined)
+    .orderBy(desc(metrics.asOf));
 
-// Fixed section order so two consecutive weekly reports diff cleanly.
-export const WEEKLY_SYNTHESIS_TEMPLATE = [
-  "Highlights",
-  "Decisions & Outcomes",
-  "Hypotheses Resolved",
-  "Playbooks Invoked",
-  "Risks & Watch Items",
-  "Metrics Snapshot",
-] as const;
-export type WeeklySynthesisSection = (typeof WEEKLY_SYNTHESIS_TEMPLATE)[number];
-
-export interface NarrativeSection {
-  heading: WeeklySynthesisSection;
-  body: string;
-}
-
-/** Render sections in the fixed template order into one Markdown document, consistent tone (plain, declarative, past tense). */
-export function renderNarrative(title: string, sections: NarrativeSection[], citations: Citation[]): string {
-  const byHeading = new Map(sections.map((s) => [s.heading, s.body]));
-  const body = WEEKLY_SYNTHESIS_TEMPLATE.map((heading) => {
-    const content = byHeading.get(heading) ?? "_Nothing to report this period._";
-    return `## ${heading}\n\n${content}`;
-  }).join("\n\n");
-  return `# ${title}\n\n${body}${renderCitationList(citations)}`;
-}
-
-export interface DiffLine {
-  type: "same" | "added" | "removed";
-  text: string;
-}
-
-/**
- * Line-based diff via longest-common-subsequence, sufficient for diffable
- * narrative/doc text (no external diff dependency required).
- */
-export function diffLines(oldText: string, newText: string): DiffLine[] {
-  const a = oldText.split("\n");
-  const b = newText.split("\n");
-  const n = a.length;
-  const m = b.length;
-  const lcs: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      lcs[i][j] = a[i] === b[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
-    }
+  // Group by (entityId, metricName), compare latest value in-window to the
+  // most recent value before the window started.
+  const byKey = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const key = `${r.entityId ?? "org"}::${r.metricName}`;
+    byKey.set(key, [...(byKey.get(key) ?? []), r]);
   }
-  const result: DiffLine[] = [];
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (a[i] === b[j]) {
-      result.push({ type: "same", text: a[i] });
-      i++;
-      j++;
-    } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
-      result.push({ type: "removed", text: a[i] });
-      i++;
-    } else {
-      result.push({ type: "added", text: b[j] });
-      j++;
-    }
+
+  const deltas: MetricDelta[] = [];
+  for (const [, series] of byKey) {
+    const inWindow = series.filter((r) => r.asOf >= since);
+    const before = series.filter((r) => r.asOf < since);
+    if (inWindow.length === 0) continue;
+    const latest = inWindow[0];
+    const baseline = before[0] ?? inWindow[inWindow.length - 1];
+    const from = Number(baseline.value);
+    const to = Number(latest.value);
+    const deltaPct = from === 0 ? 0 : ((to - from) / Math.abs(from)) * 100;
+    deltas.push({
+      id: latest.id,
+      entityId: latest.entityId,
+      entityName: latest.entityName ?? "Org-wide",
+      metricName: latest.metricName,
+      from,
+      to,
+      deltaPct,
+      asOf: latest.asOf.toISOString(),
+    });
   }
-  while (i < n) {
-    result.push({ type: "removed", text: a[i] });
-    i++;
-  }
-  while (j < m) {
-    result.push({ type: "added", text: b[j] });
-    j++;
-  }
-  return result;
+  return deltas.sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct));
+}
+
+export async function getOpenFindings() {
+  return db.select().from(findings).where(eq(findings.status, "open")).orderBy(desc(findings.createdAt)).limit(20);
 }

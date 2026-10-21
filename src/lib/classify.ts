@@ -1,83 +1,125 @@
-import type { CaptureType, ClassificationResult } from "@/lib/types";
+// Section E.4: classify.ts — assisted capture/classification. Turns a raw
+// note/email into a *proposed* structured event. The proposal is written to
+// capture_proposals and, if the proposer wants it to become a real event,
+// it must go through invokeCapability("events.create", ...) — for an
+// "agent" actor this capability's autoApprove() always returns false, so it
+// always lands as pending_approval. Nothing is ever auto-written.
+import { db } from "@/db";
+import { captureProposals, entities } from "@/db/schema";
+import { redactPii } from "@/lib/piiRedaction";
+import { runPrompt } from "@/lib/agentCore";
+import { classifyCapturePrompt } from "@/lib/promptRegistry";
+import { invokeCapability, type Actor } from "@/lib/capabilityRegistry";
+import { desc, eq } from "drizzle-orm";
 
-// Lightweight keyword-weighted Naive-Bayes-style classifier for free text
-// quick-capture input. Each category has a lexicon of indicative tokens with
-// weights; the raw score per category is the sum of matched weights plus a
-// small prior, then normalized with softmax so scores sum to 1 and can be
-// read as a confidence. This is a deliberately simple, auditable classifier
-// (not an ML black box) appropriate for routing short operator notes.
-
-const LEXICON: Record<CaptureType, Array<{ token: RegExp; weight: number }>> = {
-  one_on_one: [
-    { token: /\b1:1|one.on.one|1 on 1\b/i, weight: 3 },
-    { token: /\bcheck.?in\b/i, weight: 2 },
-    { token: /\bfeeling|morale|burnout|stressed\b/i, weight: 1.2 },
-    { token: /\bmet with|talked to|spoke with\b/i, weight: 1.5 },
-    { token: /\bcareer|growth|promotion\b/i, weight: 1 },
-  ],
-  decision: [
-    { token: /\bdecide|decision|approve|greenlight|go\/no.go\b/i, weight: 3 },
-    { token: /\bshould we|proposal|recommend\b/i, weight: 1.8 },
-    { token: /\bdeadline|by (eow|eod|friday|monday)\b/i, weight: 1.2 },
-    { token: /\bchoose between|option [ab]\b/i, weight: 1.5 },
-  ],
-  metric_update: [
-    { token: /\b\d+(\.\d+)?\s?(%|percent|k|m|usd|\$)\b/i, weight: 2.2 },
-    { token: /\bmrr|arr|churn|nps|cac|ltv|dau|mau|conversion|runway\b/i, weight: 3 },
-    { token: /\bup from|down from|increased|decreased|hit\b/i, weight: 1.3 },
-    { token: /\btarget|benchmark|kpi\b/i, weight: 1 },
-  ],
-  incident: [
-    { token: /\boutage|incident|down|breach|failed|failure|sev1|sev2\b/i, weight: 3 },
-    { token: /\bbug|broken|crash|error rate\b/i, weight: 2 },
-    { token: /\bcustomer impact|data loss\b/i, weight: 2.5 },
-  ],
-  feedback: [
-    { token: /\bfeedback|suggest|complain|praised|frustrated|loved\b/i, weight: 2.5 },
-    { token: /\bcustomer said|user said|they mentioned\b/i, weight: 2 },
-    { token: /\bnps|survey|review\b/i, weight: 1 },
-  ],
+export type ClassifyCaptureResult = {
+  proposalId: string;
+  proposedEntityType: string;
+  proposedEntityName: string;
+  eventType: string;
+  summary: string;
+  confidence: number;
+  reasoning: string;
+  degraded: boolean;
+  modelCallId: number | null;
+  redactionLabelsFound: string[];
 };
 
-const PRIOR: Record<CaptureType, number> = {
-  one_on_one: 0.3,
-  decision: 0.3,
-  metric_update: 0.3,
-  incident: 0.3,
-  feedback: 0.3,
-};
+export async function classifyCapture(
+  sourceType: "note" | "email",
+  rawText: string,
+  actor: Actor = { kind: "agent", id: "classify.ts" },
+): Promise<ClassifyCaptureResult> {
+  const { redactedText, labelsFound } = redactPii(rawText);
 
-export function classifyCapture(text: string): ClassificationResult {
-  const raw: Record<CaptureType, number> = {
-    one_on_one: PRIOR.one_on_one,
-    decision: PRIOR.decision,
-    metric_update: PRIOR.metric_update,
-    incident: PRIOR.incident,
-    feedback: PRIOR.feedback,
+  const knownEntities = await db.select({ name: entities.name }).from(entities).limit(200);
+
+  const run = await runPrompt(
+    classifyCapturePrompt,
+    { redactedText, knownEntityNames: knownEntities.map((e) => e.name) },
+    actor,
+  );
+
+  const [proposal] = await db
+    .insert(captureProposals)
+    .values({
+      sourceType,
+      rawText,
+      redactedText,
+      proposedEntityType: run.output.proposedEntityType,
+      proposedEntityName: run.output.proposedEntityName,
+      proposedEvent: {
+        type: run.output.eventType,
+        summary: run.output.summary,
+        entityName: run.output.proposedEntityName,
+        entityType: run.output.proposedEntityType,
+      },
+      confidence: run.output.confidence.toFixed(3),
+      status: "pending",
+      modelCallId: run.modelCallId,
+    })
+    .returning();
+
+  return {
+    proposalId: proposal.id,
+    proposedEntityType: run.output.proposedEntityType,
+    proposedEntityName: run.output.proposedEntityName,
+    eventType: run.output.eventType,
+    summary: run.output.summary,
+    confidence: run.output.confidence,
+    reasoning: run.output.reasoning,
+    degraded: run.degraded,
+    modelCallId: run.modelCallId,
+    redactionLabelsFound: labelsFound,
   };
+}
 
-  (Object.keys(LEXICON) as CaptureType[]).forEach((type) => {
-    for (const { token, weight } of LEXICON[type]) {
-      if (token.test(text)) raw[type] += weight;
-    }
-  });
+export async function listCaptureProposals(status?: "pending" | "approved" | "rejected") {
+  const rows = await db.select().from(captureProposals).orderBy(desc(captureProposals.createdAt)).limit(100);
+  return status ? rows.filter((r) => r.status === status) : rows;
+}
 
-  // Softmax normalization: p_i = e^(s_i) / sum(e^(s_j))
-  const exps = (Object.keys(raw) as CaptureType[]).map((k) => ({ k, v: Math.exp(raw[k]) }));
-  const sumExp = exps.reduce((a, b) => a + b.v, 0);
-  const scores = {} as Record<CaptureType, number>;
-  exps.forEach(({ k, v }) => {
-    scores[k] = sumExp > 0 ? v / sumExp : 1 / exps.length;
-  });
+/** Human approves a proposal: routes through the Part 07 capability registry (events.create), never writes `events` directly. */
+export async function approveCaptureProposal(proposalId: string, approvedBy: string) {
+  const [proposal] = await db.select().from(captureProposals).where(eq(captureProposals.id, proposalId)).limit(1);
+  if (!proposal) throw new Error("Proposal not found");
+  if (proposal.status !== "pending") throw new Error(`Proposal already ${proposal.status}`);
 
-  let best: CaptureType = "feedback";
-  let bestScore = -Infinity;
-  (Object.keys(scores) as CaptureType[]).forEach((k) => {
-    if (scores[k] > bestScore) {
-      bestScore = scores[k];
-      best = k;
-    }
-  });
+  const payload = proposal.proposedEvent as { type: string; summary: string; entityName: string; entityType: string };
+  const invocation = await invokeCapability(
+    "events.create",
+    {
+      entityName: payload.entityName,
+      entityType: payload.entityType,
+      type: payload.type,
+      summary: payload.summary,
+      payload: { fromCaptureProposalId: proposalId },
+      source: "capture" as const,
+    },
+    { kind: "user", id: approvedBy },
+  );
 
-  return { type: best, confidence: bestScore, scores };
+  // A human approving a capture proposal is itself the human-in-the-loop
+  // approval the capability registry's policy gate is waiting for, so we
+  // immediately approve the resulting pending invocation too.
+  let finalInvocation = invocation;
+  if (invocation.status === "pending_approval") {
+    const { approveCapabilityInvocation } = await import("@/lib/capabilityRegistry");
+    const result = await approveCapabilityInvocation(invocation.invocationId, approvedBy);
+    finalInvocation = { status: "executed", invocationId: invocation.invocationId, result };
+  }
+
+  await db
+    .update(captureProposals)
+    .set({ status: "approved", reviewedBy: approvedBy, reviewedAt: new Date() })
+    .where(eq(captureProposals.id, proposalId));
+
+  return finalInvocation;
+}
+
+export async function rejectCaptureProposal(proposalId: string, reviewedBy: string) {
+  await db
+    .update(captureProposals)
+    .set({ status: "rejected", reviewedBy, reviewedAt: new Date() })
+    .where(eq(captureProposals.id, proposalId));
 }
