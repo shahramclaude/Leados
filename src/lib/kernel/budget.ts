@@ -1,111 +1,99 @@
-// =============================================================================
-// LEADOS kernel — daily action budgets & anomaly tripwire
-// =============================================================================
-
+// Daily action budgets per (domain, capability), plus circuit breakers.
 import { db } from "@/db";
-import { actionBudgets, kernelToolCalls } from "@/db/schema";
-import { and, eq, gte } from "drizzle-orm";
+import { kernelBudgets, kernelCircuitBreakers } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
+import { newId, todayKey } from "./ids";
 
-export const DEFAULT_DAILY_BUDGET = 20;
+export const DEFAULT_DAILY_BUDGET = 25;
+export const CIRCUIT_BREAKER_THRESHOLD = 3; // consecutive failures before trip
 
-function todayKey(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10);
-}
-
-export interface BudgetStatus {
-  domain: string;
-  dateKey: string;
-  maxWrites: number;
-  usedWrites: number;
-  remaining: number;
-}
-
-export async function getBudgetStatus(domain: string, maxWrites = DEFAULT_DAILY_BUDGET, now = new Date()): Promise<BudgetStatus> {
-  const dateKey = todayKey(now);
-  const rows = await db
+/** Atomically checks and, if allowed, consumes `cost` units of today's budget
+ * for (domain, capability). Returns whether consumption succeeded. */
+export async function tryConsumeBudget(domain: string, capability: string, cost: number): Promise<{ ok: boolean; remaining: number; limit: number }> {
+  const day = todayKey();
+  const [existing] = await db
     .select()
-    .from(actionBudgets)
-    .where(and(eq(actionBudgets.domain, domain), eq(actionBudgets.dateKey, dateKey)))
+    .from(kernelBudgets)
+    .where(and(eq(kernelBudgets.domain, domain), eq(kernelBudgets.capability, capability), eq(kernelBudgets.day, day)))
     .limit(1);
 
-  if (rows.length === 0) {
-    return { domain, dateKey, maxWrites, usedWrites: 0, remaining: maxWrites };
-  }
-  const row = rows[0];
-  return {
-    domain,
-    dateKey,
-    maxWrites: row.maxWrites,
-    usedWrites: row.usedWrites,
-    remaining: Math.max(0, row.maxWrites - row.usedWrites),
-  };
-}
-
-/** Atomically reserves `cost` units of budget for `domain`. Returns false
- * (and does NOT consume) if that would exceed the daily cap. */
-export async function tryConsumeBudget(domain: string, cost: number, maxWrites = DEFAULT_DAILY_BUDGET, now = new Date()): Promise<boolean> {
-  const dateKey = todayKey(now);
-  const existing = await db
-    .select()
-    .from(actionBudgets)
-    .where(and(eq(actionBudgets.domain, domain), eq(actionBudgets.dateKey, dateKey)))
-    .limit(1);
-
-  if (existing.length === 0) {
-    if (cost > maxWrites) return false;
-    await db.insert(actionBudgets).values({ domain, dateKey, maxWrites, usedWrites: cost }).onConflictDoNothing();
-    return true;
+  if (!existing) {
+    const limit = DEFAULT_DAILY_BUDGET;
+    if (cost > limit) return { ok: false, remaining: limit, limit };
+    await db.insert(kernelBudgets).values({
+      id: newId("budget"),
+      domain,
+      capability,
+      day,
+      limitAmount: limit,
+      consumed: cost,
+    });
+    return { ok: true, remaining: limit - cost, limit };
   }
 
-  const row = existing[0];
-  // `maxWrites` passed in always reflects the current capability override (or
-  // the default), so re-evaluate the cap against it even for an
-  // already-created row rather than trusting whatever cap was in effect the
-  // first time this domain/day pair was written.
-  if (row.usedWrites + cost > maxWrites) return false;
-
+  if (existing.consumed + cost > existing.limitAmount) {
+    return { ok: false, remaining: existing.limitAmount - existing.consumed, limit: existing.limitAmount };
+  }
   await db
-    .update(actionBudgets)
-    .set({ usedWrites: row.usedWrites + cost, maxWrites })
-    .where(and(eq(actionBudgets.domain, domain), eq(actionBudgets.dateKey, dateKey)));
-  return true;
+    .update(kernelBudgets)
+    .set({ consumed: existing.consumed + cost, updatedAt: new Date() })
+    .where(eq(kernelBudgets.id, existing.id));
+  return { ok: true, remaining: existing.limitAmount - existing.consumed - cost, limit: existing.limitAmount };
 }
 
-export async function listTodayBudgets(now = new Date()): Promise<BudgetStatus[]> {
-  const dateKey = todayKey(now);
-  const rows = await db.select().from(actionBudgets).where(eq(actionBudgets.dateKey, dateKey));
-  return rows.map((row) => ({
-    domain: row.domain,
-    dateKey: row.dateKey,
-    maxWrites: row.maxWrites,
-    usedWrites: row.usedWrites,
-    remaining: Math.max(0, row.maxWrites - row.usedWrites),
-  }));
+export async function peekBudget(domain: string, capability: string): Promise<{ remaining: number; limit: number }> {
+  const day = todayKey();
+  const [existing] = await db
+    .select()
+    .from(kernelBudgets)
+    .where(and(eq(kernelBudgets.domain, domain), eq(kernelBudgets.capability, capability), eq(kernelBudgets.day, day)))
+    .limit(1);
+  if (!existing) return { remaining: DEFAULT_DAILY_BUDGET, limit: DEFAULT_DAILY_BUDGET };
+  return { remaining: existing.limitAmount - existing.consumed, limit: existing.limitAmount };
 }
 
-/**
- * Anomaly tripwire: compares the number of EXECUTED tool calls in the last
- * hour against the trailing 7-day hourly average. If today's rate is more
- * than `multiplier`x the baseline (and the baseline itself is non-trivial),
- * the run is considered anomalous and the caller should pause autonomy.
- */
-export async function detectAnomalousActionRate(multiplier = 3, now = new Date()): Promise<{ anomalous: boolean; recentCount: number; baselinePerHour: number }> {
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+export async function setDailyBudget(domain: string, capability: string, limit: number): Promise<void> {
+  const day = todayKey();
+  await db
+    .insert(kernelBudgets)
+    .values({ id: newId("budget"), domain, capability, day, limitAmount: limit, consumed: 0 })
+    .onConflictDoUpdate({
+      target: [kernelBudgets.domain, kernelBudgets.capability, kernelBudgets.day],
+      set: { limitAmount: limit },
+    });
+}
 
-  const recent = await db
-    .select({ id: kernelToolCalls.id })
-    .from(kernelToolCalls)
-    .where(and(eq(kernelToolCalls.status, "executed"), gte(kernelToolCalls.executedAt, oneHourAgo)));
+/** Records a step outcome against the circuit breaker for a capability.
+ * After CIRCUIT_BREAKER_THRESHOLD consecutive failures, trips (callers
+ * should set the capability's enforcement mode to "manual" on trip). */
+export async function recordCircuitOutcome(capability: string, success: boolean): Promise<{ tripped: boolean; consecutiveFailures: number }> {
+  const [existing] = await db
+    .select()
+    .from(kernelCircuitBreakers)
+    .where(eq(kernelCircuitBreakers.capability, capability))
+    .limit(1);
 
-  const trailing = await db
-    .select({ id: kernelToolCalls.id })
-    .from(kernelToolCalls)
-    .where(and(eq(kernelToolCalls.status, "executed"), gte(kernelToolCalls.executedAt, sevenDaysAgo)));
+  if (success) {
+    await db
+      .insert(kernelCircuitBreakers)
+      .values({ capability, consecutiveFailures: 0, trippedAt: null })
+      .onConflictDoUpdate({ target: kernelCircuitBreakers.capability, set: { consecutiveFailures: 0, trippedAt: null, updatedAt: new Date() } });
+    return { tripped: false, consecutiveFailures: 0 };
+  }
 
-  const baselinePerHour = trailing.length / (7 * 24);
-  const recentCount = recent.length;
-  const anomalous = baselinePerHour >= 1 && recentCount > baselinePerHour * multiplier;
+  const next = (existing?.consecutiveFailures ?? 0) + 1;
+  const tripped = next >= CIRCUIT_BREAKER_THRESHOLD;
+  await db
+    .insert(kernelCircuitBreakers)
+    .values({ capability, consecutiveFailures: next, trippedAt: tripped ? new Date() : null })
+    .onConflictDoUpdate({
+      target: kernelCircuitBreakers.capability,
+      set: { consecutiveFailures: next, trippedAt: tripped ? new Date() : null, updatedAt: new Date() },
+    });
+  return { tripped, consecutiveFailures: next };
+}
 
-  return { anomalous, recentCount, baselinePerHour };
+export function backoffWithJitter(attempt: number, baseMs = 200, maxMs = 5000): number {
+  const exp = Math.min(maxMs, baseMs * 2 ** attempt);
+  return Math.floor(exp / 2 + Math.random() * (exp / 2));
 }

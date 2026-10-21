@@ -1,25 +1,36 @@
-// GET  /api/self-improve — list proposals.
-// POST /api/self-improve — propose a rule weight change.
-import { listProposals, proposeRuleWeightChange } from "@/lib/kernel/selfImprove";
+import "@/lib/kernel/bootstrap";
+import { listProposals, proposeChange, seedGoldenCasesIfEmpty } from "@/lib/kernel/selfImprove";
+import type { Actor } from "@/lib/kernel/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const proposals = await listProposals();
-  return Response.json({ ok: true, proposals });
+  return Response.json({ proposals: await listProposals() });
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { ruleId, newWeight, rationale, proposedBy } = body ?? {};
-    if (!ruleId || newWeight === undefined || !rationale) {
-      return Response.json({ ok: false, error: "ruleId, newWeight, rationale are required" }, { status: 400 });
-    }
-    const proposal = await proposeRuleWeightChange({ ruleId: Number(ruleId), newWeight: Number(newWeight), rationale, proposedBy });
-    return Response.json({ ok: true, proposal });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ ok: false, error: message }, { status: 400 });
+  await seedGoldenCasesIfEmpty();
+  const body = (await req.json().catch(() => ({}))) as {
+    kind?: "rule" | "threshold" | "prompt";
+    ruleKey?: string;
+    title?: string;
+    rationale?: string;
+    before?: unknown;
+    after?: unknown;
+    proposedById?: string;
+  };
+  if (!body.kind || !body.ruleKey || !body.title || !body.rationale || body.before === undefined || body.after === undefined) {
+    return Response.json({ error: "kind, ruleKey, title, rationale, before, after are required" }, { status: 400 });
   }
+  const proposedBy: Actor = { kind: "agent", id: body.proposedById ?? "self-improve-agent" };
+  const proposal = await proposeChange({
+    kind: body.kind,
+    ruleKey: body.ruleKey,
+    title: body.title,
+    rationale: body.rationale,
+    before: body.before,
+    after: body.after,
+    proposedBy,
+  });
+  return Response.json({ proposal }, { status: 201 });
 }

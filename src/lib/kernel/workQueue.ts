@@ -1,148 +1,153 @@
-// =============================================================================
-// LEADOS kernel — work queue & delegation
-// =============================================================================
-// proposed -> approved -> running -> verifying -> done | reverted | rejected
-// Agents propose tasks (via the findings.create_work_item capability, or
-// directly through proposeWorkItem below); humans (or the kernel, for
-// auto-tier capabilities) move them through the status machine. SLA timers +
-// escalation are enforced by checkSlaBreaches(), called from the
-// deadline-approaching-watch scheduled job.
-
+// Work queue: the task system agents and humans share.
+// Status machine: proposed -> approved -> running -> verifying -> done | reverted | dead-lettered
 import { db } from "@/db";
-import { notifications, workItems } from "@/db/schema";
-import { and, desc, eq, isNull, lt } from "drizzle-orm";
-import { recordAudit } from "./audit";
+import { kernelApprovals, kernelWorkItems } from "@/db/schema";
+import { and, desc, eq, lt } from "drizzle-orm";
+import { newId } from "./ids";
+import { appendEvent } from "./events";
+import type { Actor } from "./types";
 
-export type WorkItemStatus = "proposed" | "approved" | "running" | "verifying" | "done" | "reverted" | "rejected";
+export type WorkItemRow = typeof kernelWorkItems.$inferSelect;
+export type WorkItemStatus = WorkItemRow["status"];
 
-const TRANSITIONS: Record<WorkItemStatus, WorkItemStatus[]> = {
-  proposed: ["approved", "rejected"],
-  approved: ["running", "rejected"],
-  running: ["verifying", "reverted"],
-  verifying: ["done", "reverted"],
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  proposed: ["approved", "running", "reverted"],
+  approved: ["running", "reverted"],
+  running: ["verifying", "done", "failed", "dead-lettered"],
+  verifying: ["done", "reverted", "dead-lettered"],
   done: [],
   reverted: ["proposed"],
-  rejected: [],
+  "dead-lettered": ["proposed"],
+  failed: ["proposed", "dead-lettered"],
 };
 
-export async function proposeWorkItem(input: {
+export class InvalidWorkItemTransitionError extends Error {
+  constructor(from: string, to: string) {
+    super(`Cannot transition work item from "${from}" to "${to}".`);
+    this.name = "InvalidWorkItemTransitionError";
+  }
+}
+
+export async function createWorkItem(params: {
   title: string;
-  description: string;
-  domain: string;
-  proposedBy: string;
-  riskClass?: "low" | "medium" | "high";
-  slaHours?: number;
-  evidence?: Record<string, unknown>;
-}) {
-  const slaDueAt = input.slaHours ? new Date(Date.now() + input.slaHours * 3600_000) : null;
+  kind: string;
+  assigneeKind?: "human" | "agent";
+  assigneeId?: string;
+  runId?: string;
+  stepId?: string;
+  slaMs?: number;
+}): Promise<WorkItemRow> {
+  const id = newId("wi");
   const [row] = await db
-    .insert(workItems)
+    .insert(kernelWorkItems)
     .values({
-      title: input.title,
-      description: input.description,
-      domain: input.domain,
-      proposedBy: input.proposedBy,
-      status: "proposed",
-      riskClass: input.riskClass ?? "low",
-      slaDueAt,
-      evidence: input.evidence ?? {},
+      id,
+      title: params.title,
+      kind: params.kind,
+      assigneeKind: params.assigneeKind ?? null,
+      assigneeId: params.assigneeId ?? null,
+      runId: params.runId ?? null,
+      stepId: params.stepId ?? null,
+      slaDueAt: params.slaMs ? new Date(Date.now() + params.slaMs) : null,
     })
     .returning();
-  await recordAudit({
-    actor: input.proposedBy,
-    action: "work_item.proposed",
-    subjectType: "work_item",
-    subjectId: String(row.id),
-    reason: input.title,
+
+  await appendEvent({
+    type: "work_item.created",
+    actor: { kind: "system", id: "kernel" },
+    correlationId: params.runId ?? id,
+    payload: row,
+    notify: { topic: "work_queue" },
   });
+
   return row;
 }
 
-export async function transitionWorkItem(
-  id: number,
-  nextStatus: WorkItemStatus,
-  actor: string,
-  opts: { assignee?: string; reason?: string } = {},
-) {
-  const rows = await db.select().from(workItems).where(eq(workItems.id, id)).limit(1);
-  const item = rows[0];
-  if (!item) throw new Error(`Work item #${id} not found`);
-
-  const allowed = TRANSITIONS[item.status as WorkItemStatus] ?? [];
-  if (!allowed.includes(nextStatus)) {
-    throw new Error(`Cannot transition work item #${id} from "${item.status}" to "${nextStatus}"`);
-  }
+export async function transitionWorkItem(id: string, to: WorkItemStatus, actor: Actor): Promise<WorkItemRow> {
+  const [row] = await db.select().from(kernelWorkItems).where(eq(kernelWorkItems.id, id)).limit(1);
+  if (!row) throw new Error(`Work item ${id} not found`);
+  const allowed = VALID_TRANSITIONS[row.status] ?? [];
+  if (!allowed.includes(to)) throw new InvalidWorkItemTransitionError(row.status, to);
 
   const [updated] = await db
-    .update(workItems)
-    .set({ status: nextStatus, assignee: opts.assignee ?? item.assignee, updatedAt: new Date() })
-    .where(eq(workItems.id, id))
+    .update(kernelWorkItems)
+    .set({ status: to, updatedAt: new Date() })
+    .where(eq(kernelWorkItems.id, id))
     .returning();
 
-  await recordAudit({
+  await appendEvent({
+    type: "work_item.transitioned",
     actor,
-    action: `work_item.${item.status}_to_${nextStatus}`,
-    subjectType: "work_item",
-    subjectId: String(id),
-    reason: opts.reason ?? `Transitioned by ${actor}`,
-    riskClass: item.riskClass as "low" | "medium" | "high",
+    correlationId: row.runId ?? id,
+    causationId: id,
+    payload: { workItemId: id, from: row.status, to },
   });
 
   return updated;
 }
 
-export async function listWorkItems(status?: WorkItemStatus) {
-  if (status) return db.select().from(workItems).where(eq(workItems.status, status)).orderBy(desc(workItems.createdAt));
-  return db.select().from(workItems).orderBy(desc(workItems.createdAt));
+export async function assignWorkItem(id: string, assigneeKind: "human" | "agent", assigneeId: string, actor: Actor): Promise<WorkItemRow> {
+  const [updated] = await db
+    .update(kernelWorkItems)
+    .set({ assigneeKind, assigneeId, updatedAt: new Date() })
+    .where(eq(kernelWorkItems.id, id))
+    .returning();
+  await appendEvent({
+    type: "work_item.assigned",
+    actor,
+    correlationId: updated.runId ?? id,
+    causationId: id,
+    payload: { workItemId: id, assigneeKind, assigneeId },
+  });
+  return updated;
 }
 
-/** Scans for work items whose SLA has passed and are not yet terminal,
- * escalates them with a notification, and stamps escalatedAt (once). */
-export async function checkSlaBreaches(now: Date = new Date()): Promise<number> {
-  const candidates = await db
-    .select()
-    .from(workItems)
-    .where(and(lt(workItems.slaDueAt, now), isNull(workItems.escalatedAt)));
+export async function listWorkItems(): Promise<WorkItemRow[]> {
+  return db.select().from(kernelWorkItems).orderBy(desc(kernelWorkItems.createdAt));
+}
 
-  let escalated = 0;
-  for (const item of candidates) {
-    if (["done", "reverted", "rejected"].includes(item.status)) continue;
-    await db.update(workItems).set({ escalatedAt: now }).where(eq(workItems.id, item.id));
-    await db.insert(notifications).values({
-      type: "sla_breach",
-      title: `SLA breached: ${item.title}`,
-      body: `Work item #${item.id} (${item.domain}) missed its SLA while in status "${item.status}".`,
-      severity: "critical",
-      linkedWorkItemId: item.id,
+/** SLA timers with escalation: finds work items past their SLA that are not
+ * yet escalated, marks them escalated, and returns them (callers notify). */
+export async function checkSlaBreaches(): Promise<WorkItemRow[]> {
+  const now = new Date();
+  const breaches = await db
+    .select()
+    .from(kernelWorkItems)
+    .where(and(lt(kernelWorkItems.slaDueAt, now), eq(kernelWorkItems.escalated, false)));
+
+  const escalated: WorkItemRow[] = [];
+  for (const item of breaches) {
+    if (item.status === "done" || item.status === "reverted") continue;
+    const [updated] = await db
+      .update(kernelWorkItems)
+      .set({ escalated: true, updatedAt: new Date() })
+      .where(eq(kernelWorkItems.id, item.id))
+      .returning();
+    await appendEvent({
+      type: "work_item.sla_breached",
+      actor: { kind: "system", id: "scheduler" },
+      correlationId: item.runId ?? item.id,
+      causationId: item.id,
+      payload: { workItemId: item.id, slaDueAt: item.slaDueAt },
+      notify: { topic: "notifications" },
     });
-    await recordAudit({
-      actor: "agent:scheduler",
-      action: "work_item.sla_escalated",
-      subjectType: "work_item",
-      subjectId: String(item.id),
-      reason: "SLA due date passed",
-      riskClass: "medium",
-    });
-    escalated++;
+    escalated.push(updated);
   }
   return escalated;
 }
 
-/** Unified inbox: work items needing attention + unread notifications +
- * pending approvals, newest first. */
-export async function getUnifiedInbox() {
-  const { approvals } = await import("@/db/schema");
-  const [openWork, unreadNotifications, pendingApprovals] = await Promise.all([
-    db.select().from(workItems).where(eq(workItems.status, "proposed")).orderBy(desc(workItems.createdAt)).limit(25),
-    db.select().from(notifications).where(eq(notifications.read, false)).orderBy(desc(notifications.createdAt)).limit(25),
-    db.select().from(approvals).where(eq(approvals.status, "pending")).orderBy(desc(approvals.requestedAt)).limit(25),
+/** Unified inbox: work queue + approvals + notifications seam for Part 12.
+ * Returns a single, sorted feed so a human doesn't have to check three UIs. */
+export async function getInbox() {
+  const [workItems, approvals] = await Promise.all([
+    db.select().from(kernelWorkItems).orderBy(desc(kernelWorkItems.updatedAt)).limit(50),
+    db.select().from(kernelApprovals).where(eq(kernelApprovals.status, "pending")).orderBy(desc(kernelApprovals.requestedAt)).limit(50),
   ]);
 
   const items = [
-    ...openWork.map((w) => ({ kind: "work_item" as const, id: w.id, title: w.title, createdAt: w.createdAt, riskClass: w.riskClass })),
-    ...unreadNotifications.map((n) => ({ kind: "notification" as const, id: n.id, title: n.title, createdAt: n.createdAt, severity: n.severity })),
-    ...pendingApprovals.map((a) => ({ kind: "approval" as const, id: a.id, title: a.summary, createdAt: a.requestedAt, riskClass: a.riskClass })),
-  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    ...workItems.map((w) => ({ type: "work_item" as const, id: w.id, title: w.title, status: w.status, updatedAt: w.updatedAt })),
+    ...approvals.map((a) => ({ type: "approval" as const, id: a.id, title: `Approval needed: ${a.riskClass} risk step`, status: a.status, updatedAt: a.requestedAt })),
+  ].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-  return { items, counts: { workItems: openWork.length, notifications: unreadNotifications.length, approvals: pendingApprovals.length } };
+  return items;
 }

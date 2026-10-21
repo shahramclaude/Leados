@@ -1,30 +1,32 @@
-// GET /api/approvals — list approvals (?status=pending to filter).
-// POST /api/approvals — { approvalId, decision: "approved"|"rejected", decidedBy, reason? }
-import { decideApproval, listApprovals, listPendingApprovals } from "@/lib/kernel/approvals";
+import "@/lib/kernel/bootstrap";
+import { decideApproval, listPendingApprovals } from "@/lib/kernel/approvals";
+import { runCycle } from "@/lib/kernel/orchestrator";
+import type { Actor } from "@/lib/kernel/types";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status");
-  const rows = status === "pending" ? await listPendingApprovals() : await listApprovals();
-  return Response.json({ ok: true, approvals: rows });
+export async function GET() {
+  const approvals = await listPendingApprovals();
+  return Response.json({ approvals });
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { approvalId, decision, decidedBy, reason } = body ?? {};
-    if (!approvalId || !decision || !decidedBy) {
-      return Response.json({ ok: false, error: "approvalId, decision, decidedBy are required" }, { status: 400 });
-    }
-    if (decision !== "approved" && decision !== "rejected") {
-      return Response.json({ ok: false, error: "decision must be 'approved' or 'rejected'" }, { status: 400 });
-    }
-    const result = await decideApproval(Number(approvalId), decision, decidedBy, reason);
-    return Response.json({ ok: true, ...result });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ ok: false, error: message }, { status: 400 });
+  const body = (await req.json().catch(() => ({}))) as {
+    approvalId?: string;
+    decision?: "approved" | "rejected" | "modified";
+    decidedBy?: string;
+    note?: string;
+    modifiedInput?: unknown;
+  };
+  if (!body.approvalId || !body.decision) {
+    return Response.json({ error: "approvalId and decision are required" }, { status: 400 });
   }
+  const decidedBy: Actor = { kind: "human", id: body.decidedBy ?? "unknown-reviewer" };
+  const approval = await decideApproval({ approvalId: body.approvalId, decision: body.decision, decidedBy, note: body.note, modifiedInput: body.modifiedInput });
+
+  // Immediately try to resume the run so an approve/reject click has a
+  // visible, fast effect — this is the "one-click" part of the HITL design.
+  const result = await runCycle(approval.runId, { actor: decidedBy });
+
+  return Response.json({ approval, result });
 }

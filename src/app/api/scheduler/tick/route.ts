@@ -1,18 +1,18 @@
-// POST /api/scheduler/tick — evaluate all cron/event jobs and run whichever are due.
-// Call this on an external cadence (e.g. every minute); it is idempotent per
-// minute thanks to each job run's idempotency key.
-import { ensureJobsRegistered } from "@/lib/kernel/jobs";
+// Unattended automation entry point. Intended to be invoked by an external
+// scheduler (platform cron / CI schedule) on a short interval — see
+// src/lib/kernel/scheduler.ts for why this process cannot self-schedule in a
+// serverless deployment. Optionally protected by SCHEDULER_TOKEN.
+import "@/lib/kernel/bootstrap";
 import { tick } from "@/lib/kernel/scheduler";
 
 export const dynamic = "force-dynamic";
 
-ensureJobsRegistered();
-
-export async function POST() {
-  const outcomes = await tick();
-  return Response.json({ ok: true, outcomes });
-}
-
-export async function GET() {
-  return POST();
+export async function POST(req: Request) {
+  const expected = process.env.SCHEDULER_TOKEN;
+  if (expected) {
+    const got = req.headers.get("x-scheduler-token");
+    if (got !== expected) return Response.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const results = await tick();
+  return Response.json({ results });
 }

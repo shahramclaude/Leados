@@ -1,67 +1,86 @@
-// =============================================================================
-// LEADOS kernel — approvals (human-in-the-loop gate)
-// =============================================================================
-// Every risk-class >= medium capability invocation is routed through here
-// instead of being executed directly. Approving calls the SAME
-// executeToolCall() code path the kernel's own auto-mode actions use, so
-// there is exactly one place capability.execute() is ever invoked from.
-
+// Human-in-the-loop approval queue, designed: rich context (proposed action,
+// predicted diff, evidence, risk class), one-click approve/reject/modify,
+// and an immutable record (every decision is also an event).
 import { db } from "@/db";
-import { approvals, kernelToolCalls } from "@/db/schema";
+import { kernelApprovals, kernelSteps } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { executeToolCall } from "./orchestrator";
-import { recordAudit } from "./audit";
+import { newId } from "./ids";
+import { appendEvent } from "./events";
+import type { Actor, PredictedDiff, RiskClass } from "./types";
 
-export async function listPendingApprovals() {
-  return db.select().from(approvals).where(eq(approvals.status, "pending")).orderBy(desc(approvals.requestedAt));
-}
+export type ApprovalRow = typeof kernelApprovals.$inferSelect;
 
-export async function listApprovals(limit = 50) {
-  return db.select().from(approvals).orderBy(desc(approvals.requestedAt)).limit(limit);
-}
-
-export async function decideApproval(
-  approvalId: number,
-  decision: "approved" | "rejected",
-  decidedBy: string,
-  reason?: string,
-): Promise<{ approval: typeof approvals.$inferSelect; toolCallStatus: string }> {
-  const rows = await db.select().from(approvals).where(eq(approvals.id, approvalId)).limit(1);
-  const approval = rows[0];
-  if (!approval) throw new Error(`Approval #${approvalId} not found`);
-  if (approval.status !== "pending") throw new Error(`Approval #${approvalId} already ${approval.status}`);
-
-  const [updated] = await db
-    .update(approvals)
-    .set({ status: decision, decidedBy, decidedAt: new Date(), reason: reason ?? null })
-    .where(eq(approvals.id, approvalId))
+export async function createApprovalRequest(params: {
+  stepId: string;
+  runId: string;
+  riskClass: RiskClass;
+  predictedDiff: PredictedDiff;
+  evidence: unknown;
+}): Promise<ApprovalRow> {
+  const id = newId("appr");
+  const [row] = await db
+    .insert(kernelApprovals)
+    .values({
+      id,
+      stepId: params.stepId,
+      runId: params.runId,
+      riskClass: params.riskClass,
+      predictedDiff: params.predictedDiff,
+      evidence: params.evidence as object,
+    })
     .returning();
 
-  if (decision === "rejected") {
-    await db.update(kernelToolCalls).set({ status: "rejected" }).where(eq(kernelToolCalls.id, approval.toolCallId));
-    await recordAudit({
-      actor: `human:${decidedBy}`,
-      action: "approval.rejected",
-      subjectType: "approval",
-      subjectId: String(approvalId),
-      reason: reason ?? "No reason given",
-      riskClass: approval.riskClass as "low" | "medium" | "high",
-    });
-    return { approval: updated, toolCallStatus: "rejected" };
-  }
-
-  await db.update(kernelToolCalls).set({ status: "approved" }).where(eq(kernelToolCalls.id, approval.toolCallId));
-  await recordAudit({
-    actor: `human:${decidedBy}`,
-    action: "approval.approved",
-    subjectType: "approval",
-    subjectId: String(approvalId),
-    reason: reason ?? "Approved",
-    riskClass: approval.riskClass as "low" | "medium" | "high",
+  await appendEvent({
+    type: "approval.requested",
+    actor: { kind: "system", id: "kernel" },
+    correlationId: params.runId,
+    causationId: params.stepId,
+    payload: row,
+    notify: { topic: "approvals" },
   });
 
-  await executeToolCall(approval.toolCallId, `human:${decidedBy}`);
+  return row;
+}
 
-  const toolCallRows = await db.select().from(kernelToolCalls).where(eq(kernelToolCalls.id, approval.toolCallId)).limit(1);
-  return { approval: updated, toolCallStatus: toolCallRows[0]?.status ?? "unknown" };
+export async function listPendingApprovals(): Promise<ApprovalRow[]> {
+  return db.select().from(kernelApprovals).where(eq(kernelApprovals.status, "pending")).orderBy(desc(kernelApprovals.requestedAt));
+}
+
+export async function getApproval(id: string): Promise<ApprovalRow | undefined> {
+  const [row] = await db.select().from(kernelApprovals).where(eq(kernelApprovals.id, id)).limit(1);
+  return row;
+}
+
+export async function decideApproval(params: {
+  approvalId: string;
+  decision: "approved" | "rejected" | "modified";
+  decidedBy: Actor;
+  note?: string;
+  modifiedInput?: unknown;
+}): Promise<ApprovalRow> {
+  const [row] = await db
+    .update(kernelApprovals)
+    .set({
+      status: params.decision,
+      decidedAt: new Date(),
+      decidedBy: params.decidedBy.id,
+      decisionNote: params.note ?? null,
+      modifiedInput: (params.modifiedInput as object) ?? null,
+    })
+    .where(eq(kernelApprovals.id, params.approvalId))
+    .returning();
+
+  await appendEvent({
+    type: "approval.decided",
+    actor: params.decidedBy,
+    correlationId: row.runId,
+    causationId: row.stepId,
+    payload: { approvalId: row.id, decision: params.decision, note: params.note ?? null },
+  });
+
+  if (params.decision === "modified" && params.modifiedInput !== undefined) {
+    await db.update(kernelSteps).set({ input: params.modifiedInput as object }).where(eq(kernelSteps.id, row.stepId));
+  }
+
+  return row;
 }
