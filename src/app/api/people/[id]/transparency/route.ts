@@ -1,19 +1,34 @@
-import { resolveViewer } from "@/lib/platform/auth";
-import { getTransparencyReport } from "@/lib/app/people/transparency";
+import { NextRequest } from "next/server";
+import { getTransparencyReport, requestErasure } from "@/lib/transparency";
+import { resolveActor } from "@/lib/requestActor";
+import { toErrorResponse } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const personId = Number(id);
-  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
-
-  const viewer = resolveViewer(request);
-  const result = await getTransparencyReport(viewer, personId);
-  if (!result.ok) {
-    const status = result.error === "forbidden" ? 403 : 404;
-    return Response.json({ error: result.error }, { status });
+/** GET — "what LEADOS knows about me, why, and from which events" (self or HR only). */
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    const actor = await resolveActor(req);
+    const report = await getTransparencyReport(actor, id);
+    return Response.json(report);
+  } catch (err) {
+    return toErrorResponse(err);
   }
+}
 
-  return Response.json(result);
+/** POST — erasure request, wired to the Part 01 tombstone flow. */
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    const actor = await resolveActor(req);
+    const body = await req.json().catch(() => ({}));
+    if (body.action !== "erase") {
+      return Response.json({ error: "Expected { action: 'erase' }" }, { status: 400 });
+    }
+    const result = await requestErasure(actor, id);
+    return Response.json({ ok: true, ...result });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
 }

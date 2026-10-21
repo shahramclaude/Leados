@@ -1,62 +1,93 @@
-/**
- * Part 04 contract, reused and depended upon by Part 05 (causal layer),
- * Part 06 (digital twin / simulator) and Part 10 (strategy views).
- *
- * `Explain<T>` is the shared "show your work" envelope: every user-facing
- * answer that LEADOS produces (a metric read, a causal estimate, a
- * counterfactual, a recommendation) is wrapped in this type so the UI can
- * render *why* an answer is what it is, and link every claim to the
- * evidence it came from.
- */
+// Part 04 stand-in: the shared `Explain<T>` contract. Every score, risk
+// estimate or recommendation surfaced anywhere in people intelligence MUST be
+// wrapped in this type. `scripts/test-contracts.ts` asserts this at runtime
+// for every engine output.
 
-export type EvidenceKind =
-  | "event"
-  | "metric-snapshot"
-  | "survey"
-  | "system-log"
-  | "document"
-  | "synthetic";
+/** Causal status of a claim. See docs/FAIRNESS.md and Part 05's rules. */
+export type CausalStatus = "association" | "causal_candidate" | "causal_identified";
 
-export interface EvidenceRef {
-  id: string;
-  kind: EvidenceKind;
-  summary: string;
-  occurredAt: string; // ISO-8601
-  sourceUrl?: string;
+export interface Driver {
+  /** Human-readable feature name, e.g. "No growth conversation in 90 days". */
+  name: string;
+  /** Signed contribution to the score, same units as the score itself. */
+  contribution: number;
+  direction: "increases" | "decreases";
+  /** Where this came from — event ids, field names, or derivations. */
+  evidence: string;
+  /** Never claim more than the method supports. Default must be "association". */
+  causalStatus: CausalStatus;
 }
 
-export type Confidence = "low" | "medium" | "high";
+export interface Counterfactual {
+  /** Plain-language description of the hypothetical change. */
+  change: string;
+  /** Estimated delta in the score if the change were true, signed. */
+  estimatedDelta: number;
+  /** Always "association" unless a causal design (e.g. RCT) backs it. */
+  causalStatus: CausalStatus;
+  note: string;
+}
+
+export interface ConfidenceInterval {
+  low: number;
+  high: number;
+  /** e.g. 0.8 for an 80% credible interval. */
+  level: number;
+}
 
 export interface Explain<T> {
-  result: T;
-  reasoning: {
-    /** One-sentence plain-language summary of the "why". */
-    summary: string;
-    /** Ordered reasoning steps, each a short, auditable statement. */
-    steps: string[];
-  };
-  /** Every claim must be traceable to at least one evidence event. */
-  evidence: EvidenceRef[];
-  confidence: Confidence;
-  /** Known limitations, non-identifiability notices, staleness, etc. */
-  caveats: string[];
+  value: T;
+  /** Estimation/modeling method in plain language, for auditability. */
+  method: string;
+  /** Names of inputs/features actually used (never protected attributes). */
+  inputs: string[];
+  confidence?: ConfidenceInterval;
+  drivers?: Driver[];
+  counterfactuals?: Counterfactual[];
+  /** Plain-language statement of what this estimate cannot tell you. */
+  uncertaintyNote: string;
+  /** Why LEADOS is allowed to compute this at all (job-relevant purpose). */
+  lawfulPurpose: string;
+  /** ISO timestamp this estimate reflects (belief-state date). */
+  asOf: string;
+  /** Explicit human-readable caveats, e.g. "decision support, not decision". */
+  limitations?: string[];
 }
 
-export function explain<T>(
-  result: T,
-  opts: {
-    summary: string;
-    steps: string[];
-    evidence: EvidenceRef[];
-    confidence: Confidence;
-    caveats?: string[];
+/** Runtime structural check used by contract tests. Throws with a clear reason. */
+export function assertIsExplain(x: unknown, label: string): asserts x is Explain<unknown> {
+  if (typeof x !== "object" || x === null) {
+    throw new Error(`${label}: Explain<T> must be an object`);
   }
-): Explain<T> {
-  return {
-    result,
-    reasoning: { summary: opts.summary, steps: opts.steps },
-    evidence: opts.evidence,
-    confidence: opts.confidence,
-    caveats: opts.caveats ?? [],
-  };
+  const o = x as Record<string, unknown>;
+  const required: Array<[string, string]> = [
+    ["value", "undefined"],
+    ["method", "string"],
+    ["inputs", "object"],
+    ["uncertaintyNote", "string"],
+    ["lawfulPurpose", "string"],
+    ["asOf", "string"],
+  ];
+  for (const [key, notType] of required) {
+    if (key === "value") {
+      if (!("value" in o)) throw new Error(`${label}: Explain<T>.value is missing`);
+      continue;
+    }
+    if (typeof o[key] !== (notType === "object" ? "object" : notType)) {
+      throw new Error(`${label}: Explain<T>.${key} has wrong type`);
+    }
+  }
+  if (!Array.isArray(o.inputs)) throw new Error(`${label}: Explain<T>.inputs must be an array`);
+  if (o.drivers !== undefined) {
+    if (!Array.isArray(o.drivers)) throw new Error(`${label}: Explain<T>.drivers must be an array`);
+    for (const d of o.drivers as Driver[]) {
+      if (!["association", "causal_candidate", "causal_identified"].includes(d.causalStatus)) {
+        throw new Error(`${label}: driver "${d.name}" has invalid causalStatus`);
+      }
+    }
+  }
+  if (o.confidence !== undefined) {
+    const c = o.confidence as ConfidenceInterval;
+    if (!(c.low <= c.high)) throw new Error(`${label}: confidence interval low must be <= high`);
+  }
 }

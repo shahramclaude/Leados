@@ -1,275 +1,198 @@
-// LEADOS — Part 08: Language intelligence schema.
+// LEADOS — People Intelligence data model (Part 09)
 //
-// This file defines the persistence layer for the language-intelligence
-// subsystem: org entities/events/metrics/docs that retrieval is grounded in,
-// the knowledge-graph edges used for neighborhood expansion, the prompt /
-// model-call audit trail, the capability-registry write log (Part 07 seam),
-// capture proposals (assisted classification, human-gated), and findings
-// raised by the nightly eval/cost scheduler.
+// Design rule (see docs/FAIRNESS.md): protected attributes (age, gender,
+// ethnicity, religion, disability, union status, parental-leave status, ...)
+// are EXCLUDED BY CONSTRUCTION — there is no column for any of them anywhere
+// in this schema, and none should ever be added to tables consumed by
+// `flightRisk.ts`, `succession.ts`, `teamHealth.ts` or `orgNetwork.ts`.
 //
-// NOTE ON PROVENANCE: the repository snapshot handed to this part contained
-// only the bare Next.js + Postgres starter template — none of the files the
-// standing order asked us to read first (agentCore.ts, narrativeIntel.ts,
-// synthesis.ts, docs.ts, livingDocs.ts, knowledgeGraph.ts,
-// institutionalMemory.ts, search.ts, conversationIntelligence.ts,
-// classify.ts, a briefing route, Part 04's Explain<T>, or Part 07's
-// capability registry) existed yet. We say this plainly instead of
-// pretending to have "read" files that are not in the repo. Everything
-// below is built fresh, in the shape those parts are specified to own, so
-// this part is self-consistent and the seams are honest stand-ins rather
-// than silently-assumed prior art. See AI-SESSION-LOG.md for the full
-// disclosure.
+// Hard rule (Part 09-F): `collaborations` is metadata-only. It must never
+// gain a free-text content/body/subject/transcript column. `scripts/test-privacy.ts`
+// and `scripts/verify.ts` assert this contract at runtime against the live schema.
 
 import {
-  bigserial,
-  boolean,
-  index,
-  integer,
-  jsonb,
-  numeric,
   pgTable,
   text,
   timestamp,
-  uuid,
+  integer,
+  numeric,
+  jsonb,
+  boolean,
+  date,
+  index,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Org substrate: entities, events, metrics, docs, playbooks, graph edges.
-// Retrieval (section C) is grounded in these tables — never in free text
-// typed into a prompt.
+// Identity & org structure
 // ---------------------------------------------------------------------------
 
-export const entities = pgTable(
-  "entities",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    type: text("type").notNull(), // "account" | "deal" | "person" | "team" | "product" ...
-    name: text("name").notNull(),
-    attributes: jsonb("attributes").$type<Record<string, unknown>>().notNull().default({}),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("entities_type_idx").on(t.type)],
-);
+/** Every human who can authenticate into LEADOS (employee, manager, HR, exec). */
+export const actors = pgTable("actors", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  // Global role used for repository-layer visibility gating (Part 09-G).
+  // One of: 'employee' | 'manager' | 'hr' | 'executive'
+  globalRole: text("global_role").notNull().default("employee"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const teams = pgTable("teams", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  managerId: text("manager_id").references(() => actors.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * HR-relevant record for a person. Deliberately narrow: only lawful,
+ * job-relevant fields. No demographic columns exist here by design.
+ */
+export const people = pgTable("people", {
+  id: text("id").primaryKey().references(() => actors.id),
+  teamId: text("team_id").references(() => teams.id),
+  managerId: text("manager_id").references(() => actors.id),
+  title: text("title").notNull(),
+  role: text("role").notNull(), // canonical role key used by succession/skills
+  tenureStart: date("tenure_start").notNull(),
+  compaRatio: numeric("compa_ratio", { precision: 5, scale: 3 }), // pay vs. band midpoint; job-relevant, not demographic
+  location: text("location"),
+  employmentType: text("employment_type").notNull().default("full_time"),
+  status: text("status").notNull().default("active"), // active | terminated
+  terminatedAt: timestamp("terminated_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Event store (Part 01 stand-in) — append-only, source of truth for the
+// person timeline and the "what did LEADOS believe on date X" projection.
+// ---------------------------------------------------------------------------
 
 export const events = pgTable(
   "events",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id").references(() => entities.id, { onDelete: "set null" }),
-    type: text("type").notNull(), // "status_change" | "meeting" | "email" | "risk_flagged" ...
-    summary: text("summary").notNull(),
-    payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
-    source: text("source").notNull().default("manual"), // "manual" | "capture" | "integration"
-    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    id: text("id").primaryKey(),
+    type: text("type").notNull(),
+    entityType: text("entity_type").notNull(), // 'person' | 'team' | 'oneOnOne' | 'growthPlan' | ...
+    entityId: text("entity_id").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    actorId: text("actor_id").references(() => actors.id),
+    // When the real-world fact happened.
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    // When LEADOS learned/recorded it — this is the timestamp used to
+    // reconstruct "belief state as of date X", which can differ from
+    // occurredAt (e.g. late-reported events, backfills).
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+    // Tombstone support (Part 01 erasure flow): when set, payload has been
+    // scrubbed and this row is retained only to preserve referential/audit
+    // integrity of counts, not personal content.
+    tombstonedAt: timestamp("tombstoned_at", { withTimezone: true }),
   },
   (t) => [
-    index("events_entity_idx").on(t.entityId),
-    index("events_occurred_idx").on(t.occurredAt),
+    index("events_entity_idx").on(t.entityType, t.entityId),
+    index("events_recorded_idx").on(t.recordedAt),
   ],
 );
 
-export const metrics = pgTable(
-  "metrics",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id").references(() => entities.id, { onDelete: "set null" }),
-    name: text("name").notNull(), // "delivery_confidence" | "pipeline_value" ...
-    value: numeric("value", { precision: 14, scale: 4 }).notNull(),
-    unit: text("unit").notNull().default("number"),
-    asOf: timestamp("as_of", { withTimezone: true }).notNull().defaultNow(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    index("metrics_entity_idx").on(t.entityId),
-    index("metrics_name_idx").on(t.name),
-    index("metrics_asof_idx").on(t.asOf),
-  ],
-);
+// ---------------------------------------------------------------------------
+// 1:1s, commitments, growth plans
+// ---------------------------------------------------------------------------
 
-export const docs = pgTable(
-  "docs",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id").references(() => entities.id, { onDelete: "set null" }),
-    title: text("title").notNull(),
-    body: text("body").notNull(),
-    docType: text("doc_type").notNull().default("note"), // "note" | "living" | "playbook_ref"
-    tags: jsonb("tags").$type<string[]>().notNull().default([]),
-    isLiving: boolean("is_living").notNull().default(false),
-    lastRegeneratedAt: timestamp("last_regenerated_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("docs_entity_idx").on(t.entityId)],
-);
+export const oneOnOnes = pgTable("one_on_ones", {
+  id: text("id").primaryKey(),
+  managerId: text("manager_id").notNull().references(() => actors.id),
+  employeeId: text("employee_id").notNull().references(() => actors.id),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
+  heldAt: timestamp("held_at", { withTimezone: true }),
+  status: text("status").notNull().default("scheduled"), // scheduled | held | cancelled
+  // Shared agenda: visible to both manager and employee.
+  agendaJson: jsonb("agenda_json").notNull().default([]),
+  // Shared notes: visible to both manager and employee.
+  sharedNotesJson: jsonb("shared_notes_json").notNull().default([]),
+  // Private prep notes: per implemented policy (docs/FAIRNESS.md §Privacy
+  // Policy), visible to the authoring manager and HR only — NOT the employee.
+  privateNotesJson: jsonb("private_notes_json").notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
-export const playbooks = pgTable("playbooks", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
+export const commitments = pgTable("commitments", {
+  id: text("id").primaryKey(),
+  oneOnOneId: text("one_on_one_id").notNull().references(() => oneOnOnes.id),
+  ownerId: text("owner_id").notNull().references(() => actors.id), // who made the promise
   description: text("description").notNull(),
-  steps: jsonb("steps").$type<string[]>().notNull().default([]),
+  dueDate: date("due_date"),
+  status: text("status").notNull().default("open"), // open | kept | slipped
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
 });
 
-// Knowledge-graph edges between entities, used for neighborhood expansion
-// (Part 11 seam) during hybrid retrieval.
-export const graphEdges = pgTable(
-  "graph_edges",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    fromEntityId: uuid("from_entity_id")
-      .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
-    toEntityId: uuid("to_entity_id")
-      .notNull()
-      .references(() => entities.id, { onDelete: "cascade" }),
-    relation: text("relation").notNull(), // "owns" | "depends_on" | "part_of" | "mentions" ...
-    weight: numeric("weight", { precision: 6, scale: 3 }).notNull().default("1"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    index("graph_edges_from_idx").on(t.fromEntityId),
-    index("graph_edges_to_idx").on(t.toEntityId),
-  ],
-);
-
-// Distilled institutional memory notes — "what we learned", each one
-// required to carry evidence references back to events/docs.
-export const memoryNotes = pgTable(
-  "memory_notes",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    entityId: uuid("entity_id").references(() => entities.id, { onDelete: "set null" }),
-    title: text("title").notNull(),
-    body: text("body").notNull(),
-    evidenceRefs: jsonb("evidence_refs").$type<EvidenceRefRow[]>().notNull().default([]),
-    confidence: numeric("confidence", { precision: 4, scale: 3 }).notNull().default("0.5"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("memory_notes_entity_idx").on(t.entityId)],
-);
-
-export type EvidenceRefRow = {
-  kind: "entity" | "event" | "metric" | "doc" | "memory_note" | "finding";
-  id: string;
-  timestamp?: string;
-  label?: string;
-};
-
-// ---------------------------------------------------------------------------
-// Section B/D: model-call audit trail. Every model call that feeds the
-// system is recorded here — actor, prompt version, model, tokens, latency,
-// validation result, and cost.
-// ---------------------------------------------------------------------------
-
-export const modelCalls = pgTable(
-  "model_calls",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    actorKind: text("actor_kind").notNull().default("agent"), // "agent" | "user" | "system"
-    actorId: text("actor_id").notNull().default("system"),
-    taskType: text("task_type").notNull(), // "classification" | "extraction" | "synthesis" | "planning" | "qa"
-    promptName: text("prompt_name").notNull(),
-    promptVersion: text("prompt_version").notNull(),
-    provider: text("provider").notNull(),
-    model: text("model").notNull(),
-    inputTokens: integer("input_tokens").notNull().default(0),
-    outputTokens: integer("output_tokens").notNull().default(0),
-    costUsd: numeric("cost_usd", { precision: 10, scale: 6 }).notNull().default("0"),
-    latencyMs: integer("latency_ms").notNull().default(0),
-    attempt: integer("attempt").notNull().default(1),
-    validationStatus: text("validation_status").notNull(), // "valid" | "repaired" | "failed"
-    validationErrors: jsonb("validation_errors").$type<string[]>().notNull().default([]),
-    degraded: boolean("degraded").notNull().default(false),
-    requestHash: text("request_hash"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    index("model_calls_task_idx").on(t.taskType),
-    index("model_calls_created_idx").on(t.createdAt),
-    index("model_calls_status_idx").on(t.validationStatus),
-  ],
-);
-
-// Org-level cost budget with hard stop.
-export const costBudgets = pgTable("cost_budgets", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  orgId: text("org_id").notNull().default("default"),
-  periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
-  periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
-  budgetUsd: numeric("budget_usd", { precision: 10, scale: 2 }).notNull(),
-  spentUsd: numeric("spent_usd", { precision: 10, scale: 2 }).notNull().default("0"),
-  hardStop: boolean("hard_stop").notNull().default(true),
+export const growthPlans = pgTable("growth_plans", {
+  id: text("id").primaryKey(),
+  personId: text("person_id").notNull().references(() => actors.id),
+  title: text("title").notNull(),
+  targetSkillId: text("target_skill_id"),
+  milestonesJson: jsonb("milestones_json").notNull().default([]),
+  // [{ id, title, status: 'planned'|'in_progress'|'done', evidenceEventIds: string[] }]
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------
-// Section E.4 / F: assisted capture proposals. classify.ts turns raw text
-// into a *proposed* structured event. Nothing here is auto-written to
-// events — it must pass through the Part 07 capability registry's policy
-// gate (approve/reject) in capabilityInvocations below.
+// Skills & capability graph
 // ---------------------------------------------------------------------------
 
-export const captureProposals = pgTable(
-  "capture_proposals",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    sourceType: text("source_type").notNull(), // "note" | "email"
-    rawText: text("raw_text").notNull(),
-    redactedText: text("redacted_text").notNull(),
-    proposedEntityType: text("proposed_entity_type"),
-    proposedEntityName: text("proposed_entity_name"),
-    proposedEvent: jsonb("proposed_event").$type<Record<string, unknown>>().notNull(),
-    confidence: numeric("confidence", { precision: 4, scale: 3 }).notNull(),
-    status: text("status").notNull().default("pending"), // "pending" | "approved" | "rejected"
-    reviewedBy: text("reviewed_by"),
-    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-    modelCallId: integer("model_call_id").references(() => modelCalls.id, { onDelete: "set null" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("capture_proposals_status_idx").on(t.status)],
-);
+export const skills = pgTable("skills", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("general"),
+});
 
-// Part 07 seam: every write that a model-derived action makes must go
-// through this registry, recording the capability invoked, the actor,
-// params, validation result, approval and outcome.
-export const capabilityInvocations = pgTable(
-  "capability_invocations",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    capability: text("capability").notNull(), // e.g. "events.create"
-    actorKind: text("actor_kind").notNull().default("agent"),
-    actorId: text("actor_id").notNull().default("system"),
-    params: jsonb("params").$type<Record<string, unknown>>().notNull(),
-    validationStatus: text("validation_status").notNull(), // "valid" | "invalid"
-    validationErrors: jsonb("validation_errors").$type<string[]>().notNull().default([]),
-    requiresApproval: boolean("requires_approval").notNull().default(true),
-    approved: boolean("approved").notNull().default(false),
-    approvedBy: text("approved_by"),
-    status: text("status").notNull().default("pending"), // "pending" | "executed" | "rejected" | "failed"
-    resultSummary: text("result_summary"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("capability_invocations_status_idx").on(t.status)],
-);
+export const personSkills = pgTable("person_skills", {
+  id: text("id").primaryKey(),
+  personId: text("person_id").notNull().references(() => actors.id),
+  skillId: text("skill_id").notNull().references(() => skills.id),
+  level: integer("level").notNull(), // 0-5
+  source: text("source").notNull(), // 'declared' | 'observed'
+  evidenceEventIds: jsonb("evidence_event_ids").notNull().default([]),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const roleSkills = pgTable("role_skills", {
+  id: text("id").primaryKey(),
+  role: text("role").notNull(),
+  skillId: text("skill_id").notNull().references(() => skills.id),
+  requiredLevel: integer("required_level").notNull(), // 0-5
+});
 
 // ---------------------------------------------------------------------------
-// Findings raised by the nightly eval/cost scheduler (Part 07 scheduler
-// seam) on regression or budget breach.
+// Org network metadata (Part 09-F) — NEVER add a content/body/subject/
+// transcript column to this table. Enforced by scripts/verify.ts.
 // ---------------------------------------------------------------------------
 
-export const findings = pgTable(
-  "findings",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    kind: text("kind").notNull(), // "eval_regression" | "cost_budget_breach" | "injection_detected"
-    severity: text("severity").notNull().default("medium"), // "low" | "medium" | "high"
-    title: text("title").notNull(),
-    details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
-    status: text("status").notNull().default("open"), // "open" | "acknowledged" | "resolved"
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("findings_status_idx").on(t.status)],
-);
+export const collaborations = pgTable("collaborations", {
+  id: text("id").primaryKey(),
+  personId: text("person_id").notNull().references(() => actors.id),
+  counterpartId: text("counterpart_id").notNull().references(() => actors.id),
+  context: text("context").notNull(), // 'meeting' | 'review' | 'project' | 'one_on_one' — category only
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  durationMinutes: integer("duration_minutes"),
+});
+
+// ---------------------------------------------------------------------------
+// Outcomes (for calibration/fairness audits) & calibration reports
+// ---------------------------------------------------------------------------
+
+export const attritionOutcomes = pgTable("attrition_outcomes", {
+  personId: text("person_id").primaryKey().references(() => actors.id),
+  leftAt: date("left_at"),
+  leftVoluntary: boolean("left_voluntary"),
+});
+
+export const calibrationReports = pgTable("calibration_reports", {
+  id: text("id").primaryKey(),
+  modelName: text("model_name").notNull(),
+  periodStart: date("period_start").notNull(),
+  periodEnd: date("period_end").notNull(),
+  reportJson: jsonb("report_json").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

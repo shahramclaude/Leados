@@ -1,16 +1,22 @@
-import { resolveViewer } from "@/lib/platform/auth";
-import { getTeamNetworkHealth } from "@/lib/app/people/orgNetwork";
+import { NextRequest } from "next/server";
+import { collaborationLoad, busFactor, communicationBottlenecks } from "@/lib/orgNetwork";
+import { resolveActor } from "@/lib/requestActor";
+import { toErrorResponse } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: Promise<{ teamId: string }> }) {
-  const { teamId } = await params;
-  const id = Number(teamId);
-  if (!Number.isFinite(id)) return Response.json({ error: "Invalid team id." }, { status: 400 });
-
-  const viewer = resolveViewer(request);
-  const result = await getTeamNetworkHealth(viewer, id);
-  if (!result.ok) return Response.json({ error: result.error }, { status: 403 });
-
-  return Response.json(result);
+/** GET /api/org-network/[teamId] — collaboration metadata only (Part 09-F hard rule). */
+export async function GET(req: NextRequest, ctx: { params: Promise<{ teamId: string }> }) {
+  try {
+    const { teamId } = await ctx.params;
+    const actor = await resolveActor(req);
+    const [load, bus, bottlenecks] = await Promise.all([
+      collaborationLoad(actor, teamId),
+      busFactor(actor, teamId),
+      communicationBottlenecks(actor, teamId),
+    ]);
+    return Response.json({ teamId, collaborationLoad: load, busFactor: bus, bottlenecks });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
 }

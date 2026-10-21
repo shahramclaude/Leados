@@ -1,37 +1,20 @@
-import { resolveViewer } from "@/lib/platform/auth";
-import { peopleRepository } from "@/lib/platform/db/peopleRepository";
-import { accessAuditRepository } from "@/lib/platform/db/accessAuditRepository";
-import { canView } from "@/lib/domain/people/privacy";
-import { computeFlightRisk } from "@/lib/domain/people/flightRisk";
-import { buildFlightRiskInputs } from "@/lib/app/people/signals";
+import { NextRequest } from "next/server";
+import { getFlightRisk } from "@/lib/flightRisk";
+import { resolveActor } from "@/lib/requestActor";
+import { toErrorResponse } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const personId = Number(id);
-  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
-
-  const viewer = resolveViewer(request);
-  const allowed = canView(viewer, personId, "flightRiskScore");
-
-  await accessAuditRepository.log({
-    viewer,
-    subjectId: personId,
-    resource: "person.flightRisk",
-    fieldsRedacted: allowed ? [] : ["flightRisk"],
-    allowed,
-    reason: allowed
-      ? "Manager/HR/exec may view flight-risk estimates."
-      : "Flight-risk estimates are manager/HR/exec-facing only; see the transparency endpoint for what the subject is entitled to know.",
-  });
-
-  if (!allowed) return Response.json({ error: "forbidden" }, { status: 403 });
-
-  const person = await peopleRepository.getById(personId);
-  if (!person) return Response.json({ error: "not_found" }, { status: 404 });
-
-  const inputs = await buildFlightRiskInputs(person);
-  const score = computeFlightRisk(inputs);
-  return Response.json({ score });
+/** GET /api/people/[id]/flight-risk — always returns Explain<probability>. */
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    const actor = await resolveActor(req);
+    const asOfParam = req.nextUrl.searchParams.get("asOf");
+    const asOf = asOfParam ? new Date(asOfParam) : new Date();
+    const explain = await getFlightRisk(actor, id, asOf);
+    return Response.json(explain);
+  } catch (err) {
+    return toErrorResponse(err);
+  }
 }

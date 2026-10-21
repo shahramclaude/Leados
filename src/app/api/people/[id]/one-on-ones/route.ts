@@ -1,35 +1,35 @@
-import { resolveViewer } from "@/lib/platform/auth";
-import { listOneOnOnes, scheduleOneOnOne } from "@/lib/app/people/oneOnOnes";
+import { NextRequest } from "next/server";
+import { listOneOnOnesForEmployee, createOneOnOne, suggestTalkingPoints } from "@/lib/oneOnOne";
+import { resolveActor } from "@/lib/requestActor";
+import { toErrorResponse } from "@/lib/apiError";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const personId = Number(id);
-  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
-
-  const viewer = resolveViewer(request);
-  const result = await listOneOnOnes(viewer, personId);
-  if (!result.ok) return Response.json({ error: result.error }, { status: 403 });
-
-  return Response.json(result);
+/** GET — list 1:1s for this employee (scoped: manager/employee/HR only, per 1:1). */
+export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    const actor = await resolveActor(req);
+    const includeSuggestions = req.nextUrl.searchParams.get("suggest") === "1";
+    const oneOnOnes = await listOneOnOnesForEmployee(actor, id);
+    const suggestions = includeSuggestions ? await suggestTalkingPoints(id) : undefined;
+    return Response.json({ personId: id, oneOnOnes, suggestedTalkingPoints: suggestions });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
 }
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const personId = Number(id);
-  if (!Number.isFinite(personId)) return Response.json({ error: "Invalid person id." }, { status: 400 });
-
-  const viewer = resolveViewer(request);
-  const body = await request.json().catch(() => null);
-  if (!body?.scheduledAt) return Response.json({ error: "scheduledAt is required." }, { status: 400 });
-
-  const managerId = body.managerId ?? viewer.id;
-  const result = await scheduleOneOnOne(viewer, personId, managerId, body.scheduledAt);
-  if (!result.ok) {
-    const status = result.error === "forbidden" ? 403 : 404;
-    return Response.json({ error: result.error }, { status });
+/** POST — schedule a new 1:1 (manager of this employee, or HR). */
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    const actor = await resolveActor(req);
+    const body = await req.json();
+    const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : new Date();
+    const managerId = body.managerId ?? actor.id;
+    const oneOnOneId = await createOneOnOne(actor, managerId, id, scheduledAt);
+    return Response.json({ id: oneOnOneId }, { status: 201 });
+  } catch (err) {
+    return toErrorResponse(err);
   }
-
-  return Response.json({ oneOnOne: result.oneOnOne }, { status: 201 });
 }

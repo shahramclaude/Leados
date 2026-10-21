@@ -1,105 +1,89 @@
-import { useState } from "react";
-import { computeFindings } from "../lib/engine";
-import type { AppState, Person } from "../lib/types";
-import { Button, Card, SeverityBadge } from "./Shell";
+"use client";
 
-function daysSince(iso: string): number {
-  return Math.round((Date.now() - Date.parse(iso)) / 86400000);
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useActor, actorFetch } from "@/lib/actorContext";
+
+interface RosterPerson {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  title: string;
+  teamId: string | null;
+  teamName: string | null;
+  managerId: string | null;
+  status: string;
 }
 
-export function RosterView({ state, onChange }: { state: AppState; onChange: (s: AppState) => void }) {
-  const [newName, setNewName] = useState("");
-  const findings = computeFindings(state);
+/** Roster, scoped server-side by src/app/api/people/route.ts — this
+ * component renders only whatever the API already filtered; it performs no
+ * additional client-side filtering for privacy (that would be a UI-only
+ * gate, which the standing order forbids). */
+export function RosterView() {
+  const { currentActorId, currentActor } = useActor();
+  const [people, setPeople] = useState<RosterPerson[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function updatePerson(id: string, patch: Partial<Person>) {
-    onChange({ ...state, people: state.people.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
-  }
-
-  function addPerson() {
-    if (!newName.trim()) return;
-    const id = `p${state.meta.idSeq}`;
-    const person: Person = {
-      id,
-      name: newName.trim(),
-      role: "Direct report",
-      cadenceDays: 14,
-      lastOneOnOne: new Date().toISOString(),
-      lastFeedback: null,
-      lastFeedbackSentiment: null,
-    };
-    onChange({ ...state, people: [...state.people, person], meta: { ...state.meta, idSeq: state.meta.idSeq + 1 } });
-    setNewName("");
-  }
-
-  function removePerson(id: string) {
-    onChange({ ...state, people: state.people.filter((p) => p.id !== id) });
-  }
+  useEffect(() => {
+    if (!currentActorId) return;
+    setPeople(null);
+    setError(null);
+    actorFetch(currentActorId, "/api/people")
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json()).error ?? "Failed to load roster");
+        return r.json();
+      })
+      .then((data) => setPeople(data.people))
+      .catch((e) => setError(e.message));
+  }, [currentActorId]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Roster</h1>
-        <p className="text-sm text-stone-500">Manage 1:1 cadence and feedback. Changes recompute findings immediately.</p>
-      </div>
-
-      <Card>
-        <div className="flex flex-wrap gap-2">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Add a direct report…"
-            className="min-w-[200px] flex-1 rounded-md border border-stone-300 px-3 py-1.5 text-sm"
-          />
-          <Button variant="primary" onClick={addPerson}>Add</Button>
-        </div>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {state.people.map((p) => {
-          const personFindings = findings.filter((f) => f.sourceIds.includes(p.id));
-          return (
-            <Card key={p.id}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-semibold">{p.name}</div>
-                  <div className="text-xs text-stone-500">{p.role}</div>
-                </div>
-                <button onClick={() => removePerson(p.id)} className="text-xs text-stone-400 hover:text-rose-600">
-                  remove
-                </button>
-              </div>
-
-              <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-stone-500">
-                <div>
-                  <dt className="font-medium text-stone-400">Last 1:1</dt>
-                  <dd>{daysSince(p.lastOneOnOne)}d ago (cadence {p.cadenceDays}d)</dd>
-                </div>
-                <div>
-                  <dt className="font-medium text-stone-400">Last feedback</dt>
-                  <dd>{p.lastFeedback ? `${daysSince(p.lastFeedback)}d ago · ${p.lastFeedbackSentiment}` : "never"}</dd>
-                </div>
-              </dl>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button onClick={() => updatePerson(p.id, { lastOneOnOne: new Date().toISOString() })}>Log 1:1 today</Button>
-                <Button onClick={() => updatePerson(p.id, { lastFeedback: new Date().toISOString(), lastFeedbackSentiment: "positive" })}>+ Positive feedback</Button>
-                <Button onClick={() => updatePerson(p.id, { lastFeedback: new Date().toISOString(), lastFeedbackSentiment: "negative" })}>+ Negative feedback</Button>
-              </div>
-
-              {personFindings.length > 0 && (
-                <ul className="mt-3 space-y-1 border-t border-stone-100 pt-3">
-                  {personFindings.map((f) => (
-                    <li key={f.key} className="flex items-center justify-between text-xs">
-                      <span className="text-stone-600">{f.title}</span>
-                      <SeverityBadge severity={f.severity} />
-                    </li>
-                  ))}
-                </ul>
+    <div>
+      <p className="mb-3 text-sm text-slate-600">
+        Scoped to <strong>{currentActor?.name ?? "…"}</strong>&rsquo;s role ({currentActor?.globalRole}). HR and
+        executives see the whole roster; managers see their direct reports; everyone else sees only themselves — this
+        is enforced in <code>src/app/api/people/route.ts</code>, not in this component.
+      </p>
+      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {!people && !error && <p className="text-sm text-slate-400">Loading…</p>}
+      {people && (
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Title</th>
+                <th className="px-3 py-2">Team</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {people.map((p) => (
+                <tr key={p.id}>
+                  <td className="px-3 py-2 font-medium text-slate-800">{p.name}</td>
+                  <td className="px-3 py-2 text-slate-600">{p.title}</td>
+                  <td className="px-3 py-2 text-slate-600">{p.teamName ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-600">{p.status}</td>
+                  <td className="px-3 py-2 text-right">
+                    <Link href={`/people/${p.id}`} className="text-indigo-600 hover:underline">
+                      Open profile →
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {people.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-3 py-6 text-center text-slate-400">
+                    No people visible to this actor.
+                  </td>
+                </tr>
               )}
-            </Card>
-          );
-        })}
-      </div>
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

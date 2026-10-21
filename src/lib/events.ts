@@ -1,103 +1,72 @@
-// src/lib/events.ts
-//
-// Data-access layer for the `events` table — the table this part's "10x
-// data day" rehearsal is about. Every list query here is keyset-paginated
-// and bounded; there is no "SELECT * FROM events" anywhere in this app.
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+// Part 01 stand-in: a minimal append-only event store used as the single
+// source of truth for the person timeline, provenance, and the
+// "what did LEADOS believe about this person on date X" projection.
+
 import { db } from "@/db";
 import { events } from "@/db/schema";
-import { decodeCursor, encodeCursor, parseLimit, type Page } from "./pagination";
-import { invalidateForecastCache } from "./forecastCache";
-import { invalidatePrefix } from "./queryCache";
+import { and, asc, eq, lte } from "drizzle-orm";
+import { newId } from "./ids";
 
-export interface EventRecord {
-  id: number;
-  type: string;
-  version: number;
-  payload: unknown;
-  createdAt: string;
+export type EventType =
+  | "PERSON_HIRED"
+  | "ROLE_CHANGED"
+  | "MANAGER_CHANGED"
+  | "TEAM_CHANGED"
+  | "COMPA_RATIO_UPDATED"
+  | "SKILL_DECLARED"
+  | "SKILL_OBSERVED"
+  | "GOAL_SET"
+  | "GOAL_UPDATED"
+  | "ONE_ON_ONE_HELD"
+  | "COMMITMENT_CREATED"
+  | "COMMITMENT_RESOLVED"
+  | "GROWTH_PLAN_CREATED"
+  | "GROWTH_PLAN_MILESTONE_UPDATED"
+  | "CONSENT_GRANTED"
+  | "CONSENT_REVOKED"
+  | "ERASURE_REQUESTED"
+  | "ERASURE_COMPLETED"
+  | "TERMINATION_RECORDED";
+
+export interface AppendEventInput {
+  type: EventType;
+  entityType: "person" | "team" | "oneOnOne" | "growthPlan";
+  entityId: string;
+  payload: Record<string, unknown>;
+  actorId?: string | null;
+  occurredAt?: Date;
 }
 
-function toRecord(row: typeof events.$inferSelect): EventRecord {
-  return { ...row, createdAt: row.createdAt.toISOString() };
+export async function appendEvent(input: AppendEventInput) {
+  const id = newId("evt");
+  const occurredAt = input.occurredAt ?? new Date();
+  await db.insert(events).values({
+    id,
+    type: input.type,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    payload: input.payload,
+    actorId: input.actorId ?? null,
+    occurredAt,
+    recordedAt: new Date(),
+  });
+  return id;
 }
 
-export async function listEvents(searchParams: URLSearchParams): Promise<Page<EventRecord>> {
-  const limit = parseLimit(searchParams);
-  const type = searchParams.get("type");
-  const cursor = decodeCursor(searchParams.get("cursor"));
-
-  const conditions = [];
-  if (type) conditions.push(eq(events.type, type));
-  if (cursor) {
-    const cursorDate = new Date(cursor.createdAt);
-    conditions.push(
-      or(lt(events.createdAt, cursorDate), and(eq(events.createdAt, cursorDate), lt(events.id, cursor.id))),
-    );
-  }
-
-  const rows = await db
+/**
+ * Returns every event about `entityId` that LEADOS had recorded as of
+ * `asOf` (inclusive), ordered chronologically by recordedAt. This is the
+ * "belief state" projection: an event that occurred in the past but was
+ * entered late is excluded until its recordedAt.
+ */
+export async function eventsAsOf(entityId: string, asOf: Date) {
+  return db
     .select()
     .from(events)
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(events.createdAt), desc(events.id))
-    .limit(limit + 1);
-
-  const hasMore = rows.length > limit;
-  const page = rows.slice(0, limit);
-  const last = page[page.length - 1];
-
-  return {
-    items: page.map(toRecord),
-    hasMore,
-    nextCursor: hasMore && last ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) : null,
-  };
+    .where(and(eq(events.entityId, entityId), lte(events.recordedAt, asOf)))
+    .orderBy(asc(events.recordedAt));
 }
 
-export async function countEvents(): Promise<number> {
-  const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(events);
-  return row?.count ?? 0;
-}
-
-export async function eventTypeBreakdown(): Promise<{ type: string; count: number }[]> {
-  const rows = await db
-    .select({ type: events.type, count: sql<number>`count(*)::int` })
-    .from(events)
-    .groupBy(events.type)
-    .orderBy(desc(sql`count(*)`))
-    .limit(20);
-  return rows;
-}
-
-export interface RecordEventInput {
-  type: string;
-  version?: number;
-  payload: unknown;
-}
-
-export async function recordEvent(input: RecordEventInput): Promise<EventRecord> {
-  const [row] = await db
-    .insert(events)
-    .values({ type: input.type, version: input.version ?? 1, payload: input.payload ?? {} })
-    .returning();
-  // Explicit, targeted cache invalidation — see forecastCache.ts and
-  // queryCache.ts header comments for why this beats a blanket TTL alone.
-  invalidateForecastCache();
-  invalidatePrefix("stats:");
-  return toRecord(row);
-}
-
-/** Bulk insert used by the seed script — batches of up to 1,000 rows per round trip. */
-export async function bulkInsertEvents(rows: RecordEventInput[]): Promise<number> {
-  if (rows.length === 0) return 0;
-  const BATCH = 1000;
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const batch = rows.slice(i, i + BATCH).map((r) => ({ type: r.type, version: r.version ?? 1, payload: r.payload ?? {} }));
-    await db.insert(events).values(batch);
-    inserted += batch.length;
-  }
-  invalidateForecastCache();
-  invalidatePrefix("stats:");
-  return inserted;
+export async function allEventsFor(entityId: string) {
+  return db.select().from(events).where(eq(events.entityId, entityId)).orderBy(asc(events.recordedAt));
 }
