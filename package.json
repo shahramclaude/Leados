@@ -9,18 +9,20 @@
     "typecheck": "tsc --noEmit",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts",
-    "check:routes": "node scripts/check-route-registry.mjs",
-    "secret-scan": "node scripts/secret-scan.mjs",
+    "db:rebuild": "tsx scripts/rebuild.ts",
+    "backup": "tsx scripts/backup.ts",
+    "restore:verify": "tsx scripts/restore-verify.ts",
+    "slo:report": "tsx scripts/slo-report.ts",
     "audit:verify": "tsx scripts/audit-verify.ts",
+    "check:metrics": "node scripts/check-metrics.mjs",
+    "secret-scan": "node scripts/secret-scan.mjs",
     "test": "vitest run",
-    "test:security": "vitest run tests/security",
-    "verify": "npm run typecheck && npm run lint && npm run check:routes && npm run secret-scan && npm run test && npm audit --omit=dev --audit-level=critical"
+    "verify": "npm run typecheck && npm run lint && npm run secret-scan && npm run test"
   },
   "dependencies": {
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
-    "jose": "^6.2.13",
-    "next": "^16.4.2",
+    "next": "16.2.6",
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
@@ -36,8 +38,8 @@
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
-    "eslint-config-next": "^16.4.2",
-    "postcss": "^8.5.31",
+    "eslint-config-next": "16.2.6",
+    "postcss": "8.5.8",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3"
   }

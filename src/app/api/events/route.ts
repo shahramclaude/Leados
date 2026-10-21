@@ -1,39 +1,28 @@
-import { NextRequest } from "next/server";
+import { desc } from "drizzle-orm";
 import { z } from "zod";
-import { ApiError, ok, readJsonBody, withRouteErrors } from "@/lib/server/http";
-import { createEvent, listEvents } from "@/lib/server/repositories/events";
-import { findIdempotentResponse, getIdempotencyKey, recordIdempotentResponse } from "@/lib/server/idempotency";
+import { db } from "@/db";
+import { eventLog } from "@/db/schema";
+import { publishEvent } from "@/lib/ops/eventBus";
+import { withApiHandler } from "@/lib/obs/apiHandler";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withRouteErrors(async (req) => {
-  const sp = req.nextUrl.searchParams;
-  const domain = sp.get("domain") ?? undefined;
-  const limit = sp.get("limit") ? Number(sp.get("limit")) : undefined;
-  const offset = sp.get("offset") ? Number(sp.get("offset")) : undefined;
-  const { rows, total } = await listEvents({ domain, limit, offset });
-  return ok({ rows, total });
+export const GET = withApiHandler({ routeFamily: "events" }, async (req) => {
+  const url = new URL(req.url);
+  const limit = Math.min(500, Number(url.searchParams.get("limit") || 50));
+  const rows = await db.select().from(eventLog).orderBy(desc(eventLog.seq)).limit(limit);
+  return Response.json({ events: rows });
 });
 
-const createEventSchema = z.object({
-  type: z.string().min(1),
-  domain: z.string().min(1),
-  severity: z.number().int().min(1).max(5).default(1),
-  title: z.string().min(1).max(200),
-  body: z.string().max(2000).optional(),
+const BodySchema = z.object({
+  eventType: z.string().min(1),
+  payload: z.record(z.string(), z.unknown()).default({}),
+  actor: z.string().default("demo"),
+  notify: z.array(z.string()).optional(),
 });
 
-export const POST = withRouteErrors(async (req: NextRequest) => {
-  const idempotencyKey = getIdempotencyKey(req);
-  const replay = await findIdempotentResponse(idempotencyKey);
-  if (replay) return replay;
-
-  const parsed = createEventSchema.safeParse(await readJsonBody(req));
-  if (!parsed.success) {
-    throw new ApiError(422, "VALIDATION_ERROR", "Invalid event payload.", parsed.error.flatten());
-  }
-  const row = await createEvent(parsed.data);
-  const response = ok(row);
-  await recordIdempotentResponse(idempotencyKey, "/api/events", 200, await response.clone().json());
-  return response;
+export const POST = withApiHandler({ routeFamily: "events" }, async (req) => {
+  const body = BodySchema.parse(await req.json());
+  const row = await publishEvent(body.eventType, body.payload, { actor: body.actor, notify: body.notify });
+  return Response.json({ event: row }, { status: 201 });
 });

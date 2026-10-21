@@ -1,21 +1,32 @@
-// POST /api/scheduler/run — manually run a specific job by key.
-// Body: { jobKey: string, actor?: string }
-import { ensureJobsRegistered } from "@/lib/kernel/jobs";
-import { runJob } from "@/lib/kernel/scheduler";
+// Manual trigger: enqueue a job immediately (used by runbooks, drills, and
+// the Health page's "run now" affordance) or run a full scheduler tick.
+import { z } from "zod";
+import { enqueue } from "@/lib/ops/workQueue";
+import { tickScheduler, runWorkerPass } from "@/lib/ops/scheduler/runner";
+import { JOB_HANDLERS } from "@/lib/ops/scheduler/jobs";
+import { withApiHandler } from "@/lib/obs/apiHandler";
+import { requireAdmin } from "@/lib/ops/adminAuth";
+import { AppError } from "@/lib/obs/errors";
 
 export const dynamic = "force-dynamic";
 
-ensureJobsRegistered();
+const BodySchema = z.object({ job: z.string().optional(), mode: z.enum(["enqueue", "tick", "worker"]).default("enqueue") });
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-    const { jobKey, actor } = body ?? {};
-    if (!jobKey) return Response.json({ ok: false, error: "jobKey is required" }, { status: 400 });
-    const outcome = await runJob(jobKey, { type: "manual", actor: actor ?? "human:unknown" });
-    return Response.json({ ok: true, outcome });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return Response.json({ ok: false, error: message }, { status: 400 });
+export const POST = withApiHandler({ routeFamily: "scheduler_run" }, async (req) => {
+  requireAdmin(req);
+  const body = BodySchema.parse(await req.json().catch(() => ({})));
+  if (body.mode === "tick") {
+    const result = await tickScheduler();
+    return Response.json({ mode: "tick", ...result });
   }
-}
+  if (body.mode === "worker") {
+    const processed = await runWorkerPass(25);
+    return Response.json({ mode: "worker", processed });
+  }
+  if (!body.job || !(body.job in JOB_HANDLERS)) {
+    throw new AppError("unknown_job", `job must be one of: ${Object.keys(JOB_HANDLERS).join(", ")}`, 400);
+  }
+  const row = await enqueue(body.job, { manual: true });
+  const processed = await runWorkerPass(5);
+  return Response.json({ mode: "enqueue", job: row, processedAfterEnqueue: processed });
+});

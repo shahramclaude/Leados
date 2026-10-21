@@ -1,15 +1,22 @@
-import "@/lib/kernel/bootstrap";
-import { listDeadLetters, resolveDeadLetter } from "@/lib/kernel/deadLetter";
+import { z } from "zod";
+import { deadLetterRows, requeueDeadLetter } from "@/lib/ops/workQueue";
+import { withApiHandler } from "@/lib/obs/apiHandler";
+import { requireAdmin } from "@/lib/ops/adminAuth";
+import { appendAudit } from "@/lib/ops/auditChain";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  return Response.json({ deadLetters: await listDeadLetters() });
-}
+export const GET = withApiHandler({ routeFamily: "scheduler_dead_letter" }, async () => {
+  const rows = await deadLetterRows();
+  return Response.json({ deadLetters: rows, count: rows.length });
+});
 
-export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { id?: string };
-  if (!body.id) return Response.json({ error: "id is required" }, { status: 400 });
-  const row = await resolveDeadLetter(body.id);
-  return Response.json({ deadLetter: row });
-}
+const BodySchema = z.object({ id: z.string().uuid() });
+
+export const POST = withApiHandler({ routeFamily: "scheduler_dead_letter" }, async (req) => {
+  requireAdmin(req);
+  const { id } = BodySchema.parse(await req.json());
+  await requeueDeadLetter(id);
+  await appendAudit("admin", "dead_letter.requeue", `work_queue:${id}`, {});
+  return Response.json({ requeued: id });
+});

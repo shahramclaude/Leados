@@ -1,36 +1,23 @@
-import { sql } from "drizzle-orm";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { db } from "@/db";
-import { systemMeta } from "@/db/schema";
-import { withObservability } from "@/lib/observability/apiHandler";
-import { logger } from "@/lib/observability/logger";
+import { z } from "zod";
+import { getMaintenanceState, setMaintenanceMode } from "@/lib/ops/maintenance";
+import { appendAudit } from "@/lib/ops/auditChain";
+import { withApiHandler } from "@/lib/obs/apiHandler";
+import { requireAdmin } from "@/lib/ops/adminAuth";
 
 export const dynamic = "force-dynamic";
 
-// Honest limitation: this build has no auth/session system (see
-// FEATURES.md), so this route is unauthenticated. docs/RUNBOOKS.md and
-// docs/DEPLOYMENT.md both call this out explicitly: put it behind network
-// controls (VPN/allowlist at the reverse proxy) before exposing this
-// deployment publicly, or gate it with a shared secret header read from
-// process.env before relying on it in production.
-export const GET = withObservability("GET /api/admin/maintenance", async () => {
-  const rows = await db.select().from(systemMeta).where(sql`${systemMeta.key} = 'maintenance_mode'`).limit(1);
-  return NextResponse.json({ enabled: rows[0]?.value === "true" });
+export const GET = withApiHandler({ routeFamily: "admin_maintenance", allowDuringMaintenance: true }, async () => {
+  const state = await getMaintenanceState();
+  return Response.json(state);
 });
 
-export const POST = withObservability("POST /api/admin/maintenance", async (req: NextRequest) => {
-  const body = await req.json().catch(() => ({}));
-  const enabled = body?.enabled === true;
+const BodySchema = z.object({ enabled: z.boolean(), reason: z.string().optional() });
 
-  await db
-    .insert(systemMeta)
-    .values({ key: "maintenance_mode", value: String(enabled) })
-    .onConflictDoUpdate({
-      target: systemMeta.key,
-      set: { value: String(enabled), updatedAt: new Date() },
-    });
-
-  logger.warn("maintenance_mode_changed", { enabled });
-  return NextResponse.json({ enabled });
+export const POST = withApiHandler({ routeFamily: "admin_maintenance", allowDuringMaintenance: true }, async (req) => {
+  requireAdmin(req);
+  const body = BodySchema.parse(await req.json());
+  await setMaintenanceMode(body.enabled, body.reason, "admin");
+  await appendAudit("admin", body.enabled ? "maintenance.enable" : "maintenance.disable", "maintenance_state", { reason: body.reason });
+  const state = await getMaintenanceState();
+  return Response.json(state);
 });

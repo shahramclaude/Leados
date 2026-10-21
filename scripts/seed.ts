@@ -1,44 +1,51 @@
-#!/usr/bin/env tsx
-// `npm run db:seed` — creates one demo organization with an owner, an admin,
-// and a member so the security test suite and manual QA have a known
-// starting fixture. Intentionally NOT exposed as a public HTTP endpoint
-// (see src/lib/authz/registry.ts comment: no self-serve signup — LEADOS is
-// invite-only B2B provisioning).
+// Bootstraps the operational rows every health check and runbook assumes
+// exist: schema_version, maintenance_state, a handful of demo events so the
+// projection/forecast machinery has real data to operate on.
 import "dotenv/config";
-import { randomUUID } from "node:crypto";
-import { db } from "../src/db";
-import { organizations, users } from "../src/db/schema";
-import { hashPassword } from "../src/lib/crypto";
-import { pool } from "../src/db";
+import { db, pool } from "../src/db";
+import { eventLog, maintenanceState, organizations, systemMeta } from "../src/db/schema";
+import { CURRENT_SCHEMA_VERSION } from "../src/lib/ops/health/checks";
+import { refreshProjection } from "../src/lib/ops/projection";
 
 async function main() {
-  const [org] = await db
-    .insert(organizations)
-    .values({ name: "Acme Demo Org" })
-    .returning();
+  await db
+    .insert(systemMeta)
+    .values({ key: "schema_version", value: { version: CURRENT_SCHEMA_VERSION }, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: systemMeta.key, set: { value: { version: CURRENT_SCHEMA_VERSION }, updatedAt: new Date() } });
 
-  const [orgB] = await db
-    .insert(organizations)
-    .values({ name: "Beta Demo Org (tenant-isolation fixture)" })
-    .returning();
+  await db
+    .insert(maintenanceState)
+    .values({ id: "global", enabled: false })
+    .onConflictDoNothing();
 
-  const demoPassword = process.env.SEED_DEMO_PASSWORD ?? "ChangeMe!2026-demo";
-  const passwordHash = await hashPassword(demoPassword);
+  const existingOrgs = await db.select().from(organizations).limit(1);
+  if (existingOrgs.length === 0) {
+    await db.insert(organizations).values([{ name: "Acme Leadership Group" }, { name: "Northwind Org" }]);
+  }
 
-  await db.insert(users).values([
-    { orgId: org.id, email: "owner@acme.test", role: "owner", passwordHash, securityStamp: randomUUID() },
-    { orgId: org.id, email: "admin@acme.test", role: "admin", passwordHash, securityStamp: randomUUID() },
-    { orgId: org.id, email: "member@acme.test", role: "member", passwordHash, securityStamp: randomUUID() },
-    { orgId: orgB.id, email: "owner@beta.test", role: "owner", passwordHash, securityStamp: randomUUID() },
-  ]);
+  const existingEvents = await db.select().from(eventLog).limit(1);
+  if (existingEvents.length === 0) {
+    const now = Date.now();
+    for (let day = 13; day >= 0; day--) {
+      const count = 3 + Math.round(2 * Math.sin(day / 2)) + (day === 0 ? 1 : 0);
+      for (let i = 0; i < Math.max(1, count); i++) {
+        await db.insert(eventLog).values({
+          eventType: "demo.seed_event",
+          payload: { day, i },
+          actor: "seed",
+          createdAt: new Date(now - day * 86_400_000 - i * 60_000),
+        });
+      }
+    }
+  }
 
-  console.log("Seeded orgs:", { acme: org.id, beta: orgB.id });
-  console.log(`Demo password for all seeded users: ${demoPassword} (NOT for production use)`);
-  await pool.end();
+  await refreshProjection();
+  console.log("Seed complete: schema_version, maintenance_state, demo organizations/events, projection refreshed.");
 }
 
-main().catch(async (err) => {
-  console.error("seed failed:", err);
-  await pool.end().catch(() => {});
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(() => pool.end());
