@@ -1,0 +1,12 @@
+# Architecture Decision Records
+
+ADRs capture architecturally significant decisions: why, not just what. See `CONTRIBUTING.md` →
+"When you need an ADR" for the criteria that trigger writing a new one.
+
+Format: copy `0001-record-architecture-decisions.md`, number sequentially, status one of
+`Proposed`, `Accepted`, `Superseded by ADR-000N`.
+
+| ADR | Title | Status |
+|---|---|---|
+| [0001](./0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
+| [0002](./0002-rule-based-lead-scoring-v0.md) | Use rule-based scoring, not ML, for v0 | Accepted |

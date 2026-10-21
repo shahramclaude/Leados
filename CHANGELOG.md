@@ -1,80 +1,59 @@
 # Changelog
 
-All notable changes to this project are documented here. Format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
-follows [Semantic Versioning](https://semver.org/).
+All notable changes to LEADOS are documented in this file.
+
+The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and this project
+uses [Semantic Versioning](https://semver.org/).
+
+**Honesty note (Part 19):** this changelog was curated retroactively. The repository snapshot
+used to write it contains no prior git history, no prior tags, and none of the stale status
+reports referenced by earlier planning documents (`APP-STATUS-REPORT.txt`,
+`APP-CAPABILITY-REPORT.md`, etc.) — see `docs/CONSISTENCY-SWEEP.md` for the full accounting. This
+file therefore starts at the first version that can be verified against real code:
+**v0.1.0**. No entries describe work that cannot be pointed at a file.
 
 ## [Unreleased]
 
-Nothing yet.
+### Planned
+- Authentication for the dashboard and API (see README Roadmap, M1).
+- Automated test suite (M3) — currently `npm run verify` does not execute any behavioral tests
+  because none exist.
 
-## [14.0.0] - 2026-10-20
+## [0.1.0] - 2026-01-01
+
+First documented, verifiable release.
 
 ### Added
-
-- Composite `/api/health` endpoint aggregating six real dependency checks:
-  database connectivity, schema-version drift, automation queue depth/lag,
-  automation freshness, maintenance mode, and process runtime —
-  replacing the single `{ok: true}` placeholder.
-- `/health` dashboard page rendering the composite result with
-  per-check drill-downs and remediation pointers into `docs/RUNBOOKS.md`.
-- `GET /api/metrics` (JSON and `?format=prometheus`): per-route request
-  counts, error rates, p50/p95/p99 latency, automation-run outcomes, and
-  queue depth. `forecastDrift` is reserved but reports
-  `status: "not_implemented"` honestly (no forecasting engine exists yet).
-- Structured JSON logging with correlation IDs
-  (`src/lib/observability/logger.ts`, `requestContext.ts`), propagated via
-  `src/middleware.ts` and `withObservability()`.
-- Env-configured error-tracking hook with no vendor SDK
-  (`src/lib/observability/errorTracking.ts`,
-  `ERROR_TRACKING_WEBHOOK_URL`).
-- `automation_runs` and `system_meta` tables (`src/db/schema.ts`), backing
-  the health checks above with real, queryable data instead of
-  placeholders.
-- `POST /api/automation/runs` (synchronous demonstration/test endpoint —
-  see ADR-0002) and `GET /api/automation/runs`.
-- `POST /api/admin/maintenance` + `GET /api/admin/maintenance`, surfaced in
-  the composite health check.
-- Graceful shutdown signal handling (`src/instrumentation.ts`,
-  `src/lib/health/shutdown.ts`).
-- Schema-version drift detection: `src/db/schemaVersion.json`,
-  `scripts/record-schema-version.mjs`, wired into `npm run db:migrate`.
-- Minimal dependency-free secret scanner: `scripts/scan-secrets.sh`,
-  `npm run security:scan`.
-- Multi-stage `Dockerfile`, health-checked `docker-compose.production.yml`
-  (app + db + nightly backup sidecar), and `scripts/deploy.sh` as the one
-  canonical deploy path.
-- `.github/workflows/release.yml`: on tag push, runs typecheck/lint/build/
-  security scan, builds the production image, and attaches
-  `docs/api/openapi.json` to the GitHub Release.
-- Documentation: `docs/SLO.md`, `docs/RUNBOOKS.md`, `docs/RELEASING.md`,
-  `docs/DEPLOYMENT.md`, `docs/CONFIG.md`, `docs/README.md` (index),
-  `docs/adr/` (template + two ADRs), `docs/history/` (provenance notes),
-  `docs/api/openapi.json`. Rewrote `README.md`, added `FEATURES.md`,
-  `ARCHITECTURE.md`, `CONTRIBUTING.md`.
+- `leads` and `score_events` tables (`src/db/schema.ts`).
+- Rule-based lead scoring, `rule-v1` (`src/lib/scoring.ts`): additive, fully explainable, no ML.
+- Lead API: create/list/filter (`src/app/api/leads/route.ts`), get/update/delete by id
+  (`src/app/api/leads/[id]/route.ts`), force rescoring (`src/app/api/leads/[id]/score/route.ts`).
+- Dashboard at `/` to add leads, view scores with breakdown tooltip, and record a
+  qualify/disqualify/contacted/converted decision (`src/app/page.tsx`,
+  `src/components/LeadBoard.tsx`).
+- Health check endpoint reporting DB connectivity and app version
+  (`src/app/api/health/route.ts`).
+- Seed script with four sample leads for onboarding (`scripts/seed.ts`, `npm run seed`).
+- Full Diátaxis documentation set under `docs/` (tutorial, how-to guides, reference, explanation),
+  tied together by `docs/INDEX.md`.
+- Release engineering: `docs/RELEASING.md`, `docs/ROLLBACK.md`,
+  `.github/workflows/release.yml`, `.github/workflows/ci.yml`.
+- Deployment: single canonical Docker path, `Dockerfile`, `deploy-production.sh`,
+  `docs/DEPLOYMENT.md`.
+- Governance: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `docs/adr/` with ADR-0001 and ADR-0002,
+  `docs/MAINTAINER-RUNBOOK.md`.
+- Dependency-free docs link checker (`scripts/check-docs-links.mjs`), wired into
+  `npm run verify` and CI.
 
 ### Changed
+- Renamed the project from the scaffold name "Arena Next.js PostgreSQL Starter" to **LEADOS**
+  across `package.json`, `src/app/layout.tsx`, `src/app/page.tsx`, and an internal global variable
+  in `src/db/index.ts`. See `docs/CONSISTENCY-SWEEP.md` item C-1.
+- `/api/health` now also reports `service` and `version` fields, not just `ok`.
 
-- Renamed the project from `nextjs-postgresql-template` to `leados` in
-  `package.json`, and updated `src/app/layout.tsx` metadata and
-  `src/app/page.tsx` to reflect LEADOS branding and link to the new health
-  surfaces.
-- `src/app/api/health/route.ts` now returns the composite payload (see
-  Added) instead of `{ok: boolean}`. This is a **breaking** response-shape
-  change for any existing caller of that route, which is why this is
-  `14.0.0` and not a patch — see `docs/RELEASING.md` version-bump rule.
-
-### Known gaps (tracked, not hidden — see FEATURES.md → Roadmap)
-
-- No auth/session system, event log, orchestrator/agent runtime, decisions/
-  findings/metrics-definitions domains, or forecasting/calibration engine
-  exist in this working tree.
-- `eval:intelligence`, `perf:check`, and `i18n:check` gates referenced in
-  the broader LEADOS program brief are not implemented — there is nothing
-  yet for them to evaluate. `docs/RELEASING.md`'s checklist lists them
-  explicitly as not applicable rather than silently skipping them.
-- No automated test suite (unit/integration/e2e) or coverage report exists
-  yet; the release workflow does not fabricate one.
-- See `docs/adr/0001-scope-given-upstream-repo-state.md` for the full
-  reasoning behind this version's scope relative to the broader LEADOS
-  program.
+### Known gaps (tracked, not hidden)
+- No authentication/authorization anywhere in the app.
+- No multi-tenancy; single shared table for all leads.
+- No automated tests, coverage, or mutation-testing reports.
+- No realtime transport; the dashboard only refetches after actions it took itself.
+- No fairness-auditing tooling, because there is no learned model to audit.

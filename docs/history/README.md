@@ -1,42 +1,16 @@
-# History / provenance notes
+# Archived / superseded documents
 
-This folder holds superseded or stale material that's kept for provenance
-rather than silently deleted, per the project convention that the repo
-should never contradict itself.
+This directory holds documents that are no longer current but are kept (not deleted) so the
+project's history is auditable, per the project's honesty rules: **stale docs are archived, never
+silently deleted.**
 
-## 2026-10-20 — Provenance note on the upstream `shahramclaude/Leados` repository
+Every file in this directory must start with a dated preamble stating:
+1. When it was archived and by which release/part.
+2. Why it was archived (superseded by which document, or found to be inaccurate).
+3. What, if anything, is still true in it.
 
-This working tree did not start from an export of the live
-`shahramclaude/Leados` GitHub repository's `main` branch. It started from a
-blank Next.js + Drizzle + PostgreSQL starter template. The upstream `main`
-branch was read (cloned and inspected) for context before this part's work
-began, per the standing "read before write" order, but was **not** used as
-a base because, as verified directly (not assumed):
+## Index
 
-- `npx tsc --noEmit` against that branch reports 2,863 TypeScript errors
-  (2,343 of them inside `src/`).
-- `src/db/schema.ts` on that branch defines 6 tables, while ~150 files
-  under `src/app/api/**` import dozens of tables/columns/helpers that do
-  not exist anywhere in the branch (e.g. `events`, `decisions`, `findings`,
-  `comments`, `agentCycleRuns`, `lib/seed.ts#ensureBaselineData`,
-  `lib/api.ts#withErrorHandling`).
-- The repository root also contains a full, separate, pre-Next.js (Vite)
-  application (`App.tsx`, `Shell.tsx`, `index.html`, `vite.config.ts`, and
-  ~35 more files) that branch's own `README.md` explicitly claims is "not
-  part of this working tree" — a claim contradicted by the files actually
-  present in the clone.
-- No `Dockerfile`, `docker-compose*.yml`, `deploy-production.sh`, or
-  `CHANGELOG.md` exist anywhere in that repository.
-
-Full reasoning and the decision this session made in response is recorded
-as an ADR: see `docs/adr/0001-scope-given-upstream-repo-state.md`. No files
-from the upstream `main` branch are reproduced here — this note exists so
-a future reader of this repository's history understands why its
-`README.md`/`CHANGELOG.md`/`FEATURES.md` describe a different (smaller,
-but real and verified) feature set than a casual GitHub browse of
-`shahramclaude/Leados` might suggest, and so nobody re-derives the same
-2,863 errors from a cold start before finding this note.
-
-There are no other legacy session logs or status reports in this working
-tree to migrate here — this tree's own prior history is exactly what's in
-`AI-SESSION-LOG.md`.
+| File | Archived | Reason |
+|---|---|---|
+| [`2026-part19-baseline-note.md`](./2026-part19-baseline-note.md) | Part 19 / v0.1.0 | Not actually a supersession — see the note itself. Records what this release-engineering pass found (and didn't find) in the repository, for anyone later wondering "where did Parts 00–18's documents go?" |

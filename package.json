@@ -1,5 +1,6 @@
 {
-  "name": "nextjs-postgresql-template",
+  "name": "leados",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -7,17 +8,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "seed": "tsx scripts/seed.ts",
     "db:push": "drizzle-kit push",
-    "db:seed": "tsx scripts/seed.ts",
-    "db:rebuild": "tsx scripts/rebuild.ts",
-    "backup": "tsx scripts/backup.ts",
-    "restore:verify": "tsx scripts/restore-verify.ts",
-    "slo:report": "tsx scripts/slo-report.ts",
-    "audit:verify": "tsx scripts/audit-verify.ts",
-    "check:metrics": "node scripts/check-metrics.mjs",
-    "secret-scan": "node scripts/secret-scan.mjs",
-    "test": "vitest run",
-    "verify": "npm run typecheck && npm run lint && npm run secret-scan && npm run test"
+    "docs:check": "node scripts/check-docs-links.mjs",
+    "verify": "npm run lint && npm run typecheck && npm run docs:check && npm run build"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -26,9 +20,7 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15",
-    "vitest": "^5.0.5",
-    "zod": "^4.6.7"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

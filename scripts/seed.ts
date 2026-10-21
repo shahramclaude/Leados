@@ -1,46 +1,83 @@
-// Bootstraps the operational rows every health check and runbook assumes
-// exist: schema_version, maintenance_state, a handful of demo events so the
-// projection/forecast machinery has real data to operate on.
+// Seed script for the LEADOS "first hour" tutorial (docs/tutorials.md).
+// Run with: npm run seed
+//
+// This inserts a handful of sample leads with deliberately varied inputs
+// (different sources, with/without company, with/without notes) so the
+// rule-based scores in src/lib/scoring.ts visibly differ on first run.
 import "dotenv/config";
 import { db, pool } from "../src/db";
-import { eventLog, maintenanceState, organizations, systemMeta } from "../src/db/schema";
-import { CURRENT_SCHEMA_VERSION } from "../src/lib/ops/health/checks";
-import { refreshProjection } from "../src/lib/ops/projection";
+import { leads, scoreEvents } from "../src/db/schema";
+import { computeScore } from "../src/lib/scoring";
+
+const SAMPLE_LEADS = [
+  {
+    name: "Priya Shah",
+    email: "priya.shah@globex-industrial.com",
+    company: "Globex Industrial",
+    source: "referral",
+    notes: "Referred by an existing customer, asked about enterprise pricing.",
+  },
+  {
+    name: "Jordan Lee",
+    email: "jordan.lee@brightfield.io",
+    company: "Brightfield",
+    source: "website",
+    notes: "Filled out the contact form after reading the pricing page.",
+  },
+  {
+    name: "Sam Carter",
+    email: "sam.carter@gmail.com",
+    company: null,
+    source: "cold-outreach",
+    notes: null,
+  },
+  {
+    name: "Ana Kowalski",
+    email: "ana@northwind-events.com",
+    company: "Northwind Events",
+    source: "event",
+    notes: "Met at the regional conference booth, wants a trial.",
+  },
+] as const;
 
 async function main() {
-  await db
-    .insert(systemMeta)
-    .values({ key: "schema_version", value: { version: CURRENT_SCHEMA_VERSION }, updatedAt: new Date() })
-    .onConflictDoUpdate({ target: systemMeta.key, set: { value: { version: CURRENT_SCHEMA_VERSION }, updatedAt: new Date() } });
+  console.log(`Seeding ${SAMPLE_LEADS.length} sample leads…`);
 
-  await db
-    .insert(maintenanceState)
-    .values({ id: "global", enabled: false })
-    .onConflictDoNothing();
+  for (const sample of SAMPLE_LEADS) {
+    const { score, breakdown, version } = computeScore(sample);
 
-  const existingOrgs = await db.select().from(organizations).limit(1);
-  if (existingOrgs.length === 0) {
-    await db.insert(organizations).values([{ name: "Acme Leadership Group" }, { name: "Northwind Org" }]);
-  }
+    const [created] = await db
+      .insert(leads)
+      .values({
+        name: sample.name,
+        email: sample.email,
+        company: sample.company,
+        source: sample.source,
+        notes: sample.notes,
+        score,
+        scoreBreakdown: breakdown,
+        scoreVersion: version,
+      })
+      .onConflictDoNothing({ target: leads.email })
+      .returning();
 
-  const existingEvents = await db.select().from(eventLog).limit(1);
-  if (existingEvents.length === 0) {
-    const now = Date.now();
-    for (let day = 13; day >= 0; day--) {
-      const count = 3 + Math.round(2 * Math.sin(day / 2)) + (day === 0 ? 1 : 0);
-      for (let i = 0; i < Math.max(1, count); i++) {
-        await db.insert(eventLog).values({
-          eventType: "demo.seed_event",
-          payload: { day, i },
-          actor: "seed",
-          createdAt: new Date(now - day * 86_400_000 - i * 60_000),
-        });
-      }
+    if (!created) {
+      console.log(`  skipped (already exists): ${sample.email}`);
+      continue;
     }
+
+    await db.insert(scoreEvents).values({
+      leadId: created.id,
+      score,
+      breakdown,
+      scoreVersion: version,
+      reason: "seed",
+    });
+
+    console.log(`  created ${sample.name} <${sample.email}> — score ${score}`);
   }
 
-  await refreshProjection();
-  console.log("Seed complete: schema_version, maintenance_state, demo organizations/events, projection refreshed.");
+  console.log("Done. Start the app and visit / to see the board, or GET /api/leads.");
 }
 
 main()
@@ -48,4 +85,6 @@ main()
     console.error(err);
     process.exitCode = 1;
   })
-  .finally(() => pool.end());
+  .finally(async () => {
+    await pool.end();
+  });
