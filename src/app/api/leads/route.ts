@@ -1,14 +1,36 @@
-import { withDeprecationHeaders } from "@/lib/api/deprecation";
-import { GET as v1GET, POST as v1POST } from "@/app/api/v1/leads/route";
+import { getDb } from "@/db";
+import { requireTenant } from "@/lib/api-auth";
+import { createLeadSchema, paginationSchema } from "@/lib/validation";
+import { handleRouteError } from "@/lib/api-response";
+import { createLead, listLeads } from "@/lib/services/pipeline";
 
-// Deprecated shim — see docs/API.md "Deprecated endpoint mapping". Preserves
-// exact old behavior by delegating to the v1 handler, just adds
-// Deprecation/Sunset/Link headers so existing integrations keep working
-// until the documented sunset date.
-export async function GET(req: Request) {
-  return withDeprecationHeaders(await v1GET(req), "/api/v1/leads");
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  try {
+    const tenant = await requireTenant(request);
+    const url = new URL(request.url);
+    const { page, pageSize } = paginationSchema.parse({
+      page: url.searchParams.get("page") ?? undefined,
+      pageSize: url.searchParams.get("pageSize") ?? undefined,
+    });
+    const db = getDb();
+    const { rows, total } = await listLeads(db, tenant.id, page, pageSize);
+    return Response.json({ data: rows, page, pageSize, total });
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }
 
-export async function POST(req: Request) {
-  return withDeprecationHeaders(await v1POST(req), "/api/v1/leads");
+export async function POST(request: Request) {
+  try {
+    const tenant = await requireTenant(request);
+    const body = await request.json();
+    const input = createLeadSchema.parse(body);
+    const db = getDb();
+    const row = await createLead(db, tenant.id, input);
+    return Response.json(row, { status: 201 });
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }

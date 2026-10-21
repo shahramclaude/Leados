@@ -1,34 +1,24 @@
-import { runAutomation } from "@/lib/app/automation";
-import { ValidationError } from "@/lib/app/findings";
-import { checkAuth } from "@/lib/platform/auth";
+import { getDb } from "@/db";
+import { requireTenant } from "@/lib/api-auth";
+import { createAutomationRunSchema } from "@/lib/validation";
+import { handleRouteError, jsonError } from "@/lib/api-response";
+import { runAutomation } from "@/lib/services/pipeline";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const auth = checkAuth(request);
-  if (!auth.ok) return Response.json({ error: auth.message }, { status: auth.status });
-
-  let body: unknown;
   try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: "Request body must be valid JSON" }, { status: 400 });
-  }
-
-  const { kind, base, volatility, trials, seed } = (body ?? {}) as Record<string, unknown>;
-  try {
-    const run = await runAutomation({
-      kind: (kind as "monte_carlo_forecast") ?? "monte_carlo_forecast",
-      base: Number(base),
-      volatility: Number(volatility),
-      trials: Number(trials),
-      seed: Number(seed),
-    });
-    return Response.json(run, { status: 201 });
+    const tenant = await requireTenant(request);
+    const body = await request.json();
+    const input = createAutomationRunSchema.parse(body);
+    const db = getDb();
+    const row = await runAutomation(db, tenant.id, input);
+    if (!row) return jsonError("Approval not found for this tenant", 404);
+    return Response.json(row, { status: 201 });
   } catch (error) {
-    if (error instanceof ValidationError) {
-      return Response.json({ error: error.message }, { status: 400 });
+    if (error instanceof Error && error.message.includes("not approved")) {
+      return jsonError(error.message, 422);
     }
-    throw error;
+    return handleRouteError(error);
   }
 }

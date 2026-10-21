@@ -1,38 +1,33 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { GET, POST } from "@/app/api/onboarding/route";
-import { resetDatabase } from "../setup/db";
+import { describe, expect, it } from "vitest";
+import { withTestTransaction } from "@/db";
+import { POST } from "@/app/api/onboarding/route";
+import { jsonRequest } from "./helpers";
 
-const AUTH = { authorization: "Bearer leados-dev-token" };
-
-function postRequest(body: unknown, headers: Record<string, string> = AUTH) {
-  return new Request("http://localhost/api/onboarding", {
-    method: "POST",
-    headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify(body),
-  });
-}
-
-describe("/api/onboarding", () => {
-  beforeEach(resetDatabase);
-
-  it("happy path: starts incomplete, POST completes it, GET reflects completion", async () => {
-    const before = await (await GET()).json();
-    expect(before).toEqual({ completed: false, orgName: null });
-
-    const postRes = await POST(postRequest({ orgName: "Acme" }));
-    expect(postRes.status).toBe(201);
-
-    const after = await (await GET()).json();
-    expect(after).toEqual({ completed: true, orgName: "Acme" });
+describe("POST /api/onboarding", () => {
+  it("happy path: creates a tenant and returns an api key", async () => {
+    await withTestTransaction(async () => {
+      const res = await POST(jsonRequest("http://test/api/onboarding", { method: "POST", body: { name: "Acme Co" } }));
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body.name).toBe("Acme Co");
+      expect(typeof body.apiKey).toBe("string");
+      expect(body.apiKey.length).toBeGreaterThan(10);
+    });
   });
 
-  it("auth failure: POST without a token is rejected with 401", async () => {
-    const res = await POST(postRequest({ orgName: "Acme" }, {}));
-    expect(res.status).toBe(401);
+  it("validation failure: rejects a name that is too short", async () => {
+    await withTestTransaction(async () => {
+      const res = await POST(jsonRequest("http://test/api/onboarding", { method: "POST", body: { name: "A" } }));
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toBe("Validation failed");
+    });
   });
 
-  it("validation failure: empty orgName is rejected with 400", async () => {
-    const res = await POST(postRequest({ orgName: "" }));
-    expect(res.status).toBe(400);
+  it("validation failure: rejects a missing body field", async () => {
+    await withTestTransaction(async () => {
+      const res = await POST(jsonRequest("http://test/api/onboarding", { method: "POST", body: {} }));
+      expect(res.status).toBe(400);
+    });
   });
 });

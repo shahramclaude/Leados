@@ -1,0 +1,238 @@
+openapi: 3.0.3
+info:
+  title: LEADOS API
+  version: "15.0.0"
+  description: >
+    Subset of the LEADOS API covering the onboarding -> capture -> finding ->
+    decision -> approval -> automation run -> board pack golden journey.
+    Contract tests in tests/contract/ validate live route responses against
+    the schemas declared here.
+servers:
+  - url: /api
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        details: {}
+    Tenant:
+      type: object
+      required: [id, name, apiKey]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        apiKey: { type: string }
+    Lead:
+      type: object
+      required: [id, tenantId, name, source, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        name: { type: string }
+        source: { type: string }
+        notes: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    Finding:
+      type: object
+      required: [id, tenantId, leadId, summary, alpha, beta, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        leadId: { type: string, format: uuid }
+        summary: { type: string }
+        alpha: { type: number }
+        beta: { type: number }
+        status: { type: string, enum: [cold, hot] }
+        createdAt: { type: string, format: date-time }
+    Decision:
+      type: object
+      required: [id, tenantId, findingId, action, rationale, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        findingId: { type: string, format: uuid }
+        action: { type: string, enum: [pursue, watch, discard] }
+        rationale: { type: string }
+        createdAt: { type: string, format: date-time }
+    Approval:
+      type: object
+      required: [id, tenantId, decisionId, approver, outcome, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        decisionId: { type: string, format: uuid }
+        approver: { type: string }
+        outcome: { type: string, enum: [approved, rejected] }
+        createdAt: { type: string, format: date-time }
+    AutomationRun:
+      type: object
+      required: [id, tenantId, approvalId, seed, trials, meanOutcome, p05, p95, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        tenantId: { type: string, format: uuid }
+        approvalId: { type: string, format: uuid }
+        seed: { type: integer }
+        trials: { type: integer }
+        meanOutcome: { type: number }
+        p05: { type: number }
+        p95: { type: number }
+        createdAt: { type: string, format: date-time }
+    Page:
+      type: object
+      required: [data, page, pageSize, total]
+      properties:
+        data: { type: array, items: {} }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+paths:
+  /onboarding:
+    post:
+      summary: Create a tenant
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Tenant" }
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /leads:
+    get:
+      summary: List leads (paginated, tenant-scoped)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      summary: Capture a lead
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lead" }
+        "400":
+          description: Validation failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /findings:
+    get:
+      summary: List findings
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+    post:
+      summary: Create a finding from a lead
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Finding" }
+        "404":
+          description: Lead not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /decisions:
+    get:
+      summary: List decisions
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+    post:
+      summary: Record a decision for a finding
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Decision" }
+  /approvals:
+    get:
+      summary: List approvals
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Page" }
+    post:
+      summary: Approve or reject a decision
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Approval" }
+  /automation/run:
+    post:
+      summary: Run the Monte Carlo automation forecast for an approved decision
+      security: [{ bearerAuth: [] }]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutomationRun" }
+        "422":
+          description: Decision was not approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /board-pack:
+    get:
+      summary: Export the tenant's board pack
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: OK
+  /health:
+    get:
+      summary: Liveness/readiness probe
+      responses:
+        "200":
+          description: OK
+  /self-test:
+    get:
+      summary: Smoke subset of the real test suites, used by /about
+      responses:
+        "200":
+          description: OK

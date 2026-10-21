@@ -1,83 +1,78 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+import { withTestTransaction } from "@/db";
+import { POST as createLead } from "@/app/api/leads/route";
 import { GET, POST } from "@/app/api/findings/route";
-import { GET as GET_ONE } from "@/app/api/findings/[id]/route";
-import { resetDatabase } from "../setup/db";
+import { jsonRequest, seedTenant } from "./helpers";
 
-const AUTH = { authorization: "Bearer leados-dev-token" };
-
-function postRequest(body: unknown, headers: Record<string, string> = AUTH) {
-  return new Request("http://localhost/api/findings", {
-    method: "POST",
-    headers: { "content-type": "application/json", ...headers },
-    body: JSON.stringify(body),
-  });
+async function seedLead(apiKey: string, name = "Lead X") {
+  const res = await createLead(
+    jsonRequest("http://test/api/leads", { method: "POST", apiKey, body: { name, source: "web" } }),
+  );
+  return res.json();
 }
 
-function getRequest(qs = "") {
-  return new Request(`http://localhost/api/findings${qs}`);
-}
-
-const validFinding = { title: "Support backlog growing", impact: 8, confidence: 7, effort: 3 };
-
-describe("/api/findings", () => {
-  beforeEach(resetDatabase);
-
-  it("happy path: POST creates a finding with a server-computed score, GET /{id} fetches it", async () => {
-    const postRes = await POST(postRequest(validFinding));
-    expect(postRes.status).toBe(201);
-    const created = await postRes.json();
-    expect(created.score).toBeCloseTo((8 * 7) / 3, 2);
-
-    const getRes = await GET_ONE(new Request("http://localhost/api/findings/" + created.id), {
-      params: Promise.resolve({ id: String(created.id) }),
+describe("GET/POST /api/findings", () => {
+  it("happy path: creating a finding from a lead computes a beta-backed status", async () => {
+    await withTestTransaction(async (tx) => {
+      const tenant = await seedTenant(tx);
+      const lead = await seedLead(tenant.apiKey);
+      const res = await POST(
+        jsonRequest("http://test/api/findings", {
+          method: "POST",
+          apiKey: tenant.apiKey,
+          body: { leadId: lead.id, summary: "Strong fit", outcome: 1 },
+        }),
+      );
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body.alpha).toBe(2); // prior alpha=1 + 1 success
+      expect(body.beta).toBe(1);
+      expect(["cold", "hot"]).toContain(body.status);
     });
-    expect(getRes.status).toBe(200);
-    const fetched = await getRes.json();
-    expect(fetched.id).toBe(created.id);
   });
 
-  it("auth failure: POST without a token is rejected with 401", async () => {
-    const res = await POST(postRequest(validFinding, {}));
-    expect(res.status).toBe(401);
-  });
-
-  it("validation failure: impact out of range (1-10) is rejected with 400", async () => {
-    const res = await POST(postRequest({ ...validFinding, impact: 99 }));
-    expect(res.status).toBe(400);
-  });
-
-  it("validation failure: missing title is rejected with 400", async () => {
-    const res = await POST(postRequest({ ...validFinding, title: "" }));
-    expect(res.status).toBe(400);
-  });
-
-  it("GET /{id} returns 404 for a finding that does not exist", async () => {
-    const res = await GET_ONE(new Request("http://localhost/api/findings/999999"), {
-      params: Promise.resolve({ id: "999999" }),
+  it("auth failure: no api key -> 401", async () => {
+    await withTestTransaction(async () => {
+      const res = await GET(jsonRequest("http://test/api/findings"));
+      expect(res.status).toBe(401);
     });
-    expect(res.status).toBe(404);
   });
 
-  it("GET /{id} returns 400 for a non-numeric id", async () => {
-    const res = await GET_ONE(new Request("http://localhost/api/findings/abc"), {
-      params: Promise.resolve({ id: "abc" }),
+  it("validation failure: leadId must be a uuid", async () => {
+    await withTestTransaction(async (tx) => {
+      const tenant = await seedTenant(tx);
+      const res = await POST(
+        jsonRequest("http://test/api/findings", {
+          method: "POST",
+          apiKey: tenant.apiKey,
+          body: { leadId: "not-a-uuid", summary: "x" },
+        }),
+      );
+      expect(res.status).toBe(400);
     });
-    expect(res.status).toBe(400);
   });
 
-  it("pagination edge: empty list returns an empty page with total 0 and null cursor", async () => {
-    const res = await GET(getRequest());
-    const page = await res.json();
-    expect(page).toEqual({ items: [], nextCursor: null, total: 0 });
+  it("references a lead belonging to another tenant -> 404 (tenancy isolation on writes)", async () => {
+    await withTestTransaction(async (tx) => {
+      const tenantA = await seedTenant(tx, "A");
+      const tenantB = await seedTenant(tx, "B");
+      const leadA = await seedLead(tenantA.apiKey);
+      const res = await POST(
+        jsonRequest("http://test/api/findings", {
+          method: "POST",
+          apiKey: tenantB.apiKey,
+          body: { leadId: leadA.id, summary: "cross tenant" },
+        }),
+      );
+      expect(res.status).toBe(404);
+    });
   });
 
-  it("listing is ranked and paginated correctly across a full page boundary", async () => {
-    await POST(postRequest({ title: "Low value", impact: 1, confidence: 1, effort: 10 }));
-    await POST(postRequest({ title: "High value", impact: 10, confidence: 10, effort: 1 }));
-
-    const page = await (await GET(getRequest("?limit=1"))).json();
-    expect(page.items).toHaveLength(1);
-    expect(page.total).toBe(2);
-    expect(page.nextCursor).not.toBeNull();
+  it("pagination edges: zero/negative page is rejected", async () => {
+    await withTestTransaction(async (tx) => {
+      const tenant = await seedTenant(tx);
+      const res = await GET(jsonRequest("http://test/api/findings?page=0", { apiKey: tenant.apiKey }));
+      expect(res.status).toBe(400);
+    });
   });
 });

@@ -1,32 +1,37 @@
-import "@/lib/kernel/bootstrap";
-import { decideApproval, listPendingApprovals } from "@/lib/kernel/approvals";
-import { runCycle } from "@/lib/kernel/orchestrator";
-import type { Actor } from "@/lib/kernel/types";
+import { getDb } from "@/db";
+import { requireTenant } from "@/lib/api-auth";
+import { createApprovalSchema, paginationSchema } from "@/lib/validation";
+import { handleRouteError, jsonError } from "@/lib/api-response";
+import { createApproval, listApprovals } from "@/lib/services/pipeline";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const approvals = await listPendingApprovals();
-  return Response.json({ approvals });
+export async function GET(request: Request) {
+  try {
+    const tenant = await requireTenant(request);
+    const url = new URL(request.url);
+    const { page, pageSize } = paginationSchema.parse({
+      page: url.searchParams.get("page") ?? undefined,
+      pageSize: url.searchParams.get("pageSize") ?? undefined,
+    });
+    const db = getDb();
+    const { rows, total } = await listApprovals(db, tenant.id, page, pageSize);
+    return Response.json({ data: rows, page, pageSize, total });
+  } catch (error) {
+    return handleRouteError(error);
+  }
 }
 
-export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as {
-    approvalId?: string;
-    decision?: "approved" | "rejected" | "modified";
-    decidedBy?: string;
-    note?: string;
-    modifiedInput?: unknown;
-  };
-  if (!body.approvalId || !body.decision) {
-    return Response.json({ error: "approvalId and decision are required" }, { status: 400 });
+export async function POST(request: Request) {
+  try {
+    const tenant = await requireTenant(request);
+    const body = await request.json();
+    const input = createApprovalSchema.parse(body);
+    const db = getDb();
+    const row = await createApproval(db, tenant.id, input);
+    if (!row) return jsonError("Decision not found for this tenant", 404);
+    return Response.json(row, { status: 201 });
+  } catch (error) {
+    return handleRouteError(error);
   }
-  const decidedBy: Actor = { kind: "human", id: body.decidedBy ?? "unknown-reviewer" };
-  const approval = await decideApproval({ approvalId: body.approvalId, decision: body.decision, decidedBy, note: body.note, modifiedInput: body.modifiedInput });
-
-  // Immediately try to resume the run so an approve/reject click has a
-  // visible, fast effect — this is the "one-click" part of the HITL design.
-  const result = await runCycle(approval.runId, { actor: decidedBy });
-
-  return Response.json({ approval, result });
 }

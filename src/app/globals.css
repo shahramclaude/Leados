@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/* Class-based dark mode (Tailwind v4): toggled via ThemeToggle adding/removing
+   `.dark` on <html>, independent of OS preference, so visual regression
+   screenshots are deterministic regardless of the test runner's OS theme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {
+  color-scheme: light dark;
+}
