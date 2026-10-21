@@ -1,19 +1,16 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { AppShell } from "@/components/shell/AppShell";
 
 export const metadata: Metadata = {
-  title: "LEADOS",
-  description: "LEADOS — perceptually uniform, accessibility-verified decision operating system.",
+  title: "Arena Next.js PostgreSQL Starter",
+  description: "Starter template with Next.js, Drizzle, and PostgreSQL.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
-        <AppShell>{children}</AppShell>
-      </body>
+    <html lang="en">
+      <body className="bg-slate-100 text-slate-900 antialiased">{children}</body>
     </html>
   );
 }

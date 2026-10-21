@@ -1,32 +1,25 @@
-// Small shared helpers for API route handlers across the strategy/finance/
-// execution surface — consistent error shapes and safe body parsing.
+"use client";
 
-export function jsonOk(data: unknown, init?: ResponseInit): Response {
-  return Response.json(data, init);
+// Thin client fetch helper: generates idempotency keys and a stable client id
+// used to attribute "You" vs other actors in the demo realtime stream.
+
+export function newIdempotencyKey() {
+  return `idem_${crypto.randomUUID()}`;
 }
 
-export function jsonError(message: string, status = 400): Response {
-  return Response.json({ error: message }, { status });
-}
-
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function parseNumber(value: unknown, fallback: number): number {
-  const n = typeof value === "string" ? Number(value) : value;
-  return typeof n === "number" && Number.isFinite(n) ? n : fallback;
-}
-
-export function parseString(value: unknown, fallback: string): string {
-  return typeof value === "string" && value.trim() !== "" ? value : fallback;
-}
-
-export async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
-  try {
-    const body: unknown = await request.json();
-    return isRecord(body) ? body : {};
-  } catch {
-    return {};
+export function getClientActorId() {
+  if (typeof window === "undefined") return "server";
+  const key = "leados.actorId";
+  let id = window.localStorage.getItem(key);
+  if (!id) {
+    id = `actor_${crypto.randomUUID().slice(0, 8)}`;
+    window.localStorage.setItem(key, id);
   }
+  return id;
+}
+
+export async function apiGet<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(url, { signal, headers: { accept: "application/json" } });
+  if (!response.ok) throw response;
+  return response.json() as Promise<T>;
 }

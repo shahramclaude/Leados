@@ -1,21 +1,19 @@
 "use client";
 
 import { useEffect } from "react";
-import { flushQueue } from "@/lib/offlineQueue";
+import { registerBackgroundSync } from "@/lib/platform/integration/backgroundSync";
+import { startSyncEngine } from "@/lib/platform/integration/syncEngine";
 
-export default function ServiceWorkerRegister() {
+export function ServiceWorkerRegister() {
   useEffect(() => {
+    startSyncEngine();
+
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {
-        // Non-fatal: app still works online without the SW.
-      });
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then(() => registerBackgroundSync())
+        .catch(() => undefined);
     }
-    const onOnline = () => {
-      flushQueue().catch(() => undefined);
-    };
-    window.addEventListener("online", onOnline);
-    if (navigator.onLine) onOnline();
-    return () => window.removeEventListener("online", onOnline);
   }, []);
 
   return null;
