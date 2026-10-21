@@ -1,84 +1,57 @@
 import {
-  jsonb,
   pgTable,
+  serial,
   text,
+  doublePrecision,
   timestamp,
-  uuid,
-  integer,
+  boolean,
+  jsonb,
+  smallint,
 } from "drizzle-orm/pg-core";
 
-// ---------------------------------------------------------------------------
-// LEADOS domain schema (Part 03)
-// Entities: scenarios -> objectives -> findings, objectives -> approvals.
-// `version` columns back optimistic-concurrency (expectedVersion) on every
-// mutation. `auditLog` backs the "what changed since last visit" strip and
-// the realtime stream. `mutationLog` backs server-side idempotency so queued
-// offline mutations can be safely replayed without double-applying.
-// ---------------------------------------------------------------------------
-
-export const scenarios = pgTable("scenarios", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  description: text("description").default(""),
+/**
+ * observations — raw evidence feeding the belief primitives.
+ * kind='rate'  -> `success` is required (Bernoulli trial for a RateBelief).
+ * kind='level' -> `value` is required (continuous sample for a LevelBelief).
+ * kind='drift' -> `value` is required (period sample for a DriftBelief/EWMA).
+ */
+export const observations = pgTable("observations", {
+  id: serial("id").primaryKey(),
+  metric: text("metric").notNull(),
+  kind: text("kind").notNull(), // 'rate' | 'level' | 'drift'
+  value: doublePrecision("value"),
+  success: boolean("success"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const objectives = pgTable("objectives", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  scenarioId: uuid("scenario_id")
-    .notNull()
-    .references(() => scenarios.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  description: text("description").default(""),
-  status: text("status").notNull().default("draft"), // draft|active|at_risk|done
-  ownerName: text("owner_name").notNull().default("You"),
-  version: integer("version").notNull().default(1),
+/**
+ * predictions — a log of every probability forecast issued by the engine,
+ * resolved later with a 0/1 outcome. This is the evidence base for the
+ * weekly calibration self-check (ECE > 0.05 auto-opens a finding).
+ */
+export const predictions = pgTable("predictions", {
+  id: serial("id").primaryKey(),
+  modelCardId: text("model_card_id").notNull(),
+  metric: text("metric").notNull(),
+  predictedP: doublePrecision("predicted_p").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  outcome: smallint("outcome"), // 0 | 1 | null (unresolved)
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  context: jsonb("context"),
 });
 
+/**
+ * findings — auto-opened issues. Created by the weekly calibration
+ * self-check when ECE exceeds 0.05, or manually via /api/ai-learn.
+ */
 export const findings = pgTable("findings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  objectiveId: uuid("objective_id")
-    .notNull()
-    .references(() => objectives.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  body: text("body").notNull(),
-  confidence: text("confidence").notNull().default("medium"), // low|medium|high
-  version: integer("version").notNull().default(1),
+  id: serial("id").primaryKey(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const approvals = pgTable("approvals", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  objectiveId: uuid("objective_id")
-    .notNull()
-    .references(() => objectives.id, { onDelete: "cascade" }),
-  status: text("status").notNull().default("pending"), // pending|approved|rejected|changes_requested
-  requestedByName: text("requested_by_name").notNull().default("You"),
-  decidedByName: text("decided_by_name"),
-  note: text("note").default(""),
-  version: integer("version").notNull().default(1),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const auditLog = pgTable("audit_log", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  entityType: text("entity_type").notNull(), // objective|finding|approval
-  entityId: uuid("entity_id").notNull(),
-  action: text("action").notNull(), // created|updated|status_changed|approved|rejected
-  actorName: text("actor_name").notNull().default("You"),
-  summary: text("summary").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const mutationLog = pgTable("mutation_log", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  idempotencyKey: text("idempotency_key").notNull().unique(),
-  entityType: text("entity_type").notNull(),
-  status: text("status").notNull(), // applied|conflict|failed
-  resultJson: jsonb("result_json"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  type: text("type").notNull(), // e.g. 'calibration-drift'
+  severity: text("severity").notNull(), // 'info' | 'warning' | 'critical'
+  message: text("message").notNull(),
+  metricRef: text("metric_ref"),
+  value: doublePrecision("value"),
+  threshold: doublePrecision("threshold"),
+  status: text("status").notNull().default("open"), // 'open' | 'acknowledged' | 'resolved'
 });

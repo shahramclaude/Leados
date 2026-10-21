@@ -16,6 +16,12 @@ export default async function HomePage() {
         <p className="mt-4 text-base text-slate-700">
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
+        <a
+          href="/intelligence"
+          className="mt-6 inline-block rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
+        >
+          Open the Decision Intelligence briefing →
+        </a>
       </section>
     </main>
   );

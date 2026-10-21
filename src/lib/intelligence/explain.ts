@@ -1,100 +1,137 @@
-// src/lib/intelligence/explain.ts
-//
-// The explainability contract (Part 3 §2). `explainFinding()` is the ONLY
-// sanctioned way to turn an internal computation (belief, rule, forecast,
-// causal estimate, fused finding) into something a UI can render. No view
-// may construct an `Explanation` object by hand — this is enforced by the
-// test in src/lib/intelligence/__tests__/explain.test.ts, which scans every
-// engine's public output through `isValidExplanation`.
-import { randomUUID } from "crypto";
-import { betaCredibleInterval, betaMean } from "./bayesian";
-import type { Belief } from "./beliefFabric";
-import type { Driver, EngineMethod, EvidenceRef, Explanation, Interval } from "./types";
-import { isValidExplanation } from "./types";
+/**
+ * explain.ts — turns belief primitives into Explain<T> envelopes.
+ *
+ * Confidence-class policy (documented, not invented):
+ *   evidenceCount === 0        -> "assumed"   (prior only, no data)
+ *   0 < evidenceCount < MIN_N  -> "inferred"  (some data, too thin to trust fully)
+ *   evidenceCount >= MIN_N     -> "estimated" (enough direct evidence)
+ * "observed" is reserved for raw counts with no modeling step at all and is
+ * assigned by callers directly (see observedExplain below), never by a belief.
+ */
 
-export interface ExplainInput {
-  label: string;
-  value: number;
-  interval: Interval;
-  drivers: Driver[];
-  evidence: EvidenceRef[];
-  method: EngineMethod;
-  confidence: number;
-  caveats?: string[];
-  asOf?: string;
-  id?: string;
+import { RateBelief, LevelBelief, DriftBelief } from "./beliefs";
+import { Explain, EvidenceRef, SensitivityFactor, makeExplain, noDataExplain } from "./types";
+
+const MIN_N_ESTIMATED = 20;
+
+function classify(evidenceCount: number): "assumed" | "inferred" | "estimated" {
+  if (evidenceCount <= 0) return "assumed";
+  if (evidenceCount < MIN_N_ESTIMATED) return "inferred";
+  return "estimated";
 }
 
-/** Builds a validated `Explanation`. Throws if the result would violate the
- * contract, so a bug in an engine fails loudly in tests/CI rather than
- * shipping a bare number to the UI. */
-export function explainFinding(input: ExplainInput): Explanation {
-  const explanation: Explanation = {
-    id: input.id ?? randomUUID(),
-    label: input.label,
-    value: input.value,
-    interval: input.interval,
-    drivers: [...input.drivers].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)),
-    evidence: input.evidence,
-    method: input.method,
-    asOf: input.asOf ?? new Date().toISOString(),
-    confidence: input.confidence,
-    caveats: input.caveats ?? [],
-  };
-  if (!isValidExplanation(explanation)) {
-    throw new Error(`explainFinding() produced an invalid Explanation for "${input.label}"`);
+export function explainRate(
+  belief: RateBelief,
+  opts: {
+    method: string;
+    modelCardId: string;
+    evidence?: EvidenceRef[];
+    sensitivity?: SensitivityFactor[];
+    nextDataNeeded?: string;
+    level?: number;
+  },
+): Explain<number> {
+  const n = belief.evidenceCount;
+  if (n <= 0) {
+    return noDataExplain(belief.mean, opts.nextDataNeeded ?? "At least a handful of resolved outcomes.", opts.method);
   }
-  return explanation;
-}
-
-/** Convenience constructor for the common case of explaining a belief
- * straight out of the belief fabric (method="bayesian-belief"). */
-export function explainBelief(
-  belief: Belief,
-  label: string,
-  opts: { level?: number; extraDrivers?: Driver[]; extraEvidence?: EvidenceRef[]; extraCaveats?: string[] } = {},
-): Explanation {
-  const level = opts.level ?? 0.9;
-  const ci = betaCredibleInterval(belief.params, level);
-  const drivers: Driver[] = belief.provenance.map((p) => ({
-    name: p.source,
-    contribution: Number((p.posteriorMean - p.priorMean).toFixed(4)),
-    description: p.wasContradiction
-      ? `Contradicted prior belief (z=${p.contradictionZ.toFixed(2)}); confidence was reduced, not averaged away.`
-      : undefined,
-  }));
-  const evidence: EvidenceRef[] = belief.provenance.map((p) => ({
-    type: p.evidence.type,
-    id: p.evidence.id,
-    label: p.evidence.label,
-    timestamp: p.evidence.timestamp ?? p.observedAt,
-    weight: p.evidence.weight,
-  }));
-
-  const caveats: string[] = [];
-  if (belief.contradictionCount > 0) {
-    caveats.push(
-      `${belief.contradictionCount} contradicting observation(s) detected; confidence explicitly reduced rather than averaging sources.`,
-    );
-  }
-  if (belief.params.alpha + belief.params.beta <= 2) {
-    caveats.push("No evidence observed yet; this is the uninformative Beta(1,1) prior.");
-  }
-
-  return explainFinding({
-    id: belief.id,
-    label,
-    value: betaMean(belief.params),
-    interval: { low: ci.low, high: ci.high, level, kind: "credible" },
-    drivers: [...drivers, ...(opts.extraDrivers ?? [])],
-    evidence: [...evidence, ...(opts.extraEvidence ?? [])],
-    method: "bayesian-belief",
-    confidence: belief.confidence,
-    caveats: [...caveats, ...(opts.extraCaveats ?? [])],
-    asOf: belief.updatedAt,
+  const cls = classify(n);
+  const [lo, hi] = belief.interval(opts.level ?? 0.8);
+  return makeExplain({
+    value: belief.mean,
+    interval: [lo, hi],
+    confidenceClass: cls,
+    method: opts.method,
+    assumptions: [
+      `Beta(${belief.alpha.toFixed(1)}, ${belief.beta.toFixed(1)}) conjugate posterior over a Bernoulli-generating process.`,
+      "Observations are assumed exchangeable (no seasonal/order effects modeled).",
+    ],
+    evidence: opts.evidence ?? [],
+    sensitivity: opts.sensitivity ?? [],
+    modelCardId: opts.modelCardId,
+    nextDataNeeded: cls === "inferred" ? `${MIN_N_ESTIMATED - n} more resolved outcomes to reach "estimated".` : undefined,
   });
 }
 
-/** Re-exported for convenience so views only need one import for both the
- * builder and the type guard. */
-export { isValidExplanation };
+export function explainLevel(
+  belief: LevelBelief,
+  opts: {
+    method: string;
+    modelCardId: string;
+    evidence?: EvidenceRef[];
+    sensitivity?: SensitivityFactor[];
+    nextDataNeeded?: string;
+    level?: number;
+    unit?: string;
+  },
+): Explain<number> {
+  const n = belief.evidenceCount;
+  if (n <= 0) {
+    return noDataExplain(belief.mean, opts.nextDataNeeded ?? "At least a handful of measurements.", opts.method);
+  }
+  const cls = classify(n);
+  const [lo, hi] = belief.interval(opts.level ?? 0.8);
+  return makeExplain({
+    value: belief.mean,
+    interval: [lo, hi],
+    confidenceClass: cls,
+    method: opts.method,
+    assumptions: [
+      "Normal-Inverse-Gamma conjugate posterior over an unknown mean AND unknown variance.",
+      "Assumes approximately symmetric, unimodal measurement noise.",
+      opts.unit ? `Reported in ${opts.unit}.` : "",
+    ].filter(Boolean),
+    evidence: opts.evidence ?? [],
+    sensitivity: opts.sensitivity ?? [],
+    modelCardId: opts.modelCardId,
+    nextDataNeeded: cls === "inferred" ? `${MIN_N_ESTIMATED - n} more measurements to reach "estimated".` : undefined,
+  });
+}
+
+export function explainDrift(
+  belief: DriftBelief,
+  opts: {
+    method: string;
+    modelCardId: string;
+    evidence?: EvidenceRef[];
+    sensitivity?: SensitivityFactor[];
+    nextDataNeeded?: string;
+  },
+): Explain<number> {
+  const n = belief.evidenceCount;
+  if (n <= 0) {
+    return noDataExplain(belief.z, opts.nextDataNeeded ?? "At least a few periods of the metric.", opts.method);
+  }
+  const cls = classify(n);
+  const [lo, hi] = belief.interval();
+  const [ctrlLo, ctrlHi] = belief.controlLimits();
+  return makeExplain({
+    value: belief.z,
+    interval: [lo, hi],
+    confidenceClass: cls,
+    method: opts.method,
+    assumptions: [
+      `EWMA(lambda=${belief.lambda}) smoothed statistic; control limits at [${ctrlLo.toFixed(2)}, ${ctrlHi.toFixed(2)}].`,
+      belief.isOutOfControl
+        ? "Current statistic is OUTSIDE 3-sigma control limits — treat as a flagged drift, not noise."
+        : "Current statistic is within normal control limits.",
+    ],
+    evidence: opts.evidence ?? [],
+    sensitivity: opts.sensitivity ?? [],
+    modelCardId: opts.modelCardId,
+    nextDataNeeded: cls === "inferred" ? `${MIN_N_ESTIMATED - n} more periods to reach "estimated".` : undefined,
+  });
+}
+
+/** For raw, unmodeled counts — the ONLY case allowed to render without an uncertainty affordance. */
+export function observedExplain<T>(value: T, method: string, evidence: EvidenceRef[] = []): Explain<T> {
+  return makeExplain({
+    value,
+    interval: [NaN, NaN],
+    confidenceClass: "observed",
+    method,
+    assumptions: ["Direct count/measurement; no statistical model applied."],
+    evidence,
+    sensitivity: [],
+  });
+}

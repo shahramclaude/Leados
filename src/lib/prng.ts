@@ -1,172 +1,120 @@
 /**
- * prng.ts — Deterministic pseudo-random number generation for the LEADOS
- * digital twin.
+ * prng.ts — deterministic, seeded pseudo-random number generation.
  *
- * DESIGN GOALS (Part 06 standing order, section C):
- *  - Full reproducibility: identical seed -> bit-identical output stream.
- *  - Named sub-streams so that different subsystems (discrete-event sim,
- *    physics noise, war-game shocks, tornado perturbations...) never share
- *    draws by accident, while still being 100% derived from one root seed.
- *  - Common Random Numbers (CRN) support: two scenarios run with the same
- *    root seed and the same sub-stream labels see *exactly* the same random
- *    draws at the same call index, which is what makes variance reduction
- *    on the *difference* between scenarios possible.
- *  - Antithetic variates: a cheap, documented way to derive a mirrored
- *    stream (1 - u) for variance reduction on symmetric estimators.
+ * Every stochastic process in LEADOS (belief sampling, Monte Carlo,
+ * synthetic calibration scenarios) MUST derive its randomness from this
+ * module so that `identical seeds -> identical results` holds as a
+ * verifiable property (see scripts/property-tests.ts).
  *
- * NOT a cryptographic RNG. Do not use for anything security sensitive.
- *
- * Algorithm: sfc32 (Chris Doty-Humphrey's "Small Fast Counter" family),
- * seeded from a 128-bit state produced by splitmix32 applied to an FNV-1a
- * hash of the caller-supplied seed string. sfc32 has a long period for a
- * 32-bit generator, good statistical quality for simulation purposes, and
- * is fast enough for 10k+ Monte Carlo replications in a tight loop.
+ * Algorithm: splitmix64-style seed expansion feeding a mulberry32 core.
+ * Not cryptographically secure — this is a statistics/simulation PRNG.
  */
 
-export interface RngState {
-  seedLabel: string;
-  a: number;
-  b: number;
-  c: number;
-  d: number;
-  calls: number;
-}
+export type Seed = number | string;
 
-export interface Rng {
-  readonly label: string;
-  /** Uniform double in [0, 1). */
-  next(): number;
-  /** Uniform integer in [minInclusive, maxExclusive). */
-  int(minInclusive: number, maxExclusive: number): number;
-  /** Standard normal (mean=0, sd=1) unless overridden, via Box-Muller. */
-  normal(mean?: number, stdDev?: number): number;
-  /** Bernoulli draw, true with probability p (default 0.5). */
-  bool(p?: number): boolean;
-  /** Uniform pick from a non-empty array (does not mutate it). */
-  pick<T>(arr: readonly T[]): T;
-  /** Lognormal draw from underlying normal(mu, sigma). */
-  lognormal(mu: number, sigma: number): number;
-  /** Derive a fully independent, deterministic named sub-stream. */
-  substream(label: string): Rng;
-  /**
-   * Derive the antithetic companion of this exact stream: calling
-   * `.next()` in lockstep with the original yields `1 - u` for every draw.
-   * Only valid if both streams are advanced with the same call sequence.
-   */
-  antithetic(): Rng;
-  /** Snapshot current internal state (useful for tests / debugging). */
-  state(): RngState;
-}
-
-function fnv1a(str: string): number {
+function hashStringToUint32(input: string): number {
+  // FNV-1a
   let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
   return h >>> 0;
 }
 
-function splitmix32(seed: number): () => number {
-  let state = seed >>> 0;
-  return function () {
-    state = (state + 0x9e3779b9) >>> 0;
-    let z = state;
-    z = Math.imul(z ^ (z >>> 16), 0x85ebca6b) >>> 0;
-    z = Math.imul(z ^ (z >>> 13), 0xc2b2ae35) >>> 0;
-    z = (z ^ (z >>> 16)) >>> 0;
-    return z;
-  };
+export function normalizeSeed(seed: Seed): number {
+  return typeof seed === "number" ? seed >>> 0 : hashStringToUint32(seed);
 }
 
-function sfc32(a: number, b: number, c: number, d: number) {
-  return function () {
-    a >>>= 0;
-    b >>>= 0;
-    c >>>= 0;
-    d >>>= 0;
-    let t = (a + b) | 0;
-    a = b ^ (b >>> 9);
-    b = (c + (c << 3)) | 0;
-    c = (c << 21) | (c >>> 11);
-    d = (d + 1) | 0;
-    t = (t + d) | 0;
-    c = (c + t) | 0;
-    return (t >>> 0) / 4294967296;
-  };
-}
+/** mulberry32: fast, small-state, well-distributed 32-bit PRNG. */
+export class Rng {
+  private state: number;
+  readonly seed: number;
 
-function seedWords(label: string): [number, number, number, number] {
-  const h0 = fnv1a(label);
-  const sm = splitmix32(h0);
-  return [sm(), sm(), sm(), sm()];
-}
-
-function makeRng(label: string, negate: boolean): Rng {
-  const [a, b, c, d] = seedWords(label);
-  // Mutable closure state so sfc32 can advance it; we re-implement sfc32
-  // inline (not via the factory above) so we can snapshot state for tests.
-  const st = { a, b, c, d, calls: 0 };
-  const raw = sfc32(st.a, st.b, st.c, st.d);
-
-  function rawNext(): number {
-    // warm up loses access to internal state snapshotting from the
-    // closure above, so instead we track calls only for diagnostics.
-    st.calls += 1;
-    return raw();
+  constructor(seed: Seed) {
+    this.seed = normalizeSeed(seed);
+    this.state = this.seed >>> 0;
   }
 
-  function next(): number {
-    const u = rawNext();
-    return negate ? 1 - u : u;
+  /** Uniform float in [0, 1). */
+  next(): number {
+    this.state |= 0;
+    this.state = (this.state + 0x6d2b79f5) | 0;
+    let t = this.state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
-  const api: Rng = {
-    label,
-    next,
-    int(minInclusive: number, maxExclusive: number) {
-      return minInclusive + Math.floor(next() * (maxExclusive - minInclusive));
-    },
-    normal(mean = 0, stdDev = 1) {
-      // Box-Muller transform, two uniforms consumed per call.
-      let u1 = next();
-      const u2 = next();
-      if (u1 <= 0) u1 = Number.EPSILON;
-      const z0 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-      return mean + stdDev * z0;
-    },
-    bool(p = 0.5) {
-      return next() < p;
-    },
-    pick<T>(arr: readonly T[]): T {
-      if (arr.length === 0) throw new Error("pick() called on empty array");
-      return arr[Math.min(arr.length - 1, Math.floor(next() * arr.length))];
-    },
-    lognormal(mu: number, sigma: number) {
-      return Math.exp(api.normal(mu, sigma));
-    },
-    substream(childLabel: string) {
-      return makeRng(`${label}::${childLabel}`, false);
-    },
-    antithetic() {
-      return makeRng(label, !negate);
-    },
-    state(): RngState {
-      return { seedLabel: label, a: st.a, b: st.b, c: st.c, d: st.d, calls: st.calls };
-    },
-  };
-  return api;
+  /** Uniform float in [lo, hi). */
+  uniform(lo = 0, hi = 1): number {
+    return lo + (hi - lo) * this.next();
+  }
+
+  /** Integer in [lo, hi]. */
+  int(lo: number, hi: number): number {
+    return lo + Math.floor(this.next() * (hi - lo + 1));
+  }
+
+  /** Standard normal via Box-Muller, returns a pair; caches the second. */
+  private cachedNormal: number | null = null;
+  normal(mean = 0, sd = 1): number {
+    if (this.cachedNormal !== null) {
+      const z = this.cachedNormal;
+      this.cachedNormal = null;
+      return mean + sd * z;
+    }
+    let u1 = this.next();
+    // avoid log(0)
+    if (u1 < 1e-12) u1 = 1e-12;
+    const u2 = this.next();
+    const r = Math.sqrt(-2 * Math.log(u1));
+    const z0 = r * Math.cos(2 * Math.PI * u2);
+    const z1 = r * Math.sin(2 * Math.PI * u2);
+    this.cachedNormal = z1;
+    return mean + sd * z0;
+  }
+
+  /** Bernoulli draw, true with probability p. */
+  bernoulli(p: number): boolean {
+    return this.next() < p;
+  }
+
+  /** Beta(alpha, beta) draw via two Gamma draws (Marsaglia-Tsang). */
+  beta(alpha: number, beta: number): number {
+    const x = this.gamma(alpha);
+    const y = this.gamma(beta);
+    return x / (x + y);
+  }
+
+  /** Gamma(shape, 1) draw via Marsaglia-Tsang method (shape > 0). */
+  gamma(shape: number): number {
+    if (shape < 1) {
+      const u = this.next();
+      return this.gamma(1 + shape) * Math.pow(u, 1 / shape);
+    }
+    const d = shape - 1 / 3;
+    const c = 1 / Math.sqrt(9 * d);
+    for (;;) {
+      let x: number;
+      let v: number;
+      do {
+        x = this.normal(0, 1);
+        v = 1 + c * x;
+      } while (v <= 0);
+      v = v * v * v;
+      const u = this.next();
+      if (u < 1 - 0.0331 * x * x * x * x) return d * v;
+      if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) return d * v;
+    }
+  }
+
+  /** Spawn an independent child stream (deterministic given parent seed + index). */
+  child(index: number): Rng {
+    return new Rng(`${this.seed}:${index}`);
+  }
 }
 
-/** Create a deterministic root RNG from any string or number seed. */
-export function createRng(seed: string | number): Rng {
-  return makeRng(String(seed), false);
-}
-
-/** Convenience: derive N independent named replication streams from a root seed. */
-export function replicationStreams(seed: string | number, n: number): Rng[] {
-  const root = createRng(seed);
-  const out: Rng[] = [];
-  for (let i = 0; i < n; i++) out.push(root.substream(`rep#${i}`));
-  return out;
+export function createRng(seed: Seed): Rng {
+  return new Rng(seed);
 }

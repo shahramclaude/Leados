@@ -1,0 +1,302 @@
+{
+  "generatedAt": "2026-10-21T22:02:15.521Z",
+  "binary": {
+    "n": 800,
+    "brierScore": 0.12780116556179089,
+    "logLoss": 0.42424188966099297,
+    "ece": 0.04916275793702228,
+    "bins": [
+      {
+        "binLo": 0,
+        "binHi": 0.1,
+        "count": 68,
+        "avgConfidence": 0.07570367737991765,
+        "avgAccuracy": 0.14705882352941177,
+        "gap": 0.07135514614949412
+      },
+      {
+        "binLo": 0.1,
+        "binHi": 0.2,
+        "count": 164,
+        "avgConfidence": 0.14710299735396914,
+        "avgAccuracy": 0.10365853658536585,
+        "gap": 0.043444460768603296
+      },
+      {
+        "binLo": 0.2,
+        "binHi": 0.3,
+        "count": 111,
+        "avgConfidence": 0.24220024384482497,
+        "avgAccuracy": 0.22522522522522523,
+        "gap": 0.01697501861959974
+      },
+      {
+        "binLo": 0.3,
+        "binHi": 0.4,
+        "count": 28,
+        "avgConfidence": 0.3310983187584152,
+        "avgAccuracy": 0.21428571428571427,
+        "gap": 0.11681260447270095
+      },
+      {
+        "binLo": 0.4,
+        "binHi": 0.5,
+        "count": 3,
+        "avgConfidence": 0.4681318681318681,
+        "avgAccuracy": 0.3333333333333333,
+        "gap": 0.13479853479853476
+      },
+      {
+        "binLo": 0.5,
+        "binHi": 0.6,
+        "count": 7,
+        "avgConfidence": 0.5566378066378067,
+        "avgAccuracy": 0.5714285714285714,
+        "gap": 0.014790764790764688
+      },
+      {
+        "binLo": 0.6,
+        "binHi": 0.7,
+        "count": 32,
+        "avgConfidence": 0.6583374807620656,
+        "avgAccuracy": 0.78125,
+        "gap": 0.12291251923793445
+      },
+      {
+        "binLo": 0.7,
+        "binHi": 0.8,
+        "count": 144,
+        "avgConfidence": 0.7571594636649819,
+        "avgAccuracy": 0.8333333333333334,
+        "gap": 0.07617386966835149
+      },
+      {
+        "binLo": 0.8,
+        "binHi": 0.9,
+        "count": 170,
+        "avgConfidence": 0.8463921491081193,
+        "avgAccuracy": 0.8823529411764706,
+        "gap": 0.03596079206835123
+      },
+      {
+        "binLo": 0.9,
+        "binHi": 1,
+        "count": 73,
+        "avgConfidence": 0.9270504300819575,
+        "avgAccuracy": 0.9178082191780822,
+        "gap": 0.009242210903875336
+      }
+    ]
+  },
+  "binaryCombined": {
+    "synthetic": {
+      "n": 500,
+      "brierScore": 0.11311022184958595,
+      "logLoss": 0.38565247498251165,
+      "ece": 0.034523375595248706,
+      "bins": [
+        {
+          "binLo": 0,
+          "binHi": 0.1,
+          "count": 64,
+          "avgConfidence": 0.07574208680618033,
+          "avgAccuracy": 0.109375,
+          "gap": 0.03363291319381967
+        },
+        {
+          "binLo": 0.1,
+          "binHi": 0.2,
+          "count": 123,
+          "avgConfidence": 0.14694980006941138,
+          "avgAccuracy": 0.10569105691056911,
+          "gap": 0.04125874315884227
+        },
+        {
+          "binLo": 0.2,
+          "binHi": 0.3,
+          "count": 55,
+          "avgConfidence": 0.23429989399501167,
+          "avgAccuracy": 0.2,
+          "gap": 0.034299893995011654
+        },
+        {
+          "binLo": 0.3,
+          "binHi": 0.4,
+          "count": 3,
+          "avgConfidence": 0.33120090417494036,
+          "avgAccuracy": 0.3333333333333333,
+          "gap": 0.0021324291583929567
+        },
+        {
+          "binLo": 0.4,
+          "binHi": 0.5,
+          "count": 0,
+          "avgConfidence": 0,
+          "avgAccuracy": 0,
+          "gap": 0
+        },
+        {
+          "binLo": 0.5,
+          "binHi": 0.6,
+          "count": 0,
+          "avgConfidence": 0,
+          "avgAccuracy": 0,
+          "gap": 0
+        },
+        {
+          "binLo": 0.6,
+          "binHi": 0.7,
+          "count": 3,
+          "avgConfidence": 0.6608770633160876,
+          "avgAccuracy": 0.6666666666666666,
+          "gap": 0.005789603350578987
+        },
+        {
+          "binLo": 0.7,
+          "binHi": 0.8,
+          "count": 76,
+          "avgConfidence": 0.7620334844625413,
+          "avgAccuracy": 0.8289473684210527,
+          "gap": 0.06691388395851139
+        },
+        {
+          "binLo": 0.8,
+          "binHi": 0.9,
+          "count": 112,
+          "avgConfidence": 0.850692810475949,
+          "avgAccuracy": 0.875,
+          "gap": 0.024307189524050976
+        },
+        {
+          "binLo": 0.9,
+          "binHi": 1,
+          "count": 64,
+          "avgConfidence": 0.9268161760920182,
+          "avgAccuracy": 0.921875,
+          "gap": 0.0049411760920181624
+        }
+      ]
+    },
+    "syntheticHistorical": {
+      "n": 300,
+      "brierScore": 0.15228607174879893,
+      "logLoss": 0.48855758079179384,
+      "ece": 0.07361949110947998,
+      "bins": [
+        {
+          "binLo": 0,
+          "binHi": 0.1,
+          "count": 4,
+          "avgConfidence": 0.07508912655971481,
+          "avgAccuracy": 0.75,
+          "gap": 0.6749108734402852
+        },
+        {
+          "binLo": 0.1,
+          "binHi": 0.2,
+          "count": 41,
+          "avgConfidence": 0.14756258920764248,
+          "avgAccuracy": 0.0975609756097561,
+          "gap": 0.05000161359788638
+        },
+        {
+          "binLo": 0.2,
+          "binHi": 0.3,
+          "count": 56,
+          "avgConfidence": 0.24995951601874888,
+          "avgAccuracy": 0.25,
+          "gap": 0.000040483981251115964
+        },
+        {
+          "binLo": 0.3,
+          "binHi": 0.4,
+          "count": 25,
+          "avgConfidence": 0.3310860085084322,
+          "avgAccuracy": 0.2,
+          "gap": 0.13108600850843216
+        },
+        {
+          "binLo": 0.4,
+          "binHi": 0.5,
+          "count": 3,
+          "avgConfidence": 0.4681318681318681,
+          "avgAccuracy": 0.3333333333333333,
+          "gap": 0.13479853479853476
+        },
+        {
+          "binLo": 0.5,
+          "binHi": 0.6,
+          "count": 7,
+          "avgConfidence": 0.5566378066378067,
+          "avgAccuracy": 0.5714285714285714,
+          "gap": 0.014790764790764688
+        },
+        {
+          "binLo": 0.6,
+          "binHi": 0.7,
+          "count": 29,
+          "avgConfidence": 0.6580747653254424,
+          "avgAccuracy": 0.7931034482758621,
+          "gap": 0.1350286829504197
+        },
+        {
+          "binLo": 0.7,
+          "binHi": 0.8,
+          "count": 68,
+          "avgConfidence": 0.7517120286559446,
+          "avgAccuracy": 0.8382352941176471,
+          "gap": 0.08652326546170253
+        },
+        {
+          "binLo": 0.8,
+          "binHi": 0.9,
+          "count": 58,
+          "avgConfidence": 0.8380874237081726,
+          "avgAccuracy": 0.896551724137931,
+          "gap": 0.058464300429758476
+        },
+        {
+          "binLo": 0.9,
+          "binHi": 1,
+          "count": 9,
+          "avgConfidence": 0.928716236232639,
+          "avgAccuracy": 0.8888888888888888,
+          "gap": 0.03982734734375015
+        }
+      ]
+    }
+  },
+  "rateCoverage80": 0.8275,
+  "levelMeanCoverage80": 0.8033333333333333,
+  "levelPredictiveCoverage80": 0.7833333333333333,
+  "gates": {
+    "brierOk": true,
+    "eceOk": true,
+    "rateCoverageOk": true,
+    "levelCoverageOk": true,
+    "allOk": true
+  },
+  "monteCarlo": {
+    "probExceed": {
+      "mean": 0.3838836934447917,
+      "stderr": 0.0009781008901400955,
+      "n": 40000,
+      "relativeError": 0.0025479094497687003,
+      "converged": true
+    },
+    "expectedOverrun": {
+      "mean": 18164.8669586225,
+      "stderr": 27.732179256640187,
+      "n": 40000,
+      "relativeError": 0.0015266932215804792,
+      "converged": true
+    },
+    "groundTruth": {
+      "muT": 480000,
+      "sigmaT": 67638.74629234342,
+      "probExceed": 0.38373405478917677,
+      "expectedOverrun": 18155.060645488622
+    },
+    "converged": true
+  }
+}
