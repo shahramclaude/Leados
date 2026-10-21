@@ -1,13 +1,5 @@
-import { getSessionContext } from "@/lib/demo-auth";
-import { ok, fail, withApiResult } from "@/lib/api-result";
-import { listBudgets } from "@/services/budgets";
+import { createCollectionHandlers } from "@/lib/platform/http/entityRoutes";
+import { budgetRepository } from "@/lib/platform/repositories";
 
 export const dynamic = "force-dynamic";
-
-export async function GET() {
-  return withApiResult(async () => {
-    const session = await getSessionContext();
-    if (!session) return fail("UNAUTHORIZED", "No demo session cookie set", 401);
-    return ok(await listBudgets(session));
-  });
-}
+export const { GET, POST } = createCollectionHandlers(budgetRepository);
