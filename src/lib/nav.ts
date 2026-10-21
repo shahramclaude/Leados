@@ -1,50 +1,45 @@
-import type { Permission } from "@/lib/permissions";
+import { CATEGORICAL_ORDER, DOMAIN_META } from "@/design/tokens";
 
 /**
- * Single source of truth for navigation (Section E: consistent navigation
- * is a cognitive-accessibility requirement, and Section D: the same list
- * renders as a sidebar ≥768px and a bottom tab bar on 360–430px screens).
- *
- * `coreForNewUsers` marks the "Now + 3 core views" progressive-disclosure
- * set (Section E). Everything else unlocks after `unlockAfterUses` recorded
- * uses of `unlockSignalKey` (tracked client-side in localStorage — see
- * `useProgressiveNav`).
+ * Primary navigation model. Hick–Hyman law: choice reaction time grows with
+ * log2(n) over the number of options, so the PRIMARY set is capped at 7
+ * (Overview + the 6 domains). Everything else (settings, admin, help,
+ * search) lives in `secondaryNav` or behind the CommandPalette —
+ * progressive disclosure rather than a wider top-level menu.
  */
-export type NavItem = {
+export interface NavItem {
+  id: string;
+  label: string;
   href: string;
-  labelKey: string;
-  icon: string; // decorative emoji glyph kept out of generate_image budget
-  permission: Permission | null;
-  coreForNewUsers: boolean;
-  unlockSignalKey?: string;
-  unlockAfterUses?: number;
-};
+  shortcut?: string;
+  domain?: (typeof CATEGORICAL_ORDER)[number];
+  description: string;
+}
 
-export const NAV_ITEMS: NavItem[] = [
-  { href: "/now", labelKey: "nav.now", icon: "🏠", permission: null, coreForNewUsers: true },
-  { href: "/subjects", labelKey: "nav.subjects", icon: "👥", permission: "subjects.read", coreForNewUsers: true },
-  { href: "/briefings", labelKey: "nav.briefings", icon: "📋", permission: "briefings.read", coreForNewUsers: true },
+export const primaryNav: NavItem[] = [
   {
-    href: "/findings",
-    labelKey: "nav.findings",
-    icon: "🔎",
-    permission: "findings.read",
-    coreForNewUsers: false,
-    unlockSignalKey: "briefings",
-    unlockAfterUses: 3,
+    id: "overview",
+    label: "Overview",
+    href: "/",
+    shortcut: "g o",
+    description: "Cross-domain summary, chunked 3±1 per Miller's law.",
   },
-  {
-    href: "/playbooks",
-    labelKey: "nav.playbooks",
-    icon: "🧭",
-    permission: "playbooks.read",
-    coreForNewUsers: false,
-    unlockSignalKey: "briefings",
-    unlockAfterUses: 3,
-  },
-  { href: "/admin", labelKey: "nav.admin", icon: "⚙️", permission: "permissions.manage", coreForNewUsers: false },
-  { href: "/settings", labelKey: "nav.settings", icon: "🛠️", permission: null, coreForNewUsers: false },
+  ...CATEGORICAL_ORDER.map((id, index) => ({
+    id,
+    label: DOMAIN_META[id].label,
+    href: `/${id}`,
+    shortcut: `g ${index + 1}`,
+    domain: id,
+    description: DOMAIN_META[id].description,
+  })),
 ];
 
-/** Bottom-nav gets the four highest-priority, always-available items (thumb reach). */
-export const BOTTOM_NAV_HREFS = ["/now", "/subjects", "/briefings", "/settings"];
+export const secondaryNav: NavItem[] = [
+  { id: "styleguide", label: "Styleguide", href: "/styleguide", description: "Living design-system specification." },
+  { id: "settings", label: "Settings", href: "/settings", description: "Workspace, theme, density, notifications." },
+  { id: "help", label: "Help & shortcuts", href: "/help", description: "Keyboard shortcuts and documentation." },
+];
+
+export const allNavItems: NavItem[] = [...primaryNav, ...secondaryNav];
+
+export const PRIMARY_NAV_LIMIT = 7;

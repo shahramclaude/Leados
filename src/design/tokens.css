@@ -1,0 +1,350 @@
+/**
+ * LEADOS DESIGN TOKENS — single source of truth (CSS custom properties).
+ *
+ * All values were generated and APCA/WCAG-verified by the scripts used to
+ * author this file (see docs/DESIGN-SYSTEM.md §2 and scripts/design-audit.mjs,
+ * scripts/colorblind-sim.mjs for the reproducible method). Do NOT hand-edit a
+ * color without re-running `npm run design:check` and `npm run design:colorblind`.
+ *
+ * Color space: OKLCH (perceptually uniform lightness + chroma + hue).
+ * Every token below is declared with the CSS `oklch()` function so the browser
+ * renders the exact perceptual value; the audit script parses this same file
+ * and re-derives sRGB to check APCA Lc and WCAG ratios — "what ships is what
+ * is checked".
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ===================================================================
+   * 1. SURFACES / TEXT / BORDERS — neutral ramp (light theme, default)
+   * APCA targets: body >= Lc 90, large >= Lc 75, ui/non-text >= Lc 45.
+   * See docs/DESIGN-SYSTEM.md §2.1 "Sanctioned contrast pairs".
+   * =================================================================== */
+  --surface-0: oklch(97.0% 0.004 250);   /* page background */
+  --surface-1: oklch(99.5% 0.002 250);   /* card */
+  --surface-2: oklch(100% 0 0);          /* raised / modal / popover */
+  --surface-sunken: oklch(94.0% 0.006 250); /* inset, table stripe */
+  --surface-overlay-scrim: oklch(20% 0.01 260 / 0.45);
+
+  --text-primary: oklch(19% 0.012 260);
+  --text-secondary: oklch(36% 0.014 260);
+  --text-muted: oklch(48% 0.014 260);
+  --text-disabled: oklch(64% 0.01 260);     /* exempt from APCA floor: WCAG 1.4.3 exception for inactive/disabled content */
+  --text-inverse: oklch(98% 0.003 260);
+  --text-link: var(--domain-strategy-ink);
+
+  --border-subtle: oklch(90% 0.004 250);
+  --border-default: oklch(80% 0.007 250);
+  --border-strong: oklch(58% 0.012 260);
+  --focus-ring: oklch(55% 0.17 260);
+
+  /* ===================================================================
+   * 2. SEMANTIC (success / warn / danger / info) — 3 roles each:
+   * -tint (fill), -ink (text on tint or on surface-0), -solid (icon/mark)
+   * =================================================================== */
+  --success-tint: oklch(96.5% 0.020 145);
+  --success-ink: oklch(30.4% 0.095 145);
+  --success-solid: oklch(55% 0.150 145);
+
+  --warn-tint: oklch(96.5% 0.020 80);
+  --warn-ink: oklch(31.0% 0.064 80);
+  --warn-solid: oklch(72% 0.150 80);
+
+  --danger-tint: oklch(96.5% 0.020 25);
+  --danger-ink: oklch(29.6% 0.119 25);
+  --danger-solid: oklch(52% 0.190 25);
+
+  --info-tint: oklch(96.5% 0.020 235);
+  --info-ink: oklch(31.0% 0.065 235);
+  --info-solid: oklch(58% 0.130 235);
+
+  /* ===================================================================
+   * 3. DOMAIN ACCENTS (6) — categorical identity for the six LEADOS
+   * domains. Hue + LIGHTNESS are both varied (not hue alone) because a
+   * hue-only categorical palette collapses under deuteranopia/protanopia
+   * (see scripts/colorblind-sim.mjs, min delta dropped 32->74 once
+   * lightness was co-varied). Domain color is identity, NOT severity —
+   * severity always comes from the semantic tokens above.
+   * =================================================================== */
+  --domain-strategy-h: 280;
+  --domain-strategy-tint: oklch(96.5% 0.018 280);
+  --domain-strategy-ink: oklch(30.6% 0.185 280);
+  --domain-strategy-solid: oklch(52% 0.150 280);
+
+  --domain-people-h: 260;
+  --domain-people-tint: oklch(96.5% 0.018 260);
+  --domain-people-ink: oklch(31.4% 0.128 260);
+  --domain-people-solid: oklch(68% 0.135 260);
+
+  --domain-finance-h: 160;
+  --domain-finance-tint: oklch(96.5% 0.018 160);
+  --domain-finance-ink: oklch(30.2% 0.068 160);
+  --domain-finance-solid: oklch(52% 0.150 160);
+
+  --domain-operations-h: 100;
+  --domain-operations-tint: oklch(96.5% 0.018 100);
+  --domain-operations-ink: oklch(31.4% 0.065 100);
+  --domain-operations-solid: oklch(52% 0.150 100);
+
+  --domain-risk-h: 0;
+  --domain-risk-tint: oklch(96.5% 0.018 0);
+  --domain-risk-ink: oklch(30.6% 0.1235 0);
+  --domain-risk-solid: oklch(68% 0.135 0);
+
+  --domain-knowledge-h: 120;
+  --domain-knowledge-tint: oklch(96.5% 0.018 120);
+  --domain-knowledge-ink: oklch(30.6% 0.0725 120);
+  --domain-knowledge-solid: oklch(68% 0.135 120);
+
+  /* ===================================================================
+   * 4. CONFIDENCE RAMP (5 steps, observed -> assumed). Single hue (230)
+   * so the ramp reads as ONE ordinal dimension (not a category); lightness
+   * + chroma both drop together so direction survives grayscale print and
+   * all three CVD simulations (adjacent-step distance >= 50 under
+   * normal/deuter/protan — see scripts/colorblind-sim.mjs output).
+   * Color is always paired with a text label + glyph in <ConfidenceBar>;
+   * never color-only.
+   * =================================================================== */
+  --confidence-1-observed: oklch(34% 0.130 230);
+  --confidence-2-corroborated: oklch(45% 0.115 230);
+  --confidence-3-modeled: oklch(56% 0.095 230);
+  --confidence-4-estimated: oklch(68% 0.070 230);
+  --confidence-5-assumed: oklch(82% 0.040 230);
+
+  /* ===================================================================
+   * 5. DATAVIZ GRAMMAR — sequential (7) + diverging (7) + categorical (6)
+   * Categorical palette reuses the domain -solid colors in a fixed,
+   * Cleveland-McGill-respecting order (see tokens.ts CATEGORICAL_ORDER).
+   * Sequential: one hue (210), monotonic lightness -> colorblind-safe by
+   * construction (CVD does not remove a lightness gradient).
+   * Diverging: blue<->amber around a neutral midpoint, the standard
+   * CVD-safe substitute for red<->green diverging scales.
+   * =================================================================== */
+  --chart-seq-1: oklch(94% 0.030 210);
+  --chart-seq-2: oklch(84% 0.060 210);
+  --chart-seq-3: oklch(72% 0.085 210);
+  --chart-seq-4: oklch(60% 0.100 210);
+  --chart-seq-5: oklch(48% 0.100 210);
+  --chart-seq-6: oklch(37% 0.090 210);
+  --chart-seq-7: oklch(26% 0.070 210);
+
+  --chart-div-neg-3: oklch(40% 0.160 70);
+  --chart-div-neg-2: oklch(58% 0.150 70);
+  --chart-div-neg-1: oklch(80% 0.080 70);
+  --chart-div-mid: oklch(93% 0.006 250);
+  --chart-div-pos-1: oklch(80% 0.080 230);
+  --chart-div-pos-2: oklch(58% 0.130 230);
+  --chart-div-pos-3: oklch(38% 0.140 230);
+
+  --chart-axis-ink: var(--text-muted);
+  --chart-gridline: var(--border-subtle);
+
+  /* ===================================================================
+   * 6. TYPE SCALE — modular 1.25 (major third) from a 14px base.
+   * Tabular numerals are mandatory on metric surfaces (.tabular-nums /
+   * [data-metric] below force font-variant-numeric: tabular-nums).
+   * =================================================================== */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --text-xs: 0.64rem;     /* 9px   -> 14 / 1.25^3 */
+  --text-sm: 0.8rem;      /* 11.2px -> 14 / 1.25^1.5 approx, rounded */
+  --text-base: 0.875rem;  /* 14px base */
+  --text-md: 1.09375rem;  /* 17.5px -> 14 * 1.25 */
+  --text-lg: 1.3671875rem; /* 21.9px -> 14 * 1.25^2 */
+  --text-xl: 1.708984375rem; /* 27.3px -> 14 * 1.25^3 */
+  --text-2xl: 2.13623046875rem; /* 34.2px -> 14 * 1.25^4 */
+  --text-3xl: 2.6702880859375rem; /* 42.7px -> 14 * 1.25^5 */
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --measure-min: 45ch;
+  --measure-max: 75ch;
+
+  /* ===================================================================
+   * 7. SPACE — 4px grid
+   * =================================================================== */
+  --space-0: 0px;
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.25rem;  /* 20px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+  --space-10: 2.5rem;  /* 40px */
+  --space-12: 3rem;    /* 48px */
+  --space-16: 4rem;    /* 64px */
+  --space-20: 5rem;    /* 80px */
+  --space-24: 6rem;    /* 96px */
+
+  /* ===================================================================
+   * 8. RADIUS / ELEVATION
+   * =================================================================== */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 999px;
+
+  --elevation-0: none;
+  --elevation-1: 0 1px 2px oklch(20% 0.01 260 / 0.06), 0 1px 1px oklch(20% 0.01 260 / 0.04);
+  --elevation-2: 0 4px 10px oklch(20% 0.01 260 / 0.08), 0 1px 2px oklch(20% 0.01 260 / 0.06);
+  --elevation-3: 0 12px 28px oklch(20% 0.01 260 / 0.14), 0 4px 8px oklch(20% 0.01 260 / 0.08);
+
+  /* ===================================================================
+   * 9. MOTION — disabled wholesale under prefers-reduced-motion (below)
+   * =================================================================== */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ===================================================================
+ * DARK THEME
+ * =================================================================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-0: oklch(16.0% 0.010 260);
+  --surface-1: oklch(20.5% 0.011 260);
+  --surface-2: oklch(25.0% 0.012 260);
+  --surface-sunken: oklch(12.0% 0.010 260);
+  --surface-overlay-scrim: oklch(5% 0.01 260 / 0.6);
+
+  --text-primary: oklch(96.5% 0.003 260);
+  --text-secondary: oklch(85% 0.007 260);
+  --text-muted: oklch(69% 0.009 260);
+  --text-disabled: oklch(48% 0.009 260);
+  --text-inverse: oklch(15% 0.01 260);
+
+  --border-subtle: oklch(30% 0.012 260);
+  --border-default: oklch(38% 0.015 260);
+  --border-strong: oklch(70% 0.015 260);
+  --focus-ring: oklch(78% 0.14 260);
+
+  --success-tint: oklch(28% 0.035 145);
+  --success-ink: oklch(93.2% 0.124 145);
+  --success-solid: oklch(63% 0.150 145);
+
+  --warn-tint: oklch(32% 0.027 80);
+  --warn-ink: oklch(94.4% 0.0505 80);
+  --warn-solid: oklch(75% 0.150 80);
+
+  --danger-tint: oklch(28% 0.035 25);
+  --danger-ink: oklch(94.6% 0.0265 25);
+  --danger-solid: oklch(65% 0.180 25);
+
+  --info-tint: oklch(28% 0.035 235);
+  --info-ink: oklch(94.4% 0.031 235);
+  --info-solid: oklch(66% 0.130 235);
+
+  --domain-strategy-tint: oklch(26.0% 0.030 280);
+  --domain-strategy-ink: oklch(94.0% 0.029 280);
+  --domain-strategy-solid: oklch(71% 0.150 280);
+
+  --domain-people-tint: oklch(26.0% 0.030 260);
+  --domain-people-ink: oklch(94.0% 0.0275 260);
+  --domain-people-solid: oklch(76% 0.135 260);
+
+  --domain-finance-tint: oklch(26.0% 0.030 160);
+  --domain-finance-ink: oklch(92.8% 0.113 160);
+  --domain-finance-solid: oklch(60% 0.150 160);
+
+  --domain-operations-tint: oklch(26.0% 0.030 100);
+  --domain-operations-ink: oklch(93.8% 0.1325 100);
+  --domain-operations-solid: oklch(60% 0.150 100);
+
+  --domain-risk-tint: oklch(26.0% 0.030 0);
+  --domain-risk-ink: oklch(94.4% 0.029 0);
+  --domain-risk-solid: oklch(76% 0.135 0);
+
+  --domain-knowledge-tint: oklch(26.0% 0.030 120);
+  --domain-knowledge-ink: oklch(92.8% 0.200 120);
+  --domain-knowledge-solid: oklch(76% 0.135 120);
+
+  --confidence-1-observed: oklch(44% 0.130 230);
+  --confidence-2-corroborated: oklch(54% 0.115 230);
+  --confidence-3-modeled: oklch(64% 0.095 230);
+  --confidence-4-estimated: oklch(74% 0.070 230);
+  --confidence-5-assumed: oklch(84% 0.040 230);
+
+  --chart-seq-1: oklch(22% 0.040 210);
+  --chart-seq-2: oklch(31% 0.065 210);
+  --chart-seq-3: oklch(41% 0.085 210);
+  --chart-seq-4: oklch(52% 0.100 210);
+  --chart-seq-5: oklch(64% 0.100 210);
+  --chart-seq-6: oklch(76% 0.075 210);
+  --chart-seq-7: oklch(88% 0.045 210);
+
+  --chart-div-neg-3: oklch(45% 0.160 70);
+  --chart-div-neg-2: oklch(62% 0.150 70);
+  --chart-div-neg-1: oklch(78% 0.085 70);
+  --chart-div-mid: oklch(30% 0.008 260);
+  --chart-div-pos-1: oklch(78% 0.085 230);
+  --chart-div-pos-2: oklch(62% 0.130 230);
+  --chart-div-pos-3: oklch(45% 0.145 230);
+
+  --elevation-1: 0 1px 2px oklch(0% 0 0 / 0.5), 0 1px 1px oklch(0% 0 0 / 0.4);
+  --elevation-2: 0 4px 10px oklch(0% 0 0 / 0.5), 0 1px 2px oklch(0% 0 0 / 0.4);
+  --elevation-3: 0 12px 28px oklch(0% 0 0 / 0.6), 0 4px 8px oklch(0% 0 0 / 0.4);
+}
+
+/* ===================================================================
+ * HIGH-CONTRAST THEMES — forced near-maximum APCA (Lc ~106) + thicker
+ * borders, for users who opt in via the theme switcher or
+ * `forced-colors` / OS high-contrast mode.
+ * =================================================================== */
+[data-theme="hc-light"] {
+  color-scheme: light;
+  --surface-0: oklch(100% 0 0);
+  --surface-1: oklch(100% 0 0);
+  --surface-2: oklch(100% 0 0);
+  --surface-sunken: oklch(96% 0 0);
+  --text-primary: oklch(0% 0 0);
+  --text-secondary: oklch(12% 0 0);
+  --text-muted: oklch(26% 0 0);
+  --border-subtle: oklch(40% 0 0);
+  --border-default: oklch(20% 0 0);
+  --border-strong: oklch(0% 0 0);
+  --focus-ring: oklch(40% 0.2 280);
+}
+
+[data-theme="hc-dark"] {
+  color-scheme: dark;
+  --surface-0: oklch(0% 0 0);
+  --surface-1: oklch(0% 0 0);
+  --surface-2: oklch(4% 0 0);
+  --surface-sunken: oklch(0% 0 0);
+  --text-primary: oklch(100% 0 0);
+  --text-secondary: oklch(92% 0 0);
+  --text-muted: oklch(78% 0 0);
+  --border-subtle: oklch(60% 0 0);
+  --border-default: oklch(80% 0 0);
+  --border-strong: oklch(100% 0 0);
+  --focus-ring: oklch(85% 0.18 95);
+}
+
+/* ===================================================================
+ * MOTION — hard kill-switch. Nothing in src/components should set its
+ * own transition-duration; everything reads --motion-* so this one rule
+ * disables motion system-wide.
+ * =================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-slow: 0ms;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

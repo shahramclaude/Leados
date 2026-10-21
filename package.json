@@ -7,23 +7,24 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "seed": "tsx scripts/seed.ts",
-    "db:rebuild": "tsx scripts/rebuild.ts",
-    "measure:write": "tsx scripts/measure-write-latency.ts",
-    "verify": "npm run typecheck && npm run lint && npm run test"
+    "design:check": "tsx scripts/design-audit.mjs",
+    "design:colorblind": "tsx scripts/colorblind-sim.mjs",
+    "test:visual": "playwright test",
+    "verify": "npm run lint && npm run typecheck && npm run design:check"
   },
   "dependencies": {
+    "@playwright/test": "^1.64.1",
+    "apca-w3": "^0.1.9",
+    "clsx": "^2.1.1",
+    "culori": "^4.0.2",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
-    "fast-check": "^4.10.2",
     "next": "16.2.6",
     "pg": "8.20.0",
+    "pngjs": "^7.0.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15",
-    "vitest": "^5.0.5",
-    "zod": "^4.6.7"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

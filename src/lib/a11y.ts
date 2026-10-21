@@ -1,115 +1,153 @@
 /**
- * Inclusive-access helpers (Section F). Kept dependency-free and pure so
- * they're trivially unit-testable and usable in both server and client
- * code.
+ * Accessibility + perceptual-contrast primitives shared by components and by
+ * scripts/design-audit.mjs. The APCA implementation purposely matches the
+ * published apca-w3 algorithm (we depend on the real `apca-w3` package at
+ * runtime/build time for anything script-checked); the pure functions here
+ * are small re-implementations usable from client components without
+ * shipping the full apca-w3 bundle, and are unit-cross-checked against
+ * apca-w3 in scripts/design-audit.mjs so the two never drift.
  */
 
-export const MAX_PLAIN_SENTENCE_WORDS = 15;
+export type ContrastClass = "body" | "large" | "ui";
 
-/**
- * Controlled vocabulary for plain-language mode. Keys are lowercase source
- * terms; values are the plain-language replacement in the same locale. This
- * is intentionally a small, auditable list rather than an LLM call, so its
- * output is deterministic and testable.
- */
-const PLAIN_VOCABULARY: Record<"en-US" | "da-DK", Record<string, string>> = {
-  "en-US": {
-    attrition: "people leaving",
-    engagement: "how involved people feel",
-    rebalance: "move work around",
-    utilization: "how busy someone is",
-    stakeholder: "person involved",
-    initiative: "project",
-    leverage: "use",
-    synerg: "work together", // matches "synergy"/"synergies" as a prefix
-  },
-  "da-DK": {
-    tiltrædelse: "folk der stopper",
-    engagement: "hvor involverede folk føler sig",
-    interessent: "person der er involveret",
-    initiativ: "projekt",
-    udnytte: "bruge",
-  },
+export const APCA_FLOOR: Record<ContrastClass, number> = {
+  body: 90,
+  large: 75,
+  ui: 45,
 };
 
-/** Splits on sentence-final punctuation while keeping it attached to the sentence. */
-function splitSentences(text: string): string[] {
-  return text
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+export const WCAG_FLOOR: Record<ContrastClass, number> = {
+  body: 4.5,
+  large: 3,
+  ui: 3,
+};
+
+export type RGB = [number, number, number];
+
+function srgbToLinear(channel: number): number {
+  const c = channel / 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
 
-function capSentenceLength(sentence: string, maxWords: number): string[] {
-  const words = sentence.split(/\s+/);
-  if (words.length <= maxWords) return [sentence];
-  const chunks: string[] = [];
-  for (let i = 0; i < words.length; i += maxWords) {
-    const chunk = words.slice(i, i + maxWords).join(" ");
-    chunks.push(/[.!?]$/.test(chunk) ? chunk : `${chunk}.`);
-  }
-  return chunks;
+/** WCAG 2.x relative luminance. */
+export function relativeLuminance([r, g, b]: RGB): number {
+  const [lr, lg, lb] = [srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)];
+  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
 }
 
-function substituteVocabulary(sentence: string, locale: "en-US" | "da-DK"): string {
-  let result = sentence;
-  for (const [term, replacement] of Object.entries(PLAIN_VOCABULARY[locale])) {
-    const re = new RegExp(term, "gi");
-    result = result.replace(re, replacement);
-  }
-  return result;
+/** WCAG 2.x contrast ratio (1:1 .. 21:1), used as the hard AA floor beneath
+ * the APCA target. */
+export function wcagContrast(a: RGB, b: RGB): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  const lighter = Math.max(la, lb);
+  const darker = Math.min(la, lb);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+const APCA_EXPONENTS = { mainTRC: 2.4, normBG: 0.56, normTXT: 0.57, revTXT: 0.62, revBG: 0.65 };
+const APCA_CLAMPS = { blkThrs: 0.022, blkClmp: 1.414, scale: 1.14, loClip: 0.1, deltaYmin: 0.0005 };
+const APCA_COEFFS = { r: 0.2126729, g: 0.7151522, b: 0.072175 };
+
+function apcaY([r, g, b]: RGB): number {
+  const toLin = (v: number) => Math.pow(v / 255, APCA_EXPONENTS.mainTRC);
+  const y = APCA_COEFFS.r * toLin(r) + APCA_COEFFS.g * toLin(g) + APCA_COEFFS.b * toLin(b);
+  return y > APCA_CLAMPS.blkThrs ? y : y + Math.pow(APCA_CLAMPS.blkThrs - y, APCA_CLAMPS.blkClmp);
 }
 
 /**
- * Converts executive-summary prose into plain language: controlled
- * vocabulary substitution + a hard sentence-length cap. Deterministic and
- * measurable via `scorePlainLanguage` below (used by
- * `tests/a11y-plain-language.test.ts`... kept inline-testable here too).
+ * APCA Lc (signed, -108..106). Text color first, background second — APCA is
+ * polarity-sensitive, unlike WCAG ratio. This mirrors the public
+ * `apca-w3` 0.1.9 "0.0.98G-4g" base algorithm.
  */
-export function toPlainLanguage(text: string, locale: "en-US" | "da-DK" = "en-US"): string {
-  const sentences = splitSentences(text);
-  const withVocabulary = sentences.map((s) => substituteVocabulary(s, locale));
-  const capped = withVocabulary.flatMap((s) => capSentenceLength(s, MAX_PLAIN_SENTENCE_WORDS));
-  return capped.join(" ");
+export function apcaContrast(text: RGB, bg: RGB): number {
+  const Ytxt = apcaY(text);
+  const Ybg = apcaY(bg);
+  if (Math.abs(Ybg - Ytxt) < APCA_CLAMPS.deltaYmin) return 0;
+
+  let sapc: number;
+  let polarity: "normal" | "reverse";
+  if (Ybg > Ytxt) {
+    sapc = (Math.pow(Ybg, APCA_EXPONENTS.normBG) - Math.pow(Ytxt, APCA_EXPONENTS.normTXT)) * APCA_CLAMPS.scale;
+    polarity = "normal";
+  } else {
+    sapc = (Math.pow(Ybg, APCA_EXPONENTS.revBG) - Math.pow(Ytxt, APCA_EXPONENTS.revTXT)) * APCA_CLAMPS.scale;
+    polarity = "reverse";
+  }
+
+  if (Math.abs(sapc) < APCA_CLAMPS.loClip) return 0;
+  const signed = sapc > 0 ? sapc - 0.027 : sapc + 0.027;
+  const lc = signed * 100;
+  return polarity === "normal" ? lc : lc;
 }
 
-export type PlainLanguageScore = {
-  maxSentenceWords: number;
-  averageSentenceWords: number;
-  withinCap: boolean;
-};
-
-export function scorePlainLanguage(text: string): PlainLanguageScore {
-  const sentences = splitSentences(text);
-  const lengths = sentences.map((s) => s.split(/\s+/).filter(Boolean).length);
-  const max = Math.max(0, ...lengths);
-  const avg = lengths.length ? lengths.reduce((a, b) => a + b, 0) / lengths.length : 0;
-  return { maxSentenceWords: max, averageSentenceWords: avg, withinCap: max <= MAX_PLAIN_SENTENCE_WORDS };
+export function passesContrast(lc: number, wcagRatio: number, cls: ContrastClass): boolean {
+  return Math.abs(lc) >= APCA_FLOOR[cls] && wcagRatio >= WCAG_FLOOR[cls];
 }
 
-/** Colorblind-safe severity encoding: never color alone — always paired with shape/icon + text label. */
-export const SEVERITY_ENCODING: Record<"info" | "watch" | "urgent", { color: string; icon: string; pattern: string }> = {
-  info: { color: "#2563eb", icon: "ℹ️", pattern: "solid" },
-  watch: { color: "#b45309", icon: "▲", pattern: "diagonal-stripes" },
-  urgent: { color: "#b91c1c", icon: "■", pattern: "cross-hatch" },
-};
+/** Minimal focus trap used by <Dialog> and <CommandPalette>. Returns a
+ * cleanup function. Pure DOM, no dependency, SSR-safe (no-op outside the
+ * browser). */
+export function trapFocus(container: HTMLElement): () => void {
+  const selector =
+    'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-/** Minimal focus trap for modal/dialog surfaces (conflict resolution, wizard). */
-export function trapFocus(container: HTMLElement, event: KeyboardEvent) {
-  if (event.key !== "Tab") return;
-  const focusable = container.querySelectorAll<HTMLElement>(
-    'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
-  );
-  if (focusable.length === 0) return;
-  const first = focusable[0];
-  const last = focusable[focusable.length - 1];
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
+  function getFocusable(): HTMLElement[] {
+    return Array.from(container.querySelectorAll<HTMLElement>(selector)).filter(
+      (el) => el.offsetParent !== null || el === document.activeElement,
+    );
+  }
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key !== "Tab") return;
+    const focusable = getFocusable();
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  container.addEventListener("keydown", onKeydown);
+  const focusable = getFocusable();
+  focusable[0]?.focus();
+
+  return () => container.removeEventListener("keydown", onKeydown);
+}
+
+let liveRegion: HTMLElement | null = null;
+
+/** Announce a message to assistive tech via a shared polite live region.
+ * Used by Toast, DataTable (sort/filter changes), ScenarioSlider (delta
+ * preview) instead of relying on visual change alone. */
+export function announce(message: string): void {
+  if (typeof document === "undefined") return;
+  if (!liveRegion) {
+    liveRegion = document.createElement("div");
+    liveRegion.setAttribute("role", "status");
+    liveRegion.setAttribute("aria-live", "polite");
+    liveRegion.className = "visually-hidden";
+    document.body.appendChild(liveRegion);
+  }
+  liveRegion.textContent = "";
+  window.setTimeout(() => {
+    if (liveRegion) liveRegion.textContent = message;
+  }, 50);
+}
+
+/** Hick–Hyman guardrail: throws in development if a navigation/menu set
+ * exceeds 7 primary items. Call with the rendered item count. */
+export function assertHickHymanLimit(count: number, context: string, limit = 7): void {
+  if (process.env.NODE_ENV !== "production" && count > limit) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[a11y/cognitive] "${context}" exposes ${count} primary items (> ${limit}). ` +
+        `Hick–Hyman: decision time grows with log2(n); move the overflow behind progressive disclosure.`,
+    );
   }
 }
-
-export const SKIP_LINK_TARGET_ID = "main-content";

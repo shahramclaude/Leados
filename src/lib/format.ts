@@ -1,69 +1,88 @@
-import { LOCALE_META, type AppLocale } from "@/i18n/locales";
-
 /**
- * Centralized locale-aware formatting. Everything here uses the platform
- * `Intl` APIs (never hand-rolled date math) so da-DK gets correct Danish
- * conventions (DD.MM.YYYY-style ordering, "kr." currency, 24-hour clock)
- * for free, and so RTL-ready layout mechanics stay separate from number
- * shaping.
+ * Formatting helpers. Every function here returns digits meant for a
+ * `.tabular-nums` / `[data-metric]` surface — see docs/DESIGN-SYSTEM.md §2.2.
  */
-export function formatDate(date: Date | string, locale: AppLocale, opts?: Intl.DateTimeFormatOptions): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeZone: LOCALE_META[locale].timeZone,
-    ...opts,
-  }).format(d);
-}
 
-export function formatDateTime(date: Date | string, locale: AppLocale): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: LOCALE_META[locale].timeZone,
-  }).format(d);
-}
+const numberFormatter = new Intl.NumberFormat("en-US");
+const integerFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
-export function formatNumber(value: number, locale: AppLocale, opts?: Intl.NumberFormatOptions): string {
-  return new Intl.NumberFormat(locale, opts).format(value);
-}
-
-export function formatCurrency(value: number, locale: AppLocale, currency?: string): string {
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: currency ?? LOCALE_META[locale].currency,
+export function formatNumber(value: number, fractionDigits = 0): string {
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(value);
 }
 
-export function formatPercent(value: number, locale: AppLocale): string {
-  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(value);
+export function formatInteger(value: number): string {
+  return integerFormatter.format(value);
 }
 
-const RELATIVE_UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
-  { unit: "year", ms: 1000 * 60 * 60 * 24 * 365 },
-  { unit: "month", ms: 1000 * 60 * 60 * 24 * 30 },
-  { unit: "week", ms: 1000 * 60 * 60 * 24 * 7 },
-  { unit: "day", ms: 1000 * 60 * 60 * 24 },
-  { unit: "hour", ms: 1000 * 60 * 60 },
-  { unit: "minute", ms: 1000 * 60 },
-];
+export function formatCurrency(value: number, currency = "USD", fractionDigits = 0): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
+}
 
-/**
- * Produces "3 days ago" / "3 dage siden" from a single Intl call — no
- * hand-written pluralization strings, so it is correct in every supported
- * locale automatically, including ones added later.
- */
-export function formatRelativeTime(date: Date | string, locale: AppLocale, now: Date = new Date()): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  const diffMs = d.getTime() - now.getTime();
-  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+export function formatCompact(value: number): string {
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
 
-  for (const { unit, ms } of RELATIVE_UNITS) {
-    if (Math.abs(diffMs) >= ms || unit === "minute") {
-      const value = Math.round(diffMs / ms);
-      return rtf.format(value, unit);
-    }
+export function formatPercent(value: number, fractionDigits = 1): string {
+  return `${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value * 100)}%`;
+}
+
+/** Signed delta, e.g. "+4.2%" / "−1.8%" (real minus sign, not hyphen). */
+export function formatDelta(value: number, opts: { percent?: boolean; fractionDigits?: number } = {}): string {
+  const { percent = true, fractionDigits = 1 } = opts;
+  const sign = value > 0 ? "+" : value < 0 ? "\u2212" : "\u00B1";
+  const magnitude = percent ? formatPercent(Math.abs(value), fractionDigits) : formatNumber(Math.abs(value), fractionDigits);
+  return `${sign}${magnitude}`;
+}
+
+export function formatDate(value: Date | string | number, opts: Intl.DateTimeFormatOptions = {}): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", ...opts }).format(date);
+}
+
+export function formatDateTime(value: Date | string | number): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+export function formatRelativeTime(value: Date | string | number, now: Date = new Date()): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const diffMs = date.getTime() - now.getTime();
+  const diffSec = Math.round(diffMs / 1000);
+  const rtf = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
+
+  const divisions: [number, Intl.RelativeTimeFormatUnit][] = [
+    [60, "second"],
+    [60, "minute"],
+    [24, "hour"],
+    [7, "day"],
+    [4.34524, "week"],
+    [12, "month"],
+    [Number.POSITIVE_INFINITY, "year"],
+  ];
+
+  let duration = diffSec;
+  for (const [amount, unit] of divisions) {
+    if (Math.abs(duration) < amount) return rtf.format(Math.round(duration), unit);
+    duration /= amount;
   }
-  return rtf.format(0, "minute");
+  return rtf.format(Math.round(duration), "year");
 }
+
+export { numberFormatter };
