@@ -1,19 +1,21 @@
 // src/lib/playbooks.ts
 //
-// Playbooks are executable checklists: trigger conditions, ordered steps
-// with owners, versioned with a changelog. This module owns basic CRUD +
-// versioning; execution lives in playbooksEngine.ts, mining of new
-// candidates from retrospectives lives in playbooksIntelligence.ts.
+// Playbooks are executable checklists (mission §D): trigger conditions,
+// ordered steps with owners + verification, versioned with a changelog.
+// This module owns CRUD + versioning; execution lives in
+// playbooksEngine.ts, mining of new candidates from retrospectives lives in
+// playbooksIntelligence.ts. Retrieval indexes the `playbooks` table
+// directly (see retrieval/index.ts) — no separate search-index write here.
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { playbooks } from "@/db/schema";
-import { indexDocument } from "@/lib/search";
+import { playbooks, playbookVersions } from "@/db/schema";
 
 export interface PlaybookStep {
   order: number;
   title: string;
   description?: string;
   owner?: string;
+  verification?: string; // how a human/the kernel confirms this step was actually done
 }
 
 export interface TriggerCondition {
@@ -53,7 +55,7 @@ export async function createPlaybook(input: CreatePlaybookInput) {
       originRetrospectiveId: input.originRetrospectiveId ?? null,
     })
     .returning();
-  await indexPlaybook(row);
+  await db.insert(playbookVersions).values({ playbookId: row.id, version: 1, steps: input.steps, changelogNote: "Initial version" });
   return row;
 }
 
@@ -71,10 +73,7 @@ export async function updatePlaybook(id: number, input: UpdatePlaybookInput) {
   const [existing] = await db.select().from(playbooks).where(eq(playbooks.id, id)).limit(1);
   if (!existing) throw new Error(`Playbook ${id} not found`);
   const newVersion = existing.version + 1;
-  const changelog = [
-    ...(existing.changelog as ChangelogEntry[]),
-    { version: newVersion, date: new Date().toISOString().slice(0, 10), note: input.changeNote },
-  ];
+  const changelog = [...(existing.changelog as ChangelogEntry[]), { version: newVersion, date: new Date().toISOString().slice(0, 10), note: input.changeNote }];
   const [row] = await db
     .update(playbooks)
     .set({
@@ -89,8 +88,12 @@ export async function updatePlaybook(id: number, input: UpdatePlaybookInput) {
     })
     .where(eq(playbooks.id, id))
     .returning();
-  await indexPlaybook(row);
+  await db.insert(playbookVersions).values({ playbookId: id, version: newVersion, steps: row.steps, changelogNote: input.changeNote });
   return row;
+}
+
+export async function listPlaybookVersions(playbookId: number) {
+  return db.select().from(playbookVersions).where(eq(playbookVersions.playbookId, playbookId)).orderBy(desc(playbookVersions.version));
 }
 
 export async function listPlaybooks(status?: "draft" | "active" | "deprecated") {
@@ -104,14 +107,7 @@ export async function getPlaybook(id: number) {
   return row ?? null;
 }
 
-async function indexPlaybook(row: typeof playbooks.$inferSelect) {
-  const steps = (row.steps as PlaybookStep[]) ?? [];
-  await indexDocument({
-    sourceType: "playbook",
-    sourceId: row.id,
-    title: row.title,
-    body: `${row.description ?? ""}\n${steps.map((s) => `${s.order}. ${s.title} ${s.description ?? ""}`).join("\n")}`,
-    tags: [row.status],
-    recencyAt: row.updatedAt,
-  });
+export async function getPlaybookByKey(key: string) {
+  const [row] = await db.select().from(playbooks).where(eq(playbooks.key, key)).limit(1);
+  return row ?? null;
 }

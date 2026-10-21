@@ -1,11 +1,14 @@
-// Small, dependency-free id helper shared by the whole kernel.
-// Uses crypto.randomUUID (Node >=16.7 / edge runtime both support it) so we
-// avoid adding a ulid dependency for a 21-part program that already has a
-// tight dependency budget.
-export function newId(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID()}`;
-}
+// src/lib/kernel/ids.ts
+//
+// Minimal, dependency-free id helper for the kernel audit seam. Part 07's
+// real kernel (as read from the upstream checkout, see AI-SESSION-LOG.md)
+// uses a `newId(prefix)` convention for correlation ids — reproduced here
+// so audit events this part writes are shaped consistently with that
+// seam, without depending on files outside this part's mandate.
+let counter = 0;
 
-export function todayKey(d: Date = new Date()): string {
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD, UTC
+export function newId(prefix: string): string {
+  counter += 1;
+  const rand = Math.random().toString(36).slice(2, 10);
+  return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}${rand}`;
 }

@@ -8,9 +8,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") as "draft" | "active" | "deprecated" | null;
   const rows = await listPlaybooks(status ?? undefined);
-  const withEffectiveness = await Promise.all(
-    rows.map(async (p) => ({ ...p, effectiveness: await computeEffectiveness(p.id) }))
-  );
+  const withEffectiveness = await Promise.all(rows.map(async (p) => ({ ...p, effectiveness: await computeEffectiveness(p.id) })));
   return NextResponse.json({ playbooks: withEffectiveness });
 }
 

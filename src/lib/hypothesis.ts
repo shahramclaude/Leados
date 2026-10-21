@@ -1,10 +1,11 @@
 // src/lib/hypothesis.ts
 //
-// Compat shim: an earlier iteration of this codebase had both `hypotheses.ts`
-// (plural, the module) and `hypothesis.ts` (singular) referenced from
-// different call sites. Rather than keep two parallel implementations that
-// can drift, `hypothesis.ts` now simply re-exports the single source of
-// truth in `hypotheses.ts`. Keep importing from `@/lib/hypotheses` in new
-// code — this file exists only so older imports of `@/lib/hypothesis` keep
-// working.
+// Compat shim: the upstream checkout had both `hypotheses.ts` (plural, the
+// module this part owns) and a singular `hypothesis.ts` referenced from a
+// completely different, unrelated rule-calibration subsystem (entity/claim/
+// resolveBy/ruleId — see AI-SESSION-LOG.md for the disclosure). Rather than
+// collide with that subsystem's route (`src/app/api/hypothesis/route.ts`),
+// this file is kept as a pure re-export of the Part 11 module so any new
+// code that imports "@/lib/hypothesis" (singular) by mistake still gets a
+// single source of truth instead of a second, drifting implementation.
 export * from "./hypotheses";

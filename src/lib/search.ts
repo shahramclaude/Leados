@@ -1,19 +1,31 @@
-// search.ts — thin, UI-facing wrapper over the hybrid retrieval pipeline,
-// used by GET /api/search. No model calls — pure retrieval.
-import { hybridRetrieve } from "@/lib/retrieval";
-import { annotateChunks } from "@/lib/promptInjectionGuard";
+// src/lib/search.ts — thin, UI/API-facing wrapper over the hybrid retrieval
+// pipeline (mission §E), plus saved-search CRUD. No model calls — pure
+// retrieval.
+import { db } from "@/db";
+import { savedSearches } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { hybridRetrieve, type ChunkKind } from "@/lib/retrieval";
 
-export async function search(query: string, limit = 12) {
-  const result = await hybridRetrieve(query, limit);
-  const annotated = annotateChunks(result.chunks);
+export async function search(query: string, limit = 12, kinds?: ChunkKind[]) {
+  const result = await hybridRetrieve(query, limit, kinds ? { kinds } : undefined);
   return {
     query: result.query,
     confidence: result.confidence,
-    results: annotated.map((c, i) => ({
-      ...c,
-      rank: i + 1,
-      score: result.chunks[i]?.score ?? 0,
-      entityId: result.chunks[i]?.entityId ?? null,
-    })),
+    facets: result.facets,
+    results: result.chunks.map((c, i) => ({ ...c, rank: i + 1 })),
   };
+}
+
+export async function saveSearch(ownerName: string, query: string, filters: Record<string, unknown> = {}) {
+  const [row] = await db.insert(savedSearches).values({ ownerName, query, filters }).returning();
+  return row;
+}
+
+export async function listSavedSearches(ownerName?: string) {
+  const rows = await db.select().from(savedSearches).orderBy(desc(savedSearches.createdAt));
+  return ownerName ? rows.filter((r) => r.ownerName === ownerName) : rows;
+}
+
+export async function deleteSavedSearch(id: number) {
+  await db.delete(savedSearches).where(eq(savedSearches.id, id));
 }

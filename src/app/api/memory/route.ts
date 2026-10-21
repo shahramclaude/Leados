@@ -27,9 +27,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as RetrospectiveInput & { action?: string; id?: number };
+  const body = (await request.json()) as RetrospectiveInput & { action?: string; id?: number; reason?: string; citedBy?: string };
   if (body.action === "reinforce" && body.id) {
-    const row = await reinforceRetrospective(body.id);
+    const row = await reinforceRetrospective(body.id, body.reason, body.citedBy);
     return NextResponse.json(row);
   }
   if (body.action === "find-similar") {

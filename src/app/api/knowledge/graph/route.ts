@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { getBlastRadius, getNeighbors, getOrphans, getShortestPath } from "@/lib/knowledgeGraph";
+import { getBlastRadius, getNeighbors, getOrphans, getShortestPath, detectCycles } from "@/lib/knowledgeGraph";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/knowledge/graph?mode=neighbors&key=project:x&depth=2
+// GET /api/knowledge/graph?mode=neighbors&key=project:x&depth=2[&types=blocked,depends_on]
 // GET /api/knowledge/graph?mode=path&from=decision:x&to=metric:y
 // GET /api/knowledge/graph?mode=blast&key=decision:x&depth=3
-// GET /api/knowledge/graph?mode=orphans
+// GET /api/knowledge/graph?mode=orphans[&staleDays=90]
+// GET /api/knowledge/graph?mode=cycles
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode") ?? "neighbors";
@@ -15,7 +16,8 @@ export async function GET(request: Request) {
   if (mode === "neighbors") {
     const key = searchParams.get("key");
     if (!key) return NextResponse.json({ error: "key is required" }, { status: 400 });
-    const result = await getNeighbors(key, depth);
+    const types = searchParams.get("types")?.split(",").filter(Boolean);
+    const result = await getNeighbors(key, depth, types);
     return NextResponse.json(result);
   }
 
@@ -36,8 +38,14 @@ export async function GET(request: Request) {
   }
 
   if (mode === "orphans") {
-    const result = await getOrphans();
+    const staleDays = Number(searchParams.get("staleDays") ?? "90");
+    const result = await getOrphans(staleDays);
     return NextResponse.json({ orphans: result });
+  }
+
+  if (mode === "cycles") {
+    const result = await detectCycles();
+    return NextResponse.json({ cycles: result });
   }
 
   return NextResponse.json({ error: `unknown mode "${mode}"` }, { status: 400 });

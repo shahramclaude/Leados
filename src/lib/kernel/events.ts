@@ -1,65 +1,43 @@
-// Part 01 (minimal, reconstructed) — append-only event envelope.
+// src/lib/kernel/events.ts
 //
-// Every observation, tool call, decision and outcome produced by the kernel
-// is appended here. `correlationId` is always the runId, so a run's full
-// history (and therefore its replay/resume state) is exactly
-// `listEvents(runId)` ordered by `seq`. Nothing in the kernel ever mutates
-// or deletes a row in this table.
+// Append-only audit trail for the knowledge-systems kernel seam (Part 07
+// stand-in — see schema.ts `auditEvents` comment for why a minimal stand-in
+// was built instead of vendoring the upstream kernel's full self-improve
+// event sourcing system, which belongs to a different part's mandate).
+// Every capability invocation (playbook run, nightly memory consolidation,
+// hypothesis auto-resolution) appends one of these rows. Nothing here is
+// ever mutated or deleted.
 import { db } from "@/db";
-import { kernelEvents, kernelOutbox } from "@/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { auditEvents } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
 import { newId } from "./ids";
-import type { Actor } from "./types";
 
-export interface AppendEventInput {
+export type Actor = { kind: "human" | "kernel" | "system"; name: string };
+
+export async function appendAuditEvent(input: {
   type: string;
   actor: Actor;
-  correlationId: string;
-  causationId?: string | null;
-  payload: unknown;
-  policyVersion?: string | null;
-  /** If true, also drops a row in the outbox for downstream notification fan-out. */
-  notify?: { topic: string };
-}
-
-export type KernelEventRow = typeof kernelEvents.$inferSelect;
-
-export async function appendEvent(input: AppendEventInput): Promise<KernelEventRow> {
-  const id = newId("evt");
+  correlationId?: string;
+  payload?: Record<string, unknown>;
+}) {
+  const correlationId = input.correlationId ?? newId("evt");
   const [row] = await db
-    .insert(kernelEvents)
+    .insert(auditEvents)
     .values({
-      id,
       type: input.type,
       actorKind: input.actor.kind,
-      actorId: input.actor.id,
-      correlationId: input.correlationId,
-      causationId: input.causationId ?? null,
-      payload: input.payload as object,
-      policyVersion: input.policyVersion ?? null,
+      actorName: input.actor.name,
+      correlationId,
+      payload: input.payload ?? {},
     })
     .returning();
-
-  if (input.notify) {
-    await db.insert(kernelOutbox).values({
-      id: newId("obx"),
-      eventId: id,
-      topic: input.notify.topic,
-      payload: { eventId: id, type: input.type, correlationId: input.correlationId, payload: input.payload },
-    });
-  }
-
   return row;
 }
 
-export async function listEvents(correlationId: string): Promise<KernelEventRow[]> {
-  return db
-    .select()
-    .from(kernelEvents)
-    .where(eq(kernelEvents.correlationId, correlationId))
-    .orderBy(asc(kernelEvents.seq));
-}
-
-export async function listAllEvents(limit = 500): Promise<KernelEventRow[]> {
-  return db.select().from(kernelEvents).orderBy(asc(kernelEvents.seq)).limit(limit);
+export async function listAuditEvents(opts: { type?: string; limit?: number } = {}) {
+  const limit = opts.limit ?? 100;
+  const rows = opts.type
+    ? await db.select().from(auditEvents).where(eq(auditEvents.type, opts.type)).orderBy(desc(auditEvents.createdAt)).limit(limit)
+    : await db.select().from(auditEvents).orderBy(desc(auditEvents.createdAt)).limit(limit);
+  return rows;
 }

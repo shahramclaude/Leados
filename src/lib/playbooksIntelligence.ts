@@ -1,14 +1,15 @@
 // src/lib/playbooksIntelligence.ts
 //
-// Mines institutional memory (retrospectives) for new playbook candidates.
-// This module only ever SUGGESTS — candidates land in `playbook_candidates`
-// with status "suggested" and a human must explicitly accept one (which
-// calls `createPlaybook` in playbooks.ts) before it becomes a real,
-// invocable playbook. Nothing here auto-publishes.
+// Mines institutional memory (retrospectives) for new playbook candidates
+// (mission §D: "mining from retrospectives proposes candidates (never
+// auto-published)"). Candidates land in `playbook_candidates` with status
+// "suggested" and a human must explicitly accept one (which calls
+// `createPlaybook` in playbooks.ts) before it becomes a real, invocable
+// playbook. Nothing here auto-publishes.
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { playbookCandidates, retrospectives } from "@/db/schema";
-import { jaccard } from "@/lib/knowledgeGraph";
+import { jaccard } from "@/lib/memory";
 import { createPlaybook, type PlaybookStep } from "@/lib/playbooks";
 
 export interface MinedCandidate {
@@ -24,18 +25,13 @@ const SIMILARITY_THRESHOLD = 0.5;
 
 /**
  * Greedy tag-similarity clustering over retrospectives with a lesson that
- * implies a repeatable action (`playbookUpdate` populated and outcome not
- * neutral). Clusters of >= MIN_CLUSTER_SIZE sharing >= SIMILARITY_THRESHOLD
- * Jaccard tag overlap become playbook candidates.
+ * implies a repeatable action (`playbookUpdate` populated). Clusters of
+ * >= MIN_CLUSTER_SIZE sharing >= SIMILARITY_THRESHOLD Jaccard tag overlap
+ * become playbook candidates. Deterministic — no model call.
  */
 export async function mineCandidatesFromRetrospectives(): Promise<MinedCandidate[]> {
-  const rows = await db
-    .select()
-    .from(retrospectives)
-    .where(eq(retrospectives.outcomeValence, "negative")); // lessons from negative outcomes are the richest playbook source
-  const withPlaybookHint = rows.filter((r) => Boolean(r.playbookUpdate));
-  const positiveRows = await db.select().from(retrospectives).where(eq(retrospectives.outcomeValence, "positive"));
-  const candidates = [...withPlaybookHint, ...positiveRows.filter((r) => Boolean(r.playbookUpdate))];
+  const rows = await db.select().from(retrospectives);
+  const candidates = rows.filter((r) => Boolean(r.playbookUpdate));
 
   const used = new Set<number>();
   const clusters: MinedCandidate[] = [];
@@ -61,13 +57,14 @@ export async function mineCandidatesFromRetrospectives(): Promise<MinedCandidate
         order: idx + 1,
         title: r.playbookUpdate ?? r.lesson,
         description: `From retrospective "${r.title}" (${r.occurredAt}): ${r.lesson}`,
+        verification: "Confirm the action described was actually taken and link evidence in the run's completion note.",
       }));
       clusters.push({
         clusterTags: tags,
         retrospectiveIds: cluster.map((r) => r.id),
         suggestedTitle: `Playbook: ${base.title.replace(/^Retro:\s*/i, "")}`,
         suggestedSteps: steps,
-        rationale: `${cluster.length} retrospectives tagged [${tags.join(", ")}] independently arrived at the same corrective action — strong signal this should be a standing playbook.`,
+        rationale: `${cluster.length} retrospectives tagged [${tags.join(", ")}] independently arrived at the same corrective action — a recurring pattern, strong signal this should be a standing playbook. This is a mined suggestion, not an automatic publication.`,
       });
     }
   }
@@ -75,11 +72,11 @@ export async function mineCandidatesFromRetrospectives(): Promise<MinedCandidate
 }
 
 /** Run mining and persist any newly-found clusters as suggested candidates (idempotent per retrospective-id set). */
-export async function refreshPlaybookCandidates(): Promise<typeof playbookCandidates.$inferSelect[]> {
+export async function refreshPlaybookCandidates(): Promise<(typeof playbookCandidates.$inferSelect)[]> {
   const mined = await mineCandidatesFromRetrospectives();
   const existing = await db.select().from(playbookCandidates);
   const existingKeys = new Set(existing.map((c) => c.sourceRetrospectiveId));
-  const created: typeof playbookCandidates.$inferSelect[] = [];
+  const created: (typeof playbookCandidates.$inferSelect)[] = [];
   for (const candidate of mined) {
     const primaryRetroId = candidate.retrospectiveIds[0];
     if (existingKeys.has(primaryRetroId)) continue;
@@ -105,15 +102,11 @@ export async function listCandidates(status?: "suggested" | "accepted" | "reject
 }
 
 export async function rejectCandidate(id: number) {
-  const [row] = await db
-    .update(playbookCandidates)
-    .set({ status: "rejected", decidedAt: new Date() })
-    .where(eq(playbookCandidates.id, id))
-    .returning();
+  const [row] = await db.update(playbookCandidates).set({ status: "rejected", decidedAt: new Date() }).where(eq(playbookCandidates.id, id)).returning();
   return row;
 }
 
-/** Human explicitly accepts a mined candidate -> becomes a real, invocable playbook (draft status). */
+/** Human explicitly accepts a mined candidate -> becomes a real, invocable playbook (draft status, never active on acceptance alone). */
 export async function acceptCandidate(id: number, key: string) {
   const [candidate] = await db.select().from(playbookCandidates).where(eq(playbookCandidates.id, id)).limit(1);
   if (!candidate) throw new Error(`Playbook candidate ${id} not found`);
@@ -122,12 +115,9 @@ export async function acceptCandidate(id: number, key: string) {
     title: candidate.suggestedTitle,
     description: candidate.rationale,
     steps: candidate.suggestedSteps as PlaybookStep[],
-    originRetrospectiveId: candidate.sourceRetrospectiveId,
+    originRetrospectiveId: candidate.sourceRetrospectiveId ?? undefined,
     status: "draft",
   });
-  await db
-    .update(playbookCandidates)
-    .set({ status: "accepted", decidedAt: new Date() })
-    .where(eq(playbookCandidates.id, id));
+  await db.update(playbookCandidates).set({ status: "accepted", decidedAt: new Date() }).where(eq(playbookCandidates.id, id));
   return playbook;
 }

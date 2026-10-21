@@ -1,22 +1,12 @@
-// narrativeIntel.ts — gathers structured inputs (metric deltas, recent
-// events, open findings) for narrative synthesis. Pure data access + math;
-// no model calls. synthesis.ts, livingDocs.ts and briefing.ts all read from
-// here so the "what happened" facts are computed exactly once and the same
-// way everywhere.
-import { db } from "@/db";
-import { entities, events, metrics, findings } from "@/db/schema";
+// src/lib/narrativeIntel.ts
+//
+// Shared, deterministic read-model helpers over the `events` and `metrics`
+// tables. No model calls happen here — every number is a direct query
+// result. Consumed by institutionalMemory.ts (impactful-event distillation),
+// livingDocs.ts (live block re-rendering), genome.ts and synthesis.ts.
 import { and, desc, eq, gte } from "drizzle-orm";
-
-export type MetricDelta = {
-  id: string;
-  entityId: string | null;
-  entityName: string;
-  metricName: string;
-  from: number;
-  to: number;
-  deltaPct: number;
-  asOf: string;
-};
+import { db } from "@/db";
+import { entities, events, metrics } from "@/db/schema";
 
 export type RecentEvent = {
   id: string;
@@ -27,74 +17,83 @@ export type RecentEvent = {
   occurredAt: string;
 };
 
-export async function getRecentEvents(sinceDays: number, entityId?: string): Promise<RecentEvent[]> {
-  const since = new Date(Date.now() - sinceDays * 86_400_000);
-  const rows = await db
-    .select({
-      id: events.id,
-      entityId: events.entityId,
-      entityName: entities.name,
-      type: events.type,
-      summary: events.summary,
-      occurredAt: events.occurredAt,
-    })
-    .from(events)
-    .leftJoin(entities, eq(events.entityId, entities.id))
-    .where(and(gte(events.occurredAt, since), entityId ? eq(events.entityId, entityId) : undefined))
-    .orderBy(desc(events.occurredAt))
-    .limit(50);
+export async function getRecentEvents(lookbackDays = 30, entityId?: string): Promise<RecentEvent[]> {
+  const since = new Date();
+  since.setDate(since.getDate() - lookbackDays);
+  const rows = entityId
+    ? await db.select().from(events).where(and(gte(events.occurredAt, since), eq(events.entityId, entityId))).orderBy(desc(events.occurredAt))
+    : await db.select().from(events).where(gte(events.occurredAt, since)).orderBy(desc(events.occurredAt));
 
-  return rows.map((r) => ({ ...r, occurredAt: r.occurredAt.toISOString() }));
+  const entityIds = Array.from(new Set(rows.map((r) => r.entityId).filter((v): v is string => Boolean(v))));
+  const entityRows = entityIds.length > 0 ? await db.select().from(entities) : [];
+  const nameById = new Map(entityRows.filter((e) => entityIds.includes(e.id)).map((e) => [e.id, e.name]));
+
+  return rows.map((r) => ({
+    id: r.id,
+    entityId: r.entityId,
+    entityName: r.entityId ? nameById.get(r.entityId) ?? null : null,
+    type: r.type,
+    summary: r.summary,
+    occurredAt: r.occurredAt.toISOString(),
+  }));
 }
 
-export async function getMetricDeltas(sinceDays: number, entityId?: string): Promise<MetricDelta[]> {
-  const since = new Date(Date.now() - sinceDays * 86_400_000);
-  const rows = await db
-    .select({
-      id: metrics.id,
-      entityId: metrics.entityId,
-      entityName: entities.name,
-      metricName: metrics.name,
-      value: metrics.value,
-      asOf: metrics.asOf,
-    })
-    .from(metrics)
-    .leftJoin(entities, eq(metrics.entityId, entities.id))
-    .where(entityId ? eq(metrics.entityId, entityId) : undefined)
-    .orderBy(desc(metrics.asOf));
+export type MetricDelta = {
+  id: string;
+  entityId: string | null;
+  entityName: string | null;
+  metricName: string;
+  from: number;
+  to: number;
+  deltaPct: number;
+  asOf: string;
+};
 
-  // Group by (entityId, metricName), compare latest value in-window to the
-  // most recent value before the window started.
-  const byKey = new Map<string, typeof rows>();
+/** For each (entity, metric name), compare the two most recent readings within the lookback window. */
+export async function getMetricDeltas(lookbackDays = 30, entityId?: string): Promise<MetricDelta[]> {
+  const since = new Date();
+  since.setDate(since.getDate() - lookbackDays);
+  const rows = entityId
+    ? await db.select().from(metrics).where(and(gte(metrics.asOf, since), eq(metrics.entityId, entityId))).orderBy(desc(metrics.asOf))
+    : await db.select().from(metrics).where(gte(metrics.asOf, since)).orderBy(desc(metrics.asOf));
+
+  const groups = new Map<string, typeof rows>();
   for (const r of rows) {
-    const key = `${r.entityId ?? "org"}::${r.metricName}`;
-    byKey.set(key, [...(byKey.get(key) ?? []), r]);
+    const key = `${r.entityId ?? "none"}::${r.name}`;
+    const group = groups.get(key) ?? [];
+    group.push(r);
+    groups.set(key, group);
   }
 
+  const entityIds = Array.from(new Set(rows.map((r) => r.entityId).filter((v): v is string => Boolean(v))));
+  const entityRows = entityIds.length > 0 ? await db.select().from(entities) : [];
+  const nameById = new Map(entityRows.filter((e) => entityIds.includes(e.id)).map((e) => [e.id, e.name]));
+
   const deltas: MetricDelta[] = [];
-  for (const [, series] of byKey) {
-    const inWindow = series.filter((r) => r.asOf >= since);
-    const before = series.filter((r) => r.asOf < since);
-    if (inWindow.length === 0) continue;
-    const latest = inWindow[0];
-    const baseline = before[0] ?? inWindow[inWindow.length - 1];
-    const from = Number(baseline.value);
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const [latest, prior] = group;
+    const from = Number(prior.value);
     const to = Number(latest.value);
     const deltaPct = from === 0 ? 0 : ((to - from) / Math.abs(from)) * 100;
     deltas.push({
       id: latest.id,
       entityId: latest.entityId,
-      entityName: latest.entityName ?? "Org-wide",
-      metricName: latest.metricName,
+      entityName: latest.entityId ? nameById.get(latest.entityId) ?? null : null,
+      metricName: latest.name,
       from,
       to,
       deltaPct,
       asOf: latest.asOf.toISOString(),
     });
   }
-  return deltas.sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct));
+  return deltas;
 }
 
-export async function getOpenFindings() {
-  return db.select().from(findings).where(eq(findings.status, "open")).orderBy(desc(findings.createdAt)).limit(20);
+/** Latest reading for a given metric name (optionally scoped to an entity) — the primitive live-doc blocks render from. */
+export async function getLatestMetric(name: string, entityId?: string) {
+  const rows = entityId
+    ? await db.select().from(metrics).where(and(eq(metrics.name, name), eq(metrics.entityId, entityId))).orderBy(desc(metrics.asOf)).limit(1)
+    : await db.select().from(metrics).where(eq(metrics.name, name)).orderBy(desc(metrics.asOf)).limit(1);
+  return rows[0] ?? null;
 }

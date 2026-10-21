@@ -1,72 +1,55 @@
-// Section E.2: synthesis.ts — weekly narrative synthesis from structured
-// inputs (narrativeIntel.ts), generated via the prompt registry
-// (synthesizeNarrativePrompt) through agentCore, with the faithfulness
-// checker as a hard gate before anything is returned to a caller. Citations
-// are mandatory: any claim that fails faithfulness is dropped and logged in
-// `droppedClaims`, never silently rendered.
+// src/lib/synthesis.ts
+//
+// Deterministic weekly synthesis: a short, citeable digest of what changed
+// (metric deltas + notable events) plus the organizational genome. No model
+// call — see the scope note in livingDocs.ts for why this part does not
+// invent an LLM seam that wasn't actually present in the checkout. Every
+// line traces to a metric or event id.
 import { getMetricDeltas, getRecentEvents } from "@/lib/narrativeIntel";
-import { runPrompt } from "@/lib/agentCore";
-import { synthesizeNarrativePrompt } from "@/lib/promptRegistry";
-import { checkFaithfulness, type EvidenceIndex } from "@/lib/faithfulness";
-import type { Explain } from "@/lib/types/explain";
+import { computeGenome } from "@/lib/genome";
+
+export type SynthesisParagraph = { text: string; evidenceRefs: { kind: "metric" | "event"; id: string }[] };
 
 export type WeeklySynthesis = {
-  title: string;
-  paragraphs: string[];
+  periodDays: number;
+  generatedAt: string;
+  paragraphs: SynthesisParagraph[];
+  genome: Awaited<ReturnType<typeof computeGenome>>;
 };
 
-export async function generateWeeklySynthesis(periodDays = 7): Promise<Explain<WeeklySynthesis> & { degraded: boolean; modelCallId: number | null }> {
-  const [metricDeltas, events] = await Promise.all([getMetricDeltas(periodDays), getRecentEvents(periodDays)]);
+export async function generateWeeklySynthesis(periodDays = 7): Promise<WeeklySynthesis> {
+  const [deltas, events, genome] = await Promise.all([
+    getMetricDeltas(periodDays),
+    getRecentEvents(periodDays),
+    computeGenome(),
+  ]);
 
-  const evidenceIndex: EvidenceIndex = new Map();
-  for (const d of metricDeltas) {
-    evidenceIndex.set(d.id, { kind: "metric", text: `${d.entityName} ${d.metricName} from ${d.from} to ${d.to} (${d.deltaPct.toFixed(1)}%)` });
+  const paragraphs: SynthesisParagraph[] = [];
+
+  if (deltas.length > 0) {
+    const sorted = [...deltas].sort((a, b) => Math.abs(b.deltaPct) - Math.abs(a.deltaPct)).slice(0, 5);
+    paragraphs.push({
+      text: `Largest metric moves in the last ${periodDays} day(s): ${sorted
+        .map((d) => `${d.metricName}${d.entityName ? ` (${d.entityName})` : ""} ${d.from}->${d.to} (${d.deltaPct >= 0 ? "+" : ""}${d.deltaPct.toFixed(1)}%)`)
+        .join("; ")}.`,
+      evidenceRefs: sorted.map((d) => ({ kind: "metric" as const, id: d.id })),
+    });
+  } else {
+    paragraphs.push({ text: `No metric readings recorded in the last ${periodDays} day(s).`, evidenceRefs: [] });
   }
-  for (const e of events) {
-    evidenceIndex.set(e.id, { kind: "event", text: `${e.entityName ?? ""} ${e.type} ${e.summary}` });
+
+  if (events.length > 0) {
+    const sample = events.slice(0, 8);
+    paragraphs.push({
+      text: `Notable events: ${sample.map((e) => `[${e.type}] ${e.summary}${e.entityName ? ` (${e.entityName})` : ""}`).join("; ")}.`,
+      evidenceRefs: sample.map((e) => ({ kind: "event" as const, id: e.id })),
+    });
   }
 
-  const periodLabel = `${periodDays}-day period ending ${new Date().toISOString().slice(0, 10)}`;
-
-  const run = await runPrompt(synthesizeNarrativePrompt, {
-    periodLabel,
-    metricDeltas: metricDeltas.map((d) => ({
-      id: d.id,
-      entityName: d.entityName,
-      metricName: d.metricName,
-      from: d.from,
-      to: d.to,
-      deltaPct: d.deltaPct,
-    })),
-    events: events.map((e) => ({ id: e.id, entityName: e.entityName, summary: e.summary, occurredAt: e.occurredAt })),
-    evidenceChunks: [
-      ...metricDeltas.map((d) => ({ id: d.id, kind: "metric" as const, text: d.metricName })),
-      ...events.map((e) => ({ id: e.id, kind: "event" as const, text: e.summary })),
-    ],
+  paragraphs.push({
+    text: `Relation mix: ${genome.relationMix.map((r) => `${r.type}=${(r.share * 100).toFixed(0)}%`).join(", ") || "no relations recorded yet"}. Playbook adoption rate: ${(genome.playbookAdoptionRate * 100).toFixed(0)}% across ${genome.activePlaybookCount} active playbook(s).`,
+    evidenceRefs: [],
   });
 
-  const { kept, dropped, faithfulnessRate } = checkFaithfulness(run.output.claims, evidenceIndex);
-
-  // The prose (paragraphs) is generated alongside claims but is not
-  // guaranteed to be sentence-aligned 1:1 with them, so we do not attempt
-  // lossy paragraph surgery when a claim is dropped. Instead the renderer
-  // shows the kept claims as the authoritative, citation-backed record
-  // directly beneath the prose, and any dropped claim is surfaced (never
-  // hidden) via `droppedClaims` — see /app/synthesis/page.tsx. If nothing
-  // survived faithfulness review at all, we fall back to a plain digest of
-  // the paragraphs flagged as unverified rather than publishing prose with
-  // zero surviving evidence.
-  const paragraphs = kept.length === 0 && dropped.length > 0
-    ? [`(All ${dropped.length} generated statement(s) failed the faithfulness check and were withheld. See droppedClaims.)`]
-    : run.output.paragraphs;
-
-  return {
-    value: { title: run.output.title, paragraphs },
-    confidence: faithfulnessRate,
-    evidenceRefs: kept.flatMap((c) => c.evidenceRefs),
-    claims: kept,
-    droppedClaims: dropped,
-    degraded: run.degraded,
-    modelCallId: run.modelCallId,
-  };
+  return { periodDays, generatedAt: new Date().toISOString(), paragraphs, genome };
 }

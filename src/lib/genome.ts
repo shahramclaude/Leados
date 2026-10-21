@@ -8,7 +8,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { relations, retrospectives, playbookRuns, playbooks } from "@/db/schema";
-import { jaccard } from "@/lib/knowledgeGraph";
+import { jaccard } from "@/lib/memory";
 
 export interface RelationTypeMix {
   type: string;
