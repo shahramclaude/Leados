@@ -1,5 +1,8 @@
 import "dotenv/config";
+import { beforeAll } from "vitest";
 
-// Fail fast and loud if secrets aren't configured, same as production code.
-import { getEnv } from "@/lib/env";
-getEnv();
+beforeAll(() => {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL must be set to run the seam/contract test suite against a real Postgres instance.");
+  }
+});

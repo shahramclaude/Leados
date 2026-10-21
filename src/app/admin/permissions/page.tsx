@@ -1,43 +1,44 @@
-import { redirect } from "next/navigation";
-import { requireSession, UnauthorizedError } from "@/lib/platform/session";
-import { can } from "@/lib/domain/rbac";
-import { getOrganizationById } from "@/lib/platform/db/orgsRepository";
-import { Nav } from "@/components/Nav";
-import { AccessDenied } from "@/components/AccessDenied";
-import { PermissionsMatrix } from "@/components/PermissionsMatrix";
+import { PERMISSIONS, ROLE_PERMISSIONS, type Role } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
-export default async function PermissionsPage() {
-  let session;
-  try {
-    session = await requireSession();
-  } catch (err) {
-    if (err instanceof UnauthorizedError) redirect("/login");
-    throw err;
-  }
+const ROLES: Role[] = ["owner", "admin", "analyst", "viewer"];
 
-  const org = await getOrganizationById(session.orgId);
-  if (!org) redirect("/login");
-
-  if (!can(session.role, "permissions:view")) {
-    return (
-      <div>
-        <Nav role={session.role} orgName={org.name} />
-        <AccessDenied role={session.role} />
-      </div>
-    );
-  }
-
+export default function PermissionsPage() {
   return (
-    <div className="pb-20 sm:pb-0">
-      <Nav role={session.role} orgName={org.name} />
-      <main id="main-content" className="mx-auto max-w-3xl px-4 py-6">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Permissions</h1>
-        <div className="mt-4">
-          <PermissionsMatrix />
-        </div>
-      </main>
-    </div>
+    <main className="space-y-6">
+      <section>
+        <h1 className="text-2xl font-semibold text-slate-950">Permission registry</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          The single source of truth in <code className="rounded bg-slate-200 px-1">src/lib/permissions.ts</code>.
+          Internal routes, the public API, and this page all read the same table — nothing here is
+          hard-coded twice.
+        </p>
+      </section>
+      <table className="w-full table-auto border-collapse overflow-hidden rounded-xl bg-white text-sm shadow-sm">
+        <thead className="bg-slate-900 text-left text-white">
+          <tr>
+            <th className="px-3 py-2">Permission</th>
+            {ROLES.map((role) => (
+              <th key={role} className="px-3 py-2 text-center capitalize">
+                {role}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {PERMISSIONS.map((perm) => (
+            <tr key={perm} className="border-t border-slate-100">
+              <td className="px-3 py-2 font-mono text-xs">{perm}</td>
+              {ROLES.map((role) => (
+                <td key={role} className="px-3 py-2 text-center">
+                  {ROLE_PERMISSIONS[role].includes(perm) ? "✅" : "—"}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </main>
   );
 }

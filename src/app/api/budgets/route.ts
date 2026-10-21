@@ -1,14 +1,13 @@
-import "@/lib/kernel/bootstrap";
-import { db } from "@/db";
-import { kernelBudgets, kernelCircuitBreakers } from "@/db/schema";
-import { todayKey } from "@/lib/kernel/ids";
-import { eq } from "drizzle-orm";
+import { getSessionContext } from "@/lib/demo-auth";
+import { ok, fail, withApiResult } from "@/lib/api-result";
+import { listBudgets } from "@/services/budgets";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const day = todayKey();
-  const budgets = await db.select().from(kernelBudgets).where(eq(kernelBudgets.day, day));
-  const breakers = await db.select().from(kernelCircuitBreakers);
-  return Response.json({ day, budgets, circuitBreakers: breakers });
+  return withApiResult(async () => {
+    const session = await getSessionContext();
+    if (!session) return fail("UNAUTHORIZED", "No demo session cookie set", 401);
+    return ok(await listBudgets(session));
+  });
 }
