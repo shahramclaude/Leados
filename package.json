@@ -6,27 +6,20 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "i18n:check": "node scripts/i18n-check.mjs",
-    "db:seed": "tsx scripts/seed.ts",
-    "test:isolation": "vitest run tests/isolation.test.ts",
-    "test:permissions": "vitest run tests/permissionRegistry.test.ts",
-    "test:offline": "vitest run tests/offline-sync.test.ts",
-    "verify": "npm run i18n:check && npm run test:permissions && npm run test:isolation && npm run test:offline"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@formatjs/icu-messageformat-parser": "^3.5.22",
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "@types/js-yaml": "^4.0.9",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
-    "idb-keyval": "^6.3.0",
-    "intl-messageformat": "^12.1.4",
+    "js-yaml": "^5.5.0",
     "next": "16.2.6",
-    "next-intl": "^4.14.9",
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tsx": "^4.23.15",
-    "vitest": "^5.0.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
