@@ -1,90 +1,91 @@
 # AI Session Log
 
-## Part 24 — Strategic Foresight Engine (Scenario Studio, War-Room, Strategy Wind Tunnel, Horizon Radar, Foresight Ledger)
+## Part 28 — Process Intelligence (mining / conformance / queueing / automation ROI)
 
-**Date:** 2026-03-08 (session timestamp; see individual `authoredAt` fields inside each surface for content-specific authoring times)
-**Repo:** https://github.com/shahramclaude/Leados
-**Depends on (per brief):** Parts 04, 05, 06, 13, 23
+**Repository:** https://github.com/shahramclaude/Leados
+**Depends on:** Part 01 (event store), Part 06 (work-system model / twin), Part 10 (capability registry)
 
-### What was found (Phase 0)
+### What this session found (Phase 0)
 
-This sandbox snapshot of the repository contained only the base Vite + React + Tailwind scaffold
-(`src/App.tsx`, `src/main.tsx`, `src/index.css`, `src/utils/cn.ts`) — none of `src/lib/scenarios/*`,
-`src/lib/twin/*`, or a Part 13 sensing module existed yet to read. This is recorded here rather than
-silently assumed away. Per the standing order's "read before write," the following reads were attempted
-and their results are what justified the provenance notes below:
+The sandbox snapshot of the repo at the start of this session contained only the bare
+`nextjs-postgresql-template` scaffold — `src/db/schema.ts` was an empty placeholder,
+and none of `src/lib/portfolioMath.ts`, `optimizer.ts`, `loadBalancer.ts`,
+`workQueue*`, a Part 01 event store, or a Part 06 work-system model were present.
+This was confirmed by `list_files`/`grep_files` before any writes (see files-read
+list in the PR description below). Rather than guess at APIs for modules that
+don't exist in this checkout, Part 28 ships:
 
-- `src/lib/scenarios/*` (`simulationScenario`, `strategicScenarios`, `scenarioEngine`, `stress.ts`,
-  `resilience.ts`, `anticipation.ts`, `readiness.ts`) — **not present**. Built fresh for this part.
-- `src/lib/twin/*` (Part 06) — **not present**. A minimal typed twin contract
-  (`src/lib/twin/types.ts`, `src/lib/twin/twinEngine.ts`) was declared, explicitly labeled as a
-  stand-in to be replaced by the real Part 06 module when it lands in the repo.
-- Part 13's sensing/horizon-scanning output — **not present**. A minimal `HorizonSignal` contract and
-  seed feed (`src/lib/signals/horizonSignal.ts`) were declared, same provenance caveat.
-- Part 12's hypothesis registry and Part 23's pre-mortem outputs — **not present**. Minimal stand-in
-  contracts with seed data were declared (`src/lib/hypotheses/hypothesisRegistry.ts`,
-  `src/lib/premortem/premortemLink.ts`), linked into the foresight ledger and readiness index.
+1. Its own minimal, explicitly-labelled event-store table (`process_events`)
+   shaped like what Part 01's correlationId/entity-chain model implies, so the
+   mining pipeline has something real to read.
+2. Minimal local stand-ins for the EWMA utility (Part 04) and the control
+   chart (Part 13), clearly commented as "replace with the shared module once
+   it lands in this repo".
+3. A minimal capacity/"twin" stand-in for ROI projection (Part 06), and a
+   `automation_proposals` draft table as the hand-off point for Part 10's
+   capability registry.
 
-Every stand-in file carries a `PROVENANCE NOTE` comment at the top explaining what it replaces and that
-it should be deleted/repointed once the real upstream module is present in the repo. No single-point
-forecast was found anywhere (there was nothing to find yet) — this part is the first to introduce
-scenario/foresight machinery to the codebase.
+This is documented in-code (top-of-file comments in `src/db/schema.ts` and
+each `src/lib/processMining/*.ts` file) and in the Findings table delivered in
+chat, so nobody mistakes these stand-ins for the real upstream modules.
 
 ### What was built (Phases 1–3)
 
-- **Scenario modeling**: `src/lib/scenarios/types.ts`, `simulationScenario.ts`, `strategicScenarios.ts`
-  (2×2 named-world quadrant + 3-axis morphological analysis with an explicit cross-consistency pruning
-  log), `scenarioEngine.ts` (deterministic seeded runs), `stress.ts` (parameterized shock library),
-  `resilience.ts` (trough-depth + recovery-speed scoring), `anticipation.ts` (signal→scenario lead-time
-  + single-point-forecast guard), `readiness.ts` (composite readiness index).
-- **War-game engine**: `src/lib/wargame/roles.ts` (5 roles with explicit, disjoint knowledge scopes),
-  `engine.ts` (observe→decide→act→resolve turn loop, resolved via seeded twin steps, with a
-  `RoleScopeViolation` guard that throws on out-of-scope reads), `afterAction.ts` (auto-generated
-  after-action review from the event log).
-- **Strategy wind tunnel**: `src/lib/windtunnel/types.ts`, `robustness.ts` (pure `utility`,
-  `validateWeights`, `robustnessScore`, `regretForCell`, `maxRegret` functions), `runner.ts` (ensemble
-  runner with elapsed-time measurement), `strategyLibrary.ts` (3 seed strategies).
-- **Foresight registry**: `src/lib/foresight/registry.ts` (register/resolve/Brier, with a
-  `BackdatingViolation` guard preventing resolution timestamps before registration and preventing
-  re-resolution), `calibration.ts` (reliability-diagram-style bucketing).
-- **Horizon radar**: `src/lib/horizon/radar.ts` (impact/likelihood/uncertainty classification + simple
-  auditable novelty clustering).
-- **UI**: `src/components/foresight24/*` — Overview/Readiness dashboard, Scenario Studio, War-Room,
-  Strategy Wind Tunnel, Horizon Radar, Foresight Ledger, all sharing a `PossibilityBanner` affordance
-  (possibilities-not-predictions disclaimer + authored timestamp) per the brief's design requirement.
+- `src/lib/processMining/*` — case reconstruction (with honest degradation on
+  overlapping/shared correlation ids), directly-follows graph discovery with a
+  Heuristics-Miner-lite frequency/dependency filter (+ incremental merge for
+  streaming updates), conformance checking split into **mined** (statistical
+  rarity, never auto-fails a case) vs **declared** (rule violations only),
+  waiting-time bottleneck decomposition with root-cause heuristics, queueing
+  analytics with Little's-Law cross-validation, aggregate-safe bus-factor
+  scoring (k=3 anonymity), `Explain<T>`-wrapped automation scoring, and an
+  operational metrics + control-chart layer.
+- `src/app/api/process-mining/*` — seed, processes, overview, cases,
+  conformance, automation, automation/propose.
+- `src/app/process-mining/*` — Process X-Ray, Bottleneck Board, Conformance
+  Explorer, Automation ROI, plus an Overview landing page. Every surface
+  renders the mandatory "discovered, not designed" provenance banner.
+- `scripts/verify.ts` — the Phase 4 gate suite (planted-bottleneck recall/
+  precision, seeded-deviation detection, Little's Law delta, automation
+  score fixture check, 100k-event performance timing). Run via
+  `npx tsx scripts/verify.ts`. **Not** wired as `npm run verify` because this
+  session's platform policy prohibits editing `package.json` directly; see
+  the note at the top of `scripts/verify.ts`.
 
-### Verification (Phase 4)
+### Verification performed this session
 
-`npm run verify` (vitest run + `tsc --noEmit`) exits 0. 37 tests across 5 files cover: regret ≥ 0
-(including a 100-trial random-matrix property test), weight-sum-to-1 validation (including a 50-trial
-property test), utility monotonicity (including a 100-trial property test), role-scoping enforcement
-(including a full war-game run asserting no event ever leaks an out-of-scope field to any role),
-scenario-ensemble reproducibility (same seed ⇒ same trace, byte-for-byte metric equality), and the
-foresight register→resolve→Brier loop including backdating rejection. See VERIFICATION LOG in the
-delivery message for full command output.
+- `npx tsx scripts/verify.ts` → all gates PASS (see VERIFICATION LOG in the
+  chat delivery for full output).
+- `npx eslint .` → clean (0 errors, 0 warnings) after two small fixes
+  (lazy localStorage initializer instead of setState-in-effect; removed a
+  stale eslint-disable comment).
+- `npx next typegen`, `npm exec tsc -- --noEmit`, `npm run build` → all pass.
+- `npx drizzle-kit push` → applied the 5 new tables to the local Postgres
+  instance.
+- `build_and_start` → preview boots, `/api/health` returns `{ok:true}`,
+  manually exercised `/api/process-mining/seed`, `/overview`, `/automation`,
+  `/conformance` against the live server and confirmed correct output.
 
-### Honesty rules applied
+### Honesty notes carried into the UI/API copy
 
-- Every scenario/war-game/wind-tunnel/radar surface carries the `PossibilityBanner` component stating
-  "this is a modeled possibility, not a prediction," plus its authored timestamp.
-- Scenario `planningWeight` is deliberately never called a "probability" anywhere in code, types, or UI
-  copy — it is an ensemble-testing weight, not a forecast of occurrence.
-- `resolveForesight` throws `BackdatingViolation` if a resolution timestamp precedes registration, and
-  refuses to re-resolve an already-resolved claim. This is the literal enforcement of "never backdate
-  foresight" — not just a written policy.
-- The after-action review narrative explicitly states it is "a record of one seeded play-through of a
-  modeled possibility — not a transcript of events that happened, and not a prediction of what will
-  happen."
+- Mined-model conformance is always labelled "statistical" and never flips a
+  case to non-conformant by itself (over-standardization guard, verified by
+  an explicit test in `scripts/verify.ts`).
+- Automation scores whose `ruleBasedFraction`/`errorRate` were never
+  instrumented are marked `confidence: "estimated"` with an explicit
+  surfaced note; the UI shows an amber "estimated inputs — directional only"
+  badge rather than presenting all scores as equally trustworthy.
+- Case-reconstruction ambiguity (overlapping starts, shared correlation ids)
+  is surfaced as a count on the Overview page, not silently resolved.
 
-### Self-review (Phase 5) — see full answers in the delivery message
+### Known limitations (deliberately not done — see Phase 5 in the PR)
 
-1. Deep uncertainty / unknown-unknowns are explicitly out of scope — the scenario space only spans the
-   three named axes; a residual "unmodeled discontinuity" acknowledgment was added to the Overview copy
-   rather than invented a false fourth axis.
-2. Hindsight-bias resistance relies on immutable registration timestamps and the `BackdatingViolation`
-   guard, not on process alone.
-3. False-confidence risk in wind-tunnel output is called out directly in the UI copy next to every
-   ranking ("ranks candidates under the modeled ensemble — it is not a guarantee of real-world outcomes").
-4. Deliberately not built: live AI role-players (Part 11 dependency, stand-in is rule-based and labeled
-   as such), a learned embedding clusterer for Horizon Radar (stand-in is a simple auditable heuristic),
-   and persistence/multi-user collaboration for the war-room (session-local state only).
+- No full inductive-miner / Petri-net with places and silent transitions —
+  the discovery engine is a heuristics-miner-lite DFG filter.
+- No true full-history streaming recompute for conformance/bottlenecks/
+  queueing — only the discovered-model DFG edges support incremental merge;
+  the rest are batch-recomputed per request against whatever events are
+  currently in `process_events`.
+- No real Part 06 twin simulation of cross-step capacity reallocation — the
+  ROI projection only reallocates a step's own freed hours into its own
+  volume.

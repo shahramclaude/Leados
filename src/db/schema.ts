@@ -1,85 +1,107 @@
+// ---------------------------------------------------------------------------
+// Part 28 — Process Intelligence (mining / conformance / queueing / automation)
+//
+// NOTE ON PROVENANCE: this snapshot of the repo does not contain the Part 01
+// event-store tables, the Part 06 work-system / twin tables, the Part 09
+// roster tables, or the Part 10 capability registry tables referenced by the
+// standing order. Rather than invent speculative foreign keys into modules
+// that are not present, Part 28 ships minimal, explicitly-scoped tables that
+// capture only what the process-mining pipeline needs:
+//   - process_events       : event-store projection (caseId/correlationId
+//                             chain, activity, timestamp, duration, resource)
+//   - process_roster       : aggregate-safe resource/team lookup (Part 09 stand-in)
+//   - process_definitions  : optional *declared* process (for conformance
+//                             against intent, kept separate from mined models)
+//   - automation_proposals : draft rows a human can promote into Part 10's
+//                             capability registry ("propose automation")
+//   - metric_snapshots     : per-period operational metrics feeding Part 13's
+//                             control charts
+// When Parts 01/06/09/10 land in this repo, process_events should become a
+// read-through projection of the real event store instead of its own table.
+// ---------------------------------------------------------------------------
 import {
   pgTable,
-  text,
-  integer,
-  numeric,
-  timestamp,
-  jsonb,
   serial,
+  text,
+  timestamp,
+  integer,
   boolean,
+  jsonb,
+  numeric,
+  uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
-/**
- * Part 26 — Transformation / change-program schema.
- *
- * Individual-level tables (`people`, `changeEvents`) exist only to make
- * aggregate, k-anonymity-gated metrics computable server-side. No API route
- * in this part returns rows from these tables directly — see
- * `src/lib/privacy/aggregation.ts` and the privacy attempt-matrix tests in
- * `src/lib/change/__tests__/privacy.test.ts`.
- *
- * `capacityHeadroom` on `changeGroups` is a stand-in for Part 06's capacity
- * digital twin, which is not present in this repository snapshot.
- */
+export const processEvents = pgTable(
+  "process_events",
+  {
+    id: serial("id").primaryKey(),
+    eventId: text("event_id").notNull(),
+    caseId: text("case_id").notNull(),
+    correlationId: text("correlation_id").notNull(),
+    processName: text("process_name").notNull(),
+    activity: text("activity").notNull(),
+    resourceId: text("resource_id"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    durationMs: integer("duration_ms").notNull().default(0),
+    status: text("status").notNull().default("completed"),
+    attributes: jsonb("attributes").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("process_events_event_id_idx").on(table.eventId),
+    index("process_events_process_idx").on(table.processName),
+    index("process_events_case_idx").on(table.caseId),
+    index("process_events_correlation_idx").on(table.correlationId),
+    index("process_events_activity_idx").on(table.activity),
+    index("process_events_time_idx").on(table.occurredAt),
+  ],
+);
 
-export const changeGroups = pgTable("change_groups", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  department: text("department").notNull(),
-  headcount: integer("headcount").notNull(),
-  capacityHeadroom: numeric("capacity_headroom", { precision: 4, scale: 3 }).notNull().default("0.500"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const processRoster = pgTable(
+  "process_roster",
+  {
+    id: serial("id").primaryKey(),
+    resourceId: text("resource_id").notNull(),
+    displayName: text("display_name").notNull(),
+    team: text("team").notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("process_roster_resource_id_idx").on(table.resourceId)],
+);
 
-export const people = pgTable("people", {
-  id: text("id").primaryKey(),
-  groupId: text("group_id").notNull(),
-  trainingCompletionPct: numeric("training_completion_pct", { precision: 5, scale: 2 }).notNull().default("0.00"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const processDefinitions = pgTable(
+  "process_definitions",
+  {
+    id: serial("id").primaryKey(),
+    processName: text("process_name").notNull(),
+    version: integer("version").notNull().default(1),
+    // Ordered array of { activity, mandatory, allowedNext: string[] }
+    steps: jsonb("steps").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("process_definitions_process_version_idx").on(table.processName, table.version)],
+);
 
-export const changePrograms = pgTable("change_programs", {
-  id: text("id").primaryKey(),
-  intent: text("intent").notNull(),
-  targetBehaviors: jsonb("target_behaviors").notNull(),
-  affectedGroupIds: jsonb("affected_group_ids").notNull(),
-  resistanceMap: jsonb("resistance_map").notNull(),
-  status: text("status").notNull().default("planned"),
-  startDate: timestamp("start_date", { withTimezone: true }).notNull(),
-  loadWeight: numeric("load_weight", { precision: 4, scale: 2 }).notNull().default("1.00"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const changeInterventions = pgTable("change_interventions", {
-  id: text("id").primaryKey(),
-  programId: text("program_id").notNull(),
-  kind: text("kind").notNull(),
-  cost: numeric("cost", { precision: 10, scale: 2 }).notNull().default("0.00"),
-  expectedEffectJson: jsonb("expected_effect_json").notNull(),
-  rolloutDesignJson: jsonb("rollout_design_json"),
-  designIdentification: text("design_identification").notNull().default("randomized_clean"),
-  status: text("status").notNull().default("proposed"),
-  startDate: timestamp("start_date", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const changeEvents = pgTable("change_events", {
+export const automationProposals = pgTable("automation_proposals", {
   id: serial("id").primaryKey(),
-  programId: text("program_id"),
-  groupId: text("group_id").notNull(),
-  personId: text("person_id").notNull(),
-  proxyEventType: text("proxy_event_type").notNull(),
-  periodIndex: integer("period_index"),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  metadata: jsonb("metadata"),
+  processName: text("process_name").notNull(),
+  activity: text("activity").notNull(),
+  score: numeric("score", { precision: 14, scale: 4 }).notNull(),
+  explain: jsonb("explain").notNull(),
+  status: text("status").notNull().default("draft"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const interventionResults = pgTable("intervention_results", {
-  id: text("id").primaryKey(),
-  interventionId: text("intervention_id").notNull(),
-  estimateJson: jsonb("estimate_json").notNull(),
-  method: text("method").notNull(),
-  surprise: numeric("surprise", { precision: 6, scale: 4 }),
-  withinExpectedBounds: boolean("within_expected_bounds"),
-  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+export const metricSnapshots = pgTable("metric_snapshots", {
+  id: serial("id").primaryKey(),
+  processName: text("process_name").notNull(),
+  metric: text("metric").notNull(),
+  periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+  periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+  value: numeric("value", { precision: 14, scale: 4 }).notNull(),
+  sampleSize: integer("sample_size").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+

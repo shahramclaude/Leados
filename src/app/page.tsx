@@ -17,10 +17,10 @@ export default async function HomePage() {
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
         <a
-          href="/change"
-          className="mt-6 inline-block rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700"
+          href="/process-mining"
+          className="mt-6 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
         >
-          Open Transformation &amp; Change Dashboard →
+          Open Process Intelligence (Part 28) →
         </a>
       </section>
     </main>
