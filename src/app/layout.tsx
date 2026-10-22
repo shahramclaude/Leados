@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LEADOS · Sustainability Intelligence",
-  description: "Carbon accounting, ESG metrics, targets & trajectories, and disclosure reporting for LEADOS.",
+  title: "LEADOS — Global Operations (Part 37)",
+  description: "Multi-entity, multi-currency, multi-zone consolidation and jurisdiction tracking for LEADOS.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

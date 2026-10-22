@@ -7,8 +7,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "seed:esg": "tsx scripts/seed-esg.ts",
-    "verify": "tsx scripts/verify.ts"
+    "test": "vitest run",
+    "verify": "npm run typecheck && vitest run",
+    "db:push": "drizzle-kit push",
+    "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -17,7 +19,8 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
