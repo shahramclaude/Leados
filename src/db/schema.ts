@@ -1,131 +1,292 @@
-// src/db/schema.ts
-//
-// Drizzle schema for the LEADOS people-analytics domain (Part 09).
-//
-// Tables are intentionally narrow: production (DB-backed) storage covers
-// what the API routes/UI need to persist across requests. The fairness test
-// suite, optimizer tests, and property tests operate on pure in-memory data
-// (see src/lib/people/seedOrg.ts) and do not touch these tables at all.
+// =============================================================================
+// LEADOS — Part 11 schema bridge
+// -----------------------------------------------------------------------------
+// This sandbox does not contain the actual Parts 01/04/08 source (fresh
+// starter template). To build and validate Part 11 (LLM systems: grounded
+// generation, RAG, tool use, cost governance) end-to-end, this file defines
+// the MINIMAL set of upstream tables that Part 11 depends on:
+//   - orgs / users              (Part 01 — identity & tenancy bridge)
+//   - entities / events / metrics (Part 04 — knowledge graph bridge)
+//   - documents / document_chunks (Part 08/12 — evidence & RAG corpus bridge)
+// plus the tables that belong to THIS part:
+//   - llm_budgets / llm_usage_log   (cost governance)
+//   - llm_cache                     (semantic cache)
+//   - llm_audit_log                 (redacted generation audit trail)
+//   - injection_incidents           (prompt-injection containment log)
+//   - eval_runs                     (eval:llm scorecard history)
+// When the real Parts 01/04/08 land, these bridge tables should be reconciled
+// (same shape, same `ref` conventions) rather than duplicated.
+// =============================================================================
 
-import { boolean, integer, jsonb, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  numeric,
+  boolean,
+  timestamp,
+  jsonb,
+  uniqueIndex,
+  index,
+} from "drizzle-orm/pg-core";
 
-export const teams = pgTable("teams", {
-  id: text("id").primaryKey(),
+// ---------------------------------------------------------------------------
+// Tenancy / identity bridge (Part 01)
+// ---------------------------------------------------------------------------
+
+export const orgs = pgTable("orgs", {
+  id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const employees = pgTable("employees", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  title: text("title").notNull(),
-  teamId: text("team_id").notNull(),
-  managerId: text("manager_id"),
-  active: boolean("active").notNull().default(true),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    role: text("role").notNull().default("member"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    emailIdx: uniqueIndex("users_email_idx").on(t.email),
+  }),
+);
 
-export const skills = pgTable("skills", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  category: text("category").notNull(),
-  requires: jsonb("requires").$type<string[]>().notNull().default([]),
-  specializes: jsonb("specializes").$type<string[]>().notNull().default([]),
-  equivalent: jsonb("equivalent").$type<string[]>().notNull().default([]),
-  levelAnchors: jsonb("level_anchors").$type<Record<number, string>>().notNull(),
-});
+// ---------------------------------------------------------------------------
+// Knowledge graph bridge (Part 04): entities / events / metrics
+// ---------------------------------------------------------------------------
 
-export const personSkillEvidence = pgTable("person_skill_evidence", {
-  id: text("id").primaryKey(),
-  personId: text("person_id").notNull(),
-  skillId: text("skill_id").notNull(),
-  source: text("source").notNull(), // claimed | endorsed | demonstrated-by-work-evidence
-  level: integer("level").notNull(),
-  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
-  evidenceRef: text("evidence_ref"),
-  recordedBy: text("recorded_by"),
-  supersededBy: text("superseded_by"),
-  invalidated: boolean("invalidated").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const entities = pgTable(
+  "entities",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    type: text("type").notNull(), // company | person | product | market | deal
+    name: text("name").notNull(),
+    description: text("description"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgIdx: index("entities_org_idx").on(t.orgId),
+  }),
+);
 
-export const roles = pgTable("roles", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  coreSkills: jsonb("core_skills").$type<Record<string, number>>().notNull(),
-  complementarySkills: jsonb("complementary_skills").$type<Record<string, number>>().notNull(),
-  adjacencyRoles: jsonb("adjacency_roles").$type<string[]>().notNull().default([]),
-});
+export const events = pgTable(
+  "events",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    entityId: integer("entity_id").references(() => entities.id),
+    type: text("type").notNull(), // funding | leadership_change | product_launch | filing | news | risk_flag
+    title: text("title").notNull(),
+    description: text("description"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    importance: text("importance").notNull().default("normal"), // low | normal | high | critical
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgIdx: index("events_org_idx").on(t.orgId),
+    entityIdx: index("events_entity_idx").on(t.entityId),
+    occurredIdx: index("events_occurred_idx").on(t.occurredAt),
+  }),
+);
 
-export const compensationBands = pgTable("compensation_bands", {
-  id: text("id").primaryKey(),
-  roleId: text("role_id").notNull(),
-  level: integer("level").notNull(),
-  min: integer("min").notNull(),
-  mid: integer("mid").notNull(),
-  max: integer("max").notNull(),
-  currency: text("currency").notNull().default("USD"),
-});
+export const metrics = pgTable(
+  "metrics",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    entityId: integer("entity_id").references(() => entities.id),
+    name: text("name").notNull(), // arr | headcount | nps | churn_rate | ...
+    value: numeric("value", { precision: 18, scale: 4 }).notNull(),
+    previousValue: numeric("previous_value", { precision: 18, scale: 4 }),
+    unit: text("unit"), // usd | percent | count
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    source: text("source").notNull().default("system"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgIdx: index("metrics_org_idx").on(t.orgId),
+    entityIdx: index("metrics_entity_idx").on(t.entityId),
+    periodIdx: index("metrics_period_idx").on(t.periodEnd),
+  }),
+);
 
-export const employeeCompensation = pgTable("employee_compensation", {
-  employeeId: text("employee_id").primaryKey(),
-  bandId: text("band_id").notNull(),
-  currentPay: integer("current_pay").notNull(),
-});
+// ---------------------------------------------------------------------------
+// Evidence / RAG corpus bridge (Part 08 citation contract + Part 12 retrieval)
+// ---------------------------------------------------------------------------
 
-export const workloadSnapshots = pgTable("workload_snapshots", {
-  id: text("id").primaryKey(),
-  personId: text("person_id").notNull(),
-  date: text("date").notNull(), // ISO date, one row per person per day
-  wip: integer("wip").notNull(),
-  contextSwitches: integer("context_switches").notNull(),
-  meetingHours: real("meeting_hours").notNull(),
-  source: text("source").notNull().default("twin-proxy"),
-});
+export const documents = pgTable(
+  "documents",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    entityId: integer("entity_id").references(() => entities.id),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    // Where the content originated. Anything other than "system" (curated,
+    // deterministic pipeline output) is treated as UNTRUSTED for prompt
+    // construction purposes (see src/lib/ai/taint.ts).
+    sourceType: text("source_type").notNull(), // system | import | webhook | note
+    trust: text("trust").notNull().default("untrusted"), // trusted | untrusted
+    author: text("author"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgIdx: index("documents_org_idx").on(t.orgId),
+  }),
+);
 
-/** Append-only. Rows are never updated or deleted — corrections are new rows. Part 01 proxy table. */
-export const peopleEvents = pgTable("people_events", {
-  id: text("id").primaryKey(),
-  type: text("type").notNull(),
-  subjectId: text("subject_id").notNull(),
-  actorId: text("actor_id").notNull(),
-  purpose: text("purpose").notNull(),
-  payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const documentChunks = pgTable(
+  "document_chunks",
+  {
+    id: serial("id").primaryKey(),
+    documentId: integer("document_id").notNull().references(() => documents.id),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    chunkIndex: integer("chunk_index").notNull(),
+    section: text("section"),
+    text: text("text").notNull(),
+    tokenCount: integer("token_count").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    docIdx: index("document_chunks_doc_idx").on(t.documentId),
+    orgIdx: index("document_chunks_org_idx").on(t.orgId),
+  }),
+);
 
-export const corrections = pgTable("corrections", {
-  id: text("id").primaryKey(),
-  subjectId: text("subject_id").notNull(),
-  surface: text("surface").notNull(), // which people-surface the correction concerns, e.g. "skills-matrix"
-  claim: text("claim").notNull(), // the person's description of what's wrong
-  evidenceRef: text("evidence_ref"),
-  targetEvidenceId: text("target_evidence_id"),
-  status: text("status").notNull().default("open"), // open | accepted | rejected
-  resolverId: text("resolver_id"),
-  resolutionNote: text("resolution_note"),
-  filedEventId: text("filed_event_id").notNull(),
-  resolvedEventId: text("resolved_event_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-});
+// ---------------------------------------------------------------------------
+// Part 11 — cost governance
+// ---------------------------------------------------------------------------
 
-export const teamComposerFeedback = pgTable("team_composer_feedback", {
-  id: text("id").primaryKey(),
-  teamId: text("team_id").notNull(),
-  proposalId: text("proposal_id").notNull(),
-  rejectedBy: text("rejected_by").notNull(),
-  reason: text("reason").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const llmBudgets = pgTable(
+  "llm_budgets",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    userId: integer("user_id").references(() => users.id),
+    feature: text("feature").notNull(), // briefing | ask | insight | narrative
+    periodKey: text("period_key").notNull(), // e.g. 2026-06 (monthly bucket)
+    budgetCents: integer("budget_cents").notNull(),
+    spentCents: integer("spent_cents").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    uniq: uniqueIndex("llm_budgets_unique").on(t.orgId, t.userId, t.feature, t.periodKey),
+  }),
+);
 
-export const workingStyleDeclarations = pgTable("working_style_declarations", {
-  personId: text("person_id").primaryKey(),
-  style: text("style").notNull(),
-  declaredAt: timestamp("declared_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const llmUsageLog = pgTable(
+  "llm_usage_log",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    userId: integer("user_id").references(() => users.id),
+    feature: text("feature").notNull(),
+    taskId: text("task_id"),
+    modelCardId: text("model_card_id").notNull(),
+    provider: text("provider").notNull(), // composer | openai-small | openai-large
+    tier: text("tier").notNull(), // composer | small | large
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    costCents: numeric("cost_cents", { precision: 10, scale: 4 }).notNull().default("0"),
+    cacheHit: boolean("cache_hit").notNull().default(false),
+    degraded: boolean("degraded").notNull().default(false),
+    groundingHash: text("grounding_hash"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgIdx: index("llm_usage_log_org_idx").on(t.orgId),
+    featureIdx: index("llm_usage_log_feature_idx").on(t.feature),
+  }),
+);
 
-export const humanNeedsDeclarations = pgTable("human_needs_declarations", {
-  personId: text("person_id").primaryKey(),
-  capacityPreference: text("capacity_preference").notNull().default("standard"),
-  daysSinceLastBreak: integer("days_since_last_break").notNull().default(0),
-  openToStretch: boolean("open_to_stretch").notNull().default(true),
+// ---------------------------------------------------------------------------
+// Part 11 — semantic cache
+// ---------------------------------------------------------------------------
+
+export const llmCache = pgTable(
+  "llm_cache",
+  {
+    id: serial("id").primaryKey(),
+    cacheKey: text("cache_key").notNull(),
+    task: text("task").notNull(),
+    groundingHash: text("grounding_hash").notNull(),
+    output: jsonb("output").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    keyIdx: uniqueIndex("llm_cache_key_idx").on(t.cacheKey),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Part 11 — redacted audit trail for every generation
+// ---------------------------------------------------------------------------
+
+export const llmAuditLog = pgTable(
+  "llm_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id").notNull().references(() => orgs.id),
+    userId: integer("user_id").references(() => users.id),
+    feature: text("feature").notNull(),
+    taskId: text("task_id"),
+    modelCardId: text("model_card_id").notNull(),
+    inputSummaryRedacted: text("input_summary_redacted").notNull(),
+    outputSummaryRedacted: text("output_summary_redacted").notNull(),
+    citationCount: integer("citation_count").notNull().default(0),
+    citationsValid: boolean("citations_valid").notNull().default(false),
+    abstained: boolean("abstained").notNull().default(false),
+    abstainReason: text("abstain_reason"),
+    injectionFlag: boolean("injection_flag").notNull().default(false),
+    confidenceClass: text("confidence_class").notNull().default("low"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgIdx: index("llm_audit_log_org_idx").on(t.orgId),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Part 11 — prompt-injection containment log
+// ---------------------------------------------------------------------------
+
+export const injectionIncidents = pgTable(
+  "injection_incidents",
+  {
+    id: serial("id").primaryKey(),
+    orgId: integer("org_id"),
+    userId: integer("user_id"),
+    source: text("source").notNull(), // document | tool_result | user_query
+    attackPattern: text("attack_pattern").notNull(),
+    blocked: boolean("blocked").notNull().default(true),
+    detail: text("detail").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    orgIdx: index("injection_incidents_org_idx").on(t.orgId),
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Part 11 — eval:llm scorecard history
+// ---------------------------------------------------------------------------
+
+export const evalRuns = pgTable("eval_runs", {
+  id: serial("id").primaryKey(),
+  runId: text("run_id").notNull(),
+  datasetVersion: text("dataset_version").notNull(),
+  split: text("split").notNull(), // train | holdout | all
+  metrics: jsonb("metrics").$type<Record<string, unknown>>().notNull(),
+  costReport: jsonb("cost_report").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });

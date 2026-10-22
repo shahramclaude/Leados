@@ -7,13 +7,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:fairness": "tsx scripts/test-fairness.ts",
-    "test:privacy": "tsx scripts/test-privacy.ts",
-    "test:optimizer": "tsx scripts/test-optimizer.ts",
-    "test:contestation": "tsx scripts/test-contestation.ts",
-    "test:people": "npm run test:fairness && npm run test:privacy && npm run test:optimizer && npm run test:contestation",
-    "db:seed": "tsx scripts/seed-db.ts",
-    "verify": "npm run lint && npm run typecheck && npm run test:people"
+    "db:seed": "tsx scripts/seed.ts",
+    "eval:llm": "tsx scripts/eval-llm.ts",
+    "injection:suite": "tsx scripts/injection-suite.ts",
+    "cost:report": "tsx scripts/cost-report.ts",
+    "verify": "npm run lint && npm run typecheck && npm run eval:llm && npm run injection:suite"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -22,7 +20,8 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

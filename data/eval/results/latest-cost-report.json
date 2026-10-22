@@ -1,0 +1,943 @@
+{
+  "runAt": "2026-10-22T06:46:41.125Z",
+  "totalCostCents": 0,
+  "avgCostCentsPerTask": 0,
+  "rows": [
+    {
+      "taskId": "gqa-metric-1-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 620,
+      "completionTokens": 204,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-1-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 620,
+      "completionTokens": 204,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-1-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 620,
+      "completionTokens": 204,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-1-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 620,
+      "completionTokens": 204,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-2-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-2-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-2-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-2-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-3-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 589,
+      "completionTokens": 142,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-3-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 589,
+      "completionTokens": 142,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-3-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 589,
+      "completionTokens": 142,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-3-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 589,
+      "completionTokens": 142,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-4-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-4-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-4-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-4-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-5-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 549,
+      "completionTokens": 191,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-5-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 549,
+      "completionTokens": 191,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-5-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 549,
+      "completionTokens": 191,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-5-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 549,
+      "completionTokens": 191,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-6-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 245,
+      "completionTokens": 61,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-6-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 245,
+      "completionTokens": 61,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-6-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 245,
+      "completionTokens": 61,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-metric-6-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 245,
+      "completionTokens": 61,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-1-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-1-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-1-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-1-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-2-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-2-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-2-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-2-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-3-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 516,
+      "completionTokens": 219,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-3-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 516,
+      "completionTokens": 219,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-3-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 301,
+      "completionTokens": 121,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-3-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 301,
+      "completionTokens": 121,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-4-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 458,
+      "completionTokens": 153,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-4-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 458,
+      "completionTokens": 153,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-4-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 245,
+      "completionTokens": 61,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-4-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 245,
+      "completionTokens": 61,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-5-0",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-5-1",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-5-2",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "gqa-event-5-3",
+      "category": "grounded_qa",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-level-1",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 620,
+      "completionTokens": 204,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-delta-1",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 707,
+      "completionTokens": 219,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-level-2",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 371,
+      "completionTokens": 134,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-delta-2",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 458,
+      "completionTokens": 149,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-level-3",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 589,
+      "completionTokens": 142,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-delta-3",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 589,
+      "completionTokens": 142,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-level-4",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-delta-4",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 343,
+      "completionTokens": 73,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-level-5",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 549,
+      "completionTokens": 191,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-delta-5",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 636,
+      "completionTokens": 205,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-level-6",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 245,
+      "completionTokens": 61,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-delta-6",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 332,
+      "completionTokens": 75,
+      "costCents": 0
+    },
+    {
+      "taskId": "num-level-7",
+      "category": "numeric_citation",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 495,
+      "completionTokens": 131,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-ask-0",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 992,
+      "completionTokens": 223,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-ask-1",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 992,
+      "completionTokens": 223,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-ask-2",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 992,
+      "completionTokens": 223,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-ask-3",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 992,
+      "completionTokens": 223,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-ask-4",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 992,
+      "completionTokens": 223,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-briefing-executive",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 1007,
+      "completionTokens": 201,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-insight-executive",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 75,
+      "completionTokens": 22,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-briefing-analyst",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 1007,
+      "completionTokens": 201,
+      "costCents": 0
+    },
+    {
+      "taskId": "summ-insight-analyst",
+      "category": "summarization",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 75,
+      "completionTokens": 22,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-0",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-1",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-2",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-3",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 137,
+      "completionTokens": 86,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-4",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 130,
+      "completionTokens": 79,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-5",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 132,
+      "completionTokens": 81,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-6",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-7",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-8",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-9",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-10",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-11",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-12",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 130,
+      "completionTokens": 79,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-13",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "abstain-14",
+      "category": "abstention",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 84,
+      "completionTokens": 20,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-0",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 272,
+      "completionTokens": 171,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-1",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 401,
+      "completionTokens": 250,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-2",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 132,
+      "completionTokens": 81,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-3",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-4",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 272,
+      "completionTokens": 171,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-5",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 272,
+      "completionTokens": 171,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-6",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 272,
+      "completionTokens": 171,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-7",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 891,
+      "completionTokens": 375,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-8",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 614,
+      "completionTokens": 244,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-user-9",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 404,
+      "completionTokens": 252,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-doc-0",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 478,
+      "completionTokens": 158,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-doc-1",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 301,
+      "completionTokens": 121,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-doc-2",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 512,
+      "completionTokens": 226,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-0",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 743,
+      "completionTokens": 323,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-1",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 697,
+      "completionTokens": 366,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-2",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 377,
+      "completionTokens": 142,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-3",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 1379,
+      "completionTokens": 458,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-4",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 265,
+      "completionTokens": 164,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-5",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 401,
+      "completionTokens": 250,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-6",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 743,
+      "completionTokens": 323,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-7",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 401,
+      "completionTokens": 250,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-8",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 432,
+      "completionTokens": 202,
+      "costCents": 0
+    },
+    {
+      "taskId": "inj-extra-9",
+      "category": "injection",
+      "tier": "composer",
+      "provider": "composer",
+      "promptTokens": 267,
+      "completionTokens": 166,
+      "costCents": 0
+    }
+  ]
+}
