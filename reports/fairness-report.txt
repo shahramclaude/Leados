@@ -1,0 +1,37 @@
+Fairness report generated 2026-01-15T00:00:00.000Z
+Thresholds: DPD<=0.1, EOD<=0.1, calibration-ECE<=0.1, min group n=30, k-anonymity=5
+
+## succession-readiness-ready-now (n=1600)
+   Share of people whose current skill evidence meets every core-skill bar for their archetype role (ready-now succession state). Computed purely from skill evidence; no protected attribute enters this computation.
+   demographic_parity_difference: 0.03 [pass] — computed across all groups with n >= 30
+     groups: cohort-alpha(n=400, rate=0.15), cohort-beta(n=400, rate=0.16), cohort-gamma(n=400, rate=0.18), cohort-delta(n=400, rate=0.16)
+
+## role-fit-shortlist-threshold (n=1600)
+   Share of people whose weighted role-fit score for their archetype role is >= 0.7 — the same threshold the Team Composer uses to consider someone a plausible addition.
+   demographic_parity_difference: 0.038 [pass] — computed across all groups with n >= 30
+     groups: cohort-alpha(n=400, rate=0.18), cohort-beta(n=400, rate=0.20), cohort-gamma(n=400, rate=0.20), cohort-delta(n=400, rate=0.22)
+
+## compensation-underpaid-vs-band-mid (n=1600)
+   Share of people paid 5%+ below their compensation band midpoint. Pay is generated independently of cohort in the seed data; this checks whether the metric correctly detects (the absence of) disparity.
+   demographic_parity_difference: 0.05 [pass] — computed across all groups with n >= 30
+     groups: cohort-alpha(n=400, rate=0.17), cohort-beta(n=400, rate=0.19), cohort-gamma(n=400, rate=0.17), cohort-delta(n=400, rate=0.22)
+
+## workload-high-cognitive-load (n=1600)
+   Share of people whose twin-proxy-derived cognitive load score is in the 'high' or 'critical' band on the snapshot date.
+   demographic_parity_difference: 0.01 [pass] — computed across all groups with n >= 30
+     groups: cohort-alpha(n=400, rate=0.12), cohort-beta(n=400, rate=0.12), cohort-gamma(n=400, rate=0.11), cohort-delta(n=400, rate=0.12)
+
+## synthetic-selftest-known-biased-fixture (n=80)
+   NOT a real computation. Deliberately constructed 90% vs 60% positive-rate fixture (n=40 each) to prove the fairness gate reports a FAIL rather than hiding it.
+   demographic_parity_difference: 0.3 [fail] — computed across all groups with n >= 30
+     groups: synthetic-group-a(n=40, rate=0.90), synthetic-group-b(n=40, rate=0.60)
+
+## synthetic-selftest-calibration-metric (n=120)
+   NOT a real computation. Exercises equalized-odds and calibration-by-group math against a synthetic, deterministic numeric fixture (n=60/group) because LEADOS does not score individual people's future performance.
+   demographic_parity_difference: 0 [pass] — computed across all groups with n >= 30
+     groups: synthetic-group-a(n=60, rate=0.50), synthetic-group-b(n=60, rate=0.50)
+   equalized_odds_difference: 0 (tpr diff 0, fpr diff 0) [pass]
+   calibration_by_group max ECE: 0.13 [fail]
+
+SUMMARY: 6 passed, 2 failed, 0 not evaluated (insufficient sample).
+OVERALL: some-gates-failed

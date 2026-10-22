@@ -1,0 +1,386 @@
+{
+  "generatedAt": "2026-01-15T00:00:00.000Z",
+  "thresholds": {
+    "demographicParityDifference": 0.1,
+    "equalizedOddsDifference": 0.1,
+    "calibrationEce": 0.1,
+    "minGroupSize": 30,
+    "kAnonymity": 5
+  },
+  "computations": [
+    {
+      "name": "succession-readiness-ready-now",
+      "description": "Share of people whose current skill evidence meets every core-skill bar for their archetype role (ready-now succession state). Computed purely from skill evidence; no protected attribute enters this computation.",
+      "sampleSizeTotal": 1600,
+      "demographicParity": {
+        "metric": "demographic_parity_difference",
+        "value": 0.03,
+        "groups": [
+          {
+            "group": "cohort-alpha",
+            "n": 400,
+            "rate": 0.1475
+          },
+          {
+            "group": "cohort-beta",
+            "n": 400,
+            "rate": 0.1575
+          },
+          {
+            "group": "cohort-gamma",
+            "n": 400,
+            "rate": 0.1775
+          },
+          {
+            "group": "cohort-delta",
+            "n": 400,
+            "rate": 0.16
+          }
+        ],
+        "minGroupN": 400,
+        "evaluable": true,
+        "note": "computed across all groups with n >= 30"
+      },
+      "dpdGate": {
+        "gate": "demographic_parity_difference",
+        "verdict": "pass",
+        "threshold": 0.1,
+        "observed": 0.03,
+        "detail": "0.03 <= threshold 0.1"
+      },
+      "equalizedOdds": null,
+      "eoGate": null,
+      "calibration": null,
+      "calibrationGate": null
+    },
+    {
+      "name": "role-fit-shortlist-threshold",
+      "description": "Share of people whose weighted role-fit score for their archetype role is >= 0.7 — the same threshold the Team Composer uses to consider someone a plausible addition.",
+      "sampleSizeTotal": 1600,
+      "demographicParity": {
+        "metric": "demographic_parity_difference",
+        "value": 0.038,
+        "groups": [
+          {
+            "group": "cohort-alpha",
+            "n": 400,
+            "rate": 0.185
+          },
+          {
+            "group": "cohort-beta",
+            "n": 400,
+            "rate": 0.1975
+          },
+          {
+            "group": "cohort-gamma",
+            "n": 400,
+            "rate": 0.2025
+          },
+          {
+            "group": "cohort-delta",
+            "n": 400,
+            "rate": 0.2225
+          }
+        ],
+        "minGroupN": 400,
+        "evaluable": true,
+        "note": "computed across all groups with n >= 30"
+      },
+      "dpdGate": {
+        "gate": "demographic_parity_difference",
+        "verdict": "pass",
+        "threshold": 0.1,
+        "observed": 0.038,
+        "detail": "0.038 <= threshold 0.1"
+      },
+      "equalizedOdds": null,
+      "eoGate": null,
+      "calibration": null,
+      "calibrationGate": null
+    },
+    {
+      "name": "compensation-underpaid-vs-band-mid",
+      "description": "Share of people paid 5%+ below their compensation band midpoint. Pay is generated independently of cohort in the seed data; this checks whether the metric correctly detects (the absence of) disparity.",
+      "sampleSizeTotal": 1600,
+      "demographicParity": {
+        "metric": "demographic_parity_difference",
+        "value": 0.05,
+        "groups": [
+          {
+            "group": "cohort-alpha",
+            "n": 400,
+            "rate": 0.1675
+          },
+          {
+            "group": "cohort-beta",
+            "n": 400,
+            "rate": 0.19
+          },
+          {
+            "group": "cohort-gamma",
+            "n": 400,
+            "rate": 0.1675
+          },
+          {
+            "group": "cohort-delta",
+            "n": 400,
+            "rate": 0.2175
+          }
+        ],
+        "minGroupN": 400,
+        "evaluable": true,
+        "note": "computed across all groups with n >= 30"
+      },
+      "dpdGate": {
+        "gate": "demographic_parity_difference",
+        "verdict": "pass",
+        "threshold": 0.1,
+        "observed": 0.05,
+        "detail": "0.05 <= threshold 0.1"
+      },
+      "equalizedOdds": null,
+      "eoGate": null,
+      "calibration": null,
+      "calibrationGate": null
+    },
+    {
+      "name": "workload-high-cognitive-load",
+      "description": "Share of people whose twin-proxy-derived cognitive load score is in the 'high' or 'critical' band on the snapshot date.",
+      "sampleSizeTotal": 1600,
+      "demographicParity": {
+        "metric": "demographic_parity_difference",
+        "value": 0.01,
+        "groups": [
+          {
+            "group": "cohort-alpha",
+            "n": 400,
+            "rate": 0.12
+          },
+          {
+            "group": "cohort-beta",
+            "n": 400,
+            "rate": 0.115
+          },
+          {
+            "group": "cohort-gamma",
+            "n": 400,
+            "rate": 0.11
+          },
+          {
+            "group": "cohort-delta",
+            "n": 400,
+            "rate": 0.115
+          }
+        ],
+        "minGroupN": 400,
+        "evaluable": true,
+        "note": "computed across all groups with n >= 30"
+      },
+      "dpdGate": {
+        "gate": "demographic_parity_difference",
+        "verdict": "pass",
+        "threshold": 0.1,
+        "observed": 0.01,
+        "detail": "0.01 <= threshold 0.1"
+      },
+      "equalizedOdds": null,
+      "eoGate": null,
+      "calibration": null,
+      "calibrationGate": null
+    },
+    {
+      "name": "synthetic-selftest-known-biased-fixture",
+      "description": "NOT a real computation. Deliberately constructed 90% vs 60% positive-rate fixture (n=40 each) to prove the fairness gate reports a FAIL rather than hiding it.",
+      "sampleSizeTotal": 80,
+      "demographicParity": {
+        "metric": "demographic_parity_difference",
+        "value": 0.3,
+        "groups": [
+          {
+            "group": "synthetic-group-a",
+            "n": 40,
+            "rate": 0.9
+          },
+          {
+            "group": "synthetic-group-b",
+            "n": 40,
+            "rate": 0.6
+          }
+        ],
+        "minGroupN": 40,
+        "evaluable": true,
+        "note": "computed across all groups with n >= 30"
+      },
+      "dpdGate": {
+        "gate": "demographic_parity_difference",
+        "verdict": "fail",
+        "threshold": 0.1,
+        "observed": 0.3,
+        "detail": "0.3 > threshold 0.1"
+      },
+      "equalizedOdds": null,
+      "eoGate": null,
+      "calibration": null,
+      "calibrationGate": null
+    },
+    {
+      "name": "synthetic-selftest-calibration-metric",
+      "description": "NOT a real computation. Exercises equalized-odds and calibration-by-group math against a synthetic, deterministic numeric fixture (n=60/group) because LEADOS does not score individual people's future performance.",
+      "sampleSizeTotal": 120,
+      "demographicParity": {
+        "metric": "demographic_parity_difference",
+        "value": 0,
+        "groups": [
+          {
+            "group": "synthetic-group-a",
+            "n": 60,
+            "rate": 0.5
+          },
+          {
+            "group": "synthetic-group-b",
+            "n": 60,
+            "rate": 0.5
+          }
+        ],
+        "minGroupN": 60,
+        "evaluable": true,
+        "note": "computed across all groups with n >= 30"
+      },
+      "dpdGate": {
+        "gate": "demographic_parity_difference",
+        "verdict": "pass",
+        "threshold": 0.1,
+        "observed": 0,
+        "detail": "0 <= threshold 0.1"
+      },
+      "equalizedOdds": {
+        "metric": "equalized_odds_difference",
+        "value": 0,
+        "tprDiff": 0,
+        "fprDiff": 0,
+        "groups": [
+          {
+            "group": "synthetic-group-a",
+            "n": 60
+          },
+          {
+            "group": "synthetic-group-b",
+            "n": 60
+          }
+        ],
+        "minGroupN": 60,
+        "evaluable": true,
+        "note": "computed across groups with n >= 30 and >= 10 per label"
+      },
+      "eoGate": {
+        "gate": "equalized_odds_difference",
+        "verdict": "pass",
+        "threshold": 0.1,
+        "observed": 0,
+        "detail": "0 <= threshold 0.1"
+      },
+      "calibration": {
+        "metric": "calibration_by_group",
+        "bins": [
+          {
+            "group": "synthetic-group-a",
+            "bin": "0-20%",
+            "n": 12,
+            "meanPredicted": 0.1,
+            "observedRate": 0.167
+          },
+          {
+            "group": "synthetic-group-a",
+            "bin": "20-40%",
+            "n": 12,
+            "meanPredicted": 0.3,
+            "observedRate": 0.5
+          },
+          {
+            "group": "synthetic-group-a",
+            "bin": "40-60%",
+            "n": 12,
+            "meanPredicted": 0.5,
+            "observedRate": 0.667
+          },
+          {
+            "group": "synthetic-group-a",
+            "bin": "60-80%",
+            "n": 12,
+            "meanPredicted": 0.7,
+            "observedRate": 0.583
+          },
+          {
+            "group": "synthetic-group-a",
+            "bin": "80-100%",
+            "n": 12,
+            "meanPredicted": 0.9,
+            "observedRate": 1
+          },
+          {
+            "group": "synthetic-group-b",
+            "bin": "0-20%",
+            "n": 12,
+            "meanPredicted": 0.12,
+            "observedRate": 0.417
+          },
+          {
+            "group": "synthetic-group-b",
+            "bin": "20-40%",
+            "n": 12,
+            "meanPredicted": 0.32,
+            "observedRate": 0.333
+          },
+          {
+            "group": "synthetic-group-b",
+            "bin": "40-60%",
+            "n": 12,
+            "meanPredicted": 0.52,
+            "observedRate": 0.583
+          },
+          {
+            "group": "synthetic-group-b",
+            "bin": "60-80%",
+            "n": 12,
+            "meanPredicted": 0.72,
+            "observedRate": 0.583
+          },
+          {
+            "group": "synthetic-group-b",
+            "bin": "80-100%",
+            "n": 12,
+            "meanPredicted": 0.91,
+            "observedRate": 1
+          }
+        ],
+        "expectedCalibrationErrorByGroup": [
+          {
+            "group": "synthetic-group-a",
+            "n": 60,
+            "ece": 0.13
+          },
+          {
+            "group": "synthetic-group-b",
+            "n": 60,
+            "ece": 0.12
+          }
+        ],
+        "evaluable": true,
+        "note": "computed across groups with n >= 30"
+      },
+      "calibrationGate": {
+        "gate": "calibration_ece_max_group",
+        "verdict": "fail",
+        "threshold": 0.1,
+        "observed": 0.13,
+        "detail": "0.13 > threshold 0.1"
+      }
+    }
+  ],
+  "summary": {
+    "pass": 6,
+    "fail": 2,
+    "notEvaluated": 0
+  },
+  "overallVerdict": "some-gates-failed"
+}

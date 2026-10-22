@@ -7,11 +7,13 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "finance:reconcile": "tsx scripts/finance-reconcile.ts",
-    "finance:citation-check": "tsx scripts/finance-citation-check.ts",
-    "finance:backtest": "tsx scripts/finance-backtest.ts",
-    "finance:perf": "tsx scripts/finance-perf.ts",
-    "verify": "npm run finance:reconcile && npm run finance:backtest && npm run finance:perf && npm run finance:citation-check"
+    "test:fairness": "tsx scripts/test-fairness.ts",
+    "test:privacy": "tsx scripts/test-privacy.ts",
+    "test:optimizer": "tsx scripts/test-optimizer.ts",
+    "test:contestation": "tsx scripts/test-contestation.ts",
+    "test:people": "npm run test:fairness && npm run test:privacy && npm run test:optimizer && npm run test:contestation",
+    "db:seed": "tsx scripts/seed-db.ts",
+    "verify": "npm run lint && npm run typecheck && npm run test:people"
   },
   "dependencies": {
     "dotenv": "17.3.1",

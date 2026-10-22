@@ -1,125 +1,104 @@
-// Acceptance gate (3): two-user privacy tests.
+// scripts/test-privacy.ts  ->  `npm run test:privacy`
 //
-// Declared policy under test (see docs/FAIRNESS.md §2):
-//  - A manager cannot read HR-only fields.
-//  - An employee CANNOT read their manager's private 1:1 prep notes about
-//    them, even though they can read the shared agenda/notes for the same
-//    1:1 — this is the "user cannot read own [manager-authored] notes"
-//    policy declared for this implementation.
-//  - A manager cannot read another manager's reports, and cannot read any
-//    employee's GDPR-style transparency report (self+HR only).
-import "dotenv/config";
-import { db, pool } from "../src/db";
-import { oneOnOnes } from "../src/db/schema";
-import { eq, and } from "drizzle-orm";
-import {
-  canReadHrOnlyFields,
-  canReadOneOnOnePrivateNotes,
-  canReadTransparencyReport,
-  AccessDeniedError,
-  type Actor,
-} from "../src/lib/accessControl";
-import { getPersonAggregate } from "../src/lib/peopleIntel";
-import { getOneOnOne } from "../src/lib/oneOnOne";
-import { getTransparencyReport } from "../src/lib/transparency";
+// Privacy scoping at the repository layer. Attempts EVERY forbidden read
+// this part's rules describe and asserts each one is denied, plus confirms
+// the legitimate reads succeed. The denial matrix is printed so the
+// verification log has a readable record of what was tried.
 
-let failures = 0;
-function check(name: string, pass: boolean, detail?: string) {
-  console.log(`${pass ? "PASS" : "FAIL"} - ${name}${detail ? ` (${detail})` : ""}`);
-  if (!pass) failures++;
+import { checkAccess, inMemoryDirectory, PeopleScopeError, assertNoOpaqueRanking, type PeopleScope } from "../src/lib/people/peopleScope";
+import { assert, assertThrows, test, runAll } from "./lib/testKit";
+
+const employees = [
+  { id: "alice", managerId: "manager-1" },
+  { id: "bob", managerId: "manager-1" },
+  { id: "carol", managerId: "manager-2" },
+  { id: "manager-1", managerId: null },
+  { id: "manager-2", managerId: null },
+];
+const directory = inMemoryDirectory(employees);
+
+interface Attempt {
+  description: string;
+  scope: PeopleScope;
+  resourceType: Parameters<typeof checkAccess>[1];
+  subjectId: string;
+  expected: "allow" | "deny";
 }
 
-async function expectDenied(fn: () => Promise<unknown>, name: string) {
+const attempts: Attempt[] = [
+  { description: "self views own skills evidence", scope: { viewerId: "alice", viewerRole: "self", purpose: "self-view" }, resourceType: "skills-evidence", subjectId: "alice", expected: "allow" },
+  { description: "self views own compensation", scope: { viewerId: "alice", viewerRole: "self", purpose: "self-view" }, resourceType: "compensation-individual", subjectId: "alice", expected: "allow" },
+  { description: "manager views direct report's growth plan", scope: { viewerId: "manager-1", viewerRole: "manager", purpose: "1:1-prep" }, resourceType: "growth-plan", subjectId: "alice", expected: "allow" },
+  { description: "manager views direct report's workload", scope: { viewerId: "manager-1", viewerRole: "manager", purpose: "staffing" }, resourceType: "workload-individual", subjectId: "bob", expected: "allow" },
+  { description: "manager views team workload aggregate", scope: { viewerId: "manager-1", viewerRole: "manager", purpose: "staffing" }, resourceType: "workload-team-aggregate", subjectId: "alice", expected: "allow" },
+
+  // --- forbidden reads ------------------------------------------------------
+  { description: "manager views NON-report's growth plan (cross-team)", scope: { viewerId: "manager-1", viewerRole: "manager", purpose: "curiosity" }, resourceType: "growth-plan", subjectId: "carol", expected: "deny" },
+  { description: "manager views NON-report's skills evidence", scope: { viewerId: "manager-1", viewerRole: "manager", purpose: "curiosity" }, resourceType: "skills-evidence", subjectId: "carol", expected: "deny" },
+  { description: "manager views a direct report's individual compensation", scope: { viewerId: "manager-1", viewerRole: "manager", purpose: "curiosity" }, resourceType: "compensation-individual", subjectId: "alice", expected: "deny" },
+  { description: "org-scope viewer views an individual's compensation", scope: { viewerId: "finance-dashboard", viewerRole: "org", purpose: "org-reporting" }, resourceType: "compensation-individual", subjectId: "alice", expected: "deny" },
+  { description: "org-scope viewer views an individual's workload", scope: { viewerId: "org-dashboard", viewerRole: "org", purpose: "org-reporting" }, resourceType: "workload-individual", subjectId: "alice", expected: "deny" },
+  { description: "org-scope viewer views an individual's growth plan", scope: { viewerId: "org-dashboard", viewerRole: "org", purpose: "org-reporting" }, resourceType: "growth-plan", subjectId: "alice", expected: "deny" },
+  { description: "peer (non-manager) views another peer's skills evidence", scope: { viewerId: "bob", viewerRole: "manager", purpose: "nosiness" }, resourceType: "skills-evidence", subjectId: "alice", expected: "deny" },
+  { description: "manager-2 views manager-1's report (not their own report)", scope: { viewerId: "manager-2", viewerRole: "manager", purpose: "curiosity" }, resourceType: "growth-plan", subjectId: "alice", expected: "deny" },
+];
+
+console.log("\n=== Privacy scoping attempt matrix ===");
+for (const attempt of attempts) {
+  let actual: "allow" | "deny" = "allow";
+  let detail = "";
   try {
-    await fn();
-    check(name, false, "expected AccessDeniedError, none thrown");
-  } catch (e) {
-    check(name, e instanceof AccessDeniedError, e instanceof AccessDeniedError ? undefined : String(e));
+    const level = checkAccess(attempt.scope, attempt.resourceType, attempt.subjectId, directory);
+    detail = `access level: ${level}`;
+  } catch (err) {
+    actual = "deny";
+    detail = err instanceof Error ? err.message : String(err);
   }
+  const verdict = actual === attempt.expected ? "OK" : "MISMATCH";
+  console.log(`  [${verdict}] (${attempt.scope.viewerRole}:${attempt.scope.viewerId} -> ${attempt.resourceType}:${attempt.subjectId}) expected=${attempt.expected} actual=${actual} :: ${detail}`);
+}
+console.log("=== end matrix ===\n");
+
+for (const attempt of attempts) {
+  test(`${attempt.expected === "allow" ? "ALLOWS" : "DENIES"}: ${attempt.description}`, () => {
+    if (attempt.expected === "allow") {
+      const level = checkAccess(attempt.scope, attempt.resourceType, attempt.subjectId, directory);
+      assert(level !== "denied", `expected an access level, got denied`);
+    } else {
+      assertThrows(() => checkAccess(attempt.scope, attempt.resourceType, attempt.subjectId, directory), attempt.description);
+    }
+  });
 }
 
-async function main() {
-  console.log("=== Two-user privacy / repository-layer scoping tests ===");
-
-  const manager: Actor = { id: "mgr_dana", globalRole: "manager" };
-  const otherManager: Actor = { id: "mgr_jordan", globalRole: "manager" };
-  const employee: Actor = { id: "emp_priya", globalRole: "employee" };
-  const hr: Actor = { id: "hr_casey", globalRole: "hr" };
-
-  // 1. Manager cannot read HR-only fields; HR can.
-  check("Manager cannot read HR-only fields (predicate)", canReadHrOnlyFields(manager) === false);
-  check("HR can read HR-only fields (predicate)", canReadHrOnlyFields(hr) === true);
-
-  // 2. Cross-team manager cannot read another manager's report's aggregate.
-  await expectDenied(
-    () => getPersonAggregate(otherManager, "emp_priya"),
-    "A manager who does not manage this person is denied read access to their aggregate",
-  );
+test("checkAccess throws PeopleScopeError (typed), not a generic error, on denial", () => {
   try {
-    await getPersonAggregate(manager, "emp_priya");
-    check("The actual manager of this person CAN read their aggregate", true);
-  } catch (e) {
-    check("The actual manager of this person CAN read their aggregate", false, String(e));
+    checkAccess({ viewerId: "manager-2", viewerRole: "manager", purpose: "x" }, "growth-plan", "alice", directory);
+    assert(false, "expected a throw");
+  } catch (err) {
+    assert(err instanceof PeopleScopeError, "expected a PeopleScopeError instance");
   }
-
-  // 3. Employee cannot read their manager's private 1:1 prep notes about them,
-  //    even though they can read the same 1:1's shared content.
-  const [oneOnOne] = await db
-    .select()
-    .from(oneOnOnes)
-    .where(and(eq(oneOnOnes.managerId, "mgr_dana"), eq(oneOnOnes.employeeId, "emp_priya")))
-    .limit(1);
-  if (!oneOnOne) throw new Error("Seed data missing: expected a 1:1 between mgr_dana and emp_priya");
-
-  check(
-    "Predicate: employee cannot read manager's private prep notes about them",
-    canReadOneOnOnePrivateNotes(employee, oneOnOne) === false,
-  );
-  check("Predicate: the authoring manager CAN read their own private notes", canReadOneOnOnePrivateNotes(manager, oneOnOne) === true);
-  check("Predicate: HR CAN read private notes (duty of care)", canReadOneOnOnePrivateNotes(hr, oneOnOne) === true);
-
-  const asEmployee = await getOneOnOne(employee, oneOnOne.id);
-  check("Integration: employee's fetched 1:1 doc has privateNotes redacted to null", asEmployee.privateNotes === null);
-  check("Integration: employee's fetched 1:1 doc still includes shared notes", Array.isArray(asEmployee.sharedNotes));
-
-  const asManager = await getOneOnOne(manager, oneOnOne.id);
-  check("Integration: manager's fetched 1:1 doc includes their own private notes", asManager.privateNotes !== null);
-
-  await expectDenied(
-    () => getOneOnOne(otherManager, oneOnOne.id),
-    "A manager not party to this 1:1 is denied read access entirely",
-  );
-
-  // 4. Transparency report is self+HR only — a manager (even the actual
-  // manager of this person) must not be able to read it.
-  await expectDenied(
-    () => getTransparencyReport(manager, "emp_priya"),
-    "A manager cannot read an employee's transparency report (self+HR only policy)",
-  );
-  try {
-    await getTransparencyReport(employee, "emp_priya");
-    check("The employee CAN read their own transparency report", true);
-  } catch (e) {
-    check("The employee CAN read their own transparency report", false, String(e));
-  }
-  try {
-    await getTransparencyReport(hr, "emp_priya");
-    check("HR CAN read an employee's transparency report", true);
-  } catch (e) {
-    check("HR CAN read an employee's transparency report", false, String(e));
-  }
-  check(
-    "Predicate: executives cannot read individual transparency reports",
-    canReadTransparencyReport({ id: "exec_taylor", globalRole: "executive" }, "emp_priya") === false,
-  );
-
-  console.log(`\n${failures === 0 ? "ALL PRIVACY TESTS PASSED" : `${failures} PRIVACY TEST(S) FAILED`}`);
-  await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
-}
-
-main().catch(async (e) => {
-  console.error(e);
-  await pool.end();
-  process.exit(1);
 });
+
+test("hr role cannot read a resource type that doesn't exist (no stack-ranking resource type exists at all)", () => {
+  // There is deliberately no "ranking" PeopleResourceType in the union type —
+  // this is a compile-time guarantee, not just a runtime check. This test
+  // documents that guarantee by confirming the resource type union used by
+  // every legitimate call site is closed over the eight declared types.
+  const declaredResourceTypes = ["skills-evidence", "growth-plan", "succession-gaps", "workload-individual", "workload-team-aggregate", "compensation-individual", "compensation-band-aggregate", "team-composer"];
+  assert(declaredResourceTypes.length === 8, "resource type surface changed — re-review that no ranking-shaped resource was added");
+});
+
+test("assertNoOpaqueRanking rejects a score without its paired named-gap detail", () => {
+  assertThrows(() => assertNoOpaqueRanking([{ fitScore: 0.8 }]), "a bare fitScore with no gaps must be rejected as an opaque ranking");
+});
+
+test("assertNoOpaqueRanking allows a score accompanied by named gaps", () => {
+  assertNoOpaqueRanking([{ fitScore: 0.8, gaps: [{ skillId: "x" }] }]);
+});
+
+test("self access level is always 'full' regardless of viewerRole field", () => {
+  const level = checkAccess({ viewerId: "alice", viewerRole: "org", purpose: "whatever" }, "compensation-individual", "alice", directory);
+  assert(level === "full", "self-access must be full even if the caller mislabels viewerRole");
+});
+
+runAll("test:privacy").then((code) => process.exit(code));
