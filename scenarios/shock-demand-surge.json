@@ -1,0 +1,28 @@
+{
+  "name": "Shock: Demand Surge (week 8, 12 weeks)",
+  "horizonWeeks": 52,
+  "orgSize": 120,
+  "teamCount": 8,
+  "arrivalRateLambda": 1.5,
+  "effortMeanHrs": 380,
+  "effortSpread": 0.55,
+  "wipLimit": 15,
+  "queueDiscipline": "priority",
+  "headcountDeltaFraction": 0,
+  "headcountChangeWeek": 1,
+  "demandMultiplier": 1,
+  "costPerHeadWeek": 2200,
+  "costPerEffortHr": 85,
+  "valuePerEffortHr": 140,
+  "shocks": [
+    {
+      "type": "demandSurge",
+      "weekApplied": 8,
+      "arrivalMultiplier": 1.8,
+      "durationWeeks": 12,
+      "label": "Market demand surge"
+    }
+  ],
+  "ensembleRuns": 2000,
+  "seedBase": 20240601
+}

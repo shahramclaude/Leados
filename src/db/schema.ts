@@ -1,57 +1,84 @@
+// src/db/schema.ts
+//
+// Persistence for the Simulation Lab (Part 06): a durable cache of ensemble
+// results keyed by (scenarioHash, seedBase, modelVersion) so repeated runs of
+// the same scenario are instant and auditable, plus a small history of
+// backtest/calibration reports.
+//
+// All JSON payloads stored here are MODEL ESTIMATES produced by
+// src/lib/twin/*. Nothing in this schema represents an observation of a real
+// organisation.
+
 import {
+  boolean,
+  index,
+  integer,
+  jsonb,
   pgTable,
+  real,
   serial,
   text,
-  doublePrecision,
   timestamp,
-  boolean,
-  jsonb,
-  smallint,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-/**
- * observations — raw evidence feeding the belief primitives.
- * kind='rate'  -> `success` is required (Bernoulli trial for a RateBelief).
- * kind='level' -> `value` is required (continuous sample for a LevelBelief).
- * kind='drift' -> `value` is required (period sample for a DriftBelief/EWMA).
- */
-export const observations = pgTable("observations", {
-  id: serial("id").primaryKey(),
-  metric: text("metric").notNull(),
-  kind: text("kind").notNull(), // 'rate' | 'level' | 'drift'
-  value: doublePrecision("value"),
-  success: boolean("success"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const simRuns = pgTable(
+  "sim_runs",
+  {
+    id: serial("id").primaryKey(),
+    scenarioHash: text("scenario_hash").notNull(),
+    seedBase: integer("seed_base").notNull(),
+    modelVersion: text("model_version").notNull(),
+    scenarioName: text("scenario_name").notNull(),
+    scenarioDefinition: jsonb("scenario_definition").notNull(),
+    runsRequested: integer("runs_requested").notNull(),
+    runsCompleted: integer("runs_completed").notNull(),
+    horizonWeeks: integer("horizon_weeks").notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    bands: jsonb("bands").notNull(),
+    controlVariateDiagnostics: jsonb("control_variate_diagnostics"),
+    cancelled: boolean("cancelled").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("sim_runs_cache_key").on(table.scenarioHash, table.seedBase, table.modelVersion),
+    index("sim_runs_created_at_idx").on(table.createdAt),
+  ],
+);
 
-/**
- * predictions — a log of every probability forecast issued by the engine,
- * resolved later with a 0/1 outcome. This is the evidence base for the
- * weekly calibration self-check (ECE > 0.05 auto-opens a finding).
- */
-export const predictions = pgTable("predictions", {
-  id: serial("id").primaryKey(),
-  modelCardId: text("model_card_id").notNull(),
-  metric: text("metric").notNull(),
-  predictedP: doublePrecision("predicted_p").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  outcome: smallint("outcome"), // 0 | 1 | null (unresolved)
-  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-  context: jsonb("context"),
-});
+export const simBacktests = pgTable(
+  "sim_backtests",
+  {
+    id: serial("id").primaryKey(),
+    modelVersion: text("model_version").notNull(),
+    metric: text("metric").notNull(),
+    casesEvaluated: integer("cases_evaluated").notNull(),
+    casesCovered: integer("cases_covered").notNull(),
+    empiricalCoveragePct: real("empirical_coverage_pct").notNull(),
+    withinGate: boolean("within_gate").notNull(),
+    report: jsonb("report").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("sim_backtests_model_version_idx").on(table.modelVersion)],
+);
 
-/**
- * findings — auto-opened issues. Created by the weekly calibration
- * self-check when ECE exceeds 0.05, or manually via /api/ai-learn.
- */
-export const findings = pgTable("findings", {
-  id: serial("id").primaryKey(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  type: text("type").notNull(), // e.g. 'calibration-drift'
-  severity: text("severity").notNull(), // 'info' | 'warning' | 'critical'
-  message: text("message").notNull(),
-  metricRef: text("metric_ref"),
-  value: doublePrecision("value"),
-  threshold: doublePrecision("threshold"),
-  status: text("status").notNull().default("open"), // 'open' | 'acknowledged' | 'resolved'
-});
+export const simAttributions = pgTable(
+  "sim_attributions",
+  {
+    id: serial("id").primaryKey(),
+    baselineHash: text("baseline_hash").notNull(),
+    interventionHash: text("intervention_hash").notNull(),
+    metric: text("metric").notNull(),
+    modelVersion: text("model_version").notNull(),
+    result: jsonb("result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("sim_attributions_cache_key").on(
+      table.baselineHash,
+      table.interventionHash,
+      table.metric,
+      table.modelVersion,
+    ),
+  ],
+);

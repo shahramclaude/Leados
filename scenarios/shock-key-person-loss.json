@@ -1,0 +1,26 @@
+{
+  "name": "Shock: Key-Person Loss (week 10)",
+  "horizonWeeks": 52,
+  "orgSize": 120,
+  "teamCount": 8,
+  "arrivalRateLambda": 1.5,
+  "effortMeanHrs": 380,
+  "effortSpread": 0.55,
+  "wipLimit": 15,
+  "queueDiscipline": "fifo",
+  "headcountDeltaFraction": 0,
+  "headcountChangeWeek": 1,
+  "demandMultiplier": 1,
+  "costPerHeadWeek": 2200,
+  "costPerEffortHr": 85,
+  "valuePerEffortHr": 140,
+  "shocks": [
+    {
+      "type": "keyPersonLoss",
+      "weekApplied": 10,
+      "label": "Highest-influence contributor departs"
+    }
+  ],
+  "ensembleRuns": 2000,
+  "seedBase": 20240601
+}

@@ -1,0 +1,20 @@
+{
+  "name": "Hiring Surge (+15% headcount, week 4)",
+  "horizonWeeks": 52,
+  "orgSize": 120,
+  "teamCount": 8,
+  "arrivalRateLambda": 1.5,
+  "effortMeanHrs": 380,
+  "effortSpread": 0.55,
+  "wipLimit": 18,
+  "queueDiscipline": "fifo",
+  "headcountDeltaFraction": 0.15,
+  "headcountChangeWeek": 4,
+  "demandMultiplier": 1,
+  "costPerHeadWeek": 2200,
+  "costPerEffortHr": 85,
+  "valuePerEffortHr": 140,
+  "shocks": [],
+  "ensembleRuns": 2000,
+  "seedBase": 20240601
+}
