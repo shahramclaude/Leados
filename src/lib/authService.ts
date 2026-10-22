@@ -1,153 +1,90 @@
-import { randomUUID, createHash } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+// Local-credentials auth provider (see src/lib/auth/provider.ts for the
+// OIDC-ready seam this will sit alongside, not be replaced by, if/when SSO
+// is added). Owns: org+admin bootstrap, login with lockout, logout.
+import "server-only";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { organizations, sessions, users } from "@/db/schema";
+import { organizations, users } from "@/db/schema";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import {
-  SESSION_ABSOLUTE_MAX_AGE_SECONDS,
-  SESSION_MAX_AGE_SECONDS,
-  signSessionToken,
-  type SessionPayload,
-} from "@/lib/session";
+import { createSession } from "@/lib/session";
+import type { Role } from "@/lib/authz/permissions";
 
 export const MAX_FAILED_LOGIN_ATTEMPTS = 5;
-export const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
-
-export class AuthServiceError extends Error {
-  code: string;
-  constructor(code: string, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
+export const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
 export async function createOrgAndAdmin(orgName: string, email: string, password: string) {
-  const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
   if (existing.length > 0) {
-    throw new AuthServiceError("EMAIL_TAKEN", "An account with that email already exists.");
+    throw new Error("EMAIL_ALREADY_REGISTERED");
   }
 
+  const [org] = await db.insert(organizations).values({ name: orgName }).returning();
   const passwordHash = await hashPassword(password);
+  const [user] = await db
+    .insert(users)
+    .values({ orgId: org.id, email, passwordHash, role: "admin" })
+    .returning();
 
-  return db.transaction(async (tx) => {
-    const [org] = await tx.insert(organizations).values({ name: orgName }).returning();
-    const [user] = await tx
-      .insert(users)
-      .values({
-        orgId: org.id,
-        email,
-        passwordHash,
-        role: "admin",
-      })
-      .returning();
-    return { org, user };
+  return { org, user: { ...user, role: user.role as Role } };
+}
+
+export async function createSessionForUser(
+  user: { id: string; orgId: string; role: string; email: string },
+  ip: string | null,
+  userAgent: string | null,
+) {
+  return createSession({
+    userId: user.id,
+    orgId: user.orgId,
+    role: user.role as Role,
+    email: user.email,
+    ip,
+    userAgent,
   });
 }
 
-/**
- * Verifies credentials with account lockout. Always takes a comparable
- * amount of time whether the email exists or not (bcrypt against a dummy
- * hash) to reduce user-enumeration via timing.
- */
-const DUMMY_HASH = "$2a$12$CwTycUXWue0Thq9StjUM0uJ8G8G8G8G8G8G8G8G8G8G8G8G8G8G8G";
+export type LoginResult =
+  | { outcome: "success"; user: { id: string; orgId: string; role: Role; email: string }; token: string }
+  | { outcome: "invalid_credentials" }
+  | { outcome: "locked"; retryAfterMs: number };
 
-export async function authenticateUser(email: string, password: string) {
-  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+/** Account lockout is independent of (and in addition to) the IP-based rate
+ * limit applied in the route handler — an attacker rotating source IPs still
+ * cannot brute-force a single account past MAX_FAILED_LOGIN_ATTEMPTS. */
+export async function authenticateWithPassword(
+  email: string,
+  password: string,
+  ip: string | null,
+  userAgent: string | null,
+): Promise<LoginResult> {
+  const [user] = await db.select().from(users).where(eq(users.email, email));
 
   if (!user) {
-    await verifyPassword(password, DUMMY_HASH).catch(() => undefined);
-    throw new AuthServiceError("INVALID_CREDENTIALS", "Invalid email or password.");
-  }
-
-  if (!user.isActive) {
-    throw new AuthServiceError("ACCOUNT_DISABLED", "This account has been disabled.");
+    // Constant-shape response: don't reveal whether the email exists.
+    await hashPassword(password).catch(() => {}); // keep timing roughly similar to the real path
+    return { outcome: "invalid_credentials" };
   }
 
   if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
-    throw new AuthServiceError(
-      "ACCOUNT_LOCKED",
-      `Account temporarily locked. Try again after ${user.lockedUntil.toISOString()}.`,
-    );
-  }
-
-  if (user.ssoSubject) {
-    throw new AuthServiceError("SSO_REQUIRED", "This account must sign in via SSO.");
+    return { outcome: "locked", retryAfterMs: user.lockedUntil.getTime() - Date.now() };
   }
 
   const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
-    const attempts = user.failedLoginAttempts + 1;
-    const locked = attempts >= MAX_FAILED_LOGIN_ATTEMPTS;
+    const failedCount = user.failedLoginCount + 1;
+    const lockedUntil = failedCount >= MAX_FAILED_LOGIN_ATTEMPTS ? new Date(Date.now() + LOCKOUT_DURATION_MS) : null;
     await db
       .update(users)
-      .set({
-        failedLoginAttempts: locked ? 0 : attempts,
-        lockedUntil: locked ? new Date(Date.now() + LOCKOUT_DURATION_MS) : null,
-        updatedAt: new Date(),
-      })
+      .set({ failedLoginCount: failedCount, lockedUntil })
       .where(eq(users.id, user.id));
-    throw new AuthServiceError(
-      locked ? "ACCOUNT_LOCKED" : "INVALID_CREDENTIALS",
-      locked
-        ? `Too many failed attempts. Account locked for ${LOCKOUT_DURATION_MS / 60000} minutes.`
-        : "Invalid email or password.",
-    );
+    if (lockedUntil) {
+      return { outcome: "locked", retryAfterMs: LOCKOUT_DURATION_MS };
+    }
+    return { outcome: "invalid_credentials" };
   }
 
-  if (user.failedLoginAttempts > 0 || user.lockedUntil) {
-    await db
-      .update(users)
-      .set({ failedLoginAttempts: 0, lockedUntil: null, updatedAt: new Date() })
-      .where(eq(users.id, user.id));
-  }
+  await db.update(users).set({ failedLoginCount: 0, lockedUntil: null }).where(eq(users.id, user.id));
 
-  return user;
-}
-
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-export async function createSessionForUser(
-  user: { id: string; orgId: string; email: string; role: "admin" | "manager" | "member" },
-  ip: string,
-  userAgent: string | null,
-) {
-  const sessionId = randomUUID();
-  const now = Date.now();
-  const expiresAt = new Date(now + SESSION_ABSOLUTE_MAX_AGE_SECONDS * 1000);
-
-  const payload: SessionPayload = {
-    sid: sessionId,
-    sub: user.id,
-    orgId: user.orgId,
-    email: user.email,
-    role: user.role,
-  };
-  const token = await signSessionToken(payload);
-
-  await db.insert(sessions).values({
-    id: sessionId,
-    userId: user.id,
-    tokenHash: hashToken(token),
-    ip,
-    userAgent,
-    expiresAt,
-  });
-
-  return { token, sessionId, maxAgeSeconds: SESSION_MAX_AGE_SECONDS };
-}
-
-export async function revokeSession(sessionId: string, reason: string) {
-  await db
-    .update(sessions)
-    .set({ revokedAt: new Date(), revokedReason: reason })
-    .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)));
-}
-
-export async function revokeAllSessionsForUser(userId: string, reason: string) {
-  await db
-    .update(sessions)
-    .set({ revokedAt: new Date(), revokedReason: reason })
-    .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)));
+  const { token } = await createSessionForUser(user, ip, userAgent);
+  return { outcome: "success", user: { id: user.id, orgId: user.orgId, role: user.role as Role, email: user.email }, token };
 }

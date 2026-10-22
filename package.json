@@ -7,23 +7,23 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "db:seed": "tsx scripts/seed.ts",
-    "db:seed:x10": "SCALE=10 tsx scripts/seed.ts",
-    "sim:bench": "tsx scripts/sim-bench.ts",
-    "perf:check": "node scripts/perf-check.mjs",
-    "loadtest": "node scripts/loadtest.mjs",
-    "verify": "node scripts/verify.mjs"
+    "test": "vitest run",
+    "test:security": "vitest run tests/security",
+    "audit:verify": "tsx scripts/audit-verify.ts",
+    "secret:scan": "node scripts/secret-scan.mjs",
+    "verify": "npm run lint && npm run typecheck && npm run secret:scan && npm run test"
   },
   "dependencies": {
-    "@next/bundle-analyzer": "^16.4.2",
-    "autocannon": "^8.0.0",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
+    "jose": "^6.2.13",
     "next": "16.2.6",
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.5",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

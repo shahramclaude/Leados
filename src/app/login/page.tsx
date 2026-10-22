@@ -1,32 +1,30 @@
 "use client";
-import { Suspense, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { apiFetch } from "@/lib/clientApi";
 
-function LoginForm() {
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/client/api";
+
+export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      const res = await apiFetch("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
+      const res = await apiFetch("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Login failed");
+        if (res.status === 423) setError("Account temporarily locked due to repeated failed attempts. Try again later.");
+        else if (res.status === 429) setError("Too many attempts from this network. Try again later.");
+        else setError(data?.error?.message ?? "Login failed");
         return;
       }
-      const next = searchParams.get("next") ?? "/dashboard";
-      router.push(next);
+      router.push("/");
       router.refresh();
     } finally {
       setSubmitting(false);
@@ -34,52 +32,41 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-4 rounded-lg border border-slate-200 bg-white p-8 shadow-sm">
-      <h1 className="text-xl font-semibold text-slate-900">Sign in to LEADOS</h1>
-      {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      <div>
-        <label className="block text-sm font-medium text-slate-700">Email</label>
-        <input
-          type="email"
-          required
-          autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-slate-700">Password</label>
-        <input
-          type="password"
-          required
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-        />
-      </div>
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-      >
-        {submitting ? "Signing in…" : "Sign in"}
-      </button>
-      <p className="text-xs text-slate-500">
-        No self-serve sign-up: LEADOS accounts are invite-only. Ask an org admin, or run{" "}
-        <code>npm run db:seed</code> for local demo accounts.
+    <main className="mx-auto max-w-sm">
+      <h1 className="text-2xl font-semibold text-slate-950">Log in</h1>
+      <form onSubmit={onSubmit} className="mt-6 space-y-4 rounded-xl bg-white p-6 shadow-sm">
+        <div>
+          <label className="block text-xs font-medium text-slate-600">Email</label>
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600">Password</label>
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+          />
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button
+          type="submit"
+          disabled={submitting}
+          className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Log in
+        </button>
+      </form>
+      <p className="mt-4 text-sm text-slate-600">
+        No account yet? <a href="/register" className="font-medium text-slate-900 underline">Register your organization</a>.
       </p>
-    </form>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <Suspense fallback={null}>
-        <LoginForm />
-      </Suspense>
     </main>
   );
 }

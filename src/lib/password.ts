@@ -1,33 +1,48 @@
-import bcrypt from "bcryptjs";
+// Password hashing via Node's built-in scrypt (no native dependency,
+// no supply-chain risk beyond Node itself). Format: scrypt$N$r$p$saltHex$hashHex
+import "server-only";
+import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 
-/**
- * Password hashing boundary. Centralized so the work factor can be tuned in
- * one place and so nothing in the codebase stores or compares plaintext
- * passwords directly.
- */
-const SALT_ROUNDS = 12;
+const N = 16384; // CPU/memory cost
+const r = 8;
+const p = 1;
+const KEY_LEN = 64;
 
-export async function hashPassword(plaintext: string): Promise<string> {
-  return bcrypt.hash(plaintext, SALT_ROUNDS);
+function scrypt(
+  password: string,
+  salt: Buffer,
+  keylen: number,
+  options: { N: number; r: number; p: number },
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scryptCb(password, salt, keylen, options, (err, derivedKey) => {
+      if (err) reject(err);
+      else resolve(derivedKey);
+    });
+  });
 }
 
-export async function verifyPassword(plaintext: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(plaintext, hash);
+export async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const derived = await scrypt(password, salt, KEY_LEN, { N, r, p });
+  return `scrypt$${N}$${r}$${p}$${salt.toString("hex")}$${derived.toString("hex")}`;
 }
 
-const PASSWORD_MIN_LENGTH = 12;
-
-/** Minimum viable password policy — length + character class diversity. */
-export function assessPasswordStrength(password: string): { ok: boolean; reason?: string } {
-  if (password.length < PASSWORD_MIN_LENGTH) {
-    return { ok: false, reason: `Password must be at least ${PASSWORD_MIN_LENGTH} characters.` };
-  }
-  const classes = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((re) => re.test(password));
-  if (classes.length < 3) {
-    return {
-      ok: false,
-      reason: "Password must include at least 3 of: lowercase, uppercase, digit, symbol.",
-    };
-  }
-  return { ok: true };
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const parts = stored.split("$");
+  if (parts.length !== 6 || parts[0] !== "scrypt") return false;
+  const [, nStr, rStr, pStr, saltHex, hashHex] = parts;
+  const salt = Buffer.from(saltHex, "hex");
+  const expected = Buffer.from(hashHex, "hex");
+  const derived = await scrypt(password, salt, expected.length, {
+    N: Number(nStr),
+    r: Number(rStr),
+    p: Number(pStr),
+  });
+  if (derived.length !== expected.length) return false;
+  return timingSafeEqual(derived, expected);
 }
+
+/** Minimum password policy enforced at the zod layer (src/lib/validation.ts)
+ * as well, kept here so the rule has a single source of truth. */
+export const PASSWORD_MIN_LENGTH = 12;

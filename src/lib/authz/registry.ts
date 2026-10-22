@@ -1,55 +1,66 @@
-// Route -> permission registry (Part 13), CI-enforced.
-//
-// `scripts/check-route-registry.mjs` walks every `src/app/api/**/route.ts`
-// file, extracts the HTTP methods it exports, derives the path template
-// (Next.js `[param]` segments become `:param`), and fails the build if any
-// (method, path) pair is missing from `ROUTE_REGISTRY` below. This is what
-// makes "a new route without a registry entry fails the pipeline" true
-// rather than aspirational — see `npm run check:routes`.
-//
-// `permission: "public"` is an explicit, auditable opt-out (health checks,
-// login, csrf bootstrap) — never the default.
+// Route -> permission registry. Every route.ts under src/app/api MUST have a
+// matching entry here for every HTTP method it exports.
+// `scripts/check-route-registry.mjs` fails CI if a route file exists on disk
+// with no matching registry entry, or a registry entry points at a route
+// that no longer exists — so "forgot to protect a new route" is a build-time
+// failure, not a production incident. `secureRoute()` (src/lib/apiUtils.ts)
+// additionally fails closed at runtime: an unregistered route refuses to
+// serve traffic rather than defaulting to "open".
 import type { Permission } from "@/lib/authz/permissions";
 
-export type RouteRule = {
-  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
-  /** Next.js-style path template, e.g. "/api/people/:id". */
-  path: string;
-  permission: Permission | "public" | "authenticated";
-  /** Short note on why, for audit readability. */
-  note: string;
-};
+export type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+
+export interface RouteRule {
+  method: HttpMethod;
+  path: string; // Next.js path template, e.g. "/api/people/:id"
+  permission: Permission;
+  description: string;
+}
 
 export const ROUTE_REGISTRY: RouteRule[] = [
-  { method: "GET", path: "/api/health", permission: "public", note: "liveness probe" },
+  { method: "GET", path: "/api/health", permission: "public", description: "Liveness/readiness probe." },
+  { method: "GET", path: "/api/csrf", permission: "public", description: "Issue a CSRF double-submit token." },
+  { method: "POST", path: "/api/auth/register", permission: "public", description: "Create an org + first admin user." },
+  { method: "POST", path: "/api/auth/login", permission: "public", description: "Authenticate with email+password." },
+  { method: "POST", path: "/api/auth/logout", permission: "authenticated", description: "End the current session." },
 
-  { method: "POST", path: "/api/auth/login", permission: "public", note: "rate-limited credential check" },
-  { method: "POST", path: "/api/auth/logout", permission: "authenticated", note: "ends caller's own session" },
-  { method: "GET", path: "/api/auth/session", permission: "authenticated", note: "returns caller identity only" },
-  { method: "GET", path: "/api/auth/csrf", permission: "public", note: "issues double-submit token" },
+  { method: "GET", path: "/api/people", permission: "people:read", description: "List people in the caller's org." },
+  { method: "POST", path: "/api/people", permission: "people:write", description: "Create a person in the caller's org." },
+  { method: "GET", path: "/api/people/:id", permission: "people:read", description: "Read one person (own org only)." },
+  { method: "PATCH", path: "/api/people/:id", permission: "people:write", description: "Update one person (own org only)." },
+  { method: "DELETE", path: "/api/people/:id", permission: "people:delete", description: "Soft-delete one person (own org only)." },
+  { method: "GET", path: "/api/people/search", permission: "people:read", description: "Parameterized search over the caller's org." },
+  { method: "GET", path: "/api/people/export", permission: "people:export", description: "CSV export, requires prior recorded consent." },
+  { method: "POST", path: "/api/people/import", permission: "people:import", description: "Submit a quarantined import batch for review." },
+  { method: "GET", path: "/api/people/import", permission: "people:import", description: "List import batches pending/decided for the org." },
+  { method: "POST", path: "/api/people/import/:id/approve", permission: "people:import", description: "Admin approval applies a quarantined batch." },
+  { method: "POST", path: "/api/people/import/:id/reject", permission: "people:import", description: "Admin rejection discards a quarantined batch." },
 
-  { method: "GET", path: "/api/people", permission: "people:read", note: "org-scoped list" },
-  { method: "POST", path: "/api/people", permission: "people:write", note: "org-scoped create" },
-  { method: "GET", path: "/api/people/:id", permission: "people:read", note: "org-scoped read" },
-  { method: "PATCH", path: "/api/people/:id", permission: "people:write", note: "org-scoped update" },
-  { method: "DELETE", path: "/api/people/:id", permission: "people:write", note: "org-scoped soft delete" },
-  { method: "GET", path: "/api/people/export", permission: "people:export", note: "bulk export, heavily audited" },
-  { method: "POST", path: "/api/people/import", permission: "people:import", note: "quarantined CSV import" },
+  { method: "PATCH", path: "/api/admin/users/:id/role", permission: "users:role_change", description: "Change another user's role; rotates their sessions." },
+  { method: "GET", path: "/api/admin/incident-banner", permission: "authenticated", description: "Read the current sitewide incident banner." },
+  { method: "PATCH", path: "/api/admin/incident-banner", permission: "settings:incident_banner", description: "Toggle the sitewide incident-mode banner." },
 
-  { method: "GET", path: "/api/users", permission: "users:read", note: "org-scoped list" },
-  { method: "POST", path: "/api/users", permission: "users:manage", note: "invite user into caller's org" },
-  { method: "PATCH", path: "/api/users/:id/role", permission: "roles:manage", note: "privilege change, rotates sessions" },
+  { method: "GET", path: "/api/audit", permission: "audit:read", description: "List hash-chained audit events for the caller's org." },
+  { method: "GET", path: "/api/audit/verify", permission: "audit:verify", description: "Recompute and verify the org's audit hash chain." },
 
-  { method: "GET", path: "/api/webhooks", permission: "webhooks:manage", note: "org-scoped list, secrets redacted" },
-  { method: "POST", path: "/api/webhooks", permission: "webhooks:manage", note: "SSRF-checked URL" },
+  { method: "GET", path: "/api/privacy/me", permission: "authenticated", description: "What's stored about me: own profile + audit entries about me." },
 
-  { method: "POST", path: "/api/agent/run", permission: "agent:run", note: "simulated agent action, fully audited" },
+  { method: "GET", path: "/api/sessions", permission: "authenticated", description: "List the caller's own active sessions (device management)." },
+  { method: "DELETE", path: "/api/sessions/:id", permission: "authenticated", description: "Revoke one of the caller's own sessions." },
 
-  { method: "GET", path: "/api/audit", permission: "audit:read", note: "filtered, org-scoped" },
-  { method: "GET", path: "/api/audit/export", permission: "audit:export", note: "bulk export, heavily audited" },
-  { method: "GET", path: "/api/audit/verify", permission: "audit:read", note: "recomputes hash chain" },
+  { method: "POST", path: "/api/consent/export", permission: "authenticated", description: "Record explicit consent before an export proceeds." },
+
+  { method: "POST", path: "/api/integrations/test-webhook", permission: "people:import", description: "Validate a user-supplied URL against the SSRF guard before any use." },
 ];
 
-export function findRouteRule(method: string, templatePath: string): RouteRule | undefined {
-  return ROUTE_REGISTRY.find((r) => r.method === method && r.path === templatePath);
+function toRegex(pathTemplate: string): RegExp {
+  const escaped = pathTemplate
+    .split("/")
+    .map((segment) => (segment.startsWith(":") ? "[^/]+" : segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("/");
+  return new RegExp(`^${escaped}$`);
+}
+
+export function findRouteRule(method: HttpMethod, path: string): RouteRule | undefined {
+  return ROUTE_REGISTRY.find((rule) => rule.method === method && toRegex(rule.path).test(path));
 }

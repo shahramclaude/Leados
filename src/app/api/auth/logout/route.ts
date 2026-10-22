@@ -1,23 +1,26 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { secureRoute } from "@/lib/apiUtils";
-import { destroySession } from "@/lib/session";
+import { clearSessionCookie, revokeSession, type SessionUser } from "@/lib/session";
 import { recordAuditEvent } from "@/lib/audit";
 
 export const POST = secureRoute({
   method: "POST",
   path: "/api/auth/logout",
-  handler: async ({ session }) => {
+  handler: async ({ request, session }: { request: NextRequest; session: SessionUser | null }) => {
     if (session) {
-      await destroySession(session.sessionId);
+      await revokeSession(session.sessionId);
       await recordAuditEvent({
         orgId: session.orgId,
         actorUserId: session.userId,
+        actorEmail: session.email,
         actorRole: session.role,
         action: "auth.logout",
-        resourceType: "user",
-        resourceId: session.userId,
+        resourceType: "session",
+        resourceId: session.sessionId,
+        correlationId: request.headers.get("x-correlation-id") ?? crypto.randomUUID(),
       });
     }
+    await clearSessionCookie();
     return NextResponse.json({ ok: true });
   },
 });

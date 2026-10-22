@@ -1,35 +1,36 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { sql } from "drizzle-orm";
+import { people } from "@/db/schema";
+import { getSession } from "@/lib/session";
+import { PeoplePanel } from "@/components/PeoplePanel";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Deliberately the lightest route in the app (the "shell" budget in
- * perf-budgets.json: <= 150KB gzip initial JS). It does one cheap `select 1`
- * health check and renders a single link — no charts, no client panels, no
- * dynamic imports — so it is the cheapest possible baseline against which
- * the heavier /cockpit route's budget is measured.
- */
 export default async function HomePage() {
-  await db.execute(sql`select 1`);
+  const session = await getSession();
+  if (!session) redirect("/login");
+
+  const rows = await db
+    .select()
+    .from(people)
+    .where(and(eq(people.orgId, session.orgId), isNull(people.deletedAt)))
+    .orderBy(desc(people.createdAt))
+    .limit(200);
+
+  const canWrite = session.role === "admin" || session.role === "manager";
 
   return (
-    <main className="grid min-h-screen place-items-center px-6 py-12">
-      <section className="w-full max-w-2xl rounded-3xl bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
-        <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">LEADOS</p>
-        <h1 className="mt-4 text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.05] text-slate-950">
-          Performance-hardened cockpit
-        </h1>
-        <p className="mt-4 text-base text-slate-700">
-          This shell route stays minimal on purpose. The dashboard, with its forecast simulation,
-          org network, activity heatmap and virtualized people table, lives at{" "}
-          <Link href="/cockpit" className="font-medium text-indigo-600 underline">
-            /cockpit
-          </Link>
-          .
+    <main className="space-y-6">
+      <header>
+        <p className="text-sm uppercase tracking-[0.08em] text-slate-500">LEADOS · Part 19 security slice</p>
+        <h1 className="mt-1 text-3xl font-semibold text-slate-950">People</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Every row shown here is scoped to your organization only, enforced at the query layer — not by client-side
+          filtering.
         </p>
-      </section>
+      </header>
+      <PeoplePanel initialPeople={rows.map((r) => ({ id: r.id, firstName: r.firstName, lastName: r.lastName, email: r.email }))} canWrite={canWrite} />
     </main>
   );
 }

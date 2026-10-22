@@ -1,70 +1,59 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { people } from "@/db/schema";
-import { jsonError, secureRoute } from "@/lib/apiUtils";
-import { processImportUpload } from "@/lib/importPeople";
-import { MAX_IMPORT_BYTES } from "@/lib/validation/schemas";
+import { importBatches } from "@/db/schema";
+import { readJson, secureRoute } from "@/lib/apiUtils";
+import { importCreateSchema } from "@/lib/validation";
 import { recordAuditEvent } from "@/lib/audit";
-import { getClientIp } from "@/lib/session";
+import type { SessionUser } from "@/lib/session";
 
-// Content-Length is checked before reading the body so an oversized upload
-// is rejected without buffering it fully in memory. The actual bytes are
-// then sniffed (src/lib/importPeople.ts) regardless of the declared
-// Content-Type header, since a client can lie about it.
+// Import quarantine (Part 19 Phase 1-c "injection surfaces"): a submitted
+// batch is validated row-by-row with the exact same strict zod schema used
+// for interactive creation (no separate, looser "bulk" code path to drift
+// out of sync) and stored as `pending` — nothing is written to `people`
+// until an admin explicitly approves the batch via
+// POST /api/people/import/:id/approve. This bounds the blast radius of a
+// compromised or malicious data source (CSV from an untrusted partner,
+// scraped lead list, etc.) to "an admin has to look at it first".
 export const POST = secureRoute({
   method: "POST",
   path: "/api/people/import",
-  handler: async ({ request, session }) => {
-    if (!session) return jsonError(401, "Authentication required");
+  handler: async ({ request, session }: { request: NextRequest; session: SessionUser | null }) => {
+    const s = session!;
+    const parsed = await readJson(request, importCreateSchema);
+    if (!parsed.ok) return parsed.response;
 
-    const declaredLength = Number(request.headers.get("content-length") ?? "0");
-    if (declaredLength > MAX_IMPORT_BYTES) {
-      return jsonError(413, `Upload exceeds ${MAX_IMPORT_BYTES} byte limit`);
-    }
-
-    const arrayBuffer = await request.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    if (buffer.byteLength > MAX_IMPORT_BYTES) {
-      return jsonError(413, `Upload exceeds ${MAX_IMPORT_BYTES} byte limit`);
-    }
-
-    const result = processImportUpload(buffer);
-    if (!result.ok) {
-      await recordAuditEvent({
-        orgId: session.orgId,
-        actorUserId: session.userId,
-        actorRole: session.role,
-        action: "people.import",
-        resourceType: "person",
-        reason: "quarantined: failed validation/content sniffing",
-        ip: await getClientIp(),
-        metadata: { quarantined: true, issueCount: result.issues.length, issues: result.issues.slice(0, 20) },
-      });
-      return jsonError(422, "Import quarantined: file failed validation", { issues: result.issues });
-    }
-
-    const inserted = await db.transaction(async (tx) => {
-      const rows = result.rows.map((r) => ({
-        orgId: session.orgId,
-        createdByUserId: session.userId,
-        fullName: r.fullName,
-        email: r.email || null,
-        phone: r.phone || null,
-      }));
-      if (rows.length === 0) return [];
-      return tx.insert(people).values(rows).returning({ id: people.id });
-    });
+    const [batch] = await db
+      .insert(importBatches)
+      .values({ orgId: s.orgId, createdBy: s.userId, status: "pending", rows: parsed.data.rows })
+      .returning();
 
     await recordAuditEvent({
-      orgId: session.orgId,
-      actorUserId: session.userId,
-      actorRole: session.role,
-      action: "people.import",
-      resourceType: "person",
-      ip: await getClientIp(),
-      metadata: { quarantined: false, rowCount: inserted.length },
+      orgId: s.orgId,
+      actorUserId: s.userId,
+      actorEmail: s.email,
+      actorRole: s.role,
+      action: "people.import.submit",
+      resourceType: "import_batch",
+      resourceId: batch.id,
+      correlationId: request.headers.get("x-correlation-id") ?? crypto.randomUUID(),
+      metadata: { rowCount: parsed.data.rows.length },
     });
 
-    return NextResponse.json({ imported: inserted.length });
+    return NextResponse.json({ batch: { id: batch.id, status: batch.status, rowCount: parsed.data.rows.length } }, { status: 201 });
+  },
+});
+
+export const GET = secureRoute({
+  method: "GET",
+  path: "/api/people/import",
+  handler: async ({ session }: { session: SessionUser | null }) => {
+    const s = session!;
+    const rows = await db
+      .select({ id: importBatches.id, status: importBatches.status, createdAt: importBatches.createdAt, rows: importBatches.rows })
+      .from(importBatches)
+      .where(and(eq(importBatches.orgId, s.orgId)))
+      .orderBy(desc(importBatches.createdAt));
+    return NextResponse.json({ batches: rows.map((r) => ({ id: r.id, status: r.status, createdAt: r.createdAt, rowCount: Array.isArray(r.rows) ? r.rows.length : 0 })) });
   },
 });

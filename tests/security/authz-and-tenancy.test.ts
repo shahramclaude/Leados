@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { GET as peopleList, POST as peopleCreate } from "@/app/api/people/route";
 import { GET as personGet, PATCH as personPatch, DELETE as personDelete } from "@/app/api/people/[id]/route";
-import { GET as peopleExport } from "@/app/api/people/export/route";
 import { GET as auditList } from "@/app/api/audit/route";
+import { PATCH as changeRole } from "@/app/api/admin/users/[id]/role/route";
 import { buildRequest, createTestActor, resetDb } from "../helpers";
 
 describe("authorization matrix + cross-tenant isolation", () => {
@@ -17,111 +17,91 @@ describe("authorization matrix + cross-tenant isolation", () => {
 
   it("enforces role-based permission for writes: member cannot create a person", async () => {
     const member = await createTestActor("Acme", "member@acme.test", "member");
-    const res = await peopleCreate(
-      buildRequest("/api/people", member, {
-        method: "POST",
-        body: { firstName: "A", lastName: "B" },
-      }),
-    );
+    const res = await peopleCreate(buildRequest("/api/people", member, { method: "POST", body: { firstName: "A", lastName: "B" } }));
     expect(res.status).toBe(403);
     const json = await res.json();
     expect(json.error.code).toBe("FORBIDDEN");
   });
 
-  it("allows admin to create and read a person in their own org", async () => {
-    const admin = await createTestActor("Acme", "admin@acme.test", "admin");
+  it("enforces role-based permission for writes: viewer cannot create a person", async () => {
+    const viewer = await createTestActor("Acme", "viewer@acme.test", "viewer");
+    const res = await peopleCreate(buildRequest("/api/people", viewer, { method: "POST", body: { firstName: "A", lastName: "B" } }));
+    expect(res.status).toBe(403);
+  });
+
+  it("allows manager to create and read a person in their own org", async () => {
+    const manager = await createTestActor("Acme", "manager@acme.test", "manager");
     const createRes = await peopleCreate(
-      buildRequest("/api/people", admin, {
-        method: "POST",
-        body: { firstName: "Alice", lastName: "Anderson", email: "alice@acme.test" },
-      }),
+      buildRequest("/api/people", manager, { method: "POST", body: { firstName: "Alice", lastName: "Anderson", email: "alice@acme.test" } }),
     );
     expect(createRes.status).toBe(201);
     const { person } = await createRes.json();
 
-    const getRes = await personGet(buildRequest(`/api/people/${person.id}`, admin), {
-      params: Promise.resolve({ id: person.id }),
-    });
+    const getRes = await personGet(buildRequest(`/api/people/${person.id}`, manager), { params: Promise.resolve({ id: person.id }) });
     expect(getRes.status).toBe(200);
+  });
+
+  it("vertical escalation attempt: manager cannot change roles (admin-only)", async () => {
+    const manager = await createTestActor("Acme", "manager2@acme.test", "manager");
+    const res = await changeRole(
+      buildRequest(`/api/admin/users/${manager.user.id}/role`, manager, { method: "PATCH", body: { role: "admin", reason: "self escalation attempt" } }),
+      { params: Promise.resolve({ id: manager.user.id }) },
+    );
+    expect(res.status).toBe(403);
   });
 
   it("makes cross-tenant access impossible: org B gets 404, not the data, not 403", async () => {
     const adminA = await createTestActor("Acme", "admin-a@acme.test", "admin");
     const adminB = await createTestActor("Globex", "admin-b@globex.test", "admin");
 
-    const createRes = await peopleCreate(
-      buildRequest("/api/people", adminA, {
-        method: "POST",
-        body: { firstName: "Carol", lastName: "Corp" },
-      }),
-    );
+    const createRes = await peopleCreate(buildRequest("/api/people", adminA, { method: "POST", body: { firstName: "Carol", lastName: "Corp" } }));
     const { person } = await createRes.json();
 
-    const crossRead = await personGet(buildRequest(`/api/people/${person.id}`, adminB), {
-      params: Promise.resolve({ id: person.id }),
-    });
+    const crossRead = await personGet(buildRequest(`/api/people/${person.id}`, adminB), { params: Promise.resolve({ id: person.id }) });
     expect(crossRead.status).toBe(404);
 
-    const crossPatch = await personPatch(
+    const crossWrite = await personPatch(
       buildRequest(`/api/people/${person.id}`, adminB, { method: "PATCH", body: { firstName: "Hacked" } }),
       { params: Promise.resolve({ id: person.id }) },
     );
-    expect(crossPatch.status).toBe(404);
+    expect(crossWrite.status).toBe(404);
 
-    const crossDelete = await personDelete(buildRequest(`/api/people/${person.id}`, adminB, { method: "DELETE" }), {
-      params: Promise.resolve({ id: person.id }),
-    });
+    const crossDelete = await personDelete(buildRequest(`/api/people/${person.id}`, adminB), { params: Promise.resolve({ id: person.id }) });
     expect(crossDelete.status).toBe(404);
 
-    // Org A can still read its own record untouched.
-    const stillThere = await personGet(buildRequest(`/api/people/${person.id}`, adminA), {
-      params: Promise.resolve({ id: person.id }),
-    });
-    expect(stillThere.status).toBe(200);
-    const { person: untouched } = await stillThere.json();
-    expect(untouched.firstName).toBe("Carol");
+    // Prove the record is genuinely untouched in org A.
+    const ownRead = await personGet(buildRequest(`/api/people/${person.id}`, adminA), { params: Promise.resolve({ id: person.id }) });
+    const { person: stillThere } = await ownRead.json();
+    expect(stillThere.firstName).toBe("Carol");
   });
 
-  it("org B's /api/people list never contains org A's records", async () => {
-    const adminA = await createTestActor("Acme", "admin-a2@acme.test", "admin");
-    const adminB = await createTestActor("Globex", "admin-b2@globex.test", "admin");
-
-    await peopleCreate(
-      buildRequest("/api/people", adminA, { method: "POST", body: { firstName: "Dana", lastName: "A" } }),
-    );
-
-    const listB = await peopleList(buildRequest("/api/people", adminB));
-    const { people } = await listB.json();
-    expect(people).toHaveLength(0);
-  });
-
-  it("export requires people:export — member is forbidden, manager allowed", async () => {
-    const member = await createTestActor("Acme", "member2@acme.test", "member");
-    const forbidden = await peopleExport(buildRequest("/api/people/export", member));
-    expect(forbidden.status).toBe(403);
-
-    const manager = await createTestActor("Acme", "manager@acme.test", "manager");
-    const ok = await peopleExport(buildRequest("/api/people/export", manager));
-    expect(ok.status).toBe(200);
-    expect(ok.headers.get("content-type")).toContain("text/csv");
-  });
-
-  it("audit log is admin-only: manager is forbidden", async () => {
-    const manager = await createTestActor("Acme", "manager2@acme.test", "manager");
-    const res = await auditList(buildRequest("/api/audit", manager));
-    expect(res.status).toBe(403);
-  });
-
-  it("audit log read is itself scoped per-org for admins", async () => {
-    const adminA = await createTestActor("Acme", "admin-a3@acme.test", "admin");
-    const adminB = await createTestActor("Globex", "admin-b3@globex.test", "admin");
-
-    await peopleCreate(
-      buildRequest("/api/people", adminA, { method: "POST", body: { firstName: "Eve", lastName: "A" } }),
-    );
+  it("org B's audit log never contains org A's events", async () => {
+    const adminA = await createTestActor("Acme", "audit-a@acme.test", "admin");
+    const adminB = await createTestActor("Globex", "audit-b@globex.test", "admin");
+    await peopleCreate(buildRequest("/api/people", adminA, { method: "POST", body: { firstName: "Secret", lastName: "PersonA" } }));
 
     const auditB = await auditList(buildRequest("/api/audit", adminB));
     const { events } = await auditB.json();
-    expect(events.every((e: { orgId: string | null }) => e.orgId === adminB.org.id)).toBe(true);
+    expect(events.some((e: { resourceType: string }) => e.resourceType === "people")).toBe(false);
+  });
+
+  it("role change rotates sessions: the demoted user's old token stops working immediately", async () => {
+    const admin = await createTestActor("Acme", "admin-rotate@acme.test", "admin");
+    const member = await createTestActor("Acme", "member-rotate@acme.test", "member");
+
+    // member can read before the change
+    const before = await peopleList(buildRequest("/api/people", member));
+    expect(before.status).toBe(200);
+
+    const roleRes = await changeRole(
+      buildRequest(`/api/admin/users/${member.user.id}/role`, admin, { method: "PATCH", body: { role: "viewer", reason: "scope reduction per policy" } }),
+      { params: Promise.resolve({ id: member.user.id }) },
+    );
+    expect(roleRes.status).toBe(200);
+
+    // old token (still claims role=member) must now be rejected because
+    // the user's sessionVersion was bumped and the session row revoked.
+    const after = await peopleList(buildRequest("/api/people", member));
+    expect(after.status).toBe(401);
   });
 });

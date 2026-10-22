@@ -4,6 +4,8 @@ import { POST as login } from "@/app/api/auth/login/route";
 import { createOrgAndAdmin } from "@/lib/authService";
 import { generateCsrfToken } from "@/lib/csrf";
 import { buildRequest, createTestActor, resetDb } from "../helpers";
+import { middleware } from "@/middleware";
+import { NextRequest } from "next/server";
 
 describe("CSRF protection on mutating requests", () => {
   beforeEach(async () => {
@@ -13,11 +15,7 @@ describe("CSRF protection on mutating requests", () => {
   it("rejects a mutating request with no CSRF header even with a valid session", async () => {
     const admin = await createTestActor("Acme", "csrf1@acme.test", "admin");
     const res = await peopleCreate(
-      buildRequest("/api/people", admin, {
-        method: "POST",
-        body: { firstName: "A", lastName: "B" },
-        omitCsrfHeader: true,
-      }),
+      buildRequest("/api/people", admin, { method: "POST", body: { firstName: "A", lastName: "B" }, omitCsrfHeader: true }),
     );
     expect(res.status).toBe(403);
     const json = await res.json();
@@ -38,20 +36,12 @@ describe("CSRF protection on mutating requests", () => {
 
   it("accepts a mutating request when the double-submit token matches", async () => {
     const admin = await createTestActor("Acme", "csrf3@acme.test", "admin");
-    const res = await peopleCreate(
-      buildRequest("/api/people", admin, { method: "POST", body: { firstName: "A", lastName: "B" } }),
-    );
+    const res = await peopleCreate(buildRequest("/api/people", admin, { method: "POST", body: { firstName: "A", lastName: "B" } }));
     expect(res.status).toBe(201);
   });
 
   it("login itself requires a CSRF token (defense against login CSRF)", async () => {
-    const res = await login(
-      buildRequest("/api/auth/login", null, {
-        method: "POST",
-        body: { email: "nobody@acme.test", password: "whatever12345" },
-        omitCsrfHeader: true,
-      }),
-    );
+    const res = await login(buildRequest("/api/auth/login", null, { method: "POST", body: { email: "nobody@acme.test", password: "whatever12345A" }, omitCsrfHeader: true }));
     expect(res.status).toBe(403);
   });
 
@@ -68,5 +58,30 @@ describe("CSRF protection on mutating requests", () => {
     );
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie")).toBeTruthy();
+  });
+});
+
+describe("security headers (middleware)", () => {
+  it("sets CSP with a per-request nonce, HSTS, nosniff, referrer-policy, permissions-policy, and frame-ancestors", () => {
+    const res = middleware(new NextRequest("http://localhost/"));
+    const csp = res.headers.get("Content-Security-Policy");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("strict-dynamic");
+    expect(csp).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+    expect(res.headers.get("Strict-Transport-Security")).toContain("max-age=63072000");
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
+    expect(res.headers.get("Permissions-Policy")).toContain("geolocation=()");
+    expect(res.headers.get("X-Frame-Options")).toBe("DENY");
+  });
+
+  it("propagates an incoming correlation id rather than always minting a new one", () => {
+    const res = middleware(new NextRequest("http://localhost/", { headers: { "x-correlation-id": "fixed-id-123" } }));
+    expect(res.headers.get("x-correlation-id")).toBe("fixed-id-123");
+  });
+
+  it("mints a fresh correlation id when none is supplied", () => {
+    const res = middleware(new NextRequest("http://localhost/"));
+    expect(res.headers.get("x-correlation-id")).toBeTruthy();
   });
 });

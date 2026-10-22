@@ -1,40 +1,92 @@
+// Every input boundary in this app goes through one of these schemas —
+// `.strict()` everywhere so mass-assignment (extra fields like `role` or
+// `orgId` smuggled into a body) is rejected outright rather than silently
+// dropped. Field length caps bound storage/memory abuse from fuzzing.
 import { z } from "zod";
+import { PASSWORD_MIN_LENGTH } from "@/lib/password";
 
-export const onboardingSchema = z.object({
-  name: z.string().trim().min(2).max(120),
-});
+export const EMAIL_MAX = 254;
+export const NAME_MAX = 120;
+export const NOTES_MAX = 10_000;
 
-export const createLeadSchema = z.object({
-  name: z.string().trim().min(1).max(200),
-  source: z.string().trim().min(1).max(80),
-  notes: z.string().trim().max(2000).optional().default(""),
-});
+const email = z.string().trim().toLowerCase().email().max(EMAIL_MAX);
+const strongPassword = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+  .max(256)
+  .refine((v) => /[a-z]/.test(v) && /[A-Z]/.test(v) && /[0-9]/.test(v), {
+    message: "Password must contain upper, lower, and a digit",
+  });
 
-export const createFindingSchema = z.object({
-  leadId: z.string().uuid(),
-  summary: z.string().trim().min(1).max(2000),
-  outcome: z.union([z.literal(0), z.literal(1)]).optional(),
-});
+export const registerSchema = z
+  .object({
+    orgName: z.string().trim().min(1).max(NAME_MAX),
+    email,
+    password: strongPassword,
+  })
+  .strict();
 
-export const createDecisionSchema = z.object({
-  findingId: z.string().uuid(),
-  action: z.enum(["pursue", "watch", "discard"]),
-  rationale: z.string().trim().min(1).max(2000),
-});
+export const loginSchema = z
+  .object({
+    email,
+    password: z.string().min(1).max(256),
+  })
+  .strict();
 
-export const createApprovalSchema = z.object({
-  decisionId: z.string().uuid(),
-  approver: z.string().trim().min(1).max(200),
-  outcome: z.enum(["approved", "rejected"]),
-});
+export const personCreateSchema = z
+  .object({
+    firstName: z.string().trim().min(1).max(NAME_MAX),
+    lastName: z.string().trim().min(1).max(NAME_MAX),
+    email: email.optional(),
+    notes: z.string().max(NOTES_MAX).optional(),
+  })
+  .strict();
 
-export const createAutomationRunSchema = z.object({
-  approvalId: z.string().uuid(),
-  trials: z.number().int().min(100).max(200000).optional().default(5000),
-  seed: z.number().int().min(0).optional(),
-});
+export const personUpdateSchema = personCreateSchema.partial().strict();
 
-export const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-});
+export const personSearchSchema = z
+  .object({
+    q: z.string().trim().min(1).max(200),
+  })
+  .strict();
+
+export const roleChangeSchema = z
+  .object({
+    role: z.enum(["admin", "manager", "member", "viewer"]),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
+
+export const incidentBannerSchema = z
+  .object({
+    enabled: z.boolean(),
+    message: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+export const exportConsentSchema = z
+  .object({
+    scope: z.enum(["people_export", "self_data_export"]),
+    acknowledge: z.literal(true),
+  })
+  .strict();
+
+export const webhookUrlCheckSchema = z
+  .object({
+    url: z.string().trim().min(1).max(2048),
+  })
+  .strict();
+
+export const importRowSchema = personCreateSchema;
+
+export const importCreateSchema = z
+  .object({
+    rows: z.array(importRowSchema).min(1).max(500),
+  })
+  .strict();
+
+export const sessionRevokeSchema = z
+  .object({
+    sessionId: z.string().uuid(),
+  })
+  .strict();

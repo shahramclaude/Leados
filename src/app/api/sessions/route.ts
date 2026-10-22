@@ -1,30 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-import { and, eq, isNull } from "drizzle-orm";
+import { NextResponse, type NextRequest } from "next/server";
+import { eq, isNull, and } from "drizzle-orm";
 import { db } from "@/db";
-import { sessions, users } from "@/db/schema";
-import { isAuthContext, requireAuth } from "@/lib/apiUtils";
-import { PERMISSIONS } from "@/lib/permissions";
+import { sessions } from "@/db/schema";
+import { secureRoute } from "@/lib/apiUtils";
+import type { SessionUser } from "@/lib/session";
 
-export const dynamic = "force-dynamic";
-
-/** Admin-only: list active sessions across the org for incident response. */
-export async function GET(req: NextRequest) {
-  const auth = await requireAuth(req, { permission: PERMISSIONS.SESSION_REVOKE });
-  if (!isAuthContext(auth)) return auth;
-
-  const rows = await db
-    .select({
-      id: sessions.id,
-      userId: sessions.userId,
-      email: users.email,
-      ip: sessions.ip,
-      userAgent: sessions.userAgent,
-      createdAt: sessions.createdAt,
-      expiresAt: sessions.expiresAt,
-    })
-    .from(sessions)
-    .innerJoin(users, eq(sessions.userId, users.id))
-    .where(and(eq(users.orgId, auth.session.orgId), isNull(sessions.revokedAt)));
-
-  return NextResponse.json({ sessions: rows });
-}
+// Device/session management (Part 19 Phase 2): lets a user see every
+// non-revoked session tied to their account, which is what they actually
+// need to answer "is someone else logged into my account" — a plainer and
+// more actionable surface than raw audit log rows.
+export const GET = secureRoute({
+  method: "GET",
+  path: "/api/sessions",
+  handler: async ({ session }: { request: NextRequest; session: SessionUser | null }) => {
+    const s = session!;
+    const rows = await db
+      .select({ id: sessions.id, createdAt: sessions.createdAt, lastSeenAt: sessions.lastSeenAt, ip: sessions.ip, userAgent: sessions.userAgent })
+      .from(sessions)
+      .where(and(eq(sessions.userId, s.userId), isNull(sessions.revokedAt)));
+    return NextResponse.json({ sessions: rows.map((r) => ({ ...r, isCurrent: r.id === s.sessionId })) });
+  },
+});
