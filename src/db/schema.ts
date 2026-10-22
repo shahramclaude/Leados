@@ -1,164 +1,114 @@
+// src/db/schema.ts
+//
+// Part 18 performance slice. Domain follows the canonical LEADOS org-
+// intelligence model found upstream (tenants/people/relationships/decisions/
+// forecasts) rather than a generic "sales leads" model — see
+// AI-SESSION-LOG.md for the read-before-write note on why this scoped
+// re-implementation exists instead of a 2,148-file import.
+//
+// Every table is tenant-scoped (Part 03 convention: `tenantId` on every
+// table) and every unbounded-access pattern (list people, list decisions,
+// list relationships) has a btree index backing its WHERE/ORDER BY so
+// `EXPLAIN ANALYZE` shows an index scan, not a sequential scan, at 10x scale.
 import {
   pgTable,
-  serial,
+  uuid,
   text,
   integer,
+  real,
   timestamp,
   jsonb,
-  doublePrecision,
-  pgEnum,
+  index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-// ---------------------------------------------------------------------------
-// LEADOS core domain schema (reconstructed minimal subset needed to exercise
-// the Part 17 test pyramid: tenancy, auth, findings -> decisions -> approvals
-// -> automation runs -> board packs). See docs/TESTING.md "Phase 0" for why
-// this is a reconstruction rather than a port of pre-existing Parts 01-16
-// tables (none were present in this workspace).
-// ---------------------------------------------------------------------------
+export const tenants = pgTable("tenants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
-export const userRoleEnum = pgEnum("user_role", ["member", "admin"]);
-
-export const findingStatusEnum = pgEnum("finding_status", [
-  "open",
-  "triaged",
-  "closed",
-]);
-
-export const decisionStatusEnum = pgEnum("decision_status", [
-  "proposed",
-  "approved",
-  "rejected",
-]);
-
-export const approvalStatusEnum = pgEnum("approval_status", [
-  "pending",
-  "approved",
-  "rejected",
-]);
-
-export const automationStatusEnum = pgEnum("automation_status", [
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-]);
-
-export const tenants = pgTable(
-  "tenants",
+export const people = pgTable(
+  "people",
   {
-    id: serial("id").primaryKey(),
-    slug: text("slug").notNull(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
     name: text("name").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    role: text("role").notNull(),
+    team: text("team").notNull(),
+    managerId: uuid("manager_id"),
+    riskScore: real("risk_score").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("tenants_slug_idx").on(table.slug)],
+  (t) => [
+    // Backs the paginated "list people in tenant, newest first" query
+    // (/api/people) — see docs/PERFORMANCE.md EXPLAIN evidence.
+    index("people_tenant_created_idx").on(t.tenantId, t.createdAt),
+    // Backs the manager batch-loader (WHERE manager_id = ANY($1)) used to
+    // kill the people-list N+1 described in docs/PERFORMANCE.md.
+    index("people_manager_idx").on(t.managerId),
+    index("people_tenant_team_idx").on(t.tenantId, t.team),
+  ],
 );
 
-export const users = pgTable(
-  "users",
+export const relationships = pgTable(
+  "relationships",
   {
-    id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id")
-      .notNull()
-      .references(() => tenants.id, { onDelete: "cascade" }),
-    email: text("email").notNull(),
-    role: userRoleEnum("role").notNull().default("member"),
-    apiKey: text("api_key").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    sourcePersonId: uuid("source_person_id").notNull(),
+    targetPersonId: uuid("target_person_id").notNull(),
+    kind: text("kind").notNull(),
+    weight: real("weight").notNull(),
   },
-  (table) => [uniqueIndex("users_api_key_idx").on(table.apiKey)],
+  (t) => [
+    // Backs the bounded org-network query (top-N by weight within tenant).
+    index("relationships_tenant_weight_idx").on(t.tenantId, t.weight),
+    index("relationships_source_idx").on(t.sourcePersonId),
+    index("relationships_target_idx").on(t.targetPersonId),
+  ],
 );
 
-export const findings = pgTable("findings", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  description: text("description").notNull().default(""),
-  status: findingStatusEnum("status").notNull().default("open"),
-  // Beta-Bernoulli confidence state (see src/lib/domain/beta.ts).
-  confidenceAlpha: doublePrecision("confidence_alpha").notNull().default(1),
-  confidenceBeta: doublePrecision("confidence_beta").notNull().default(1),
-  createdBy: integer("created_by").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const decisions = pgTable(
+  "decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    personId: uuid("person_id").notNull(),
+    kind: text("kind").notNull(),
+    impact: real("impact").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    // Backs the heatmap aggregation (GROUP BY day WHERE tenant_id = $1 AND
+    // occurred_at BETWEEN ...) — the single most expensive query in Phase 0.
+    index("decisions_tenant_occurred_idx").on(t.tenantId, t.occurredAt),
+    index("decisions_person_idx").on(t.personId),
+  ],
+);
 
-export const decisions = pgTable("decisions", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  findingId: integer("finding_id")
-    .notNull()
-    .references(() => findings.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  rationale: text("rationale").notNull().default(""),
-  status: decisionStatusEnum("status").notNull().default("proposed"),
-  // PERT three-point estimate (see src/lib/domain/pert.ts).
-  optimisticEstimate: doublePrecision("optimistic_estimate").notNull(),
-  likelyEstimate: doublePrecision("likely_estimate").notNull(),
-  pessimisticEstimate: doublePrecision("pessimistic_estimate").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-export const approvals = pgTable("approvals", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  decisionId: integer("decision_id")
-    .notNull()
-    .references(() => decisions.id, { onDelete: "cascade" }),
-  approverId: integer("approver_id").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  status: approvalStatusEnum("status").notNull().default("pending"),
-  decidedAt: timestamp("decided_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-export const automationRuns = pgTable("automation_runs", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  decisionId: integer("decision_id")
-    .notNull()
-    .references(() => decisions.id, { onDelete: "cascade" }),
-  status: automationStatusEnum("status").notNull().default("queued"),
-  output: jsonb("output"),
-  startedAt: timestamp("started_at", { withTimezone: true }),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-export const boardPacks = pgTable("board_packs", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
-  periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
-  summary: jsonb("summary").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const forecastRuns = pgTable(
+  "forecast_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    scenarioKey: text("scenario_key").notNull(),
+    inputsHash: text("inputs_hash").notNull(),
+    status: text("status").notNull(), // 'ready' | 'computing' | 'error'
+    p10: real("p10"),
+    p50: real("p50"),
+    p90: real("p90"),
+    series: jsonb("series").$type<{ week: number; p10: number; p50: number; p90: number }[]>(),
+    durationMs: integer("duration_ms"),
+    computedAt: timestamp("computed_at", { withTimezone: true }),
+  },
+  (t) => [
+    // Durable projection cache: one row per (tenant, scenario, inputs hash).
+    // This is the "projection cache with event-driven invalidation" surface
+    // — a new inputs hash (any input event changed) simply inserts a new
+    // row rather than overwriting, so stale rows can still be served while
+    // a fresh computation runs (see src/lib/forecastCache.ts).
+    uniqueIndex("forecast_runs_identity_idx").on(t.tenantId, t.scenarioKey, t.inputsHash),
+    index("forecast_runs_tenant_idx").on(t.tenantId),
+  ],
+);

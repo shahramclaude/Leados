@@ -1,21 +1,14 @@
 #!/usr/bin/env node
-// LEADOS Part 14 — verification harness.
-//
-// NOTE: this repository's package.json cannot be edited directly per this
-// project's standing instructions (only `install_npm_packages` may touch
-// dependencies), so there is no `npm run verify` script wired up. This file
-// is the equivalent suite — run it with `node scripts/verify.mjs`. It:
-//   1. runs `npx next typegen`
-//   2. runs `tsc --noEmit`
-//   3. runs `npm run build`
-//   4. boots a `next start` instance on a throwaway port
-//   5. runs the unit test (no network) + DB-level test + HTTP-level tests
-//   6. tears the throwaway server down
-//
-// Exits non-zero if any step fails.
+// scripts/verify.mjs — `npm run verify`
+// Mirrors the mandatory final-validation sequence plus the Part 18 perf
+// gates: typegen -> tsc -> build -> perf:check (bundle budgets) -> boot a
+// throwaway server -> smoke-test the API routes -> teardown.
+// `npm run loadtest` is intentionally NOT part of this fast gate (it takes
+// ~15s+ and spawns its own server); run it separately — see
+// docs/PERFORMANCE.md.
 import { spawn, spawnSync } from "node:child_process";
 
-const PORT = 3100;
+const PORT = 3102;
 const SERVER_URL = `http://127.0.0.1:${PORT}`;
 
 function run(cmd, args, opts = {}) {
@@ -44,30 +37,34 @@ async function main() {
   run("npx", ["next", "typegen"]);
   run("npm", ["exec", "tsc", "--", "--noEmit", "--pretty", "false"]);
   run("npm", ["run", "build"]);
+  run("node", ["scripts/perf-check.mjs"]);
 
-  console.log("\n$ unit test (no network, no DB): backpressure + scoping");
-  run("npx", ["tsx", "scripts/tests/backpressure-and-scoping.test.ts"]);
-
-  console.log("\n$ DB-level test: interrupt budget + dedupe burst");
-  run("npx", ["tsx", "scripts/tests/budget-and-dedupe.test.ts"]);
-
-  console.log(`\nStarting throwaway server on port ${PORT} for HTTP-level tests...`);
+  console.log(`\nStarting throwaway server on port ${PORT} for HTTP smoke tests...`);
   const server = spawn("npx", ["next", "start", "-p", String(PORT)], { stdio: "inherit" });
 
   try {
     const up = await waitForHealth(SERVER_URL);
     if (!up) throw new Error("server did not become healthy in time");
 
-    run("npx", ["tsx", "scripts/tests/http-realtime.test.ts"], { env: { ...process.env, SERVER_URL } });
+    const checks = [
+      ["/api/health", 200],
+      ["/api/people?limit=10", 200],
+      ["/api/network", 200],
+      ["/api/heatmap", 200],
+      ["/api/forecast?scenario=baseline", 200],
+    ];
+    for (const [path, expected] of checks) {
+      const res = await fetch(`${SERVER_URL}${path}`);
+      console.log(`  GET ${path} -> ${res.status}`);
+      if (res.status !== expected) throw new Error(`${path} returned ${res.status}, expected ${expected}`);
+    }
+    console.log("\nAll smoke tests passed.");
   } finally {
     server.kill("SIGTERM");
-    await new Promise((r) => setTimeout(r, 500));
   }
-
-  console.log("\nAll verification steps passed.");
 }
 
 main().catch((err) => {
-  console.error(`\nVerification failed: ${err.message}`);
-  process.exit(1);
+  console.error(err);
+  process.exitCode = 1;
 });

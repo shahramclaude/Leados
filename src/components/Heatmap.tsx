@@ -1,62 +1,46 @@
 "use client";
-import React from "react";
+
+import { useMemo } from "react";
 
 export interface HeatmapCell {
-  color: string;
-  title: string;
-  label?: string;
+  day: string;
+  count: number;
+  avgImpact: number;
 }
 
-// Generic heatmap grid — used by the Signal Board temporal heatmap (rules x
-// days) and the Execution blocker heatmap (domain x severity).
-export function Heatmap({
-  rowLabels,
-  colLabels,
-  cell,
-  cellWidth = 22,
-  cellHeight = 18,
-  rowLabelWidth = 160,
-  onCellClick,
-}: {
-  rowLabels: string[];
-  colLabels: string[];
-  cell: (rowIdx: number, colIdx: number) => HeatmapCell;
-  cellWidth?: number;
-  cellHeight?: number;
-  rowLabelWidth?: number;
-  onCellClick?: (rowIdx: number, colIdx: number) => void;
-}) {
+/**
+ * Calendar heatmap of decision activity. The cell count is naturally bounded
+ * (<= 371 cells for a year-ish window) so no virtualization is needed here —
+ * the perf risk for this view is the *query*, not the render, which is why
+ * the heavy lifting (GROUP BY aggregation + stale-while-revalidate caching)
+ * lives in src/db/repositories/heatmap.ts. This component just memoizes the
+ * color scale so re-renders from parent state changes don't re-walk the
+ * array.
+ */
+export function Heatmap({ cells, stale, staleForMs }: { cells: HeatmapCell[]; stale?: boolean; staleForMs?: number }) {
+  const maxCount = useMemo(() => Math.max(1, ...cells.map((c) => c.count)), [cells]);
+
   return (
-    <div className="overflow-x-auto">
-      <div style={{ minWidth: rowLabelWidth + colLabels.length * (cellWidth + 2) }}>
-        <div className="flex">
-          <div style={{ width: rowLabelWidth }} />
-          {colLabels.map((c, i) => (
-            <div key={i} style={{ width: cellWidth }} className="shrink-0 text-center text-[9px] text-slate-500">
-              {c}
-            </div>
-          ))}
-        </div>
-        {rowLabels.map((r, ri) => (
-          <div key={ri} className="flex items-center">
-            <div style={{ width: rowLabelWidth }} className="truncate pr-2 text-xs text-slate-400">
-              {r}
-            </div>
-            {colLabels.map((_, ci) => {
-              const c = cell(ri, ci);
-              return (
-                <button
-                  key={ci}
-                  title={c.title}
-                  onClick={() => onCellClick?.(ri, ci)}
-                  style={{ width: cellWidth, height: cellHeight, backgroundColor: c.color, margin: 1 }}
-                  className="shrink-0 rounded-sm transition hover:ring-1 hover:ring-slate-300"
-                />
-              );
-            })}
-          </div>
-        ))}
+    <div>
+      {stale && (
+        <p className="mb-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-700">
+          slow query — showing cached result from {Math.round((staleForMs ?? 0) / 1000)}s ago while it refreshes
+        </p>
+      )}
+      <div className="grid grid-cols-[repeat(26,minmax(0,1fr))] gap-[2px]">
+        {cells.map((cell) => {
+          const intensity = cell.count / maxCount;
+          return (
+            <div
+              key={cell.day}
+              title={`${cell.day}: ${cell.count} decisions, avg impact ${cell.avgImpact.toFixed(2)}`}
+              className="aspect-square rounded-[2px]"
+              style={{ backgroundColor: `rgba(79, 70, 229, ${0.08 + intensity * 0.82})` }}
+            />
+          );
+        })}
       </div>
+      <p className="mt-1 text-xs text-slate-500">{cells.length} days aggregated server-side (one GROUP BY query).</p>
     </div>
   );
 }

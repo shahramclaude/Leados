@@ -1,13 +1,8 @@
-/** Deterministic FNV-1a string hash — used only to derive a default Monte
- * Carlo seed from an id when the caller doesn't supply one explicitly. This
- * is not a source of randomness (no entropy), just a pure deterministic
- * mapping, so it is safe to use outside the Prng abstraction.
- */
-export function fnv1a(input: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
+import { createHash } from "node:crypto";
+
+/** Stable short hash of a JSON-serializable object, used as the forecast
+ * cache/projection identity key component ("inputsHash"). */
+export function hashInputs(obj: unknown): string {
+  const json = JSON.stringify(obj, Object.keys(obj as object).sort());
+  return createHash("sha1").update(json).digest("hex").slice(0, 16);
 }

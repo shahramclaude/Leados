@@ -1,95 +1,115 @@
-// Part 06 stand-in: Monte Carlo / distribution engine. Re-implemented locally
-// because no prior-part files existed in the sandbox checkout. Deterministic
-// given a seed, so board-pack generation and backtests stay reproducible.
+/**
+ * src/lib/simulation.ts — chunked, in-process Monte Carlo org-forecast
+ * engine used by the `/api/forecast` route.
+ *
+ * Compute model note (mirrors the canonical repo's documented rationale for
+ * `monteCarloWorker.ts` vs `monteCarlo.ts`): `worker_threads` + TypeScript
+ * inside the Next.js server runtime is a real source of bundling/ESM-loader
+ * fragility, so the HTTP request path deliberately uses this simpler
+ * in-process engine, chunked with a macrotask yield every
+ * `REPLICATIONS_PER_CHUNK` replications so a 2,000-run ensemble never blocks
+ * the Node event loop for a single long task. True multi-core throughput
+ * (worker_threads) is exercised instead by the offline `npm run sim:bench`
+ * CLI via `src/workers/monteCarloWorker.ts`, which is never imported by any
+ * route and therefore never enters the Next.js server bundle.
+ *
+ * Each replication projects a tenant's headcount risk-weighted "effective
+ * capacity" forward `horizonWeeks` weeks under random attrition/hiring
+ * shocks drawn from a seeded PRNG, so the whole run is reproducible from
+ * (tenantId, scenarioKey, inputsHash).
+ */
+import { mulberry32, randNormal, seedFromString, clamp } from "./mathUtils";
+import { summarizeDistribution, type Distribution } from "./stats";
 
-export type Rng = () => number;
-
-/** mulberry32 — small, fast, deterministic PRNG. Same seed -> same stream, always. */
-export function makeRng(seed: number): Rng {
-  let a = seed >>> 0;
-  return function rng() {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+export interface SimInputs {
+  tenantId: string;
+  scenarioKey: string;
+  inputsHash: string;
+  headcount: number;
+  avgRisk: number; // 0..1, mean attrition-risk score across the roster
+  horizonWeeks: number;
+  replications: number;
 }
 
-/** Triangular distribution sample — the standard shape for low/base/high driver ranges. */
-export function sampleTriangular(low: number, base: number, high: number, rng: Rng): number {
-  if (high <= low) return base;
-  const u = rng();
-  const c = (base - low) / (high - low);
-  if (u < c) return low + Math.sqrt(u * (high - low) * (base - low));
-  return high - Math.sqrt((1 - u) * (high - low) * (high - base));
+export interface ForecastSeriesPoint {
+  week: number;
+  p10: number;
+  p50: number;
+  p90: number;
 }
 
-export function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return NaN;
-  const idx = clamp((p / 100) * (sorted.length - 1), 0, sorted.length - 1);
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  const frac = idx - lo;
-  return sorted[lo] * (1 - frac) + sorted[hi] * frac;
+export interface SimResult {
+  final: Distribution;
+  series: ForecastSeriesPoint[];
+  replicationsCompleted: number;
+  durationMs: number;
 }
 
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n));
-}
+const REPLICATIONS_PER_CHUNK = 50;
 
-export type DriverRange = { key: string; low: number; base: number; high: number };
-
-/** Runs N trials of a model fn fed sampled driver values. Pure + seeded = reproducible. */
-export function runMonteCarlo<T>(
-  trials: number,
-  drivers: DriverRange[],
-  model: (sample: Record<string, number>, rng: Rng) => T,
-  seed = 42,
-): T[] {
-  const rng = makeRng(seed);
-  const out: T[] = [];
-  for (let i = 0; i < trials; i++) {
-    const sample: Record<string, number> = {};
-    for (const d of drivers) sample[d.key] = sampleTriangular(d.low, d.base, d.high, rng);
-    out.push(model(sample, rng));
+/** Runs one replication: a headcount random walk influenced by avgRisk. */
+function runOneReplication(rand: () => number, headcount: number, avgRisk: number, horizonWeeks: number): number[] {
+  let capacity = headcount;
+  const series: number[] = [];
+  const weeklyAttritionBase = 0.004 + avgRisk * 0.01; // 0.4%-1.4%/week base hazard
+  for (let week = 0; week < horizonWeeks; week++) {
+    const shock = randNormal(rand, 0, 0.6);
+    const hazard = clamp(weeklyAttritionBase * (1 + shock), 0, 0.08);
+    const leavers = capacity * hazard;
+    const hires = capacity * 0.006 * (1 + randNormal(rand, 0, 0.3));
+    capacity = Math.max(0, capacity - leavers + hires);
+    series.push(capacity);
   }
-  return out;
-}
-
-export function distributionSummary(values: number[]): { p10: number; p50: number; p90: number; mean: number } {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mean = values.reduce((a, b) => a + b, 0) / (values.length || 1);
-  return {
-    p10: percentile(sorted, 10),
-    p50: percentile(sorted, 50),
-    p90: percentile(sorted, 90),
-    mean,
-  };
+  return series;
 }
 
 /**
- * One-at-a-time sensitivity ("tornado"): perturb each driver to its low/high while
- * holding all others at base, measure the swing in the output metric.
+ * Runs the ensemble in yielded chunks so the caller's event loop stays
+ * responsive. `onProgress` fires after every chunk for SSE/polling progress
+ * reporting; `signal` allows cooperative cancellation (queue eviction).
  */
-export function tornadoSensitivity(
-  drivers: DriverRange[],
-  metricAtBase: (overrides: Record<string, number>) => number,
-): { key: string; low: number; high: number; swing: number }[] {
-  const baseSample: Record<string, number> = {};
-  for (const d of drivers) baseSample[d.key] = d.base;
-  const rows = drivers.map((d) => {
-    const lowSample = { ...baseSample, [d.key]: d.low };
-    const highSample = { ...baseSample, [d.key]: d.high };
-    const lowVal = metricAtBase(lowSample);
-    const highVal = metricAtBase(highSample);
-    return {
-      key: d.key,
-      low: lowVal,
-      high: highVal,
-      swing: Math.abs(highVal - lowVal),
-    };
+export async function runForecastEnsemble(
+  inputs: SimInputs,
+  onProgress?: (completed: number, total: number) => void,
+  signal?: AbortSignal,
+): Promise<SimResult> {
+  const start = Date.now();
+  const seed = seedFromString(inputs.inputsHash);
+  const rootRand = mulberry32(seed);
+
+  const perWeekSamples: number[][] = Array.from({ length: inputs.horizonWeeks }, () => []);
+  const finals: number[] = [];
+
+  let completed = 0;
+  while (completed < inputs.replications) {
+    if (signal?.aborted) break;
+    const chunkEnd = Math.min(completed + REPLICATIONS_PER_CHUNK, inputs.replications);
+    for (let r = completed; r < chunkEnd; r++) {
+      // Derive a per-replication seed from the root stream so replications
+      // are independent but the whole ensemble is reproducible.
+      const repRand = mulberry32((seed ^ (r * 2654435761)) >>> 0);
+      void rootRand; // root stream reserved for future antithetic pairing
+      const series = runOneReplication(repRand, inputs.headcount, inputs.avgRisk, inputs.horizonWeeks);
+      series.forEach((v, week) => perWeekSamples[week].push(v));
+      finals.push(series[series.length - 1]);
+    }
+    completed = chunkEnd;
+    onProgress?.(completed, inputs.replications);
+    // Yield to the event loop between chunks — this is the mechanism that
+    // keeps any single macrotask under ~50ms during heavy simulation; see
+    // docs/PERFORMANCE.md "main-thread long task" evidence.
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  const series: ForecastSeriesPoint[] = perWeekSamples.map((samples, week) => {
+    const d = summarizeDistribution(samples);
+    return { week: week + 1, p10: d.p10, p50: d.p50, p90: d.p90 };
   });
-  return rows.sort((a, b) => b.swing - a.swing);
+
+  return {
+    final: summarizeDistribution(finals),
+    series,
+    replicationsCompleted: completed,
+    durationMs: Date.now() - start,
+  };
 }

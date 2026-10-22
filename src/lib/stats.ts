@@ -1,148 +1,56 @@
 /**
  * src/lib/stats.ts
- * Statistical helpers layered on mathUtils: hypothesis tests, balance
- * diagnostics, and sensitivity-analysis primitives (E-value, Rosenbaum-style
- * bound) used across the causal estimators.
+ * Statistics layered on mathUtils — used by the forecast summarizer to turn
+ * a raw array of Monte Carlo replication outputs into p10/p50/p90 bands.
  */
-import { mean, variance, weightedMean, weightedVariance, zTwoSidedPValue, sum, mulberry32 } from "./mathUtils";
+import { mean, quantile, std, sum } from "./mathUtils";
 
-export interface TTestResult {
-  diff: number;
-  se: number;
-  t: number;
-  pValue: number;
-  ci95: [number, number];
+export interface Distribution {
+  n: number;
+  mean: number;
+  std: number;
+  p10: number;
+  p50: number;
+  p90: number;
+  min: number;
+  max: number;
 }
 
-/** Welch's two-sample t-test (unequal variance), used for simple difference-in-means estimators and placebo tests. */
-export function welchTTest(a: number[], b: number[]): TTestResult {
-  const ma = mean(a);
-  const mb = mean(b);
-  const va = variance(a);
-  const vb = variance(b);
-  const se = Math.sqrt(va / a.length + vb / b.length);
-  const diff = ma - mb;
-  const t = diff / se;
-  const pValue = zTwoSidedPValue(t); // normal approximation, adequate for N >= ~30
-  return { diff, se, t, pValue, ci95: [diff - 1.96 * se, diff + 1.96 * se] };
-}
-
-/** Standardized mean difference between treated/control for one covariate (used for balance diagnostics). */
-export function standardizedMeanDifference(treated: number[], control: number[], weightsTreated?: number[], weightsControl?: number[]): number {
-  const mt = weightsTreated ? weightedMean(treated, weightsTreated) : mean(treated);
-  const mc = weightsControl ? weightedMean(control, weightsControl) : mean(control);
-  const vt = weightsTreated ? weightedVariance(treated, weightsTreated) : variance(treated);
-  const vc = weightsControl ? weightedVariance(control, weightsControl) : variance(control);
-  const pooledSd = Math.sqrt((vt + vc) / 2);
-  if (pooledSd === 0 || Number.isNaN(pooledSd)) return 0;
-  return (mt - mc) / pooledSd;
-}
-
-export interface BalanceRow {
-  covariate: string;
-  smdBefore: number;
-  smdAfter: number;
-  balanced: boolean; // |smdAfter| < 0.1
-}
-
-export function balanceTable(
-  covariateNames: string[],
-  treatedRows: number[][],
-  controlRows: number[][],
-  controlWeights: number[],
-): BalanceRow[] {
-  const unitWeightsControl = controlRows.map(() => 1);
-  return covariateNames.map((name, j) => {
-    const treatedCol = treatedRows.map((r) => r[j]);
-    const controlCol = controlRows.map((r) => r[j]);
-    const smdBefore = standardizedMeanDifference(treatedCol, controlCol, undefined, unitWeightsControl);
-    const smdAfter = standardizedMeanDifference(treatedCol, controlCol, undefined, controlWeights);
-    return { covariate: name, smdBefore, smdAfter, balanced: Math.abs(smdAfter) < 0.1 };
-  });
-}
-
-/**
- * E-value: minimum strength of association (risk-ratio scale) an unmeasured
- * confounder would need to have with BOTH treatment and outcome to fully
- * explain away an observed effect estimate, given the CI bound closest to
- * the null. Implemented for a standardized-mean-difference-style estimate by
- * first converting to an approximate risk ratio via the VanderWeele-Ding
- * approximation (RR ≈ exp(0.91 * SMD)) for continuous outcomes.
- */
-export function eValue(estimateSmd: number, ciBoundSmd: number): { pointEValue: number; ciEValue: number } {
-  const toRR = (smd: number) => Math.exp(0.91 * Math.abs(smd));
-  const evalFromRR = (rr: number) => (rr >= 1 ? rr + Math.sqrt(rr * (rr - 1)) : (1 / rr) + Math.sqrt((1 / rr) * (1 / rr - 1)));
-  const rrPoint = toRR(estimateSmd);
-  const rrCi = toRR(ciBoundSmd);
+export function summarizeDistribution(xs: number[]): Distribution {
+  if (xs.length === 0) {
+    return { n: 0, mean: NaN, std: NaN, p10: NaN, p50: NaN, p90: NaN, min: NaN, max: NaN };
+  }
   return {
-    pointEValue: evalFromRR(rrPoint),
-    ciEValue: ciBoundSmd === 0 ? 1 : evalFromRR(rrCi),
+    n: xs.length,
+    mean: mean(xs),
+    std: xs.length > 1 ? std(xs) : 0,
+    p10: quantile(xs, 0.1),
+    p50: quantile(xs, 0.5),
+    p90: quantile(xs, 0.9),
+    min: Math.min(...xs),
+    max: Math.max(...xs),
   };
 }
 
-/**
- * Simplified Rosenbaum-style sensitivity bound for matched-pair comparisons:
- * reports, for a grid of Gamma (odds of differential assignment due to an
- * unmeasured confounder), the worst-case p-value under Wilcoxon signed-rank
- * logic approximated with a normal approximation. Returns the smallest
- * Gamma at which significance (p<0.05) could be lost.
- */
-export function rosenbaumBounds(pairedDiffs: number[], gammaGrid: number[] = [1, 1.5, 2, 2.5, 3, 4, 5]): {
-  gamma: number;
-  worstCaseP: number;
-}[] {
-  const n = pairedDiffs.length;
-  const ranks = rankAbs(pairedDiffs);
-  const signs = pairedDiffs.map((d) => (d > 0 ? 1 : d < 0 ? -1 : 0));
-  const wPlus = sum(ranks.map((r, i) => (signs[i] > 0 ? r : 0)));
-  return gammaGrid.map((gamma) => {
-    const pPlus = gamma / (1 + gamma);
-    const muMax = sum(ranks.map((r) => r * pPlus));
-    const varMax = sum(ranks.map((r) => r * r * pPlus * (1 - pPlus)));
-    const z = varMax > 0 ? (wPlus - muMax) / Math.sqrt(varMax) : 0;
-    const worstCaseP = 1 - normalCdfLocal(z);
-    return { gamma, worstCaseP };
-  });
-
-  function rankAbs(xs: number[]): number[] {
-    const idx = xs.map((x, i) => [Math.abs(x), i] as [number, number]).sort((a, b) => a[0] - b[0]);
-    const r = new Array(n).fill(0);
-    idx.forEach(([, origIdx], rank) => (r[origIdx] = rank + 1));
-    return r;
+/** Builds a fixed-bin histogram (for the forecast distribution chart) so the
+ * client never has to receive the full N=2,000 replication array. */
+export function histogram(xs: number[], bins = 24): { x0: number; x1: number; count: number }[] {
+  if (xs.length === 0) return [];
+  const min = Math.min(...xs);
+  const max = Math.max(...xs);
+  const width = (max - min) / bins || 1;
+  const counts = new Array(bins).fill(0);
+  for (const x of xs) {
+    const idx = Math.min(bins - 1, Math.max(0, Math.floor((x - min) / width)));
+    counts[idx]++;
   }
-  function normalCdfLocal(z: number): number {
-    return 0.5 * (1 + erfLocal(z / Math.SQRT2));
-  }
-  function erfLocal(x: number): number {
-    const sign = x < 0 ? -1 : 1;
-    const ax = Math.abs(x);
-    const t = 1 / (1 + 0.3275911 * ax);
-    const y =
-      1 -
-      (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-ax * ax);
-    return sign * y;
-  }
+  return counts.map((count, i) => ({ x0: min + i * width, x1: min + (i + 1) * width, count }));
 }
 
-/** Bootstrap percentile CI for an arbitrary statistic function over paired arrays. */
-export function bootstrapCI(
-  n: number,
-  statFn: (sampleIdx: number[]) => number,
-  opts: { iters?: number; seed?: number; alpha?: number } = {},
-): { low: number; high: number; draws: number[] } {
-  const { iters = 500, seed = 42, alpha = 0.1 } = opts;
-  const rand = mulberry32(seed);
-  const draws: number[] = [];
-  for (let b = 0; b < iters; b++) {
-    const idx = Array.from({ length: n }, () => Math.floor(rand() * n));
-    draws.push(statFn(idx));
-  }
-  const sorted = [...draws].sort((a, b) => a - b);
-  const low = sorted[Math.floor((alpha / 2) * sorted.length)];
-  const high = sorted[Math.ceil((1 - alpha / 2) * sorted.length) - 1];
-  return { low, high, draws };
-}
-
-export function pooledStd(a: number[], b: number[]): number {
-  return Math.sqrt((variance(a) + variance(b)) / 2);
+/** Weighted average attrition-risk score for a cohort, used in the Network
+ * node coloring and the cockpit KPI cards. */
+export function weightedRisk(scores: number[], weights: number[]): number {
+  const wsum = sum(weights);
+  if (wsum === 0) return NaN;
+  return sum(scores.map((s, i) => s * weights[i])) / wsum;
 }

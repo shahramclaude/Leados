@@ -1,7 +1,13 @@
 /**
  * src/lib/mathUtils.ts
- * Shared numeric primitives for the causal-inference layer.
- * Pure functions only — no I/O, no randomness except the explicit PRNG below.
+ *
+ * Pure numeric primitives shared by the simulation engine and the stats
+ * layer. Re-implemented to match the canonical repo's `src/lib/mathUtils.ts`
+ * API (same function names/signatures) so this slice merges cleanly — see
+ * AI-SESSION-LOG.md for the read-before-write note.
+ *
+ * No I/O, no ambient randomness — the only randomness is the explicit
+ * seeded PRNG below, so every caller is reproducible.
  */
 
 export function sum(xs: number[]): number {
@@ -23,21 +29,6 @@ export function std(xs: number[], ddof = 1): number {
   return Math.sqrt(variance(xs, ddof));
 }
 
-export function weightedMean(xs: number[], w: number[]): number {
-  const wsum = sum(w);
-  if (wsum === 0) return NaN;
-  return sum(xs.map((x, i) => x * w[i])) / wsum;
-}
-
-export function weightedVariance(xs: number[], w: number[], ddof = 1): number {
-  const wm = weightedMean(xs, w);
-  const wsum = sum(w);
-  const n = w.filter((x) => x > 0).length;
-  if (n <= ddof) return NaN;
-  const correction = wsum / Math.max(wsum - ddof * (wsum / n), 1e-9);
-  return correction * (sum(xs.map((x, i) => w[i] * (x - wm) ** 2)) / wsum);
-}
-
 export function quantile(xs: number[], p: number): number {
   const sorted = [...xs].sort((a, b) => a - b);
   if (sorted.length === 0) return NaN;
@@ -54,7 +45,8 @@ export function linspace(start: number, stop: number, n: number): number[] {
   return Array.from({ length: n }, (_, i) => start + step * i);
 }
 
-/** Deterministic, seedable PRNG (mulberry32) for reproducible synthetic ground truth. */
+/** Deterministic, seedable PRNG (mulberry32) — same algorithm as the
+ * canonical repo, so a given seed produces the same stream here and there. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return function rand() {
@@ -66,7 +58,18 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
-/** Standard normal sample via Box-Muller, driven by an injected PRNG for reproducibility. */
+/** Hashes a string seed (e.g. "tenant:scenario:inputsHash") to a uint32 seed
+ * for mulberry32, so callers can seed by a stable string key. */
+export function seedFromString(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Standard normal sample via Box-Muller, driven by an injected PRNG. */
 export function randNormal(rand: () => number, mu = 0, sigma = 1): number {
   let u = 0;
   let v = 0;
@@ -76,147 +79,64 @@ export function randNormal(rand: () => number, mu = 0, sigma = 1): number {
   return mu + sigma * z;
 }
 
-export function erf(x: number): number {
-  // Abramowitz-Stegun 7.1.26 approximation, max error ~1.5e-7
-  const sign = x < 0 ? -1 : 1;
-  const ax = Math.abs(x);
-  const a1 = 0.254829592;
-  const a2 = -0.284496736;
-  const a3 = 1.421413741;
-  const a4 = -1.453152027;
-  const a5 = 1.061405429;
-  const p = 0.3275911;
-  const t = 1 / (1 + p * ax);
-  const y = 1 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
-  return sign * y;
-}
-
-export function normalCdf(x: number, mu = 0, sigma = 1): number {
-  return 0.5 * (1 + erf((x - mu) / (sigma * Math.SQRT2)));
-}
-
-/** Two-sided p-value for a z-statistic under the standard normal. */
-export function zTwoSidedPValue(z: number): number {
-  return 2 * (1 - normalCdf(Math.abs(z)));
-}
-
 export function clamp(x: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, x));
+  return Math.min(hi, Math.max(lo, x));
 }
 
-export function logistic(x: number): number {
-  if (x >= 0) {
-    const z = Math.exp(-x);
-    return 1 / (1 + z);
-  }
-  const z = Math.exp(x);
-  return z / (1 + z);
-}
+/**
+ * Largest-Triangle-Three-Buckets downsampling (Sveinn Steinarsson, 2013).
+ * Reduces a time series of N points to `threshold` points while preserving
+ * visual shape (peaks/troughs) far better than naive stride sampling —
+ * used by ForecastChart so a 2,000-week/percentile-band series never ships
+ * more than ~400 SVG points to the browser. Documented in
+ * docs/PERFORMANCE.md "Progressive chart rendering".
+ */
+export function lttb<T>(data: T[], threshold: number, getX: (d: T) => number, getY: (d: T) => number): T[] {
+  const n = data.length;
+  if (threshold >= n || threshold <= 2) return data;
 
-/** Solve (X'X) b = X'y via Gauss-Jordan elimination. X is n x k (first column should be 1s for intercept). */
-export function olsFit(X: number[][], y: number[]): { coef: number[]; fitted: number[]; residuals: number[] } {
-  const n = X.length;
-  const k = X[0].length;
-  const XtX: number[][] = Array.from({ length: k }, () => new Array(k).fill(0));
-  const Xty: number[] = new Array(k).fill(0);
-  for (let i = 0; i < n; i++) {
-    for (let a = 0; a < k; a++) {
-      Xty[a] += X[i][a] * y[i];
-      for (let b = 0; b < k; b++) {
-        XtX[a][b] += X[i][a] * X[i][b];
+  const sampled: T[] = [];
+  const every = (n - 2) / (threshold - 2);
+
+  let a = 0; // index of last sampled point
+  sampled.push(data[a]);
+
+  for (let i = 0; i < threshold - 2; i++) {
+    const avgRangeStart = Math.floor((i + 1) * every) + 1;
+    const avgRangeEndRaw = Math.floor((i + 2) * every) + 1;
+    const avgRangeEnd = Math.min(avgRangeEndRaw, n);
+
+    let avgX = 0;
+    let avgY = 0;
+    const rangeLength = avgRangeEnd - avgRangeStart;
+    for (let j = avgRangeStart; j < avgRangeEnd; j++) {
+      avgX += getX(data[j]);
+      avgY += getY(data[j]);
+    }
+    avgX /= Math.max(rangeLength, 1);
+    avgY /= Math.max(rangeLength, 1);
+
+    const rangeOffs = Math.floor(i * every) + 1;
+    const rangeTo = Math.floor((i + 1) * every) + 1;
+
+    const pointAX = getX(data[a]);
+    const pointAY = getY(data[a]);
+
+    let maxArea = -1;
+    let nextA = rangeOffs;
+    for (let j = rangeOffs; j < rangeTo && j < n; j++) {
+      const area = Math.abs(
+        (pointAX - avgX) * (getY(data[j]) - pointAY) - (pointAX - getX(data[j])) * (avgY - pointAY),
+      ) * 0.5;
+      if (area > maxArea) {
+        maxArea = area;
+        nextA = j;
       }
     }
+    sampled.push(data[nextA]);
+    a = nextA;
   }
-  const coef = solveLinearSystem(XtX, Xty);
-  const fitted = X.map((row) => row.reduce((s, v, j) => s + v * coef[j], 0));
-  const residuals = y.map((v, i) => v - fitted[i]);
-  return { coef, fitted, residuals };
-}
 
-/** Gauss-Jordan elimination with partial pivoting + ridge fallback for near-singular systems. */
-export function solveLinearSystem(A: number[][], b: number[]): number[] {
-  const n = A.length;
-  const ridge = 1e-8;
-  const M = A.map((row, i) => [...row.map((v, j) => v + (i === j ? ridge : 0)), b[i]]);
-  for (let col = 0; col < n; col++) {
-    let pivotRow = col;
-    let maxVal = Math.abs(M[col][col]);
-    for (let r = col + 1; r < n; r++) {
-      if (Math.abs(M[r][col]) > maxVal) {
-        maxVal = Math.abs(M[r][col]);
-        pivotRow = r;
-      }
-    }
-    [M[col], M[pivotRow]] = [M[pivotRow], M[col]];
-    const pivot = M[col][col] || 1e-12;
-    for (let j = col; j <= n; j++) M[col][j] /= pivot;
-    for (let r = 0; r < n; r++) {
-      if (r === col) continue;
-      const factor = M[r][col];
-      for (let j = col; j <= n; j++) M[r][j] -= factor * M[col][j];
-    }
-  }
-  return M.map((row) => row[n]);
-}
-
-/** Standard errors of OLS coefficients under homoskedasticity. */
-export function olsStandardErrors(X: number[][], residuals: number[]): number[] {
-  const n = X.length;
-  const k = X[0].length;
-  const dof = Math.max(n - k, 1);
-  const sigma2 = sum(residuals.map((r) => r * r)) / dof;
-  const XtX: number[][] = Array.from({ length: k }, () => new Array(k).fill(0));
-  for (let i = 0; i < n; i++) {
-    for (let a = 0; a < k; a++) {
-      for (let b = 0; b < k; b++) {
-        XtX[a][b] += X[i][a] * X[i][b];
-      }
-    }
-  }
-  const inv = invertMatrix(XtX);
-  return inv.map((row, i) => Math.sqrt(Math.max(sigma2 * row[i], 0)));
-}
-
-export function invertMatrix(A: number[][]): number[][] {
-  const n = A.length;
-  const I: number[][] = Array.from({ length: n }, (_, i) =>
-    Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)),
-  );
-  const cols: number[][] = [];
-  for (let c = 0; c < n; c++) {
-    cols.push(solveLinearSystem(A, I.map((row) => row[c])));
-  }
-  // cols[c] is the c-th column of the inverse
-  const inv: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
-  for (let c = 0; c < n; c++) {
-    for (let r = 0; r < n; r++) inv[r][c] = cols[c][r];
-  }
-  return inv;
-}
-
-/** Logistic regression via simple gradient descent (sufficient for propensity scores on small/medium N). */
-export function logisticRegressionFit(
-  X: number[][],
-  y: number[],
-  opts: { iters?: number; lr?: number; l2?: number } = {},
-): { coef: number[]; predict: (row: number[]) => number } {
-  const { iters = 2000, lr = 0.1, l2 = 1e-4 } = opts;
-  const n = X.length;
-  const k = X[0].length;
-  let coef = new Array(k).fill(0);
-  for (let it = 0; it < iters; it++) {
-    const grad = new Array(k).fill(0);
-    for (let i = 0; i < n; i++) {
-      const pred = logistic(sum(X[i].map((v, j) => v * coef[j])));
-      const err = pred - y[i];
-      for (let j = 0; j < k; j++) grad[j] += err * X[i][j];
-    }
-    for (let j = 0; j < k; j++) {
-      coef[j] -= (lr * (grad[j] / n + l2 * coef[j]));
-    }
-  }
-  return {
-    coef,
-    predict: (row: number[]) => logistic(sum(row.map((v, j) => v * coef[j]))),
-  };
+  sampled.push(data[n - 1]);
+  return sampled;
 }

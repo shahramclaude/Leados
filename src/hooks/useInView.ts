@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 /**
  * Lazily mounts expensive panels (charts, network graph, heatmap) only once
  * they scroll into the viewport, using IntersectionObserver. Once visible it
- * stays mounted (no mount/unmount thrash while scrolling).
+ * stays mounted (no mount/unmount thrash while scrolling). Matches the
+ * canonical repo's `src/hooks/useInView.ts` contract.
  */
 export function useInView<T extends HTMLElement>(options?: IntersectionObserverInit) {
   const ref = useRef<T | null>(null);
@@ -31,7 +32,8 @@ export function useInView<T extends HTMLElement>(options?: IntersectionObserverI
 
     observer.observe(node);
     return () => observer.disconnect();
-  }, [inView, options]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView]);
 
   return { ref, inView };
 }

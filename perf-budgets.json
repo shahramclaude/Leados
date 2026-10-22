@@ -1,0 +1,45 @@
+{
+  "_comment": "Part 18 performance budgets. Each budget has a one-line justification. Enforced by `npm run perf:check` (bundle sizes) and `npm run loadtest` (API p95/p99/error budget). Numbers are re-measured, not assumed — see docs/PERFORMANCE.md VERIFICATION LOG.",
+  "routes": {
+    "/": {
+      "maxInitialJsKb": 150,
+      "justification": "Shell route: one health-check query, one link, zero client components. 150KB is the 'shell' ceiling from the standing order and should be mostly Next.js/React runtime, not app code."
+    },
+    "/cockpit": {
+      "maxInitialJsKb": 200,
+      "justification": "Heaviest route in the app (KPI strip + 4 lazy panels). 200KB is the standing-order ceiling for any route; the panels themselves (Network canvas renderer, Heatmap, PeopleTable virtualization, ForecastChart) are code-split via next/dynamic so they are NOT counted in this route's *initial* JS — only the shell + dynamic-import glue is."
+    }
+  },
+  "webVitals": {
+    "lcpMs": 2000,
+    "inpMs": 200,
+    "cls": 0.1,
+    "profile": "mid-tier (4x CPU slowdown, Slow 4G) — standing-order default; not independently re-measured in this sandbox because it has no headless-browser Lighthouse runner installed (see docs/PERFORMANCE.md Phase 5 self-review for what this does NOT prove)."
+  },
+  "api": {
+    "reads": {
+      "p95Ms": 300,
+      "routes": ["/api/people", "/api/network", "/api/heatmap"],
+      "justification": "Index-backed, paginated/bounded reads. 300ms p95 leaves headroom above the sub-10ms query time measured locally for connection overhead + JSON serialization under concurrent load."
+    },
+    "computes": {
+      "p95Ms": 2000,
+      "routes": ["/api/forecast"],
+      "justification": "Monte Carlo forecast. On a warm cache (StaleCache, <30s old) this should be ~0ms server compute; the 2s budget covers a cold-cache miss that must await a real simulation, bounded by the BoundedQueue and the sim:bench single-thread gate."
+    }
+  },
+  "simulation": {
+    "maxWallMsFor2000Replications": 5000,
+    "justification": "The HTTP route runs the single-threaded chunked engine (worker_threads deliberately excluded from the request path — see src/lib/simulation.ts header). 5s keeps a cold-cache forecast request well inside typical browser/proxy timeouts even under the Node event-loop-yield overhead that chunking adds."
+  },
+  "db": {
+    "unboundedQueriesAllowed": 0,
+    "nPlus1PatternsAllowed": 0,
+    "justification": "Every list endpoint goes through src/db/repositories/pagination.ts (hard server-side cap, MAX_PAGE_SIZE=100); the one known N+1 (resolving manager names per person row) is fixed with a single batched IN query — see docs/PERFORMANCE.md."
+  },
+  "loadtest": {
+    "maxErrorRatePct": 0.1,
+    "concurrency": 20,
+    "justification": "Standing order asks for 100 users/org; this sandbox is a single shared CPU/DB container (see docs/PERFORMANCE.md hardware profile), so concurrency is reduced to 20 and documented as a scaled-down proxy rather than silently claiming a 100-user result we did not actually generate."
+  }
+}

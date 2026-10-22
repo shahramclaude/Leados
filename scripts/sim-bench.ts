@@ -1,61 +1,82 @@
-// scripts/sim-bench.ts
-//
-// `npm run sim:bench` — benchmarks the standard 2,000-run ensemble, before
-// and after variance-reduction (antithetic + control variate), and reports
-// whether it meets the Phase 4 gate: "2,000-run ensemble of the standard
-// scenario completes <= 30s on the bench profile".
-//
-// All numbers printed are MODEL ESTIMATES of the engine's own performance
-// and variance; this script measures the simulator, not any real
-// organisation.
+/**
+ * scripts/sim-bench.ts — `npm run sim:bench`
+ *
+ * Benchmarks the forecast ensemble two ways on the same seeded workload:
+ *   BEFORE: single-threaded, in-process, chunked engine (src/lib/simulation.ts)
+ *            — this is what the HTTP route actually uses.
+ *   AFTER:  multi-core worker pool (src/lib/monteCarloPool.ts +
+ *            src/workers/monteCarloWorker.ts) — this is the throughput
+ *            ceiling if/when a route ever needs more than one process's
+ *            worth of CPU for a single forecast.
+ *
+ * All numbers printed are measurements of THIS machine running THIS engine
+ * on a fixed, seeded workload — not a claim about production hardware.
+ */
+import { runForecastEnsemble } from "../src/lib/simulation";
+import { runPooled } from "../src/lib/monteCarloPool";
 
-import { DEFAULT_SCENARIO } from "../src/lib/twin/simulationScenario";
-import { runEnsemble } from "../src/lib/twin/ensemble";
+const REPLICATIONS = Number(process.env.SIM_BENCH_REPLICATIONS ?? 2000);
+const HORIZON_WEEKS = 26;
+const HEADCOUNT = 1500; // matches the x10 seeded people count
+const AVG_RISK = 0.35;
 
-const STANDARD_RUNS = 2000;
-const GATE_MS = 30_000;
-
-function fmtMs(ms: number): string {
+function fmtMs(ms: number) {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-function bench(label: string, useAntithetic: boolean, useControlVariate: boolean) {
-  const scenario = { ...DEFAULT_SCENARIO, ensembleRuns: STANDARD_RUNS };
-  const wallStart = Date.now();
-  const result = runEnsemble(scenario, {
-    runs: STANDARD_RUNS,
-    seedBase: scenario.seedBase,
-    useAntithetic,
-    useControlVariate,
+async function benchSingleThreaded() {
+  const start = Date.now();
+  const result = await runForecastEnsemble({
+    tenantId: "bench",
+    scenarioKey: "bench",
+    inputsHash: "bench-fixed-seed",
+    headcount: HEADCOUNT,
+    avgRisk: AVG_RISK,
+    horizonWeeks: HORIZON_WEEKS,
+    replications: REPLICATIONS,
   });
-  const wallMs = Date.now() - wallStart;
-  console.log(`\n--- ${label} ---`);
-  console.log(`  runs requested/completed: ${result.runsRequested}/${result.runsCompleted}`);
+  const wallMs = Date.now() - start;
+  console.log(`\n--- BEFORE: single-threaded chunked engine (in-process, used by /api/forecast) ---`);
+  console.log(`  replications: ${result.replicationsCompleted}/${REPLICATIONS}`);
   console.log(`  engine-reported duration: ${fmtMs(result.durationMs)}`);
   console.log(`  wall-clock duration:      ${fmtMs(wallMs)}`);
-  if (result.controlVariateDiagnostics) {
-    console.log(
-      `  control-variate variance reduction on cumulativeNetValue mean: ${result.controlVariateDiagnostics.varianceReductionPct.toFixed(2)}% ` +
-        `(stdErr ${result.controlVariateDiagnostics.rawStdErr.toFixed(0)} -> ${result.controlVariateDiagnostics.adjustedStdErr.toFixed(0)})`,
-    );
-  }
-  if (result.antitheticDiagnostics) {
-    console.log(
-      `  antithetic variance reduction on cumulativeNetValue mean: ${result.antitheticDiagnostics.varianceReductionPct.toFixed(2)}% ` +
-        `(stdErr ${result.antitheticDiagnostics.independentStdErr.toFixed(0)} -> ${result.antitheticDiagnostics.pairedStdErr.toFixed(0)})`,
-    );
-  }
+  console.log(`  throughput: ${(REPLICATIONS / (wallMs / 1000)).toFixed(0)} replications/sec`);
   return wallMs;
 }
 
-console.log(`LEADOS sim:bench — standard scenario "${DEFAULT_SCENARIO.name}", horizon ${DEFAULT_SCENARIO.horizonWeeks}w, ${STANDARD_RUNS} runs`);
+async function benchPooled() {
+  const start = Date.now();
+  const result = await runPooled({
+    seed: 0xc0ffee,
+    replications: REPLICATIONS,
+    headcount: HEADCOUNT,
+    avgRisk: AVG_RISK,
+    horizonWeeks: HORIZON_WEEKS,
+  });
+  const wallMs = Date.now() - start;
+  console.log(`\n--- AFTER: ${result.workerCount}-worker pool (offline CLI only, not in request path) ---`);
+  console.log(`  replications: ${result.finals.length}/${REPLICATIONS}`);
+  console.log(`  worker count: ${result.workerCount}`);
+  console.log(`  wall-clock duration: ${fmtMs(result.wallMs)}`);
+  console.log(`  throughput: ${(REPLICATIONS / (wallMs / 1000)).toFixed(0)} replications/sec`);
+  return wallMs;
+}
 
-const beforeMs = bench("BEFORE (no antithetic, no control variate)", false, false);
-const afterMs = bench("AFTER (antithetic + control variate enabled)", true, true);
+async function main() {
+  console.log(`LEADOS sim:bench — ${REPLICATIONS} replications, ${HORIZON_WEEKS}w horizon, headcount=${HEADCOUNT} (x10 seeded scale)`);
+  const beforeMs = await benchSingleThreaded();
+  const afterMs = await benchPooled();
 
-console.log("\n=== SUMMARY ===");
-console.log(`before: ${fmtMs(beforeMs)}  |  after: ${fmtMs(afterMs)}`);
-console.log(`gate: 2,000-run ensemble must complete in <= ${fmtMs(GATE_MS)}`);
-const pass = afterMs <= GATE_MS;
-console.log(pass ? "GATE PASS" : "GATE FAIL");
-process.exit(pass ? 0 : 1);
+  console.log("\n=== SUMMARY ===");
+  console.log(`single-threaded: ${fmtMs(beforeMs)}`);
+  console.log(`worker pool:     ${fmtMs(afterMs)}`);
+  console.log(`speedup: ${(beforeMs / afterMs).toFixed(2)}x`);
+
+  const GATE_MS = 5000; // the HTTP route's own gate: single-threaded 2000-rep run must stay under 5s
+  const pass = beforeMs <= GATE_MS;
+  console.log(`\ngate: single-threaded ${REPLICATIONS}-run ensemble must complete in <= ${fmtMs(GATE_MS)} (this is what /api/forecast pays on a cold cache)`);
+  console.log(pass ? "GATE PASS" : "GATE FAIL");
+  process.exit(pass ? 0 : 1);
+}
+
+main();
