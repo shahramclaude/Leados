@@ -1,36 +1,33 @@
-import { redirect } from "next/navigation";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import Link from "next/link";
 import { db } from "@/db";
-import { people } from "@/db/schema";
-import { getSession } from "@/lib/session";
-import { PeoplePanel } from "@/components/PeoplePanel";
+import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const session = await getSession();
-  if (!session) redirect("/login");
-
-  const rows = await db
-    .select()
-    .from(people)
-    .where(and(eq(people.orgId, session.orgId), isNull(people.deletedAt)))
-    .orderBy(desc(people.createdAt))
-    .limit(200);
-
-  const canWrite = session.role === "admin" || session.role === "manager";
+  await db.execute(sql`select 1`);
 
   return (
-    <main className="space-y-6">
-      <header>
-        <p className="text-sm uppercase tracking-[0.08em] text-slate-500">LEADOS · Part 19 security slice</p>
-        <h1 className="mt-1 text-3xl font-semibold text-slate-950">People</h1>
-        <p className="mt-1 text-sm text-slate-600">
-          Every row shown here is scoped to your organization only, enforced at the query layer — not by client-side
-          filtering.
+    <main className="grid min-h-[80vh] place-items-center px-6 py-12">
+      <section className="w-full max-w-2xl rounded-3xl bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
+        <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">LEADOS · Part 20</p>
+        <h1 className="mt-4 text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.05] text-slate-950">
+          SRE &amp; Operability Console
+        </h1>
+        <p className="mt-4 text-base text-slate-700">
+          Structured telemetry, a composite health model, maintenance mode, and an end-to-end trace
+          viewer — built against a real PostgreSQL-backed work queue, agent-run ledger, and
+          hash-chained audit log.
         </p>
-      </header>
-      <PeoplePanel initialPeople={rows.map((r) => ({ id: r.id, firstName: r.firstName, lastName: r.lastName, email: r.email }))} canWrite={canWrite} />
+        <div className="mt-6 flex gap-3">
+          <Link href="/health" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+            View system health
+          </Link>
+          <Link href="/trace" className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-900">
+            Trace viewer
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }

@@ -1,64 +1,85 @@
-import { getCompositeHealth } from "@/lib/ops/health/composite";
-import type { CheckStatus } from "@/lib/ops/health/checks";
+import { getCompositeHealth } from "@/lib/health";
+import type { Status, SubsystemHealth } from "@/lib/health";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_STYLES: Record<CheckStatus, string> = {
-  ok: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  warn: "bg-amber-50 text-amber-800 border-amber-200",
-  fail: "bg-rose-50 text-rose-800 border-rose-200",
+const STATUS_STYLES: Record<Status, string> = {
+  healthy: "bg-emerald-100 text-emerald-900 border-emerald-300",
+  degraded: "bg-amber-100 text-amber-900 border-amber-300",
+  failing: "bg-red-100 text-red-900 border-red-300",
 };
 
-const OVERALL_STYLES: Record<string, string> = {
-  healthy: "bg-emerald-600",
+const STATUS_DOT: Record<Status, string> = {
+  healthy: "bg-emerald-500",
   degraded: "bg-amber-500",
-  unhealthy: "bg-rose-600",
+  failing: "bg-red-500",
 };
+
+function SubsystemCard({ subsystem }: { subsystem: SubsystemHealth }) {
+  return (
+    <details className={`rounded-xl border p-4 ${STATUS_STYLES[subsystem.status]}`}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+        <span className="flex items-center gap-2 font-semibold">
+          <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[subsystem.status]}`} />
+          {subsystem.name}
+        </span>
+        <span className="text-xs uppercase tracking-wide">{subsystem.status}</span>
+      </summary>
+      <div className="mt-3 space-y-2 text-sm">
+        <p>{subsystem.message}</p>
+        {subsystem.remediation && (
+          <p>
+            <span className="font-semibold">What to do: </span>
+            {subsystem.remediation}
+            {subsystem.runbook && (
+              <>
+                {" "}
+                (<code className="rounded bg-white/60 px-1">{subsystem.runbook}</code>)
+              </>
+            )}
+          </p>
+        )}
+        <pre className="overflow-x-auto rounded bg-white/60 p-2 text-xs">
+          {JSON.stringify(subsystem.metrics, null, 2)}
+        </pre>
+        <p className="text-xs opacity-70">checked at {subsystem.checkedAt}</p>
+      </div>
+    </details>
+  );
+}
 
 export default async function HealthPage() {
   const health = await getCompositeHealth();
 
   return (
-    <main className="min-h-screen px-6 py-12">
-      <section className="mx-auto w-full max-w-4xl">
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-white p-8 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
-          <div>
-            <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">Composite health</p>
-            <h1 className="mt-2 text-3xl font-semibold text-slate-950">System status</h1>
-            <p className="mt-2 text-sm text-slate-600">As of {health.timestamp}{health.draining ? " — draining for shutdown" : ""}</p>
-          </div>
-          <span className={`rounded-full px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white ${OVERALL_STYLES[health.status]}`}>
-            {health.status}
-          </span>
-        </div>
+    <main className="mx-auto max-w-5xl px-6 py-10">
+      <div className={`mb-6 rounded-2xl border p-6 ${STATUS_STYLES[health.status]}`}>
+        <p className="text-sm uppercase tracking-wide opacity-80">Composite status</p>
+        <h1 className="mt-1 text-3xl font-bold">{health.status.toUpperCase()}</h1>
+        {health.draining && <p className="mt-2 font-medium">⚠️ Server is draining for shutdown.</p>}
+        <p className="mt-2 text-sm opacity-80">Checked at {health.checkedAt}</p>
+      </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {health.checks.map((check) => (
-            <div key={check.id} className={`rounded-2xl border p-5 ${STATUS_STYLES[check.status]}`}>
-              <div className="flex items-center justify-between gap-2">
-                <p className="m-0 font-semibold">{check.label}</p>
-                <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold uppercase">{check.status}</span>
-              </div>
-              <p className="mt-1 text-sm">{check.summary}</p>
-              {check.status !== "ok" && (
-                <p className="mt-2 text-xs font-medium">
-                  Remediation: {check.remediation} <span className="opacity-70">({check.runbook})</span>
-                </p>
-              )}
-              <details className="mt-2 text-xs opacity-80">
-                <summary className="cursor-pointer select-none">details</summary>
-                <pre className="mt-1 whitespace-pre-wrap break-all">{JSON.stringify(check.details, null, 2)}</pre>
-              </details>
-              {check.critical && <p className="mt-2 text-[10px] font-bold uppercase tracking-wide opacity-60">critical dependency</p>}
-            </div>
-          ))}
-        </div>
-
-        <p className="mt-6 text-xs text-slate-500">
-          Machine-readable: <code>GET /api/health</code>. Metrics: <code>GET /api/metrics</code>. Full runbook text: {" "}
-          <code>docs/RUNBOOKS.md</code>.
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-slate-900">Subsystems</h2>
+        <p className="text-sm text-slate-500">
+          Machine-readable: <code className="rounded bg-white px-1">GET /api/health</code> · Metrics:{" "}
+          <code className="rounded bg-white px-1">GET /api/metrics</code>
         </p>
-      </section>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {health.subsystems.map((s) => (
+          <SubsystemCard key={s.name} subsystem={s} />
+        ))}
+      </div>
+
+      <p className="mt-8 text-sm text-slate-500">
+        Each degraded/failing subsystem links to the matching section of{" "}
+        <code className="rounded bg-white px-1">docs/RUNBOOKS.md</code>. See{" "}
+        <code className="rounded bg-white px-1">docs/SLO.md</code> for the thresholds behind these
+        statuses.
+      </p>
     </main>
   );
 }

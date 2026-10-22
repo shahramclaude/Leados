@@ -4,26 +4,29 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:security": "vitest run tests/security",
-    "audit:verify": "tsx scripts/audit-verify.ts",
-    "secret:scan": "node scripts/secret-scan.mjs",
-    "verify": "npm run lint && npm run typecheck && npm run secret:scan && npm run test"
+    "verify": "tsx scripts/verify.ts",
+    "metrics:check": "node scripts/check-metrics-exposition.mjs",
+    "slo:report": "node scripts/slo-report.mjs",
+    "backup": "bash scripts/backup.sh",
+    "restore": "bash scripts/restore.sh",
+    "backup:drill": "node scripts/backup-drill.mjs",
+    "dead-letter:triage": "node scripts/dead-letter-triage.mjs",
+    "run:reaper": "node scripts/run-reaper.mjs",
+    "projection:rebuild": "node scripts/rebuild-projection.mjs",
+    "maintenance:flush": "node scripts/flush-deferred-writes.mjs",
+    "shutdown:test": "bash scripts/graceful-shutdown-test.sh"
   },
   "dependencies": {
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
-    "jose": "^6.2.13",
     "next": "16.2.6",
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15",
-    "vitest": "^5.0.5",
-    "zod": "^4.6.7"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
