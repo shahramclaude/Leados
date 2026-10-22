@@ -1,98 +1,72 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
-import { DEFAULT_A11Y_PREFS, type A11yPrefs } from "@/lib/a11yPrefs";
+import { useApp } from "@/components/providers/AppProviders";
+import { t } from "@/lib/i18n";
+import { TEXT_SCALE_STEPS, type TextScale } from "@/lib/a11y";
 
-function applyToDocument(prefs: A11yPrefs) {
-  document.documentElement.dataset.theme = prefs.highContrast ? "high-contrast" : "default";
-  document.documentElement.style.setProperty("--text-scale", String(prefs.textScale));
-}
-
-/**
- * High-contrast theme, text scaling to 200%, and plain-language mode
- * (Section F) — all three are user-controlled toggles persisted in a
- * cookie so SSR renders them correctly on the next request, and applied
- * immediately client-side so there's no flash/reload needed.
- */
-export default function AccessibilityControls({ initial }: { initial: A11yPrefs }) {
-  const t = useTranslations("accessibility");
-  const [prefs, setPrefs] = useState<A11yPrefs>(initial ?? DEFAULT_A11Y_PREFS);
-
-  useEffect(() => {
-    applyToDocument(prefs);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function update(patch: Partial<A11yPrefs>) {
-    const next = { ...prefs, ...patch };
-    setPrefs(next);
-    applyToDocument(next);
-    await fetch("/api/settings/a11y", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(next),
-    });
-  }
+export function AccessibilityControls() {
+  const { locale, highContrast, setHighContrast, textScale, setTextScale, plainLanguage, setPlainLanguage } = useApp();
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
-      <h2 className="text-base font-semibold">{t("settingsTitle")}</h2>
+    <div className="lx-surface space-y-5 rounded-2xl border border-slate-200 bg-white p-5">
+      <h2 className="text-base font-semibold text-slate-900">{t(locale, "settings.accessibility")}</h2>
 
-      <div className="flex items-center justify-between gap-3">
-        <label htmlFor="a11y-contrast" className="text-sm">
-          {t("highContrast")}
-        </label>
-        <input
-          id="a11y-contrast"
-          type="checkbox"
-          className="h-6 w-11 touch-target"
-          checked={prefs.highContrast}
-          onChange={(e) => update({ highContrast: e.target.checked })}
-        />
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="font-medium text-slate-900">{t(locale, "a11y.highContrast")}</p>
+        </div>
+        <Toggle checked={highContrast} onChange={setHighContrast} label={t(locale, "a11y.highContrast")} />
       </div>
 
       <div>
-        <label htmlFor="a11y-textscale" className="text-sm">
-          {t("textScale")}: {Math.round(prefs.textScale * 100)}%
-        </label>
-        <input
-          id="a11y-textscale"
-          type="range"
-          min={1}
-          max={2}
-          step={0.1}
-          value={prefs.textScale}
-          onChange={(e) => update({ textScale: Number(e.target.value) })}
-          className="touch-target w-full"
-        />
+        <p className="font-medium text-slate-900">{t(locale, "a11y.textScale")}</p>
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={t(locale, "a11y.textScale")}>
+          {TEXT_SCALE_STEPS.map((step) => (
+            <button
+              key={step}
+              type="button"
+              onClick={() => setTextScale(step as TextScale)}
+              aria-pressed={textScale === step}
+              className={`lx-tap-target rounded-lg border px-4 py-2 text-sm font-semibold ${
+                textScale === step
+                  ? "border-[color:var(--accent)] bg-[color:var(--accent)] text-white"
+                  : "border-slate-300 bg-white text-slate-700"
+              }`}
+            >
+              {step}%
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <label htmlFor="a11y-plain" className="text-sm">
-          {t("plainLanguage")}
-        </label>
-        <input
-          id="a11y-plain"
-          type="checkbox"
-          className="h-6 w-11 touch-target"
-          checked={prefs.plainLanguage}
-          onChange={(e) => update({ plainLanguage: e.target.checked })}
-        />
-      </div>
-
-      <div className="flex items-center justify-between gap-3">
-        <label htmlFor="a11y-motion" className="text-sm">
-          {t("reduceMotion")}
-        </label>
-        <input
-          id="a11y-motion"
-          type="checkbox"
-          className="h-6 w-11 touch-target"
-          checked={prefs.reduceMotion}
-          onChange={(e) => update({ reduceMotion: e.target.checked })}
-        />
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="font-medium text-slate-900">{t(locale, "a11y.plainLanguage")}</p>
+          <p className="lx-muted text-sm text-slate-500">{t(locale, "a11y.plainLanguageHint")}</p>
+        </div>
+        <Toggle checked={plainLanguage} onChange={setPlainLanguage} label={t(locale, "a11y.plainLanguage")} />
       </div>
     </div>
+  );
+}
+
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`lx-tap-target relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+        checked ? "bg-[color:var(--accent)]" : "bg-slate-300"
+      }`}
+    >
+      <span
+        className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+          checked ? "translate-x-7" : "translate-x-1"
+        }`}
+      />
+    </button>
   );
 }

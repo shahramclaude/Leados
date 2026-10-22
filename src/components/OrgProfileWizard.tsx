@@ -2,283 +2,222 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SUPPORTED_LOCALES } from "@/i18n/locales";
-import { useLocaleContext } from "@/components/providers/LocaleProvider";
-import type { OrgProfile } from "@/lib/domain/types";
+import { t, SUPPORTED_LOCALES, LOCALE_LABELS, type Locale } from "@/lib/i18n";
+import { useApp } from "@/components/providers/AppProviders";
 
-const STEPS = ["profile", "locale", "terminology", "admin", "review"] as const;
-type Step = (typeof STEPS)[number];
+type Props = {
+  initialName: string;
+  initialLocale: Locale;
+  initialAccent: string;
+  initialEmoji: string;
+};
 
-const TERMINOLOGY_OPTIONS = ["default", "startup", "enterprise", "nonprofit"] as const;
+const EMOJI_CHOICES = ["🏛️", "🧭", "🚀", "🌱", "⚡", "🛡️"];
+const ACCENT_CHOICES = ["#2563eb", "#0f766e", "#9333ea", "#dc2626", "#ca8a04", "#0b3d91"];
 
-const COMMON_TIMEZONES = [
-  "UTC",
-  "America/New_York",
-  "America/Los_Angeles",
-  "Europe/Copenhagen",
-  "Europe/London",
-  "Asia/Singapore",
-];
-
-/**
- * First-run / net-new-org wizard. Configures: domains (slug/org name),
- * roles (the admin account created at the end gets the `admin` role),
- * terminology glossary preset, locale/timezone, and the initial feature-flag
- * rule set (wired server-side in `src/lib/app/onboarding.ts`).
- */
-export function OrgProfileWizard() {
-  const { t, locale } = useLocaleContext();
+export function OrgProfileWizard({ initialName, initialLocale, initialAccent, initialEmoji }: Props) {
+  const { locale } = useApp();
   const router = useRouter();
-  const [stepIndex, setStepIndex] = useState(0);
+  const [step, setStep] = useState(1);
+  const [name, setName] = useState(initialName);
+  const [orgLocale, setOrgLocale] = useState<Locale>(initialLocale);
+  const [accent, setAccent] = useState(initialAccent);
+  const [emoji, setEmoji] = useState(initialEmoji);
+  const [peopleTerm, setPeopleTerm] = useState("");
+  const [financeTerm, setFinanceTerm] = useState("");
+  const [strategyTerm, setStrategyTerm] = useState("");
+  const [addSample, setAddSample] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [profile, setProfile] = useState<OrgProfile>({
-    slug: "",
-    name: "",
-    industry: "technology",
-    defaultLocale: locale,
-    timezone: "UTC",
-    currency: "USD",
-    accentColor: "#4f46e5",
-    terminologyPreset: "default",
-    sampleDataEnabled: true,
-    adminName: "",
-    adminEmail: "",
-  });
 
-  const step: Step = STEPS[stepIndex];
+  const totalSteps = 4;
 
-  function update<K extends keyof OrgProfile>(key: K, value: OrgProfile[K]) {
-    setProfile((p) => ({ ...p, [key]: value }));
-  }
-
-  async function submit() {
+  async function finish() {
     setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/onboarding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create organization");
-      setSuccess(true);
-      router.push("/dashboard");
-      router.refresh();
-    } catch (err) {
-      setError((err as Error).message);
-      setSubmitting(false);
-    }
-  }
+    const terminology: Record<string, string> = {};
+    if (peopleTerm.trim()) terminology.people = peopleTerm.trim();
+    if (financeTerm.trim()) terminology.finance = financeTerm.trim();
+    if (strategyTerm.trim()) terminology.strategy = strategyTerm.trim();
 
-  const stepLabel = (s: Step) => t(`onboarding.step.${s}`);
+    await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, locale: orgLocale, accentColor: accent, logoEmoji: emoji, terminology }),
+    });
+
+    await fetch(addSample ? "/api/onboarding/seed" : "/api/onboarding/complete", { method: "POST" });
+
+    setSubmitting(false);
+    router.push("/");
+    router.refresh();
+  }
 
   return (
-    <div className="mx-auto w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{t("onboarding.title")}</h1>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{t("onboarding.subtitle")}</p>
-
-      <ol className="mt-5 flex flex-wrap gap-2" aria-label={t("onboarding.title")}>
-        {STEPS.map((s, i) => (
-          <li
-            key={s}
-            aria-current={i === stepIndex ? "step" : undefined}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              i === stepIndex
-                ? "bg-indigo-600 text-white"
-                : i < stepIndex
-                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
-                  : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-            }`}
-          >
-            {i + 1}. {stepLabel(s)}
-          </li>
+    <div className="mx-auto max-w-xl">
+      <div className="mb-4 flex items-center gap-2" aria-label={`Step ${step} of ${totalSteps}`}>
+        {Array.from({ length: totalSteps }, (_, i) => i + 1).map((n) => (
+          <div
+            key={n}
+            className={`h-2 flex-1 rounded-full ${n <= step ? "bg-[color:var(--accent)]" : "bg-slate-200"}`}
+            aria-hidden="true"
+          />
         ))}
-      </ol>
+      </div>
 
-      <div className="mt-6 flex flex-col gap-4">
-        {step === "profile" && (
-          <>
-            <Field label={t("onboarding.field.orgName")}>
-              <input
-                className="field"
-                value={profile.name}
-                onChange={(e) => update("name", e.target.value)}
-                required
-              />
-            </Field>
-            <Field label={t("onboarding.field.slug")}>
-              <input
-                className="field"
-                value={profile.slug}
-                onChange={(e) => update("slug", e.target.value)}
-                placeholder="acme-inc"
-              />
-            </Field>
-            <Field label={t("onboarding.field.industry")}>
-              <select className="field" value={profile.industry} onChange={(e) => update("industry", e.target.value)}>
-                <option value="technology">Technology</option>
-                <option value="healthcare">Healthcare</option>
-                <option value="finance">Finance</option>
-                <option value="nonprofit">Nonprofit</option>
-                <option value="manufacturing">Manufacturing</option>
-              </select>
-            </Field>
-            <Field label={t("onboarding.field.accentColor")}>
-              <input
-                type="color"
-                className="h-11 w-16 rounded border border-slate-300"
-                value={profile.accentColor}
-                onChange={(e) => update("accentColor", e.target.value)}
-              />
-            </Field>
-          </>
+      <div className="lx-surface rounded-2xl border border-slate-200 bg-white p-6">
+        {step === 1 && (
+          <fieldset>
+            <legend className="text-lg font-semibold text-slate-900">{t(locale, "onboarding.step1.title")}</legend>
+            <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="org-name">
+              {t(locale, "onboarding.step1.name")}
+            </label>
+            <input
+              id="org-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="lx-tap-target mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            />
+
+            <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="org-locale">
+              {t(locale, "onboarding.step1.locale")}
+            </label>
+            <select
+              id="org-locale"
+              value={orgLocale}
+              onChange={(e) => setOrgLocale(e.target.value as Locale)}
+              className="lx-tap-target mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            >
+              {SUPPORTED_LOCALES.map((l) => (
+                <option key={l} value={l}>
+                  {LOCALE_LABELS[l]}
+                </option>
+              ))}
+            </select>
+          </fieldset>
         )}
 
-        {step === "locale" && (
-          <>
-            <Field label={t("onboarding.field.locale")}>
-              <select
-                className="field"
-                value={profile.defaultLocale}
-                onChange={(e) => update("defaultLocale", e.target.value)}
-              >
-                {SUPPORTED_LOCALES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.nativeLabel}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label={t("onboarding.field.timezone")}>
-              <select className="field" value={profile.timezone} onChange={(e) => update("timezone", e.target.value)}>
-                {COMMON_TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label={t("onboarding.field.currency")}>
-              <select className="field" value={profile.currency} onChange={(e) => update("currency", e.target.value)}>
-                {["USD", "DKK", "EUR", "GBP"].map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
-        )}
-
-        {step === "terminology" && (
-          <Field label={t("onboarding.field.terminologyPreset")}>
-            <div className="flex flex-col gap-2">
-              {TERMINOLOGY_OPTIONS.map((opt) => (
-                <label
-                  key={opt}
-                  className="flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 p-2 text-sm dark:border-slate-700"
-                >
-                  <input
-                    type="radio"
-                    name="terminologyPreset"
-                    checked={profile.terminologyPreset === opt}
-                    onChange={() => update("terminologyPreset", opt)}
-                    className="h-5 w-5"
-                  />
-                  {t(`onboarding.terminology.${opt}`)}
-                </label>
+        {step === 2 && (
+          <fieldset>
+            <legend className="text-lg font-semibold text-slate-900">{t(locale, "onboarding.step2.title")}</legend>
+            <p className="mt-4 text-sm font-medium text-slate-700">{t(locale, "onboarding.step2.accentColor")}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {ACCENT_CHOICES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setAccent(c)}
+                  aria-pressed={accent === c}
+                  aria-label={c}
+                  className="lx-tap-target h-11 w-11 rounded-full border-4"
+                  style={{ backgroundColor: c, borderColor: accent === c ? "#0f172a" : "transparent" }}
+                />
               ))}
             </div>
-          </Field>
+
+            <p className="mt-5 text-sm font-medium text-slate-700">{t(locale, "onboarding.step2.logoEmoji")}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {EMOJI_CHOICES.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setEmoji(e)}
+                  aria-pressed={emoji === e}
+                  className={`lx-tap-target rounded-lg border-2 px-3 py-2 text-xl ${
+                    emoji === e ? "border-[color:var(--accent)]" : "border-slate-200"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </fieldset>
         )}
 
-        {step === "admin" && (
-          <>
-            <Field label={t("onboarding.field.adminName")}>
-              <input className="field" value={profile.adminName} onChange={(e) => update("adminName", e.target.value)} />
-            </Field>
-            <Field label={t("onboarding.field.adminEmail")}>
-              <input
-                type="email"
-                className="field"
-                value={profile.adminEmail}
-                onChange={(e) => update("adminEmail", e.target.value)}
-                required
-              />
-            </Field>
-            <label className="flex min-h-[44px] items-center gap-3 rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-700">
+        {step === 3 && (
+          <fieldset>
+            <legend className="text-lg font-semibold text-slate-900">{t(locale, "onboarding.step3.title")}</legend>
+            <p className="lx-muted mt-2 text-sm text-slate-600">{t(locale, "onboarding.step3.hint")}</p>
+
+            <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="term-people">
+              {t(locale, "onboarding.step3.peopleLabel")}
+            </label>
+            <input
+              id="term-people"
+              value={peopleTerm}
+              onChange={(e) => setPeopleTerm(e.target.value)}
+              placeholder={t(locale, "nav.people")}
+              className="lx-tap-target mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            />
+
+            <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="term-finance">
+              {t(locale, "onboarding.step3.financeLabel")}
+            </label>
+            <input
+              id="term-finance"
+              value={financeTerm}
+              onChange={(e) => setFinanceTerm(e.target.value)}
+              placeholder={t(locale, "nav.finance")}
+              className="lx-tap-target mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            />
+
+            <label className="mt-4 block text-sm font-medium text-slate-700" htmlFor="term-strategy">
+              {t(locale, "onboarding.step3.strategyLabel")}
+            </label>
+            <input
+              id="term-strategy"
+              value={strategyTerm}
+              onChange={(e) => setStrategyTerm(e.target.value)}
+              placeholder={t(locale, "nav.strategy")}
+              className="lx-tap-target mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+            />
+          </fieldset>
+        )}
+
+        {step === 4 && (
+          <fieldset>
+            <legend className="text-lg font-semibold text-slate-900">{t(locale, "onboarding.step4.title")}</legend>
+            <p className="lx-muted mt-2 text-sm text-slate-600">{t(locale, "onboarding.step4.hint")}</p>
+            <label className="mt-4 flex items-center gap-3">
               <input
                 type="checkbox"
-                checked={profile.sampleDataEnabled}
-                onChange={(e) => update("sampleDataEnabled", e.target.checked)}
-                className="h-5 w-5"
+                checked={addSample}
+                onChange={(e) => setAddSample(e.target.checked)}
+                className="lx-tap-target h-5 w-5"
               />
-              <span>
-                <span className="font-medium">{t("onboarding.field.sampleData")}</span>
-                <br />
-                <span className="text-xs text-slate-500">{t("onboarding.field.sampleData.hint")}</span>
-              </span>
+              <span className="text-sm font-medium text-slate-800">{t(locale, "onboarding.step4.toggle")}</span>
             </label>
-          </>
+          </fieldset>
         )}
 
-        {step === "review" && (
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-            <dt className="font-medium text-slate-600 dark:text-slate-400">{t("onboarding.field.orgName")}</dt>
-            <dd>{profile.name || "—"}</dd>
-            <dt className="font-medium text-slate-600 dark:text-slate-400">{t("onboarding.field.locale")}</dt>
-            <dd>{profile.defaultLocale}</dd>
-            <dt className="font-medium text-slate-600 dark:text-slate-400">{t("onboarding.field.terminologyPreset")}</dt>
-            <dd>{t(`onboarding.terminology.${profile.terminologyPreset}`)}</dd>
-            <dt className="font-medium text-slate-600 dark:text-slate-400">{t("onboarding.field.adminEmail")}</dt>
-            <dd>{profile.adminEmail || "—"}</dd>
-          </dl>
-        )}
-
-        {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
-        {success ? <p role="status" className="text-sm font-medium text-emerald-600">{t("onboarding.success")}</p> : null}
-
-        <div className="mt-2 flex items-center justify-between">
+        <div className="mt-6 flex items-center justify-between gap-3">
           <button
             type="button"
-            disabled={stepIndex === 0}
-            onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
-            className="min-h-[44px] rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-40 dark:border-slate-600 dark:text-slate-200"
+            onClick={() => setStep((s) => Math.max(1, s - 1))}
+            disabled={step === 1}
+            className="lx-tap-target rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-40"
           >
-            {t("onboarding.action.back")}
+            {t(locale, "common.back")}
           </button>
-          {step === "review" ? (
+
+          {step < totalSteps ? (
             <button
               type="button"
-              disabled={submitting}
-              onClick={submit}
-              className="min-h-[44px] rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+              onClick={() => setStep((s) => Math.min(totalSteps, s + 1))}
+              className="lx-tap-target rounded-lg bg-[color:var(--accent)] px-5 py-2 text-sm font-semibold text-white"
             >
-              {t("onboarding.action.create")}
+              {t(locale, "common.next")}
             </button>
           ) : (
             <button
               type="button"
-              onClick={() => setStepIndex((i) => Math.min(STEPS.length - 1, i + 1))}
-              className="min-h-[44px] rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+              onClick={finish}
+              disabled={submitting}
+              className="lx-tap-target rounded-lg bg-[color:var(--accent)] px-5 py-2 text-sm font-semibold text-white"
             >
-              {t("onboarding.action.next")}
+              {submitting ? t(locale, "common.loading") : t(locale, "onboarding.complete")}
             </button>
           )}
         </div>
       </div>
     </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">
-      {label}
-      {children}
-    </label>
   );
 }

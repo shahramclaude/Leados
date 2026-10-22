@@ -1,45 +1,38 @@
-import { CATEGORICAL_ORDER, DOMAIN_META } from "@/design/tokens";
+import type { DomainScope, MembershipRole } from "@/db/schema";
 
-/**
- * Primary navigation model. Hick–Hyman law: choice reaction time grows with
- * log2(n) over the number of options, so the PRIMARY set is capped at 7
- * (Overview + the 6 domains). Everything else (settings, admin, help,
- * search) lives in `secondaryNav` or behind the CommandPalette —
- * progressive disclosure rather than a wider top-level menu.
- */
-export interface NavItem {
-  id: string;
-  label: string;
+export type NavItem = {
+  key: string; // i18n key for the label
   href: string;
-  shortcut?: string;
-  domain?: (typeof CATEGORICAL_ORDER)[number];
-  description: string;
-}
+  icon: string; // emoji, avoids an icon-font dependency and scales with text
+  domain?: DomainScope;
+  minRoleHint?: MembershipRole[]; // UI hint only — the API routes are the real gate
+  section: "primary" | "secondary";
+};
 
-export const primaryNav: NavItem[] = [
+// Progressive disclosure: only "Now" + the three core domain views ship in
+// the primary nav on first login. Admin/Settings are one tap away but not
+// competing for thumb-zone space on a 360px screen.
+export const NAV_ITEMS: NavItem[] = [
+  { key: "nav.now", href: "/", icon: "🏠", section: "primary" },
+  { key: "nav.people", href: "/people", icon: "🧑‍🤝‍🧑", domain: "people", section: "primary" },
+  { key: "nav.finance", href: "/finance", icon: "💰", domain: "finance", section: "primary" },
+  { key: "nav.strategy", href: "/strategy", icon: "🧭", domain: "strategy", section: "primary" },
+  { key: "nav.settings", href: "/settings", icon: "⚙️", section: "secondary" },
   {
-    id: "overview",
-    label: "Overview",
-    href: "/",
-    shortcut: "g o",
-    description: "Cross-domain summary, chunked 3±1 per Miller's law.",
+    key: "nav.admin",
+    href: "/admin/permissions",
+    icon: "🛡️",
+    section: "secondary",
+    minRoleHint: ["Admin"],
   },
-  ...CATEGORICAL_ORDER.map((id, index) => ({
-    id,
-    label: DOMAIN_META[id].label,
-    href: `/${id}`,
-    shortcut: `g ${index + 1}`,
-    domain: id,
-    description: DOMAIN_META[id].description,
-  })),
+  {
+    key: "admin.flags.title",
+    href: "/admin/flags",
+    icon: "🚩",
+    section: "secondary",
+    minRoleHint: ["Admin"],
+  },
 ];
 
-export const secondaryNav: NavItem[] = [
-  { id: "styleguide", label: "Styleguide", href: "/styleguide", description: "Living design-system specification." },
-  { id: "settings", label: "Settings", href: "/settings", description: "Workspace, theme, density, notifications." },
-  { id: "help", label: "Help & shortcuts", href: "/help", description: "Keyboard shortcuts and documentation." },
-];
-
-export const allNavItems: NavItem[] = [...primaryNav, ...secondaryNav];
-
-export const PRIMARY_NAV_LIMIT = 7;
+export const PRIMARY_NAV = NAV_ITEMS.filter((item) => item.section === "primary");
+export const SECONDARY_NAV = NAV_ITEMS.filter((item) => item.section === "secondary");

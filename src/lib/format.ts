@@ -1,88 +1,64 @@
-/**
- * Formatting helpers. Every function here returns digits meant for a
- * `.tabular-nums` / `[data-metric]` surface — see docs/DESIGN-SYSTEM.md §2.2.
- */
+import type { Locale } from "@/lib/i18n";
 
-const numberFormatter = new Intl.NumberFormat("en-US");
-const integerFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+// Locale-aware formatting. Never hand-build date/number strings — always go
+// through Intl so en-US (M/D/YYYY, Sunday-start week, $) and da-DK
+// (DD.MM.YYYY, Monday-start week, kr.) render correctly automatically.
 
-export function formatNumber(value: number, fractionDigits = 0): string {
-  return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(value);
+const CURRENCY_BY_LOCALE: Record<Locale, string> = {
+  "en-US": "USD",
+  "da-DK": "DKK",
+};
+
+export function currencyForLocale(locale: Locale): string {
+  return CURRENCY_BY_LOCALE[locale] ?? "USD";
 }
 
-export function formatInteger(value: number): string {
-  return integerFormatter.format(value);
+export function formatDate(locale: Locale, date: Date | string | number, opts?: Intl.DateTimeFormatOptions): string {
+  const d = date instanceof Date ? date : new Date(date);
+  return new Intl.DateTimeFormat(locale, opts ?? { year: "numeric", month: "long", day: "numeric" }).format(d);
 }
 
-export function formatCurrency(value: number, currency = "USD", fractionDigits = 0): string {
-  return new Intl.NumberFormat("en-US", {
+export function formatShortDate(locale: Locale, date: Date | string | number): string {
+  return new Intl.DateTimeFormat(locale, { year: "numeric", month: "2-digit", day: "2-digit" }).format(
+    date instanceof Date ? date : new Date(date),
+  );
+}
+
+export function formatNumber(locale: Locale, value: number, opts?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat(locale, opts).format(value);
+}
+
+export function formatCurrency(locale: Locale, value: number, currency?: string): string {
+  return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency,
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
+    currency: currency ?? currencyForLocale(locale),
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
-export function formatCompact(value: number): string {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+export function formatPercent(locale: Locale, value: number): string {
+  return new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(value / 100);
 }
 
-export function formatPercent(value: number, fractionDigits = 1): string {
-  return `${new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(value * 100)}%`;
-}
+const RELATIVE_UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
+  { unit: "year", ms: 1000 * 60 * 60 * 24 * 365 },
+  { unit: "month", ms: 1000 * 60 * 60 * 24 * 30 },
+  { unit: "week", ms: 1000 * 60 * 60 * 24 * 7 },
+  { unit: "day", ms: 1000 * 60 * 60 * 24 },
+  { unit: "hour", ms: 1000 * 60 * 60 },
+  { unit: "minute", ms: 1000 * 60 },
+];
 
-/** Signed delta, e.g. "+4.2%" / "−1.8%" (real minus sign, not hyphen). */
-export function formatDelta(value: number, opts: { percent?: boolean; fractionDigits?: number } = {}): string {
-  const { percent = true, fractionDigits = 1 } = opts;
-  const sign = value > 0 ? "+" : value < 0 ? "\u2212" : "\u00B1";
-  const magnitude = percent ? formatPercent(Math.abs(value), fractionDigits) : formatNumber(Math.abs(value), fractionDigits);
-  return `${sign}${magnitude}`;
-}
+export function formatRelativeTime(locale: Locale, date: Date | string | number, now: Date = new Date()): string {
+  const target = date instanceof Date ? date : new Date(date);
+  const diffMs = target.getTime() - now.getTime();
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
 
-export function formatDate(value: Date | string | number, opts: Intl.DateTimeFormatOptions = {}): string {
-  const date = value instanceof Date ? value : new Date(value);
-  return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", ...opts }).format(date);
-}
-
-export function formatDateTime(value: Date | string | number): string {
-  const date = value instanceof Date ? value : new Date(value);
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-export function formatRelativeTime(value: Date | string | number, now: Date = new Date()): string {
-  const date = value instanceof Date ? value : new Date(value);
-  const diffMs = date.getTime() - now.getTime();
-  const diffSec = Math.round(diffMs / 1000);
-  const rtf = new Intl.RelativeTimeFormat("en-US", { numeric: "auto" });
-
-  const divisions: [number, Intl.RelativeTimeFormatUnit][] = [
-    [60, "second"],
-    [60, "minute"],
-    [24, "hour"],
-    [7, "day"],
-    [4.34524, "week"],
-    [12, "month"],
-    [Number.POSITIVE_INFINITY, "year"],
-  ];
-
-  let duration = diffSec;
-  for (const [amount, unit] of divisions) {
-    if (Math.abs(duration) < amount) return rtf.format(Math.round(duration), unit);
-    duration /= amount;
+  for (const { unit, ms } of RELATIVE_UNITS) {
+    if (Math.abs(diffMs) >= ms || unit === "minute") {
+      const value = Math.round(diffMs / ms);
+      return rtf.format(value, unit);
+    }
   }
-  return rtf.format(Math.round(duration), "year");
+  return rtf.format(0, "minute");
 }
-
-export { numberFormatter };

@@ -1,35 +1,39 @@
-import { requireSession } from "@/lib/platform/session";
-import { errorToResponse } from "@/lib/platform/authz";
-import { getOrgSettings, setFeatureFlag, updateOrgSettings, type SettingsPatch } from "@/lib/app/settings";
-import type { FeatureFlagKey } from "@/lib/domain/types";
+import { NextResponse } from "next/server";
+import { requireContext } from "@/lib/api-helpers";
+import { updateOrgSettings } from "@/lib/repo/orgs";
+import { isSupportedLocale } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  try {
-    const session = await requireSession();
-    const view = await getOrgSettings(session);
-    return Response.json(view);
-  } catch (err) {
-    return errorToResponse(err);
-  }
+  const result = await requireContext("GET", "/api/settings");
+  if ("error" in result) return result.error;
+  return NextResponse.json({ org: result.ctx.org, role: result.ctx.role, scopes: result.ctx.scopes });
 }
 
 export async function PATCH(request: Request) {
-  try {
-    const session = await requireSession();
-    const body = (await request.json()) as SettingsPatch & { flags?: Partial<Record<FeatureFlagKey, boolean>> };
-    const { flags, ...patch } = body;
-    const org = await updateOrgSettings(session, patch);
-    if (flags) {
-      for (const [key, value] of Object.entries(flags)) {
-        if (typeof value === "boolean") {
-          await setFeatureFlag(session, key as FeatureFlagKey, value);
-        }
-      }
-    }
-    return Response.json({ org });
-  } catch (err) {
-    return errorToResponse(err);
+  const result = await requireContext("PATCH", "/api/settings");
+  if ("error" in result) return result.error;
+  const { ctx } = result;
+
+  const body = (await request.json()) as Partial<{
+    name: string;
+    locale: string;
+    accentColor: string;
+    logoEmoji: string;
+    terminology: Record<string, string>;
+    highContrastDefault: boolean;
+    plainLanguageDefault: boolean;
+  }>;
+
+  if (body.locale && !isSupportedLocale(body.locale)) {
+    return NextResponse.json({ error: "unsupported-locale" }, { status: 400 });
   }
+
+  const updated = await updateOrgSettings(ctx.orgId, {
+    ...body,
+    locale: body.locale && isSupportedLocale(body.locale) ? body.locale : undefined,
+  });
+
+  return NextResponse.json({ org: updated });
 }

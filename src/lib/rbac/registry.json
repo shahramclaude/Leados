@@ -1,0 +1,133 @@
+{
+  "_comment": "Route -> permission registry. Every route.ts under src/app/api MUST have a matching entry here for every HTTP method it exports. scripts/route-permission-lint.ts fails CI if a route is missing an entry or an entry references a route that no longer exists.",
+  "roles": ["Executive", "HR", "Manager", "Contributor", "Viewer", "Admin"],
+  "scopes": ["people", "finance", "strategy", "operations"],
+  "entries": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "roles": ["*"],
+      "scope": null,
+      "description": "Liveness/readiness probe, unauthenticated."
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings",
+      "roles": ["Executive", "HR", "Manager", "Contributor", "Viewer", "Admin"],
+      "scope": null,
+      "description": "Read org settings (locale, theme, terminology)."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/settings",
+      "roles": ["Admin", "Executive"],
+      "scope": null,
+      "description": "Update org settings."
+    },
+    {
+      "method": "POST",
+      "path": "/api/onboarding/seed",
+      "roles": ["Admin", "Executive"],
+      "scope": null,
+      "description": "Add clearly-labeled synthetic sample data."
+    },
+    {
+      "method": "POST",
+      "path": "/api/onboarding/remove-sample",
+      "roles": ["Admin", "Executive"],
+      "scope": null,
+      "description": "One-click removal of all seeded sample data."
+    },
+    {
+      "method": "POST",
+      "path": "/api/onboarding/complete",
+      "roles": ["Admin", "Executive"],
+      "scope": null,
+      "description": "Marks onboarding complete when the user opts out of sample data."
+    },
+    {
+      "method": "GET",
+      "path": "/api/orgs/[orgId]/records",
+      "roles": ["Executive", "HR", "Manager", "Contributor", "Viewer", "Admin"],
+      "scope": "dynamic",
+      "description": "List engine records (briefings/findings/playbooks) for a domain."
+    },
+    {
+      "method": "POST",
+      "path": "/api/orgs/[orgId]/records",
+      "roles": ["Executive", "Manager", "Contributor", "Admin"],
+      "scope": "dynamic",
+      "description": "Create an engine record."
+    },
+    {
+      "method": "GET",
+      "path": "/api/orgs/[orgId]/records/[id]",
+      "roles": ["Executive", "HR", "Manager", "Contributor", "Viewer", "Admin"],
+      "scope": "dynamic",
+      "description": "Read a single engine record."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/orgs/[orgId]/records/[id]",
+      "roles": ["Executive", "Manager", "Contributor", "Admin"],
+      "scope": "dynamic",
+      "description": "Update an engine record with optimistic-concurrency version check."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/orgs/[orgId]/records/[id]",
+      "roles": ["Executive", "Admin"],
+      "scope": "dynamic",
+      "description": "Delete an engine record."
+    },
+    {
+      "method": "GET",
+      "path": "/api/orgs/[orgId]/records/aggregate",
+      "roles": ["Executive", "HR", "Manager", "Contributor", "Viewer", "Admin"],
+      "scope": null,
+      "description": "Per-domain counts for the org, used by the Now dashboard."
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/permissions",
+      "roles": ["Admin"],
+      "scope": null,
+      "description": "Serve the permission matrix straight from the registry."
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/flags",
+      "roles": ["Admin"],
+      "scope": null,
+      "description": "List feature flags and audit trail for the org."
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/flags",
+      "roles": ["Admin"],
+      "scope": null,
+      "description": "Create a feature flag."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/flags",
+      "roles": ["Admin"],
+      "scope": null,
+      "description": "Toggle a feature flag (audited)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/dev/bootstrap",
+      "roles": ["*"],
+      "scope": null,
+      "description": "DEV ONLY: seeds demo orgs/users/memberships since Parts 01-03 auth is out of scope for this sandbox. Documented in AI-SESSION-LOG.md as a known gap."
+    },
+    {
+      "method": "POST",
+      "path": "/api/dev/session",
+      "roles": ["*"],
+      "scope": null,
+      "description": "DEV ONLY: sets the simulated-session cookies (org + user) used in place of real auth."
+    }
+  ]
+}

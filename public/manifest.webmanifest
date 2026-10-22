@@ -1,15 +1,19 @@
 {
   "name": "LEADOS",
   "short_name": "LEADOS",
-  "description": "Objective, finding, and approval workflow with offline-first sync.",
-  "start_url": "/dashboard",
+  "description": "Now, People, Finance and Strategy in one installable workspace.",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#0f172a",
+  "background_color": "#0b1220",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "lang": "en-US",
+  "dir": "ltr",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

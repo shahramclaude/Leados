@@ -1,19 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { registerBackgroundSync } from "@/lib/platform/integration/backgroundSync";
-import { startSyncEngine } from "@/lib/platform/integration/syncEngine";
+import { initAutoFlush } from "@/lib/offline/queue";
 
 export function ServiceWorkerRegister() {
   useEffect(() => {
-    startSyncEngine();
-
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js")
-        .then(() => registerBackgroundSync())
-        .catch(() => undefined);
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // Offline support degrades gracefully if registration fails (e.g. in
+        // a non-HTTPS preview); the app still works online.
+      });
     }
+    initAutoFlush();
   }, []);
 
   return null;

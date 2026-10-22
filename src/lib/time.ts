@@ -1,61 +1,30 @@
-/**
- * Small time utilities kept separate from `format.ts` (which is about
- * locale-aware *display*). This module is about *behavior* — in particular
- * the cognitive-accessibility requirement that no interaction may have a
- * hard time limit without an extension path (WCAG 2.2.1 Timing Adjustable).
- */
-export const SECOND = 1000;
-export const MINUTE = 60 * SECOND;
-export const HOUR = 60 * MINUTE;
-export const DAY = 24 * HOUR;
+import type { Locale } from "@/lib/i18n";
 
-export function now(): Date {
-  return new Date();
+// Week-start convention is a locale fact, not a UI preference: en-US weeks
+// start Sunday, da-DK (and most of Europe) start Monday. Anything that lays
+// out a week grid (e.g. the "Now" briefing calendar strip) must call this.
+export function weekStartsOn(locale: Locale): 0 | 1 {
+  return locale === "da-DK" ? 1 : 0;
 }
 
-export type ExtendableTimer = {
-  remainingMs: number;
-  extend: (byMs?: number) => void;
-  cancel: () => void;
-};
+export function startOfWeek(date: Date, locale: Locale): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const start = weekStartsOn(locale);
+  const diff = (day - start + 7) % 7;
+  d.setDate(d.getDate() - diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
-/**
- * Any session/notice timeout in LEADOS must be created through this helper
- * rather than a bare `setTimeout`, so it is always extendable and always
- * warns before firing. Used by the (optional) idle-session notice; nothing
- * in the app currently uses a hard, non-extendable timeout.
- */
-export function createExtendableTimer(
-  initialMs: number,
-  onExpire: () => void,
-  onWarning?: (remainingMs: number) => void,
-  warnBeforeMs = 30 * SECOND,
-): ExtendableTimer {
-  let remaining = initialMs;
-  let expireHandle: ReturnType<typeof setTimeout> | undefined;
-  let warnHandle: ReturnType<typeof setTimeout> | undefined;
-
-  const schedule = () => {
-    if (expireHandle) clearTimeout(expireHandle);
-    if (warnHandle) clearTimeout(warnHandle);
-    expireHandle = setTimeout(onExpire, remaining);
-    if (onWarning && remaining > warnBeforeMs) {
-      warnHandle = setTimeout(() => onWarning(warnBeforeMs), remaining - warnBeforeMs);
-    }
-  };
-  schedule();
-
-  return {
-    get remainingMs() {
-      return remaining;
-    },
-    extend(byMs = initialMs) {
-      remaining = byMs;
-      schedule();
-    },
-    cancel() {
-      if (expireHandle) clearTimeout(expireHandle);
-      if (warnHandle) clearTimeout(warnHandle);
-    },
-  };
+export function weekdayLabels(locale: Locale): string[] {
+  const start = weekStartsOn(locale);
+  const base = new Date(Date.UTC(2023, 0, 1)); // a Sunday
+  const labels: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(base);
+    d.setUTCDate(base.getUTCDate() + ((start + i) % 7));
+    labels.push(new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" }).format(d));
+  }
+  return labels;
 }

@@ -1,38 +1,61 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { ActorProvider } from "@/components/ActorProvider";
-import { NotificationTray } from "@/components/NotificationTray";
-import Link from "next/link";
+import { getOrgContext } from "@/lib/org-context";
+import { listAllDemoUsers } from "@/lib/repo/devDirectory";
+import { DEFAULT_LOCALE, localeDirection } from "@/lib/i18n";
+import { AppProviders } from "@/components/providers/AppProviders";
+import { AppShell } from "@/components/AppShell";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
-  title: "LEADOS — Now",
-  description: "Realtime attention surface for LEADOS.",
+  title: "LEADOS",
+  description: "Now, People, Finance and Strategy in one installable workspace.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: ["/icons/icon-192.png", "/icons/icon-512.png"],
+    apple: "/icons/icon-180.png",
+  },
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#2563eb",
+};
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const ctx = await getOrgContext();
+  const demoUsers = await listAllDemoUsers();
+  const locale = ctx?.locale ?? DEFAULT_LOCALE;
+
   return (
-    <html lang="en">
-      <body className="bg-slate-100 text-slate-900 antialiased">
-        <ActorProvider>
-          <div className="min-h-screen">
-            <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white/90 px-6 py-3 backdrop-blur">
-              <div className="flex items-center gap-6">
-                <span className="text-sm font-semibold tracking-tight text-slate-900">LEADOS</span>
-                <nav className="flex gap-4 text-sm text-slate-500">
-                  <Link href="/" className="hover:text-slate-900">
-                    Now
-                  </Link>
-                  <Link href="/attention-report" className="hover:text-slate-900">
-                    Attention Report
-                  </Link>
-                </nav>
-              </div>
-              <NotificationTray />
-            </header>
-            <main>{children}</main>
-          </div>
-        </ActorProvider>
+    <html lang={locale} dir={localeDirection(locale)} style={{ ["--accent" as string]: ctx?.org.accentColor ?? "#2563eb" }}>
+      <body className="antialiased">
+        <AppProviders
+          initial={{
+            locale,
+            accentColor: ctx?.org.accentColor ?? "#2563eb",
+            terminology: ctx?.org.terminology ?? {},
+            highContrastDefault: ctx?.org.highContrastDefault ?? false,
+            plainLanguageDefault: ctx?.org.plainLanguageDefault ?? false,
+          }}
+        >
+          <ServiceWorkerRegister />
+          {ctx ? (
+            <AppShell
+              orgName={ctx.org.name}
+              logoEmoji={ctx.org.logoEmoji}
+              isAdmin={ctx.role === "Admin"}
+              currentUserId={ctx.userId}
+              demoUsers={demoUsers}
+            >
+              {children}
+            </AppShell>
+          ) : (
+            children
+          )}
+        </AppProviders>
       </body>
     </html>
   );
