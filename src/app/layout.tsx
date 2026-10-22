@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LEADOS — Quantified Risk & GRC Engine",
-  description: "Part 29: quantified risk register, control assurance, obligation tracker, and risk appetite engine.",
+  title: "Arena Next.js PostgreSQL Starter",
+  description: "Starter template with Next.js, Drizzle, and PostgreSQL.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
