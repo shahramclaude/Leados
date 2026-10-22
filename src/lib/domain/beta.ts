@@ -1,57 +1,73 @@
 /**
- * Beta-Bernoulli belief updating engine.
+ * Beta-Bernoulli conjugate updating.
  *
- * Models confidence in a finding as a Beta(alpha, beta) posterior over an
- * unknown success probability. Observing a success/failure is a conjugate
- * update: alpha += 1 (success) or beta += 1 (failure). This module is pure
- * and deterministic — no randomness, no wall-clock reads — so it can be
- * property tested exhaustively.
+ * Used across LEADOS to track confidence in binary signals (e.g. "did this
+ * finding convert into a validated decision?") as a probability
+ * distribution rather than a point estimate.
  */
-export type BetaParams = {
-  alpha: number;
-  beta: number;
-};
 
-export function createBetaPrior(alpha = 1, beta = 1): BetaParams {
+export interface BetaState {
+  readonly alpha: number;
+  readonly beta: number;
+}
+
+/** A fresh, uninformative prior. Beta(1,1) == Uniform(0,1). */
+export function priorBeta(alpha = 1, beta = 1): BetaState {
   if (alpha <= 0 || beta <= 0) {
-    throw new Error("Beta prior parameters must be strictly positive");
+    throw new Error("Beta prior parameters must be > 0");
   }
   return { alpha, beta };
 }
 
-/** Conjugate update after observing a single Bernoulli outcome. */
-export function betaUpdate(params: BetaParams, outcome: 0 | 1): BetaParams {
-  return outcome === 1
-    ? { alpha: params.alpha + 1, beta: params.beta }
-    : { alpha: params.alpha, beta: params.beta + 1 };
+/** Bayesian update after observing a single Bernoulli outcome. */
+export function updateBeta(state: BetaState, success: boolean): BetaState {
+  return success
+    ? { alpha: state.alpha + 1, beta: state.beta }
+    : { alpha: state.alpha, beta: state.beta + 1 };
 }
 
-/** Batch update — order-independent by construction (addition is commutative). */
-export function betaUpdateBatch(params: BetaParams, outcomes: readonly (0 | 1)[]): BetaParams {
-  return outcomes.reduce((acc, o) => betaUpdate(acc, o), params);
+/** Batch update — order-independent (addition is commutative). */
+export function updateBetaBatch(
+  state: BetaState,
+  outcomes: readonly boolean[],
+): BetaState {
+  const successes = outcomes.filter(Boolean).length;
+  const failures = outcomes.length - successes;
+  return {
+    alpha: state.alpha + successes,
+    beta: state.beta + failures,
+  };
 }
 
-export function betaMean(params: BetaParams): number {
-  return params.alpha / (params.alpha + params.beta);
+export function meanBeta(state: BetaState): number {
+  return state.alpha / (state.alpha + state.beta);
 }
 
-export function betaVariance(params: BetaParams): number {
-  const { alpha, beta } = params;
+export function varianceBeta(state: BetaState): number {
+  const { alpha, beta } = state;
   const sum = alpha + beta;
   return (alpha * beta) / (sum * sum * (sum + 1));
 }
 
+/** Total pseudo-observations absorbed into this state (prior + data). */
+export function totalCount(state: BetaState): number {
+  return state.alpha + state.beta;
+}
+
 /**
- * Approximate central credible interval using the normal approximation to
- * the Beta distribution. Adequate for alpha+beta large enough (>= ~10); for
- * small sample sizes the interval is clamped to [0, 1].
+ * Approximate equal-tailed credible interval using the Wilson–Hilferty / 
+ * normal approximation to the Beta distribution. Good enough for
+ * dashboards; not a substitute for exact quantile functions when
+ * alpha/beta are tiny (<1 after the uniform prior, which cannot happen
+ * via updateBeta since it only adds whole counts).
  */
-export function betaCredibleInterval(
-  params: BetaParams,
-  z = 1.96,
+export function credibleInterval(
+  state: BetaState,
+  confidence = 0.95,
 ): { lower: number; upper: number } {
-  const mean = betaMean(params);
-  const sd = Math.sqrt(betaVariance(params));
+  const mean = meanBeta(state);
+  const sd = Math.sqrt(varianceBeta(state));
+  const z = confidence >= 0.99 ? 2.5758 : confidence >= 0.95 ? 1.95996 : 1.6449;
   return {
     lower: Math.max(0, mean - z * sd),
     upper: Math.min(1, mean + z * sd),

@@ -1,39 +1,71 @@
 import { db } from "@/db";
-import { approvals, objectives } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { getApprovals } from "@/lib/queries";
-import { findExistingMutation, recordAudit, recordMutation } from "@/lib/server/idempotency";
+import { approvals, decisions } from "@/db/schema";
+import { requireAuth } from "@/lib/api/auth";
+import { parsePageParams, toPagedResult } from "@/lib/api/pagination";
+import { errorResponse, NotFoundError } from "@/lib/api/respond";
+import { createApprovalSchema } from "@/lib/api/schemas";
+import { and, count, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const rows = await getApprovals({ status: url.searchParams.get("status") ?? undefined });
-  return Response.json({ items: rows });
+  try {
+    const auth = await requireAuth(request);
+    const url = new URL(request.url);
+    const page = parsePageParams(url);
+
+    const [rows, totalRow] = await Promise.all([
+      db
+        .select()
+        .from(approvals)
+        .where(eq(approvals.tenantId, auth.tenantId))
+        .orderBy(approvals.id)
+        .limit(page.pageSize)
+        .offset(page.offset),
+      db
+        .select({ value: count() })
+        .from(approvals)
+        .where(eq(approvals.tenantId, auth.tenantId)),
+    ]);
+
+    return Response.json(toPagedResult(rows, totalRow[0]?.value ?? 0, page));
+  } catch (error) {
+    return errorResponse(error);
+  }
 }
 
 export async function POST(request: Request) {
-  const idempotencyKey = request.headers.get("idempotency-key");
-  const body = (await request.json()) as { id?: string; objectiveId?: string; note?: string };
+  try {
+    const auth = await requireAuth(request);
+    const body = createApprovalSchema.parse(await request.json());
 
-  if (idempotencyKey) {
-    const existing = await findExistingMutation(idempotencyKey);
-    if (existing) return Response.json(existing.resultJson, { status: 201 });
+    const decisionRows = await db
+      .select({ id: decisions.id })
+      .from(decisions)
+      .where(
+        and(
+          eq(decisions.id, body.decisionId),
+          eq(decisions.tenantId, auth.tenantId),
+        ),
+      )
+      .limit(1);
+    if (!decisionRows[0]) {
+      throw new NotFoundError(
+        `Decision ${body.decisionId} not found for this tenant`,
+      );
+    }
+
+    const [created] = await db
+      .insert(approvals)
+      .values({
+        tenantId: auth.tenantId,
+        decisionId: body.decisionId,
+        approverId: auth.userId,
+      })
+      .returning();
+
+    return Response.json(created, { status: 201 });
+  } catch (error) {
+    return errorResponse(error);
   }
-
-  if (!body.objectiveId) {
-    return Response.json({ code: "VALIDATION", message: "An objective is required to request approval." }, { status: 422 });
-  }
-  const [objective] = await db.select().from(objectives).where(eq(objectives.id, body.objectiveId));
-  if (!objective) return Response.json({ code: "NOT_FOUND", message: "Objective not found." }, { status: 404 });
-
-  const [row] = await db
-    .insert(approvals)
-    .values({ id: body.id, objectiveId: body.objectiveId, note: body.note ?? "" })
-    .returning();
-
-  await recordAudit("approval", row.id, "created", `Approval requested for "${objective.title}"`);
-  if (idempotencyKey) await recordMutation(idempotencyKey, "approval", "applied", row);
-
-  return Response.json(row, { status: 201 });
 }

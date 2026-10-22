@@ -1,194 +1,164 @@
 import {
   pgTable,
-  uuid,
+  serial,
   text,
   integer,
-  numeric,
   timestamp,
   jsonb,
-  boolean,
+  doublePrecision,
+  pgEnum,
   uniqueIndex,
-  index,
 } from "drizzle-orm/pg-core";
 
-/* ------------------------------------------------------------------ *
- * LEADOS core domain (Part 16 establishes a minimal but real domain
- * so the /api/v1 platform work has concrete resources to normalize).
- * ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// LEADOS core domain schema (reconstructed minimal subset needed to exercise
+// the Part 17 test pyramid: tenancy, auth, findings -> decisions -> approvals
+// -> automation runs -> board packs). See docs/TESTING.md "Phase 0" for why
+// this is a reconstruction rather than a port of pre-existing Parts 01-16
+// tables (none were present in this workspace).
+// ---------------------------------------------------------------------------
 
-export const leads = pgTable(
-  "leads",
+export const userRoleEnum = pgEnum("user_role", ["member", "admin"]);
+
+export const findingStatusEnum = pgEnum("finding_status", [
+  "open",
+  "triaged",
+  "closed",
+]);
+
+export const decisionStatusEnum = pgEnum("decision_status", [
+  "proposed",
+  "approved",
+  "rejected",
+]);
+
+export const approvalStatusEnum = pgEnum("approval_status", [
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+export const automationStatusEnum = pgEnum("automation_status", [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+]);
+
+export const tenants = pgTable(
+  "tenants",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: serial("id").primaryKey(),
+    slug: text("slug").notNull(),
     name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [uniqueIndex("tenants_slug_idx").on(table.slug)],
+);
+
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
-    company: text("company"),
-    status: text("status").notNull().default("new"), // new|contacted|qualified|won|lost
-    score: integer("score").notNull().default(0),
-    ownerId: text("owner_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  },
-  (t) => [index("leads_created_at_idx").on(t.createdAt), index("leads_status_idx").on(t.status)],
-);
-
-export const contacts = pgTable(
-  "contacts",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    email: text("email"),
-    phone: text("phone"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  },
-  (t) => [index("contacts_created_at_idx").on(t.createdAt)],
-);
-
-export const deals = pgTable(
-  "deals",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    leadId: uuid("lead_id").references(() => leads.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    value: numeric("value", { precision: 14, scale: 2 }).notNull().default("0"),
-    stage: text("stage").notNull().default("open"), // open|won|lost
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-    deletedAt: timestamp("deleted_at", { withTimezone: true }),
-  },
-  (t) => [index("deals_created_at_idx").on(t.createdAt)],
-);
-
-/* ------------------------------------------------------------------ *
- * Platform: auth, idempotency, audit
- * ------------------------------------------------------------------ */
-
-export const apiKeys = pgTable("api_keys", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  hashedKey: text("hashed_key").notNull().unique(),
-  prefix: text("prefix").notNull(),
-  scopes: text("scopes").array().notNull().default([]),
-  isAdmin: boolean("is_admin").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  revokedAt: timestamp("revoked_at", { withTimezone: true }),
-});
-
-export const idempotencyKeys = pgTable(
-  "idempotency_keys",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    idempotencyKey: text("idempotency_key").notNull(),
-    route: text("route").notNull(),
-    requestHash: text("request_hash").notNull(),
-    responseStatus: integer("response_status").notNull(),
-    responseBody: jsonb("response_body").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("idempotency_key_route_idx").on(t.idempotencyKey, t.route)],
-);
-
-export const auditLog = pgTable(
-  "audit_log",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    actor: text("actor").notNull(),
-    action: text("action").notNull(),
-    resource: text("resource").notNull(),
-    resourceId: text("resource_id"),
-    metadata: jsonb("metadata"),
-    correlationId: text("correlation_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("audit_log_created_at_idx").on(t.createdAt)],
-);
-
-/* ------------------------------------------------------------------ *
- * Webhooks: subscriptions, durable event log, deliveries (+ retry /
- * dead-letter), per Part 10's durable-run model.
- * ------------------------------------------------------------------ */
-
-export const webhookSubscriptions = pgTable("webhook_subscriptions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  url: text("url").notNull(),
-  secret: text("secret").notNull(),
-  eventTypes: text("event_types").array().notNull().default([]),
-  status: text("status").notNull().default("active"), // active|disabled
-  description: text("description"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const webhookEvents = pgTable(
-  "webhook_events",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    type: text("type").notNull(),
-    payload: jsonb("payload").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("webhook_events_created_at_idx").on(t.createdAt)],
-);
-
-export const webhookDeliveries = pgTable(
-  "webhook_deliveries",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    subscriptionId: uuid("subscription_id")
+    role: userRoleEnum("role").notNull().default("member"),
+    apiKey: text("api_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
-      .references(() => webhookSubscriptions.id, { onDelete: "cascade" }),
-    eventId: uuid("event_id")
-      .notNull()
-      .references(() => webhookEvents.id, { onDelete: "cascade" }),
-    eventType: text("event_type").notNull(),
-    payload: jsonb("payload").notNull(),
-    status: text("status").notNull().default("pending"), // pending|retrying|success|dead_letter
-    attempt: integer("attempt").notNull().default(0),
-    maxAttempts: integer("max_attempts").notNull().default(5),
-    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
-    lastError: text("last_error"),
-    lastStatusCode: integer("last_status_code"),
-    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+      .defaultNow(),
   },
-  (t) => [
-    index("webhook_deliveries_status_idx").on(t.status),
-    index("webhook_deliveries_next_attempt_idx").on(t.nextAttemptAt),
-  ],
+  (table) => [uniqueIndex("users_api_key_idx").on(table.apiKey)],
 );
 
-/* ------------------------------------------------------------------ *
- * Automation: playbooks + durable runs (Part 10 capability registry)
- * ------------------------------------------------------------------ */
-
-export const playbooks = pgTable("playbooks", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  description: text("description"),
-  steps: jsonb("steps").notNull().default([]), // [{ type, config }]
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+export const findings = pgTable("findings", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  status: findingStatusEnum("status").notNull().default("open"),
+  // Beta-Bernoulli confidence state (see src/lib/domain/beta.ts).
+  confidenceAlpha: doublePrecision("confidence_alpha").notNull().default(1),
+  confidenceBeta: doublePrecision("confidence_beta").notNull().default(1),
+  createdBy: integer("created_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
-export const automationRuns = pgTable(
-  "automation_runs",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    playbookId: uuid("playbook_id").references(() => playbooks.id, { onDelete: "set null" }),
-    trigger: text("trigger").notNull().default("manual"),
-    status: text("status").notNull().default("queued"), // queued|running|succeeded|failed
-    input: jsonb("input"),
-    output: jsonb("output"),
-    correlationId: text("correlation_id").notNull(),
-    startedAt: timestamp("started_at", { withTimezone: true }),
-    finishedAt: timestamp("finished_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("automation_runs_created_at_idx").on(t.createdAt)],
-);
+export const decisions = pgTable("decisions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  findingId: integer("finding_id")
+    .notNull()
+    .references(() => findings.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  rationale: text("rationale").notNull().default(""),
+  status: decisionStatusEnum("status").notNull().default("proposed"),
+  // PERT three-point estimate (see src/lib/domain/pert.ts).
+  optimisticEstimate: doublePrecision("optimistic_estimate").notNull(),
+  likelyEstimate: doublePrecision("likely_estimate").notNull(),
+  pessimisticEstimate: doublePrecision("pessimistic_estimate").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const approvals = pgTable("approvals", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  decisionId: integer("decision_id")
+    .notNull()
+    .references(() => decisions.id, { onDelete: "cascade" }),
+  approverId: integer("approver_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  status: approvalStatusEnum("status").notNull().default("pending"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const automationRuns = pgTable("automation_runs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  decisionId: integer("decision_id")
+    .notNull()
+    .references(() => decisions.id, { onDelete: "cascade" }),
+  status: automationStatusEnum("status").notNull().default("queued"),
+  output: jsonb("output"),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const boardPacks = pgTable("board_packs", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+  periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+  summary: jsonb("summary").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

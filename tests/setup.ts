@@ -1,8 +1,6 @@
-import "dotenv/config";
-import { beforeAll } from "vitest";
+import { config as loadEnv } from "dotenv";
+import "@testing-library/jest-dom/vitest";
 
-beforeAll(() => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL must be set to run the seam/contract test suite against a real Postgres instance.");
-  }
-});
+// Load .env for DATABASE_URL etc., mirroring Next.js's own env loading, so
+// `npm test` works the same way `npm run build` / `next dev` do.
+loadEnv({ path: ".env" });

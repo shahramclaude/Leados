@@ -1,62 +1,65 @@
 /**
- * Hysteresis controller for status transitions (e.g. finding "cold" -> "hot").
+ * Schmitt-trigger style hysteresis gate.
  *
- * A naive threshold ("hot if score >= 0.5") oscillates when the score
- * hovers around the boundary. Hysteresis uses two thresholds: the score must
- * rise above `enterAbove` to switch cold -> hot, and must fall below
- * `exitBelow` (< enterAbove) to switch hot -> cold. Pure function of
- * (previous state, score) — no randomness, no time — so non-oscillation is a
- * provable, property-testable invariant.
+ * Used to turn a noisy continuous signal (e.g. a risk score, a fairness
+ * metric, a utilization percentage) into a stable binary state
+ * ("alert" / "ok") without chattering when the signal hovers near a single
+ * threshold. Requires `onThreshold > offThreshold` for an "alert when high"
+ * gate (or `onThreshold < offThreshold` for an "alert when low" gate).
  */
-export type HysteresisState = "cold" | "hot";
 
-export type HysteresisConfig = {
-  enterAbove: number; // score must exceed this to go cold -> hot
-  exitBelow: number; // score must drop below this to go hot -> cold
-};
+export type GateState = "on" | "off";
 
-export function createHysteresisConfig(enterAbove: number, exitBelow: number): HysteresisConfig {
-  if (!(exitBelow < enterAbove)) {
-    throw new Error("exitBelow must be strictly less than enterAbove to avoid oscillation");
-  }
-  return { enterAbove, exitBelow };
+export interface HysteresisConfig {
+  /** Value at/above which the gate turns ON (for a high-alert gate). */
+  readonly onThreshold: number;
+  /** Value at/below which the gate turns OFF (for a high-alert gate). */
+  readonly offThreshold: number;
 }
 
-export function hysteresisStep(
-  config: HysteresisConfig,
-  previous: HysteresisState,
-  score: number,
-): HysteresisState {
-  if (previous === "cold") {
-    return score > config.enterAbove ? "hot" : "cold";
-  }
-  return score < config.exitBelow ? "cold" : "hot";
+export interface HysteresisGate {
+  readonly state: GateState;
+  readonly config: HysteresisConfig;
 }
 
-/** Runs a full score sequence through the controller, returning the state trace. */
-export function hysteresisTrace(
+export function createHysteresisGate(
   config: HysteresisConfig,
-  initial: HysteresisState,
-  scores: readonly number[],
-): HysteresisState[] {
-  const trace: HysteresisState[] = [];
-  let state = initial;
-  for (const score of scores) {
-    state = hysteresisStep(config, state, score);
-    trace.push(state);
+  initial: GateState = "off",
+): HysteresisGate {
+  validateConfig(config);
+  return { state: initial, config };
+}
+
+function validateConfig(config: HysteresisConfig): void {
+  if (config.onThreshold <= config.offThreshold) {
+    throw new Error(
+      "onThreshold must be strictly greater than offThreshold to avoid oscillation",
+    );
   }
-  return trace;
 }
 
 /**
- * Counts transitions in a trace. Used by tests to assert that a score
- * sequence confined to the dead band (exitBelow, enterAbove) never produces
- * more transitions than a naive single-threshold controller would.
+ * Feed one new sample through the gate. Pure function — returns a new gate,
+ * never mutates. The core correctness property is: once `off`, the value
+ * must reach `onThreshold` to flip `on`; once `on`, the value must fall to
+ * `offThreshold` to flip `off`. Any value strictly between the thresholds
+ * leaves the state unchanged ("the dead band").
  */
-export function countTransitions(trace: readonly HysteresisState[]): number {
-  let transitions = 0;
-  for (let i = 1; i < trace.length; i += 1) {
-    if (trace[i] !== trace[i - 1]) transitions += 1;
+export function stepHysteresis(gate: HysteresisGate, value: number): HysteresisGate {
+  const { onThreshold, offThreshold } = gate.config;
+  if (gate.state === "off" && value >= onThreshold) {
+    return { ...gate, state: "on" };
   }
-  return transitions;
+  if (gate.state === "on" && value <= offThreshold) {
+    return { ...gate, state: "off" };
+  }
+  return gate;
+}
+
+/** Convenience: fold a whole series through the gate, returning final state. */
+export function runHysteresis(
+  gate: HysteresisGate,
+  values: readonly number[],
+): HysteresisGate {
+  return values.reduce(stepHysteresis, gate);
 }

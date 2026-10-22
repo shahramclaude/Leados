@@ -1,70 +1,69 @@
 import { db } from "@/db";
-import { approvals } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
-import { findExistingMutation, recordAudit, recordMutation } from "@/lib/server/idempotency";
+import { approvals, decisions } from "@/db/schema";
+import { requireAdmin, requireAuth } from "@/lib/api/auth";
+import { ValidationError } from "@/lib/api/pagination";
+import { errorResponse, NotFoundError } from "@/lib/api/respond";
+import { decideApprovalSchema } from "@/lib/api/schemas";
+import { and, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const [current] = await db.select().from(approvals).where(eq(approvals.id, id));
-  if (!current) return Response.json({ code: "NOT_FOUND", message: "Approval not found." }, { status: 404 });
-  if (current.status !== "pending") {
-    return Response.json(
-      { code: "VALIDATION", message: "A decided approval cannot be deleted, only its status changed." },
-      { status: 422 },
-    );
+function parseId(raw: string): number {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new ValidationError("id must be a positive integer");
   }
-  await db.delete(approvals).where(eq(approvals.id, id));
-  await recordAudit("approval", id, "deleted", "Approval request withdrawn (undo of request)");
-  return Response.json({ ok: true });
+  return id;
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const idempotencyKey = request.headers.get("idempotency-key");
-  const body = (await request.json()) as {
-    status?: "approved" | "rejected" | "changes_requested" | "pending";
-    note?: string;
-    decidedByName?: string;
-    expectedVersion: number;
-  };
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const auth = await requireAuth(request);
+    requireAdmin(auth); // only admins decide approvals (approve/reject)
+    const id = parseId((await params).id);
+    const body = decideApprovalSchema.parse(await request.json());
 
-  if (idempotencyKey) {
-    const existing = await findExistingMutation(idempotencyKey);
-    if (existing) {
-      return Response.json(existing.resultJson, { status: existing.status === "conflict" ? 409 : 200 });
+    const existingRows = await db
+      .select({ id: approvals.id, decisionId: approvals.decisionId })
+      .from(approvals)
+      .where(and(eq(approvals.id, id), eq(approvals.tenantId, auth.tenantId)))
+      .limit(1);
+    const existing = existingRows[0];
+    if (!existing) throw new NotFoundError("Approval not found");
+
+    const [updated] = await db
+      .update(approvals)
+      .set({ status: body.status, decidedAt: new Date() })
+      .where(and(eq(approvals.id, id), eq(approvals.tenantId, auth.tenantId)))
+      .returning();
+
+    if (body.status === "approved") {
+      await db
+        .update(decisions)
+        .set({ status: "approved" })
+        .where(
+          and(
+            eq(decisions.id, existing.decisionId),
+            eq(decisions.tenantId, auth.tenantId),
+          ),
+        );
+    } else {
+      await db
+        .update(decisions)
+        .set({ status: "rejected" })
+        .where(
+          and(
+            eq(decisions.id, existing.decisionId),
+            eq(decisions.tenantId, auth.tenantId),
+          ),
+        );
     }
+
+    return Response.json(updated);
+  } catch (error) {
+    return errorResponse(error);
   }
-
-  const [current] = await db.select().from(approvals).where(eq(approvals.id, id));
-  if (!current) return Response.json({ code: "NOT_FOUND", message: "Approval not found." }, { status: 404 });
-
-  if (current.version !== body.expectedVersion) {
-    if (idempotencyKey) await recordMutation(idempotencyKey, "approval", "conflict", { current });
-    return Response.json({ code: "VERSION_CONFLICT", current }, { status: 409 });
-  }
-
-  const [updated] = await db
-    .update(approvals)
-    .set({
-      status: body.status ?? current.status,
-      note: body.note ?? current.note,
-      decidedByName: body.status && body.status !== "pending" ? (body.decidedByName ?? "You") : current.decidedByName,
-      version: sql`${approvals.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(approvals.id, id), eq(approvals.version, body.expectedVersion)))
-    .returning();
-
-  if (!updated) {
-    const [latest] = await db.select().from(approvals).where(eq(approvals.id, id));
-    if (idempotencyKey) await recordMutation(idempotencyKey, "approval", "conflict", { current: latest });
-    return Response.json({ code: "VERSION_CONFLICT", current: latest }, { status: 409 });
-  }
-
-  await recordAudit("approval", updated.id, "status_changed", `Approval ${updated.status}`);
-  if (idempotencyKey) await recordMutation(idempotencyKey, "approval", "applied", updated);
-
-  return Response.json(updated);
 }

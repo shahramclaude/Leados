@@ -1,63 +1,79 @@
 import { db } from "@/db";
 import { findings } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
-import { findExistingMutation, recordAudit, recordMutation } from "@/lib/server/idempotency";
+import { requireAuth } from "@/lib/api/auth";
+import { ValidationError } from "@/lib/api/pagination";
+import { errorResponse, NotFoundError } from "@/lib/api/respond";
+import { updateFindingSchema } from "@/lib/api/schemas";
+import { updateBeta } from "@/lib/domain/beta";
+import { and, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const [deleted] = await db.delete(findings).where(eq(findings.id, id)).returning();
-  if (!deleted) return Response.json({ code: "NOT_FOUND", message: "Finding not found." }, { status: 404 });
-  await recordAudit("finding", id, "deleted", `Finding "${deleted.title}" removed (undo of create)`);
-  return Response.json({ ok: true });
+function parseId(raw: string): number {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new ValidationError("id must be a positive integer");
+  }
+  return id;
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const idempotencyKey = request.headers.get("idempotency-key");
-  const body = (await request.json()) as {
-    title?: string;
-    body?: string;
-    confidence?: string;
-    expectedVersion: number;
-  };
+async function loadScoped(id: number, tenantId: number) {
+  const rows = await db
+    .select()
+    .from(findings)
+    .where(and(eq(findings.id, id), eq(findings.tenantId, tenantId)))
+    .limit(1);
+  const finding = rows[0];
+  if (!finding) throw new NotFoundError("Finding not found");
+  return finding;
+}
 
-  if (idempotencyKey) {
-    const existing = await findExistingMutation(idempotencyKey);
-    if (existing) {
-      return Response.json(existing.resultJson, { status: existing.status === "conflict" ? 409 : 200 });
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const auth = await requireAuth(request);
+    const id = parseId((await params).id);
+    const finding = await loadScoped(id, auth.tenantId);
+    return Response.json(finding);
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const auth = await requireAuth(request);
+    const id = parseId((await params).id);
+    const body = updateFindingSchema.parse(await request.json());
+    const existing = await loadScoped(id, auth.tenantId);
+
+    let { confidenceAlpha, confidenceBeta } = existing;
+    if (body.observeOutcome !== undefined) {
+      const updated = updateBeta(
+        { alpha: confidenceAlpha, beta: confidenceBeta },
+        body.observeOutcome,
+      );
+      confidenceAlpha = updated.alpha;
+      confidenceBeta = updated.beta;
     }
+
+    const [updatedRow] = await db
+      .update(findings)
+      .set({
+        status: body.status ?? existing.status,
+        confidenceAlpha,
+        confidenceBeta,
+      })
+      .where(and(eq(findings.id, id), eq(findings.tenantId, auth.tenantId)))
+      .returning();
+
+    return Response.json(updatedRow);
+  } catch (error) {
+    return errorResponse(error);
   }
-
-  const [current] = await db.select().from(findings).where(eq(findings.id, id));
-  if (!current) return Response.json({ code: "NOT_FOUND", message: "Finding not found." }, { status: 404 });
-
-  if (current.version !== body.expectedVersion) {
-    if (idempotencyKey) await recordMutation(idempotencyKey, "finding", "conflict", { current });
-    return Response.json({ code: "VERSION_CONFLICT", current }, { status: 409 });
-  }
-
-  const [updated] = await db
-    .update(findings)
-    .set({
-      title: body.title ?? current.title,
-      body: body.body ?? current.body,
-      confidence: body.confidence ?? current.confidence,
-      version: sql`${findings.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(findings.id, id), eq(findings.version, body.expectedVersion)))
-    .returning();
-
-  if (!updated) {
-    const [latest] = await db.select().from(findings).where(eq(findings.id, id));
-    if (idempotencyKey) await recordMutation(idempotencyKey, "finding", "conflict", { current: latest });
-    return Response.json({ code: "VERSION_CONFLICT", current: latest }, { status: 409 });
-  }
-
-  await recordAudit("finding", updated.id, "updated", `Finding "${updated.title}" updated`);
-  if (idempotencyKey) await recordMutation(idempotencyKey, "finding", "applied", updated);
-
-  return Response.json(updated);
 }

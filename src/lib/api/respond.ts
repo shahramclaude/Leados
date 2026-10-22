@@ -1,55 +1,35 @@
-import { ApiError, errorBody, ErrorCodes, type ErrorCode } from "./errors";
-import type { RateLimitResult } from "./rateLimit";
+import { AuthError, ForbiddenError } from "./auth";
+import { ValidationError } from "./pagination";
+import { ZodError } from "zod";
 
-export type JsonInit = {
-  status?: number;
-  headers?: Record<string, string>;
-};
-
-/** Standard headers applied to every /api/v1 response. */
-export function baseHeaders(correlationId: string, extra?: Record<string, string>): Record<string, string> {
-  return {
-    "X-Correlation-Id": correlationId,
-    "X-API-Version": "v1",
-    ...extra,
-  };
-}
-
-export function rateLimitHeaders(rl?: RateLimitResult): Record<string, string> {
-  if (!rl) return {};
-  return {
-    "RateLimit-Limit": String(rl.limit),
-    "RateLimit-Remaining": String(rl.remaining),
-    "RateLimit-Reset": String(rl.resetSeconds),
-    "RateLimit-Policy": `${rl.limit};w=60`,
-  };
-}
-
-export function jsonOk(data: unknown, correlationId: string, init: JsonInit = {}, rl?: RateLimitResult) {
-  return Response.json(data, {
-    status: init.status ?? 200,
-    headers: { ...baseHeaders(correlationId), ...rateLimitHeaders(rl), ...(init.headers ?? {}) },
-  });
-}
-
-export function jsonError(
-  code: ErrorCode,
-  correlationId: string,
-  opts: { message?: string; details?: unknown; headers?: Record<string, string> } = {},
-  rl?: RateLimitResult,
-) {
-  const def = ErrorCodes[code];
-  return Response.json(errorBody(code, correlationId, opts.message, opts.details), {
-    status: def.status,
-    headers: { ...baseHeaders(correlationId), ...rateLimitHeaders(rl), ...(opts.headers ?? {}) },
-  });
-}
-
-/** Converts a thrown error into a consistent JSON error response. */
-export function jsonFromCaught(err: unknown, correlationId: string, rl?: RateLimitResult) {
-  if (err instanceof ApiError) {
-    return jsonError(err.code, correlationId, { message: err.message, details: err.details }, rl);
+/** Normalizes thrown errors from route handlers into consistent HTTP responses. */
+export function errorResponse(error: unknown): Response {
+  if (error instanceof AuthError) {
+    return Response.json({ error: error.message }, { status: 401 });
   }
-  console.error(`[api] unhandled error (correlationId=${correlationId})`, err);
-  return jsonError("INTERNAL_ERROR", correlationId, undefined, rl);
+  if (error instanceof ForbiddenError) {
+    return Response.json({ error: error.message }, { status: 403 });
+  }
+  if (error instanceof ValidationError) {
+    return Response.json({ error: error.message }, { status: 400 });
+  }
+  if (error instanceof ZodError) {
+    return Response.json(
+      { error: "Validation failed", issues: error.issues },
+      { status: 400 },
+    );
+  }
+  if (error instanceof NotFoundError) {
+    return Response.json({ error: error.message }, { status: 404 });
+  }
+  // eslint-disable-next-line no-console
+  console.error("Unhandled API error", error);
+  return Response.json({ error: "Internal server error" }, { status: 500 });
+}
+
+export class NotFoundError extends Error {
+  constructor(message = "Not found") {
+    super(message);
+    this.name = "NotFoundError";
+  }
 }
