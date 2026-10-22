@@ -1,189 +1,179 @@
-// LEADOS — Part 35: Resilience & Chaos Engineering schema.
-//
-// NOTE ON THIS SANDBOX: the repository snapshot available while building this
-// part contains only the bare Next.js/Drizzle starter — none of Part 10
-// (scheduler), Part 18 (queue), Part 20 (runbooks/SLO service), Part 29 (risk
-// register), Part 06 (shock models), Part 12 (playbooks) or Part 28 (process
-// mining) artifacts are present. Part 35 therefore ships its own
-// representation of the pieces it needs (a local risk register, a local
-// critical-process list, a local SLO config) clearly namespaced so a future
-// merge with the real Part 10/18/20/29 tables is a rename, not a rewrite.
-// This is called out again in RESILIENCE.md and AI-SESSION-LOG.md.
-
 import {
   pgTable,
-  serial,
   text,
+  numeric,
   integer,
-  boolean,
   timestamp,
   jsonb,
-  varchar,
-  real,
+  boolean,
+  date,
+  pgEnum,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Phase 0 — failure domain inventory (the program's own object of study)
+// Part 36 — Sustainability Intelligence (ESG / Carbon) schema
+//
+// Conventions reused from earlier parts (re-implemented locally in this
+// sandbox because Parts 01/04/08/29 are not present as separate modules
+// here — see AI-SESSION-LOG.md for the honesty note on this):
+//  - Part 01 substrate convention -> Explain<T> evidence envelope (src/lib/evidence.ts)
+//  - Part 08 finance DAG convention -> generic calc DAG (src/lib/financeDag.ts)
+//  - Part 29 obligation tracker convention -> esgObligations table + lib/obligationTracker.ts
+//  - Part 34 lineage convention -> manifest builder (src/lib/lineage.ts)
 // ---------------------------------------------------------------------------
-export const failureDomains = pgTable("resilience_failure_domains", {
-  id: serial("id").primaryKey(),
-  key: varchar("key", { length: 64 }).notNull().unique(),
+
+export const esgScopeEnum = pgEnum("esg_scope", ["scope1", "scope2", "scope3"]);
+
+export const esgMethodEnum = pgEnum("esg_method", [
+  "measured",
+  "activity-based",
+  "spend-based",
+  "derived",
+  "assumed",
+]);
+
+export const esgEvidenceClassEnum = pgEnum("esg_evidence_class", [
+  "metered-measured",
+  "activity-based-estimate",
+  "spend-based-estimate",
+  "derived-aggregate",
+  "aggregated-hr-derived",
+  "governance-log-derived",
+  "assumed-placeholder",
+]);
+
+// --- Carbon: factor library (versioned, sourced) ---------------------------
+export const emissionFactors = pgTable("esg_emission_factors", {
+  id: text("id").primaryKey(),
+  version: integer("version").notNull(),
+  supersedes: text("supersedes"),
+  scope: esgScopeEnum("scope").notNull(),
+  category: text("category").notNull(),
+  region: text("region").notNull(),
+  unit: text("unit").notNull(),
+  gridMethod: text("grid_method"), // "location-based" | "market-based" | null
+  factorValue: numeric("factor_value", { precision: 18, scale: 8 }).notNull(), // kgCO2e per unit
+  method: esgMethodEnum("method").notNull(), // activity-based | spend-based
+  evidenceClass: esgEvidenceClassEnum("evidence_class").notNull(),
+  uncertaintyPct: numeric("uncertainty_pct", { precision: 6, scale: 4 }).notNull(),
+  source: text("source").notNull(),
+  sourceUrl: text("source_url"),
+  validFrom: date("valid_from").notNull(),
+  validTo: date("valid_to"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// --- Carbon: activity data --------------------------------------------------
+export const activities = pgTable("esg_activities", {
+  id: text("id").primaryKey(),
+  scope: esgScopeEnum("scope").notNull(),
+  category: text("category").notNull(),
+  region: text("region").notNull(),
+  period: text("period").notNull(), // e.g. "2025-Q1"
+  quantity: numeric("quantity", { precision: 18, scale: 4 }).notNull(),
+  unit: text("unit").notNull(),
+  method: esgMethodEnum("method").notNull(),
+  spendAmountUsd: numeric("spend_amount_usd", { precision: 18, scale: 2 }),
+  financeLedgerRef: text("finance_ledger_ref"),
+  factorId: text("factor_id")
+    .notNull()
+    .references(() => emissionFactors.id),
+  gridMethod: text("grid_method"),
+  sourceDescription: text("source_description").notNull(),
+  recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+});
+
+// --- Finance ledger mirror (stand-in for Part 08 finance DAG outputs) ------
+export const financeLedgerEntries = pgTable("esg_finance_ledger_entries", {
+  id: text("id").primaryKey(),
+  period: text("period").notNull(),
+  category: text("category").notNull(),
+  amountUsd: numeric("amount_usd", { precision: 18, scale: 2 }).notNull(),
+  description: text("description").notNull(),
+});
+
+// --- Environmental raw metrics (energy, waste) ------------------------------
+export const environmentalMetrics = pgTable("esg_environmental_metrics", {
+  id: text("id").primaryKey(),
+  period: text("period").notNull(),
+  metric: text("metric").notNull(), // energy_consumption_kwh | waste_generated_kg | waste_diverted_kg
+  value: numeric("value", { precision: 16, scale: 3 }).notNull(),
+  unit: text("unit").notNull(),
+  method: esgMethodEnum("method").notNull(),
+  evidenceClass: esgEvidenceClassEnum("evidence_class").notNull(),
+  source: text("source").notNull(),
+});
+
+// --- Social: aggregate-only people metrics (k-anonymity enforced) ---------
+export const peopleAggregates = pgTable("esg_people_aggregates", {
+  id: text("id").primaryKey(),
+  period: text("period").notNull(),
+  metric: text("metric").notNull(), // safety_incident_rate | training_hours_per_fte | pay_equity_ratio
+  cohort: text("cohort").notNull(),
+  cohortSize: integer("cohort_size").notNull(),
+  value: numeric("value", { precision: 12, scale: 4 }).notNull(),
+  unit: text("unit").notNull(),
+  evidenceClass: esgEvidenceClassEnum("evidence_class").notNull(),
+  kAnonymityThreshold: integer("k_anonymity_threshold").notNull().default(5),
+});
+
+// --- Governance: board / decision metrics ----------------------------------
+export const governanceDecisions = pgTable("esg_governance_decisions", {
+  id: text("id").primaryKey(),
+  period: text("period").notNull(),
+  decisionTitle: text("decision_title").notNull(),
+  reviewedByBoard: boolean("reviewed_by_board").notNull(),
+  hasDocumentedRationale: boolean("has_documented_rationale").notNull(),
+  withinSlaDays: boolean("within_sla_days").notNull(),
+  cadenceDays: integer("cadence_days"),
+  decidedAt: date("decided_at").notNull(),
+});
+
+// --- Targets / OKRs (Part 07 stand-in) -------------------------------------
+export const targets = pgTable("esg_targets", {
+  id: text("id").primaryKey(),
   name: text("name").notNull(),
-  description: text("description").notNull(),
-  currentProtection: text("current_protection").notNull(),
-  untestedAssumption: text("untested_assumption").notNull(),
-  chaosTestable: boolean("chaos_testable").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  scope: esgScopeEnum("scope"),
+  category: text("category"),
+  baselineYear: integer("baseline_year").notNull(),
+  baselineValueTco2e: numeric("baseline_value_tco2e", { precision: 14, scale: 3 }).notNull(),
+  targetYear: integer("target_year").notNull(),
+  targetValueTco2e: numeric("target_value_tco2e", { precision: 14, scale: 3 }).notNull(),
+  pathway: text("pathway").notNull(), // linear | geometric
+  okrRef: text("okr_ref"),
 });
 
-// ---------------------------------------------------------------------------
-// Risk register (Part 29 stand-in) — assumptions become tested beliefs
-// ---------------------------------------------------------------------------
-export const riskRegisterEntries = pgTable("resilience_risk_register", {
-  id: serial("id").primaryKey(),
-  domainKey: varchar("domain_key", { length: 64 }).notNull(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  belief: varchar("belief", { length: 24 }).notNull().default("untested"), // untested | tested_holds | tested_broken
-  likelihood: varchar("likelihood", { length: 16 }).notNull().default("unknown"), // low|medium|high|unknown
-  impact: varchar("impact", { length: 16 }).notNull().default("unknown"),
-  owner: text("owner").notNull(),
-  sourceExperimentKey: varchar("source_experiment_key", { length: 64 }),
-  lastUpdated: timestamp("last_updated", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Chaos experiment catalog + run transcripts
-// ---------------------------------------------------------------------------
-export const chaosExperiments = pgTable("resilience_chaos_experiments", {
-  id: serial("id").primaryKey(),
-  key: varchar("key", { length: 64 }).notNull().unique(),
-  title: text("title").notNull(),
-  domainKey: varchar("domain_key", { length: 64 }).notNull(),
-  hypothesis: text("hypothesis").notNull(),
-  injectionType: varchar("injection_type", { length: 32 }).notNull(),
-  // process_kill | latency | error_rate | dependency_outage | corrupt_payload | clock_skew
-  blastRadius: varchar("blast_radius", { length: 16 }).notNull().default("test"), // test|staging|production
-  steadyStateSlo: jsonb("steady_state_slo").notNull(),
-  rollbackPlan: text("rollback_plan").notNull(),
-  safetyPolicy: jsonb("safety_policy").notNull(),
-  schedule: varchar("schedule", { length: 32 }).notNull().default("quarterly"),
-  active: boolean("active").notNull().default(true),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const chaosRuns = pgTable("resilience_chaos_runs", {
-  id: serial("id").primaryKey(),
-  experimentKey: varchar("experiment_key", { length: 64 }).notNull(),
-  environment: varchar("environment", { length: 16 }).notNull().default("test"),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-  endedAt: timestamp("ended_at", { withTimezone: true }),
-  injectionDetail: jsonb("injection_detail").notNull(),
-  steadyStateBefore: jsonb("steady_state_before").notNull(),
-  steadyStateDuring: jsonb("steady_state_during").notNull(),
-  steadyStateAfter: jsonb("steady_state_after"),
-  outcome: varchar("outcome", { length: 16 }).notNull(), // passed | failed | aborted
-  observed: text("observed").notNull(),
-  conclusion: text("conclusion").notNull(),
-  rolledBack: boolean("rolled_back").notNull().default(false),
-  thunderingHerdChecked: boolean("thundering_herd_checked").notNull().default(false),
-  operator: text("operator").notNull().default("chaos-harness"),
-});
-
-export const hardeningTasks = pgTable("resilience_hardening_tasks", {
-  id: serial("id").primaryKey(),
-  chaosRunId: integer("chaos_run_id").notNull(),
-  experimentKey: varchar("experiment_key", { length: 64 }).notNull(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  status: varchar("status", { length: 16 }).notNull().default("open"), // open|in_progress|done
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  completedAt: timestamp("completed_at", { withTimezone: true }),
-});
-
-// ---------------------------------------------------------------------------
-// Circuit breakers / degraded modes
-// ---------------------------------------------------------------------------
-export const circuitBreakerStates = pgTable("resilience_circuit_breakers", {
-  id: serial("id").primaryKey(),
-  dependencyKey: varchar("dependency_key", { length: 64 }).notNull().unique(),
-  label: text("label").notNull(),
-  state: varchar("state", { length: 16 }).notNull().default("closed"), // closed|open|half_open
-  failureCount: integer("failure_count").notNull().default(0),
-  lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
-  lastStateChangeAt: timestamp("last_state_change_at", { withTimezone: true }).notNull().defaultNow(),
-  degradedModeDescription: text("degraded_mode_description").notNull(),
-  userVisibleMessage: text("user_visible_message").notNull(),
-});
-
-// ---------------------------------------------------------------------------
-// Continuity (operational business continuity, not just IT)
-// ---------------------------------------------------------------------------
-export const continuityProcesses = pgTable("resilience_continuity_processes", {
-  id: serial("id").primaryKey(),
-  key: varchar("key", { length: 64 }).notNull().unique(),
+// --- Reduction portfolio / MACC (Part 07 portfolio link) -------------------
+export const abatementInitiatives = pgTable("esg_abatement_initiatives", {
+  id: text("id").primaryKey(),
   name: text("name").notNull(),
-  criticality: varchar("criticality", { length: 16 }).notNull().default("medium"), // low|medium|high|critical
-  rtoMinutes: integer("rto_minutes").notNull(),
-  rpoMinutes: integer("rpo_minutes").notNull(),
-  workaroundPlaybook: text("workaround_playbook").notNull(),
-  owner: text("owner").notNull(),
-  lastDrillAt: timestamp("last_drill_at", { withTimezone: true }),
+  scope: esgScopeEnum("scope").notNull(),
+  category: text("category").notNull(),
+  annualAbatementTco2e: numeric("annual_abatement_tco2e", { precision: 14, scale: 3 }).notNull(),
+  annualNetCostUsd: numeric("annual_net_cost_usd", { precision: 14, scale: 2 }).notNull(),
+  implementationStatus: text("implementation_status").notNull(),
+  portfolioRef: text("portfolio_ref"),
+  evidenceClass: esgEvidenceClassEnum("evidence_class").notNull(),
 });
 
-export const continuityDrills = pgTable("resilience_continuity_drills", {
-  id: serial("id").primaryKey(),
-  processKey: varchar("process_key", { length: 64 }).notNull(),
-  scenarioKey: varchar("scenario_key", { length: 64 }).notNull(),
-  scenarioTitle: text("scenario_title").notNull(),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-  endedAt: timestamp("ended_at", { withTimezone: true }),
-  timerSeconds: integer("timer_seconds"),
-  participants: text("participants").notNull(),
-  afterActionNotes: text("after_action_notes"),
-  actionItems: jsonb("action_items"),
-  outcome: varchar("outcome", { length: 16 }).notNull().default("in_progress"), // in_progress|completed|aborted
+// --- Disclosure engine -------------------------------------------------------
+export const disclosurePacks = pgTable("esg_disclosure_packs", {
+  id: text("id").primaryKey(),
+  period: text("period").notNull(),
+  standard: text("standard").notNull(),
+  generatedAt: timestamp("generated_at").defaultNow().notNull(),
+  figures: jsonb("figures").notNull(),
+  lineageManifest: jsonb("lineage_manifest").notNull(),
+  gaps: jsonb("gaps").notNull(),
+  manifestHash: text("manifest_hash").notNull(),
 });
 
-// ---------------------------------------------------------------------------
-// Recovery re-verification (data-integrity check after any recovery)
-// ---------------------------------------------------------------------------
-export const recoverySnapshots = pgTable("resilience_recovery_snapshots", {
-  id: serial("id").primaryKey(),
-  label: text("label").notNull(),
-  takenAt: timestamp("taken_at", { withTimezone: true }).notNull().defaultNow(),
-  expectedCount: integer("expected_count").notNull(),
-  expectedChecksum: text("expected_checksum").notNull(),
-});
-
-export const recoveryVerifications = pgTable("resilience_recovery_verifications", {
-  id: serial("id").primaryKey(),
-  snapshotId: integer("snapshot_id").notNull(),
-  label: text("label").notNull(),
-  runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
-  expectedCount: integer("expected_count").notNull(),
-  actualCount: integer("actual_count").notNull(),
-  expectedChecksum: text("expected_checksum").notNull(),
-  actualChecksum: text("actual_checksum").notNull(),
-  consistent: boolean("consistent").notNull(),
-  discrepancies: jsonb("discrepancies"),
-});
-
-// ---------------------------------------------------------------------------
-// Demo domain data used as the "thing being protected" by the lab:
-// a toy ledger of recoverable business records + a clock-skew probe table
-// used by the clock-skew chaos experiment (exp-clock-skew).
-// ---------------------------------------------------------------------------
-export const recoverableRecords = pgTable("resilience_recoverable_records", {
-  id: serial("id").primaryKey(),
-  externalRef: varchar("external_ref", { length: 64 }).notNull(),
-  amount: real("amount").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const clockSkewProbes = pgTable("resilience_clock_skew_probes", {
-  id: serial("id").primaryKey(),
-  label: text("label").notNull(),
-  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
-  payload: jsonb("payload").notNull(),
+// --- Obligation tracker (Part 29 stand-in) ----------------------------------
+export const obligations = pgTable("esg_obligations", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  standard: text("standard").notNull(),
+  dueDate: date("due_date").notNull(),
+  status: text("status").notNull(), // open | in-progress | satisfied | overdue
+  linkedPackId: text("linked_pack_id"),
 });

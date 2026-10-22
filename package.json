@@ -7,10 +7,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "seed:resilience": "tsx scripts/seed-resilience.ts",
-    "chaos:run": "tsx scripts/chaos-run.ts",
-    "drill:run": "tsx scripts/continuity-drill.ts",
-    "verify": "npm run typecheck && npm run seed:resilience && tsx scripts/verify-resilience.ts"
+    "seed:esg": "tsx scripts/seed-esg.ts",
+    "verify": "tsx scripts/verify.ts"
   },
   "dependencies": {
     "dotenv": "17.3.1",

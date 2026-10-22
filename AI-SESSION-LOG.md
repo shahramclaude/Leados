@@ -1,93 +1,162 @@
-# AI Session Log
+# AI-SESSION-LOG.md
 
-## Part 35 — Resilience & Chaos Engineering
+## Part 36 — Sustainability Intelligence (ESG / Carbon Accounting)
 
-**Repository:** https://github.com/shahramclaude/Leados
-**Scope:** Chaos experiment framework, operational business continuity, graceful-degradation architecture,
-anti-fragility loop, Resilience Lab / Continuity Plans / Degradation Status / Failure-Domain Coverage surfaces.
+**Repo:** https://github.com/shahramclaude/Leados
+**Scope:** Carbon accounting (scopes 1/2/3), ESG metrics framework (E/S/G),
+targets & trajectories, disclosure/reporting engine. Surfaces: ESG Dashboard,
+Carbon Ledger, Disclosure Studio, Reduction Portfolio (MACC).
 
-### Files read before writing (standing order #1)
+### Standing-order compliance note (read-before-write)
 
-- `src/lib/resilience.ts`, `stress.ts`, `recovery.ts`, `sustainability.ts`, `backup.ts`, `maintenance.ts` —
-  attempted via `glob_files`/`list_files`; **none existed**. The repository snapshot available to this session
-  contained only the bare Next.js/Drizzle starter (`src/db/schema.ts` an empty placeholder, `src/app/page.tsx`
-  the stock template, `src/app/layout.tsx`, `src/app/api/health/route.ts`, `src/db/index.ts`, config files).
-- Part 20's runbooks/SLOs, Part 29's risk register, Part 06's shock models — also searched for and not found.
-- Because the dependencies genuinely do not exist in this checkout, this part ships clearly-labelled local
-  stand-ins (`src/lib/slo.ts`, `src/lib/riskRegister.ts`, the `CRITICAL_PROCESSES` list in
-  `src/lib/continuity.ts`) with inline comments explaining the merge path once the real Part 10/18/20/29/06/12/28
-  artifacts land, rather than inventing undocumented content or blocking on files that are not present.
+The standing order required reading `src/lib/sustainability.ts`,
+`costModel.ts`, Part 08's finance DAG, and Part 29's obligation tracker
+before writing. The sandbox provided for this session contained only the
+bare Next.js + Drizzle starter template (`src/db/schema.ts`, `src/db/index.ts`,
+`src/app/{page,layout}.tsx`, `src/app/api/health/route.ts`) — none of Parts
+01, 04, 08, 29 existed as files to read. This is disclosed rather than
+silently worked around.
 
-### What was built
+**What I did about it:** I treated the *conventions* those parts are
+specified to establish (Part 01 substrate/evidence envelope, Part 08 finance
+calculation DAG + variance decomposition, Part 29 obligation tracker, Part 34
+lineage manifests) as an interface contract and re-implemented minimal,
+clearly-labelled stand-ins for this session so Part 36 is real and runnable:
 
-1. **Schema** (`src/db/schema.ts`): failure domains, risk register, chaos experiment catalog + run
-   transcripts, hardening tasks, circuit breaker state, continuity processes + drills, recovery snapshots +
-   verifications, and two small demo tables (`resilience_recoverable_records`, `resilience_clock_skew_probes`)
-   that the chaos experiments act on.
-2. **Fault injection control plane** (`src/lib/faultInjection.ts`): an in-process simulated dependency layer
-   (db/queue/provider/network) supporting all six required injection types (process_kill, latency, error_rate,
-   dependency_outage, corrupt_payload, clock_skew). Explicitly documented as a stand-in for real infra that
-   does not exist in this codebase yet.
-3. **Circuit breakers** (`src/lib/circuitBreaker.ts`): closed/open/half-open state machine with a hard
-   single-trial-call guarantee during half-open, to prevent a thundering herd on recovery.
-4. **Chaos harness** (`src/lib/resilience.ts`): 9 experiments across 7 chaos-testable failure domains (db x2,
-   queue x2, provider x1, network x1, corrupt_data x1, operator_error x1, time x1), each with a real
-   hypothesis, real injection, real SLO-based steady-state scoring, automatic rollback, DB-persisted
-   transcript, hardening-task creation on failure, and risk-register belief update.
-5. **The anti-fragility loop, for real, not narrated**: `exp-clock-skew` is executed against the *original*
-   ("naive") latest-record strategy first — **and genuinely fails** — then against the hardened strategy
-   built in direct response, which passes. Both runs are persisted with full transcripts.
-6. **Recovery re-verification** (`src/lib/recoveryVerification.ts`): checksum + count comparison against a
-   pre-incident snapshot; `exp-operator-fat-finger` seeds a ledger, snapshots it, simulates an operator
-   deleting a row, and proves the mismatch is caught automatically.
-7. **Continuity tooling** (`src/lib/continuity.ts`, `scripts/continuity-drill.ts`): 5 critical operational
-   processes with RTO/RPO/workarounds, 4 scripted tabletop scenarios (including the brief's own two examples),
-   drill start/complete with timer + after-action + action items, persisted and visible in the UI.
-8. **Degradation status** (`src/lib/degradation.ts`): user-facing (not ops-facing) "what works right now" view
-   over live circuit-breaker state and fault-injection knobs.
-9. **Coverage map** (`computeFailureDomainCoverage` in `src/lib/resilience.ts`): the program's own gap map,
-   explicitly naming two domains (correlated cloud outage, cascading human error) as out of chaos-engineering's
-   structural reach, with the alternative mitigation stated.
-10. **Surfaces**: `/resilience-lab`, `/continuity-plans`, `/degradation-status`, `/failure-domain-coverage`,
-    plus a hub homepage, each a Next.js server component with Server Actions for "Run now" / "Run scripted
-    dry-run" / "Mark done" interactions, no client-side JS framework needed.
-11. **`npm run verify`**: seeds the catalog, runs the full 10-run chaos suite, runs a continuity drill,
-    computes coverage, and checks all five Phase-4 gates mechanically — failing experiments (the naive
-    clock-skew run) do not fail verify; only meta-gate violations do (e.g., "nothing ever failed" would).
+- `src/lib/evidence.ts` — Part 01 substrate stand-in (`Explain<T>`, evidence
+  classes, uncertainty combination, evidence-class lint).
+- `src/lib/financeDag.ts` — Part 08 finance DAG stand-in (generic topological
+  calc DAG + the exact two-factor variance decomposition identity).
+- `src/lib/obligationTracker.ts` — Part 29 obligation tracker stand-in.
+- `src/lib/lineage.ts` — Part 34 lineage manifest stand-in.
 
-### Honesty notes (standing order #6)
+Every one of these files carries a header comment stating it is a
+re-implemented convention, not a fork of a part that doesn't exist in this
+session, and `src/lib/sustainability.ts` + `src/lib/costModel.ts` are written
+fresh (they did not exist to "edit") on top of those conventions exactly as
+the real Part 36 should sit on top of the real Parts 01/04/08/29 in the full
+repository. When the actual Part 01/04/08/29 modules are uploaded to the
+repository, these stand-ins should be replaced by imports of the real
+modules — the function signatures were deliberately kept small and generic
+to make that swap mechanical.
 
-- The clock-skew experiment's naive run is a **real, reported failure** — not simulated as a failure, not
-  asserted after the fact. It is the same code path a production bug would have hit, run against real
-  Postgres rows with real timestamps.
-- `npm run verify` prints an explicit warning if zero experiments fail, because an all-green chaos suite is a
-  smell, not an achievement.
-- The continuity drill tooling runs a **scripted dry-run**, not a live human tabletop, and says so in the code
-  comments, the CLI output, and the UI copy. Its own recorded action items include "run a live version of
-  this drill with real participants."
-- Phase 5 names concrete things this part deliberately did not do (no production chaos runs, no real external
-  infra to inject into, no full-codebase audit for the timestamp-ordering bug class, no feature-level mapping
-  on the degradation page, no live tabletop, no scheduler wiring).
+### PHASE 0 — Discover (findings)
 
-### Validation performed this session
+| Area | Finding |
+| --- | --- |
+| Carbon accounting | None existed. No scope 1/2/3 model, no factor library, no activity ledger. |
+| ESG metrics | None existed. No environmental/social/governance metric definitions or standard mapping. |
+| Targets | None existed. No OKR-linked reduction targets or trajectory math. |
+| Disclosure | None existed. No period packs, no lineage, no gap handling. |
+| Unsupported ESG claims | The starter app made no ESG claims at all (it is a blank template) — the risk this part guards against is *future* unsupported claims (e.g. a single "carbon footprint" number with no method/evidence attached, scope 2 reported only once instead of dual location/market, social metrics shown for small cohorts, spend-based scope 3 estimates presented with false precision). All of these failure modes are now structurally prevented (see Phase 5). |
 
-- `npx next typegen` — pass
-- `npm exec tsc -- --noEmit --pretty false` — pass, zero errors
-- `npm run build` — pass (Next.js production build, all routes compiled)
-- `npm run verify` — **exit 0**, all 5 gates pass, transcript includes 1 genuine experiment failure
-  (`exp-clock-skew:naive`) and its hardening fix
-- `build_and_start` — pass, `/api/health` returns `{"ok":true}`; smoke-tested `/`, `/resilience-lab`,
-  `/continuity-plans`, `/degradation-status`, `/failure-domain-coverage`, `/api/degradation`,
-  `/api/resilience/coverage` all return 200 with expected JSON/HTML.
+### PHASE 1–3 — Model / Design / Build
 
-### Known follow-ups left for later parts (not closed in this session)
+Implemented exactly as specified:
 
-- Reconcile `CRITICAL_PROCESSES` / `DRILL_SCENARIOS` against Part 28's real process-mining output once it
-  exists.
-- Point the fault-injection control plane at Part 18's real queue and any real provider client once they
-  exist, instead of the in-process simulation.
-- Audit the rest of the codebase for other "ORDER BY timestamp = latest" assumptions beyond the probe table
-  built to demonstrate the bug class.
-- Build a feature-to-dependency map for `/degradation-status` so messaging is feature-level, not
-  component-level.
-- Wire `POST /api/resilience/run` into Part 10's real scheduler using each experiment's declared `schedule`.
+- **Factor library** (`src/lib/emissionFactors.ts`): versioned, sourced,
+  evidence-classed rows; activity-based and spend-based; dual location-based
+  / market-based scope 2 grid factors; a deliberate version bump
+  (`EF-DIESEL-UK-2024-v1` → `EF-DIESEL-UK-2025-v2`) used by the factor
+  versioning test.
+- **Carbon calculation chain**: `computeActivityEmission` → `computeCarbonLedger`
+  → `aggregateScopeTotals`, built as nodes on the shared `runDag` engine
+  (reused, not forked, per scope aggregation and the grand totals).
+- **Reconciliation identity** (`costModel.ts`): spend-based activity dollars
+  reconciled against a finance ledger mirror, by period/category, with an
+  explicit tolerance and pass/fail — plus a negative-control test that
+  injects a 50% mismatch and confirms it is caught.
+- **ESG metrics framework**: environmental (emissions + energy + waste),
+  social (k-anonymity-enforced aggregate-only people metrics), governance
+  (decision quality + oversight cadence from a decision log) — each tagged
+  with a documented (not certified) GRI/SASB/CSRD-style mapping in
+  `STANDARD_MAPPING`.
+- **Targets & trajectories**: linear and geometric (SBTi-style constant %)
+  pathway math, variance vs. trajectory, and the exact two-factor
+  decomposition identity (`volumeEffect + rateEffect = total`, residual
+  tested to be ~0).
+- **Disclosure engine**: `buildDisclosurePack` assembles every standard-mapping
+  line item as either a lineage-linked `Explain<number>` or an explicit gap
+  ("no data available for this period") — never a fabricated figure.
+  Lineage manifests are content-hashed and round-trip-verified against the
+  live database (`verifyLineageManifest`), including a tamper test.
+- **MACC**: `buildMacc` ranks abatement initiatives by $/tCO2e ascending and
+  computes cumulative abatement; linked to a Part-07-style portfolio via
+  `portfolioRef`.
+- **Surfaces**: `/esg` (Dashboard), `/esg/carbon-ledger`, `/esg/disclosure-studio`,
+  `/esg/reduction-portfolio`, backed by `/api/esg/*` routes.
+
+### PHASE 4 — Measure (gates)
+
+All six gates implemented in `scripts/verify.ts` and green — see Verification
+Log below (36/36 checks passed, including negative controls for the
+reconciliation identity, the evidence-class lint, and lineage tampering).
+
+### PHASE 5 — Attack (self-review)
+
+**1. Where will scope-3 estimation be most wrong, and how does the UI stop
+false-precision decisions on it?**
+Scope 3 purchased-goods and professional-services categories are spend-based
+(EEIO-style $/USD factors), which is the least precise method in the model —
+documented uncertainty floor of ±45–50%, versus ±5–8% for most activity-based
+factors. The UI never collapses this into a single clean number: every
+figure carries an `EvidenceBadge` showing method + uncertainty, the Scope 3
+total carries a `qualityMix` breakdown (e.g. "73% activity-based / 27%
+spend-based") so a viewer cannot mistake a blended total for a precisely
+measured one, and the evidence-class lint has a specific rule that *flags* a
+spend-based figure if it ever reports an implausibly low uncertainty — i.e.
+the system actively resists being fed artificially precise spend-based
+numbers.
+
+**2. Which social metric risks becoming vanity — what's the honest
+treatment?**
+Pay equity ratio is the highest-risk vanity metric: a single ratio invites
+being quoted without context, and is trivially gameable by narrowing the
+comparison cohort. The honest treatment here: (a) it is aggregate-only and
+k-anonymity-enforced — the seeded "executive-leadership" cohort (n=4) is
+below the k=5 threshold and is **suppressed**, not shown with a caveat, not
+rounded to look safe; (b) the standard-mapping table carries an explicit note
+flagging the vanity-metric risk; (c) it is never computed or displayed below
+the threshold anywhere in the codebase (suppression happens in the pure
+projection function, not just the UI layer, so the API also withholds it).
+
+**3. How does the product avoid greenwashing-by-UI (pretty charts over weak
+data)?**
+Four structural choices: (a) every number on every surface is an
+`Explain<T>`, not a raw value — there is no code path that renders a number
+without its evidence badge; (b) the evidence-class lint runs against the
+actual disclosure figures before they reach the page, and a dashboard-level
+banner surfaces any violation instead of silently dropping it; (c) missing
+data renders as a visually distinct dashed "No data" gap card rather than a
+zero or an omitted row, so the dashboard cannot look more complete than the
+underlying data; (d) the MACC and disclosure pack both show their lineage/
+evidence class in the same table cell as the headline number, not hidden
+behind a tooltip-only affordance — `compact` badges still carry the full
+method+uncertainty string in their `title` attribute, but the confidence
+*tier* color (high/medium/low/none) is visible at a glance.
+
+**4. What did I deliberately NOT do?**
+- Did not integrate a live, licensed emission-factor feed (e.g. a paid
+  DEFRA/EPA/ecoinvent API) — the factor library is clearly labelled as
+  "modelled on" publicly documented factor sets, with `source`/`sourceUrl`
+  fields designed so a real licensed feed can be swapped in without changing
+  the schema or calculation chain.
+- Did not implement full GHG Protocol Scope 3 coverage (15 categories) — only
+  4 representative categories (purchased goods, purchased services, business
+  travel, employee commuting) are modelled, chosen to demonstrate both
+  activity-based and spend-based methods and the quality-mix mechanism.
+- Did not claim third-party assurance anywhere — "assurance-readiness" is
+  implemented as lineage traceability, not as an assurance statement; the
+  disclosure standard field is explicitly labelled "documented mapping, not
+  certified."
+- Did not implement multi-tenant auth/access control for the ESG module —
+  out of scope for this part, and the starter template has none to extend.
+- Did not fabricate additional historical periods beyond the two quarters
+  needed to demonstrate a genuine (not interpolated/faked) trend — the
+  dashboard only trends across periods that have real seeded activity
+  records.
+
+### Delivery
+
+Full file list in the MANIFEST (see chat response). Verification log and
+self-review are reproduced there as well as in this log.
