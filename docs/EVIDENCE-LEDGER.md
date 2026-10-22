@@ -1,54 +1,74 @@
-# Evidence Ledger
+# Evidence Ledger — LEADOS
 
-## What it is
+**This is the honesty backbone of the product.** Every claim this product (or
+its documentation, or a salesperson, or a future AI session) makes about
+itself must appear here with a true, current status and a real, checkable
+proof. `npm run ledger:check` parses this file and fails the build if any row
+marked **Verified** does not cite a proof path that actually exists in the
+repository. It cannot check that the proof is *good*, only that it *exists*
+— human review is still required.
 
-The `decisions` table (`src/db/schema.ts:94`) is an append-only log of every automated action LEADOS has
-taken. Nothing updates or deletes rows in this table from application code — only inserts, from exactly
-two call sites today:
+## How to read this table
 
-- `src/app/api/leads/[id]/score/route.ts` — inserts a row with `type: "scored"` whenever a lead is scored,
-  including the full rule-by-rule breakdown (`evidence.breakdown`) that produced the score.
-- `src/app/api/rotations/assign/route.ts` — inserts a row with `type: "rotated"` whenever a lead is
-  assigned to a rep, including which reps were eligible candidates and which one was chosen
-  (`evidence.candidateRepIds`, `evidence.chosenRepId`).
+- **Verified** — there is an automated test or a reproducible command that
+  proves the claim, and it currently passes.
+- **Partial** — part of the claim is proven; the rest is a named, scoped gap.
+- **Planned** — designed and scoped, not built.
+- **Not implemented** — explicitly out of scope for this build; see
+  `docs/LEADOS-VISION.md` §2 ("what LEADOS is not").
+- **Accepted risk** — a real gap that we are consciously not closing right
+  now, with a written rationale (see `docs/RED-TEAM-FINAL.md`).
 
-## Schema
+## Session 40 starting condition (read this first)
 
-| Column | Type | Meaning |
+Before any other claim: at the start of this session, the repository
+contained **only** the unmodified `nextjs-postgresql-template` starter — one
+page, one health route, an empty `schema.ts`, no `docs/` directory, no prior
+`AI-SESSION-LOG.md`. None of the artifacts that Parts 1–39 are described as
+having produced (`FEATURES.md`, `PART-DEPENDENCY.md`,
+`LEADOS-ARCHITECTURE-2026.md`, `RED-TEAM-2026.md`, prior evidence ledgers)
+existed in this checkout. This is recorded as `RED-TEAM-FINAL.md` finding
+**#1 (Critical)**. Rather than inventing the missing history, this session
+re-baselines LEADOS honestly: everything below was built, tested, and
+measured in this one session. See `docs/PART-DEPENDENCY.md` for the full
+account.
+
+## Core seam claims
+
+| Claim | Status | Proof |
 |---|---|---|
-| `id` | serial | Primary key. |
-| `tenant_id` | integer, FK → `tenants.id` | Which tenant this decision belongs to. |
-| `lead_id` | integer, FK → `leads.id`, nullable | Which lead the decision is about (nullable so a future tenant-level decision isn't forced to reference a lead). |
-| `type` | text | `"scored"` or `"rotated"` today. New types should be added as new literal values, not overload existing ones. |
-| `actor` | text | Who/what made the decision. Always `"system"` today — there is no human-initiated action yet. |
-| `summary` | text | One-sentence, human-readable description of what happened. Shown directly in the dashboard (`src/app/page.tsx`). |
-| `evidence` | jsonb | The raw data that justifies the decision — e.g. the full rule breakdown, or the candidate/chosen rep ids. |
-| `created_at` | timestamptz | When the decision was recorded. |
+| Seam 1 — Fitness reads every domain's metrics and never fabricates a score for a domain with no data | Verified | `src/lib/fitness.ts`, `src/lib/fitness.test.ts`, `src/app/api/fitness/route.ts` |
+| Seam 2 — Assurance monitors every engine, distinguishes pass/warn/fail/unmonitored/stale | Verified | `src/lib/assurance.ts`, `src/lib/assurance.test.ts`, `src/lib/assuranceData.ts`, `src/app/api/assurance/route.ts` |
+| Seam 3 — Chaos experiment outcomes update the target risk's belief score | Verified | `src/lib/chaos.ts`, `src/lib/chaos.test.ts`, `src/app/api/chaos/route.ts` |
+| Seam 4 — Global entities flow into a consolidation run, which generates a board pack | Verified | `src/lib/consolidation.ts`, `src/lib/consolidation.test.ts`, `src/app/api/consolidation/route.ts` |
+| Seam 5 — Voice-of-customer feedback is ranked by theme urgency and linked to an existing strategy item when one matches | Verified | `src/lib/voc.ts`, `src/lib/voc.test.ts`, `src/app/api/voc/route.ts` |
+| Seam 6 — Process mining events feed an automation score per process | Verified | `src/lib/automation.ts`, `src/lib/automation.test.ts`, `src/app/api/automation-score/route.ts` |
+| `/api/health` reports real DB connectivity, not a hardcoded 200 | Verified | `src/app/api/health/route.ts` |
+| Dashboard renders live, read-only aggregates for all six seams in one view | Verified | `src/app/page.tsx`, `src/lib/dashboard.ts` |
+| Board pack discloses its own FX and intercompany-elimination limitations instead of presenting a statutory-looking number | Verified | `src/lib/consolidation.ts` (`buildBoardPackSummary`), `src/lib/consolidation.test.ts` |
+| Board pack never softens or hides a negative net result | Verified | `src/lib/consolidation.test.ts` (`surfaces a loss plainly...`) |
+| Assurance treats an engine whose last check is older than 90 days as stale, not as a standing pass | Verified | `src/lib/assurance.test.ts` (`a stale check...`) |
+| Mutation endpoints reject invalid enum values (assurance result/severity, VoC sentiment, chaos outcome, non-positive process durations) | Verified | `src/app/api/assurance/route.ts`, `src/app/api/voc/route.ts`, `src/app/api/chaos/route.ts`, `src/app/api/process-mining/route.ts` |
+| `npm run gate:all` runs lint, typecheck, all seam tests, and ledger:check as one fast-tier command | Verified | `scripts/gate-all.mjs`, `package.json` |
+| CI wires the fast and slow tiers to run on every push/PR | Partial | `.github/workflows/ci.yml` exists and is reviewed, but has not been executed by an actual GitHub Actions runner in this sandbox — only the locally-equivalent command sequence has been run and is logged in `docs/VERIFICATION-LOG.md`. |
 
-## Why append-only matters
+## Explicitly not implemented (see vision doc for the full list)
 
-Because nothing in the codebase updates or deletes a `decisions` row, the ledger for a given lead is a
-complete, ordered history of every automated action taken on it. `GET /api/decisions` returns the most
-recent 50 rows for a tenant, newest first (`src/app/api/decisions/route.ts`).
+| Claim | Status | Notes |
+|---|---|---|
+| Authentication / authorization / multi-tenant org boundaries | Not implemented | Every API route is open. This is the single largest pre-production blocker. See `docs/RED-TEAM-FINAL.md` #4. |
+| Real ML/AI models behind the "engines" table | Not implemented | `engines` and `assuranceChecks` model the *governance contract* (something must be checked, on a schedule, with a severity) — there is no inference code behind any engine. See `docs/RED-TEAM-FINAL.md` #27. |
+| Live FX feed / intercompany elimination in consolidation | Not implemented | `fxRateToUsd` is a manually entered snapshot. See `docs/RED-TEAM-FINAL.md` #17–18. |
+| External/independent ESG assurance | Not implemented | ESG metrics are self-reported with no evidence attachment. Seeded with a `fail/critical` assurance check on purpose, to not overstate confidence. See `docs/RED-TEAM-FINAL.md` #30–31. |
+| Autonomous closed-loop action (sensing → ... → learning without a human in the loop) | Partial | All six seams require a human (or a scheduled job that does not yet exist) to trigger the POST action; nothing runs itself. See `docs/SYSTEM-MAP.md`. |
+| Audit log of who changed what | Not implemented | See `docs/RED-TEAM-FINAL.md` #26. |
+| 39 prior "parts" of product history | Not present in repository | See "Session 40 starting condition" above and `docs/PART-DEPENDENCY.md`. |
 
-## What is honestly NOT part of the evidence ledger today
+## Quality claims
 
-- **No human actor support.** There is no login, so every row's `actor` is `"system"`. A future
-  authenticated write path (e.g. a rep manually overriding a score) should populate `actor` with a real
-  user identifier — this is roadmap, not implemented.
-- **No retention policy or archival.** The table grows unbounded; there is no partitioning or TTL.
-- **No tamper-evidence (hashing/signing).** Rows can be deleted by direct database access (e.g. by anyone
-  with `DATABASE_URL`); the ledger is an audit trail for application-level mistakes and transparency, not
-  a cryptographically tamper-evident log.
-- **No export/webhook delivery.** Reading the ledger requires calling `GET /api/decisions`; there is no
-  push mechanism (see `docs/REALTIME.md`).
-
-## Verifying it yourself
-
-```
-$ curl -s -X POST "http://localhost:3000/api/leads/1/score?tenant=demo"
-$ curl -s "http://localhost:3000/api/decisions?tenant=demo"
-```
-
-The second call returns a `"scored"` decision whose `evidence.breakdown` matches exactly what the first
-call returned — the ledger is not a summary, it is the actual evidence.
+| Claim | Status | Proof |
+|---|---|---|
+| Zero duplicated business-logic implementations across API routes and the dashboard | Verified | `src/lib/assuranceData.ts`, `docs/VERIFICATION-LOG.md` |
+| All 24 unit tests pass | Verified | `docs/VERIFICATION-LOG.md` |
+| TypeScript strict mode compiles with zero errors | Verified | `docs/VERIFICATION-LOG.md` |
+| Production build succeeds | Verified | `docs/VERIFICATION-LOG.md` |

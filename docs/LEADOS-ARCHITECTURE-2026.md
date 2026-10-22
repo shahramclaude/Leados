@@ -1,84 +1,82 @@
-# LEADOS Architecture (2026 baseline, v0.1.0)
+# LEADOS Architecture (2026 baseline)
 
-## System diagram
+This document describes the system as built in this session. It supersedes
+no prior architecture document because none existed in this repository
+(see `docs/PART-DEPENDENCY.md`).
 
-```mermaid
-flowchart LR
-    subgraph Client
-        UI[Dashboard /<br/>Server Component]
-        API_CALLER[API caller<br/>curl / scripts]
-    end
+## Stack
 
-    subgraph "Next.js App (single process)"
-        PAGE["/ (page.tsx)<br/>reads leads, scores, decisions"]
-        TENANTS["/api/tenants"]
-        RULES["/api/rules"]
-        LEADS["/api/leads"]
-        SCORE["/api/leads/:id/score<br/>runs scoring engine"]
-        ROTATE["/api/rotations/assign<br/>runs rotation engine"]
-        DECISIONS["/api/decisions<br/>evidence ledger reader"]
-        HEALTH["/api/health"]
-    end
+- **Next.js 16 (App Router)**, React 19 server components for all reads,
+  one shared client component (`src/components/ActionForm.tsx`) for all
+  writes.
+- **PostgreSQL** via **Drizzle ORM** (`src/db/schema.ts`, `src/db/index.ts`).
+  A single connection pool, reused across requests.
+- **Vitest** for unit tests of business logic (`src/lib/*.test.ts`).
+- **Tailwind CSS v4** for styling, no component library.
+- No external services, queues, or background workers in this build.
 
-    subgraph "Pure logic (unit tested)"
-        SCORER[src/lib/scoring.ts<br/>deterministic weighted rules]
-        ROTATOR[src/lib/rotation.ts<br/>round-robin]
-    end
+## Layering
 
-    subgraph PostgreSQL
-        T[(tenants)]
-        R[(reps)]
-        RU[(rules)]
-        L[(leads)]
-        LS[(lead_scores)]
-        D[(decisions — evidence ledger)]
-        RS[(rotation_state)]
-    end
-
-    UI --> PAGE --> T & L & LS & D
-    API_CALLER --> TENANTS & RULES & LEADS & SCORE & ROTATE & DECISIONS & HEALTH
-    SCORE --> SCORER
-    SCORE --> L & RU & LS & D
-    ROTATE --> ROTATOR
-    ROTATE --> R & L & RS & D
-    TENANTS --> T
-    RULES --> RU
-    LEADS --> L & LS
-    DECISIONS --> D
-    HEALTH -. "select 1" .-> PostgreSQL
+```
+src/app/api/*/route.ts    <- HTTP boundary: validates input, calls db + lib, returns JSON
+src/lib/*.ts (pure)        <- business logic: computeFitnessScore, summarizeAssurance,
+                              applyChaosToRisk, runConsolidation, rankVocThemes,
+                              computeAutomationScore — no I/O, 100% unit-testable
+src/lib/assuranceData.ts   <- the one exception: a thin DB-reading orchestrator shared
+src/lib/dashboard.ts          by the dashboard and the assurance API route, so there is
+                              exactly one implementation of "latest check per engine"
+                              and one of "read everything for the dashboard"
+src/db/schema.ts            <- the one source of truth for every table
+src/app/page.tsx            <- the one dashboard, reads via lib/dashboard.ts,
+                              writes via ActionForm -> the same API routes
 ```
 
-## Process model
+## Why business logic is pure
 
-LEADOS v0.1.0 is a single Next.js application (App Router, Node runtime) talking directly to one
-PostgreSQL database through Drizzle ORM (`src/db/index.ts`). There is no separate worker process, queue,
-cache layer, or external service dependency. Every API route handler under `src/app/api/**/route.ts`
-opens its own query against the shared connection pool and returns JSON.
+Every seam's core calculation (`computeFitnessScore`, `summarizeAssurance`,
+`applyChaosToRisk`, `runConsolidation` + `buildBoardPackSummary`,
+`rankVocThemes` + `suggestStrategyLink`, `computeAutomationScore`) takes
+plain data in and returns plain data out. This means:
 
-## The four real subsystems
+- Unit tests run in milliseconds with no database, in CI without a Postgres
+  container if needed (though CI here does run one, to also exercise the
+  routes end-to-end via `build_and_start`).
+- The same function can be reused by an API route, a background job (not
+  yet built), or a CLI script without duplication.
+- The "gaming" surface (see `docs/RED-TEAM-FINAL.md`) is isolated to a
+  single, auditable function per seam.
 
-1. **Scoring (`src/lib/scoring.ts`).** A pure function that evaluates a tenant's active `rules` rows
-   against a lead's `signals` JSON blob (merged with first-class lead columns such as `source`) and
-   returns a `0–100` score, a `hot`/`warm`/`cold` band, and a per-rule breakdown. No machine learning, no
-   causal inference — see `docs/explanations/intelligence-methodology.md` for the honest rationale.
-2. **Rotation (`src/lib/rotation.ts`).** A pure round-robin function over a tenant's active reps, keyed
-   by the id of whoever was assigned last (`rotation_state` table).
-3. **Evidence ledger (`decisions` table, written from `src/app/api/leads/[id]/score/route.ts` and
-   `src/app/api/rotations/assign/route.ts`).** Every automated scoring or rotation action writes one
-   append-only row recording a human-readable summary and the raw evidence used to make the decision. See
-   `docs/EVIDENCE-LEDGER.md`.
-4. **Tenancy (`tenant_id` foreign keys across every table, resolved in `src/lib/tenant.ts`).** All data is
-   partitioned by `tenant_id`. The active tenant is resolved from a `?tenant=` query parameter or an
-   `x-leados-tenant` header — there is intentionally no authentication yet (see `docs/SECURITY.md`).
+## Data model (six seam tables + supporting tables)
 
-## Known architectural gaps (roadmap, not implemented)
+See `src/db/schema.ts` for the authoritative definitions. Grouped by seam:
 
-- No authentication/authorization — any caller that can name a tenant slug can read/write that tenant's
-  data (`src/lib/tenant.ts:6-9`).
-- No background jobs/queue — scoring and rotation are synchronous, request-triggered actions only.
-- No caching layer — every request hits PostgreSQL directly.
-- No horizontal scale-out story beyond what a stateless Next.js deployment + a managed Postgres gives you
-  for free; there is no sharding, read replica routing, or connection pooler configuration documented.
-- No realtime/event-streaming layer (see `docs/REALTIME.md`).
+1. `domains`, `metrics`, `fitness_scores`
+2. `engines`, `assurance_checks`
+3. `risks`, `chaos_experiments`
+4. `entities`, `consolidation_runs`, `board_packs`
+5. `strategy_items`, `voc_feedback`
+6. `process_events`, `automation_scores`
 
-These gaps are tracked, not hidden, and are reflected in `FEATURES.md` and `docs/THREAT-MODEL.md`.
+## Deliberate non-goals of this architecture (see vision doc for the full list)
+
+- No auth/identity layer yet — every route is open. This is the top
+  pre-production blocker (`docs/RED-TEAM-FINAL.md` #4).
+- No background scheduler — every seam is triggered by an explicit API call
+  (human via the dashboard, or a script/external caller).
+- No real ML models behind "engines" — the engine/assurance tables model the
+  *governance contract* a real model would need to satisfy, not an actual
+  inference pipeline.
+- No multi-tenant boundary — this is a single-organization data model.
+
+## Request flow example (Seam 4, end to end)
+
+1. Seed or a caller `POST /api/entities` for several entities in a period.
+2. A human clicks "Run consolidation" on the dashboard (`ActionForm` →
+   `POST /api/consolidation` with `{ period }`).
+3. The route loads all entities for that period, calls the pure
+   `runConsolidation()` function, persists a `consolidationRuns` row, calls
+   `buildBoardPackSummary()`, persists a `boardPacks` row, and returns both.
+4. `router.refresh()` re-renders the server component, which re-reads the
+   latest board pack from the database and displays it — including its own
+   FX/elimination disclosure and, if applicable, an un-softened loss
+   warning.

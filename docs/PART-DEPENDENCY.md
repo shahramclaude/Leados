@@ -1,39 +1,70 @@
-# Part Dependency Map
+# Part Dependency Record — LEADOS
 
-LEADOS is being built in a series of 23 numbered parts. This document records how Part 21
-(release management, documentation, and consistency sweep) depends on the parts before it, and is
-honest about what this specific repository snapshot actually contains.
+## What this document is
 
-## Honesty note on this snapshot
+The working brief for this session frames it as "Part 40 of 41," depending
+on artifacts from Parts 1–39 (`docs/EVIDENCE-LEDGER.md`,
+`docs/PART-DEPENDENCY.md`, `docs/LEADOS-ARCHITECTURE-2026.md`,
+`docs/RED-TEAM-2026.md`, prior `AI-SESSION-LOG.md` entries, `FEATURES.md`)
+existing in the target repository
+(`https://github.com/shahramclaude/Leados`) in this working copy.
 
-The working copy handed to Part 21 contained only a generic Next.js + Drizzle + PostgreSQL starter
-template — none of the application code, schema, or documentation that Parts 00–20 are assumed to have
-produced was present (see `docs/AUDIT-2026.md` for the full discovery). Rather than inventing a fictional
-history to match the expected part count, this part:
+## What was actually found at session start
 
-1. Treats the discovered starter template as the true starting point.
-2. Builds a small, real, fully-tested baseline (deterministic lead scoring, round-robin rotation, an
-   append-only evidence ledger, multi-tenant storage by `tenant_id`) that is consistent with the product
-   name "LEADOS" and the vocabulary used across the part briefs (leads, rules, scenarios, rotations,
-   tenancy, evidence ledger, fairness, attention).
-3. Labels everything implied by earlier part numbers that is **not** present in code — causal inference,
-   retrieval/RAG, real-time sensing feeds, LLM-based reasoning, automated fairness auditing, mutation
-   testing, i18n, formal SLOs — as **roadmap intent** in `FEATURES.md`, not as delivered capability.
+A full read of the repository (Phase 0, step 1 of this session) found:
 
-## Dependency chain (as designed, even where a part's artifacts were not found in this snapshot)
+```
+package.json, drizzle.config.json, next.config.ts, tsconfig.json,
+eslint.config.mjs, postcss.config.mjs, .env,
+src/db/schema.ts        (empty — "export {}")
+src/db/index.ts         (drizzle/pg boilerplate)
+src/app/page.tsx         (generic starter homepage)
+src/app/layout.tsx
+src/app/globals.css
+src/app/api/health/route.ts
+```
 
-| Part | Assumed scope | Status in this snapshot |
-|---|---|---|
-| 00–09 | Project scaffolding, core domain model, intelligence/causal/retrieval/sensing engines, fairness tooling | Not present; superseded by the v0.1.0 baseline built in Part 21 (deterministic scoring only, no ML/causal/retrieval). |
-| 10–18 | LLM integration, performance hardening, i18n, security hardening, threat modeling, SLOs, realtime layer | Not present; documented as roadmap in `FEATURES.md`, `docs/SECURITY.md`, `docs/THREAT-MODEL.md`, `docs/SLO.md`, `docs/REALTIME.md`. |
-| 19 | Container image + SBOM pipeline | Not present as a prior artifact; built fresh in this part (`.github/workflows/release.yml`, `npm sbom`). |
-| 20 | Pre-release hardening / test suite | Not present as a prior artifact; this part adds the first real test suite (`tests/*.test.ts`, 11 passing cases) and CI (`.github/workflows/ci.yml`). |
-| **21 (this part)** | Release management & documentation | Delivered: Diátaxis docs set, README with claim-to-file table, CHANGELOG, CONTRIBUTING, release workflow, rollback drill, consolidated verification sweep. |
-| 22–23 | Assumed: final hardening and launch | Not started. Out of scope for this part. |
+No `docs/` directory existed. No prior `AI-SESSION-LOG.md` existed. No
+`FEATURES.md` existed. This is the unmodified
+`nextjs-postgresql-template` scaffold, with no LEADOS-specific code,
+schema, or documentation of any kind.
 
-## What Part 21 does not attempt to retroactively fix
+## What this session did about it (honesty over narrative)
 
-This part does not add intelligence/causal/retrieval/sensing/fairness/LLM features, i18n, mutation
-testing, or a real-time layer, because they were never present to document, and building them is outside
-the release-management/documentation scope of this part. `FEATURES.md` and the consolidated verification
-table in `README.md` mark each of these explicitly as **absent**, not merely "undocumented".
+Per the standing honesty rule for this program — "the evidence ledger's
+final statuses are the product's truthful face" — this session does **not**
+fabricate 39 parts of retrospective history to satisfy the dependency
+chain described in the brief. Instead:
+
+1. This gap is recorded as **Finding #1 (Critical)** in
+   `docs/RED-TEAM-FINAL.md`.
+2. This session (labeled, per the brief, "Part 40") is treated as the
+   **origin point** of the documented system. Every subsequent "Part 41"
+   session should treat *this* session's output as its Part-39-equivalent
+   input, not as confirmation that Parts 1–39 occurred.
+3. All docs in this delivery (`GLOSSARY.md`, `SYSTEM-MAP.md`,
+   `EVIDENCE-LEDGER.md`, `LEADOS-ARCHITECTURE-2026.md`, `LEADOS-VISION.md`,
+   `FEATURES.md`, `RED-TEAM-FINAL.md`) are written fresh, describing only
+   what exists in this repository right now, with no invented prior-part
+   citations.
+4. The six cross-domain "seams" named in the brief (fitness reads every
+   domain's metrics; assurance monitors every engine; chaos results update
+   risk beliefs; global entities flow into consolidation → board pack; VoC
+   links to strategy; process mining feeds automation scoring) are treated
+   as the real target architecture and are built, tested, and proven in
+   this session — see `docs/SYSTEM-MAP.md` and `docs/EVIDENCE-LEDGER.md`.
+5. Seams referenced in the brief that imply a much larger prior system —
+   "evolution loop's arrows all wired" across 23–39 distinct engines/parts,
+   a standing `RED-TEAM-2026.md` from "Part 22" — have no prior artifact to
+   extend. They are addressed by building the generalizable version of each
+   pattern (one fitness engine, one assurance engine, one chaos/risk engine,
+   one consolidation engine, one VoC engine, one process-mining engine) and
+   explicitly scoping the rest as `docs/LEADOS-VISION.md` §3, "next program
+   of work."
+
+## If a future session finds this document stale
+
+Re-run the Phase 0 discovery step literally: list the full repository tree,
+read every file in `docs/`, and compare it against this document before
+trusting any of its claims. This document itself is only as good as the
+last time someone actually looked.

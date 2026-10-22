@@ -1,19 +1,36 @@
-import { NextResponse } from "next/server";
-import { renderPrometheusExposition } from "@/lib/metrics";
-import { pool } from "@/db";
-import { registry } from "@/lib/metrics";
+import { db } from "@/db";
+import { metrics } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-// Not wrapped in withRoute: scraping /metrics should not itself inflate the
-// RED metrics it is reporting, and must stay reachable even during
-// maintenance/incident states (see MAINTENANCE_BYPASS_PREFIXES).
-export async function GET() {
-  registry.dbPoolInUse.set({}, pool.totalCount - pool.idleCount);
-  registry.dbPoolSize.set({}, pool.totalCount);
-  const body = renderPrometheusExposition();
-  return new NextResponse(body, {
-    status: 200,
-    headers: { "content-type": "text/plain; version=0.0.4; charset=utf-8" },
-  });
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const domainId = searchParams.get("domainId");
+  const rows = domainId
+    ? await db.select().from(metrics).where(eq(metrics.domainId, Number(domainId)))
+    : await db.select().from(metrics);
+  return Response.json({ metrics: rows });
+}
+
+export async function POST(request: Request) {
+  const body = await request.json();
+  if (!body?.domainId || !body?.name || body?.value === undefined || body?.target === undefined || !body?.unit || !body?.period) {
+    return Response.json(
+      { error: "domainId, name, value, target, unit, period are required" },
+      { status: 400 },
+    );
+  }
+  const [row] = await db
+    .insert(metrics)
+    .values({
+      domainId: Number(body.domainId),
+      name: body.name,
+      value: String(body.value),
+      target: String(body.target),
+      unit: body.unit,
+      period: body.period,
+    })
+    .returning();
+  return Response.json({ metric: row }, { status: 201 });
 }

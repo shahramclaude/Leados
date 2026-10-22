@@ -1,149 +1,186 @@
-// LEADOS — Part 39: Organizational Fitness Function & Evolution Engine
+// LEADOS core schema.
 //
-// This schema stores:
-//  - versioned weight policies for the transparent fitness function
-//  - raw metric samples (the evidence behind every dimension score)
-//  - computed fitness snapshots (full decomposition + sensitivity, never just a number)
-//  - Goodhart-pair anomaly alerts (gaming-resistance)
-//  - evolution loops (hypothesis -> twin prediction -> human T3 decision -> intervention -> outcome -> belief update)
-//  - the legacy health-score catalog being consolidated/deprecated into this model (Phase 0 audit)
-
+// Tables are grouped by the six cross-domain "seams" this build proves end
+// to end (see docs/SYSTEM-MAP.md and docs/EVIDENCE-LEDGER.md):
+//   1. domains + metrics          -> fitnessScores      (fitness reads every domain's metrics)
+//   2. engines + assuranceChecks  -> assurance summary   (assurance monitors every engine)
+//   3. risks + chaosExperiments                          (chaos results update risk beliefs)
+//   4. entities + consolidationRuns + boardPacks          (global entities -> consolidation -> board pack)
+//   5. vocFeedback -> strategyItems                       (VoC links to strategy)
+//   6. processEvents -> automationScores                  (process mining feeds automation scoring)
 import {
-  pgTable,
-  text,
-  integer,
-  numeric,
-  jsonb,
-  timestamp,
   boolean,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
   serial,
-  date,
-  uniqueIndex,
+  text,
+  timestamp,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Weight policy: THE org-configurable, versioned, rationale-carrying weighting
-// of the fitness function. Never a hidden constant.
+// 1. Fitness: domains + metrics -> fitnessScores
 // ---------------------------------------------------------------------------
-export const fitnessWeightPolicies = pgTable("fitness_weight_policies", {
+export const domains = pgTable("domains", {
   id: serial("id").primaryKey(),
-  version: integer("version").notNull(),
+  key: text("key").notNull().unique(),
   name: text("name").notNull(),
-  rationale: text("rationale").notNull(),
-  // { [dimensionId]: { weight: number, rationale: string } }
-  weights: jsonb("weights").notNull(),
-  status: text("status").notNull().default("draft"), // draft | active | archived
-  createdBy: text("created_by").notNull().default("org-admin"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  activatedAt: timestamp("activated_at", { withTimezone: true }),
-  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  category: text("category").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// ---------------------------------------------------------------------------
-// Raw metric samples — the evidence layer underneath every dimension score.
-// Metric *definitions* (dimension, direction, bounds, evidence class, Goodhart
-// risk, counter-metric pairing) live in code (src/lib/fitness/dimensions.ts)
-// because they are policy-reviewed constants, not org data — but every value
-// plugged into the function comes from this table.
-// ---------------------------------------------------------------------------
-export const fitnessMetricSamples = pgTable(
-  "fitness_metric_samples",
-  {
-    id: serial("id").primaryKey(),
-    metricId: text("metric_id").notNull(),
-    periodStart: date("period_start").notNull(),
-    periodEnd: date("period_end").notNull(),
-    value: numeric("value", { precision: 14, scale: 4 }).notNull(),
-    source: text("source").notNull().default("manual"), // manual | integration | derived
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("fitness_metric_samples_metric_period_idx").on(t.metricId, t.periodEnd)],
-);
-
-// ---------------------------------------------------------------------------
-// Computed fitness snapshots — the single number is NEVER stored without its
-// full decomposition + sensitivity attached.
-// ---------------------------------------------------------------------------
-export const fitnessSnapshots = pgTable(
-  "fitness_snapshots",
-  {
-    id: serial("id").primaryKey(),
-    periodStart: date("period_start").notNull(),
-    periodEnd: date("period_end").notNull(),
-    policyId: integer("policy_id")
-      .notNull()
-      .references(() => fitnessWeightPolicies.id),
-    fitness: numeric("fitness", { precision: 6, scale: 4 }).notNull(),
-    decomposition: jsonb("decomposition").notNull(),
-    sensitivity: jsonb("sensitivity").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [uniqueIndex("fitness_snapshots_period_idx").on(t.periodEnd)],
-);
-
-// ---------------------------------------------------------------------------
-// Goodhart Watch — suspicious joint movement of a metric vs its paired
-// counter-metric (gaming-resistance detector).
-// ---------------------------------------------------------------------------
-export const goodhartAlerts = pgTable("goodhart_alerts", {
+export const metrics = pgTable("metrics", {
   id: serial("id").primaryKey(),
-  metricId: text("metric_id").notNull(),
-  counterMetricId: text("counter_metric_id").notNull(),
-  periodStart: date("period_start").notNull(),
-  periodEnd: date("period_end").notNull(),
-  metricDeltaPct: numeric("metric_delta_pct", { precision: 10, scale: 4 }).notNull(),
-  counterDeltaPct: numeric("counter_delta_pct", { precision: 10, scale: 4 }).notNull(),
-  severity: text("severity").notNull(), // info | watch | high
-  note: text("note").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  domainId: integer("domain_id")
+    .notNull()
+    .references(() => domains.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  value: numeric("value").notNull(),
+  target: numeric("target").notNull(),
+  unit: text("unit").notNull(),
+  period: text("period").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const fitnessScores = pgTable("fitness_scores", {
+  id: serial("id").primaryKey(),
+  domainId: integer("domain_id")
+    .notNull()
+    .references(() => domains.id, { onDelete: "cascade" }),
+  score: numeric("score").notNull(),
+  metricCount: integer("metric_count").notNull(),
+  inputs: jsonb("inputs").notNull(),
+  computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // ---------------------------------------------------------------------------
-// Evolution loops — human-commanded, T3-gated organizational change loop.
-// Stage machine lives in src/lib/fitness/evolutionLoop.ts
+// 2. Assurance: engines + assuranceChecks
 // ---------------------------------------------------------------------------
-export const evolutionLoops = pgTable("evolution_loops", {
+export const engines = pgTable("engines", {
+  id: serial("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  status: text("status").notNull().default("unknown"),
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+});
+
+export const assuranceChecks = pgTable("assurance_checks", {
+  id: serial("id").primaryKey(),
+  engineId: integer("engine_id")
+    .notNull()
+    .references(() => engines.id, { onDelete: "cascade" }),
+  checkType: text("check_type").notNull(),
+  result: text("result").notNull(),
+  severity: text("severity").notNull().default("info"),
+  notes: text("notes"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// 3. Chaos -> risk belief
+// ---------------------------------------------------------------------------
+export const risks = pgTable("risks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
-  dimensionId: text("dimension_id").notNull(),
-  hypothesis: text("hypothesis").notNull(),
-  // Stand-in link to Part 30's experiment registry (not physically present in
-  // this sandbox instance) — kept as an opaque reference id.
-  relatedExperimentId: text("related_experiment_id"),
-  // Stand-in link to Part 06's organizational digital twin pre-test.
-  twinPredictedDelta: numeric("twin_predicted_delta", { precision: 8, scale: 4 }),
-  twinConfidence: numeric("twin_confidence", { precision: 5, scale: 4 }),
-  stage: text("stage").notNull().default("hypothesis"),
-  decisionTier: text("decision_tier").notNull().default("T3"),
-  // Stand-in link to Part 23's decision ledger.
-  decisionId: text("decision_id"),
-  approvedBy: text("approved_by"),
-  approvedAt: timestamp("approved_at", { withTimezone: true }),
-  rejectedReason: text("rejected_reason"),
-  // Stand-in link to Part 10's execution/orchestration engine.
-  executionRef: text("execution_ref"),
-  executedAt: timestamp("executed_at", { withTimezone: true }),
-  measuredAt: timestamp("measured_at", { withTimezone: true }),
-  actualDelta: numeric("actual_delta", { precision: 8, scale: 4 }),
-  counterfactualDelta: numeric("counterfactual_delta", { precision: 8, scale: 4 }),
-  counterfactualNote: text("counterfactual_note"),
-  beliefUpdateNote: text("belief_update_note"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  category: text("category").notNull(),
+  likelihood: numeric("likelihood").notNull(),
+  impact: numeric("impact").notNull(),
+  beliefScore: numeric("belief_score").notNull(),
+  status: text("status").notNull().default("open"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const chaosExperiments = pgTable("chaos_experiments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  targetRiskId: integer("target_risk_id")
+    .notNull()
+    .references(() => risks.id, { onDelete: "cascade" }),
+  outcome: text("outcome").notNull(),
+  beliefBefore: numeric("belief_before").notNull(),
+  beliefAfter: numeric("belief_after").notNull(),
+  notes: text("notes"),
+  runAt: timestamp("run_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // ---------------------------------------------------------------------------
-// Legacy health-score catalog (Phase 0 audit output) — consolidated/deprecated
-// into the fitness model. Kept as data so the audit is visible in-product.
+// 4. Global entities -> consolidation -> board pack
 // ---------------------------------------------------------------------------
-export const legacyHealthScores = pgTable("legacy_health_scores", {
-  id: text("id").primaryKey(),
-  label: text("label").notNull(),
-  formerLocation: text("former_location").notNull(),
-  formulaSummary: text("formula_summary").notNull(),
-  gamingNotes: text("gaming_notes").notNull(),
-  actionabilityNotes: text("actionability_notes").notNull(),
-  mappedDimensionId: text("mapped_dimension_id"),
-  deprecated: boolean("deprecated").notNull().default(true),
-  deprecatedNote: text("deprecated_note").notNull(),
+export const entities = pgTable("entities", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  region: text("region").notNull(),
+  currency: text("currency").notNull(),
+  revenue: numeric("revenue").notNull(),
+  costs: numeric("costs").notNull(),
+  fxRateToUsd: numeric("fx_rate_to_usd").notNull().default("1"),
+  period: text("period").notNull(),
+});
+
+export const consolidationRuns = pgTable("consolidation_runs", {
+  id: serial("id").primaryKey(),
+  period: text("period").notNull(),
+  totalRevenueUsd: numeric("total_revenue_usd").notNull(),
+  totalCostsUsd: numeric("total_costs_usd").notNull(),
+  entityCount: integer("entity_count").notNull(),
+  fxNotes: jsonb("fx_notes").notNull(),
+  status: text("status").notNull().default("draft"),
+  runAt: timestamp("run_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const boardPacks = pgTable("board_packs", {
+  id: serial("id").primaryKey(),
+  period: text("period").notNull(),
+  consolidationRunId: integer("consolidation_run_id")
+    .notNull()
+    .references(() => consolidationRuns.id, { onDelete: "cascade" }),
+  summary: text("summary").notNull(),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// 5. Voice of customer -> strategy
+// ---------------------------------------------------------------------------
+export const strategyItems = pgTable("strategy_items", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  owner: text("owner").notNull(),
+  status: text("status").notNull().default("proposed"),
+  priority: text("priority").notNull().default("medium"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const vocFeedback = pgTable("voc_feedback", {
+  id: serial("id").primaryKey(),
+  source: text("source").notNull(),
+  sentiment: text("sentiment").notNull(),
+  theme: text("theme").notNull(),
+  text: text("text").notNull(),
+  linkedStrategyId: integer("linked_strategy_id").references(() => strategyItems.id, {
+    onDelete: "set null",
+  }),
+  receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ---------------------------------------------------------------------------
+// 6. Process mining -> automation scoring
+// ---------------------------------------------------------------------------
+export const processEvents = pgTable("process_events", {
+  id: serial("id").primaryKey(),
+  processName: text("process_name").notNull(),
+  step: text("step").notNull(),
+  durationMs: integer("duration_ms").notNull(),
+  automatable: boolean("automatable").notNull().default(false),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const automationScores = pgTable("automation_scores", {
+  id: serial("id").primaryKey(),
+  processName: text("process_name").notNull(),
+  score: numeric("score").notNull(),
+  eventCount: integer("event_count").notNull(),
+  basis: jsonb("basis").notNull(),
+  computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
 });

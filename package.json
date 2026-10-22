@@ -7,7 +7,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "verify": "tsx scripts/verify-fitness.ts"
+    "test": "vitest run",
+    "seed": "node scripts/seed.mjs",
+    "ledger:check": "node scripts/ledger-check.mjs",
+    "gate:all": "node scripts/gate-all.mjs",
+    "verify": "npm run gate:all"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -16,7 +20,7 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15"
+    "vitest": "^5.0.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
