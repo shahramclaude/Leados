@@ -1,116 +1,89 @@
-"use client";
+import Link from "next/link";
+import { ensureDecisionInvariants } from "@/lib/decision/dbSetup";
+import { listDecisions } from "@/lib/decision/decisionEngine";
+import { rankDecisionDesk } from "@/lib/decision/decisionIntelligence";
+import { listOrgs } from "@/lib/decision/orgs";
+import { listDecisionRights } from "@/lib/decision/decisionRights";
+import { DecisionsNav, Pill, Card } from "./components";
 
-import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/client-session";
+export const dynamic = "force-dynamic";
 
-type Finding = { id: string; summary: string };
-type Decision = { id: string; action: string; rationale: string; createdAt: string };
+export default async function DecisionDeskPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ org?: string }>;
+}) {
+  await ensureDecisionInvariants();
+  const orgs = await listOrgs();
+  const sp = await searchParams;
+  const orgId = sp.org ?? orgs[0]?.id ?? "";
 
-export default function DecisionsPage() {
-  const [findings, setFindings] = useState<Finding[]>([]);
-  const [decisions, setDecisions] = useState<Decision[]>([]);
-  const [findingId, setFindingId] = useState("");
-  const [action, setAction] = useState<"pursue" | "watch" | "discard">("pursue");
-  const [rationale, setRationale] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  async function refresh() {
-    const [findingsRes, decisionsRes] = await Promise.all([
-      apiFetch("/api/findings?page=1&pageSize=50"),
-      apiFetch("/api/decisions?page=1&pageSize=50"),
-    ]);
-    if (findingsRes.ok) setFindings((await findingsRes.json()).data);
-    if (decisionsRes.ok) setDecisions((await decisionsRes.json()).data);
+  if (!orgId) {
+    return (
+      <main className="mx-auto max-w-5xl px-6 py-12">
+        <h1 className="text-2xl font-semibold">Decision Desk</h1>
+        <p className="mt-4 text-slate-600">No org seeded yet. Run the seed script.</p>
+      </main>
+    );
   }
 
-  useEffect(() => {
-    refresh();
-  }, []);
-
-  async function onSubmit(event: React.FormEvent) {
-    event.preventDefault();
-    setError(null);
-    const res = await apiFetch("/api/decisions", {
-      method: "POST",
-      body: JSON.stringify({ findingId, action, rationale }),
-    });
-    if (!res.ok) {
-      const body = await res.json();
-      setError(body.error ?? "Failed to record decision");
-      return;
-    }
-    setRationale("");
-    await refresh();
-  }
+  const [records, rights] = await Promise.all([listDecisions(orgId), listDecisionRights(orgId)]);
+  const deciderByClass = new Map(rights.map((r) => [r.decisionClass, r.deciderRole]));
+  const ranked = rankDecisionDesk(records);
 
   return (
-    <main className="mx-auto max-w-2xl">
-      <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">Decisions</h1>
-      <form onSubmit={onSubmit} className="mt-6 space-y-4 rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <div>
-          <label htmlFor="decision-finding" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Finding
-          </label>
-          <select
-            id="decision-finding"
-            value={findingId}
-            onChange={(e) => setFindingId(e.target.value)}
-            required
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          >
-            <option value="" disabled>
-              Select a finding…
-            </option>
-            {findings.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.summary}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="decision-action" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Action
-          </label>
-          <select
-            id="decision-action"
-            value={action}
-            onChange={(e) => setAction(e.target.value as typeof action)}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          >
-            <option value="pursue">Pursue</option>
-            <option value="watch">Watch</option>
-            <option value="discard">Discard</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="decision-rationale" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Rationale
-          </label>
-          <textarea
-            id="decision-rationale"
-            value={rationale}
-            onChange={(e) => setRationale(e.target.value)}
-            required
-            rows={3}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-          />
-        </div>
-        {error ? <p role="alert" className="text-sm text-rose-600">{error}</p> : null}
-        <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900">
-          Record decision
-        </button>
-      </form>
+    <main className="mx-auto max-w-6xl px-6 py-12">
+      <DecisionsNav orgId={orgId} orgs={orgs} active="desk" />
+      <h1 className="text-3xl font-semibold text-slate-950">Decision Desk</h1>
+      <p className="mt-2 max-w-2xl text-slate-600">
+        Open decisions ranked by <code>urgency × reversibility × impact</code>. Evidence-gap warnings surface
+        where a decision is at risk of being made badly — no hiding dissent, no silent single-option "decisions".
+      </p>
 
-      <ul data-testid="decision-list" className="mt-6 space-y-2">
-        {decisions.map((d) => (
-          <li key={d.id} className="rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
-            <span className="font-medium capitalize text-slate-900 dark:text-white">{d.action}</span>
-            <p className="mt-1 text-slate-600 dark:text-slate-400">{d.rationale}</p>
-          </li>
+      <div className="mt-8 space-y-4">
+        {ranked.length === 0 && (
+          <Card>
+            <p className="text-slate-600">No open decisions. Everything has been reviewed, or nothing has been raised yet.</p>
+          </Card>
+        )}
+        {ranked.map(({ decision, urgency, reversibilityWeight, impact, rank, warnings }) => (
+          <Card key={decision.id} className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <Link href={`/decisions/${decision.id}?org=${orgId}`} className="text-lg font-semibold text-slate-950 hover:underline">
+                  {decision.question}
+                </Link>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  <Pill tone={decision.decisionType === "type1" ? "red" : "blue"}>
+                    {decision.decisionType === "type1" ? "Type 1 · irreversible" : "Type 2 · reversible"}
+                  </Pill>
+                  <Pill>{decision.decisionClass}</Pill>
+                  <Pill tone="slate">{decision.status.replace("_", " ")}</Pill>
+                  <Pill tone={deciderByClass.get(decision.decisionClass) ? "green" : "amber"}>
+                    decider: {deciderByClass.get(decision.decisionClass) ?? "unconfigured"}
+                  </Pill>
+                </div>
+              </div>
+              <div className="text-right text-sm text-slate-500">
+                <div>
+                  rank <span className="font-mono text-base font-semibold text-slate-900">{rank}</span>
+                </div>
+                <div>
+                  urgency {urgency} · reversibility ×{reversibilityWeight} · impact {impact}
+                </div>
+              </div>
+            </div>
+
+            {warnings.length > 0 && (
+              <ul className="space-y-1 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+                {warnings.map((w, i) => (
+                  <li key={i}>⚠ {w}</li>
+                ))}
+              </ul>
+            )}
+          </Card>
         ))}
-        {decisions.length === 0 ? <li className="text-sm text-slate-500">No decisions yet.</li> : null}
-      </ul>
+      </div>
     </main>
   );
 }
