@@ -7,8 +7,11 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "verify": "npm run typecheck && vitest run"
+    "finance:reconcile": "tsx scripts/finance-reconcile.ts",
+    "finance:citation-check": "tsx scripts/finance-citation-check.ts",
+    "finance:backtest": "tsx scripts/finance-backtest.ts",
+    "finance:perf": "tsx scripts/finance-perf.ts",
+    "verify": "npm run finance:reconcile && npm run finance:backtest && npm run finance:perf && npm run finance:citation-check"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -17,7 +20,7 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "vitest": "^5.0.5"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
