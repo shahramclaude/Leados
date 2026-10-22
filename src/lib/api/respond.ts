@@ -1,59 +1,55 @@
-import { ApiError, errorBody } from "./errors";
+import { ApiError, errorBody, ErrorCodes, type ErrorCode } from "./errors";
+import type { RateLimitResult } from "./rateLimit";
 
-export interface RateLimitHeaders {
-  limit: number;
-  remaining: number;
-  resetSeconds: number;
+export type JsonInit = {
+  status?: number;
+  headers?: Record<string, string>;
+};
+
+/** Standard headers applied to every /api/v1 response. */
+export function baseHeaders(correlationId: string, extra?: Record<string, string>): Record<string, string> {
+  return {
+    "X-Correlation-Id": correlationId,
+    "X-API-Version": "v1",
+    ...extra,
+  };
 }
 
-export function withCommonHeaders(
-  headers: Headers,
-  correlationId: string,
-  rateLimit?: RateLimitHeaders,
-) {
-  headers.set("X-Correlation-Id", correlationId);
-  if (rateLimit) {
-    headers.set("RateLimit-Limit", String(rateLimit.limit));
-    headers.set("RateLimit-Remaining", String(Math.max(0, rateLimit.remaining)));
-    headers.set("RateLimit-Reset", String(rateLimit.resetSeconds));
-  }
-  return headers;
+export function rateLimitHeaders(rl?: RateLimitResult): Record<string, string> {
+  if (!rl) return {};
+  return {
+    "RateLimit-Limit": String(rl.limit),
+    "RateLimit-Remaining": String(rl.remaining),
+    "RateLimit-Reset": String(rl.resetSeconds),
+    "RateLimit-Policy": `${rl.limit};w=60`,
+  };
 }
 
-export function jsonOk(
-  body: unknown,
-  correlationId: string,
-  init?: { status?: number; headers?: HeadersInit; rateLimit?: RateLimitHeaders },
-) {
-  const headers = new Headers(init?.headers);
-  headers.set("Content-Type", "application/json");
-  withCommonHeaders(headers, correlationId, init?.rateLimit);
-  return new Response(JSON.stringify(body), { status: init?.status ?? 200, headers });
-}
-
-export function jsonError(
-  error: ApiError,
-  correlationId: string,
-  rateLimit?: RateLimitHeaders,
-) {
-  const headers = new Headers();
-  headers.set("Content-Type", "application/json");
-  withCommonHeaders(headers, correlationId, rateLimit);
-  return new Response(JSON.stringify(errorBody(error.code, error.message, correlationId, error.details)), {
-    status: error.status,
-    headers,
+export function jsonOk(data: unknown, correlationId: string, init: JsonInit = {}, rl?: RateLimitResult) {
+  return Response.json(data, {
+    status: init.status ?? 200,
+    headers: { ...baseHeaders(correlationId), ...rateLimitHeaders(rl), ...(init.headers ?? {}) },
   });
 }
 
-export function toErrorResponse(err: unknown, correlationId: string, rateLimit?: RateLimitHeaders) {
+export function jsonError(
+  code: ErrorCode,
+  correlationId: string,
+  opts: { message?: string; details?: unknown; headers?: Record<string, string> } = {},
+  rl?: RateLimitResult,
+) {
+  const def = ErrorCodes[code];
+  return Response.json(errorBody(code, correlationId, opts.message, opts.details), {
+    status: def.status,
+    headers: { ...baseHeaders(correlationId), ...rateLimitHeaders(rl), ...(opts.headers ?? {}) },
+  });
+}
+
+/** Converts a thrown error into a consistent JSON error response. */
+export function jsonFromCaught(err: unknown, correlationId: string, rl?: RateLimitResult) {
   if (err instanceof ApiError) {
-    return jsonError(err, correlationId, rateLimit);
+    return jsonError(err.code, correlationId, { message: err.message, details: err.details }, rl);
   }
-  // eslint-disable-next-line no-console
-  console.error(`[${correlationId}] unhandled error`, err);
-  return jsonError(
-    new ApiError("INTERNAL_ERROR", "An unexpected error occurred."),
-    correlationId,
-    rateLimit,
-  );
+  console.error(`[api] unhandled error (correlationId=${correlationId})`, err);
+  return jsonError("INTERNAL_ERROR", correlationId, undefined, rl);
 }

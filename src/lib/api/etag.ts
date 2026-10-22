@@ -1,15 +1,17 @@
 import { createHash } from "crypto";
 
-export function computeEtag(payload: unknown): string {
-  const hash = createHash("sha1").update(JSON.stringify(payload)).digest("hex");
+/** Deterministic weak ETag from a resource's id + updatedAt (cheap, no need to hash the whole payload). */
+export function computeEtag(id: string, updatedAt: Date | string): string {
+  const stamp = updatedAt instanceof Date ? updatedAt.toISOString() : String(updatedAt);
+  const hash = createHash("sha1").update(`${id}:${stamp}`).digest("hex").slice(0, 16);
   return `"${hash}"`;
 }
 
-export function isNotModified(req: Request, etag: string): boolean {
-  const inm = req.headers.get("if-none-match");
-  if (!inm) return false;
-  return inm
+export function matchesIfNoneMatch(req: Request, etag: string): boolean {
+  const header = req.headers.get("if-none-match");
+  if (!header) return false;
+  return header
     .split(",")
-    .map((t) => t.trim())
+    .map((v) => v.trim())
     .includes(etag);
 }

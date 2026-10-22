@@ -1,22 +1,20 @@
 import { db } from "@/db";
-import { auditLogs } from "@/db/schema";
+import { auditLog } from "@/db/schema";
 
-export async function writeAudit(params: {
-  orgId: string;
-  tokenId?: string | null;
+export async function recordAudit(entry: {
+  actor: string;
   action: string;
-  resourceType: string;
-  resourceId?: string | null;
+  resource: string;
+  resourceId?: string;
   metadata?: Record<string, unknown>;
-  correlationId: string;
+  correlationId?: string;
 }) {
-  await db.insert(auditLogs).values({
-    orgId: params.orgId,
-    tokenId: params.tokenId ?? null,
-    action: params.action,
-    resourceType: params.resourceType,
-    resourceId: params.resourceId ?? null,
-    metadata: params.metadata ?? {},
-    correlationId: params.correlationId,
+  await db.insert(auditLog).values({
+    actor: entry.actor,
+    action: entry.action,
+    resource: entry.resource,
+    resourceId: entry.resourceId,
+    metadata: entry.metadata,
+    correlationId: entry.correlationId,
   });
 }

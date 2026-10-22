@@ -1,52 +1,37 @@
-import { and, asc, desc, eq, gt, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { webhookDeliveries, webhookSubscriptions } from "@/db/schema";
+import { withApi } from "@/lib/api/handler";
+import { jsonOk, jsonFromCaught } from "@/lib/api/respond";
+import { buildPageMeta, cursorRowCondition, decodeCursor, parseLimit, parseSort } from "@/lib/api/pagination";
 import { ApiError } from "@/lib/api/errors";
-import { withApiRoute } from "@/lib/api/handler";
-import { decodeCursor, paginate, parseLimit } from "@/lib/api/pagination";
-import { buildFilterConditions, WEBHOOK_DELIVERY_FILTER_WHITELIST } from "@/lib/api/resourceFilters";
-import { jsonOk } from "@/lib/api/respond";
-import { serializeWebhookDelivery } from "@/lib/api/serializers";
-import { parseSort } from "@/lib/api/sorting";
+import { toWebhookDelivery } from "@/lib/api/serialize";
 
-// Delivery log UI data source: full attempt history, with
-// `responseBodySnippet` already redacted per policy at write time
-// (see src/lib/api/webhooks.ts `redact()`).
-export const GET = withApiRoute("webhooks:read", async (req, ctx, params) => {
-  const [sub] = await db
-    .select()
-    .from(webhookSubscriptions)
-    .where(and(eq(webhookSubscriptions.id, params.id), eq(webhookSubscriptions.orgId, ctx.auth.orgId)))
-    .limit(1);
-  if (!sub) throw new ApiError("NOT_FOUND", `Webhook subscription ${params.id} not found.`);
+export const dynamic = "force-dynamic";
 
-  const url = new URL(req.url);
-  const limit = parseLimit(url.searchParams);
-  const sort = parseSort(url.searchParams, ["createdAt"], { field: "createdAt", direction: "desc" });
-  const cursor = decodeCursor(url.searchParams.get("cursor"));
-  const filters = buildFilterConditions(url.searchParams, WEBHOOK_DELIVERY_FILTER_WHITELIST, {
-    status: webhookDeliveries.status,
-    eventType: webhookDeliveries.eventType,
-    createdAt: webhookDeliveries.createdAt,
-  });
-  const conditions = [eq(webhookDeliveries.subscriptionId, sub.id), ...filters];
-  const op = sort.direction === "desc" ? lt : gt;
-  if (cursor) {
-    conditions.push(
-      or(
-        op(webhookDeliveries.createdAt, new Date(cursor.v)),
-        and(eq(webhookDeliveries.createdAt, new Date(cursor.v)), op(webhookDeliveries.id, cursor.id)),
-      )!,
-    );
+/**
+ * Delivery log for a subscription. Payloads are always redacted here — the raw
+ * payload is only ever transmitted to the subscriber's own endpoint, never
+ * replayed back over the API (see docs/API.md "Webhook delivery log").
+ */
+export const GET = withApi("webhooks:read", async (req, { correlationId, rl, params }) => {
+  try {
+    const [sub] = await db.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, params.id)).limit(1);
+    if (!sub) throw new ApiError("NOT_FOUND", `No webhook subscription with id ${params.id}`);
+
+    const sp = new URL(req.url).searchParams;
+    const limit = parseLimit(sp.get("limit"));
+    const { direction } = parseSort(sp.get("sort"), ["createdAt"], "-createdAt");
+    const sortColumn = webhookDeliveries.createdAt;
+
+    const conditions: SQL[] = [eq(webhookDeliveries.subscriptionId, params.id)];
+    if (sp.get("cursor")) conditions.push(cursorRowCondition(sortColumn, webhookDeliveries.id, decodeCursor(sp.get("cursor")!), direction));
+
+    const orderFns = direction === "desc" ? [desc(sortColumn), desc(webhookDeliveries.id)] : [asc(sortColumn), asc(webhookDeliveries.id)];
+    const rows = await db.select().from(webhookDeliveries).where(and(...conditions)).orderBy(...orderFns).limit(limit + 1);
+    const { items, hasMore, nextCursor } = buildPageMeta(rows, limit, "createdAt");
+    return jsonOk({ data: items.map(toWebhookDelivery), page: { cursor: nextCursor, hasMore, limit } }, correlationId, {}, rl);
+  } catch (err) {
+    return jsonFromCaught(err, correlationId, rl);
   }
-  const dir = sort.direction === "desc" ? desc : asc;
-  const rows = await db
-    .select()
-    .from(webhookDeliveries)
-    .where(and(...conditions))
-    .orderBy(dir(webhookDeliveries.createdAt), dir(webhookDeliveries.id))
-    .limit(limit + 1);
-  const serialized = rows.map(serializeWebhookDelivery);
-  const { page, meta } = paginate(serialized, limit, "createdAt", "id");
-  return jsonOk({ data: page, meta }, ctx.correlationId, { rateLimit: ctx.rateLimit });
 });

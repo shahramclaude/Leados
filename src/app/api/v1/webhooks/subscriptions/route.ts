@@ -1,78 +1,63 @@
-import { and, asc, desc, eq, gt, lt, or } from "drizzle-orm";
+import { and, asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { webhookSubscriptions } from "@/db/schema";
-import { writeAudit } from "@/lib/api/audit";
+import { withApi } from "@/lib/api/handler";
+import { jsonOk, jsonFromCaught } from "@/lib/api/respond";
+import { buildPageMeta, cursorRowCondition, decodeCursor, parseLimit, parseSort } from "@/lib/api/pagination";
+import { WebhookSubscriptionCreateSchema } from "@/lib/api/schemas";
 import { ApiError } from "@/lib/api/errors";
-import { generateWebhookSecret } from "@/lib/api/webhooks";
-import { withApiRoute } from "@/lib/api/handler";
-import { withIdempotency } from "@/lib/api/idempotency";
-import { decodeCursor, paginate, parseLimit } from "@/lib/api/pagination";
-import { jsonOk } from "@/lib/api/respond";
-import { CreateWebhookSubscriptionSchema } from "@/lib/api/schemas";
-import { serializeWebhookSubscription } from "@/lib/api/serializers";
-import { parseSort } from "@/lib/api/sorting";
+import { toWebhookSubscription } from "@/lib/api/serialize";
+import { handleIdempotentCreate } from "@/lib/api/writeHelpers";
+import { recordAudit } from "@/lib/api/audit";
+import { randomBytes } from "crypto";
 
-export const GET = withApiRoute("webhooks:read", async (req, ctx) => {
-  const url = new URL(req.url);
-  const limit = parseLimit(url.searchParams);
-  const sort = parseSort(url.searchParams, ["createdAt"], { field: "createdAt", direction: "desc" });
-  const cursor = decodeCursor(url.searchParams.get("cursor"));
-  const conditions = [eq(webhookSubscriptions.orgId, ctx.auth.orgId)];
-  const op = sort.direction === "desc" ? lt : gt;
-  if (cursor) {
-    conditions.push(
-      or(
-        op(webhookSubscriptions.createdAt, new Date(cursor.v)),
-        and(eq(webhookSubscriptions.createdAt, new Date(cursor.v)), op(webhookSubscriptions.id, cursor.id)),
-      )!,
-    );
+export const dynamic = "force-dynamic";
+
+const SORT_COLUMN = { createdAt: webhookSubscriptions.createdAt, updatedAt: webhookSubscriptions.updatedAt } as const;
+
+export const GET = withApi("webhooks:read", async (req, { correlationId, rl }) => {
+  try {
+    const sp = new URL(req.url).searchParams;
+    const limit = parseLimit(sp.get("limit"));
+    const { field, direction } = parseSort(sp.get("sort"), ["createdAt", "updatedAt"], "-createdAt");
+    const sortColumn = SORT_COLUMN[field as keyof typeof SORT_COLUMN];
+
+    const conditions = [];
+    if (sp.get("cursor")) conditions.push(cursorRowCondition(sortColumn, webhookSubscriptions.id, decodeCursor(sp.get("cursor")!), direction));
+
+    const orderFns = direction === "desc" ? [desc(sortColumn), desc(webhookSubscriptions.id)] : [asc(sortColumn), asc(webhookSubscriptions.id)];
+    const rows = await db
+      .select()
+      .from(webhookSubscriptions)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(...orderFns)
+      .limit(limit + 1);
+    const { items, hasMore, nextCursor } = buildPageMeta(rows, limit, field as keyof (typeof rows)[number]);
+    return jsonOk({ data: items.map(toWebhookSubscription), page: { cursor: nextCursor, hasMore, limit } }, correlationId, {}, rl);
+  } catch (err) {
+    return jsonFromCaught(err, correlationId, rl);
   }
-  const dir = sort.direction === "desc" ? desc : asc;
-  const rows = await db
-    .select()
-    .from(webhookSubscriptions)
-    .where(and(...conditions))
-    .orderBy(dir(webhookSubscriptions.createdAt), dir(webhookSubscriptions.id))
-    .limit(limit + 1);
-  const serialized = rows.map(serializeWebhookSubscription);
-  const { page, meta } = paginate(serialized, limit, "createdAt", "id");
-  return jsonOk({ data: page, meta }, ctx.correlationId, { rateLimit: ctx.rateLimit });
 });
 
-export const POST = withApiRoute("webhooks:write", async (req, ctx) => {
-  const raw = await req.json().catch(() => {
-    throw new ApiError("VALIDATION_ERROR", "Request body must be valid JSON.");
-  });
-  const parsed = CreateWebhookSubscriptionSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new ApiError("VALIDATION_ERROR", "Request body failed validation.", parsed.error.flatten());
-  }
-  const result = await withIdempotency(
-    req,
-    ctx.auth.orgId,
-    ctx.auth.tokenId,
-    "POST /api/v1/webhooks/subscriptions",
-    raw,
-    async () => {
-      const secret = generateWebhookSecret();
-      const [created] = await db
+export const POST = withApi("webhooks:write", async (req, { correlationId, key, rl }) => {
+  try {
+    const rawBody = await req.json().catch(() => {
+      throw new ApiError("VALIDATION_ERROR", "Request body must be valid JSON");
+    });
+    const parsed = WebhookSubscriptionCreateSchema.safeParse(rawBody);
+    if (!parsed.success) throw new ApiError("VALIDATION_ERROR", "Webhook subscription payload failed validation", parsed.error.flatten());
+
+    const result = await handleIdempotentCreate(req, "POST /v1/webhooks/subscriptions", rawBody, async () => {
+      const secret = "whsec_" + randomBytes(24).toString("base64url");
+      const [row] = await db
         .insert(webhookSubscriptions)
-        .values({ orgId: ctx.auth.orgId, secret, ...parsed.data })
+        .values({ url: parsed.data.url, eventTypes: parsed.data.eventTypes, description: parsed.data.description, secret })
         .returning();
-      await writeAudit({
-        orgId: ctx.auth.orgId,
-        tokenId: ctx.auth.tokenId,
-        action: "webhook_subscription.created",
-        resourceType: "webhook_subscription",
-        resourceId: created.id,
-        correlationId: ctx.correlationId,
-      });
-      return { status: 201, body: { ...serializeWebhookSubscription(created), secret } };
-    },
-  );
-  return jsonOk(result.body, ctx.correlationId, {
-    status: result.status,
-    rateLimit: ctx.rateLimit,
-    headers: result.replayed ? { "Idempotent-Replayed": "true" } : undefined,
-  });
+      await recordAudit({ actor: key.id, action: "webhook_subscription.created", resource: "webhook_subscription", resourceId: row.id, correlationId });
+      return { status: 201, body: { ...toWebhookSubscription(row), secret } };
+    });
+    return jsonOk(result.body, correlationId, { status: result.status, headers: result.replayed ? { "Idempotency-Replayed": "true" } : {} }, rl);
+  } catch (err) {
+    return jsonFromCaught(err, correlationId, rl);
+  }
 });

@@ -1,265 +1,190 @@
 openapi: 3.1.0
 info:
   title: LEADOS API
-  version: 0.1.0
-  description: Representative slice of the LEADOS API surface (events, findings,
-    decisions, automation runs, board packs) used to prove out the Part 11 QE
-    pipeline.
+  version: 1.0.0
+  description: |-
+    LEADOS public API. See docs/API.md for the full guide (auth, pagination,
+    errors, webhooks, realtime, deprecation policy).
+
+    v1 freeze date: 2026-02-01. Pre-v1 shim sunset date: 2026-08-01.
+
+    Deprecated legacy path -> v1 path mapping:
+      GET /api/leads -> GET /api/v1/leads
+      POST /api/leads -> POST /api/v1/leads
+      GET /api/leads/{id} -> GET /api/v1/leads/{id}
+      PATCH /api/leads/{id} -> PATCH /api/v1/leads/{id}
+      DELETE /api/leads/{id} -> DELETE /api/v1/leads/{id}
+      GET /api/contacts -> GET /api/v1/contacts
+      POST /api/contacts -> POST /api/v1/contacts
+      GET /api/contacts/{id} -> GET /api/v1/contacts/{id}
+      GET /api/deals -> GET /api/v1/deals
+      POST /api/deals -> POST /api/v1/deals
+      GET /api/deals/{id} -> GET /api/v1/deals/{id}
 servers:
-  - url: /
+  - url: /api
+    description: Same-origin deployment
 components:
   securitySchemes:
-    bearerAuth:
+    ApiKeyAuth:
       type: http
       scheme: bearer
-      description: API token (see API_TOKEN env var). Required for all mutating requests.
+      description: "API key issued via POST /v1/api-keys (admin-only). Send as
+        `Authorization: Bearer <key>`."
   schemas:
-    Error:
+    ErrorEnvelope:
       type: object
       properties:
         error:
-          type: string
-      required:
-        - error
-      description: Standard error envelope.
-    Health:
-      type: object
-      properties:
-        ok:
-          type: boolean
-        service:
-          type: string
-          enum:
-            - leados
-        database:
-          type: string
-          enum:
-            - connected
-            - unreachable
-        error:
-          type: string
-      required:
-        - ok
-        - service
-        - database
-    EventRecord:
-      type: object
-      properties:
-        id:
-          type: integer
-        type:
-          type: string
-        version:
-          type: integer
-        payload: {}
-        createdAt:
-          type: string
-      required:
-        - id
-        - type
-        - version
-        - createdAt
-    Finding:
-      type: object
-      properties:
-        id:
-          type: integer
-        title:
-          type: string
-        summary:
-          type: string
-        impact:
-          type: number
-        confidence:
-          type: number
-        effort:
-          type: number
-        score:
-          type: number
-        status:
-          type: string
-          enum:
-            - open
-            - resolved
-            - dismissed
-        createdAt:
-          type: string
-        updatedAt:
-          type: string
-      required:
-        - id
-        - title
-        - summary
-        - impact
-        - confidence
-        - effort
-        - score
-        - status
-        - createdAt
-        - updatedAt
-    Decision:
-      type: object
-      properties:
-        id:
-          type: integer
-        title:
-          type: string
-        context:
-          type: string
-        priorAlpha:
-          type: number
-        priorBeta:
-          type: number
-        posteriorAlpha:
-          type: number
-        posteriorBeta:
-          type: number
-        beliefMean:
-          type: number
-        status:
-          type: string
-          enum:
-            - open
-            - decided
-            - abandoned
-        createdAt:
-          type: string
-        updatedAt:
-          type: string
-      required:
-        - id
-        - title
-        - context
-        - priorAlpha
-        - priorBeta
-        - posteriorAlpha
-        - posteriorBeta
-        - beliefMean
-        - status
-        - createdAt
-        - updatedAt
-    AutomationRun:
-      type: object
-      properties:
-        id:
-          type: integer
-        kind:
-          type: string
-        seed:
-          type: integer
-        trials:
-          type: integer
-        input: {}
-        result: {}
-        status:
-          type: string
-          enum:
-            - completed
-            - failed
-        createdAt:
-          type: string
-      required:
-        - id
-        - kind
-        - seed
-        - trials
-        - status
-        - createdAt
-    BoardPack:
-      type: object
-      properties:
-        id:
-          type: integer
-        periodLabel:
-          type: string
-        summary:
           type: object
           properties:
-            generatedAt:
+            code:
               type: string
-            totals:
-              type: object
-              properties:
-                events:
-                  type: number
-                findings:
-                  type: number
-                openFindings:
-                  type: number
-                decisions:
-                  type: number
-                decidedDecisions:
-                  type: number
-                automationRuns:
-                  type: number
-              required:
-                - events
-                - findings
-                - openFindings
-                - decisions
-                - decidedDecisions
-                - automationRuns
-            topFindings:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: number
-                  title:
-                    type: string
-                  score:
-                    type: number
-                required:
-                  - id
-                  - title
-                  - score
-            recentDecisions:
-              type: array
-              items:
-                type: object
-                properties:
-                  id:
-                    type: number
-                  title:
-                    type: string
-                  beliefMean:
-                    type: number
-                  status:
-                    type: string
-                required:
-                  - id
-                  - title
-                  - beliefMean
-                  - status
+            message:
+              type: string
+            details: {}
+            correlationId:
+              type: string
           required:
-            - generatedAt
-            - totals
-            - topFindings
-            - recentDecisions
-        createdAt:
-          type: string
+            - code
+            - message
+            - correlationId
       required:
-        - id
-        - periodLabel
-        - summary
-        - createdAt
+        - error
   parameters: {}
 paths:
-  /api/health:
-    get:
-      summary: Service + database health check
+  /v1/api-keys:
+    post:
+      operationId: createApiKey
+      summary: "Admin-only: mint a new API key with the given scopes"
+      tags:
+        - Admin
+      security:
+        - ApiKeyAuth:
+            - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - leads:read
+                      - leads:write
+                      - contacts:read
+                      - contacts:write
+                      - deals:read
+                      - deals:write
+                      - webhooks:read
+                      - webhooks:write
+                      - automation:read
+                      - automation:write
+                      - admin
+                  minItems: 1
+              required:
+                - name
+                - scopes
       responses:
-        "200":
-          description: Health status
+        "201":
+          description: "Admin-only: mint a new API key with the given scopes"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Health"
-  /api/events:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - leads:read
+                        - leads:write
+                        - contacts:read
+                        - contacts:write
+                        - deals:read
+                        - deals:write
+                        - webhooks:read
+                        - webhooks:write
+                        - automation:read
+                        - automation:write
+                        - admin
+                  prefix:
+                    type: string
+                  apiKey:
+                    type: string
+                    description: Returned once, at creation time only.
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - name
+                  - scopes
+                  - prefix
+                  - apiKey
+                  - createdAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/leads:
     get:
-      summary: List recent events (paginated)
+      operationId: listLeads
+      summary: List leads (cursor-paginated, filterable, sortable)
+      tags:
+        - Leads
+      security:
+        - ApiKeyAuth:
+            - leads:read
       parameters:
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
         - schema:
             type: string
           required: false
@@ -268,431 +193,2698 @@ paths:
         - schema:
             type: string
           required: false
-          name: cursor
+          name: sort
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: status
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: score[gte]
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: score[lte]
           in: query
       responses:
         "200":
-          description: A page of events
+          description: List leads (cursor-paginated, filterable, sortable)
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  items:
+                  data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/EventRecord"
-                  nextCursor:
-                    type:
-                      - string
-                      - "null"
-                  total:
-                    type: integer
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        email:
+                          type: string
+                          format: email
+                        company:
+                          type:
+                            - string
+                            - "null"
+                        status:
+                          type: string
+                          enum:
+                            - new
+                            - contacted
+                            - qualified
+                            - won
+                            - lost
+                        score:
+                          type: integer
+                        ownerId:
+                          type:
+                            - string
+                            - "null"
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
+                      required:
+                        - id
+                        - name
+                        - email
+                        - company
+                        - status
+                        - score
+                        - ownerId
+                        - createdAt
+                        - updatedAt
+                  page:
+                    type: object
+                    properties:
+                      cursor:
+                        type:
+                          - string
+                          - "null"
+                      hasMore:
+                        type: boolean
+                      limit:
+                        type: integer
+                    required:
+                      - cursor
+                      - hasMore
+                      - limit
                 required:
-                  - items
-                  - nextCursor
-                  - total
+                  - data
+                  - page
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
     post:
-      summary: Record a new event
-      security: &a1
-        - bearerAuth: []
+      operationId: createLead
+      summary: Create a lead
+      tags:
+        - Leads
+      security:
+        - ApiKeyAuth:
+            - leads:write
       requestBody:
         content:
           application/json:
             schema:
               type: object
               properties:
-                type:
+                name:
                   type: string
-                version:
-                  type: number
-                payload: {}
+                  minLength: 1
+                  maxLength: 200
+                email:
+                  type: string
+                  format: email
+                company:
+                  type: string
+                  maxLength: 200
+                status:
+                  type: string
+                  enum:
+                    - new
+                    - contacted
+                    - qualified
+                    - won
+                    - lost
+                score:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                ownerId:
+                  type: string
+                  maxLength: 100
               required:
-                - type
-                - version
+                - name
+                - email
       responses:
         "201":
-          description: Event recorded
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/EventRecord"
-        "400":
-          description: Validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          description: Missing/malformed auth header
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Invalid token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /api/findings:
-    get:
-      summary: List findings (paginated)
-      responses:
-        "200":
-          description: A page of findings
+          description: Create a lead
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Finding"
-                  nextCursor:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                  company:
                     type:
                       - string
                       - "null"
-                  total:
+                  status:
+                    type: string
+                    enum:
+                      - new
+                      - contacted
+                      - qualified
+                      - won
+                      - lost
+                  score:
                     type: integer
-                required:
-                  - items
-                  - nextCursor
-                  - total
-    post:
-      summary: Create a finding (ICE score computed server-side)
-      security: *a1
-      responses:
-        "201":
-          description: Finding created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Finding"
-        "400":
-          description: Validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          description: Missing/malformed auth header
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Invalid token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /api/findings/{id}:
-    get:
-      summary: Get a finding by id
-      parameters:
-        - schema:
-            type: string
-          required: true
-          name: id
-          in: path
-      responses:
-        "200":
-          description: Finding
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Finding"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /api/decisions:
-    get:
-      summary: List decisions (paginated)
-      responses:
-        "200":
-          description: A page of decisions
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Decision"
-                  nextCursor:
+                  ownerId:
                     type:
                       - string
                       - "null"
-                  total:
-                    type: integer
-                required:
-                  - items
-                  - nextCursor
-                  - total
-    post:
-      summary: Create a decision with a Beta(1,1) prior belief
-      security: *a1
-      responses:
-        "201":
-          description: Decision created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Decision"
-        "400":
-          description: Validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          description: Missing/malformed auth header
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Invalid token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /api/decisions/{id}:
-    get:
-      summary: Get a decision by id
-      parameters:
-        - schema:
-            type: string
-          required: true
-          name: id
-          in: path
-      responses:
-        "200":
-          description: Decision
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Decision"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-    patch:
-      summary: Update a decision's belief with new evidence (Bayesian update)
-      security: *a1
-      parameters:
-        - schema:
-            type: string
-          required: true
-          name: id
-          in: path
-      responses:
-        "200":
-          description: Decision updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Decision"
-        "400":
-          description: Validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          description: Missing/malformed auth header
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Invalid token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /api/automation/runs:
-    get:
-      summary: List automation runs (paginated)
-      responses:
-        "200":
-          description: A page of runs
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/AutomationRun"
-                  nextCursor:
-                    type:
-                      - string
-                      - "null"
-                  total:
-                    type: integer
-                required:
-                  - items
-                  - nextCursor
-                  - total
-  /api/automation/run:
-    post:
-      summary: Trigger a Monte Carlo forecast automation run
-      security: *a1
-      responses:
-        "201":
-          description: Run completed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AutomationRun"
-        "400":
-          description: Validation failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          description: Missing/malformed auth header
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Invalid token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /api/boardpack:
-    get:
-      summary: Get the latest board pack (generates one if none exists)
-      responses:
-        "200":
-          description: Board pack
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BoardPack"
-    post:
-      summary: Force-generate a new board pack
-      security: *a1
-      responses:
-        "201":
-          description: Board pack generated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BoardPack"
-        "401":
-          description: Missing/malformed auth header
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "403":
-          description: Invalid token
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-  /api/onboarding:
-    get:
-      summary: Get onboarding status
-      responses:
-        "200":
-          description: Status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  completed:
-                    type: boolean
-                  orgName:
-                    type:
-                      - string
-                      - "null"
-                required:
-                  - completed
-                  - orgName
-    post:
-      summary: Complete onboarding
-      security: *a1
-      responses:
-        "201":
-          description: Onboarding completed
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  orgName:
+                  createdAt:
+                    type: string
+                  updatedAt:
                     type: string
                 required:
-                  - orgName
+                  - id
+                  - name
+                  - email
+                  - company
+                  - status
+                  - score
+                  - ownerId
+                  - createdAt
+                  - updatedAt
         "400":
-          description: Validation failed
+          description: Validation or filter/sort error
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ErrorEnvelope"
         "401":
-          description: Missing/malformed auth header
+          description: Missing/invalid API key
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
+                $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: Invalid token
+          description: Insufficient scope
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Error"
-  /api/self-test:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/leads/{id}:
     get:
-      summary: Run the smoke subset of the real test suites in-process
+      operationId: getLead
+      summary: Get a lead by id
+      tags:
+        - Leads
+      security:
+        - ApiKeyAuth:
+            - leads:read
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
       responses:
         "200":
-          description: Self-test results
+          description: Get a lead by id
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  ok:
-                    type: boolean
-                  checks:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                  company:
+                    type:
+                      - string
+                      - "null"
+                  status:
+                    type: string
+                    enum:
+                      - new
+                      - contacted
+                      - qualified
+                      - won
+                      - lost
+                  score:
+                    type: integer
+                  ownerId:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - name
+                  - email
+                  - company
+                  - status
+                  - score
+                  - ownerId
+                  - createdAt
+                  - updatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateLead
+      summary: Update a lead
+      tags:
+        - Leads
+      security:
+        - ApiKeyAuth:
+            - leads:write
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                email:
+                  type: string
+                  format: email
+                company:
+                  type: string
+                  maxLength: 200
+                status:
+                  type: string
+                  enum:
+                    - new
+                    - contacted
+                    - qualified
+                    - won
+                    - lost
+                score:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                ownerId:
+                  type: string
+                  maxLength: 100
+      responses:
+        "200":
+          description: Update a lead
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type: string
+                    format: email
+                  company:
+                    type:
+                      - string
+                      - "null"
+                  status:
+                    type: string
+                    enum:
+                      - new
+                      - contacted
+                      - qualified
+                      - won
+                      - lost
+                  score:
+                    type: integer
+                  ownerId:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - name
+                  - email
+                  - company
+                  - status
+                  - score
+                  - ownerId
+                  - createdAt
+                  - updatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteLead
+      summary: Soft-delete a lead
+      tags:
+        - Leads
+      security:
+        - ApiKeyAuth:
+            - leads:write
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Soft-delete a lead
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/contacts:
+    get:
+      operationId: listContacts
+      summary: List contacts
+      tags:
+        - Contacts
+      security:
+        - ApiKeyAuth:
+            - contacts:read
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: sort
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: leadId
+          in: query
+      responses:
+        "200":
+          description: List contacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
                     type: array
                     items:
                       type: object
                       properties:
+                        id:
+                          type: string
+                          format: uuid
+                        leadId:
+                          type:
+                            - string
+                            - "null"
+                          format: uuid
                         name:
                           type: string
-                        pass:
-                          type: boolean
-                        detail:
+                        email:
+                          type:
+                            - string
+                            - "null"
+                        phone:
+                          type:
+                            - string
+                            - "null"
+                        createdAt:
+                          type: string
+                        updatedAt:
                           type: string
                       required:
+                        - id
+                        - leadId
                         - name
-                        - pass
-                        - detail
+                        - email
+                        - phone
+                        - createdAt
+                        - updatedAt
+                  page:
+                    type: object
+                    properties:
+                      cursor:
+                        type:
+                          - string
+                          - "null"
+                      hasMore:
+                        type: boolean
+                      limit:
+                        type: integer
+                    required:
+                      - cursor
+                      - hasMore
+                      - limit
                 required:
-                  - ok
-                  - checks
+                  - data
+                  - page
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createContact
+      summary: Create a contact
+      tags:
+        - Contacts
+      security:
+        - ApiKeyAuth:
+            - contacts:write
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                leadId:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                  maxLength: 40
+              required:
+                - name
+      responses:
+        "201":
+          description: Create a contact
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  leadId:
+                    type:
+                      - string
+                      - "null"
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type:
+                      - string
+                      - "null"
+                  phone:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - leadId
+                  - name
+                  - email
+                  - phone
+                  - createdAt
+                  - updatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/contacts/{id}:
+    get:
+      operationId: getContact
+      summary: Get a contact by id
+      tags:
+        - Contacts
+      security:
+        - ApiKeyAuth:
+            - contacts:read
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Get a contact by id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  leadId:
+                    type:
+                      - string
+                      - "null"
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type:
+                      - string
+                      - "null"
+                  phone:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - leadId
+                  - name
+                  - email
+                  - phone
+                  - createdAt
+                  - updatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateContact
+      summary: Update a contact
+      tags:
+        - Contacts
+      security:
+        - ApiKeyAuth:
+            - contacts:write
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                leadId:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                  maxLength: 40
+      responses:
+        "200":
+          description: Update a contact
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  leadId:
+                    type:
+                      - string
+                      - "null"
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type:
+                      - string
+                      - "null"
+                  phone:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - leadId
+                  - name
+                  - email
+                  - phone
+                  - createdAt
+                  - updatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      operationId: deleteContact
+      summary: Delete a contact
+      tags:
+        - Contacts
+      security:
+        - ApiKeyAuth:
+            - contacts:write
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Delete a contact
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/deals:
+    get:
+      operationId: listDeals
+      summary: List deals
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth:
+            - deals:read
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: sort
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: stage
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: false
+          name: leadId
+          in: query
+      responses:
+        "200":
+          description: List deals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        leadId:
+                          type:
+                            - string
+                            - "null"
+                          format: uuid
+                        title:
+                          type: string
+                        value:
+                          type: string
+                        stage:
+                          type: string
+                          enum:
+                            - open
+                            - won
+                            - lost
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
+                      required:
+                        - id
+                        - leadId
+                        - title
+                        - value
+                        - stage
+                        - createdAt
+                        - updatedAt
+                  page:
+                    type: object
+                    properties:
+                      cursor:
+                        type:
+                          - string
+                          - "null"
+                      hasMore:
+                        type: boolean
+                      limit:
+                        type: integer
+                    required:
+                      - cursor
+                      - hasMore
+                      - limit
+                required:
+                  - data
+                  - page
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createDeal
+      summary: Create a deal
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth:
+            - deals:write
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                leadId:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                value:
+                  type: number
+                  minimum: 0
+                stage:
+                  type: string
+                  enum:
+                    - open
+                    - won
+                    - lost
+              required:
+                - title
+      responses:
+        "201":
+          description: Create a deal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  leadId:
+                    type:
+                      - string
+                      - "null"
+                    format: uuid
+                  title:
+                    type: string
+                  value:
+                    type: string
+                  stage:
+                    type: string
+                    enum:
+                      - open
+                      - won
+                      - lost
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - leadId
+                  - title
+                  - value
+                  - stage
+                  - createdAt
+                  - updatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/deals/{id}:
+    get:
+      operationId: getDeal
+      summary: Get a deal by id
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth:
+            - deals:read
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Get a deal by id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  leadId:
+                    type:
+                      - string
+                      - "null"
+                    format: uuid
+                  title:
+                    type: string
+                  value:
+                    type: string
+                  stage:
+                    type: string
+                    enum:
+                      - open
+                      - won
+                      - lost
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - leadId
+                  - title
+                  - value
+                  - stage
+                  - createdAt
+                  - updatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      operationId: updateDeal
+      summary: Update a deal
+      tags:
+        - Deals
+      security:
+        - ApiKeyAuth:
+            - deals:write
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                leadId:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                value:
+                  type: number
+                  minimum: 0
+                stage:
+                  type: string
+                  enum:
+                    - open
+                    - won
+                    - lost
+      responses:
+        "200":
+          description: Update a deal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  leadId:
+                    type:
+                      - string
+                      - "null"
+                    format: uuid
+                  title:
+                    type: string
+                  value:
+                    type: string
+                  stage:
+                    type: string
+                    enum:
+                      - open
+                      - won
+                      - lost
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                required:
+                  - id
+                  - leadId
+                  - title
+                  - value
+                  - stage
+                  - createdAt
+                  - updatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/webhooks/subscriptions:
+    get:
+      operationId: listWebhookSubscriptions
+      summary: List webhook subscriptions
+      tags:
+        - Webhooks
+      security:
+        - ApiKeyAuth:
+            - webhooks:read
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: sort
+          in: query
+      responses:
+        "200":
+          description: List webhook subscriptions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        url:
+                          type: string
+                          format: uri
+                        eventTypes:
+                          type: array
+                          items:
+                            type: string
+                            enum:
+                              - lead.created
+                              - lead.updated
+                              - deal.won
+                              - automation.run.completed
+                        status:
+                          type: string
+                          enum:
+                            - active
+                            - disabled
+                        description:
+                          type:
+                            - string
+                            - "null"
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
+                      required:
+                        - id
+                        - url
+                        - eventTypes
+                        - status
+                        - description
+                        - createdAt
+                        - updatedAt
+                  page:
+                    type: object
+                    properties:
+                      cursor:
+                        type:
+                          - string
+                          - "null"
+                      hasMore:
+                        type: boolean
+                      limit:
+                        type: integer
+                    required:
+                      - cursor
+                      - hasMore
+                      - limit
+                required:
+                  - data
+                  - page
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: createWebhookSubscription
+      summary: Create a webhook subscription. The signing secret is returned once.
+      tags:
+        - Webhooks
+      security:
+        - ApiKeyAuth:
+            - webhooks:write
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                eventTypes:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - lead.created
+                      - lead.updated
+                      - deal.won
+                      - automation.run.completed
+                  minItems: 1
+                description:
+                  type: string
+                  maxLength: 300
+              required:
+                - url
+                - eventTypes
+      responses:
+        "201":
+          description: Create a webhook subscription. The signing secret is returned once.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  url:
+                    type: string
+                    format: uri
+                  eventTypes:
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                        - lead.created
+                        - lead.updated
+                        - deal.won
+                        - automation.run.completed
+                  status:
+                    type: string
+                    enum:
+                      - active
+                      - disabled
+                  description:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                  updatedAt:
+                    type: string
+                  secret:
+                    type: string
+                    description: Returned once, at creation time only. Store it securely.
+                required:
+                  - id
+                  - url
+                  - eventTypes
+                  - status
+                  - description
+                  - createdAt
+                  - updatedAt
+                  - secret
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/webhooks/subscriptions/{id}:
+    delete:
+      operationId: deleteWebhookSubscription
+      summary: Delete a webhook subscription
+      tags:
+        - Webhooks
+      security:
+        - ApiKeyAuth:
+            - webhooks:write
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "204":
+          description: Delete a webhook subscription
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/webhooks/subscriptions/{id}/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: List delivery attempts for a subscription (payloads redacted)
+      tags:
+        - Webhooks
+      security:
+        - ApiKeyAuth:
+            - webhooks:read
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: sort
+          in: query
+      responses:
+        "200":
+          description: List delivery attempts for a subscription (payloads redacted)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        subscriptionId:
+                          type: string
+                          format: uuid
+                        eventType:
+                          type: string
+                        status:
+                          type: string
+                          enum:
+                            - pending
+                            - retrying
+                            - success
+                            - dead_letter
+                        attempt:
+                          type: integer
+                        maxAttempts:
+                          type: integer
+                        lastStatusCode:
+                          type:
+                            - integer
+                            - "null"
+                        lastError:
+                          type:
+                            - string
+                            - "null"
+                        payloadRedacted:
+                          type: object
+                          additionalProperties: {}
+                        deliveredAt:
+                          type:
+                            - string
+                            - "null"
+                        nextAttemptAt:
+                          type:
+                            - string
+                            - "null"
+                        createdAt:
+                          type: string
+                      required:
+                        - id
+                        - subscriptionId
+                        - eventType
+                        - status
+                        - attempt
+                        - maxAttempts
+                        - lastStatusCode
+                        - lastError
+                        - payloadRedacted
+                        - deliveredAt
+                        - nextAttemptAt
+                        - createdAt
+                  page:
+                    type: object
+                    properties:
+                      cursor:
+                        type:
+                          - string
+                          - "null"
+                      hasMore:
+                        type: boolean
+                      limit:
+                        type: integer
+                    required:
+                      - cursor
+                      - hasMore
+                      - limit
+                required:
+                  - data
+                  - page
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/webhooks/subscriptions/{id}/test:
+    post:
+      operationId: testFireWebhook
+      summary: Fire a synthetic test event at a subscription
+      tags:
+        - Webhooks
+      security:
+        - ApiKeyAuth:
+            - webhooks:write
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "201":
+          description: Fire a synthetic test event at a subscription
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  subscriptionId:
+                    type: string
+                    format: uuid
+                  eventType:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - pending
+                      - retrying
+                      - success
+                      - dead_letter
+                  attempt:
+                    type: integer
+                  maxAttempts:
+                    type: integer
+                  lastStatusCode:
+                    type:
+                      - integer
+                      - "null"
+                  lastError:
+                    type:
+                      - string
+                      - "null"
+                  payloadRedacted:
+                    type: object
+                    additionalProperties: {}
+                  deliveredAt:
+                    type:
+                      - string
+                      - "null"
+                  nextAttemptAt:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - subscriptionId
+                  - eventType
+                  - status
+                  - attempt
+                  - maxAttempts
+                  - lastStatusCode
+                  - lastError
+                  - payloadRedacted
+                  - deliveredAt
+                  - nextAttemptAt
+                  - createdAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/webhooks/_worker/tick:
+    post:
+      operationId: runWebhookWorkerTick
+      summary: "Admin-only: process due webhook deliveries/retries now (simulates the
+        background worker)"
+      tags:
+        - Webhooks
+      security:
+        - ApiKeyAuth:
+            - admin
+      responses:
+        "200":
+          description: "Admin-only: process due webhook deliveries/retries now (simulates
+            the background worker)"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  processed:
+                    type: integer
+                required:
+                  - processed
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/playbooks:
+    get:
+      operationId: listPlaybooks
+      summary: List playbooks
+      tags:
+        - Automation
+      security:
+        - ApiKeyAuth:
+            - automation:read
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: sort
+          in: query
+      responses:
+        "200":
+          description: List playbooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        description:
+                          type:
+                            - string
+                            - "null"
+                        steps:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              type:
+                                type: string
+                              config:
+                                type: object
+                                additionalProperties: {}
+                            required:
+                              - type
+                        createdAt:
+                          type: string
+                        updatedAt:
+                          type: string
+                      required:
+                        - id
+                        - name
+                        - description
+                        - steps
+                        - createdAt
+                        - updatedAt
+                  page:
+                    type: object
+                    properties:
+                      cursor:
+                        type:
+                          - string
+                          - "null"
+                      hasMore:
+                        type: boolean
+                      limit:
+                        type: integer
+                    required:
+                      - cursor
+                      - hasMore
+                      - limit
+                required:
+                  - data
+                  - page
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/automation-runs:
+    get:
+      operationId: listAutomationRuns
+      summary: List/poll automation runs
+      tags:
+        - Automation
+      security:
+        - ApiKeyAuth:
+            - automation:read
+      parameters:
+        - schema:
+            type: string
+          required: false
+          name: cursor
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: limit
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: sort
+          in: query
+        - schema:
+            type: string
+          required: false
+          name: status
+          in: query
+      responses:
+        "200":
+          description: List/poll automation runs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        playbookId:
+                          type:
+                            - string
+                            - "null"
+                          format: uuid
+                        trigger:
+                          type: string
+                        status:
+                          type: string
+                          enum:
+                            - queued
+                            - running
+                            - succeeded
+                            - failed
+                        input: {}
+                        output: {}
+                        correlationId:
+                          type: string
+                        startedAt:
+                          type:
+                            - string
+                            - "null"
+                        finishedAt:
+                          type:
+                            - string
+                            - "null"
+                        createdAt:
+                          type: string
+                      required:
+                        - id
+                        - playbookId
+                        - trigger
+                        - status
+                        - correlationId
+                        - startedAt
+                        - finishedAt
+                        - createdAt
+                  page:
+                    type: object
+                    properties:
+                      cursor:
+                        type:
+                          - string
+                          - "null"
+                      hasMore:
+                        type: boolean
+                      limit:
+                        type: integer
+                    required:
+                      - cursor
+                      - hasMore
+                      - limit
+                required:
+                  - data
+                  - page
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: triggerAutomationRun
+      summary: Trigger a playbook run
+      tags:
+        - Automation
+      security:
+        - ApiKeyAuth:
+            - automation:write
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                playbookId:
+                  type: string
+                  format: uuid
+                input:
+                  type: object
+                  additionalProperties: {}
+              required:
+                - playbookId
+      responses:
+        "201":
+          description: Trigger a playbook run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  playbookId:
+                    type:
+                      - string
+                      - "null"
+                    format: uuid
+                  trigger:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - queued
+                      - running
+                      - succeeded
+                      - failed
+                  input: {}
+                  output: {}
+                  correlationId:
+                    type: string
+                  startedAt:
+                    type:
+                      - string
+                      - "null"
+                  finishedAt:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - playbookId
+                  - trigger
+                  - status
+                  - correlationId
+                  - startedAt
+                  - finishedAt
+                  - createdAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/automation-runs/{id}:
+    get:
+      operationId: getAutomationRun
+      summary: Get a single automation run (poll for completion)
+      tags:
+        - Automation
+      security:
+        - ApiKeyAuth:
+            - automation:read
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: id
+          in: path
+      responses:
+        "200":
+          description: Get a single automation run (poll for completion)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  playbookId:
+                    type:
+                      - string
+                      - "null"
+                    format: uuid
+                  trigger:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - queued
+                      - running
+                      - succeeded
+                      - failed
+                  input: {}
+                  output: {}
+                  correlationId:
+                    type: string
+                  startedAt:
+                    type:
+                      - string
+                      - "null"
+                  finishedAt:
+                    type:
+                      - string
+                      - "null"
+                  createdAt:
+                    type: string
+                required:
+                  - id
+                  - playbookId
+                  - trigger
+                  - status
+                  - correlationId
+                  - startedAt
+                  - finishedAt
+                  - createdAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/events/stream:
+    get:
+      operationId: streamEvents
+      summary: Server-Sent Events stream of domain + automation events (public
+        realtime stream, scoped)
+      tags:
+        - Realtime
+      security:
+        - ApiKeyAuth:
+            - leads:read
+      responses:
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/stats:
+    get:
+      operationId: getStats
+      summary: Aggregate platform stats
+      tags:
+        - Status
+      security:
+        - ApiKeyAuth:
+            - leads:read
+      responses:
+        "200":
+          description: Aggregate platform stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  leads:
+                    type: integer
+                  contacts:
+                    type: integer
+                  deals:
+                    type: integer
+                  openDealsValue:
+                    type: string
+                  automationRuns:
+                    type: object
+                    properties:
+                      queued:
+                        type: integer
+                      running:
+                        type: integer
+                      succeeded:
+                        type: integer
+                      failed:
+                        type: integer
+                    required:
+                      - queued
+                      - running
+                      - succeeded
+                      - failed
+                  webhooks:
+                    type: object
+                    properties:
+                      subscriptions:
+                        type: integer
+                      pendingDeliveries:
+                        type: integer
+                      deadLetters:
+                        type: integer
+                    required:
+                      - subscriptions
+                      - pendingDeliveries
+                      - deadLetters
+                  generatedAt:
+                    type: string
+                required:
+                  - leads
+                  - contacts
+                  - deals
+                  - openDealsValue
+                  - automationRuns
+                  - webhooks
+                  - generatedAt
+        "400":
+          description: Validation or filter/sort error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing/invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Insufficient scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Idempotency-Key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 webhooks: {}

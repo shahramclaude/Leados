@@ -1,88 +1,82 @@
-// Realtime API: Server-Sent Events with resume semantics. Clients can pass
-// `?after=<seq>` (or the standard `Last-Event-ID` header) to resume exactly
-// where they left off after a disconnect, without missing or duplicating
-// events. Requires the `realtime` scope.
-import { authenticateAndAuthorize } from "@/lib/platform/auth";
-import { ApiError, errorResponse, newCorrelationId } from "@/lib/platform/envelope";
-import { listEventsSince } from "@/lib/platform/events";
+import { authenticate, rateLimitKeyFor, type Scope } from "@/lib/api/auth";
+import { getOrCreateCorrelationId } from "@/lib/api/correlation";
+import { ApiError } from "@/lib/api/errors";
+import { takeToken } from "@/lib/api/rateLimit";
+import { jsonFromCaught, baseHeaders } from "@/lib/api/respond";
+import { eventBus, type BusEvent } from "@/lib/events/bus";
 
 export const dynamic = "force-dynamic";
 
-const POLL_INTERVAL_MS = 1000;
-const HEARTBEAT_MS = 15000;
+/** Maps a caller's scopes to the event types they are allowed to receive on the public stream. */
+const SCOPE_EVENT_MAP: Record<Scope, string[]> = {
+  "leads:read": ["lead.created", "lead.updated"],
+  "leads:write": [],
+  "contacts:read": [],
+  "contacts:write": [],
+  "deals:read": ["deal.won"],
+  "deals:write": [],
+  "webhooks:read": [],
+  "webhooks:write": [],
+  "automation:read": ["automation.run.completed"],
+  "automation:write": [],
+  admin: ["lead.created", "lead.updated", "deal.won", "automation.run.completed"],
+};
 
+const HEARTBEAT_MS = 15_000;
+
+/**
+ * Public realtime stream (Server-Sent Events). Scoped: callers only receive
+ * event types their API key's scopes permit (same scope model as the REST
+ * surface — no separate realtime ACL to drift out of sync).
+ */
 export async function GET(req: Request) {
-  const correlationId = newCorrelationId();
-  let ctx;
+  const correlationId = getOrCreateCorrelationId(req);
   try {
-    ({ ctx } = await authenticateAndAuthorize(req, "realtime"));
-  } catch (err) {
-    if (err instanceof ApiError) return errorResponse(err, correlationId);
-    return errorResponse(new ApiError("INTERNAL_ERROR", "Unexpected error"), correlationId);
-  }
+    const key = await authenticate(req);
+    const rl = takeToken(rateLimitKeyFor(key));
+    if (!rl.allowed) {
+      return jsonFromCaught(new ApiError("RATE_LIMITED"), correlationId, rl);
+    }
 
-  const url = new URL(req.url);
-  const afterParam = url.searchParams.get("after") ?? req.headers.get("last-event-id");
-  let cursor = afterParam ? Number.parseInt(afterParam, 10) : 0;
-  if (!Number.isFinite(cursor)) cursor = 0;
+    const allowedTypes = new Set(
+      key.isAdmin || key.scopes.includes("admin")
+        ? Object.values(SCOPE_EVENT_MAP).flat()
+        : key.scopes.flatMap((s) => SCOPE_EVENT_MAP[s] ?? []),
+    );
 
-  const orgId = ctx.orgId;
-  const encoder = new TextEncoder();
-  let closed = false;
+    const encoder = new TextEncoder();
+    let heartbeat: ReturnType<typeof setInterval>;
+    let listener: (evt: BusEvent) => void;
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (eventId: number, data: unknown) => {
-        controller.enqueue(encoder.encode(`id: ${eventId}\nevent: message\ndata: ${JSON.stringify(data)}\n\n`));
-      };
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(`event: connected\ndata: ${JSON.stringify({ correlationId })}\n\n`));
 
-      const heartbeat = setInterval(() => {
-        if (closed) return;
-        controller.enqueue(encoder.encode(`: heartbeat\n\n`));
-      }, HEARTBEAT_MS);
+        listener = (evt) => {
+          if (!allowedTypes.has(evt.type)) return;
+          controller.enqueue(encoder.encode(`event: ${evt.type}\ndata: ${JSON.stringify(evt)}\nid: ${evt.id}\n\n`));
+        };
+        eventBus.on("event", listener);
 
-      req.signal.addEventListener("abort", () => {
-        closed = true;
+        heartbeat = setInterval(() => {
+          controller.enqueue(encoder.encode(`: heartbeat ${new Date().toISOString()}\n\n`));
+        }, HEARTBEAT_MS);
+      },
+      cancel() {
         clearInterval(heartbeat);
-        clearInterval(poll);
-        try {
-          controller.close();
-        } catch {
-          // already closed
-        }
-      });
+        eventBus.off("event", listener);
+      },
+    });
 
-      const poll = setInterval(async () => {
-        if (closed) return;
-        try {
-          const events = await listEventsSince(orgId, cursor, 50);
-          for (const event of events) {
-            cursor = event.seq;
-            send(event.seq, {
-              id: event.id,
-              type: event.type,
-              orgId: event.orgId,
-              createdAt: event.createdAt.toISOString(),
-              data: event.payload,
-            });
-          }
-        } catch (err) {
-          console.error("event stream poll failed", err);
-        }
-      }, POLL_INTERVAL_MS);
-    },
-    cancel() {
-      closed = true;
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Correlation-Id": correlationId,
-      "X-Accel-Buffering": "no",
-    },
-  });
+    return new Response(stream, {
+      headers: {
+        ...baseHeaders(correlationId),
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
+    });
+  } catch (err) {
+    return jsonFromCaught(err, correlationId);
+  }
 }

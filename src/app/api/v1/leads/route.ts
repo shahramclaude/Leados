@@ -1,86 +1,110 @@
-import { and, asc, desc, eq, gt, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { leads } from "@/db/schema";
-import { writeAudit } from "@/lib/api/audit";
+import { withApi } from "@/lib/api/handler";
+import { jsonOk, jsonFromCaught } from "@/lib/api/respond";
+import {
+  buildPageMeta,
+  cursorRowCondition,
+  decodeCursor,
+  parseFilters,
+  parseLimit,
+  parseSort,
+} from "@/lib/api/pagination";
+import { LeadCreateSchema } from "@/lib/api/schemas";
 import { ApiError } from "@/lib/api/errors";
-import { withApiRoute } from "@/lib/api/handler";
-import { withIdempotency } from "@/lib/api/idempotency";
-import { decodeCursor, paginate, parseLimit } from "@/lib/api/pagination";
-import { buildFilterConditions, LEAD_FILTER_WHITELIST } from "@/lib/api/resourceFilters";
-import { jsonOk } from "@/lib/api/respond";
-import { CreateLeadSchema } from "@/lib/api/schemas";
-import { serializeLead } from "@/lib/api/serializers";
-import { parseSort } from "@/lib/api/sorting";
-import { emitEvent } from "@/lib/api/stream";
+import { toLead } from "@/lib/api/serialize";
+import { handleIdempotentCreate } from "@/lib/api/writeHelpers";
+import { recordAudit } from "@/lib/api/audit";
+import { emitEvent } from "@/lib/webhooks/worker";
 
-const SORTABLE = ["createdAt", "score", "name"] as const;
-const SORT_COLUMNS = { createdAt: leads.createdAt, score: leads.score, name: leads.name } as const;
+export const dynamic = "force-dynamic";
 
-export const GET = withApiRoute("leads:read", async (req, ctx) => {
-  const url = new URL(req.url);
-  const limit = parseLimit(url.searchParams);
-  const sort = parseSort(url.searchParams, [...SORTABLE], { field: "createdAt", direction: "desc" });
-  const cursor = decodeCursor(url.searchParams.get("cursor"));
-  const sortColumn = SORT_COLUMNS[sort.field as keyof typeof SORT_COLUMNS];
+const SORTABLE = ["createdAt", "updatedAt", "score"] as const;
+const SORT_COLUMN = { createdAt: leads.createdAt, updatedAt: leads.updatedAt, score: leads.score } as const;
 
-  const filters = buildFilterConditions(url.searchParams, LEAD_FILTER_WHITELIST, {
-    stage: leads.stage,
-    score: leads.score,
-    company: leads.company,
-    createdAt: leads.createdAt,
-    accountId: leads.accountId,
-    email: leads.email,
-  });
+export const GET = withApi("leads:read", async (req, { correlationId, rl }) => {
+  try {
+    const url = new URL(req.url);
+    const sp = url.searchParams;
+    const limit = parseLimit(sp.get("limit"));
+    const { field, direction } = parseSort(sp.get("sort"), [...SORTABLE], "-createdAt");
+    const filters = parseFilters(sp, { status: ["eq"], score: ["gte", "lte"], ownerId: ["eq"] }, [
+      "cursor",
+      "limit",
+      "sort",
+    ]);
 
-  const conditions = [eq(leads.orgId, ctx.auth.orgId), ...filters];
-  const op = sort.direction === "desc" ? lt : gt;
-  if (cursor) {
-    conditions.push(or(op(sortColumn, cursor.v as never), and(eq(sortColumn, cursor.v as never), op(leads.id, cursor.id)))!);
+    const conditions = [sql`${leads.deletedAt} is null`];
+    for (const f of filters) {
+      if (f.field === "status") conditions.push(eq(leads.status, f.value));
+      if (f.field === "ownerId") conditions.push(eq(leads.ownerId, f.value));
+      if (f.field === "score" && f.op === "gte") conditions.push(gte(leads.score, Number(f.value)));
+      if (f.field === "score" && f.op === "lte") conditions.push(lte(leads.score, Number(f.value)));
+    }
+
+    const sortColumn = SORT_COLUMN[field as keyof typeof SORT_COLUMN];
+    if (sp.get("cursor")) {
+      const cursor = decodeCursor(sp.get("cursor")!);
+      conditions.push(cursorRowCondition(sortColumn, leads.id, cursor, direction));
+    }
+
+    const orderFns = direction === "desc" ? [desc(sortColumn), desc(leads.id)] : [asc(sortColumn), asc(leads.id)];
+
+    const rows = await db
+      .select()
+      .from(leads)
+      .where(and(...conditions))
+      .orderBy(...orderFns)
+      .limit(limit + 1);
+
+    const { items, hasMore, nextCursor } = buildPageMeta(rows, limit, field as keyof (typeof rows)[number]);
+    return jsonOk({ data: items.map(toLead), page: { cursor: nextCursor, hasMore, limit } }, correlationId, {}, rl);
+  } catch (err) {
+    return jsonFromCaught(err, correlationId, rl);
   }
-
-  const dir = sort.direction === "desc" ? desc : asc;
-  const rows = await db
-    .select()
-    .from(leads)
-    .where(and(...conditions))
-    .orderBy(dir(sortColumn), dir(leads.id))
-    .limit(limit + 1);
-
-  const serialized = rows.map(serializeLead);
-  const { page, meta } = paginate(serialized, limit, sort.field as "createdAt" | "score" | "name", "id");
-  return jsonOk({ data: page, meta }, ctx.correlationId, { rateLimit: ctx.rateLimit });
 });
 
-export const POST = withApiRoute("leads:write", async (req, ctx) => {
-  const raw = await req.json().catch(() => {
-    throw new ApiError("VALIDATION_ERROR", "Request body must be valid JSON.");
-  });
-  const parsed = CreateLeadSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new ApiError("VALIDATION_ERROR", "Request body failed validation.", parsed.error.flatten());
-  }
-
-  const result = await withIdempotency(req, ctx.auth.orgId, ctx.auth.tokenId, "POST /api/v1/leads", raw, async () => {
-    const [created] = await db
-      .insert(leads)
-      .values({ orgId: ctx.auth.orgId, stage: "new", ...parsed.data })
-      .returning();
-    await writeAudit({
-      orgId: ctx.auth.orgId,
-      tokenId: ctx.auth.tokenId,
-      action: "lead.created",
-      resourceType: "lead",
-      resourceId: created.id,
-      correlationId: ctx.correlationId,
+export const POST = withApi("leads:write", async (req, { correlationId, key, rl }) => {
+  try {
+    const rawBody = await req.json().catch(() => {
+      throw new ApiError("VALIDATION_ERROR", "Request body must be valid JSON");
     });
-    const serialized = serializeLead(created);
-    await emitEvent(ctx.auth.orgId, "lead.created", serialized, ctx.correlationId);
-    return { status: 201, body: serialized };
-  });
+    const parsed = LeadCreateSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new ApiError("VALIDATION_ERROR", "Lead payload failed validation", parsed.error.flatten());
+    }
 
-  return jsonOk(result.body, ctx.correlationId, {
-    status: result.status,
-    rateLimit: ctx.rateLimit,
-    headers: result.replayed ? { "Idempotent-Replayed": "true" } : undefined,
-  });
+    const result = await handleIdempotentCreate(req, "POST /v1/leads", rawBody, async () => {
+      const [row] = await db
+        .insert(leads)
+        .values({
+          name: parsed.data.name,
+          email: parsed.data.email,
+          company: parsed.data.company,
+          status: parsed.data.status ?? "new",
+          score: parsed.data.score ?? 0,
+          ownerId: parsed.data.ownerId,
+        })
+        .returning();
+      await recordAudit({
+        actor: key.id,
+        action: "lead.created",
+        resource: "lead",
+        resourceId: row.id,
+        correlationId,
+      });
+      await emitEvent("lead.created", { id: row.id, name: row.name, email: row.email, status: row.status });
+      return { status: 201, body: toLead(row) };
+    });
+
+    return jsonOk(
+      result.body,
+      correlationId,
+      { status: result.status, headers: result.replayed ? { "Idempotency-Replayed": "true" } : {} },
+      rl,
+    );
+  } catch (err) {
+    return jsonFromCaught(err, correlationId, rl);
+  }
 });

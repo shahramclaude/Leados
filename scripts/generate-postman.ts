@@ -1,100 +1,56 @@
-// Generates postman-collection.json straight from api-spec.json. Never
-// hand-edit the collection — change the zod schemas / registry and
-// regenerate via: npx tsx scripts/generate-openapi.ts && npx tsx scripts/generate-postman.ts
-import { readFileSync, writeFileSync } from "node:fs";
+/**
+ * Generates postman-collection.json from the same route registry used for
+ * the OpenAPI spec and the SDK. Run with: npx tsx scripts/generate-postman.ts
+ */
+import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { routeRegistry } from "../src/lib/api/spec";
 
-interface OpenApiOperation {
-  summary?: string;
-  description?: string;
-  tags?: string[];
-  security?: unknown[];
-  requestBody?: { content?: Record<string, { schema?: unknown; example?: unknown }> };
-  parameters?: { name: string; in: string; required?: boolean; schema?: { type?: string } }[];
-}
-
-interface OpenApiDocument {
-  info: { title: string; version: string; description?: string };
-  servers?: { url: string }[];
-  paths: Record<string, Record<string, OpenApiOperation>>;
-}
-
-function exampleBodyFor(path: string, method: string): Record<string, unknown> | undefined {
-  if (path === "/api/v1/decisions" && method === "post") {
-    return { title: "Adopt the new pricing tier", status: "open", owner: "vp-sales" };
-  }
-  if (path === "/api/v1/findings" && method === "post") {
-    return { summary: "Churn risk detected in enterprise segment", severity: "warning" };
-  }
-  if (path === "/api/v1/runs" && method === "post") {
-    return { type: "digest_summary", input: {} };
-  }
-  if (path === "/api/v1/webhooks/subscriptions" && method === "post") {
-    return { url: "https://example.com/webhooks/leados", eventTypes: ["decision.created", "run.completed"] };
-  }
-  if (path === "/api/v1/integrations/slack/notify" && method === "post") {
-    return { message: "LEADOS: new critical finding raised" };
-  }
-  if (path === "/api/v1/tokens" && method === "post") {
-    return { orgId: "org_demo", name: "CI token", scopes: ["read", "write", "automation", "webhooks", "realtime"] };
-  }
-  return undefined;
-}
-
-function main() {
-  const root = path.resolve(__dirname, "..");
-  const document = JSON.parse(readFileSync(path.join(root, "api-spec.json"), "utf8")) as OpenApiDocument;
-
-  const items = Object.entries(document.paths).flatMap(([routePath, methods]) =>
-    Object.entries(methods).map(([method, op]) => {
-      const pathParams = (op.parameters ?? []).filter((p) => p.in === "path");
-      let urlPath = routePath;
-      const pathVariables = pathParams.map((p) => {
-        urlPath = urlPath.replace(`{${p.name}}`, `:${p.name}`);
-        return { key: p.name, value: "REPLACE_ME" };
-      });
-
-      const body = exampleBodyFor(routePath, method);
-      const needsAuth = Boolean(op.security?.length);
-
-      return {
-        name: `${method.toUpperCase()} ${routePath}`,
-        request: {
-          method: method.toUpperCase(),
-          header: [
-            { key: "Content-Type", value: "application/json" },
-            ...(needsAuth ? [{ key: "Authorization", value: "Bearer {{leados_token}}" }] : []),
-          ],
-          url: {
-            raw: `{{baseUrl}}${urlPath}`,
-            host: ["{{baseUrl}}"],
-            path: urlPath.split("/").filter(Boolean),
-            ...(pathVariables.length ? { variable: pathVariables } : {}),
-          },
-          description: op.summary ?? op.description ?? "",
-          ...(body ? { body: { mode: "raw", raw: JSON.stringify(body, null, 2) } } : {}),
-        },
-      };
-    }),
-  );
-
-  const collection = {
-    info: {
-      name: document.info.title,
-      description: document.info.description ?? "",
-      schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    },
-    variable: [
-      { key: "baseUrl", value: "http://localhost:3000" },
-      { key: "leados_token", value: "lead_sk_replace_with_real_token" },
-    ],
-    item: items,
+type PostmanItem = {
+  name: string;
+  request: {
+    method: string;
+    header: { key: string; value: string }[];
+    url: { raw: string; host: string[]; path: string[]; query?: { key: string; value: string }[] };
+    body?: { mode: "raw"; raw: string; options: { raw: { language: "json" } } };
   };
+};
 
-  const collectionJson = JSON.stringify(collection, null, 2);
-  writeFileSync(path.join(root, "postman-collection.json"), collectionJson, "utf8");
-  writeFileSync(path.join(root, "public", "postman-collection.json"), collectionJson, "utf8");
-  console.log(`Generated postman-collection.json with ${items.length} requests.`);
+function examplePlaceholder(path: string) {
+  return path.replace(/\{([a-zA-Z0-9_]+)\}/g, (_m, p) => `{{${p}}}`);
 }
 
-main();
+const items: PostmanItem[] = routeRegistry.map((route) => {
+  const urlPath = `api${examplePlaceholder(route.path)}`;
+  const headers = [{ key: "Authorization", value: "Bearer {{apiKey}}" }];
+  if (route.body) headers.push({ key: "Content-Type", value: "application/json" });
+  if (route.idempotent) headers.push({ key: "Idempotency-Key", value: "{{$guid}}" });
+
+  return {
+    name: `${route.method} ${route.path}`,
+    request: {
+      method: route.method,
+      header: headers,
+      url: { raw: `{{baseUrl}}/${urlPath}`, host: ["{{baseUrl}}"], path: urlPath.split("/") },
+      ...(route.body ? { body: { mode: "raw" as const, raw: "{}", options: { raw: { language: "json" as const } } } } : {}),
+    },
+  };
+});
+
+const collection = {
+  info: {
+    _postman_id: randomUUID(),
+    name: "LEADOS API (v1)",
+    description: "Generated from src/lib/api/spec.ts. See docs/API.md for the full guide.",
+    schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+  },
+  variable: [
+    { key: "baseUrl", value: "http://localhost:3000" },
+    { key: "apiKey", value: "" },
+  ],
+  item: items,
+};
+
+fs.writeFileSync(path.resolve(__dirname, "../postman-collection.json"), JSON.stringify(collection, null, 2) + "\n");
+console.log(`[api:gen] wrote postman-collection.json with ${items.length} requests.`);

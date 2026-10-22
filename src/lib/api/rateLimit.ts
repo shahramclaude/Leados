@@ -1,48 +1,55 @@
-// In-memory token-bucket rate limiter, keyed per API token. Suitable for a
-// single-instance deployment; production multi-instance deployments should
-// swap this for a shared store (Redis `INCR`/`EXPIRE` or a leaky-bucket Lua
-// script) without changing the call site in withApiRoute(). This limitation
-// is called out explicitly in docs/API.md and the Part 14 self-review.
-interface Bucket {
-  tokens: number;
-  lastRefillMs: number;
-}
+/**
+ * In-memory token-bucket rate limiter, keyed per API key (or IP for unauthenticated calls).
+ *
+ * LIMITATION (documented, not hidden): this is per-process state. In a
+ * multi-instance deployment this should move to Redis/Upstash. For the
+ * scope of this part (single Next.js server instance) it is sufficient
+ * to demonstrate the RateLimit-* header contract and 429 behavior.
+ */
 
-const buckets = new Map<string, Bucket>();
-
-export interface RateLimitResult {
+export type RateLimitResult = {
   allowed: boolean;
   limit: number;
   remaining: number;
   resetSeconds: number;
-}
+};
 
-export function consumeRateLimit(key: string, limitPerMinute: number): RateLimitResult {
+type Bucket = { tokens: number; lastRefillMs: number };
+
+const buckets = new Map<string, Bucket>();
+
+const DEFAULT_CAPACITY = 60; // tokens
+const REFILL_PER_SEC = 1; // tokens/sec
+
+export function takeToken(key: string, capacity = DEFAULT_CAPACITY, refillPerSec = REFILL_PER_SEC): RateLimitResult {
   const now = Date.now();
-  const refillRatePerMs = limitPerMinute / 60_000;
   let bucket = buckets.get(key);
   if (!bucket) {
-    bucket = { tokens: limitPerMinute, lastRefillMs: now };
+    bucket = { tokens: capacity, lastRefillMs: now };
     buckets.set(key, bucket);
   }
-  const elapsed = now - bucket.lastRefillMs;
-  bucket.tokens = Math.min(limitPerMinute, bucket.tokens + elapsed * refillRatePerMs);
+  const elapsedSec = (now - bucket.lastRefillMs) / 1000;
+  bucket.tokens = Math.min(capacity, bucket.tokens + elapsedSec * refillPerSec);
   bucket.lastRefillMs = now;
 
-  const resetSeconds = Math.ceil((limitPerMinute - bucket.tokens) / (limitPerMinute / 60));
-
-  if (bucket.tokens < 1) {
-    return { allowed: false, limit: limitPerMinute, remaining: 0, resetSeconds: Math.max(1, resetSeconds) };
+  if (bucket.tokens >= 1) {
+    bucket.tokens -= 1;
+    return {
+      allowed: true,
+      limit: capacity,
+      remaining: Math.floor(bucket.tokens),
+      resetSeconds: Math.ceil((capacity - bucket.tokens) / refillPerSec),
+    };
   }
-  bucket.tokens -= 1;
   return {
-    allowed: true,
-    limit: limitPerMinute,
-    remaining: Math.floor(bucket.tokens),
-    resetSeconds: Math.max(0, resetSeconds),
+    allowed: false,
+    limit: capacity,
+    remaining: 0,
+    resetSeconds: Math.ceil((1 - bucket.tokens) / refillPerSec),
   };
 }
 
-export function resetRateLimitState() {
+/** Test/ops helper to reset state between contract test runs. */
+export function resetRateLimits() {
   buckets.clear();
 }

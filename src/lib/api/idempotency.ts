@@ -1,80 +1,56 @@
 import { createHash } from "crypto";
-import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { idempotencyKeys } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 import { ApiError } from "./errors";
 
-export interface IdempotencyLookup {
-  key: string;
-  bodyHash: string;
+export function hashRequest(body: unknown): string {
+  return createHash("sha256").update(JSON.stringify(body ?? null)).digest("hex");
 }
 
+export type IdempotencyLookup =
+  | { replayed: true; status: number; body: unknown }
+  | { replayed: false };
+
 /**
- * Resolves the `Idempotency-Key` header for a write request. If the same
- * (org, route, method, key) was seen before:
- *  - with the same request body -> returns the previously stored response so
- *    retries of a timed-out write are safe.
- *  - with a different request body -> raises IDEMPOTENCY_KEY_CONFLICT, since
- *    reusing a key for a different payload is a client bug.
- * If no key is supplied, writes are simply not deduplicated (allowed, but
- * discouraged for mutating endpoints — documented in docs/API.md).
+ * Looks up a prior response for (idempotencyKey, route). If the same key was used
+ * with a *different* request body, throws IDEMPOTENCY_CONFLICT (422).
  */
-export async function withIdempotency<T>(
-  req: Request,
-  orgId: string,
-  tokenId: string,
+export async function checkIdempotency(
+  idempotencyKey: string,
   route: string,
   requestBody: unknown,
-  handler: () => Promise<{ status: number; body: T }>,
-): Promise<{ status: number; body: T; replayed: boolean }> {
-  const key = req.headers.get("idempotency-key");
-  const method = req.method.toUpperCase();
-  const bodyHash = createHash("sha256").update(JSON.stringify(requestBody ?? null)).digest("hex");
-
-  if (!key) {
-    const result = await handler();
-    return { ...result, replayed: false };
-  }
-
+): Promise<IdempotencyLookup> {
+  const requestHash = hashRequest(requestBody);
   const [existing] = await db
     .select()
     .from(idempotencyKeys)
-    .where(
-      and(
-        eq(idempotencyKeys.orgId, orgId),
-        eq(idempotencyKeys.route, route),
-        eq(idempotencyKeys.method, method),
-        eq(idempotencyKeys.key, key),
-      ),
-    )
+    .where(and(eq(idempotencyKeys.idempotencyKey, idempotencyKey), eq(idempotencyKeys.route, route)))
     .limit(1);
 
-  if (existing) {
-    if (existing.requestHash !== bodyHash) {
-      throw new ApiError(
-        "IDEMPOTENCY_KEY_CONFLICT",
-        "This Idempotency-Key was already used with a different request body.",
-        { key },
-      );
-    }
-    return { status: existing.status ?? 200, body: existing.responseBody as T, replayed: true };
+  if (!existing) return { replayed: false };
+
+  if (existing.requestHash !== requestHash) {
+    throw new ApiError("IDEMPOTENCY_CONFLICT");
   }
+  return { replayed: true, status: existing.responseStatus, body: existing.responseBody };
+}
 
-  const result = await handler();
-
+export async function storeIdempotentResponse(
+  idempotencyKey: string,
+  route: string,
+  requestBody: unknown,
+  responseStatus: number,
+  responseBody: unknown,
+) {
   await db
     .insert(idempotencyKeys)
     .values({
-      orgId,
-      tokenId,
-      key,
+      idempotencyKey,
       route,
-      method,
-      requestHash: bodyHash,
-      status: result.status,
-      responseBody: result.body as object,
+      requestHash: hashRequest(requestBody),
+      responseStatus,
+      responseBody: responseBody as object,
     })
     .onConflictDoNothing();
-
-  return { ...result, replayed: false };
 }

@@ -1,7 +1,8 @@
 {
   "info": {
-    "name": "LEADOS Platform API",
-    "description": "LEADOS public API v1. See docs/API.md for the full guide (auth, pagination, idempotency, webhooks, realtime, automation, deprecation policy).",
+    "_postman_id": "8f3b482f-74bb-4ab9-96de-dfde8b52f1af",
+    "name": "LEADOS API (v1)",
+    "description": "Generated from src/lib/api/spec.ts. See docs/API.md for the full guide.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,343 +11,760 @@
       "value": "http://localhost:3000"
     },
     {
-      "key": "leados_token",
-      "value": "lead_sk_replace_with_real_token"
+      "key": "apiKey",
+      "value": ""
     }
   ],
   "item": [
     {
-      "name": "GET /api/v1/decisions",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/decisions",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "decisions"
-          ]
-        },
-        "description": "List decisions (cursor-paginated)"
-      }
-    },
-    {
-      "name": "POST /api/v1/decisions",
+      "name": "POST /v1/api-keys",
       "request": {
         "method": "POST",
         "header": [
           {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
+          {
             "key": "Content-Type",
             "value": "application/json"
           },
           {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/api/v1/decisions",
+          "raw": "{{baseUrl}}/api/v1/api-keys",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
             "v1",
-            "decisions"
+            "api-keys"
           ]
         },
-        "description": "Create a decision",
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"title\": \"Adopt the new pricing tier\",\n  \"status\": \"open\",\n  \"owner\": \"vp-sales\"\n}"
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
         }
       }
     },
     {
-      "name": "GET /api/v1/decisions/{id}",
+      "name": "GET /v1/leads",
       "request": {
         "method": "GET",
         "header": [
           {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
             "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
+            "value": "Bearer {{apiKey}}"
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/api/v1/decisions/:id",
+          "raw": "{{baseUrl}}/api/v1/leads",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
             "v1",
-            "decisions",
-            ":id"
-          ],
-          "variable": [
-            {
-              "key": "id",
-              "value": "REPLACE_ME"
-            }
+            "leads"
           ]
-        },
-        "description": "Get a decision (supports ETag / If-None-Match)"
+        }
       }
     },
     {
-      "name": "PATCH /api/v1/decisions/{id}",
+      "name": "POST /v1/leads",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/leads",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "leads"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "GET /v1/leads/{id}",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/leads/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "leads",
+            "{{id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "PATCH /v1/leads/{id}",
       "request": {
         "method": "PATCH",
         "header": [
           {
-            "key": "Content-Type",
-            "value": "application/json"
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
           },
           {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
+            "key": "Content-Type",
+            "value": "application/json"
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/api/v1/decisions/:id",
+          "raw": "{{baseUrl}}/api/v1/leads/{{id}}",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
             "v1",
-            "decisions",
-            ":id"
-          ],
-          "variable": [
-            {
-              "key": "id",
-              "value": "REPLACE_ME"
-            }
+            "leads",
+            "{{id}}"
           ]
         },
-        "description": "Update a decision"
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
       }
     },
     {
-      "name": "DELETE /api/v1/decisions/{id}",
+      "name": "DELETE /v1/leads/{id}",
       "request": {
         "method": "DELETE",
         "header": [
           {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
             "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
+            "value": "Bearer {{apiKey}}"
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/api/v1/decisions/:id",
+          "raw": "{{baseUrl}}/api/v1/leads/{{id}}",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
             "v1",
-            "decisions",
-            ":id"
-          ],
-          "variable": [
-            {
-              "key": "id",
-              "value": "REPLACE_ME"
-            }
+            "leads",
+            "{{id}}"
           ]
-        },
-        "description": "Delete a decision"
-      }
-    },
-    {
-      "name": "GET /api/v1/findings",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/findings",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "findings"
-          ]
-        },
-        "description": "List findings (cursor-paginated)"
-      }
-    },
-    {
-      "name": "POST /api/v1/findings",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/findings",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "findings"
-          ]
-        },
-        "description": "Create a finding",
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"summary\": \"Churn risk detected in enterprise segment\",\n  \"severity\": \"warning\"\n}"
         }
       }
     },
     {
-      "name": "POST /api/v1/runs",
+      "name": "GET /v1/contacts",
       "request": {
-        "method": "POST",
+        "method": "GET",
         "header": [
           {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
             "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
+            "value": "Bearer {{apiKey}}"
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/api/v1/runs",
+          "raw": "{{baseUrl}}/api/v1/contacts",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
             "v1",
-            "runs"
+            "contacts"
           ]
-        },
-        "description": "Trigger an automation run (idempotent on Idempotency-Key)",
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"type\": \"digest_summary\",\n  \"input\": {}\n}"
         }
       }
     },
     {
-      "name": "GET /api/v1/runs",
+      "name": "POST /v1/contacts",
       "request": {
-        "method": "GET",
+        "method": "POST",
         "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
           {
             "key": "Content-Type",
             "value": "application/json"
           },
           {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/api/v1/runs",
+          "raw": "{{baseUrl}}/api/v1/contacts",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
             "v1",
-            "runs"
+            "contacts"
           ]
         },
-        "description": "List runs"
-      }
-    },
-    {
-      "name": "GET /api/v1/runs/{id}",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/runs/:id",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "runs",
-            ":id"
-          ],
-          "variable": [
-            {
-              "key": "id",
-              "value": "REPLACE_ME"
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
             }
-          ]
-        },
-        "description": "Poll a run's status"
+          }
+        }
       }
     },
     {
-      "name": "GET /api/v1/events/stream",
+      "name": "GET /v1/contacts/{id}",
       "request": {
         "method": "GET",
         "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/contacts/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "contacts",
+            "{{id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "PATCH /v1/contacts/{id}",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/contacts/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "contacts",
+            "{{id}}"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "DELETE /v1/contacts/{id}",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/contacts/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "contacts",
+            "{{id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /v1/deals",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/deals",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "deals"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /v1/deals",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
           {
             "key": "Content-Type",
             "value": "application/json"
           },
           {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/deals",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "deals"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "GET /v1/deals/{id}",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
             "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/deals/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "deals",
+            "{{id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "PATCH /v1/deals/{id}",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/deals/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "deals",
+            "{{id}}"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "GET /v1/webhooks/subscriptions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "subscriptions"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /v1/webhooks/subscriptions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "subscriptions"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "DELETE /v1/webhooks/subscriptions/{id}",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "subscriptions",
+            "{{id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /v1/webhooks/subscriptions/{id}/deliveries",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions/{{id}}/deliveries",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "subscriptions",
+            "{{id}}",
+            "deliveries"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /v1/webhooks/subscriptions/{id}/test",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions/{{id}}/test",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "subscriptions",
+            "{{id}}",
+            "test"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /v1/webhooks/_worker/tick",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/webhooks/_worker/tick",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "webhooks",
+            "_worker",
+            "tick"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /v1/playbooks",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/playbooks",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "playbooks"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /v1/automation-runs",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/automation-runs",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "automation-runs"
+          ]
+        }
+      }
+    },
+    {
+      "name": "POST /v1/automation-runs",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{$guid}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/automation-runs",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "automation-runs"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "GET /v1/automation-runs/{id}",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/automation-runs/{{id}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "automation-runs",
+            "{{id}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "GET /v1/events/stream",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{apiKey}}"
           }
         ],
         "url": {
@@ -360,305 +778,30 @@
             "events",
             "stream"
           ]
-        },
-        "description": "Server-Sent Events stream of platform events, resumable via Last-Event-ID"
-      }
-    },
-    {
-      "name": "GET /api/v1/webhooks/subscriptions",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "webhooks",
-            "subscriptions"
-          ]
-        },
-        "description": "List webhook subscriptions"
-      }
-    },
-    {
-      "name": "POST /api/v1/webhooks/subscriptions",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "webhooks",
-            "subscriptions"
-          ]
-        },
-        "description": "Create a webhook subscription",
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"url\": \"https://example.com/webhooks/leados\",\n  \"eventTypes\": [\n    \"decision.created\",\n    \"run.completed\"\n  ]\n}"
         }
       }
     },
     {
-      "name": "DELETE /api/v1/webhooks/subscriptions/{id}",
-      "request": {
-        "method": "DELETE",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/webhooks/subscriptions/:id",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "webhooks",
-            "subscriptions",
-            ":id"
-          ],
-          "variable": [
-            {
-              "key": "id",
-              "value": "REPLACE_ME"
-            }
-          ]
-        },
-        "description": "Deactivate a webhook subscription"
-      }
-    },
-    {
-      "name": "GET /api/v1/webhooks/deliveries",
+      "name": "GET /v1/stats",
       "request": {
         "method": "GET",
         "header": [
           {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
             "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
+            "value": "Bearer {{apiKey}}"
           }
         ],
         "url": {
-          "raw": "{{baseUrl}}/api/v1/webhooks/deliveries",
+          "raw": "{{baseUrl}}/api/v1/stats",
           "host": [
             "{{baseUrl}}"
           ],
           "path": [
             "api",
             "v1",
-            "webhooks",
-            "deliveries"
-          ]
-        },
-        "description": "List webhook delivery attempts (delivery log)"
-      }
-    },
-    {
-      "name": "POST /api/v1/webhooks/deliveries/{id}/retry",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/webhooks/deliveries/:id/retry",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "webhooks",
-            "deliveries",
-            ":id",
-            "retry"
-          ],
-          "variable": [
-            {
-              "key": "id",
-              "value": "REPLACE_ME"
-            }
-          ]
-        },
-        "description": "Force an immediate retry of a delivery"
-      }
-    },
-    {
-      "name": "POST /api/v1/webhooks/sandbox",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/webhooks/sandbox",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "webhooks",
-            "sandbox"
-          ]
-        },
-        "description": "Sandbox endpoint for testing webhook delivery + HMAC signatures (no auth required)"
-      }
-    },
-    {
-      "name": "POST /api/v1/integrations/slack/notify",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "Authorization",
-            "value": "Bearer {{leados_token}}"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/integrations/slack/notify",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "integrations",
-            "slack",
-            "notify"
-          ]
-        },
-        "description": "Send a Slack notification via the actuation layer (reference integration)",
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"message\": \"LEADOS: new critical finding raised\"\n}"
-        }
-      }
-    },
-    {
-      "name": "POST /api/v1/tokens",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/tokens",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "v1",
-            "tokens"
-          ]
-        },
-        "description": "Create an API token (dev/bootstrap helper — protect this route in production)",
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"orgId\": \"org_demo\",\n  \"name\": \"CI token\",\n  \"scopes\": [\n    \"read\",\n    \"write\",\n    \"automation\",\n    \"webhooks\",\n    \"realtime\"\n  ]\n}"
-        }
-      }
-    },
-    {
-      "name": "GET /api/health",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/health",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
-            "health"
-          ]
-        },
-        "description": "Liveness/readiness probe"
-      }
-    },
-    {
-      "name": "GET /api/stats",
-      "request": {
-        "method": "GET",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api/stats",
-          "host": [
-            "{{baseUrl}}"
-          ],
-          "path": [
-            "api",
             "stats"
           ]
-        },
-        "description": "Public aggregate stats that power the status page"
+        }
       }
     }
   ]

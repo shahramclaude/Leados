@@ -1,45 +1,45 @@
-import { authenticate, requireScope, type AuthContext, type Scope } from "./auth";
-import { getCorrelationId } from "./context";
+import { authenticate, rateLimitKeyFor, requireScope, type AuthedKey, type Scope } from "./auth";
+import { getOrCreateCorrelationId } from "./correlation";
 import { ApiError } from "./errors";
-import { consumeRateLimit } from "./rateLimit";
-import { toErrorResponse, type RateLimitHeaders } from "./respond";
+import { takeToken, type RateLimitResult } from "./rateLimit";
+import { jsonError, jsonFromCaught } from "./respond";
 
-export interface RouteCtx {
-  auth: AuthContext;
+export type ApiContext = {
   correlationId: string;
-  rateLimit: RateLimitHeaders;
-}
+  key: AuthedKey;
+  rl: RateLimitResult;
+  params: Record<string, string>;
+};
 
-type Handler = (req: Request, ctx: RouteCtx, params: Record<string, string>) => Promise<Response>;
+export type ApiHandler = (req: Request, ctx: ApiContext) => Promise<Response>;
 
 /**
- * Standard composition for every /api/v1 route: auth -> scope check ->
- * per-token rate limit -> handler -> uniform error envelope on throw.
- * Public (unauthenticated) routes pass `scope: null`.
+ * Wraps a /api/v1 route function with the shared platform concerns: correlation id,
+ * API-key auth + scope check, token-bucket rate limiting, and the single error envelope.
  */
-export function withApiRoute(scope: Scope | null, handler: Handler) {
-  return async (req: Request, routeParams?: { params: Promise<Record<string, string>> }) => {
-    const correlationId = getCorrelationId(req);
+export function withApi(scope: Scope, fn: ApiHandler) {
+  return async (req: Request, routeCtx?: { params: Promise<Record<string, string>> }): Promise<Response> => {
+    const correlationId = getOrCreateCorrelationId(req);
+    let rl: RateLimitResult | undefined;
     try {
-      const params = routeParams ? await routeParams.params : {};
-      let auth: AuthContext;
-      let rateLimit: RateLimitHeaders = { limit: 0, remaining: 0, resetSeconds: 0 };
-
-      if (scope === null) {
-        auth = { tokenId: "anonymous", orgId: "anonymous", scopes: [], isAdmin: false, rateLimitPerMinute: 0 };
-      } else {
-        auth = await authenticate(req);
-        requireScope(auth, scope);
-        const rl = consumeRateLimit(auth.tokenId, auth.rateLimitPerMinute);
-        rateLimit = { limit: rl.limit, remaining: rl.remaining, resetSeconds: rl.resetSeconds };
-        if (!rl.allowed) {
-          throw new ApiError("RATE_LIMITED", "Rate limit exceeded for this token. Retry after the reset window.");
-        }
+      const key = await authenticate(req);
+      rl = takeToken(rateLimitKeyFor(key));
+      if (!rl.allowed) {
+        return jsonError(
+          "RATE_LIMITED",
+          correlationId,
+          { headers: { "Retry-After": String(rl.resetSeconds) } },
+          rl,
+        );
       }
-
-      return await handler(req, { auth, correlationId, rateLimit }, params);
+      requireScope(key, scope);
+      const params = routeCtx ? await routeCtx.params : {};
+      return await fn(req, { correlationId, key, rl, params });
     } catch (err) {
-      return toErrorResponse(err, correlationId);
+      if (err instanceof ApiError) {
+        return jsonFromCaught(err, correlationId, rl);
+      }
+      return jsonFromCaught(err, correlationId, rl);
     }
   };
 }

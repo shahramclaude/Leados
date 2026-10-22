@@ -1,77 +1,70 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { leads } from "@/db/schema";
-import { writeAudit } from "@/lib/api/audit";
-import { computeEtag, isNotModified } from "@/lib/api/etag";
+import { withApi } from "@/lib/api/handler";
+import { jsonOk, jsonFromCaught, baseHeaders } from "@/lib/api/respond";
+import { computeEtag, matchesIfNoneMatch } from "@/lib/api/etag";
+import { LeadUpdateSchema } from "@/lib/api/schemas";
 import { ApiError } from "@/lib/api/errors";
-import { withApiRoute } from "@/lib/api/handler";
-import { jsonOk, withCommonHeaders } from "@/lib/api/respond";
-import { UpdateLeadSchema } from "@/lib/api/schemas";
-import { serializeLead } from "@/lib/api/serializers";
-import { emitEvent } from "@/lib/api/stream";
+import { toLead } from "@/lib/api/serialize";
+import { recordAudit } from "@/lib/api/audit";
+import { emitEvent } from "@/lib/webhooks/worker";
 
-async function findLead(orgId: string, id: string) {
+export const dynamic = "force-dynamic";
+
+async function findActive(id: string) {
   const [row] = await db
     .select()
     .from(leads)
-    .where(and(eq(leads.id, id), eq(leads.orgId, orgId)))
+    .where(and(eq(leads.id, id), isNull(leads.deletedAt)))
     .limit(1);
-  return row ?? null;
+  if (!row) throw new ApiError("NOT_FOUND", `No lead with id ${id}`);
+  return row;
 }
 
-export const GET = withApiRoute("leads:read", async (req, ctx, params) => {
-  const lead = await findLead(ctx.auth.orgId, params.id);
-  if (!lead) throw new ApiError("NOT_FOUND", `Lead ${params.id} not found.`);
-  const serialized = serializeLead(lead);
-  const etag = computeEtag(serialized);
-  if (isNotModified(req, etag)) {
-    const headers = withCommonHeaders(new Headers({ ETag: etag }), ctx.correlationId, ctx.rateLimit);
-    return new Response(null, { status: 304, headers });
+export const GET = withApi("leads:read", async (req, { correlationId, rl, params }) => {
+  try {
+    const row = await findActive(params.id);
+    const etag = computeEtag(row.id, row.updatedAt);
+    if (matchesIfNoneMatch(req, etag)) {
+      return new Response(null, { status: 304, headers: baseHeaders(correlationId, { ETag: etag }) });
+    }
+    return jsonOk(toLead(row), correlationId, { headers: { ETag: etag } }, rl);
+  } catch (err) {
+    return jsonFromCaught(err, correlationId, rl);
   }
-  return jsonOk(serialized, ctx.correlationId, { rateLimit: ctx.rateLimit, headers: { ETag: etag } });
 });
 
-export const PATCH = withApiRoute("leads:write", async (req, ctx, params) => {
-  const lead = await findLead(ctx.auth.orgId, params.id);
-  if (!lead) throw new ApiError("NOT_FOUND", `Lead ${params.id} not found.`);
-  const raw = await req.json().catch(() => {
-    throw new ApiError("VALIDATION_ERROR", "Request body must be valid JSON.");
-  });
-  const parsed = UpdateLeadSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new ApiError("VALIDATION_ERROR", "Request body failed validation.", parsed.error.flatten());
+export const PATCH = withApi("leads:write", async (req, { correlationId, key, rl, params }) => {
+  try {
+    await findActive(params.id);
+    const rawBody = await req.json().catch(() => {
+      throw new ApiError("VALIDATION_ERROR", "Request body must be valid JSON");
+    });
+    const parsed = LeadUpdateSchema.safeParse(rawBody);
+    if (!parsed.success) {
+      throw new ApiError("VALIDATION_ERROR", "Lead payload failed validation", parsed.error.flatten());
+    }
+    const [row] = await db
+      .update(leads)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(eq(leads.id, params.id))
+      .returning();
+    await recordAudit({ actor: key.id, action: "lead.updated", resource: "lead", resourceId: row.id, correlationId });
+    await emitEvent("lead.updated", { id: row.id, name: row.name, status: row.status });
+    return jsonOk(toLead(row), correlationId, {}, rl);
+  } catch (err) {
+    return jsonFromCaught(err, correlationId, rl);
   }
-  const [updated] = await db
-    .update(leads)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(leads.id, lead.id))
-    .returning();
-  await writeAudit({
-    orgId: ctx.auth.orgId,
-    tokenId: ctx.auth.tokenId,
-    action: "lead.updated",
-    resourceType: "lead",
-    resourceId: lead.id,
-    metadata: parsed.data,
-    correlationId: ctx.correlationId,
-  });
-  const serialized = serializeLead(updated);
-  await emitEvent(ctx.auth.orgId, "lead.updated", serialized, ctx.correlationId);
-  return jsonOk(serialized, ctx.correlationId, { rateLimit: ctx.rateLimit });
 });
 
-export const DELETE = withApiRoute("leads:write", async (_req, ctx, params) => {
-  const lead = await findLead(ctx.auth.orgId, params.id);
-  if (!lead) throw new ApiError("NOT_FOUND", `Lead ${params.id} not found.`);
-  await db.delete(leads).where(eq(leads.id, lead.id));
-  await writeAudit({
-    orgId: ctx.auth.orgId,
-    tokenId: ctx.auth.tokenId,
-    action: "lead.deleted",
-    resourceType: "lead",
-    resourceId: lead.id,
-    correlationId: ctx.correlationId,
-  });
-  await emitEvent(ctx.auth.orgId, "lead.deleted", { id: lead.id }, ctx.correlationId);
-  return jsonOk({ id: lead.id, deleted: true }, ctx.correlationId, { rateLimit: ctx.rateLimit });
+export const DELETE = withApi("leads:write", async (_req, { correlationId, key, rl, params }) => {
+  try {
+    await findActive(params.id);
+    await db.update(leads).set({ deletedAt: new Date(), updatedAt: new Date() }).where(eq(leads.id, params.id));
+    await recordAudit({ actor: key.id, action: "lead.deleted", resource: "lead", resourceId: params.id, correlationId });
+    return new Response(null, { status: 204, headers: baseHeaders(correlationId) });
+  } catch (err) {
+    return jsonFromCaught(err, correlationId, rl);
+  }
 });

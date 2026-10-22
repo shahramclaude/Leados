@@ -1,103 +1,113 @@
-import { and, asc, desc, eq, gt, lt, or, type SQL } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { ApiError } from "./errors";
 
-export interface CursorValue {
-  // value of the sorted field for the last row of the previous page
-  v: string | number;
-  // id tiebreaker for the last row of the previous page (always unique)
-  id: string;
+/**
+ * Generic composite ("keyset") cursor: { v: <stringified sort-field value>, id }.
+ * Using a Postgres ROW() comparison — (sortColumn, idColumn) < (v, id) — gives
+ * correct, gap-free pagination for *any* whitelisted sort field, including
+ * ties on the sort field (the id is always the deterministic tiebreaker).
+ */
+export type Cursor = { v: string; id: string };
+
+export const DEFAULT_LIMIT = 20;
+export const MAX_LIMIT = 100;
+
+export function encodeCursor(c: Cursor): string {
+  return Buffer.from(JSON.stringify(c), "utf8").toString("base64url");
 }
 
-const MAX_LIMIT = 100;
-const DEFAULT_LIMIT = 25;
-
-export function parseLimit(searchParams: URLSearchParams): number {
-  const raw = searchParams.get("limit");
-  if (!raw) return DEFAULT_LIMIT;
-  const n = Number(raw);
-  if (!Number.isInteger(n) || n < 1 || n > MAX_LIMIT) {
-    throw new ApiError("VALIDATION_ERROR", `limit must be an integer between 1 and ${MAX_LIMIT}.`, {
-      field: "limit",
-    });
-  }
-  return n;
-}
-
-export function encodeCursor(value: CursorValue): string {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
-}
-
-export function decodeCursor(raw: string | null): CursorValue | null {
-  if (!raw) return null;
+export function decodeCursor(raw: string): Cursor {
   try {
     const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      "v" in parsed &&
-      "id" in parsed &&
-      typeof parsed.id === "string"
-    ) {
-      return parsed as CursorValue;
+    if (typeof parsed.v !== "string" || typeof parsed.id !== "string") {
+      throw new Error("shape");
     }
-    throw new Error("shape");
+    return parsed as Cursor;
   } catch {
-    throw new ApiError("INVALID_CURSOR", "The `cursor` parameter is malformed or expired.", {
-      field: "cursor",
-    });
+    throw new ApiError("INVALID_CURSOR");
   }
 }
 
+export function parseLimit(raw: string | null): number {
+  if (!raw) return DEFAULT_LIMIT;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new ApiError("VALIDATION_ERROR", "limit must be a positive integer");
+  }
+  return Math.min(n, MAX_LIMIT);
+}
+
+export type SortSpec = { field: string; direction: "asc" | "desc" };
+
+/** sort=-createdAt | sort=createdAt, validated against a per-route whitelist. */
+export function parseSort(raw: string | null, allowed: string[], fallback: string): SortSpec {
+  const value = raw ?? fallback;
+  const direction: "asc" | "desc" = value.startsWith("-") ? "desc" : "asc";
+  const field = value.startsWith("-") ? value.slice(1) : value;
+  if (!allowed.includes(field)) {
+    throw new ApiError("UNSUPPORTED_SORT", `sort=${value} is not supported. Allowed fields: ${allowed.join(", ")}`);
+  }
+  return { field, direction };
+}
+
+export type FilterOp = "eq" | "gte" | "lte";
+export type ParsedFilter = { field: string; op: FilterOp; value: string };
+
 /**
- * Builds a composite keyset ("seek") condition for cursor pagination:
- *   (sortColumn <op> cursor.v) OR (sortColumn = cursor.v AND idColumn <op> cursor.id)
- *
- * This two-column composite tiebreak is required because `sortColumn` alone
- * is not guaranteed unique (e.g. many leads created in the same millisecond,
- * or ties on `score`). Without the `id` tiebreak, rows with an identical
- * sort value would be nondeterministically skipped or duplicated across
- * pages when the underlying table is written to concurrently. See
- * docs/API.md "Pagination correctness" and scripts/contract-test.ts
- * (`paginationNoSkipNoDup`) for the regression test covering this.
+ * Parses whitelisted filter query params of the form field, field[gte], field[lte], field[eq].
+ * Throws UNSUPPORTED_FILTER on any non-whitelisted field/op so typos fail loudly instead of
+ * silently being ignored.
  */
-export function buildKeysetCondition(
-  sortColumn: SQL.Aliased | any,
-  idColumn: any,
-  cursor: CursorValue | null,
+export function parseFilters(
+  searchParams: URLSearchParams,
+  allowed: Record<string, FilterOp[]>,
+  reserved: string[],
+): ParsedFilter[] {
+  const out: ParsedFilter[] = [];
+  for (const [key, value] of searchParams.entries()) {
+    if (reserved.includes(key)) continue;
+    const match = key.match(/^([a-zA-Z0-9_]+)(?:\[(eq|gte|lte)\])?$/);
+    if (!match) {
+      throw new ApiError("UNSUPPORTED_FILTER", `Unsupported filter parameter: ${key}`);
+    }
+    const [, field, opRaw] = match;
+    const op = (opRaw ?? "eq") as FilterOp;
+    const allowedOps = allowed[field];
+    if (!allowedOps || !allowedOps.includes(op)) {
+      throw new ApiError("UNSUPPORTED_FILTER", `Filter not supported: ${key}`);
+    }
+    out.push({ field, op, value });
+  }
+  return out;
+}
+
+/** Builds the `(sortColumn, idColumn) < / > (v, id)` keyset predicate for the given cursor. */
+export function cursorRowCondition(
+  sortColumn: AnyPgColumn,
+  idColumn: AnyPgColumn,
+  cursor: Cursor,
   direction: "asc" | "desc",
-): SQL | undefined {
-  if (!cursor) return undefined;
-  const cmp = direction === "desc" ? lt : gt;
-  return or(cmp(sortColumn, cursor.v), and(eq(sortColumn, cursor.v), cmp(idColumn, cursor.id)));
+): SQL {
+  return direction === "desc"
+    ? sql`(${sortColumn}, ${idColumn}) < (${cursor.v}, ${cursor.id})`
+    : sql`(${sortColumn}, ${idColumn}) > (${cursor.v}, ${cursor.id})`;
 }
 
-export function orderFns(direction: "asc" | "desc") {
-  return direction === "desc" ? desc : asc;
+/** Stringifies a row's sort-field value into the canonical cursor `v` format. */
+export function cursorValueOf(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
 }
 
-export interface PageMeta {
-  nextCursor: string | null;
-  hasMore: boolean;
-  limit: number;
-}
-
-/**
- * Given `limit + 1` rows fetched in sort order, returns the page (trimmed to
- * `limit`) plus pagination metadata. Centralizing this avoids the classic
- * off-by-one bug where the extra probe row leaks into the response.
- */
-export function paginate<T extends Record<string, unknown>>(
+export function buildPageMeta<T extends { id: string }>(
   rows: T[],
   limit: number,
   sortField: keyof T,
-  idField: keyof T,
-): { page: T[]; meta: PageMeta } {
+): { items: T[]; hasMore: boolean; nextCursor: string | null } {
   const hasMore = rows.length > limit;
-  const page = hasMore ? rows.slice(0, limit) : rows;
-  const last = page[page.length - 1];
-  const nextCursor =
-    hasMore && last
-      ? encodeCursor({ v: last[sortField] as string | number, id: String(last[idField]) })
-      : null;
-  return { page, meta: { nextCursor, hasMore, limit } };
+  const items = hasMore ? rows.slice(0, limit) : rows;
+  const last = items[items.length - 1];
+  const nextCursor = hasMore && last ? encodeCursor({ v: cursorValueOf(last[sortField]), id: last.id }) : null;
+  return { items, hasMore, nextCursor };
 }

@@ -1,300 +1,245 @@
-import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 
+// Must run before any schema below is constructed so OpenAPI generation
+// (scripts/generate-api-spec.ts) can call `.openapi(...)` on them.
 extendZodWithOpenApi(z);
 
-// ---------------------------------------------------------------------------
-// Single source of truth: these schemas are imported directly by the route
-// handlers (runtime validation) AND by scripts/generate-openapi.ts +
-// scripts/generate-sdk.ts (static generation). There is no separate
-// hand-maintained copy to drift out of sync.
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------ *
+ * Shared envelopes
+ * ------------------------------------------------------------------ */
 
-export const ErrorEnvelopeSchema = z
-  .object({
-    error: z.object({
-      code: z.string().openapi({ example: "NOT_FOUND" }),
-      message: z.string(),
-      details: z.unknown().optional(),
-      correlationId: z.string(),
-    }),
-  })
-  .openapi("ErrorEnvelope");
-
-export const PageMetaSchema = z
-  .object({
-    nextCursor: z.string().nullable(),
-    hasMore: z.boolean(),
-    limit: z.number().int(),
-  })
-  .openapi("PageMeta");
-
-export const LeadStageSchema = z.enum(["new", "qualified", "engaged", "won", "lost"]).openapi("LeadStage");
-
-export const LeadSchema = z
-  .object({
-    id: z.string().uuid(),
-    orgId: z.string().uuid(),
-    accountId: z.string().uuid().nullable(),
-    name: z.string(),
-    email: z.string().email(),
-    company: z.string().nullable(),
-    stage: LeadStageSchema,
-    score: z.number().int(),
-    ownerEmail: z.string().nullable(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .openapi("Lead");
-
-export const CreateLeadSchema = z
-  .object({
-    name: z.string().min(1),
-    email: z.string().email(),
-    company: z.string().optional(),
-    accountId: z.string().uuid().optional(),
-    stage: LeadStageSchema.optional(),
-    ownerEmail: z.string().email().optional(),
-  })
-  .openapi("CreateLeadInput");
-
-export const UpdateLeadSchema = CreateLeadSchema.partial().openapi("UpdateLeadInput");
-
-export const LeadListSchema = z.object({ data: z.array(LeadSchema), meta: PageMetaSchema }).openapi("LeadList");
-
-export const AccountSchema = z
-  .object({
-    id: z.string().uuid(),
-    orgId: z.string().uuid(),
-    name: z.string(),
-    domain: z.string().nullable(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .openapi("Account");
-
-export const CreateAccountSchema = z
-  .object({ name: z.string().min(1), domain: z.string().optional() })
-  .openapi("CreateAccountInput");
-
-export const UpdateAccountSchema = CreateAccountSchema.partial().openapi("UpdateAccountInput");
-
-export const AccountListSchema = z
-  .object({ data: z.array(AccountSchema), meta: PageMetaSchema })
-  .openapi("AccountList");
-
-export const EventSchema = z
-  .object({
-    id: z.string().uuid(),
-    seq: z.number().int(),
-    orgId: z.string().uuid(),
-    type: z.string(),
-    payload: z.unknown(),
+export const ErrorEnvelopeSchema = z.object({
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    details: z.unknown().optional(),
     correlationId: z.string(),
-    createdAt: z.string(),
-  })
-  .openapi("Event");
+  }),
+});
 
-export const EventListSchema = z.object({ data: z.array(EventSchema), meta: PageMetaSchema }).openapi("EventList");
+export const PageMetaSchema = z.object({
+  cursor: z.string().nullable(),
+  hasMore: z.boolean(),
+  limit: z.number().int(),
+});
 
-export const AuditLogSchema = z
-  .object({
-    id: z.string().uuid(),
-    orgId: z.string().uuid(),
-    tokenId: z.string().uuid().nullable(),
-    action: z.string(),
-    resourceType: z.string(),
-    resourceId: z.string().nullable(),
-    metadata: z.unknown(),
-    correlationId: z.string(),
-    createdAt: z.string(),
-  })
-  .openapi("AuditLog");
+export function listResponseSchema<T extends z.ZodTypeAny>(item: T) {
+  return z.object({ data: z.array(item), page: PageMetaSchema });
+}
 
-export const AuditLogListSchema = z
-  .object({ data: z.array(AuditLogSchema), meta: PageMetaSchema })
-  .openapi("AuditLogList");
+/* ------------------------------------------------------------------ *
+ * Leads
+ * ------------------------------------------------------------------ */
 
-export const TokenScopeSchema = z
-  .enum([
-    "leads:read",
-    "leads:write",
-    "accounts:read",
-    "accounts:write",
-    "events:read",
-    "stream:read",
-    "webhooks:read",
-    "webhooks:write",
-    "automations:read",
-    "automations:write",
-    "extensions:read",
-    "extensions:write",
-    "audit:read",
-    "tokens:admin",
-  ])
-  .openapi("TokenScope");
+export const LeadStatusEnum = z.enum(["new", "contacted", "qualified", "won", "lost"]);
 
-export const CreateTokenSchema = z
-  .object({
-    name: z.string().min(1),
-    scopes: z.array(TokenScopeSchema).default([]),
-    isAdmin: z.boolean().default(false),
-    rateLimitPerMinute: z.number().int().min(1).max(10_000).default(120),
-  })
-  .openapi("CreateTokenInput");
+export const LeadSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  email: z.string().email(),
+  company: z.string().nullable(),
+  status: LeadStatusEnum,
+  score: z.number().int(),
+  ownerId: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
 
-export const TokenSchema = z
-  .object({
-    id: z.string().uuid(),
-    name: z.string(),
-    tokenPrefix: z.string(),
-    scopes: z.array(TokenScopeSchema),
-    isAdmin: z.boolean(),
-    rateLimitPerMinute: z.number().int(),
-    createdAt: z.string(),
-    revokedAt: z.string().nullable(),
-  })
-  .openapi("Token");
+export const LeadCreateSchema = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().email(),
+  company: z.string().max(200).optional(),
+  status: LeadStatusEnum.optional(),
+  score: z.number().int().min(0).max(100).optional(),
+  ownerId: z.string().max(100).optional(),
+});
 
-export const CreateTokenResponseSchema = TokenSchema.extend({
-  secret: z.string().openapi({ description: "Raw bearer token value — shown exactly once." }),
-}).openapi("CreateTokenResponse");
+export const LeadUpdateSchema = LeadCreateSchema.partial();
 
-export const TokenListSchema = z.object({ data: z.array(TokenSchema), meta: PageMetaSchema }).openapi("TokenList");
+/* ------------------------------------------------------------------ *
+ * Contacts
+ * ------------------------------------------------------------------ */
 
-export const WebhookSubscriptionSchema = z
-  .object({
-    id: z.string().uuid(),
-    orgId: z.string().uuid(),
-    url: z.string().url(),
-    eventTypes: z.array(z.string()),
-    description: z.string().nullable(),
-    active: z.boolean(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .openapi("WebhookSubscription");
+export const ContactSchema = z.object({
+  id: z.string().uuid(),
+  leadId: z.string().uuid().nullable(),
+  name: z.string(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
 
-export const CreateWebhookSubscriptionSchema = z
-  .object({
-    url: z.string().url(),
-    eventTypes: z.array(z.string()).min(1),
-    description: z.string().optional(),
-  })
-  .openapi("CreateWebhookSubscriptionInput");
+export const ContactCreateSchema = z.object({
+  leadId: z.string().uuid().optional(),
+  name: z.string().min(1).max(200),
+  email: z.string().email().optional(),
+  phone: z.string().max(40).optional(),
+});
 
-export const UpdateWebhookSubscriptionSchema = z
-  .object({
-    url: z.string().url().optional(),
-    eventTypes: z.array(z.string()).min(1).optional(),
-    description: z.string().optional(),
-    active: z.boolean().optional(),
-  })
-  .openapi("UpdateWebhookSubscriptionInput");
+export const ContactUpdateSchema = ContactCreateSchema.partial();
 
-export const CreateWebhookSubscriptionResponseSchema = WebhookSubscriptionSchema.extend({
-  secret: z.string().openapi({ description: "Shared secret for HMAC verification — shown exactly once." }),
-}).openapi("CreateWebhookSubscriptionResponse");
+/* ------------------------------------------------------------------ *
+ * Deals
+ * ------------------------------------------------------------------ */
 
-export const WebhookSubscriptionListSchema = z
-  .object({ data: z.array(WebhookSubscriptionSchema), meta: PageMetaSchema })
-  .openapi("WebhookSubscriptionList");
+export const DealStageEnum = z.enum(["open", "won", "lost"]);
 
-export const WebhookDeliverySchema = z
-  .object({
-    id: z.string().uuid(),
-    subscriptionId: z.string().uuid(),
-    eventType: z.string(),
-    status: z.enum(["pending", "success", "failed", "dead_letter"]),
-    attempt: z.number().int(),
-    maxAttempts: z.number().int(),
-    nextAttemptAt: z.string(),
-    lastAttemptAt: z.string().nullable(),
-    responseStatus: z.number().int().nullable(),
-    responseBodySnippet: z.string().nullable().openapi({ description: "Redacted per data handling policy." }),
-    errorMessage: z.string().nullable(),
-    createdAt: z.string(),
-    deliveredAt: z.string().nullable(),
-  })
-  .openapi("WebhookDelivery");
+export const DealSchema = z.object({
+  id: z.string().uuid(),
+  leadId: z.string().uuid().nullable(),
+  title: z.string(),
+  value: z.string(),
+  stage: DealStageEnum,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
 
-export const WebhookDeliveryListSchema = z
-  .object({ data: z.array(WebhookDeliverySchema), meta: PageMetaSchema })
-  .openapi("WebhookDeliveryList");
+export const DealCreateSchema = z.object({
+  leadId: z.string().uuid().optional(),
+  title: z.string().min(1).max(200),
+  value: z.number().min(0).optional(),
+  stage: DealStageEnum.optional(),
+});
 
-export const TestFireResponseSchema = z
-  .object({ deliveryId: z.string().uuid(), status: z.string(), responseStatus: z.number().int().nullable() })
-  .openapi("TestFireResponse");
+export const DealUpdateSchema = DealCreateSchema.partial();
 
-export const AutomationPlaybookSchema = z
-  .object({ key: z.string(), description: z.string(), steps: z.array(z.string()), inputSchemaDescription: z.string() })
-  .openapi("AutomationPlaybook");
+/* ------------------------------------------------------------------ *
+ * Webhooks
+ * ------------------------------------------------------------------ */
 
-export const AutomationPlaybookListSchema = z
-  .object({ data: z.array(AutomationPlaybookSchema) })
-  .openapi("AutomationPlaybookList");
+export const WebhookEventTypeEnum = z.enum([
+  "lead.created",
+  "lead.updated",
+  "deal.won",
+  "automation.run.completed",
+]);
 
-export const TriggerRunSchema = z.object({ input: z.record(z.string(), z.unknown()).default({}) }).openapi("TriggerRunInput");
+export const WebhookSubscriptionSchema = z.object({
+  id: z.string().uuid(),
+  url: z.string().url(),
+  eventTypes: z.array(WebhookEventTypeEnum),
+  status: z.enum(["active", "disabled"]),
+  description: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
 
-export const AutomationRunSchema = z
-  .object({
-    id: z.string().uuid(),
-    orgId: z.string().uuid(),
-    playbookKey: z.string(),
-    status: z.enum(["queued", "running", "succeeded", "failed"]),
-    input: z.unknown(),
-    output: z.unknown().nullable(),
-    error: z.string().nullable(),
-    correlationId: z.string(),
-    createdAt: z.string(),
-    startedAt: z.string().nullable(),
-    finishedAt: z.string().nullable(),
-  })
-  .openapi("AutomationRun");
+export const WebhookSubscriptionCreateSchema = z.object({
+  url: z.string().url(),
+  eventTypes: z.array(WebhookEventTypeEnum).min(1),
+  description: z.string().max(300).optional(),
+});
 
-export const AutomationRunListSchema = z
-  .object({ data: z.array(AutomationRunSchema), meta: PageMetaSchema })
-  .openapi("AutomationRunList");
+export const WebhookSubscriptionCreateResponseSchema = WebhookSubscriptionSchema.extend({
+  secret: z.string().describe("Returned once, at creation time only. Store it securely."),
+});
 
-export const ExtensionKindSchema = z.enum(["connector", "channel", "step"]).openapi("ExtensionKind");
+export const WebhookDeliverySchema = z.object({
+  id: z.string().uuid(),
+  subscriptionId: z.string().uuid(),
+  eventType: z.string(),
+  status: z.enum(["pending", "retrying", "success", "dead_letter"]),
+  attempt: z.number().int(),
+  maxAttempts: z.number().int(),
+  lastStatusCode: z.number().int().nullable(),
+  lastError: z.string().nullable(),
+  payloadRedacted: z.record(z.string(), z.unknown()),
+  deliveredAt: z.string().nullable(),
+  nextAttemptAt: z.string().nullable(),
+  createdAt: z.string(),
+});
 
-export const ExtensionSchema = z
-  .object({
-    id: z.string().uuid(),
-    orgId: z.string().uuid(),
-    kind: ExtensionKindSchema,
-    type: z.string(),
-    key: z.string(),
-    config: z.unknown(),
-    active: z.boolean(),
-    createdAt: z.string(),
-    updatedAt: z.string(),
-  })
-  .openapi("Extension");
+/* ------------------------------------------------------------------ *
+ * Automation runs & playbooks
+ * ------------------------------------------------------------------ */
 
-export const ExtensionTypeSchema = z
-  .object({ kind: ExtensionKindSchema, type: z.string(), description: z.string(), requiredCapability: z.string() })
-  .openapi("ExtensionType");
+export const AutomationRunStatusEnum = z.enum(["queued", "running", "succeeded", "failed"]);
 
-export const CreateExtensionSchema = z
-  .object({ kind: ExtensionKindSchema, type: z.string(), key: z.string().min(1), config: z.unknown().optional() })
-  .openapi("CreateExtensionInput");
+export const AutomationRunSchema = z.object({
+  id: z.string().uuid(),
+  playbookId: z.string().uuid().nullable(),
+  trigger: z.string(),
+  status: AutomationRunStatusEnum,
+  input: z.unknown().nullable(),
+  output: z.unknown().nullable(),
+  correlationId: z.string(),
+  startedAt: z.string().nullable(),
+  finishedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
 
-export const ExtensionListSchema = z
-  .object({ data: z.array(ExtensionSchema), availableTypes: z.array(ExtensionTypeSchema), meta: PageMetaSchema })
-  .openapi("ExtensionList");
+export const AutomationRunTriggerSchema = z.object({
+  playbookId: z.string().uuid(),
+  input: z.record(z.string(), z.unknown()).optional(),
+});
 
-export const HealthSchema = z
-  .object({ ok: z.boolean(), service: z.string(), version: z.string(), timestamp: z.string() })
-  .openapi("Health");
+export const PlaybookStepSchema = z.object({
+  type: z.string(),
+  config: z.record(z.string(), z.unknown()).optional(),
+});
 
-export const StatsSchema = z
-  .object({
-    leads: z.number().int(),
-    accounts: z.number().int(),
-    automationRuns: z.number().int(),
-    webhookSubscriptions: z.number().int(),
-    webhookDeadLetterCount: z.number().int(),
-    eventsLast24h: z.number().int(),
-  })
-  .openapi("Stats");
+export const PlaybookSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  steps: z.array(PlaybookStepSchema),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+/* ------------------------------------------------------------------ *
+ * API keys (admin-only management)
+ * ------------------------------------------------------------------ */
+
+export const ScopeEnum = z.enum([
+  "leads:read",
+  "leads:write",
+  "contacts:read",
+  "contacts:write",
+  "deals:read",
+  "deals:write",
+  "webhooks:read",
+  "webhooks:write",
+  "automation:read",
+  "automation:write",
+  "admin",
+]);
+
+export const ApiKeyCreateSchema = z.object({
+  name: z.string().min(1).max(100),
+  scopes: z.array(ScopeEnum).min(1),
+});
+
+export const ApiKeyCreateResponseSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  scopes: z.array(ScopeEnum),
+  prefix: z.string(),
+  apiKey: z.string().describe("Returned once, at creation time only."),
+  createdAt: z.string(),
+});
+
+/* ------------------------------------------------------------------ *
+ * Stats
+ * ------------------------------------------------------------------ */
+
+export const StatsSchema = z.object({
+  leads: z.number().int(),
+  contacts: z.number().int(),
+  deals: z.number().int(),
+  openDealsValue: z.string(),
+  automationRuns: z.object({
+    queued: z.number().int(),
+    running: z.number().int(),
+    succeeded: z.number().int(),
+    failed: z.number().int(),
+  }),
+  webhooks: z.object({
+    subscriptions: z.number().int(),
+    pendingDeliveries: z.number().int(),
+    deadLetters: z.number().int(),
+  }),
+  generatedAt: z.string(),
+});
