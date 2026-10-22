@@ -1,194 +1,96 @@
 /**
- * Counterfactual & what-if engine (Part 05, section C). Wraps the
- * abduction-action-prediction machinery in `scm.ts` with the `Explain<T>`
- * envelope so the UI can render:
- *   - "Why is this happening?"      -> whyIsThisHappening()
- *   - "What would move this?"       -> whatWouldMoveThis()
- *   - "What if...?"                 -> whatIf()  (feeds Part 06's simulator)
- *
- * Every answer references real DAG paths computed by `scm.ts`'s
- * abduction-action-prediction trace (not a canned sentence), and every
- * answer links to evidence.
+ * src/lib/causal/counterfactual.ts
+ * Counterfactual simulator: "if X had been Z, the model estimates Y would
+ * have been ... (interval)". Includes a sensitivity slider that widens the
+ * interval as the assumed strength of the strongest unmeasured confounder
+ * increases — this is a transparency device, NOT a new estimator: it never
+ * narrows a CI and never changes `class` to a more confident one.
  */
+import type { Explain } from "../belief/explain";
+import { explainFromInterval } from "../belief/explain";
+import type { CausalClaim } from "./types";
 
-import { explain, type EvidenceRef, type Explain } from "@/lib/explain";
-import { counterfactual as runCounterfactual, loadSCM, whyExplanation, type Assignment, type CounterfactualTrace, type LoadedModel } from "./scm";
-import type { CausalEstimate, StructuralCausalModel } from "./types";
-import { renderInterventionSentence } from "./language";
-
-export interface WhyAnswer {
-  variable: string;
-  value: number;
-  parents: { variable: string; value: number; contribution: number }[];
-  intercept: number;
-  noiseContribution: number;
-  path: string[];
+export interface CounterfactualInput {
+  claim: CausalClaim;
+  /** The new hypothetical treatment level, expressed as a multiple of the observed treatment change (1.0 = same as observed). */
+  treatmentScale: number;
+  /**
+   * 0..1 slider: 0 = trust the stated identification strategy fully, 1 = assume
+   * the strongest known confounder is as strong as the sensitivity bound
+   * implies is possible without flipping the sign of the effect.
+   */
+  confounderSensitivity: number;
 }
 
-export function whyIsThisHappening(
-  scm: StructuralCausalModel,
-  observed: Assignment,
-  variable: string,
-  evidence: EvidenceRef[]
-): Explain<WhyAnswer> {
-  const model = loadSCM(scm);
-  const step = whyExplanation(model, observed, variable);
-
-  if (!step) {
-    return explain(
-      { variable, value: observed[variable], parents: [], intercept: 0, noiseContribution: 0, path: [variable] },
-      {
-        summary: `${variable} is exogenous in this model (no structural parents recorded).`,
-        steps: ["No structural assignment found for this variable; treated as a root cause in the current DAG."],
-        evidence,
-        confidence: "low",
-        caveats: ["This variable may have real-world causes not yet modelled in the DAG."],
-      }
-    );
-  }
-
-  const varLabel = scm.variables.find((v) => v.id === variable)?.label ?? variable;
-  const parentsWithValues = step.contributions.map((c) => ({
-    variable: c.parent,
-    value: observed[c.parent] ?? 0,
-    contribution: c.contribution,
-  }));
-
-  const total = step.intercept + step.noiseContribution + step.contributions.reduce((a, c) => a + c.contribution, 0);
-  const sortedByMagnitude = [...parentsWithValues].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
-
-  return explain(
-    {
-      variable,
-      value: observed[variable],
-      parents: parentsWithValues,
-      intercept: step.intercept,
-      noiseContribution: step.noiseContribution,
-      path: [variable, ...step.parents],
-    },
-    {
-      summary: `${varLabel} is ${observed[variable].toFixed(2)}, mainly explained by ${
-        sortedByMagnitude[0] ? sortedByMagnitude[0].variable : "its baseline"
-      }.`,
-      steps: [
-        `${varLabel} := f(${step.parents.join(", ") || "exogenous"}) + noise, structural total ${total.toFixed(2)}.`,
-        ...sortedByMagnitude.map(
-          (p) => `${p.variable} = ${p.value.toFixed(2)} contributes ${p.contribution.toFixed(2)} to ${varLabel}.`
-        ),
-        `Baseline (intercept) contributes ${step.intercept.toFixed(2)}; idiosyncratic/unexplained noise contributes ${step.noiseContribution.toFixed(2)}.`,
-      ],
-      evidence,
-      confidence: "medium",
-      caveats: [
-        "Decomposition assumes the structural model's functional form (linear/logistic) is correctly specified.",
-        "Noise contribution bundles everything not explicitly modelled — it is not itself explained.",
-      ],
-    }
-  );
+export interface CounterfactualOutput {
+  baselineOutcome: Explain<number>;
+  counterfactualOutcome: Explain<number>;
+  /** Multiplicative widening applied to the interval because of the sensitivity slider. */
+  intervalWideningFactor: number;
+  explanation: string;
 }
 
-export interface InterventionCandidate {
-  variable: string;
-  label: string;
-  estimate: CausalEstimate;
-  costPerUnit: number;
-  candidateDelta: number; // proposed unit change to evaluate, e.g. +1 session/month
-}
+/**
+ * Linearly scale the point estimate by `treatmentScale` (the only assumption
+ * this makes is local linearity of the dose-response curve around the
+ * observed treatment change — stated explicitly in the explanation string)
+ * and widen the interval according to the sensitivity slider and the claim's
+ * own sensitivity bound. This never fabricates certainty: as
+ * confounderSensitivity -> 1, the interval widens toward (and can cross) zero,
+ * which is the correct behavior when a user stress-tests the "no unmeasured
+ * confounding" assumption.
+ */
+export function simulateCounterfactual(input: CounterfactualInput): CounterfactualOutput {
+  const { claim, treatmentScale, confounderSensitivity } = input;
+  const baseline = claim.estimate;
+  const scaledValue = baseline.value * treatmentScale;
+  const scaledLow = baseline.low * treatmentScale;
+  const scaledHigh = baseline.high * treatmentScale;
 
-export interface RankedIntervention {
-  variable: string;
-  label: string;
-  identifiable: boolean;
-  expectedEffect: number | null;
-  expectedEffectPerCost: number | null;
-  sentence: string;
-}
+  // Widening factor: at sensitivity=0, factor=1 (use stated interval). At
+  // sensitivity=1, factor grows large enough that the interval plausibly
+  // straddles zero whenever the diagnostics flagged real fragility
+  // (small E-value / small Gamma), and grows more modestly when the
+  // diagnostics suggested the finding is robust (large E-value / large Gamma).
+  const fragility = fragilityScore(claim);
+  const intervalWideningFactor = 1 + confounderSensitivity * fragility * 4;
 
-export function whatWouldMoveThis(
-  candidates: InterventionCandidate[],
-  evidence: EvidenceRef[]
-): Explain<RankedIntervention[]> {
-  const ranked: RankedIntervention[] = candidates.map((c) => {
-    const sentence = renderInterventionSentence(c.label, c.estimate, c.costPerUnit);
-    const expectedEffect =
-      c.estimate.identifiable && c.estimate.estimate
-        ? c.estimate.estimate.ate * c.candidateDelta
-        : null;
-    const expectedEffectPerCost =
-      expectedEffect !== null ? expectedEffect / Math.max(c.costPerUnit, 1e-6) : null;
-    return {
-      variable: c.variable,
-      label: c.label,
-      identifiable: c.estimate.identifiable,
-      expectedEffect,
-      expectedEffectPerCost,
-      sentence,
-    };
-  });
-
-  ranked.sort((a, b) => (b.expectedEffectPerCost ?? -Infinity) - (a.expectedEffectPerCost ?? -Infinity));
-
-  const actionable = ranked.filter((r) => r.identifiable);
-  const nonActionable = ranked.filter((r) => !r.identifiable);
-
-  return explain(ranked, {
-    summary:
-      actionable.length > 0
-        ? `${actionable[0].label} ranks highest on expected effect per unit cost among identifiable levers.`
-        : "No candidate lever currently has an identifiable causal effect; all ranked by association only.",
-    steps: [
-      `Ranked ${candidates.length} candidate interventions by (expected effect x proposed delta) / cost-per-unit.`,
-      ...actionable.map((r) => r.sentence),
-      ...(nonActionable.length > 0
-        ? [`${nonActionable.length} candidate(s) excluded from causal ranking (not identifiable): ${nonActionable.map((r) => r.label).join(", ")}.`]
-        : []),
+  const halfWidthBase = (scaledHigh - scaledLow) / 2;
+  const widenedHalfWidth = halfWidthBase * intervalWideningFactor;
+  const counterfactualOutcome = explainFromInterval(
+    scaledValue,
+    scaledValue - widenedHalfWidth,
+    scaledValue + widenedHalfWidth,
+    baseline.coverage,
+    `${baseline.method}+counterfactual-scale(${treatmentScale.toFixed(2)})+sensitivity(${confounderSensitivity.toFixed(2)})`,
+    [
+      ...baseline.caveats,
+      "Assumes the dose-response relationship is roughly linear near the observed change — large extrapolations (treatmentScale far from 1) are less trustworthy than small ones.",
     ],
-    evidence,
-    confidence: actionable.length > 0 ? "medium" : "low",
-    caveats: nonActionable.map((r) => `${r.label}: ${r.sentence}`),
-  });
-}
-
-export interface WhatIfResult extends CounterfactualTrace {
-  summaryVariable: string;
-}
-
-export function whatIf(
-  scm: StructuralCausalModel,
-  observed: Assignment,
-  interventions: Assignment,
-  summaryVariable: string,
-  evidence: EvidenceRef[]
-): Explain<WhatIfResult> {
-  const model: LoadedModel = loadSCM(scm);
-  const trace = runCounterfactual(model, observed, interventions);
-
-  const before = trace.before[summaryVariable];
-  const after = trace.after[summaryVariable];
-  const delta = after - before;
-
-  const interventionDesc = Object.entries(interventions)
-    .map(([k, v]) => `do(${k} = ${v})`)
-    .join(", ");
-
-  return explain(
-    { ...trace, summaryVariable },
-    {
-      summary: `Under ${interventionDesc}, ${summaryVariable} moves from ${before.toFixed(2)} to ${after.toFixed(2)} (${delta >= 0 ? "+" : ""}${delta.toFixed(2)}) along the modelled DAG path.`,
-      steps: [
-        `Abduction: inferred this entity's idiosyncratic noise terms from its observed values.`,
-        `Action: fixed ${interventionDesc}, cutting those variables' incoming structural edges.`,
-        `Prediction: recomputed ${trace.path.length} downstream variable(s) in topological order: ${trace.path.join(" -> ")}.`,
-        ...trace.steps.map(
-          (s) => `${s.variable}: ${s.before.toFixed(2)} -> ${s.after.toFixed(2)} (intercept ${s.intercept.toFixed(2)}, parents ${s.contributions.map((c) => `${c.parent}=${c.contribution.toFixed(2)}`).join(", ") || "none"}, noise ${s.noiseContribution.toFixed(2)}).`
-        ),
-      ],
-      evidence,
-      confidence: "medium",
-      caveats: [
-        "This is a model-based counterfactual for ONE entity under the stated structural assumptions, not a guarantee — it does not replace running the actual intervention.",
-        "Assumes the structural functional form and the DAG's parent sets are correctly specified.",
-      ],
-    }
   );
+
+  const crossesZero = counterfactualOutcome.low < 0 && counterfactualOutcome.high > 0;
+
+  return {
+    baselineOutcome: baseline,
+    counterfactualOutcome,
+    intervalWideningFactor,
+    explanation: crossesZero
+      ? `At this level of assumed unmeasured confounding, the estimate is no longer distinguishable from "no effect" — the interval now straddles zero.`
+      : `Even under this level of assumed unmeasured confounding, the direction of the effect holds, though the size is less certain.`,
+  };
+}
+
+/** Lower fragility score = diagnostics suggest a robust claim; higher = fragile to hidden confounding. */
+function fragilityScore(claim: CausalClaim): number {
+  const bound = claim.diagnostics.sensitivityBounds;
+  if (bound.type === "e-value" && bound.value != null) {
+    // E-value of 1 = trivially fragile; E-value of ~3+ = fairly robust for social-science-scale confounding.
+    return Math.max(0, Math.min(1, 1 - (bound.value - 1) / 3));
+  }
+  if (bound.type === "rosenbaum-gamma" && bound.value != null) {
+    return Math.max(0, Math.min(1, 1 - (bound.value - 1) / 3));
+  }
+  // No sensitivity bound computed at all -> treat as maximally fragile.
+  return 1;
 }

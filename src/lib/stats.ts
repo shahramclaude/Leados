@@ -1,142 +1,148 @@
 /**
- * stats.ts — scoring rules & calibration metrics used by the eval harness
- * (npm run eval:intelligence) and by the weekly self-check in ai-learn.
- *
- * Formulas (documented so no "invented metric" rule is violated):
- *   Brier score:  BS = (1/N) * Σ (p_i − o_i)^2            o_i ∈ {0,1}
- *   Log loss:     LL = −(1/N) * Σ [ o·ln(p) + (1−o)·ln(1−p) ]
- *   ECE:          Σ_b (|B_b|/N) * |acc(B_b) − conf(B_b)|   10 equal-width bins
+ * src/lib/stats.ts
+ * Statistical helpers layered on mathUtils: hypothesis tests, balance
+ * diagnostics, and sensitivity-analysis primitives (E-value, Rosenbaum-style
+ * bound) used across the causal estimators.
  */
+import { mean, variance, weightedMean, weightedVariance, zTwoSidedPValue, sum, mulberry32 } from "./mathUtils";
 
-export interface PredictionOutcome {
-  /** Predicted probability of the positive outcome, in [0, 1]. */
-  p: number;
-  /** Realized outcome: 1 = event happened, 0 = it did not. */
-  o: 0 | 1;
+export interface TTestResult {
+  diff: number;
+  se: number;
+  t: number;
+  pValue: number;
+  ci95: [number, number];
 }
 
-export function brierScore(samples: PredictionOutcome[]): number {
-  if (samples.length === 0) return NaN;
-  const sum = samples.reduce((acc, s) => acc + (s.p - s.o) ** 2, 0);
-  return sum / samples.length;
+/** Welch's two-sample t-test (unequal variance), used for simple difference-in-means estimators and placebo tests. */
+export function welchTTest(a: number[], b: number[]): TTestResult {
+  const ma = mean(a);
+  const mb = mean(b);
+  const va = variance(a);
+  const vb = variance(b);
+  const se = Math.sqrt(va / a.length + vb / b.length);
+  const diff = ma - mb;
+  const t = diff / se;
+  const pValue = zTwoSidedPValue(t); // normal approximation, adequate for N >= ~30
+  return { diff, se, t, pValue, ci95: [diff - 1.96 * se, diff + 1.96 * se] };
 }
 
-const LOG_EPS = 1e-12;
-
-export function logLoss(samples: PredictionOutcome[]): number {
-  if (samples.length === 0) return NaN;
-  const sum = samples.reduce((acc, s) => {
-    const p = Math.min(1 - LOG_EPS, Math.max(LOG_EPS, s.p));
-    return acc + (s.o === 1 ? Math.log(p) : Math.log(1 - p));
-  }, 0);
-  return -sum / samples.length;
+/** Standardized mean difference between treated/control for one covariate (used for balance diagnostics). */
+export function standardizedMeanDifference(treated: number[], control: number[], weightsTreated?: number[], weightsControl?: number[]): number {
+  const mt = weightsTreated ? weightedMean(treated, weightsTreated) : mean(treated);
+  const mc = weightsControl ? weightedMean(control, weightsControl) : mean(control);
+  const vt = weightsTreated ? weightedVariance(treated, weightsTreated) : variance(treated);
+  const vc = weightsControl ? weightedVariance(control, weightsControl) : variance(control);
+  const pooledSd = Math.sqrt((vt + vc) / 2);
+  if (pooledSd === 0 || Number.isNaN(pooledSd)) return 0;
+  return (mt - mc) / pooledSd;
 }
 
-export interface ReliabilityBin {
-  binLo: number;
-  binHi: number;
-  count: number;
-  avgConfidence: number;
-  avgAccuracy: number;
-  gap: number;
+export interface BalanceRow {
+  covariate: string;
+  smdBefore: number;
+  smdAfter: number;
+  balanced: boolean; // |smdAfter| < 0.1
 }
 
-export interface CalibrationReport {
-  n: number;
-  brierScore: number;
-  logLoss: number;
-  ece: number;
-  bins: ReliabilityBin[];
+export function balanceTable(
+  covariateNames: string[],
+  treatedRows: number[][],
+  controlRows: number[][],
+  controlWeights: number[],
+): BalanceRow[] {
+  const unitWeightsControl = controlRows.map(() => 1);
+  return covariateNames.map((name, j) => {
+    const treatedCol = treatedRows.map((r) => r[j]);
+    const controlCol = controlRows.map((r) => r[j]);
+    const smdBefore = standardizedMeanDifference(treatedCol, controlCol, undefined, unitWeightsControl);
+    const smdAfter = standardizedMeanDifference(treatedCol, controlCol, undefined, controlWeights);
+    return { covariate: name, smdBefore, smdAfter, balanced: Math.abs(smdAfter) < 0.1 };
+  });
 }
 
-/** Expected Calibration Error with `numBins` equal-width confidence bins. */
-export function expectedCalibrationError(
-  samples: PredictionOutcome[],
-  numBins = 10,
-): { ece: number; bins: ReliabilityBin[] } {
-  const bins: ReliabilityBin[] = Array.from({ length: numBins }, (_, i) => ({
-    binLo: i / numBins,
-    binHi: (i + 1) / numBins,
-    count: 0,
-    avgConfidence: 0,
-    avgAccuracy: 0,
-    gap: 0,
-  }));
-
-  const sums = bins.map(() => ({ conf: 0, acc: 0, count: 0 }));
-
-  for (const s of samples) {
-    let idx = Math.floor(s.p * numBins);
-    if (idx >= numBins) idx = numBins - 1;
-    if (idx < 0) idx = 0;
-    sums[idx].conf += s.p;
-    sums[idx].acc += s.o;
-    sums[idx].count += 1;
-  }
-
-  let ece = 0;
-  const n = samples.length || 1;
-  for (let i = 0; i < numBins; i++) {
-    const { conf, acc, count } = sums[i];
-    if (count === 0) continue;
-    const avgConfidence = conf / count;
-    const avgAccuracy = acc / count;
-    const gap = Math.abs(avgAccuracy - avgConfidence);
-    bins[i].count = count;
-    bins[i].avgConfidence = avgConfidence;
-    bins[i].avgAccuracy = avgAccuracy;
-    bins[i].gap = gap;
-    ece += (count / n) * gap;
-  }
-
-  return { ece, bins };
-}
-
-export function calibrationReport(samples: PredictionOutcome[], numBins = 10): CalibrationReport {
-  const { ece, bins } = expectedCalibrationError(samples, numBins);
+/**
+ * E-value: minimum strength of association (risk-ratio scale) an unmeasured
+ * confounder would need to have with BOTH treatment and outcome to fully
+ * explain away an observed effect estimate, given the CI bound closest to
+ * the null. Implemented for a standardized-mean-difference-style estimate by
+ * first converting to an approximate risk ratio via the VanderWeele-Ding
+ * approximation (RR ≈ exp(0.91 * SMD)) for continuous outcomes.
+ */
+export function eValue(estimateSmd: number, ciBoundSmd: number): { pointEValue: number; ciEValue: number } {
+  const toRR = (smd: number) => Math.exp(0.91 * Math.abs(smd));
+  const evalFromRR = (rr: number) => (rr >= 1 ? rr + Math.sqrt(rr * (rr - 1)) : (1 / rr) + Math.sqrt((1 / rr) * (1 / rr - 1)));
+  const rrPoint = toRR(estimateSmd);
+  const rrCi = toRR(ciBoundSmd);
   return {
-    n: samples.length,
-    brierScore: brierScore(samples),
-    logLoss: logLoss(samples),
-    ece,
-    bins,
+    pointEValue: evalFromRR(rrPoint),
+    ciEValue: ciBoundSmd === 0 ? 1 : evalFromRR(rrCi),
   };
 }
 
-export function reliabilityBinsToCsv(bins: ReliabilityBin[]): string {
-  const header = "bin_lo,bin_hi,count,avg_confidence,avg_accuracy,gap";
-  const rows = bins.map(
-    (b) =>
-      `${b.binLo.toFixed(2)},${b.binHi.toFixed(2)},${b.count},${b.avgConfidence.toFixed(4)},${b.avgAccuracy.toFixed(4)},${b.gap.toFixed(4)}`,
-  );
-  return [header, ...rows].join("\n");
-}
+/**
+ * Simplified Rosenbaum-style sensitivity bound for matched-pair comparisons:
+ * reports, for a grid of Gamma (odds of differential assignment due to an
+ * unmeasured confounder), the worst-case p-value under Wilcoxon signed-rank
+ * logic approximated with a normal approximation. Returns the smallest
+ * Gamma at which significance (p<0.05) could be lost.
+ */
+export function rosenbaumBounds(pairedDiffs: number[], gammaGrid: number[] = [1, 1.5, 2, 2.5, 3, 4, 5]): {
+  gamma: number;
+  worstCaseP: number;
+}[] {
+  const n = pairedDiffs.length;
+  const ranks = rankAbs(pairedDiffs);
+  const signs = pairedDiffs.map((d) => (d > 0 ? 1 : d < 0 ? -1 : 0));
+  const wPlus = sum(ranks.map((r, i) => (signs[i] > 0 ? r : 0)));
+  return gammaGrid.map((gamma) => {
+    const pPlus = gamma / (1 + gamma);
+    const muMax = sum(ranks.map((r) => r * pPlus));
+    const varMax = sum(ranks.map((r) => r * r * pPlus * (1 - pPlus)));
+    const z = varMax > 0 ? (wPlus - muMax) / Math.sqrt(varMax) : 0;
+    const worstCaseP = 1 - normalCdfLocal(z);
+    return { gamma, worstCaseP };
+  });
 
-export function reliabilityBinsToText(bins: ReliabilityBin[]): string {
-  const lines = [
-    "bin            n     avg_conf   avg_acc    gap",
-    "-------------  ----  ---------  ---------  ------",
-  ];
-  for (const b of bins) {
-    const label = `${b.binLo.toFixed(1)}-${b.binHi.toFixed(1)}`.padEnd(13);
-    lines.push(
-      `${label}  ${String(b.count).padEnd(4)}  ${b.avgConfidence.toFixed(3).padEnd(9)}  ${b.avgAccuracy.toFixed(3).padEnd(9)}  ${b.gap.toFixed(3)}`,
-    );
+  function rankAbs(xs: number[]): number[] {
+    const idx = xs.map((x, i) => [Math.abs(x), i] as [number, number]).sort((a, b) => a[0] - b[0]);
+    const r = new Array(n).fill(0);
+    idx.forEach(([, origIdx], rank) => (r[origIdx] = rank + 1));
+    return r;
   }
-  return lines.join("\n");
+  function normalCdfLocal(z: number): number {
+    return 0.5 * (1 + erfLocal(z / Math.SQRT2));
+  }
+  function erfLocal(x: number): number {
+    const sign = x < 0 ? -1 : 1;
+    const ax = Math.abs(x);
+    const t = 1 / (1 + 0.3275911 * ax);
+    const y =
+      1 -
+      (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-ax * ax);
+    return sign * y;
+  }
 }
 
-/** Coverage check: fraction of outcomes that actually fell inside their declared interval. */
-export function intervalCoverage(
-  samples: { lo: number; hi: number; observed: number }[],
-): number {
-  if (samples.length === 0) return NaN;
-  const covered = samples.filter((s) => s.observed >= s.lo && s.observed <= s.hi).length;
-  return covered / samples.length;
+/** Bootstrap percentile CI for an arbitrary statistic function over paired arrays. */
+export function bootstrapCI(
+  n: number,
+  statFn: (sampleIdx: number[]) => number,
+  opts: { iters?: number; seed?: number; alpha?: number } = {},
+): { low: number; high: number; draws: number[] } {
+  const { iters = 500, seed = 42, alpha = 0.1 } = opts;
+  const rand = mulberry32(seed);
+  const draws: number[] = [];
+  for (let b = 0; b < iters; b++) {
+    const idx = Array.from({ length: n }, () => Math.floor(rand() * n));
+    draws.push(statFn(idx));
+  }
+  const sorted = [...draws].sort((a, b) => a - b);
+  const low = sorted[Math.floor((alpha / 2) * sorted.length)];
+  const high = sorted[Math.ceil((1 - alpha / 2) * sorted.length) - 1];
+  return { low, high, draws };
 }
 
-/** Relative Monte Carlo standard error: SE / |mean|, used as the convergence criterion. */
-export function relativeMcError(se: number, meanEstimate: number): number {
-  const denom = Math.max(Math.abs(meanEstimate), 1e-9);
-  return se / denom;
+export function pooledStd(a: number[], b: number[]): number {
+  return Math.sqrt((variance(a) + variance(b)) / 2);
 }

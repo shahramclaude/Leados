@@ -1,111 +1,83 @@
 /**
- * mathUtils.ts — special functions needed by the belief/calibration layer.
- *
- * Everything here is pure and side-effect free so it can be property-tested
- * and reused by both the Next.js server runtime and standalone scripts.
+ * src/lib/mathUtils.ts
+ * Shared numeric primitives for the causal-inference layer.
+ * Pure functions only — no I/O, no randomness except the explicit PRNG below.
  */
 
-/** Natural log of the Gamma function (Lanczos approximation, g=7, n=9). */
-const LANCZOS_G = 7;
-const LANCZOS_COEFFICIENTS = [
-  0.99999999999980993, 676.5203681218851, -1259.1392167224028,
-  771.32342877765313, -176.61502916214059, 12.507343278686905,
-  -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
-];
-
-export function logGamma(x: number): number {
-  if (x < 0.5) {
-    // Reflection formula
-    return Math.log(Math.PI / Math.sin(Math.PI * x)) - logGamma(1 - x);
-  }
-  x -= 1;
-  let a = LANCZOS_COEFFICIENTS[0];
-  const t = x + LANCZOS_G + 0.5;
-  for (let i = 1; i < LANCZOS_COEFFICIENTS.length; i++) {
-    a += LANCZOS_COEFFICIENTS[i] / (x + i);
-  }
-  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+export function sum(xs: number[]): number {
+  return xs.reduce((a, b) => a + b, 0);
 }
 
-export function gammaFn(x: number): number {
-  return Math.exp(logGamma(x));
+export function mean(xs: number[]): number {
+  if (xs.length === 0) return NaN;
+  return sum(xs) / xs.length;
 }
 
-const FPMIN = 1e-300;
-
-/** Continued-fraction core, faithful port of Numerical Recipes `betacf(a,b,x)`. */
-function betaContinuedFraction(a: number, b: number, x: number): number {
-  const MAX_ITER = 300;
-  const EPS = 3e-14;
-  const qab = a + b;
-  const qap = a + 1;
-  const qam = a - 1;
-  let c = 1;
-  let d = 1 - (qab * x) / qap;
-  if (Math.abs(d) < FPMIN) d = FPMIN;
-  d = 1 / d;
-  let h = d;
-
-  for (let m = 1; m <= MAX_ITER; m++) {
-    const m2 = 2 * m;
-    let aa = (m * (b - m) * x) / ((qam + m2) * (a + m2));
-    d = 1 + aa * d;
-    if (Math.abs(d) < FPMIN) d = FPMIN;
-    c = 1 + aa / c;
-    if (Math.abs(c) < FPMIN) c = FPMIN;
-    d = 1 / d;
-    h *= d * c;
-
-    aa = (-(a + m) * (qab + m) * x) / ((a + m2) * (qap + m2));
-    d = 1 + aa * d;
-    if (Math.abs(d) < FPMIN) d = FPMIN;
-    c = 1 + aa / c;
-    if (Math.abs(c) < FPMIN) c = FPMIN;
-    d = 1 / d;
-    const del = d * c;
-    h *= del;
-
-    if (Math.abs(del - 1) < EPS) break;
-  }
-  return h;
+export function variance(xs: number[], ddof = 1): number {
+  if (xs.length <= ddof) return NaN;
+  const m = mean(xs);
+  return sum(xs.map((x) => (x - m) ** 2)) / (xs.length - ddof);
 }
 
-/**
- * Regularized incomplete beta function I_x(a,b), Numerical Recipes `betai`.
- * Picks whichever of I_x(a,b) / 1-I_{1-x}(b,a) has the faster-converging
- * continued fraction, computed directly (no recursive self-call, so it
- * cannot infinite-loop at symmetric inputs like a===b, x===0.5).
- */
-export function regularizedIncompleteBeta(x: number, a: number, b: number): number {
-  if (x <= 0) return 0;
-  if (x >= 1) return 1;
-  const lbeta = logGamma(a) + logGamma(b) - logGamma(a + b);
-  const bt = Math.exp(a * Math.log(x) + b * Math.log(1 - x) - lbeta);
-
-  if (x < (a + 1) / (a + b + 2)) {
-    return (bt * betaContinuedFraction(a, b, x)) / a;
-  }
-  return 1 - (bt * betaContinuedFraction(b, a, 1 - x)) / b;
+export function std(xs: number[], ddof = 1): number {
+  return Math.sqrt(variance(xs, ddof));
 }
 
-/** Inverse regularized incomplete beta via bisection (robust, sufficient precision for UI intervals). */
-export function betaQuantile(p: number, a: number, b: number): number {
-  if (p <= 0) return 0;
-  if (p >= 1) return 1;
-  let lo = 0;
-  let hi = 1;
-  for (let i = 0; i < 100; i++) {
-    const mid = (lo + hi) / 2;
-    const cdf = regularizedIncompleteBeta(mid, a, b);
-    if (cdf > p) hi = mid;
-    else lo = mid;
-    if (hi - lo < 1e-10) break;
-  }
-  return (lo + hi) / 2;
+export function weightedMean(xs: number[], w: number[]): number {
+  const wsum = sum(w);
+  if (wsum === 0) return NaN;
+  return sum(xs.map((x, i) => x * w[i])) / wsum;
 }
 
-/** Standard normal CDF via erf approximation (Abramowitz & Stegun 7.1.26). */
+export function weightedVariance(xs: number[], w: number[], ddof = 1): number {
+  const wm = weightedMean(xs, w);
+  const wsum = sum(w);
+  const n = w.filter((x) => x > 0).length;
+  if (n <= ddof) return NaN;
+  const correction = wsum / Math.max(wsum - ddof * (wsum / n), 1e-9);
+  return correction * (sum(xs.map((x, i) => w[i] * (x - wm) ** 2)) / wsum);
+}
+
+export function quantile(xs: number[], p: number): number {
+  const sorted = [...xs].sort((a, b) => a - b);
+  if (sorted.length === 0) return NaN;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+}
+
+export function linspace(start: number, stop: number, n: number): number[] {
+  if (n <= 1) return [start];
+  const step = (stop - start) / (n - 1);
+  return Array.from({ length: n }, (_, i) => start + step * i);
+}
+
+/** Deterministic, seedable PRNG (mulberry32) for reproducible synthetic ground truth. */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return function rand() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Standard normal sample via Box-Muller, driven by an injected PRNG for reproducibility. */
+export function randNormal(rand: () => number, mu = 0, sigma = 1): number {
+  let u = 0;
+  let v = 0;
+  while (u === 0) u = rand();
+  while (v === 0) v = rand();
+  const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+  return mu + sigma * z;
+}
+
 export function erf(x: number): number {
+  // Abramowitz-Stegun 7.1.26 approximation, max error ~1.5e-7
   const sign = x < 0 ? -1 : 1;
   const ax = Math.abs(x);
   const a1 = 0.254829592;
@@ -119,101 +91,132 @@ export function erf(x: number): number {
   return sign * y;
 }
 
-export function normalCdf(x: number, mean = 0, sd = 1): number {
-  return 0.5 * (1 + erf((x - mean) / (sd * Math.SQRT2)));
+export function normalCdf(x: number, mu = 0, sigma = 1): number {
+  return 0.5 * (1 + erf((x - mu) / (sigma * Math.SQRT2)));
 }
 
-/** Inverse standard normal CDF (Acklam's algorithm). */
-export function normalQuantile(p: number, mean = 0, sd = 1): number {
-  if (p <= 0) return -Infinity;
-  if (p >= 1) return Infinity;
-  const a = [
-    -3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2,
-    1.38357751867269e2, -3.066479806614716e1, 2.506628277459239,
-  ];
-  const b = [
-    -5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2,
-    6.680131188771972e1, -1.328068155288572e1,
-  ];
-  const c = [
-    -7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838,
-    -2.549732539343734, 4.374664141464968, 2.938163982698783,
-  ];
-  const d = [
-    7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996,
-    3.75440866190742,
-  ];
-  const plow = 0.02425;
-  const phigh = 1 - plow;
-  let q: number;
-  let z: number;
-  if (p < plow) {
-    q = Math.sqrt(-2 * Math.log(p));
-    z = (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
-      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
-  } else if (p <= phigh) {
-    q = p - 0.5;
-    const r = q * q;
-    z = ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) /
-      (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
-  } else {
-    q = Math.sqrt(-2 * Math.log(1 - p));
-    z = -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
-      ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
-  }
-  return mean + sd * z;
-}
-
-/**
- * Student's t CDF via the regularized incomplete beta function:
- *   P(T <= t) = 1 - 0.5*I_x(v/2, 1/2)   for t >= 0, x = v/(v+t^2)
- *   P(T <= t) = 0.5*I_x(v/2, 1/2)       for t < 0,  x = v/(v+t^2)
- */
-export function studentTCdf(t: number, dof: number): number {
-  const x = dof / (dof + t * t);
-  const ib = regularizedIncompleteBeta(x, dof / 2, 0.5);
-  return t >= 0 ? 1 - 0.5 * ib : 0.5 * ib;
-}
-
-/** Inverse Student's t CDF via bisection on studentTCdf (robust for any dof > 0, incl. non-integer). */
-export function studentTQuantile(p: number, dof: number): number {
-  if (p <= 0) return -Infinity;
-  if (p >= 1) return Infinity;
-  if (p === 0.5) return 0;
-  let lo = -1000;
-  let hi = 1000;
-  // Widen bounds if needed for extreme p / low dof (fat tails).
-  while (studentTCdf(lo, dof) > p) lo *= 2;
-  while (studentTCdf(hi, dof) < p) hi *= 2;
-  for (let i = 0; i < 200; i++) {
-    const mid = (lo + hi) / 2;
-    if (studentTCdf(mid, dof) > p) hi = mid;
-    else lo = mid;
-    if (hi - lo < 1e-9) break;
-  }
-  return (lo + hi) / 2;
+/** Two-sided p-value for a z-statistic under the standard normal. */
+export function zTwoSidedPValue(z: number): number {
+  return 2 * (1 - normalCdf(Math.abs(z)));
 }
 
 export function clamp(x: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, x));
+  return Math.max(lo, Math.min(hi, x));
 }
 
-export function mean(xs: number[]): number {
-  if (xs.length === 0) return NaN;
-  return xs.reduce((a, b) => a + b, 0) / xs.length;
+export function logistic(x: number): number {
+  if (x >= 0) {
+    const z = Math.exp(-x);
+    return 1 / (1 + z);
+  }
+  const z = Math.exp(x);
+  return z / (1 + z);
 }
 
-export function variance(xs: number[]): number {
-  if (xs.length < 2) return 0;
-  const m = mean(xs);
-  return xs.reduce((a, b) => a + (b - m) * (b - m), 0) / (xs.length - 1);
+/** Solve (X'X) b = X'y via Gauss-Jordan elimination. X is n x k (first column should be 1s for intercept). */
+export function olsFit(X: number[][], y: number[]): { coef: number[]; fitted: number[]; residuals: number[] } {
+  const n = X.length;
+  const k = X[0].length;
+  const XtX: number[][] = Array.from({ length: k }, () => new Array(k).fill(0));
+  const Xty: number[] = new Array(k).fill(0);
+  for (let i = 0; i < n; i++) {
+    for (let a = 0; a < k; a++) {
+      Xty[a] += X[i][a] * y[i];
+      for (let b = 0; b < k; b++) {
+        XtX[a][b] += X[i][a] * X[i][b];
+      }
+    }
+  }
+  const coef = solveLinearSystem(XtX, Xty);
+  const fitted = X.map((row) => row.reduce((s, v, j) => s + v * coef[j], 0));
+  const residuals = y.map((v, i) => v - fitted[i]);
+  return { coef, fitted, residuals };
 }
 
-export function stddev(xs: number[]): number {
-  return Math.sqrt(variance(xs));
+/** Gauss-Jordan elimination with partial pivoting + ridge fallback for near-singular systems. */
+export function solveLinearSystem(A: number[][], b: number[]): number[] {
+  const n = A.length;
+  const ridge = 1e-8;
+  const M = A.map((row, i) => [...row.map((v, j) => v + (i === j ? ridge : 0)), b[i]]);
+  for (let col = 0; col < n; col++) {
+    let pivotRow = col;
+    let maxVal = Math.abs(M[col][col]);
+    for (let r = col + 1; r < n; r++) {
+      if (Math.abs(M[r][col]) > maxVal) {
+        maxVal = Math.abs(M[r][col]);
+        pivotRow = r;
+      }
+    }
+    [M[col], M[pivotRow]] = [M[pivotRow], M[col]];
+    const pivot = M[col][col] || 1e-12;
+    for (let j = col; j <= n; j++) M[col][j] /= pivot;
+    for (let r = 0; r < n; r++) {
+      if (r === col) continue;
+      const factor = M[r][col];
+      for (let j = col; j <= n; j++) M[r][j] -= factor * M[col][j];
+    }
+  }
+  return M.map((row) => row[n]);
 }
 
-export function round(x: number, decimals: number): number {
-  const f = Math.pow(10, decimals);
-  return Math.round(x * f) / f;
+/** Standard errors of OLS coefficients under homoskedasticity. */
+export function olsStandardErrors(X: number[][], residuals: number[]): number[] {
+  const n = X.length;
+  const k = X[0].length;
+  const dof = Math.max(n - k, 1);
+  const sigma2 = sum(residuals.map((r) => r * r)) / dof;
+  const XtX: number[][] = Array.from({ length: k }, () => new Array(k).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let a = 0; a < k; a++) {
+      for (let b = 0; b < k; b++) {
+        XtX[a][b] += X[i][a] * X[i][b];
+      }
+    }
+  }
+  const inv = invertMatrix(XtX);
+  return inv.map((row, i) => Math.sqrt(Math.max(sigma2 * row[i], 0)));
+}
+
+export function invertMatrix(A: number[][]): number[][] {
+  const n = A.length;
+  const I: number[][] = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)),
+  );
+  const cols: number[][] = [];
+  for (let c = 0; c < n; c++) {
+    cols.push(solveLinearSystem(A, I.map((row) => row[c])));
+  }
+  // cols[c] is the c-th column of the inverse
+  const inv: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  for (let c = 0; c < n; c++) {
+    for (let r = 0; r < n; r++) inv[r][c] = cols[c][r];
+  }
+  return inv;
+}
+
+/** Logistic regression via simple gradient descent (sufficient for propensity scores on small/medium N). */
+export function logisticRegressionFit(
+  X: number[][],
+  y: number[],
+  opts: { iters?: number; lr?: number; l2?: number } = {},
+): { coef: number[]; predict: (row: number[]) => number } {
+  const { iters = 2000, lr = 0.1, l2 = 1e-4 } = opts;
+  const n = X.length;
+  const k = X[0].length;
+  let coef = new Array(k).fill(0);
+  for (let it = 0; it < iters; it++) {
+    const grad = new Array(k).fill(0);
+    for (let i = 0; i < n; i++) {
+      const pred = logistic(sum(X[i].map((v, j) => v * coef[j])));
+      const err = pred - y[i];
+      for (let j = 0; j < k; j++) grad[j] += err * X[i][j];
+    }
+    for (let j = 0; j < k; j++) {
+      coef[j] -= (lr * (grad[j] / n + l2 * coef[j]));
+    }
+  }
+  return {
+    coef,
+    predict: (row: number[]) => logistic(sum(row.map((v, j) => v * coef[j]))),
+  };
 }
