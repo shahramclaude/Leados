@@ -1,62 +1,47 @@
-import { db } from "@/db";
-import { objectives } from "@/db/schema";
-import { getObjectives } from "@/lib/queries";
-import { findExistingMutation, recordAudit, recordMutation } from "@/lib/server/idempotency";
+import { NextRequest } from "next/server";
+import { createObjective, createObjectiveLink, listObjectiveLinks, listObjectives } from "@/lib/strategy/objectives";
+import { listKeyResultsAndEvidenceForObjectives } from "@/lib/strategy/objectives";
+import { computeObjectiveScore } from "@/lib/strategy/okrsEngine";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const rows = await getObjectives({
-    status: url.searchParams.get("status") ?? undefined,
-    scenarioId: url.searchParams.get("scenarioId") ?? undefined,
-    q: url.searchParams.get("q") ?? undefined,
-    sort: (url.searchParams.get("sort") as "updated" | "created" | "title") ?? undefined,
-  });
-  return Response.json({ items: rows });
+export async function GET() {
+  const [objs, links] = await Promise.all([listObjectives(), listObjectiveLinks()]);
+  const { keyResults, evidence } = await listKeyResultsAndEvidenceForObjectives(objs.map((o) => o.id));
+
+  const withScores = objs.map((o) => ({
+    ...o,
+    score: computeObjectiveScore(o.id, o.stretch, keyResults, evidence),
+  }));
+
+  return Response.json({ objectives: withScores, links });
 }
 
-export async function POST(request: Request) {
-  const idempotencyKey = request.headers.get("idempotency-key");
-  const body = (await request.json()) as {
-    id?: string;
-    scenarioId?: string;
-    title?: string;
-    description?: string;
-  };
-
-  if (idempotencyKey) {
-    const existing = await findExistingMutation(idempotencyKey);
-    if (existing) {
-      return Response.json(existing.resultJson, { status: existing.status === "applied" ? 201 : 200 });
-    }
-  }
-
-  if (!body.title || body.title.trim().length < 3) {
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  if (!body.title || !body.level || !body.timeframe || !body.ownerName) {
     return Response.json(
-      { code: "VALIDATION", message: "Objective title must be at least 3 characters.", field: "title" },
-      { status: 422 },
-    );
-  }
-  if (!body.scenarioId) {
-    return Response.json(
-      { code: "VALIDATION", message: "Select a scenario for this objective.", field: "scenarioId" },
-      { status: 422 },
+      { error: "title, level, timeframe, and ownerName are required" },
+      { status: 400 },
     );
   }
 
-  const [row] = await db
-    .insert(objectives)
-    .values({
-      id: body.id,
-      scenarioId: body.scenarioId,
-      title: body.title.trim(),
-      description: body.description ?? "",
-    })
-    .returning();
+  const objective = await createObjective({
+    title: body.title,
+    description: body.description,
+    level: body.level,
+    timeframe: body.timeframe,
+    ownerName: body.ownerName,
+    status: body.status,
+    stretch: body.stretch,
+    isNorthStarAligned: body.isNorthStarAligned,
+    parentId: body.parentId ?? null,
+    priorityRank: body.priorityRank,
+  });
 
-  await recordAudit("objective", row.id, "created", `Objective "${row.title}" created`);
-  if (idempotencyKey) await recordMutation(idempotencyKey, "objective", "applied", row);
+  if (body.contributesToObjectiveId) {
+    await createObjectiveLink(objective.id, body.contributesToObjectiveId, "contributes_to");
+  }
 
-  return Response.json(row, { status: 201 });
+  return Response.json({ objective }, { status: 201 });
 }

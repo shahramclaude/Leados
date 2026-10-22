@@ -1,0 +1,6 @@
+// Centralized id generation so every strategy table uses the same scheme.
+import { randomUUID } from "crypto";
+
+export function newId(prefix: string): string {
+  return `${prefix}_${randomUUID()}`;
+}
