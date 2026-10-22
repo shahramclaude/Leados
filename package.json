@@ -8,10 +8,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "seed": "node scripts/seed.mjs",
-    "ledger:check": "node scripts/ledger-check.mjs",
-    "gate:all": "node scripts/gate-all.mjs",
-    "verify": "npm run gate:all"
+    "verify": "tsc --noEmit && vitest run"
   },
   "dependencies": {
     "dotenv": "17.3.1",
