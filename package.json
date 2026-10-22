@@ -1,23 +1,18 @@
 {
-  "name": "nextjs-postgresql-template",
+  "name": "leados",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node server.js",
+    "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "verify": "tsx scripts/verify.ts",
-    "metrics:check": "node scripts/check-metrics-exposition.mjs",
-    "slo:report": "node scripts/slo-report.mjs",
-    "backup": "bash scripts/backup.sh",
-    "restore": "bash scripts/restore.sh",
-    "backup:drill": "node scripts/backup-drill.mjs",
-    "dead-letter:triage": "node scripts/dead-letter-triage.mjs",
-    "run:reaper": "node scripts/run-reaper.mjs",
-    "projection:rebuild": "node scripts/rebuild-projection.mjs",
-    "maintenance:flush": "node scripts/flush-deferred-writes.mjs",
-    "shutdown:test": "bash scripts/graceful-shutdown-test.sh"
+    "test": "node --import tsx --test tests/**/*.test.ts",
+    "seed": "tsx scripts/seed.ts",
+    "db:push": "drizzle-kit push",
+    "docs:check": "node scripts/check-docs-links.mjs",
+    "verify": "npm run lint && npm run typecheck && npm run test && npm run build && npm run docs:check"
   },
   "dependencies": {
     "dotenv": "17.3.1",

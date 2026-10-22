@@ -1,68 +1,98 @@
 # Releasing LEADOS
 
-LEADOS uses [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. Bump `MAJOR` for
-breaking API/schema changes, `MINOR` for backward-compatible features, `PATCH` for fixes/docs.
+This is the actual checklist used to cut `v0.1.0`, and the one `.github/workflows/release.yml` automates
+where possible. Follow it in order.
 
-## Checklist (every item must be checked before tagging)
+## 1. Gates (all must pass locally first)
 
-1. **All gates green.**
-   ```bash
-   npx next typegen
-   npm exec tsc -- --noEmit --pretty false
-   npm run verify            # lint + typecheck + docs link check + production build
-   ```
-2. **Calibration drift check.** LEADOS's scoring is rule-based, not a trained model (see
-   `docs/explanation.md`), so there is no statistical calibration to drift. The equivalent check
-   here is a **rule-weight diff review**: run `git diff <previous-tag> -- src/lib/scoring.ts` and
-   confirm every changed weight is called out in `CHANGELOG.md`. If `SCORE_VERSION` wasn't bumped
-   for a meaningful rule change, bump it now — see `docs/how-to-guides.md` → "Add a scoring rule".
-3. **Migration check.** Confirm `npm run db:push` is idempotent against a copy of the current
-   production schema (no destructive column drops without an expand/contract plan — see
-   `docs/ROLLBACK.md`). Since this project uses `drizzle-kit push` rather than generated migration
-   files (see `docs/explanation.md` → "Why no migration files yet"), "migration check" means:
-   diff `src/db/schema.ts` against the previous tag and confirm any column removal has already
-   shipped a prior release where the column was simply unused, not read.
-4. **Perf check.** No load-testing harness exists yet (tracked gap). Minimum bar: `npm run build`
-   succeeds and `/api/health` responds in a manual `curl -w "%{time_total}\n"` check under 1 second
-   against a warm local server. Record the number in the release notes.
-5. **Security scan.** `npm audit --omit=dev` and review new findings since the last release (see
-   `docs/explanation.md` → "Security posture" for the currently-accepted baseline). Any new
-   high/critical finding in a dependency actually reachable at runtime blocks the release.
-6. **Version bump.** Update:
-   - `src/app/api/health/route.ts` → `LEADOS_VERSION`
-   - `package.json` → add/update a `"version"` field matching the tag (without a leading `v`)
-7. **Changelog.** Move `[Unreleased]` entries in `CHANGELOG.md` into a new `## [X.Y.Z] - YYYY-MM-DD`
-   section. CI (`.github/workflows/release.yml`) fails the release job if no section matching the
-   tag's version exists in `CHANGELOG.md`.
-8. **Tag.**
-   ```bash
-   git tag -a vX.Y.Z -m "LEADOS vX.Y.Z"
-   git push origin vX.Y.Z
-   ```
-9. **Build artifacts.** Pushing the tag triggers `.github/workflows/release.yml`, which:
-   - builds and pushes a pinned container image (tagged both `vX.Y.Z` and the image digest),
-   - generates and attaches a Software Bill of Materials (SBOM) via `npm sbom` (CycloneDX format),
-   - attaches `FEATURES.md` and `docs/reference.md` as the "API spec" artifact (see note below on
-     why there is no separate OpenAPI file yet),
-   - runs `npm run verify` again inside CI and attaches its log as a build artifact.
-10. **Deploy.** Follow `docs/DEPLOYMENT.md` — staging first, health-gated promotion to production.
-11. **Smoke test.** After deploy, `curl https://<host>/api/health` must return
-    `{"ok":true,"service":"leados","version":"X.Y.Z"}` with the version matching the tag. Also
-    exercise one real write: create a throwaway lead via `POST /api/leads`, confirm it appears in
-    `GET /api/leads`, then delete it.
-12. **Announce.** Post the `CHANGELOG.md` section for this version wherever your team tracks
-    releases (issue comment, release notes on GitHub — the release workflow auto-populates the
-    GitHub Release body from the matching `CHANGELOG.md` section).
+```
+$ npx next typegen
+$ npm exec tsc -- --noEmit --pretty false
+$ npm run lint
+$ npm run test
+$ npm run build
+```
 
-## Note on "API spec" artifact
+Equivalently: `npm run verify` runs lint → typecheck → test → build (typegen is run separately since it's
+a Next.js-specific pre-step, see `.github/workflows/ci.yml`).
 
-There is no OpenAPI/Swagger document in this version — `docs/reference.md` is the hand-maintained
-contract. Rather than ship a fabricated OpenAPI file nobody validates, the release workflow attaches
-the real reference doc as the spec artifact and says so in the release notes. Generating a real
-OpenAPI spec from the route handlers is listed in `FEATURES.md` as a roadmap item (dependency: M3,
-so routes can be contract-tested against the generated spec, not just documented by it).
+## 2. Calibration drift
 
-## Rollback
+LEADOS v0.1.0 has no ML model and no calibration process — the scoring engine is a deterministic rule
+evaluator (`docs/explanations/intelligence-methodology.md`). **There is nothing to check for calibration
+drift in this release.** Future releases that add outcome-based calibration must add a real drift check
+here before this step can be marked done — do not check this box based on a model that doesn't exist.
 
-See `docs/ROLLBACK.md` for the full procedure and a real transcript of a rollback drill performed
-against this version.
+## 3. Migrations
+
+- Confirm `src/db/schema.ts` matches what `npx drizzle-kit push --config=drizzle.config.json` will apply.
+- Confirm the change follows expand/contract (`docs/RUNBOOKS.md`): no `NOT NULL` additions or column
+  drops that current application code depends on, in the same release.
+- If the release includes a schema change, re-run the rollback drill pattern in
+  `docs/ROLLBACK-DRILL.md` against a copy of the migrated database before shipping.
+
+## 4. Performance
+
+No load testing tooling exists yet (`docs/PERFORMANCE.md`). This step is currently a no-op; it is listed
+so it isn't silently skipped once load testing is added.
+
+## 5. Security
+
+- Run `npm audit` and record the count/severity in the release notes.
+- Confirm no new route handler was added without going through `docs/SECURITY.md`'s "no auth yet" caveat —
+  i.e. don't let an unrelated PR quietly imply auth exists when it doesn't.
+
+## 6. Version bump
+
+Bump `package.json`'s `version` following semver:
+
+- **patch** — bug fixes, no schema or API shape changes (e.g. the `source` field scoring fix in this
+  release, see `docs/AUDIT-2026.md` finding #8 — though since this is the first tagged release, it's
+  folded into `0.1.0` rather than a separate patch).
+- **minor** — new, backward-compatible capability (e.g. a new rule operator, a new API route).
+- **major** — breaking API or schema change requiring a contract step, or removal of a documented capability.
+
+## 7. Changelog
+
+Add an entry to `CHANGELOG.md` under the new version, following [Keep a Changelog](https://keepachangelog.com/).
+Entries must describe what is actually shipped — no forward-looking promises (those belong in `FEATURES.md`'s
+roadmap column).
+
+## 8. Tag and build
+
+```
+$ git tag vX.Y.Z
+$ git push --tags
+```
+
+Pushing a tag matching `v*` triggers `.github/workflows/release.yml`, which:
+
+1. Runs the full gate sequence (lint, typecheck, test, build).
+2. Builds a pinned container image (`Dockerfile`) and tags it with the release version.
+3. Generates an SBOM via `npm sbom --sbom-format cyclonedx` and attaches it as a release artifact.
+4. Attaches `openapi.yaml` (API spec) as a release artifact.
+5. Runs `node --experimental-test-coverage --import tsx --test tests/**/*.test.ts` and attaches the
+   coverage output as an artifact. (There is no mutation-testing or LLM-eval artifact, because neither
+   tool exists in this repository — see `docs/TESTING.md`.)
+6. Creates a GitHub Release with the above artifacts attached.
+
+## 9. Deploy
+
+Deployment target/infrastructure is out of scope for this repository (see
+`docs/LEADOS-ARCHITECTURE-2026.md`). At minimum: apply any pending schema migration first (expand), then
+deploy the new container image.
+
+## 10. Smoke test
+
+```
+$ curl -s https://<deployed-host>/api/health
+{"ok":true,"service":"leados","version":"X.Y.Z"}
+```
+
+Then walk `docs/tutorials/first-hour.md`'s steps 5–7 against the deployed host to confirm scoring and
+rotation work end to end.
+
+## 11. Announce
+
+Update release notes with: what changed (from `CHANGELOG.md`), the `npm audit` summary, the coverage
+numbers, and a link to the SBOM and OpenAPI artifacts.

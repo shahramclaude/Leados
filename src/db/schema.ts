@@ -1,151 +1,118 @@
-// LEADOS — Part 20 (SRE: telemetry, health, maintenance, audit, deployment plumbing)
+// LEADOS baseline schema (Part 21 reconciliation baseline).
 //
-// This sandbox checkout only contained a bare Next.js + Drizzle starter — none of the
-// five legacy health endpoints, the Part 10 kernel, or the Part 19 audit chain tables
-// referenced in the standing order exist here (see Phase 0 findings in docs/RUNBOOKS.md
-// and AI-SESSION-LOG.md). The tables below are the minimum *real* substrate needed so the
-// composite health model, telemetry trio, and runbooks in this part operate against real
-// data instead of mocked responses.
+// Honesty note: this schema is the real, running schema for the LEADOS
+// "v0.1.0" baseline described in README.md and docs/INDEX.md. It intentionally
+// covers only what is implemented: multi-tenant lead storage, a deterministic
+// rules-based scoring engine, round-robin rotation of reps, and an append-only
+// evidence ledger ("decisions"). Anything described elsewhere as causal
+// inference, ML-based fairness auditing, retrieval/LLM reasoning, or
+// real-time sensing is NOT represented here and is labeled as roadmap intent
+// in docs/explanations/*.
 import {
-  bigserial,
-  boolean,
-  integer,
-  jsonb,
   pgTable,
+  serial,
   text,
+  integer,
+  boolean,
   timestamp,
-  uuid,
+  jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-// ---------------------------------------------------------------------------
-// Work queue — backs queue depth / queue age / dead-letter health signals.
-// ---------------------------------------------------------------------------
-export const workQueueJobs = pgTable("work_queue_jobs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  queue: text("queue").notNull().default("default"),
-  kind: text("kind").notNull(),
-  payload: jsonb("payload").notNull().default({}),
-  status: text("status").notNull().default("pending"), // pending | processing | done | dead_letter
-  attempts: integer("attempts").notNull().default(0),
-  maxAttempts: integer("max_attempts").notNull().default(5),
-  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
-  claimedAt: timestamp("claimed_at", { withTimezone: true }),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
-  lastError: text("last_error"),
-  correlationId: text("correlation_id").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const tenants = pgTable(
+  "tenants",
+  {
+    id: serial("id").primaryKey(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("tenants_slug_idx").on(table.slug)],
+);
 
-// ---------------------------------------------------------------------------
-// Agent runs — backs "last successful run" + "stuck run" health signals.
-// Stands in for Part 10's orchestrator/kernel run ledger.
-// ---------------------------------------------------------------------------
-export const agentRuns = pgTable("agent_runs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  kind: text("kind").notNull(),
-  status: text("status").notNull().default("running"), // running | succeeded | failed | timed_out
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
-  correlationId: text("correlation_id").notNull(),
-  error: text("error"),
-  forecastDrift: integer("forecast_drift_bps"), // basis points, used for forecast-drift gauge
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Projection state — backs projection-freshness SLO / health signal.
-// ---------------------------------------------------------------------------
-export const projectionState = pgTable("projection_state", {
-  name: text("name").primaryKey(),
-  lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true }).notNull().defaultNow(),
-  rowCount: integer("row_count").notNull().default(0),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Notifications — backs notification-delivery SLO.
-// ---------------------------------------------------------------------------
-export const notifications = pgTable("notifications", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  channel: text("channel").notNull().default("email"),
-  status: text("status").notNull().default("queued"), // queued | sent | failed
-  correlationId: text("correlation_id").notNull(),
-  queuedAt: timestamp("queued_at", { withTimezone: true }).notNull().defaultNow(),
-  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-});
-
-// ---------------------------------------------------------------------------
-// Audit chain — stand-in for Part 19's hash-chained audit log. Each row commits
-// to the previous row's hash so tampering/gaps are detectable.
-// ---------------------------------------------------------------------------
-export const auditEvents = pgTable("audit_events", {
-  seq: bigserial("seq", { mode: "number" }).primaryKey(),
-  actor: text("actor").notNull(),
-  action: text("action").notNull(),
-  payload: jsonb("payload").notNull().default({}),
-  correlationId: text("correlation_id").notNull(),
-  prevHash: text("prev_hash").notNull(),
-  hash: text("hash").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Trace spans — sampled spans persisted so the "explain this correlationId"
-// viewer can reconstruct an end-to-end trace without an external APM backend.
-// ---------------------------------------------------------------------------
-export const traceSpans = pgTable("trace_spans", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  correlationId: text("correlation_id").notNull(),
-  traceId: text("trace_id").notNull(),
-  spanId: text("span_id").notNull(),
-  parentSpanId: text("parent_span_id"),
+export const reps = pgTable("reps", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
-  service: text("service").notNull(), // api | orchestrator | agent-run | repo | external
-  startTime: timestamp("start_time", { withTimezone: true }).notNull(),
-  endTime: timestamp("end_time", { withTimezone: true }),
-  durationMs: integer("duration_ms"),
-  status: text("status").notNull().default("ok"), // ok | error
-  attributes: jsonb("attributes").notNull().default({}),
+  email: text("email").notNull(),
+  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ---------------------------------------------------------------------------
-// System settings — small key/value store for maintenance mode, incident
-// banner state, and the stream-hub heartbeat used by graceful shutdown.
-// ---------------------------------------------------------------------------
-export const systemSettings = pgTable("system_settings", {
-  key: text("key").primaryKey(),
-  value: jsonb("value").notNull().default({}),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Deferred writes — maintenance-mode write queueing. Mutating API calls made
-// while maintenance mode is enabled are persisted here and replayed on flush.
-// ---------------------------------------------------------------------------
-export const deferredWrites = pgTable("deferred_writes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  method: text("method").notNull(),
-  path: text("path").notNull(),
-  body: jsonb("body").notNull().default({}),
-  correlationId: text("correlation_id").notNull(),
-  status: text("status").notNull().default("queued"), // queued | replayed | failed
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  replayedAt: timestamp("replayed_at", { withTimezone: true }),
-  lastError: text("last_error"),
-});
-
-// ---------------------------------------------------------------------------
-// Backup drills — append-only record of backup/restore verification runs so
-// the RPO/RTO claims in docs/SLO.md are evidence-backed, not aspirational.
-// ---------------------------------------------------------------------------
-export const backupDrills = pgTable("backup_drills", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  backupFile: text("backup_file").notNull(),
-  sourceRowCounts: jsonb("source_row_counts").notNull().default({}),
-  restoredRowCounts: jsonb("restored_row_counts").notNull().default({}),
-  checksumMatch: boolean("checksum_match").notNull(),
-  durationMs: integer("duration_ms").notNull(),
+// Deterministic, auditable scoring rules. Each rule inspects one signal field
+// on a lead and contributes `weight` points to the score when `operator`
+// evaluated against `value` is true for that field. See src/lib/scoring.ts.
+export const rules = pgTable("rules", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  field: text("field").notNull(),
+  operator: text("operator").notNull(), // "gte" | "lte" | "eq" | "truthy"
+  value: text("value").notNull(),
+  weight: integer("weight").notNull(),
+  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  company: text("company").notNull(),
+  email: text("email").notNull(),
+  source: text("source").notNull().default("manual"),
+  signals: jsonb("signals").notNull().$type<Record<string, number | string | boolean>>(),
+  repId: integer("rep_id").references(() => reps.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const leadScores = pgTable("lead_scores", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  leadId: integer("lead_id")
+    .notNull()
+    .references(() => leads.id, { onDelete: "cascade" }),
+  score: integer("score").notNull(),
+  band: text("band").notNull(), // "hot" | "warm" | "cold"
+  breakdown: jsonb("breakdown").notNull().$type<
+    Array<{ rule: string; field: string; matched: boolean; weight: number }>
+  >(),
+  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Append-only evidence ledger. Every automated action (scoring, rotation
+// assignment) writes one row here with a human-readable summary and the raw
+// evidence that produced it, so any decision can be traced back to its cause.
+export const decisions = pgTable("decisions", {
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  leadId: integer("lead_id").references(() => leads.id, { onDelete: "set null" }),
+  type: text("type").notNull(), // "scored" | "rotated"
+  actor: text("actor").notNull().default("system"),
+  summary: text("summary").notNull(),
+  evidence: jsonb("evidence").notNull().$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const rotationState = pgTable(
+  "rotation_state",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    lastRepId: integer("last_rep_id").references(() => reps.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("rotation_state_tenant_idx").on(table.tenantId)],
+);

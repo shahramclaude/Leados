@@ -1,37 +1,58 @@
 # LEADOS Documentation Index
 
-This index follows the [Diátaxis](https://diataxis.fr/) framework: four documents for four
-different needs. Start with whichever matches what you're trying to do right now.
+This index organizes documentation in four voices ([Diátaxis](https://diataxis.fr/)): tutorials (learning
+by doing), how-to guides (accomplishing a specific task), reference (looking up facts), and explanations
+(understanding why). Cross-cutting engineering/governance docs (security, testing, release process) sit
+alongside them since they don't fit neatly into one voice.
 
-| I want to... | Go to |
-|---|---|
-| Get LEADOS running and see my first scored lead | [`tutorials.md`](./tutorials.md) — **Tutorial** |
-| Do a specific task I already know the shape of | [`how-to-guides.md`](./how-to-guides.md) — **How-to guides** |
-| Look up a config variable, API route, or event type | [`reference.md`](./reference.md) — **Reference** |
-| Understand *why* LEADOS is built this way, including its limits | [`explanation.md`](./explanation.md) — **Explanation** |
-| Cut a release | [`RELEASING.md`](./RELEASING.md) |
-| Roll back a bad release | [`ROLLBACK.md`](./ROLLBACK.md) |
-| Deploy to staging/production | [`DEPLOYMENT.md`](./DEPLOYMENT.md) |
-| Triage an issue as a maintainer | [`MAINTAINER-RUNBOOK.md`](./MAINTAINER-RUNBOOK.md) |
-| See past architectural decisions | [`adr/INDEX.md`](./adr/INDEX.md) |
-| See what changed in this release and why docs don't contradict code anymore | [`CONSISTENCY-SWEEP.md`](./CONSISTENCY-SWEEP.md) |
-| Read superseded/retired documents, with context | [`history/README.md`](./history/README.md) |
+Start with `docs/AUDIT-2026.md` if you want the honest story of what this repository actually contained
+before this part, and `FEATURES.md` (repo root) for the live/partial/stub/roadmap capability matrix.
 
-## Everything else at a glance
+## Tutorials (learn by doing)
 
-- Product capability matrix (live/partial/planned): [`../FEATURES.md`](../FEATURES.md)
-- Project overview, quickstart, architecture diagram: [`../README.md`](../README.md)
-- Version history: [`../CHANGELOG.md`](../CHANGELOG.md)
-- Contribution rules and PR checklist: [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
-- Code of conduct: [`../CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md)
+- [`tutorials/first-hour.md`](tutorials/first-hour.md) — install → push schema → seed → first insight →
+  first decision, walked and verified step by step with real command output.
 
-## Scope note for this release (Part 19)
+## How-to guides (accomplish a task)
 
-This documentation set was written/rewritten in full during the release-engineering pass that
-produced v0.1.0. The repository snapshot it was written against contains a small, real feature set
-(lead intake + rule-based scoring + a dashboard) and **no prior documentation files** — no
-`ARCHITECTURE.md`, `AUDIT-2026`, `SECURITY.md`, etc. existed beforehand in this working copy. Where
-earlier planning material (e.g. an "Arena" starter template) left stale naming in the code, it was
-corrected; see [`CONSISTENCY-SWEEP.md`](./CONSISTENCY-SWEEP.md) for the itemized list. Every
-document below describes only what is in the code today, with roadmap items explicitly labeled as
-such.
+- [`how-to/tenancy.md`](how-to/tenancy.md) — create tenants, scope requests, understand the isolation guarantee and its limits.
+- [`how-to/rules.md`](how-to/rules.md) — author scoring rules, understand operators and weighting.
+- [`how-to/rotations.md`](how-to/rotations.md) — assign leads to reps via round-robin.
+- [`how-to/scenarios.md`](how-to/scenarios.md) — **honest gap**: scenario/what-if modeling isn't built; this explains the closest real workaround.
+
+## Reference (look things up)
+
+- [`reference/config.md`](reference/config.md) — every environment variable and config file that actually exists.
+- [`reference/api.md`](reference/api.md) → [`API.md`](API.md) + [`openapi.yaml`](../openapi.yaml) — full endpoint reference.
+- [`reference/events.md`](reference/events.md) — evidence-ledger decision types.
+
+## Explanations (understand why)
+
+- [`explanations/architecture.md`](explanations/architecture.md) → [`LEADOS-ARCHITECTURE-2026.md`](LEADOS-ARCHITECTURE-2026.md) — system diagram and design rationale.
+- [`explanations/intelligence-methodology.md`](explanations/intelligence-methodology.md) — what the scoring engine is (deterministic rules) and is not (ML/causal/LLM), with honest limitations.
+- [`explanations/fairness-posture.md`](explanations/fairness-posture.md) — what fairness auditing exists today (none, automated) vs. what's manually possible.
+- [`explanations/attention-philosophy.md`](explanations/attention-philosophy.md) — why the UI always shows evidence next to a score.
+
+## Engineering & governance
+
+- [`AUDIT-2026.md`](AUDIT-2026.md) — Phase 0 consistency sweep and findings table for this part.
+- [`PART-DEPENDENCY.md`](PART-DEPENDENCY.md) — how this part relates to Parts 00–23, and the honesty note on this snapshot.
+- [`EVIDENCE-LEDGER.md`](EVIDENCE-LEDGER.md) — the append-only decisions table, in depth.
+- [`DESIGN-SYSTEM.md`](DESIGN-SYSTEM.md) — honest stub: Tailwind utility classes only, no formal tokens yet.
+- [`TESTING.md`](TESTING.md) — what's tested (unit, 11 cases, real coverage numbers), what isn't (integration, e2e, mutation, load, fairness, LLM eval).
+- [`PERFORMANCE.md`](PERFORMANCE.md) — honest: not measured yet.
+- [`SECURITY.md`](SECURITY.md) — no auth/authz yet; what's mitigated (SQL injection, secret handling) vs. not.
+- [`THREAT-MODEL.md`](THREAT-MODEL.md) — STRIDE-lite pass over the current, unauthenticated surface.
+- [`SLO.md`](SLO.md) — honest: no formal SLOs published, and why.
+- [`RUNBOOKS.md`](RUNBOOKS.md) — real, executed operational procedures (start from zero, score a lead, rollback a deploy).
+- [`REALTIME.md`](REALTIME.md) — honest: request/response only, no realtime layer.
+- [`RELEASING.md`](RELEASING.md) — the release checklist used to cut v0.1.0.
+- [`ROLLBACK-DRILL.md`](ROLLBACK-DRILL.md) — a real expand/contract rollback transcript run against the migrated database during this part.
+
+## Root documents
+
+- [`../README.md`](../README.md) — vision, capability matrix, architecture diagram, quickstart, claim-to-file table, roadmap.
+- [`../FEATURES.md`](../FEATURES.md) — live/partial/stub/roadmap capability matrix.
+- [`../CHANGELOG.md`](../CHANGELOG.md) — keep-a-changelog format, honest retroactive entries.
+- [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — setup, style, test expectations, ADR requirement, PR checklist.
+- [`../AI-SESSION-LOG.md`](../AI-SESSION-LOG.md) — session-by-session log of AI-assisted work on this repository.

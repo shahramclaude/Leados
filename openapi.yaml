@@ -1,0 +1,154 @@
+openapi: 3.0.3
+info:
+  title: LEADOS API
+  version: 0.1.0
+  description: >
+    Deterministic lead scoring, round-robin rotation, and evidence-ledger API.
+    Hand-written to mirror the real route handlers under src/app/api/**/route.ts;
+    see docs/API.md for narrative documentation and verified curl examples.
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/health:
+    get:
+      summary: Liveness/readiness check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  service: { type: string, example: leados }
+                  version: { type: string, example: 0.1.0 }
+        "500":
+          description: Database unreachable
+  /api/tenants:
+    get:
+      summary: List tenants
+      responses:
+        "200": { description: OK }
+    post:
+      summary: Create a tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug, name]
+              properties:
+                slug: { type: string }
+                name: { type: string }
+      responses:
+        "201": { description: Created }
+        "400": { description: Missing fields }
+  /api/rules:
+    get:
+      summary: List a tenant's scoring rules
+      parameters:
+        - $ref: "#/components/parameters/tenant"
+      responses:
+        "200": { description: OK }
+        "404": { description: Unknown tenant }
+    post:
+      summary: Create a scoring rule
+      parameters:
+        - $ref: "#/components/parameters/tenant"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, field, operator, value, weight]
+              properties:
+                name: { type: string }
+                field: { type: string }
+                operator: { type: string, enum: [gte, lte, eq, truthy] }
+                value: { type: string }
+                weight: { type: integer }
+      responses:
+        "201": { description: Created }
+        "400": { description: Missing/invalid fields }
+        "404": { description: Unknown tenant }
+  /api/leads:
+    get:
+      summary: List a tenant's leads with their latest score
+      parameters:
+        - $ref: "#/components/parameters/tenant"
+      responses:
+        "200": { description: OK }
+        "404": { description: Unknown tenant }
+    post:
+      summary: Create a lead (unscored)
+      parameters:
+        - $ref: "#/components/parameters/tenant"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, company, email]
+              properties:
+                name: { type: string }
+                company: { type: string }
+                email: { type: string }
+                source: { type: string }
+                signals: { type: object }
+      responses:
+        "201": { description: Created }
+        "400": { description: Missing fields }
+        "404": { description: Unknown tenant }
+  /api/leads/{id}/score:
+    post:
+      summary: Score a lead against the tenant's active rules and append to the evidence ledger
+      parameters:
+        - $ref: "#/components/parameters/tenant"
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Score computed and persisted }
+        "400": { description: Invalid lead id }
+        "404": { description: Lead not found for tenant }
+  /api/rotations/assign:
+    post:
+      summary: Assign a lead to the next active rep in round-robin order
+      parameters:
+        - $ref: "#/components/parameters/tenant"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [leadId]
+              properties:
+                leadId: { type: integer }
+      responses:
+        "200": { description: Assigned }
+        "404": { description: Lead not found for tenant }
+        "409": { description: No active reps to assign }
+  /api/decisions:
+    get:
+      summary: Read the evidence ledger (most recent 50 decisions) for a tenant
+      parameters:
+        - $ref: "#/components/parameters/tenant"
+      responses:
+        "200": { description: OK }
+        "404": { description: Unknown tenant }
+components:
+  parameters:
+    tenant:
+      name: tenant
+      in: query
+      required: false
+      schema: { type: string, default: demo }
+      description: >
+        Tenant slug. Defaults to "demo". Can also be supplied via the
+        x-leados-tenant header. No authentication is performed (see docs/SECURITY.md).

@@ -1,11 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getCompositeHealth } from "@/lib/health";
-import { withRoute } from "@/lib/withRoute";
+import { db } from "@/db";
+import { sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withRoute(async (_req: NextRequest) => {
-  const health = await getCompositeHealth();
-  const httpStatus = health.status === "failing" ? 503 : 200;
-  return NextResponse.json(health, { status: httpStatus });
-});
+const VERSION = "0.1.0";
+
+export async function GET() {
+  try {
+    await db.execute(sql`select 1`);
+    return Response.json({ ok: true, service: "leados", version: VERSION });
+  } catch {
+    return Response.json({ ok: false, service: "leados", version: VERSION }, { status: 500 });
+  }
+}

@@ -1,41 +1,25 @@
-# LEADOS container image — single canonical build path (see docs/DEPLOYMENT.md).
-# Multi-stage: deps -> builder -> runner. DATABASE_URL is supplied at `docker run`
-# time, never baked into the image.
+# LEADOS production image. Pinned base image per docs/RELEASING.md / Part 19 SBOM practice.
+# Multi-stage build: install + build in one stage, copy only the Next.js
+# "standalone" output (next.config.ts -> output: "standalone") into a minimal
+# runtime stage.
 
-# ---- deps -------------------------------------------------------------
-FROM node:22-bookworm-slim AS deps
+FROM node:22.23.2-bookworm-slim AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
+
+COPY package.json package-lock.json ./
 RUN npm ci
 
-# ---- builder ------------------------------------------------------------
-FROM node:22-bookworm-slim AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# No real DATABASE_URL is needed to build: `next build` does not execute
-# src/app/page.tsx's database query at build time for a force-dynamic route.
-ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# ---- runner ---------------------------------------------------------------
-FROM node:22-bookworm-slim AS runner
+FROM node:22.23.2-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 
-RUN addgroup --system --gid 1001 nodejs \
-  && adduser --system --uid 1001 leados
+COPY --from=build /app/public ./public
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
 
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=leados:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=leados:nodejs /app/.next/static ./.next/static
-
-USER leados
 EXPOSE 3000
-
-HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
-  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-
 CMD ["node", "server.js"]

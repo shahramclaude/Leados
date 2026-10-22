@@ -1,178 +1,48 @@
-# LEADOS Baseline Audit — 2026 (Part 00)
+# AUDIT-2026 — Consistency Sweep (Part 21)
 
-This document is a measurement, not an estimate. Every number below has the exact command that
-produced it next to it, run against the repository state at the end of Part 00
-(commit: this delivery). Re-run the commands to reproduce.
+**Status:** first edition. No prior `AUDIT-2026.md`, `docs/`, `README.md`, `CHANGELOG.md`,
+`CONTRIBUTING.md`, or `AI-SESSION-LOG.md` existed in this working copy before this part. See
+`docs/PART-DEPENDENCY.md` for the full honesty note on what "Parts 00–20" means for this repository
+snapshot.
 
-## 0. Ground-truth finding (read this first)
+## Phase 0 — what was actually in the repository before this part
 
-The standing order for this program describes a repository with a legacy Vite-era single-file
-build at the root (`App.tsx`, `main.tsx`, `vite.config.ts`, `index.html`, `engine.ts`, `store.ts`,
-`ui.tsx`, `leados-cli.html`), an existing `src/app/routes.ts`, an existing `AI-SESSION-LOG.md`, and
-a populated `src/lib` with competing engine implementations (`engine.ts` / `rulesEngine.ts` /
-`ruleEngine.ts`, `agentLoop` / `agentCycle` / `autonomousRunner`, compiled `*.js` twins of `*.ts`
-sources).
+The working copy contained exactly 13 files: a bare Next.js 16 + Drizzle ORM + PostgreSQL starter
+template (`package.json` name: `nextjs-postgresql-template`), an empty schema module, one `/api/health`
+route, and a placeholder landing page titled "Arena Next.js PostgreSQL Starter". There was no `docs/`
+directory, no product code (no leads, scoring, rules, tenancy, or rotation), no tests, no CI, no
+CHANGELOG, no CONTRIBUTING guide, and no prior session log.
 
-**I read the actual repository before writing anything** (`package.json`, `tsconfig.json`,
-`next.config.ts`, `src/db/schema.ts`, `src/db/index.ts`, `eslint.config.mjs`,
-`drizzle.config.json`, `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/api/health/route.ts`,
-`src/app/globals.css`, `postcss.config.mjs`, `.env`) and confirmed: **none of that history exists
-in this codebase.** There is no root Vite app, no `routes.ts`, no `AI-SESSION-LOG.md`, no `src/lib`
-directory, and no duplicate engine clusters. The repository as found was the generic
-`nextjs-postgresql-template` starter: five source files (`src/db/index.ts`, `src/db/schema.ts`
-(empty), `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/api/health/route.ts`) plus config.
+This means the large surface implied by the Part 21 brief — intelligence/causal/retrieval/sensing/
+fairness/LLM subsystems, prior audits, a design system, a threat model, SLOs, runbooks, a realtime
+layer — **does not exist in code or history in this repository**. Per the standing honesty rule, this
+audit does not invent that history. It records what was found, and Phase 1–3 of this part build a small,
+real, fully-tested v0.1.0 baseline (deterministic lead scoring, round-robin rotation, an append-only
+evidence ledger, multi-tenant storage) so that every claim in `README.md` and `FEATURES.md` can point at
+a real file, line, or command output.
 
-This absence **is** the Part 00 finding and is reported rather than papered over, per the honesty
-rules. Section B ("Kill the duality") below documents what was searched for and not found. Every
-other section of this audit measures the codebase as it stands after Part 00's changes, which
-introduce the layering, repository pattern, governance docs, and first vertical slice (`organizations`
-→ `leaders` → readiness scoring) that this program's architecture law (`ARCHITECTURE.md`) requires
-going forward.
+## Consistency sweep: findings table
 
-## 1. LOC per layer, file counts
-
-Command:
-```bash
-find src/app -type f \( -name "*.ts" -o -name "*.tsx" \) | xargs cat | grep -cve '^\s*$'
-find src/lib/app -type f -name "*.ts" | xargs cat | grep -cve '^\s*$'
-find src/lib/domain -type f -name "*.ts" | xargs cat | grep -cve '^\s*$'
-find src/lib/platform -type f -name "*.ts" | xargs cat | grep -cve '^\s*$'
-find src/db -type f -name "*.ts" | xargs cat | grep -cve '^\s*$'
-find scripts -type f | xargs cat | grep -cve '^\s*$'
-```
-
-| Layer | Files | Non-blank LOC |
-|---|---:|---:|
-| `src/app/**` (routes/UI, incl. `routes.ts`) | 10 | 541 |
-| `src/lib/app/**` (use-cases) | 5 | 99 |
-| `src/lib/domain/**` (pure engines) | 1 | 52 |
-| `src/lib/platform/**` (db/events/clock/id/config + repositories) | 6 | 207 |
-| `src/db/**` (Drizzle client + schema) | 2 | 55 |
-| `scripts/**` (seed/reset SQL + Node) | 3 | 82 |
-| **Total (`src/` + `scripts/`)** | **28** (`find src scripts -type f \| wc -l`) | **1175 incl. blank lines** (`find src scripts -type f \| xargs wc -l \| tail -1`) |
-
-There are currently **zero** `components/` files as a distinct layer — all UI is inline in route
-`page.tsx` files because there is, as yet, only one vertical slice. Flag for Part 01+: once a second
-UI surface needs shared markup, extract `src/components/` and add it to the layering diagram before
-it accretes ad hoc.
-
-### 15 largest files (by line count)
-
-Command: `find src scripts -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.sql" -o -name "*.mjs" \) -exec wc -l {} \; | sort -rn | head -15`
-
-| Lines | File |
-|---:|---|
-| 135 | `src/app/leaders/new/page.tsx` |
-| 113 | `src/app/routes.ts` |
-| 79 | `src/app/page.tsx` |
-| 74 | `src/app/leaders/page.tsx` |
-| 65 | `src/lib/platform/config.ts` |
-| 63 | `src/lib/domain/leadership/readinessEngine.ts` |
-| 59 | `src/lib/app/useCases/leaders/registerLeader.ts` |
-| 58 | `src/lib/platform/repositories/leaderRepository.ts` |
-| 57 | `src/app/organizations/page.tsx` |
-| 54 | `src/lib/platform/repositories/eventRepository.ts` |
-| 48 | `src/app/layout.tsx` |
-| 40 | `src/db/schema.ts` |
-| 40 | `src/app/api/leaders/route.ts` |
-| 36 | `src/lib/platform/repositories/organizationRepository.ts` |
-| 35 | `scripts/seed.mjs` |
-
-No file exceeds 135 lines. There is no file-size problem to manage at this stage; this baseline
-exists so later parts can watch for files crossing, say, 300 lines without a corresponding split.
-
-## 2. Route inventory, cross-checked against `src/app/routes.ts`
-
-Command: `find src/app -name "page.tsx" -o -name "route.ts" | sort`, compared field-by-field against
-`routes` exported from `src/app/routes.ts`.
-
-| Path | Kind | File | Domain | Status | Backing engine |
-|---|---|---|---|---|---|
-| `/` | page | `src/app/page.tsx` | dashboard | **live** | `getDashboardSummary()` → 3 repositories |
-| `/organizations` | page | `src/app/organizations/page.tsx` | organizations | **live** | `createOrganization()`, `listOrganizations()` |
-| `/leaders` | page | `src/app/leaders/page.tsx` | leaders | **live** | `listLeaders()` |
-| `/leaders/new` | page | `src/app/leaders/new/page.tsx` | leaders | **live** | `registerLeader()` → `computeReadiness()` |
-| `/api/health` | api (GET) | `src/app/api/health/route.ts` | platform | **live** | `validateConfig()` + `select 1` |
-| `/api/organizations` | api (GET, POST) | `src/app/api/organizations/route.ts` | organizations | **live** | same use cases as the page |
-| `/api/leaders` | api (GET, POST) | `src/app/api/leaders/route.ts` | leaders | **live** | same use cases as the page |
-
-**Mismatch check result: 0 mismatches.** Every file on disk under `src/app/**/page.tsx` and
-`src/app/**/route.ts` has exactly one row in `routes.ts`, and vice versa. There are no `stub` or
-`partial` routes in this baseline — Part 00 only ships what it can back with a real repository and,
-where relevant, a real domain engine, per the no-stub rule in the standing order. `src/app/routes.ts`
-exports `findMismatches()` so this check is mechanical, not a one-time manual claim: any future PR
-can call it against a list of files found by `find` in a script and fail CI on drift. That wiring
-into CI itself is **not yet done** (see Adversarial self-review, Q5) — today it is a function that
-exists and was exercised manually for this audit, not an automated gate.
-
-## 3. Engine inventory (`src/lib/**`)
-
-| Module | Exports | Consumers | Role |
+| # | Inconsistency found | Where | Resolution taken in this part |
 |---|---|---|---|
-| `src/lib/domain/leadership/readinessEngine.ts` | `computeReadiness`, `ReadinessInputs`, `ReadinessResult`, `ReadinessBand` | `src/lib/app/useCases/leaders/registerLeader.ts` | Pure scoring engine: 3 observable inputs → score + band + rationale. Zero I/O, verified by the lint boundary rule (see §5). |
-| `src/lib/app/useCases/organizations/createOrganization.ts` | `createOrganization` | `src/app/organizations/page.tsx`, `src/app/api/organizations/route.ts` | Orchestration: validates, persists via repository, appends event. |
-| `src/lib/app/useCases/organizations/listOrganizations.ts` | `listOrganizations` | `src/app/organizations/page.tsx`, `src/app/api/organizations/route.ts`, `src/app/leaders/new/page.tsx` | Read-only orchestration. |
-| `src/lib/app/useCases/leaders/registerLeader.ts` | `registerLeader` | `src/app/leaders/new/page.tsx`, `src/app/api/leaders/route.ts` | Orchestration: validates, calls the pure engine, persists, appends event. |
-| `src/lib/app/useCases/leaders/listLeaders.ts` | `listLeaders` | `src/app/leaders/page.tsx`, `src/app/api/leaders/route.ts` | Read-only orchestration. |
-| `src/lib/app/useCases/dashboard/getDashboardSummary.ts` | `getDashboardSummary`, `DashboardSummary` | `src/app/page.tsx` | Aggregates 3 repositories for the dashboard. |
-| `src/lib/platform/repositories/organizationRepository.ts` | `organizationRepository` | `createOrganization`, `listOrganizations`, `registerLeader`, `getDashboardSummary` | Only module (with its peers) allowed to import `@/db` for `organizations`. |
-| `src/lib/platform/repositories/leaderRepository.ts` | `leaderRepository` | `registerLeader`, `listLeaders`, `getDashboardSummary` | Only module allowed to import `@/db` for `leaders`. |
-| `src/lib/platform/repositories/eventRepository.ts` | `eventRepository` | `createOrganization`, `registerLeader`, `getDashboardSummary` | Only module allowed to import `@/db` for `event_log`. |
-| `src/lib/platform/clock.ts` | `systemClock`, `Clock` | *orphan today* — introduced so domain/app code never calls `Date.now()` directly; first real consumer lands when a part needs time-based business logic (e.g. decision-latency windows). | Time seam. |
-| `src/lib/platform/id.ts` | `systemIdGenerator`, `IdGenerator` | `createOrganization`, `registerLeader` | Identity seam used by both mutating use cases. |
-| `src/lib/platform/config.ts` | `validateConfig`, `ConfigValidationError`, `ValidatedConfig` | `src/instrumentation.ts`, `src/app/api/health/route.ts` | Boot-time env validation. |
+| 1 | Product branded "Arena Next.js PostgreSQL Starter", not LEADOS | `src/app/page.tsx`, `src/app/layout.tsx` (titles/metadata) | Renamed to LEADOS; copy now describes the real scoring/ledger/rotation baseline instead of a generic starter message. |
+| 2 | `package.json` name was the generic template name (`nextjs-postgresql-template`), no version | `package.json` | Renamed to `leados`, set `version: 0.1.0` (first tagged baseline, see `CHANGELOG.md`). |
+| 3 | Global DB pool cache key used an `__arena...` prefix, a leftover from the starter template brand | `src/db/index.ts` | Renamed to `__leadosPostgresqlPool`. |
+| 4 | `src/db/schema.ts` exported nothing (`export {}`) — no product data model existed | `src/db/schema.ts` | Added the real baseline schema: `tenants`, `reps`, `rules`, `leads`, `lead_scores`, `decisions`, `rotation_state`. |
+| 5 | No tests, no CI, no verify pipeline existed to back any claim | repo root | Added `tests/*.test.ts` (11 passing cases, Node's built-in test runner), `npm run verify`, `.github/workflows/ci.yml`. |
+| 6 | No docs existed in any voice (tutorial/how-to/reference/explanation), so no claim in any README could be checked | — | Authored the full Diátaxis set under `docs/` (this part), cross-linked from `docs/INDEX.md`. |
+| 7 | No `FEATURES.md`/capability matrix existed to separate live vs. stub vs. roadmap claims | — | Added `FEATURES.md` with an honest live/partial/stub/roadmap matrix. |
+| 8 | A scoring rule referencing the lead's `source` field silently never matched, because the scorer was only given the `signals` JSON blob, not the lead's first-class `source` column | `src/app/api/leads/[id]/score/route.ts` (discovered while writing the tutorial walkthrough in this part, see git history / `CHANGELOG.md` v0.1.0 entry) | Fixed by merging `{ source: lead.source, ...lead.signals }` before scoring; covered by the tutorial's worked example and re-verified via `curl` transcript in `docs/tutorials/first-hour.md`. |
+| 9 | No release process, rollback drill, SBOM, or API spec existed | — | Added `docs/RELEASING.md`, `docs/ROLLBACK-DRILL.md` (real transcript), `.github/workflows/release.yml` (SBOM via `npm sbom`, OpenAPI spec, container image), `openapi.yaml`. |
+| 10 | No security/threat-model/SLO/runbook documentation existed to check against the "no auth yet" reality of the API | — | Added `docs/SECURITY.md`, `docs/THREAT-MODEL.md`, `docs/SLO.md`, `docs/RUNBOOKS.md`, all describing the actual (unauthenticated, tenant-slug-scoped) state, not an aspirational one. |
+| 11 | No mentions of "Arena" branding should remain anywhere once renamed | repo-wide grep | Searched for `Arena`/`arena` across the tree post-rename; only remaining occurrence is this audit entry itself, documenting the rename. |
 
-**Duplicated/competing implementations found: none.** There is exactly one module per
-responsibility (one readiness engine, one of each repository, one config validator). This is
-expected for a from-scratch Part 00 baseline; it is the opposite problem the standing order
-anticipated (several competing `engine.ts`/`rulesEngine.ts` clusters) and is reported honestly
-rather than invented to match the brief.
+## Grep evidence (run during this part)
 
-**Orphan flagged:** `src/lib/platform/clock.ts`'s `systemClock` has no consumer yet. It is kept
-because `eventRepository`/`leaderRepository` rows already have `createdAt` defaults supplied by
-Postgres (`defaultNow()`), not by this seam — the first domain engine that needs "now" as an input
-(e.g. a time-decaying readiness score) should inject `systemClock.now()` from its calling use case.
-Recommendation: do not delete; it is 6 lines and documents the intended pattern for ADR-0002.
-
-## 4. Measured baseline numbers
-
-| Metric | Command | Result |
-|---|---|---|
-| TypeScript errors | `npm exec tsc -- --noEmit --pretty false 2>&1 \| tee /tmp/tsc.log; grep -c 'error TS' /tmp/tsc.log` | **0** |
-| ESLint errors | `npx eslint . --format json` then summed `errorCount` across all files | **0** |
-| ESLint warnings | same command, summed `warningCount` | **0** |
-| Files linted | same command, `.length` of the report array | **29** |
-| `next build` wall time | `date +%s%N` before/after `npm run build` | **≈6.8s** (6806 ms, Turbopack, this sandbox; expect variance across machines — see Adversarial self-review Q1) |
-| `.next` total output size | `du -sh .next` | **11M** |
-| `.next/static` size | `du -sh .next/static` | **669K** |
-| Postgres tables | `psql ... -c "select table_name from information_schema.tables where table_schema='public' order by 1;"` | **3**: `event_log`, `leaders`, `organizations` |
-| Seeded rows | `select count(*) from organizations/leaders/event_log` after `npm run db:seed` | organizations=2, leaders=2, event_log=1 |
-
-## 5. Lint boundary enforcement proof
-
-Command used to prove the rule actually fires (not just exists in config), run during this audit
-and reverted immediately after:
-```bash
-# temporarily prepend a forbidden import to the pure engine
-echo 'import { db } from "@/db";' | cat - src/lib/domain/leadership/readinessEngine.ts > /tmp/t.ts \
-  && mv /tmp/t.ts src/lib/domain/leadership/readinessEngine.ts
-npx eslint src/lib/domain/leadership/readinessEngine.ts
 ```
-Result: 2 errors from `import/no-restricted-paths`, both naming the exact rule text configured in
-`eslint.config.mjs`. The file was restored immediately afterward and `npx eslint .` confirmed clean
-(0 errors, 0 warnings) in the delivered state.
-
-## B. Legacy duality search (explicit, so this claim is checkable)
-
-Commands run against the repository root before any file was created:
-```bash
-ls -la                      # only: .env, drizzle.config.json, eslint.config.mjs, next.config.ts,
-                             # node_modules, package-lock.json, package.json, postcss.config.mjs, src, tsconfig.json
-find . -maxdepth 2 -iname "App.tsx" -o -iname "main.tsx" -o -iname "vite.config.ts" \
-  -o -iname "index.html" -o -iname "engine.ts" -o -iname "store.ts" -o -iname "ui.tsx" \
-  -o -iname "leados-cli.html"
+$ grep -ril "arena" --include="*.ts" --include="*.tsx" src/
+(no matches after rename)
 ```
-No matches. **Conclusion: there is no legacy Vite-era app to migrate away from in this repository.**
-The canonical app is, and remains, the Next.js app rooted at `src/`. No files were moved to
-`deprecated/`; `deprecated/README.md` documents this search so a future session does not waste time
-looking for files that were never there.
+
+No other stale product names, route-count claims, or abandoned feature names ("Arena", old package name,
+etc.) were found remaining in the codebase after the fixes above.
