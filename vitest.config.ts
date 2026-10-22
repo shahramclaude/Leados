@@ -5,14 +5,13 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
-    globals: false,
     setupFiles: ["./vitest.setup.ts"],
-    hookTimeout: 30000,
     testTimeout: 30000,
+    hookTimeout: 30000,
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": path.resolve(__dirname, "./src"),
     },
   },
 });
