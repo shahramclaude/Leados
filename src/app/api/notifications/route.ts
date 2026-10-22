@@ -1,57 +1,48 @@
-// GET /api/notifications?cursor=&limit=&state=&class=&domain=&rootsOnly=
-//
-// Cursor pagination: cursor is an opaque base64 string encoding
-// `${createdAtMillis}:${id}` of the last row on the previous page, ordered
-// newest-first. Stable under concurrent inserts because it is anchored to a
-// specific row, not an offset.
-
+// LEADOS Part 14 — /api/notifications
+// GET: cursor-paginated notification list (chains collapsed: parent + count)
+// POST: dispatch a notification through the single gate (test/dev harness —
+//       in production this would be called from domain events, not the API).
+import { resolveActor } from "@/lib/demoContext";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
-import { resolveCurrentUser } from "@/lib/currentUser";
-import { runDueWork } from "@/lib/scheduler";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { dispatchInterrupt } from "@/lib/notifications";
+import type { NotificationClass } from "@/lib/attention";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-function encodeCursor(createdAt: Date, id: string): string {
-  return Buffer.from(`${createdAt.getTime()}:${id}`).toString("base64url");
+interface Cursor {
+  createdAt: string;
+  id: string;
 }
 
-function decodeCursor(cursor: string): { ts: number; id: string } | null {
+function encodeCursor(c: Cursor): string {
+  return Buffer.from(JSON.stringify(c)).toString("base64url");
+}
+function decodeCursor(raw: string): Cursor | null {
   try {
-    const raw = Buffer.from(cursor, "base64url").toString("utf8");
-    const [ts, id] = raw.split(":");
-    return { ts: Number.parseInt(ts, 10), id };
+    return JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
   } catch {
     return null;
   }
 }
 
 export async function GET(req: Request) {
-  const user = await resolveCurrentUser(req);
-  if (!user) return Response.json({ error: "unauthenticated" }, { status: 401 });
-
-  runDueWork().catch(() => {});
-
+  const actor = await resolveActor(req);
   const url = new URL(req.url);
-  const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get("limit") ?? "25", 10)));
-  const state = url.searchParams.get("state");
-  const cls = url.searchParams.get("class");
-  const domain = url.searchParams.get("domain");
-  const rootsOnly = url.searchParams.get("rootsOnly") !== "false"; // default true: chain view
-  const cursorParam = url.searchParams.get("cursor");
+  const limit = Math.min(Number(url.searchParams.get("limit") ?? "20") || 20, 100);
+  const stateFilter = url.searchParams.get("state"); // unread|read|archived|reopened
+  const cursorRaw = url.searchParams.get("cursor");
+  const cursor = cursorRaw ? decodeCursor(cursorRaw) : null;
 
-  const conditions = [eq(notifications.userId, user.id)];
-  if (state) conditions.push(eq(notifications.state, state as "unread" | "read" | "archived"));
-  if (cls) conditions.push(eq(notifications.class, cls as "alert" | "action" | "info" | "digest"));
-  if (domain) conditions.push(eq(notifications.domain, domain));
-
-  const cursor = cursorParam ? decodeCursor(cursorParam) : null;
+  const conditions = [eq(notifications.userId, actor.userId), isNull(notifications.parentId)];
+  if (stateFilter) conditions.push(eq(notifications.state, stateFilter));
   if (cursor) {
     conditions.push(
       or(
-        lt(notifications.createdAt, new Date(cursor.ts)),
-        and(eq(notifications.createdAt, new Date(cursor.ts)), lt(notifications.id, cursor.id)),
+        lt(notifications.createdAt, new Date(cursor.createdAt)),
+        and(eq(notifications.createdAt, new Date(cursor.createdAt)), lt(notifications.id, cursor.id)),
       )!,
     );
   }
@@ -63,27 +54,44 @@ export async function GET(req: Request) {
     .orderBy(desc(notifications.createdAt), desc(notifications.id))
     .limit(limit + 1);
 
-  const page = rows.slice(0, limit);
-  const filtered = rootsOnly ? page.filter((r) => !r.parentId) : page;
   const hasMore = rows.length > limit;
-  const last = page[page.length - 1];
+  const page = rows.slice(0, limit);
 
-  let withChainCounts: Array<(typeof filtered)[number] & { chainCount: number }> = filtered.map((f) => ({
-    ...f,
-    chainCount: 1,
+  const chainCounts = await Promise.all(
+    page.map(async (root) => {
+      const children = await db.select().from(notifications).where(eq(notifications.parentId, root.id));
+      return { rootId: root.id, count: children.length, latestChild: children.at(-1) ?? null };
+    }),
+  );
+  const countByRoot = new Map(chainCounts.map((c) => [c.rootId, c]));
+
+  const items = page.map((row) => ({
+    ...row,
+    chainLength: 1 + (countByRoot.get(row.id)?.count ?? 0),
   }));
 
-  if (rootsOnly && filtered.length > 0) {
-    const allForUser = await db.select().from(notifications).where(eq(notifications.userId, user.id));
-    const counts = new Map<string, number>();
-    for (const row of allForUser) {
-      if (row.parentId) counts.set(row.parentId, (counts.get(row.parentId) ?? 0) + 1);
-    }
-    withChainCounts = filtered.map((f) => ({ ...f, chainCount: 1 + (counts.get(f.id) ?? 0) }));
-  }
+  const last = page.at(-1);
+  const nextCursor = hasMore && last ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) : null;
 
-  return Response.json({
-    items: withChainCounts,
-    nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null,
+  return Response.json({ items, nextCursor, actor });
+}
+
+export async function POST(req: Request) {
+  const actor = await resolveActor(req);
+  const body = await req.json().catch(() => ({}));
+
+  const result = await dispatchInterrupt({
+    orgId: actor.orgId,
+    userId: body.userId ?? actor.userId,
+    timezone: body.timezone ?? actor.timezone,
+    class: (body.class ?? "info") as NotificationClass,
+    severity: Number(body.severity ?? 3),
+    entityRef: body.entityRef,
+    dedupeKey: body.dedupeKey ?? `manual:${Date.now()}`,
+    title: body.title ?? "Untitled",
+    body: body.body ?? "",
+    evidence: body.evidence,
   });
+
+  return Response.json(result, { status: 201 });
 }

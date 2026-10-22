@@ -1,42 +1,40 @@
-// In-process pub/sub fan-out for live SSE subscribers.
-//
-// This is deliberately NOT the source of truth (the outbox table is). It
-// exists purely so that already-connected streams get new frames without
-// polling the database on a tight loop. Every frame published here was
-// already durably committed to `event_outbox` by eventStore.appendEvent
-// before this function is called, so a process crash between "durable
-// write" and "in-memory publish" only ever costs a live push — the next
-// reconnect (or even the same connection's periodic backfill-check) will
-// still pick the frame up from the database. No event is ever lost, only
-// potentially delayed.
-
+// LEADOS Part 14 — in-process realtime fan-out bus.
+// Single-process pub/sub (EventEmitter) used to push durably-stored frames to
+// live SSE connections without re-polling Postgres. Cached on globalThis so
+// Next.js dev-mode hot reload doesn't create duplicate emitters/listener leak
+// warnings. For multi-process deployment this would be swapped for a
+// Postgres LISTEN/NOTIFY or Redis pub/sub backend — the StoredFrame contract
+// is unchanged either way, so no caller code would need to change.
 import { EventEmitter } from "node:events";
-import type { StreamFrame } from "@/lib/eventStore";
-
-type Listener = (frame: StreamFrame) => void;
+import type { StoredFrame } from "./eventStore";
 
 const globalForBus = globalThis as typeof globalThis & {
   __leadosEventBus?: EventEmitter;
 };
 
-const emitter = globalForBus.__leadosEventBus ?? new EventEmitter();
-emitter.setMaxListeners(0); // many concurrent SSE connections expected
+export const bus =
+  globalForBus.__leadosEventBus ??
+  (() => {
+    const emitter = new EventEmitter();
+    emitter.setMaxListeners(0); // unbounded: one listener per live SSE connection
+    return emitter;
+  })();
 
 if (process.env.NODE_ENV !== "production") {
-  globalForBus.__leadosEventBus = emitter;
+  globalForBus.__leadosEventBus = bus;
 }
 
-const CHANNEL = "frame";
+const FRAME_EVENT = "frame";
 
-export function publish(frame: StreamFrame): void {
-  emitter.emit(CHANNEL, frame);
+export function publishFrame(frame: StoredFrame): void {
+  bus.emit(FRAME_EVENT, frame);
 }
 
-export function subscribe(listener: Listener): () => void {
-  emitter.on(CHANNEL, listener);
-  return () => emitter.off(CHANNEL, listener);
+export function subscribeFrames(listener: (frame: StoredFrame) => void): () => void {
+  bus.on(FRAME_EVENT, listener);
+  return () => bus.off(FRAME_EVENT, listener);
 }
 
-export function listenerCount(): number {
-  return emitter.listenerCount(CHANNEL);
+export function currentListenerCount(): number {
+  return bus.listenerCount(FRAME_EVENT);
 }

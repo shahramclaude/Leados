@@ -1,27 +1,32 @@
-// GET /api/work-queue — role-scoped work queue listing (Part 09 scoping
-// reused: a user only sees items in domains their role may see).
-
+// LEADOS Part 14 — GET /api/work-queue
+// Powers the "Now" surface: top-3 ranked decisions, delta-since-last-visit,
+// pending approvals, and one recommended next action with evidence.
+import { resolveActor } from "@/lib/demoContext";
+import { getDecisionQueue, getDeltaSinceLastVisit, markNowVisited, recommendNextAction } from "@/lib/workQueue";
 import { db } from "@/db";
-import { workQueueItems } from "@/db/schema";
-import { resolveCurrentUser } from "@/lib/currentUser";
-import { visibleDomainsForRole } from "@/lib/scoping";
-import { asc, inArray, ne } from "drizzle-orm";
+import { approvals } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  const user = await resolveCurrentUser(req);
-  if (!user) return Response.json({ error: "unauthenticated" }, { status: 401 });
+  const actor = await resolveActor(req);
+  const now = new Date();
 
-  const domains = await visibleDomainsForRole(user.role);
-  const domainList = [...domains];
-  if (domainList.length === 0) return Response.json({ items: [] });
-
-  const rows = await db
+  const previousLastSeen = await markNowVisited(actor.userId, now);
+  const queue = await getDecisionQueue(actor.orgId, actor.role, now);
+  const delta = await getDeltaSinceLastVisit(actor.orgId, actor.role, previousLastSeen, now);
+  const pendingApprovals = await db
     .select()
-    .from(workQueueItems)
-    .where(domainList.includes("*") ? ne(workQueueItems.status, "__never__") : inArray(workQueueItems.domain, domainList))
-    .orderBy(asc(workQueueItems.priority), asc(workQueueItems.createdAt));
+    .from(approvals)
+    .where(and(eq(approvals.orgId, actor.orgId), eq(approvals.assigneeRole, actor.role), eq(approvals.status, "pending")));
 
-  return Response.json({ items: rows });
+  return Response.json({
+    top3: queue.slice(0, 3),
+    recommendedAction: recommendNextAction(queue),
+    pendingApprovals,
+    delta,
+    isEmptyOrg: queue.length === 0 && pendingApprovals.length === 0,
+  });
 }

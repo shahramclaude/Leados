@@ -1,155 +1,111 @@
-// Adaptive batching: learns, per (user, notification class, hour-of-day),
-// how likely the user is to open/act-on/dismiss a digest sent at that hour,
-// and uses that to pick when to actually send.
-//
-// METHOD (and why): decayed-statistics counters, not a contextual bandit.
-//   - Each (user, class, hour) cell stores four exponentially-decayed
-//     running totals: sent, opened, actedOn, dismissed.
-//   - On every new observation we age the existing totals by the elapsed
-//     time (half-life = 14 days, see temporal.decayWeight) before adding the
-//     new 1.0, so a user's behavior from 3 months ago matters much less than
-//     last week's, without ever discarding history outright or needing a
-//     background decay job.
-//   - The "engagement score" for a cell is a Laplace-smoothed blend of open
-//     rate and act rate: score = 0.35*openRate + 0.65*actRate, smoothed with
-//     +1/+2 pseudo-counts so a single lucky/unlucky event can't dominate.
-//
-// Why not a multi-armed bandit (e.g. Thompson sampling over hours)? Each
-// user generates at most a handful of notifications per class per day, so
-// an explore/exploit bandit would spend most of its (tiny) sample budget
-// exploring instead of serving the user well, and its output is harder to
-// turn into a one-line human explanation. Decayed statistics give almost
-// the same adaptivity with a trivially explainable score and sane behavior
-// from the very first observation (thanks to Laplace smoothing), which
-// matters because every scheduling decision must be explainable per the
-// product requirement. This is a documented, deliberate trade-off — not an
-// oversight — and the module is small enough to swap for a bandit later if
-// volume ever justifies it.
-
+// LEADOS Part 14 — adaptive digest timing.
+// Maintains a decayed engagement score per (user, class, hour-of-day) and
+// picks the best upcoming digest send time with an epsilon-greedy bandit.
+// Every decision returns a human-readable explanation string so the UI can
+// show "sent now because…" (see docs/REALTIME.md "Explainability" section).
 import { db } from "@/db";
-import { attentionStats } from "@/db/schema";
+import { engagementStats } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
-import type { NotificationClass } from "@/lib/attention";
-import { decayWeight } from "@/lib/temporal";
+import { decayedUpdate } from "./temporal";
 
-export type EngagementSignal = "sent" | "opened" | "acted" | "dismissed";
+const EPSILON = 0.15; // exploration rate
+const DEFAULT_SCORE = 0.5;
 
-const HALF_LIFE_DAYS = 14;
-
-export async function recordEngagement(args: {
-  userId: string;
-  class: NotificationClass;
+export interface EngagementRow {
   hourOfDay: number;
-  signal: EngagementSignal;
-  now?: Date;
-}): Promise<void> {
-  const now = args.now ?? new Date();
+  score: number;
+  samples: number;
+}
+
+export async function recordEngagement(userId: string, klass: string, hourOfDay: number, acted: boolean): Promise<void> {
   const [existing] = await db
     .select()
-    .from(attentionStats)
-    .where(
-      and(
-        eq(attentionStats.userId, args.userId),
-        eq(attentionStats.class, args.class),
-        eq(attentionStats.hourOfDay, args.hourOfDay),
-      ),
-    )
+    .from(engagementStats)
+    .where(and(eq(engagementStats.userId, userId), eq(engagementStats.class, klass), eq(engagementStats.hourOfDay, hourOfDay)))
     .limit(1);
 
-  if (!existing) {
-    await db.insert(attentionStats).values({
-      userId: args.userId,
-      class: args.class,
-      hourOfDay: args.hourOfDay,
-      sent: args.signal === "sent" ? 1 : 0,
-      opened: args.signal === "opened" ? 1 : 0,
-      actedOn: args.signal === "acted" ? 1 : 0,
-      dismissed: args.signal === "dismissed" ? 1 : 0,
-      updatedAt: now,
+  const observation = acted ? 1 : 0;
+  const nextScore = decayedUpdate(existing ? Number(existing.score) : DEFAULT_SCORE, existing?.samples ?? 0, observation);
+  const nextSamples = (existing?.samples ?? 0) + 1;
+
+  if (existing) {
+    await db
+      .update(engagementStats)
+      .set({ score: nextScore.toFixed(4), samples: nextSamples, updatedAt: new Date() })
+      .where(eq(engagementStats.id, existing.id));
+  } else {
+    await db.insert(engagementStats).values({
+      userId,
+      class: klass,
+      hourOfDay,
+      score: nextScore.toFixed(4),
+      samples: nextSamples,
     });
-    return;
   }
-
-  const ageDays = (now.getTime() - existing.updatedAt.getTime()) / (24 * 60 * 60 * 1000);
-  const w = decayWeight(Math.max(0, ageDays), HALF_LIFE_DAYS);
-
-  await db
-    .update(attentionStats)
-    .set({
-      sent: existing.sent * w + (args.signal === "sent" ? 1 : 0),
-      opened: existing.opened * w + (args.signal === "opened" ? 1 : 0),
-      actedOn: existing.actedOn * w + (args.signal === "acted" ? 1 : 0),
-      dismissed: existing.dismissed * w + (args.signal === "dismissed" ? 1 : 0),
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(attentionStats.userId, args.userId),
-        eq(attentionStats.class, args.class),
-        eq(attentionStats.hourOfDay, args.hourOfDay),
-      ),
-    );
 }
 
-export interface HourScore {
-  hour: number;
-  score: number;
-  sent: number;
-  confidence: "low" | "medium" | "high";
-}
-
-function engagementScore(opened: number, actedOn: number, sent: number): number {
-  const openRate = (opened + 1) / (sent + 2);
-  const actRate = (actedOn + 1) / (sent + 2);
-  return 0.35 * openRate + 0.65 * actRate;
-}
-
-export async function hourlyScores(userId: string, cls: NotificationClass): Promise<HourScore[]> {
+export async function getEngagementCurve(userId: string, klass: string): Promise<EngagementRow[]> {
   const rows = await db
     .select()
-    .from(attentionStats)
-    .where(and(eq(attentionStats.userId, userId), eq(attentionStats.class, cls)));
-
-  const byHour = new Map(rows.map((r) => [r.hourOfDay, r]));
-  const scores: HourScore[] = [];
-  for (let hour = 0; hour < 24; hour++) {
-    const row = byHour.get(hour);
-    const sent = row?.sent ?? 0;
-    const score = engagementScore(row?.opened ?? 0, row?.actedOn ?? 0, sent);
-    scores.push({
-      hour,
-      score: Number(score.toFixed(4)),
-      sent: Number(sent.toFixed(2)),
-      confidence: sent >= 8 ? "high" : sent >= 2 ? "medium" : "low",
-    });
-  }
-  return scores;
+    .from(engagementStats)
+    .where(and(eq(engagementStats.userId, userId), eq(engagementStats.class, klass)));
+  return rows.map((r) => ({ hourOfDay: r.hourOfDay, score: Number(r.score), samples: r.samples }));
 }
 
 export interface DigestTimingDecision {
-  hour: number;
-  explain: string;
-  confidence: "low" | "medium" | "high";
+  hourOfDay: number;
+  explored: boolean;
+  explanation: string;
+  candidateScores: Array<{ hourOfDay: number; score: number; samples: number }>;
 }
 
-const DEFAULT_HOUR = 9; // sensible default: start of workday
+/**
+ * Pick the best hour-of-day (local time) to send the next digest, from a set
+ * of candidate hours (typically the next N quiet-hours-safe slots).
+ */
+export async function pickDigestHour(
+  userId: string,
+  klass: string,
+  candidateHours: number[],
+  random: () => number = Math.random,
+): Promise<DigestTimingDecision> {
+  const curve = await getEngagementCurve(userId, klass);
+  const byHour = new Map(curve.map((c) => [c.hourOfDay, c]));
+  const candidateScores = candidateHours.map((h) => {
+    const row = byHour.get(h);
+    return { hourOfDay: h, score: row?.score ?? DEFAULT_SCORE, samples: row?.samples ?? 0 };
+  });
 
-export async function bestDigestHour(userId: string, cls: NotificationClass, domain: string): Promise<DigestTimingDecision> {
-  const scores = await hourlyScores(userId, cls);
-  const totalSent = scores.reduce((acc, s) => acc + s.sent, 0);
+  const totalSamples = candidateScores.reduce((sum, c) => sum + c.samples, 0);
 
-  if (totalSent < 3) {
+  // Not enough data yet -> use the earliest candidate (soonest delivery),
+  // explained as "not enough history".
+  if (totalSamples < 3) {
+    const pick = candidateScores[0];
     return {
-      hour: DEFAULT_HOUR,
-      confidence: "low",
-      explain: `not enough history yet for ${domain}/${cls} — defaulting to ${DEFAULT_HOUR}:00 local`,
+      hourOfDay: pick.hourOfDay,
+      explored: false,
+      explanation: `sent at ${pick.hourOfDay}:00 because there isn't enough engagement history yet for "${klass}" — defaulting to the soonest available slot`,
+      candidateScores,
     };
   }
 
-  const best = scores.reduce((a, b) => (b.score > a.score ? b : a));
+  const explore = random() < EPSILON;
+  if (explore) {
+    const pick = candidateScores[Math.floor(random() * candidateScores.length)];
+    return {
+      hourOfDay: pick.hourOfDay,
+      explored: true,
+      explanation: `sent at ${pick.hourOfDay}:00 as an exploration slot (${Math.round(EPSILON * 100)}% of the time we try a slot outside your usual pattern to keep learning)`,
+      candidateScores,
+    };
+  }
+
+  const best = candidateScores.reduce((a, b) => (b.score > a.score ? b : a));
   return {
-    hour: best.hour,
-    confidence: best.confidence,
-    explain: `sent at ${best.hour}:00 because you typically act on ${domain} ${cls} notifications around that hour (engagement score ${best.score.toFixed(2)}, based on ${best.sent.toFixed(1)} decayed observations)`,
+    hourOfDay: best.hourOfDay,
+    explored: false,
+    explanation: `sent at ${best.hourOfDay}:00 because you act on ${klass} notifications ${Math.round(best.score * 100)}% of the time in that hour, the best of your available slots (based on ${best.samples} past observations)`,
+    candidateScores,
   };
 }

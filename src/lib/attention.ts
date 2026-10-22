@@ -1,201 +1,106 @@
-// The interrupt policy state machine + daily interrupt budget enforcement.
+// LEADOS Part 14 — interrupt policy state machine.
 //
-// Policy (documented here because this file IS the policy declaration this
-// part builds on top of):
+// State machine (per interrupt attempt):
 //
-//   1. severity-5 findings ALWAYS interrupt. They bypass quiet hours, deep
-//      work, and the daily budget. They do not consume budget. This is the
-//      one deliberate "money can't buy this" exception — true emergencies.
-//   2. Everything else interrupts only if the user has explicitly opted the
-//      notification class into interrupts (channelPrefs.perClass[class].optInInterrupt).
-//   3. Opted-in, non-critical candidates are still blocked by (in order):
-//        a. quiet hours (per-user, timezone-aware)
-//        b. an active deep-work block (cognitive load signal, if any)
-//        c. an exhausted daily interrupt budget
-//      Any of these routes the notification to the next digest instead.
-//   4. Everything not covered above batches into the digest by default.
+//   ┌────────────┐   muted for class     ┌────────────┐
+//   │  INCOMING  ├──────────────────────▶│ SUPPRESSED │
+//   └─────┬──────┘                       │  (mute)    │
+//         │ not muted                    └────────────┘
+//         ▼
+//   focus mode on & class not allow-listed
+//         ├───────────────────────────────▶ SUPPRESSED (focus)
+//         │ else
+//         ▼
+//   severity === 5  OR user opted in to immediate for this class?
+//         │ yes                                   │ no
+//         ▼                                       ▼
+//   in quiet hours?                          QUEUED_DIGEST (policy)
+//     │ yes            │ no
+//     ▼                ▼
+//   QUEUED_DIGEST   budget has room?
+//   (quiet hours)     │ yes          │ no
+//                      ▼              ▼
+//                  IMMEDIATE     QUEUED_DIGEST
+//                                (budget exhausted)
 //
-// Every decision is written to `interrupt_log` — this is both the
-// enforcement ledger (so budget checks are exact, not estimated) and the
-// training data for adaptive batching in attentionOpt.ts.
-
+// This module is pure decision logic — it does not write notifications or
+// touch the event bus. `src/lib/notifications.ts` is the single gate that
+// calls `decideInterrupt` and then acts on the verdict, which is what makes
+// "every interruption passes through one gate" true and testable.
+import { checkQuietHours } from "./circadian";
+import { getBudgetStatus, trySpendBudget } from "./cognitiveLoad";
 import { db } from "@/db";
-import { interruptLog, notificationPrefs } from "@/db/schema";
-import { and, desc, eq, gte } from "drizzle-orm";
-import { isQuietNow } from "@/lib/circadian";
-import { assessCognitiveLoad, type CognitiveLoadSignals } from "@/lib/cognitiveLoad";
-import { startOfLocalDay } from "@/lib/temporal";
+import { notificationPrefs } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 
 export type NotificationClass = "alert" | "action" | "info" | "digest";
 
-export interface ClassPref {
-  inApp: boolean;
-  email: boolean;
-  webhook: boolean;
-  optInInterrupt: boolean;
-}
-
-export interface UserAttentionPrefs {
+export interface InterruptRequest {
   userId: string;
   timezone: string;
-  quietHoursStart: number;
-  quietHoursEnd: number;
-  dailyInterruptBudget: number;
-  perClass: Record<string, ClassPref>;
+  class: NotificationClass;
+  severity: number; // 1..5
+  focusModeEnabled: boolean;
+  focusAllowedClasses: string[];
+  budget?: number;
 }
 
-export type InterruptDecisionKind = "interrupted" | "queued_to_digest" | "suppressed_quiet_hours";
+export type InterruptVerdict =
+  | { outcome: "immediate"; reason: string }
+  | { outcome: "queued_digest"; reason: string }
+  | { outcome: "suppressed_mute"; reason: string }
+  | { outcome: "suppressed_focus"; reason: string };
 
-export interface InterruptDecision {
-  decision: InterruptDecisionKind;
-  reason: string;
-  countedAgainstBudget: boolean;
-}
-
-export const DEFAULT_CLASS_PREFS: Record<NotificationClass, ClassPref> = {
-  alert: { inApp: true, email: false, webhook: false, optInInterrupt: true },
-  action: { inApp: true, email: false, webhook: false, optInInterrupt: true },
-  info: { inApp: true, email: false, webhook: false, optInInterrupt: false },
-  digest: { inApp: true, email: false, webhook: false, optInInterrupt: false },
-};
-
-export async function getUserAttentionPrefs(userId: string): Promise<UserAttentionPrefs> {
-  const [row] = await db
+export async function decideInterrupt(req: InterruptRequest, at: Date = new Date()): Promise<InterruptVerdict> {
+  const [pref] = await db
     .select()
     .from(notificationPrefs)
-    .where(eq(notificationPrefs.userId, userId))
+    .where(and(eq(notificationPrefs.userId, req.userId), eq(notificationPrefs.class, req.class)))
     .limit(1);
 
-  if (!row) {
+  if (pref?.muted) {
+    return { outcome: "suppressed_mute", reason: `class "${req.class}" is muted: ${pref.muteReason || "no reason given"}` };
+  }
+
+  if (req.focusModeEnabled && !req.focusAllowedClasses.includes(req.class)) {
+    return { outcome: "suppressed_focus", reason: `focus mode is on and "${req.class}" is not in your allow-list` };
+  }
+
+  const optedIn = pref?.optedInImmediate ?? false;
+  const qualifiesForImmediate = req.severity >= 5 || optedIn;
+
+  if (!qualifiesForImmediate) {
     return {
-      userId,
-      timezone: "UTC",
-      quietHoursStart: 22,
-      quietHoursEnd: 7,
-      dailyInterruptBudget: 6,
-      perClass: DEFAULT_CLASS_PREFS,
+      outcome: "queued_digest",
+      reason: `severity ${req.severity} and not opted-in to immediate delivery for "${req.class}" — queued to next digest`,
+    };
+  }
+
+  const quiet = await checkQuietHours(req.userId, at);
+  if (quiet.inQuietHours) {
+    return {
+      outcome: "queued_digest",
+      reason: `quiet hours active (${quiet.config.timezone}) — queued to next digest, ends in ${quiet.minutesUntilEnd}m`,
+    };
+  }
+
+  const spend = await trySpendBudget(req.userId, req.timezone, at, req.budget);
+  if (!spend.ok) {
+    return {
+      outcome: "queued_digest",
+      reason: `daily interrupt budget exhausted (${spend.status.spent}/${spend.status.budget} used) — queued to next digest`,
     };
   }
 
   return {
-    userId,
-    timezone: "UTC",
-    quietHoursStart: row.quietHoursStart,
-    quietHoursEnd: row.quietHoursEnd,
-    dailyInterruptBudget: row.dailyInterruptBudget,
-    perClass: { ...DEFAULT_CLASS_PREFS, ...row.perClass },
+    outcome: "immediate",
+    reason:
+      req.severity >= 5
+        ? `severity 5 always interrupts immediately (budget ${spend.status.spent}/${spend.status.budget})`
+        : `opted-in to immediate delivery for "${req.class}" (budget ${spend.status.spent}/${spend.status.budget})`,
   };
 }
 
-export async function spentToday(userId: string, timezone: string, now: Date = new Date()): Promise<number> {
-  const dayStart = startOfLocalDay(now, timezone);
-  const rows = await db
-    .select()
-    .from(interruptLog)
-    .where(
-      and(
-        eq(interruptLog.userId, userId),
-        eq(interruptLog.countedAgainstBudget, true),
-        gte(interruptLog.occurredAt, dayStart),
-      ),
-    );
-  return rows.length;
-}
-
-export async function minutesSinceLastInterrupt(userId: string, now: Date = new Date()): Promise<number | null> {
-  const [row] = await db
-    .select()
-    .from(interruptLog)
-    .where(and(eq(interruptLog.userId, userId), eq(interruptLog.countedAgainstBudget, true)))
-    .orderBy(desc(interruptLog.occurredAt))
-    .limit(1);
-  if (!row) return null;
-  return (now.getTime() - row.occurredAt.getTime()) / 60_000;
-}
-
-export async function evaluateInterruptPolicy(args: {
-  userId: string;
-  class: NotificationClass;
-  domain: string;
-  severity: number;
-  prefs: UserAttentionPrefs;
-  cognitiveLoad?: CognitiveLoadSignals | null;
-  now?: Date;
-}): Promise<InterruptDecision> {
-  const now = args.now ?? new Date();
-
-  // Rule 1: severity-5 always interrupts, bypasses everything, costs nothing.
-  if (args.severity >= 5) {
-    return {
-      decision: "interrupted",
-      reason: "severity-5 findings always interrupt (policy override, does not consume budget)",
-      countedAgainstBudget: false,
-    };
-  }
-
-  const classPref = args.prefs.perClass[args.class] ?? DEFAULT_CLASS_PREFS[args.class];
-  if (!classPref?.optInInterrupt) {
-    return {
-      decision: "queued_to_digest",
-      reason: `class "${args.class}" is not opted in to interrupts — batched to digest`,
-      countedAgainstBudget: false,
-    };
-  }
-
-  if (
-    isQuietNow(
-      { timezone: args.prefs.timezone, quietHoursStart: args.prefs.quietHoursStart, quietHoursEnd: args.prefs.quietHoursEnd },
-      now,
-    )
-  ) {
-    return {
-      decision: "suppressed_quiet_hours",
-      reason: `quiet hours active (${args.prefs.quietHoursStart}:00-${args.prefs.quietHoursEnd}:00 local) — batched to digest`,
-      countedAgainstBudget: false,
-    };
-  }
-
-  const cognitive = assessCognitiveLoad(args.cognitiveLoad, now);
-  if (cognitive.inDeepWork) {
-    return {
-      decision: "queued_to_digest",
-      reason: `cognitive load guard: ${cognitive.reason} — batched to digest`,
-      countedAgainstBudget: false,
-    };
-  }
-
-  const spend = await spentToday(args.userId, args.prefs.timezone, now);
-  if (spend >= args.prefs.dailyInterruptBudget) {
-    return {
-      decision: "queued_to_digest",
-      reason: `daily interrupt budget exhausted (${spend}/${args.prefs.dailyInterruptBudget}) — batched to next digest`,
-      countedAgainstBudget: false,
-    };
-  }
-
-  return {
-    decision: "interrupted",
-    reason: `opted-in class within budget (${spend}/${args.prefs.dailyInterruptBudget} spent before this one)`,
-    countedAgainstBudget: true,
-  };
-}
-
-export async function logInterruptDecision(args: {
-  userId: string;
-  notificationId: string | null;
-  class: NotificationClass;
-  domain: string;
-  decision: InterruptDecision;
-  localHour: number;
-}) {
-  await db.insert(interruptLog).values({
-    userId: args.userId,
-    notificationId: args.notificationId,
-    class: args.class,
-    domain: args.domain,
-    decision: args.decision.decision,
-    reason: args.decision.reason,
-    countedAgainstBudget: args.decision.countedAgainstBudget,
-    localHour: args.localHour,
-  });
+export async function currentBudgetStatus(userId: string, timezone: string, budget?: number) {
+  return getBudgetStatus(userId, timezone, new Date(), budget);
 }

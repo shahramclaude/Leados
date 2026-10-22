@@ -1,52 +1,101 @@
-// Server-sent events stream. Registers with the stream hub so the
-// `stream_connections_active` metric and `stream_hub` health check reflect
-// reality, and so graceful shutdown can close it during a drain.
-import { registerStreamConnection } from "@/lib/ops/streamHub";
-import { registerStreamCloser } from "@/lib/ops/shutdown";
-import { logger } from "@/lib/obs/logger";
+// LEADOS Part 14 — SSE stream hub endpoint.
+// GET /api/events/stream?userId=...&role=...  (role optional override for demo)
+// Resume: send `Last-Event-ID: <id>` header (standard EventSource behavior)
+// or `?lastEventId=<id>` query param (for non-EventSource clients / tests).
+import { resolveActor } from "@/lib/demoContext";
+import { encodeComment, openConnection, type Sink } from "@/lib/streamHub";
+import { getLatestFrameId } from "@/lib/eventStore";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-export async function GET() {
-  const unregister = registerStreamConnection();
-  const encoder = new TextEncoder();
-  let unregisterShutdown: () => void = () => undefined;
+const HEARTBEAT_MS = 15000;
+// Small queue high-water-mark so the backpressure demo/tests can trip it
+// deterministically without needing thousands of frames.
+const QUEUE_HIGH_WATER_MARK = 32;
 
-  const stream = new ReadableStream({
-    start(controller) {
-      const send = (data: Record<string, unknown>) => {
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-        } catch {
-          /* controller already closed */
-        }
+export async function GET(req: Request) {
+  const actor = await resolveActor(req);
+  const url = new URL(req.url);
+  const headerLastId = req.headers.get("last-event-id");
+  const queryLastId = url.searchParams.get("lastEventId");
+  const rawLastId = headerLastId ?? queryLastId;
+  const lastEventId = rawLastId ? BigInt(rawLastId) : null;
+
+  let closed = false;
+  let pendingWrites = 0;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder();
+
+      const sink: Sink = {
+        write(chunk: string) {
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(chunk));
+            pendingWrites += 1;
+            // "Drain" bookkeeping: desiredSize goes negative/low when the
+            // consumer isn't reading fast enough relative to our queuing
+            // strategy high water mark.
+            queueMicrotask(() => {
+              pendingWrites = Math.max(0, pendingWrites - 1);
+            });
+          } catch {
+            closed = true;
+          }
+        },
+        isBackedUp() {
+          const desired = controller.desiredSize;
+          if (desired === null) return false;
+          return desired <= 0;
+        },
+        isClosed() {
+          return closed;
+        },
       };
-      send({ type: "connected", at: new Date().toISOString() });
-      const heartbeat = setInterval(() => send({ type: "heartbeat", at: new Date().toISOString() }), 15000);
 
-      const close = () => {
+      sink.write(encodeComment("leados-stream-open"));
+
+      const resolvedLastId = lastEventId ?? (await getLatestFrameId());
+      const connection = await openConnection({
+        orgId: actor.orgId,
+        userId: actor.userId,
+        role: actor.role,
+        lastEventId,
+        sink,
+      });
+      void resolvedLastId;
+
+      const heartbeat = setInterval(() => {
+        if (closed) return;
+        sink.write(encodeComment(`heartbeat ${Date.now()}`));
+      }, HEARTBEAT_MS);
+
+      const cleanup = () => {
+        closed = true;
         clearInterval(heartbeat);
-        unregister();
+        connection.close();
         try {
           controller.close();
         } catch {
-          /* already closed */
+          // already closed
         }
       };
-      unregisterShutdown = registerStreamCloser(close);
+
+      req.signal.addEventListener("abort", cleanup);
     },
     cancel() {
-      logger.info("stream.client_disconnected", {});
-      unregister();
-      unregisterShutdown();
+      closed = true;
     },
-  });
+  }, new CountQueuingStrategy({ highWaterMark: QUEUE_HIGH_WATER_MARK }));
 
   return new Response(stream, {
     headers: {
-      "content-type": "text/event-stream",
-      "cache-control": "no-cache, no-transform",
-      connection: "keep-alive",
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }

@@ -1,45 +1,40 @@
-// Fatigue heuristic: how "spent" is this user's attention budget right now,
-// as a 0..1 score. Backed only by the interrupt_log ledger (observable,
-// auditable), not by any physiological or inferred-emotion signal — so the
-// claim here is strictly "spend rate relative to declared budget", not a
-// clinical fatigue measurement.
+// LEADOS Part 14 — interrupt fatigue signal.
+// A soft (non-blocking) adaptive signal distinct from the hard budget gate in
+// cognitiveLoad.ts. Fatigue looks at recent dismiss-without-action rate per
+// class and feeds it into attentionOpt's digest-timing bandit as a damping
+// factor, and into the "explain this decision" string shown in the UI.
+import { db } from "@/db";
+import { interruptEvents } from "@/db/schema";
+import { and, desc, eq } from "drizzle-orm";
 
-export interface FatigueInput {
-  interruptsToday: number;
-  dailyBudget: number;
-  minutesSinceLastInterrupt: number | null;
+export interface FatigueSignal {
+  class: string;
+  sampleSize: number;
+  dismissRate: number; // 0..1, share of recent delivered interrupts dismissed without action
+  fatigued: boolean; // true when dismissRate is high enough to warrant damping
 }
 
-export interface FatigueResult {
-  score: number; // 0 = fresh, 1 = fully spent
-  label: "fresh" | "moderate" | "high" | "exhausted";
-  explain: string;
-}
+const LOOKBACK = 20;
+const FATIGUE_THRESHOLD = 0.6;
 
-export function computeFatigue(input: FatigueInput): FatigueResult {
-  const budget = Math.max(1, input.dailyBudget);
-  const spendRatio = Math.min(1, input.interruptsToday / budget);
+export async function getFatigueSignal(userId: string, klass: string): Promise<FatigueSignal> {
+  const rows = await db
+    .select({ actedOn: interruptEvents.actedOn, dismissed: interruptEvents.dismissed, outcome: interruptEvents.outcome })
+    .from(interruptEvents)
+    .where(and(eq(interruptEvents.userId, userId), eq(interruptEvents.class, klass)))
+    .orderBy(desc(interruptEvents.createdAt))
+    .limit(LOOKBACK);
 
-  // Rapid-fire interrupts (little recovery time) push fatigue up even below
-  // budget; a cool-down drags it back down.
-  const recencyPenalty =
-    input.minutesSinceLastInterrupt === null
-      ? 0
-      : Math.max(0, 0.2 - input.minutesSinceLastInterrupt / 150);
-
-  const score = Math.max(0, Math.min(1, spendRatio * 0.85 + recencyPenalty));
-
-  let label: FatigueResult["label"] = "fresh";
-  if (score >= 0.95) label = "exhausted";
-  else if (score >= 0.66) label = "high";
-  else if (score >= 0.33) label = "moderate";
-
+  const delivered = rows.filter((r) => r.outcome === "delivered");
+  if (delivered.length === 0) {
+    return { class: klass, sampleSize: 0, dismissRate: 0, fatigued: false };
+  }
+  const dismissedCount = delivered.filter((r) => r.dismissed && !r.actedOn).length;
+  const dismissRate = dismissedCount / delivered.length;
   return {
-    score: Number(score.toFixed(2)),
-    label,
-    explain: `${input.interruptsToday}/${budget} interrupts spent today` +
-      (input.minutesSinceLastInterrupt !== null
-        ? `, last one ${Math.round(input.minutesSinceLastInterrupt)}m ago`
-        : ", none yet today"),
+    class: klass,
+    sampleSize: delivered.length,
+    dismissRate,
+    fatigued: delivered.length >= 5 && dismissRate >= FATIGUE_THRESHOLD,
   };
 }

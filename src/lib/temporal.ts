@@ -1,63 +1,87 @@
-// Pure, isomorphic time utilities shared by the attention engine, the Now
-// surface, and the client-side `useNowTick` hook. No DB/IO here on purpose
-// so it can run on the client without bundling server code.
+// LEADOS Part 14 — shared time utilities.
+// No date library dependency: uses Intl.DateTimeFormat (built into Node/V8)
+// to do timezone-aware math without pulling in luxon/date-fns-tz.
 
-export function localHourFor(date: Date, timezone: string): number {
+export function nowMs(): number {
+  return Date.now();
+}
+
+/** Returns the local hour-of-day (0-23) for a given instant in a given IANA timezone. */
+export function hourOfDayInTz(date: Date, timeZone: string): number {
   try {
     const fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
+      timeZone,
       hour: "numeric",
-      hour12: false,
+      hourCycle: "h23",
     });
     const parts = fmt.formatToParts(date);
-    const hourPart = parts.find((p) => p.type === "hour")?.value ?? "0";
-    const hour = Number.parseInt(hourPart, 10);
-    // Intl can return "24" for midnight in some locales/timezones.
-    return hour === 24 ? 0 : hour;
+    const hourPart = parts.find((p) => p.type === "hour");
+    return hourPart ? Number.parseInt(hourPart.value, 10) % 24 : date.getUTCHours();
   } catch {
     return date.getUTCHours();
   }
 }
 
-export function isWithinQuietHours(hour: number, start: number, end: number): boolean {
-  if (start === end) return false; // zero-length window = no quiet hours
-  if (start < end) return hour >= start && hour < end;
-  // Wraps midnight, e.g. 22 -> 7
-  return hour >= start || hour < end;
+/** Returns minutes-since-local-midnight for a given instant in a given IANA timezone. */
+export function minuteOfDayInTz(date: Date, timeZone: string): number {
+  try {
+    const fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour: "numeric",
+      minute: "numeric",
+      hourCycle: "h23",
+    });
+    const parts = fmt.formatToParts(date);
+    const hour = Number.parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10) % 24;
+    const minute = Number.parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+    return hour * 60 + minute;
+  } catch {
+    return date.getUTCHours() * 60 + date.getUTCMinutes();
+  }
 }
 
-export function startOfLocalDay(date: Date, timezone: string): Date {
+/** Local calendar day key (YYYY-MM-DD) for a given instant + timezone. Used as the interrupt-budget ledger key. */
+export function dayKeyInTz(date: Date, timeZone: string): string {
   try {
     const fmt = new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
+      timeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     });
-    const ymd = fmt.format(date); // YYYY-MM-DD in local tz
-    return new Date(`${ymd}T00:00:00.000Z`);
+    return fmt.format(date); // en-CA formats as YYYY-MM-DD
   } catch {
-    const d = new Date(date);
-    d.setUTCHours(0, 0, 0, 0);
-    return d;
+    return date.toISOString().slice(0, 10);
   }
 }
 
-export function startOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getUTCDay(); // 0 = Sunday
-  const diff = (day + 6) % 7; // Monday-start week
-  d.setUTCDate(d.getUTCDate() - diff);
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
+/**
+ * Whether `minute` (0..1439) falls inside a wraparound window [start, end).
+ * Supports windows that cross midnight (e.g. 22:00 -> 07:00).
+ */
+export function isWithinWindow(minute: number, startMinute: number, endMinute: number): boolean {
+  if (startMinute === endMinute) return false; // zero-length window = never
+  if (startMinute < endMinute) {
+    return minute >= startMinute && minute < endMinute;
+  }
+  // wraps midnight
+  return minute >= startMinute || minute < endMinute;
 }
 
-export function minutesBetween(a: Date, b: Date): number {
-  return Math.abs(a.getTime() - b.getTime()) / 60_000;
+/** Minutes until `minute` reaches `targetMinute`, walking forward (wraps at 1440). */
+export function minutesUntil(minute: number, targetMinute: number): number {
+  const diff = targetMinute - minute;
+  return diff >= 0 ? diff : diff + 24 * 60;
 }
 
-// Exponential decay weight for "recency-weighted" statistics. halfLifeDays
-// controls how fast old behavior stops mattering.
-export function decayWeight(ageDays: number, halfLifeDays = 14): number {
-  return Math.pow(0.5, ageDays / halfLifeDays);
+/** Exponential decay weight for an observation `ageMs` old, with half-life `halfLifeMs`. */
+export function decayWeight(ageMs: number, halfLifeMs: number): number {
+  if (halfLifeMs <= 0) return ageMs <= 0 ? 1 : 0;
+  return Math.pow(0.5, ageMs / halfLifeMs);
+}
+
+/** Merge a new observation into a decayed exponential moving average. */
+export function decayedUpdate(previousScore: number, previousSamples: number, observation: number, alpha = 0.25): number {
+  if (previousSamples <= 0) return observation;
+  return previousScore * (1 - alpha) + observation * alpha;
 }

@@ -1,227 +1,231 @@
-// Part 13 — Sensing & Forecasting schema.
+// LEADOS — Part 14: Realtime Systems & Attention Design
 //
-// Tables here support: metric series + points (sensing substrate), anomaly
-// alerts (explainable per-series detections), weak-signal radar (free text
-// -> themes), a forecasting tournament (questions carried over from Part
-// 12's hypotheses, forecasts, proper-scoring results), the leading-indicator
-// framework (risk register -> indicators -> findings), and the generated
-// morning briefs (zero-filler, citation-bearing).
-//
-// Parts 01/04/05/12 are assumed upstream (metric projections, risk register,
-// hypothesis store). Those tables are not present in this sandbox checkout,
-// so minimal compatible versions are (re)declared here with a comment market
-// `-- part13-local-stub --` wherever we are standing in for an earlier part's
-// table rather than duplicating it. When this file is merged into the real
-// Leados repo, de-duplicate against the authoritative Part 01/04/05/12
-// schema and keep the Part 13 additions (anomalyAlerts onward).
+// NOTE ON DEPENDENCIES: This sandbox repository did not contain any prior
+// Part (01 / 03 / 10) artifacts — no outbox table, no org/role model, no
+// approvals table existed on disk. To deliver a working Part 14 this file
+// defines minimal, compatible stand-ins for those tables (clearly marked
+// below) alongside the Part 14 tables themselves. When Parts 01/03/10 land
+// for real, swap the stand-in tables for theirs and keep the Part 14 tables
+// (outbox, notifications, attention/*) as-is — the contracts were written to
+// match the spec in this prompt so they should not need to change shape.
 
 import {
-  pgTable,
-  serial,
-  text,
-  integer,
-  real,
+  bigserial,
   boolean,
-  timestamp,
-  jsonb,
-  date,
-  uniqueIndex,
   index,
+  integer,
+  jsonb,
+  numeric,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Sensing substrate (Part 01 projections) -- part13-local-stub --
+// STAND-INS for Part 03 (org/role model) and Part 10 (approvals)
 // ---------------------------------------------------------------------------
 
-export const metricSeries = pgTable("metric_series", {
-  id: serial("id").primaryKey(),
-  key: text("key").notNull(),
+export const orgs = pgTable("orgs", {
+  id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
-  unit: text("unit").notNull().default(""),
-  // If set, the series is treated as seasonal with this period (in points).
-  seasonalPeriod: integer("seasonal_period"),
-  // If true, robust (MAD-based) statistics are preferred over EWMA because
-  // the series is known to have heavy-tailed / non-Gaussian noise.
-  heavyTailed: boolean("heavy_tailed").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  keyIdx: uniqueIndex("metric_series_key_idx").on(t.key),
-}));
-
-export const metricPoints = pgTable("metric_points", {
-  id: serial("id").primaryKey(),
-  seriesId: integer("series_id").notNull().references(() => metricSeries.id, { onDelete: "cascade" }),
-  ts: timestamp("ts", { withTimezone: true }).notNull(),
-  value: real("value").notNull(),
-}, (t) => ({
-  seriesTsIdx: index("metric_points_series_ts_idx").on(t.seriesId, t.ts),
-}));
-
-// ---------------------------------------------------------------------------
-// Anomaly detection
-// ---------------------------------------------------------------------------
-
-export const anomalyAlerts = pgTable("anomaly_alerts", {
-  id: serial("id").primaryKey(),
-  seriesId: integer("series_id").notNull().references(() => metricSeries.id, { onDelete: "cascade" }),
-  ts: timestamp("ts", { withTimezone: true }).notNull(),
-  method: text("method").notNull(), // 'ewma' | 'robust_z' | 'seasonal_ewma'
-  observed: real("observed").notNull(),
-  expectedLow: real("expected_low").notNull(),
-  expectedHigh: real("expected_high").notNull(),
-  deviation: real("deviation").notNull(), // z / sigma units from the method's own statistic
-  falsePositiveEstimate: real("false_positive_estimate").notNull(),
-  likelyCauses: jsonb("likely_causes").$type<string[]>().notNull().default([]),
-  severity: text("severity").notNull(), // 'low' | 'medium' | 'high'
-  status: text("status").notNull().default("open"), // 'open' | 'muted' | 'resolved'
-  muteReason: text("mute_reason"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  seriesTsIdx: index("anomaly_alerts_series_ts_idx").on(t.seriesId, t.ts),
-}));
-
-// ---------------------------------------------------------------------------
-// Weak-signal radar
-// ---------------------------------------------------------------------------
-
-export const signalItems = pgTable("signal_items", {
-  id: serial("id").primaryKey(),
-  text: text("text").notNull(),
-  source: text("source").notNull().default("unknown"),
-  ts: timestamp("ts", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const weakSignalThemes = pgTable("weak_signal_themes", {
-  id: serial("id").primaryKey(),
-  label: text("label").notNull(),
-  ngram: text("ngram").notNull(),
-  status: text("status").notNull().default("signal"), // 'signal' | 'trend'
-  evidenceCount: integer("evidence_count").notNull().default(0),
-  velocity: real("velocity").notNull().default(0),
-  firstSeen: timestamp("first_seen", { withTimezone: true }).notNull(),
-  lastSeen: timestamp("last_seen", { withTimezone: true }).notNull(),
-  persistenceDays: integer("persistence_days").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  ngramIdx: uniqueIndex("weak_signal_themes_ngram_idx").on(t.ngram),
-}));
-
-export const weakSignalThemeItems = pgTable("weak_signal_theme_items", {
-  id: serial("id").primaryKey(),
-  themeId: integer("theme_id").notNull().references(() => weakSignalThemes.id, { onDelete: "cascade" }),
-  signalItemId: integer("signal_item_id").notNull().references(() => signalItems.id, { onDelete: "cascade" }),
-  score: real("score").notNull().default(0),
-});
-
-// ---------------------------------------------------------------------------
-// Forecasting tournament (questions sourced from Part 12 hypotheses)
-// -- part13-local-stub -- for the `hypotheses` table.
-// ---------------------------------------------------------------------------
-
-export const hypotheses = pgTable("hypotheses", {
-  id: serial("id").primaryKey(),
-  question: text("question").notNull(),
-  description: text("description").notNull().default(""),
-  status: text("status").notNull().default("open"),
+export const users = pgTable("users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  // role drives topic scoping for the realtime hub ("role:<role>")
+  role: text("role").notNull().default("analyst"),
+  timezone: text("timezone").notNull().default("UTC"),
+  // Tracks the last time the user loaded the "Now" surface, used to compute
+  // the what-changed-since-last-visit delta strip.
+  lastSeenNowAt: timestamp("last_seen_now_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const forecastQuestions = pgTable("forecast_questions", {
-  id: serial("id").primaryKey(),
-  hypothesisId: integer("hypothesis_id").references(() => hypotheses.id, { onDelete: "set null" }),
-  question: text("question").notNull(),
-  resolveBy: timestamp("resolve_by", { withTimezone: true }).notNull(),
-  status: text("status").notNull().default("open"), // 'open' | 'resolved'
-  resolutionValue: boolean("resolution_value"),
-  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const forecasts = pgTable("forecasts", {
-  id: serial("id").primaryKey(),
-  questionId: integer("question_id").notNull().references(() => forecastQuestions.id, { onDelete: "cascade" }),
-  forecaster: text("forecaster").notNull(),
-  isModel: boolean("is_model").notNull().default(false),
-  probability: real("probability").notNull(), // clamped to [0.02, 0.98] at write time
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  questionIdx: index("forecasts_question_idx").on(t.questionId),
-}));
-
-export const forecastScores = pgTable("forecast_scores", {
-  id: serial("id").primaryKey(),
-  forecastId: integer("forecast_id").notNull().references(() => forecasts.id, { onDelete: "cascade" }),
-  questionId: integer("question_id").notNull().references(() => forecastQuestions.id, { onDelete: "cascade" }),
-  forecaster: text("forecaster").notNull(),
-  brier: real("brier").notNull(),
-  logLoss: real("log_loss").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Leading-indicator framework (risk register from Part 04/05)
-// -- part13-local-stub -- for `risk_register`.
-// ---------------------------------------------------------------------------
-
-export const riskRegister = pgTable("risk_register", {
-  id: serial("id").primaryKey(),
+export const approvals = pgTable("approvals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   description: text("description").notNull().default(""),
-  status: text("status").notNull().default("open"),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected
+  severity: integer("severity").notNull().default(3), // 1..5
+  assigneeRole: text("assignee_role").notNull().default("manager"),
+  requestedByUserId: uuid("requested_by_user_id").references(() => users.id),
+  entityRef: text("entity_ref"),
+  dueAt: timestamp("due_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const leadingIndicators = pgTable("leading_indicators", {
-  id: serial("id").primaryKey(),
-  riskId: integer("risk_id").notNull().references(() => riskRegister.id, { onDelete: "cascade" }),
-  seriesId: integer("series_id").notNull().references(() => metricSeries.id, { onDelete: "cascade" }),
-  direction: text("direction").notNull(), // 'above' | 'below'
-  thresholdValue: real("threshold_value").notNull(),
-  status: text("status").notNull().default("armed"), // 'armed' | 'breached' | 'disarmed'
-  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Findings + notification seam (Part 10 / Part 14)
-// ---------------------------------------------------------------------------
-
+// Generic "finding" stand-in for Part 03's lead-intelligence output. Used to
+// populate the Now surface's "what changed since last visit" delta strip.
 export const findings = pgTable("findings", {
-  id: serial("id").primaryKey(),
-  source: text("source").notNull(), // 'anomaly' | 'indicator_breach' | 'weak_signal'
+  id: uuid("id").primaryKey().defaultRandom(),
+  orgId: uuid("org_id").notNull().references(() => orgs.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
-  description: text("description").notNull(),
-  severity: text("severity").notNull(),
-  relatedType: text("related_type"),
-  relatedId: integer("related_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// Part 14 seam stub: this is a deliberately inert placeholder. Nothing is
-// actually sent anywhere; `status` stays 'queued_stub' so downstream code and
-// reviewers can tell this was never wired to a real channel.
-export const notifications = pgTable("notifications", {
-  id: serial("id").primaryKey(),
-  findingId: integer("finding_id").notNull().references(() => findings.id, { onDelete: "cascade" }),
-  channel: text("channel").notNull().default("stub"),
-  status: text("status").notNull().default("queued_stub"),
-  payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+  detail: text("detail").notNull().default(""),
+  severity: integer("severity").notNull().default(3),
+  entityRef: text("entity_ref"),
+  visibleToRole: text("visible_to_role").notNull().default("analyst"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------
-// Morning brief
+// PART 14: Outbox-backed event stream (zero-loss resume)
 // ---------------------------------------------------------------------------
 
-export const briefs = pgTable("briefs", {
-  id: serial("id").primaryKey(),
-  briefDate: date("brief_date").notNull(),
-  content: text("content").notNull(),
-  citationsCount: integer("citations_count").notNull().default(0),
-  lintPassed: boolean("lint_passed").notNull().default(false),
-  lintErrors: jsonb("lint_errors").$type<string[]>().notNull().default([]),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  dateIdx: uniqueIndex("briefs_brief_date_idx").on(t.briefDate),
-}));
+export const eventOutbox = pgTable(
+  "event_outbox",
+  {
+    // bigserial => strictly monotonically increasing frame id, used as the
+    // SSE `id:` field and the `Last-Event-ID` resume cursor.
+    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    orgId: uuid("org_id").notNull(),
+    // topic examples: "org:<id>:role:manager", "org:<id>:user:<id>",
+    // "org:<id>:broadcast"
+    topic: text("topic").notNull(),
+    type: text("type").notNull(), // finding | approval | work_queue | anomaly | run_progress | notification_state | lag_notice
+    payload: jsonb("payload").notNull(),
+    dedupeKey: text("dedupe_key"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("event_outbox_topic_id_idx").on(table.topic, table.id),
+    index("event_outbox_org_id_idx").on(table.orgId, table.id),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// PART 14: Notifications
+// ---------------------------------------------------------------------------
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id").notNull(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    class: text("class").notNull(), // alert | action | info | digest
+    severity: integer("severity").notNull().default(3),
+    entityRef: text("entity_ref"),
+    dedupeKey: text("dedupe_key").notNull(),
+    parentId: uuid("parent_id"),
+    state: text("state").notNull().default("unread"), // unread | read | archived | reopened
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    evidence: jsonb("evidence").$type<Record<string, unknown> | null>(),
+    deliveredImmediately: boolean("delivered_immediately").notNull().default(false),
+    decisionReason: text("decision_reason").notNull().default(""),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("notifications_user_state_idx").on(table.userId, table.state, table.createdAt),
+    index("notifications_user_dedupe_idx").on(table.userId, table.dedupeKey),
+    index("notifications_parent_idx").on(table.parentId),
+  ],
+);
+
+export const notificationPrefs = pgTable(
+  "notification_prefs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    class: text("class").notNull(), // alert | action | info | digest
+    muted: boolean("muted").notNull().default(false),
+    muteReason: text("mute_reason").notNull().default(""),
+    optedInImmediate: boolean("opted_in_immediate").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("notification_prefs_user_class_idx").on(table.userId, table.class)],
+);
+
+export const interruptBudgetLedger = pgTable(
+  "interrupt_budget_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    dayKey: text("day_key").notNull(), // YYYY-MM-DD in user's timezone
+    spent: integer("spent").notNull().default(0),
+    budget: integer("budget").notNull().default(8),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("interrupt_budget_user_day_idx").on(table.userId, table.dayKey)],
+);
+
+export const engagementStats = pgTable(
+  "engagement_stats",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    class: text("class").notNull(),
+    hourOfDay: integer("hour_of_day").notNull(), // 0..23, in user's local timezone
+    // Exponentially decayed engagement score (acted-on rate), 0..1
+    score: numeric("score", { precision: 6, scale: 4 }).notNull().default("0.5"),
+    samples: integer("samples").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("engagement_stats_user_class_hour_idx").on(table.userId, table.class, table.hourOfDay)],
+);
+
+export const quietHours = pgTable("quiet_hours", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  timezone: text("timezone").notNull().default("UTC"),
+  startMinute: integer("start_minute").notNull().default(22 * 60), // 22:00
+  endMinute: integer("end_minute").notNull().default(7 * 60), // 07:00
+  enabled: boolean("enabled").notNull().default(true),
+});
+
+export const focusMode = pgTable("focus_mode", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  allowedClasses: jsonb("allowed_classes").$type<string[]>().notNull().default(["action"]),
+  reason: text("reason").notNull().default(""),
+  enabledAt: timestamp("enabled_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const digestQueue = pgTable(
+  "digest_queue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    class: text("class").notNull(),
+    notificationId: uuid("notification_id").notNull().references(() => notifications.id, { onDelete: "cascade" }),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+    explanation: text("explanation").notNull().default(""),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("digest_queue_user_sched_idx").on(table.userId, table.scheduledFor)],
+);
+
+// Interrupt events log — raw record of every attempted interruption, used
+// for the weekly Attention Report (received / acted / dismissed, cost) and
+// as the audit trail for the adaptive engagement model.
+export const interruptEvents = pgTable(
+  "interrupt_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    notificationId: uuid("notification_id").references(() => notifications.id, { onDelete: "cascade" }),
+    class: text("class").notNull(),
+    hourOfDay: integer("hour_of_day").notNull(),
+    outcome: text("outcome").notNull().default("delivered"), // delivered | queued_digest | suppressed_quiet | suppressed_focus | suppressed_mute
+    actedOn: boolean("acted_on").notNull().default(false),
+    dismissed: boolean("dismissed").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("interrupt_events_user_idx").on(table.userId, table.createdAt)],
+);

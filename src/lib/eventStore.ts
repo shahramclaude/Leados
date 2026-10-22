@@ -1,118 +1,96 @@
-// Part 01 seam, reused: durable outbox-backed event store.
-//
-// Every realtime fact is written here FIRST (durable, monotonically
-// increasing `id`), then fanned out to live subscribers via eventBus. This
-// ordering is what makes Last-Event-ID resume lossless: a reconnecting
-// client replays everything with id > lastSeenId directly from this table,
-// so it is impossible to miss an event that was written before the
-// subscription existed, and impossible to see one twice (strictly > compare).
-
+// LEADOS Part 14 — outbox-backed event store.
+// Durability-first: every realtime frame is written to Postgres BEFORE it is
+// fanned out to live connections. This is what makes `Last-Event-ID` resume
+// lossless — a reconnecting client always replays from the durable log, not
+// from in-memory state that could have been dropped.
 import { db } from "@/db";
 import { eventOutbox } from "@/db/schema";
-import { and, asc, gt, sql } from "drizzle-orm";
-import { publish } from "@/lib/eventBus";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 
-export type StreamEventType =
+export type FrameType =
   | "finding"
   | "approval"
   | "work_queue"
-  | "metric_anomaly"
-  | "agent_run"
-  | "notification"
-  | "presence"
-  | "comment";
+  | "anomaly"
+  | "run_progress"
+  | "notification_state"
+  | "lag_notice"
+  | "heartbeat";
 
-export interface StreamFrame {
-  id: number;
-  type: StreamEventType;
-  domain: string;
-  entityRef: string | null;
-  payload: unknown;
-  visibleRoles: string[];
+export interface AppendEventInput {
+  orgId: string;
+  topic: string;
+  type: FrameType;
+  payload: Record<string, unknown>;
+  dedupeKey?: string;
+}
+
+export interface StoredFrame {
+  id: string; // bigint serialized as string to avoid precision loss over JSON
+  orgId: string;
+  topic: string;
+  type: FrameType;
+  payload: Record<string, unknown>;
+  dedupeKey: string | null;
   createdAt: string;
 }
 
-export async function appendEvent(input: {
-  type: StreamEventType;
-  domain: string;
-  entityRef?: string | null;
-  payload: unknown;
-  visibleRoles: string[];
-}): Promise<StreamFrame> {
+function rowToFrame(row: typeof eventOutbox.$inferSelect): StoredFrame {
+  return {
+    id: row.id.toString(),
+    orgId: row.orgId,
+    topic: row.topic,
+    type: row.type as FrameType,
+    payload: row.payload as Record<string, unknown>,
+    dedupeKey: row.dedupeKey,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** Append a frame to the durable outbox. Returns the stored frame (with its monotonic id). */
+export async function appendEvent(input: AppendEventInput): Promise<StoredFrame> {
   const [row] = await db
     .insert(eventOutbox)
     .values({
+      orgId: input.orgId,
+      topic: input.topic,
       type: input.type,
-      domain: input.domain,
-      entityRef: input.entityRef ?? null,
-      payload: input.payload as object,
-      visibleRoles: input.visibleRoles,
+      payload: input.payload,
+      dedupeKey: input.dedupeKey ?? null,
     })
     .returning();
-
-  const frame: StreamFrame = {
-    id: row.id,
-    type: row.type as StreamEventType,
-    domain: row.domain,
-    entityRef: row.entityRef,
-    payload: row.payload,
-    visibleRoles: row.visibleRoles,
-    createdAt: row.createdAt.toISOString(),
-  };
-
-  // Fan out to any live in-process subscribers (realtime path). The outbox
-  // row above is the durable source of truth used for resume/backfill.
-  publish(frame);
-  return frame;
+  return rowToFrame(row);
 }
 
-export async function readEventsSince(
-  lastEventId: number,
-  opts: { roles: string[]; limit?: number },
-): Promise<StreamFrame[]> {
-  const limit = opts.limit ?? 500;
+/**
+ * Fetch frames after `lastId` (exclusive) for any of `topics`, in strictly
+ * increasing id order. This is the resume path used both for
+ * `Last-Event-ID` reconnects and for the initial catch-up on first connect.
+ */
+export async function getFramesSince(
+  topics: string[],
+  lastId: bigint | null,
+  limit = 500,
+): Promise<StoredFrame[]> {
+  if (topics.length === 0) return [];
+  const conditions = [inArray(eventOutbox.topic, topics)];
+  if (lastId !== null) conditions.push(gt(eventOutbox.id, lastId));
   const rows = await db
     .select()
     .from(eventOutbox)
-    .where(gt(eventOutbox.id, lastEventId))
+    .where(and(...conditions))
     .orderBy(asc(eventOutbox.id))
     .limit(limit);
-
-  return rows
-    .filter((r) => roleSetCanSee(opts.roles, r.visibleRoles))
-    .map((r) => ({
-      id: r.id,
-      type: r.type as StreamEventType,
-      domain: r.domain,
-      entityRef: r.entityRef,
-      payload: r.payload,
-      visibleRoles: r.visibleRoles,
-      createdAt: r.createdAt.toISOString(),
-    }));
+  return rows.map(rowToFrame);
 }
 
-export function roleSetCanSee(roles: string[], visibleRoles: string[]): boolean {
-  if (visibleRoles.includes("*")) return true;
-  return roles.some((r) => visibleRoles.includes(r));
+export async function getLatestFrameId(): Promise<bigint | null> {
+  const result = await db.execute<{ max: string | null }>(sql`SELECT MAX(id)::text AS max FROM event_outbox`);
+  const max = result.rows[0]?.max;
+  return max ? BigInt(max) : null;
 }
 
-export async function latestEventId(): Promise<number> {
-  const [row] = await db
-    .select({ maxId: sql<number>`coalesce(max(${eventOutbox.id}), 0)` })
-    .from(eventOutbox);
-  return row?.maxId ?? 0;
-}
-
-// Used by the "what changed since last visit" delta on the Now surface.
-export async function countEventsSince(lastEventId: number, roles: string[], domain?: string) {
-  const rows = await db
-    .select()
-    .from(eventOutbox)
-    .where(
-      domain
-        ? and(gt(eventOutbox.id, lastEventId), sql`${eventOutbox.domain} = ${domain}`)
-        : gt(eventOutbox.id, lastEventId),
-    )
-    .orderBy(asc(eventOutbox.id));
-  return rows.filter((r) => roleSetCanSee(roles, r.visibleRoles));
+/** Build the set of topics a given role/user can see. Shared contract for Parts 15/19 to reuse. */
+export function scopedTopics(orgId: string, userId: string, role: string): string[] {
+  return [`org:${orgId}:broadcast`, `org:${orgId}:role:${role}`, `org:${orgId}:user:${userId}`];
 }

@@ -1,15 +1,12 @@
-// GET /api/me — resolves current dev-auth identity, and lists all seeded
-// users so the demo UI can offer a "view as" switcher (there is no real
-// login flow in this part; see src/lib/currentUser.ts).
-
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { resolveCurrentUser } from "@/lib/currentUser";
+// LEADOS Part 14 — GET /api/me
+// Resolves (and lazily seeds) the current demo actor. Stand-in for real
+// session/auth (Part 03). Accepts ?role=manager to switch demo persona.
+import { resolveActor } from "@/lib/demoContext";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: Request) {
-  const user = await resolveCurrentUser(req);
-  const all = await db.select().from(users);
-  return Response.json({ user, users: all });
+  const actor = await resolveActor(req);
+  return Response.json(actor);
 }

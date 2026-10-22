@@ -6,12 +6,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "eval:sensing": "tsx scripts/eval-sensing.ts",
-    "test:scoring": "tsx scripts/test-scoring.ts",
-    "forecast:demo": "tsx scripts/forecast-demo.ts",
-    "lint:briefs": "tsx scripts/lint-briefs.ts",
-    "verify": "npm run typecheck && npm run lint && npm run eval:sensing && npm run test:scoring && npm run forecast:demo && npm run lint:briefs"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -19,8 +14,7 @@
     "next": "16.2.6",
     "pg": "8.20.0",
     "react": "19.2.6",
-    "react-dom": "19.2.6",
-    "tsx": "^4.23.15"
+    "react-dom": "19.2.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

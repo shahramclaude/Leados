@@ -1,32 +1,56 @@
-// Per-user, timezone-aware quiet hours. This is the "circadian" input to the
-// interrupt policy state machine: it answers one question — is right now a
-// bad time to interrupt this specific human, in their own local time?
-
-import { isWithinQuietHours, localHourFor } from "@/lib/temporal";
+// LEADOS Part 14 — timezone-aware quiet hours ("circadian" guard).
+import { db } from "@/db";
+import { quietHours } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { isWithinWindow, minuteOfDayInTz, minutesUntil } from "./temporal";
 
 export interface QuietHoursConfig {
   timezone: string;
-  quietHoursStart: number; // local hour 0-23
-  quietHoursEnd: number; // local hour 0-23
+  startMinute: number;
+  endMinute: number;
+  enabled: boolean;
 }
 
-export function isQuietNow(cfg: QuietHoursConfig, now: Date = new Date()): boolean {
-  const hour = localHourFor(now, cfg.timezone);
-  return isWithinQuietHours(hour, cfg.quietHoursStart, cfg.quietHoursEnd);
+const DEFAULT_QUIET: QuietHoursConfig = {
+  timezone: "UTC",
+  startMinute: 22 * 60,
+  endMinute: 7 * 60,
+  enabled: true,
+};
+
+export async function getQuietHours(userId: string): Promise<QuietHoursConfig> {
+  const [row] = await db.select().from(quietHours).where(eq(quietHours.userId, userId)).limit(1);
+  if (!row) return DEFAULT_QUIET;
+  return {
+    timezone: row.timezone,
+    startMinute: row.startMinute,
+    endMinute: row.endMinute,
+    enabled: row.enabled,
+  };
 }
 
-export function localHourNow(timezone: string, now: Date = new Date()): number {
-  return localHourFor(now, timezone);
+export interface QuietHoursCheck {
+  inQuietHours: boolean;
+  minutesUntilEnd: number;
+  minutesUntilStart: number;
+  config: QuietHoursConfig;
 }
 
-// Seam: meeting-aware suppression once a calendar integration exists. With
-// no calendar wired up, this always degrades to "not in a meeting" so the
-// rest of the pipeline behaves identically whether or not the seam is filled.
-export interface CalendarSignal {
-  inMeetingUntil?: Date | null;
+export function evaluateQuietHours(at: Date, config: QuietHoursConfig): QuietHoursCheck {
+  if (!config.enabled) {
+    return { inQuietHours: false, minutesUntilEnd: 0, minutesUntilStart: Infinity, config };
+  }
+  const minute = minuteOfDayInTz(at, config.timezone);
+  const inQuietHours = isWithinWindow(minute, config.startMinute, config.endMinute);
+  return {
+    inQuietHours,
+    minutesUntilEnd: inQuietHours ? minutesUntil(minute, config.endMinute) : 0,
+    minutesUntilStart: inQuietHours ? 0 : minutesUntil(minute, config.startMinute),
+    config,
+  };
 }
 
-export function isInMeeting(signal: CalendarSignal | null | undefined, now: Date = new Date()): boolean {
-  if (!signal?.inMeetingUntil) return false;
-  return now.getTime() < signal.inMeetingUntil.getTime();
+export async function checkQuietHours(userId: string, at: Date = new Date()): Promise<QuietHoursCheck> {
+  const config = await getQuietHours(userId);
+  return evaluateQuietHours(at, config);
 }

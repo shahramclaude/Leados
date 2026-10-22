@@ -1,48 +1,50 @@
 "use client";
 
-// ---------------------------------------------------------------------------
-// Subscribes to the SSE audit stream and exposes "events since mount" plus
-// "what changed since last visit". Incoming events are buffered and flushed
-// at most once per animation frame (rAF coalescing) so a burst of N events
-// from the server produces exactly one React commit, not N.
-// ---------------------------------------------------------------------------
+// LEADOS Part 14 — useRealtimeIntelligence
+// Lazy-loads src/lib/realtimeClient.ts (kept out of the initial bundle) and
+// exposes its rAF-coalesced state via useSyncExternalStore so React only
+// re-renders at most once per animation frame even under a frame storm.
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { RealtimeClient, RealtimeState } from "@/lib/realtimeClient";
 
-import { useEffect, useRef, useState } from "react";
-import type { AuditEntryDTO } from "@/lib/state/entityStore";
+const EMPTY_STATE: RealtimeState = {
+  connectionState: "connecting",
+  frames: [],
+  lastEventId: null,
+  reconnectAttempts: 0,
+  lagNotices: 0,
+};
 
-export function useRealtimeIntelligence(options?: { enabled?: boolean }) {
-  const [events, setEvents] = useState<AuditEntryDTO[]>([]);
-  const [connected, setConnected] = useState(false);
-  const bufferRef = useRef<AuditEntryDTO[]>([]);
-  const frameRef = useRef<number | null>(null);
-  const renderCountRef = useRef(0);
+export function useRealtimeIntelligence(userId: string | null, role?: string) {
+  const clientRef = useRef<RealtimeClient | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (options?.enabled === false) return;
-    const source = new EventSource("/api/realtime/stream");
-
-    source.addEventListener("hello", () => setConnected(true));
-    source.addEventListener("ping", () => setConnected(true));
-    source.addEventListener("audit", (event) => {
-      const payload = JSON.parse((event as MessageEvent).data) as AuditEntryDTO;
-      bufferRef.current.push(payload);
-      if (frameRef.current === null) {
-        frameRef.current = requestAnimationFrame(() => {
-          const batch = bufferRef.current;
-          bufferRef.current = [];
-          frameRef.current = null;
-          renderCountRef.current += 1;
-          setEvents((prev) => [...batch.reverse(), ...prev].slice(0, 50));
-        });
-      }
+    if (!userId) return;
+    let cancelled = false;
+    void import("@/lib/realtimeClient").then(({ createRealtimeClient }) => {
+      if (cancelled) return;
+      const client = createRealtimeClient({ userId, role });
+      clientRef.current = client;
+      client.start();
+      setReady(true);
     });
-    source.onerror = () => setConnected(false);
-
     return () => {
-      source.close();
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      cancelled = true;
+      clientRef.current?.stop();
+      clientRef.current = null;
+      setReady(false);
     };
-  }, [options?.enabled]);
+  }, [userId, role]);
 
-  return { events, connected, renderCount: renderCountRef.current };
+  const state = useSyncExternalStore(
+    (onStoreChange) => {
+      if (!clientRef.current) return () => {};
+      return clientRef.current.subscribe(onStoreChange);
+    },
+    () => clientRef.current?.getState() ?? EMPTY_STATE,
+    () => EMPTY_STATE,
+  );
+
+  return { ready, state };
 }

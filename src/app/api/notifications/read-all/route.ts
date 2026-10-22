@@ -1,29 +1,35 @@
+// LEADOS Part 14 — POST /api/notifications/read-all
+// Bulk triage: marks every unread/reopened notification (and its chain
+// children) as read for the current user. Returns the affected ids so the
+// client can offer a single "Undo" action.
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
-import { resolveCurrentUser } from "@/lib/currentUser";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
+import { resolveActor } from "@/lib/demoContext";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const user = await resolveCurrentUser(req);
-  if (!user) return Response.json({ error: "unauthenticated" }, { status: 401 });
+  const actor = await resolveActor(req);
+  const body = await req.json().catch(() => ({} as { ids?: string[] }));
 
-  const body = await req.json().catch(() => ({}));
-  const domain = typeof body?.domain === "string" ? body.domain : null;
+  const targetRows = body.ids?.length
+    ? await db.select().from(notifications).where(and(eq(notifications.userId, actor.userId), inArray(notifications.id, body.ids)))
+    : await db
+        .select()
+        .from(notifications)
+        .where(and(eq(notifications.userId, actor.userId), or(eq(notifications.state, "unread"), eq(notifications.state, "reopened"))));
 
-  const conditions = [eq(notifications.userId, user.id), eq(notifications.state, "unread")] as const;
-  const rows = await db
-    .select()
-    .from(notifications)
-    .where(domain ? and(...conditions, eq(notifications.domain, domain)) : and(...conditions));
+  const ids = targetRows.map((r) => r.id);
+  if (ids.length === 0) return Response.json({ updated: [], previousStates: {} });
 
-  if (rows.length === 0) return Response.json({ updated: 0 });
+  const previousStates: Record<string, string> = Object.fromEntries(targetRows.map((r) => [r.id, r.state]));
 
-  const now = new Date();
-  for (const row of rows) {
-    await db.update(notifications).set({ state: "read", readAt: now }).where(eq(notifications.id, row.id));
-  }
+  await db
+    .update(notifications)
+    .set({ state: "read", updatedAt: new Date(), readAt: new Date() })
+    .where(and(eq(notifications.userId, actor.userId), inArray(notifications.id, ids)));
 
-  return Response.json({ updated: rows.length });
+  return Response.json({ updated: ids, previousStates });
 }

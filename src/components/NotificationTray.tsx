@@ -1,59 +1,110 @@
 "use client";
 
-// Compact header tray: unread count + bell. Opens NotificationDrawer.
-// Realtime-aware (via useRealtimeIntelligence) but degrades fine if the
-// stream is unavailable — the unread count simply updates on the next
-// poll/fetch instead of instantly.
-
-import { useEffect, useState } from "react";
+// LEADOS Part 14 — NotificationTray
+// Bell trigger with unread count + visible interrupt-budget spend + a Focus
+// Mode toggle (visibly reversible — the badge and banner make the state
+// obvious whenever it's on).
+import { useCallback, useEffect, useState } from "react";
+import { useActor } from "./ActorProvider";
+import { NotificationDrawer } from "./NotificationDrawer";
 import { useRealtimeIntelligence } from "@/hooks/useRealtimeIntelligence";
-import NotificationDrawer from "@/components/NotificationDrawer";
 
-export default function NotificationTray() {
+interface BudgetStatus {
+  spent: number;
+  budget: number;
+  remaining: number;
+  exhausted: boolean;
+  quietHours: { inQuietHours: boolean };
+}
+
+export function NotificationTray() {
+  const { actor, loading, switchRole } = useActor();
+  const { state } = useRealtimeIntelligence(actor?.userId ?? null, actor?.role);
   const [open, setOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const { status, frames } = useRealtimeIntelligence();
+  const [unread, setUnread] = useState(0);
+  const [budget, setBudget] = useState<BudgetStatus | null>(null);
+  const [focusEnabled, setFocusEnabled] = useState(false);
 
-  async function refreshCount() {
-    try {
-      const res = await fetch("/api/notifications?state=unread&limit=50", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = await res.json();
-      setUnreadCount(Array.isArray(data.items) ? data.items.length : 0);
-    } catch {
-      // best-effort
-    }
+  const refresh = useCallback(async () => {
+    if (!actor) return;
+    const [nRes, bRes, fRes] = await Promise.all([
+      fetch(`/api/notifications?userId=${actor.userId}&state=unread&limit=100`),
+      fetch(`/api/notifications/budget?userId=${actor.userId}`),
+      fetch(`/api/focus-mode?userId=${actor.userId}`),
+    ]);
+    const n = await nRes.json();
+    setUnread(n.items?.length ?? 0);
+    setBudget(await bRes.json());
+    const f = await fRes.json();
+    setFocusEnabled(!!f.enabled);
+  }, [actor]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const lastFrameId = state.frames.at(-1)?.id;
+  useEffect(() => {
+    if (lastFrameId) void refresh();
+  }, [lastFrameId, refresh]);
+
+  async function toggleFocus() {
+    if (!actor) return;
+    const next = !focusEnabled;
+    await fetch(`/api/focus-mode?userId=${actor.userId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: next, allowedClasses: ["action"], reason: next ? "user enabled focus mode" : "" }),
+    });
+    setFocusEnabled(next);
   }
 
-  useEffect(() => {
-    refreshCount();
-  }, []);
-
-  useEffect(() => {
-    if (frames.some((f) => f.type === "notification")) {
-      refreshCount();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frames.length]);
-
-  const dotColor = status === "open" ? "bg-emerald-500" : status === "polling" ? "bg-amber-500" : "bg-slate-400";
+  if (loading || !actor) return null;
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white shadow ring-1 ring-slate-200 hover:bg-slate-50"
-        aria-label="Notifications"
+    <div className="flex items-center gap-3">
+      {focusEnabled && (
+        <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-700">
+          Focus mode on
+          <button onClick={toggleFocus} className="ml-2 underline">
+            turn off
+          </button>
+        </span>
+      )}
+      {!focusEnabled && (
+        <button onClick={toggleFocus} className="text-xs font-medium text-slate-500 hover:text-slate-800">
+          Enable focus mode
+        </button>
+      )}
+
+      <select
+        value={actor.role}
+        onChange={(e) => switchRole(e.target.value as "manager" | "analyst")}
+        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
       >
-        <span className="text-lg">🔔</span>
-        <span className={`absolute right-1 top-1 h-2 w-2 rounded-full ${dotColor}`} title={`realtime: ${status}`} />
-        {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-rose-600 px-1 text-center text-[11px] font-semibold leading-[18px] text-white">
-            {unreadCount > 99 ? "99+" : unreadCount}
+        <option value="analyst">as analyst</option>
+        <option value="manager">as manager</option>
+      </select>
+
+      {budget && (
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-medium ${budget.exhausted ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600"}`}
+          title="daily interrupt budget spend"
+        >
+          {budget.spent}/{budget.budget} interrupts today
+        </span>
+      )}
+
+      <button onClick={() => setOpen(true)} className="relative rounded-full border border-slate-300 bg-white p-2 hover:bg-slate-50" aria-label="Notifications">
+        🔔
+        {unread > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
+            {unread}
           </span>
         )}
       </button>
-      {open && <NotificationDrawer onClose={() => setOpen(false)} onChanged={refreshCount} />}
+
+      <NotificationDrawer open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }
