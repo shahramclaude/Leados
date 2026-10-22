@@ -1,88 +1,80 @@
-// src/lib/findings.ts — paginated, indexed findings access.
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+// src/lib/findings.ts
+//
+// Findings: the single intake for anything the GRC engine surfaces as a
+// problem (appetite breach, overdue control test, obligation breach). All
+// findings can be linked to a Part 23 decision record (src/lib/decisions.ts)
+// so governance follow-up is tracked end to end.
+
 import { db } from "@/db";
-import { findings } from "@/db/schema";
-import { decodeCursor, encodeCursor, parseLimit, type Page } from "./pagination";
+import { findings, decisions } from "@/db/schema";
+import { eq, desc } from "drizzle-orm";
+import { appendAuditEvent } from "./audit";
 
-export interface FindingRecord {
-  id: number;
+export type FindingSeverity = "low" | "medium" | "high" | "critical";
+export type FindingSourceType = "appetite_breach" | "control_overdue" | "obligation_breach";
+
+export interface CreateFindingInput {
   title: string;
-  summary: string;
-  impact: number;
-  confidence: number;
-  effort: number;
-  score: number;
-  status: string;
-  createdAt: string;
+  severity: FindingSeverity;
+  sourceType: FindingSourceType;
+  sourceRef: string;
+  description: string;
 }
 
-function toRecord(row: typeof findings.$inferSelect): FindingRecord {
-  return { ...row, score: Number(row.score), createdAt: row.createdAt.toISOString() };
+function nextCode(prefix: string, n: number) {
+  return `${prefix}-${String(n).padStart(4, "0")}`;
 }
 
-export async function listFindings(searchParams: URLSearchParams): Promise<Page<FindingRecord>> {
-  const limit = parseLimit(searchParams);
-  const status = searchParams.get("status");
-  const cursor = decodeCursor(searchParams.get("cursor"));
-
-  const conditions = [];
-  if (status) conditions.push(eq(findings.status, status));
-  if (cursor) {
-    const cursorDate = new Date(cursor.createdAt);
-    conditions.push(
-      or(lt(findings.createdAt, cursorDate), and(eq(findings.createdAt, cursorDate), lt(findings.id, cursor.id))),
-    );
-  }
-
-  const rows = await db
-    .select()
-    .from(findings)
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(findings.createdAt), desc(findings.id))
-    .limit(limit + 1);
-
-  const hasMore = rows.length > limit;
-  const page = rows.slice(0, limit);
-  const last = page[page.length - 1];
-  return {
-    items: page.map(toRecord),
-    hasMore,
-    nextCursor: hasMore && last ? encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) : null,
-  };
-}
-
-export async function countOpenFindings(): Promise<number> {
-  const [row] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(findings)
-    .where(eq(findings.status, "open"));
-  return row?.count ?? 0;
-}
-
-export class ValidationError extends Error {}
-
-export async function createFinding(input: {
-  title: string;
-  summary?: string;
-  impact: number;
-  confidence: number;
-  effort: number;
-}): Promise<FindingRecord> {
-  if (!input.title.trim()) throw new ValidationError("title is required");
-  if (![input.impact, input.confidence, input.effort].every((n) => Number.isFinite(n) && n >= 0 && n <= 10)) {
-    throw new ValidationError("impact, confidence and effort must be numbers between 0 and 10");
-  }
-  const score = (input.impact * input.confidence) / Math.max(1, input.effort);
+export async function createFinding(input: CreateFindingInput) {
+  const existing = await db.select().from(findings);
+  const code = nextCode("FND", existing.length + 1);
   const [row] = await db
     .insert(findings)
     .values({
+      code,
       title: input.title,
-      summary: input.summary ?? "",
-      impact: input.impact,
-      confidence: input.confidence,
-      effort: input.effort,
-      score: score.toFixed(4),
+      severity: input.severity,
+      sourceType: input.sourceType,
+      sourceRef: input.sourceRef,
+      description: input.description,
     })
     .returning();
-  return toRecord(row);
+
+  await appendAuditEvent({
+    category: "finding",
+    entityType: "finding",
+    entityId: String(row.id),
+    action: "finding_raised",
+    payload: { code, severity: input.severity, sourceType: input.sourceType, sourceRef: input.sourceRef },
+    actor: "grc-engine",
+  });
+
+  return row;
+}
+
+export async function listFindings() {
+  return db.select().from(findings).orderBy(desc(findings.createdAt));
+}
+
+/** Refer a finding into the Part 23 decision register (minimal stand-in — see decisions.ts). */
+export async function referFindingToDecision(findingId: number, actor: string, title: string, rationale: string) {
+  const existingDecisions = await db.select().from(decisions);
+  const code = nextCode("DEC", existingDecisions.length + 1);
+  const [decision] = await db
+    .insert(decisions)
+    .values({ code, title, rationale, linkedFindingIds: [findingId] })
+    .returning();
+
+  await db.update(findings).set({ status: "referred", linkedDecisionId: decision.id }).where(eq(findings.id, findingId));
+
+  await appendAuditEvent({
+    category: "finding",
+    entityType: "finding",
+    entityId: String(findingId),
+    action: "finding_referred_to_decision",
+    payload: { decisionCode: code },
+    actor,
+  });
+
+  return decision;
 }

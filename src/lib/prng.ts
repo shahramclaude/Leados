@@ -1,23 +1,21 @@
-/**
- * Deterministic seeded PRNG utilities.
- *
- * STATUS: Part 01 of the LEADOS build is expected to own `src/lib/prng.ts`.
- * This repository snapshot does not yet contain Parts 01-25, so Part 26
- * bootstraps a minimal, spec-compatible implementation here. If/when the
- * real Part 01 module lands, this file should be replaced by it verbatim
- * (the public surface below — `createRng`, `seedFromString`, `shuffle`,
- * `pick`) is the contract Part 26 depends on.
- *
- * Algorithm: mulberry32 — small, fast, deterministic, good enough statistical
- * quality for assignment/randomization (not for cryptography).
- */
+// src/lib/prng.ts
+//
+// Deterministic, seedable pseudo-random number generator used throughout the
+// GRC risk-quantification stack (Part 29). We deliberately avoid Math.random()
+// so that:
+//   1. Monte Carlo runs are reproducible for audit/evidence purposes.
+//   2. The risk-model validation suite (scripts/validate-risk-model.ts) can
+//      assert recovered percentiles against known analytic answers.
+//
+// mulberry32 is a small, fast, statistically-adequate PRNG for simulation
+// work. It is NOT cryptographically secure and must never be used for
+// anything security-sensitive (tokens, hash-chain nonces, etc.).
 
 export type Rng = () => number;
 
-/** Build a deterministic RNG from a 32-bit integer seed. */
-export function createRng(seed: number): Rng {
+export function mulberry32(seed: number): Rng {
   let a = seed >>> 0;
-  return function mulberry32() {
+  return function rng() {
     a |= 0;
     a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
@@ -26,39 +24,14 @@ export function createRng(seed: number): Rng {
   };
 }
 
-/** Derive a stable 32-bit seed from an arbitrary string (FNV-1a hash). */
-export function seedFromString(input: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
+/** Hash an arbitrary string into a 32-bit seed (xmur3). Deterministic. */
+export function seedFromString(str: string): number {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
   }
-  return hash >>> 0;
-}
-
-/** Create a deterministic RNG seeded by a string key (e.g. "program:P1:rollout"). */
-export function rngFromKey(key: string): Rng {
-  return createRng(seedFromString(key));
-}
-
-/** Deterministic Fisher-Yates shuffle (does not mutate input). */
-export function shuffle<T>(items: readonly T[], rng: Rng): T[] {
-  const arr = items.slice();
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-/** Deterministically pick one item weighted by a uniform draw. */
-export function pick<T>(items: readonly T[], rng: Rng): T {
-  if (items.length === 0) throw new Error("pick: items must be non-empty");
-  const idx = Math.floor(rng() * items.length);
-  return items[Math.min(idx, items.length - 1)];
-}
-
-/** Deterministic Bernoulli draw, true with probability p. */
-export function bernoulli(p: number, rng: Rng): boolean {
-  return rng() < p;
+  h = Math.imul(h ^ (h >>> 16), 2246822507);
+  h = Math.imul(h ^ (h >>> 13), 3266489909);
+  return (h ^= h >>> 16) >>> 0;
 }

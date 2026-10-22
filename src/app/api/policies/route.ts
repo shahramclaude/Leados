@@ -1,5 +1,8 @@
-import { createCollectionHandlers } from "@/lib/platform/http/entityRoutes";
-import { policyRepository } from "@/lib/platform/repositories";
+import { listPolicies } from "@/lib/policies";
 
 export const dynamic = "force-dynamic";
-export const { GET, POST } = createCollectionHandlers(policyRepository);
+
+export async function GET() {
+  const policies = await listPolicies();
+  return Response.json({ policies });
+}

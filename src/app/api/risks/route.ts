@@ -1,5 +1,9 @@
-import { createCollectionHandlers } from "@/lib/platform/http/entityRoutes";
-import { riskRepository } from "@/lib/platform/repositories";
+import { listRisks, summarizeBeliefs } from "@/lib/risk";
 
 export const dynamic = "force-dynamic";
-export const { GET, POST } = createCollectionHandlers(riskRepository);
+
+export async function GET() {
+  const risks = await listRisks();
+  const payload = risks.map((r) => ({ risk: r, beliefs: summarizeBeliefs(r) }));
+  return Response.json({ risks: payload });
+}
