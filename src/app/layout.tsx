@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LEADOS — Global Operations (Part 37)",
-  description: "Multi-entity, multi-currency, multi-zone consolidation and jurisdiction tracking for LEADOS.",
+  title: "LEADOS — Continuous Assurance",
+  description: "Part 38: nightly assurance checks, drift detection, tiered remediation, and blind-spot register.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

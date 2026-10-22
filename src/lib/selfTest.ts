@@ -1,39 +1,23 @@
-// Synthetic smoke checks used by the composite health model.
-import { logger } from "./logger";
+// LEADOS — Part 38: ad-hoc self-test entry point (dry evaluation, no
+// scheduler/idempotency bookkeeping, no remediation side effects). Used by
+// the "run now" console action and by scripts/verify.ts's registry sanity
+// checks.
 
-const log = logger.child({ component: "selfTest" });
+import { CHECK_REGISTRY } from "@/lib/assurance/registry";
+import { evaluateCheck, type CheckEvaluation } from "@/lib/evaluation";
 
 export interface SelfTestResult {
-  ok: boolean;
-  latencyMs: number;
-  detail: string;
+  checkId: string;
+  name: string;
+  domain: string;
+  evaluation: CheckEvaluation;
 }
 
-/**
- * LLM reachability check. If `LLM_HEALTHCHECK_URL` is configured we do a real
- * network round trip with a short timeout. Otherwise we are honest about it:
- * no external LLM is wired up in this checkout, so we report a "stubbed"
- * status rather than pretending a check happened.
- */
-export async function checkLlmReachability(): Promise<SelfTestResult> {
-  const url = process.env.LLM_HEALTHCHECK_URL;
-  const start = Date.now();
-  if (!url) {
-    return {
-      ok: true,
-      latencyMs: 0,
-      detail: "no LLM_HEALTHCHECK_URL configured — reporting stubbed-ok, not a real reachability probe",
-    };
+export async function runSelfTest(): Promise<SelfTestResult[]> {
+  const results: SelfTestResult[] = [];
+  for (const check of CHECK_REGISTRY) {
+    const evaluation = await evaluateCheck(check);
+    results.push({ checkId: check.id, name: check.name, domain: check.domain, evaluation });
   }
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-    const res = await fetch(url, { signal: controller.signal, method: "GET" });
-    clearTimeout(timeout);
-    const latencyMs = Date.now() - start;
-    return { ok: res.ok, latencyMs, detail: `HTTP ${res.status}` };
-  } catch (err) {
-    log.warn("llm_reachability_failed", { error: String(err) });
-    return { ok: false, latencyMs: Date.now() - start, detail: String(err) };
-  }
+  return results;
 }

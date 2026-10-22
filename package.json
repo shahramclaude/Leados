@@ -7,10 +7,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "verify": "npm run typecheck && vitest run",
-    "db:push": "drizzle-kit push",
-    "db:seed": "tsx src/db/seed.ts"
+    "verify": "tsx scripts/verify.ts",
+    "assurance:run": "tsx scripts/runAssuranceCycle.ts",
+    "drift:inject": "tsx scripts/driftInjectionHarness.ts",
+    "audit:verify": "tsx scripts/auditVerify.ts"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -19,8 +19,7 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15",
-    "vitest": "^5.0.5"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
