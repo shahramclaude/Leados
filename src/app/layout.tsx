@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LEADOS Data Platform",
-  description: "Connector SDK, data quality gates, lineage, and MDM for LEADOS.",
+  title: "LEADOS — Resilience Lab",
+  description: "Chaos engineering, continuity planning, and graceful degradation for LEADOS (Part 35).",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

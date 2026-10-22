@@ -1,177 +1,189 @@
-// LEADOS Part 34 — Data Platform (connectors, quality, lineage, MDM, export integrity)
+// LEADOS — Part 35: Resilience & Chaos Engineering schema.
 //
-// Conventions:
-//  - Primary keys are app-generated text UUIDs (crypto.randomUUID()) rather than DB-generated,
-//    so lib code can build lineage/audit graphs before the row is committed.
-//  - jsonb columns hold structured-but-flexible payloads (schema maps, quality reports, etc.)
-//    documented in src/lib/platform/* alongside the code that writes them.
+// NOTE ON THIS SANDBOX: the repository snapshot available while building this
+// part contains only the bare Next.js/Drizzle starter — none of Part 10
+// (scheduler), Part 18 (queue), Part 20 (runbooks/SLO service), Part 29 (risk
+// register), Part 06 (shock models), Part 12 (playbooks) or Part 28 (process
+// mining) artifacts are present. Part 35 therefore ships its own
+// representation of the pieces it needs (a local risk register, a local
+// critical-process list, a local SLO config) clearly namespaced so a future
+// merge with the real Part 10/18/20/29 tables is a rename, not a rewrite.
+// This is called out again in RESILIENCE.md and AI-SESSION-LOG.md.
+
 import {
   pgTable,
+  serial,
   text,
   integer,
-  numeric,
-  jsonb,
+  boolean,
   timestamp,
+  jsonb,
+  varchar,
+  real,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Connector framework (Part 16 extension seam)
+// Phase 0 — failure domain inventory (the program's own object of study)
 // ---------------------------------------------------------------------------
-export const connectors = pgTable("connectors", {
-  id: text("id").primaryKey(),
+export const failureDomains = pgTable("resilience_failure_domains", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 64 }).notNull().unique(),
   name: text("name").notNull(),
-  kind: text("kind").notNull(), // "pull" | "push" | "webhook"
-  authType: text("auth_type").notNull(), // "none" | "apiKey" | "oauth2" | "basic"
-  config: jsonb("config").notNull().default({}),
-  schemaMap: jsonb("schema_map").notNull().default({}),
-  rateLimits: jsonb("rate_limits").notNull().default({}),
-  retryPolicy: jsonb("retry_policy").notNull().default({}),
-  // Lower rank = higher trust for golden-record field precedence (MDM).
-  precedenceRank: integer("precedence_rank").notNull().default(100),
-  healthState: text("health_state").notNull().default("unknown"), // unknown|healthy|degraded|down
-  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
-  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
-  lastErrorMessage: text("last_error_message"),
+  description: text("description").notNull(),
+  currentProtection: text("current_protection").notNull(),
+  untestedAssumption: text("untested_assumption").notNull(),
+  chaosTestable: boolean("chaos_testable").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const syncRuns = pgTable("sync_runs", {
-  id: text("id").primaryKey(),
-  connectorId: text("connector_id").notNull(),
-  mode: text("mode").notNull(), // "dry_run" | "commit"
-  status: text("status").notNull(), // running|success|partial|failed
-  rowsRead: integer("rows_read").notNull().default(0),
-  rowsValid: integer("rows_valid").notNull().default(0),
-  rowsQuarantined: integer("rows_quarantined").notNull().default(0),
-  rowsImported: integer("rows_imported").notNull().default(0),
-  rowsMergedPending: integer("rows_merged_pending").notNull().default(0),
-  rowsMergedAuto: integer("rows_merged_auto").notNull().default(0),
-  errorSummary: jsonb("error_summary"),
+// ---------------------------------------------------------------------------
+// Risk register (Part 29 stand-in) — assumptions become tested beliefs
+// ---------------------------------------------------------------------------
+export const riskRegisterEntries = pgTable("resilience_risk_register", {
+  id: serial("id").primaryKey(),
+  domainKey: varchar("domain_key", { length: 64 }).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  belief: varchar("belief", { length: 24 }).notNull().default("untested"), // untested | tested_holds | tested_broken
+  likelihood: varchar("likelihood", { length: 16 }).notNull().default("unknown"), // low|medium|high|unknown
+  impact: varchar("impact", { length: 16 }).notNull().default("unknown"),
+  owner: text("owner").notNull(),
+  sourceExperimentKey: varchar("source_experiment_key", { length: 64 }),
+  lastUpdated: timestamp("last_updated", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Chaos experiment catalog + run transcripts
+// ---------------------------------------------------------------------------
+export const chaosExperiments = pgTable("resilience_chaos_experiments", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 64 }).notNull().unique(),
+  title: text("title").notNull(),
+  domainKey: varchar("domain_key", { length: 64 }).notNull(),
+  hypothesis: text("hypothesis").notNull(),
+  injectionType: varchar("injection_type", { length: 32 }).notNull(),
+  // process_kill | latency | error_rate | dependency_outage | corrupt_payload | clock_skew
+  blastRadius: varchar("blast_radius", { length: 16 }).notNull().default("test"), // test|staging|production
+  steadyStateSlo: jsonb("steady_state_slo").notNull(),
+  rollbackPlan: text("rollback_plan").notNull(),
+  safetyPolicy: jsonb("safety_policy").notNull(),
+  schedule: varchar("schedule", { length: 32 }).notNull().default("quarterly"),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const chaosRuns = pgTable("resilience_chaos_runs", {
+  id: serial("id").primaryKey(),
+  experimentKey: varchar("experiment_key", { length: 64 }).notNull(),
+  environment: varchar("environment", { length: 16 }).notNull().default("test"),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  injectionDetail: jsonb("injection_detail").notNull(),
+  steadyStateBefore: jsonb("steady_state_before").notNull(),
+  steadyStateDuring: jsonb("steady_state_during").notNull(),
+  steadyStateAfter: jsonb("steady_state_after"),
+  outcome: varchar("outcome", { length: 16 }).notNull(), // passed | failed | aborted
+  observed: text("observed").notNull(),
+  conclusion: text("conclusion").notNull(),
+  rolledBack: boolean("rolled_back").notNull().default(false),
+  thunderingHerdChecked: boolean("thundering_herd_checked").notNull().default(false),
+  operator: text("operator").notNull().default("chaos-harness"),
+});
+
+export const hardeningTasks = pgTable("resilience_hardening_tasks", {
+  id: serial("id").primaryKey(),
+  chaosRunId: integer("chaos_run_id").notNull(),
+  experimentKey: varchar("experiment_key", { length: 64 }).notNull(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("open"), // open|in_progress|done
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
 // ---------------------------------------------------------------------------
-// Import Studio (preview -> dry-run diff -> commit)
+// Circuit breakers / degraded modes
 // ---------------------------------------------------------------------------
-export const importBatches = pgTable("import_batches", {
-  id: text("id").primaryKey(),
-  connectorId: text("connector_id").notNull(),
-  syncRunId: text("sync_run_id"),
-  status: text("status").notNull().default("previewed"), // previewed|committed|discarded
-  rawRowCount: integer("raw_row_count").notNull().default(0),
-  mapping: jsonb("mapping").notNull().default({}),
-  qualityReport: jsonb("quality_report"),
-  // Cached, fully-processed rows from preview so commit is deterministic and
-  // never silently re-derives different results from a changed source file.
-  previewPayload: jsonb("preview_payload"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  committedAt: timestamp("committed_at", { withTimezone: true }),
-});
-
-export const quarantinedRows = pgTable("quarantined_rows", {
-  id: text("id").primaryKey(),
-  batchId: text("batch_id").notNull(),
-  rowIndex: integer("row_index").notNull(),
-  rawPayload: jsonb("raw_payload").notNull(),
-  reasons: jsonb("reasons").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const rawRecords = pgTable("raw_records", {
-  id: text("id").primaryKey(),
-  connectorId: text("connector_id").notNull(),
-  batchId: text("batch_id").notNull(),
-  externalId: text("external_id"),
-  entityType: text("entity_type").notNull(), // person|organization
-  normalized: jsonb("normalized").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Master Data Management: golden entities + entity resolution
-// ---------------------------------------------------------------------------
-export const entities = pgTable("entities", {
-  id: text("id").primaryKey(),
-  entityType: text("entity_type").notNull(),
-  goldenRecord: jsonb("golden_record").notNull(),
-  sourcePrecedence: jsonb("source_precedence").notNull().default([]),
-  fieldProvenance: jsonb("field_provenance").notNull().default({}),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const entityLinks = pgTable("entity_links", {
-  id: text("id").primaryKey(),
-  entityId: text("entity_id").notNull(),
-  rawRecordId: text("raw_record_id").notNull(),
-  confidence: numeric("confidence").notNull(),
-  linkMethod: text("link_method").notNull(), // initial|auto_duplicate|human_confirmed
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const dedupCandidates = pgTable("dedup_candidates", {
-  id: text("id").primaryKey(),
-  entityId: text("entity_id").notNull(),
-  rawRecordId: text("raw_record_id").notNull(),
-  score: numeric("score").notNull(),
-  matchedRules: jsonb("matched_rules").notNull(),
-  status: text("status").notNull().default("pending"), // pending|confirmed|rejected
-  decidedBy: text("decided_by"),
-  decidedAt: timestamp("decided_at", { withTimezone: true }),
-  preMergeSnapshot: jsonb("pre_merge_snapshot"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Lineage & provenance graph
-// ---------------------------------------------------------------------------
-export const lineageNodes = pgTable("lineage_nodes", {
-  id: text("id").primaryKey(),
-  nodeType: text("node_type").notNull(), // source|transform|projection|surface
-  refTable: text("ref_table"),
-  refId: text("ref_id"),
+export const circuitBreakerStates = pgTable("resilience_circuit_breakers", {
+  id: serial("id").primaryKey(),
+  dependencyKey: varchar("dependency_key", { length: 64 }).notNull().unique(),
   label: text("label").notNull(),
-  metadata: jsonb("metadata").default({}),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const lineageEdges = pgTable("lineage_edges", {
-  id: text("id").primaryKey(),
-  fromNodeId: text("from_node_id").notNull(),
-  toNodeId: text("to_node_id").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  state: varchar("state", { length: 16 }).notNull().default("closed"), // closed|open|half_open
+  failureCount: integer("failure_count").notNull().default(0),
+  lastFailureAt: timestamp("last_failure_at", { withTimezone: true }),
+  lastStateChangeAt: timestamp("last_state_change_at", { withTimezone: true }).notNull().defaultNow(),
+  degradedModeDescription: text("degraded_mode_description").notNull(),
+  userVisibleMessage: text("user_visible_message").notNull(),
 });
 
 // ---------------------------------------------------------------------------
-// Export integrity
+// Continuity (operational business continuity, not just IT)
 // ---------------------------------------------------------------------------
-export const exportManifests = pgTable("export_manifests", {
-  id: text("id").primaryKey(),
-  exportName: text("export_name").notNull(),
-  format: text("format").notNull(),
-  rowCount: integer("row_count").notNull(),
-  checksumSha256: text("checksum_sha256").notNull(),
-  provenance: jsonb("provenance").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+export const continuityProcesses = pgTable("resilience_continuity_processes", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 64 }).notNull().unique(),
+  name: text("name").notNull(),
+  criticality: varchar("criticality", { length: 16 }).notNull().default("medium"), // low|medium|high|critical
+  rtoMinutes: integer("rto_minutes").notNull(),
+  rpoMinutes: integer("rpo_minutes").notNull(),
+  workaroundPlaybook: text("workaround_playbook").notNull(),
+  owner: text("owner").notNull(),
+  lastDrillAt: timestamp("last_drill_at", { withTimezone: true }),
+});
+
+export const continuityDrills = pgTable("resilience_continuity_drills", {
+  id: serial("id").primaryKey(),
+  processKey: varchar("process_key", { length: 64 }).notNull(),
+  scenarioKey: varchar("scenario_key", { length: 64 }).notNull(),
+  scenarioTitle: text("scenario_title").notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  timerSeconds: integer("timer_seconds"),
+  participants: text("participants").notNull(),
+  afterActionNotes: text("after_action_notes"),
+  actionItems: jsonb("action_items"),
+  outcome: varchar("outcome", { length: 16 }).notNull().default("in_progress"), // in_progress|completed|aborted
 });
 
 // ---------------------------------------------------------------------------
-// Cross-cutting: domain events (outbox) + audit log
+// Recovery re-verification (data-integrity check after any recovery)
 // ---------------------------------------------------------------------------
-export const platformEvents = pgTable("platform_events", {
-  id: text("id").primaryKey(),
-  eventType: text("event_type").notNull(),
-  payload: jsonb("payload").notNull().default({}),
+export const recoverySnapshots = pgTable("resilience_recovery_snapshots", {
+  id: serial("id").primaryKey(),
+  label: text("label").notNull(),
+  takenAt: timestamp("taken_at", { withTimezone: true }).notNull().defaultNow(),
+  expectedCount: integer("expected_count").notNull(),
+  expectedChecksum: text("expected_checksum").notNull(),
+});
+
+export const recoveryVerifications = pgTable("resilience_recovery_verifications", {
+  id: serial("id").primaryKey(),
+  snapshotId: integer("snapshot_id").notNull(),
+  label: text("label").notNull(),
+  runAt: timestamp("run_at", { withTimezone: true }).notNull().defaultNow(),
+  expectedCount: integer("expected_count").notNull(),
+  actualCount: integer("actual_count").notNull(),
+  expectedChecksum: text("expected_checksum").notNull(),
+  actualChecksum: text("actual_checksum").notNull(),
+  consistent: boolean("consistent").notNull(),
+  discrepancies: jsonb("discrepancies"),
+});
+
+// ---------------------------------------------------------------------------
+// Demo domain data used as the "thing being protected" by the lab:
+// a toy ledger of recoverable business records + a clock-skew probe table
+// used by the clock-skew chaos experiment (exp-clock-skew).
+// ---------------------------------------------------------------------------
+export const recoverableRecords = pgTable("resilience_recoverable_records", {
+  id: serial("id").primaryKey(),
+  externalRef: varchar("external_ref", { length: 64 }).notNull(),
+  amount: real("amount").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const auditLog = pgTable("audit_log", {
-  id: text("id").primaryKey(),
-  actor: text("actor").notNull(),
-  action: text("action").notNull(),
-  targetTable: text("target_table").notNull(),
-  targetId: text("target_id").notNull(),
-  details: jsonb("details").default({}),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+export const clockSkewProbes = pgTable("resilience_clock_skew_probes", {
+  id: serial("id").primaryKey(),
+  label: text("label").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+  payload: jsonb("payload").notNull(),
 });

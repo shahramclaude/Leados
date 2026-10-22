@@ -6,16 +6,20 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed:resilience": "tsx scripts/seed-resilience.ts",
+    "chaos:run": "tsx scripts/chaos-run.ts",
+    "drill:run": "tsx scripts/continuity-drill.ts",
+    "verify": "npm run typecheck && npm run seed:resilience && tsx scripts/verify-resilience.ts"
   },
   "dependencies": {
-    "dotenv": "^17.3.1",
+    "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
     "next": "16.2.6",
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "vitest": "^5.0.5"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

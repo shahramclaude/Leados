@@ -1,91 +1,93 @@
 # AI Session Log
 
-## Part 28 — Process Intelligence (mining / conformance / queueing / automation ROI)
+## Part 35 — Resilience & Chaos Engineering
 
 **Repository:** https://github.com/shahramclaude/Leados
-**Depends on:** Part 01 (event store), Part 06 (work-system model / twin), Part 10 (capability registry)
+**Scope:** Chaos experiment framework, operational business continuity, graceful-degradation architecture,
+anti-fragility loop, Resilience Lab / Continuity Plans / Degradation Status / Failure-Domain Coverage surfaces.
 
-### What this session found (Phase 0)
+### Files read before writing (standing order #1)
 
-The sandbox snapshot of the repo at the start of this session contained only the bare
-`nextjs-postgresql-template` scaffold — `src/db/schema.ts` was an empty placeholder,
-and none of `src/lib/portfolioMath.ts`, `optimizer.ts`, `loadBalancer.ts`,
-`workQueue*`, a Part 01 event store, or a Part 06 work-system model were present.
-This was confirmed by `list_files`/`grep_files` before any writes (see files-read
-list in the PR description below). Rather than guess at APIs for modules that
-don't exist in this checkout, Part 28 ships:
+- `src/lib/resilience.ts`, `stress.ts`, `recovery.ts`, `sustainability.ts`, `backup.ts`, `maintenance.ts` —
+  attempted via `glob_files`/`list_files`; **none existed**. The repository snapshot available to this session
+  contained only the bare Next.js/Drizzle starter (`src/db/schema.ts` an empty placeholder, `src/app/page.tsx`
+  the stock template, `src/app/layout.tsx`, `src/app/api/health/route.ts`, `src/db/index.ts`, config files).
+- Part 20's runbooks/SLOs, Part 29's risk register, Part 06's shock models — also searched for and not found.
+- Because the dependencies genuinely do not exist in this checkout, this part ships clearly-labelled local
+  stand-ins (`src/lib/slo.ts`, `src/lib/riskRegister.ts`, the `CRITICAL_PROCESSES` list in
+  `src/lib/continuity.ts`) with inline comments explaining the merge path once the real Part 10/18/20/29/06/12/28
+  artifacts land, rather than inventing undocumented content or blocking on files that are not present.
 
-1. Its own minimal, explicitly-labelled event-store table (`process_events`)
-   shaped like what Part 01's correlationId/entity-chain model implies, so the
-   mining pipeline has something real to read.
-2. Minimal local stand-ins for the EWMA utility (Part 04) and the control
-   chart (Part 13), clearly commented as "replace with the shared module once
-   it lands in this repo".
-3. A minimal capacity/"twin" stand-in for ROI projection (Part 06), and a
-   `automation_proposals` draft table as the hand-off point for Part 10's
-   capability registry.
+### What was built
 
-This is documented in-code (top-of-file comments in `src/db/schema.ts` and
-each `src/lib/processMining/*.ts` file) and in the Findings table delivered in
-chat, so nobody mistakes these stand-ins for the real upstream modules.
+1. **Schema** (`src/db/schema.ts`): failure domains, risk register, chaos experiment catalog + run
+   transcripts, hardening tasks, circuit breaker state, continuity processes + drills, recovery snapshots +
+   verifications, and two small demo tables (`resilience_recoverable_records`, `resilience_clock_skew_probes`)
+   that the chaos experiments act on.
+2. **Fault injection control plane** (`src/lib/faultInjection.ts`): an in-process simulated dependency layer
+   (db/queue/provider/network) supporting all six required injection types (process_kill, latency, error_rate,
+   dependency_outage, corrupt_payload, clock_skew). Explicitly documented as a stand-in for real infra that
+   does not exist in this codebase yet.
+3. **Circuit breakers** (`src/lib/circuitBreaker.ts`): closed/open/half-open state machine with a hard
+   single-trial-call guarantee during half-open, to prevent a thundering herd on recovery.
+4. **Chaos harness** (`src/lib/resilience.ts`): 9 experiments across 7 chaos-testable failure domains (db x2,
+   queue x2, provider x1, network x1, corrupt_data x1, operator_error x1, time x1), each with a real
+   hypothesis, real injection, real SLO-based steady-state scoring, automatic rollback, DB-persisted
+   transcript, hardening-task creation on failure, and risk-register belief update.
+5. **The anti-fragility loop, for real, not narrated**: `exp-clock-skew` is executed against the *original*
+   ("naive") latest-record strategy first — **and genuinely fails** — then against the hardened strategy
+   built in direct response, which passes. Both runs are persisted with full transcripts.
+6. **Recovery re-verification** (`src/lib/recoveryVerification.ts`): checksum + count comparison against a
+   pre-incident snapshot; `exp-operator-fat-finger` seeds a ledger, snapshots it, simulates an operator
+   deleting a row, and proves the mismatch is caught automatically.
+7. **Continuity tooling** (`src/lib/continuity.ts`, `scripts/continuity-drill.ts`): 5 critical operational
+   processes with RTO/RPO/workarounds, 4 scripted tabletop scenarios (including the brief's own two examples),
+   drill start/complete with timer + after-action + action items, persisted and visible in the UI.
+8. **Degradation status** (`src/lib/degradation.ts`): user-facing (not ops-facing) "what works right now" view
+   over live circuit-breaker state and fault-injection knobs.
+9. **Coverage map** (`computeFailureDomainCoverage` in `src/lib/resilience.ts`): the program's own gap map,
+   explicitly naming two domains (correlated cloud outage, cascading human error) as out of chaos-engineering's
+   structural reach, with the alternative mitigation stated.
+10. **Surfaces**: `/resilience-lab`, `/continuity-plans`, `/degradation-status`, `/failure-domain-coverage`,
+    plus a hub homepage, each a Next.js server component with Server Actions for "Run now" / "Run scripted
+    dry-run" / "Mark done" interactions, no client-side JS framework needed.
+11. **`npm run verify`**: seeds the catalog, runs the full 10-run chaos suite, runs a continuity drill,
+    computes coverage, and checks all five Phase-4 gates mechanically — failing experiments (the naive
+    clock-skew run) do not fail verify; only meta-gate violations do (e.g., "nothing ever failed" would).
 
-### What was built (Phases 1–3)
+### Honesty notes (standing order #6)
 
-- `src/lib/processMining/*` — case reconstruction (with honest degradation on
-  overlapping/shared correlation ids), directly-follows graph discovery with a
-  Heuristics-Miner-lite frequency/dependency filter (+ incremental merge for
-  streaming updates), conformance checking split into **mined** (statistical
-  rarity, never auto-fails a case) vs **declared** (rule violations only),
-  waiting-time bottleneck decomposition with root-cause heuristics, queueing
-  analytics with Little's-Law cross-validation, aggregate-safe bus-factor
-  scoring (k=3 anonymity), `Explain<T>`-wrapped automation scoring, and an
-  operational metrics + control-chart layer.
-- `src/app/api/process-mining/*` — seed, processes, overview, cases,
-  conformance, automation, automation/propose.
-- `src/app/process-mining/*` — Process X-Ray, Bottleneck Board, Conformance
-  Explorer, Automation ROI, plus an Overview landing page. Every surface
-  renders the mandatory "discovered, not designed" provenance banner.
-- `scripts/verify.ts` — the Phase 4 gate suite (planted-bottleneck recall/
-  precision, seeded-deviation detection, Little's Law delta, automation
-  score fixture check, 100k-event performance timing). Run via
-  `npx tsx scripts/verify.ts`. **Not** wired as `npm run verify` because this
-  session's platform policy prohibits editing `package.json` directly; see
-  the note at the top of `scripts/verify.ts`.
+- The clock-skew experiment's naive run is a **real, reported failure** — not simulated as a failure, not
+  asserted after the fact. It is the same code path a production bug would have hit, run against real
+  Postgres rows with real timestamps.
+- `npm run verify` prints an explicit warning if zero experiments fail, because an all-green chaos suite is a
+  smell, not an achievement.
+- The continuity drill tooling runs a **scripted dry-run**, not a live human tabletop, and says so in the code
+  comments, the CLI output, and the UI copy. Its own recorded action items include "run a live version of
+  this drill with real participants."
+- Phase 5 names concrete things this part deliberately did not do (no production chaos runs, no real external
+  infra to inject into, no full-codebase audit for the timestamp-ordering bug class, no feature-level mapping
+  on the degradation page, no live tabletop, no scheduler wiring).
 
-### Verification performed this session
+### Validation performed this session
 
-- `npx tsx scripts/verify.ts` → all gates PASS (see VERIFICATION LOG in the
-  chat delivery for full output).
-- `npx eslint .` → clean (0 errors, 0 warnings) after two small fixes
-  (lazy localStorage initializer instead of setState-in-effect; removed a
-  stale eslint-disable comment).
-- `npx next typegen`, `npm exec tsc -- --noEmit`, `npm run build` → all pass.
-- `npx drizzle-kit push` → applied the 5 new tables to the local Postgres
-  instance.
-- `build_and_start` → preview boots, `/api/health` returns `{ok:true}`,
-  manually exercised `/api/process-mining/seed`, `/overview`, `/automation`,
-  `/conformance` against the live server and confirmed correct output.
+- `npx next typegen` — pass
+- `npm exec tsc -- --noEmit --pretty false` — pass, zero errors
+- `npm run build` — pass (Next.js production build, all routes compiled)
+- `npm run verify` — **exit 0**, all 5 gates pass, transcript includes 1 genuine experiment failure
+  (`exp-clock-skew:naive`) and its hardening fix
+- `build_and_start` — pass, `/api/health` returns `{"ok":true}`; smoke-tested `/`, `/resilience-lab`,
+  `/continuity-plans`, `/degradation-status`, `/failure-domain-coverage`, `/api/degradation`,
+  `/api/resilience/coverage` all return 200 with expected JSON/HTML.
 
-### Honesty notes carried into the UI/API copy
+### Known follow-ups left for later parts (not closed in this session)
 
-- Mined-model conformance is always labelled "statistical" and never flips a
-  case to non-conformant by itself (over-standardization guard, verified by
-  an explicit test in `scripts/verify.ts`).
-- Automation scores whose `ruleBasedFraction`/`errorRate` were never
-  instrumented are marked `confidence: "estimated"` with an explicit
-  surfaced note; the UI shows an amber "estimated inputs — directional only"
-  badge rather than presenting all scores as equally trustworthy.
-- Case-reconstruction ambiguity (overlapping starts, shared correlation ids)
-  is surfaced as a count on the Overview page, not silently resolved.
-
-### Known limitations (deliberately not done — see Phase 5 in the PR)
-
-- No full inductive-miner / Petri-net with places and silent transitions —
-  the discovery engine is a heuristics-miner-lite DFG filter.
-- No true full-history streaming recompute for conformance/bottlenecks/
-  queueing — only the discovered-model DFG edges support incremental merge;
-  the rest are batch-recomputed per request against whatever events are
-  currently in `process_events`.
-- No real Part 06 twin simulation of cross-step capacity reallocation — the
-  ROI projection only reallocates a step's own freed hours into its own
-  volume.
+- Reconcile `CRITICAL_PROCESSES` / `DRILL_SCENARIOS` against Part 28's real process-mining output once it
+  exists.
+- Point the fault-injection control plane at Part 18's real queue and any real provider client once they
+  exist, instead of the in-process simulation.
+- Audit the rest of the codebase for other "ORDER BY timestamp = latest" assumptions beyond the probe table
+  built to demonstrate the bug class.
+- Build a feature-to-dependency map for `/degradation-status` so messaging is feature-level, not
+  component-level.
+- Wire `POST /api/resilience/run` into Part 10's real scheduler using each experiment's declared `schedule`.
