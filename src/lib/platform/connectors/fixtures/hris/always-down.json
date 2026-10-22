@@ -1,0 +1,7 @@
+{
+  "attempts": [
+    { "status": 500, "body": { "error": "Internal Server Error" } },
+    { "status": 500, "body": { "error": "Internal Server Error" } },
+    { "status": 500, "body": { "error": "Internal Server Error" } }
+  ]
+}

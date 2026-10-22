@@ -1,0 +1,17 @@
+{
+  "attempts": [
+    { "status": 503, "body": { "error": "Service Unavailable" } },
+    { "status": 200, "body": { "page": 1, "hasMore": false, "employees": [
+      {
+        "employeeId": "E-3001",
+        "employeeName": "Lena Fischer",
+        "workEmail": "lena.fischer@retrysource.com",
+        "mobilePhone": "+49 30 555-0101",
+        "department": "RetrySource GmbH",
+        "jobTitle": "Head of IT",
+        "country": "DE",
+        "updatedAt": "2026-02-10T12:00:00Z"
+      }
+    ] } }
+  ]
+}

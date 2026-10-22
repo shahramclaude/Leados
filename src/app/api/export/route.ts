@@ -1,21 +1,22 @@
-import { generateBoardPack, renderBoardPackMarkdown } from "@/lib/boardPack";
+import { exportLeadsCsv } from "@/lib/export";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const type = searchParams.get("type") ?? "board-pack";
-  const format = searchParams.get("format") ?? "json";
-  const periodLabel = searchParams.get("period") ?? new Date().toISOString().slice(0, 10);
+  const url = new URL(req.url);
+  const format = url.searchParams.get("format");
+  const result = await exportLeadsCsv();
 
-  if (type !== "board-pack") {
-    return Response.json({ error: `Unsupported export type: ${type}` }, { status: 400 });
+  if (format === "file") {
+    return new Response(result.csvText, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${result.manifestId}.csv"`,
+        "X-Export-Checksum-Sha256": result.checksumSha256,
+        "X-Export-Row-Count": String(result.rowCount),
+      },
+    });
   }
 
-  const pack = await generateBoardPack(periodLabel);
-
-  if (format === "markdown") {
-    return new Response(renderBoardPackMarkdown(pack), { headers: { "Content-Type": "text/markdown; charset=utf-8" } });
-  }
-  return Response.json({ pack });
+  return Response.json(result);
 }

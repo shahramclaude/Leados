@@ -1,252 +1,177 @@
-// LEADOS — Part 31: Ecosystem Intelligence (network / stakeholder / dependency layer)
+// LEADOS Part 34 — Data Platform (connectors, quality, lineage, MDM, export integrity)
 //
-// NOTE ON LINEAGE: this repository snapshot does not contain the Part 01 substrate,
-// Part 06 digital-twin, Part 09 roster/skills, or Part 29 risk-register tables described
-// in the standing order. To keep Part 31 runnable and internally consistent, this file
-// defines minimal, clearly-labelled stand-in tables for those dependencies
-// (`people`, `skillCoverage`, `riskRegister`) using the same field names/shapes the
-// standing order calls for, so a future part that lands the real Part 01/06/09/29
-// tables can rename/merge rather than redesign. Everything under "Part 31 core" is net
-// new for this part.
-
+// Conventions:
+//  - Primary keys are app-generated text UUIDs (crypto.randomUUID()) rather than DB-generated,
+//    so lib code can build lineage/audit graphs before the row is committed.
+//  - jsonb columns hold structured-but-flexible payloads (schema maps, quality reports, etc.)
+//    documented in src/lib/platform/* alongside the code that writes them.
 import {
-  boolean,
-  integer,
-  jsonb,
-  numeric,
-  pgEnum,
   pgTable,
   text,
+  integer,
+  numeric,
+  jsonb,
   timestamp,
-  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-const id = () =>
-  text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID());
-
 // ---------------------------------------------------------------------------
-// Stand-ins for prior parts (Part 09 roster, Part 29 risk register)
+// Connector framework (Part 16 extension seam)
 // ---------------------------------------------------------------------------
-
-/** Part 09 stand-in: minimal roster so bus-factor / privacy scoping has real rows. */
-export const people = pgTable("eco_people", {
-  id: id(),
+export const connectors = pgTable("connectors", {
+  id: text("id").primaryKey(),
   name: text("name").notNull(),
-  role: text("role").notNull(),
-  team: text("team").notNull(),
-  managerId: text("manager_id"),
+  kind: text("kind").notNull(), // "pull" | "push" | "webhook"
+  authType: text("auth_type").notNull(), // "none" | "apiKey" | "oauth2" | "basic"
+  config: jsonb("config").notNull().default({}),
+  schemaMap: jsonb("schema_map").notNull().default({}),
+  rateLimits: jsonb("rate_limits").notNull().default({}),
+  retryPolicy: jsonb("retry_policy").notNull().default({}),
+  // Lower rank = higher trust for golden-record field precedence (MDM).
+  precedenceRank: integer("precedence_rank").notNull().default(100),
+  healthState: text("health_state").notNull().default("unknown"), // unknown|healthy|degraded|down
+  lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  lastErrorMessage: text("last_error_message"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Part 29 stand-in: risk register rows that partner scorecards link evidence to. */
-export const riskRegister = pgTable("eco_risk_register", {
-  id: id(),
-  title: text("title").notNull(),
-  category: text("category").notNull(),
-  severity: text("severity").notNull(), // low | medium | high | critical
-  likelihood: text("likelihood").notNull(), // low | medium | high
-  status: text("status").notNull().default("open"), // open | mitigated | closed
-  owner: text("owner"),
+export const syncRuns = pgTable("sync_runs", {
+  id: text("id").primaryKey(),
+  connectorId: text("connector_id").notNull(),
+  mode: text("mode").notNull(), // "dry_run" | "commit"
+  status: text("status").notNull(), // running|success|partial|failed
+  rowsRead: integer("rows_read").notNull().default(0),
+  rowsValid: integer("rows_valid").notNull().default(0),
+  rowsQuarantined: integer("rows_quarantined").notNull().default(0),
+  rowsImported: integer("rows_imported").notNull().default(0),
+  rowsMergedPending: integer("rows_merged_pending").notNull().default(0),
+  rowsMergedAuto: integer("rows_merged_auto").notNull().default(0),
+  errorSummary: jsonb("error_summary"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
+// ---------------------------------------------------------------------------
+// Import Studio (preview -> dry-run diff -> commit)
+// ---------------------------------------------------------------------------
+export const importBatches = pgTable("import_batches", {
+  id: text("id").primaryKey(),
+  connectorId: text("connector_id").notNull(),
+  syncRunId: text("sync_run_id"),
+  status: text("status").notNull().default("previewed"), // previewed|committed|discarded
+  rawRowCount: integer("raw_row_count").notNull().default(0),
+  mapping: jsonb("mapping").notNull().default({}),
+  qualityReport: jsonb("quality_report"),
+  // Cached, fully-processed rows from preview so commit is deterministic and
+  // never silently re-derives different results from a changed source file.
+  previewPayload: jsonb("preview_payload"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  committedAt: timestamp("committed_at", { withTimezone: true }),
+});
+
+export const quarantinedRows = pgTable("quarantined_rows", {
+  id: text("id").primaryKey(),
+  batchId: text("batch_id").notNull(),
+  rowIndex: integer("row_index").notNull(),
+  rawPayload: jsonb("raw_payload").notNull(),
+  reasons: jsonb("reasons").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const rawRecords = pgTable("raw_records", {
+  id: text("id").primaryKey(),
+  connectorId: text("connector_id").notNull(),
+  batchId: text("batch_id").notNull(),
+  externalId: text("external_id"),
+  entityType: text("entity_type").notNull(), // person|organization
+  normalized: jsonb("normalized").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------
-// Part 31 core: ecosystem graph
+// Master Data Management: golden entities + entity resolution
 // ---------------------------------------------------------------------------
+export const entities = pgTable("entities", {
+  id: text("id").primaryKey(),
+  entityType: text("entity_type").notNull(),
+  goldenRecord: jsonb("golden_record").notNull(),
+  sourcePrecedence: jsonb("source_precedence").notNull().default([]),
+  fieldProvenance: jsonb("field_provenance").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
-export const nodeTypeEnum = pgEnum("eco_node_type", [
-  "internal_person",
-  "internal_team",
-  "partner",
-  "supplier",
-  "customer",
-  "regulator",
-]);
-
-export const edgeTypeEnum = pgEnum("eco_edge_type", [
-  "employs",
-  "reports_to",
-  "depends_on",
-  "partners_with",
-  "serves",
-  "regulated_by",
-  "supplies",
-]);
-
-export const evidenceClassEnum = pgEnum("eco_evidence_class", [
-  "verified_primary", // e.g. signed contract, system-of-record export
-  "verified_secondary", // corroborated but indirect (e.g. finance extract)
-  "self_reported", // asserted by a party without corroboration
-  "inferred", // derived by a model/heuristic, not directly observed
-]);
-
-export const ecosystemNodes = pgTable("eco_nodes", {
-  id: id(),
-  type: nodeTypeEnum("type").notNull(),
-  name: text("name").notNull(),
-  isExternal: boolean("is_external").notNull().default(false),
-  /** Links back to `people` when type = internal_person, for privacy scoping. */
-  personId: text("person_id"),
-  scopeTags: jsonb("scope_tags").$type<string[]>().notNull().default([]),
-  metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+export const entityLinks = pgTable("entity_links", {
+  id: text("id").primaryKey(),
+  entityId: text("entity_id").notNull(),
+  rawRecordId: text("raw_record_id").notNull(),
+  confidence: numeric("confidence").notNull(),
+  linkMethod: text("link_method").notNull(), // initial|auto_duplicate|human_confirmed
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const ecosystemEdges = pgTable("eco_edges", {
-  id: id(),
-  sourceId: text("source_id").notNull(),
+export const dedupCandidates = pgTable("dedup_candidates", {
+  id: text("id").primaryKey(),
+  entityId: text("entity_id").notNull(),
+  rawRecordId: text("raw_record_id").notNull(),
+  score: numeric("score").notNull(),
+  matchedRules: jsonb("matched_rules").notNull(),
+  status: text("status").notNull().default("pending"), // pending|confirmed|rejected
+  decidedBy: text("decided_by"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  preMergeSnapshot: jsonb("pre_merge_snapshot"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Lineage & provenance graph
+// ---------------------------------------------------------------------------
+export const lineageNodes = pgTable("lineage_nodes", {
+  id: text("id").primaryKey(),
+  nodeType: text("node_type").notNull(), // source|transform|projection|surface
+  refTable: text("ref_table"),
+  refId: text("ref_id"),
+  label: text("label").notNull(),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const lineageEdges = pgTable("lineage_edges", {
+  id: text("id").primaryKey(),
+  fromNodeId: text("from_node_id").notNull(),
+  toNodeId: text("to_node_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Export integrity
+// ---------------------------------------------------------------------------
+export const exportManifests = pgTable("export_manifests", {
+  id: text("id").primaryKey(),
+  exportName: text("export_name").notNull(),
+  format: text("format").notNull(),
+  rowCount: integer("row_count").notNull(),
+  checksumSha256: text("checksum_sha256").notNull(),
+  provenance: jsonb("provenance").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Cross-cutting: domain events (outbox) + audit log
+// ---------------------------------------------------------------------------
+export const platformEvents = pgTable("platform_events", {
+  id: text("id").primaryKey(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const auditLog = pgTable("audit_log", {
+  id: text("id").primaryKey(),
+  actor: text("actor").notNull(),
+  action: text("action").notNull(),
+  targetTable: text("target_table").notNull(),
   targetId: text("target_id").notNull(),
-  edgeType: edgeTypeEnum("edge_type").notNull(),
-  /** Relationship strength, 0..1 (how material the dependency is). */
-  strength: numeric("strength", { precision: 5, scale: 4 }).notNull().default("0.5"),
-  /** 0 = irreplaceable, 1 = freely substitutable. */
-  substitutability: numeric("substitutability", { precision: 5, scale: 4 })
-    .notNull()
-    .default("0.5"),
-  evidenceClass: evidenceClassEnum("evidence_class").notNull().default("self_reported"),
-  evidenceRefs: jsonb("evidence_refs").$type<string[]>().notNull().default([]),
+  details: jsonb("details").default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
-
-// ---------------------------------------------------------------------------
-// Capability / bus-factor data (reads Part 09 skill data, stand-in here)
-// ---------------------------------------------------------------------------
-
-export const skillCoverage = pgTable("eco_skill_coverage", {
-  id: id(),
-  capability: text("capability").notNull(),
-  personId: text("person_id").notNull(),
-  /** Relative capacity this person contributes to the capability (any positive unit). */
-  capacity: numeric("capacity", { precision: 10, scale: 2 }).notNull().default("1"),
-  isPrimary: boolean("is_primary").notNull().default(false),
-});
-
-// ---------------------------------------------------------------------------
-// Concentration inputs (spend / revenue)
-// ---------------------------------------------------------------------------
-
-export const spendRecords = pgTable("eco_spend_records", {
-  id: id(),
-  partnerNodeId: text("partner_node_id").notNull(),
-  category: text("category").notNull(),
-  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
-  period: text("period").notNull(), // e.g. "2026-Q1"
-});
-
-export const revenueRecords = pgTable("eco_revenue_records", {
-  id: id(),
-  customerNodeId: text("customer_node_id").notNull(),
-  amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
-  period: text("period").notNull(),
-});
-
-export const concentrationSnapshots = pgTable("eco_concentration_snapshots", {
-  id: id(),
-  dimension: text("dimension").notNull(), // spend | revenue | skill | partner
-  period: text("period").notNull(),
-  hhi: numeric("hhi", { precision: 6, scale: 4 }).notNull(),
-  topShare: numeric("top_share", { precision: 6, scale: 4 }).notNull(),
-  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Dependency alerts (wired to Part 13 notification surface — stand-in channel field)
-// ---------------------------------------------------------------------------
-
-export const dependencyAlerts = pgTable("eco_dependency_alerts", {
-  id: id(),
-  alertType: text("alert_type").notNull(), // bus_factor | single_source | concentration | choke_point
-  subjectRef: text("subject_ref").notNull(), // capability name, node id, or dimension
-  severity: text("severity").notNull(), // low | medium | high | critical
-  message: text("message").notNull(),
-  status: text("status").notNull().default("open"), // open | acknowledged | resolved
-  notifyChannel: text("notify_channel").notNull().default("part13:inbox"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-});
-
-// ---------------------------------------------------------------------------
-// Stakeholder management
-// ---------------------------------------------------------------------------
-
-export const stakeholders = pgTable("eco_stakeholders", {
-  id: id(),
-  nodeId: text("node_id").notNull(),
-  interest: integer("interest").notNull(), // 0..10
-  influence: integer("influence").notNull(), // 0..10
-  affectedness: integer("affectedness").notNull(), // 0..10
-  engagementPlan: text("engagement_plan").notNull().default(""),
-  owner: text("owner").notNull().default(""),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const commitmentStatusEnum = pgEnum("eco_commitment_status", [
-  "open",
-  "in_progress",
-  "closed",
-  "missed",
-]);
-
-export const commitments = pgTable("eco_commitments", {
-  id: id(),
-  stakeholderId: text("stakeholder_id").notNull(),
-  description: text("description").notNull(),
-  promisedBy: text("promised_by").notNull(),
-  dueDate: timestamp("due_date", { withTimezone: true }),
-  status: commitmentStatusEnum("status").notNull().default("open"),
-  evidenceClass: evidenceClassEnum("evidence_class").notNull().default("self_reported"),
-  evidenceRefs: jsonb("evidence_refs").$type<string[]>().notNull().default([]),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  closedAt: timestamp("closed_at", { withTimezone: true }),
-});
-
-/** Aggregate-safe interaction log — counts/cadence only, no message content. */
-export const interactions = pgTable("eco_interactions", {
-  id: id(),
-  stakeholderId: text("stakeholder_id").notNull(),
-  channel: text("channel").notNull(), // meeting | email | call | event
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
-  sentiment: text("sentiment"), // positive | neutral | negative | null (optional, coarse)
-});
-
-// ---------------------------------------------------------------------------
-// Partner scorecards (linked to Part 29 risk register, evidence classed per Part 27)
-// ---------------------------------------------------------------------------
-
-export const partnerScorecards = pgTable("eco_partner_scorecards", {
-  id: id(),
-  partnerNodeId: text("partner_node_id").notNull(),
-  deliveryQuality: numeric("delivery_quality", { precision: 5, scale: 2 }), // 0..100
-  deliveryEvidenceClass: evidenceClassEnum("delivery_evidence_class"),
-  concentrationScore: numeric("concentration_score", { precision: 5, scale: 4 }), // HHI contribution
-  substitutabilityScore: numeric("substitutability_score", { precision: 5, scale: 4 }),
-  riskScore: numeric("risk_score", { precision: 5, scale: 2 }), // 0..100
-  linkedRiskIds: jsonb("linked_risk_ids").$type<string[]>().notNull().default([]),
-  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
-  notes: text("notes").notNull().default(""),
-});
-
-// ---------------------------------------------------------------------------
-// Privacy guardrails (Part 09 scopes stand-in): who may view per-person metrics
-// ---------------------------------------------------------------------------
-
-export const scopeEnum = pgEnum("eco_scope", ["self", "manager", "hr_admin", "exec"]);
-
-export const personMetricGrants = pgTable(
-  "eco_person_metric_grants",
-  {
-    id: id(),
-    personId: text("person_id").notNull(),
-    granteeUserId: text("grantee_user_id").notNull(),
-    scope: scopeEnum("scope").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    uniqGrant: uniqueIndex("eco_person_metric_grants_uniq").on(
-      table.personId,
-      table.granteeUserId,
-    ),
-  }),
-);

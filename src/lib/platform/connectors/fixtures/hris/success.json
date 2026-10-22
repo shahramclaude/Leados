@@ -1,0 +1,39 @@
+{
+  "status": 200,
+  "body": {
+    "page": 1,
+    "hasMore": false,
+    "employees": [
+      {
+        "employeeId": "E-1001",
+        "employeeName": "Dana Whitfield",
+        "workEmail": "dana.whitfield@acme-hr.com",
+        "mobilePhone": "+1 415-555-0133",
+        "department": "Acme Corp",
+        "jobTitle": "VP Sales",
+        "country": "US",
+        "updatedAt": "2026-01-14T10:00:00Z"
+      },
+      {
+        "employeeId": "E-1002",
+        "employeeName": "Priya Natarajan",
+        "workEmail": "priya.n@acme-hr.com",
+        "mobilePhone": "+1 415-555-0144",
+        "department": "Acme Corp",
+        "jobTitle": "Sales Director",
+        "country": "US",
+        "updatedAt": "2026-01-15T09:30:00Z"
+      },
+      {
+        "employeeId": "E-1003",
+        "employeeName": "Mateus Oliveira",
+        "workEmail": "mateus.oliveira@globex.io",
+        "mobilePhone": "+55 11 98888-0000",
+        "department": "Globex",
+        "jobTitle": "Procurement Lead",
+        "country": "BR",
+        "updatedAt": "2026-01-10T08:00:00Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+Full Name,Email,Phone,Company,Job Title,Country,Updated At
+Grace Lin,grace.lin@northwind.com,+1 312-555-0120,Northwind Traders,Buyer,US,2026-01-05T00:00:00Z
+Bad Row,missing-some-columns,US
+Omar Siddiqui,not-an-email,+1 312-555-0140,Northwind Traders,Analyst,US,2026-01-06T00:00:00Z
+,,,,,,

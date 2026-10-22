@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "body": {
+    "page": 1,
+    "hasMore": false,
+    "employees": [
+      {
+        "employeeId": "E-2001",
+        "fullLegalName": "Jordan Keel",
+        "primaryEmailAddress": "jordan.keel@newvendorapi.com",
+        "contactNumber": "+1 212-555-0101",
+        "orgUnit": "NewVendor Inc",
+        "positionTitle": "CFO",
+        "updatedAt": "2026-02-01T00:00:00Z"
+      }
+    ]
+  }
+}

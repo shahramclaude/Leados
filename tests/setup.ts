@@ -1,6 +1,6 @@
-import { config as loadEnv } from "dotenv";
-import "@testing-library/jest-dom/vitest";
+import { afterAll } from "vitest";
+import { pool } from "@/db";
 
-// Load .env for DATABASE_URL etc., mirroring Next.js's own env loading, so
-// `npm test` works the same way `npm run build` / `next dev` do.
-loadEnv({ path: ".env" });
+afterAll(async () => {
+  await pool.end();
+});

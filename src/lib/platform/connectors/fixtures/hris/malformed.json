@@ -1,0 +1,8 @@
+{
+  "status": 200,
+  "body": {
+    "page": 1,
+    "hasMore": false,
+    "employees": "this-should-be-an-array-not-a-string"
+  }
+}

@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Arena Next.js PostgreSQL Starter",
-  description: "Starter template with Next.js, Drizzle, and PostgreSQL.",
+  title: "LEADOS Data Platform",
+  description: "Connector SDK, data quality gates, lineage, and MDM for LEADOS.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
