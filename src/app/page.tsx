@@ -16,6 +16,12 @@ export default async function HomePage() {
         <p className="mt-4 text-base text-slate-700">
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
+        <a
+          href="/network"
+          className="mt-6 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+        >
+          Open Ecosystem Intelligence (Part 31) →
+        </a>
       </section>
     </main>
   );
