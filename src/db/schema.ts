@@ -1,118 +1,196 @@
-// LEADOS baseline schema (Part 21 reconciliation baseline).
+// LEADOS core schema.
 //
-// Honesty note: this schema is the real, running schema for the LEADOS
-// "v0.1.0" baseline described in README.md and docs/INDEX.md. It intentionally
-// covers only what is implemented: multi-tenant lead storage, a deterministic
-// rules-based scoring engine, round-robin rotation of reps, and an append-only
-// evidence ledger ("decisions"). Anything described elsewhere as causal
-// inference, ML-based fairness auditing, retrieval/LLM reasoning, or
-// real-time sensing is NOT represented here and is labeled as roadmap intent
-// in docs/explanations/*.
+// Vocabulary contract (see docs/GLOSSARY.md — do not reintroduce synonyms):
+//   - "signal"   = a raw observed data point about a lead (never "finding").
+//   - "decision" = a committed, attributable choice made by a human, agent or
+//                  LLM about a lead (never "choice").
+//   - "event"    = the immutable envelope row written for every mutation.
 import {
-  pgTable,
-  serial,
-  text,
-  integer,
+  bigserial,
   boolean,
-  timestamp,
+  integer,
   jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
-export const tenants = pgTable(
-  "tenants",
-  {
-    id: serial("id").primaryKey(),
-    slug: text("slug").notNull(),
-    name: text("name").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("tenants_slug_idx").on(table.slug)],
-);
+export const actorTypeEnum = pgEnum("actor_type", ["human", "agent", "llm", "system"]);
+export const apiScopeEnum = pgEnum("api_scope", ["internal", "partner", "public"]);
+export const agentRunStatusEnum = pgEnum("agent_run_status", [
+  "ok",
+  "denied_tier",
+  "denied_budget",
+  "denied_policy",
+  "error",
+]);
 
-export const reps = pgTable("reps", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
+export const organizations = pgTable("organizations", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
   name: text("name").notNull(),
-  email: text("email").notNull(),
-  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Deterministic, auditable scoring rules. Each rule inspects one signal field
-// on a lead and contributes `weight` points to the score when `operator`
-// evaluated against `value` is true for that field. See src/lib/scoring.ts.
-export const rules = pgTable("rules", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
+export const users = pgTable("users", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: integer("org_id")
     .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
-  field: text("field").notNull(),
-  operator: text("operator").notNull(), // "gte" | "lte" | "eq" | "truthy"
-  value: text("value").notNull(),
-  weight: integer("weight").notNull(),
-  active: boolean("active").notNull().default(true),
+    .references(() => organizations.id),
+  email: text("email").notNull(),
+  role: text("role").notNull().default("member"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const leads = pgTable("leads", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: integer("org_id")
     .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
+    .references(() => organizations.id),
   name: text("name").notNull(),
   company: text("company").notNull(),
-  email: text("email").notNull(),
-  source: text("source").notNull().default("manual"),
-  signals: jsonb("signals").notNull().$type<Record<string, number | string | boolean>>(),
-  repId: integer("rep_id").references(() => reps.id, { onDelete: "set null" }),
+  email: text("email"),
+  stage: text("stage").notNull().default("new"),
+  // Denormalized latest score + confidence so list surfaces don't need a join
+  // to render an Explain<T> badge (Part 04 uncertainty requirement).
+  score: numeric("score", { precision: 5, scale: 2 }),
+  scoreConfidence: numeric("score_confidence", { precision: 5, scale: 4 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const leadScores = pgTable("lead_scores", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
+// A "signal" is a raw, low-level observation about a lead (an email open, a
+// firmographic fact, a webhook payload, an imported CSV row, etc). Signals
+// are inputs; they are never themselves decisions.
+export const signals = pgTable("signals", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: integer("org_id")
     .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
+    .references(() => organizations.id),
   leadId: integer("lead_id")
     .notNull()
-    .references(() => leads.id, { onDelete: "cascade" }),
-  score: integer("score").notNull(),
-  band: text("band").notNull(), // "hot" | "warm" | "cold"
-  breakdown: jsonb("breakdown").notNull().$type<
-    Array<{ rule: string; field: string; matched: boolean; weight: number }>
-  >(),
-  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// Append-only evidence ledger. Every automated action (scoring, rotation
-// assignment) writes one row here with a human-readable summary and the raw
-// evidence that produced it, so any decision can be traced back to its cause.
-export const decisions = pgTable("decisions", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  leadId: integer("lead_id").references(() => leads.id, { onDelete: "set null" }),
-  type: text("type").notNull(), // "scored" | "rotated"
-  actor: text("actor").notNull().default("system"),
-  summary: text("summary").notNull(),
-  evidence: jsonb("evidence").notNull().$type<Record<string, unknown>>(),
+    .references(() => leads.id),
+  type: text("type").notNull(),
+  payload: jsonb("payload").notNull(),
+  source: text("source").notNull(),
+  confidence: numeric("confidence", { precision: 5, scale: 4 }).notNull().default("1.0000"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const rotationState = pgTable(
-  "rotation_state",
+// A "decision" is a committed, attributable choice (stage change, score
+// override, outreach recommendation) made by a human, an agent tool, or an
+// LLM draft. Every decision carries an Explain<T> envelope (confidence +
+// basis + generatedBy) so downstream surfaces never show a bare number.
+export const decisions = pgTable("decisions", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  leadId: integer("lead_id")
+    .notNull()
+    .references(() => leads.id),
+  kind: text("kind").notNull(),
+  value: jsonb("value").notNull(),
+  confidence: numeric("confidence", { precision: 5, scale: 4 }).notNull(),
+  basis: jsonb("basis").notNull(),
+  rationale: text("rationale").notNull(),
+  actorType: actorTypeEnum("actor_type").notNull(),
+  actorId: text("actor_id").notNull(),
+  languagePolicyViolations: jsonb("language_policy_violations").notNull().default([]),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// The write envelope. EVERY mutation in LEADOS — human, agent-tool, or
+// LLM-proposed — must produce exactly one row here (src/lib/envelope.ts is
+// the only code path allowed to insert into this table).
+export const events = pgTable("events", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  actorType: actorTypeEnum("actor_type").notNull(),
+  actorId: text("actor_id").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  action: text("action").notNull(),
+  before: jsonb("before"),
+  after: jsonb("after"),
+  reason: text("reason").notNull(),
+  requestId: text("request_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Agent tier catalogue (Part 10). Tier gates which tools (Part 11) an agent
+// may invoke, regardless of what the LLM "wants" to call.
+export const agents = pgTable("agents", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  name: text("name").notNull(),
+  tier: integer("tier").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const agentRuns = pgTable("agent_runs", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  agentId: integer("agent_id")
+    .notNull()
+    .references(() => agents.id),
+  tool: text("tool").notNull(),
+  tierAtRun: integer("tier_at_run").notNull(),
+  status: agentRunStatusEnum("status").notNull(),
+  costUnits: numeric("cost_units", { precision: 10, scale: 4 }).notNull().default("0"),
+  input: jsonb("input").notNull(),
+  output: jsonb("output"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Compute budgets (Part 18) covering agent/LLM compute (Part 06).
+export const budgets = pgTable(
+  "budgets",
   {
-    id: serial("id").primaryKey(),
-    tenantId: integer("tenant_id")
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    orgId: integer("org_id")
       .notNull()
-      .references(() => tenants.id, { onDelete: "cascade" }),
-    lastRepId: integer("last_rep_id").references(() => reps.id, { onDelete: "set null" }),
+      .references(() => organizations.id),
+    period: text("period").notNull(), // e.g. "2026-01"
+    limitUnits: numeric("limit_units", { precision: 12, scale: 4 }).notNull(),
+    usedUnits: numeric("used_units", { precision: 12, scale: 4 }).notNull().default("0"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("rotation_state_tenant_idx").on(table.tenantId)],
+  (table) => [uniqueIndex("budgets_org_period_idx").on(table.orgId, table.period)],
 );
+
+// API registry (Part 19) covering every public route (Part 16). The public
+// API handler refuses to serve any path that is not listed here.
+export const apiRegistry = pgTable(
+  "api_registry",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    path: text("path").notNull(),
+    version: text("version").notNull().default("v1"),
+    scope: apiScopeEnum("scope").notNull(),
+    minTier: integer("min_tier").notNull().default(0),
+    description: text("description").notNull(),
+    deprecated: boolean("deprecated").notNull().default(false),
+  },
+  (table) => [uniqueIndex("api_registry_path_version_idx").on(table.path, table.version)],
+);
+
+export const apiKeys = pgTable("api_keys", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  orgId: integer("org_id")
+    .notNull()
+    .references(() => organizations.id),
+  keyHash: text("key_hash").notNull(),
+  label: text("label").notNull(),
+  scope: apiScopeEnum("scope").notNull().default("public"),
+  revoked: boolean("revoked").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});

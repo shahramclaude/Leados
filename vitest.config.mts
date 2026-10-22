@@ -4,12 +4,10 @@ import path from "node:path";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts"],
-    setupFiles: ["tests/setup.ts"],
+    globals: false,
+    setupFiles: ["./vitest.setup.mts"],
+    include: ["src/__tests__/**/*.test.ts"],
     testTimeout: 20000,
-    hookTimeout: 20000,
-    pool: "forks",
-    fileParallelism: false,
   },
   resolve: {
     alias: {

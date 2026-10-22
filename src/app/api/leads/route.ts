@@ -1,68 +1,60 @@
-import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { leads, leadScores } from "@/db/schema";
-import { getTenantBySlug, resolveTenantSlug } from "@/lib/tenant";
-import type { Signals } from "@/lib/scoring";
+import { leads } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { requireInternalOrgId } from "@/lib/tenant";
+import { handleRouteError, jsonError } from "@/lib/api-response";
+import { writeWithEnvelope } from "@/lib/envelope";
+import { makeExplain } from "@/lib/explain";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const slug = await resolveTenantSlug(request);
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant) return Response.json({ error: `unknown tenant '${slug}'` }, { status: 404 });
-
-  const rows = await db
-    .select()
-    .from(leads)
-    .where(eq(leads.tenantId, tenant.id))
-    .orderBy(desc(leads.createdAt));
-
-  const scores = await db
-    .select()
-    .from(leadScores)
-    .where(eq(leadScores.tenantId, tenant.id))
-    .orderBy(desc(leadScores.computedAt));
-
-  const latestScoreByLead = new Map<number, (typeof scores)[number]>();
-  for (const score of scores) {
-    if (!latestScoreByLead.has(score.leadId)) latestScoreByLead.set(score.leadId, score);
+export async function GET(req: Request) {
+  try {
+    const orgId = requireInternalOrgId(req);
+    const rows = await db.select().from(leads).where(eq(leads.orgId, orgId)).orderBy(desc(leads.createdAt));
+    const data = rows.map((lead) => ({
+      ...lead,
+      scoreExplain: makeExplain({
+        value: lead.score ? Number(lead.score) : 0,
+        confidence: lead.scoreConfidence ? Number(lead.scoreConfidence) : 0,
+        basis: lead.score ? ["stored score from last signal ingest/agent run"] : ["no score computed yet"],
+        generatedBy: "system",
+      }),
+    }));
+    return Response.json({ ok: true, leads: data });
+  } catch (err) {
+    return handleRouteError(err);
   }
-
-  return Response.json({
-    tenant: tenant.slug,
-    leads: rows.map((lead) => ({ ...lead, latestScore: latestScoreByLead.get(lead.id) ?? null })),
-  });
 }
 
-interface CreateLeadBody {
-  name?: string;
-  company?: string;
-  email?: string;
-  source?: string;
-  signals?: Signals;
-}
+export async function POST(req: Request) {
+  try {
+    const orgId = requireInternalOrgId(req);
+    const body = await req.json();
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const company = typeof body.company === "string" ? body.company.trim() : "";
+    if (!name || !company) {
+      return jsonError('"name" and "company" are required', 400);
+    }
+    const email = typeof body.email === "string" ? body.email.trim() : null;
 
-export async function POST(request: Request) {
-  const slug = await resolveTenantSlug(request);
-  const tenant = await getTenantBySlug(slug);
-  if (!tenant) return Response.json({ error: `unknown tenant '${slug}'` }, { status: 404 });
+    const lead = await writeWithEnvelope({
+      orgId,
+      actorType: "human",
+      actorId: req.headers.get("x-actor-id") ?? "unknown-human",
+      entityType: "lead",
+      entityId: (result) => String((result as { id: number }).id),
+      action: "lead.create",
+      reason: "manual lead creation",
+      mutate: async () => {
+        const [row] = await db.insert(leads).values({ orgId, name, company, email }).returning();
+        return row;
+      },
+      after: (row) => row,
+    });
 
-  const body = (await request.json().catch(() => null)) as CreateLeadBody | null;
-  if (!body?.name || !body?.company || !body?.email) {
-    return Response.json({ error: "name, company, email are required" }, { status: 400 });
+    return Response.json({ ok: true, lead }, { status: 201 });
+  } catch (err) {
+    return handleRouteError(err);
   }
-
-  const [lead] = await db
-    .insert(leads)
-    .values({
-      tenantId: tenant.id,
-      name: body.name,
-      company: body.company,
-      email: body.email,
-      source: body.source ?? "manual",
-      signals: body.signals ?? {},
-    })
-    .returning();
-
-  return Response.json({ lead }, { status: 201 });
 }

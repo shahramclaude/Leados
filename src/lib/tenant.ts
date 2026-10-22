@@ -1,26 +1,53 @@
-// Minimal tenant resolution helper.
-//
-// LEADOS v0.1.0 isolates data by `tenant_id` foreign keys (see src/db/schema.ts)
-// and resolves the active tenant from a `tenant` query parameter or the
-// `x-leados-tenant` header, defaulting to the "demo" tenant seeded by
-// scripts/seed.ts. There is no authentication or per-user RBAC yet — every
-// request that can name a tenant slug can read/write that tenant's data. This
-// is explicitly called out as a gap in docs/explanations/architecture.md and
-// SECURITY posture notes in README.md; it is not hidden.
-import { eq } from "drizzle-orm";
+// Tenant scoping (Part 15), enforced on the public API (Part 16). Internal
+// routes trust an `x-org-id` header (there is no human login system in this
+// build — see docs/FEATURES.md "Auth" row, marked stub). The public API
+// additionally requires a bearer API key that is hashed and looked up
+// per-org, so a leaked internal org id header alone cannot read another
+// tenant's data through the public surface.
+import { createHash } from "node:crypto";
 import { db } from "@/db";
-import { tenants } from "@/db/schema";
+import { apiKeys } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 
-export const DEFAULT_TENANT_SLUG = "demo";
-
-export async function resolveTenantSlug(request: Request): Promise<string> {
-  const url = new URL(request.url);
-  const fromQuery = url.searchParams.get("tenant");
-  const fromHeader = request.headers.get("x-leados-tenant");
-  return fromQuery ?? fromHeader ?? DEFAULT_TENANT_SLUG;
+export class TenantError extends Error {
+  status: number;
+  constructor(message: string, status = 401) {
+    super(message);
+    this.status = status;
+  }
 }
 
-export async function getTenantBySlug(slug: string) {
-  const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1);
-  return tenant ?? null;
+export function requireInternalOrgId(req: Request): number {
+  const header = req.headers.get("x-org-id");
+  const orgId = header ? Number(header) : NaN;
+  if (!Number.isInteger(orgId) || orgId <= 0) {
+    throw new TenantError('missing/invalid "x-org-id" header', 400);
+  }
+  return orgId;
+}
+
+export function hashApiKey(rawKey: string): string {
+  return createHash("sha256").update(rawKey).digest("hex");
+}
+
+/**
+ * Resolves the org that a public-API bearer key belongs to. Throws if the
+ * key is missing, unknown, or revoked — this is the only legal way the
+ * public API surface learns which tenant it is serving.
+ */
+export async function requirePublicOrgId(req: Request): Promise<number> {
+  const auth = req.headers.get("authorization") ?? "";
+  const match = /^Bearer\s+(.+)$/i.exec(auth);
+  if (!match) {
+    throw new TenantError('missing "Authorization: Bearer <key>" header', 401);
+  }
+  const hash = hashApiKey(match[1]);
+  const [row] = await db
+    .select()
+    .from(apiKeys)
+    .where(and(eq(apiKeys.keyHash, hash), eq(apiKeys.revoked, false)));
+  if (!row) {
+    throw new TenantError("invalid or revoked API key", 401);
+  }
+  return row.orgId;
 }

@@ -1,96 +1,55 @@
-// Deterministic, rules-based lead scoring engine.
-//
-// This is intentionally NOT machine learning, causal inference, or an LLM.
-// It is a transparent weighted-rule evaluator: every point on the score can
-// be traced to exactly one rule and one signal value. See
-// docs/explanations/intelligence-methodology.md for the honest rationale and
-// limitations of this approach.
+// Deterministic lead scoring. No external model call is made anywhere in
+// this build (there is no LLM API key wired up) — "LLM-proposed" text below
+// is produced by a local deterministic template generator that stands in
+// for one. This is documented plainly in docs/FEATURES.md; nothing in the
+// UI claims a real external model is being called.
+import type { Explain } from "@/lib/explain";
+import { makeExplain } from "@/lib/explain";
 
-export type RuleOperator = "gte" | "lte" | "eq" | "truthy";
-
-export interface ScoringRule {
-  name: string;
-  field: string;
-  operator: RuleOperator;
-  value: string;
-  weight: number;
+export interface SignalLike {
+  type: string;
+  confidence: number;
+  createdAt: Date | string;
 }
 
-export type SignalValue = number | string | boolean;
-export type Signals = Record<string, SignalValue>;
+const TYPE_WEIGHT: Record<string, number> = {
+  email_open: 0.5,
+  email_reply: 3,
+  meeting_booked: 5,
+  pricing_page_view: 1.5,
+  firmographic_match: 1,
+  webhook_import: 0.75,
+};
 
-export interface ScoreBreakdownEntry {
-  rule: string;
-  field: string;
-  matched: boolean;
-  weight: number;
-}
-
-export interface ScoreResult {
-  score: number;
-  band: "hot" | "warm" | "cold";
-  breakdown: ScoreBreakdownEntry[];
-}
-
-export const HOT_THRESHOLD = 70;
-export const WARM_THRESHOLD = 40;
-
-function coerceNumber(value: SignalValue | undefined): number | undefined {
-  if (typeof value === "number") return value;
-  if (typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))) {
-    return Number(value);
+export function scoreLead(signals: SignalLike[]): Explain<number> {
+  if (signals.length === 0) {
+    return makeExplain({
+      value: 0,
+      confidence: 0,
+      basis: ["no signals recorded for this lead yet"],
+      generatedBy: "system",
+    });
   }
-  return undefined;
-}
 
-export function evaluateRule(rule: ScoringRule, signals: Signals): boolean {
-  const actual = signals[rule.field];
-
-  switch (rule.operator) {
-    case "truthy":
-      return Boolean(actual);
-    case "eq":
-      return String(actual ?? "") === rule.value;
-    case "gte": {
-      const a = coerceNumber(actual);
-      const b = coerceNumber(rule.value);
-      return a !== undefined && b !== undefined && a >= b;
-    }
-    case "lte": {
-      const a = coerceNumber(actual);
-      const b = coerceNumber(rule.value);
-      return a !== undefined && b !== undefined && a <= b;
-    }
-    default:
-      return false;
+  let raw = 0;
+  const basis: string[] = [];
+  for (const s of signals) {
+    const weight = TYPE_WEIGHT[s.type] ?? 0.25;
+    raw += weight * s.confidence;
+    basis.push(`${s.type} (signal confidence ${(s.confidence * 100).toFixed(0)}%, weight ${weight})`);
   }
-}
 
-export function bandForScore(score: number): ScoreResult["band"] {
-  if (score >= HOT_THRESHOLD) return "hot";
-  if (score >= WARM_THRESHOLD) return "warm";
-  return "cold";
-}
+  const score = Math.max(0, Math.min(100, raw * 6));
+  const avgSignalConfidence = signals.reduce((a, s) => a + s.confidence, 0) / signals.length;
+  // Scoring confidence rewards both signal quality AND volume — a single
+  // high-confidence signal is not treated the same as corroborated signals.
+  const volumeFactor = Math.min(1, signals.length / 5);
+  const confidence = avgSignalConfidence * (0.5 + 0.5 * volumeFactor);
 
-/**
- * Scores a lead against an ordered list of active rules. The raw score is the
- * sum of weights of matched rules, clamped to [0, 100]. The breakdown lists
- * every rule evaluated (matched or not) so the caller can persist a full,
- * auditable evidence record.
- */
-export function scoreLead(signals: Signals, rules: ScoringRule[]): ScoreResult {
-  const breakdown: ScoreBreakdownEntry[] = rules.map((rule) => {
-    const matched = evaluateRule(rule, signals);
-    return {
-      rule: rule.name,
-      field: rule.field,
-      matched,
-      weight: matched ? rule.weight : 0,
-    };
+  return makeExplain({
+    value: Math.round(score * 100) / 100,
+    confidence,
+    basis,
+    generatedBy: "system",
   });
-
-  const rawScore = breakdown.reduce((sum, entry) => sum + entry.weight, 0);
-  const score = Math.max(0, Math.min(100, rawScore));
-
-  return { score, band: bandForScore(score), breakdown };
 }

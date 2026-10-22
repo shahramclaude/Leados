@@ -1,68 +1,82 @@
-// Compute budgets (Part 16 lineage) covering agent compute (Part 06 lineage).
-//
-// Every agent run must charge the org's monthly compute budget before it is
-// allowed to transition out of "pending". If the charge would exceed the
-// budget, the run is rejected with a typed error instead of silently running
-// over — this is the seam tests/seams/budget-covers-compute.test.ts proves.
-
-import { and, eq } from "drizzle-orm";
+// Compute budgets (Part 18), covering all agent/LLM compute (Part 06).
+// Every agent-run must check-and-consume budget atomically BEFORE the tool
+// executes; if the budget is exhausted the run is denied regardless of tier.
 import { db } from "@/db";
 import { budgets } from "@/db/schema";
-
-export class BudgetExceededError extends Error {
-  constructor(public readonly orgId: string, public readonly period: string) {
-    super(`Compute budget exceeded for org ${orgId} in period ${period}`);
-    this.name = "BudgetExceededError";
-  }
-}
+import { and, eq, sql } from "drizzle-orm";
 
 export function currentPeriod(date = new Date()): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-const DEFAULT_MONTHLY_LIMIT = 100;
-
-/** Ensures a budget row exists for the org/period, creating one with the
- * default limit if this is the org's first activity in that period. */
-export async function ensureBudget(orgId: string, period = currentPeriod()) {
-  const [existing] = await db
-    .select()
-    .from(budgets)
-    .where(and(eq(budgets.orgId, orgId), eq(budgets.period, period)));
-  if (existing) return existing;
-
-  const [created] = await db
-    .insert(budgets)
-    .values({ orgId, period, computeUnitsLimit: DEFAULT_MONTHLY_LIMIT, computeUnitsUsed: 0 })
-    .returning();
-  return created;
+export interface BudgetCheckResult {
+  allowed: boolean;
+  remaining: number;
+  limit: number;
+  used: number;
+  reason: string;
 }
 
-/** Atomically charges `units` of compute against the org's current-period
- * budget. Throws BudgetExceededError (and charges nothing) if it would push
- * usage over the limit. */
-export async function chargeCompute(orgId: string, units: number, period = currentPeriod()) {
-  await ensureBudget(orgId, period);
+/**
+ * Ensures a budget row exists for the org/period, then attempts to atomically
+ * reserve `costUnits`. Returns allowed=false (without consuming) if the
+ * reservation would exceed the limit.
+ */
+export async function checkAndConsumeBudget(
+  orgId: number,
+  costUnits: number,
+  period: string = currentPeriod(),
+): Promise<BudgetCheckResult> {
+  await db
+    .insert(budgets)
+    .values({ orgId, period, limitUnits: "100", usedUnits: "0" })
+    .onConflictDoNothing({ target: [budgets.orgId, budgets.period] });
 
-  // Use a guarded read-then-write (fine at this scale; a single-row
-  // SELECT ... FOR UPDATE would be the production hardening noted in
-  // docs/RED-TEAM-2026.md DATA-2).
+  const updated = await db
+    .update(budgets)
+    .set({ usedUnits: sql`${budgets.usedUnits} + ${costUnits}`, updatedAt: new Date() })
+    .where(
+      and(
+        eq(budgets.orgId, orgId),
+        eq(budgets.period, period),
+        sql`${budgets.usedUnits} + ${costUnits} <= ${budgets.limitUnits}`,
+      ),
+    )
+    .returning();
+
+  if (updated.length > 0) {
+    const row = updated[0];
+    return {
+      allowed: true,
+      remaining: Number(row.limitUnits) - Number(row.usedUnits),
+      limit: Number(row.limitUnits),
+      used: Number(row.usedUnits),
+      reason: "reserved",
+    };
+  }
+
   const [row] = await db
     .select()
     .from(budgets)
     .where(and(eq(budgets.orgId, orgId), eq(budgets.period, period)));
 
-  if (!row) throw new BudgetExceededError(orgId, period);
+  return {
+    allowed: false,
+    remaining: row ? Number(row.limitUnits) - Number(row.usedUnits) : 0,
+    limit: row ? Number(row.limitUnits) : 0,
+    used: row ? Number(row.usedUnits) : 0,
+    reason: "budget exhausted for period",
+  };
+}
 
-  if (row.computeUnitsUsed + units > row.computeUnitsLimit) {
-    throw new BudgetExceededError(orgId, period);
-  }
-
-  const [updated] = await db
-    .update(budgets)
-    .set({ computeUnitsUsed: row.computeUnitsUsed + units, updatedAt: new Date() })
-    .where(eq(budgets.id, row.id))
-    .returning();
-
-  return updated;
+export async function getBudget(orgId: number, period: string = currentPeriod()) {
+  await db
+    .insert(budgets)
+    .values({ orgId, period, limitUnits: "100", usedUnits: "0" })
+    .onConflictDoNothing({ target: [budgets.orgId, budgets.period] });
+  const [row] = await db
+    .select()
+    .from(budgets)
+    .where(and(eq(budgets.orgId, orgId), eq(budgets.period, period)));
+  return row;
 }
