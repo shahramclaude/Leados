@@ -10,19 +10,19 @@ export default async function HomePage() {
   return (
     <main className="grid min-h-screen place-items-center px-6 py-12">
       <section className="w-full max-w-2xl rounded-3xl bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
-        <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">LEADOS · Part 23</p>
+        <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">LEADOS · Part 25</p>
         <h1 className="mt-4 text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.05] text-slate-950">
-          Decision Operations
+          Operating Rhythm Engine
         </h1>
         <p className="mt-4 text-base text-slate-700">
-          Frozen decision records, decision rights, decision-quality scoring, velocity metrics, decision debt,
-          trigger-based review, pre-mortems and the decision journal.
+          Cadence graph, agenda synthesis, adaptive cadence policy, after-ritual capture, and ritual
+          effectiveness — server-rendered with Next.js over PostgreSQL via Drizzle.
         </p>
         <Link
-          href="/decisions"
-          className="mt-6 inline-block rounded-lg bg-slate-900 px-5 py-2.5 font-medium text-white hover:bg-slate-800"
+          href="/cadence"
+          className="mt-6 inline-block rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-slate-700"
         >
-          Open Decision Desk →
+          Open the Rhythm Board →
         </Link>
       </section>
     </main>

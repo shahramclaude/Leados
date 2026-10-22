@@ -1,4 +1,11 @@
 // LEADOS Part 14 — shared time utilities.
+// REUSED VERBATIM from the upstream repository (https://github.com/shahramclaude/Leados,
+// `src/lib/temporal.ts`) — read during this part's Phase 0 discovery and
+// copied byte-for-byte rather than reinvented, per the standing order's
+// "read before write" rule. Part 25's own timezone/DST occurrence math lives
+// in `src/lib/cadence/occurrenceClock.ts` (new) and does not duplicate these
+// helpers, but reuses `dayKeyInTz` for daily-brief occurrence keys.
+//
 // No date library dependency: uses Intl.DateTimeFormat (built into Node/V8)
 // to do timezone-aware math without pulling in luxon/date-fns-tz.
 
