@@ -1,25 +1,18 @@
-import { NextResponse } from "next/server";
-import { invokeCapability } from "@/lib/kernel/capabilities";
-import "@/lib/playbooksEngine"; // ensures the "playbook.invoke" capability is registered
+import { invokePlaybook } from "@/lib/playbooksEngine";
 
 export const dynamic = "force-dynamic";
 
-// POST { invokedBy, invokedVia?: "human"|"automation", context? }
-// Goes through the `playbook.invoke` kernel capability so human and kernel
-// invocations are indistinguishable to the effectiveness-measurement code
-// (mission §D).
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const body = (await request.json().catch(() => ({}))) as { invokedBy?: string; invokedVia?: "human" | "automation"; context?: Record<string, unknown> };
-  const invokedVia = body.invokedVia ?? "human";
+export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   try {
-    const result = await invokeCapability(
-      "playbook.invoke",
-      { playbookId: Number(id), invokedBy: body.invokedBy ?? "unknown", invokedVia, context: body.context },
-      { kind: invokedVia === "automation" ? "kernel" : "human", name: body.invokedBy ?? "unknown" }
-    );
-    return NextResponse.json(result, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const run = await invokePlaybook({
+      playbookId: id,
+      triggeredBy: body.triggeredBy ?? "manual",
+      linkedDecisionEntityId: body.linkedDecisionEntityId,
+    });
+    return Response.json({ ok: true, run }, { status: 201 });
+  } catch (err) {
+    return Response.json({ ok: false, error: (err as Error).message }, { status: 400 });
   }
 }

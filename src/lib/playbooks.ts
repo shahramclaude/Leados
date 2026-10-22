@@ -1,113 +1,116 @@
-// src/lib/playbooks.ts
-//
-// Playbooks are executable checklists (mission §D): trigger conditions,
-// ordered steps with owners + verification, versioned with a changelog.
-// This module owns CRUD + versioning; execution lives in
-// playbooksEngine.ts, mining of new candidates from retrospectives lives in
-// playbooksIntelligence.ts. Retrieval indexes the `playbooks` table
-// directly (see retrieval/index.ts) — no separate search-index write here.
-import { desc, eq } from "drizzle-orm";
+// =============================================================================
+// playbooks.ts — Playbook CRUD + versioning
+// =============================================================================
+// A playbook is an executable checklist: trigger -> steps[] (owner +
+// verification per step) -> status. New versions are created by cloning the
+// previous version with `parentPlaybookId` set and `version` incremented;
+// old versions are never deleted so effectiveness history stays intact.
+// =============================================================================
+
 import { db } from "@/db";
-import { playbooks, playbookVersions } from "@/db/schema";
+import { playbooks, playbookRuns } from "@/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 
 export interface PlaybookStep {
   order: number;
-  title: string;
-  description?: string;
-  owner?: string;
-  verification?: string; // how a human/the kernel confirms this step was actually done
-}
-
-export interface TriggerCondition {
-  field: string;
-  operator: "gt" | "lt" | "eq" | "contains";
-  value: string | number;
-}
-
-export interface ChangelogEntry {
-  version: number;
-  date: string;
-  note: string;
+  text: string;
+  owner: string;
+  verification: string;
 }
 
 export interface CreatePlaybookInput {
-  key: string;
-  title: string;
-  description?: string;
-  triggerConditions?: TriggerCondition[];
+  slug: string;
+  name: string;
+  trigger: Record<string, unknown>;
   steps: PlaybookStep[];
-  originRetrospectiveId?: number;
   status?: "draft" | "active" | "deprecated";
+  createdFromRetrospectiveId?: string | null;
+  parentPlaybookId?: string | null;
+  version?: number;
 }
 
 export async function createPlaybook(input: CreatePlaybookInput) {
   const [row] = await db
     .insert(playbooks)
     .values({
-      key: input.key,
-      title: input.title,
-      description: input.description ?? null,
-      triggerConditions: input.triggerConditions ?? [],
+      slug: input.slug,
+      name: input.name,
+      trigger: input.trigger,
       steps: input.steps,
       status: input.status ?? "draft",
-      version: 1,
-      changelog: [{ version: 1, date: new Date().toISOString().slice(0, 10), note: "Initial version" }],
-      originRetrospectiveId: input.originRetrospectiveId ?? null,
+      createdFromRetrospectiveId: input.createdFromRetrospectiveId ?? null,
+      parentPlaybookId: input.parentPlaybookId ?? null,
+      version: input.version ?? 1,
     })
     .returning();
-  await db.insert(playbookVersions).values({ playbookId: row.id, version: 1, steps: input.steps, changelogNote: "Initial version" });
   return row;
 }
 
-export interface UpdatePlaybookInput {
-  title?: string;
-  description?: string;
-  triggerConditions?: TriggerCondition[];
-  steps?: PlaybookStep[];
-  status?: "draft" | "active" | "deprecated";
-  changeNote: string;
+export async function listPlaybooks(opts?: { status?: "draft" | "active" | "deprecated" }) {
+  return db
+    .select()
+    .from(playbooks)
+    .where(opts?.status ? eq(playbooks.status, opts.status) : undefined)
+    .orderBy(sql`${playbooks.createdAt} desc`);
 }
 
-/** Any content change bumps the version and appends a changelog entry — playbooks are never silently edited. */
-export async function updatePlaybook(id: number, input: UpdatePlaybookInput) {
-  const [existing] = await db.select().from(playbooks).where(eq(playbooks.id, id)).limit(1);
-  if (!existing) throw new Error(`Playbook ${id} not found`);
-  const newVersion = existing.version + 1;
-  const changelog = [...(existing.changelog as ChangelogEntry[]), { version: newVersion, date: new Date().toISOString().slice(0, 10), note: input.changeNote }];
+export async function getPlaybook(id: string) {
+  const [row] = await db.select().from(playbooks).where(eq(playbooks.id, id));
+  return row ?? null;
+}
+
+/** Full version chain for a playbook family (by slug), oldest first. */
+export async function getPlaybookVersionHistory(slug: string) {
+  return db
+    .select()
+    .from(playbooks)
+    .where(eq(playbooks.slug, slug))
+    .orderBy(sql`${playbooks.version} asc`);
+}
+
+/** Publish a draft (human action — never automatic). */
+export async function publishPlaybook(id: string) {
   const [row] = await db
     .update(playbooks)
-    .set({
-      title: input.title ?? existing.title,
-      description: input.description ?? existing.description,
-      triggerConditions: input.triggerConditions ?? existing.triggerConditions,
-      steps: input.steps ?? existing.steps,
-      status: input.status ?? existing.status,
-      version: newVersion,
-      changelog,
-      updatedAt: new Date(),
-    })
+    .set({ status: "active", publishedAt: new Date() })
     .where(eq(playbooks.id, id))
     .returning();
-  await db.insert(playbookVersions).values({ playbookId: id, version: newVersion, steps: row.steps, changelogNote: input.changeNote });
   return row;
 }
 
-export async function listPlaybookVersions(playbookId: number) {
-  return db.select().from(playbookVersions).where(eq(playbookVersions.playbookId, playbookId)).orderBy(desc(playbookVersions.version));
+export async function deprecatePlaybook(id: string) {
+  const [row] = await db
+    .update(playbooks)
+    .set({ status: "deprecated" })
+    .where(eq(playbooks.id, id))
+    .returning();
+  return row;
 }
 
-export async function listPlaybooks(status?: "draft" | "active" | "deprecated") {
-  return status
-    ? db.select().from(playbooks).where(eq(playbooks.status, status)).orderBy(desc(playbooks.updatedAt))
-    : db.select().from(playbooks).orderBy(desc(playbooks.updatedAt));
+/** Create a new version of an existing playbook (clone + increment). */
+export async function createNewVersion(id: string, steps: PlaybookStep[], trigger?: Record<string, unknown>) {
+  const current = await getPlaybook(id);
+  if (!current) throw new Error("Playbook not found");
+
+  return createPlaybook({
+    slug: current.slug,
+    name: current.name,
+    trigger: trigger ?? (current.trigger as Record<string, unknown>),
+    steps,
+    status: "draft",
+    parentPlaybookId: current.id,
+    version: current.version + 1,
+  });
 }
 
-export async function getPlaybook(id: number) {
-  const [row] = await db.select().from(playbooks).where(eq(playbooks.id, id)).limit(1);
-  return row ?? null;
+export async function listRunsForPlaybook(playbookId: string) {
+  return db
+    .select()
+    .from(playbookRuns)
+    .where(eq(playbookRuns.playbookId, playbookId))
+    .orderBy(sql`${playbookRuns.startedAt} desc`);
 }
 
-export async function getPlaybookByKey(key: string) {
-  const [row] = await db.select().from(playbooks).where(eq(playbooks.key, key)).limit(1);
-  return row ?? null;
+export async function listAllActivePlaybooks() {
+  return db.select().from(playbooks).where(and(eq(playbooks.status, "active")));
 }

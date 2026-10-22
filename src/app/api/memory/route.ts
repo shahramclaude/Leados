@@ -1,47 +1,31 @@
-import { NextResponse } from "next/server";
-import {
-  listTimeline,
-  recallOnThisDay,
-  recallThisQuarter,
-  recordRetrospective,
-  reinforceRetrospective,
-  memorySummaryByCategory,
-  findSimilarRetrospectives,
-  type RetrospectiveInput,
-} from "@/lib/institutionalMemory";
+import { NextRequest } from "next/server";
+import { listMemories, recordMemory, type MemoryClass } from "@/lib/institutionalMemory";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/memory?view=timeline|on-this-day|this-quarter|summary
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const view = searchParams.get("view") ?? "timeline";
-
-  if (view === "on-this-day") return NextResponse.json({ records: await recallOnThisDay() });
-  if (view === "this-quarter") return NextResponse.json({ records: await recallThisQuarter() });
-  if (view === "summary") return NextResponse.json({ summary: await memorySummaryByCategory() });
-
-  const limit = Number(searchParams.get("limit") ?? "100");
-  const timeline = await listTimeline(limit);
-  return NextResponse.json({ records: timeline });
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const cls = searchParams.get("class") as MemoryClass | null;
+  const includeArchived = searchParams.get("includeArchived") === "true";
+  const entityId = searchParams.get("entityId");
+  try {
+    const rows = await listMemories({ class: cls ?? undefined, includeArchived, entityId: entityId ?? undefined });
+    return Response.json({ ok: true, memories: rows });
+  } catch (err) {
+    return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
+  }
 }
 
-export async function POST(request: Request) {
-  const body = (await request.json()) as RetrospectiveInput & { action?: string; id?: number; reason?: string; citedBy?: string };
-  if (body.action === "reinforce" && body.id) {
-    const row = await reinforceRetrospective(body.id, body.reason, body.citedBy);
-    return NextResponse.json(row);
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const required = ["class", "title", "content", "provenanceSource", "sourceType"];
+    for (const f of required) {
+      if (!body[f]) return Response.json({ ok: false, error: `${f} is required` }, { status: 400 });
+    }
+    const memory = await recordMemory(body);
+    return Response.json({ ok: true, memory }, { status: 201 });
+  } catch (err) {
+    return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }
-  if (body.action === "find-similar") {
-    const matches = await findSimilarRetrospectives(body);
-    return NextResponse.json({ matches });
-  }
-  if (!body.title || !body.situation || !body.decision || !body.outcome || !body.lesson || !body.occurredAt) {
-    return NextResponse.json(
-      { error: "title, situation, decision, outcome, lesson and occurredAt are required" },
-      { status: 400 }
-    );
-  }
-  const row = await recordRetrospective(body);
-  return NextResponse.json(row, { status: 201 });
 }

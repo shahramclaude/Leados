@@ -1,0 +1,17 @@
+{
+  "w1_bm25": 0.8,
+  "w2_graphProximity": 0.15,
+  "w3_recencyDecay": 0.05,
+  "w4_authority": 0,
+  "w5_evidenceStrength": 0,
+  "fitMetadata": {
+    "fitted": true,
+    "fittedAt": "2026-10-22T08:31:43.677Z",
+    "procedure": "w2_graphProximity fixed at 0.15 (no train query supplies a seed entity, so it is inert on this text-only eval set and excluded from grid search to avoid a meaningless fit). Remaining 0.85 mass grid-searched in 0.05 steps over w1/w3/w4/w5 with a floor of w1 >= 0.34 (BM25 must carry the primary lexical signal; unconstrained search could zero it out via train-set score-tie artifacts). Objective: maximize mean P@5 on TRAIN, tie-broken by mean nDCG@10. Holdout split is never touched by this script.",
+    "trainQueryCount": 44,
+    "holdoutQueryCount": 22,
+    "trainNdcgAt10": 0.9258923240479117,
+    "trainPrecisionAt5": 0.8545454545454546,
+    "combinationsEvaluated": 286
+  }
+}

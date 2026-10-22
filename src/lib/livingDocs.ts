@@ -1,92 +1,64 @@
-// src/lib/livingDocs.ts
-//
-// Keeps "living" docs (docs.isLiving = true) current by re-rendering their
-// `live` blocks from present-day data (narrativeIntel.ts), leaving `prose`
-// blocks untouched, and recording a version + plain-text diff so a reviewer
-// can see exactly what changed (mission §F: "no hard-coded narrative
-// numbers anywhere").
-//
-// SCOPE NOTE: the upstream checkout's `livingDocs.ts` called into
-// `@/lib/agentCore`, `@/lib/promptRegistry` and `@/lib/faithfulness` (Part
-// 08's LLM/RAG seam) to have a model draft the prose around citations. None
-// of those three files exist anywhere in the checkout this session could
-// fetch (see AI-SESSION-LOG.md), so rather than guess at an LLM API surface
-// this part doesn't own, live blocks here render deterministically straight
-// from the metric/event read-model — zero model calls, zero hallucination
-// risk, and still satisfies "re-renders from current state" exactly. If
-// Part 08 ships a real prompt/faithfulness seam later, prose blocks (not
-// live blocks) are the natural place to let a model draft narrative text
-// around these citeable numbers.
-import { getDoc, pushDocVersion, renderBlocks, type DocBlock } from "@/lib/docs";
-import { getLatestMetric, getMetricDeltas } from "@/lib/narrativeIntel";
+// =============================================================================
+// livingDocs.ts — keeps docs honest about their own staleness
+// =============================================================================
+// A "living doc" is any doc with `sourceEntityIds` — it is supposed to
+// reflect the current state of those entities. Rather than silently
+// re-deriving content with an LLM (which risks drift/hallucination), this
+// module computes a staleness signal by comparing `lastSyncedAt` to the most
+// recent `updatedAt` among its source entities, and flags docs that need a
+// human re-sync. Docs are never auto-rewritten.
+// =============================================================================
 
-export type LivingDocRegenResult = {
+import { db } from "@/db";
+import { docs, entities } from "@/db/schema";
+import { inArray } from "drizzle-orm";
+import { ageInDays } from "./institutionalMemory";
+
+export interface StalenessReport {
   docId: string;
-  previousBody: string;
-  newBody: string;
-  changed: boolean;
-  diff: string;
-  unresolvedBlocks: string[];
-};
+  title: string;
+  lastSyncedAt: Date;
+  staleDays: number;
+  mostRecentSourceUpdate: Date | null;
+  isStale: boolean;
+  staleSourceCount: number;
+}
 
-async function resolveLiveBlocks(blocks: DocBlock[]): Promise<{ resolved: Map<string, string>; unresolved: string[] }> {
-  const resolved = new Map<string, string>();
-  const unresolved: string[] = [];
-  for (const b of blocks) {
-    if (b.type !== "live") continue;
-    const key = `${b.refKind}:${b.refName}:${b.entityId ?? ""}`;
-    if (b.refKind === "metric") {
-      const metric = await getLatestMetric(b.refName, b.entityId);
-      if (metric) {
-        resolved.set(key, `${Number(metric.value)}${metric.unit ? ` ${metric.unit}` : ""} (as of ${metric.asOf.toISOString().slice(0, 10)})`);
-      } else {
-        unresolved.push(key);
-      }
-    } else if (b.refKind === "finding" || b.refKind === "okr") {
-      // Generic numeric read-model lookup: treat "finding"/"okr" refs as metric names too —
-      // this part does not own a separate findings/OKR store, so it degrades to the metrics
-      // table rather than fabricating a number.
-      const deltas = await getMetricDeltas(90, b.entityId);
-      const match = deltas.find((d) => d.metricName === b.refName);
-      if (match) {
-        resolved.set(key, `${match.to} (Δ ${match.deltaPct.toFixed(1)}% vs prior reading, as of ${match.asOf.slice(0, 10)})`);
-      } else {
-        unresolved.push(key);
-      }
+const STALE_THRESHOLD_DAYS = 30;
+
+export async function computeStaleness(docId: string): Promise<StalenessReport | null> {
+  const [doc] = await db.select().from(docs).where(inArray(docs.id, [docId]));
+  if (!doc) return null;
+
+  const sourceIds = (doc.sourceEntityIds as string[]) ?? [];
+  let mostRecentSourceUpdate: Date | null = null;
+  let staleSourceCount = 0;
+
+  if (sourceIds.length > 0) {
+    const sources = await db.select().from(entities).where(inArray(entities.id, sourceIds));
+    for (const s of sources) {
+      const updated = new Date(s.updatedAt);
+      if (!mostRecentSourceUpdate || updated > mostRecentSourceUpdate) mostRecentSourceUpdate = updated;
+      if (updated > new Date(doc.lastSyncedAt)) staleSourceCount++;
     }
   }
-  return { resolved, unresolved };
+
+  const staleDays = ageInDays(new Date(doc.lastSyncedAt));
+  const isStale = staleDays > STALE_THRESHOLD_DAYS || staleSourceCount > 0;
+
+  return {
+    docId: doc.id,
+    title: doc.title,
+    lastSyncedAt: new Date(doc.lastSyncedAt),
+    staleDays: Number(staleDays.toFixed(1)),
+    mostRecentSourceUpdate,
+    isStale,
+    staleSourceCount,
+  };
 }
 
-export async function regenerateLivingDoc(docId: string): Promise<LivingDocRegenResult> {
-  const doc = await getDoc(docId);
-  if (!doc) throw new Error("Doc not found");
-  if (!doc.isLiving) throw new Error("Doc is not marked as living");
-
-  // Pull the current block structure from the latest version so we know which blocks are "live".
-  const { getDocVersions } = await import("@/lib/docs");
-  const versions = await getDocVersions(docId);
-  const blocks = (versions[0]?.blocks as DocBlock[]) ?? [];
-
-  const { resolved, unresolved } = await resolveLiveBlocks(blocks);
-  const newBody = renderBlocks(blocks, resolved);
-  const changed = newBody !== doc.body;
-
-  if (!changed) {
-    return { docId, previousBody: doc.body, newBody, changed: false, diff: "", unresolvedBlocks: unresolved };
-  }
-
-  const { diff } = await pushDocVersion(docId, blocks, newBody);
-  return { docId, previousBody: doc.body, newBody, changed: true, diff, unresolvedBlocks: unresolved };
-}
-
-/** Regenerate every living doc — the nightly-consolidation capability's doc-refresh step. */
-export async function regenerateAllLivingDocs(): Promise<LivingDocRegenResult[]> {
-  const { listDocs } = await import("@/lib/docs");
-  const livingDocs = await listDocs({ isLiving: true });
-  const results: LivingDocRegenResult[] = [];
-  for (const doc of livingDocs) {
-    results.push(await regenerateLivingDoc(doc.id));
-  }
-  return results;
+export async function listStalenessReports(): Promise<StalenessReport[]> {
+  const all = await db.select({ id: docs.id }).from(docs);
+  const reports = await Promise.all(all.map((d) => computeStaleness(d.id)));
+  return reports.filter((r): r is StalenessReport => r !== null);
 }

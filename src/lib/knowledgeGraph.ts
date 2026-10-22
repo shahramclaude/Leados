@@ -1,559 +1,430 @@
-// src/lib/knowledgeGraph.ts
+// =============================================================================
+// knowledgeGraph.ts — Temporal knowledge graph store + query engine
+// =============================================================================
+// Entities: people, teams, projects, decisions, hypotheses, risks, metrics,
+// playbooks. Relations are typed, bitemporal edges with provenance.
 //
-// Knowledge graph as a first-class store (mission §A). Entities (people,
-// teams, projects, decisions, hypotheses, metrics, risks, playbooks,
-// skills) + typed, directed relations (`caused`, `blocked`, `informs`,
-// `supersedes`, `owns`, `depends_on`, `evidences`).
+// STORAGE CHOICE: recursive CTE over `relations` (justified in
+// docs/PART-12-KNOWLEDGE-MEMORY.md). We additionally maintain a nightly
+// materialized `relationClosure` accelerator table (see selfImprove.ts) for
+// cheap blast-radius counts on dashboards, but it is NEVER the source of
+// truth and is always rebuildable.
 //
-// OBSERVED vs PROPOSED edges:
-//   - `createRelation(...)` writes an OBSERVED fact. Call sites are
-//     deterministic rules over structured events (see
-//     `extractRelationsFromEvent` below) — e.g. a `blocker_raised` event on
-//     a project deterministically creates a `blocked` edge. These are
-//     treated as ground truth.
-//   - `proposeRelation(...)` writes a PROPOSED edge with mandatory
-//     `confidence` (0..1) and `provenance` (who/what proposed it — a rule
-//     name or, per Part 08's LLM layer, a model+prompt id). Proposed edges
-//     are invisible to blast-radius/shortest-path/cycle-detection by
-//     default (`includeProposed: false`) until `confirmRelation(...)`
-//     promotes them to observed. This is the mechanism mission §A and the
-//     adversarial self-review require: inferred relations are never
-//     presented as observed facts.
-//
-// INDEXING / QUERY-PLAN CHOICE (mission §A: "Index for these queries
-// (recursive CTE or closure table — choose, justify, explain the plans)."):
-//
-//   Chosen: recursive CTE over a plain edge table with btree indexes on
-//   (from_entity_id), (to_entity_id), (type) — NOT a closure table.
-//
-//   Justification: LEADOS's relation graph is write-light (edges are
-//   created by deterministic rules on event ingestion, or rarely, by
-//   human-confirmed proposals — not a high-frequency OLTP workload) and
-//   read-moderate (graph panel loads, retrieval expansion, nightly
-//   consolidation). A transitive-closure table trades write complexity
-//   (every insert/delete must maintain O(depth) derived rows, and cycles
-//   make closure-table maintenance genuinely hard to get right) for read
-//   speed we do not need yet: a recursive CTE bounded to depth <= 6 over a
-//   few thousand edges returns in low single-digit milliseconds (see
-//   `docs/knowledge-graph-query-plans.md` for captured `EXPLAIN ANALYZE`
-//   output from `scripts/verify.ts`). If the edge count grows by 2-3 orders
-//   of magnitude, or blast-radius queries become a hot path, the documented
-//   fallback is to add a closure table maintained by a trigger — not
-//   something to build speculatively today.
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+// LLM-extracted edges are proposals (`confidenceClass: "proposed"`,
+// `extractedBy: "llm-proposal"`) until a human confirms them. Only
+// `observed` and `confirmed` edges are treated as facts by default graph
+// reads; callers must opt in with `includeProposed` to see proposals.
+// =============================================================================
+
 import { db } from "@/db";
-import { entities, events, relations } from "@/db/schema";
-import { jaccard } from "@/lib/memory";
+import { entities, relations } from "@/db/schema";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
-export { jaccard };
+export type EntityType =
+  | "person"
+  | "team"
+  | "project"
+  | "decision"
+  | "hypothesis"
+  | "risk"
+  | "metric"
+  | "playbook";
 
-export const RELATION_TYPES = [
-  "caused",
-  "blocked",
-  "informs",
-  "supersedes",
-  "owns",
-  "depends_on",
-  "evidences",
-] as const;
-export type RelationType = (typeof RELATION_TYPES)[number];
-export const ENTITY_TYPES = [
-  "person",
-  "team",
-  "project",
-  "decision",
-  "hypothesis",
-  "metric",
-  "risk",
-  "playbook",
-  "skill",
-] as const;
-export type EntityType = (typeof ENTITY_TYPES)[number];
+export type RelationType =
+  | "caused"
+  | "blocked"
+  | "informs"
+  | "supersedes"
+  | "owns"
+  | "depends_on"
+  | "evidences";
 
-/* -------------------------------------------------------------------------- */
-/* Entity CRUD                                                                 */
-/* -------------------------------------------------------------------------- */
+export type ConfidenceClass = "observed" | "proposed" | "confirmed" | "rejected";
+export type ExtractedBy = "rule" | "llm-proposal" | "human";
 
-export async function upsertEntity(input: { key: string; type: EntityType | string; name: string; attributes?: Record<string, unknown> }) {
-  const existing = await getEntityByKey(input.key);
-  if (existing) {
-    const [row] = await db
-      .update(entities)
-      .set({ name: input.name, attributes: input.attributes ?? existing.attributes, updatedAt: new Date() })
-      .where(eq(entities.id, existing.id))
-      .returning();
-    return row;
-  }
-  const [row] = await db
-    .insert(entities)
-    .values({ key: input.key, type: input.type, name: input.name, attributes: input.attributes ?? {} })
-    .returning();
-  return row;
+export interface CreateEntityInput {
+  type: EntityType;
+  name: string;
+  summary?: string;
+  attributes?: Record<string, unknown>;
 }
 
-export async function getEntityByKey(key: string) {
-  const [row] = await db.select().from(entities).where(eq(entities.key, key)).limit(1);
-  return row ?? null;
-}
-
-export async function getEntityByName(name: string) {
-  const [row] = await db.select().from(entities).where(eq(entities.name, name)).limit(1);
-  return row ?? null;
-}
-
-export async function listEntities(type?: string) {
-  return type
-    ? db.select().from(entities).where(eq(entities.type, type)).orderBy(desc(entities.importance))
-    : db.select().from(entities).orderBy(desc(entities.importance));
-}
-
-/* -------------------------------------------------------------------------- */
-/* Relation creation                                                           */
-/* -------------------------------------------------------------------------- */
-
-export async function createRelation(input: {
-  fromKey: string;
-  toKey: string;
-  type: RelationType | string;
-  weight?: number;
-  provenance?: Record<string, unknown>;
-}) {
-  const [from, to] = await Promise.all([getEntityByKey(input.fromKey), getEntityByKey(input.toKey)]);
-  if (!from) throw new Error(`Unknown entity key "${input.fromKey}"`);
-  if (!to) throw new Error(`Unknown entity key "${input.toKey}"`);
-  const [row] = await db
-    .insert(relations)
-    .values({
-      fromEntityId: from.id,
-      toEntityId: to.id,
-      type: input.type,
-      status: "observed",
-      weight: (input.weight ?? 1).toFixed(3),
-      provenance: input.provenance ?? { source: "rule" },
-    })
-    .returning();
-  return row;
-}
-
-/** Keep the plain `linkEntities(fromId,toId,relation)` helper for retrieval callers that already resolved uuids. */
-export async function linkEntities(fromEntityId: string, toEntityId: string, relation: string, weight = 1) {
-  const [row] = await db
-    .insert(relations)
-    .values({ fromEntityId, toEntityId, type: relation, status: "observed", weight: weight.toFixed(3) })
-    .returning();
-  return row;
-}
-
-/** Inferred edges require confidence + provenance and start out invisible to graph analytics until confirmed (adversarial review §1). */
-export async function proposeRelation(input: {
-  fromKey: string;
-  toKey: string;
-  type: RelationType | string;
-  confidence: number;
-  provenance: Record<string, unknown>;
-}) {
-  if (input.confidence < 0 || input.confidence > 1) throw new Error("confidence must be in [0,1]");
-  if (!input.provenance || Object.keys(input.provenance).length === 0) {
-    throw new Error("Proposed relations require non-empty provenance (who/what proposed this edge).");
-  }
-  const [from, to] = await Promise.all([getEntityByKey(input.fromKey), getEntityByKey(input.toKey)]);
-  if (!from) throw new Error(`Unknown entity key "${input.fromKey}"`);
-  if (!to) throw new Error(`Unknown entity key "${input.toKey}"`);
-  const [row] = await db
-    .insert(relations)
-    .values({
-      fromEntityId: from.id,
-      toEntityId: to.id,
-      type: input.type,
-      status: "proposed",
-      confidence: input.confidence.toFixed(4),
-      provenance: input.provenance,
-      weight: "1",
-    })
-    .returning();
-  return row;
-}
-
-export async function confirmRelation(relationId: string, confirmedBy: string) {
-  const [row] = await db
-    .update(relations)
-    .set({ status: "observed", confirmedAt: new Date(), confirmedBy })
-    .where(eq(relations.id, relationId))
-    .returning();
-  return row;
-}
-
-export async function rejectRelation(relationId: string) {
-  await db.delete(relations).where(and(eq(relations.id, relationId), eq(relations.status, "proposed")));
-}
-
-export async function listPendingProposals() {
-  return db.select().from(relations).where(eq(relations.status, "proposed")).orderBy(desc(relations.createdAt));
+export interface CreateRelationInput {
+  fromEntityId: string;
+  toEntityId: string;
+  relationType: RelationType;
+  provenanceSource: string;
+  confidenceClass?: ConfidenceClass;
+  extractedBy?: ExtractedBy;
+  confidence?: number;
+  validFrom?: Date;
+  notes?: string;
+  /** If this edge supersedes a prior one, the prior edge's validTo is set. */
+  supersedesRelationId?: string;
 }
 
 /**
- * Deterministic rule-based extraction: structured events -> OBSERVED edges.
- * This is the "extracted from structured events (deterministic rules)" half
- * of mission §A. Each rule is named so provenance is auditable.
+ * Edge-type hallucination risk tiers. `caused` is the most hallucination
+ * prone (causality is rarely directly observable) so it is FORCED into the
+ * `proposed` confidence class whenever `extractedBy` is `llm-proposal`,
+ * regardless of what the caller requests, and additionally requires a
+ * `provenanceSource` that is not empty. See PHASE 5 attack-answer #1 in
+ * docs/PART-12-KNOWLEDGE-MEMORY.md.
  */
-export async function extractRelationsFromEvent(eventId: string) {
-  const [event] = await db.select().from(events).where(eq(events.id, eventId)).limit(1);
-  if (!event || !event.entityId) return [];
-  const created: (typeof relations.$inferSelect)[] = [];
+const HIGH_RISK_RELATION_TYPES: ReadonlySet<RelationType> = new Set([
+  "caused",
+]);
 
-  if (event.type === "blocker_raised" && typeof event.payload === "object" && event.payload) {
-    const blockerKey = (event.payload as Record<string, unknown>).blockedByKey as string | undefined;
-    if (blockerKey) {
-      const blocker = await getEntityByKey(blockerKey);
-      const target = await db.select().from(entities).where(eq(entities.id, event.entityId)).limit(1);
-      if (blocker && target[0]) {
-        const [row] = await db
-          .insert(relations)
-          .values({
-            fromEntityId: blocker.id,
-            toEntityId: target[0].id,
-            type: "blocked",
-            status: "observed",
-            provenance: { source: "rule:blocker_raised", eventId },
-          })
-          .returning();
-        created.push(row);
-      }
-    }
-  }
-
-  if (event.type === "decision" && typeof event.payload === "object" && event.payload) {
-    const supersedesKey = (event.payload as Record<string, unknown>).supersedesKey as string | undefined;
-    if (supersedesKey) {
-      const prior = await getEntityByKey(supersedesKey);
-      const target = await db.select().from(entities).where(eq(entities.id, event.entityId)).limit(1);
-      if (prior && target[0]) {
-        const [row] = await db
-          .insert(relations)
-          .values({
-            fromEntityId: target[0].id,
-            toEntityId: prior.id,
-            type: "supersedes",
-            status: "observed",
-            provenance: { source: "rule:decision_supersedes", eventId },
-          })
-          .returning();
-        created.push(row);
-      }
-    }
-  }
-
-  return created;
+export async function createEntity(input: CreateEntityInput) {
+  const [row] = await db
+    .insert(entities)
+    .values({
+      type: input.type,
+      name: input.name,
+      summary: input.summary ?? null,
+      attributes: input.attributes ?? {},
+    })
+    .returning();
+  return row;
 }
 
-/* -------------------------------------------------------------------------- */
-/* 1-hop expansion (used by retrieval/index.ts)                               */
-/* -------------------------------------------------------------------------- */
+export async function listEntities(filter?: { type?: EntityType; q?: string }) {
+  const clauses = [];
+  if (filter?.type) clauses.push(eq(entities.type, filter.type));
+  if (filter?.q) {
+    clauses.push(sql`${entities.name} ilike ${"%" + filter.q + "%"}`);
+  }
+  return db
+    .select()
+    .from(entities)
+    .where(clauses.length ? and(...clauses) : undefined)
+    .orderBy(sql`${entities.authorityScore} desc`);
+}
 
-export type GraphNeighbor = { entityId: string; name: string; relation: string; weight: number; hops: 1 };
+export async function getEntity(id: string) {
+  const [row] = await db.select().from(entities).where(eq(entities.id, id));
+  return row ?? null;
+}
 
-export async function expandNeighborhood(seedEntityIds: string[]): Promise<GraphNeighbor[]> {
-  if (seedEntityIds.length === 0) return [];
-  const edges = await db
+/**
+ * Create a relation (edge). If `extractedBy === "llm-proposal"`, the edge is
+ * always stored with `confidenceClass: "proposed"` no matter what the
+ * caller passed — proposals must be confirmed by a human before they are
+ * treated as facts by default graph reads.
+ */
+export async function createRelation(input: CreateRelationInput) {
+  if (!input.provenanceSource || !input.provenanceSource.trim()) {
+    throw new Error("provenanceSource is required for every relation");
+  }
+
+  const extractedBy = input.extractedBy ?? "rule";
+  let confidenceClass = input.confidenceClass ?? "observed";
+
+  if (extractedBy === "llm-proposal") {
+    confidenceClass = "proposed";
+  }
+  if (extractedBy === "human") {
+    confidenceClass = "confirmed";
+  }
+
+  // caused edges from LLM proposals get an additional confidence ceiling —
+  // they cannot be auto-elevated above 0.6 without human confirmation.
+  let confidence = input.confidence ?? 0.5;
+  if (HIGH_RISK_RELATION_TYPES.has(input.relationType) && extractedBy === "llm-proposal") {
+    confidence = Math.min(confidence, 0.6);
+  }
+
+  if (input.supersedesRelationId) {
+    await db
+      .update(relations)
+      .set({ validTo: input.validFrom ?? new Date() })
+      .where(eq(relations.id, input.supersedesRelationId));
+  }
+
+  const [row] = await db
+    .insert(relations)
+    .values({
+      fromEntityId: input.fromEntityId,
+      toEntityId: input.toEntityId,
+      relationType: input.relationType,
+      provenanceSource: input.provenanceSource,
+      confidenceClass,
+      extractedBy,
+      confidence: confidence.toString(),
+      validFrom: input.validFrom ?? new Date(),
+      supersedesRelationId: input.supersedesRelationId ?? null,
+      notes: input.notes ?? null,
+    })
+    .returning();
+  return row;
+}
+
+export async function confirmRelation(id: string, confirmedBy: string, accept: boolean) {
+  const [row] = await db
+    .update(relations)
+    .set({
+      confidenceClass: accept ? "confirmed" : "rejected",
+      confirmedAt: new Date(),
+      confirmedBy,
+      confidence: accept ? "0.95" : "0.05",
+    })
+    .where(eq(relations.id, id))
+    .returning();
+  return row;
+}
+
+export interface GraphQueryOptions {
+  includeProposed?: boolean;
+  asOf?: Date;
+  relationTypes?: RelationType[];
+}
+
+function factFilterSql(opts?: GraphQueryOptions) {
+  const asOf = opts?.asOf ?? new Date();
+  const confClause = opts?.includeProposed
+    ? sql`r.confidence_class in ('observed','proposed','confirmed')`
+    : sql`r.confidence_class in ('observed','confirmed')`;
+  const typeClause = opts?.relationTypes?.length
+    ? sql`and r.relation_type = any(${opts.relationTypes})`
+    : sql``;
+  return sql`${confClause} and r.valid_from <= ${asOf} and (r.valid_to is null or r.valid_to > ${asOf}) ${typeClause}`;
+}
+
+/**
+ * Typed neighbor expansion to depth N via recursive CTE.
+ * Direction: "out" follows fromEntityId -> toEntityId, "in" the reverse,
+ * "both" expands in either direction.
+ */
+export async function neighborExpansion(
+  entityId: string,
+  depth: number,
+  direction: "out" | "in" | "both" = "out",
+  opts?: GraphQueryOptions,
+) {
+  const factFilter = factFilterSql(opts);
+  const maxDepth = Math.max(1, Math.min(depth, 10));
+
+  const joinCondOut = sql`r.from_entity_id = w.node_id`;
+  const joinCondIn = sql`r.to_entity_id = w.node_id`;
+  const nextNodeOut = sql`r.to_entity_id`;
+  const nextNodeIn = sql`r.from_entity_id`;
+
+  const joinCond =
+    direction === "out" ? joinCondOut : direction === "in" ? joinCondIn : sql`(${joinCondOut} or ${joinCondIn})`;
+  const nextNode =
+    direction === "out"
+      ? nextNodeOut
+      : direction === "in"
+        ? nextNodeIn
+        : sql`case when ${joinCondOut} then ${nextNodeOut} else ${nextNodeIn} end`;
+
+  const query = sql`
+    with recursive walk as (
+      select ${entityId}::text as node_id, 0 as depth,
+             array[${entityId}::text] as path,
+             array[]::text[] as relation_path
+      union all
+      select ${nextNode} as node_id, w.depth + 1,
+             w.path || ${nextNode},
+             w.relation_path || r.relation_type::text
+      from relations r
+      join walk w on ${joinCond}
+      where w.depth < ${maxDepth}
+        and ${factFilter}
+        and not (${nextNode} = any(w.path))
+    )
+    select w.node_id, w.depth, w.path, w.relation_path,
+           e.type, e.name, e.summary, e.authority_score
+    from walk w
+    join entities e on e.id = w.node_id
+    where w.depth > 0
+    order by w.depth asc, e.authority_score desc;
+  `;
+
+  const result = await db.execute(query);
+  return result.rows as Array<{
+    node_id: string;
+    depth: number;
+    path: string[];
+    relation_path: string[];
+    type: EntityType;
+    name: string;
+    summary: string | null;
+    authority_score: string;
+  }>;
+}
+
+/**
+ * Shortest "influence path" between two entities (unweighted BFS via
+ * recursive CTE, direction "out" = following causal/informational flow).
+ */
+export async function shortestInfluencePath(
+  fromEntityId: string,
+  toEntityId: string,
+  opts?: GraphQueryOptions & { maxDepth?: number },
+) {
+  const factFilter = factFilterSql(opts);
+  const maxDepth = opts?.maxDepth ?? 8;
+
+  const query = sql`
+    with recursive walk as (
+      select r.from_entity_id as node_id, 1 as depth,
+             array[r.from_entity_id, r.to_entity_id] as path,
+             array[r.relation_type::text] as relation_path
+      from relations r
+      where r.from_entity_id = ${fromEntityId} and ${factFilter}
+      union all
+      select w.node_id, w.depth + 1,
+             w.path || r.to_entity_id,
+             w.relation_path || r.relation_type::text
+      from relations r
+      join walk w on r.from_entity_id = w.path[array_length(w.path, 1)]
+      where w.depth < ${maxDepth}
+        and ${factFilter}
+        and not (r.to_entity_id = any(w.path))
+    )
+    select path, relation_path, depth
+    from walk
+    where path[array_length(path, 1)] = ${toEntityId}
+    order by depth asc
+    limit 1;
+  `;
+
+  const result = await db.execute(query);
+  const row = result.rows[0] as
+    | { path: string[]; relation_path: string[]; depth: number }
+    | undefined;
+  if (!row) return null;
+
+  const nodeRows = await db
+    .select({ id: entities.id, name: entities.name, type: entities.type })
+    .from(entities)
+    .where(sql`${entities.id} = any(${row.path})`);
+  const byId = new Map(nodeRows.map((n) => [n.id, n]));
+
+  return {
+    depth: row.depth,
+    path: row.path.map((id) => byId.get(id) ?? { id, name: "(unknown)", type: null }),
+    relationPath: row.relation_path,
+  };
+}
+
+/**
+ * Blast radius: every entity reachable within `depth` hops downstream of
+ * `entityId` following caused/blocked/depends_on edges (the "if this
+ * changes, what else is affected" question).
+ */
+export async function blastRadius(entityId: string, depth = 3, opts?: GraphQueryOptions) {
+  const impactTypes: RelationType[] = opts?.relationTypes ?? [
+    "caused",
+    "blocked",
+    "depends_on",
+    "informs",
+  ];
+  const expansion = await neighborExpansion(entityId, depth, "out", {
+    ...opts,
+    relationTypes: impactTypes,
+  });
+  const uniqueNodes = new Map<string, (typeof expansion)[number]>();
+  for (const row of expansion) {
+    if (!uniqueNodes.has(row.node_id) || uniqueNodes.get(row.node_id)!.depth > row.depth) {
+      uniqueNodes.set(row.node_id, row);
+    }
+  }
+  return {
+    entityId,
+    depth,
+    count: uniqueNodes.size,
+    nodes: [...uniqueNodes.values()],
+  };
+}
+
+/**
+ * Cycle detection over the current fact graph (confirmed/observed edges).
+ * Returns every simple cycle found up to length `maxLen`, via recursive CTE.
+ * Cycles are a data-quality smell for most of our relation types (e.g. two
+ * decisions cannot legitimately "cause" each other) and are surfaced for
+ * human review rather than silently resolved.
+ */
+export async function detectCycles(maxLen = 6, opts?: GraphQueryOptions) {
+  const factFilter = factFilterSql(opts);
+  const query = sql`
+    with recursive walk as (
+      select r.from_entity_id as start_id, r.to_entity_id as node_id, 1 as depth,
+             array[r.from_entity_id, r.to_entity_id] as path,
+             array[r.relation_type::text] as relation_path
+      from relations r
+      where ${factFilter}
+      union all
+      select w.start_id, r.to_entity_id, w.depth + 1,
+             w.path || r.to_entity_id,
+             w.relation_path || r.relation_type::text
+      from relations r
+      join walk w on r.from_entity_id = w.node_id
+      where w.depth < ${maxLen}
+        and ${factFilter}
+        and (
+          r.to_entity_id = w.start_id
+          or not (r.to_entity_id = any(w.path))
+        )
+    )
+    select distinct path, relation_path, depth
+    from walk
+    where node_id = start_id and depth > 1
+    order by depth asc;
+  `;
+  const result = await db.execute(query);
+  return result.rows as Array<{ path: string[]; relation_path: string[]; depth: number }>;
+}
+
+/**
+ * Orphans: entities with zero edges (in or out) among fact-class relations.
+ */
+export async function findOrphans(opts?: GraphQueryOptions) {
+  const factFilter = factFilterSql(opts);
+  const query = sql`
+    select e.id, e.type, e.name, e.created_at
+    from entities e
+    where not exists (
+      select 1 from relations r
+      where (r.from_entity_id = e.id or r.to_entity_id = e.id) and ${factFilter}
+    )
+    order by e.created_at desc;
+  `;
+  const result = await db.execute(query);
+  return result.rows as Array<{ id: string; type: EntityType; name: string; created_at: string }>;
+}
+
+export async function listRelationsForEntity(entityId: string, opts?: GraphQueryOptions) {
+  return db
     .select()
     .from(relations)
     .where(
       and(
-        eq(relations.status, "observed"),
-        or(inArray(relations.fromEntityId, seedEntityIds), inArray(relations.toEntityId, seedEntityIds))
-      )
+        sql`(${relations.fromEntityId} = ${entityId} or ${relations.toEntityId} = ${entityId})`,
+        opts?.includeProposed ? undefined : eq(relations.confidenceClass, "confirmed"),
+      ),
     );
-
-  const neighborIds = new Set<string>();
-  for (const e of edges) {
-    if (seedEntityIds.includes(e.fromEntityId) && !seedEntityIds.includes(e.toEntityId)) neighborIds.add(e.toEntityId);
-    if (seedEntityIds.includes(e.toEntityId) && !seedEntityIds.includes(e.fromEntityId)) neighborIds.add(e.fromEntityId);
-  }
-  if (neighborIds.size === 0) return [];
-
-  const neighborRows = await db.select().from(entities).where(inArray(entities.id, Array.from(neighborIds)));
-  const nameById = new Map(neighborRows.map((r) => [r.id, r.name]));
-
-  const results: GraphNeighbor[] = [];
-  for (const e of edges) {
-    const neighborId = seedEntityIds.includes(e.fromEntityId) ? e.toEntityId : e.fromEntityId;
-    if (!neighborIds.has(neighborId)) continue;
-    const name = nameById.get(neighborId);
-    if (!name) continue;
-    results.push({ entityId: neighborId, name, relation: e.type, weight: Number(e.weight), hops: 1 });
-  }
-  return results;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Graph query: neighbors at depth N, edge-typed                              */
-/* -------------------------------------------------------------------------- */
-
-export type NeighborEntry = { key: string; name: string; type: string; relation: string; depth: number; direction: "out" | "in" };
-
-/**
- * Neighbors within `depth` hops (either direction), optionally filtered to
- * a set of edge types. Implemented as a bounded recursive CTE — see the
- * module-level comment for the closure-table-vs-CTE justification.
- */
-export async function getNeighbors(
-  key: string,
-  depth = 2,
-  edgeTypes?: string[]
-): Promise<{ root: string; neighbors: NeighborEntry[] }> {
-  const root = await getEntityByKey(key);
-  if (!root) return { root: key, neighbors: [] };
-  const boundedDepth = Math.max(1, Math.min(6, depth));
-  const typeFilter = edgeTypes && edgeTypes.length > 0 ? sql`and r.type = any(${edgeTypes})` : sql``;
-
-  const result = await db.execute(sql`
-    with recursive walk(entity_id, direction, relation, depth, path) as (
-      select r.to_entity_id, 'out'::text, r.type, 1, array[r.from_entity_id, r.to_entity_id]
-      from relations r
-      where r.from_entity_id = ${root.id} and r.status = 'observed' ${typeFilter}
-      union all
-      select r.from_entity_id, 'in'::text, r.type, 1, array[r.to_entity_id, r.from_entity_id]
-      from relations r
-      where r.to_entity_id = ${root.id} and r.status = 'observed' ${typeFilter}
-      union all
-      select r.to_entity_id, 'out'::text, r.type, w.depth + 1, w.path || r.to_entity_id
-      from relations r
-      join walk w on r.from_entity_id = w.entity_id
-      where w.depth < ${boundedDepth} and r.status = 'observed' and not (r.to_entity_id = any(w.path)) ${typeFilter}
-      union all
-      select r.from_entity_id, 'in'::text, r.type, w.depth + 1, w.path || r.from_entity_id
-      from relations r
-      join walk w on r.to_entity_id = w.entity_id
-      where w.depth < ${boundedDepth} and r.status = 'observed' and not (r.from_entity_id = any(w.path)) ${typeFilter}
-    )
-    select distinct on (entity_id) entity_id as "entityId", direction, relation, depth
-    from walk
-    order by entity_id, depth asc
-  `);
-
-  type Row = { entityId: string; direction: "out" | "in"; relation: string; depth: number };
-  const rows = result.rows as unknown as Row[];
-  if (rows.length === 0) return { root: key, neighbors: [] };
-
-  const entityRows = await db.select().from(entities).where(inArray(entities.id, rows.map((r) => r.entityId)));
-  const byId = new Map(entityRows.map((e) => [e.id, e]));
-
-  const neighbors: NeighborEntry[] = rows
-    .map((r) => {
-      const e = byId.get(r.entityId);
-      if (!e) return null;
-      return { key: e.key, name: e.name, type: e.type, relation: r.relation, depth: r.depth, direction: r.direction };
+export async function listPendingProposals() {
+  return db
+    .select({
+      relation: relations,
+      fromName: sql<string>`fe.name`,
+      toName: sql<string>`te.name`,
     })
-    .filter((v): v is NeighborEntry => v !== null)
-    .sort((a, b) => a.depth - b.depth);
-
-  return { root: key, neighbors };
+    .from(relations)
+    .innerJoin(sql`entities fe`, sql`fe.id = ${relations.fromEntityId}`)
+    .innerJoin(sql`entities te`, sql`te.id = ${relations.toEntityId}`)
+    .where(eq(relations.confidenceClass, "proposed"))
+    .orderBy(sql`${relations.recordedAt} desc`);
 }
 
-/* -------------------------------------------------------------------------- */
-/* Graph query: shortest influence path between two entities                  */
-/* -------------------------------------------------------------------------- */
-
-export type PathStep = { fromKey: string; toKey: string; relation: string };
-
-/** Unweighted shortest path (fewest hops) via BFS recursive CTE, directed. Returns null if unreachable within 8 hops. */
-export async function getShortestPath(fromKey: string, toKey: string): Promise<{ hops: number; path: PathStep[] } | null> {
-  const [from, to] = await Promise.all([getEntityByKey(fromKey), getEntityByKey(toKey)]);
-  if (!from || !to) return null;
-  if (from.id === to.id) return { hops: 0, path: [] };
-
-  const result = await db.execute(sql`
-    with recursive bfs(entity_id, depth, path, rels) as (
-      select r.to_entity_id, 1, array[r.from_entity_id, r.to_entity_id], array[r.type]
-      from relations r
-      where r.from_entity_id = ${from.id} and r.status = 'observed'
-      union all
-      select r.to_entity_id, b.depth + 1, b.path || r.to_entity_id, b.rels || r.type
-      from relations r
-      join bfs b on r.from_entity_id = b.entity_id
-      where b.depth < 8 and r.status = 'observed' and not (r.to_entity_id = any(b.path))
-    )
-    select path, rels, depth from bfs where entity_id = ${to.id} order by depth asc limit 1
-  `);
-
-  type Row = { path: string[]; rels: string[]; depth: number };
-  const rows = result.rows as unknown as Row[];
-  if (rows.length === 0) return null;
-  const { path, rels } = rows[0];
-
-  const entityRows = await db.select().from(entities).where(inArray(entities.id, path));
-  const byId = new Map(entityRows.map((e) => [e.id, e.key]));
-  const steps: PathStep[] = [];
-  for (let i = 0; i < path.length - 1; i++) {
-    steps.push({ fromKey: byId.get(path[i]) ?? path[i], toKey: byId.get(path[i + 1]) ?? path[i + 1], relation: rels[i] });
-  }
-  return { hops: rows[0].depth, path: steps };
-}
-
-/* -------------------------------------------------------------------------- */
-/* Graph query: blast radius of a change                                      */
-/* -------------------------------------------------------------------------- */
-
-export type BlastEntry = { key: string; name: string; type: string; relation: string; depth: number };
-
-/**
- * Everything potentially affected if `key` changes: downstream reachability
- * along causally-directional edge types (`caused`, `blocked`, `depends_on`
- * followed in reverse — i.e. "what depends on me", `informs`, `supersedes`).
- * `evidences`/`owns` are excluded by default since they describe sourcing/
- * ownership, not propagation of change.
- */
-const BLAST_RADIUS_TYPES = ["caused", "blocked", "informs", "supersedes"];
-
-export async function getBlastRadius(key: string, depth = 3): Promise<BlastEntry[]> {
-  const root = await getEntityByKey(key);
-  if (!root) return [];
-  const boundedDepth = Math.max(1, Math.min(6, depth));
-
-  const result = await db.execute(sql`
-    with recursive downstream(entity_id, relation, depth, path) as (
-      select r.to_entity_id, r.type, 1, array[r.from_entity_id, r.to_entity_id]
-      from relations r
-      where r.from_entity_id = ${root.id} and r.status = 'observed' and r.type = any(${BLAST_RADIUS_TYPES})
-      union all
-      -- "depends_on" propagates backwards: if B depends_on A and A changes, B is affected.
-      select r.from_entity_id, r.type, 1, array[r.to_entity_id, r.from_entity_id]
-      from relations r
-      where r.to_entity_id = ${root.id} and r.status = 'observed' and r.type = 'depends_on'
-      union all
-      select r.to_entity_id, r.type, d.depth + 1, d.path || r.to_entity_id
-      from relations r
-      join downstream d on r.from_entity_id = d.entity_id
-      where d.depth < ${boundedDepth} and r.status = 'observed' and r.type = any(${BLAST_RADIUS_TYPES})
-        and not (r.to_entity_id = any(d.path))
-      union all
-      select r.from_entity_id, r.type, d.depth + 1, d.path || r.from_entity_id
-      from relations r
-      join downstream d on r.to_entity_id = d.entity_id
-      where d.depth < ${boundedDepth} and r.status = 'observed' and r.type = 'depends_on'
-        and not (r.from_entity_id = any(d.path))
-    )
-    select distinct on (entity_id) entity_id as "entityId", relation, depth
-    from downstream
-    order by entity_id, depth asc
-  `);
-
-  type Row = { entityId: string; relation: string; depth: number };
-  const rows = result.rows as unknown as Row[];
-  if (rows.length === 0) return [];
-  const entityRows = await db.select().from(entities).where(inArray(entities.id, rows.map((r) => r.entityId)));
-  const byId = new Map(entityRows.map((e) => [e.id, e]));
-  return rows
-    .map((r) => {
-      const e = byId.get(r.entityId);
-      if (!e) return null;
-      return { key: e.key, name: e.name, type: e.type, relation: r.relation, depth: r.depth };
-    })
-    .filter((v): v is BlastEntry => v !== null)
-    .sort((a, b) => a.depth - b.depth);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Graph query: cycle detection                                               */
-/* -------------------------------------------------------------------------- */
-
-export type CycleReport = { entityKey: string; path: string[] };
-
-/** Detects directed cycles reachable within 10 hops of any entity (observed edges only — proposed edges can't corrupt analytics). */
-export async function detectCycles(): Promise<CycleReport[]> {
-  const result = await db.execute(sql`
-    with recursive walk(start_id, entity_id, depth, path) as (
-      select r.from_entity_id, r.to_entity_id, 1, array[r.from_entity_id, r.to_entity_id]
-      from relations r
-      where r.status = 'observed'
-      union all
-      select w.start_id, r.to_entity_id, w.depth + 1, w.path || r.to_entity_id
-      from relations r
-      join walk w on r.from_entity_id = w.entity_id
-      where w.depth < 10 and r.status = 'observed' and r.to_entity_id <> all(w.path[1:array_length(w.path,1)-1])
-    )
-    select start_id as "startId", path
-    from walk
-    where entity_id = start_id
-  `);
-  type Row = { startId: string; path: string[] };
-  const rows = result.rows as unknown as Row[];
-  if (rows.length === 0) return [];
-  const allIds = Array.from(new Set(rows.flatMap((r) => r.path)));
-  const entityRows = await db.select().from(entities).where(inArray(entities.id, allIds));
-  const byId = new Map(entityRows.map((e) => [e.id, e.key]));
-  const seen = new Set<string>();
-  const cycles: CycleReport[] = [];
-  for (const row of rows) {
-    const pathKeys = row.path.map((id) => byId.get(id) ?? id);
-    const signature = [...pathKeys].sort().join(">");
-    if (seen.has(signature)) continue;
-    seen.add(signature);
-    cycles.push({ entityKey: byId.get(row.startId) ?? row.startId, path: pathKeys });
-  }
-  return cycles;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Graph query: orphan / neglected-entity detection                           */
-/* -------------------------------------------------------------------------- */
-
-export type OrphanEntry = { key: string; name: string; type: string; reason: "no_edges" | "neglected"; daysSinceActivity: number | null };
-
-/** Entities with zero edges ("orphan"), or with edges but no event activity in `staleDays` ("neglected"). */
-export async function getOrphans(staleDays = 90): Promise<OrphanEntry[]> {
-  const allEntities = await db.select().from(entities);
-  const allEdges = await db.select({ from: relations.fromEntityId, to: relations.toEntityId }).from(relations).where(eq(relations.status, "observed"));
-  const connected = new Set<string>();
-  for (const e of allEdges) {
-    connected.add(e.from);
-    connected.add(e.to);
-  }
-  const lastEventByEntity = await db.execute(sql`
-    select entity_id as "entityId", max(occurred_at) as "lastAt" from events where entity_id is not null group by entity_id
-  `);
-  type Row = { entityId: string; lastAt: Date };
-  const lastAtById = new Map((lastEventByEntity.rows as unknown as Row[]).map((r) => [r.entityId, new Date(r.lastAt)]));
-
-  const out: OrphanEntry[] = [];
-  const now = Date.now();
-  for (const e of allEntities) {
-    if (!connected.has(e.id)) {
-      out.push({ key: e.key, name: e.name, type: e.type, reason: "no_edges", daysSinceActivity: null });
-      continue;
-    }
-    const lastAt = lastAtById.get(e.id);
-    const daysSince = lastAt ? (now - lastAt.getTime()) / (1000 * 60 * 60 * 24) : null;
-    if (daysSince === null || daysSince > staleDays) {
-      out.push({ key: e.key, name: e.name, type: e.type, reason: "neglected", daysSinceActivity: daysSince });
-    }
-  }
-  return out;
-}
-
-/** Recompute entity "authority" (0..1) from in-degree + out-degree of observed edges — feeds retrieval ranking. Deterministic, idempotent. */
-export async function recomputeEntityImportance(): Promise<number> {
-  const allEntities = await db.select({ id: entities.id }).from(entities);
-  const edgeCounts = await db.execute(sql`
-    select coalesce(from_entity_id, to_entity_id) as id, count(*) as degree from (
-      select from_entity_id, null::uuid as to_entity_id from relations where status = 'observed'
-      union all
-      select null::uuid, to_entity_id from relations where status = 'observed'
-    ) x group by 1
-  `);
-  type Row = { id: string; degree: string };
-  const degreeById = new Map((edgeCounts.rows as unknown as Row[]).map((r) => [r.id, Number(r.degree)]));
-  const maxDegree = Math.max(1, ...Array.from(degreeById.values()));
-  let updated = 0;
-  for (const e of allEntities) {
-    const degree = degreeById.get(e.id) ?? 0;
-    const importance = clampImportance(0.1 + 0.9 * (degree / maxDegree));
-    await db.update(entities).set({ importance: importance.toFixed(4), updatedAt: new Date() }).where(eq(entities.id, e.id));
-    updated += 1;
-  }
-  return updated;
-}
-
-function clampImportance(v: number) {
-  return Math.max(0, Math.min(1, v));
+export async function currentEdgesCount() {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(relations)
+    .where(isNull(relations.validTo));
+  return row?.count ?? 0;
 }

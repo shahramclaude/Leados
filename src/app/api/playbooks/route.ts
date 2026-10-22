@@ -1,29 +1,35 @@
-import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth";
-import { handleApiError } from "@/lib/apiErrors";
-import { createPlaybook, listPlaybooks } from "@/db/repositories/engineContent";
+import { NextRequest } from "next/server";
+import { createPlaybook, listPlaybooks } from "@/lib/playbooks";
+import { computePlaybookEffectiveness, effectivenessBadge } from "@/lib/playbooksIntelligence";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status") as "draft" | "active" | "deprecated" | null;
   try {
-    const user = await requirePermission("playbooks.read");
-    const playbooks = await listPlaybooks(user.orgId);
-    return NextResponse.json({ playbooks });
+    const rows = await listPlaybooks({ status: status ?? undefined });
+    const withEffectiveness = await Promise.all(
+      rows.map(async (p) => {
+        const effectiveness = await computePlaybookEffectiveness(p.id);
+        return { ...p, effectiveness, badge: effectivenessBadge(effectiveness) };
+      }),
+    );
+    return Response.json({ ok: true, playbooks: withEffectiveness });
   } catch (err) {
-    return handleApiError(err);
+    return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const user = await requirePermission("playbooks.write");
-    const body = await request.json().catch(() => ({}));
-    const { templateKey, params } = body as { templateKey?: string; params?: Record<string, unknown> };
-    if (!templateKey || !params) {
-      return NextResponse.json({ error: "validation", messageKey: "errors.validation" }, { status: 400 });
+    const body = await req.json();
+    if (!body.slug || !body.name || !body.trigger || !body.steps) {
+      return Response.json({ ok: false, error: "slug, name, trigger, and steps are required" }, { status: 400 });
     }
-    const playbook = await createPlaybook(user.orgId, { templateKey, params });
-    return NextResponse.json({ playbook }, { status: 201 });
+    const playbook = await createPlaybook(body);
+    return Response.json({ ok: true, playbook }, { status: 201 });
   } catch (err) {
-    return handleApiError(err);
+    return Response.json({ ok: false, error: (err as Error).message }, { status: 500 });
   }
 }

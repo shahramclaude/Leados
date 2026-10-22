@@ -1,0 +1,1858 @@
+{
+  "generatedAt": "2026-10-22T08:31:37.884Z",
+  "totalQueries": 66,
+  "trainCount": 44,
+  "holdoutCount": 22,
+  "splitRule": "index % 3 === 2 -> holdout, else train (deterministic, fixed)",
+  "relevanceScale": "0 = not relevant, 1 = related, 2 = directly relevant",
+  "queries": [
+    {
+      "id": "q001",
+      "domain": "incident-response",
+      "query": "why did we add circuit breakers to payment gateway calls",
+      "judgments": [
+        {
+          "title": "Decision: circuit breakers for payment gateway",
+          "grade": 2
+        },
+        {
+          "title": "Payment Gateway Timeout Postmortem",
+          "grade": 1
+        },
+        {
+          "title": "Checkout error rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: always circuit-break third-party payment calls",
+          "grade": 1
+        },
+        {
+          "title": "Checkout Reliability Runbook",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q002",
+      "domain": "incident-response",
+      "query": "circuit breaker runbook for checkout outages",
+      "judgments": [
+        {
+          "title": "Checkout Reliability Runbook",
+          "grade": 2
+        },
+        {
+          "title": "Decision: circuit breakers for payment gateway",
+          "grade": 1
+        },
+        {
+          "title": "Checkout error rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: always circuit-break third-party payment calls",
+          "grade": 1
+        },
+        {
+          "title": "Payment Gateway Timeout Postmortem",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q003",
+      "domain": "incident-response",
+      "query": "what is the current checkout error rate",
+      "judgments": [
+        {
+          "title": "Checkout error rate status update",
+          "grade": 2
+        },
+        {
+          "title": "Decision: circuit breakers for payment gateway",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: always circuit-break third-party payment calls",
+          "grade": 1
+        },
+        {
+          "title": "Checkout Reliability Runbook",
+          "grade": 1
+        },
+        {
+          "title": "Payment Gateway Timeout Postmortem",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q004",
+      "domain": "incident-response",
+      "query": "payment gateway timeout postmortem root cause",
+      "judgments": [
+        {
+          "title": "Payment Gateway Timeout Postmortem",
+          "grade": 2
+        },
+        {
+          "title": "Decision: circuit breakers for payment gateway",
+          "grade": 1
+        },
+        {
+          "title": "Checkout error rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: always circuit-break third-party payment calls",
+          "grade": 1
+        },
+        {
+          "title": "Checkout Reliability Runbook",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q005",
+      "domain": "incident-response",
+      "query": "lesson learned about third party payment calls",
+      "judgments": [
+        {
+          "title": "Lesson: always circuit-break third-party payment calls",
+          "grade": 2
+        },
+        {
+          "title": "Decision: circuit breakers for payment gateway",
+          "grade": 1
+        },
+        {
+          "title": "Checkout error rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Checkout Reliability Runbook",
+          "grade": 1
+        },
+        {
+          "title": "Payment Gateway Timeout Postmortem",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q006",
+      "domain": "incident-response",
+      "query": "incident review payment gateway cascading failure",
+      "judgments": [
+        {
+          "title": "Payment Gateway Timeout Postmortem",
+          "grade": 2
+        },
+        {
+          "title": "Decision: circuit breakers for payment gateway",
+          "grade": 1
+        },
+        {
+          "title": "Checkout error rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: always circuit-break third-party payment calls",
+          "grade": 1
+        },
+        {
+          "title": "Checkout Reliability Runbook",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q007",
+      "domain": "incident-response",
+      "query": "payment gateway circuit breaker threshold runbook",
+      "judgments": [
+        {
+          "title": "Checkout Reliability Runbook",
+          "grade": 2
+        },
+        {
+          "title": "Decision: circuit breakers for payment gateway",
+          "grade": 1
+        },
+        {
+          "title": "Checkout error rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: always circuit-break third-party payment calls",
+          "grade": 1
+        },
+        {
+          "title": "Payment Gateway Timeout Postmortem",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q008",
+      "domain": "hiring",
+      "query": "why did we move to structured interview rubrics",
+      "judgments": [
+        {
+          "title": "Decision: structured interview rubrics",
+          "grade": 2
+        },
+        {
+          "title": "Structured Interview Rubric Guide",
+          "grade": 1
+        },
+        {
+          "title": "Hiring plan status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: rubrics reduce interview scoring variance",
+          "grade": 1
+        },
+        {
+          "title": "Engineering Hiring Plan Overview",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q009",
+      "domain": "hiring",
+      "query": "structured interview rubric guide for calibration",
+      "judgments": [
+        {
+          "title": "Structured Interview Rubric Guide",
+          "grade": 2
+        },
+        {
+          "title": "Decision: structured interview rubrics",
+          "grade": 1
+        },
+        {
+          "title": "Hiring plan status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: rubrics reduce interview scoring variance",
+          "grade": 1
+        },
+        {
+          "title": "Engineering Hiring Plan Overview",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q010",
+      "domain": "hiring",
+      "query": "current status of engineering hiring plan",
+      "judgments": [
+        {
+          "title": "Hiring plan status update",
+          "grade": 2
+        },
+        {
+          "title": "Engineering Hiring Plan Overview",
+          "grade": 1
+        },
+        {
+          "title": "Decision: structured interview rubrics",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: rubrics reduce interview scoring variance",
+          "grade": 1
+        },
+        {
+          "title": "Structured Interview Rubric Guide",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q011",
+      "domain": "hiring",
+      "query": "did rubrics reduce interview scoring variance",
+      "judgments": [
+        {
+          "title": "Lesson: rubrics reduce interview scoring variance",
+          "grade": 2
+        },
+        {
+          "title": "Decision: structured interview rubrics",
+          "grade": 1
+        },
+        {
+          "title": "Hiring plan status update",
+          "grade": 1
+        },
+        {
+          "title": "Structured Interview Rubric Guide",
+          "grade": 1
+        },
+        {
+          "title": "Engineering Hiring Plan Overview",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q012",
+      "domain": "hiring",
+      "query": "engineering hiring plan for 2025",
+      "judgments": [
+        {
+          "title": "Engineering Hiring Plan Overview",
+          "grade": 2
+        },
+        {
+          "title": "Decision: structured interview rubrics",
+          "grade": 1
+        },
+        {
+          "title": "Hiring plan status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: rubrics reduce interview scoring variance",
+          "grade": 1
+        },
+        {
+          "title": "Structured Interview Rubric Guide",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q013",
+      "domain": "hiring",
+      "query": "interview scoring variance calibration sessions",
+      "judgments": [
+        {
+          "title": "Lesson: rubrics reduce interview scoring variance",
+          "grade": 2
+        },
+        {
+          "title": "Structured Interview Rubric Guide",
+          "grade": 1
+        },
+        {
+          "title": "Decision: structured interview rubrics",
+          "grade": 1
+        },
+        {
+          "title": "Hiring plan status update",
+          "grade": 1
+        },
+        {
+          "title": "Engineering Hiring Plan Overview",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q014",
+      "domain": "pricing",
+      "query": "why did we introduce usage based pricing tier",
+      "judgments": [
+        {
+          "title": "Decision: usage-based pricing tier",
+          "grade": 2
+        },
+        {
+          "title": "Usage-Based Pricing Design Doc",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: customer bill shock",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: overage alerts reduce billing complaints",
+          "grade": 1
+        },
+        {
+          "title": "Average Revenue Per Account Dashboard Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q015",
+      "domain": "pricing",
+      "query": "usage based pricing design doc overage alerts",
+      "judgments": [
+        {
+          "title": "Usage-Based Pricing Design Doc",
+          "grade": 2
+        },
+        {
+          "title": "Decision: usage-based pricing tier",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: customer bill shock",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: overage alerts reduce billing complaints",
+          "grade": 1
+        },
+        {
+          "title": "Average Revenue Per Account Dashboard Notes",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q016",
+      "domain": "pricing",
+      "query": "average revenue per account after pricing change",
+      "judgments": [
+        {
+          "title": "Average Revenue Per Account Dashboard Notes",
+          "grade": 2
+        },
+        {
+          "title": "Decision: usage-based pricing tier",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: customer bill shock",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: overage alerts reduce billing complaints",
+          "grade": 1
+        },
+        {
+          "title": "Usage-Based Pricing Design Doc",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q017",
+      "domain": "pricing",
+      "query": "risk of customer bill shock from usage pricing",
+      "judgments": [
+        {
+          "title": "Risk watch: customer bill shock",
+          "grade": 2
+        },
+        {
+          "title": "Decision: usage-based pricing tier",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: overage alerts reduce billing complaints",
+          "grade": 1
+        },
+        {
+          "title": "Usage-Based Pricing Design Doc",
+          "grade": 1
+        },
+        {
+          "title": "Average Revenue Per Account Dashboard Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q018",
+      "domain": "pricing",
+      "query": "lesson about overage alerts and billing complaints",
+      "judgments": [
+        {
+          "title": "Lesson: overage alerts reduce billing complaints",
+          "grade": 2
+        },
+        {
+          "title": "Decision: usage-based pricing tier",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: customer bill shock",
+          "grade": 1
+        },
+        {
+          "title": "Usage-Based Pricing Design Doc",
+          "grade": 1
+        },
+        {
+          "title": "Average Revenue Per Account Dashboard Notes",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q019",
+      "domain": "pricing",
+      "query": "bill shock mitigation overage alerts enterprise",
+      "judgments": [
+        {
+          "title": "Lesson: overage alerts reduce billing complaints",
+          "grade": 2
+        },
+        {
+          "title": "Risk watch: customer bill shock",
+          "grade": 1
+        },
+        {
+          "title": "Decision: usage-based pricing tier",
+          "grade": 1
+        },
+        {
+          "title": "Usage-Based Pricing Design Doc",
+          "grade": 1
+        },
+        {
+          "title": "Average Revenue Per Account Dashboard Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q020",
+      "domain": "infra-reliability",
+      "query": "why did we adopt active active multi region deployment",
+      "judgments": [
+        {
+          "title": "Decision: active-active multi-region deployment",
+          "grade": 2
+        },
+        {
+          "title": "Multi-Region Failover Design",
+          "grade": 1
+        },
+        {
+          "title": "Platform uptime status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: active-active deployment limits single-region blast radius",
+          "grade": 1
+        },
+        {
+          "title": "Platform Uptime Percentage Trend Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q021",
+      "domain": "infra-reliability",
+      "query": "multi region failover design replication lag",
+      "judgments": [
+        {
+          "title": "Multi-Region Failover Design",
+          "grade": 2
+        },
+        {
+          "title": "Decision: active-active multi-region deployment",
+          "grade": 1
+        },
+        {
+          "title": "Platform uptime status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: active-active deployment limits single-region blast radius",
+          "grade": 1
+        },
+        {
+          "title": "Platform Uptime Percentage Trend Notes",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q022",
+      "domain": "infra-reliability",
+      "query": "current platform uptime percentage",
+      "judgments": [
+        {
+          "title": "Platform uptime status update",
+          "grade": 2
+        },
+        {
+          "title": "Platform Uptime Percentage Trend Notes",
+          "grade": 1
+        },
+        {
+          "title": "Decision: active-active multi-region deployment",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: active-active deployment limits single-region blast radius",
+          "grade": 1
+        },
+        {
+          "title": "Multi-Region Failover Design",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q023",
+      "domain": "infra-reliability",
+      "query": "lesson about active active deployment blast radius",
+      "judgments": [
+        {
+          "title": "Lesson: active-active deployment limits single-region blast radius",
+          "grade": 2
+        },
+        {
+          "title": "Decision: active-active multi-region deployment",
+          "grade": 1
+        },
+        {
+          "title": "Platform uptime status update",
+          "grade": 1
+        },
+        {
+          "title": "Multi-Region Failover Design",
+          "grade": 1
+        },
+        {
+          "title": "Platform Uptime Percentage Trend Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q024",
+      "domain": "infra-reliability",
+      "query": "platform uptime trend after failover",
+      "judgments": [
+        {
+          "title": "Platform Uptime Percentage Trend Notes",
+          "grade": 2
+        },
+        {
+          "title": "Decision: active-active multi-region deployment",
+          "grade": 1
+        },
+        {
+          "title": "Platform uptime status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: active-active deployment limits single-region blast radius",
+          "grade": 1
+        },
+        {
+          "title": "Multi-Region Failover Design",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q025",
+      "domain": "infra-reliability",
+      "query": "failover trigger replication lag multi region",
+      "judgments": [
+        {
+          "title": "Multi-Region Failover Design",
+          "grade": 2
+        },
+        {
+          "title": "Decision: active-active multi-region deployment",
+          "grade": 1
+        },
+        {
+          "title": "Platform uptime status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: active-active deployment limits single-region blast radius",
+          "grade": 1
+        },
+        {
+          "title": "Platform Uptime Percentage Trend Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q026",
+      "domain": "data-privacy",
+      "query": "why did we set a 90 day data retention policy",
+      "judgments": [
+        {
+          "title": "Decision: 90-day default data retention",
+          "grade": 2
+        },
+        {
+          "title": "Data Retention Policy",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: regulatory non-compliance exposure",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: automated deletion jobs are required, not just policy",
+          "grade": 1
+        },
+        {
+          "title": "Privacy Regulation Compliance Checklist",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q027",
+      "domain": "data-privacy",
+      "query": "data retention policy exceptions review",
+      "judgments": [
+        {
+          "title": "Data Retention Policy",
+          "grade": 2
+        },
+        {
+          "title": "Decision: 90-day default data retention",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: regulatory non-compliance exposure",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: automated deletion jobs are required, not just policy",
+          "grade": 1
+        },
+        {
+          "title": "Privacy Regulation Compliance Checklist",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q028",
+      "domain": "data-privacy",
+      "query": "privacy regulation compliance checklist steps",
+      "judgments": [
+        {
+          "title": "Privacy Regulation Compliance Checklist",
+          "grade": 2
+        },
+        {
+          "title": "Decision: 90-day default data retention",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: regulatory non-compliance exposure",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: automated deletion jobs are required, not just policy",
+          "grade": 1
+        },
+        {
+          "title": "Data Retention Policy",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q029",
+      "domain": "data-privacy",
+      "query": "risk of regulatory non compliance exposure",
+      "judgments": [
+        {
+          "title": "Risk watch: regulatory non-compliance exposure",
+          "grade": 2
+        },
+        {
+          "title": "Decision: 90-day default data retention",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: automated deletion jobs are required, not just policy",
+          "grade": 1
+        },
+        {
+          "title": "Data Retention Policy",
+          "grade": 1
+        },
+        {
+          "title": "Privacy Regulation Compliance Checklist",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q030",
+      "domain": "data-privacy",
+      "query": "lesson about automated deletion jobs compliance",
+      "judgments": [
+        {
+          "title": "Lesson: automated deletion jobs are required, not just policy",
+          "grade": 2
+        },
+        {
+          "title": "Decision: 90-day default data retention",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: regulatory non-compliance exposure",
+          "grade": 1
+        },
+        {
+          "title": "Data Retention Policy",
+          "grade": 1
+        },
+        {
+          "title": "Privacy Regulation Compliance Checklist",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q031",
+      "domain": "customer-success",
+      "query": "why did we launch proactive churn risk outreach",
+      "judgments": [
+        {
+          "title": "Decision: proactive churn-risk outreach",
+          "grade": 2
+        },
+        {
+          "title": "Customer Health Score Model Notes",
+          "grade": 1
+        },
+        {
+          "title": "Customer churn rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: proactive outreach is associated with lower churn",
+          "grade": 1
+        },
+        {
+          "title": "Quarterly Customer Churn Rate Report",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q032",
+      "domain": "customer-success",
+      "query": "customer health score model usage support ticket NPS",
+      "judgments": [
+        {
+          "title": "Customer Health Score Model Notes",
+          "grade": 2
+        },
+        {
+          "title": "Decision: proactive churn-risk outreach",
+          "grade": 1
+        },
+        {
+          "title": "Customer churn rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: proactive outreach is associated with lower churn",
+          "grade": 1
+        },
+        {
+          "title": "Quarterly Customer Churn Rate Report",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q033",
+      "domain": "customer-success",
+      "query": "current quarterly customer churn rate",
+      "judgments": [
+        {
+          "title": "Customer churn rate status update",
+          "grade": 2
+        },
+        {
+          "title": "Quarterly Customer Churn Rate Report",
+          "grade": 1
+        },
+        {
+          "title": "Decision: proactive churn-risk outreach",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: proactive outreach is associated with lower churn",
+          "grade": 1
+        },
+        {
+          "title": "Customer Health Score Model Notes",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q034",
+      "domain": "customer-success",
+      "query": "lesson about proactive outreach and churn",
+      "judgments": [
+        {
+          "title": "Lesson: proactive outreach is associated with lower churn",
+          "grade": 2
+        },
+        {
+          "title": "Decision: proactive churn-risk outreach",
+          "grade": 1
+        },
+        {
+          "title": "Customer churn rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Customer Health Score Model Notes",
+          "grade": 1
+        },
+        {
+          "title": "Quarterly Customer Churn Rate Report",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q035",
+      "domain": "customer-success",
+      "query": "quarterly churn rate report after outreach",
+      "judgments": [
+        {
+          "title": "Quarterly Customer Churn Rate Report",
+          "grade": 2
+        },
+        {
+          "title": "Decision: proactive churn-risk outreach",
+          "grade": 1
+        },
+        {
+          "title": "Customer churn rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: proactive outreach is associated with lower churn",
+          "grade": 1
+        },
+        {
+          "title": "Customer Health Score Model Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q036",
+      "domain": "customer-success",
+      "query": "churn risk account outreach CSM",
+      "judgments": [
+        {
+          "title": "Decision: proactive churn-risk outreach",
+          "grade": 2
+        },
+        {
+          "title": "Customer Health Score Model Notes",
+          "grade": 1
+        },
+        {
+          "title": "Customer churn rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: proactive outreach is associated with lower churn",
+          "grade": 1
+        },
+        {
+          "title": "Quarterly Customer Churn Rate Report",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q037",
+      "domain": "marketing",
+      "query": "why did we shorten the onboarding email sequence",
+      "judgments": [
+        {
+          "title": "Decision: shorten onboarding email sequence",
+          "grade": 2
+        },
+        {
+          "title": "Q4 Lifecycle Email Campaign Brief",
+          "grade": 1
+        },
+        {
+          "title": "Trial conversion rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: shorter onboarding sequences can raise conversion",
+          "grade": 1
+        },
+        {
+          "title": "Trial-to-Paid Conversion Rate Analysis",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q038",
+      "domain": "marketing",
+      "query": "q4 lifecycle email campaign brief onboarding emails",
+      "judgments": [
+        {
+          "title": "Q4 Lifecycle Email Campaign Brief",
+          "grade": 2
+        },
+        {
+          "title": "Decision: shorten onboarding email sequence",
+          "grade": 1
+        },
+        {
+          "title": "Trial conversion rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: shorter onboarding sequences can raise conversion",
+          "grade": 1
+        },
+        {
+          "title": "Trial-to-Paid Conversion Rate Analysis",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q039",
+      "domain": "marketing",
+      "query": "current trial to paid conversion rate",
+      "judgments": [
+        {
+          "title": "Trial conversion rate status update",
+          "grade": 2
+        },
+        {
+          "title": "Trial-to-Paid Conversion Rate Analysis",
+          "grade": 1
+        },
+        {
+          "title": "Decision: shorten onboarding email sequence",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: shorter onboarding sequences can raise conversion",
+          "grade": 1
+        },
+        {
+          "title": "Q4 Lifecycle Email Campaign Brief",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q040",
+      "domain": "marketing",
+      "query": "lesson about shorter onboarding sequences and conversion",
+      "judgments": [
+        {
+          "title": "Lesson: shorter onboarding sequences can raise conversion",
+          "grade": 2
+        },
+        {
+          "title": "Decision: shorten onboarding email sequence",
+          "grade": 1
+        },
+        {
+          "title": "Trial conversion rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Q4 Lifecycle Email Campaign Brief",
+          "grade": 1
+        },
+        {
+          "title": "Trial-to-Paid Conversion Rate Analysis",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q041",
+      "domain": "marketing",
+      "query": "trial to paid conversion rate analysis after shortening emails",
+      "judgments": [
+        {
+          "title": "Trial-to-Paid Conversion Rate Analysis",
+          "grade": 2
+        },
+        {
+          "title": "Decision: shorten onboarding email sequence",
+          "grade": 1
+        },
+        {
+          "title": "Trial conversion rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: shorter onboarding sequences can raise conversion",
+          "grade": 1
+        },
+        {
+          "title": "Q4 Lifecycle Email Campaign Brief",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q042",
+      "domain": "marketing",
+      "query": "shorten onboarding email sequence conversion",
+      "judgments": [
+        {
+          "title": "Decision: shorten onboarding email sequence",
+          "grade": 2
+        },
+        {
+          "title": "Trial conversion rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: shorter onboarding sequences can raise conversion",
+          "grade": 1
+        },
+        {
+          "title": "Q4 Lifecycle Email Campaign Brief",
+          "grade": 1
+        },
+        {
+          "title": "Trial-to-Paid Conversion Rate Analysis",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q043",
+      "domain": "security",
+      "query": "why do we require mTLS between internal services",
+      "judgments": [
+        {
+          "title": "Decision: require mTLS between internal services",
+          "grade": 2
+        },
+        {
+          "title": "Zero Trust Network Rollout Plan",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: lateral movement after credential compromise",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: mTLS rollout needs service identity first",
+          "grade": 1
+        },
+        {
+          "title": "Internal Service Security Review Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q044",
+      "domain": "security",
+      "query": "zero trust network rollout plan mutual tls",
+      "judgments": [
+        {
+          "title": "Zero Trust Network Rollout Plan",
+          "grade": 2
+        },
+        {
+          "title": "Decision: require mTLS between internal services",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: lateral movement after credential compromise",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: mTLS rollout needs service identity first",
+          "grade": 1
+        },
+        {
+          "title": "Internal Service Security Review Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q045",
+      "domain": "security",
+      "query": "internal service security review lateral movement",
+      "judgments": [
+        {
+          "title": "Internal Service Security Review Notes",
+          "grade": 2
+        },
+        {
+          "title": "Decision: require mTLS between internal services",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: lateral movement after credential compromise",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: mTLS rollout needs service identity first",
+          "grade": 1
+        },
+        {
+          "title": "Zero Trust Network Rollout Plan",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q046",
+      "domain": "security",
+      "query": "risk of lateral movement after credential compromise",
+      "judgments": [
+        {
+          "title": "Risk watch: lateral movement after credential compromise",
+          "grade": 2
+        },
+        {
+          "title": "Decision: require mTLS between internal services",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: mTLS rollout needs service identity first",
+          "grade": 1
+        },
+        {
+          "title": "Zero Trust Network Rollout Plan",
+          "grade": 1
+        },
+        {
+          "title": "Internal Service Security Review Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q047",
+      "domain": "security",
+      "query": "lesson about mTLS rollout and service identity",
+      "judgments": [
+        {
+          "title": "Lesson: mTLS rollout needs service identity first",
+          "grade": 2
+        },
+        {
+          "title": "Decision: require mTLS between internal services",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: lateral movement after credential compromise",
+          "grade": 1
+        },
+        {
+          "title": "Zero Trust Network Rollout Plan",
+          "grade": 1
+        },
+        {
+          "title": "Internal Service Security Review Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q048",
+      "domain": "security",
+      "query": "SPIFFE service identity before mTLS",
+      "judgments": [
+        {
+          "title": "Lesson: mTLS rollout needs service identity first",
+          "grade": 2
+        },
+        {
+          "title": "Decision: require mTLS between internal services",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: lateral movement after credential compromise",
+          "grade": 1
+        },
+        {
+          "title": "Zero Trust Network Rollout Plan",
+          "grade": 1
+        },
+        {
+          "title": "Internal Service Security Review Notes",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q049",
+      "domain": "product-roadmap",
+      "query": "why did we prioritize offline mode over dashboard widgets",
+      "judgments": [
+        {
+          "title": "Decision: prioritize offline mode",
+          "grade": 2
+        },
+        {
+          "title": "Mobile App Offline Mode PRD",
+          "grade": 1
+        },
+        {
+          "title": "Mobile crash-free rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: field feedback should weigh heavily in roadmap prioritization",
+          "grade": 1
+        },
+        {
+          "title": "Mobile Crash-Free Session Rate Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q050",
+      "domain": "product-roadmap",
+      "query": "mobile app offline mode PRD field connectivity",
+      "judgments": [
+        {
+          "title": "Mobile App Offline Mode PRD",
+          "grade": 2
+        },
+        {
+          "title": "Decision: prioritize offline mode",
+          "grade": 1
+        },
+        {
+          "title": "Mobile crash-free rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: field feedback should weigh heavily in roadmap prioritization",
+          "grade": 1
+        },
+        {
+          "title": "Mobile Crash-Free Session Rate Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q051",
+      "domain": "product-roadmap",
+      "query": "current mobile crash free session rate",
+      "judgments": [
+        {
+          "title": "Mobile crash-free rate status update",
+          "grade": 2
+        },
+        {
+          "title": "Mobile Crash-Free Session Rate Notes",
+          "grade": 1
+        },
+        {
+          "title": "Decision: prioritize offline mode",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: field feedback should weigh heavily in roadmap prioritization",
+          "grade": 1
+        },
+        {
+          "title": "Mobile App Offline Mode PRD",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q052",
+      "domain": "product-roadmap",
+      "query": "lesson about field feedback and roadmap prioritization",
+      "judgments": [
+        {
+          "title": "Lesson: field feedback should weigh heavily in roadmap prioritization",
+          "grade": 2
+        },
+        {
+          "title": "Decision: prioritize offline mode",
+          "grade": 1
+        },
+        {
+          "title": "Mobile crash-free rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Mobile App Offline Mode PRD",
+          "grade": 1
+        },
+        {
+          "title": "Mobile Crash-Free Session Rate Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q053",
+      "domain": "product-roadmap",
+      "query": "mobile crash free session rate notes after offline mode",
+      "judgments": [
+        {
+          "title": "Mobile Crash-Free Session Rate Notes",
+          "grade": 2
+        },
+        {
+          "title": "Decision: prioritize offline mode",
+          "grade": 1
+        },
+        {
+          "title": "Mobile crash-free rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: field feedback should weigh heavily in roadmap prioritization",
+          "grade": 1
+        },
+        {
+          "title": "Mobile App Offline Mode PRD",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q054",
+      "domain": "finance",
+      "query": "why did we move batch jobs to spot instances",
+      "judgments": [
+        {
+          "title": "Decision: move batch jobs to spot instances",
+          "grade": 2
+        },
+        {
+          "title": "Cloud Cost Optimization Plan",
+          "grade": 1
+        },
+        {
+          "title": "Cloud spend status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: checkpoint before moving jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Monthly Cloud Infrastructure Spend Report",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q055",
+      "domain": "finance",
+      "query": "cloud cost optimization plan spot instances checkpointing",
+      "judgments": [
+        {
+          "title": "Cloud Cost Optimization Plan",
+          "grade": 2
+        },
+        {
+          "title": "Decision: move batch jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Cloud spend status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: checkpoint before moving jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Monthly Cloud Infrastructure Spend Report",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q056",
+      "domain": "finance",
+      "query": "current monthly cloud infrastructure spend",
+      "judgments": [
+        {
+          "title": "Cloud spend status update",
+          "grade": 2
+        },
+        {
+          "title": "Monthly Cloud Infrastructure Spend Report",
+          "grade": 1
+        },
+        {
+          "title": "Decision: move batch jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: checkpoint before moving jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Cloud Cost Optimization Plan",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q057",
+      "domain": "finance",
+      "query": "lesson about checkpointing before spot instance migration",
+      "judgments": [
+        {
+          "title": "Lesson: checkpoint before moving jobs to spot instances",
+          "grade": 2
+        },
+        {
+          "title": "Decision: move batch jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Cloud spend status update",
+          "grade": 1
+        },
+        {
+          "title": "Cloud Cost Optimization Plan",
+          "grade": 1
+        },
+        {
+          "title": "Monthly Cloud Infrastructure Spend Report",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q058",
+      "domain": "finance",
+      "query": "monthly cloud infrastructure spend report after spot migration",
+      "judgments": [
+        {
+          "title": "Monthly Cloud Infrastructure Spend Report",
+          "grade": 2
+        },
+        {
+          "title": "Decision: move batch jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Cloud spend status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: checkpoint before moving jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Cloud Cost Optimization Plan",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q059",
+      "domain": "finance",
+      "query": "spot instances cloud cost savings",
+      "judgments": [
+        {
+          "title": "Decision: move batch jobs to spot instances",
+          "grade": 2
+        },
+        {
+          "title": "Cloud spend status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: checkpoint before moving jobs to spot instances",
+          "grade": 1
+        },
+        {
+          "title": "Cloud Cost Optimization Plan",
+          "grade": 1
+        },
+        {
+          "title": "Monthly Cloud Infrastructure Spend Report",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q060",
+      "domain": "incident-response",
+      "query": "circuit breakers for payment gateway",
+      "judgments": [
+        {
+          "title": "Decision: circuit breakers for payment gateway",
+          "grade": 2
+        },
+        {
+          "title": "Checkout error rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: always circuit-break third-party payment calls",
+          "grade": 1
+        },
+        {
+          "title": "Checkout Reliability Runbook",
+          "grade": 1
+        },
+        {
+          "title": "Payment Gateway Timeout Postmortem",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q061",
+      "domain": "hiring",
+      "query": "structured interview rubrics hiring",
+      "judgments": [
+        {
+          "title": "Structured Interview Rubric Guide",
+          "grade": 2
+        },
+        {
+          "title": "Decision: structured interview rubrics",
+          "grade": 1
+        },
+        {
+          "title": "Hiring plan status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: rubrics reduce interview scoring variance",
+          "grade": 1
+        },
+        {
+          "title": "Engineering Hiring Plan Overview",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q062",
+      "domain": "pricing",
+      "query": "usage based pricing enterprise customers",
+      "judgments": [
+        {
+          "title": "Decision: usage-based pricing tier",
+          "grade": 2
+        },
+        {
+          "title": "Usage-Based Pricing Design Doc",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: customer bill shock",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: overage alerts reduce billing complaints",
+          "grade": 1
+        },
+        {
+          "title": "Average Revenue Per Account Dashboard Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q063",
+      "domain": "infra-reliability",
+      "query": "active active deployment two regions",
+      "judgments": [
+        {
+          "title": "Decision: active-active multi-region deployment",
+          "grade": 2
+        },
+        {
+          "title": "Platform uptime status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: active-active deployment limits single-region blast radius",
+          "grade": 1
+        },
+        {
+          "title": "Multi-Region Failover Design",
+          "grade": 1
+        },
+        {
+          "title": "Platform Uptime Percentage Trend Notes",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    },
+    {
+      "id": "q064",
+      "domain": "data-privacy",
+      "query": "90 day retention period customer data",
+      "judgments": [
+        {
+          "title": "Data Retention Policy",
+          "grade": 2
+        },
+        {
+          "title": "Decision: 90-day default data retention",
+          "grade": 1
+        },
+        {
+          "title": "Risk watch: regulatory non-compliance exposure",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: automated deletion jobs are required, not just policy",
+          "grade": 1
+        },
+        {
+          "title": "Privacy Regulation Compliance Checklist",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q065",
+      "domain": "security",
+      "query": "mutual TLS internal services zero trust",
+      "judgments": [
+        {
+          "title": "Decision: require mTLS between internal services",
+          "grade": 2
+        },
+        {
+          "title": "Risk watch: lateral movement after credential compromise",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: mTLS rollout needs service identity first",
+          "grade": 1
+        },
+        {
+          "title": "Zero Trust Network Rollout Plan",
+          "grade": 1
+        },
+        {
+          "title": "Internal Service Security Review Notes",
+          "grade": 1
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "id": "q066",
+      "domain": "product-roadmap",
+      "query": "offline mode mobile app roadmap priority",
+      "judgments": [
+        {
+          "title": "Decision: prioritize offline mode",
+          "grade": 2
+        },
+        {
+          "title": "Mobile crash-free rate status update",
+          "grade": 1
+        },
+        {
+          "title": "Lesson: field feedback should weigh heavily in roadmap prioritization",
+          "grade": 1
+        },
+        {
+          "title": "Mobile App Offline Mode PRD",
+          "grade": 1
+        },
+        {
+          "title": "Mobile Crash-Free Session Rate Notes",
+          "grade": 1
+        }
+      ],
+      "split": "holdout"
+    }
+  ]
+}

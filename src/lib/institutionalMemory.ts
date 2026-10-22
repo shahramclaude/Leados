@@ -1,209 +1,198 @@
-// src/lib/institutionalMemory.ts
+// =============================================================================
+// institutionalMemory.ts — decaying memory lifecycle
+// =============================================================================
+// Retention model: R(t) = e^(-t/S)
+//   t = days since lastReactivatedAt
+//   S = strength (days), per-memory, seeded from a per-class base and
+//       increased every time the memory is reactivated (read, cited,
+//       linked from a new decision, etc).
 //
-// Institutional memory (mission §B): structured retrospectives
-// (situation -> decision -> outcome -> lesson -> playbook impact), created
-// automatically from Part 10's decision retrospectives
-// (`createFromDecisionRetrospective`, wired to the `decision_retrospectives`
-// seam table — see schema.ts) and manually via the UI/API
-// (`recordRetrospective`). Strength decays per mission's
-// s(t) = s0*exp(-Δt/τ) + Σreactivations formula (memory.ts), with a
-// documented half-life per memory class. Nothing is ever deleted.
+// Reactivation: S' = S + delta * recency
+//   recency = R(t) evaluated at the moment of reactivation — i.e. catching
+//   a memory while it is still well-retained reinforces it more than
+//   reactivating something that had already decayed close to zero. This
+//   mirrors spaced-repetition "desirable difficulty": reinforcing a fading
+//   memory barely nudges strength, reinforcing a fresh one compounds fast
+//   because it signals an actively-relied-upon record.
 //
-// Contract note: this module's exported function names
-// (listTimeline/recallOnThisDay/recallThisQuarter/recordRetrospective/
-// reinforceRetrospective/memorySummaryByCategory/findSimilarRetrospectives)
-// match `src/app/api/memory/route.ts` as already shipped on the upstream
-// `main` branch — see the disclosure at the top of schema.ts for why an
-// earlier, incompatible `institutionalMemory.ts` (createMemoryNote/
-// listMemoryNotes) was replaced rather than kept.
-import { desc, eq, gte, sql } from "drizzle-orm";
+// NOTHING IS EVER DELETED. Decay only changes the *computed, derived*
+// retention value and (below a visibility threshold) the `archived` flag,
+// which hides a memory from default list views but never removes the row.
+// =============================================================================
+
 import { db } from "@/db";
-import { retrospectives, memoryReactivations, decisionRetrospectivesLegacy } from "@/db/schema";
-import { ageDays, halfLifeForClass, jaccard, memoryStrength } from "@/lib/memory";
+import { memories } from "@/db/schema";
+import { eq, sql } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
 
-export type OutcomeValence = "positive" | "neutral" | "negative";
+export type MemoryClass = "decision" | "status" | "risk" | "metric" | "lesson";
+export type MemoryRow = InferSelectModel<typeof memories>;
 
-export interface RetrospectiveInput {
-  title: string;
-  situation: string;
-  decision: string;
-  outcome: string;
-  outcomeValence?: OutcomeValence;
-  lesson: string;
-  playbookUpdate?: string;
-  tags?: string[];
-  entityIds?: string[];
-  memoryClass?: string;
-  occurredAt: string; // ISO date
-  sourceDecisionRetrospectiveId?: number;
+/** Base strength (days) per memory class — decisions & lessons decay slowly,
+ * status updates decay fast. These are the *seed* values; actual strength
+ * grows via reactivation over the memory's life. */
+export const BASE_STRENGTH_DAYS: Record<MemoryClass, number> = {
+  decision: 180,
+  lesson: 220,
+  risk: 60,
+  metric: 30,
+  status: 7,
+};
+
+/** Reactivation increment (days) per class — how much a single reactivation
+ * can add at maximum (when recency factor = 1, i.e. memory still fresh). */
+export const REACTIVATION_DELTA_DAYS: Record<MemoryClass, number> = {
+  decision: 45,
+  lesson: 60,
+  risk: 20,
+  metric: 10,
+  status: 3,
+};
+
+/** Below this retention value, a memory is flagged `archived` (hidden by
+ * default, but never deleted and still queryable/reactivatable). */
+export const ARCHIVE_THRESHOLD = 0.05;
+
+/** Pure function: exponential retention R(t) = e^(-t/S). */
+export function retention(ageDays: number, strengthDays: number): number {
+  if (strengthDays <= 0) return 0;
+  if (ageDays <= 0) return 1;
+  return Math.exp(-ageDays / strengthDays);
 }
 
-export async function recordRetrospective(input: RetrospectiveInput) {
+export function ageInDays(since: Date, now: Date = new Date()): number {
+  return Math.max(0, (now.getTime() - since.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** Pure function: compute the new strength after a reactivation event. */
+export function reactivatedStrength(
+  currentStrengthDays: number,
+  ageDaysAtReactivation: number,
+  deltaDays: number,
+): number {
+  const recency = retention(ageDaysAtReactivation, currentStrengthDays);
+  return currentStrengthDays + deltaDays * recency;
+}
+
+export interface MemoryWithRetention extends MemoryRow {
+  ageDays: number;
+  retention: number;
+}
+
+export function decorateWithRetention(row: MemoryRow, now: Date = new Date()): MemoryWithRetention {
+  const t = ageInDays(row.lastReactivatedAt, now);
+  return {
+    ...row,
+    ageDays: Number(t.toFixed(2)),
+    retention: Number(retention(t, Number(row.strength)).toFixed(4)),
+  };
+}
+
+export interface RecordMemoryInput {
+  class: MemoryClass;
+  title: string;
+  content: string;
+  entityId?: string | null;
+  relatedEntityIds?: string[];
+  provenanceSource: string;
+  sourceType: string;
+}
+
+export async function recordMemory(input: RecordMemoryInput) {
   const [row] = await db
-    .insert(retrospectives)
+    .insert(memories)
     .values({
+      class: input.class,
       title: input.title,
-      situation: input.situation,
-      decision: input.decision,
-      outcome: input.outcome,
-      outcomeValence: input.outcomeValence ?? "neutral",
-      lesson: input.lesson,
-      playbookUpdate: input.playbookUpdate ?? null,
-      tags: input.tags ?? [],
-      entityIds: input.entityIds ?? [],
-      memoryClass: input.memoryClass ?? "decision",
-      occurredAt: input.occurredAt,
-      sourceDecisionRetrospectiveId: input.sourceDecisionRetrospectiveId ?? null,
+      content: input.content,
+      entityId: input.entityId ?? null,
+      relatedEntityIds: input.relatedEntityIds ?? [],
+      strength: BASE_STRENGTH_DAYS[input.class].toString(),
+      provenanceSource: input.provenanceSource,
+      sourceType: input.sourceType,
     })
     .returning();
   return row;
 }
 
-/** Nightly/manual: scan decision_retrospectives for newly-completed ones and mint an institutional-memory record for each, idempotently. */
-export async function createFromDecisionRetrospective(decisionRetroId: number) {
-  const [existing] = await db
+export async function listMemories(opts?: {
+  class?: MemoryClass;
+  includeArchived?: boolean;
+  entityId?: string;
+}) {
+  const rows = await db
     .select()
-    .from(retrospectives)
-    .where(eq(retrospectives.sourceDecisionRetrospectiveId, decisionRetroId))
-    .limit(1);
-  if (existing) return existing; // idempotent — never double-mint a memory for the same source
+    .from(memories)
+    .where(
+      opts?.entityId
+        ? eq(memories.entityId, opts.entityId)
+        : opts?.class
+          ? eq(memories.class, opts.class)
+          : undefined,
+    )
+    .orderBy(sql`${memories.lastReactivatedAt} desc`);
 
-  const [source] = await db
-    .select()
-    .from(decisionRetrospectivesLegacy)
-    .where(eq(decisionRetrospectivesLegacy.id, decisionRetroId))
-    .limit(1);
-  if (!source || !source.completedAt) return null;
-
-  const predicted = source.predicted as Record<string, unknown>;
-  const actual = (source.actual ?? {}) as Record<string, unknown>;
-  const valence: OutcomeValence = source.calibrationErrorNotes.toLowerCase().includes("worse")
-    ? "negative"
-    : source.calibrationErrorNotes
-    ? "neutral"
-    : "positive";
-
-  return recordRetrospective({
-    title: `Retro: decision #${source.decisionId}`,
-    situation: `Decision #${source.decisionId} was due for review on ${source.dueAt}.`,
-    decision: JSON.stringify(predicted),
-    outcome: JSON.stringify(actual),
-    outcomeValence: valence,
-    lesson: source.lessons || "No explicit lesson captured.",
-    playbookUpdate: source.lessons && source.lessons.length > 0 ? source.lessons : undefined,
-    tags: ["auto-generated", `decision-${source.decisionId}`],
-    memoryClass: "decision",
-    occurredAt: new Date(source.completedAt).toISOString().slice(0, 10),
-    sourceDecisionRetrospectiveId: source.id,
-  });
+  const filtered = opts?.includeArchived ? rows : rows.filter((r) => !r.archived);
+  return filtered.map((r) => decorateWithRetention(r));
 }
 
-/** Every citation/reuse strengthens a memory (mission §B "strengthened by reuse/citation"). The row itself is never edited, only its reactivation log grows. */
-export async function reinforceRetrospective(id: number, reason?: string, citedBy?: string, weight = 1) {
-  await db.insert(memoryReactivations).values({ retrospectiveId: id, reason: reason ?? null, citedBy: citedBy ?? null, weight: weight.toFixed(3) });
-  const [row] = await db
-    .update(retrospectives)
-    .set({ reactivationCount: sql`${retrospectives.reactivationCount} + 1`, lastReinforcedAt: new Date() })
-    .where(eq(retrospectives.id, id))
+export async function getMemory(id: string) {
+  const [row] = await db.select().from(memories).where(eq(memories.id, id));
+  return row ? decorateWithRetention(row) : null;
+}
+
+/** Reactivate a memory: strengthens it per the formula above, always
+ * un-archives it (a reactivated memory is, by definition, not stale). */
+export async function reactivateMemory(id: string, now: Date = new Date()) {
+  const [row] = await db.select().from(memories).where(eq(memories.id, id));
+  if (!row) return null;
+
+  const ageDays = ageInDays(row.lastReactivatedAt, now);
+  const memoryClass = row.class as MemoryClass;
+  const newStrength = reactivatedStrength(
+    Number(row.strength),
+    ageDays,
+    REACTIVATION_DELTA_DAYS[memoryClass],
+  );
+
+  const [updated] = await db
+    .update(memories)
+    .set({
+      strength: newStrength.toString(),
+      lastReactivatedAt: now,
+      reactivationCount: row.reactivationCount + 1,
+      archived: false,
+    })
+    .where(eq(memories.id, id))
     .returning();
-  return row;
-}
 
-export type RetrospectiveWithStrength = typeof retrospectives.$inferSelect & { strength: number; halfLifeDays: number };
-
-async function withStrength(rows: (typeof retrospectives.$inferSelect)[]): Promise<RetrospectiveWithStrength[]> {
-  if (rows.length === 0) return [];
-  const ids = rows.map((r) => r.id);
-  const allReactivations = await db.select().from(memoryReactivations);
-  const reactivationsById = new Map<number, typeof allReactivations>();
-  for (const r of allReactivations) {
-    if (!ids.includes(r.retrospectiveId)) continue;
-    const list = reactivationsById.get(r.retrospectiveId) ?? [];
-    list.push(r);
-    reactivationsById.set(r.retrospectiveId, list);
-  }
-  const now = new Date();
-  return rows.map((row) => {
-    const halfLifeDays = halfLifeForClass(row.memoryClass);
-    const reactivations = (reactivationsById.get(row.id) ?? []).map((r) => ({
-      ageDays: ageDays(r.reactivatedAt, now),
-      weight: Number(r.weight),
-    }));
-    const strength = memoryStrength({
-      baseStrength: Number(row.baseStrength),
-      ageDaysSinceCreation: ageDays(row.createdAt, now),
-      halfLifeDays,
-      reactivations,
-    });
-    return { ...row, strength, halfLifeDays };
-  });
-}
-
-export async function listTimeline(limit = 100): Promise<RetrospectiveWithStrength[]> {
-  const rows = await db.select().from(retrospectives).orderBy(desc(retrospectives.occurredAt)).limit(limit);
-  return withStrength(rows);
-}
-
-/** "On this day" recall: retrospectives whose occurredAt shares today's month+day in any prior year. */
-export async function recallOnThisDay(today: Date = new Date()): Promise<RetrospectiveWithStrength[]> {
-  const month = today.getMonth() + 1;
-  const day = today.getDate();
-  const rows = await db.execute(sql`
-    select * from retrospectives
-    where extract(month from occurred_at) = ${month} and extract(day from occurred_at) = ${day}
-    order by occurred_at desc
-  `);
-  return withStrength(rows.rows as unknown as (typeof retrospectives.$inferSelect)[]);
-}
-
-/** "On this quarter" recall: retrospectives from the same calendar quarter in any prior year. */
-export async function recallThisQuarter(today: Date = new Date()): Promise<RetrospectiveWithStrength[]> {
-  const quarter = Math.floor(today.getMonth() / 3) + 1;
-  const rows = await db.execute(sql`
-    select * from retrospectives
-    where extract(quarter from occurred_at) = ${quarter}
-    order by occurred_at desc
-  `);
-  return withStrength(rows.rows as unknown as (typeof retrospectives.$inferSelect)[]);
-}
-
-export async function memorySummaryByCategory() {
-  const rows = await listTimeline(1000);
-  const byClass = new Map<string, { count: number; meanStrength: number; strengths: number[] }>();
-  for (const r of rows) {
-    const bucket = byClass.get(r.memoryClass) ?? { count: 0, meanStrength: 0, strengths: [] };
-    bucket.count += 1;
-    bucket.strengths.push(r.strength);
-    byClass.set(r.memoryClass, bucket);
-  }
-  return Array.from(byClass.entries()).map(([memoryClass, bucket]) => ({
-    memoryClass,
-    count: bucket.count,
-    halfLifeDays: halfLifeForClass(memoryClass),
-    meanStrength: bucket.strengths.reduce((s, v) => s + v, 0) / bucket.strengths.length,
-  }));
+  return decorateWithRetention(updated);
 }
 
 /**
- * "We faced this before" — similarity surfacing via tag Jaccard overlap
- * against a candidate retrospective's situation tags. Deterministic, no
- * embeddings: this is a keyword/tag primitive, consistent with the rest of
- * this module's refusal to fabricate model-generated similarity claims.
+ * Nightly decay pass: NEVER deletes or mutates `strength`. Only recomputes
+ * retention and flips `archived` for records that have decayed below the
+ * visibility threshold (and un-flips any that got reactivated and are back
+ * above it, though reactivateMemory already does that eagerly).
+ * Returns counts for the audit log (consolidationRuns).
  */
-export async function findSimilarRetrospectives(candidate: { tags?: string[]; title?: string }, threshold = 0.25, limit = 5) {
-  const candidateTags = new Set(candidate.tags ?? []);
-  const all = await db.select().from(retrospectives);
-  const scored = all
-    .map((r) => ({ row: r, score: jaccard(candidateTags, new Set((r.tags as string[]) ?? [])) }))
-    .filter((s) => s.score >= threshold || (candidate.title && s.row.title.toLowerCase().includes(candidate.title.toLowerCase())))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-  const withStr = await withStrength(scored.map((s) => s.row));
-  return withStr.map((row, i) => ({ ...row, similarity: scored[i].score }));
-}
+export async function decayPass(now: Date = new Date()) {
+  const rows = await db.select().from(memories);
+  let decayedCount = 0;
+  let unarchivedCount = 0;
 
-export async function listRetrospectivesSince(days: number) {
-  const since = new Date();
-  since.setDate(since.getDate() - days);
-  return db.select().from(retrospectives).where(gte(retrospectives.occurredAt, since.toISOString().slice(0, 10)));
+  for (const row of rows) {
+    const t = ageInDays(row.lastReactivatedAt, now);
+    const r = retention(t, Number(row.strength));
+    const shouldArchive = r < ARCHIVE_THRESHOLD;
+    if (shouldArchive && !row.archived) {
+      await db.update(memories).set({ archived: true }).where(eq(memories.id, row.id));
+      decayedCount++;
+    } else if (!shouldArchive && row.archived) {
+      await db.update(memories).set({ archived: false }).where(eq(memories.id, row.id));
+      unarchivedCount++;
+    }
+  }
+
+  return { scanned: rows.length, decayedCount, unarchivedCount };
 }

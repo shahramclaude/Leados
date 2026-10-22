@@ -1,30 +1,25 @@
-import { NextResponse } from "next/server";
-import { getPlaybook, listPlaybookVersions, updatePlaybook, type UpdatePlaybookInput } from "@/lib/playbooks";
-import { computeEffectiveness, listRuns } from "@/lib/playbooksEngine";
+import { getPlaybook, getPlaybookVersionHistory, listRunsForPlaybook } from "@/lib/playbooks";
+import { computePlaybookEffectiveness, effectivenessBadge } from "@/lib/playbooksIntelligence";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const playbookId = Number(id);
-  const playbook = await getPlaybook(playbookId);
-  if (!playbook) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const [versions, runs, effectiveness] = await Promise.all([
-    listPlaybookVersions(playbookId),
-    listRuns(playbookId),
-    computeEffectiveness(playbookId),
-  ]);
-  return NextResponse.json({ playbook, versions, runs, effectiveness });
-}
+export async function GET(_req: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const playbook = await getPlaybook(id);
+  if (!playbook) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const body = (await request.json()) as UpdatePlaybookInput;
-  if (!body.changeNote) return NextResponse.json({ error: "changeNote is required" }, { status: 400 });
-  try {
-    const row = await updatePlaybook(Number(id), body);
-    return NextResponse.json(row);
-  } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
-  }
+  const [versions, runs, effectiveness] = await Promise.all([
+    getPlaybookVersionHistory(playbook.slug),
+    listRunsForPlaybook(id),
+    computePlaybookEffectiveness(id),
+  ]);
+
+  return Response.json({
+    ok: true,
+    playbook,
+    versions,
+    runs,
+    effectiveness,
+    badge: effectivenessBadge(effectiveness),
+  });
 }

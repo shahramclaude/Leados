@@ -1,123 +1,107 @@
-// src/lib/playbooksIntelligence.ts
-//
-// Mines institutional memory (retrospectives) for new playbook candidates
-// (mission §D: "mining from retrospectives proposes candidates (never
-// auto-published)"). Candidates land in `playbook_candidates` with status
-// "suggested" and a human must explicitly accept one (which calls
-// `createPlaybook` in playbooks.ts) before it becomes a real, invocable
-// playbook. Nothing here auto-publishes.
-import { desc, eq } from "drizzle-orm";
+// =============================================================================
+// playbooksIntelligence.ts — Playbook effectiveness tracking
+// =============================================================================
+// Applies Part 05's language policy: we only ever say a playbook's use was
+// "associated with" an outcome rate, never that it "caused" or "improved"
+// anything, unless a controlled/identified causal design exists (it does
+// not here — this is observational run data). Every effectiveness figure
+// carries its sample size (n) and is suppressed/flagged when n is small.
+// =============================================================================
+
 import { db } from "@/db";
-import { playbookCandidates, retrospectives } from "@/db/schema";
-import { jaccard } from "@/lib/memory";
-import { createPlaybook, type PlaybookStep } from "@/lib/playbooks";
+import { playbookRuns, playbooks } from "@/db/schema";
+import { eq, ne, sql } from "drizzle-orm";
 
-export interface MinedCandidate {
-  clusterTags: string[];
-  retrospectiveIds: number[];
-  suggestedTitle: string;
-  suggestedSteps: PlaybookStep[];
-  rationale: string;
+export const MIN_SAMPLE_FOR_CONFIDENT_CLAIM = 5;
+
+export interface EffectivenessSummary {
+  playbookId: string;
+  playbookName: string;
+  totalRuns: number;
+  completedRuns: number;
+  successRuns: number;
+  partialRuns: number;
+  failureRuns: number;
+  successRate: number | null;
+  /** Baseline success rate across all OTHER playbooks' completed runs,
+   * shown purely as context — never framed as a counterfactual for this
+   * playbook's decisions. */
+  baselineSuccessRate: number | null;
+  baselineN: number;
+  sampleSizeWarning: boolean;
+  /** Pre-written, Part-05-compliant language for display. */
+  statement: string;
 }
 
-const MIN_CLUSTER_SIZE = 2;
-const SIMILARITY_THRESHOLD = 0.5;
+export async function computePlaybookEffectiveness(playbookId: string): Promise<EffectivenessSummary> {
+  const [playbook] = await db.select().from(playbooks).where(eq(playbooks.id, playbookId));
+  if (!playbook) throw new Error("Playbook not found");
 
-/**
- * Greedy tag-similarity clustering over retrospectives with a lesson that
- * implies a repeatable action (`playbookUpdate` populated). Clusters of
- * >= MIN_CLUSTER_SIZE sharing >= SIMILARITY_THRESHOLD Jaccard tag overlap
- * become playbook candidates. Deterministic — no model call.
- */
-export async function mineCandidatesFromRetrospectives(): Promise<MinedCandidate[]> {
-  const rows = await db.select().from(retrospectives);
-  const candidates = rows.filter((r) => Boolean(r.playbookUpdate));
+  const runs = await db.select().from(playbookRuns).where(eq(playbookRuns.playbookId, playbookId));
+  const completed = runs.filter((r) => r.outcome !== "in_progress");
+  const successRuns = completed.filter((r) => r.outcome === "success").length;
+  const partialRuns = completed.filter((r) => r.outcome === "partial").length;
+  const failureRuns = completed.filter((r) => r.outcome === "failure").length;
+  const successRate = completed.length ? successRuns / completed.length : null;
 
-  const used = new Set<number>();
-  const clusters: MinedCandidate[] = [];
+  const baselineRows = await db
+    .select({ outcome: playbookRuns.outcome, n: sql<number>`count(*)` })
+    .from(playbookRuns)
+    .where(ne(playbookRuns.playbookId, playbookId))
+    .groupBy(playbookRuns.outcome);
 
-  for (let i = 0; i < candidates.length; i++) {
-    if (used.has(candidates[i].id)) continue;
-    const base = candidates[i];
-    const baseTags = new Set((base.tags as string[]) ?? []);
-    const cluster = [base];
-    used.add(base.id);
-    for (let j = i + 1; j < candidates.length; j++) {
-      if (used.has(candidates[j].id)) continue;
-      const other = candidates[j];
-      const sim = jaccard(baseTags, new Set((other.tags as string[]) ?? []));
-      if (sim >= SIMILARITY_THRESHOLD) {
-        cluster.push(other);
-        used.add(other.id);
-      }
-    }
-    if (cluster.length >= MIN_CLUSTER_SIZE) {
-      const tags = [...new Set(cluster.flatMap((r) => (r.tags as string[]) ?? []))];
-      const steps: PlaybookStep[] = cluster.map((r, idx) => ({
-        order: idx + 1,
-        title: r.playbookUpdate ?? r.lesson,
-        description: `From retrospective "${r.title}" (${r.occurredAt}): ${r.lesson}`,
-        verification: "Confirm the action described was actually taken and link evidence in the run's completion note.",
-      }));
-      clusters.push({
-        clusterTags: tags,
-        retrospectiveIds: cluster.map((r) => r.id),
-        suggestedTitle: `Playbook: ${base.title.replace(/^Retro:\s*/i, "")}`,
-        suggestedSteps: steps,
-        rationale: `${cluster.length} retrospectives tagged [${tags.join(", ")}] independently arrived at the same corrective action — a recurring pattern, strong signal this should be a standing playbook. This is a mined suggestion, not an automatic publication.`,
-      });
-    }
+  const baselineTotal = baselineRows
+    .filter((r) => r.outcome !== "in_progress")
+    .reduce((acc, r) => acc + Number(r.n), 0);
+  const baselineSuccess = baselineRows.find((r) => r.outcome === "success")?.n ?? 0;
+  const baselineSuccessRate = baselineTotal ? Number(baselineSuccess) / baselineTotal : null;
+
+  const sampleSizeWarning = completed.length < MIN_SAMPLE_FOR_CONFIDENT_CLAIM;
+
+  let statement: string;
+  if (completed.length === 0) {
+    statement = `"${playbook.name}" has no completed runs yet — effectiveness cannot be assessed.`;
+  } else if (sampleSizeWarning) {
+    statement = `Runs of "${playbook.name}" were associated with a ${(successRate! * 100).toFixed(0)}% success rate, but the sample is small (n=${completed.length}); treat this as directional, not conclusive.`;
+  } else {
+    const vsBaseline =
+      baselineSuccessRate !== null
+        ? ` This is associated with a ${successRate! >= baselineSuccessRate ? "higher" : "lower"} rate than the ${(baselineSuccessRate * 100).toFixed(0)}% baseline across other playbooks (n=${baselineTotal}); no causal claim is made, as runs are not randomly assigned.`
+        : "";
+    statement = `Runs of "${playbook.name}" were associated with a ${(successRate! * 100).toFixed(0)}% success rate across ${completed.length} completed runs.${vsBaseline}`;
   }
-  return clusters;
+
+  return {
+    playbookId,
+    playbookName: playbook.name,
+    totalRuns: runs.length,
+    completedRuns: completed.length,
+    successRuns,
+    partialRuns,
+    failureRuns,
+    successRate,
+    baselineSuccessRate,
+    baselineN: baselineTotal,
+    sampleSizeWarning,
+    statement,
+  };
 }
 
-/** Run mining and persist any newly-found clusters as suggested candidates (idempotent per retrospective-id set). */
-export async function refreshPlaybookCandidates(): Promise<(typeof playbookCandidates.$inferSelect)[]> {
-  const mined = await mineCandidatesFromRetrospectives();
-  const existing = await db.select().from(playbookCandidates);
-  const existingKeys = new Set(existing.map((c) => c.sourceRetrospectiveId));
-  const created: (typeof playbookCandidates.$inferSelect)[] = [];
-  for (const candidate of mined) {
-    const primaryRetroId = candidate.retrospectiveIds[0];
-    if (existingKeys.has(primaryRetroId)) continue;
-    const [row] = await db
-      .insert(playbookCandidates)
-      .values({
-        sourceRetrospectiveId: primaryRetroId,
-        suggestedTitle: candidate.suggestedTitle,
-        suggestedSteps: candidate.suggestedSteps,
-        rationale: candidate.rationale,
-        status: "suggested",
-      })
-      .returning();
-    created.push(row);
+export async function computeAllPlaybookEffectiveness() {
+  const all = await db.select().from(playbooks);
+  return Promise.all(all.map((p) => computePlaybookEffectiveness(p.id)));
+}
+
+/** Effectiveness badge tier for UI display — purely descriptive bucketing of
+ * the observational success rate + sample size, not a quality judgement. */
+export function effectivenessBadge(summary: EffectivenessSummary): {
+  label: string;
+  tone: "neutral" | "positive" | "caution";
+} {
+  if (summary.completedRuns === 0) return { label: "No data yet", tone: "neutral" };
+  if (summary.sampleSizeWarning) return { label: `Early signal (n=${summary.completedRuns})`, tone: "caution" };
+  if (summary.successRate !== null && summary.successRate >= 0.8) {
+    return { label: `Associated with ${(summary.successRate * 100).toFixed(0)}% success (n=${summary.completedRuns})`, tone: "positive" };
   }
-  return created;
-}
-
-export async function listCandidates(status?: "suggested" | "accepted" | "rejected") {
-  return status
-    ? db.select().from(playbookCandidates).where(eq(playbookCandidates.status, status)).orderBy(desc(playbookCandidates.createdAt))
-    : db.select().from(playbookCandidates).orderBy(desc(playbookCandidates.createdAt));
-}
-
-export async function rejectCandidate(id: number) {
-  const [row] = await db.update(playbookCandidates).set({ status: "rejected", decidedAt: new Date() }).where(eq(playbookCandidates.id, id)).returning();
-  return row;
-}
-
-/** Human explicitly accepts a mined candidate -> becomes a real, invocable playbook (draft status, never active on acceptance alone). */
-export async function acceptCandidate(id: number, key: string) {
-  const [candidate] = await db.select().from(playbookCandidates).where(eq(playbookCandidates.id, id)).limit(1);
-  if (!candidate) throw new Error(`Playbook candidate ${id} not found`);
-  const playbook = await createPlaybook({
-    key,
-    title: candidate.suggestedTitle,
-    description: candidate.rationale,
-    steps: candidate.suggestedSteps as PlaybookStep[],
-    originRetrospectiveId: candidate.sourceRetrospectiveId ?? undefined,
-    status: "draft",
-  });
-  await db.update(playbookCandidates).set({ status: "accepted", decidedAt: new Date() }).where(eq(playbookCandidates.id, id));
-  return playbook;
+  return { label: `${((summary.successRate ?? 0) * 100).toFixed(0)}% success (n=${summary.completedRuns})`, tone: "neutral" };
 }
