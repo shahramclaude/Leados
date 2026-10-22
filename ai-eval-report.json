@@ -1,0 +1,541 @@
+{
+  "generatedAt": "2026-10-22T20:10:04.513Z",
+  "scores": [
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o-mini",
+      "taskClass": "extraction",
+      "score": 0.2606,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o-mini",
+      "taskClass": "classification",
+      "score": 0.2067,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o-mini",
+      "taskClass": "drafting",
+      "score": 0.2398,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o-mini",
+      "taskClass": "reasoning",
+      "score": 0.1139,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o-mini",
+      "taskClass": "code",
+      "score": 0.2602,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o-mini",
+      "taskClass": "summarize",
+      "score": 0.2632,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o",
+      "taskClass": "extraction",
+      "score": 0.8095,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o",
+      "taskClass": "classification",
+      "score": 0.565,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o",
+      "taskClass": "drafting",
+      "score": 0.8259,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o",
+      "taskClass": "reasoning",
+      "score": 0.7965,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o",
+      "taskClass": "code",
+      "score": 0.9259,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4o",
+      "taskClass": "summarize",
+      "score": 0.7472,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4.1",
+      "taskClass": "extraction",
+      "score": 0.94,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4.1",
+      "taskClass": "classification",
+      "score": 0.6767,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4.1",
+      "taskClass": "drafting",
+      "score": 0.8907,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4.1",
+      "taskClass": "reasoning",
+      "score": 0.9354,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4.1",
+      "taskClass": "code",
+      "score": 0.9213,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "openai",
+      "modelName": "gpt-4.1",
+      "taskClass": "summarize",
+      "score": 0.9382,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-haiku",
+      "taskClass": "extraction",
+      "score": 0.3317,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-haiku",
+      "taskClass": "classification",
+      "score": 0.2283,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-haiku",
+      "taskClass": "drafting",
+      "score": 0.2463,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-haiku",
+      "taskClass": "reasoning",
+      "score": 0.2931,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-haiku",
+      "taskClass": "code",
+      "score": 0.4602,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-haiku",
+      "taskClass": "summarize",
+      "score": 0.4007,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-sonnet",
+      "taskClass": "extraction",
+      "score": 0.9028,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-sonnet",
+      "taskClass": "classification",
+      "score": 0.6583,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-sonnet",
+      "taskClass": "drafting",
+      "score": 0.7593,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-sonnet",
+      "taskClass": "reasoning",
+      "score": 0.8452,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-sonnet",
+      "taskClass": "code",
+      "score": 0.7769,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-sonnet",
+      "taskClass": "summarize",
+      "score": 0.8188,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-opus",
+      "taskClass": "extraction",
+      "score": 0.94,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-opus",
+      "taskClass": "classification",
+      "score": 0.6767,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-opus",
+      "taskClass": "drafting",
+      "score": 0.863,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-opus",
+      "taskClass": "reasoning",
+      "score": 0.9445,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-opus",
+      "taskClass": "code",
+      "score": 0.9815,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "anthropic",
+      "modelName": "claude-opus",
+      "taskClass": "summarize",
+      "score": 0.9222,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-fast",
+      "taskClass": "extraction",
+      "score": 0.2733,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-fast",
+      "taskClass": "classification",
+      "score": 0.2467,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-fast",
+      "taskClass": "drafting",
+      "score": 0.3676,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-fast",
+      "taskClass": "reasoning",
+      "score": 0.2583,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-fast",
+      "taskClass": "code",
+      "score": 0.4,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-fast",
+      "taskClass": "summarize",
+      "score": 0.2465,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-balanced",
+      "taskClass": "extraction",
+      "score": 0.7883,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-balanced",
+      "taskClass": "classification",
+      "score": 0.605,
+      "usedRealProvider": false,
+      "caseCount": 5
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-balanced",
+      "taskClass": "drafting",
+      "score": 0.7426,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-balanced",
+      "taskClass": "reasoning",
+      "score": 0.8278,
+      "usedRealProvider": false,
+      "caseCount": 4
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-balanced",
+      "taskClass": "code",
+      "score": 0.8241,
+      "usedRealProvider": false,
+      "caseCount": 3
+    },
+    {
+      "provider": "simulated-local",
+      "modelName": "local-balanced",
+      "taskClass": "summarize",
+      "score": 0.7451,
+      "usedRealProvider": false,
+      "caseCount": 4
+    }
+  ],
+  "routingTable": [
+    {
+      "taskClass": "extraction",
+      "chosen": {
+        "provider": "simulated-local",
+        "modelName": "local-balanced",
+        "costUsd": 0.00064,
+        "quality": 0.7883
+      },
+      "cheapest": {
+        "provider": "simulated-local",
+        "modelName": "local-fast",
+        "costUsd": 0.00016,
+        "quality": 0.2733
+      },
+      "bestQuality": {
+        "provider": "anthropic",
+        "modelName": "claude-opus",
+        "costUsd": 0.048,
+        "quality": 0.94
+      },
+      "costReductionVsBestQuality": 0.9867,
+      "qualityGapVsBestQuality": 0.1517,
+      "meetsCostReductionGate": true,
+      "meetsQualityMarginGate": true
+    },
+    {
+      "taskClass": "classification",
+      "chosen": {
+        "provider": "simulated-local",
+        "modelName": "local-balanced",
+        "costUsd": 0.00064,
+        "quality": 0.605
+      },
+      "cheapest": {
+        "provider": "simulated-local",
+        "modelName": "local-fast",
+        "costUsd": 0.00016,
+        "quality": 0.2467
+      },
+      "bestQuality": {
+        "provider": "anthropic",
+        "modelName": "claude-opus",
+        "costUsd": 0.048,
+        "quality": 0.6767
+      },
+      "costReductionVsBestQuality": 0.9867,
+      "qualityGapVsBestQuality": 0.0717,
+      "meetsCostReductionGate": true,
+      "meetsQualityMarginGate": true
+    },
+    {
+      "taskClass": "drafting",
+      "chosen": {
+        "provider": "simulated-local",
+        "modelName": "local-balanced",
+        "costUsd": 0.00064,
+        "quality": 0.7426
+      },
+      "cheapest": {
+        "provider": "simulated-local",
+        "modelName": "local-fast",
+        "costUsd": 0.00016,
+        "quality": 0.3676
+      },
+      "bestQuality": {
+        "provider": "openai",
+        "modelName": "gpt-4.1",
+        "costUsd": 0.024,
+        "quality": 0.8907
+      },
+      "costReductionVsBestQuality": 0.9733,
+      "qualityGapVsBestQuality": 0.1481,
+      "meetsCostReductionGate": true,
+      "meetsQualityMarginGate": true
+    },
+    {
+      "taskClass": "reasoning",
+      "chosen": {
+        "provider": "openai",
+        "modelName": "gpt-4.1",
+        "costUsd": 0.024,
+        "quality": 0.9354
+      },
+      "cheapest": {
+        "provider": "simulated-local",
+        "modelName": "local-fast",
+        "costUsd": 0.00016,
+        "quality": 0.2583
+      },
+      "bestQuality": {
+        "provider": "anthropic",
+        "modelName": "claude-opus",
+        "costUsd": 0.048,
+        "quality": 0.9445
+      },
+      "costReductionVsBestQuality": 0.5,
+      "qualityGapVsBestQuality": 0.0091,
+      "meetsCostReductionGate": true,
+      "meetsQualityMarginGate": true
+    },
+    {
+      "taskClass": "code",
+      "chosen": {
+        "provider": "simulated-local",
+        "modelName": "local-balanced",
+        "costUsd": 0.00064,
+        "quality": 0.8241
+      },
+      "cheapest": {
+        "provider": "simulated-local",
+        "modelName": "local-fast",
+        "costUsd": 0.00016,
+        "quality": 0.4
+      },
+      "bestQuality": {
+        "provider": "anthropic",
+        "modelName": "claude-opus",
+        "costUsd": 0.048,
+        "quality": 0.9815
+      },
+      "costReductionVsBestQuality": 0.9867,
+      "qualityGapVsBestQuality": 0.1574,
+      "meetsCostReductionGate": true,
+      "meetsQualityMarginGate": true
+    },
+    {
+      "taskClass": "summarize",
+      "chosen": {
+        "provider": "simulated-local",
+        "modelName": "local-balanced",
+        "costUsd": 0.00064,
+        "quality": 0.7451
+      },
+      "cheapest": {
+        "provider": "simulated-local",
+        "modelName": "local-fast",
+        "costUsd": 0.00016,
+        "quality": 0.2465
+      },
+      "bestQuality": {
+        "provider": "openai",
+        "modelName": "gpt-4.1",
+        "costUsd": 0.024,
+        "quality": 0.9382
+      },
+      "costReductionVsBestQuality": 0.9733,
+      "qualityGapVsBestQuality": 0.1931,
+      "meetsCostReductionGate": true,
+      "meetsQualityMarginGate": true
+    }
+  ]
+}
