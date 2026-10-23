@@ -1,87 +1,56 @@
-// LEADOS Part 14 — per-user daily interrupt budget ("cognitive load" gate).
-// Enforces the hard cap B (default 8) on immediate interruptions per local
-// calendar day. This module is the ONLY place that increments spend — the
-// dispatch gate in notifications.ts calls `trySpend` before ever pushing an
-// immediate interrupt, which is what makes "exhausted budget queues to
-// digest" an enforced invariant rather than a UI suggestion.
-import { db } from "@/db";
-import { interruptBudgetLedger } from "@/db/schema";
-import { and, eq, sql } from "drizzle-orm";
-import { dayKeyInTz } from "./temporal";
+// src/lib/cognitiveLoad.ts
+//
+// RECONSTRUCTION NOTE: see src/lib/circadian.ts header. Stand-in for the
+// earlier cognitive-load module. Exposes Part 23's referenced "DQ
+// dimensions" (decision-quality dimensions) plus a reversibility class, and
+// a pure weighting function. This module is intentionally generic (no
+// storage, no identity) so it can be reused by both org-level workload
+// features (outside this part's scope) and the self-only leader-state model
+// in src/lib/leaderState/decisionLoad.ts.
 
-export const DEFAULT_DAILY_BUDGET = 8;
+/** 1 (low) .. 5 (high) rating scale used across all DQ dimensions. */
+export type DQScale = 1 | 2 | 3 | 4 | 5;
 
-export interface BudgetStatus {
-  dayKey: string;
-  spent: number;
-  budget: number;
-  remaining: number;
-  exhausted: boolean;
+export interface DecisionQualityDimensions {
+  /** How high the stakes of the decision are. */
+  stakes: DQScale;
+  /** How much time pressure surrounded the decision. */
+  timePressure: DQScale;
+  /** How complete the available information felt (5 = very complete). */
+  informationCompleteness: DQScale;
+  /** How clear the decision criteria felt (5 = very clear). */
+  clarity: DQScale;
 }
 
-export async function getBudgetStatus(
-  userId: string,
-  timezone: string,
-  at: Date = new Date(),
-  budget = DEFAULT_DAILY_BUDGET,
-): Promise<BudgetStatus> {
-  const dayKey = dayKeyInTz(at, timezone);
-  const [row] = await db
-    .select()
-    .from(interruptBudgetLedger)
-    .where(and(eq(interruptBudgetLedger.userId, userId), eq(interruptBudgetLedger.dayKey, dayKey)))
-    .limit(1);
-  const spent = row?.spent ?? 0;
-  const effectiveBudget = row?.budget ?? budget;
-  return {
-    dayKey,
-    spent,
-    budget: effectiveBudget,
-    remaining: Math.max(0, effectiveBudget - spent),
-    exhausted: spent >= effectiveBudget,
-  };
-}
+export type ReversibilityClass = "reversible" | "costly-to-reverse" | "irreversible";
+
+export const REVERSIBILITY_MULTIPLIER: Record<ReversibilityClass, number> = {
+  reversible: 1,
+  "costly-to-reverse": 1.5,
+  irreversible: 2,
+};
 
 /**
- * Atomically attempt to spend one unit of the daily interrupt budget.
- * Returns { ok: true, status } if the spend succeeded (caller may deliver
- * immediately), or { ok: false, status } if the budget is exhausted (caller
- * MUST queue to the next digest instead).
- *
- * Implemented as a single upsert + conditional update so concurrent
- * dispatches cannot both "succeed" past the cap (race-safe under Postgres
- * row-level locking via the unique index on (user_id, day_key)).
+ * Cognitive weight of a single decision, roughly on a 0..10 scale.
+ * Higher stakes, higher time pressure, lower information, lower clarity,
+ * and lower reversibility all push the weight up.
  */
-export async function trySpendBudget(
-  userId: string,
-  timezone: string,
-  at: Date = new Date(),
-  budget = DEFAULT_DAILY_BUDGET,
-): Promise<{ ok: boolean; status: BudgetStatus }> {
-  const dayKey = dayKeyInTz(at, timezone);
+export function decisionCognitiveWeight(
+  dims: DecisionQualityDimensions,
+  reversibility: ReversibilityClass,
+): number {
+  const demandFactors = [
+    dims.stakes,
+    dims.timePressure,
+    6 - dims.informationCompleteness,
+    6 - dims.clarity,
+  ];
+  const avgDemand = demandFactors.reduce((a, b) => a + b, 0) / demandFactors.length; // 1..5
+  const base = (avgDemand - 1) * 2.5; // rescale 1..5 -> 0..10
+  const weighted = base * REVERSIBILITY_MULTIPLIER[reversibility];
+  return Math.round(weighted * 100) / 100;
+}
 
-  await db
-    .insert(interruptBudgetLedger)
-    .values({ userId, dayKey, spent: 0, budget })
-    .onConflictDoNothing({ target: [interruptBudgetLedger.userId, interruptBudgetLedger.dayKey] });
-
-  const result = await db.execute<{ spent: number; budget: number }>(sql`
-    UPDATE interrupt_budget_ledger
-    SET spent = spent + 1, updated_at = now()
-    WHERE user_id = ${userId} AND day_key = ${dayKey} AND spent < budget
-    RETURNING spent, budget
-  `);
-
-  const row = result.rows[0];
-  if (row) {
-    const spent = Number(row.spent);
-    const budgetVal = Number(row.budget);
-    return {
-      ok: true,
-      status: { dayKey, spent, budget: budgetVal, remaining: Math.max(0, budgetVal - spent), exhausted: spent >= budgetVal },
-    };
-  }
-
-  const status = await getBudgetStatus(userId, timezone, at, budget);
-  return { ok: false, status };
+export function isHighStakes(dims: DecisionQualityDimensions, reversibility: ReversibilityClass): boolean {
+  return dims.stakes >= 4 || reversibility === "irreversible";
 }

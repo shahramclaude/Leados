@@ -1,26 +1,28 @@
-// Part 09 reconstruction: a small self-determination-theory-flavoured needs
-// taxonomy LEADOS uses to keep coaching and manager-nudge language humane
-// rather than purely metrics-driven. Not present to read in this sandbox
-// (src/lib was empty); reconstructed minimally per the standing order.
+// src/lib/humanNeeds.ts
+//
+// RECONSTRUCTION NOTE: see src/lib/circadian.ts header. This is a minimal
+// stand-in for the real `humanNeeds.ts` from earlier parts, exposing just
+// the taxonomy Part 52 uses to frame language so coaching never curdles
+// into pressure (Phase 5 question #2).
 
-export type HumanNeed = "autonomy" | "competence" | "relatedness";
+export type HumanNeed = "autonomy" | "rest" | "connection" | "mastery" | "meaning";
 
-export const HUMAN_NEEDS: Record<HumanNeed, { label: string; coachingCue: string }> = {
-  autonomy: {
-    label: "Autonomy",
-    coachingCue: "Whose choice is this, and how much of it is genuinely theirs?",
-  },
-  competence: {
-    label: "Competence",
-    coachingCue: "What evidence would tell them they're getting better at this?",
-  },
-  relatedness: {
-    label: "Relatedness",
-    coachingCue: "Who else needs to be part of this for it to feel safe to try?",
-  },
-};
+export const HUMAN_NEEDS: HumanNeed[] = ["autonomy", "rest", "connection", "mastery", "meaning"];
 
-/** Used to keep nudges and coaching prompts phrased as support, not surveillance. */
-export function needAwareFraming(need: HumanNeed): string {
-  return HUMAN_NEEDS[need].coachingCue;
+/**
+ * Copy-linting helper: phrases that tend to convert a needs-respecting
+ * suggestion into a productivity-pressure demand. Used by the
+ * uncertainty/coaching-tone checks in leaderState surfaces and tests.
+ */
+export const PRESSURE_LANGUAGE_PATTERNS: RegExp[] = [
+  /you (should|must|need to) (work|decide|push)/i,
+  /underperform/i,
+  /falling behind/i,
+  /not productive enough/i,
+  /optimi[sz]e your(self)?\b.*output/i,
+  /maximi[sz]e (every|all) (hour|minute)/i,
+];
+
+export function violatesNeedsRespectingTone(text: string): string[] {
+  return PRESSURE_LANGUAGE_PATTERNS.filter((re) => re.test(text)).map((re) => re.source);
 }
