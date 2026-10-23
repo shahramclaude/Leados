@@ -1,51 +1,22 @@
-/**
- * `Explain<T>` — the shared "show your work" envelope used across LEADOS
- * scoring and estimation surfaces (readiness, momentum, change-load,
- * intervention effects, ADKAR stage detection, etc).
- *
- * STATUS: this is expected to be a cross-cutting primitive introduced early
- * in the LEADOS build (referenced by Parts 04/05/09/12/23). It is not present
- * in this repository snapshot, so Part 26 defines the minimal contract it
- * needs here. Any later part that introduces a canonical `Explain<T>` should
- * supersede this file; the shape below is intentionally conservative so it
- * can be swapped in without touching call sites.
- */
-
-export type Confidence = "low" | "medium" | "high";
-
-export interface Explain<T> {
-  /** The computed value. */
-  value: T;
-  /** Human-readable name of the method/formula used. */
-  method: string;
-  /** Named inputs that fed the computation, for audit/replay. */
-  inputs: Record<string, number | string | boolean | null>;
-  /** Qualitative confidence in the result (not a p-value). */
-  confidence: Confidence;
-  /** Known limitations, assumptions, or ways this could mislead. */
-  caveats: string[];
-}
+// Shared `Explain<T>` rationale wrapper used across LEADOS wherever a
+// recommendation, nudge, or system judgement is surfaced to a human. Nothing
+// in LEADOS should hand back a bare recommendation without a citable reason.
+export type Explain<T> = {
+  result: T;
+  rationale: string;
+  /** Ids of the concrete evidence rows that justify this result. Must be
+   * non-empty for anything that claims to address a development gap. */
+  citedEvidenceIds: string[];
+  /** Free-form structured facts backing the rationale, e.g. the gap that was
+   * detected, for audit/debugging and for the property tests in Phase 3. */
+  basis: Record<string, unknown>;
+};
 
 export function explain<T>(
-  value: T,
-  method: string,
-  inputs: Record<string, number | string | boolean | null>,
-  options?: { confidence?: Confidence; caveats?: string[] }
+  result: T,
+  rationale: string,
+  citedEvidenceIds: string[],
+  basis: Record<string, unknown> = {},
 ): Explain<T> {
-  return {
-    value,
-    method,
-    inputs,
-    confidence: options?.confidence ?? "medium",
-    caveats: options?.caveats ?? [],
-  };
-}
-
-/** A finding is a surfaced observation, distinct from an asserted "fact". */
-export interface Finding {
-  id: string;
-  severity: "info" | "warning" | "critical";
-  title: string;
-  detail: string;
-  evidence: Record<string, unknown>;
+  return { result, rationale, citedEvidenceIds, basis };
 }

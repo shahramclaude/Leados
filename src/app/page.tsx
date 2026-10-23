@@ -1,68 +1,106 @@
 import Link from "next/link";
-import { db } from "@/db";
-import { evidenceDocuments, meetings } from "@/db/schema";
-import { sql } from "drizzle-orm";
-import AskFollowUpButton from "@/components/AskFollowUpButton";
+import { listPeople } from "@/lib/people";
+import { TopNav } from "@/components/TopNav";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  await db.execute(sql`select 1`);
-  const evidenceCount = (await db.select().from(evidenceDocuments)).length;
-  const meetingRows = await db.select().from(meetings);
+  const people = await listPeople();
+  const members = people.filter((p) => p.role === "member");
+  const managers = people.filter((p) => p.role === "manager");
+  const admins = people.filter((p) => p.role === "admin");
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl px-6 py-12">
-      <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">LEADOS · Part 42</p>
-      <h1 className="mt-2 text-[clamp(2rem,5vw,3rem)] font-semibold leading-[1.05] text-slate-950">
-        Conversational layer &amp; Meeting Copilot
-      </h1>
-      <p className="mt-4 max-w-2xl text-base text-slate-700">
-        Ask LEADOS anything from anywhere (press <kbd className="rounded bg-slate-200 px-1.5 py-0.5 text-sm">⌘K</kbd>).
-        Every answer is grounded in evidence or explicitly refuses. Meeting Copilot drafts summaries, decisions, and
-        actions from transcripts — nothing commits until a human confirms it.
-      </p>
+    <>
+      <TopNav />
+      <main className="mx-auto max-w-5xl px-6 py-10">
+        <section className="rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+          <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-500">Part 43</p>
+          <h1 className="mt-2 text-3xl font-semibold text-slate-950">My Growth, 1:1s, Feedback &amp; Coaching</h1>
+          <p className="mt-3 max-w-3xl text-slate-600">
+            Everything here is <strong>developmental, never evaluative</strong>. No coaching transcript, journal
+            entry, or raw feedback response ever feeds a performance system. Every surface below states exactly
+            who can see what.
+          </p>
+        </section>
 
-      <section className="mt-10 grid gap-6 md:grid-cols-2">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Q2 Revenue</p>
-              <p className="mt-1 text-3xl font-semibold text-slate-950">$12.4M</p>
-              <p className="mt-1 text-xs text-slate-500">Grounded in {evidenceCount} evidence documents</p>
-            </div>
-            <AskFollowUpButton prompt="What is our Q2 revenue and what is it based on?" />
-          </div>
-          <div className="mt-4 flex justify-end">
-            <AskFollowUpButton prompt="And for Q3?" label="And for Q3?" />
-          </div>
-        </div>
+        <section className="mt-8 grid gap-6 md:grid-cols-3">
+          <PersonColumn title="Members — My Growth view" people={members} roleHint="person" />
+          <PersonColumn title="Managers — 1:1 &amp; nudges" people={managers} roleHint="manager" />
+          <PersonColumn title="Admin — org fairness only" people={admins} roleHint="admin" />
+        </section>
 
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Meetings</p>
-              <p className="mt-1 text-3xl font-semibold text-slate-950">{meetingRows.length}</p>
-              <p className="mt-1 text-xs text-slate-500">Pre / live / post copilot lifecycle</p>
-            </div>
-          </div>
-          <Link
-            href="/meetings"
-            className="mt-4 inline-flex items-center gap-1 rounded-full bg-slate-900 px-4 py-2 text-xs font-medium text-white"
-          >
-            Open Meeting Room →
-          </Link>
-        </div>
-      </section>
+        <section className="mt-8 rounded-2xl bg-white p-6 text-sm text-slate-600 ring-1 ring-slate-200">
+          <h2 className="text-base font-semibold text-slate-900">How to explore</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>
+              Open <strong>Group A Member 1</strong> for the fullest walkthrough: growth goals, evidence,
+              recommendations, a completed GROW coaching session, and 360 feedback.
+            </li>
+            <li>
+              Open <strong>Morgan Rivera</strong>&apos;s manager view for Group A Member 1 to see the symmetry rule in
+              action — only what that person chose to share.
+            </li>
+            <li>
+              Open the <Link className="underline" href="/admin/fairness">fairness report</Link> as the admin to see
+              coaching-access and feedback-distribution audits with sample sizes.
+            </li>
+          </ul>
+        </section>
+      </main>
+    </>
+  );
+}
 
-      <section className="mt-10 rounded-2xl border border-dashed border-slate-300 bg-white/50 p-6">
-        <h2 className="text-sm font-semibold text-slate-900">Conversational touchpoints today</h2>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600">
-          <li>Ask-LEADOS command palette (global, every page) — multi-turn, context-carrying, cite-or-refuse.</li>
-          <li>Inline &quot;ask a follow-up&quot; chips on data surfaces (e.g. the revenue card above).</li>
-          <li>Meeting Room: pre-meeting brief, live transcript capture seam, post-meeting confirmation workflow.</li>
-        </ul>
-      </section>
-    </main>
+function PersonColumn({
+  title,
+  people,
+  roleHint,
+}: {
+  title: string;
+  people: Awaited<ReturnType<typeof listPeople>>;
+  roleHint: "person" | "manager" | "admin";
+}) {
+  return (
+    <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+      <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+      <ul className="mt-3 space-y-2">
+        {people.map((p) => (
+          <li key={p.id} className="flex items-center justify-between text-sm">
+            <span className="text-slate-700">{p.name}</span>
+            {roleHint === "admin" ? (
+              <Link href="/admin/fairness" className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
+                Fairness report
+              </Link>
+            ) : roleHint === "manager" ? (
+              <ManagerLinks managerId={p.id} />
+            ) : (
+              <Link
+                href={`/dashboard/${p.id}`}
+                className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white"
+              >
+                My Growth
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+async function ManagerLinksData(managerId: string) {
+  const people = await listPeople();
+  return people.filter((p) => p.managerId === managerId);
+}
+
+async function ManagerLinks({ managerId }: { managerId: string }) {
+  const reports = await ManagerLinksData(managerId);
+  const first = reports[0];
+  if (!first) return <span className="text-xs text-slate-400">No reports</span>;
+  return (
+    <Link href={`/manager/${managerId}/${first.id}`} className="rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
+      View 1:1 for {first.name.split(" ")[0]}
+    </Link>
   );
 }

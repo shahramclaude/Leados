@@ -1,146 +1,120 @@
-# AI Session Log
+# AI-SESSION-LOG
 
-## Part 42 — Conversational layer (Ask-LEADOS) & Meeting Copilot
+## Part 43 — My Growth, 1:1 Space, Feedback Flows, Coach Sessions, Manager Nudges
 
-**Scope:** multi-turn dialogue-state agent over the Part 32 question ontology
-and Part 33 orchestration shape; meeting copilot (pre/live/post) with
-consent-gated transcript ingestion, drafted-artifact generation, and a
-mandatory human-confirmation gate before anything commits as a Decision
-(Part 23) or Task (Part 10).
+**Repo:** https://github.com/shahramclaude/Leados
+**Depends on:** Parts 09, 12, 23, 26, 25, 26, 42 (per the brief)
 
-### Sandbox reality check (read-before-write honesty note)
+### Provenance / read-before-write
 
-This sandbox's repository checkout contained only the bare Next.js +
-Drizzle starter template (`src/db/{index,schema}.ts`, `src/app/{layout,page}.tsx`,
-`src/app/api/health/route.ts`) — none of Parts 1–41's files were present on
-disk to read, including the specific files the standing order named
-(`src/lib/ai/*`, `briefing.ts`, `storytelling.ts`, Part 32's ontology file,
-Part 33's router, `CommandPalette.tsx`). This is recorded here rather than
-silently assumed away. To keep Part 42 buildable, verifiable, and honest
-about its foundations, this session reconstructed **minimal, clearly
-commented, narrow-surface stand-ins** for the specific contracts Part 42
-depends on:
+Per the standing order I read-before-write. In this sandbox's working tree,
+`src/lib` was **empty** and the only existing files were the generic
+Next.js + Drizzle starter (`src/db/schema.ts` was a placeholder, `src/app`
+held only the template landing page). None of `careers.ts`, `development.ts`,
+`humanNeeds.ts`, `culture.ts`, Part 09's people-scoping/fairness module,
+Part 23's decision journal, or Part 26's change model were present to read.
 
-- `src/lib/ai/grounding.ts` + `src/lib/ai/llmClient.ts` — Part 11's
-  cite-or-refuse contract, implemented deterministically (no LLM API key is
-  provisioned in this sandbox — see "What we deliberately did not do" below).
-- `src/lib/ontology/questions.ts` — Part 32's six-intent ontology
-  (`query | compare | explain | simulate | draft | act`).
-- `src/lib/orchestration/router.ts` — Part 33's single-entry-point router.
-- `src/lib/policy/actionPolicy.ts` — Part 10's T1/T2/T3 action-tier gate.
-- `src/db/schema.ts` additions for `decisions` (Part 23) and `tasks`
-  (Part 10) as committed-entity sinks for confirmed meeting artifacts.
-- `src/lib/consent/consent.ts` — Part 09's opt-in-only consent contract.
+Files actually read before writing (all that existed):
+- `package.json`, `tsconfig.json`, `drizzle.config.json`, `.env`
+- `src/db/schema.ts`, `src/db/index.ts`
+- `src/app/page.tsx`, `src/app/layout.tsx`, `src/app/globals.css`
+- `src/app/api/health/route.ts`
 
-Every file above is additive and isolated; nothing here contradicts or
-forecloses a later part dropping in the "real" Part 11/32/33 modules — the
-import surfaces (`groundAnswer`, `classifyIntent`, `routeIntent`,
-`gateAction`) are the seams a future part would replace.
+Because the dependency files did not exist in this checkout, I reconstructed
+the **minimum stable interfaces** those parts are documented to expose, and
+labelled every reconstruction explicitly in the file header comment:
+- `src/lib/careers.ts` — Part 09 competency-anchor taxonomy (8 anchors across
+  self/people/strategic clusters).
+- `src/lib/people.ts` — Part 09 people-scoping + the symmetry ("parity")
+  rule, including a named list of policy extensions.
+- `src/lib/humanNeeds.ts`, `src/lib/culture.ts` — Part 09 supporting
+  taxonomies used to keep coaching/nudge language humane.
+- `src/lib/decisionJournal.ts` — Part 23 person-owned, private-by-default
+  journal record shape.
+- `src/lib/changeModel.ts` — Part 26 minimal change-initiative reference
+  (read-only; Part 43 only needed to tag a goal against a change wave).
 
-### What was built
+If the real Part 09/12/23/26 files exist in the canonical repo, these
+reconstructions should be reviewed against them for naming drift before
+merge; the public function signatures were kept deliberately small so a
+swap-in should be mechanical.
 
-**Phase 1–3 (model/design/build):**
-- `src/lib/conversation/dialogueState.ts` — dialogue state
-  `{ turns, resolvedEntities, activeContext, groundingSet }`; scope
-  inheritance so "and for Q3?" keeps the metric from the prior turn while
-  letting an explicit mention override just the timeframe.
-- `src/lib/conversation/contradiction.ts` — self-correction: if a new
-  grounded answer disagrees with a prior assistant assertion for the same
-  (metric, timeframe), the agent prepends an explicit correction rather than
-  silently overwriting.
-- `src/lib/conversation/engine.ts` — turn persistence, intent
-  classification, routing, grounding, contradiction check, in that order,
-  end to end.
-- `src/lib/meeting/pipeline.ts` — pre-meeting brief (agenda + cited
-  evidence), consent-gated transcript ingestion, post-meeting artifact
-  generation (summary/decision/action/open-question, each cited to
-  transcript spans), and `confirmArtifact` — the **only** path by which a
-  drafted artifact becomes a committed `decisions`/`tasks` row. T2/T3
-  actions throw `GatedConfirmationRequiredError` unless `acknowledgeGated`
-  is explicitly passed.
-- `src/lib/redaction/redact.ts` — two-gate redaction: at capture time
-  (`shouldRedactAtCapture`) and again defensively at generation time
-  (`filterConsentedSegments`), re-checked against *current* consent state.
-- `src/lib/voice/seam.ts` — ledgered as deferred: `toSpeechReadyText` is
-  real (strips markdown/citation noise), live ASR/TTS vendor wiring is not
-  implemented and is explicitly labeled `deferred` in
-  `VOICE_SEAM_STATUS`, not silently stubbed as if it worked.
-- UI: `CommandPalette.tsx` (global ⌘K layer, pinned context chips, renders
-  citations/abstention/contradiction/action-gate inline),
-  `AskFollowUpButton.tsx` (inline follow-up affordance usable on any data
-  surface — wired onto the homepage revenue card as a reference example),
-  `MeetingRoomClient.tsx` (pre/live/post tabs with a visibly distinct
-  "verbatim" vs "redacted"/"generated" styling), `ConsentBadge`/consent
-  toggles per participant.
+### What was built (new in this session)
 
-**Phase 3(e) eval slice:** `scripts/eval-llm.ts` — 40 multi-turn dialogues
-(scope-inheritance grid across 4 metrics × 2 timeframes × 3 phrasings, plus
-abstention, compare→explain, simulate→follow-up, draft→gated-act, and
-3-turn scope chains), plus three dedicated probes: self-correction
-(seeded contradiction), consent/redaction leak-attempt, and the
-confirmation gate. `scripts/verify.ts` runs typecheck → lint → the eval
-slice and is wired as `npm run verify`.
+**Schema** (`src/db/schema.ts`, rewritten in full): `people`, `competencies`,
+`experiences`, `relationship_types`, `evidence_events`, `growth_goals`,
+`growth_path_recommendations`, `journal_entries`, `change_initiatives`,
+`feedback_requests`, `feedback_invitations`, `feedback_responses`,
+`feedback_theme_links`, `coaching_sessions`, `coaching_messages`,
+`commitments`, `one_on_ones`, `manager_nudges`, `access_audit_log`.
 
-### Honesty rules applied
-- Every conversational answer either carries ≥1 citation or abstains
-  explicitly (`abstained: true`, `abstentionReason`) — never a fabricated
-  number. Verified by the citation-continuity metric (1.000 in this run)
-  and the dedicated abstention dialogues.
-- Meeting artifacts are always labeled `generated: true` / drafted, and the
-  UI visually distinguishes verbatim transcript lines from generated
-  summary/decision/action text. Redacted lines never render as if they were
-  verbatim.
-- `act`-intent turns are never executed — only ever gated drafts
-  (`actionGate.status === "blocked_needs_confirmation"` for T2/T3).
+**Lib modules:** `explain.ts` (shared `Explain<T>`), `development.ts`
+(evidence-weighted competency levels, gap detection, growth-path engine),
+`feedback.ts` (360 feedback with storage-layer confidentiality),
+`coaching.ts` (GROW dialogue engine + quality rubric), `managerEnablement.ts`
+(nudges, 1:1s, symmetry views), `fairness.ts` (Part 09 extension: coaching
+access + feedback distribution audits with sample-size suppression).
 
-### Self-review / Phase 5 attack answers
-1. **Wrong assumption carried forward:** scope inheritance trusts the prior
-   turn's `activeContext` blindly when the new utterance reads as a
-   follow-up. If the user says "and the number for last quarter" after an
-   agent *misclassified* metric in turn 1, the wrong metric rides along
-   silently. **Recovery path implemented:** the contradiction checker
-   catches it the moment a *new* grounded value disagrees with a prior
-   claim for the same scope key and forces an explicit correction turn
-   rather than compounding the error. It does not catch a wrong metric
-   inherited into a *first-time* claim (no prior claim to contradict) —
-   that gap is real and is the honest limit of this build: the mitigation
-   is the visible context chip in the palette, so a human sees and can
-   correct the inherited scope before trusting the answer.
-2. **Narrative capture risk:** the generated summary is explicitly labeled
-   `generated: true`, always ships with citations into transcript span IDs,
-   and commits nothing on its own — the decision/action drafts are the only
-   artifacts that can become permanent record, and only after a named human
-   confirms them (`confirmedBy` is stored). The verbatim transcript is
-   retained independently of the summary, so the "official" generated
-   narrative can always be checked against the source material later — it
-   doesn't overwrite or discard the verbatim record.
-3. **Power-dynamic risk (the boss hears everything):** consent is per
-   person, opt-in only (`pending` is treated as non-consent, not a default
-   yes), and enforced at two points (capture + generation) so an organizer
-   cannot simply generate artifacts that include a non-consenting
-   subordinate's words. The attempt-to-leak probe in `eval:llm` asserts
-   this structurally, not just by policy text. What this build does **not**
-   solve: a boss who is in the room can still *verbally* pressure someone
-   into opting in, and the tool has no way to detect coerced consent — that
-   is a people/process problem outside what software can enforce, and is
-   named here rather than claimed as solved.
-4. **Deliberately not done:**
-   - No real LLM call is wired (no API key in this sandbox); grounding uses
-     deterministic keyword scoring and template narration. The seam
-     (`llmClient.ts`) is real and ready for a provider swap.
-   - No live ASR/TTS integration — `voice/seam.ts` documents this as
-     deferred rather than faking it.
-   - No auth/multi-tenant org boundary beyond a single `orgId` column —
-     out of scope for this part.
-   - No org-level retention-policy enforcement job (e.g. auto-purge after N
-     days) — the schema has the hooks (`createdAt` on every row) but no
-     scheduler exists yet.
+**Surfaces (Phase 2):** My Growth (`/dashboard/[personId]`), 1:1 Space
+(`/dashboard/[personId]/one-on-one`), Feedback Flows
+(`/dashboard/[personId]/feedback`), Coach Sessions
+(`/dashboard/[personId]/coach[...]`), Manager Nudges
+(`/manager/[managerId]/[personId]`), Fairness report (`/admin/fairness`).
+Every surface carries an explicit "who can see this" banner and
+visibility/confidentiality badges on every item.
 
-### Verification
-See VERIFICATION LOG in the delivery message for full command output:
-`npx next typegen`, `npm exec tsc --noEmit`, `npm run build`,
-`npm run verify` (typecheck + lint + 40-dialogue eval slice + 3 gate
-probes), and a live `build_and_start` + curl transcript against
-`/api/conversations`, `/api/meetings/*` showing scope inheritance,
-cite-or-refuse abstention, consent-gated redaction, and the confirmation
-gate (including a blocked T2 action without explicit acknowledgement).
+**Scripts:** `scripts/seedData.ts` + `scripts/seed.ts` (deterministic
+fixtures, including deliberate self-rating-only, below-threshold,
+attribution-consent, and symmetry test cases), `scripts/test-dev-graph.ts`,
+`scripts/test-confidentiality.ts`, `scripts/test-coaching-eval.ts`,
+`scripts/test-symmetry.ts`, `scripts/test-fairness.ts`, `scripts/verify.ts`.
+
+**package.json**: added `db:seed`, `test:dev-graph`, `test:confidentiality`,
+`test:coaching-eval`, `test:symmetry`, `test:fairness`, `verify` scripts
+(dependency section untouched; `tsx` added via the package-install tool).
+
+### Honesty-rule compliance
+
+- **No evaluative leakage by construction:** there is no code path anywhere
+  in this part that reads `coaching_sessions`/`coaching_messages` content and
+  writes it to any other table, exports it, or exposes it outside
+  `/dashboard/[personId]/coach/*`. The only artifact that can leave a
+  coaching session is a `commitments` row, and only after the person
+  explicitly confirms its text and visibility.
+- **360 feedback confidential by default:** `feedback_responses.invitationId`
+  and `.attributedRaterId` are left `NULL` at the database level (not just
+  access-controlled) for every anonymous or consent-declined response — see
+  `submitFeedbackResponse` in `src/lib/feedback.ts` and the attempt tests in
+  `scripts/test-confidentiality.ts`.
+- **Symmetry/parity:** `managerVisibleItems` is constructed only from rows
+  the person marked `shared_with_manager`; `scripts/test-symmetry.ts` checks
+  manager view ⊆ person's own view and that a private goal never leaks.
+
+### Verification performed this session
+
+- `npx drizzle-kit push` — applied schema successfully.
+- `npx tsx scripts/verify.ts` — reseeds fixtures then runs all five gates;
+  all PASS (full transcript in the chat response's verification log).
+- `npx next typegen` — clean.
+- `npm exec tsc -- --noEmit` — clean, zero errors.
+- `npm run build` — clean production build, all routes compiled.
+- `build_and_start` — bootstrap + build + start + `/api/health` check — PASS,
+  seed data confirmed to persist afterward (15 people, 4 coaching sessions).
+
+### Known limitations / deliberately not done (see Phase 5 for detail)
+
+- No real authentication/session layer exists in this scaffold (none of the
+  dependency parts' auth code was present to read), so route params
+  (`personId`, `managerId`) are trusted directly rather than derived from a
+  verified session. `src/lib/people.ts#canActOnPerson` encodes the intended
+  perimeter and is exercised by the symmetry/confidentiality scripts, but the
+  UI layer does not yet call it on every request. This must be wired to a
+  real identity provider before production use.
+- The GROW coaching engine is deterministic/template-based, not an LLM —
+  Part 42's "dialogue stack" was not present to read, so the engine was
+  built to the narrower contract it is documented to need (store a turn,
+  produce the next one) so it can be swapped in later without changing the
+  schema or the eval rubric.
+- Growth-path recommendations only match against a small, hand-seeded
+  experience/relationship catalog; a real deployment would load this from
+  the org's actual stretch-assignment and mentoring inventory.

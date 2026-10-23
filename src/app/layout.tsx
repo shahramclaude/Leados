@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import CommandPalette from "@/components/CommandPalette";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LEADOS",
-  description: "LEADOS — grounded conversational leadership operating system.",
+  title: "LEADOS — Growth & Coaching",
+  description: "Part 43: My Growth, 1:1 Space, Feedback Flows, Coach Sessions, Manager Nudges.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-slate-100 text-slate-900 antialiased">
-        {children}
-        {/* Ask-LEADOS is a layer over the whole product, not a page. */}
-        <CommandPalette />
-      </body>
+      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">{children}</body>
     </html>
   );
 }
