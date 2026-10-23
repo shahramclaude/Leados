@@ -1,38 +1,31 @@
-import { NextRequest } from "next/server";
-import { ensureDecisionInvariants } from "@/lib/decision/dbSetup";
-import { commitDecision, InvalidMutationError } from "@/lib/decision/decisionEngine";
+import { db } from "@/db";
+import { decisions, decisionEvents } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-// POST /api/decisions/[id]/commit -> freezes the decision record. No mutation
-// path exists for frozen fields after this call succeeds (DB trigger + app
-// guard). Attempting to commit an already-committed decision returns 409.
-export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  await ensureDecisionInvariants();
-  const { id } = await ctx.params;
-  const body = await req.json();
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const decisionId = Number(id);
+  if (!Number.isFinite(decisionId)) return Response.json({ error: "invalid id" }, { status: 400 });
 
-  const required = ["chosen", "choiceRationale", "expectedOutcome", "confidenceClass", "reviewAt", "decidedBy"];
-  for (const key of required) {
-    if (!body[key]) return Response.json({ error: `${key} is required` }, { status: 400 });
-  }
+  const body = await request.json().catch(() => ({}));
+  const note = typeof body?.note === "string" ? body.note : "";
 
-  try {
-    const decision = await commitDecision(id, {
-      chosen: body.chosen,
-      choiceRationale: body.choiceRationale,
-      expectedOutcome: body.expectedOutcome,
-      expectedInterval: body.expectedInterval,
-      confidenceClass: body.confidenceClass,
-      reviewAt: body.reviewAt,
-      decidedBy: body.decidedBy,
-      triggerConditions: body.triggerConditions ?? [],
-    });
-    return Response.json({ decision });
-  } catch (err) {
-    if (err instanceof InvalidMutationError) {
-      return Response.json({ error: "invalid", message: err.message }, { status: 409 });
-    }
-    throw err;
-  }
+  const [existing] = await db.select().from(decisions).where(eq(decisions.id, decisionId));
+  if (!existing) return Response.json({ error: "not found" }, { status: 404 });
+
+  const [updated] = await db
+    .update(decisions)
+    .set({ status: "committed", committedAt: new Date(), updatedAt: new Date() })
+    .where(eq(decisions.id, decisionId))
+    .returning();
+
+  await db.insert(decisionEvents).values({
+    decisionId,
+    type: "committed",
+    payload: note ? `Decision committed. ${note}` : "Decision committed.",
+  });
+
+  return Response.json(updated);
 }

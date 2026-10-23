@@ -1,32 +1,28 @@
 import { db } from "@/db";
-import { domains, fitnessScores, metrics } from "@/db/schema";
-import { computeFitnessScore } from "@/lib/fitness";
-import { eq } from "drizzle-orm";
+import { fitnessMetrics } from "@/db/schema";
+import { desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-// Seam 1 proving endpoint: recompute fitness for every domain from its
-// current metrics, persist a snapshot, and return the fleet view.
 export async function GET() {
-  const allDomains = await db.select().from(domains);
-  const results = [];
+  const rows = await db.select().from(fitnessMetrics).orderBy(desc(fitnessMetrics.measuredAt));
+  return Response.json(rows);
+}
 
-  for (const domain of allDomains) {
-    const domainMetrics = await db.select().from(metrics).where(eq(metrics.domainId, domain.id));
-    const fitness = computeFitnessScore(
-      domainMetrics.map((m) => ({ name: m.name, value: Number(m.value), target: Number(m.target) })),
-    );
-    const [saved] = await db
-      .insert(fitnessScores)
-      .values({
-        domainId: domain.id,
-        score: String(fitness.score),
-        metricCount: fitness.metricCount,
-        inputs: fitness.inputs,
-      })
-      .returning();
-    results.push({ domain, fitness: saved });
-  }
+export async function POST(request: Request) {
+  const body = await request.json();
+  const dimension = typeof body.dimension === "string" ? body.dimension.trim() : "";
+  if (!dimension) return Response.json({ error: "dimension is required" }, { status: 400 });
 
-  return Response.json({ results });
+  const [created] = await db
+    .insert(fitnessMetrics)
+    .values({
+      dimension,
+      score: Number.isFinite(body.score) ? body.score : 50,
+      trend: body.trend ?? "stable",
+      notes: body.notes ?? "",
+    })
+    .returning();
+
+  return Response.json(created, { status: 201 });
 }
