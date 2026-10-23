@@ -1,144 +1,117 @@
 import { db } from "@/db";
-import { decisions, leads } from "@/db/schema";
-import { getOrCreateDefaultTenant } from "@/lib/tenant";
-import { verifyChain } from "@/lib/ledger";
-import { StatCard } from "@/components/StatCard";
-import { ScoreBadge } from "@/components/ScoreBadge";
+import {
+  metrics,
+  claims,
+  incidents,
+  initiatives,
+  objectives,
+  approvals,
+  recommendations,
+  evalRuns,
+  auditEvents,
+  cadenceRuns,
+} from "@/db/schema";
+import { eq } from "drizzle-orm";
 import Link from "next/link";
-import { avg, count, desc, eq } from "drizzle-orm";
+import { verifyAuditChain } from "@/lib/auditLog";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const tenant = await getOrCreateDefaultTenant();
+async function stat(label: string, value: string | number, href: string, tone: "ok" | "warn" | "neutral" = "neutral") {
+  const toneClass =
+    tone === "ok" ? "text-emerald-400" : tone === "warn" ? "text-amber-400" : "text-slate-100";
+  return (
+    <Link href={href} className="card block transition hover:border-indigo-600">
+      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-2 text-3xl font-semibold ${toneClass}`}>{value}</p>
+    </Link>
+  );
+}
 
-  const [[leadAgg], topLeads, recentDecisions, chain] = tenant
-    ? await Promise.all([
-        db
-          .select({ total: count(), avgScore: avg(leads.score) })
-          .from(leads)
-          .where(eq(leads.tenantId, tenant.id)),
-        db
-          .select()
-          .from(leads)
-          .where(eq(leads.tenantId, tenant.id))
-          .orderBy(desc(leads.score))
-          .limit(5),
-        db
-          .select()
-          .from(decisions)
-          .where(eq(decisions.tenantId, tenant.id))
-          .orderBy(desc(decisions.createdAt))
-          .limit(6),
-        verifyChain(tenant.id),
-      ])
-    : [[{ total: 0, avgScore: null }], [], [], { valid: true, checkedCount: 0, brokenAt: null }];
+export default async function HomePage() {
+  const [allMetrics, allClaims, openIncidents, allInitiatives, allObjectives, pendingApprovals, openRecs, allEvalRuns, chain] =
+    await Promise.all([
+      db.select().from(metrics),
+      db.select().from(claims),
+      db.select().from(incidents).where(eq(incidents.status, "open")),
+      db.select().from(initiatives),
+      db.select().from(objectives),
+      db.select().from(approvals).where(eq(approvals.status, "pending")),
+      db.select().from(recommendations).where(eq(recommendations.status, "open")),
+      db.select().from(evalRuns),
+      verifyAuditChain(),
+    ]);
+
+  const conflictedClaims = allClaims.filter((c) => c.status === "conflict").length;
+  const selectedInitiatives = allInitiatives.filter((i) => i.status === "selected").length;
+  const latestEvalRate = allEvalRuns.length
+    ? allEvalRuns.sort((a, b) => (a.runAt! < b.runAt! ? 1 : -1))[0].passRate
+    : null;
+  const totalAuditEvents = await db.select().from(auditEvents);
+  const cadence = await db.select().from(cadenceRuns);
 
   return (
-    <main className="mx-auto max-w-6xl px-8 py-10">
-      <header className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-indigo-600">
-          {tenant?.name ?? "LEADOS"}
+    <div className="space-y-8">
+      <div>
+        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">LEADOS</p>
+        <h1 className="mt-1 text-3xl font-semibold text-white">Intelligence &amp; Automation Core</h1>
+        <p className="mt-2 max-w-3xl text-sm text-slate-400">
+          World model &amp; simulation · reasoning workbench · causal root-cause · strategy &amp; portfolio optimization ·
+          next-best-action · governed automation ladder (T0–T5) with a tamper-evident audit chain · self-improving
+          eval fabric.
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-950">
-          Executive Overview
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          A founding build of the LEADOS decision operating system: an
-          event-sourced ontology, a deterministic explainable scoring engine,
-          and a hash-chained, tamper-evident evidence ledger for every
-          decision made in the organization.
-        </p>
-      </header>
+      </div>
 
-      <section className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Leads tracked" value={String(leadAgg?.total ?? 0)} />
-        <StatCard
-          label="Average lead score"
-          value={leadAgg?.avgScore ? String(Math.round(Number(leadAgg.avgScore))) : "0"}
-          hint="out of 100"
-        />
-        <StatCard
-          label="Ledger entries"
-          value={String(chain.checkedCount)}
-          hint="append-only, hash-chained"
-        />
-        <StatCard
-          label="Ledger integrity"
-          value={chain.valid ? "Verified" : "BROKEN"}
-          tone={chain.valid ? "good" : "bad"}
-        />
-      </section>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        {await stat("Metrics tracked", allMetrics.length, "/simulate")}
+        {await stat("Open incidents", openIncidents.length, "/causal", openIncidents.length > 0 ? "warn" : "ok")}
+        {await stat(
+          "Claims in conflict",
+          conflictedClaims,
+          "/reasoning",
+          conflictedClaims > 0 ? "warn" : "ok",
+        )}
+        {await stat("Initiatives selected", `${selectedInitiatives}/${allInitiatives.length}`, "/strategy")}
+        {await stat("Pending approvals", pendingApprovals.length, "/governance", pendingApprovals.length > 0 ? "warn" : "ok")}
+        {await stat("Open recommendations", openRecs.length, "/actions")}
+        {await stat(
+          "Audit chain",
+          chain.valid ? "Intact" : "BROKEN",
+          "/governance",
+          chain.valid ? "ok" : "warn",
+        )}
+        {await stat(
+          "Latest eval pass rate",
+          latestEvalRate != null ? `${(latestEvalRate * 100).toFixed(0)}%` : "never run",
+          "/quality",
+          latestEvalRate != null && latestEvalRate >= 0.8 ? "ok" : "neutral",
+        )}
+      </div>
 
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900">Top-scoring leads</h2>
-            <Link href="/leads" className="text-xs font-medium text-indigo-600 hover:underline">
-              View all →
-            </Link>
-          </div>
-          {topLeads.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No leads yet. Create one from the Leads page to see the scoring
-              engine in action.
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-100">
-              {topLeads.map((lead) => (
-                <li key={lead.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">{lead.name}</p>
-                    <p className="text-xs text-slate-500">{lead.company}</p>
-                  </div>
-                  <ScoreBadge
-                    score={lead.score}
-                    label={
-                      lead.score >= 80
-                        ? "critical"
-                        : lead.score >= 60
-                          ? "high"
-                          : lead.score >= 35
-                            ? "medium"
-                            : "low"
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="card">
+          <h2 className="text-sm font-semibold text-slate-200">Objectives in flight</h2>
+          <ul className="mt-3 space-y-2 text-sm text-slate-400">
+            {allObjectives.length === 0 && <li>No objectives yet — visit Strategy.</li>}
+            {allObjectives.map((o) => (
+              <li key={o.id} className="flex items-center justify-between gap-3">
+                <span className="truncate">{o.statement}</span>
+                <span className="badge bg-slate-800 text-slate-300">{o.owner}</span>
+              </li>
+            ))}
+          </ul>
         </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900">Recent evidence</h2>
-            <Link href="/decisions" className="text-xs font-medium text-indigo-600 hover:underline">
-              View ledger →
-            </Link>
-          </div>
-          {recentDecisions.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No decisions recorded yet. Every lead score and stage change
-              writes an entry here automatically.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {recentDecisions.map((decision) => (
-                <li key={decision.id} className="rounded-xl border border-slate-100 p-3">
-                  <p className="text-sm font-medium text-slate-900">{decision.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">{decision.rationale}</p>
-                  <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
-                      {decision.confidenceLabel}
-                    </span>
-                    <span>{decision.createdAt.toLocaleString()}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="card">
+          <h2 className="text-sm font-semibold text-slate-200">Audit trail &amp; cadence</h2>
+          <p className="mt-3 text-sm text-slate-400">
+            {totalAuditEvents.length} hash-chained audit events recorded. {cadence.length} cadence loop runs executed.
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Every governed action, approval decision, and kill-switch toggle is appended to the hash chain in{" "}
+            <code>audit_events</code> and independently re-verifiable from <code>/governance</code>.
+          </p>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }
