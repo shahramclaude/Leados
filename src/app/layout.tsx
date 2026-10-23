@@ -1,29 +1,19 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import { Nav } from "./components/Nav";
 
 export const metadata: Metadata = {
-  title: "LEADOS Crisis Ops",
-  description: "LEADOS crisis command, comms, and continuity module (Part 47).",
-  manifest: "/manifest.json",
+  title: "LEADOS — Proactive Workflow Architect",
+  description: "Commitment ledger, delegation intelligence, proactive drafts, and loop closure for LEADOS.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-slate-100 text-slate-900 antialiased">
+        <Nav />
         {children}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function () {
-                  navigator.serviceWorker.register('/sw.js').catch(function () {});
-                });
-              }
-            `,
-          }}
-        />
       </body>
     </html>
   );

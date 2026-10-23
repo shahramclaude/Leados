@@ -1,162 +1,162 @@
 "use server";
 
-// Part 43 server actions — thin, auditable wrappers around the lib modules.
-// Every mutation that touches a cross-person surface (manager views,
-// feedback) logs an access-audit row so the fairness/confidentiality tests
-// (and any future audit UI) have a real trail.
-
 import { revalidatePath } from "next/cache";
-import {
-  createGrowthGoal,
-  recordEvidenceEvent,
-  recommendGrowthPaths,
-  type EvidenceEventType,
-} from "@/lib/development";
-import {
-  createFeedbackRequest,
-  linkFeedbackThemeToGrowth,
-  submitFeedbackResponse,
-  type ConfidentialityPolicy,
-} from "@/lib/feedback";
+import { seedDemoData } from "@/lib/db/seed";
 import {
   confirmCommitment,
-  postPersonTurn,
-  startCoachingSession,
-  recordCommitmentProgress,
-} from "@/lib/coaching";
+  createCommitmentDraft,
+  markKept,
+  renegotiateCommitment,
+  runExtractionFromArtifacts,
+} from "@/lib/db/commitmentRepo";
+import { findPersonByName } from "@/lib/db/peopleRepo";
 import {
-  acknowledgeNudge,
-  generateNudgesForManager,
-  scheduleOneOnOne,
-} from "@/lib/managerEnablement";
-import { logAccess } from "@/lib/fairness";
+  acceptDelegation,
+  checkinDelegation,
+  completeDelegation,
+  overrideBlockedDelegation,
+  proposeDelegation,
+} from "@/lib/db/delegationRepo";
+import { approveDraft, attemptAutoSend, dismissDraft, runDetectionCycle } from "@/lib/db/proactiveRepo";
+import { closeLoop, parkLoop, setNextStep, syncLoopsFromSurfaces } from "@/lib/db/loopRepo";
 
-export async function createGoalAction(params: {
-  personId: string;
-  competencyId: string;
-  title: string;
-  description: string;
-  visibility: "private" | "shared_with_manager";
-}) {
-  await createGrowthGoal(params);
-  revalidatePath(`/dashboard/${params.personId}`);
+export async function seedAction() {
+  await seedDemoData();
+  revalidatePath("/");
 }
 
-export async function recordEvidenceAction(params: {
-  personId: string;
-  competencyId: string;
-  eventType: EvidenceEventType;
-  narrative: string;
-  evidenceWeight: number;
-}) {
-  await recordEvidenceEvent(params);
-  revalidatePath(`/dashboard/${params.personId}`);
-}
-
-export async function computeRecommendationsAction(personId: string) {
-  await recommendGrowthPaths(personId);
-  revalidatePath(`/dashboard/${personId}`);
-}
-
-export async function createFeedbackRequestAction(params: {
-  subjectId: string;
-  themeCompetencyId?: string;
-  message: string;
-  confidentialityPolicy: ConfidentialityPolicy;
-  aggregationThreshold: number;
-  raterIds: string[];
-}) {
-  await createFeedbackRequest({ ...params, requestedById: params.subjectId });
-  revalidatePath(`/dashboard/${params.subjectId}/feedback`);
-}
-
-export async function submitFeedbackResponseAction(params: {
-  invitationId: string;
-  raterId: string;
-  qualitativeText: string;
-  ratingValue: number;
-  ratingKey: string;
-  attributionConsent?: boolean;
-  returnPersonId: string;
-}) {
-  await submitFeedbackResponse({
-    invitationId: params.invitationId,
-    raterId: params.raterId,
-    ratingsJson: { [params.ratingKey]: params.ratingValue },
-    qualitativeText: params.qualitativeText,
-    attributionConsent: params.attributionConsent,
+export async function runExtractionAction() {
+  await runExtractionFromArtifacts(async (name) => {
+    if (!name) return null;
+    const p = await findPersonByName(name);
+    return p?.id ?? null;
   });
-  revalidatePath(`/dashboard/${params.returnPersonId}/feedback`);
+  revalidatePath("/commitments");
 }
 
-export async function linkFeedbackThemeAction(params: {
-  requestId: string;
-  subjectId: string;
-  competencyId: string;
-  developmentThemeSummary: string;
-  consent: boolean;
-}) {
-  await linkFeedbackThemeToGrowth(params);
-  revalidatePath(`/dashboard/${params.subjectId}/feedback`);
-  revalidatePath(`/dashboard/${params.subjectId}`);
+export async function confirmCommitmentAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  await confirmCommitment(id, actorId);
+  revalidatePath("/commitments");
 }
 
-export async function startCoachingSessionAction(personId: string, topic: string) {
-  const { session } = await startCoachingSession(personId, topic);
-  revalidatePath(`/dashboard/${personId}/coach`);
-  return session.id;
+export async function keepCommitmentAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  await markKept(id, actorId);
+  revalidatePath("/commitments");
 }
 
-export async function postCoachingTurnAction(sessionId: string, personId: string, content: string) {
-  await postPersonTurn(sessionId, personId, content);
-  revalidatePath(`/dashboard/${personId}/coach/${sessionId}`);
+export async function renegotiateCommitmentAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  const newDueAt = String(formData.get("newDueAt"));
+  const note = String(formData.get("note") ?? "");
+  await renegotiateCommitment(id, newDueAt, actorId, note);
+  revalidatePath("/commitments");
 }
 
-export async function confirmCommitmentAction(params: {
-  sessionId: string;
-  personId: string;
-  title: string;
-  description: string;
-  competencyId?: string;
-  visibility: "private" | "shared_with_manager";
-}) {
-  await confirmCommitment(params);
-  revalidatePath(`/dashboard/${params.personId}/coach/${params.sessionId}`);
-  revalidatePath(`/dashboard/${params.personId}`);
-  revalidatePath(`/dashboard/${params.personId}/one-on-one`);
-}
-
-export async function recordCommitmentProgressAction(
-  commitmentId: string,
-  personId: string,
-  status: "open" | "in_progress" | "done" | "dropped",
-) {
-  await recordCommitmentProgress(commitmentId, personId, status);
-  revalidatePath(`/dashboard/${personId}`);
-  revalidatePath(`/dashboard/${personId}/one-on-one`);
-}
-
-export async function scheduleOneOnOneAction(managerId: string, personId: string, scheduledAt: string) {
-  await scheduleOneOnOne({ managerId, personId, scheduledAt: new Date(scheduledAt) });
-  revalidatePath(`/manager/${managerId}/${personId}`);
-  revalidatePath(`/dashboard/${personId}/one-on-one`);
-}
-
-export async function generateNudgesAction(managerId: string, personId: string) {
-  await logAccess({
-    actorId: managerId,
-    actorRole: "manager",
-    action: "generate_nudges",
-    targetPersonId: personId,
-    surface: "growth",
-    allowed: true,
-    reason: "Manager generated nudges from the person's own shared goals/commitments only.",
+export async function createCommitmentAction(formData: FormData) {
+  const promisorId = String(formData.get("promisorId"));
+  const promiseeId = String(formData.get("promiseeId"));
+  const content = String(formData.get("content"));
+  const dueAt = String(formData.get("dueAt"));
+  await createCommitmentDraft({
+    promisorId,
+    promiseeId,
+    content,
+    dueAt: new Date(dueAt),
+    context: { sourceType: "manual", surface: "commitments_view" },
+    confirmed: true,
   });
-  await generateNudgesForManager(managerId, personId);
-  revalidatePath(`/manager/${managerId}/${personId}`);
+  revalidatePath("/commitments");
 }
 
-export async function acknowledgeNudgeAction(nudgeId: string, managerId: string, personId: string) {
-  await acknowledgeNudge(nudgeId);
-  revalidatePath(`/manager/${managerId}/${personId}`);
+export async function proposeDelegationAction(formData: FormData) {
+  const delegatorId = String(formData.get("delegatorId"));
+  const delegateId = String(formData.get("delegateId"));
+  const task = String(formData.get("task"));
+  const actionClassKey = String(formData.get("actionClassKey"));
+  const estimatedHours = Number(formData.get("estimatedHours"));
+  const weekOf = String(formData.get("weekOf"));
+  const skillTags = String(formData.get("skillTags") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  await proposeDelegation({ delegatorId, delegateId, task, actionClassKey, estimatedHours, weekOf, skillTags });
+  revalidatePath("/delegation");
+}
+
+export async function overrideDelegationAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  const reason = String(formData.get("reason") ?? "");
+  await overrideBlockedDelegation(id, actorId, reason);
+  revalidatePath("/delegation");
+}
+
+export async function acceptDelegationAction(formData: FormData) {
+  await acceptDelegation(String(formData.get("id")));
+  revalidatePath("/delegation");
+}
+
+export async function checkinDelegationAction(formData: FormData) {
+  await checkinDelegation(String(formData.get("id")));
+  revalidatePath("/delegation");
+}
+
+export async function completeDelegationAction(formData: FormData) {
+  await completeDelegation(String(formData.get("id")));
+  revalidatePath("/delegation");
+}
+
+export async function runDetectionCycleAction() {
+  await runDetectionCycle();
+  revalidatePath("/proactive");
+}
+
+export async function approveDraftAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  await approveDraft(id, actorId);
+  await attemptAutoSend(id); // no-op unless tier+grant both allow it; always audited
+  revalidatePath("/proactive");
+}
+
+export async function dismissDraftAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  await dismissDraft(id, actorId);
+  revalidatePath("/proactive");
+}
+
+export async function syncLoopsAction() {
+  await syncLoopsFromSurfaces();
+  revalidatePath("/loops");
+}
+
+export async function parkLoopAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  const reason = String(formData.get("reason") ?? "");
+  const until = String(formData.get("until") ?? "");
+  await parkLoop(id, reason, actorId, until || undefined);
+  revalidatePath("/loops");
+}
+
+export async function closeLoopAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  await closeLoop(id, actorId);
+  revalidatePath("/loops");
+}
+
+export async function setNextStepAction(formData: FormData) {
+  const id = String(formData.get("id"));
+  const actorId = String(formData.get("actorId"));
+  const nextStep = String(formData.get("nextStep"));
+  const ownerId = String(formData.get("ownerId"));
+  await setNextStep(id, nextStep, ownerId, actorId);
+  revalidatePath("/loops");
 }
