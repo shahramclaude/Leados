@@ -1,131 +1,86 @@
-// Shared domain types for the LEADOS demo product.
-// Every mock record below carries an `evidence` class so the UI can be
-// honest about what is real vs simulated. See docs/EVIDENCE-LEDGER.md.
+// LEADOS demo console — type contracts
+// These mirror the shape of the specs this UI illustrates (Parts 66/67/69/73/75-style
+// quality + governance + design-token concepts). They are demo-UI contracts only:
+// nothing here is wired to a real CI pipeline, database, or GitHub repo.
 
-export type EvidenceClass =
-  | "verified" // backed by a real, runnable check in this codebase
-  | "simulated" // deterministic mock data, UI behavior is real, content is fake
-  | "planned"; // described in docs, not implemented
+export type Tier = 'T0' | 'T1' | 'T2' | 'T3' | 'T4' | 'T5';
 
-export interface EvidenceTagProps {
-  level: EvidenceClass;
-}
-
-export interface NavItem {
-  id: ModuleId;
+export interface ActionPolicy {
+  actionId: string;
   label: string;
-  icon: string;
-  group: "Core" | "Decide" | "People" | "Govern";
-  essential?: boolean; // stays visible in crisis mode
+  tier: Tier;
+  budgetUsdPerDay: number;
+  budgetCountPerDay: number;
+  approvalMode: 'none' | 'single' | 'dual';
+  undoWindowMin: number | null;
+  burnPct: number; // 0-100, demo burn against daily budget
 }
 
-export type ModuleId =
-  | "dashboard"
-  | "assistant"
-  | "coaching"
-  | "collective"
-  | "time"
-  | "ethics"
-  | "crisis"
-  | "drafts"
-  | "spatial"
-  | "benchmarks"
-  | "recommender"
-  | "leaderstate"
-  | "legal"
-  | "reorg"
-  | "board"
-  | "registry"
-  | "ledger";
-
-export interface ChatMessage {
+export interface EvalSuiteRow {
   id: string;
-  role: "user" | "assistant" | "system";
-  text: string;
-  gate?: "draft" | "review" | "committed";
+  surface: string;
+  target: 'prompt' | 'model' | 'pipeline' | 'ui';
+  golden: number;
+  adversarial: number;
+  meanScore: number; // 0-1
+  p10: number; // 0-1
+  mutationScore: number; // 0-1
+  pass: boolean;
 }
 
-export interface Viewpoint {
-  id: string;
-  author: string;
-  stance: "majority" | "minority";
-  text: string;
-  votes: number;
-}
-
-export interface TimeBlock {
-  category: string;
-  hours: number;
-  color: string;
-}
-
-export interface EthicsCase {
-  id: string;
-  title: string;
-  stage: "proposed" | "review" | "approved" | "blocked";
-  flags: string[];
-  riskLevel: "low" | "medium" | "high";
-}
-
-export interface Draft {
-  id: string;
-  title: string;
-  audience: string;
-  cost: 1 | 2 | 3; // attention-budget cost
-  status: "queued" | "sent" | "dismissed";
-}
-
-export interface OrgNode {
+export interface MutationOperator {
   id: string;
   name: string;
-  role: string;
-  children?: OrgNode[];
+  description: string;
+  difficulty: 'low' | 'medium' | 'high';
+  catchRatePct: number;
 }
 
-export interface BenchmarkFigure {
-  id: string;
-  metric: string;
-  yourOrg: string;
-  industry: string;
-  evidenceClass: "A" | "B" | "C";
-  source: string;
+export interface DriftAlertRow {
+  target: string;
+  method: 'psi' | 'ks' | 'embedding';
+  statistic: number;
+  threshold: number;
+  status: 'stable' | 'watch' | 'breach';
+  since: string;
 }
 
-export interface Recommendation {
+export interface SelfAuditFindingRow {
   id: string;
-  title: string;
-  rationale: string;
-  confidence: number; // 0-1, calibrated
-  lintPassed: boolean;
-  lintNotes: string[];
-}
-
-export interface LegalDraft {
-  id: string;
-  title: string;
-  summary: string;
-  humanConfirmed: boolean;
-}
-
-export interface BoardCheck {
-  id: string;
-  label: string;
-  done: boolean;
-}
-
-export interface AlgorithmEntry {
-  id: string;
-  name: string;
-  purpose: string;
-  inputs: string;
-  evidenceClass: EvidenceClass;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  area: string;
+  evidence: string;
   owner: string;
-  lastReviewed: string;
+  dueDate: string;
+  status: 'open' | 'in-progress' | 'resolved';
+  goodhartFlag: boolean;
 }
 
-export interface LedgerClaim {
+export interface GrandGateRow {
   id: string;
-  claim: string;
-  status: EvidenceClass;
-  proof: string;
+  part: number;
+  statement: string;
+  accept: string;
+  measured: string;
+  status: 'pass' | 'fail' | 'unknown' | 'never-run';
+}
+
+export interface DesignTokenRow {
+  name: string;
+  kind: 'color' | 'space' | 'type' | 'radius' | 'elevation' | 'motion' | 'z';
+  semantic: string;
+  light: string;
+  dark: string;
+  highContrast: string;
+  contrastVsBg: number; // computed ratio, demo value
+  contrastPass: boolean;
+}
+
+export interface PipelineHealthRow {
+  dataset: string;
+  owner: string;
+  freshnessSlaMin: number;
+  observedLagMin: number;
+  status: 'on-time' | 'degraded' | 'quarantined';
+  lastHeal: string;
 }
