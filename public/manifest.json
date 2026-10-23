@@ -1,0 +1,10 @@
+{
+  "name": "LEADOS Crisis Ops",
+  "short_name": "Crisis Ops",
+  "description": "LEADOS crisis command, comms and status page — offline-capable in degraded-dependency mode.",
+  "start_url": "/status",
+  "display": "standalone",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": []
+}

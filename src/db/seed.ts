@@ -1,249 +1,208 @@
-// Seed data for Part 46 — a small org graph with known hop distances, a
-// red-flag corpus of decisions (one seeded case per detector, plus one clean
-// control decision), and the red-flag definition registry mirrored into the
-// database for reference/UI use. Idempotent: truncates Part 46 + compat
-// tables and reseeds from scratch every run.
+// Seeds baseline reference data for the Crisis Ops module:
+// crisis classes, command-role templates, authority grants, stakeholder
+// groups, notification contacts, message templates and dependency rows.
+//
+// Run with: npx tsx src/db/seed.ts
+// Safe to re-run — it upserts by natural key and skips if already present.
 
 import "dotenv/config";
-import { db } from "@/db";
+import { db, pool } from "./index";
 import {
-  people,
-  stakeholderEdges,
-  decisions,
-  ethicalRedFlagDefinitions,
-  orgSettings,
-  ethicalReviews,
-  safeChannelReports,
-  safeChannelAccessLog,
-  safeChannelAlerts,
-  safeChannelCaseEvents,
-  antiRetaliationSignals,
-  dualControlActions,
-  dualControlApprovals,
-  dualControlViolationAttempts,
-  conflictDeclarations,
-  conflictRecusals,
-  conflictProximityWarnings,
-  dissentSuggestions,
-  dissentSuppressionAttempts,
-  dissentArchiveRequests,
-  auditLog,
-} from "@/db/schema";
-import { RED_FLAG_DEFINITIONS } from "@/lib/ethics/redFlags";
-import { sql } from "drizzle-orm";
-
-async function reset() {
-  // Children first.
-  await db.execute(sql`truncate table ${dissentArchiveRequests} restart identity cascade`);
-  await db.execute(sql`truncate table ${dissentSuppressionAttempts} restart identity cascade`);
-  await db.execute(sql`truncate table ${dissentSuggestions} restart identity cascade`);
-  await db.execute(sql`truncate table ${conflictRecusals} restart identity cascade`);
-  await db.execute(sql`truncate table ${conflictProximityWarnings} restart identity cascade`);
-  await db.execute(sql`truncate table ${conflictDeclarations} restart identity cascade`);
-  await db.execute(sql`truncate table ${dualControlViolationAttempts} restart identity cascade`);
-  await db.execute(sql`truncate table ${dualControlApprovals} restart identity cascade`);
-  await db.execute(sql`truncate table ${dualControlActions} restart identity cascade`);
-  await db.execute(sql`truncate table ${antiRetaliationSignals} restart identity cascade`);
-  await db.execute(sql`truncate table ${safeChannelCaseEvents} restart identity cascade`);
-  await db.execute(sql`truncate table ${safeChannelAlerts} restart identity cascade`);
-  await db.execute(sql`truncate table ${safeChannelAccessLog} restart identity cascade`);
-  await db.execute(sql`truncate table ${safeChannelReports} restart identity cascade`);
-  await db.execute(sql`truncate table ${ethicalReviews} restart identity cascade`);
-  await db.execute(sql`truncate table ${ethicalRedFlagDefinitions} restart identity cascade`);
-  await db.execute(sql`truncate table ${decisions} restart identity cascade`);
-  await db.execute(sql`truncate table ${stakeholderEdges} restart identity cascade`);
-  await db.execute(sql`truncate table ${people} restart identity cascade`);
-  await db.execute(sql`truncate table ${orgSettings} restart identity cascade`);
-  await db.execute(sql`truncate table ${auditLog} restart identity cascade`);
-}
-
-async function seedPeople() {
-  const rows = await db
-    .insert(people)
-    .values([
-      { name: "Casey CEO", email: "casey.ceo@leados.example", role: "ceo" },
-      { name: "Vik VP-Eng", email: "vik.vpeng@leados.example", role: "manager" },
-      { name: "Sana VP-Sales", email: "sana.vpsales@leados.example", role: "manager" },
-      { name: "Mo Manager", email: "mo.manager@leados.example", role: "manager" },
-      { name: "Ivy IC1", email: "ivy.ic1@leados.example", role: "employee" },
-      { name: "Imran IC2", email: "imran.ic2@leados.example", role: "employee" },
-      { name: "Priya HR", email: "priya.hr@leados.example", role: "hr_manager" },
-      { name: "Eli EthicsOfficer", email: "eli.ethics@leados.example", role: "ethics_officer" },
-      { name: "Oma Ombudsman", email: "oma.ombudsman@leados.example", role: "ombudsman" },
-      { name: "Blair BoardLiaison", email: "blair.board@leados.example", role: "board_liaison" },
-      { name: "Adrian Admin", email: "adrian.admin@leados.example", role: "admin" },
-      { name: "Ira IC3", email: "ira.ic3@leados.example", role: "employee" },
-    ])
-    .returning();
-  return rows;
-}
-
-async function seedEdges(p: Array<{ id: number; name: string }>) {
-  const byName = Object.fromEntries(p.map((row) => [row.name, row.id]));
-  await db.insert(stakeholderEdges).values([
-    { fromPersonId: byName["Vik VP-Eng"], toPersonId: byName["Casey CEO"], relation: "reports_to" },
-    { fromPersonId: byName["Sana VP-Sales"], toPersonId: byName["Casey CEO"], relation: "reports_to" },
-    { fromPersonId: byName["Mo Manager"], toPersonId: byName["Vik VP-Eng"], relation: "reports_to" },
-    { fromPersonId: byName["Ivy IC1"], toPersonId: byName["Mo Manager"], relation: "reports_to" },
-    { fromPersonId: byName["Imran IC2"], toPersonId: byName["Mo Manager"], relation: "reports_to" },
-    { fromPersonId: byName["Ira IC3"], toPersonId: byName["Mo Manager"], relation: "reports_to" },
-    { fromPersonId: byName["Priya HR"], toPersonId: byName["Casey CEO"], relation: "reports_to" },
-    { fromPersonId: byName["Eli EthicsOfficer"], toPersonId: byName["Casey CEO"], relation: "influences" },
-    { fromPersonId: byName["Adrian Admin"], toPersonId: byName["Casey CEO"], relation: "reports_to" },
-    { fromPersonId: byName["Oma Ombudsman"], toPersonId: byName["Blair BoardLiaison"], relation: "collaborates_with" },
-  ]);
-  return byName;
-}
-
-async function seedRedFlagDefinitions() {
-  await db.insert(ethicalRedFlagDefinitions).values(
-    RED_FLAG_DEFINITIONS.map((d) => ({
-      code: d.code,
-      label: d.label,
-      description: d.description,
-      severity: d.severity,
-    })),
-  );
-}
-
-async function seedOrgSettings() {
-  await db.insert(orgSettings).values([
-    { orgId: "default", key: "dual_control.approvers_required", value: 1 },
-  ]);
-}
-
-async function seedDecisions(byName: Record<string, number>) {
-  const rows = await db
-    .insert(decisions)
-    .values([
-      {
-        title: "Process performance scores from new monitoring tool",
-        description: "Seeded corpus case: people-data decision with no subject visibility.",
-        decisionType: "performance_data_processing",
-        involvesPeopleData: true,
-        subjectsHaveVisibility: false,
-        visibilityScope: "individual",
-        reversibility: "reversible",
-        impact: "medium",
-        isPowerAction: false,
-        primarySubjectPersonId: byName["Ivy IC1"],
-        proposedByPersonId: byName["Priya HR"],
-        structuredCriteria: { dimension_a_score: 0.92, dimension_b_score: 0.48 },
-      },
-      {
-        title: "Grant org-wide dashboard read access",
-        description: "Seeded corpus case: bulk visibility grant.",
-        decisionType: "access_grant",
-        involvesPeopleData: true,
-        subjectsHaveVisibility: true,
-        visibilityScope: "bulk",
-        reversibility: "reversible",
-        impact: "medium",
-        isPowerAction: false,
-        proposedByPersonId: byName["Adrian Admin"],
-      },
-      {
-        title: "Change performance evaluation policy weights",
-        description: "Seeded corpus case: unilateral high-power (T4) action.",
-        decisionType: "policy_change",
-        involvesPeopleData: true,
-        subjectsHaveVisibility: true,
-        visibilityScope: "individual",
-        reversibility: "partially_reversible",
-        impact: "high",
-        isPowerAction: true,
-        powerActionType: "evaluation_policy_change",
-        proposedByPersonId: byName["Casey CEO"],
-      },
-      {
-        title: "Decommission legacy identity infrastructure",
-        description: "Seeded corpus case: irreversible + high impact.",
-        decisionType: "infrastructure_decommission",
-        involvesPeopleData: false,
-        subjectsHaveVisibility: true,
-        visibilityScope: "individual",
-        reversibility: "irreversible",
-        impact: "high",
-        isPowerAction: false,
-        proposedByPersonId: byName["Vik VP-Eng"],
-      },
-      {
-        title: "Ship accelerated product launch timeline",
-        description: "Seeded corpus case: dissent hidden from the record.",
-        decisionType: "product_launch",
-        involvesPeopleData: false,
-        subjectsHaveVisibility: true,
-        visibilityScope: "individual",
-        reversibility: "reversible",
-        impact: "medium",
-        isPowerAction: false,
-        proposedByPersonId: byName["Mo Manager"],
-        dissentNotes: [{ byPersonId: byName["Imran IC2"], note: "I disagree with this rollout timeline; QA window is too short." }],
-        dissentHidden: true,
-      },
-      {
-        title: "Promote Ivy IC1 to senior engineer",
-        description: "Seeded corpus case: conflict-of-interest proximity scenario.",
-        decisionType: "promotion_decision",
-        involvesPeopleData: true,
-        subjectsHaveVisibility: true,
-        visibilityScope: "individual",
-        reversibility: "partially_reversible",
-        impact: "medium",
-        isPowerAction: false,
-        primarySubjectPersonId: byName["Ivy IC1"],
-        proposedByPersonId: byName["Mo Manager"],
-      },
-      {
-        title: "Rotate team standup time by 30 minutes",
-        description: "Seeded corpus control case: expected to raise zero red flags.",
-        decisionType: "scheduling",
-        involvesPeopleData: false,
-        subjectsHaveVisibility: true,
-        visibilityScope: "individual",
-        reversibility: "reversible",
-        impact: "low",
-        isPowerAction: false,
-        proposedByPersonId: byName["Mo Manager"],
-      },
-    ])
-    .returning();
-  return rows;
-}
+  crisisClasses,
+  authorityGrants,
+  stakeholderGroups,
+  notificationContacts,
+  messageTemplates,
+  dependencies,
+  personas,
+} from "./schema";
+import { DEFAULT_AUTHORITY_MATRIX } from "../lib/crisis/authority";
+import { eq } from "drizzle-orm";
 
 async function main() {
-  console.log("[seed] resetting Part 46 tables...");
-  await reset();
+  console.log("Seeding Crisis Ops reference data...");
 
-  console.log("[seed] inserting people...");
-  const peopleRows = await seedPeople();
+  // --- Personas (demo roster used by the drill + UI pickers) -------------
+  const personaSeed = [
+    { name: "Avery Chen", email: "avery.chen@leados.example", roleKeys: ["commander"] },
+    { name: "Priya Patel", email: "priya.patel@leados.example", roleKeys: ["deputy_commander", "board_liaison"] },
+    { name: "Marcus Webb", email: "marcus.webb@leados.example", roleKeys: ["comms_lead"] },
+    { name: "Sofia Reyes", email: "sofia.reyes@leados.example", roleKeys: ["ops_lead"] },
+    { name: "Daniel Okafor", email: "daniel.okafor@leados.example", roleKeys: ["liaison"] },
+    { name: "Grace Lin", email: "grace.lin@leados.example", roleKeys: ["scribe"] },
+    { name: "Helen Brooks", email: "helen.brooks@leados.example", roleKeys: ["legal"] },
+    { name: "Watch Desk", email: "watch.desk@leados.example", roleKeys: ["watch_officer"] },
+  ];
+  for (const p of personaSeed) {
+    const existing = await db.select().from(personas).where(eq(personas.email, p.email));
+    if (existing.length === 0) {
+      await db.insert(personas).values(p);
+    }
+  }
 
-  console.log("[seed] inserting stakeholder graph edges...");
-  const byName = await seedEdges(peopleRows);
+  // --- Crisis classes ------------------------------------------------------
+  const classSeed = [
+    {
+      key: "operational_outage",
+      name: "Operational Outage",
+      description: "Product or infrastructure outage impacting customers.",
+      requiresDualDeclaration: false,
+      dualDeclarationRoleKeys: [],
+      roleTemplate: ["commander", "ops_lead", "comms_lead", "scribe"],
+    },
+    {
+      key: "security_incident",
+      name: "Security Incident",
+      description: "Suspected or confirmed security breach.",
+      requiresDualDeclaration: true,
+      dualDeclarationRoleKeys: ["commander", "legal"],
+      roleTemplate: ["commander", "ops_lead", "comms_lead", "legal", "scribe", "liaison"],
+    },
+    {
+      key: "leadership_scandal",
+      name: "Leadership Scandal",
+      description: "Allegation or event implicating senior leadership, including a possible commander.",
+      requiresDualDeclaration: true,
+      dualDeclarationRoleKeys: ["deputy_commander", "board_liaison"],
+      roleTemplate: ["deputy_commander", "board_liaison", "legal", "comms_lead", "scribe"],
+    },
+    {
+      key: "data_breach",
+      name: "Data Breach",
+      description: "Confirmed or suspected unauthorized data exposure.",
+      requiresDualDeclaration: true,
+      dualDeclarationRoleKeys: ["commander", "legal"],
+      roleTemplate: ["commander", "legal", "ops_lead", "comms_lead", "liaison", "scribe"],
+    },
+    {
+      key: "financial_crisis",
+      name: "Financial Crisis",
+      description: "Liquidity, payments, or solvency emergency.",
+      requiresDualDeclaration: true,
+      dualDeclarationRoleKeys: ["commander", "board_liaison"],
+      roleTemplate: ["commander", "board_liaison", "legal", "comms_lead", "scribe"],
+    },
+  ];
 
-  console.log("[seed] inserting red-flag definitions + org settings...");
-  await seedRedFlagDefinitions();
-  await seedOrgSettings();
+  const classIdByKey = new Map<string, string>();
+  for (const c of classSeed) {
+    const existing = await db.select().from(crisisClasses).where(eq(crisisClasses.key, c.key));
+    if (existing.length === 0) {
+      const [row] = await db.insert(crisisClasses).values(c).returning();
+      classIdByKey.set(c.key, row.id);
+    } else {
+      classIdByKey.set(c.key, existing[0].id);
+    }
+  }
 
-  console.log("[seed] inserting decision corpus...");
-  const decisionRows = await seedDecisions(byName);
+  // --- Authority grants ------------------------------------------------------
+  const existingGrants = await db.select().from(authorityGrants);
+  if (existingGrants.length === 0) {
+    await db.insert(authorityGrants).values(
+      DEFAULT_AUTHORITY_MATRIX.map((g) => ({
+        roleKey: g.roleKey,
+        action: g.action,
+        scope: g.scope,
+        maxCommitUsd: g.maxCommitUsd?.toString(),
+        requiresDualControl: g.requiresDualControl ?? false,
+      })),
+    );
+  }
 
-  console.log("[seed] done.");
-  console.log(
-    JSON.stringify(
+  // --- Stakeholder groups ------------------------------------------------------
+  const groupSeed = [
+    { key: "internal", name: "Internal / All-hands", requiresLegalReview: false },
+    { key: "customer", name: "Customers", requiresLegalReview: true },
+    { key: "regulatory", name: "Regulators", requiresLegalReview: true },
+    { key: "media", name: "Media / Press", requiresLegalReview: true },
+  ];
+  const groupIdByKey = new Map<string, string>();
+  for (const g of groupSeed) {
+    const existing = await db.select().from(stakeholderGroups).where(eq(stakeholderGroups.key, g.key));
+    if (existing.length === 0) {
+      const [row] = await db.insert(stakeholderGroups).values(g).returning();
+      groupIdByKey.set(g.key, row.id);
+    } else {
+      groupIdByKey.set(g.key, existing[0].id);
+    }
+  }
+
+  // --- Notification tree (contacts, in escalation order, each gated by a dependency) ---
+  const existingContacts = await db.select().from(notificationContacts);
+  if (existingContacts.length === 0) {
+    await db.insert(notificationContacts).values([
+      { groupId: groupIdByKey.get("internal")!, name: "All-hands Email Alias", channel: "email", dependencyKey: "email_provider", escalationOrder: 1 },
+      { groupId: groupIdByKey.get("internal")!, name: "Internal Push/Status Board", channel: "push", dependencyKey: "push_service", escalationOrder: 2 },
+      { groupId: groupIdByKey.get("internal")!, name: "Phone Tree Lead", channel: "phone", dependencyKey: "telephony", escalationOrder: 3 },
+
+      { groupId: groupIdByKey.get("customer")!, name: "Customer Email Broadcast", channel: "email", dependencyKey: "email_provider", escalationOrder: 1 },
+      { groupId: groupIdByKey.get("customer")!, name: "In-app Banner Service", channel: "push", dependencyKey: "push_service", escalationOrder: 2 },
+      { groupId: groupIdByKey.get("customer")!, name: "SMS Fallback", channel: "sms", dependencyKey: "sms_gateway", escalationOrder: 3 },
+
+      { groupId: groupIdByKey.get("regulatory")!, name: "Regulatory Liaison Email", channel: "email", dependencyKey: "email_provider", escalationOrder: 1 },
+      { groupId: groupIdByKey.get("regulatory")!, name: "Regulatory Liaison Phone", channel: "phone", dependencyKey: "telephony", escalationOrder: 2 },
+
+      { groupId: groupIdByKey.get("media")!, name: "Press Desk Email", channel: "email", dependencyKey: "email_provider", escalationOrder: 1 },
+      { groupId: groupIdByKey.get("media")!, name: "Press Desk SMS", channel: "sms", dependencyKey: "sms_gateway", escalationOrder: 2 },
+    ]);
+  }
+
+  // --- Message templates per class/audience ------------------------------------------------------
+  const existingTemplates = await db.select().from(messageTemplates);
+  if (existingTemplates.length === 0) {
+    await db.insert(messageTemplates).values([
       {
-        people: Object.fromEntries(peopleRows.map((p) => [p.name, p.id])),
-        decisions: Object.fromEntries(decisionRows.map((d) => [d.title, d.id])),
+        classId: classIdByKey.get("operational_outage"),
+        groupId: groupIdByKey.get("internal")!,
+        name: "Outage — Internal Notice",
+        subject: "[Crisis] Operational outage declared",
+        body: "Team — we have declared a crisis for an operational outage. Incident commander: {{commander}}. Status page: {{statusUrl}}. Updates every 30 minutes.",
       },
-      null,
-      2,
-    ),
-  );
+      {
+        classId: classIdByKey.get("operational_outage"),
+        groupId: groupIdByKey.get("customer")!,
+        name: "Outage — Customer Notice",
+        subject: "We're investigating an issue affecting your service",
+        body: "We are aware of an issue affecting the service and are actively investigating. We will post updates at {{statusUrl}}. We apologize for the disruption.",
+      },
+      {
+        classId: classIdByKey.get("security_incident"),
+        groupId: groupIdByKey.get("regulatory")!,
+        name: "Security — Regulatory Notice",
+        subject: "Notification of a security incident under review",
+        body: "This notice is provided in connection with a security incident currently under investigation. Confirmed facts only; see {{statusUrl}} for authoritative updates.",
+      },
+      {
+        classId: classIdByKey.get("leadership_scandal"),
+        groupId: groupIdByKey.get("media")!,
+        name: "Leadership Matter — Media Statement",
+        subject: "Statement regarding leadership matter",
+        body: "We are aware of the matter raised and are conducting a thorough review with independent oversight. We will not comment on unconfirmed reports. Verified updates: {{statusUrl}}.",
+      },
+    ]);
+  }
+
+  // --- Dependencies (circuit-breaker gated) ------------------------------------------------------
+  const depSeed = [
+    { key: "email_provider", name: "Transactional Email Provider" },
+    { key: "sms_gateway", name: "SMS Gateway" },
+    { key: "push_service", name: "Push/In-app Notification Service" },
+    { key: "telephony", name: "Telephony / Phone Tree" },
+    { key: "monitoring_feed", name: "Monitoring & Sensing Feed (Part 13 seam)" },
+  ];
+  for (const d of depSeed) {
+    const existing = await db.select().from(dependencies).where(eq(dependencies.key, d.key));
+    if (existing.length === 0) {
+      await db.insert(dependencies).values(d);
+    }
+  }
+
+  console.log("Seed complete.");
 }
 
 main()
-  .then(() => process.exit(0))
+  .then(() => pool.end())
   .catch((err) => {
     console.error(err);
-    process.exit(1);
+    return pool.end().finally(() => process.exit(1));
   });

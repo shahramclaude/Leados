@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+/* Crisis-mode visual semantics (Part 02 seam): reduced motion, high contrast,
+   essential-only. Applied via the `.crisis-mode` class on the Crisis Room
+   root whenever crisis.state === "crisis". */
+.crisis-mode {
+  background-color: #0b0d12;
+  color: #f5f6f8;
+}
+
+.crisis-mode * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+.crisis-mode .essential-surface {
+  border-color: #f5c84c !important;
+}
+
+.crisis-mode a,
+.crisis-mode button {
+  outline-offset: 2px;
+}
+
+.crisis-badge {
+  letter-spacing: 0.08em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+

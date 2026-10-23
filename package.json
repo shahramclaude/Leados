@@ -7,8 +7,9 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "db:seed": "tsx src/db/seed.ts",
-    "verify": "tsx src/db/seed.ts && tsx scripts/verify.ts"
+    "verify": "npm run lint && npm run typecheck && npm run test"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -17,7 +18,8 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
