@@ -1,44 +1,28 @@
 {
-  "name": "nextjs-postgresql-template",
+  "name": "react-vite-tailwind",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "db:push": "drizzle-kit push",
-    "db:seed": "tsx scripts/seed.ts",
-    "registry:lint": "tsx scripts/check-registry-completeness.ts",
-    "registry:test": "tsx scripts/test-registry-completeness.ts",
-    "risktier:test": "tsx scripts/test-risk-tier-consistency.ts",
-    "assessment:test": "tsx scripts/test-change-trigger.ts",
-    "rights:test": "tsx scripts/test-rights-machinery.ts",
-    "conformity:export": "tsx scripts/conformity-export.ts",
-    "conformity:test": "tsx scripts/test-conformity-export.ts",
-    "verify": "npm run typecheck && npm run registry:lint && npm run registry:test && npm run risktier:test && npm run assessment:test && npm run rights:test && npm run conformity:test"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "dotenv": "17.3.1",
-    "drizzle-orm": "0.45.2",
-    "next": "16.2.6",
-    "pg": "8.20.0",
+    "clsx": "2.1.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15",
-    "zod": "^4.6.7"
+    "tailwind-merge": "3.4.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "4.1.17",
-    "@types/node": "22.19.15",
-    "@types/pg": "8.18.0",
-    "@types/react": "19.2.14",
+    "@tailwindcss/vite": "4.1.17",
+    "@types/node": "22.19.17",
+    "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "drizzle-kit": "0.31.10",
-    "eslint": "9.39.4",
-    "eslint-config-next": "16.2.6",
-    "postcss": "8.5.8",
+    "@vitejs/plugin-react": "5.1.1",
     "tailwindcss": "4.1.17",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vite": "7.3.2",
+    "vite-plugin-singlefile": "2.3.0"
   }
 }

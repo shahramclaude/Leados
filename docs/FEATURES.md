@@ -1,45 +1,75 @@
-# Features — LEADOS (as of this session)
+# FEATURES.md
 
-Status values match `docs/EVIDENCE-LEDGER.md` exactly. If a feature is not
-listed here, it does not exist in this build.
+Complete feature list as actually implemented in this repository, grouped by
+navigation group. "Interactive" means state changes in the browser in
+response to user action; "Static" means the module renders mock data with no
+mutation UI.
 
-## Shipped (Verified)
+## Core
 
-| Feature | Where |
-|---|---|
-| Domain + metric tracking, with fitness scoring (0–100, 0 if no data) | `src/lib/fitness.ts`, `/api/domains`, `/api/metrics`, `/api/fitness` |
-| Engine registry + assurance checks, with coverage/staleness/severity summary | `src/lib/assurance.ts`, `src/lib/assuranceData.ts`, `/api/engines`, `/api/assurance` |
-| Risk register with belief scores, updated by chaos experiments | `src/lib/chaos.ts`, `/api/risks`, `/api/chaos` |
-| Multi-entity financial consolidation into a disclosed board pack | `src/lib/consolidation.ts`, `/api/entities`, `/api/consolidation` |
-| Voice-of-customer capture, theme urgency ranking, strategy linking | `src/lib/voc.ts`, `/api/voc`, `/api/strategy` |
-| Process-mining event capture and automation scoring | `src/lib/automation.ts`, `/api/process-mining`, `/api/automation-score` |
-| Single live dashboard covering all six seams with inline action forms | `src/app/page.tsx`, `src/components/ActionForm.tsx` |
-| Health check endpoint backed by a real DB query | `/api/health` |
-| Seed script producing a realistic, deliberately imperfect dataset (includes a failing engine, an escalated risk, a negative scenario covered in tests) | `scripts/seed.mjs` |
-| Fast quality gate: lint + typecheck + 24 unit tests + ledger self-check in one command | `npm run gate:all`, `scripts/gate-all.mjs` |
-| Evidence ledger with an automated self-check that fails the build if a "Verified" claim has no real proof | `docs/EVIDENCE-LEDGER.md`, `scripts/ledger-check.mjs` |
-| CI workflow definition for the fast + slow tiers | `.github/workflows/ci.yml` |
+- **Dashboard** — Interactive. Cross-module rollup (open ethics cases, queued
+  drafts, board readiness, evidence counts), click-through navigation,
+  crisis-aware copy.
+- **Conversation** — Interactive. Scripted chat with keyword-matched replies;
+  real Draft → Review → Commit gate state machine; audit-style system message
+  on commit.
+- **Crisis Mode** — Interactive. One toggle, observable effect across
+  Sidebar, TopBar, and Dashboard simultaneously.
 
-## Explicitly not shipped
+## Decide
 
-See `docs/LEADOS-VISION.md` §2 and §3 for the full, ranked list. Headlines:
-authentication/authorization, multi-tenant isolation, real ML models behind
-any "engine," live FX feed, intercompany elimination, audit logging,
-scheduled/autonomous triggers, ESG external verification.
+- **Ethics Flags** — Static kanban (Proposed/Review/Approved/Blocked) with
+  per-case risk badges and flag lists.
+- **Recommender** — Interactive (expand/collapse lint notes). Visible
+  pass/fail honesty lint per recommendation, confidence bars.
+- **Industry Benchmarks** — Static table with A/B/C evidence-class badges and
+  source captions per row.
+- **Reorg Simulator** — Interactive slider driving a live-computed savings
+  estimate paired, every time, with a Human Impact Ledger card.
+- **Legal Drafts** — Interactive. Checkbox-gated "Finalize" button per draft
+  (disabled until human-confirmation checkbox is checked).
+- **Proactive Drafts** — Interactive. Send/dismiss actions spend a shared
+  attention-budget resource; budget exhaustion blocks sending with an explicit
+  message, never a silent failure.
 
-## Before / after (this session's baseline)
+## People
 
-There is no prior in-repository baseline to compare against (see
-`docs/PART-DEPENDENCY.md`). The table below is "session start" → "session
-end," which is the only honest comparison available.
+- **Org / Spatial View** — Interactive toggle between a tree (spatial) and a
+  flattened list (semantic) rendering of the identical underlying org data.
+- **Coaching** — Static skill bars + a private reflection textarea (not
+  persisted); explicit "data wall" banner.
+- **Collective Intelligence** — Static, always renders both majority and
+  minority viewpoint clusters with vote counts.
+- **Time Analytics** — Static stacked bar + legend of hours by category;
+  explicit "visible to: only me" badge.
+- **Leader State** — Static self-only wellbeing indicators with explicit
+  non-sharing badge.
 
-| Metric | Session start | Session end |
-|---|---|---|
-| Lines of application code (`src/`) | ~90 (starter template) | 1,693 (`find src -name '*.ts' -o -name '*.tsx' \| xargs wc -l`) |
-| Database tables | 0 | 14 |
-| API routes | 1 (`/api/health`) | 14 |
-| Proven seams (test + route) | 0 | 6 |
-| Unit tests | 0 | 24 |
-| Docs | 0 | 11 (`docs/*.md` + root `AI-SESSION-LOG.md`) |
-| Known duplicated business-logic implementations | n/a | 0 (one shared `assuranceData.ts`; verified by manual review — see Red Team #35 for how this was found and fixed) |
-| Critical/High findings fixed this session vs. accepted with rationale | n/a | see `docs/RED-TEAM-FINAL.md` disposition column |
+## Govern
+
+- **Board Readiness** — Interactive checklist with live completeness
+  percentage and a "not board ready until 100%" warning state.
+- **Algorithm Registry** — Static table of every scoring/ranking mechanism
+  referenced anywhere in the product, each tagged with an evidence class.
+- **Evidence Ledger** — Static, live-rendered mirror of
+  `docs/EVIDENCE-LEDGER.md` with verified/simulated/planned counts.
+
+## Cross-cutting, code-level features
+
+- Global `AppStateContext` (crisis mode + attention budget) consumed
+  consistently by Sidebar, TopBar, Dashboard, and Proactive Drafts.
+- `ErrorBoundary` wraps the whole app so a single module's render error
+  degrades gracefully instead of blanking the page.
+- `safeId()` utility avoids a crash path in non-secure/older-browser contexts.
+- Single shared mock dataset (`src/data/mockData.ts`) — no module maintains
+  its own divergent copy of shared concepts (org chart, evidence claims).
+- `scripts/check-ledger.mjs` + `scripts/gate-all.sh` — a real, re-runnable
+  local gate matrix (tsc, ledger structural check, production build).
+
+## Explicitly not built (see Evidence Ledger + Vision §3 roadmap)
+
+- Any backend, database, authentication, or multi-tenancy.
+- Any live LLM integration.
+- Any persistence across page reloads.
+- Any CI pipeline.
+- Any internationalization/localization.
