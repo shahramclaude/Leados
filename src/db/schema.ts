@@ -1,307 +1,226 @@
-// LEADOS — Part 43: Development & Coaching Surfaces
+// Part 44 — Collective Intelligence Engine
 //
-// NOTE ON PROVENANCE: this sandbox does not contain the working trees for
-// Parts 09, 12, 23 or 26 (src/lib was empty on read). Per the standing order
-// we read-before-write; there was nothing to read. The tables and types
-// below reconstruct the *minimum* stable interfaces those parts are known to
-// expose (people/role scoping + fairness primitives from Part 09, assistant
-// memory shape from Part 12, the person-owned decision-journal record shape
-// from Part 23, and a lightweight change-initiative reference from Part 26)
-// so that Part 43 can be built against them faithfully. This is called out
-// again in AI-SESSION-LOG.md.
+// This schema reconstructs the minimal compatible surface of:
+//   Part 12 — Knowledge graph "registered questions/claims" (collectiveQuestions)
+//   Part 13 — Forecasting tournament engine forecaster scoring (forecasters)
+//   Part 24 — Registered-question governance (status/category on collectiveQuestions)
+// The working tree handed to this session did not contain those parts' files, so
+// stand-in tables are defined here with the same documented field contracts
+// (calibration/Brier scores, question registration + status) so this module can
+// interoperate once the real Part 12/13/24 tables land (see AI-SESSION-LOG.md).
+//
+// New in Part 44: judgment aggregation, Delphi engine, internal LMSR prediction
+// market, and wisdom-of-the-crowd metrics.
 
 import {
   boolean,
+  index,
   integer,
   jsonb,
+  numeric,
+  pgEnum,
   pgTable,
-  real,
+  serial,
   text,
   timestamp,
+  uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Part 09 reconstruction: people, roles, scoping
+// Shared: registered questions + forecaster roster (stand-ins for Part 12/13/24)
 // ---------------------------------------------------------------------------
 
-export const people = pgTable("people", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  role: text("role", { enum: ["member", "manager", "admin"] })
-    .notNull()
-    .default("member"),
-  managerId: text("manager_id"),
-  department: text("department").notNull().default("general"),
-  // Coarse, self-reported, optional — used ONLY for aggregate fairness
-  // reporting with a minimum sample-size guard. Never joined to coaching or
-  // feedback content.
-  demographicGroup: text("demographic_group"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const questionStatusEnum = pgEnum("ci_question_status", [
+  "open",
+  "delphi",
+  "market",
+  "resolved",
+  "void",
+]);
 
-// Part 09 competency anchors ("careers.ts" taxonomy)
-export const competencies = pgTable("competencies", {
-  id: text("id").primaryKey(),
-  key: text("key").notNull().unique(),
-  label: text("label").notNull(),
-  cluster: text("cluster", {
-    enum: ["self-leadership", "people-leadership", "strategic-leadership"],
-  }).notNull(),
-  description: text("description").notNull(),
-});
-
-// ---------------------------------------------------------------------------
-// Development graph: experiences & relationships catalogs
-// ---------------------------------------------------------------------------
-
-export const experiences = pgTable("experiences", {
-  id: text("id").primaryKey(),
+export const collectiveQuestions = pgTable("ci_questions", {
+  id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
-  description: text("description").notNull(),
-  competencyIds: jsonb("competency_ids").$type<string[]>().notNull(),
-  stretchLevel: text("stretch_level", { enum: ["moderate", "high"] }).notNull(),
-});
-
-export const relationshipTypes = pgTable("relationship_types", {
-  id: text("id").primaryKey(),
-  kind: text("kind", { enum: ["mentor", "sponsor", "peer-coach"] }).notNull(),
-  description: text("description").notNull(),
-  competencyIds: jsonb("competency_ids").$type<string[]>().notNull(),
-});
-
-// Evidence events — demonstrated-evidence, not self-rating alone.
-export const evidenceEvents = pgTable("evidence_events", {
-  id: text("id").primaryKey(),
-  personId: text("person_id").notNull().references(() => people.id),
-  competencyId: text("competency_id").notNull().references(() => competencies.id),
-  eventType: text("event_type", {
-    enum: ["self_rating", "manager_observation", "peer_feedback_theme", "demonstrated_outcome"],
-  }).notNull(),
-  narrative: text("narrative").notNull(),
-  // Relative evidentiary weight: self_rating is intentionally the lowest.
-  evidenceWeight: real("evidence_weight").notNull(),
-  sourceRef: text("source_ref"),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-  visibility: text("visibility", { enum: ["private", "shared_with_manager"] })
-    .notNull()
-    .default("private"),
-});
-
-// Person's own growth goals (private by default — symmetry rule applies).
-export const growthGoals = pgTable("growth_goals", {
-  id: text("id").primaryKey(),
-  personId: text("person_id").notNull().references(() => people.id),
-  competencyId: text("competency_id").notNull().references(() => competencies.id),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  status: text("status", { enum: ["active", "stalled", "achieved", "archived"] })
-    .notNull()
-    .default("active"),
-  targetDate: timestamp("target_date", { withTimezone: true }),
-  visibility: text("visibility", { enum: ["private", "shared_with_manager"] })
-    .notNull()
-    .default("private"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// Audit trail of Explain<T> growth-path recommendations (for citation tests).
-export const growthPathRecommendations = pgTable("growth_path_recommendations", {
-  id: text("id").primaryKey(),
-  personId: text("person_id").notNull().references(() => people.id),
-  competencyId: text("competency_id").notNull().references(() => competencies.id),
-  gapSummary: text("gap_summary").notNull(),
-  recommendationType: text("recommendation_type", { enum: ["experience", "relationship"] }).notNull(),
-  refId: text("ref_id").notNull(),
-  rationale: text("rationale").notNull(),
-  citedEvidenceIds: jsonb("cited_evidence_ids").$type<string[]>().notNull(),
+  description: text("description").notNull().default(""),
+  questionClass: text("question_class").notNull().default("general"),
+  status: questionStatusEnum("status").notNull().default("open"),
+  // Resolution: null until resolved. 1 = true/yes outcome, 0 = false/no outcome.
+  resolutionValue: numeric("resolution_value", { precision: 6, scale: 5 }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  // Snapshot of Part 11's ensemble model probability for crowd-vs-model comparison.
+  modelProbability: numeric("model_probability", { precision: 6, scale: 5 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ---------------------------------------------------------------------------
-// Part 23 reconstruction: person-owned journal / decision records
-// ---------------------------------------------------------------------------
-
-export const journalEntries = pgTable("journal_entries", {
-  id: text("id").primaryKey(),
-  personId: text("person_id").notNull().references(() => people.id),
-  kind: text("kind", { enum: ["coaching_commitment", "reflection", "decision"] }).notNull(),
-  content: jsonb("content").$type<Record<string, unknown>>().notNull(),
-  visibility: text("visibility", { enum: ["private", "shared_with_manager"] })
-    .notNull()
-    .default("private"),
-  relatedSessionId: text("related_session_id"),
+export const forecasters = pgTable("ci_forecasters", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  displayName: text("display_name").notNull(),
+  anonymousTag: text("anonymous_tag").notNull(),
+  // Authority flag used only to test market-manipulation-by-authority attack scenarios.
+  isAuthoritySignal: boolean("is_authority_signal").notNull().default(false),
+  // Part 13 forecaster scoring contract: calibration (0-1, higher = better calibrated)
+  // and Brier score (0-1, lower = better). Updated by resolveQuestion scoring jobs.
+  calibrationScore: numeric("calibration_score", { precision: 6, scale: 5 }).notNull().default("0.50000"),
+  brierScore: numeric("brier_score", { precision: 6, scale: 5 }).notNull().default("0.25000"),
+  forecastCount: integer("forecast_count").notNull().default(0),
+  playMoneyBalance: numeric("play_money_balance", { precision: 14, scale: 2 }).notNull().default("1000.00"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  anonTagIdx: uniqueIndex("ci_forecasters_anon_tag_idx").on(table.anonymousTag),
+}));
 
 // ---------------------------------------------------------------------------
-// Part 26 reconstruction: lightweight change-initiative reference
-// (used only so a growth goal can optionally link to an org change wave).
+// Judgment aggregation
 // ---------------------------------------------------------------------------
 
-export const changeInitiatives = pgTable("change_initiatives", {
-  id: text("id").primaryKey(),
-  title: text("title").notNull(),
-  phase: text("phase", { enum: ["sense", "design", "pilot", "scale", "sustain"] }).notNull(),
-});
-
-// ---------------------------------------------------------------------------
-// 360 feedback system — confidentiality enforced at storage layer
-// ---------------------------------------------------------------------------
-
-export const feedbackRequests = pgTable("feedback_requests", {
-  id: text("id").primaryKey(),
-  subjectId: text("subject_id").notNull().references(() => people.id),
-  requestedById: text("requested_by_id").notNull().references(() => people.id),
-  themeCompetencyId: text("theme_competency_id").references(() => competencies.id),
-  message: text("message").notNull(),
-  confidentialityPolicy: text("confidentiality_policy", {
-    enum: ["anonymous_aggregate", "attributed_with_consent"],
-  })
-    .notNull()
-    .default("anonymous_aggregate"),
-  aggregationThreshold: integer("aggregation_threshold").notNull().default(3),
-  status: text("status", { enum: ["open", "closed"] }).notNull().default("open"),
+export const forecasts = pgTable("ci_forecasts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  questionId: uuid("question_id").notNull().references(() => collectiveQuestions.id, { onDelete: "cascade" }),
+  forecasterId: uuid("forecaster_id").notNull().references(() => forecasters.id, { onDelete: "cascade" }),
+  probability: numeric("probability", { precision: 6, scale: 5 }).notNull(),
+  rationale: text("rationale").notNull().default(""),
+  // true when this forecast was flagged as a minority report at aggregation time.
+  flaggedMinority: boolean("flagged_minority").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  questionIdx: index("ci_forecasts_question_idx").on(table.questionId),
+  latestPerForecaster: uniqueIndex("ci_forecasts_q_f_unique").on(table.questionId, table.forecasterId),
+}));
 
-export const feedbackInvitations = pgTable("feedback_invitations", {
-  id: text("id").primaryKey(),
-  requestId: text("request_id").notNull().references(() => feedbackRequests.id),
-  raterId: text("rater_id").notNull().references(() => people.id),
-  status: text("status", { enum: ["pending", "responded", "declined"] })
-    .notNull()
-    .default("pending"),
-  invitedAt: timestamp("invited_at", { withTimezone: true }).notNull().defaultNow(),
-  respondedAt: timestamp("responded_at", { withTimezone: true }),
-});
+export const aggregates = pgTable("ci_aggregates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  questionId: uuid("question_id").notNull().references(() => collectiveQuestions.id, { onDelete: "cascade" }),
+  method: text("method").notNull(), // 'mean' | 'extremized' | 'calibration_weighted'
+  value: numeric("value", { precision: 6, scale: 5 }).notNull(),
+  params: jsonb("params").notNull().default({}),
+  minorityReportIds: jsonb("minority_report_ids").notNull().default([]),
+  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  questionIdx: index("ci_aggregates_question_idx").on(table.questionId),
+}));
 
-// IMPORTANT (storage-layer confidentiality): for `anonymous_aggregate`
-// policy, or whenever a rater declines attribution, `invitationId` and
-// `attributedRaterId` are left NULL — the link to the rater is never
-// persisted anywhere, not merely access-controlled. There is no column, no
-// row, no join path that can recover who authored the response. This is the
-// property the confidentiality attempt-tests check directly with raw SQL.
-export const feedbackResponses = pgTable("feedback_responses", {
-  id: text("id").primaryKey(),
-  requestId: text("request_id").notNull().references(() => feedbackRequests.id),
-  invitationId: text("invitation_id"),
-  attributedRaterId: text("attributed_rater_id"),
-  attributionConsent: boolean("attribution_consent").notNull().default(false),
-  ratingsJson: jsonb("ratings_json").$type<Record<string, number>>().notNull(),
-  qualitativeText: text("qualitative_text").notNull(),
-  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// ---------------------------------------------------------------------------
+// Delphi engine
+// ---------------------------------------------------------------------------
 
-// Feedback-to-growth linkage requires the SUBJECT's consent per link.
-export const feedbackThemeLinks = pgTable("feedback_theme_links", {
-  id: text("id").primaryKey(),
-  requestId: text("request_id").notNull().references(() => feedbackRequests.id),
-  subjectId: text("subject_id").notNull().references(() => people.id),
-  competencyId: text("competency_id").notNull().references(() => competencies.id),
-  developmentThemeSummary: text("development_theme_summary").notNull(),
-  consentGivenAt: timestamp("consent_given_at", { withTimezone: true }),
-  evidenceEventId: text("evidence_event_id"),
+export const delphiRoundStatusEnum = pgEnum("ci_delphi_round_status", ["open", "closed"]);
+
+export const delphiRounds = pgTable("ci_delphi_rounds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  questionId: uuid("question_id").notNull().references(() => collectiveQuestions.id, { onDelete: "cascade" }),
+  roundNumber: integer("round_number").notNull(),
+  status: delphiRoundStatusEnum("status").notNull().default("open"),
+  // Anonymity mode controls herding guards: 'anonymous_delayed' hides others' positions
+  // until the round closes; 'open' shows them live (kept only for baseline simulation/A-B).
+  anonymityMode: text("anonymity_mode").notNull().default("anonymous_delayed"),
+  openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+}, (table) => ({
+  questionIdx: index("ci_delphi_rounds_question_idx").on(table.questionId),
+  roundUnique: uniqueIndex("ci_delphi_rounds_q_r_unique").on(table.questionId, table.roundNumber),
+}));
+
+export const delphiEstimates = pgTable("ci_delphi_estimates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  roundId: uuid("round_id").notNull().references(() => delphiRounds.id, { onDelete: "cascade" }),
+  forecasterId: uuid("forecaster_id").notNull().references(() => forecasters.id, { onDelete: "cascade" }),
+  estimate: numeric("estimate", { precision: 6, scale: 5 }).notNull(),
+  rationale: text("rationale").notNull().default(""),
+  // Dissent is never deleted even after convergence — preserved for the record.
+  isDissent: boolean("is_dissent").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  roundIdx: index("ci_delphi_estimates_round_idx").on(table.roundId),
+  roundForecasterUnique: uniqueIndex("ci_delphi_estimates_r_f_unique").on(table.roundId, table.forecasterId),
+}));
+
+export const delphiConvergence = pgTable("ci_delphi_convergence", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  questionId: uuid("question_id").notNull().references(() => collectiveQuestions.id, { onDelete: "cascade" }),
+  roundNumber: integer("round_number").notNull(),
+  mean: numeric("mean", { precision: 6, scale: 5 }).notNull(),
+  stdDev: numeric("std_dev", { precision: 6, scale: 5 }).notNull(),
+  stdDevDelta: numeric("std_dev_delta", { precision: 6, scale: 5 }),
+  dissentCount: integer("dissent_count").notNull().default(0),
+  stopped: boolean("stopped").notNull().default(false),
+  stopReason: text("stop_reason"),
+  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  questionIdx: index("ci_delphi_convergence_question_idx").on(table.questionId),
+}));
 
 // ---------------------------------------------------------------------------
-// Micro-coaching engine (GROW) — private by default
+// Internal play-money prediction market (LMSR)
 // ---------------------------------------------------------------------------
 
-export const coachingSessions = pgTable("coaching_sessions", {
-  id: text("id").primaryKey(),
-  personId: text("person_id").notNull().references(() => people.id),
-  topic: text("topic").notNull(),
-  stage: text("stage", { enum: ["goal", "reality", "options", "will", "complete"] })
-    .notNull()
-    .default("goal"),
-  status: text("status", { enum: ["active", "completed", "abandoned"] })
-    .notNull()
-    .default("active"),
-  // Coaching session transcripts are ALWAYS private; only the derived,
-  // owner-chosen commitment (see `commitments`) can ever be shared.
+export const marketMakers = pgTable("ci_market_makers", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  questionId: uuid("question_id").notNull().references(() => collectiveQuestions.id, { onDelete: "cascade" }),
+  liquidityB: numeric("liquidity_b", { precision: 10, scale: 4 }).notNull().default("20.0000"),
+  // LMSR quantities for the binary outcome pair [YES, NO].
+  qYes: numeric("q_yes", { precision: 14, scale: 6 }).notNull().default("0"),
+  qNo: numeric("q_no", { precision: 14, scale: 6 }).notNull().default("0"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  questionUnique: uniqueIndex("ci_market_makers_question_unique").on(table.questionId),
+}));
 
-export const coachingMessages = pgTable("coaching_messages", {
-  id: text("id").primaryKey(),
-  sessionId: text("session_id").notNull().references(() => coachingSessions.id),
-  speaker: text("speaker", { enum: ["coach", "person"] }).notNull(),
-  content: text("content").notNull(),
-  stage: text("stage", { enum: ["goal", "reality", "options", "will", "complete"] }).notNull(),
-  flaggedDirective: boolean("flagged_directive").notNull().default(false),
+export const marketTrades = pgTable("ci_market_trades", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  questionId: uuid("question_id").notNull().references(() => collectiveQuestions.id, { onDelete: "cascade" }),
+  traderId: uuid("trader_id").notNull().references(() => forecasters.id, { onDelete: "cascade" }),
+  side: text("side").notNull(), // 'YES' | 'NO'
+  shares: numeric("shares", { precision: 14, scale: 6 }).notNull(),
+  cost: numeric("cost", { precision: 14, scale: 6 }).notNull(), // positive = debit, negative = credit (sell)
+  priceBefore: numeric("price_before", { precision: 6, scale: 5 }).notNull(),
+  priceAfter: numeric("price_after", { precision: 6, scale: 5 }).notNull(),
+  flaggedWashTrade: boolean("flagged_wash_trade").notNull().default(false),
+  flaggedPositionLimit: boolean("flagged_position_limit").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  questionIdx: index("ci_market_trades_question_idx").on(table.questionId),
+  traderIdx: index("ci_market_trades_trader_idx").on(table.traderId),
+}));
 
-// Owner-chosen commitments (Part 23-style record): person-owned, private by
-// default, only visible to a manager if the person explicitly shares it.
-export const commitments = pgTable("commitments", {
-  id: text("id").primaryKey(),
-  personId: text("person_id").notNull().references(() => people.id),
-  sessionId: text("session_id").references(() => coachingSessions.id),
-  competencyId: text("competency_id").references(() => competencies.id),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  dueDate: timestamp("due_date", { withTimezone: true }),
-  status: text("status", { enum: ["open", "in_progress", "done", "dropped"] })
-    .notNull()
-    .default("open"),
-  visibility: text("visibility", { enum: ["private", "shared_with_manager"] })
-    .notNull()
-    .default("private"),
-  lastProgressAt: timestamp("last_progress_at", { withTimezone: true }),
+export const marketPositions = pgTable("ci_market_positions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  questionId: uuid("question_id").notNull().references(() => collectiveQuestions.id, { onDelete: "cascade" }),
+  traderId: uuid("trader_id").notNull().references(() => forecasters.id, { onDelete: "cascade" }),
+  yesShares: numeric("yes_shares", { precision: 14, scale: 6 }).notNull().default("0"),
+  noShares: numeric("no_shares", { precision: 14, scale: 6 }).notNull().default("0"),
+  netInvested: numeric("net_invested", { precision: 14, scale: 6 }).notNull().default("0"),
+}, (table) => ({
+  questionTraderUnique: uniqueIndex("ci_market_positions_q_t_unique").on(table.questionId, table.traderId),
+}));
+
+export const integrityFlags = pgTable("ci_integrity_flags", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  questionId: uuid("question_id").notNull().references(() => collectiveQuestions.id, { onDelete: "cascade" }),
+  traderId: uuid("trader_id").references(() => forecasters.id, { onDelete: "set null" }),
+  type: text("type").notNull(), // 'wash_trade' | 'position_limit' | 'authority_pressure'
+  detail: text("detail").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  questionIdx: index("ci_integrity_flags_question_idx").on(table.questionId),
+}));
 
 // ---------------------------------------------------------------------------
-// Manager-enablement layer — symmetry-verified
+// Wisdom-of-the-crowd metrics
 // ---------------------------------------------------------------------------
 
-export const oneOnOnes = pgTable("one_on_ones", {
-  id: text("id").primaryKey(),
-  managerId: text("manager_id").notNull().references(() => people.id),
-  personId: text("person_id").notNull().references(() => people.id),
-  scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
-  cadenceDays: integer("cadence_days").notNull().default(14),
-  status: text("status", { enum: ["scheduled", "held", "skipped"] })
-    .notNull()
-    .default("scheduled"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// Manager nudges are generated ONLY from data the person has marked
-// `shared_with_manager`. Every nudge row records exactly which source datum
-// licensed it, so the symmetry test can verify the person can see the same
-// underlying item.
-export const managerNudges = pgTable("manager_nudges", {
-  id: text("id").primaryKey(),
-  managerId: text("manager_id").notNull().references(() => people.id),
-  personId: text("person_id").notNull().references(() => people.id),
-  kind: text("kind", {
-    enum: ["stalled_goal", "feedback_cycle_due", "commitment_overdue", "celebrate_progress"],
-  }).notNull(),
-  message: text("message").notNull(),
-  sourceTable: text("source_table").notNull(),
-  sourceId: text("source_id").notNull(),
-  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
-  acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
-});
-
-// ---------------------------------------------------------------------------
-// Access audit log — backs confidentiality + fairness tests
-// ---------------------------------------------------------------------------
-
-export const accessAuditLog = pgTable("access_audit_log", {
-  id: text("id").primaryKey(),
-  actorId: text("actor_id").notNull(),
-  actorRole: text("actor_role").notNull(),
-  action: text("action").notNull(),
-  targetPersonId: text("target_person_id"),
-  surface: text("surface", { enum: ["coaching", "feedback", "growth", "one_on_one"] }).notNull(),
-  allowed: boolean("allowed").notNull(),
-  reason: text("reason").notNull(),
-  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const wisdomStats = pgTable("ci_wisdom_stats", {
+  id: serial("id").primaryKey(),
+  questionClass: text("question_class").notNull(),
+  periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+  periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+  crowdBrier: numeric("crowd_brier", { precision: 6, scale: 5 }).notNull(),
+  modelBrier: numeric("model_brier", { precision: 6, scale: 5 }).notNull(),
+  marketBrier: numeric("market_brier", { precision: 6, scale: 5 }),
+  diversityIndex: numeric("diversity_index", { precision: 6, scale: 5 }).notNull(),
+  sampleSize: integer("sample_size").notNull().default(0),
+  winner: text("winner").notNull(), // 'crowd' | 'model' | 'market' | 'tie'
+  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  classIdx: index("ci_wisdom_stats_class_idx").on(table.questionClass),
+}));
