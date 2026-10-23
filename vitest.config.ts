@@ -4,14 +4,15 @@ import path from "node:path";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    include: ["src/**/__tests__/**/*.test.ts"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    setupFiles: ["./tests/setup.ts"],
+    fileParallelism: false,
+    setupFiles: ["./vitest.setup.ts"],
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": path.resolve(__dirname, "./src"),
     },
   },
 });
