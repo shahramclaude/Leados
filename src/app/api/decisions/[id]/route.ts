@@ -1,33 +1,29 @@
+import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { decisions } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { NextRequest } from "next/server";
+import { decisionEvents, decisions } from "@/db/schema";
+import { asc, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [row] = await db.select().from(decisions).where(eq(decisions.id, id));
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
-}
+  const decisionId = Number(id);
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const body = await request.json().catch(() => null);
-  if (!body) return Response.json({ error: "invalid body" }, { status: 400 });
-  const [row] = await db
-    .update(decisions)
-    .set({ ...body, updatedAt: new Date() })
-    .where(eq(decisions.id, id))
-    .returning();
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
-}
+  if (!Number.isInteger(decisionId)) {
+    return NextResponse.json({ error: "Invalid decision id." }, { status: 400 });
+  }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const [row] = await db.delete(decisions).where(eq(decisions.id, id)).returning();
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
+  const [decision] = await db.select().from(decisions).where(eq(decisions.id, decisionId));
+
+  if (!decision) {
+    return NextResponse.json({ error: "Decision not found." }, { status: 404 });
+  }
+
+  const events = await db
+    .select()
+    .from(decisionEvents)
+    .where(eq(decisionEvents.decisionId, decisionId))
+    .orderBy(asc(decisionEvents.createdAt));
+
+  return NextResponse.json({ decision, events });
 }

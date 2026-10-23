@@ -1,131 +1,123 @@
 import Link from "next/link";
-import { getAllParts, getSummary } from "@/lib/coverage";
-import { CoverageTable } from "@/components/CoverageTable";
+import { db } from "@/db";
+import { decisions, signals, people } from "@/db/schema";
+import { desc } from "drizzle-orm";
+import Badge from "@/components/Badge";
+import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  const [parts, summary] = await Promise.all([getAllParts(), getSummary()]);
+export default async function CockpitPage() {
+  const [allDecisions, allSignals, allPeople] = await Promise.all([
+    db.select().from(decisions).orderBy(desc(decisions.createdAt)),
+    db.select().from(signals).orderBy(desc(signals.detectedAt)),
+    db.select().from(people),
+  ]);
 
-  const cards = [
-    {
-      label: "Total parts",
-      value: summary.total,
-      hint: "Parts 00–58",
-      className: "text-slate-900",
-    },
-    {
-      label: "✅ Canonical (seed)",
-      value: summary.seedCounts.canonical,
-      hint: "strong evidence at seed time",
-      className: "text-emerald-700",
-    },
-    {
-      label: "🟡 Partial (seed)",
-      value: summary.seedCounts.partial,
-      hint: "thin / docs-only / legacy evidence",
-      className: "text-amber-700",
-    },
-    {
-      label: "🔴 Absent (seed)",
-      value: summary.seedCounts.absent,
-      hint: "essentially missing at seed time",
-      className: "text-rose-700",
-    },
+  const openDecisions = allDecisions.filter((d) => d.status !== "archived" && d.status !== "committed");
+  const committedDecisions = allDecisions.filter((d) => d.status === "committed");
+  const activeSignals = allSignals.filter((s) => s.status === "active");
+  const criticalSignals = activeSignals.filter((s) => s.severity === "critical" || s.severity === "high");
+
+  const recentDecisions = allDecisions.slice(0, 5);
+  const recentSignals = allSignals.slice(0, 5);
+
+  const stats = [
+    { label: "Open Decisions", value: openDecisions.length, href: "/decisions", tone: "text-indigo-600" },
+    { label: "Committed Decisions", value: committedDecisions.length, href: "/decisions", tone: "text-emerald-600" },
+    { label: "Active Signals", value: activeSignals.length, href: "/signals", tone: "text-amber-600" },
+    { label: "High/Critical Signals", value: criticalSignals.length, href: "/signals", tone: "text-rose-600" },
+    { label: "People Tracked", value: allPeople.length, href: "/people", tone: "text-slate-700" },
   ];
 
   return (
-    <main className="mx-auto max-w-6xl px-6 py-12">
-      <header className="mb-8">
-        <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-500">
-          Leados Program Governance
+    <div className="flex flex-col gap-8">
+      <section>
+        <p className="text-sm font-medium uppercase tracking-[0.1em] text-indigo-600">Executive Cockpit</p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-950">Command Center Overview</h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600">
+          A single pane for decision governance, early-warning signals, and org visibility — the
+          operating core of LEADOS.
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-950 sm:text-4xl">
-          Coverage Matrix — Parts 00–58
-        </h1>
-        <p className="mt-3 max-w-3xl text-slate-600">
-          This board turns the Part 59 dry-run&apos;s coverage matrix seed into a live Phase-0
-          verification workspace. Every row started as a keyword-evidence claim (✅ canonical /
-          🟡 partial / 🔴 absent); none of them become a fact until a Phase-0 pass records a real
-          command output against it and sets a verified status.
-        </p>
-        <div className="mt-4 flex gap-3">
-          <Link
-            href="/gaps"
-            className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
-          >
-            Open gaps register ({summary.gapsRemaining} unverified)
-          </Link>
-          <Link
-            href="/method"
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            Method & contract gaps
-          </Link>
-        </div>
-      </header>
+      </section>
 
-      <section className="mb-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {cards.map((c) => (
-          <div
-            key={c.label}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      <section className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {stats.map((stat) => (
+          <Link
+            key={stat.label}
+            href={stat.href}
+            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
           >
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              {c.label}
-            </p>
-            <p className={`mt-2 text-3xl font-semibold ${c.className}`}>{c.value}</p>
-            <p className="mt-1 text-xs text-slate-400">{c.hint}</p>
-          </div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{stat.label}</p>
+            <p className={`mt-2 text-3xl font-semibold ${stat.tone}`}>{stat.value}</p>
+          </Link>
         ))}
       </section>
 
-      <section className="mb-10 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Phase-0 verification progress
-        </h2>
-        <div className="flex flex-wrap gap-6 text-sm">
-          <Progress label="Unverified" value={summary.verifiedCounts.unverified} total={summary.total} color="bg-slate-400" />
-          <Progress label="Present" value={summary.verifiedCounts.present} total={summary.total} color="bg-emerald-500" />
-          <Progress label="Partial" value={summary.verifiedCounts.partial} total={summary.total} color="bg-amber-500" />
-          <Progress label="Missing" value={summary.verifiedCounts.missing} total={summary.total} color="bg-rose-500" />
-          <Progress label="Legacy-quarantined" value={summary.verifiedCounts.legacy_quarantined} total={summary.total} color="bg-violet-500" />
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-950">Recent Decisions</h2>
+            <Link href="/decisions" className="text-sm font-medium text-indigo-600 hover:underline">
+              View all →
+            </Link>
+          </div>
+          {recentDecisions.length === 0 ? (
+            <p className="text-sm text-slate-500">No decisions logged yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {recentDecisions.map((decision) => (
+                <li key={decision.id}>
+                  <Link
+                    href={`/decisions/${decision.id}`}
+                    className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3 transition hover:border-indigo-200 hover:bg-indigo-50/40"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">{decision.title}</p>
+                      <p className="text-xs text-slate-500">
+                        {decision.owner} · due {formatDate(decision.dueDate)}
+                      </p>
+                    </div>
+                    <Badge value={decision.status} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-950">Recent Signals</h2>
+            <Link href="/signals" className="text-sm font-medium text-indigo-600 hover:underline">
+              View all →
+            </Link>
+          </div>
+          {recentSignals.length === 0 ? (
+            <p className="text-sm text-slate-500">No signals detected yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {recentSignals.map((signal) => (
+                <li
+                  key={signal.id}
+                  className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{signal.title}</p>
+                    <p className="text-xs text-slate-500">
+                      {signal.category} · {signal.source} · {formatDate(signal.detectedAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge value={signal.severity} />
+                    <Badge value={signal.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
-
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Full matrix
-        </h2>
-        <CoverageTable parts={parts} />
-      </section>
-    </main>
-  );
-}
-
-function Progress({
-  label,
-  value,
-  total,
-  color,
-}: {
-  label: string;
-  value: number;
-  total: number;
-  color: string;
-}) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-  return (
-    <div className="w-40">
-      <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
-        <span>{label}</span>
-        <span>
-          {value} ({pct}%)
-        </span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-        <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
     </div>
   );
 }

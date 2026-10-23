@@ -1,67 +1,31 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { people } from "@/db/schema";
-import { readJson, secureRoute } from "@/lib/apiUtils";
-import { personCreateSchema } from "@/lib/validation";
-import { recordAuditEvent } from "@/lib/audit";
-import type { SessionUser } from "@/lib/session";
+import { asc } from "drizzle-orm";
 
-export const GET = secureRoute({
-  method: "GET",
-  path: "/api/people",
-  handler: async ({ request, session }: { request: NextRequest; session: SessionUser | null }) => {
-    const s = session!;
-    // Tenant scoping happens here, in the repository query, never from a
-    // client-supplied org id — this is the control that makes cross-tenant
-    // access structurally impossible rather than merely checked.
-    const rows = await db
-      .select()
-      .from(people)
-      .where(and(eq(people.orgId, s.orgId), isNull(people.deletedAt)))
-      .orderBy(desc(people.createdAt))
-      .limit(200);
+export const dynamic = "force-dynamic";
 
-    await recordAuditEvent({
-      orgId: s.orgId,
-      actorUserId: s.userId,
-      actorEmail: s.email,
-      actorRole: s.role,
-      action: "people.list",
-      resourceType: "people",
-      correlationId: request.headers.get("x-correlation-id") ?? crypto.randomUUID(),
-    }).catch(() => {});
+export async function GET() {
+  const rows = await db.select().from(people).orderBy(asc(people.name));
+  return NextResponse.json({ people: rows });
+}
 
-    return NextResponse.json({ people: rows });
-  },
-});
+export async function POST(request: Request) {
+  const body = await request.json().catch(() => null);
 
-export const POST = secureRoute({
-  method: "POST",
-  path: "/api/people",
-  handler: async ({ request, session }: { request: NextRequest; session: SessionUser | null }) => {
-    const s = session!;
-    const parsed = await readJson(request, personCreateSchema);
-    if (!parsed.ok) return parsed.response;
+  if (!body || typeof body.name !== "string" || body.name.trim().length === 0) {
+    return NextResponse.json({ error: "A name is required." }, { status: 400 });
+  }
 
-    const [person] = await db
-      .insert(people)
-      .values({ orgId: s.orgId, ...parsed.data })
-      .returning();
+  const [created] = await db
+    .insert(people)
+    .values({
+      name: body.name.trim(),
+      role: typeof body.role === "string" ? body.role.trim() : "",
+      department: typeof body.department === "string" && body.department.trim() ? body.department.trim() : "General",
+      email: typeof body.email === "string" ? body.email.trim() : "",
+    })
+    .returning();
 
-    await recordAuditEvent({
-      orgId: s.orgId,
-      actorUserId: s.userId,
-      actorEmail: s.email,
-      actorRole: s.role,
-      action: "people.create",
-      resourceType: "people",
-      resourceId: person.id,
-      correlationId: request.headers.get("x-correlation-id") ?? crypto.randomUUID(),
-    });
-
-    return NextResponse.json({ person }, { status: 201 });
-  },
-});
-
-
+  return NextResponse.json({ person: created }, { status: 201 });
+}

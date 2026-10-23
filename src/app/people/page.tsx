@@ -1,40 +1,149 @@
-import { redirect } from "next/navigation";
-import { getOrgContext } from "@/lib/org-context";
-import { listRecords } from "@/lib/repo/engineRecords";
-import { canAccessDomain } from "@/lib/rbac";
-import { t } from "@/lib/i18n";
-import { EngineRecordCard } from "@/components/EngineRecordCard";
-import { AddDemoRecordButton } from "@/components/AddDemoRecordButton";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useEffect, useState, type FormEvent } from "react";
 
-export default async function PeoplePage() {
-  const ctx = await getOrgContext();
-  if (!ctx) redirect("/");
+type Person = {
+  id: number;
+  name: string;
+  role: string;
+  department: string;
+  email: string;
+};
 
-  const actor = { role: ctx.role, scopes: ctx.scopes };
-  const canRead = canAccessDomain(actor, "people", "read");
-  const canWrite = canAccessDomain(actor, "people", "write");
-  const label = ctx.org.terminology.people || t(ctx.locale, "domain.people");
+export default function PeoplePage() {
+  const [people, setPeople] = useState<Person[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ name: "", role: "", department: "", email: "" });
 
-  if (!canRead) {
-    return <p className="lx-muted text-sm text-slate-600">You do not have access to {label}.</p>;
+  async function load() {
+    setLoading(true);
+    const res = await fetch("/api/people");
+    const data = await res.json();
+    setPeople(data.people ?? []);
+    setLoading(false);
   }
 
-  const records = await listRecords(ctx.orgId, { domain: "people" });
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/people", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to add person.");
+      }
+      setForm({ name: "", role: "", department: "", email: "" });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add person.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const byDepartment = people.reduce<Record<string, Person[]>>((acc, person) => {
+    const key = person.department || "General";
+    acc[key] = acc[key] ? [...acc[key], person] : [person];
+    return acc;
+  }, {});
 
   return (
-    <div>
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-950">{label}</h1>
-        {canWrite && <AddDemoRecordButton orgId={ctx.orgId} domain="people" />}
-      </div>
-      <ul className="grid gap-3">
-        {records.map((record) => (
-          <EngineRecordCard key={record.id} record={record} canWrite={canWrite} />
-        ))}
-        {records.length === 0 && <li className="lx-muted text-sm text-slate-500">{t(ctx.locale, "common.noResults")}</li>}
-      </ul>
+    <div className="flex flex-col gap-8">
+      <section>
+        <p className="text-sm font-medium uppercase tracking-[0.1em] text-indigo-600">Org Intelligence</p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-950">People Directory</h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-600">
+          Keep a lightweight directory of decision owners and stakeholders for accountability tracking.
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-slate-950">Add a person</h2>
+        <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Name</label>
+            <input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Role</label>
+            <input
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Department</label>
+            <input
+              value={form.department}
+              onChange={(e) => setForm({ ...form, department: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Email</label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-4">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500 disabled:opacity-60"
+            >
+              {submitting ? "Adding…" : "Add person"}
+            </button>
+          </div>
+        </form>
+        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-slate-950">Directory</h2>
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading…</p>
+        ) : people.length === 0 ? (
+          <p className="text-sm text-slate-500">No people added yet.</p>
+        ) : (
+          <div className="flex flex-col gap-6">
+            {Object.entries(byDepartment).map(([department, members]) => (
+              <div key={department}>
+                <h3 className="mb-2 text-sm font-semibold text-slate-700">{department}</h3>
+                <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {members.map((person) => (
+                    <li key={person.id} className="rounded-xl border border-slate-100 px-4 py-3">
+                      <p className="text-sm font-medium text-slate-900">{person.name}</p>
+                      <p className="text-xs text-slate-500">{person.role || "—"}</p>
+                      {person.email && <p className="mt-1 text-xs text-indigo-600">{person.email}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

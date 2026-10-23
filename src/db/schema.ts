@@ -1,53 +1,85 @@
 import {
-  boolean,
-  integer,
   pgEnum,
   pgTable,
   serial,
   text,
-  timestamp,
   varchar,
+  timestamp,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
-// Status recorded by the Part 59 dry-run seed (keyword-evidence only).
-export const seedStatusEnum = pgEnum("coverage_seed_status", [
-  "canonical", // ✅
-  "partial", // 🟡
-  "absent", // 🔴
+// ---------------------------------------------------------------------------
+// LEADOS — Executive Decision Intelligence Command Center
+// Core domain: decision governance, early-warning signals, people directory.
+// ---------------------------------------------------------------------------
+
+export const decisionStatusEnum = pgEnum("decision_status", [
+  "proposed",
+  "under_review",
+  "committed",
+  "archived",
 ]);
 
-// Status produced by a live Phase-0 verification pass against real code.
-export const verifiedStatusEnum = pgEnum("coverage_verified_status", [
-  "unverified",
-  "present",
-  "partial",
-  "missing",
-  "legacy_quarantined",
+export const decisionImpactEnum = pgEnum("decision_impact", [
+  "low",
+  "medium",
+  "high",
+  "critical",
 ]);
 
-export const coverageParts = pgTable("coverage_parts", {
+export const signalSeverityEnum = pgEnum("signal_severity", [
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
+export const signalStatusEnum = pgEnum("signal_status", [
+  "active",
+  "acknowledged",
+  "resolved",
+]);
+
+export const decisions = pgTable("decisions", {
   id: serial("id").primaryKey(),
-  partNumber: integer("part_number").notNull().unique(),
-  title: text("title").notNull(),
-  seedStatus: seedStatusEnum("seed_status").notNull(),
-  evidence: text("evidence").notNull(),
-  note: text("note"),
-  currentStatus: verifiedStatusEnum("current_status").notNull().default("unverified"),
-  ownerPart: varchar("owner_part", { length: 32 }),
-  resolved: boolean("resolved").notNull().default(false),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull().default(""),
+  owner: varchar("owner", { length: 120 }).notNull().default("Unassigned"),
+  status: decisionStatusEnum("status").notNull().default("proposed"),
+  impact: decisionImpactEnum("impact").notNull().default("medium"),
+  dueDate: timestamp("due_date", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  committedAt: timestamp("committed_at", { withTimezone: true }),
+});
+
+export const decisionEvents = pgTable("decision_events", {
+  id: serial("id").primaryKey(),
+  decisionId: serial("decision_id").notNull(),
+  eventType: varchar("event_type", { length: 60 }).notNull(),
+  actor: varchar("actor", { length: 120 }).notNull().default("System"),
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const signals = pgTable("signals", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull().default(""),
+  category: varchar("category", { length: 120 }).notNull().default("General"),
+  source: varchar("source", { length: 120 }).notNull().default("Manual"),
+  severity: signalSeverityEnum("severity").notNull().default("medium"),
+  status: signalStatusEnum("status").notNull().default("active"),
+  detectedAt: timestamp("detected_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const verificationLogs = pgTable("verification_logs", {
+export const people = pgTable("people", {
   id: serial("id").primaryKey(),
-  partId: integer("part_id")
-    .notNull()
-    .references(() => coverageParts.id, { onDelete: "cascade" }),
-  previousStatus: verifiedStatusEnum("previous_status").notNull(),
-  newStatus: verifiedStatusEnum("new_status").notNull(),
-  commandOutput: text("command_output"),
-  verifiedBy: varchar("verified_by", { length: 120 }).notNull().default("operator"),
-  verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
+  name: varchar("name", { length: 150 }).notNull(),
+  role: varchar("role", { length: 150 }).notNull().default(""),
+  department: varchar("department", { length: 150 }).notNull().default("General"),
+  email: varchar("email", { length: 200 }).notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
-

@@ -1,33 +1,34 @@
+import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { signals } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [row] = await db.select().from(signals).where(eq(signals.id, id));
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
-}
+  const signalId = Number(id);
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  if (!Number.isInteger(signalId)) {
+    return NextResponse.json({ error: "Invalid signal id." }, { status: 400 });
+  }
+
   const body = await request.json().catch(() => null);
-  if (!body) return Response.json({ error: "invalid body" }, { status: 400 });
-  const [row] = await db
-    .update(signals)
-    .set({ ...body, updatedAt: new Date() })
-    .where(eq(signals.id, id))
-    .returning();
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
-}
+  const validStatuses = ["active", "acknowledged", "resolved"];
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const [row] = await db.delete(signals).where(eq(signals.id, id)).returning();
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
+  if (!body || !validStatuses.includes(body.status)) {
+    return NextResponse.json({ error: "A valid status is required." }, { status: 400 });
+  }
+
+  const [updated] = await db
+    .update(signals)
+    .set({ status: body.status, updatedAt: new Date() })
+    .where(eq(signals.id, signalId))
+    .returning();
+
+  if (!updated) {
+    return NextResponse.json({ error: "Signal not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({ signal: updated });
 }

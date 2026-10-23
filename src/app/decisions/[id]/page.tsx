@@ -1,146 +1,189 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState, use } from "react";
-import { Badge, Button, Card, PageHeader, SecondaryButton, Select } from "@/components/ui";
+import Badge from "@/components/Badge";
+import { formatDate, formatDateTime } from "@/lib/format";
 
 type Decision = {
   id: number;
   title: string;
   description: string;
-  category: string;
-  status: string;
   owner: string;
-  impact: string;
-  confidence: number;
+  status: "proposed" | "under_review" | "committed" | "archived";
+  impact: "low" | "medium" | "high" | "critical";
+  dueDate: string | null;
   createdAt: string;
+  updatedAt: string;
   committedAt: string | null;
 };
 
 type DecisionEvent = {
   id: number;
-  type: string;
-  payload: string;
+  eventType: string;
+  actor: string;
+  payload: Record<string, unknown>;
   createdAt: string;
 };
 
-export default function DecisionDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+const NEXT_STEPS: Record<string, { status: string; label: string; tone: string }[]> = {
+  proposed: [
+    { status: "under_review", label: "Move to Review", tone: "bg-blue-600 hover:bg-blue-500" },
+    { status: "archived", label: "Archive", tone: "bg-slate-500 hover:bg-slate-400" },
+  ],
+  under_review: [
+    { status: "committed", label: "Commit Decision", tone: "bg-emerald-600 hover:bg-emerald-500" },
+    { status: "proposed", label: "Send Back to Proposed", tone: "bg-slate-500 hover:bg-slate-400" },
+    { status: "archived", label: "Archive", tone: "bg-slate-500 hover:bg-slate-400" },
+  ],
+  committed: [{ status: "archived", label: "Archive", tone: "bg-slate-500 hover:bg-slate-400" }],
+  archived: [],
+};
+
+export default function DecisionDetailPage() {
+  const params = useParams<{ id: string }>();
   const [decision, setDecision] = useState<Decision | null>(null);
   const [events, setEvents] = useState<DecisionEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   async function load() {
-    const res = await fetch(`/api/decisions/${id}`);
-    if (!res.ok) return;
+    setLoading(true);
+    const res = await fetch(`/api/decisions/${params.id}`);
+    if (res.status === 404) {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
     const data = await res.json();
     setDecision(data.decision);
-    setEvents(data.events);
+    setEvents(data.events ?? []);
+    setLoading(false);
   }
 
   useEffect(() => {
-    load();
+    if (params.id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [params.id]);
 
-  async function updateStatus(status: string) {
+  async function transition(status: string) {
     setBusy(true);
-    await fetch(`/api/decisions/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    await load();
-    setBusy(false);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/decisions/${params.id}/commit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Transition failed.");
+      }
+      await load();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Transition failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function commit() {
-    setBusy(true);
-    await fetch(`/api/decisions/${id}/commit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: "Committed from cockpit." }),
-    });
-    await load();
-    setBusy(false);
+  if (notFound) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <p className="text-lg font-semibold text-slate-900">Decision not found</p>
+        <Link href="/decisions" className="mt-3 inline-block text-sm font-medium text-indigo-600 hover:underline">
+          ← Back to decisions
+        </Link>
+      </div>
+    );
   }
 
-  if (!decision) {
+  if (loading || !decision) {
     return <p className="text-sm text-slate-500">Loading…</p>;
   }
 
+  const nextSteps = NEXT_STEPS[decision.status] ?? [];
+
   return (
-    <div>
-      <Link href="/decisions" className="mb-4 inline-block text-xs text-cyan-400 hover:underline">
-        ← All decisions
+    <div className="flex flex-col gap-6">
+      <Link href="/decisions" className="text-sm font-medium text-indigo-600 hover:underline">
+        ← Back to decisions
       </Link>
-      <PageHeader
-        eyebrow={`Decision #${decision.id}`}
-        title={decision.title}
-        description={decision.description || "No description provided."}
-        action={<Badge value={decision.status} />}
-      />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Details</h2>
-          <dl className="flex flex-col gap-2 text-sm">
-            <div className="flex justify-between"><dt className="text-slate-500">Owner</dt><dd>{decision.owner}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Category</dt><dd className="capitalize">{decision.category}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Impact</dt><dd><Badge value={decision.impact} /></dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Confidence</dt><dd>{decision.confidence}%</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Created</dt><dd>{new Date(decision.createdAt).toLocaleString()}</dd></div>
-            {decision.committedAt ? (
-              <div className="flex justify-between"><dt className="text-slate-500">Committed</dt><dd>{new Date(decision.committedAt).toLocaleString()}</dd></div>
-            ) : null}
-          </dl>
-
-          <div className="mt-5 flex flex-col gap-2">
-            <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Change status</label>
-            <Select
-              value={decision.status}
-              disabled={busy}
-              onChange={(e) => updateStatus(e.target.value)}
-            >
-              <option value="proposed">Proposed</option>
-              <option value="under_review">Under review</option>
-              <option value="committed">Committed</option>
-              <option value="closed">Closed</option>
-            </Select>
-            {decision.status !== "committed" ? (
-              <Button disabled={busy} onClick={commit}>
-                Commit decision
-              </Button>
-            ) : null}
-            <SecondaryButton
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                await fetch(`/api/decisions/${id}`, { method: "DELETE" });
-                window.location.href = "/decisions";
-              }}
-            >
-              Delete
-            </SecondaryButton>
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-950">{decision.title}</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Owner: {decision.owner} · Due {formatDate(decision.dueDate)}
+            </p>
           </div>
-        </Card>
+          <div className="flex gap-2">
+            <Badge value={decision.impact} />
+            <Badge value={decision.status} />
+          </div>
+        </div>
+        {decision.description && <p className="mt-4 whitespace-pre-wrap text-sm text-slate-700">{decision.description}</p>}
 
-        <Card className="lg:col-span-2">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Event timeline (truth core)
-          </h2>
-          <ol className="relative flex flex-col gap-4 border-l border-slate-800 pl-5">
-            {events.map((ev) => (
-              <li key={ev.id} className="relative">
-                <span className="absolute -left-[26px] top-1 h-2.5 w-2.5 rounded-full bg-cyan-500" />
-                <p className="text-xs uppercase tracking-wide text-slate-500">{ev.type.replace(/_/g, " ")}</p>
-                <p className="text-sm text-slate-200">{ev.payload}</p>
-                <p className="text-xs text-slate-600">{new Date(ev.createdAt).toLocaleString()}</p>
+        <div className="mt-5 grid grid-cols-2 gap-4 text-xs text-slate-500 sm:grid-cols-4">
+          <div>
+            <p className="uppercase tracking-wide">Created</p>
+            <p className="mt-1 text-sm text-slate-700">{formatDateTime(decision.createdAt)}</p>
+          </div>
+          <div>
+            <p className="uppercase tracking-wide">Updated</p>
+            <p className="mt-1 text-sm text-slate-700">{formatDateTime(decision.updatedAt)}</p>
+          </div>
+          <div>
+            <p className="uppercase tracking-wide">Committed</p>
+            <p className="mt-1 text-sm text-slate-700">{formatDateTime(decision.committedAt)}</p>
+          </div>
+        </div>
+
+        {nextSteps.length > 0 && (
+          <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
+            {nextSteps.map((step) => (
+              <button
+                key={step.status}
+                disabled={busy}
+                onClick={() => transition(step.status)}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-60 ${step.tone}`}
+              >
+                {step.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {actionError && <p className="mt-3 text-sm text-rose-600">{actionError}</p>}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-lg font-semibold text-slate-950">Audit trail</h2>
+        {events.length === 0 ? (
+          <p className="text-sm text-slate-500">No events recorded.</p>
+        ) : (
+          <ol className="flex flex-col gap-4">
+            {events.map((event) => (
+              <li key={event.id} className="flex gap-3 border-l-2 border-indigo-200 pl-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">
+                    {event.eventType.replace("_", " ")}
+                    {typeof event.payload?.from === "string" && typeof event.payload?.to === "string"
+                      ? `: ${event.payload.from} → ${event.payload.to}`
+                      : ""}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {event.actor} · {formatDateTime(event.createdAt)}
+                  </p>
+                </div>
               </li>
             ))}
           </ol>
-        </Card>
-      </div>
+        )}
+      </section>
     </div>
   );
 }
