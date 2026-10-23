@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-10-23T09:03:17.430Z",
+  "corpus": {
+    "total": 72,
+    "train": 49,
+    "holdout": 23
+  },
+  "extractionMethod": "lexicon-grounded-v1",
+  "overall": {
+    "truePositives": 92,
+    "falsePositives": 8,
+    "falseNegatives": 9,
+    "precision": 0.92,
+    "recall": 0.911,
+    "spanIntegrityFailures": 0
+  },
+  "gates": {
+    "precisionGate": 0.9,
+    "recallGate": 0.8,
+    "precisionPass": true,
+    "recallPass": true,
+    "spanIntegrityPass": true
+  },
+  "byClauseType": {
+    "term": {
+      "truePositives": 12,
+      "falsePositives": 0,
+      "falseNegatives": 1,
+      "precision": 1,
+      "recall": 0.923
+    },
+    "renewal": {
+      "truePositives": 9,
+      "falsePositives": 0,
+      "falseNegatives": 1,
+      "precision": 1,
+      "recall": 0.9
+    },
+    "termination": {
+      "truePositives": 10,
+      "falsePositives": 0,
+      "falseNegatives": 2,
+      "precision": 1,
+      "recall": 0.833
+    },
+    "sla": {
+      "truePositives": 12,
+      "falsePositives": 0,
+      "falseNegatives": 2,
+      "precision": 1,
+      "recall": 0.857
+    },
+    "indemnity": {
+      "truePositives": 9,
+      "falsePositives": 0,
+      "falseNegatives": 0,
+      "precision": 1,
+      "recall": 1
+    },
+    "liability_cap": {
+      "truePositives": 12,
+      "falsePositives": 0,
+      "falseNegatives": 1,
+      "precision": 1,
+      "recall": 0.923
+    },
+    "change_of_control": {
+      "truePositives": 14,
+      "falsePositives": 8,
+      "falseNegatives": 0,
+      "precision": 0.636,
+      "recall": 1
+    },
+    "data_protection": {
+      "truePositives": 14,
+      "falsePositives": 0,
+      "falseNegatives": 2,
+      "precision": 1,
+      "recall": 0.875
+    }
+  }
+}

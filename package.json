@@ -7,13 +7,14 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "eval:legal": "tsx scripts/evalLegal.ts",
     "test": "vitest run",
-    "verify": "npm run typecheck && npm run lint && npm run test && node scripts/uncertainty-lint.mjs"
+    "seed:legal": "tsx scripts/seedLegal.ts",
+    "verify": "npm run typecheck && npm run lint && npm run eval:legal && npm run test"
   },
   "dependencies": {
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
-    "fast-check": "^4.10.2",
     "next": "16.2.6",
     "pg": "8.20.0",
     "react": "19.2.6",
