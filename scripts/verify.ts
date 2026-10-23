@@ -1,228 +1,451 @@
-// LEADOS Part 54 — verification script (`npm run verify`).
-//
-// Exercises the mandatory gates from PHASE 4 against the real database:
-//  1. Twin validation — seeded historical moves recovered within declared error
-//  2. Human-impact ledger mandatory (a simulation without it fails)
-//  3. Self-visibility privacy attempt matrix (person sees own status first)
-//  4. Obligation cascade fires on a change-of-control fixture
-//  5. Recalibration loop measurably updates twin parameters
-//
-// Exits 0 only if every gate passes. Prints a readable report either way.
+// Part 55 full verification: board-cycle transcript (materials -> meeting ->
+// resolutions -> oversight), resolution-implementation enforcement,
+// board-tier access matrix, completeness red-flag detector, pre-read/
+// oversight metrics, and audit-chain integrity. Exits non-zero on any
+// failed assertion.
 
 import "dotenv/config";
-import { db, pool } from "../src/db";
-import { historicalMoves, maDeals, obligations as obligationsTable, orgPeople, twinModelParameters } from "../src/db/schema";
-import { seedAll, HISTORICAL_FIXTURES, historicalFixtureUnits, historicalFixtureEdges } from "../src/lib/org-design/seedData";
-import { DEFAULT_TWIN_PARAMS, applyStructuralMove, predictDeliveryImpact, type GraphState } from "../src/lib/org-design/twinEngine";
-import { assertHumanImpactComplete, summarizeHumanImpact, type PersonLike, type SupportPlanLike } from "../src/lib/org-design/humanImpact";
-import { buildHumanImpactLedger } from "../src/lib/org-design/humanImpact";
-import { canViewEntryDetail, runPrivacyAttemptMatrix, type LedgerEntryRecord } from "../src/lib/org-design/privacy";
-import { obligationsToFire } from "../src/lib/org-design/obligationCascade";
-import { computeVariance, recalibrateParams } from "../src/lib/org-design/recalibration";
-import { runStructuralSimulation, loadGraph } from "../src/lib/org-design/dbHelpers";
+import { db } from "../src/db";
+import {
+  resetGovernanceData,
+  seedBoard,
+} from "../src/lib/governance/seed";
+import { upsertCadence, scheduleNextMeeting, reviewDeadlineEscalation } from "../src/lib/governance/boardCycle";
+import {
+  createPack,
+  addSection,
+  freezeNumbers,
+  runCompletenessCheck,
+} from "../src/lib/governance/packAssembly";
+import { recordPackOpened, recordPackAcknowledged, aggregatePreReadMetric } from "../src/lib/governance/preRead";
+import { declareConflict } from "../src/lib/governance/conflicts";
+import {
+  draftResolution,
+  castVote,
+  decideResolution,
+  linkImplementationTask,
+  createImplementationTask,
+  findUnlinkedResolutions,
+  recordEffectivenessReview,
+  UndeclaredConflictError,
+} from "../src/lib/governance/resolutions";
+import {
+  getOrCreateMinutes,
+  addVerbatimExcerpt,
+  setGeneratedSummary,
+  finalizeMinutes,
+  FinalizationNotAllowedError,
+} from "../src/lib/governance/minutes";
+import {
+  raiseInformationRequest,
+  respondToRequest,
+  closeRequest,
+  informationRequestMetrics,
+} from "../src/lib/governance/informationRequests";
+import { submitReport, listReportsForTier } from "../src/lib/governance/whistleblower";
+import { allCombinations, AccessDeniedError } from "../src/lib/governance/access";
+import { boardEffectivenessSummary, assertIndividualScoringPolicyEnabled, IndividualScoringNotAuthorizedError } from "../src/lib/governance/metrics";
+import { verifyChain, appendAuditEntry } from "../src/lib/governance/auditChain";
+import { auditLog, oversightMilestones } from "../src/db/schema";
 import { eq } from "drizzle-orm";
 
 let failures = 0;
+let passes = 0;
 
 function section(title: string) {
-  console.log(`\n${"=".repeat(8)} ${title} ${"=".repeat(8)}`);
+  console.log(`\n=== ${title} ===`);
 }
 
-function check(label: string, pass: boolean, detail?: string) {
-  console.log(`${pass ? "✅ PASS" : "❌ FAIL"} — ${label}${detail ? ` (${detail})` : ""}`);
-  if (!pass) failures++;
+function check(label: string, condition: boolean, detail?: unknown) {
+  if (condition) {
+    passes += 1;
+    console.log(`  PASS  ${label}`);
+  } else {
+    failures += 1;
+    console.log(`  FAIL  ${label}`);
+    if (detail !== undefined) console.log("        detail:", JSON.stringify(detail));
+  }
 }
 
 async function main() {
-  section("SETUP: seeding demo data");
-  await seedAll();
-  console.log("Seed complete: org units, people, support plans, historical moves, demo deal.");
+  section("PHASE 0 — reset & seed demo board");
+  await resetGovernanceData();
+  const { byEmail } = await seedBoard();
+  const chair = byEmail["chair@leados.example"];
+  const cosec = byEmail["cosec@leados.example"];
+  const david = byEmail["director.david@leados.example"];
+  const helena = byEmail["director.helena@leados.example"];
+  const auditChairUser = byEmail["audit.chair@leados.example"];
+  const auditMember = byEmail["audit.member@leados.example"];
+  const management = byEmail["cfo@leados.example"];
+  console.log(`  seeded ${Object.keys(byEmail).length} users`);
 
-  // ------------------------------------------------------------------
-  // GATE 1 — twin calibration against seeded historical moves
-  // ------------------------------------------------------------------
-  section("GATE 1 — twin validation (calibration table)");
-  const rows = await db.select().from(historicalMoves);
-  const calibrationTable: { label: string; dim: string; predicted: number; low: number; high: number; actual: number; within: boolean }[] = [];
-
-  for (const fixture of HISTORICAL_FIXTURES) {
-    const graph: GraphState = { units: historicalFixtureUnits(), edges: historicalFixtureEdges() };
-    const { graph: afterGraph, affectedUnitIds } = applyStructuralMove(graph, fixture.move);
-    const affectedUnits = afterGraph.units.filter((u) => affectedUnitIds.includes(u.id));
-    const predicted = predictDeliveryImpact(DEFAULT_TWIN_PARAMS, fixture.move.type, affectedUnits.length ? affectedUnits : graph.units);
-    const row = rows.find((r) => r.label === fixture.label);
-    if (!row) {
-      check(`historical row exists for ${fixture.label}`, false);
-      continue;
-    }
-    const capWithin = row.actualCapacityChangePct >= predicted.capacityChangePct.low && row.actualCapacityChangePct <= predicted.capacityChangePct.high;
-    const cycleWithin = row.actualCycleTimeChangeDays >= predicted.cycleTimeChangeDays.low && row.actualCycleTimeChangeDays <= predicted.cycleTimeChangeDays.high;
-    calibrationTable.push({ label: fixture.label, dim: "capacity %", predicted: predicted.capacityChangePct.value, low: predicted.capacityChangePct.low, high: predicted.capacityChangePct.high, actual: row.actualCapacityChangePct, within: capWithin });
-    calibrationTable.push({ label: fixture.label, dim: "cycle time d", predicted: predicted.cycleTimeChangeDays.value, low: predicted.cycleTimeChangeDays.low, high: predicted.cycleTimeChangeDays.high, actual: row.actualCycleTimeChangeDays, within: cycleWithin });
-    check(`${fixture.label} — capacity within declared error band`, capWithin, `predicted [${predicted.capacityChangePct.low.toFixed(2)}, ${predicted.capacityChangePct.high.toFixed(2)}], actual ${row.actualCapacityChangePct}`);
-    check(`${fixture.label} — cycle time within declared error band`, cycleWithin, `predicted [${predicted.cycleTimeChangeDays.low.toFixed(2)}, ${predicted.cycleTimeChangeDays.high.toFixed(2)}], actual ${row.actualCycleTimeChangeDays}`);
-  }
-
-  console.table(calibrationTable.map((r) => ({ move: r.label, dimension: r.dim, predicted: r.predicted.toFixed(2), low: r.low.toFixed(2), high: r.high.toFixed(2), actual: r.actual.toFixed(2), within_error: r.within })));
-
-  // ------------------------------------------------------------------
-  // GATE 2 — human-impact ledger mandatory
-  // ------------------------------------------------------------------
-  section("GATE 2 — human-impact ledger is mandatory");
-
-  let threwOnMissingLedger = false;
-  try {
-    assertHumanImpactComplete(5, summarizeHumanImpact([]));
-  } catch {
-    threwOnMissingLedger = true;
-  }
-  check("simulation with affected people but empty ledger is rejected", threwOnMissingLedger);
-
-  const peopleFixture: PersonLike[] = [{ id: 1, name: "Test Person", unitId: 1, isManager: true, tenureMonths: 10 }];
-  const plansFixtureEmpty: SupportPlanLike[] = [];
-  const unsupportedEntries = buildHumanImpactLedger("centralize", [1], 2, peopleFixture, plansFixtureEmpty);
-  // force a severe/high entry with no support plan available
-  const forcedSummary = summarizeHumanImpact(unsupportedEntries.map((e) => ({ ...e, supportPlanId: null })));
-  let threwOnUnsupported = false;
-  try {
-    assertHumanImpactComplete(1, forcedSummary);
-  } catch {
-    threwOnUnsupported = true;
-  }
-  check("high/severe disruption without a linked support plan is rejected", threwOnUnsupported || forcedSummary.unsupportedSevereOrHigh === 0, `unsupportedSevereOrHigh=${forcedSummary.unsupportedSevereOrHigh}`);
-
-  // Real DB-backed simulation: merge Platform Team + App Team (has managers -> redundancy_risk/severe)
-  const graphForIds = await loadGraph();
-  const platform = graphForIds.units.find((u) => u.name === "Platform Team")!;
-  const app = graphForIds.units.find((u) => u.name === "App Team")!;
-  const mergeResult = await runStructuralSimulation({
-    move: { type: "merge", unitIds: [platform.id, app.id] },
-    label: "verify: merge Platform+App",
-    createdBy: "verify-script",
-    description: "Calibration + human-impact gate exercise",
+  // ---------------------------------------------------------------------
+  section("BOARD CYCLE: cadence -> materials deadline -> pack assembly");
+  // ---------------------------------------------------------------------
+  const firstMeeting = new Date();
+  firstMeeting.setDate(firstMeeting.getDate() + 14);
+  await upsertCadence({
+    tier: "main_board",
+    cadenceDays: 90,
+    materialsLeadDays: 7,
+    firstMeetingDate: firstMeeting,
   });
-  check("real merge simulation produced human-impact ledger entries", mergeResult.humanImpactSummary.totalAffected > 0, `${mergeResult.humanImpactSummary.totalAffected} affected`);
-  check("real merge simulation has zero unsupported high/severe entries", mergeResult.humanImpactSummary.unsupportedSevereOrHigh === 0, `unsupported=${mergeResult.humanImpactSummary.unsupportedSevereOrHigh}`);
+  const meeting = await scheduleNextMeeting("main_board");
+  check("meeting scheduled with materials deadline before meeting date", meeting.materialsDeadline < meeting.scheduledAt);
 
-  console.log("\nHuman-impact accounting output (mandatory ledger — never aggregated into a single 'efficiency' number):");
-  console.table(
-    mergeResult.ledgerEntries.map((e) => ({
-      person: e.personName,
-      roleChangeType: e.roleChangeType,
-      disruptionClass: e.disruptionClass,
-      supportPlan: e.supportPlanName ?? "(none needed)",
-    })),
+  const escalatedEarly = await reviewDeadlineEscalation(meeting.id, new Date());
+  check("escalation level low when deadline is far away", escalatedEarly.escalationLevel === 0, escalatedEarly);
+
+  const nearDeadline = new Date(meeting.materialsDeadline);
+  nearDeadline.setHours(nearDeadline.getHours() + 6); // simulate past the deadline
+  const escalatedLate = await reviewDeadlineEscalation(meeting.id, nearDeadline);
+  check("escalation breaches to level 3 once deadline passes", escalatedLate.escalationLevel === 3, escalatedLate);
+  check("meeting status flips to materials_due on breach", escalatedLate.status === "materials_due", escalatedLate);
+
+  const pack = await createPack(meeting.id);
+  await addSection(pack.id, {
+    sectionType: "financial_highlights",
+    title: "Financial Highlights",
+    content: "Q cumulative revenue, margin bridge, cash position.",
+    required: true,
+    sourcePart: "part37_consolidation",
+  });
+  await addSection(pack.id, {
+    sectionType: "risk_and_controls",
+    title: "Risk & Controls Report",
+    content: "Principal risk register movements and controls testing results.",
+    required: true,
+    sourcePart: "part29_risk",
+  });
+  await addSection(pack.id, {
+    sectionType: "compliance_attestations",
+    title: "Compliance Attestations",
+    content: "Management attestations of compliance with obligations register.",
+    required: true,
+    sourcePart: "part29_risk",
+  });
+  await addSection(pack.id, {
+    sectionType: "minutes_prior_meeting",
+    title: "Minutes of Prior Meeting",
+    content: "Approved minutes from the previous board meeting.",
+    required: true,
+    sourcePart: "part42_artifacts",
+  });
+  await addSection(pack.id, {
+    sectionType: "resolutions_proposed",
+    title: "Resolutions Proposed for This Meeting",
+    content: "Draft resolutions for board consideration.",
+    required: true,
+    sourcePart: "part23_decisions",
+  });
+  await freezeNumbers(pack.id, { revenue: 48250000, netMargin: 0.182, cash: 11250000 });
+
+  const completenessGood = await runCompletenessCheck(pack.id);
+  check("complete pack with all mandatory sections raises zero red flags", completenessGood.flags.length === 0, completenessGood.flags);
+  check("pack completeness status is 'complete'", completenessGood.pack.completenessStatus === "complete");
+
+  // ---------------------------------------------------------------------
+  section("RED-FLAG DETECTOR: 'what the board doesn't see' (seeded suppression)");
+  // ---------------------------------------------------------------------
+  const meeting2 = await scheduleNextMeeting("main_board");
+  const suppressedPack = await createPack(meeting2.id);
+  await addSection(suppressedPack.id, {
+    sectionType: "financial_highlights",
+    title: "Financial Highlights",
+    content: "Revenue and margin summary.",
+    required: true,
+    sourcePart: "part37_consolidation",
+  });
+  // Management omits the risk & controls section without citing any policy
+  // exception — this is the seeded suppression scenario.
+  await addSection(suppressedPack.id, {
+    sectionType: "risk_and_controls",
+    title: "Risk & Controls Report",
+    content: "",
+    required: true,
+    included: false,
+    omittedReason: "Management judged it not material this quarter.",
+    sourcePart: "part29_risk",
+  });
+  await addSection(suppressedPack.id, {
+    sectionType: "compliance_attestations",
+    title: "Compliance Attestations",
+    content: "",
+    required: true,
+    included: false,
+    omittedReason: "Pending legal sign-off.",
+    omittedPolicyRef: "POLICY-ATT-EXCEPTION-2026-03", // documented exception → should NOT flag
+    sourcePart: "part29_risk",
+  });
+  await addSection(suppressedPack.id, {
+    sectionType: "minutes_prior_meeting",
+    title: "Minutes of Prior Meeting",
+    content: "Approved minutes.",
+    required: true,
+    sourcePart: "part42_artifacts",
+  });
+  // resolutions_proposed section entirely missing from assembly.
+
+  const suppressedCheck = await runCompletenessCheck(suppressedPack.id);
+  const flagTypes = suppressedCheck.flags.map((f) => f.flagType + ":" + f.sectionType);
+  check(
+    "undocumented omission of risk_and_controls is flagged as omitted_without_policy",
+    flagTypes.includes("omitted_without_policy:risk_and_controls"),
+    flagTypes,
   );
-  console.log("By disruption class:", mergeResult.humanImpactSummary.byDisruptionClass);
-  console.log("By role-change type:", mergeResult.humanImpactSummary.byRoleChangeType);
+  check(
+    "documented policy exception for compliance_attestations is NOT flagged",
+    !flagTypes.some((f) => f.endsWith(":compliance_attestations")),
+    flagTypes,
+  );
+  check(
+    "entirely missing mandatory section (resolutions_proposed) is flagged",
+    flagTypes.includes("missing_mandatory:resolutions_proposed"),
+    flagTypes,
+  );
+  check("pack with red flags is marked 'red_flag'", suppressedCheck.pack.completenessStatus === "red_flag");
 
-  // ------------------------------------------------------------------
-  // GATE 3 — self-visibility privacy attempt matrix
-  // ------------------------------------------------------------------
-  section("GATE 3 — self-visibility privacy attempt matrix");
+  // ---------------------------------------------------------------------
+  section("PRE-READ TRACKING (aggregate governance metric)");
+  // ---------------------------------------------------------------------
+  await recordPackOpened(pack.id, chair.id);
+  await recordPackAcknowledged(pack.id, chair.id, 1200);
+  await recordPackOpened(pack.id, david.id);
+  await recordPackAcknowledged(pack.id, david.id, 900);
+  await recordPackOpened(pack.id, helena.id);
+  // Helena opens but does not acknowledge — simulates incomplete pre-read.
+  const preReadMetric = await aggregatePreReadMetric(pack.id, 4); // 4 expected readers
+  check("pre-read completion rate reflects 2 of 4 acknowledged", Math.abs(preReadMetric.completionRate - 0.5) < 1e-9, preReadMetric);
+  console.log("  pre-read metric:", JSON.stringify(preReadMetric));
 
-  const [firstEntryPersonId] = mergeResult.ledgerEntries.map((e) => e.personId);
-  const otherPersonId = (await db.select().from(orgPeople)).find((p) => p.id !== firstEntryPersonId)?.id ?? -1;
-
-  const fixtureEntry: LedgerEntryRecord = {
-    id: 1,
-    simulationRunId: mergeResult.run.id,
-    personId: firstEntryPersonId,
-    personName: "Fixture Person",
-    unitId: platform.id,
-    roleChangeType: "redundancy_risk",
-    disruptionClass: "severe",
-    supportPlanId: 1,
-    supportPlanName: "Redundancy Transition Support",
-    rationale: "fixture",
-    visibleToSelfAt: new Date().toISOString(),
-    announcedOrgWideAt: null,
-  };
-
-  const preAnnounceMatrix = runPrivacyAttemptMatrix(fixtureEntry, otherPersonId);
-  console.table(preAnnounceMatrix);
-  check("pre-announcement: all privacy attempts match policy", preAnnounceMatrix.every((m) => m.pass));
-  check("pre-announcement: subject sees own entry", canViewEntryDetail(fixtureEntry, { role: "employee", personId: fixtureEntry.personId }));
-  check("pre-announcement: other employee is denied", !canViewEntryDetail(fixtureEntry, { role: "employee", personId: otherPersonId }));
-  check("pre-announcement: admin can still see (audited elevated path)", canViewEntryDetail(fixtureEntry, { role: "admin" }));
-
-  const announcedEntry: LedgerEntryRecord = { ...fixtureEntry, announcedOrgWideAt: new Date().toISOString() };
-  const postAnnounceMatrix = runPrivacyAttemptMatrix(announcedEntry, otherPersonId);
-  check("post-announcement: other employee can now see detail", canViewEntryDetail(announcedEntry, { role: "employee", personId: otherPersonId }));
-  check("post-announcement: all attempts still match policy", postAnnounceMatrix.every((m) => m.pass));
-
-  // ------------------------------------------------------------------
-  // GATE 4 — obligation cascade fires on change-of-control fixture
-  // ------------------------------------------------------------------
-  section("GATE 4 — obligation cascade (change-of-control fixture)");
-
-  const [deal] = await db.select().from(maDeals);
-  const dealObligations = await db.select().from(obligationsTable).where(eq(obligationsTable.dealId, deal.id));
-  const asFixtures = dealObligations.map((o) => ({ id: o.id, type: o.type, triggerCondition: o.triggerCondition, status: o.status }));
-
-  const firedAtDiligence = obligationsToFire(asFixtures, "diligence");
-  check("change-of-control obligations do NOT fire during diligence", firedAtDiligence.length === 0, `fired=${firedAtDiligence.length}`);
-
-  const firedAtAnnounce = obligationsToFire(asFixtures, "announce");
-  const cocObligations = dealObligations.filter((o) => o.triggerCondition === "change_of_control");
-  const allCocFired = cocObligations.every((o) => firedAtAnnounce.some((f) => f.id === o.id));
-  check("all change-of-control obligations fire at announce", allCocFired, `${firedAtAnnounce.length} total fired at announce`);
-
-  const phaseScopedIntegrateObligation = dealObligations.find((o) => o.triggerCondition === "phase:integrate");
-  const integrateObligationFiredEarly = phaseScopedIntegrateObligation
-    ? firedAtAnnounce.some((f) => f.id === phaseScopedIntegrateObligation.id)
-    : false;
-  check("phase:integrate obligation does not fire early at announce", !integrateObligationFiredEarly);
-
-  // ------------------------------------------------------------------
-  // GATE 5 — recalibration loop updates twin parameters measurably
-  // ------------------------------------------------------------------
-  section("GATE 5 — recalibration loop (before/after)");
-
-  const beforeParamsRow = (await db.select().from(twinModelParameters)).sort((a, b) => b.version - a.version)[0];
-  const beforeParams = beforeParamsRow.params as typeof DEFAULT_TWIN_PARAMS;
-  const beforeCoefficient = beforeParams.capacityCoefficients.merge;
-
-  const predictedMerge = mergeResult.deliveryImpact.capacityChangePct.value;
-  const realizedMerge = predictedMerge * 1.6; // simulate a consistent, larger-than-predicted real-world effect
-  const outcome = {
-    type: "merge" as const,
-    predictedCapacityChangePct: predictedMerge,
-    realizedCapacityChangePct: realizedMerge,
-    predictedCycleTimeChangeDays: mergeResult.deliveryImpact.cycleTimeChangeDays.value,
-    realizedCycleTimeChangeDays: mergeResult.deliveryImpact.cycleTimeChangeDays.value * 1.3,
-  };
-  const variance = computeVariance(outcome, beforeParams);
-  const afterParams = recalibrateParams(beforeParams, outcome);
-  const afterCoefficient = afterParams.capacityCoefficients.merge;
-
-  check("recalibration measurably changes the coefficient", Math.abs(afterCoefficient - beforeCoefficient) > 0.0001, `before=${beforeCoefficient.toFixed(4)} after=${afterCoefficient.toFixed(4)}`);
-  check("recalibration moves toward the realized direction (damped, not overfit)", Math.sign(afterCoefficient - beforeCoefficient) === Math.sign(beforeCoefficient) /* same-sign move, larger magnitude since realized > predicted */ , `variance.withinDeclaredError=${variance.withinDeclaredError}`);
-
-  const nextVersion = beforeParamsRow.version + 1;
-  await db.insert(twinModelParameters).values({
-    version: nextVersion,
-    params: afterParams,
-    errorMargins: { capacityChangePct: afterParams.capacityErrorFraction, cycleTimeChangeDays: afterParams.cycleTimeErrorFraction, cohesion: afterParams.cohesionErrorMargin },
-    notes: "verify-script recalibration demonstration",
+  // ---------------------------------------------------------------------
+  section("RESOLUTIONS: draft -> conflict hard-stop -> vote -> decide");
+  // ---------------------------------------------------------------------
+  const resolutionA = await draftResolution({
+    meetingId: meeting.id,
+    text: "Approve the Related-Party Supply Agreement with Helena Cruz's affiliated entity.",
+    type: "binding",
+    matterRef: "Related-Party Supply Agreement",
+    proposedBy: chair.id,
   });
-  const afterParamsRow = (await db.select().from(twinModelParameters)).sort((a, b) => b.version - a.version)[0];
-  check("new twin-parameter version persisted to the database", afterParamsRow.version === nextVersion, `version ${beforeParamsRow.version} -> ${afterParamsRow.version}`);
+  const resolutionB = await draftResolution({
+    meetingId: meeting.id,
+    text: "Endorse the updated Executive Travel Policy.",
+    type: "advisory",
+    matterRef: "Executive Travel Policy Update",
+    proposedBy: chair.id,
+  });
 
-  // ------------------------------------------------------------------
-  section("SUMMARY");
-  if (failures === 0) {
-    console.log("✅ All gates passed.");
-  } else {
-    console.log(`❌ ${failures} gate(s) failed.`);
+  await declareConflict({
+    directorId: helena.id,
+    matter: "Related-Party Supply Agreement",
+    natureOfInterest: "Director's affiliated entity is the counterparty.",
+    recusalRequired: true,
+  });
+
+  let blockedVoteCaught = false;
+  try {
+    await castVote({ resolutionId: resolutionA.id, directorId: helena.id, vote: "for" });
+  } catch (err) {
+    blockedVoteCaught = err instanceof UndeclaredConflictError;
   }
+  check("vote blocked when conflicted director has not declared conflict at vote time", blockedVoteCaught);
 
-  await pool.end();
-  process.exit(failures === 0 ? 0 : 1);
+  await castVote({ resolutionId: resolutionA.id, directorId: helena.id, vote: "recused" });
+  await castVote({ resolutionId: resolutionA.id, directorId: chair.id, vote: "for" });
+  await castVote({ resolutionId: resolutionA.id, directorId: david.id, vote: "for" });
+  await castVote({ resolutionId: resolutionA.id, directorId: auditChairUser.id, vote: "for" });
+
+  await castVote({ resolutionId: resolutionB.id, directorId: chair.id, vote: "for" });
+  await castVote({ resolutionId: resolutionB.id, directorId: david.id, vote: "for" });
+  await castVote({ resolutionId: resolutionB.id, directorId: helena.id, vote: "against" });
+
+  const decidedA = await decideResolution(resolutionA.id);
+  const decidedB = await decideResolution(resolutionB.id);
+  check("resolution A (related-party, properly recused) passed", decidedA.status === "passed", decidedA);
+  check("resolution B (advisory) passed", decidedB.status === "passed", decidedB);
+
+  const milestonesA = await db.select().from(oversightMilestones).where(eq(oversightMilestones.resolutionId, resolutionA.id));
+  check("oversight milestone auto-scheduled on passage", milestonesA.length === 1, milestonesA);
+
+  // ---------------------------------------------------------------------
+  section("IMPLEMENTATION LINKAGE: unlinked resolution must be flagged");
+  // ---------------------------------------------------------------------
+  const taskA = await createImplementationTask({ title: "Execute related-party supply agreement", owner: "Legal" });
+  await linkImplementationTask({ resolutionId: resolutionA.id, taskId: taskA.id, linkedBy: cosec.id });
+  // Resolution B is deliberately left unlinked to exercise the detector.
+
+  const futureCheckDate = new Date();
+  futureCheckDate.setDate(futureCheckDate.getDate() + 10); // past the 7-day grace period
+  const unlinked = await findUnlinkedResolutions(futureCheckDate);
+  const unlinkedIds = unlinked.map((r) => r.id);
+  check("linked resolution A is NOT flagged as unlinked", !unlinkedIds.includes(resolutionA.id), unlinkedIds);
+  check("unlinked resolution B IS flagged after grace period", unlinkedIds.includes(resolutionB.id), unlinkedIds);
+
+  // ---------------------------------------------------------------------
+  section("OVERSIGHT REVIEW (effectiveness review on milestone)");
+  // ---------------------------------------------------------------------
+  const review = await recordEffectivenessReview({
+    resolutionId: resolutionA.id,
+    milestoneId: milestonesA[0].id,
+    outcome: "effective",
+    notes: "Agreement executed on schedule; related-party terms independently reviewed.",
+    reviewedBy: auditChairUser.id,
+  });
+  check("effectiveness review recorded", review.outcome === "effective");
+  const [milestoneAfter] = await db.select().from(oversightMilestones).where(eq(oversightMilestones.id, milestonesA[0].id));
+  check("milestone marked reviewed after effectiveness review", milestoneAfter.status === "reviewed");
+
+  // ---------------------------------------------------------------------
+  section("MINUTES: verbatim/generated separation + finalization hard stop");
+  // ---------------------------------------------------------------------
+  await getOrCreateMinutes(meeting.id);
+  await addVerbatimExcerpt(meeting.id, {
+    speaker: "Chair",
+    quote: "The chair noted Helena Cruz's declared conflict and recusal on the related-party item.",
+    timestampLabel: "10:04",
+  });
+  await setGeneratedSummary(
+    meeting.id,
+    "The board reviewed Q financials, the risk & controls report, and approved two resolutions; one director recused from a related-party vote.",
+  );
+
+  let finalizeBlocked = false;
+  try {
+    await finalizeMinutes({ meetingId: meeting.id, finalizedBy: david.id, finalizedByTier: "director" });
+  } catch (err) {
+    finalizeBlocked = err instanceof FinalizationNotAllowedError;
+  }
+  check("minutes finalization blocked for non-company-secretary/chair tier", finalizeBlocked);
+
+  const finalized = await finalizeMinutes({ meetingId: meeting.id, finalizedBy: cosec.id, finalizedByTier: "company_secretary" });
+  check("minutes finalized by company secretary", finalized.finalized === true);
+  check("finalized minutes carry a hash", Boolean(finalized.hash));
+
+  // ---------------------------------------------------------------------
+  section("DIRECTORS' INFORMATION RIGHTS");
+  // ---------------------------------------------------------------------
+  const infoReq = await raiseInformationRequest({
+    requesterId: david.id,
+    subject: "Detail behind margin bridge assumption",
+    requestText: "Please provide the underlying assumptions for the Q margin bridge shown in the pack.",
+    targetTier: "management",
+    dueInDays: 5,
+  });
+  await respondToRequest({
+    requestId: infoReq.id,
+    responseText: "Assumptions memo attached; FX and input cost sensitivity included.",
+    respondedBy: management.id,
+  });
+  await closeRequest(infoReq.id, cosec.id);
+  const infoMetrics = await informationRequestMetrics();
+  check("information request closure rate > 0 after closing", infoMetrics.closureRate > 0, infoMetrics);
+  console.log("  information-request metrics:", JSON.stringify(infoMetrics));
+
+  // ---------------------------------------------------------------------
+  section("WHISTLEBLOWER / AUDIT-COMMITTEE SAFE CHANNEL");
+  // ---------------------------------------------------------------------
+  const { reportId } = await submitReport({
+    subject: "Possible expense policy breach",
+    body: "Anonymous report describing a pattern of unapproved executive expenses.",
+  });
+  const visibleToAuditChair = await listReportsForTier("audit_committee_chair");
+  check("audit committee chair can see whistleblower report", visibleToAuditChair.some((r) => r.id === reportId));
+
+  let managementDenied = false;
+  try {
+    await listReportsForTier("management");
+  } catch (err) {
+    managementDenied = err instanceof AccessDeniedError;
+  }
+  check("management tier is denied access to whistleblower channel", managementDenied);
+
+  let directorDenied = false;
+  try {
+    await listReportsForTier("director");
+  } catch (err) {
+    directorDenied = err instanceof AccessDeniedError;
+  }
+  check("ordinary director tier is denied access to whistleblower channel (audit-committee-only)", directorDenied);
+
+  // ---------------------------------------------------------------------
+  section("BOARD-TIER ACCESS ATTEMPT MATRIX");
+  // ---------------------------------------------------------------------
+  const matrix = allCombinations();
+  check("access matrix is non-empty", matrix.length > 0);
+  const managementCannotReadFullPack = !matrix.some(
+    (m) => m.tier === "management" && m.resource === "board_pack_full" && m.expected === true,
+  );
+  check("management is never granted board_pack_full access", managementCannotReadFullPack);
+  const observerCannotWriteAnything = !matrix.some(
+    (m) => m.tier === "observer" && m.action === "write" && m.expected === true,
+  );
+  check("observer tier is never granted any write access", observerCannotWriteAnything);
+  const individualScoringNeverGrantedByMatrix = !matrix.some(
+    (m) => m.resource === "governance_metrics_individual" && m.expected === true,
+  );
+  check(
+    "no tier is statically granted individual-director-scoring access (policy-gated only)",
+    individualScoringNeverGrantedByMatrix,
+  );
+  const whistleblowerOnlyAuditAndChair = matrix
+    .filter((m) => m.resource === "whistleblower_channel" && m.expected === true)
+    .every((m) => ["chair", "audit_committee_chair", "audit_committee"].includes(m.tier));
+  check("whistleblower channel access limited to chair + audit committee tiers", whistleblowerOnlyAuditAndChair);
+  console.log(`  access matrix size: ${matrix.length} combinations checked`);
+
+  // ---------------------------------------------------------------------
+  section("GOVERNANCE METRICS: board-level only, individual scoring hard stop");
+  // ---------------------------------------------------------------------
+  let individualBlocked = false;
+  try {
+    await assertIndividualScoringPolicyEnabled();
+  } catch (err) {
+    individualBlocked = err instanceof IndividualScoringNotAuthorizedError;
+  }
+  check("individual director scoring blocked by default (no board policy adopted)", individualBlocked);
+
+  const summary = await boardEffectivenessSummary();
+  check("board effectiveness summary computed", Boolean(summary.decisionLatency));
+  check("board effectiveness summary is explicitly scoped to board-level aggregates", summary.scope.includes("board-level aggregate"));
+  console.log("  board effectiveness summary:", JSON.stringify(summary, null, 2));
+
+  // ---------------------------------------------------------------------
+  section("AUDIT CHAIN INTEGRITY (Part 19)");
+  // ---------------------------------------------------------------------
+  const chainBefore = await verifyChain();
+  check("audit chain verifies intact after full cycle", chainBefore.ok, chainBefore);
+  check("audit chain has recorded entries for the cycle", chainBefore.length > 10, chainBefore);
+
+  const [someEntry] = await db.select().from(auditLog).limit(1);
+  const originalPayload = someEntry.payload;
+  await db.update(auditLog).set({ payload: { tampered: true } }).where(eq(auditLog.id, someEntry.id));
+  const chainTampered = await verifyChain();
+  check("tampering with a historical audit entry is detected", chainTampered.ok === false, chainTampered);
+  // restore
+  await db.update(auditLog).set({ payload: originalPayload }).where(eq(auditLog.id, someEntry.id));
+  const chainRestored = await verifyChain();
+  check("audit chain verifies intact again after restoring the tampered entry", chainRestored.ok, chainRestored);
+
+  // Sanity: appendAuditEntry still works after all this.
+  await appendAuditEntry({ action: "verify.completed", entityType: "system", payload: { failures } });
+
+  // ---------------------------------------------------------------------
+  section("RESULT");
+  // ---------------------------------------------------------------------
+  console.log(`\n${passes} passed, ${failures} failed.`);
+  if (failures > 0) {
+    process.exitCode = 1;
+  }
 }
 
-main().catch(async (err) => {
-  console.error("verify script crashed:", err);
-  await pool.end();
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error("Verification script crashed:", err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    const { pool } = await import("../src/db");
+    await pool.end();
+  });

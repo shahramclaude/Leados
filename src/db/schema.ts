@@ -1,257 +1,314 @@
-// LEADOS — Part 54: Org Design Lab, M&A Deal Room, Human-Impact Ledger,
-// Post-Mortem Bridge.
+// LEADOS — Part 55: Board Governance & Resolutions Automation
 //
-// Lineage (read-before-write, see AI-SESSION-LOG.md):
-//  - Part 06 twin: org dynamics digital twin + model cards (error bars, limits)
-//  - Part 09: people scoping / aggregate signals (talent-flight risk inputs)
-//  - Part 31: ecosystem graph (cohesion, choke points, bus factor)
-//  - Part 37: multi-entity model (deals span legal entities / counterparties)
-//  - Part 53: obligation cascade (change-of-control triggers)
-//
-// This file is additive: it only introduces new tables for Part 54 and does
-// not remove the starter's empty schema contract.
+// This schema is self-contained for this working tree. Parts 23 (decision
+// governance), 29 (risk/obligations), 32 (board pack machinery), 37
+// (consolidation), 46 (conflict registry) and 19 (audit chain) are modelled
+// here as the minimum interfaces this module depends on, since their files
+// are not present in this repository snapshot. Field names and provenance
+// tags (`sourcePart`) are kept so a future merge can reconcile with the
+// real upstream tables without an API change.
 
 import {
-  boolean,
-  integer,
-  jsonb,
   pgTable,
-  real,
   serial,
+  varchar,
   text,
+  integer,
+  boolean,
   timestamp,
-  uniqueIndex,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
-/* ------------------------------------------------------------------ */
-/* Org twin — structure, people, ecosystem graph (Part 06 / Part 31)  */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Identity & board structure
+// ---------------------------------------------------------------------------
 
-export const orgUnits = pgTable("od_org_units", {
+/** Board-tier access scopes. Kept as free varchar (not pg enum) so new
+ * tiers can be added without a migration; validated in src/lib/governance/access.ts. */
+export const users = pgTable("gov_users", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  kind: text("kind").notNull().default("team"), // team | department | division
-  parentId: integer("parent_id"),
-  headcount: integer("headcount").notNull().default(0),
-  location: text("location").notNull().default("unspecified"),
-  costCenter: text("cost_center").notNull().default("n/a"),
-  cycleTimeDays: real("cycle_time_days").notNull().default(10),
-  capacityUnits: real("capacity_units").notNull().default(100),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  name: varchar("name", { length: 200 }).notNull(),
+  email: varchar("email", { length: 200 }).notNull().unique(),
+  boardTier: varchar("board_tier", { length: 40 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const orgPeople = pgTable("od_org_people", {
+export const committees = pgTable("gov_committees", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  unitId: integer("unit_id").notNull(),
-  role: text("role").notNull(),
-  title: text("title").notNull(),
-  tenureMonths: integer("tenure_months").notNull().default(12),
-  isManager: boolean("is_manager").notNull().default(false),
-  uniqueSkill: boolean("unique_skill").notNull().default(false), // bus-factor flag
-  flightRiskScore: real("flight_risk_score").notNull().default(0.2), // Part 09 aggregate signal placeholder
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  slug: varchar("slug", { length: 40 }).notNull().unique(),
+  name: varchar("name", { length: 120 }).notNull(),
+  scopeDescription: text("scope_description").notNull(),
 });
 
-// Collaboration / ecosystem graph edges between units (Part 31 twin extension)
-export const orgEdges = pgTable("od_org_edges", {
+export const committeeMembers = pgTable("gov_committee_members", {
   id: serial("id").primaryKey(),
-  fromUnitId: integer("from_unit_id").notNull(),
-  toUnitId: integer("to_unit_id").notNull(),
-  weight: real("weight").notNull().default(1), // collaboration intensity
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  committeeId: integer("committee_id").notNull(),
+  userId: integer("user_id").notNull(),
+  roleInCommittee: varchar("role_in_committee", { length: 40 })
+    .notNull()
+    .default("member"),
 });
 
-/* ------------------------------------------------------------------ */
-/* Twin model parameters + model card (honesty rules)                 */
-/* ------------------------------------------------------------------ */
+// ---------------------------------------------------------------------------
+// Board cycle engine (Part 25 cadence, Part 32 pack machinery)
+// ---------------------------------------------------------------------------
 
-export const twinModelParameters = pgTable("od_twin_model_parameters", {
+export const boardCalendar = pgTable("gov_board_calendar", {
   id: serial("id").primaryKey(),
-  version: integer("version").notNull(),
-  params: jsonb("params").notNull(), // scaling coefficients used by twinEngine
-  errorMargins: jsonb("error_margins").notNull(), // declared +/- bands by dimension
-  calibratedAt: timestamp("calibrated_at", { withTimezone: true }).notNull().defaultNow(),
-  notes: text("notes").notNull().default(""),
+  tier: varchar("tier", { length: 40 }).notNull(), // e.g. main_board, audit_committee
+  cadenceDays: integer("cadence_days").notNull(),
+  materialsLeadDays: integer("materials_lead_days").notNull().default(7),
+  lastMeetingDate: timestamp("last_meeting_date"),
+  nextMeetingDate: timestamp("next_meeting_date"),
 });
 
-/* ------------------------------------------------------------------ */
-/* Structural moves + simulation runs                                 */
-/* ------------------------------------------------------------------ */
-
-export const structuralMoves = pgTable("od_structural_moves", {
+export const boardMeetings = pgTable("gov_board_meetings", {
   id: serial("id").primaryKey(),
-  type: text("type").notNull(), // merge | split | reporting_line_change | centralize | decentralize
+  tier: varchar("tier", { length: 40 }).notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  materialsDeadline: timestamp("materials_deadline").notNull(),
+  status: varchar("status", { length: 30 }).notNull().default("scheduled"),
+  // scheduled -> materials_due -> pack_assembled -> convened -> minutes_finalized -> closed
+  escalationLevel: integer("escalation_level").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const completenessPolicy = pgTable("gov_completeness_policy", {
+  id: serial("id").primaryKey(),
+  sectionType: varchar("section_type", { length: 60 }).notNull(),
+  mandatory: boolean("mandatory").notNull().default(true),
+  appliesToTier: varchar("applies_to_tier", { length: 40 })
+    .notNull()
+    .default("main_board"),
   description: text("description").notNull(),
-  payload: jsonb("payload").notNull(), // unit ids involved + parameters
-  createdBy: text("created_by").notNull().default("system"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const simulationRuns = pgTable("od_simulation_runs", {
+export const boardPacks = pgTable("gov_board_packs", {
   id: serial("id").primaryKey(),
-  kind: text("kind").notNull(), // structural_move | scenario | deal
-  moveId: integer("move_id"),
-  dealId: integer("deal_id"),
-  scenarioId: integer("scenario_id"),
-  label: text("label").notNull().default(""),
-  status: text("status").notNull().default("completed"),
-  deliveryImpact: jsonb("delivery_impact").notNull(),
-  networkImpact: jsonb("network_impact").notNull(),
-  humanImpactSummary: jsonb("human_impact_summary").notNull(),
-  modelParamsVersion: integer("model_params_version").notNull(),
-  modelCard: jsonb("model_card").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  meetingId: integer("meeting_id").notNull(),
+  assembledAt: timestamp("assembled_at"),
+  assembledBy: integer("assembled_by"),
+  numbersFrozenAt: timestamp("numbers_frozen_at"),
+  frozenSnapshot: jsonb("frozen_snapshot"),
+  completenessStatus: varchar("completeness_status", { length: 30 })
+    .notNull()
+    .default("pending"), // pending | complete | red_flag
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-/* ------------------------------------------------------------------ */
-/* Human-Impact Ledger (mandatory, never collapsed into one number)   */
-/* ------------------------------------------------------------------ */
-
-export const supportPlans = pgTable("od_support_plans", {
+export const packSections = pgTable("gov_pack_sections", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description").notNull(),
-  resources: jsonb("resources").notNull(), // list of offered resources
+  packId: integer("pack_id").notNull(),
+  sectionType: varchar("section_type", { length: 60 }).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull().default(""),
+  required: boolean("required").notNull().default(false),
+  included: boolean("included").notNull().default(true),
+  omittedReason: text("omitted_reason"),
+  omittedPolicyRef: varchar("omitted_policy_ref", { length: 120 }),
+  sourcePart: varchar("source_part", { length: 60 }).notNull().default(""),
 });
 
-export const humanImpactEntries = pgTable("od_human_impact_entries", {
+export const packRedFlags = pgTable("gov_pack_red_flags", {
   id: serial("id").primaryKey(),
-  simulationRunId: integer("simulation_run_id").notNull(),
-  personId: integer("person_id").notNull(),
-  unitId: integer("unit_id").notNull(),
-  roleChangeType: text("role_change_type").notNull(), // none|title_change|manager_change|relocation|redundancy_risk|promotion|lateral_move
-  disruptionClass: text("disruption_class").notNull(), // none|low|moderate|high|severe
-  supportPlanId: integer("support_plan_id"),
-  rationale: text("rationale").notNull().default(""),
-  visibleToSelfAt: timestamp("visible_to_self_at", { withTimezone: true }).notNull().defaultNow(),
-  announcedOrgWideAt: timestamp("announced_org_wide_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  packId: integer("pack_id").notNull(),
+  sectionType: varchar("section_type", { length: 60 }).notNull(),
+  flagType: varchar("flag_type", { length: 60 }).notNull(),
+  detail: text("detail").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  resolved: boolean("resolved").notNull().default(false),
+  resolvedBy: integer("resolved_by"),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNote: text("resolution_note"),
 });
 
-/* ------------------------------------------------------------------ */
-/* M&A Deal Room (Part 37 multi-entity, Part 53 obligation cascade)   */
-/* ------------------------------------------------------------------ */
-
-export const maDeals = pgTable("od_ma_deals", {
+export const preReadTracking = pgTable("gov_pre_read_tracking", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  targetCompany: text("target_company").notNull(),
-  phase: text("phase").notNull().default("diligence"), // diligence|announce|integrate|complete
-  closeDate: timestamp("close_date", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  packId: integer("pack_id").notNull(),
+  userId: integer("user_id").notNull(),
+  openedAt: timestamp("opened_at"),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  timeSpentSeconds: integer("time_spent_seconds").notNull().default(0),
 });
 
-export const synergyEstimates = pgTable("od_synergy_estimates", {
+export const agendaItems = pgTable("gov_agenda_items", {
   id: serial("id").primaryKey(),
-  dealId: integer("deal_id").notNull(),
-  category: text("category").notNull(), // cost | revenue | capability
-  low: real("low").notNull(),
-  mid: real("mid").notNull(),
-  high: real("high").notNull(),
-  confidence: real("confidence").notNull(),
-  assumptions: jsonb("assumptions").notNull(),
-  rationale: text("rationale").notNull(),
-  method: text("method").notNull().default("twin-explain-v1"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  meetingId: integer("meeting_id").notNull(),
+  orderIndex: integer("order_index").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  linkedResolutionId: integer("linked_resolution_id"),
 });
 
-// Legal/contractual obligations carried over from Part 53's model,
-// referenced here so change-of-control cascades can fire against them.
-export const obligations = pgTable("od_obligations", {
+// ---------------------------------------------------------------------------
+// Resolutions register & implementation linkage (Part 10 tasks interface)
+// ---------------------------------------------------------------------------
+
+export const resolutions = pgTable("gov_resolutions", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  type: text("type").notNull(), // change_of_control | notice_period | vendor_contract | benefit_continuation
-  counterparty: text("counterparty").notNull(),
-  ownerUnitId: integer("owner_unit_id"),
-  triggerCondition: text("trigger_condition").notNull(), // change_of_control | phase:announce | phase:integrate
-  dealId: integer("deal_id"),
-  status: text("status").notNull().default("dormant"), // dormant | triggered | fulfilled | breached
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  meetingId: integer("meeting_id").notNull(),
+  text: text("text").notNull(),
+  type: varchar("type", { length: 20 }).notNull(), // advisory | binding
+  status: varchar("status", { length: 30 }).notNull().default("proposed"),
+  // proposed -> voted -> passed | rejected | withdrawn
+  matterRef: varchar("matter_ref", { length: 200 }).notNull().default(""),
+  proposedBy: integer("proposed_by"),
+  proposedAt: timestamp("proposed_at").notNull().defaultNow(),
+  decidedAt: timestamp("decided_at"),
 });
 
-export const obligationCascadeEvents = pgTable("od_obligation_cascade_events", {
+export const resolutionVotes = pgTable("gov_resolution_votes", {
   id: serial("id").primaryKey(),
-  dealId: integer("deal_id").notNull(),
-  obligationId: integer("obligation_id").notNull(),
-  triggerType: text("trigger_type").notNull(),
-  firedAt: timestamp("fired_at", { withTimezone: true }).notNull().defaultNow(),
-  dueDate: timestamp("due_date", { withTimezone: true }),
-  status: text("status").notNull().default("triggered"), // triggered|acknowledged|resolved
-  notes: text("notes").notNull().default(""),
+  resolutionId: integer("resolution_id").notNull(),
+  directorId: integer("director_id").notNull(),
+  vote: varchar("vote", { length: 20 }).notNull(), // for | against | abstain | recused
+  conflictDeclared: boolean("conflict_declared").notNull().default(false),
+  conflictId: integer("conflict_id"),
+  votedAt: timestamp("voted_at").notNull().defaultNow(),
 });
 
-export const integrationDifficultyScores = pgTable("od_integration_difficulty_scores", {
+/** Stub of the Part 10 implementation-task system interface. */
+export const tasks = pgTable("gov_tasks", {
   id: serial("id").primaryKey(),
-  dealId: integer("deal_id").notNull(),
-  cultureDistance: real("culture_distance").notNull(),
-  systemsOverlapPct: real("systems_overlap_pct").notNull(),
-  talentFlightRisk: real("talent_flight_risk").notNull(),
-  compositeLow: real("composite_low").notNull(),
-  compositeMid: real("composite_mid").notNull(),
-  compositeHigh: real("composite_high").notNull(),
-  confidence: real("confidence").notNull(),
-  rationale: text("rationale").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  title: varchar("title", { length: 200 }).notNull(),
+  owner: varchar("owner", { length: 200 }).notNull(),
+  dueDate: timestamp("due_date"),
+  status: varchar("status", { length: 30 }).notNull().default("open"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const readinessChecklistItems = pgTable("od_readiness_checklist_items", {
-  id: serial("id").primaryKey(),
-  dealId: integer("deal_id").notNull(),
-  phase: text("phase").notNull(), // diligence|announce|integrate
-  item: text("item").notNull(),
-  owner: text("owner").notNull(),
-  status: text("status").notNull().default("pending"), // pending|in_progress|done|blocked
-  dueOffsetDays: integer("due_offset_days").notNull().default(0), // relative to close date
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-/* ------------------------------------------------------------------ */
-/* Scenario comparison (wind-tunnel extension, Part 24)                */
-/* ------------------------------------------------------------------ */
-
-export const scenarios = pgTable("od_scenarios", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description").notNull().default(""),
-  moveIds: jsonb("move_ids").notNull(), // int[]
-  simulationRunId: integer("simulation_run_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-/* ------------------------------------------------------------------ */
-/* Post-change tracking + recalibration loop (Part 39 counterfactual) */
-/* ------------------------------------------------------------------ */
-
-export const postChangeTracking = pgTable("od_post_change_tracking", {
-  id: serial("id").primaryKey(),
-  simulationRunId: integer("simulation_run_id").notNull(),
-  predicted: jsonb("predicted").notNull(),
-  realized: jsonb("realized").notNull(),
-  variance: jsonb("variance").notNull(),
-  recalibrationApplied: boolean("recalibration_applied").notNull().default(false),
-  newParamsVersion: integer("new_params_version"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-/* ------------------------------------------------------------------ */
-/* Historical moves used for calibration validation (seeded ground    */
-/* truth — synthetic, documented as such; never passed off as real)   */
-/* ------------------------------------------------------------------ */
-
-export const historicalMoves = pgTable(
-  "od_historical_moves",
+export const resolutionImplementationLinks = pgTable(
+  "gov_resolution_implementation_links",
   {
     id: serial("id").primaryKey(),
-    label: text("label").notNull(),
-    type: text("type").notNull(),
-    payload: jsonb("payload").notNull(),
-    actualCapacityChangePct: real("actual_capacity_change_pct").notNull(),
-    actualCycleTimeChangeDays: real("actual_cycle_time_change_days").notNull(),
-    actualCohesionChange: real("actual_cohesion_change").notNull(),
-    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+    resolutionId: integer("resolution_id").notNull(),
+    taskId: integer("task_id").notNull(),
+    linkedAt: timestamp("linked_at").notNull().defaultNow(),
+    linkedBy: integer("linked_by"),
   },
-  (t) => ({
-    labelIdx: uniqueIndex("od_historical_moves_label_idx").on(t.label),
-  }),
 );
+
+export const oversightMilestones = pgTable("gov_oversight_milestones", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull(),
+  milestoneDate: timestamp("milestone_date").notNull(),
+  description: text("description").notNull(),
+  status: varchar("status", { length: 30 }).notNull().default("pending"),
+  // pending | reviewed | overdue
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const effectivenessReviews = pgTable("gov_effectiveness_reviews", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull(),
+  milestoneId: integer("milestone_id").notNull(),
+  reviewDate: timestamp("review_date").notNull().defaultNow(),
+  outcome: varchar("outcome", { length: 30 }).notNull(),
+  // effective | partially_effective | ineffective
+  notes: text("notes").notNull().default(""),
+  reviewedBy: integer("reviewed_by"),
+});
+
+// ---------------------------------------------------------------------------
+// Minutes (Part 42 artifact pipeline: verbatim/generated separation; Part 19 chain)
+// ---------------------------------------------------------------------------
+
+export const minutes = pgTable("gov_minutes", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().unique(),
+  verbatimExcerpts: jsonb("verbatim_excerpts").notNull().default([]),
+  generatedSummary: text("generated_summary").notNull().default(""),
+  finalized: boolean("finalized").notNull().default(false),
+  finalizedBy: integer("finalized_by"),
+  finalizedByTier: varchar("finalized_by_tier", { length: 40 }),
+  finalizedAt: timestamp("finalized_at"),
+  prevHash: varchar("prev_hash", { length: 80 }),
+  hash: varchar("hash", { length: 80 }),
+});
+
+// ---------------------------------------------------------------------------
+// Directors' information rights
+// ---------------------------------------------------------------------------
+
+export const informationRequests = pgTable("gov_information_requests", {
+  id: serial("id").primaryKey(),
+  requesterId: integer("requester_id").notNull(),
+  subject: varchar("subject", { length: 200 }).notNull(),
+  requestText: text("request_text").notNull(),
+  targetTier: varchar("target_tier", { length: 40 }).notNull().default("management"),
+  status: varchar("status", { length: 30 }).notNull().default("open"),
+  // open -> responded -> closed ; or overdue
+  dueDate: timestamp("due_date").notNull(),
+  responseText: text("response_text"),
+  respondedBy: integer("responded_by"),
+  respondedAt: timestamp("responded_at"),
+  closedAt: timestamp("closed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Whistleblower / audit-committee safe channel (Part 46 access rules)
+// ---------------------------------------------------------------------------
+
+export const whistleblowerReports = pgTable("gov_whistleblower_reports", {
+  id: serial("id").primaryKey(),
+  reporterToken: varchar("reporter_token", { length: 60 }).notNull(),
+  subject: varchar("subject", { length: 200 }).notNull(),
+  body: text("body").notNull(),
+  channel: varchar("channel", { length: 40 })
+    .notNull()
+    .default("audit_committee_safe_channel"),
+  status: varchar("status", { length: 30 }).notNull().default("received"),
+  // received -> under_review -> escalated_to_board -> closed
+  allowedTiers: jsonb("allowed_tiers")
+    .notNull()
+    .default(["chair", "audit_committee_chair", "audit_committee"]),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Conflicts register (Part 46, board-level) & independence
+// ---------------------------------------------------------------------------
+
+export const conflictsRegister = pgTable("gov_conflicts_register", {
+  id: serial("id").primaryKey(),
+  directorId: integer("director_id").notNull(),
+  matter: varchar("matter", { length: 200 }).notNull(),
+  natureOfInterest: text("nature_of_interest").notNull(),
+  declaredAt: timestamp("declared_at").notNull().defaultNow(),
+  status: varchar("status", { length: 30 }).notNull().default("declared"),
+  // declared | waived_by_board | recusal_required | resolved
+  recusalRequired: boolean("recusal_required").notNull().default(false),
+});
+
+// ---------------------------------------------------------------------------
+// Audit chain (Part 19) — hash-chained append-only log
+// ---------------------------------------------------------------------------
+
+export const auditLog = pgTable("gov_audit_log", {
+  id: serial("id").primaryKey(),
+  actorId: integer("actor_id"),
+  actorTier: varchar("actor_tier", { length: 40 }),
+  action: varchar("action", { length: 100 }).notNull(),
+  entityType: varchar("entity_type", { length: 60 }).notNull(),
+  entityId: integer("entity_id"),
+  payload: jsonb("payload").notNull().default({}),
+  prevHash: varchar("prev_hash", { length: 80 }),
+  hash: varchar("hash", { length: 80 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Governance policy (documented board decisions — e.g. opting into
+// individual-director metrics must be an explicit, recorded board choice)
+// ---------------------------------------------------------------------------
+
+export const governancePolicy = pgTable("gov_governance_policy", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 80 }).notNull().unique(),
+  value: jsonb("value").notNull(),
+  documentedBy: varchar("documented_by", { length: 200 }).notNull(),
+  documentedAt: timestamp("documented_at").notNull().defaultNow(),
+  rationale: text("rationale").notNull().default(""),
+});
