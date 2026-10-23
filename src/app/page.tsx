@@ -1,161 +1,122 @@
 import { db } from "@/db";
-import { approvals, initiatives, metrics, objectives } from "@/db/schema";
-import { DEFAULT_ORG_ID } from "@/lib/org";
-import { applyTable, metricSeverityTable } from "@/lib/rules";
-import { Badge, Card, EmptyState, PageHeader, ProgressBar, StatBlock } from "@/components/ui";
-import { desc, eq } from "drizzle-orm";
+import * as s from "@/db/schema";
+import { sql, count as drizzleCount } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import Link from "next/link";
+import { Card, Badge } from "@/components/Shell";
+import { NAV_ITEMS } from "@/lib/nav";
 
 export const dynamic = "force-dynamic";
 
-const severityTone = { good: "success", watch: "warning", critical: "danger" } as const;
+async function count(table: PgTable) {
+  const [{ value }] = await db.select({ value: drizzleCount() }).from(table);
+  return value;
+}
 
 export default async function HomePage() {
-  const [metricRows, objectiveRows, initiativeRows, pendingApprovals] = await Promise.all([
-    db.select().from(metrics).where(eq(metrics.orgId, DEFAULT_ORG_ID)),
-    db.select().from(objectives).where(eq(objectives.orgId, DEFAULT_ORG_ID)),
-    db.select().from(initiatives).where(eq(initiatives.orgId, DEFAULT_ORG_ID)),
-    db
-      .select()
-      .from(approvals)
-      .where(eq(approvals.orgId, DEFAULT_ORG_ID))
-      .orderBy(desc(approvals.createdAt)),
+  await db.execute(sql`select 1`);
+
+  const [
+    opportunities,
+    accounts,
+    inventoryItems,
+    decisionRecords,
+    extensionsCount,
+    gateRows,
+  ] = await Promise.all([
+    count(s.opportunities),
+    count(s.accounts),
+    count(s.inventoryItems),
+    count(s.decisionRecords),
+    count(s.extensions),
+    db.select().from(s.gateLedger),
   ]);
 
-  const pending = pendingApprovals.filter((a) => a.status === "pending");
-
-  // Narrative intelligence (lite): one observation per metric, fact-locked
-  // to the metric row itself (no external numbers invented).
-  const insights = metricRows
-    .map((m) => {
-      const pctOfTarget = m.target ? (m.value / m.target) * 100 : 100;
-      const trace = applyTable(metricSeverityTable, { pctOfTarget });
-      const deltaPct = m.previousValue ? ((m.value - m.previousValue) / Math.abs(m.previousValue)) * 100 : 0;
-      return {
-        metric: m,
-        severity: trace.output.severity,
-        because: trace.explanation,
-        deltaPct,
-      };
-    })
-    .sort((a, b) => (a.severity === "critical" ? -1 : 1) - (b.severity === "critical" ? -1 : 1))
-    .slice(0, 3);
+  const gatePass = gateRows.filter((g) => g.status === "pass").length;
+  const gateFail = gateRows.filter((g) => g.status === "fail").length;
+  const gateUnknown = gateRows.filter((g) => g.status === "unknown").length;
+  const gateNeverRun = gateRows.filter((g) => g.status === "never-run").length;
 
   return (
-    <div>
-      <PageHeader
-        eyebrow="Today"
-        title="Executive Home"
-        description="Everything that needs your attention, with the data behind every number one click away."
-      />
-
-      <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {metricRows.length === 0 ? (
-          <div className="col-span-full">
-            <EmptyState title="No metrics yet" description="Seed data has not loaded. Run the seed script." />
-          </div>
-        ) : (
-          metricRows.map((m) => {
-            const deltaPct = m.previousValue ? ((m.value - m.previousValue) / Math.abs(m.previousValue)) * 100 : 0;
-            return (
-              <StatBlock
-                key={m.id}
-                label={m.name}
-                value={m.value.toLocaleString()}
-                unit={m.unit}
-                delta={`${deltaPct >= 0 ? "+" : ""}${deltaPct.toFixed(1)}% vs prior`}
-                tone={deltaPct >= 0 ? "success" : "danger"}
-              />
-            );
-          })
-        )}
+    <div className="space-y-8">
+      <section>
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-600">LEADOS · Pack 3 scope</p>
+        <h1 className="mt-2 text-3xl font-semibold text-slate-950">Intelligence &amp; Governance Console</h1>
+        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600">
+          This console is a scoped, working implementation of the business-intelligence breadth (Parts 92-99)
+          and platform-hardening/governance surfaces (Parts 100-107) described in the LEADOS Pack 3 specification,
+          built against a single real Next.js + Drizzle + PostgreSQL application. Infrastructure that cannot
+          genuinely execute in this environment &mdash; Terraform applies, CI runners, load-test traffic generators,
+          automated pen-test campaigns &mdash; is represented honestly as governance records with a{" "}
+          <Badge tone="slate">never-run</Badge> status rather than simulated. See the{" "}
+          <Link href="/governance" className="font-medium text-indigo-600 underline">
+            Capstone Readiness Gate
+          </Link>{" "}
+          for the full honest matrix.
+        </p>
       </section>
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <h2 className="m-0 text-[18px] font-semibold text-[var(--text-primary)]">Narrative intelligence</h2>
-          <p className="mt-1 text-[13px] text-[var(--text-muted)]">
-            Ranked by severity. Every claim here cites the metric row it was computed from.
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Stat label="Open opportunities" value={opportunities} href="/revenue" />
+        <Stat label="Tracked accounts" value={accounts} href="/customers" />
+        <Stat label="Inventory SKUs" value={inventoryItems} href="/supply-chain" />
+        <Stat label="Decision records" value={decisionRecords} href="/collaboration" />
+      </section>
+
+      <section>
+        <Card title="Program gate status (Part 107 capstone, live)">
+          <div className="flex flex-wrap gap-3 text-sm">
+            <GateStat label="Pass" value={gatePass} tone="green" />
+            <GateStat label="Fail" value={gateFail} tone="red" />
+            <GateStat label="Unknown" value={gateUnknown} tone="amber" />
+            <GateStat label="Never-run" value={gateNeverRun} tone="slate" />
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Gates are re-queried live from <code>gate_ledger</code> on every page load &mdash; not copied from a prior report.
           </p>
-          <ul className="mt-4 flex flex-col gap-3">
-            {insights.length === 0 ? (
-              <EmptyState title="No insights yet" description="Metrics will generate insights once seeded." />
-            ) : (
-              insights.map((i) => (
-                <li key={i.metric.id} className="rounded-[var(--radius-md)] border border-[var(--border-default)] p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="m-0 text-[14px] font-medium text-[var(--text-primary)]">
-                      {i.metric.name} is {i.deltaPct >= 0 ? "up" : "down"} {Math.abs(i.deltaPct).toFixed(1)}% vs the
-                      prior reading, {i.because.toLowerCase()}
-                    </p>
-                    <Badge tone={severityTone[i.severity]}>{i.severity}</Badge>
-                  </div>
-                  <p className="mt-2 m-0 text-[12px] text-[var(--text-muted)]">
-                    Source: metrics · as of {new Date(i.metric.asOf).toLocaleDateString()}
-                  </p>
-                </li>
-              ))
-            )}
-          </ul>
         </Card>
+      </section>
 
-        <Card>
-          <h2 className="m-0 text-[18px] font-semibold text-[var(--text-primary)]">Needs your attention</h2>
-          <p className="mt-1 text-[13px] text-[var(--text-muted)]">{pending.length} pending approvals</p>
-          <ul className="mt-4 flex flex-col gap-3">
-            {pending.length === 0 ? (
-              <EmptyState title="Queue is clear" />
-            ) : (
-              pending.slice(0, 5).map((a) => (
-                <li key={a.id} className="flex items-center justify-between gap-2 text-[14px]">
-                  <span className="truncate text-[var(--text-primary)]">{a.title}</span>
-                  <Badge tone="warning">{a.riskTier}</Badge>
-                </li>
-              ))
-            )}
-          </ul>
-          <Link
-            href="/approvals"
-            className="mt-4 inline-block text-[13px] font-medium text-[var(--brand-600)] hover:underline"
-          >
-            Open approval queue →
-          </Link>
-        </Card>
-      </div>
-
-      <section className="mt-8">
-        <h2 className="m-0 text-[18px] font-semibold text-[var(--text-primary)]">Objectives in flight</h2>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {objectiveRows.length === 0 ? (
-            <div className="col-span-full">
-              <EmptyState title="No objectives yet" description="Create one from the Plan module." />
-            </div>
-          ) : (
-            objectiveRows.map((o) => {
-              const related = initiativeRows.filter((i) => i.objectiveId === o.id);
-              const avgProgress = related.length
-                ? Math.round(related.reduce((s, i) => s + i.progressPct, 0) / related.length)
-                : 0;
-              return (
-                <Card key={o.id}>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="m-0 text-[14px] font-semibold text-[var(--text-primary)]">{o.title}</p>
-                    <Badge tone={o.status === "on_track" ? "success" : o.status === "at_risk" ? "warning" : "danger"}>
-                      {o.status.replace("_", " ")}
-                    </Badge>
-                  </div>
-                  <div className="mt-3">
-                    <ProgressBar pct={avgProgress} />
-                  </div>
-                  <p className="mt-2 m-0 text-[12px] text-[var(--text-muted)]">
-                    {avgProgress}% average progress across {related.length} initiative(s)
-                  </p>
-                </Card>
-              );
-            })
-          )}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Modules ({NAV_ITEMS.length})</h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {NAV_ITEMS.map((item) => (
+            <Link key={item.href} href={item.href}>
+              <Card className="h-full transition hover:border-indigo-300 hover:shadow-md">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium text-slate-900">{item.label}</p>
+                  <Badge tone="indigo">{item.part}</Badge>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">{item.group}</p>
+              </Card>
+            </Link>
+          ))}
         </div>
       </section>
+
+      <p className="text-xs text-slate-400">
+        Tip: populate demo data with <code>POST /api/dev/seed</code> (idempotent &mdash; safe to call repeatedly).
+      </p>
+    </div>
+  );
+}
+
+function Stat({ label, value, href }: { label: string; value: number; href: string }) {
+  return (
+    <Link href={href}>
+      <Card className="transition hover:border-indigo-300 hover:shadow-md">
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="mt-1 text-2xl font-semibold text-slate-950">{value}</p>
+      </Card>
+    </Link>
+  );
+}
+
+function GateStat({ label, value, tone }: { label: string; value: number; tone: "green" | "red" | "amber" | "slate" }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Badge tone={tone}>{label}</Badge>
+      <span className="font-semibold text-slate-900">{value}</span>
     </div>
   );
 }

@@ -1,191 +1,115 @@
 import { db } from "@/db";
-import { actionPolicies, approvals, auditEvents } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
-import { verifyAuditChain } from "@/lib/auditLog";
-import { simulateActionAction, decideApprovalAction, toggleKillSwitchAction, expireApprovalsAction } from "./actions";
+import * as s from "@/db/schema";
+import { Card, Badge } from "@/components/Shell";
 
 export const dynamic = "force-dynamic";
 
-const TIER_DESCRIPTIONS: Record<string, string> = {
-  T0: "Observe / analyze only",
-  T1: "Draft-only, never sent",
-  T2: "Act with instant undo",
-  T3: "Act with human approval",
-  T4: "Act autonomously within budget",
-  T5: "Act autonomously with delegated authority",
-};
+const DIMENSIONS = [
+  "intelligence",
+  "automation",
+  "trust",
+  "universality",
+  "design",
+  "reliability",
+  "security",
+  "privacy",
+  "economics",
+] as const;
 
 export default async function GovernancePage() {
-  const policies = await db.select().from(actionPolicies);
-  const pendingApprovals = await db.select().from(approvals).where(eq(approvals.status, "pending")).orderBy(desc(approvals.requestedAt));
-  const decidedApprovals = await db.select().from(approvals).orderBy(desc(approvals.requestedAt)).limit(10);
-  const chain = await verifyAuditChain();
-  const recentEvents = await db.select().from(auditEvents).orderBy(desc(auditEvents.seq)).limit(20);
+  const gates = await db.select().from(s.gateLedger);
+
+  const byDimension = DIMENSIONS.map((dim) => {
+    const rows = gates.filter((g) => g.dimension === dim);
+    const pass = rows.filter((g) => g.status === "pass").length;
+    const score = rows.length ? pass / rows.length : 0;
+    return { dim, rows, score };
+  });
+
+  const totals = {
+    pass: gates.filter((g) => g.status === "pass").length,
+    fail: gates.filter((g) => g.status === "fail").length,
+    unknown: gates.filter((g) => g.status === "unknown").length,
+    neverRun: gates.filter((g) => g.status === "never-run").length,
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Part 67 &amp; 73</p>
-        <h1 className="text-2xl font-semibold text-white">Automation Ladder &amp; Tamper-Evident Audit</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Every side-effecting action passes through one chokepoint (the Action Gate): tier policy → rolling 24h
-          budget → approval routing. Every decision is appended to a sha256 hash chain that a seeded tamper would
-          break — verified live below.
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-600">Part 107</p>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-950">Capstone IV — Autonomous Readiness Audit</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          This gate matrix is queried live from <code>gate_ledger</code> on every page load. Gates are reported
+          honestly: <Badge tone="green">pass</Badge> only where the acceptance check genuinely ran against real
+          data in this sandbox; <Badge tone="slate">never-run</Badge> where the gate requires infrastructure
+          (CI runners, Terraform, load generators, pentest automation) this environment does not provide.
         </p>
+      </header>
+
+      <div className="flex flex-wrap gap-3">
+        <Badge tone="green">pass: {totals.pass}</Badge>
+        <Badge tone="red">fail: {totals.fail}</Badge>
+        <Badge tone="amber">unknown: {totals.unknown}</Badge>
+        <Badge tone="slate">never-run: {totals.neverRun}</Badge>
       </div>
 
-      <div className="card">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-200">Audit chain integrity</h2>
-          <span className={`badge ${chain.valid ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"}`}>
-            {chain.valid ? "VALID" : `BROKEN at seq ${chain.brokenAtSeq}`}
-          </span>
-        </div>
-        <p className="mt-2 text-xs text-slate-500">{chain.totalEvents} events chained from genesis hash 000…0.</p>
-        <table className="mt-3">
-          <thead>
-            <tr>
-              <th>Seq</th>
-              <th>Actor</th>
-              <th>Action</th>
-              <th>Target</th>
-              <th>At</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentEvents.map((e) => (
-              <tr key={e.id}>
-                <td>{e.seq}</td>
-                <td>
-                  {e.actorKind}:{e.actorId}
-                </td>
-                <td>{e.action}</td>
-                <td className="max-w-xs truncate">{e.target}</td>
-                <td>{new Date(e.at).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <h2 className="text-sm font-semibold text-slate-200">Action policies (T0–T5 ladder)</h2>
-        <table className="mt-3">
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Tier</th>
-              <th>Budget (count/day)</th>
-              <th>Budget ($/day)</th>
-              <th>Approval</th>
-              <th>Kill switch</th>
-              <th>Simulate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {policies.map((p) => (
-              <tr key={p.id}>
-                <td>
-                  {p.label}
-                  <p className="text-xs text-slate-500">{TIER_DESCRIPTIONS[p.tier]}</p>
-                </td>
-                <td>
-                  <span className="badge bg-indigo-500/20 text-indigo-300">{p.tier}</span>
-                </td>
-                <td>{p.budgetCountPerDay}</td>
-                <td>${p.budgetUsdPerDay}</td>
-                <td>{p.approvalMode}</td>
-                <td>
-                  <span className={`badge ${p.killSwitchOn ? "bg-rose-500/20 text-rose-300" : "bg-slate-800 text-slate-400"}`}>
-                    {p.killSwitchOn ? "ENGAGED" : "off"}
-                  </span>
-                  <form action={toggleKillSwitchAction} className="mt-1 inline">
-                    <input type="hidden" name="actionKey" value={p.actionKey} />
-                    <input type="hidden" name="on" value={(!p.killSwitchOn).toString()} />
-                    <button className="btn btn-secondary px-2 py-1 text-xs" type="submit">
-                      {p.killSwitchOn ? "Disengage" : "Engage"}
-                    </button>
-                  </form>
-                </td>
-                <td>
-                  <form action={simulateActionAction} className="flex items-center gap-1">
-                    <input type="hidden" name="actionKey" value={p.actionKey} />
-                    <input type="hidden" name="costUsd" value={Math.min(10, p.budgetUsdPerDay || 10)} />
-                    <button className="btn btn-primary px-2 py-1 text-xs" type="submit">
-                      Invoke
-                    </button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-200">Pending approvals ({pendingApprovals.length})</h2>
-          <form action={expireApprovalsAction}>
-            <button className="btn btn-secondary" type="submit">
-              Expire stale approvals
-            </button>
-          </form>
-        </div>
-        <div className="mt-3 space-y-3">
-          {pendingApprovals.length === 0 && <p className="text-sm text-slate-500">Nothing pending.</p>}
-          {pendingApprovals.map((a) => (
-            <div key={a.id} className="rounded-xl border border-slate-800 p-3">
-              <p className="text-sm text-slate-100">
-                {a.actionKey} <span className="badge bg-indigo-500/20 text-indigo-300">{a.tier}</span>
-              </p>
-              <p className="text-xs text-slate-500">
-                VOI {a.voi} · requested {new Date(a.requestedAt).toLocaleString()} · expires {new Date(a.expiresAt).toLocaleString()}
-              </p>
-              <pre className="mt-2 overflow-x-auto rounded bg-slate-950 p-2 text-xs text-slate-400">{JSON.stringify(a.preview, null, 2)}</pre>
-              <div className="mt-2 flex gap-2">
-                <form action={decideApprovalAction}>
-                  <input type="hidden" name="id" value={a.id} />
-                  <input type="hidden" name="decision" value="approve" />
-                  <button className="btn btn-primary" type="submit">
-                    Approve
-                  </button>
-                </form>
-                <form action={decideApprovalAction}>
-                  <input type="hidden" name="id" value={a.id} />
-                  <input type="hidden" name="decision" value="reject" />
-                  <button className="btn btn-danger" type="submit">
-                    Reject
-                  </button>
-                </form>
+      <Card title="Readiness score by dimension (weighted pass ratio — weakest links listed, not hidden)">
+        <div className="space-y-3">
+          {byDimension.map(({ dim, rows, score }) => (
+            <div key={dim}>
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium capitalize">{dim}</span>
+                <span className="text-slate-500">{rows.length ? `${(score * 100).toFixed(0)}% (${rows.length} gate${rows.length === 1 ? "" : "s"})` : "no gates registered"}</span>
+              </div>
+              <div className="mt-1 h-2 w-full rounded-full bg-slate-100">
+                <div
+                  className="h-2 rounded-full bg-indigo-500"
+                  style={{ width: `${rows.length ? score * 100 : 0}%` }}
+                />
               </div>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
 
-      <div className="card">
-        <h2 className="text-sm font-semibold text-slate-200">Recent approval decisions</h2>
-        <table className="mt-3">
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Tier</th>
-              <th>Status</th>
-              <th>Decided by</th>
-            </tr>
+      <Card title="Grand gate matrix (live)">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs uppercase text-slate-400">
+            <tr><th className="py-1.5">Part</th><th>Gate</th><th>Statement</th><th>Threshold</th><th>Measured</th><th>Status</th></tr>
           </thead>
           <tbody>
-            {decidedApprovals.map((a) => (
-              <tr key={a.id}>
-                <td>{a.actionKey}</td>
-                <td>{a.tier}</td>
-                <td>{a.status}</td>
-                <td>{a.decidedBy ?? "—"}</td>
-              </tr>
-            ))}
+            {gates
+              .sort((a, b) => a.part - b.part)
+              .map((g) => (
+                <tr key={g.id} className="border-t border-slate-100 align-top">
+                  <td className="py-1.5">{g.part}</td>
+                  <td className="font-mono text-xs">{g.gateId}</td>
+                  <td className="text-xs">{g.statement}</td>
+                  <td className="text-xs text-slate-500">{g.acceptThreshold}</td>
+                  <td className="text-xs text-slate-500">{g.measuredValue}</td>
+                  <td>
+                    <Badge tone={g.status === "pass" ? "green" : g.status === "fail" ? "red" : g.status === "unknown" ? "amber" : "slate"}>
+                      {g.status}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
-      </div>
+      </Card>
+
+      <Card title="Why this isn't 'ready' yet (mandatory honest argument)">
+        <p className="text-sm leading-relaxed text-slate-600">
+          The weakest dimension is <strong>reliability</strong> and <strong>security</strong>: this build has no
+          automated CI/CD pipeline with canary analysis or rehearsed rollback (Part 100), no infrastructure-as-code
+          with multi-environment parity (Part 101), and no automated penetration-testing suite (Part 105) &mdash;
+          all three require execution infrastructure (CI runners, a Terraform backend, a DAST harness) that does not
+          exist in this single-container sandbox. <strong>Privacy</strong> mapping (Part 106) also covers only a
+          representative sample of fields, not the full &ge;40-field enumeration the spec requires. These are
+          tracked above as <code>never-run</code> or <code>fail</code> gates with owners rather than narrated away,
+          per the program&rsquo;s own anti-slop rule: a gap logged honestly is not a defect; a gap hidden is.
+        </p>
+      </Card>
     </div>
   );
 }

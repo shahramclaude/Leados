@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
-import { Chrome } from "@/components/nav/Chrome";
+import { Shell } from "@/components/Shell";
 
 export const metadata: Metadata = {
-  title: "LEADOS — Leadership Operating System",
+  title: "LEADOS Intelligence Console",
   description:
-    "The leadership and management operating system: decisions, plans, approvals, knowledge, and audit in one command-first surface.",
+    "LEADOS business-intelligence and platform-governance console: revenue, customer, supply chain, collaboration, trust, and hardening dashboards.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="antialiased">
-        <Chrome>{children}</Chrome>
+      <body className="bg-slate-50 text-slate-900 antialiased">
+        <Shell>{children}</Shell>
       </body>
     </html>
   );
