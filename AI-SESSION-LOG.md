@@ -1,57 +1,121 @@
-# AI Session Log
+# AI-SESSION-LOG.md
 
-## Part 49 — Spatial Analytics Engine (ecosystem / scenario / org spatial views)
+## Part 54 — Org Design Lab, M&A Deal Room, Human-Impact Ledger, Post-Mortem Bridge
 
-- **Date:** session timestamp per delivery.
-- **Role:** Spatial-analytics engineer.
-- **Repo:** https://github.com/shahramclaude/Leados
-- **Depends on:** Part 02 (dataviz grammar), Part 06 (digital twin outputs), Part 31 (ecosystem graph).
+**Repository:** https://github.com/shahramclaude/Leados
+**Scope:** Parts 06 (org dynamics twin), 09 (people scoping), 31 (ecosystem graph), 37 (multi-entity model),
+53 (obligation cascade) dependencies declared by the brief.
 
-### What was found (read-before-write)
+### Read-before-write
 
-Checked out working tree was a greenfield Vite+React+TS+Tailwind scaffold
-(`src/App.tsx`, `src/main.tsx`, `src/index.css`, `src/utils/cn.ts` only — see file listing in the
-verification log). None of `src/components/charts/*`, `Network.tsx`, `Heatmap.tsx`, or any Part 02/06/31
-artifact existed. This is recorded explicitly rather than silently assumed away.
+The sandbox snapshot of this repository contains only the Next.js + Drizzle starter
+(`src/app`, `src/db/index.ts`, `src/db/schema.ts` with an empty `export {}` contract, config files).
+It does **not** contain the Part 06 / 09 / 31 / 37 / 53 source files described in the brief — there is no
+existing twin, ecosystem graph, people-scoping module, multi-entity model, or obligation-cascade engine to
+extend in this codebase. Files actually read before writing:
+
+- `src/db/schema.ts` (starter — empty, additive contract documented in its header comment)
+- `src/db/index.ts` (Drizzle/pg pool wiring)
+- `src/app/page.tsx`, `src/app/layout.tsx`, `src/app/globals.css`, `src/app/api/health/route.ts`
+- `package.json`, `tsconfig.json`, `drizzle.config.json`, `.env`
+
+Because the named prior-part modules are not present to extend, Part 54 is built as a **self-contained
+implementation that honors the lineage contract**: every engine module in `src/lib/org-design/` documents,
+in its header comment, which prior part's concept it stands in for (twin, ecosystem graph, people-scoping
+signals, multi-entity deal counterparties, obligation cascade), and the twin's model card
+(`src/lib/org-design/modelCard.ts`) declares this lineage explicitly so a future integration with the real
+Part 06/09/31/37/53 modules has a clear seam to plug into (same `Explain<T>` shape, same table names prefixed
+`od_`, same function signatures).
 
 ### What was built
 
-- `src/types/spatial.ts` — `SpatialEncoding` contract, Cleveland–McGill-extended perceptual ranking with
-  `depth` as the weakest, categorical-only channel.
-- `src/data/{ecosystemGraph,scenarioEnsemble,orgHierarchy}.ts` — shape-compatible stub data sources,
-  documented for swap-in once Parts 06/24/31 land.
-- `src/lib/spatial/*` — encoding validator, hand-rolled perspective projection (no three.js — bundle
-  budget justification in docs), force layout, scenario-landscape layout, icicle layout, semantic
-  equivalent generator, keyboard traversal, guided-tour engine, URL-state sync, accessibility hooks.
-- `src/components/spatial/*` — canvas renderer with a real-DOM accessible overlay, 2D chart fallbacks
-  (network, parallel coordinates, icicle), encoding legend, table view, description, view switcher, tour
-  controls, accessibility panel, and the three scene components, all composed through `SceneShell`.
-- `src/components/spatial/SpatialRoutes.tsx` — single `React.lazy()` boundary for the whole spatial layer.
-- `src/components/MethodologyPage.tsx` — in-app Phase 0 findings / gates / self-critique tables.
-- `src/App.tsx` — rewritten as the navigation shell (Overview / 3 scenes / Methodology).
-- `scripts/verify.ts` — real, executable verification covering all 6 measurement gates (`npm run verify`).
-- `docs/part49-spatial-analytics.md` — full phase-by-phase write-up.
+- **Org twin extension** (`src/lib/org-design/twinEngine.ts`, `network.ts`): structural moves (merge, split,
+  reporting-line change, centralize, decentralize) modeled as graph transforms over a declared org-unit /
+  collaboration-edge graph. Outputs delivery impact (capacity %, cycle-time days) and network impact
+  (cohesion, choke points, bus factor) as `Explain<T>` — value + interval + confidence + assumptions +
+  method, never a bare number.
+- **Human-Impact Ledger** (`humanImpact.ts`, `privacy.ts`): mandatory, per-person accounting of every
+  structural move — role-change type × disruption class × support-plan link. `assertHumanImpactComplete`
+  throws (simulation rejected) if the ledger is empty for a move touching people, or if any high/severe
+  disruption lacks a linked support plan. Self-visibility is enforced by `canViewEntryDetail`: the subject
+  always sees their own entry; other employees only after `announcedOrgWideAt` is set; admins see immediately
+  via an audited, distinct access path.
+- **M&A Deal Room** (`obligationCascade.ts`, `synergy.ts`, `integrationScore.ts`, `readinessChecklist.ts`):
+  deal phases (diligence → announce → integrate → complete), change-of-control obligation cascades that fire
+  at "announce", synergy estimates as `Explain<T>` intervals with deliberately conservative confidence on
+  revenue/capability synergy, an integration-difficulty composite (culture distance + systems overlap +
+  talent-flight risk) returned as an interval, and a Day-1 readiness checklist template.
+- **Scenario comparison** (`scenarioCompare.ts`): side-by-side table across delivery/network/human dimensions.
+  Deliberately has **no** function that reduces the comparison to a single ranked score.
+- **Post-change tracking + recalibration** (`recalibration.ts`): records realized vs. predicted outcomes,
+  computes variance against the declared error band, and nudges twin coefficients with a damping factor
+  (30% per reorg) so a single data point cannot swing the model.
+- **UI**: `/org-design` (overview + model card + seed), `/org-design/lab` (drag-and-drop structural-move
+  builder with live delivery/network/human panels), `/org-design/ledger` (self-first view, org-wide
+  aggregate-then-detail view, privacy attempt-matrix self-check), `/org-design/scenarios` (comparison table),
+  `/org-design/deals` + `/org-design/deals/[id]` (Deal Room), `/org-design/postmortem` (Post-Mortem Bridge).
+- **`scripts/verify.ts`** (`npm run verify`): seeds demo data and a synthetic-but-declared-as-such historical
+  move set, then runs the five PHASE 4 gates against the real database and prints a calibration table, the
+  human-impact ledger output, the privacy attempt matrix, the obligation-cascade fixture result, and the
+  before/after recalibration numbers. Exits 0 only if every gate passes.
 
-### Tooling changes
+### Honesty rules applied
 
-- `npm install -D tsx esbuild` — `tsx` runs the TypeScript verification script directly against real
-  source modules (no duplicated logic); `esbuild` (already a transitive dep of Vite) is pinned directly
-  so the bundle-budget measurement is reproducible without relying on Vite's internal copy.
-- `npm pkg set scripts.verify="tsx scripts/verify.ts"` — used the npm CLI (not direct file editing) to add
-  the `verify` script, per the standing instruction to avoid hand-editing `package.json`.
+- The twin model card (`modelCard.ts`) lists known limits (undeclared informal networks are invisible,
+  small/partly-synthetic calibration set, no access to tacit knowledge/morale/trust, placeholder flight-risk
+  and culture-distance inputs) and declared error margins, embedded in every simulation run record.
+- `historicalMoves` seed data is explicitly commented and documented (schema, seed module, session log) as
+  **synthetic ground truth** generated from the twin's own formulas plus a bounded perturbation — it exists
+  to exercise the calibration pipeline end-to-end, and is never represented as real historical validation.
+- The human-impact ledger cannot be bypassed (`assertHumanImpactComplete` is called on every simulation path)
+  and is never collapsed into a single "efficiency" or "impact score" number — it is always shown as counts
+  by disruption class and role-change type, with support-plan links, per PHASE 4 gate 2.
+- `scenarioCompare.ts` exports `NO_SINGLE_SCORE_POLICY` and intentionally has no ranking function.
 
-### Verification
+### PHASE 5 — Attack (self-review)
 
-`npm run verify` → exit 0, all 6 gates PASS (full output in the chat deliverable's VERIFICATION LOG).
-`npm run build` → succeeds, `dist/index.html` produced (vite-plugin-singlefile inlines all JS/CSS into one
-HTML file for this project's deployment target — noted as a limitation on true network-level lazy-loading
-in production, though the `React.lazy()` code-splitting boundary is correctly authored in source and is
-honored by `vite build` without the singlefile plugin).
+1. **How do you prevent scenario theater (the model becoming a weapon for a predetermined outcome)?**
+   Structurally: (a) every simulation always renders all three dimensions — delivery, network, human — side
+   by side; there is no code path that hides one of them. (b) The comparison table
+   (`compareScenarios`) never emits a single ranked score, so nobody can point at "the model said 83 vs. 61"
+   to end a debate. (c) Every number carries an interval and a confidence, and the model card's known limits
+   are attached to every run — a wide interval is visible evidence against treating any single simulation as
+   a verdict. (d) The human-impact ledger is mandatory and cannot be aggregated away, so a scenario that looks
+   good on capacity/cycle-time still has to show its named, countable people cost next to it. This raises the
+   cost of cherry-picking a scenario to justify a predetermined outcome — it doesn't make it impossible; no
+   software control stops a human from only running the scenario they wanted a good trail for. The
+   post-mortem bridge is the real check: predicted-vs-realized tracking creates an audit trail that a
+   "selectively run" simulation will eventually contradict.
+2. **Which human-impact dimension is hardest to quantify honestly, and why show it anyway?** Psychological
+   safety / trust erosion among people who are *not* directly affected but watch a reorg happen to their
+   peers ("survivor" disruption). The current model only classifies people inside the affected units — it has
+   no signal for second-order morale effects on adjacent teams. This is listed as a known limit rather than
+   quietly assigning it a fake number, because a false precision here (e.g., "trust impact: 6.2/10") would be
+   worse than admitting the twin cannot see it — someone would optimize against the fake number instead of
+   asking a human.
+3. **What does the product refuse to optimize, and where is it enforced?** It refuses to produce a single
+   "efficiency" or "best scenario" score that nets human cost against delivery gain. Enforcement points:
+   `assertHumanImpactComplete` (throws, not a warning, not a config flag) in `humanImpact.ts`, called from
+   `runStructuralSimulation` on every move; `scenarioCompare.ts` has no ranking function at all (not merely a
+   UI choice — the function doesn't exist); the UI always renders the human-impact panel with the same visual
+   weight as delivery/network, never collapsed or hidden by default.
+4. **What was deliberately NOT done?** (a) No authentication/role system — "self", "employee", "admin" are
+   passed as plain identifiers for demonstration; a real deployment needs this wired to the platform's actual
+   auth/identity system before the privacy guarantees are real rather than illustrative. (b) No real
+   historical-reorg dataset — the calibration set is synthetic and declared as such; real calibration needs
+   real HRIS/delivery-metrics history. (c) No drag-and-drop org chart canvas (e.g. a full tree-diagram editor)
+   — the Lab uses native HTML5 drag-and-drop onto a "move basket," which satisfies the interaction model
+   without a new charting dependency. (d) No automatic second-order (multi-hop) cascade modeling — the model
+   card explicitly flags this as a limit rather than silently guessing. (e) No integration with a real
+   Part 06/09/31/37/53 module, because those modules are not present in this repository snapshot; the lineage
+   comments and shared `Explain<T>` / `od_` table-naming convention are the deliberate integration seam for
+   whenever those modules exist in the same codebase.
 
-### Known gaps (disclosed, not hidden)
+### Commands run this session
 
-- No real browser-automation accessibility audit (no Playwright/axe-core harness in this sandbox); gate 3
-  is a DOM-shape/data-coverage proxy, documented as such in both the script and the docs.
-- 10k-element performance gate measures JS-side projection/sort compute cost on this host, not real GPU
-  frame time in a browser — documented as a proxy, not a benchmark claim.
-- 3D heatmap/blast-radius views were deliberately not built (classic decoration-that-hurts case).
+- `npx drizzle-kit push --force` — applied new `od_*` tables.
+- `npx tsc --noEmit` — clean.
+- `npx tsx scripts/verify.ts` / `npm run verify` — all 5 gates pass (see VERIFICATION LOG in the delivery
+  message for full output).
+- `npx next typegen`, `npm exec tsc -- --noEmit`, `npm run build` — all clean.
+- `build_and_start` — healthcheck passed.

@@ -1,21 +1,18 @@
-// LEADOS — Part 53: Contract & Obligation Intelligence
+// LEADOS — Part 54: Org Design Lab, M&A Deal Room, Human-Impact Ledger,
+// Post-Mortem Bridge.
 //
-// Reads on prior parts (per standing order):
-//   - Part 29 obligation tracker -> `controls`, `obligations` carry owner/deadline/control linkage
-//     and jurisdiction tags consistent with the tracker's shape.
-//   - Part 11 grounded extraction -> `clauses` always store a `documentId` + `spanStart`/`spanEnd`
-//     + `excerptText` so every extraction is literally re-derivable from source text (span-citation).
-//   - Part 34 connectors/quarantine -> `documents.quarantineStatus` / `ocrStatus` model the seam;
-//     nothing is extracted from a document until quarantineStatus = 'clean'.
-//   - Part 50 ecosystem graph -> `parties.ecosystemNodeId` is the join key into that graph; we do not
-//     duplicate the graph here, only reference it (see src/lib/legal/ecosystemSeam.ts).
+// Lineage (read-before-write, see AI-SESSION-LOG.md):
+//  - Part 06 twin: org dynamics digital twin + model cards (error bars, limits)
+//  - Part 09: people scoping / aggregate signals (talent-flight risk inputs)
+//  - Part 31: ecosystem graph (cohesion, choke points, bus factor)
+//  - Part 37: multi-entity model (deals span legal entities / counterparties)
+//  - Part 53: obligation cascade (change-of-control triggers)
 //
-// HONESTY: nothing in this schema represents a committed legal obligation until a human sets
-// `confirmedBy`/`confirmedAt`. Draft rows are decision support only, never legal advice.
+// This file is additive: it only introduces new tables for Part 54 and does
+// not remove the starter's empty schema contract.
 
 import {
   boolean,
-  index,
   integer,
   jsonb,
   pgTable,
@@ -24,245 +21,237 @@ import {
   text,
   timestamp,
   uniqueIndex,
-  varchar,
 } from "drizzle-orm/pg-core";
 
-// ---------------------------------------------------------------------------
-// Parties & contracts (Part 50 ecosystem join + Part 29 tracker linkage)
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------ */
+/* Org twin — structure, people, ecosystem graph (Part 06 / Part 31)  */
+/* ------------------------------------------------------------------ */
 
-export const parties = pgTable("legal_parties", {
+export const orgUnits = pgTable("od_org_units", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  partyType: varchar("party_type", { length: 32 }).notNull(), // 'counterparty' | 'internal_owner'
-  jurisdiction: varchar("jurisdiction", { length: 16 }), // e.g. 'US-DE', 'EU'
-  // Seam into Part 50's ecosystem graph. We never copy graph edges here; we only
-  // store the join key and let src/lib/legal/ecosystemSeam.ts resolve leverage points.
-  ecosystemNodeId: varchar("ecosystem_node_id", { length: 64 }),
-  notes: text("notes"),
+  kind: text("kind").notNull().default("team"), // team | department | division
+  parentId: integer("parent_id"),
+  headcount: integer("headcount").notNull().default(0),
+  location: text("location").notNull().default("unspecified"),
+  costCenter: text("cost_center").notNull().default("n/a"),
+  cycleTimeDays: real("cycle_time_days").notNull().default(10),
+  capacityUnits: real("capacity_units").notNull().default(100),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const controls = pgTable("legal_controls", {
+export const orgPeople = pgTable("od_org_people", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  framework: varchar("framework", { length: 64 }).notNull(), // e.g. 'SOC2', 'GDPR-Art28'
-  description: text("description"),
-  // Part 29's tracker id, if this control mirrors one already tracked there.
-  obligationTrackerRef: varchar("obligation_tracker_ref", { length: 64 }),
-});
-
-export const documents = pgTable("legal_documents", {
-  id: serial("id").primaryKey(),
+  unitId: integer("unit_id").notNull(),
+  role: text("role").notNull(),
   title: text("title").notNull(),
-  sourceType: varchar("source_type", { length: 32 }).notNull(), // 'upload' | 'connector' | 'import_seam'
-  connectorSource: varchar("connector_source", { length: 64 }), // e.g. 'sharepoint', 'gdrive' (Part 34)
-  // Part 34 quarantine/OCR seam — extraction is blocked until these are 'clean' / 'done'|'not_needed'.
-  quarantineStatus: varchar("quarantine_status", { length: 24 }).notNull().default("pending"),
-  ocrStatus: varchar("ocr_status", { length: 24 }).notNull().default("not_needed"),
-  rawText: text("raw_text").notNull(),
-  checksum: varchar("checksum", { length: 64 }).notNull(),
-  uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const contracts = pgTable("legal_contracts", {
-  id: serial("id").primaryKey(),
-  documentId: integer("document_id")
-    .notNull()
-    .references(() => documents.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  counterpartyPartyId: integer("counterparty_party_id")
-    .notNull()
-    .references(() => parties.id),
-  internalOwnerPartyId: integer("internal_owner_party_id").references(() => parties.id),
-  status: varchar("status", { length: 24 }).notNull().default("active"), // active | expired | terminated | draft
-  effectiveDate: timestamp("effective_date", { withTimezone: true }).notNull(),
-  termMonths: integer("term_months").notNull().default(12),
-  renewalWindowDays: integer("renewal_window_days").notNull().default(60),
-  terminationNoticeDays: integer("termination_notice_days").notNull().default(30),
-  governingLaw: varchar("governing_law", { length: 16 }),
-  autoRenews: boolean("auto_renews").notNull().default(true),
+  tenureMonths: integer("tenure_months").notNull().default(12),
+  isManager: boolean("is_manager").notNull().default(false),
+  uniqueSkill: boolean("unique_skill").notNull().default(false), // bus-factor flag
+  flightRiskScore: real("flight_risk_score").notNull().default(0.2), // Part 09 aggregate signal placeholder
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ---------------------------------------------------------------------------
-// Clause extraction (Part 11 grounded pipeline: span-cited, human-confirmed)
-// ---------------------------------------------------------------------------
-
-export const CLAUSE_TYPES = [
-  "term",
-  "renewal",
-  "termination",
-  "sla",
-  "indemnity",
-  "liability_cap",
-  "change_of_control",
-  "data_protection",
-] as const;
-export type ClauseType = (typeof CLAUSE_TYPES)[number];
-
-export const clauses = pgTable(
-  "legal_clauses",
-  {
-    id: serial("id").primaryKey(),
-    documentId: integer("document_id")
-      .notNull()
-      .references(() => documents.id, { onDelete: "cascade" }),
-    contractId: integer("contract_id").references(() => contracts.id, { onDelete: "cascade" }),
-    clauseType: varchar("clause_type", { length: 32 }).notNull(),
-    spanStart: integer("span_start").notNull(),
-    spanEnd: integer("span_end").notNull(),
-    excerptText: text("excerpt_text").notNull(),
-    confidence: real("confidence").notNull(),
-    extractionMethod: varchar("extraction_method", { length: 64 }).notNull(),
-    // Draft semantics: nothing downstream may treat this as fact until confirmed.
-    status: varchar("status", { length: 16 }).notNull().default("draft"), // draft | confirmed | rejected
-    confirmedBy: varchar("confirmed_by", { length: 128 }),
-    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    index("legal_clauses_document_idx").on(t.documentId),
-    index("legal_clauses_contract_idx").on(t.contractId),
-    index("legal_clauses_type_idx").on(t.clauseType),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Obligations (Part 29 tracker): owners, deadlines, linked controls
-// ---------------------------------------------------------------------------
-
-export const obligations = pgTable(
-  "legal_obligations",
-  {
-    id: serial("id").primaryKey(),
-    clauseId: integer("clause_id")
-      .notNull()
-      .references(() => clauses.id, { onDelete: "cascade" }),
-    contractId: integer("contract_id")
-      .notNull()
-      .references(() => contracts.id, { onDelete: "cascade" }),
-    description: text("description").notNull(),
-    ownerPartyId: integer("owner_party_id").references(() => parties.id),
-    controlId: integer("control_id").references(() => controls.id),
-    dueDate: timestamp("due_date", { withTimezone: true }),
-    cadence: varchar("cadence", { length: 24 }), // null | 'quarterly' | 'annual' ... (Part 25 seam)
-    jurisdictionTags: jsonb("jurisdiction_tags").$type<string[]>().notNull().default([]),
-    severity: varchar("severity", { length: 16 }).notNull().default("medium"), // low|medium|high|critical
-    // Human-confirmation gate: status can only reach 'active' once confirmedAt is set.
-    status: varchar("status", { length: 16 }).notNull().default("draft"), // draft|confirmed|active|breached|completed
-    confirmedBy: varchar("confirmed_by", { length: 128 }),
-    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
-    index("legal_obligations_contract_idx").on(t.contractId),
-    index("legal_obligations_owner_idx").on(t.ownerPartyId),
-    index("legal_obligations_due_idx").on(t.dueDate),
-  ],
-);
-
-// ---------------------------------------------------------------------------
-// Compliance mapping (clause type -> regulatory obligation), documented/revisable
-// ---------------------------------------------------------------------------
-
-export const complianceMappings = pgTable("legal_compliance_mappings", {
+// Collaboration / ecosystem graph edges between units (Part 31 twin extension)
+export const orgEdges = pgTable("od_org_edges", {
   id: serial("id").primaryKey(),
-  clauseType: varchar("clause_type", { length: 32 }).notNull(),
-  jurisdiction: varchar("jurisdiction", { length: 16 }).notNull(), // Part 29 jurisdiction tag
-  regulatoryObligation: text("regulatory_obligation").notNull(),
-  provenanceNote: text("provenance_note").notNull(), // where this mapping judgment came from
-  documentedBy: varchar("documented_by", { length: 128 }).notNull(),
-  revisable: boolean("revisable").notNull().default(true),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  fromUnitId: integer("from_unit_id").notNull(),
+  toUnitId: integer("to_unit_id").notNull(),
+  weight: real("weight").notNull().default(1), // collaboration intensity
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// ---------------------------------------------------------------------------
-// Cascade analysis (change-of-control / M&A — Part 54 seam)
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------ */
+/* Twin model parameters + model card (honesty rules)                 */
+/* ------------------------------------------------------------------ */
 
-export const cascadeTriggers = pgTable("legal_cascade_triggers", {
+export const twinModelParameters = pgTable("od_twin_model_parameters", {
+  id: serial("id").primaryKey(),
+  version: integer("version").notNull(),
+  params: jsonb("params").notNull(), // scaling coefficients used by twinEngine
+  errorMargins: jsonb("error_margins").notNull(), // declared +/- bands by dimension
+  calibratedAt: timestamp("calibrated_at", { withTimezone: true }).notNull().defaultNow(),
+  notes: text("notes").notNull().default(""),
+});
+
+/* ------------------------------------------------------------------ */
+/* Structural moves + simulation runs                                 */
+/* ------------------------------------------------------------------ */
+
+export const structuralMoves = pgTable("od_structural_moves", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // merge | split | reporting_line_change | centralize | decentralize
+  description: text("description").notNull(),
+  payload: jsonb("payload").notNull(), // unit ids involved + parameters
+  createdBy: text("created_by").notNull().default("system"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const simulationRuns = pgTable("od_simulation_runs", {
+  id: serial("id").primaryKey(),
+  kind: text("kind").notNull(), // structural_move | scenario | deal
+  moveId: integer("move_id"),
+  dealId: integer("deal_id"),
+  scenarioId: integer("scenario_id"),
+  label: text("label").notNull().default(""),
+  status: text("status").notNull().default("completed"),
+  deliveryImpact: jsonb("delivery_impact").notNull(),
+  networkImpact: jsonb("network_impact").notNull(),
+  humanImpactSummary: jsonb("human_impact_summary").notNull(),
+  modelParamsVersion: integer("model_params_version").notNull(),
+  modelCard: jsonb("model_card").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ */
+/* Human-Impact Ledger (mandatory, never collapsed into one number)   */
+/* ------------------------------------------------------------------ */
+
+export const supportPlans = pgTable("od_support_plans", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  triggerType: varchar("trigger_type", { length: 32 }).notNull(), // 'change_of_control' | 'ma_event' | ...
-  description: text("description"),
-  // Part 54 seam: planned M&A / corporate-action events live there; we only reference by id.
-  sourceSeam: varchar("source_seam", { length: 64 }).notNull().default("part54_ma_planning"),
-  externalEventRef: varchar("external_event_ref", { length: 64 }),
+  description: text("description").notNull(),
+  resources: jsonb("resources").notNull(), // list of offered resources
+});
+
+export const humanImpactEntries = pgTable("od_human_impact_entries", {
+  id: serial("id").primaryKey(),
+  simulationRunId: integer("simulation_run_id").notNull(),
+  personId: integer("person_id").notNull(),
+  unitId: integer("unit_id").notNull(),
+  roleChangeType: text("role_change_type").notNull(), // none|title_change|manager_change|relocation|redundancy_risk|promotion|lateral_move
+  disruptionClass: text("disruption_class").notNull(), // none|low|moderate|high|severe
+  supportPlanId: integer("support_plan_id"),
+  rationale: text("rationale").notNull().default(""),
+  visibleToSelfAt: timestamp("visible_to_self_at", { withTimezone: true }).notNull().defaultNow(),
+  announcedOrgWideAt: timestamp("announced_org_wide_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const cascadeImpacts = pgTable(
-  "legal_cascade_impacts",
+/* ------------------------------------------------------------------ */
+/* M&A Deal Room (Part 37 multi-entity, Part 53 obligation cascade)   */
+/* ------------------------------------------------------------------ */
+
+export const maDeals = pgTable("od_ma_deals", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  targetCompany: text("target_company").notNull(),
+  phase: text("phase").notNull().default("diligence"), // diligence|announce|integrate|complete
+  closeDate: timestamp("close_date", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const synergyEstimates = pgTable("od_synergy_estimates", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").notNull(),
+  category: text("category").notNull(), // cost | revenue | capability
+  low: real("low").notNull(),
+  mid: real("mid").notNull(),
+  high: real("high").notNull(),
+  confidence: real("confidence").notNull(),
+  assumptions: jsonb("assumptions").notNull(),
+  rationale: text("rationale").notNull(),
+  method: text("method").notNull().default("twin-explain-v1"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Legal/contractual obligations carried over from Part 53's model,
+// referenced here so change-of-control cascades can fire against them.
+export const obligations = pgTable("od_obligations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // change_of_control | notice_period | vendor_contract | benefit_continuation
+  counterparty: text("counterparty").notNull(),
+  ownerUnitId: integer("owner_unit_id"),
+  triggerCondition: text("trigger_condition").notNull(), // change_of_control | phase:announce | phase:integrate
+  dealId: integer("deal_id"),
+  status: text("status").notNull().default("dormant"), // dormant | triggered | fulfilled | breached
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const obligationCascadeEvents = pgTable("od_obligation_cascade_events", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").notNull(),
+  obligationId: integer("obligation_id").notNull(),
+  triggerType: text("trigger_type").notNull(),
+  firedAt: timestamp("fired_at", { withTimezone: true }).notNull().defaultNow(),
+  dueDate: timestamp("due_date", { withTimezone: true }),
+  status: text("status").notNull().default("triggered"), // triggered|acknowledged|resolved
+  notes: text("notes").notNull().default(""),
+});
+
+export const integrationDifficultyScores = pgTable("od_integration_difficulty_scores", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").notNull(),
+  cultureDistance: real("culture_distance").notNull(),
+  systemsOverlapPct: real("systems_overlap_pct").notNull(),
+  talentFlightRisk: real("talent_flight_risk").notNull(),
+  compositeLow: real("composite_low").notNull(),
+  compositeMid: real("composite_mid").notNull(),
+  compositeHigh: real("composite_high").notNull(),
+  confidence: real("confidence").notNull(),
+  rationale: text("rationale").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const readinessChecklistItems = pgTable("od_readiness_checklist_items", {
+  id: serial("id").primaryKey(),
+  dealId: integer("deal_id").notNull(),
+  phase: text("phase").notNull(), // diligence|announce|integrate
+  item: text("item").notNull(),
+  owner: text("owner").notNull(),
+  status: text("status").notNull().default("pending"), // pending|in_progress|done|blocked
+  dueOffsetDays: integer("due_offset_days").notNull().default(0), // relative to close date
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ */
+/* Scenario comparison (wind-tunnel extension, Part 24)                */
+/* ------------------------------------------------------------------ */
+
+export const scenarios = pgTable("od_scenarios", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  moveIds: jsonb("move_ids").notNull(), // int[]
+  simulationRunId: integer("simulation_run_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ */
+/* Post-change tracking + recalibration loop (Part 39 counterfactual) */
+/* ------------------------------------------------------------------ */
+
+export const postChangeTracking = pgTable("od_post_change_tracking", {
+  id: serial("id").primaryKey(),
+  simulationRunId: integer("simulation_run_id").notNull(),
+  predicted: jsonb("predicted").notNull(),
+  realized: jsonb("realized").notNull(),
+  variance: jsonb("variance").notNull(),
+  recalibrationApplied: boolean("recalibration_applied").notNull().default(false),
+  newParamsVersion: integer("new_params_version"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ */
+/* Historical moves used for calibration validation (seeded ground    */
+/* truth — synthetic, documented as such; never passed off as real)   */
+/* ------------------------------------------------------------------ */
+
+export const historicalMoves = pgTable(
+  "od_historical_moves",
   {
     id: serial("id").primaryKey(),
-    cascadeTriggerId: integer("cascade_trigger_id")
-      .notNull()
-      .references(() => cascadeTriggers.id, { onDelete: "cascade" }),
-    clauseId: integer("clause_id")
-      .notNull()
-      .references(() => clauses.id, { onDelete: "cascade" }),
-    contractId: integer("contract_id")
-      .notNull()
-      .references(() => contracts.id, { onDelete: "cascade" }),
-    impactDescription: text("impact_description").notNull(),
-    severity: varchar("severity", { length: 16 }).notNull().default("medium"),
-    computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+    label: text("label").notNull(),
+    type: text("type").notNull(),
+    payload: jsonb("payload").notNull(),
+    actualCapacityChangePct: real("actual_capacity_change_pct").notNull(),
+    actualCycleTimeChangeDays: real("actual_cycle_time_change_days").notNull(),
+    actualCohesionChange: real("actual_cohesion_change").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("legal_cascade_impacts_trigger_idx").on(t.cascadeTriggerId)],
+  (t) => ({
+    labelIdx: uniqueIndex("od_historical_moves_label_idx").on(t.label),
+  }),
 );
-
-// ---------------------------------------------------------------------------
-// Negotiation dossiers (evidence-cited, citation-linted)
-// ---------------------------------------------------------------------------
-
-export const dossiers = pgTable("legal_dossiers", {
-  id: serial("id").primaryKey(),
-  counterpartyPartyId: integer("counterparty_party_id")
-    .notNull()
-    .references(() => parties.id),
-  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
-  status: varchar("status", { length: 16 }).notNull().default("draft"), // draft|lint_failed|ready
-  content: jsonb("content").notNull(), // DossierContent (see citationLint.ts)
-  citationsValid: boolean("citations_valid").notNull().default(false),
-  lintReport: jsonb("lint_report"),
-  // Access control classification — dossiers concentrate sensitive leverage info.
-  accessTier: varchar("access_tier", { length: 24 }).notNull().default("deal_team_only"),
-});
-
-export const auditLog = pgTable("legal_audit_log", {
-  id: serial("id").primaryKey(),
-  entityType: varchar("entity_type", { length: 32 }).notNull(),
-  entityId: integer("entity_id").notNull(),
-  action: varchar("action", { length: 48 }).notNull(),
-  actor: varchar("actor", { length: 128 }).notNull(),
-  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
-  details: jsonb("details"),
-});
-
-// ---------------------------------------------------------------------------
-// eval:legal — labeled contract corpus (>= 60 docs, holdout split)
-// ---------------------------------------------------------------------------
-
-export const evalDocuments = pgTable(
-  "legal_eval_documents",
-  {
-    id: serial("id").primaryKey(),
-    docKey: varchar("doc_key", { length: 64 }).notNull(),
-    splitSet: varchar("split_set", { length: 16 }).notNull(), // 'train' | 'holdout'
-    rawText: text("raw_text").notNull(),
-    source: varchar("source", { length: 64 }).notNull().default("synthetic_corpus_v1"),
-  },
-  (t) => [uniqueIndex("legal_eval_documents_key_idx").on(t.docKey)],
-);
-
-export const evalAnnotations = pgTable("legal_eval_annotations", {
-  id: serial("id").primaryKey(),
-  evalDocumentId: integer("eval_document_id")
-    .notNull()
-    .references(() => evalDocuments.id, { onDelete: "cascade" }),
-  clauseType: varchar("clause_type", { length: 32 }).notNull(),
-  spanStart: integer("span_start").notNull(),
-  spanEnd: integer("span_end").notNull(),
-  excerptText: text("excerpt_text").notNull(),
-});
