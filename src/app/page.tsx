@@ -1,123 +1,169 @@
 import Link from "next/link";
-import { db } from "@/db";
-import { decisions, signals, people } from "@/db/schema";
-import { desc } from "drizzle-orm";
-import Badge from "@/components/Badge";
-import { formatDate } from "@/lib/format";
+import { getCockpitSummary } from "@/lib/queries";
+import { Card, Badge, fmtDate, EmptyState } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function CockpitPage() {
-  const [allDecisions, allSignals, allPeople] = await Promise.all([
-    db.select().from(decisions).orderBy(desc(decisions.createdAt)),
-    db.select().from(signals).orderBy(desc(signals.detectedAt)),
-    db.select().from(people),
-  ]);
+  const summary = await getCockpitSummary();
 
-  const openDecisions = allDecisions.filter((d) => d.status !== "archived" && d.status !== "committed");
-  const committedDecisions = allDecisions.filter((d) => d.status === "committed");
-  const activeSignals = allSignals.filter((s) => s.status === "active");
-  const criticalSignals = activeSignals.filter((s) => s.severity === "critical" || s.severity === "high");
-
-  const recentDecisions = allDecisions.slice(0, 5);
-  const recentSignals = allSignals.slice(0, 5);
-
-  const stats = [
-    { label: "Open Decisions", value: openDecisions.length, href: "/decisions", tone: "text-indigo-600" },
-    { label: "Committed Decisions", value: committedDecisions.length, href: "/decisions", tone: "text-emerald-600" },
-    { label: "Active Signals", value: activeSignals.length, href: "/signals", tone: "text-amber-600" },
-    { label: "High/Critical Signals", value: criticalSignals.length, href: "/signals", tone: "text-rose-600" },
-    { label: "People Tracked", value: allPeople.length, href: "/people", tone: "text-slate-700" },
-  ];
+  const statusMap = Object.fromEntries(summary.decisionStatusCounts.map((s) => [s.status, s.count]));
+  const severityMap = Object.fromEntries(summary.openSignalCounts.map((s) => [s.severity, s.count]));
 
   return (
-    <div className="flex flex-col gap-8">
-      <section>
-        <p className="text-sm font-medium uppercase tracking-[0.1em] text-indigo-600">Executive Cockpit</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-950">Command Center Overview</h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          A single pane for decision governance, early-warning signals, and org visibility — the
-          operating core of LEADOS.
+    <div>
+      <div className="mb-10">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-400">Executive cockpit</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+          Leadership operating picture
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm text-slate-400">
+          A single pane of glass across decision governance, early-warning signals, operating cadence,
+          autonomous agents, and leader state.
         </p>
-      </section>
+      </div>
 
-      <section className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {stats.map((stat) => (
-          <Link
-            key={stat.label}
-            href={stat.href}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
-          >
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{stat.label}</p>
-            <p className={`mt-2 text-3xl font-semibold ${stat.tone}`}>{stat.value}</p>
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat label="Open decisions" value={summary.openDecisions} href="/decisions" tone="indigo" />
+        <Stat label="Critical signals" value={summary.criticalSignals} href="/signals" tone="rose" />
+        <Stat label="Upcoming rituals" value={summary.upcomingCadence.length} href="/cadence" tone="emerald" />
+        <Stat label="Agent runs logged" value={summary.recentRuns.length} href="/agents" tone="amber" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Card>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Decisions by status
+          </h2>
+          <div className="space-y-2">
+            {["proposed", "under_review", "committed", "reversed"].map((status) => (
+              <div key={status} className="flex items-center justify-between text-sm">
+                <Badge label={status} />
+                <span className="font-mono text-slate-300">{statusMap[status] ?? 0}</span>
+              </div>
+            ))}
+          </div>
+          <Link href="/decisions" className="mt-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
+            View decision log →
           </Link>
-        ))}
-      </section>
+        </Card>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-950">Recent Decisions</h2>
-            <Link href="/decisions" className="text-sm font-medium text-indigo-600 hover:underline">
-              View all →
-            </Link>
+        <Card>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Open signals by severity
+          </h2>
+          <div className="space-y-2">
+            {["critical", "high", "medium", "low"].map((sev) => (
+              <div key={sev} className="flex items-center justify-between text-sm">
+                <Badge label={sev} />
+                <span className="font-mono text-slate-300">{severityMap[sev] ?? 0}</span>
+              </div>
+            ))}
           </div>
-          {recentDecisions.length === 0 ? (
-            <p className="text-sm text-slate-500">No decisions logged yet.</p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {recentDecisions.map((decision) => (
-                <li key={decision.id}>
-                  <Link
-                    href={`/decisions/${decision.id}`}
-                    className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3 transition hover:border-indigo-200 hover:bg-indigo-50/40"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">{decision.title}</p>
-                      <p className="text-xs text-slate-500">
-                        {decision.owner} · due {formatDate(decision.dueDate)}
-                      </p>
-                    </div>
-                    <Badge value={decision.status} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+          <Link href="/signals" className="mt-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
+            View sensing board →
+          </Link>
+        </Card>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-950">Recent Signals</h2>
-            <Link href="/signals" className="text-sm font-medium text-indigo-600 hover:underline">
-              View all →
-            </Link>
-          </div>
-          {recentSignals.length === 0 ? (
-            <p className="text-sm text-slate-500">No signals detected yet.</p>
+        <Card>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Upcoming cadence
+          </h2>
+          {summary.upcomingCadence.length === 0 ? (
+            <EmptyState message="No scheduled rituals." />
           ) : (
-            <ul className="flex flex-col gap-3">
-              {recentSignals.map((signal) => (
-                <li
-                  key={signal.id}
-                  className="flex items-center justify-between rounded-xl border border-slate-100 px-4 py-3"
-                >
+            <ul className="space-y-3 text-sm">
+              {summary.upcomingCadence.map((meeting) => (
+                <li key={meeting.id} className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-900">{signal.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {signal.category} · {signal.source} · {formatDate(signal.detectedAt)}
-                    </p>
+                    <p className="font-medium text-slate-200">{meeting.title}</p>
+                    <p className="text-xs text-slate-500">{fmtDate(meeting.nextOccurrence)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge value={signal.severity} />
-                    <Badge value={signal.status} />
-                  </div>
+                  <Badge label={meeting.type} />
                 </li>
               ))}
             </ul>
           )}
-        </div>
-      </section>
+          <Link href="/cadence" className="mt-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
+            View cadence board →
+          </Link>
+        </Card>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Recent decisions
+          </h2>
+          {summary.recentDecisions.length === 0 ? (
+            <EmptyState message="No decisions logged yet." />
+          ) : (
+            <ul className="divide-y divide-slate-800">
+              {summary.recentDecisions.map((d) => (
+                <li key={d.id} className="flex items-center justify-between gap-4 py-3">
+                  <Link href={`/decisions/${d.id}`} className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-100 hover:text-indigo-300">{d.title}</p>
+                    <p className="text-xs text-slate-500">Owner: {d.ownerName ?? "Unassigned"}</p>
+                  </Link>
+                  <Badge label={d.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Recent agent runs
+          </h2>
+          {summary.recentRuns.length === 0 ? (
+            <EmptyState message="No autonomous agent runs yet." />
+          ) : (
+            <ul className="divide-y divide-slate-800">
+              {summary.recentRuns.map((run) => (
+                <li key={run.id} className="flex items-center justify-between gap-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-slate-100">{run.name}</p>
+                    <p className="truncate text-xs text-slate-500">{run.summary || "—"}</p>
+                  </div>
+                  <Badge label={run.status} />
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link href="/agents" className="mt-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
+            View agent kernel →
+          </Link>
+        </Card>
+      </div>
     </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  href,
+  tone,
+}: {
+  label: string;
+  value: number;
+  href: string;
+  tone: "indigo" | "rose" | "emerald" | "amber";
+}) {
+  const toneClasses: Record<string, string> = {
+    indigo: "from-indigo-500/20 to-indigo-500/0 text-indigo-300",
+    rose: "from-rose-500/20 to-rose-500/0 text-rose-300",
+    emerald: "from-emerald-500/20 to-emerald-500/0 text-emerald-300",
+    amber: "from-amber-500/20 to-amber-500/0 text-amber-300",
+  };
+  return (
+    <Link
+      href={href}
+      className={`block rounded-2xl border border-slate-800 bg-gradient-to-br p-5 transition hover:border-slate-700 ${toneClasses[tone]}`}
+    >
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
+    </Link>
   );
 }

@@ -1,121 +1,71 @@
 import type { ReactNode } from "react";
 
-export function PageHeader({
-  title,
-  description,
-}: {
-  title: string;
-  description?: string;
-}) {
+export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className="mb-8">
-      <h1 className="text-3xl font-semibold text-slate-950">{title}</h1>
-      {description ? (
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">{description}</p>
-      ) : null}
-    </div>
-  );
-}
-
-export function Card({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${className}`}
-    >
+    <div className={`rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg shadow-black/20 ${className}`}>
       {children}
     </div>
   );
 }
 
-export function StatCard({
-  label,
-  value,
-  hint,
-  tone = "slate",
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-  tone?: "slate" | "indigo" | "amber" | "rose" | "emerald";
-}) {
-  const toneClasses: Record<string, string> = {
-    slate: "text-slate-950",
-    indigo: "text-indigo-600",
-    amber: "text-amber-600",
-    rose: "text-rose-600",
-    emerald: "text-emerald-600",
-  };
+export function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <Card>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-        {label}
-      </p>
-      <p className={`mt-2 text-3xl font-semibold ${toneClasses[tone]}`}>{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
-    </Card>
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">{title}</h1>
+        {description ? <p className="mt-1 max-w-2xl text-sm text-slate-400">{description}</p> : null}
+      </div>
+      {action}
+    </div>
   );
 }
 
-const BADGE_TONES: Record<string, string> = {
-  proposed: "bg-slate-100 text-slate-700",
-  under_review: "bg-amber-100 text-amber-800",
-  committed: "bg-indigo-100 text-indigo-700",
-  implemented: "bg-emerald-100 text-emerald-700",
-  reversed: "bg-rose-100 text-rose-700",
-  new: "bg-indigo-100 text-indigo-700",
-  investigating: "bg-amber-100 text-amber-800",
-  resolved: "bg-emerald-100 text-emerald-700",
-  dismissed: "bg-slate-100 text-slate-500",
-  low: "bg-slate-100 text-slate-600",
-  medium: "bg-amber-100 text-amber-800",
-  high: "bg-orange-100 text-orange-800",
-  critical: "bg-rose-100 text-rose-700",
-  active: "bg-emerald-100 text-emerald-700",
-  paused: "bg-slate-100 text-slate-500",
-  draft: "bg-slate-100 text-slate-600",
-  circulated: "bg-amber-100 text-amber-800",
-  approved: "bg-emerald-100 text-emerald-700",
-  rejected: "bg-rose-100 text-rose-700",
-  open: "bg-rose-100 text-rose-700",
-  mitigating: "bg-amber-100 text-amber-800",
-  closed: "bg-emerald-100 text-emerald-700",
-  planned: "bg-slate-100 text-slate-600",
-  at_risk: "bg-rose-100 text-rose-700",
-  completed: "bg-emerald-100 text-emerald-700",
+const badgeColors: Record<string, string> = {
+  // decision status
+  proposed: "bg-slate-700 text-slate-200",
+  under_review: "bg-amber-500/20 text-amber-300",
+  committed: "bg-emerald-500/20 text-emerald-300",
+  reversed: "bg-rose-500/20 text-rose-300",
+  // impact / severity
+  low: "bg-sky-500/20 text-sky-300",
+  medium: "bg-amber-500/20 text-amber-300",
+  high: "bg-orange-500/20 text-orange-300",
+  critical: "bg-rose-500/20 text-rose-300",
+  // signal status
+  new: "bg-indigo-500/20 text-indigo-300",
+  investigating: "bg-amber-500/20 text-amber-300",
+  resolved: "bg-emerald-500/20 text-emerald-300",
+  dismissed: "bg-slate-700 text-slate-300",
+  // cadence status
+  scheduled: "bg-indigo-500/20 text-indigo-300",
+  completed: "bg-emerald-500/20 text-emerald-300",
+  skipped: "bg-slate-700 text-slate-300",
+  // agent run status
+  queued: "bg-slate-700 text-slate-200",
+  running: "bg-amber-500/20 text-amber-300",
+  succeeded: "bg-emerald-500/20 text-emerald-300",
+  failed: "bg-rose-500/20 text-rose-300",
 };
 
-export function Badge({ value }: { value: string }) {
-  const tone = BADGE_TONES[value] ?? "bg-slate-100 text-slate-700";
+export function Badge({ label }: { label: string }) {
+  const color = badgeColors[label] ?? "bg-slate-700 text-slate-200";
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize ${tone}`}
-    >
-      {value.replace(/_/g, " ")}
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${color}`}>
+      {label.replace(/_/g, " ")}
     </span>
   );
 }
 
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
+    <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-500">
       {message}
     </div>
   );
 }
 
-export function fmtDate(date: Date | string | null | undefined): string {
-  if (!date) return "—";
-  const d = typeof date === "string" ? new Date(date) : date;
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+export function fmtDate(value: Date | string | null | undefined) {
+  if (!value) return "—";
+  const d = typeof value === "string" ? new Date(value) : value;
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }

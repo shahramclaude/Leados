@@ -1,189 +1,134 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import Badge from "@/components/Badge";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { getDecision, listDecisionEvents } from "@/lib/queries";
+import { updateDecisionStatusAction, addDecisionCommentAction } from "@/app/actions";
+import { Card, PageHeader, Badge, fmtDate, EmptyState } from "@/components/ui";
 
-type Decision = {
-  id: number;
-  title: string;
-  description: string;
-  owner: string;
-  status: "proposed" | "under_review" | "committed" | "archived";
-  impact: "low" | "medium" | "high" | "critical";
-  dueDate: string | null;
-  createdAt: string;
-  updatedAt: string;
-  committedAt: string | null;
+export const dynamic = "force-dynamic";
+
+const STATUS_FLOW: Record<string, string[]> = {
+  proposed: ["under_review", "committed", "reversed"],
+  under_review: ["committed", "reversed", "proposed"],
+  committed: ["reversed"],
+  reversed: ["proposed"],
 };
 
-type DecisionEvent = {
-  id: number;
-  eventType: string;
-  actor: string;
-  payload: Record<string, unknown>;
-  createdAt: string;
-};
+export default async function DecisionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const decisionId = Number(id);
+  if (!Number.isInteger(decisionId)) notFound();
 
-const NEXT_STEPS: Record<string, { status: string; label: string; tone: string }[]> = {
-  proposed: [
-    { status: "under_review", label: "Move to Review", tone: "bg-blue-600 hover:bg-blue-500" },
-    { status: "archived", label: "Archive", tone: "bg-slate-500 hover:bg-slate-400" },
-  ],
-  under_review: [
-    { status: "committed", label: "Commit Decision", tone: "bg-emerald-600 hover:bg-emerald-500" },
-    { status: "proposed", label: "Send Back to Proposed", tone: "bg-slate-500 hover:bg-slate-400" },
-    { status: "archived", label: "Archive", tone: "bg-slate-500 hover:bg-slate-400" },
-  ],
-  committed: [{ status: "archived", label: "Archive", tone: "bg-slate-500 hover:bg-slate-400" }],
-  archived: [],
-};
+  const decision = await getDecision(decisionId);
+  if (!decision) notFound();
 
-export default function DecisionDetailPage() {
-  const params = useParams<{ id: string }>();
-  const [decision, setDecision] = useState<Decision | null>(null);
-  const [events, setEvents] = useState<DecisionEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [notFound, setNotFound] = useState(false);
-
-  async function load() {
-    setLoading(true);
-    const res = await fetch(`/api/decisions/${params.id}`);
-    if (res.status === 404) {
-      setNotFound(true);
-      setLoading(false);
-      return;
-    }
-    const data = await res.json();
-    setDecision(data.decision);
-    setEvents(data.events ?? []);
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    if (params.id) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id]);
-
-  async function transition(status: string) {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const res = await fetch(`/api/decisions/${params.id}/commit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Transition failed.");
-      }
-      await load();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Transition failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (notFound) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <p className="text-lg font-semibold text-slate-900">Decision not found</p>
-        <Link href="/decisions" className="mt-3 inline-block text-sm font-medium text-indigo-600 hover:underline">
-          ← Back to decisions
-        </Link>
-      </div>
-    );
-  }
-
-  if (loading || !decision) {
-    return <p className="text-sm text-slate-500">Loading…</p>;
-  }
-
-  const nextSteps = NEXT_STEPS[decision.status] ?? [];
+  const events = await listDecisionEvents(decisionId);
 
   return (
-    <div className="flex flex-col gap-6">
-      <Link href="/decisions" className="text-sm font-medium text-indigo-600 hover:underline">
-        ← Back to decisions
+    <div>
+      <Link href="/decisions" className="mb-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
+        ← Back to decision log
       </Link>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-950">{decision.title}</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Owner: {decision.owner} · Due {formatDate(decision.dueDate)}
-            </p>
-          </div>
+      <PageHeader
+        title={decision.title}
+        description={decision.description || undefined}
+        action={
           <div className="flex gap-2">
-            <Badge value={decision.impact} />
-            <Badge value={decision.status} />
+            <Badge label={decision.status} />
+            <Badge label={decision.impact} />
           </div>
-        </div>
-        {decision.description && <p className="mt-4 whitespace-pre-wrap text-sm text-slate-700">{decision.description}</p>}
+        }
+      />
 
-        <div className="mt-5 grid grid-cols-2 gap-4 text-xs text-slate-500 sm:grid-cols-4">
-          <div>
-            <p className="uppercase tracking-wide">Created</p>
-            <p className="mt-1 text-sm text-slate-700">{formatDateTime(decision.createdAt)}</p>
-          </div>
-          <div>
-            <p className="uppercase tracking-wide">Updated</p>
-            <p className="mt-1 text-sm text-slate-700">{formatDateTime(decision.updatedAt)}</p>
-          </div>
-          <div>
-            <p className="uppercase tracking-wide">Committed</p>
-            <p className="mt-1 text-sm text-slate-700">{formatDateTime(decision.committedAt)}</p>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="space-y-6">
+          <Card>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">Rationale</h2>
+            <p className="whitespace-pre-wrap text-sm text-slate-300">{decision.rationale || "No rationale recorded."}</p>
+            <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+              <div>
+                <dt className="text-xs text-slate-500">Owner</dt>
+                <dd className="text-slate-200">{decision.ownerName ?? "Unassigned"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Confidence</dt>
+                <dd className="text-slate-200">{decision.confidence}%</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Created</dt>
+                <dd className="text-slate-200">{fmtDate(decision.createdAt)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Decided</dt>
+                <dd className="text-slate-200">{fmtDate(decision.decidedAt)}</dd>
+              </div>
+            </dl>
+          </Card>
 
-        {nextSteps.length > 0 && (
-          <div className="mt-6 flex flex-wrap gap-2 border-t border-slate-100 pt-5">
-            {nextSteps.map((step) => (
+          <Card>
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+              Event-sourced audit trail
+            </h2>
+            {events.length === 0 ? (
+              <EmptyState message="No events yet." />
+            ) : (
+              <ul className="space-y-4">
+                {events.map((e) => (
+                  <li key={e.id} className="flex gap-3 text-sm">
+                    <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-indigo-400" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-200">
+                        {e.type.replace(/_/g, " ")} <span className="text-slate-500">by {e.actor}</span>
+                      </p>
+                      {e.type === "comment" ? (
+                        <p className="mt-1 text-slate-400">{String(e.payload.comment ?? "")}</p>
+                      ) : (
+                        <p className="mt-1 font-mono text-xs text-slate-500">{JSON.stringify(e.payload)}</p>
+                      )}
+                      <p className="mt-1 text-xs text-slate-600">{fmtDate(e.createdAt)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <form action={addDecisionCommentAction} className="mt-6 flex gap-2 border-t border-slate-800 pt-4">
+              <input type="hidden" name="id" value={decision.id} />
+              <input
+                name="comment"
+                placeholder="Add a note to the record…"
+                className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
+              />
               <button
-                key={step.status}
-                disabled={busy}
-                onClick={() => transition(step.status)}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-60 ${step.tone}`}
+                type="submit"
+                className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-700"
               >
-                {step.label}
+                Add note
               </button>
+            </form>
+          </Card>
+        </div>
+
+        <Card className="h-fit">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Governance actions</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            Current status: <span className="font-semibold text-slate-200">{decision.status.replace(/_/g, " ")}</span>
+          </p>
+          <div className="flex flex-col gap-2">
+            {(STATUS_FLOW[decision.status] ?? []).map((next) => (
+              <form key={next} action={updateDecisionStatusAction}>
+                <input type="hidden" name="id" value={decision.id} />
+                <input type="hidden" name="status" value={next} />
+                <button
+                  type="submit"
+                  className="w-full rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-500 hover:text-indigo-300"
+                >
+                  Move to {next.replace(/_/g, " ")}
+                </button>
+              </form>
             ))}
           </div>
-        )}
-        {actionError && <p className="mt-3 text-sm text-rose-600">{actionError}</p>}
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-slate-950">Audit trail</h2>
-        {events.length === 0 ? (
-          <p className="text-sm text-slate-500">No events recorded.</p>
-        ) : (
-          <ol className="flex flex-col gap-4">
-            {events.map((event) => (
-              <li key={event.id} className="flex gap-3 border-l-2 border-indigo-200 pl-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-900">
-                    {event.eventType.replace("_", " ")}
-                    {typeof event.payload?.from === "string" && typeof event.payload?.to === "string"
-                      ? `: ${event.payload.from} → ${event.payload.to}`
-                      : ""}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {event.actor} · {formatDateTime(event.createdAt)}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+        </Card>
+      </div>
     </div>
   );
 }

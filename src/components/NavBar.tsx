@@ -1,49 +1,36 @@
 import Link from "next/link";
-import type { SessionUser } from "@/lib/session";
-import { LogoutButton } from "@/components/LogoutButton";
 
-export function NavBar({ session }: { session: SessionUser | null }) {
+const links = [
+  { href: "/", label: "Cockpit" },
+  { href: "/decisions", label: "Decisions" },
+  { href: "/signals", label: "Signals" },
+  { href: "/cadence", label: "Cadence" },
+  { href: "/agents", label: "Agents" },
+  { href: "/my-state", label: "Leader State" },
+];
+
+export default function NavBar() {
   return (
-    <nav className="flex items-center justify-between border-b border-slate-300 bg-white px-6 py-3">
-      <div className="flex items-center gap-4 text-sm font-medium">
-        <Link href="/" className="font-semibold text-slate-900">
-          LEADOS
+    <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-4">
+        <Link href="/" className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 text-sm font-bold text-slate-950">
+            L
+          </span>
+          <span className="text-lg font-semibold tracking-tight text-white">LEADOS</span>
         </Link>
-        {session && (
-          <>
-            <Link href="/" className="text-slate-600 hover:text-slate-950">
-              People
+        <nav className="flex flex-wrap items-center gap-1 text-sm font-medium">
+          {links.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="rounded-full px-3 py-1.5 text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            >
+              {link.label}
             </Link>
-            <Link href="/privacy" className="text-slate-600 hover:text-slate-950">
-              Privacy
-            </Link>
-            {session.role === "admin" && (
-              <Link href="/admin" className="text-slate-600 hover:text-slate-950">
-                Admin
-              </Link>
-            )}
-          </>
-        )}
+          ))}
+        </nav>
       </div>
-      <div className="flex items-center gap-3 text-sm">
-        {session ? (
-          <>
-            <span className="text-slate-500">
-              {session.email} · {session.role}
-            </span>
-            <LogoutButton />
-          </>
-        ) : (
-          <>
-            <Link href="/login" className="text-slate-600 hover:text-slate-950">
-              Log in
-            </Link>
-            <Link href="/register" className="text-slate-600 hover:text-slate-950">
-              Register
-            </Link>
-          </>
-        )}
-      </div>
-    </nav>
+    </header>
   );
 }

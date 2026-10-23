@@ -1,30 +1,23 @@
-import { db } from "@/db";
-import { cadenceItems } from "@/db/schema";
-import { asc } from "drizzle-orm";
-import { NextRequest } from "next/server";
+import { listCadenceMeetings, createCadenceMeeting } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const rows = await db.select().from(cadenceItems).orderBy(asc(cadenceItems.nextOccurrence));
-  return Response.json({ data: rows });
+  const meetings = await listCadenceMeetings();
+  return Response.json({ meetings });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  if (!body?.title || !body?.owner) {
-    return Response.json({ error: "title and owner are required" }, { status: 400 });
+  if (!body || typeof body.title !== "string" || !body.title.trim()) {
+    return Response.json({ error: "title is required" }, { status: 400 });
   }
-  const [row] = await db
-    .insert(cadenceItems)
-    .values({
-      title: body.title,
-      type: body.type ?? "meeting",
-      frequency: body.frequency ?? "weekly",
-      owner: body.owner,
-      nextOccurrence: body.nextOccurrence ? new Date(body.nextOccurrence) : null,
-      status: body.status ?? "active",
-    })
-    .returning();
-  return Response.json({ data: row }, { status: 201 });
+  const meeting = await createCadenceMeeting({
+    title: body.title,
+    type: body.type ?? "weekly",
+    ownerId: body.ownerId ?? null,
+    nextOccurrence: body.nextOccurrence ? new Date(body.nextOccurrence) : new Date(),
+    notes: body.notes ?? "",
+  });
+  return Response.json({ meeting }, { status: 201 });
 }

@@ -1,31 +1,25 @@
-import { db } from "@/db";
-import { cadenceItems } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import { NextRequest } from "next/server";
+import { updateCadenceMeeting } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [row] = await db.select().from(cadenceItems).where(eq(cadenceItems.id, id));
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
-}
-
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const meetingId = Number(id);
+  if (!Number.isInteger(meetingId)) {
+    return Response.json({ error: "invalid id" }, { status: 400 });
+  }
   const body = await request.json().catch(() => null);
-  if (!body) return Response.json({ error: "invalid body" }, { status: 400 });
-  const payload = { ...body, updatedAt: new Date() };
-  if (body.nextOccurrence) payload.nextOccurrence = new Date(body.nextOccurrence);
-  const [row] = await db.update(cadenceItems).set(payload).where(eq(cadenceItems.id, id)).returning();
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
-}
+  if (!body) {
+    return Response.json({ error: "invalid body" }, { status: 400 });
+  }
+  const patch: Parameters<typeof updateCadenceMeeting>[1] = {};
+  if (body.status) patch.status = body.status;
+  if (body.effectivenessScore !== undefined) patch.effectivenessScore = body.effectivenessScore;
+  if (body.nextOccurrence) patch.nextOccurrence = new Date(body.nextOccurrence);
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const [row] = await db.delete(cadenceItems).where(eq(cadenceItems.id, id)).returning();
-  if (!row) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json({ data: row });
+  const meeting = await updateCadenceMeeting(meetingId, patch);
+  if (!meeting) {
+    return Response.json({ error: "not found" }, { status: 404 });
+  }
+  return Response.json({ meeting });
 }
