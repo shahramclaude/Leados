@@ -1,314 +1,224 @@
-// LEADOS — Part 55: Board Governance & Resolutions Automation
+// LEADOS — Part 56: Algorithmic Accountability
 //
-// This schema is self-contained for this working tree. Parts 23 (decision
-// governance), 29 (risk/obligations), 32 (board pack machinery), 37
-// (consolidation), 46 (conflict registry) and 19 (audit chain) are modelled
-// here as the minimum interfaces this module depends on, since their files
-// are not present in this repository snapshot. Field names and provenance
-// tags (`sourcePart`) are kept so a future merge can reconcile with the
-// real upstream tables without an API change.
-
+// This schema backs:
+//  - the model/system registry (Part 56 itself)
+//  - stand-in persistence for Part 11 (model cards), Part 38 (monitoring /
+//    assurance checks), Part 09 (fairness reports) and Part 19 (audit chain)
+//    so the registry has real data to join against inside this sandbox.
+//    NOTE (honesty): the actual Parts 09/11/19/38 tables are not present in
+//    this repository snapshot. These tables are clearly-scoped stand-ins —
+//    see AI-SESSION-LOG.md and the Part 56 self-review for what must be
+//    reconciled against the real implementations.
 import {
-  pgTable,
-  serial,
-  varchar,
-  text,
-  integer,
   boolean,
-  timestamp,
+  integer,
   jsonb,
+  pgTable,
+  real,
+  serial,
+  text,
+  timestamp,
+  varchar,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Identity & board structure
+// People (demo identity directory — stand-in for a real auth/identity system)
 // ---------------------------------------------------------------------------
-
-/** Board-tier access scopes. Kept as free varchar (not pg enum) so new
- * tiers can be added without a migration; validated in src/lib/governance/access.ts. */
-export const users = pgTable("gov_users", {
+export const people = pgTable("acc_people", {
   id: serial("id").primaryKey(),
-  name: varchar("name", { length: 200 }).notNull(),
-  email: varchar("email", { length: 200 }).notNull().unique(),
-  boardTier: varchar("board_tier", { length: 40 }).notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  personKey: varchar("person_key", { length: 64 }).notNull().unique(),
+  name: text("name").notNull(),
+  role: varchar("role", { length: 24 }).notNull().$type<
+    "subject" | "reviewer" | "auditor" | "admin" | "engineer"
+  >(),
+  note: text("note").notNull().default(""),
 });
 
-export const committees = pgTable("gov_committees", {
+// ---------------------------------------------------------------------------
+// Model / system registry (Part 56 core deliverable)
+// ---------------------------------------------------------------------------
+export const algoSystems = pgTable("algo_systems", {
   id: serial("id").primaryKey(),
-  slug: varchar("slug", { length: 40 }).notNull().unique(),
-  name: varchar("name", { length: 120 }).notNull(),
-  scopeDescription: text("scope_description").notNull(),
-});
-
-export const committeeMembers = pgTable("gov_committee_members", {
-  id: serial("id").primaryKey(),
-  committeeId: integer("committee_id").notNull(),
-  userId: integer("user_id").notNull(),
-  roleInCommittee: varchar("role_in_committee", { length: 40 })
+  systemKey: varchar("system_key", { length: 120 }).notNull().unique(),
+  name: text("name").notNull(),
+  purpose: text("purpose").notNull(),
+  affectedParties: varchar("affected_parties", { length: 32 })
     .notNull()
-    .default("member"),
-});
-
-// ---------------------------------------------------------------------------
-// Board cycle engine (Part 25 cadence, Part 32 pack machinery)
-// ---------------------------------------------------------------------------
-
-export const boardCalendar = pgTable("gov_board_calendar", {
-  id: serial("id").primaryKey(),
-  tier: varchar("tier", { length: 40 }).notNull(), // e.g. main_board, audit_committee
-  cadenceDays: integer("cadence_days").notNull(),
-  materialsLeadDays: integer("materials_lead_days").notNull().default(7),
-  lastMeetingDate: timestamp("last_meeting_date"),
-  nextMeetingDate: timestamp("next_meeting_date"),
-});
-
-export const boardMeetings = pgTable("gov_board_meetings", {
-  id: serial("id").primaryKey(),
-  tier: varchar("tier", { length: 40 }).notNull(),
-  scheduledAt: timestamp("scheduled_at").notNull(),
-  materialsDeadline: timestamp("materials_deadline").notNull(),
-  status: varchar("status", { length: 30 }).notNull().default("scheduled"),
-  // scheduled -> materials_due -> pack_assembled -> convened -> minutes_finalized -> closed
-  escalationLevel: integer("escalation_level").notNull().default(0),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const completenessPolicy = pgTable("gov_completeness_policy", {
-  id: serial("id").primaryKey(),
-  sectionType: varchar("section_type", { length: 60 }).notNull(),
-  mandatory: boolean("mandatory").notNull().default(true),
-  appliesToTier: varchar("applies_to_tier", { length: 40 })
+    .$type<"workers" | "customers" | "citizens">(),
+  inputs: jsonb("inputs").notNull().$type<string[]>(),
+  outputs: jsonb("outputs").notNull().$type<string[]>(),
+  decisionRole: varchar("decision_role", { length: 16 })
     .notNull()
-    .default("main_board"),
-  description: text("description").notNull(),
-});
-
-export const boardPacks = pgTable("gov_board_packs", {
-  id: serial("id").primaryKey(),
-  meetingId: integer("meeting_id").notNull(),
-  assembledAt: timestamp("assembled_at"),
-  assembledBy: integer("assembled_by"),
-  numbersFrozenAt: timestamp("numbers_frozen_at"),
-  frozenSnapshot: jsonb("frozen_snapshot"),
-  completenessStatus: varchar("completeness_status", { length: 30 })
+    .$type<"inform" | "recommend" | "automate">(),
+  actionTier: varchar("action_tier", { length: 4 })
     .notNull()
-    .default("pending"), // pending | complete | red_flag
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const packSections = pgTable("gov_pack_sections", {
-  id: serial("id").primaryKey(),
-  packId: integer("pack_id").notNull(),
-  sectionType: varchar("section_type", { length: 60 }).notNull(),
-  title: varchar("title", { length: 200 }).notNull(),
-  content: text("content").notNull().default(""),
-  required: boolean("required").notNull().default(false),
-  included: boolean("included").notNull().default(true),
-  omittedReason: text("omitted_reason"),
-  omittedPolicyRef: varchar("omitted_policy_ref", { length: 120 }),
-  sourcePart: varchar("source_part", { length: 60 }).notNull().default(""),
-});
-
-export const packRedFlags = pgTable("gov_pack_red_flags", {
-  id: serial("id").primaryKey(),
-  packId: integer("pack_id").notNull(),
-  sectionType: varchar("section_type", { length: 60 }).notNull(),
-  flagType: varchar("flag_type", { length: 60 }).notNull(),
-  detail: text("detail").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  resolved: boolean("resolved").notNull().default(false),
-  resolvedBy: integer("resolved_by"),
-  resolvedAt: timestamp("resolved_at"),
-  resolutionNote: text("resolution_note"),
-});
-
-export const preReadTracking = pgTable("gov_pre_read_tracking", {
-  id: serial("id").primaryKey(),
-  packId: integer("pack_id").notNull(),
-  userId: integer("user_id").notNull(),
-  openedAt: timestamp("opened_at"),
-  acknowledgedAt: timestamp("acknowledged_at"),
-  timeSpentSeconds: integer("time_spent_seconds").notNull().default(0),
-});
-
-export const agendaItems = pgTable("gov_agenda_items", {
-  id: serial("id").primaryKey(),
-  meetingId: integer("meeting_id").notNull(),
-  orderIndex: integer("order_index").notNull(),
-  title: varchar("title", { length: 200 }).notNull(),
-  linkedResolutionId: integer("linked_resolution_id"),
-});
-
-// ---------------------------------------------------------------------------
-// Resolutions register & implementation linkage (Part 10 tasks interface)
-// ---------------------------------------------------------------------------
-
-export const resolutions = pgTable("gov_resolutions", {
-  id: serial("id").primaryKey(),
-  meetingId: integer("meeting_id").notNull(),
-  text: text("text").notNull(),
-  type: varchar("type", { length: 20 }).notNull(), // advisory | binding
-  status: varchar("status", { length: 30 }).notNull().default("proposed"),
-  // proposed -> voted -> passed | rejected | withdrawn
-  matterRef: varchar("matter_ref", { length: 200 }).notNull().default(""),
-  proposedBy: integer("proposed_by"),
-  proposedAt: timestamp("proposed_at").notNull().defaultNow(),
-  decidedAt: timestamp("decided_at"),
-});
-
-export const resolutionVotes = pgTable("gov_resolution_votes", {
-  id: serial("id").primaryKey(),
-  resolutionId: integer("resolution_id").notNull(),
-  directorId: integer("director_id").notNull(),
-  vote: varchar("vote", { length: 20 }).notNull(), // for | against | abstain | recused
-  conflictDeclared: boolean("conflict_declared").notNull().default(false),
-  conflictId: integer("conflict_id"),
-  votedAt: timestamp("voted_at").notNull().defaultNow(),
-});
-
-/** Stub of the Part 10 implementation-task system interface. */
-export const tasks = pgTable("gov_tasks", {
-  id: serial("id").primaryKey(),
-  title: varchar("title", { length: 200 }).notNull(),
-  owner: varchar("owner", { length: 200 }).notNull(),
-  dueDate: timestamp("due_date"),
-  status: varchar("status", { length: 30 }).notNull().default("open"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const resolutionImplementationLinks = pgTable(
-  "gov_resolution_implementation_links",
-  {
-    id: serial("id").primaryKey(),
-    resolutionId: integer("resolution_id").notNull(),
-    taskId: integer("task_id").notNull(),
-    linkedAt: timestamp("linked_at").notNull().defaultNow(),
-    linkedBy: integer("linked_by"),
-  },
-);
-
-export const oversightMilestones = pgTable("gov_oversight_milestones", {
-  id: serial("id").primaryKey(),
-  resolutionId: integer("resolution_id").notNull(),
-  milestoneDate: timestamp("milestone_date").notNull(),
-  description: text("description").notNull(),
-  status: varchar("status", { length: 30 }).notNull().default("pending"),
-  // pending | reviewed | overdue
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const effectivenessReviews = pgTable("gov_effectiveness_reviews", {
-  id: serial("id").primaryKey(),
-  resolutionId: integer("resolution_id").notNull(),
-  milestoneId: integer("milestone_id").notNull(),
-  reviewDate: timestamp("review_date").notNull().defaultNow(),
-  outcome: varchar("outcome", { length: 30 }).notNull(),
-  // effective | partially_effective | ineffective
-  notes: text("notes").notNull().default(""),
-  reviewedBy: integer("reviewed_by"),
-});
-
-// ---------------------------------------------------------------------------
-// Minutes (Part 42 artifact pipeline: verbatim/generated separation; Part 19 chain)
-// ---------------------------------------------------------------------------
-
-export const minutes = pgTable("gov_minutes", {
-  id: serial("id").primaryKey(),
-  meetingId: integer("meeting_id").notNull().unique(),
-  verbatimExcerpts: jsonb("verbatim_excerpts").notNull().default([]),
-  generatedSummary: text("generated_summary").notNull().default(""),
-  finalized: boolean("finalized").notNull().default(false),
-  finalizedBy: integer("finalized_by"),
-  finalizedByTier: varchar("finalized_by_tier", { length: 40 }),
-  finalizedAt: timestamp("finalized_at"),
-  prevHash: varchar("prev_hash", { length: 80 }),
-  hash: varchar("hash", { length: 80 }),
-});
-
-// ---------------------------------------------------------------------------
-// Directors' information rights
-// ---------------------------------------------------------------------------
-
-export const informationRequests = pgTable("gov_information_requests", {
-  id: serial("id").primaryKey(),
-  requesterId: integer("requester_id").notNull(),
-  subject: varchar("subject", { length: 200 }).notNull(),
-  requestText: text("request_text").notNull(),
-  targetTier: varchar("target_tier", { length: 40 }).notNull().default("management"),
-  status: varchar("status", { length: 30 }).notNull().default("open"),
-  // open -> responded -> closed ; or overdue
-  dueDate: timestamp("due_date").notNull(),
-  responseText: text("response_text"),
-  respondedBy: integer("responded_by"),
-  respondedAt: timestamp("responded_at"),
-  closedAt: timestamp("closed_at"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Whistleblower / audit-committee safe channel (Part 46 access rules)
-// ---------------------------------------------------------------------------
-
-export const whistleblowerReports = pgTable("gov_whistleblower_reports", {
-  id: serial("id").primaryKey(),
-  reporterToken: varchar("reporter_token", { length: 60 }).notNull(),
-  subject: varchar("subject", { length: 200 }).notNull(),
-  body: text("body").notNull(),
-  channel: varchar("channel", { length: 40 })
+    .$type<"T0" | "T1" | "T2" | "T3" | "T4">(),
+  regulatoryTier: varchar("regulatory_tier", { length: 16 })
     .notNull()
-    .default("audit_committee_safe_channel"),
-  status: varchar("status", { length: 30 }).notNull().default("received"),
-  // received -> under_review -> escalated_to_board -> closed
-  allowedTiers: jsonb("allowed_tiers")
+    .$type<"minimal" | "limited" | "high" | "unacceptable">(),
+  sourceModule: text("source_module").notNull(),
+  owner: text("owner").notNull(),
+  oversightOwner: text("oversight_owner").notNull(),
+  oversightMethod: text("oversight_method").notNull(),
+  oversightTrainingNotes: text("oversight_training_notes").notNull(),
+  optOutAllowed: boolean("opt_out_allowed").notNull().default(false),
+  optOutLimits: text("opt_out_limits").notNull().default(""),
+  requiresHumanReview: boolean("requires_human_review").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Model cards (Part 11 stand-in)
+// ---------------------------------------------------------------------------
+export const modelCards = pgTable("model_cards", {
+  id: serial("id").primaryKey(),
+  systemKey: varchar("system_key", { length: 120 }).notNull(),
+  name: text("name").notNull(),
+  version: varchar("version", { length: 32 }).notNull(),
+  summary: text("summary").notNull(),
+  trainingData: text("training_data").notNull(),
+  limitations: text("limitations").notNull(),
+  metrics: jsonb("metrics").notNull().$type<Record<string, number>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---------------------------------------------------------------------------
+// Monitoring / assurance checks (Part 38 stand-in)
+// ---------------------------------------------------------------------------
+export const monitoringChecks = pgTable("monitoring_checks", {
+  id: serial("id").primaryKey(),
+  checkId: varchar("check_id", { length: 120 }).notNull().unique(),
+  systemKey: varchar("system_key", { length: 120 }).notNull(),
+  checkType: varchar("check_type", { length: 32 })
     .notNull()
-    .default(["chair", "audit_committee_chair", "audit_committee"]),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  lastUpdatedAt: timestamp("last_updated_at").notNull().defaultNow(),
+    .$type<"drift" | "fairness" | "accuracy" | "availability">(),
+  status: varchar("status", { length: 16 }).notNull().$type<"pass" | "warn" | "fail">(),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true }).notNull().defaultNow(),
+  details: jsonb("details").notNull().$type<Record<string, unknown>>(),
 });
 
 // ---------------------------------------------------------------------------
-// Conflicts register (Part 46, board-level) & independence
+// Fairness reports (Part 09 stand-in)
 // ---------------------------------------------------------------------------
-
-export const conflictsRegister = pgTable("gov_conflicts_register", {
+export const fairnessReports = pgTable("fairness_reports", {
   id: serial("id").primaryKey(),
-  directorId: integer("director_id").notNull(),
-  matter: varchar("matter", { length: 200 }).notNull(),
-  natureOfInterest: text("nature_of_interest").notNull(),
-  declaredAt: timestamp("declared_at").notNull().defaultNow(),
-  status: varchar("status", { length: 30 }).notNull().default("declared"),
-  // declared | waived_by_board | recusal_required | resolved
-  recusalRequired: boolean("recusal_required").notNull().default(false),
+  systemKey: varchar("system_key", { length: 120 }).notNull(),
+  metric: text("metric").notNull(),
+  groupA: text("group_a").notNull(),
+  groupB: text("group_b").notNull(),
+  valueA: real("value_a").notNull(),
+  valueB: real("value_b").notNull(),
+  disparityRatio: real("disparity_ratio").notNull(),
+  threshold: real("threshold").notNull(),
+  passed: boolean("passed").notNull(),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------
-// Audit chain (Part 19) — hash-chained append-only log
+// Audit chain (Part 19 stand-in) — simple hash-linked append-only log
 // ---------------------------------------------------------------------------
-
-export const auditLog = pgTable("gov_audit_log", {
+export const auditChainEntries = pgTable("audit_chain_entries", {
   id: serial("id").primaryKey(),
-  actorId: integer("actor_id"),
-  actorTier: varchar("actor_tier", { length: 40 }),
-  action: varchar("action", { length: 100 }).notNull(),
-  entityType: varchar("entity_type", { length: 60 }).notNull(),
-  entityId: integer("entity_id"),
-  payload: jsonb("payload").notNull().default({}),
-  prevHash: varchar("prev_hash", { length: 80 }),
-  hash: varchar("hash", { length: 80 }).notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+  seq: integer("seq").notNull(),
+  systemKey: varchar("system_key", { length: 120 }).notNull(),
+  actorId: text("actor_id").notNull(),
+  action: text("action").notNull(),
+  payload: jsonb("payload").notNull().$type<Record<string, unknown>>(),
+  prevHash: text("prev_hash").notNull(),
+  hash: text("hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------
-// Governance policy (documented board decisions — e.g. opting into
-// individual-director metrics must be an explicit, recorded board choice)
+// Impact assessments (algorithmic AIA-style), versioned per system
 // ---------------------------------------------------------------------------
-
-export const governancePolicy = pgTable("gov_governance_policy", {
+export const impactAssessments = pgTable("impact_assessments", {
   id: serial("id").primaryKey(),
-  key: varchar("key", { length: 80 }).notNull().unique(),
-  value: jsonb("value").notNull(),
-  documentedBy: varchar("documented_by", { length: 200 }).notNull(),
-  documentedAt: timestamp("documented_at").notNull().defaultNow(),
-  rationale: text("rationale").notNull().default(""),
+  systemKey: varchar("system_key", { length: 120 }).notNull(),
+  version: integer("version").notNull(),
+  status: varchar("status", { length: 16 })
+    .notNull()
+    .$type<"draft" | "in_review" | "approved" | "superseded">(),
+  purpose: text("purpose").notNull(),
+  proportionality: text("proportionality").notNull(),
+  affectedPartiesText: text("affected_parties_text").notNull(),
+  risksToRights: text("risks_to_rights").notNull(),
+  dataGovernance: text("data_governance").notNull(),
+  humanOversightText: text("human_oversight_text").notNull(),
+  accuracyRobustness: text("accuracy_robustness").notNull(),
+  transparencyText: text("transparency_text").notNull(),
+  linkedExperimentIds: jsonb("linked_experiment_ids").notNull().$type<string[]>(),
+  triggeredBy: varchar("triggered_by", { length: 32 })
+    .notNull()
+    .$type<"initial" | "model_update" | "scheduled" | "incident">(),
+  reviewerId: text("reviewer_id"),
+  reviewerRole: text("reviewer_role"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+});
+
+// ---------------------------------------------------------------------------
+// Rights machinery: decisions, explanations, contestations, opt-outs
+// ---------------------------------------------------------------------------
+export const decisionRecords = pgTable("decision_records", {
+  id: serial("id").primaryKey(),
+  systemKey: varchar("system_key", { length: 120 }).notNull(),
+  subjectId: varchar("subject_id", { length: 64 }).notNull(),
+  decisionRole: varchar("decision_role", { length: 16 })
+    .notNull()
+    .$type<"inform" | "recommend" | "automate">(),
+  outputSummary: jsonb("output_summary").notNull().$type<Record<string, unknown>>(),
+  requiresHumanReview: boolean("requires_human_review").notNull().default(false),
+  humanReviewStatus: varchar("human_review_status", { length: 16 })
+    .notNull()
+    .default("not_required")
+    .$type<"not_required" | "pending" | "confirmed" | "overridden">(),
+  humanReviewerId: text("human_reviewer_id"),
+  humanReviewedAt: timestamp("human_reviewed_at", { withTimezone: true }),
+  humanReviewNotes: text("human_review_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const explanations = pgTable("explanations", {
+  id: serial("id").primaryKey(),
+  decisionRecordId: integer("decision_record_id").notNull(),
+  systemKey: varchar("system_key", { length: 120 }).notNull(),
+  subjectId: varchar("subject_id", { length: 64 }).notNull(),
+  summary: text("summary").notNull(),
+  factors: jsonb("factors")
+    .notNull()
+    .$type<Array<{ factor: string; weight: number; direction: "increases" | "decreases" }>>(),
+  modelCardRef: text("model_card_ref").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const contestations = pgTable("contestations", {
+  id: serial("id").primaryKey(),
+  decisionRecordId: integer("decision_record_id").notNull(),
+  subjectId: varchar("subject_id", { length: 64 }).notNull(),
+  reason: text("reason").notNull(),
+  status: varchar("status", { length: 16 })
+    .notNull()
+    .default("submitted")
+    .$type<"submitted" | "under_review" | "upheld" | "overturned" | "dismissed">(),
+  reviewerId: text("reviewer_id"),
+  resolutionNotes: text("resolution_notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+});
+
+export const optOuts = pgTable("opt_outs", {
+  id: serial("id").primaryKey(),
+  systemKey: varchar("system_key", { length: 120 }).notNull(),
+  subjectId: varchar("subject_id", { length: 64 }).notNull(),
+  scope: text("scope").notNull(),
+  status: varchar("status", { length: 16 })
+    .notNull()
+    .$type<"requested" | "active" | "denied">(),
+  limitationsNote: text("limitations_note").notNull().default(""),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  effectiveAt: timestamp("effective_at", { withTimezone: true }),
 });

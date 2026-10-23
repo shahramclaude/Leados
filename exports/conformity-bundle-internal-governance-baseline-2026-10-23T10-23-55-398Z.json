@@ -1,0 +1,330 @@
+{
+  "generatedAt": "2026-10-23T10:23:55.398Z",
+  "scope": {
+    "frame": "internal-governance-baseline",
+    "statement": "This bundle evidences LEADOS's own internal algorithmic-accountability baseline (registry completeness, impact assessments, monitoring, fairness reporting, audit trail, rights machinery) as implemented in Part 56. It is an internal governance artifact.",
+    "notCertified": [
+      "No external regulator, auditor, or certification body has reviewed or attested to this bundle.",
+      "Does not constitute conformity with any named law or standard.",
+      "Does not assess systems outside the registry scanned at export time."
+    ]
+  },
+  "registry": [
+    {
+      "systemKey": "eligibility-scoring-v1",
+      "name": "Worker Eligibility Scoring",
+      "purpose": "Scores a worker's reliability/credential history to recommend eligibility for premium job tiers.",
+      "affectedParties": "workers",
+      "decisionRole": "recommend",
+      "actionTier": "T2",
+      "regulatoryTier": "limited",
+      "tierConsistency": {
+        "ok": true,
+        "issues": []
+      },
+      "owner": "Worker Platform Team",
+      "oversight": {
+        "owner": "Worker Experience Lead",
+        "method": "Reviewer spot-checks 10% of recommend-tier upgrades weekly; any worker may request human review before a tier change takes effect.",
+        "trainingNotes": "Reviewers complete the LEADOS Fair Scoring training module annually."
+      },
+      "optOut": {
+        "allowed": true,
+        "limits": "Opting out routes the worker to the manual tier-review queue, which is slower but always available."
+      },
+      "modelCards": [
+        {
+          "name": "Eligibility Scoring Model",
+          "version": "1.3.0",
+          "limitations": "Does not account for platform tenure gaps (e.g. parental leave) that reduce completedJobsCount without reflecting reliability."
+        }
+      ]
+    },
+    {
+      "systemKey": "candidate-match-recommender-v2",
+      "name": "Candidate Match Recommender",
+      "purpose": "Ranks and recommends worker candidates to customers posting open gigs.",
+      "affectedParties": "workers",
+      "decisionRole": "recommend",
+      "actionTier": "T2",
+      "regulatoryTier": "limited",
+      "tierConsistency": {
+        "ok": true,
+        "issues": []
+      },
+      "owner": "Marketplace Matching Team",
+      "oversight": {
+        "owner": "Marketplace Product Lead",
+        "method": "Customers always see and can override the ranked order; matching logic changes require sign-off from the Fairness Review Board (Part 09).",
+        "trainingNotes": "Marketplace team completes ranking-fairness training before touching ranking weights."
+      },
+      "optOut": {
+        "allowed": true,
+        "limits": "Workers may opt out of algorithmic ranking; they still appear in an unranked manual-browse list, which may reduce visibility to customers."
+      },
+      "modelCards": [
+        {
+          "name": "Candidate Match Recommender",
+          "version": "2.1.0",
+          "limitations": "Proximity weighting can disadvantage workers in low-density service areas; mitigated by a minimum-exposure floor, monitored under Part 09."
+        }
+      ]
+    },
+    {
+      "systemKey": "performance-risk-predictor-v1",
+      "name": "Performance / Churn Risk Predictor",
+      "purpose": "Predicts a worker's likelihood of missing SLA or churning, to inform retention outreach.",
+      "affectedParties": "workers",
+      "decisionRole": "inform",
+      "actionTier": "T1",
+      "regulatoryTier": "limited",
+      "tierConsistency": {
+        "ok": true,
+        "issues": []
+      },
+      "owner": "Worker Success Team",
+      "oversight": {
+        "owner": "Worker Success Manager",
+        "method": "Output is advisory only, surfaced on an internal dashboard; an ops analyst decides whether/how to reach out. No automated consequence attaches.",
+        "trainingNotes": "Analysts are trained not to treat the score as a performance rating when speaking with workers."
+      },
+      "optOut": {
+        "allowed": true,
+        "limits": "Worker may request not to be profiled; outreach stops, with no platform-side consequence."
+      },
+      "modelCards": [
+        {
+          "name": "Performance Risk Predictor",
+          "version": "1.0.4",
+          "limitations": "Accuracy degrades for workers with under 3 months tenure (sparse history). Drift monitoring currently FAILING — see monitoring check mon-perf-accuracy-01."
+        }
+      ]
+    },
+    {
+      "systemKey": "fraud-anomaly-flagger-v1",
+      "name": "Fraud / Anomaly Payout Flagger",
+      "purpose": "Automatically flags and temporarily holds suspicious payouts pending human review.",
+      "affectedParties": "workers",
+      "decisionRole": "automate",
+      "actionTier": "T4",
+      "regulatoryTier": "high",
+      "tierConsistency": {
+        "ok": true,
+        "issues": []
+      },
+      "owner": "Trust & Safety Team",
+      "oversight": {
+        "owner": "Trust & Safety Duty Reviewer",
+        "method": "Every temporary hold is queued for mandatory human review within 24h; a reviewer must confirm or overturn before the hold can exceed 24h.",
+        "trainingNotes": "Duty reviewers are certified on the Trust & Safety escalation runbook before taking queue shifts."
+      },
+      "optOut": {
+        "allowed": false,
+        "limits": "Opt-out is not permitted: fraud controls are mandatory for platform integrity and payment-partner compliance. Workers may contest any hold via the expedited review path (target resolution: 24h)."
+      },
+      "modelCards": [
+        {
+          "name": "Fraud Anomaly Flagger",
+          "version": "1.2.1",
+          "limitations": "Known disparity: hold rate for workers with <6 months tenure is 1.42x that of longer-tenured workers at equal risk score — see fairness report fr-fraud-tenure-01 (FAILING, threshold 1.25)."
+        }
+      ]
+    },
+    {
+      "systemKey": "support-ticket-priority-scorer-v1",
+      "name": "Support Ticket Priority Scorer",
+      "purpose": "Scores and suggests an order for customer support tickets to route triage.",
+      "affectedParties": "customers",
+      "decisionRole": "recommend",
+      "actionTier": "T1",
+      "regulatoryTier": "limited",
+      "tierConsistency": {
+        "ok": true,
+        "issues": []
+      },
+      "owner": "Customer Support Team",
+      "oversight": {
+        "owner": "Support Operations Lead",
+        "method": "Agents see the suggested order but always choose which ticket to open next.",
+        "trainingNotes": "Agents are briefed that `customerTierWeight` must never be used to deprioritize safety-flagged tickets."
+      },
+      "optOut": {
+        "allowed": true,
+        "limits": "Customer may request FIFO handling instead of priority scoring; this may increase wait time."
+      },
+      "modelCards": [
+        {
+          "name": "Support Ticket Priority Scorer",
+          "version": "1.1.0",
+          "limitations": "Keyword severity detection is English-only; non-English tickets default to a neutral severity score."
+        }
+      ]
+    }
+  ],
+  "impactAssessments": [
+    {
+      "systemKey": "eligibility-scoring-v1",
+      "latestVersion": 1,
+      "latestStatus": "approved",
+      "history": [
+        {
+          "version": 1,
+          "status": "approved",
+          "triggeredBy": "initial"
+        }
+      ]
+    },
+    {
+      "systemKey": "candidate-match-recommender-v2",
+      "latestVersion": 1,
+      "latestStatus": "approved",
+      "history": [
+        {
+          "version": 1,
+          "status": "approved",
+          "triggeredBy": "initial"
+        }
+      ]
+    },
+    {
+      "systemKey": "performance-risk-predictor-v1",
+      "latestVersion": 1,
+      "latestStatus": "approved",
+      "history": [
+        {
+          "version": 1,
+          "status": "approved",
+          "triggeredBy": "initial"
+        }
+      ]
+    },
+    {
+      "systemKey": "fraud-anomaly-flagger-v1",
+      "latestVersion": 1,
+      "latestStatus": "approved",
+      "history": [
+        {
+          "version": 1,
+          "status": "approved",
+          "triggeredBy": "initial"
+        }
+      ]
+    },
+    {
+      "systemKey": "support-ticket-priority-scorer-v1",
+      "latestVersion": 1,
+      "latestStatus": "approved",
+      "history": [
+        {
+          "version": 1,
+          "status": "approved",
+          "triggeredBy": "initial"
+        }
+      ]
+    }
+  ],
+  "monitoring": [
+    {
+      "checkId": "mon-eligibility-drift-01",
+      "systemKey": "eligibility-scoring-v1",
+      "checkType": "drift",
+      "status": "pass",
+      "lastRunAt": "2026-10-23T10:23:54.704Z"
+    },
+    {
+      "checkId": "mon-match-exposure-01",
+      "systemKey": "candidate-match-recommender-v2",
+      "checkType": "fairness",
+      "status": "pass",
+      "lastRunAt": "2026-10-23T10:23:54.704Z"
+    },
+    {
+      "checkId": "mon-perf-accuracy-01",
+      "systemKey": "performance-risk-predictor-v1",
+      "checkType": "accuracy",
+      "status": "fail",
+      "lastRunAt": "2026-10-23T10:23:54.704Z"
+    },
+    {
+      "checkId": "mon-fraud-fairness-01",
+      "systemKey": "fraud-anomaly-flagger-v1",
+      "checkType": "fairness",
+      "status": "warn",
+      "lastRunAt": "2026-10-23T10:23:54.704Z"
+    },
+    {
+      "checkId": "mon-fraud-availability-01",
+      "systemKey": "fraud-anomaly-flagger-v1",
+      "checkType": "availability",
+      "status": "pass",
+      "lastRunAt": "2026-10-23T10:23:54.704Z"
+    },
+    {
+      "checkId": "mon-support-triage-01",
+      "systemKey": "support-ticket-priority-scorer-v1",
+      "checkType": "accuracy",
+      "status": "pass",
+      "lastRunAt": "2026-10-23T10:23:54.704Z"
+    }
+  ],
+  "fairness": [
+    {
+      "systemKey": "fraud-anomaly-flagger-v1",
+      "metric": "hold_rate_parity_by_tenure",
+      "disparityRatio": 1.42,
+      "threshold": 1.25,
+      "passed": false
+    },
+    {
+      "systemKey": "candidate-match-recommender-v2",
+      "metric": "exposure_parity_by_region_density",
+      "disparityRatio": 1.16,
+      "threshold": 1.25,
+      "passed": true
+    },
+    {
+      "systemKey": "eligibility-scoring-v1",
+      "metric": "upgrade_rate_parity_by_tenure_gap",
+      "disparityRatio": 1.23,
+      "threshold": 1.25,
+      "passed": true
+    }
+  ],
+  "auditChain": [
+    {
+      "systemKey": "eligibility-scoring-v1",
+      "entryCount": 5,
+      "valid": true,
+      "brokenAtSeq": null
+    },
+    {
+      "systemKey": "candidate-match-recommender-v2",
+      "entryCount": 5,
+      "valid": true,
+      "brokenAtSeq": null
+    },
+    {
+      "systemKey": "performance-risk-predictor-v1",
+      "entryCount": 4,
+      "valid": true,
+      "brokenAtSeq": null
+    },
+    {
+      "systemKey": "fraud-anomaly-flagger-v1",
+      "entryCount": 8,
+      "valid": true,
+      "brokenAtSeq": null
+    },
+    {
+      "systemKey": "support-ticket-priority-scorer-v1",
+      "entryCount": 6,
+      "valid": true,
+      "brokenAtSeq": null
+    }
+  ],
+  "gaps": [
+    "Monitoring check mon-perf-accuracy-01 for performance-risk-predictor-v1 is \"fail\", not \"pass\".",
+    "Monitoring check mon-fraud-fairness-01 for fraud-anomaly-flagger-v1 is \"warn\", not \"pass\".",
+    "Fairness report for fraud-anomaly-flagger-v1 (hold_rate_parity_by_tenure) is FAILING: disparity ratio 1.42 exceeds threshold 1.25."
+  ]
+}

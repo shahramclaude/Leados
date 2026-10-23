@@ -7,7 +7,16 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "verify": "tsx scripts/verify.ts"
+    "db:push": "drizzle-kit push",
+    "db:seed": "tsx scripts/seed.ts",
+    "registry:lint": "tsx scripts/check-registry-completeness.ts",
+    "registry:test": "tsx scripts/test-registry-completeness.ts",
+    "risktier:test": "tsx scripts/test-risk-tier-consistency.ts",
+    "assessment:test": "tsx scripts/test-change-trigger.ts",
+    "rights:test": "tsx scripts/test-rights-machinery.ts",
+    "conformity:export": "tsx scripts/conformity-export.ts",
+    "conformity:test": "tsx scripts/test-conformity-export.ts",
+    "verify": "npm run typecheck && npm run registry:lint && npm run registry:test && npm run risktier:test && npm run assessment:test && npm run rights:test && npm run conformity:test"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -16,7 +25,8 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
