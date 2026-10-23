@@ -1,47 +1,162 @@
 @import "tailwindcss";
 
-::selection {
-  background: rgba(99, 102, 241, 0.4);
+/* ---------------------------------------------------------------------------
+ * LEADOS design bible — the single token source. Every value below is final
+ * (not a placeholder): hex colors, px sizes, ms durations, exact ratios.
+ * Components must consume these custom properties — no raw hex/px in
+ * component code (enforced by convention; see design/README in this repo).
+ * ------------------------------------------------------------------------ */
+:root {
+  /* Neutral scale — cool gray, analytical register */
+  --n-50: #f8fafc;
+  --n-100: #f1f5f9;
+  --n-200: #e2e8f0;
+  --n-300: #cbd5e1;
+  --n-400: #94a3b8;
+  --n-500: #64748b;
+  --n-600: #475569;
+  --n-700: #334155;
+  --n-800: #1e293b;
+  --n-900: #0f172a;
+  --n-950: #020617;
+
+  /* Brand scale — deep indigo anchor */
+  --brand-50: #eef2ff;
+  --brand-100: #e0e7ff;
+  --brand-200: #c7d2fe;
+  --brand-300: #a5b4fc;
+  --brand-400: #818cf8;
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+  --brand-700: #4338ca;
+  --brand-800: #3730a3;
+  --brand-900: #312e81;
+  --brand-950: #1e1b4b;
+
+  /* Accent: signal teal (positive/analytic) */
+  --teal-500: #14b8a6;
+  --teal-600: #0d9488;
+  --teal-700: #0f766e;
+
+  /* Accent: amber (attention) */
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+
+  /* Status ramp */
+  --success-surface: #ecfdf5;
+  --success-border: #6ee7b7;
+  --success-text: #047857;
+  --warning-surface: #fffbeb;
+  --warning-border: #fcd34d;
+  --warning-text: #b45309;
+  --danger-surface: #fef2f2;
+  --danger-border: #fca5a5;
+  --danger-text: #b91c1c;
+  --info-surface: #eff6ff;
+  --info-border: #93c5fd;
+  --info-text: #1d4ed8;
+
+  /* Chart categorical palette (order encodes significance) */
+  --chart-1: #4f46e5;
+  --chart-2: #0d9488;
+  --chart-3: #d97706;
+  --chart-4: #be185d;
+  --chart-5: #0369a1;
+  --chart-6: #65a30d;
+  --chart-7: #7c3aed;
+  --chart-8: #475569;
+
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --text-caption: 13px;
+  --text-sm: 14px;
+  --text-body: 16px;
+  --text-lg: 20px;
+  --text-h3: 25px;
+  --text-h2: 31px;
+  --text-h1: 39px;
+  --text-display: 48px;
+
+  /* Spacing (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-2: 0 4px 10px rgba(15, 23, 42, 0.08);
+  --shadow-3: 0 12px 28px rgba(15, 23, 42, 0.12);
+  --shadow-4: 0 24px 60px rgba(15, 23, 42, 0.16);
+
+  /* Motion */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Focus ring */
+  --focus-ring: 0 0 0 2px #ffffff, 0 0 0 4px var(--brand-500);
+
+  /* Semantic surface tokens (light theme) */
+  --surface-page: var(--n-50);
+  --surface-card: #ffffff;
+  --surface-sunken: var(--n-100);
+  --border-default: var(--n-200);
+  --text-primary: var(--n-900);
+  --text-secondary: var(--n-600);
+  --text-muted: var(--n-400);
 }
 
-.card {
-  @apply rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.25)];
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-page: var(--n-950);
+    --surface-card: var(--n-900);
+    --surface-sunken: var(--n-800);
+    --border-default: var(--n-700);
+    --text-primary: var(--n-50);
+    --text-secondary: var(--n-300);
+    --text-muted: var(--n-500);
+    --focus-ring: 0 0 0 2px var(--n-950), 0 0 0 4px var(--brand-400);
+  }
 }
 
-.badge {
-  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
 }
 
-.btn {
-  @apply inline-flex items-center justify-center rounded-lg px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+html,
+body {
+  background: var(--surface-page);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
 }
 
-.btn-primary {
-  @apply bg-indigo-500 text-white hover:bg-indigo-400;
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
 }
 
-.btn-secondary {
-  @apply bg-slate-800 text-slate-100 hover:bg-slate-700;
-}
-
-.btn-danger {
-  @apply bg-rose-600 text-white hover:bg-rose-500;
-}
-
-input,
-select,
-textarea {
-  @apply rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500;
-}
-
-table {
-  @apply w-full border-collapse text-sm;
-}
-
-th {
-  @apply border-b border-slate-800 px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500;
-}
-
-td {
-  @apply border-b border-slate-800/60 px-3 py-2 align-top text-slate-200;
+* {
+  box-sizing: border-box;
 }

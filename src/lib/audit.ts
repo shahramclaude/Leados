@@ -1,41 +1,83 @@
-// Part 09-style append-only audit log. Every governance-relevant write in
-// Part 46 (safe-channel access, dual-control decisions, recusals, red-flag
-// detections, suppression attempts) goes through this one function so there
-// is a single, consistent audit trail to inspect.
-
+import { createHash } from "node:crypto";
 import { db } from "@/db";
-import { auditLog } from "@/db/schema";
+import { auditEvents } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
 
-export interface AuditEntry {
-  actorId?: number | null;
-  actorRole?: string | null;
+/**
+ * Tamper-evident audit chain (lite).
+ *
+ * Each event's hash = sha256(prevHash + canonical(payload)). Any event
+ * delivered without the correct prevHash breaks the chain — a verifier can
+ * walk the table and detect the exact row where tampering occurred.
+ */
+export async function appendAuditEvent(input: {
+  orgId: string;
+  actorId?: string | null;
   action: string;
-  resourceType: string;
-  resourceId?: string | number | null;
-  metadata?: Record<string, unknown>;
-}
+  entityType: string;
+  entityId?: string | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  const [last] = await db
+    .select({ hash: auditEvents.hash })
+    .from(auditEvents)
+    .where(eq(auditEvents.orgId, input.orgId))
+    .orderBy(desc(auditEvents.createdAt))
+    .limit(1);
 
-export async function recordAudit(entry: AuditEntry) {
+  const prevHash = last?.hash ?? "GENESIS";
+  const payload = JSON.stringify({
+    orgId: input.orgId,
+    actorId: input.actorId ?? null,
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId ?? null,
+    metadata: input.metadata ?? null,
+    prevHash,
+  });
+  const hash = createHash("sha256").update(payload).digest("hex");
+
   const [row] = await db
-    .insert(auditLog)
+    .insert(auditEvents)
     .values({
-      actorId: entry.actorId ?? null,
-      actorRole: entry.actorRole ?? null,
-      action: entry.action,
-      resourceType: entry.resourceType,
-      resourceId: entry.resourceId == null ? null : String(entry.resourceId),
-      metadata: entry.metadata ?? {},
+      orgId: input.orgId,
+      actorId: input.actorId ?? null,
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId ?? null,
+      metadata: input.metadata ?? null,
+      prevHash,
+      hash,
     })
     .returning();
+
   return row;
 }
 
-export async function getAuditTrail(resourceType: string, resourceId: string | number) {
-  return db
+/** Walk the chain in creation order and verify every link. */
+export async function verifyAuditChain(orgId: string) {
+  const rows = await db
     .select()
-    .from(auditLog)
-    .where(eq(auditLog.resourceType, resourceType))
-    .orderBy(desc(auditLog.createdAt))
-    .then((rows) => rows.filter((r) => r.resourceId === String(resourceId)));
+    .from(auditEvents)
+    .where(eq(auditEvents.orgId, orgId))
+    .orderBy(auditEvents.createdAt);
+
+  let expectedPrev = "GENESIS";
+  const breaks: string[] = [];
+  for (const row of rows) {
+    if (row.prevHash !== expectedPrev) breaks.push(row.id);
+    const payload = JSON.stringify({
+      orgId: row.orgId,
+      actorId: row.actorId,
+      action: row.action,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      metadata: row.metadata,
+      prevHash: row.prevHash,
+    });
+    const recomputed = createHash("sha256").update(payload).digest("hex");
+    if (recomputed !== row.hash) breaks.push(row.id);
+    expectedPrev = row.hash;
+  }
+  return { valid: breaks.length === 0, breaks, count: rows.length };
 }

@@ -1,52 +1,116 @@
-// src/lib/rules.ts
-// Synthetic 24-rule catalog across 6 categories, used to drive the Signal
-// Board that feeds the Attention Optimizer. ORIGINAL to this sandbox —
-// disclosed-fabricated, not pulled from any verified rule engine. Rule IDs
-// R1/R4/R7/R10/R17/R73/R88/R103/R104 are deliberately reused from the task's
-// pasted "pt-U" brief so its own named dependency examples (R10 depends on
-// R1, R104 depends on R103) stay explorable; everything else is invented.
+// Reasoning compiler (scoped): declarative decision tables over plain data,
+// never scattered `if` statements. Each table is data; `applyTable` is the
+// one runtime that evaluates it and returns a trace explaining the match.
 
-import type { RuleDef } from "./types";
+export type Condition = {
+  field: string;
+  op: "eq" | "lt" | "le" | "gt" | "ge" | "in";
+  value: unknown;
+};
 
-export const RULES: RuleDef[] = [
-  { rule: "R1", category: "people", title: "1:1 cadence slipping with a direct report", baseSev: 3, playId: "oneonone-bundle", personLinked: true },
-  { rule: "R4", category: "people", title: "Sustained after-hours activity spike (burnout signal)", baseSev: 4, playId: "oneonone-bundle", personLinked: true },
-  { rule: "R7", category: "people", title: "Repeated missed deadlines, same owner", baseSev: 4, playId: "oneonone-bundle", personLinked: true },
-  { rule: "R10", category: "people", title: "No documented growth plan for a flight-risk performer", baseSev: 3, playId: "oneonone-bundle", personLinked: true },
-  { rule: "R12", category: "people", title: "Underperformance uncorrected after two review cycles", baseSev: 5, playId: "termination-prep", personLinked: true },
-  { rule: "R17", category: "ops", title: "Deploy frequency down sharply this sprint", baseSev: 3, playId: "sprint-plan" },
-  { rule: "R19", category: "ops", title: "On-call rotation overloaded on one engineer", baseSev: 4, playId: "sprint-plan", personLinked: true },
-  { rule: "R22", category: "ops", title: "Incident MTTR trending up three sprints running", baseSev: 3, playId: "sprint-plan" },
-  { rule: "R30", category: "strategy", title: "Roadmap bet has no accountable owner", baseSev: 3, playId: "roadmap-sync" },
-  { rule: "R33", category: "strategy", title: "Board narrative contradicts last quarter's stated bet", baseSev: 4, playId: "board-narrative" },
-  { rule: "R36", category: "strategy", title: "Competitive move unaddressed for 30+ days", baseSev: 3, playId: "roadmap-sync" },
-  { rule: "R41", category: "legal", title: "Key contract renewal unanswered by counterparty", baseSev: 3, playId: "contract-review" },
-  { rule: "R44", category: "legal", title: "Regulatory filing window closing within 10 days", baseSev: 5, playId: "contract-review" },
-  { rule: "R47", category: "legal", title: "Data processing agreement past review date", baseSev: 2, playId: "contract-review" },
-  { rule: "R51", category: "product", title: "Churn ticked up in a concentrated cohort", baseSev: 4, playId: "sprint-plan" },
-  { rule: "R55", category: "product", title: "Activation rate regression after last release", baseSev: 3, playId: "sprint-plan" },
-  { rule: "R58", category: "product", title: "Support escalations up without a root cause owner", baseSev: 3, playId: "crisis-response" },
-  { rule: "R73", category: "finance", title: "Runway under 6 months at current burn", baseSev: 5, playId: "pl-review" },
-  { rule: "R76", category: "finance", title: "Vendor spend materially over forecast", baseSev: 4, playId: "pl-review" },
-  { rule: "R80", category: "finance", title: "Budget variance unexplained for two consecutive months", baseSev: 3, playId: "pl-review" },
-  { rule: "R88", category: "finance", title: "Customer concentration risk — top account over 30% of revenue", baseSev: 4, playId: "board-narrative" },
-  { rule: "R103", category: "finance", title: "Gross margin compressed vs. plan", baseSev: 4, playId: "pl-review" },
-  { rule: "R104", category: "finance", title: "LTV:CAC ratio below healthy threshold", baseSev: 4, playId: "pl-review" },
-  { rule: "R110", category: "ops", title: "Cross-team dependency blocking two workstreams", baseSev: 3, playId: "sprint-plan" },
-];
+export type DecisionRow<TOut> = {
+  when: Condition[];
+  then: TOut;
+  because: string;
+};
 
-export const RULES_BY_ID: Record<string, RuleDef> = Object.fromEntries(
-  RULES.map((r) => [r.rule, r])
-);
+export type DecisionTable<TOut> = {
+  id: string;
+  rows: DecisionRow<TOut>[];
+  default: TOut;
+};
 
-// Dependency heuristic, carried over verbatim from the pasted brief's own
-// described examples (R10 needs R1 first; R104 needs R103 first). This is a
-// hand-authored heuristic map, not a learned or verified dependency graph.
-export function dependenciesFor(rule: string): string[] {
-  if (rule === "R10") return ["R1"];
-  if (rule === "R104") return ["R103"];
-  if (rule === "R12") return ["R7"];
-  return [];
+export type RuleTrace<TOut> = {
+  tableId: string;
+  matchedRowIndex: number | null;
+  output: TOut;
+  explanation: string;
+};
+
+function evalCondition(cond: Condition, input: Record<string, unknown>): boolean {
+  const actual = input[cond.field];
+  switch (cond.op) {
+    case "eq":
+      return actual === cond.value;
+    case "lt":
+      return typeof actual === "number" && actual < (cond.value as number);
+    case "le":
+      return typeof actual === "number" && actual <= (cond.value as number);
+    case "gt":
+      return typeof actual === "number" && actual > (cond.value as number);
+    case "ge":
+      return typeof actual === "number" && actual >= (cond.value as number);
+    case "in":
+      return Array.isArray(cond.value) && cond.value.includes(actual);
+    default:
+      return false;
+  }
 }
 
-export const PEOPLE = ["Ana", "Marcus", "Priya", "Dee", "Lior", "Sam"];
+/** First-match-wins evaluation with a full explanation trace. */
+export function applyTable<TOut>(
+  table: DecisionTable<TOut>,
+  input: Record<string, unknown>,
+): RuleTrace<TOut> {
+  for (let i = 0; i < table.rows.length; i++) {
+    const row = table.rows[i];
+    if (row.when.every((c) => evalCondition(c, input))) {
+      return {
+        tableId: table.id,
+        matchedRowIndex: i,
+        output: row.then,
+        explanation: row.because,
+      };
+    }
+  }
+  return {
+    tableId: table.id,
+    matchedRowIndex: null,
+    output: table.default,
+    explanation: "No row matched; default applied.",
+  };
+}
+
+// --- Rule library ----------------------------------------------------------
+
+/** Approval routing: risk tier + amount → who/what must sign off. */
+export const approvalRoutingTable: DecisionTable<{
+  autoApprovable: boolean;
+  requiredApprover: string;
+}> = {
+  id: "approval-routing-v1",
+  default: { autoApprovable: false, requiredApprover: "exec-sponsor" },
+  rows: [
+    {
+      when: [{ field: "riskTier", op: "in", value: ["T0", "T1"] }, { field: "amountUsd", op: "le", value: 1000 }],
+      then: { autoApprovable: true, requiredApprover: "none" },
+      because: "T0/T1 actions under $1,000 are reversible and low-stakes; auto-approved.",
+    },
+    {
+      when: [{ field: "riskTier", op: "eq", value: "T2" }],
+      then: { autoApprovable: false, requiredApprover: "team-lead" },
+      because: "T2 actions require a team-lead sign-off before execution.",
+    },
+    {
+      when: [{ field: "riskTier", op: "in", value: ["T3", "T4"] }],
+      then: { autoApprovable: false, requiredApprover: "exec-sponsor" },
+      because: "T3/T4 actions are materially hard to reverse; an executive sponsor must approve.",
+    },
+    {
+      when: [{ field: "riskTier", op: "eq", value: "T5" }],
+      then: { autoApprovable: false, requiredApprover: "board" },
+      because: "T5 actions are irreversible at scale; board-level approval is required.",
+    },
+  ],
+};
+
+/** Metric status → severity badge, used consistently across every surface. */
+export const metricSeverityTable: DecisionTable<{ severity: "good" | "watch" | "critical" }> = {
+  id: "metric-severity-v1",
+  default: { severity: "watch" },
+  rows: [
+    { when: [{ field: "pctOfTarget", op: "ge", value: 100 }], then: { severity: "good" }, because: "At or above target." },
+    { when: [{ field: "pctOfTarget", op: "ge", value: 80 }], then: { severity: "watch" }, because: "Within 20% of target." },
+    { when: [{ field: "pctOfTarget", op: "lt", value: 80 }], then: { severity: "critical" }, because: "More than 20% below target." },
+  ],
+};

@@ -1,35 +1,18 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { auditLog } from "@/db/schema";
-import { secureRoute } from "@/lib/apiUtils";
-import { recordAuditEvent } from "@/lib/audit";
-import type { SessionUser } from "@/lib/session";
+import { auditEvents } from "@/db/schema";
+import { DEFAULT_ORG_ID } from "@/lib/org";
+import { verifyAuditChain } from "@/lib/audit";
+import { desc, eq } from "drizzle-orm";
 
-export const GET = secureRoute({
-  method: "GET",
-  path: "/api/audit",
-  handler: async ({ request, session }: { request: NextRequest; session: SessionUser | null }) => {
-    const s = session!;
-    const rows = await db
-      .select()
-      .from(auditLog)
-      .where(eq(auditLog.orgId, s.orgId))
-      .orderBy(desc(auditLog.seq))
-      .limit(200);
+export const dynamic = "force-dynamic";
 
-    // Reading the audit log is itself an audited, sensitive action
-    // (investigators' access to the trail must itself be traceable).
-    await recordAuditEvent({
-      orgId: s.orgId,
-      actorUserId: s.userId,
-      actorEmail: s.email,
-      actorRole: s.role,
-      action: "audit.read",
-      resourceType: "audit_log",
-      correlationId: request.headers.get("x-correlation-id") ?? crypto.randomUUID(),
-    });
-
-    return NextResponse.json({ events: rows });
-  },
-});
+export async function GET() {
+  const rows = await db
+    .select()
+    .from(auditEvents)
+    .where(eq(auditEvents.orgId, DEFAULT_ORG_ID))
+    .orderBy(desc(auditEvents.createdAt))
+    .limit(200);
+  const verification = await verifyAuditChain(DEFAULT_ORG_ID);
+  return Response.json({ items: rows, verification });
+}

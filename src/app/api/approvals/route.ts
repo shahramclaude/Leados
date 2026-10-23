@@ -1,71 +1,53 @@
+import { NextRequest } from "next/server";
 import { db } from "@/db";
-import { approvals, decisions } from "@/db/schema";
-import { requireAuth } from "@/lib/api/auth";
-import { parsePageParams, toPagedResult } from "@/lib/api/pagination";
-import { errorResponse, NotFoundError } from "@/lib/api/respond";
-import { createApprovalSchema } from "@/lib/api/schemas";
-import { and, count, eq } from "drizzle-orm";
+import { approvals } from "@/db/schema";
+import { DEFAULT_ORG_ID } from "@/lib/org";
+import { applyTable, approvalRoutingTable } from "@/lib/rules";
+import { appendAuditEvent } from "@/lib/audit";
+import { eq, desc } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  try {
-    const auth = await requireAuth(request);
-    const url = new URL(request.url);
-    const page = parsePageParams(url);
-
-    const [rows, totalRow] = await Promise.all([
-      db
-        .select()
-        .from(approvals)
-        .where(eq(approvals.tenantId, auth.tenantId))
-        .orderBy(approvals.id)
-        .limit(page.pageSize)
-        .offset(page.offset),
-      db
-        .select({ value: count() })
-        .from(approvals)
-        .where(eq(approvals.tenantId, auth.tenantId)),
-    ]);
-
-    return Response.json(toPagedResult(rows, totalRow[0]?.value ?? 0, page));
-  } catch (error) {
-    return errorResponse(error);
-  }
+export async function GET() {
+  const rows = await db
+    .select()
+    .from(approvals)
+    .where(eq(approvals.orgId, DEFAULT_ORG_ID))
+    .orderBy(desc(approvals.createdAt));
+  return Response.json({ items: rows });
 }
 
-export async function POST(request: Request) {
-  try {
-    const auth = await requireAuth(request);
-    const body = createApprovalSchema.parse(await request.json());
-
-    const decisionRows = await db
-      .select({ id: decisions.id })
-      .from(decisions)
-      .where(
-        and(
-          eq(decisions.id, body.decisionId),
-          eq(decisions.tenantId, auth.tenantId),
-        ),
-      )
-      .limit(1);
-    if (!decisionRows[0]) {
-      throw new NotFoundError(
-        `Decision ${body.decisionId} not found for this tenant`,
-      );
-    }
-
-    const [created] = await db
-      .insert(approvals)
-      .values({
-        tenantId: auth.tenantId,
-        decisionId: body.decisionId,
-        approverId: auth.userId,
-      })
-      .returning();
-
-    return Response.json(created, { status: 201 });
-  } catch (error) {
-    return errorResponse(error);
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  if (!body?.title) {
+    return Response.json({ code: "validation_error", detail: "title is required" }, { status: 400 });
   }
+  const riskTier = body.riskTier ?? "T2";
+  const amountUsd = body.amountUsd ?? 0;
+
+  const trace = applyTable(approvalRoutingTable, { riskTier, amountUsd });
+
+  const [row] = await db
+    .insert(approvals)
+    .values({
+      orgId: DEFAULT_ORG_ID,
+      title: body.title,
+      description: body.description ?? null,
+      riskTier,
+      amountUsd,
+      status: trace.output.autoApprovable ? "approved" : "pending",
+      decisionNote: trace.output.autoApprovable ? `Auto-approved: ${trace.explanation}` : null,
+      decidedAt: trace.output.autoApprovable ? new Date() : null,
+    })
+    .returning();
+
+  await appendAuditEvent({
+    orgId: DEFAULT_ORG_ID,
+    action: trace.output.autoApprovable ? "approval.auto_approved" : "approval.requested",
+    entityType: "approval",
+    entityId: row.id,
+    metadata: { riskTier, amountUsd, requiredApprover: trace.output.requiredApprover, because: trace.explanation },
+  });
+
+  return Response.json({ item: row, trace }, { status: 201 });
 }

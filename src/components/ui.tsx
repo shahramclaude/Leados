@@ -1,110 +1,181 @@
 import type { ReactNode } from "react";
-import { cn } from "../utils/cn";
-import type { EvidenceClass } from "../types";
 
-export function Card({ children, className }: { children: ReactNode; className?: string }) {
+// LEADOS design-system primitives. Every primitive consumes the token
+// custom-properties defined in globals.css — no raw hex/px values here.
+
+export function Card({
+  children,
+  className = "",
+  padded = true,
+}: {
+  children: ReactNode;
+  className?: string;
+  padded?: boolean;
+}) {
   return (
-    <div className={cn("rounded-2xl border border-slate-200 bg-white p-5 shadow-sm", className)}>
+    <div
+      className={`rounded-[var(--radius-lg)] border border-[var(--border-default)] bg-[var(--surface-card)] shadow-[var(--shadow-1)] ${
+        padded ? "p-6" : ""
+      } ${className}`}
+    >
       {children}
     </div>
   );
 }
 
-export function SectionHeader({
-  title,
-  subtitle,
-  action,
-}: {
+export function PageHeader({ eyebrow, title, description, actions }: {
+  eyebrow?: string;
   title: string;
-  subtitle?: string;
-  action?: ReactNode;
+  description?: string;
+  actions?: ReactNode;
 }) {
   return (
-    <div className="mb-5 flex items-start justify-between gap-4">
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h2>
-        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+        {eyebrow ? (
+          <p className="m-0 text-[13px] font-semibold uppercase tracking-[0.08em] text-[var(--brand-600)]">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h1 className="mt-1 text-[31px] font-semibold leading-tight text-[var(--text-primary)]">
+          {title}
+        </h1>
+        {description ? (
+          <p className="mt-2 max-w-2xl text-[15px] text-[var(--text-secondary)]">{description}</p>
+        ) : null}
       </div>
-      {action}
+      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
 
-const evidenceStyles: Record<EvidenceClass, string> = {
-  verified: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  simulated: "bg-amber-50 text-amber-700 border-amber-200",
-  planned: "bg-slate-100 text-slate-600 border-slate-200",
-};
-
-const evidenceLabel: Record<EvidenceClass, string> = {
-  verified: "Verified",
-  simulated: "Simulated",
-  planned: "Planned / not built",
-};
-
-export function EvidenceTag({ level }: { level: EvidenceClass }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium",
-        evidenceStyles[level]
-      )}
-    >
-      <span
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          level === "verified" && "bg-emerald-500",
-          level === "simulated" && "bg-amber-500",
-          level === "planned" && "bg-slate-400"
-        )}
-      />
-      {evidenceLabel[level]}
-    </span>
-  );
-}
+const badgeTones = {
+  neutral: "bg-[var(--n-100)] text-[var(--n-700)] border-[var(--n-200)]",
+  success: "bg-[var(--success-surface)] text-[var(--success-text)] border-[var(--success-border)]",
+  warning: "bg-[var(--warning-surface)] text-[var(--warning-text)] border-[var(--warning-border)]",
+  danger: "bg-[var(--danger-surface)] text-[var(--danger-text)] border-[var(--danger-border)]",
+  info: "bg-[var(--info-surface)] text-[var(--info-text)] border-[var(--info-border)]",
+  brand: "bg-[var(--brand-50)] text-[var(--brand-700)] border-[var(--brand-200)]",
+} as const;
 
 export function Badge({
   children,
-  tone = "slate",
+  tone = "neutral",
 }: {
   children: ReactNode;
-  tone?: "slate" | "emerald" | "rose" | "amber" | "indigo";
+  tone?: keyof typeof badgeTones;
 }) {
-  const tones: Record<string, string> = {
-    slate: "bg-slate-100 text-slate-700",
-    emerald: "bg-emerald-100 text-emerald-700",
-    rose: "bg-rose-100 text-rose-700",
-    amber: "bg-amber-100 text-amber-800",
-    indigo: "bg-indigo-100 text-indigo-700",
-  };
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium", tones[tone])}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-[var(--radius-full)] border px-2.5 py-0.5 text-[13px] font-medium ${badgeTones[tone]}`}
+    >
       {children}
     </span>
   );
 }
 
-export function ProgressBar({ value, max = 100, tone = "indigo" }: { value: number; max?: number; tone?: "indigo" | "rose" | "emerald" | "amber" }) {
-  const pct = Math.min(100, Math.round((value / max) * 100));
-  const tones: Record<string, string> = {
-    indigo: "bg-indigo-500",
-    rose: "bg-rose-500",
-    emerald: "bg-emerald-500",
-    amber: "bg-amber-500",
-  };
+const riskToneMap: Record<string, keyof typeof badgeTones> = {
+  T0: "neutral",
+  T1: "info",
+  T2: "brand",
+  T3: "warning",
+  T4: "warning",
+  T5: "danger",
+};
+
+export function RiskBadge({ tier }: { tier: string }) {
+  return <Badge tone={riskToneMap[tier] ?? "neutral"}>Risk {tier}</Badge>;
+}
+
+export function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const pct = Math.round(confidence * 100);
+  const tone: keyof typeof badgeTones = pct >= 75 ? "success" : pct >= 50 ? "warning" : "danger";
+  return <Badge tone={tone}>{pct}% confidence</Badge>;
+}
+
+export function StatBlock({
+  label,
+  value,
+  unit,
+  delta,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string | number;
+  unit?: string;
+  delta?: string;
+  tone?: keyof typeof badgeTones;
+}) {
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-      <div className={cn("h-full rounded-full transition-all", tones[tone])} style={{ width: `${pct}%` }} />
+    <Card>
+      <p className="m-0 text-[13px] font-medium uppercase tracking-[0.06em] text-[var(--text-muted)]">
+        {label}
+      </p>
+      <p className="mt-2 text-[31px] font-semibold leading-none text-[var(--text-primary)]">
+        {value}
+        {unit ? <span className="ml-1 text-[16px] font-normal text-[var(--text-secondary)]">{unit}</span> : null}
+      </p>
+      {delta ? (
+        <div className="mt-3">
+          <Badge tone={tone}>{delta}</Badge>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+export function EmptyState({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-dashed border-[var(--border-default)] bg-[var(--surface-sunken)] px-6 py-10 text-center">
+      <p className="m-0 text-[16px] font-semibold text-[var(--text-primary)]">{title}</p>
+      {description ? <p className="mx-auto mt-2 max-w-md text-[14px] text-[var(--text-secondary)]">{description}</p> : null}
     </div>
   );
 }
 
-export function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+export function Button({
+  children,
+  variant = "primary",
+  type = "button",
+  onClick,
+  disabled,
+  className = "",
+}: {
+  children: ReactNode;
+  variant?: "primary" | "secondary" | "danger" | "ghost";
+  type?: "button" | "submit";
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const variants: Record<string, string> = {
+    primary:
+      "bg-[var(--brand-600)] text-white hover:bg-[var(--brand-700)] disabled:bg-[var(--n-300)]",
+    secondary:
+      "bg-[var(--surface-card)] text-[var(--text-primary)] border border-[var(--border-default)] hover:bg-[var(--n-100)]",
+    danger: "bg-[var(--danger-text)] text-white hover:opacity-90",
+    ghost: "bg-transparent text-[var(--text-secondary)] hover:bg-[var(--n-100)]",
+  };
   return (
-    <Card className="flex flex-col gap-1">
-      <span className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</span>
-      <span className="text-2xl font-semibold text-slate-900">{value}</span>
-      {hint && <span className="text-xs text-slate-500">{hint}</span>}
-    </Card>
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-[var(--radius-md)] px-3.5 py-2 text-[14px] font-medium transition-colors duration-[var(--motion-fast)] disabled:cursor-not-allowed ${variants[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function ProgressBar({ pct }: { pct: number }) {
+  const clamped = Math.max(0, Math.min(100, pct));
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-[var(--radius-full)] bg-[var(--n-200)]">
+      <div
+        className="h-full rounded-[var(--radius-full)] bg-[var(--brand-600)] transition-[width] duration-[var(--motion-slow)] ease-[var(--ease-out-quint)]"
+        style={{ width: `${clamped}%` }}
+      />
+    </div>
   );
 }
