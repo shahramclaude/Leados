@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LEADOS — Collective Intelligence",
-  description: "Judgment aggregation, Delphi rounds, prediction markets, and wisdom-of-the-crowd metrics.",
+  title: "Arena Next.js PostgreSQL Starter",
+  description: "Starter template with Next.js, Drizzle, and PostgreSQL.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

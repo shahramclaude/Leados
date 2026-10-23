@@ -1,49 +1,46 @@
-// `npm run verify` — orchestrates a full re-seed plus every Phase 4 gate for
-// Part 43's development & coaching surfaces.
-import "./_env";
-import { seedAll } from "./seedData";
-import { run as runDevGraph } from "./test-dev-graph";
-import { run as runConfidentiality } from "./test-confidentiality";
-import { run as runCoachingEval } from "./test-coaching-eval";
-import { run as runSymmetry } from "./test-symmetry";
-import { run as runFairness } from "./test-fairness";
+// LEADOS — Part 45 verification entrypoint (`npm run verify`).
+//
+// Order matters: the integration test needs the demo org seeded first.
+import "dotenv/config";
+import { spawnSync } from "node:child_process";
 
-async function main() {
-  console.log("### LEADOS Part 43 verification run ###\n");
-  console.log("--- Seeding deterministic fixture data ---");
-  await seedAll();
-
-  const gates: Array<[string, () => Promise<boolean>]> = [
-    ["dev-graph (growth-path citation)", runDevGraph],
-    ["confidentiality (feedback attribution attempts)", runConfidentiality],
-    ["coaching-eval (GROW rubric)", runCoachingEval],
-    ["symmetry (manager/person parity)", runSymmetry],
-    ["fairness (coaching + feedback audits)", runFairness],
-  ];
-
-  const results: Array<{ name: string; ok: boolean }> = [];
-  for (const [name, fn] of gates) {
-    console.log(`\n----------------------------------------------------`);
-    const ok = await fn();
-    results.push({ name, ok });
+function run(cmd: string, args: string[], label: string): boolean {
+  console.log(`\n=== ${label} ===`);
+  const result = spawnSync(cmd, args, { stdio: "inherit", env: process.env });
+  if (result.status !== 0) {
+    console.error(`\n✗ ${label} FAILED (exit code ${result.status})`);
+    return false;
   }
-
-  console.log(`\n### Summary ###`);
-  let allOk = true;
-  for (const r of results) {
-    console.log(`${r.ok ? "PASS" : "FAIL"} — ${r.name}`);
-    if (!r.ok) allOk = false;
-  }
-
-  if (!allOk) {
-    console.error("\nverify: FAILED");
-    process.exit(1);
-  }
-  console.log("\nverify: ALL GATES PASSED");
-  process.exit(0);
+  console.log(`✓ ${label} passed`);
+  return true;
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+async function main() {
+  let ok = true;
+
+  ok = run("npx", ["tsx", "scripts/seed-time-economics.ts"], "Seed demo org (fixtures for integration tests)") && ok;
+
+  ok =
+    run(
+      "npx",
+      [
+        "tsx",
+        "--test",
+        "src/lib/time-economics/__tests__/meetingCost.test.ts",
+        "src/lib/time-economics/__tests__/privacyMatrix.test.ts",
+        "src/lib/time-economics/__tests__/optimizer.test.ts",
+        "src/lib/time-economics/__tests__/attentionModels.test.ts",
+        "src/lib/time-economics/__tests__/classificationUncertaintyLint.test.ts",
+        "src/lib/time-economics/__tests__/outcomeDensityIntegration.test.ts",
+      ],
+      "Time-Economics test suite (cost fixtures, privacy matrix, optimizer feasibility, attention models, classification lint, outcome-density integration)",
+    ) && ok;
+
+  if (!ok) {
+    console.error("\nnpm run verify: FAILED");
+    process.exit(1);
+  }
+  console.log("\nnpm run verify: all checks passed.");
+}
+
+main();
