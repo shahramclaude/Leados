@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { db } from "@/db";
 import { sql } from "drizzle-orm";
 
@@ -8,7 +7,7 @@ export default async function HomePage() {
   await db.execute(sql`select 1`);
 
   return (
-    <main className="grid min-h-[calc(100vh-57px)] place-items-center px-6 py-12">
+    <main className="grid min-h-screen place-items-center px-6 py-12">
       <section className="w-full max-w-2xl rounded-3xl bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,0.12)]">
         <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-600">Starter template</p>
         <h1 className="mt-4 text-[clamp(2rem,5vw,3.25rem)] font-semibold leading-[1.05] text-slate-950">
@@ -17,12 +16,6 @@ export default async function HomePage() {
         <p className="mt-4 text-base text-slate-700">
           Server-rendered with Next.js after a successful PostgreSQL query through Drizzle.
         </p>
-        <Link
-          href="/world-model"
-          className="mt-6 inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-700"
-        >
-          Open World Model &amp; Scenario Simulation →
-        </Link>
       </section>
     </main>
   );
