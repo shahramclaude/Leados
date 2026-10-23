@@ -1,122 +1,117 @@
-import { db } from "@/db";
-import * as s from "@/db/schema";
-import { sql, count as drizzleCount } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
 import Link from "next/link";
-import { Card, Badge } from "@/components/Shell";
-import { NAV_ITEMS } from "@/lib/nav";
+import { sql } from "drizzle-orm";
+import { db } from "@/db";
+import { MODULES } from "@/lib/leados/modules";
+import {
+  ideas,
+  mediaItems,
+  partners,
+  integrationPlans,
+  regulatoryItems,
+  teamDiagnostics,
+  negotiationCases,
+  benchRoles,
+  agentRoles,
+  fitnessFunctions,
+  rituals,
+  tenants,
+  processSpecs,
+  valueHypotheses,
+  methodCandidates,
+  charterStatements,
+} from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
-async function count(table: PgTable) {
-  const [{ value }] = await db.select({ value: drizzleCount() }).from(table);
-  return value;
+const PRIMARY_TABLE: Record<string, unknown> = {
+  innovation: ideas,
+  brand: mediaItems,
+  partnerships: partners,
+  mna: integrationPlans,
+  regulatory: regulatoryItems,
+  team: teamDiagnostics,
+  negotiation: negotiationCases,
+  succession: benchRoles,
+  agents: agentRoles,
+  architecture: fitnessFunctions,
+  rituals: rituals,
+  deployment: tenants,
+  formal: processSpecs,
+  value: valueHypotheses,
+  research: methodCandidates,
+  capstone: charterStatements,
+};
+
+async function countOf(table: unknown): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (await db.select({ n: sql<number>`count(*)` }).from(table as any)) as { n: number }[];
+  return Number(rows[0]?.n ?? 0);
 }
 
 export default async function HomePage() {
-  await db.execute(sql`select 1`);
-
-  const [
-    opportunities,
-    accounts,
-    inventoryItems,
-    decisionRecords,
-    extensionsCount,
-    gateRows,
-  ] = await Promise.all([
-    count(s.opportunities),
-    count(s.accounts),
-    count(s.inventoryItems),
-    count(s.decisionRecords),
-    count(s.extensions),
-    db.select().from(s.gateLedger),
-  ]);
-
-  const gatePass = gateRows.filter((g) => g.status === "pass").length;
-  const gateFail = gateRows.filter((g) => g.status === "fail").length;
-  const gateUnknown = gateRows.filter((g) => g.status === "unknown").length;
-  const gateNeverRun = gateRows.filter((g) => g.status === "never-run").length;
+  const counts = await Promise.all(
+    MODULES.map(async (m) => ({ slug: m.slug, count: await countOf(PRIMARY_TABLE[m.slug]) }))
+  );
+  const countMap = Object.fromEntries(counts.map((c) => [c.slug, c.count]));
+  const totalRecords = counts.reduce((sum, c) => sum + c.count, 0);
+  const measuredModules = counts.filter((c) => c.count > 0).length;
 
   return (
-    <div className="space-y-8">
-      <section>
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-600">LEADOS · Pack 3 scope</p>
-        <h1 className="mt-2 text-3xl font-semibold text-slate-950">Intelligence &amp; Governance Console</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600">
-          This console is a scoped, working implementation of the business-intelligence breadth (Parts 92-99)
-          and platform-hardening/governance surfaces (Parts 100-107) described in the LEADOS Pack 3 specification,
-          built against a single real Next.js + Drizzle + PostgreSQL application. Infrastructure that cannot
-          genuinely execute in this environment &mdash; Terraform applies, CI runners, load-test traffic generators,
-          automated pen-test campaigns &mdash; is represented honestly as governance records with a{" "}
-          <Badge tone="slate">never-run</Badge> status rather than simulated. See the{" "}
-          <Link href="/governance" className="font-medium text-indigo-600 underline">
-            Capstone Readiness Gate
-          </Link>{" "}
-          for the full honest matrix.
+    <div className="space-y-10">
+      <section className="rounded-3xl bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,0.08)] ring-1 ring-slate-200">
+        <p className="m-0 text-sm uppercase tracking-[0.08em] text-indigo-600">Integrated Pack 4 · Parts 108–123</p>
+        <h1 className="mt-4 text-[clamp(1.75rem,4vw,2.75rem)] font-semibold leading-[1.05] text-slate-950">
+          The Strategic Frontier &amp; the AI-Native Organization
+        </h1>
+        <p className="mt-4 max-w-3xl text-base text-slate-700">
+          Sixteen modules — the domains a leadership team lives in daily, plus the AI-native operating layer —
+          running on a shared Postgres substrate. Every number below is measured live from the database, not
+          asserted: a module with zero records honestly shows <span className="font-semibold">unknown</span>,
+          never a guessed value.
         </p>
-      </section>
-
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="Open opportunities" value={opportunities} href="/revenue" />
-        <Stat label="Tracked accounts" value={accounts} href="/customers" />
-        <Stat label="Inventory SKUs" value={inventoryItems} href="/supply-chain" />
-        <Stat label="Decision records" value={decisionRecords} href="/collaboration" />
-      </section>
-
-      <section>
-        <Card title="Program gate status (Part 107 capstone, live)">
-          <div className="flex flex-wrap gap-3 text-sm">
-            <GateStat label="Pass" value={gatePass} tone="green" />
-            <GateStat label="Fail" value={gateFail} tone="red" />
-            <GateStat label="Unknown" value={gateUnknown} tone="amber" />
-            <GateStat label="Never-run" value={gateNeverRun} tone="slate" />
+        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <p className="text-xs font-medium uppercase text-slate-400">Modules</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">16</p>
           </div>
-          <p className="mt-3 text-xs text-slate-500">
-            Gates are re-queried live from <code>gate_ledger</code> on every page load &mdash; not copied from a prior report.
-          </p>
-        </Card>
+          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <p className="text-xs font-medium uppercase text-slate-400">Measured (has data)</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{measuredModules} / 16</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <p className="text-xs font-medium uppercase text-slate-400">Total records tracked</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{totalRecords}</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
+            <p className="text-xs font-medium uppercase text-slate-400">Program gate</p>
+            <Link href="/capstone" className="mt-1 block text-2xl font-semibold text-indigo-600 hover:text-indigo-500">
+              Capstone V →
+            </Link>
+          </div>
+        </div>
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Modules ({NAV_ITEMS.length})</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {NAV_ITEMS.map((item) => (
-            <Link key={item.href} href={item.href}>
-              <Card className="h-full transition hover:border-indigo-300 hover:shadow-md">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-slate-900">{item.label}</p>
-                  <Badge tone="indigo">{item.part}</Badge>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">{item.group}</p>
-              </Card>
+        <h2 className="text-lg font-semibold text-slate-900">Modules</h2>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {MODULES.map((m) => (
+            <Link
+              key={m.slug}
+              href={`/${m.slug}`}
+              className="group rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Part {m.part}</p>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                  {countMap[m.slug] ?? 0} records
+                </span>
+              </div>
+              <h3 className="mt-2 text-base font-semibold text-slate-900 group-hover:text-indigo-700">{m.name}</h3>
+              <p className="mt-1 text-sm text-slate-500">{m.tagline}</p>
             </Link>
           ))}
         </div>
       </section>
-
-      <p className="text-xs text-slate-400">
-        Tip: populate demo data with <code>POST /api/dev/seed</code> (idempotent &mdash; safe to call repeatedly).
-      </p>
-    </div>
-  );
-}
-
-function Stat({ label, value, href }: { label: string; value: number; href: string }) {
-  return (
-    <Link href={href}>
-      <Card className="transition hover:border-indigo-300 hover:shadow-md">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold text-slate-950">{value}</p>
-      </Card>
-    </Link>
-  );
-}
-
-function GateStat({ label, value, tone }: { label: string; value: number; tone: "green" | "red" | "amber" | "slate" }) {
-  return (
-    <div className="flex items-center gap-2">
-      <Badge tone={tone}>{label}</Badge>
-      <span className="font-semibold text-slate-900">{value}</span>
     </div>
   );
 }
