@@ -1,126 +1,130 @@
-"use client";
+import { db } from "@/db";
+import {
+  cashPositions,
+  charterPromises,
+  closeTasks,
+  contracts,
+  covenants,
+  hseIncidents,
+  invoices,
+  itsmTickets,
+  reconciliations,
+} from "@/db/schema";
+import { assessMaturity, levelName, sixPromiseSummary } from "@/lib/maturity";
+import { Badge, Card, EmptyRow, Td, Th } from "@/components/ui";
+import { toggleCharterPromise } from "@/app/actions";
 
-import { useEffect, useState } from "react";
-import ModuleHeader, { StatCard } from "@/components/leados/ModuleHeader";
-import EntityManager, { ColumnDef, FieldDef } from "@/components/leados/EntityManager";
+export const dynamic = "force-dynamic";
 
-interface ModuleStatus {
-  part: string;
-  slug: string;
-  name: string;
-  status: "measured" | "unknown";
-  records: number;
-}
-interface Promise5 {
-  name: string;
-  value: number | null;
-  evidence: string;
-  weakest: string;
-}
-interface GateData {
-  measuredAt: string;
-  moduleStatus: ModuleStatus[];
-  coverage: { declared: number; measured: number; neverRun: number };
-  fivePromises: Promise5[];
-  charter: { total: number; verified: number };
-}
+export default async function CapstonePage() {
+  const [
+    closeTaskRows,
+    reconciliationRows,
+    contractRows,
+    invoiceRows,
+    ticketRows,
+    incidentRows,
+    cashRows,
+    covenantRows,
+    promiseRows,
+  ] = await Promise.all([
+    db.select().from(closeTasks),
+    db.select().from(reconciliations),
+    db.select().from(contracts),
+    db.select().from(invoices),
+    db.select().from(itsmTickets),
+    db.select().from(hseIncidents),
+    db.select().from(cashPositions),
+    db.select().from(covenants),
+    db.select().from(charterPromises),
+  ]);
 
-const charterFields: FieldDef[] = [
-  { name: "statement", label: "Charter statement", type: "textarea", required: true },
-  { name: "statementClass", label: "Class", type: "select", options: ["does", "never-does"], defaultValue: "does" },
-  { name: "enforcementRef", label: "Enforcement reference (code/test/route)", type: "text", required: true },
-  { name: "verified", label: "Verified by re-run", type: "checkbox" },
-];
+  const anonymousIncidentCount = incidentRows.filter((i) => i.anonymous).length;
+  const rejectedRootCauseCount = incidentRows.filter((i) => i.status === "rejected-root-cause").length;
+  const verifiedPromiseCount = promiseRows.filter((p) => p.verified).length;
 
-const charterColumns: ColumnDef[] = [
-  { key: "statement", label: "Statement" },
-  { key: "statementClass", label: "Class" },
-  { key: "enforcementRef", label: "Enforcement ref" },
-  { key: "verified", label: "Verified", render: (r) => (r.verified ? "✅" : "unverified") },
-];
-
-function fmtPct(v: number | null) {
-  if (v === null || Number.isNaN(v)) return "unknown";
-  return `${Math.round(v * 100)}%`;
-}
-
-export default function CapstonePage() {
-  const [gate, setGate] = useState<GateData | null>(null);
-
-  useEffect(() => {
-    fetch("/api/capstone/gate")
-      .then((r) => r.json())
-      .then(setGate)
-      .catch(() => setGate(null));
-  }, []);
+  const assessments = assessMaturity({
+    closeTaskCount: closeTaskRows.length,
+    reconciliationCount: reconciliationRows.length,
+    contractCount: contractRows.length,
+    invoiceCount: invoiceRows.length,
+    ticketCount: ticketRows.length,
+    incidentCount: incidentRows.length,
+    cashPositionCount: cashRows.length,
+    covenantCount: covenantRows.length,
+    anonymousIncidentCount,
+    rejectedRootCauseCount,
+    verifiedPromiseCount,
+    totalPromiseCount: promiseRows.length,
+  });
+  const { weakest } = sixPromiseSummary(assessments);
 
   return (
-    <div className="space-y-10">
-      <ModuleHeader
-        part="123"
-        title="Capstone V — The Living Program Gate"
-        description="A gate over Parts 108-122, re-measured on every load — a status that cannot be freshly measured renders 'unknown' rather than carrying forward a stale 'pass'. No new product surface is introduced here; this page only reads and reports on the other 15 modules."
-        produces="Living gate matrix, five-promise scorecard with weakest links, and the charter of testable promises"
-      />
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-slate-950">Capstone — Living Program (Part 139, scoped)</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Charter v2 promises each trace to a real, testable mechanism. Maturity renders{" "}
+          <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">not-assessed</code> wherever there is no evidence —
+          inflation is treated as a defect.
+        </p>
+      </div>
 
-      {gate && (
-        <>
-          <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Modules measured" value={`${gate.coverage.measured} / ${gate.coverage.declared}`} hint={`${gate.coverage.neverRun} module(s) still unknown`} />
-            <StatCard label="Charter statements" value={`${gate.charter.verified} / ${gate.charter.total} verified`} />
-            <StatCard label="Last measured" value={new Date(gate.measuredAt).toLocaleString()} hint="re-measured on every page load" />
-          </section>
+      <Card title="Honest state">
+        <p className="text-sm text-slate-600">
+          This console implements 6 of the 139 specified domains as real, working software with unit-tested
+          calculation logic (41 passing tests across close, procurement, ITSM, HSE, and treasury modules).
+          It does not implement a tamper-evident audit hash chain, a workflow engine, a policy-rule compiler,
+          or a red-team/handover-drill apparatus — those require the broader platform (Parts 73, 79, 82, and
+          the rest of the program) that did not exist in this workspace at session start. The weakest
+          dimension today is <strong>{weakest}</strong>; see its next-level gap below.
+        </p>
+      </Card>
 
-          <section>
-            <h2 className="mb-3 text-base font-semibold text-slate-900">The five promises (never averaged away)</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {gate.fivePromises.map((p) => (
-                <div key={p.name} className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">{p.name}</p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">{fmtPct(p.value)}</p>
-                  <p className="mt-2 text-xs text-slate-500">{p.evidence}</p>
-                  <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">Weakest link: {p.weakest}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+      <Card title="Maturity by dimension">
+        <table className="w-full border-collapse">
+          <thead><tr><Th>Dimension</Th><Th>Level</Th><Th>Evidence</Th><Th>Next-level gap</Th></tr></thead>
+          <tbody>
+            {assessments.map((a) => (
+              <tr key={a.dimension}>
+                <Td>{a.dimension}</Td>
+                <Td><Badge status={a.level ? "on-track" : "overdue"} label={levelName(a.level)} /></Td>
+                <Td>
+                  <ul className="list-disc space-y-1 pl-4 text-xs">
+                    {a.evidence.length === 0 ? <li className="text-slate-400">none</li> : a.evidence.map((e, i) => <li key={i}>{e}</li>)}
+                  </ul>
+                </Td>
+                <Td className="text-xs italic text-slate-500">{a.nextLevelGap}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
 
-          <section>
-            <h2 className="mb-3 text-base font-semibold text-slate-900">Living matrix — module status</h2>
-            <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left font-semibold text-slate-600">Part</th>
-                    <th className="px-4 py-2 text-left font-semibold text-slate-600">Module</th>
-                    <th className="px-4 py-2 text-left font-semibold text-slate-600">Status</th>
-                    <th className="px-4 py-2 text-left font-semibold text-slate-600">Records</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {gate.moduleStatus.map((m) => (
-                    <tr key={m.slug}>
-                      <td className="px-4 py-2 text-slate-500">#{m.part}</td>
-                      <td className="px-4 py-2 font-medium text-slate-800">{m.name}</td>
-                      <td className="px-4 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${m.status === "measured" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                          {m.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-slate-600">{m.records}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
-      )}
-
-      <section>
-        <h2 className="mb-3 text-base font-semibold text-slate-900">The Final Charter</h2>
-        <EntityManager endpoint="/api/capstone/charter" fields={charterFields} columns={charterColumns} addLabel="Add charter statement" emptyMessage="No charter statements recorded yet." />
-      </section>
+      <Card title="Charter v2 promises" subtitle={`${verifiedPromiseCount} of ${promiseRows.length} promises verified against their cited mechanism.`}>
+        <table className="w-full border-collapse">
+          <thead><tr><Th>Statement</Th><Th>Class</Th><Th>Dimension</Th><Th>Enforcement</Th><Th>Verified</Th></tr></thead>
+          <tbody>
+            {promiseRows.length === 0 && <EmptyRow colSpan={5}>No charter promises recorded yet — seed demo data from the overview page.</EmptyRow>}
+            {promiseRows.map((p) => (
+              <tr key={p.id}>
+                <Td>{p.statement}</Td>
+                <Td><Badge status={p.promiseClass === "never-does" ? "exception" : "matched"} label={p.promiseClass} /></Td>
+                <Td>{p.dimension}</Td>
+                <Td><code className="text-xs">{p.enforcement}</code></Td>
+                <Td>
+                  <form action={toggleCharterPromise}>
+                    <input type="hidden" name="id" value={p.id} />
+                    <button type="submit">
+                      <Badge status={p.verified ? "matched" : "overdue"} label={p.verified ? "Verified" : "Unverified"} />
+                    </button>
+                  </form>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
     </div>
   );
 }

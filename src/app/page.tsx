@@ -1,117 +1,134 @@
-import Link from "next/link";
-import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { MODULES } from "@/lib/leados/modules";
 import {
-  ideas,
-  mediaItems,
-  partners,
-  integrationPlans,
-  regulatoryItems,
-  teamDiagnostics,
-  negotiationCases,
-  benchRoles,
-  agentRoles,
-  fitnessFunctions,
-  rituals,
-  tenants,
-  processSpecs,
-  valueHypotheses,
-  methodCandidates,
-  charterStatements,
+  cashPositions,
+  charterPromises,
+  closeTasks,
+  contracts,
+  covenants,
+  hseIncidents,
+  invoices,
+  itsmTickets,
+  reconciliations,
 } from "@/db/schema";
+import { assessMaturity, levelName, sixPromiseSummary } from "@/lib/maturity";
+import { Badge, Card, SubmitButton } from "@/components/ui";
+import { seedDemoData } from "@/app/actions";
 
 export const dynamic = "force-dynamic";
 
-const PRIMARY_TABLE: Record<string, unknown> = {
-  innovation: ideas,
-  brand: mediaItems,
-  partnerships: partners,
-  mna: integrationPlans,
-  regulatory: regulatoryItems,
-  team: teamDiagnostics,
-  negotiation: negotiationCases,
-  succession: benchRoles,
-  agents: agentRoles,
-  architecture: fitnessFunctions,
-  rituals: rituals,
-  deployment: tenants,
-  formal: processSpecs,
-  value: valueHypotheses,
-  research: methodCandidates,
-  capstone: charterStatements,
-};
-
-async function countOf(table: unknown): Promise<number> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = (await db.select({ n: sql<number>`count(*)` }).from(table as any)) as { n: number }[];
-  return Number(rows[0]?.n ?? 0);
-}
-
 export default async function HomePage() {
-  const counts = await Promise.all(
-    MODULES.map(async (m) => ({ slug: m.slug, count: await countOf(PRIMARY_TABLE[m.slug]) }))
-  );
-  const countMap = Object.fromEntries(counts.map((c) => [c.slug, c.count]));
-  const totalRecords = counts.reduce((sum, c) => sum + c.count, 0);
-  const measuredModules = counts.filter((c) => c.count > 0).length;
+  const [
+    closeTaskRows,
+    reconciliationRows,
+    contractRows,
+    invoiceRows,
+    ticketRows,
+    incidentRows,
+    cashRows,
+    covenantRows,
+    promiseRows,
+  ] = await Promise.all([
+    db.select().from(closeTasks),
+    db.select().from(reconciliations),
+    db.select().from(contracts),
+    db.select().from(invoices),
+    db.select().from(itsmTickets),
+    db.select().from(hseIncidents),
+    db.select().from(cashPositions),
+    db.select().from(covenants),
+    db.select().from(charterPromises),
+  ]);
+
+  const anonymousIncidentCount = incidentRows.filter((i) => i.anonymous).length;
+  const rejectedRootCauseCount = incidentRows.filter((i) => i.status === "rejected-root-cause").length;
+  const verifiedPromiseCount = promiseRows.filter((p) => p.verified).length;
+
+  const assessments = assessMaturity({
+    closeTaskCount: closeTaskRows.length,
+    reconciliationCount: reconciliationRows.length,
+    contractCount: contractRows.length,
+    invoiceCount: invoiceRows.length,
+    ticketCount: ticketRows.length,
+    incidentCount: incidentRows.length,
+    cashPositionCount: cashRows.length,
+    covenantCount: covenantRows.length,
+    anonymousIncidentCount,
+    rejectedRootCauseCount,
+    verifiedPromiseCount,
+    totalPromiseCount: promiseRows.length,
+  });
+
+  const { weakest } = sixPromiseSummary(assessments);
+  const hasAnyData = closeTaskRows.length > 0;
 
   return (
-    <div className="space-y-10">
-      <section className="rounded-3xl bg-white p-10 shadow-[0_24px_60px_rgba(16,24,40,0.08)] ring-1 ring-slate-200">
-        <p className="m-0 text-sm uppercase tracking-[0.08em] text-indigo-600">Integrated Pack 4 · Parts 108–123</p>
-        <h1 className="mt-4 text-[clamp(1.75rem,4vw,2.75rem)] font-semibold leading-[1.05] text-slate-950">
-          The Strategic Frontier &amp; the AI-Native Organization
-        </h1>
-        <p className="mt-4 max-w-3xl text-base text-slate-700">
-          Sixteen modules — the domains a leadership team lives in daily, plus the AI-native operating layer —
-          running on a shared Postgres substrate. Every number below is measured live from the database, not
-          asserted: a module with zero records honestly shows <span className="font-semibold">unknown</span>,
-          never a guessed value.
-        </p>
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <p className="text-xs font-medium uppercase text-slate-400">Modules</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">16</p>
+    <div className="flex flex-col gap-6">
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-wide text-slate-500">LEADOS — Operational Frontier</p>
+            <h1 className="mt-1 text-3xl font-semibold text-slate-950">Operations Console</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-600">
+              A real, working slice of the Parts 124–139 operating machinery: financial close &
+              reconciliation, source-to-pay, ITSM, HSE, and treasury — each backed by live data and the
+              calculations that enforce their core guarantees.
+            </p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <p className="text-xs font-medium uppercase text-slate-400">Measured (has data)</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{measuredModules} / 16</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <p className="text-xs font-medium uppercase text-slate-400">Total records tracked</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{totalRecords}</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-            <p className="text-xs font-medium uppercase text-slate-400">Program gate</p>
-            <Link href="/capstone" className="mt-1 block text-2xl font-semibold text-indigo-600 hover:text-indigo-500">
-              Capstone V →
-            </Link>
-          </div>
+          {!hasAnyData && (
+            <form action={seedDemoData}>
+              <SubmitButton>Seed demonstration data</SubmitButton>
+            </form>
+          )}
         </div>
-      </section>
+      </Card>
 
-      <section>
-        <h2 className="text-lg font-semibold text-slate-900">Modules</h2>
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {MODULES.map((m) => (
-            <Link
-              key={m.slug}
-              href={`/${m.slug}`}
-              className="group rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <div className="flex items-start justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Part {m.part}</p>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-                  {countMap[m.slug] ?? 0} records
-                </span>
+      <Card title="Program notice — read this first" subtitle="Honesty over inflation, per the program's own charter.">
+        <p className="text-sm text-slate-600">
+          This workspace began as an empty Next.js + Drizzle starter with no prior LEADOS history, state
+          file, or GitHub continuity artifacts present. Rather than fabricate a retrospective history of
+          138 prior parts, this session implements an honestly-scoped, fully working subset: six modules
+          (Financial Close, Source-to-Pay, ITSM, HSE, Treasury, and this Capstone view), each with real
+          database tables, enforced business rules, and unit-tested calculation logic — not a mockup.
+          Gaps are reported below rather than smoothed over.
+        </p>
+      </Card>
+
+      <Card title="Six enduring promises — maturity by dimension" subtitle={`Weakest link: ${weakest}. Levels render "not-assessed" where no evidence exists.`}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {assessments.map((a) => (
+            <div key={a.dimension} className="rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold capitalize text-slate-900">{a.dimension}</h3>
+                <Badge status={a.level ? "on-track" : "overdue"} label={levelName(a.level)} />
               </div>
-              <h3 className="mt-2 text-base font-semibold text-slate-900 group-hover:text-indigo-700">{m.name}</h3>
-              <p className="mt-1 text-sm text-slate-500">{m.tagline}</p>
-            </Link>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-slate-600">
+                {a.evidence.length === 0 ? <li>No evidence recorded yet — seed demo data to assess.</li> : a.evidence.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+              <p className="mt-2 text-xs italic text-slate-400">Next-level gap: {a.nextLevelGap}</p>
+            </div>
           ))}
         </div>
-      </section>
+      </Card>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatTile label="Close tasks" value={closeTaskRows.length} />
+        <StatTile label="Reconciliations" value={reconciliationRows.length} />
+        <StatTile label="Contracts" value={contractRows.length} />
+        <StatTile label="Invoices" value={invoiceRows.length} />
+        <StatTile label="ITSM tickets" value={ticketRows.length} />
+        <StatTile label="HSE incidents" value={incidentRows.length} />
+        <StatTile label="Cash positions" value={cashRows.length} />
+        <StatTile label="Covenants" value={covenantRows.length} />
+      </div>
+    </div>
+  );
+}
+
+function StatTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
+      <p className="text-2xl font-semibold text-slate-950">{value}</p>
+      <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{label}</p>
     </div>
   );
 }

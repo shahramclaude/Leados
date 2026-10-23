@@ -1,46 +1,34 @@
 import Link from "next/link";
 
-const links = [
+const LINKS = [
   { href: "/", label: "Overview" },
-  { href: "/leads", label: "Leads" },
-  { href: "/decisions", label: "Evidence Ledger" },
-  { href: "/knowledge", label: "Knowledge" },
+  { href: "/close", label: "Financial Close" },
+  { href: "/procurement", label: "Source-to-Pay" },
+  { href: "/itsm", label: "ITSM" },
+  { href: "/hse", label: "HSE" },
+  { href: "/treasury", label: "Treasury" },
+  { href: "/capstone", label: "Capstone" },
 ];
 
 export function Nav() {
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col justify-between border-r border-slate-800 bg-slate-950 px-5 py-6 text-slate-200">
-      <div>
-        <div className="mb-10 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 text-sm font-bold text-slate-950">
-            L
-          </div>
-          <div>
-            <p className="text-sm font-semibold tracking-wide text-white">LEADOS</p>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
-              Decision OS
-            </p>
-          </div>
-        </div>
-        <nav className="flex flex-col gap-1">
-          {links.map((link) => (
+    <header className="border-b border-slate-200 bg-white">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+        <Link href="/" className="text-base font-semibold tracking-tight text-slate-950">
+          LEADOS <span className="text-slate-400">Operations Console</span>
+        </Link>
+        <nav className="flex flex-wrap gap-1">
+          {LINKS.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-900 hover:text-white"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
             >
               {link.label}
             </Link>
           ))}
         </nav>
       </div>
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-400">
-        <p className="font-semibold text-slate-200">Founding build</p>
-        <p className="mt-1 leading-relaxed">
-          Ontology substrate, explainable scoring, and a hash-chained evidence
-          ledger — the spine the rest of the program extends.
-        </p>
-      </div>
-    </aside>
+    </header>
   );
 }
