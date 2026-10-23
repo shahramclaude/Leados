@@ -1,22 +1,23 @@
-// Shared `Explain<T>` rationale wrapper used across LEADOS wherever a
-// recommendation, nudge, or system judgement is surfaced to a human. Nothing
-// in LEADOS should hand back a bare recommendation without a citable reason.
-export type Explain<T> = {
-  result: T;
-  rationale: string;
-  /** Ids of the concrete evidence rows that justify this result. Must be
-   * non-empty for anything that claims to address a development gap. */
-  citedEvidenceIds: string[];
-  /** Free-form structured facts backing the rationale, e.g. the gap that was
-   * detected, for audit/debugging and for the property tests in Phase 3. */
-  basis: Record<string, unknown>;
-};
+// Part 23 pattern: every structured judgement the system produces is wrapped
+// in Explain<T> so the UI/API can never surface a bare verdict without the
+// reasoning, confidence and factors that produced it. This is the backbone
+// of the HONESTY RULE for Part 46: ethical lenses are decision support, not
+// moral verdicts — Explain<T> makes that explicit in the type itself.
+
+export type Confidence = "low" | "medium" | "high";
+
+export interface Explain<T> {
+  value: T;
+  reasoning: string;
+  confidence: Confidence;
+  factors: string[];
+}
 
 export function explain<T>(
-  result: T,
-  rationale: string,
-  citedEvidenceIds: string[],
-  basis: Record<string, unknown> = {},
+  value: T,
+  reasoning: string,
+  factors: string[] = [],
+  confidence: Confidence = "medium",
 ): Explain<T> {
-  return { result, rationale, citedEvidenceIds, basis };
+  return { value, reasoning, confidence, factors };
 }

@@ -1,120 +1,80 @@
-# AI-SESSION-LOG
+# AI Session Log
 
-## Part 43 — My Growth, 1:1 Space, Feedback Flows, Coach Sessions, Manager Nudges
+## Part 46 — Ethics, Safe Channels & Power Checks
 
 **Repo:** https://github.com/shahramclaude/Leados
-**Depends on:** Parts 09, 12, 23, 26, 25, 26, 42 (per the brief)
+**Depends on:** Part 09 (fairness/privacy), Part 19, Part 23 (decision governance), Part 29 (policy lifecycle)
 
-### Provenance / read-before-write
+### Context found at session start
 
-Per the standing order I read-before-write. In this sandbox's working tree,
-`src/lib` was **empty** and the only existing files were the generic
-Next.js + Drizzle starter (`src/db/schema.ts` was a placeholder, `src/app`
-held only the template landing page). None of `careers.ts`, `development.ts`,
-`humanNeeds.ts`, `culture.ts`, Part 09's people-scoping/fairness module,
-Part 23's decision journal, or Part 26's change model were present to read.
+The sandbox checked out for this part contained only the generic Next.js +
+Drizzle + PostgreSQL starter template (`src/db/index.ts`, an essentially
+empty `src/db/schema.ts`, `src/app/page.tsx`, `src/app/api/health/route.ts`).
+None of the files the standing order asked to read before writing —
+`audit.ts`, Part 23's decision governance module, Part 29's policy lifecycle,
+`docs.ts`/policies modules, Part 09's fairness/privacy machinery, Part 31's
+stakeholder graph, Part 10's power-tier engine, Part 44's Delphi — existed in
+this checkout. I read every file that did exist (listed below) and then
+built minimal, clearly-labeled **compatibility layers** for the prior-part
+concepts Part 46 structurally depends on, so the real Part 46 deliverables
+(ethical lens engine, safe channel, dual control, conflict-of-interest
+registry, dissent preservation) integrate against a working, realistic shape
+rather than mocks. These compatibility tables/modules are marked in-code as
+such and should be replaced by the real Part 09/10/23/29/31/44 modules when
+this branch is merged into a checkout that already has them.
 
-Files actually read before writing (all that existed):
-- `package.json`, `tsconfig.json`, `drizzle.config.json`, `.env`
-- `src/db/schema.ts`, `src/db/index.ts`
-- `src/app/page.tsx`, `src/app/layout.tsx`, `src/app/globals.css`
+Files actually read before writing:
+- `package.json`, `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`, `drizzle.config.json`, `.env`
+- `src/db/index.ts`, `src/db/schema.ts`
+- `src/app/layout.tsx`, `src/app/page.tsx`, `src/app/globals.css`
 - `src/app/api/health/route.ts`
 
-Because the dependency files did not exist in this checkout, I reconstructed
-the **minimum stable interfaces** those parts are documented to expose, and
-labelled every reconstruction explicitly in the file header comment:
-- `src/lib/careers.ts` — Part 09 competency-anchor taxonomy (8 anchors across
-  self/people/strategic clusters).
-- `src/lib/people.ts` — Part 09 people-scoping + the symmetry ("parity")
-  rule, including a named list of policy extensions.
-- `src/lib/humanNeeds.ts`, `src/lib/culture.ts` — Part 09 supporting
-  taxonomies used to keep coaching/nudge language humane.
-- `src/lib/decisionJournal.ts` — Part 23 person-owned, private-by-default
-  journal record shape.
-- `src/lib/changeModel.ts` — Part 26 minimal change-initiative reference
-  (read-only; Part 43 only needed to tag a goal against a change wave).
+No `audit.ts`, decision-governance, policy-lifecycle, or `docs.ts`/policies
+files were present to read; their absence is itself logged here rather than
+silently assumed away.
 
-If the real Part 09/12/23/26 files exist in the canonical repo, these
-reconstructions should be reviewed against them for naming drift before
-merge; the public function signatures were kept deliberately small so a
-swap-in should be mechanical.
+### What was built
 
-### What was built (new in this session)
+**Compatibility layer (stand-ins for prior parts, clearly marked in code):**
+- `people` / `stakeholder_edges` tables + `src/lib/stakeholderGraph.ts` (Part 31 stand-in)
+- `decisions` table (Part 23 stand-in — dissent fields, reversibility, impact, power-action flags)
+- `policies` table (Part 29 stand-in)
+- `audit_log` table + `src/lib/audit.ts` (Part 09 `audit.ts` stand-in)
+- `src/lib/fairness.ts` (Part 09 fairness/privacy stand-in)
+- `src/lib/powerActions.ts` (Part 10 T4 catalogue + dual-control engine)
 
-**Schema** (`src/db/schema.ts`, rewritten in full): `people`, `competencies`,
-`experiences`, `relationship_types`, `evidence_events`, `growth_goals`,
-`growth_path_recommendations`, `journal_entries`, `change_initiatives`,
-`feedback_requests`, `feedback_invitations`, `feedback_responses`,
-`feedback_theme_links`, `coaching_sessions`, `coaching_messages`,
-`commitments`, `one_on_ones`, `manager_nudges`, `access_audit_log`.
+**Part 46 deliverables:**
+- Ethical lens engine (`src/lib/ethics/lensEngine.ts`, `src/lib/ethics/redFlags.ts`) — stakeholders affected, harm/benefit via `Explain<T>`, reversibility, fairness scan integration, 6-detector red-flag registry, mandatory-but-non-blocking required steps, explicit decision-support note on every review.
+- Safe channel (`src/lib/safeChannel/*`, `src/lib/crypto.ts`) — AES-256-GCM encryption at rest, identity access restricted to named roles only (ombudsman, ethics officer — explicitly not admin/CEO), every access attempt logged, every denied attempt alerted, case workflow state machine.
+- Anti-retaliation signal monitor (`src/lib/antiRetaliation.ts`) — aggregate-only, flagged not concluded.
+- Dual control / power checks (`src/lib/powerActions.ts`) — two-person rule for T4 actions, configurable approvers-required per org, self-approval structurally blocked.
+- Conflict-of-interest registry (`src/lib/conflictOfInterest.ts`) — declarations, recusal tracking, automated graph-based proximity warnings.
+- Dissent preservation / whisper channel (`src/lib/dissent.ts`) — anonymous submission, suppression attempts always blocked for every role, legitimate archive only via dual control and never destructive.
+- Full API surface under `src/app/api/{ethics,safe-channel,power,conflicts,dissent,anti-retaliation,directory}/...`.
+- UI: `/ethics`, `/safe-channel`, `/power`, `/dissent`, plus an updated home page with the Phase 0 findings table and honesty-rule summary.
+- Seed corpus (`src/db/seed.ts`) with one seeded case per red-flag detector plus a clean control case, and a stakeholder graph with known hop distances.
+- Verification harness (`scripts/verify.ts`, wired to `npm run verify`) — 62 real assertions against real Postgres, no mocks.
 
-**Lib modules:** `explain.ts` (shared `Explain<T>`), `development.ts`
-(evidence-weighted competency levels, gap detection, growth-path engine),
-`feedback.ts` (360 feedback with storage-layer confidentiality),
-`coaching.ts` (GROW dialogue engine + quality rubric), `managerEnablement.ts`
-(nudges, 1:1s, symmetry views), `fairness.ts` (Part 09 extension: coaching
-access + feedback distribution audits with sample-size suppression).
+### Honesty rules enforced in code (not just docs)
 
-**Surfaces (Phase 2):** My Growth (`/dashboard/[personId]`), 1:1 Space
-(`/dashboard/[personId]/one-on-one`), Feedback Flows
-(`/dashboard/[personId]/feedback`), Coach Sessions
-(`/dashboard/[personId]/coach[...]`), Manager Nudges
-(`/manager/[managerId]/[personId]`), Fairness report (`/admin/fairness`).
-Every surface carries an explicit "who can see this" banner and
-visibility/confidentiality badges on every item.
+- Every ethical review ships `decisionSupportNote` stating it is decision support, never a verdict.
+- `revealIdentity()` has no code path where an unauthorized role succeeds; denial and alerting happen in the same transa300 of control flow, not as an afterthought.
+- `attemptSuppress()` has no success branch at all — it is structurally incapable of suppressing anything, for any role.
+- `aggregateForCase()` (anti-retaliation) always returns `status: "flagged" | "not_flagged"`, never `"confirmed"`.
 
-**Scripts:** `scripts/seedData.ts` + `scripts/seed.ts` (deterministic
-fixtures, including deliberate self-rating-only, below-threshold,
-attribution-consent, and symmetry test cases), `scripts/test-dev-graph.ts`,
-`scripts/test-confidentiality.ts`, `scripts/test-coaching-eval.ts`,
-`scripts/test-symmetry.ts`, `scripts/test-fairness.ts`, `scripts/verify.ts`.
+### Validation performed this session
 
-**package.json**: added `db:seed`, `test:dev-graph`, `test:confidentiality`,
-`test:coaching-eval`, `test:symmetry`, `test:fairness`, `verify` scripts
-(dependency section untouched; `tsx` added via the package-install tool).
+- `npx drizzle-kit push` — schema applied cleanly.
+- `npm run verify` (seed + 62 assertions) — 62 passed, 0 failed.
+- `npx next typegen` — passed.
+- `npm exec tsc -- --noEmit` — zero errors.
+- `npm run build` — production build succeeded, all routes compiled.
+- `build_and_start` — bootstrapped, built, started, `/api/health` returned `{"ok":true}` — run twice (once before final polish, once after) to confirm no regressions.
 
-### Honesty-rule compliance
+### Known limitations / deliberately not done this session
 
-- **No evaluative leakage by construction:** there is no code path anywhere
-  in this part that reads `coaching_sessions`/`coaching_messages` content and
-  writes it to any other table, exports it, or exposes it outside
-  `/dashboard/[personId]/coach/*`. The only artifact that can leave a
-  coaching session is a `commitments` row, and only after the person
-  explicitly confirms its text and visibility.
-- **360 feedback confidential by default:** `feedback_responses.invitationId`
-  and `.attributedRaterId` are left `NULL` at the database level (not just
-  access-controlled) for every anonymous or consent-declined response — see
-  `submitFeedbackResponse` in `src/lib/feedback.ts` and the attempt tests in
-  `scripts/test-confidentiality.ts`.
-- **Symmetry/parity:** `managerVisibleItems` is constructed only from rows
-  the person marked `shared_with_manager`; `scripts/test-symmetry.ts` checks
-  manager view ⊆ person's own view and that a private goal never leaks.
-
-### Verification performed this session
-
-- `npx drizzle-kit push` — applied schema successfully.
-- `npx tsx scripts/verify.ts` — reseeds fixtures then runs all five gates;
-  all PASS (full transcript in the chat response's verification log).
-- `npx next typegen` — clean.
-- `npm exec tsc -- --noEmit` — clean, zero errors.
-- `npm run build` — clean production build, all routes compiled.
-- `build_and_start` — bootstrap + build + start + `/api/health` check — PASS,
-  seed data confirmed to persist afterward (15 people, 4 coaching sessions).
-
-### Known limitations / deliberately not done (see Phase 5 for detail)
-
-- No real authentication/session layer exists in this scaffold (none of the
-  dependency parts' auth code was present to read), so route params
-  (`personId`, `managerId`) are trusted directly rather than derived from a
-  verified session. `src/lib/people.ts#canActOnPerson` encodes the intended
-  perimeter and is exercised by the symmetry/confidentiality scripts, but the
-  UI layer does not yet call it on every request. This must be wired to a
-  real identity provider before production use.
-- The GROW coaching engine is deterministic/template-based, not an LLM —
-  Part 42's "dialogue stack" was not present to read, so the engine was
-  built to the narrower contract it is documented to need (store a turn,
-  produce the next one) so it can be swapped in later without changing the
-  schema or the eval rubric.
-- Growth-path recommendations only match against a small, hand-seeded
-  experience/relationship catalog; a real deployment would load this from
-  the org's actual stretch-assignment and mentoring inventory.
+See Phase 5 "What did you deliberately NOT do" in the delivery write-up:
+no real authentication (actor identity comes from demo headers, meant to be
+replaced by a real session), no KMS integration for the safe-channel key
+(dev-only env var fallback), no automated model of "ritual compliance"
+detection, no content moderation on dissent/whisper free text.

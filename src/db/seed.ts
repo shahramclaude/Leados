@@ -1,268 +1,249 @@
-// LEADOS — Part 37: seed data for the global-operations demo surfaces.
-//
-// Run with: npx tsx src/db/seed.ts
-//
-// Builds one EntityGroup with five entities spanning four consolidation methods, four functional
-// currencies, two fiscal calendar families, and a deliberately loss-making entity (UK) so the
-// "which default view hides a failing entity" attack scenario (PHASE 5 #1) has real data behind
-// it in the UI, not just in unit tests.
+// Seed data for Part 46 — a small org graph with known hop distances, a
+// red-flag corpus of decisions (one seeded case per detector, plus one clean
+// control decision), and the red-flag definition registry mirrored into the
+// database for reference/UI use. Idempotent: truncates Part 46 + compat
+// tables and reseeds from scratch every run.
 
 import "dotenv/config";
-import { db, pool } from "./index";
+import { db } from "@/db";
 import {
-  entityGroups,
-  entities,
-  fxRates,
-  financialFigures,
-  intercompanyEliminations,
-  obligations,
-  obligationInstances,
-  dataResidencyPolicies,
-  boardPackEntityNotes,
-} from "./schema";
+  people,
+  stakeholderEdges,
+  decisions,
+  ethicalRedFlagDefinitions,
+  orgSettings,
+  ethicalReviews,
+  safeChannelReports,
+  safeChannelAccessLog,
+  safeChannelAlerts,
+  safeChannelCaseEvents,
+  antiRetaliationSignals,
+  dualControlActions,
+  dualControlApprovals,
+  dualControlViolationAttempts,
+  conflictDeclarations,
+  conflictRecusals,
+  conflictProximityWarnings,
+  dissentSuggestions,
+  dissentSuppressionAttempts,
+  dissentArchiveRequests,
+  auditLog,
+} from "@/db/schema";
+import { RED_FLAG_DEFINITIONS } from "@/lib/ethics/redFlags";
+import { sql } from "drizzle-orm";
 
-const FY = 2025;
-const FP = 1;
+async function reset() {
+  // Children first.
+  await db.execute(sql`truncate table ${dissentArchiveRequests} restart identity cascade`);
+  await db.execute(sql`truncate table ${dissentSuppressionAttempts} restart identity cascade`);
+  await db.execute(sql`truncate table ${dissentSuggestions} restart identity cascade`);
+  await db.execute(sql`truncate table ${conflictRecusals} restart identity cascade`);
+  await db.execute(sql`truncate table ${conflictProximityWarnings} restart identity cascade`);
+  await db.execute(sql`truncate table ${conflictDeclarations} restart identity cascade`);
+  await db.execute(sql`truncate table ${dualControlViolationAttempts} restart identity cascade`);
+  await db.execute(sql`truncate table ${dualControlApprovals} restart identity cascade`);
+  await db.execute(sql`truncate table ${dualControlActions} restart identity cascade`);
+  await db.execute(sql`truncate table ${antiRetaliationSignals} restart identity cascade`);
+  await db.execute(sql`truncate table ${safeChannelCaseEvents} restart identity cascade`);
+  await db.execute(sql`truncate table ${safeChannelAlerts} restart identity cascade`);
+  await db.execute(sql`truncate table ${safeChannelAccessLog} restart identity cascade`);
+  await db.execute(sql`truncate table ${safeChannelReports} restart identity cascade`);
+  await db.execute(sql`truncate table ${ethicalReviews} restart identity cascade`);
+  await db.execute(sql`truncate table ${ethicalRedFlagDefinitions} restart identity cascade`);
+  await db.execute(sql`truncate table ${decisions} restart identity cascade`);
+  await db.execute(sql`truncate table ${stakeholderEdges} restart identity cascade`);
+  await db.execute(sql`truncate table ${people} restart identity cascade`);
+  await db.execute(sql`truncate table ${orgSettings} restart identity cascade`);
+  await db.execute(sql`truncate table ${auditLog} restart identity cascade`);
+}
 
-async function main() {
-  console.log("Seeding Part 37 global-operations data...");
-
-  await db.delete(boardPackEntityNotes);
-  await db.delete(obligationInstances);
-  await db.delete(obligations);
-  await db.delete(dataResidencyPolicies);
-  await db.delete(intercompanyEliminations);
-  await db.delete(financialFigures);
-  await db.delete(fxRates);
-  await db.delete(entities);
-  await db.delete(entityGroups);
-
-  const [group] = await db
-    .insert(entityGroups)
-    .values({ code: "LEADOS-GRP", name: "Leados Group", groupCurrency: "USD" })
-    .returning();
-
-  const [parent] = await db
-    .insert(entities)
-    .values({
-      groupId: group.id,
-      parentEntityId: null,
-      code: "PARENT",
-      legalName: "Leados Holdings, Inc.",
-      jurisdictionCode: "US",
-      region: "us",
-      functionalCurrency: "USD",
-      ownershipPct: 100,
-      consolidationMethod: "full",
-      fiscalCalendarType: "calendar",
-      fiscalCalendarConfig: { yearStartMonth: 1 },
-      timezone: "America/New_York",
-      localeTag: "en-US",
-    })
-    .returning();
-
-  const [eu] = await db
-    .insert(entities)
-    .values({
-      groupId: group.id,
-      parentEntityId: parent.id,
-      code: "LEADOS-EU",
-      legalName: "Leados Europe GmbH",
-      jurisdictionCode: "DE",
-      region: "eu",
-      functionalCurrency: "EUR",
-      ownershipPct: 80,
-      consolidationMethod: "full",
-      fiscalCalendarType: "calendar",
-      fiscalCalendarConfig: { yearStartMonth: 1 },
-      timezone: "Europe/Berlin",
-      localeTag: "de-DE",
-    })
-    .returning();
-
-  const [uk] = await db
-    .insert(entities)
-    .values({
-      groupId: group.id,
-      parentEntityId: parent.id,
-      code: "LEADOS-UK",
-      legalName: "Leados UK Ltd",
-      jurisdictionCode: "GB",
-      region: "uk",
-      functionalCurrency: "GBP",
-      ownershipPct: 100,
-      consolidationMethod: "full",
-      fiscalCalendarType: "445",
-      fiscalCalendarConfig: { yearStartMonth: 1, weekStartsOn: 1 },
-      timezone: "Europe/London",
-      localeTag: "en-GB",
-    })
-    .returning();
-
-  const [apacJv] = await db
-    .insert(entities)
-    .values({
-      groupId: group.id,
-      parentEntityId: parent.id,
-      code: "LEADOS-APAC-JV",
-      legalName: "Leados APAC Joint Venture Pte Ltd",
-      jurisdictionCode: "SG",
-      region: "apac",
-      functionalCurrency: "SGD",
-      ownershipPct: 35,
-      consolidationMethod: "proportional",
-      fiscalCalendarType: "calendar",
-      fiscalCalendarConfig: { yearStartMonth: 1 },
-      timezone: "Asia/Singapore",
-      localeTag: "en-SG",
-    })
-    .returning();
-
-  const [assocJp] = await db
-    .insert(entities)
-    .values({
-      groupId: group.id,
-      parentEntityId: parent.id,
-      code: "LEADOS-ASSOC-JP",
-      legalName: "Leados Associate K.K.",
-      jurisdictionCode: "JP",
-      region: "apac",
-      functionalCurrency: "JPY",
-      ownershipPct: 25,
-      consolidationMethod: "equity",
-      fiscalCalendarType: "calendar",
-      fiscalCalendarConfig: { yearStartMonth: 1 },
-      timezone: "Asia/Tokyo",
-      localeTag: "ja-JP",
-    })
-    .returning();
-
-  await db.insert(fxRates).values([
-    { baseCurrency: "EUR", quoteCurrency: "USD", rateDate: "2025-01-31", rate: 1.09, method: "average", rateSource: "Treasury FX desk — monthly average", fiscalYear: FY, fiscalPeriod: FP },
-    { baseCurrency: "EUR", quoteCurrency: "USD", rateDate: "2025-01-31", rate: 1.10, method: "closing", rateSource: "ECB reference rate", fiscalYear: FY, fiscalPeriod: FP },
-    { baseCurrency: "EUR", quoteCurrency: "USD", rateDate: "2019-06-15", rate: 1.14, method: "historical", rateSource: "Historical rate at Leados Europe GmbH formation (2019-06-15) — treasury archive", fiscalYear: FY, fiscalPeriod: FP },
-
-    { baseCurrency: "GBP", quoteCurrency: "USD", rateDate: "2025-01-31", rate: 1.27, method: "average", rateSource: "Treasury FX desk — monthly average", fiscalYear: FY, fiscalPeriod: FP },
-    { baseCurrency: "GBP", quoteCurrency: "USD", rateDate: "2025-01-31", rate: 1.28, method: "closing", rateSource: "Bank of England reference rate", fiscalYear: FY, fiscalPeriod: FP },
-    { baseCurrency: "GBP", quoteCurrency: "USD", rateDate: "2018-03-01", rate: 1.32, method: "historical", rateSource: "Historical rate at Leados UK Ltd formation (2018-03-01) — treasury archive", fiscalYear: FY, fiscalPeriod: FP },
-
-    { baseCurrency: "SGD", quoteCurrency: "USD", rateDate: "2025-01-31", rate: 0.745, method: "average", rateSource: "Treasury FX desk — monthly average", fiscalYear: FY, fiscalPeriod: FP },
-    { baseCurrency: "SGD", quoteCurrency: "USD", rateDate: "2025-01-31", rate: 0.748, method: "closing", rateSource: "MAS reference rate", fiscalYear: FY, fiscalPeriod: FP },
-    { baseCurrency: "SGD", quoteCurrency: "USD", rateDate: "2020-09-10", rate: 0.715, method: "historical", rateSource: "Historical rate at JV formation (2020-09-10) — treasury archive", fiscalYear: FY, fiscalPeriod: FP },
-
-    { baseCurrency: "JPY", quoteCurrency: "USD", rateDate: "2025-01-31", rate: 0.0067, method: "average", rateSource: "Treasury FX desk — monthly average", fiscalYear: FY, fiscalPeriod: FP },
-    { baseCurrency: "JPY", quoteCurrency: "USD", rateDate: "2025-01-31", rate: 0.00675, method: "closing", rateSource: "Bank of Japan reference rate", fiscalYear: FY, fiscalPeriod: FP },
-  ]);
-
-  await db.insert(financialFigures).values([
-    // PARENT (USD)
-    { entityId: parent.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "REV-EXT", accountLabel: "External revenue", amountValue: 2000000, amountCurrency: "USD", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: parent.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "REV-IC", accountLabel: "Intercompany revenue (licence fee to EU)", amountValue: 150000, amountCurrency: "USD", isIntercompany: true, counterpartyEntityId: eu.id },
-    { entityId: parent.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "EXP-EXT", accountLabel: "External expense", amountValue: 1200000, amountCurrency: "USD", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: parent.id, fiscalYear: FY, fiscalPeriod: FP, statement: "BS", accountCode: "CASH", accountLabel: "Cash and equivalents", amountValue: 5000000, amountCurrency: "USD", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: parent.id, fiscalYear: FY, fiscalPeriod: FP, statement: "BS", accountCode: "RETAINED-EARNINGS", accountLabel: "Retained earnings", amountValue: 3500000, amountCurrency: "USD", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: parent.id, fiscalYear: FY, fiscalPeriod: FP, statement: "EQ", accountCode: "SHARE-CAPITAL", accountLabel: "Share capital", amountValue: 2000000, amountCurrency: "USD", isIntercompany: false, counterpartyEntityId: null },
-
-    // LEADOS-EU (EUR), 80% owned, full
-    { entityId: eu.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "REV-EXT", accountLabel: "External revenue", amountValue: 900000, amountCurrency: "EUR", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: eu.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "EXP-EXT", accountLabel: "External expense", amountValue: 500000, amountCurrency: "EUR", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: eu.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "EXP-IC", accountLabel: "Intercompany expense (licence fee from Parent)", amountValue: 137000, amountCurrency: "EUR", isIntercompany: true, counterpartyEntityId: parent.id },
-    { entityId: eu.id, fiscalYear: FY, fiscalPeriod: FP, statement: "BS", accountCode: "CASH", accountLabel: "Cash and equivalents", amountValue: 1200000, amountCurrency: "EUR", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: eu.id, fiscalYear: FY, fiscalPeriod: FP, statement: "BS", accountCode: "RETAINED-EARNINGS", accountLabel: "Retained earnings", amountValue: 800000, amountCurrency: "EUR", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: eu.id, fiscalYear: FY, fiscalPeriod: FP, statement: "EQ", accountCode: "SHARE-CAPITAL", accountLabel: "Share capital", amountValue: 500000, amountCurrency: "EUR", isIntercompany: false, counterpartyEntityId: null },
-
-    // LEADOS-UK (GBP), 100% owned, full — LOSS-MAKING this period
-    { entityId: uk.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "REV-EXT", accountLabel: "External revenue", amountValue: 300000, amountCurrency: "GBP", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: uk.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "EXP-EXT", accountLabel: "External expense (incl. one-off restructuring)", amountValue: 420000, amountCurrency: "GBP", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: uk.id, fiscalYear: FY, fiscalPeriod: FP, statement: "BS", accountCode: "CASH", accountLabel: "Cash and equivalents", amountValue: 150000, amountCurrency: "GBP", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: uk.id, fiscalYear: FY, fiscalPeriod: FP, statement: "BS", accountCode: "RETAINED-EARNINGS", accountLabel: "Retained earnings (accumulated deficit)", amountValue: -50000, amountCurrency: "GBP", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: uk.id, fiscalYear: FY, fiscalPeriod: FP, statement: "EQ", accountCode: "SHARE-CAPITAL", accountLabel: "Share capital", amountValue: 100000, amountCurrency: "GBP", isIntercompany: false, counterpartyEntityId: null },
-
-    // LEADOS-APAC-JV (SGD), 35% owned, proportional
-    { entityId: apacJv.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "REV-EXT", accountLabel: "External revenue", amountValue: 1000000, amountCurrency: "SGD", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: apacJv.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "EXP-EXT", accountLabel: "External expense", amountValue: 700000, amountCurrency: "SGD", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: apacJv.id, fiscalYear: FY, fiscalPeriod: FP, statement: "BS", accountCode: "CASH", accountLabel: "Cash and equivalents", amountValue: 900000, amountCurrency: "SGD", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: apacJv.id, fiscalYear: FY, fiscalPeriod: FP, statement: "EQ", accountCode: "SHARE-CAPITAL", accountLabel: "Share capital", amountValue: 400000, amountCurrency: "SGD", isIntercompany: false, counterpartyEntityId: null },
-
-    // LEADOS-ASSOC-JP (JPY), 25% owned, equity method
-    { entityId: assocJp.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "REV-EXT", accountLabel: "External revenue", amountValue: 50000000, amountCurrency: "JPY", isIntercompany: false, counterpartyEntityId: null },
-    { entityId: assocJp.id, fiscalYear: FY, fiscalPeriod: FP, statement: "PL", accountCode: "EXP-EXT", accountLabel: "External expense", amountValue: 42000000, amountCurrency: "JPY", isIntercompany: false, counterpartyEntityId: null },
-  ]);
-
-  await db.insert(intercompanyEliminations).values([
-    { groupId: group.id, fiscalYear: FY, fiscalPeriod: FP, fromEntityId: parent.id, toEntityId: eu.id, accountCode: "REV-IC", amountValue: 150000, amountCurrency: "USD", reason: "Eliminate intercompany licence fee revenue: Parent -> Leados Europe" },
-    { groupId: group.id, fiscalYear: FY, fiscalPeriod: FP, fromEntityId: eu.id, toEntityId: parent.id, accountCode: "EXP-IC", amountValue: 137000, amountCurrency: "EUR", reason: "Eliminate intercompany licence fee expense: Leados Europe <- Parent" },
-  ]);
-
-  await db.insert(dataResidencyPolicies).values([
-    { dataClass: "group-financial", description: "Group-level consolidated financial data", allowedRegions: ["us", "eu", "uk", "apac"] },
-    { dataClass: "us-tax", description: "US federal/state tax filings", allowedRegions: ["us"] },
-    { dataClass: "eu-personal-data", description: "EU personal data subject to GDPR", allowedRegions: ["eu"] },
-    { dataClass: "uk-regulatory", description: "UK statutory/regulatory filings", allowedRegions: ["uk"] },
-    { dataClass: "apac-regulatory", description: "APAC statutory/regulatory filings", allowedRegions: ["apac"] },
-  ]);
-
-  const [globalTp, usTenQ, euGdpr, ukCt600, sgAcra, jpTax] = await db
-    .insert(obligations)
+async function seedPeople() {
+  const rows = await db
+    .insert(people)
     .values([
-      { code: "GLOBAL-TRANSFER-PRICING", title: "Group transfer pricing documentation", description: "Master file + local files per OECD BEPS Action 13.", jurisdictionCode: "*", applicabilityRule: {}, frequency: "annual", dataClass: "group-financial" },
-      { code: "US-10Q", title: "US quarterly filing (10-Q equivalent)", description: "Quarterly financial filing for US-controlled entities.", jurisdictionCode: "US", applicabilityRule: { minOwnershipPct: 51 }, frequency: "quarterly", dataClass: "us-tax" },
-      { code: "EU-GDPR-ROPA", title: "GDPR Record of Processing Activities", description: "Annual update of the data processing register.", jurisdictionCode: "*", applicabilityRule: { regions: ["eu"] }, frequency: "annual", dataClass: "eu-personal-data" },
-      { code: "UK-CT600", title: "UK Corporation Tax Return (CT600)", description: "Annual UK corporation tax filing.", jurisdictionCode: "GB", applicabilityRule: {}, frequency: "annual", dataClass: "uk-regulatory" },
-      { code: "SG-ACRA-ANNUAL-RETURN", title: "Singapore ACRA Annual Return", description: "Annual corporate filing with ACRA.", jurisdictionCode: "SG", applicabilityRule: {}, frequency: "annual", dataClass: "apac-regulatory" },
-      { code: "JP-TAX-RETURN", title: "Japan corporate tax return", description: "Annual Japanese corporate tax filing.", jurisdictionCode: "JP", applicabilityRule: { minOwnershipPct: 20 }, frequency: "annual", dataClass: "apac-regulatory" },
+      { name: "Casey CEO", email: "casey.ceo@leados.example", role: "ceo" },
+      { name: "Vik VP-Eng", email: "vik.vpeng@leados.example", role: "manager" },
+      { name: "Sana VP-Sales", email: "sana.vpsales@leados.example", role: "manager" },
+      { name: "Mo Manager", email: "mo.manager@leados.example", role: "manager" },
+      { name: "Ivy IC1", email: "ivy.ic1@leados.example", role: "employee" },
+      { name: "Imran IC2", email: "imran.ic2@leados.example", role: "employee" },
+      { name: "Priya HR", email: "priya.hr@leados.example", role: "hr_manager" },
+      { name: "Eli EthicsOfficer", email: "eli.ethics@leados.example", role: "ethics_officer" },
+      { name: "Oma Ombudsman", email: "oma.ombudsman@leados.example", role: "ombudsman" },
+      { name: "Blair BoardLiaison", email: "blair.board@leados.example", role: "board_liaison" },
+      { name: "Adrian Admin", email: "adrian.admin@leados.example", role: "admin" },
+      { name: "Ira IC3", email: "ira.ic3@leados.example", role: "employee" },
     ])
     .returning();
+  return rows;
+}
 
-  await db.insert(obligationInstances).values([
-    { obligationId: globalTp.id, entityId: parent.id, periodLabel: "2025-FY", dueDate: "2025-12-31", status: "in_progress" },
-    { obligationId: globalTp.id, entityId: eu.id, periodLabel: "2025-FY", dueDate: "2025-12-31", status: "filed" },
-    { obligationId: globalTp.id, entityId: uk.id, periodLabel: "2025-FY", dueDate: "2025-12-31", status: "not_started" },
-    { obligationId: usTenQ.id, entityId: parent.id, periodLabel: "2025-Q1", dueDate: "2025-04-30", status: "filed" },
-    { obligationId: euGdpr.id, entityId: eu.id, periodLabel: "2025-FY", dueDate: "2025-05-31", status: "in_progress" },
-    { obligationId: ukCt600.id, entityId: uk.id, periodLabel: "2024-FY", dueDate: "2025-01-31", status: "overdue" },
-    { obligationId: sgAcra.id, entityId: apacJv.id, periodLabel: "2025-FY", dueDate: "2025-09-30", status: "not_started" },
-    { obligationId: jpTax.id, entityId: assocJp.id, periodLabel: "2025-FY", dueDate: "2025-05-31", status: "filed" },
+async function seedEdges(p: Array<{ id: number; name: string }>) {
+  const byName = Object.fromEntries(p.map((row) => [row.name, row.id]));
+  await db.insert(stakeholderEdges).values([
+    { fromPersonId: byName["Vik VP-Eng"], toPersonId: byName["Casey CEO"], relation: "reports_to" },
+    { fromPersonId: byName["Sana VP-Sales"], toPersonId: byName["Casey CEO"], relation: "reports_to" },
+    { fromPersonId: byName["Mo Manager"], toPersonId: byName["Vik VP-Eng"], relation: "reports_to" },
+    { fromPersonId: byName["Ivy IC1"], toPersonId: byName["Mo Manager"], relation: "reports_to" },
+    { fromPersonId: byName["Imran IC2"], toPersonId: byName["Mo Manager"], relation: "reports_to" },
+    { fromPersonId: byName["Ira IC3"], toPersonId: byName["Mo Manager"], relation: "reports_to" },
+    { fromPersonId: byName["Priya HR"], toPersonId: byName["Casey CEO"], relation: "reports_to" },
+    { fromPersonId: byName["Eli EthicsOfficer"], toPersonId: byName["Casey CEO"], relation: "influences" },
+    { fromPersonId: byName["Adrian Admin"], toPersonId: byName["Casey CEO"], relation: "reports_to" },
+    { fromPersonId: byName["Oma Ombudsman"], toPersonId: byName["Blair BoardLiaison"], relation: "collaborates_with" },
   ]);
+  return byName;
+}
 
-  await db.insert(boardPackEntityNotes).values([
-    {
-      groupId: group.id,
-      entityId: uk.id,
-      fiscalYear: FY,
-      fiscalPeriod: FP,
-      noteText: "UK posted a GBP 120k operating loss this period, driven by one-off restructuring costs. CT600 filing for FY2024 is overdue; treasury is engaging HMRC on a short extension.",
-      flagLevel: "risk",
-    },
-    {
-      groupId: group.id,
-      entityId: apacJv.id,
-      fiscalYear: FY,
-      fiscalPeriod: FP,
-      noteText: "ACRA annual return not yet started. The 35%-owned JV partner has been slow to counter-sign board minutes; escalated to JV governance committee.",
-      flagLevel: "watch",
-    },
-    {
-      groupId: group.id,
-      entityId: eu.id,
-      fiscalYear: FY,
-      fiscalPeriod: FP,
-      noteText: "On track. GDPR processing register update in progress ahead of the Q2 deadline.",
-      flagLevel: "info",
-    },
+async function seedRedFlagDefinitions() {
+  await db.insert(ethicalRedFlagDefinitions).values(
+    RED_FLAG_DEFINITIONS.map((d) => ({
+      code: d.code,
+      label: d.label,
+      description: d.description,
+      severity: d.severity,
+    })),
+  );
+}
+
+async function seedOrgSettings() {
+  await db.insert(orgSettings).values([
+    { orgId: "default", key: "dual_control.approvers_required", value: 1 },
   ]);
+}
 
-  console.log("Seed complete:", {
-    group: group.code,
-    entities: [parent.code, eu.code, uk.code, apacJv.code, assocJp.code],
-  });
+async function seedDecisions(byName: Record<string, number>) {
+  const rows = await db
+    .insert(decisions)
+    .values([
+      {
+        title: "Process performance scores from new monitoring tool",
+        description: "Seeded corpus case: people-data decision with no subject visibility.",
+        decisionType: "performance_data_processing",
+        involvesPeopleData: true,
+        subjectsHaveVisibility: false,
+        visibilityScope: "individual",
+        reversibility: "reversible",
+        impact: "medium",
+        isPowerAction: false,
+        primarySubjectPersonId: byName["Ivy IC1"],
+        proposedByPersonId: byName["Priya HR"],
+        structuredCriteria: { dimension_a_score: 0.92, dimension_b_score: 0.48 },
+      },
+      {
+        title: "Grant org-wide dashboard read access",
+        description: "Seeded corpus case: bulk visibility grant.",
+        decisionType: "access_grant",
+        involvesPeopleData: true,
+        subjectsHaveVisibility: true,
+        visibilityScope: "bulk",
+        reversibility: "reversible",
+        impact: "medium",
+        isPowerAction: false,
+        proposedByPersonId: byName["Adrian Admin"],
+      },
+      {
+        title: "Change performance evaluation policy weights",
+        description: "Seeded corpus case: unilateral high-power (T4) action.",
+        decisionType: "policy_change",
+        involvesPeopleData: true,
+        subjectsHaveVisibility: true,
+        visibilityScope: "individual",
+        reversibility: "partially_reversible",
+        impact: "high",
+        isPowerAction: true,
+        powerActionType: "evaluation_policy_change",
+        proposedByPersonId: byName["Casey CEO"],
+      },
+      {
+        title: "Decommission legacy identity infrastructure",
+        description: "Seeded corpus case: irreversible + high impact.",
+        decisionType: "infrastructure_decommission",
+        involvesPeopleData: false,
+        subjectsHaveVisibility: true,
+        visibilityScope: "individual",
+        reversibility: "irreversible",
+        impact: "high",
+        isPowerAction: false,
+        proposedByPersonId: byName["Vik VP-Eng"],
+      },
+      {
+        title: "Ship accelerated product launch timeline",
+        description: "Seeded corpus case: dissent hidden from the record.",
+        decisionType: "product_launch",
+        involvesPeopleData: false,
+        subjectsHaveVisibility: true,
+        visibilityScope: "individual",
+        reversibility: "reversible",
+        impact: "medium",
+        isPowerAction: false,
+        proposedByPersonId: byName["Mo Manager"],
+        dissentNotes: [{ byPersonId: byName["Imran IC2"], note: "I disagree with this rollout timeline; QA window is too short." }],
+        dissentHidden: true,
+      },
+      {
+        title: "Promote Ivy IC1 to senior engineer",
+        description: "Seeded corpus case: conflict-of-interest proximity scenario.",
+        decisionType: "promotion_decision",
+        involvesPeopleData: true,
+        subjectsHaveVisibility: true,
+        visibilityScope: "individual",
+        reversibility: "partially_reversible",
+        impact: "medium",
+        isPowerAction: false,
+        primarySubjectPersonId: byName["Ivy IC1"],
+        proposedByPersonId: byName["Mo Manager"],
+      },
+      {
+        title: "Rotate team standup time by 30 minutes",
+        description: "Seeded corpus control case: expected to raise zero red flags.",
+        decisionType: "scheduling",
+        involvesPeopleData: false,
+        subjectsHaveVisibility: true,
+        visibilityScope: "individual",
+        reversibility: "reversible",
+        impact: "low",
+        isPowerAction: false,
+        proposedByPersonId: byName["Mo Manager"],
+      },
+    ])
+    .returning();
+  return rows;
+}
+
+async function main() {
+  console.log("[seed] resetting Part 46 tables...");
+  await reset();
+
+  console.log("[seed] inserting people...");
+  const peopleRows = await seedPeople();
+
+  console.log("[seed] inserting stakeholder graph edges...");
+  const byName = await seedEdges(peopleRows);
+
+  console.log("[seed] inserting red-flag definitions + org settings...");
+  await seedRedFlagDefinitions();
+  await seedOrgSettings();
+
+  console.log("[seed] inserting decision corpus...");
+  const decisionRows = await seedDecisions(byName);
+
+  console.log("[seed] done.");
+  console.log(
+    JSON.stringify(
+      {
+        people: Object.fromEntries(peopleRows.map((p) => [p.name, p.id])),
+        decisions: Object.fromEntries(decisionRows.map((d) => [d.title, d.id])),
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main()
+  .then(() => process.exit(0))
   .catch((err) => {
     console.error(err);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await pool.end();
+    process.exit(1);
   });

@@ -7,8 +7,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "seed:time-economics": "tsx scripts/seed-time-economics.ts",
-    "verify": "tsx scripts/verify.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "verify": "tsx src/db/seed.ts && tsx scripts/verify.ts"
   },
   "dependencies": {
     "dotenv": "17.3.1",

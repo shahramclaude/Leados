@@ -1,135 +1,49 @@
-// Part 09 reconstruction + Part 43 extension: fairness/disparity auditing,
-// now covering coaching-access and feedback-distribution surfaces as
-// required by Phase 3(e)/Phase 4(4). Every reported row carries its sample
-// size; any group smaller than MIN_SAMPLE_SIZE is suppressed from
-// disaggregated output to avoid re-identifying individuals through small
-// cells — it still counts in the overall total.
+// Part 09 compatibility stand-in: fairness/privacy machinery. The real Part
+// 09 module runs statistical parity / disparate-impact style scans over
+// machine-readable decision criteria. Here we expose the same contract the
+// ethical lens engine (Part 46) needs: given a decision's structured
+// criteria (if any), run a scan; otherwise explain plainly why it could not
+// run rather than pretending fairness was checked.
 
-import { db } from "@/db";
-import { accessAuditLog, coachingSessions, feedbackInvitations, feedbackRequests, people } from "@/db/schema";
-import { newId } from "@/lib/ids";
-import { eq } from "drizzle-orm";
+import { Explain, explain } from "@/lib/explain";
 
-export const MIN_SAMPLE_SIZE = 5;
-
-export async function logAccess(params: {
-  actorId: string;
-  actorRole: string;
-  action: string;
-  targetPersonId?: string;
-  surface: "coaching" | "feedback" | "growth" | "one_on_one";
-  allowed: boolean;
-  reason: string;
-}): Promise<void> {
-  await db.insert(accessAuditLog).values({ id: newId("audit"), ...params });
+export interface FairnessScanResult {
+  ran: boolean;
+  disparities: Array<{ dimension: string; score: number; flagged: boolean }>;
 }
 
-export type GroupMetric = {
-  group: string;
-  sampleSize: number;
-  value: number; // e.g. proportion with >=1 coaching session
-  suppressed: boolean;
-};
-
-export type DisparityReport = {
-  surface: string;
-  metric: string;
-  groups: GroupMetric[];
-  maxObservedDisparity: number | null; // max-min across NON-suppressed groups
-  note: string;
-};
-
-function groupBy<T, K extends string>(items: T[], key: (item: T) => K): Map<K, T[]> {
-  const map = new Map<K, T[]>();
-  for (const item of items) {
-    const k = key(item);
-    const list = map.get(k) ?? [];
-    list.push(item);
-    map.set(k, list);
-  }
-  return map;
-}
-
-/** Coaching-access audit: proportion of each demographic group that has
- * started at least one coaching session, with sample sizes. */
-export async function coachingAccessAudit(): Promise<DisparityReport> {
-  const allPeople = await db.select().from(people);
-  const allSessions = await db.select().from(coachingSessions);
-  const peopleWithSession = new Set(allSessions.map((s) => s.personId));
-
-  const byGroup = groupBy(allPeople, (p) => p.demographicGroup ?? "undeclared");
-  const groups: GroupMetric[] = [];
-  for (const [group, members] of byGroup) {
-    const sampleSize = members.length;
-    const withSession = members.filter((m) => peopleWithSession.has(m.id)).length;
-    const value = sampleSize > 0 ? Number((withSession / sampleSize).toFixed(3)) : 0;
-    groups.push({ group, sampleSize, value, suppressed: sampleSize < MIN_SAMPLE_SIZE });
+export function runFairnessScan(
+  structuredCriteria: Record<string, number> | null | undefined,
+): Explain<FairnessScanResult> {
+  if (!structuredCriteria || Object.keys(structuredCriteria).length === 0) {
+    return explain(
+      { ran: false, disparities: [] },
+      "This decision has no machine-readable criteria attached, so the automated " +
+        "fairness scan could not run. This is NOT evidence of fairness — it means " +
+        "a human equity review is required instead.",
+      ["no_structured_criteria"],
+      "low",
+    );
   }
 
-  const visible = groups.filter((g) => !g.suppressed);
-  const maxObservedDisparity =
-    visible.length >= 2 ? Number((Math.max(...visible.map((g) => g.value)) - Math.min(...visible.map((g) => g.value))).toFixed(3)) : null;
+  // Minimal, explainable heuristic: flag any dimension whose normalized score
+  // deviates more than 0.3 from parity (0.5), mirroring the kind of
+  // disparate-impact signal Part 09's real machinery computes in full.
+  const disparities = Object.entries(structuredCriteria).map(([dimension, score]) => ({
+    dimension,
+    score,
+    flagged: Math.abs(score - 0.5) > 0.3,
+  }));
 
-  return {
-    surface: "coaching",
-    metric: "share_of_group_with_at_least_one_coaching_session",
-    groups,
-    maxObservedDisparity,
-    note: `Groups with n<${MIN_SAMPLE_SIZE} are suppressed from disaggregated reporting to protect privacy.`,
-  };
-}
+  const flaggedCount = disparities.filter((d) => d.flagged).length;
 
-/** Feedback-distribution audit: are some groups systematically asked to give
- * less feedback, or do their feedback requests resolve less often (stuck
- * below the confidentiality threshold, meaning they get no signal back)? */
-export async function feedbackDistributionAudit(): Promise<DisparityReport> {
-  const allPeople = await db.select().from(people);
-  const allRequests = await db.select().from(feedbackRequests);
-  const allInvitations = await db.select().from(feedbackInvitations);
-
-  const respondedCountByRequest = new Map<string, number>();
-  for (const inv of allInvitations) {
-    if (inv.status === "responded") {
-      respondedCountByRequest.set(inv.requestId, (respondedCountByRequest.get(inv.requestId) ?? 0) + 1);
-    }
-  }
-
-  const requestsBySubject = groupBy(allRequests, (r) => r.subjectId);
-  const byGroup = groupBy(allPeople, (p) => p.demographicGroup ?? "undeclared");
-
-  const groups: GroupMetric[] = [];
-  for (const [group, members] of byGroup) {
-    const sampleSize = members.length;
-    let resolved = 0;
-    let total = 0;
-    for (const member of members) {
-      const requests = requestsBySubject.get(member.id) ?? [];
-      for (const r of requests) {
-        total += 1;
-        if ((respondedCountByRequest.get(r.id) ?? 0) >= r.aggregationThreshold) resolved += 1;
-      }
-    }
-    const value = total > 0 ? Number((resolved / total).toFixed(3)) : 0;
-    groups.push({ group, sampleSize, value, suppressed: sampleSize < MIN_SAMPLE_SIZE });
-  }
-
-  const visible = groups.filter((g) => !g.suppressed);
-  const maxObservedDisparity =
-    visible.length >= 2 ? Number((Math.max(...visible.map((g) => g.value)) - Math.min(...visible.map((g) => g.value))).toFixed(3)) : null;
-
-  return {
-    surface: "feedback",
-    metric: "share_of_feedback_requests_reaching_confidentiality_threshold",
-    groups,
-    maxObservedDisparity,
-    note: `Groups with n<${MIN_SAMPLE_SIZE} are suppressed from disaggregated reporting to protect privacy. Low resolution rates may indicate under-staffed rater pools rather than bias — investigate before acting.`,
-  };
-}
-
-export async function fullFairnessReport() {
-  return {
-    generatedAt: new Date().toISOString(),
-    minSampleSize: MIN_SAMPLE_SIZE,
-    reports: [await coachingAccessAudit(), await feedbackDistributionAudit()],
-  };
+  return explain(
+    { ran: true, disparities },
+    flaggedCount > 0
+      ? `Fairness scan ran on ${disparities.length} criteria and flagged ${flaggedCount} ` +
+        `dimension(s) with a disparity greater than 0.3 from parity.`
+      : `Fairness scan ran on ${disparities.length} criteria; no disparity exceeded the 0.3 threshold.`,
+    disparities.map((d) => d.dimension),
+    flaggedCount > 0 ? "medium" : "high",
+  );
 }
