@@ -1,152 +1,238 @@
+"use server";
+
 import { db } from "@/db";
-import { banditArms, recommendations, attentionLedger } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
-import { newId } from "@/lib/id";
-import { mulberry32, gaussian } from "@/lib/rng";
+import {
+  decisions,
+  signals,
+  cadenceItems,
+  boardItems,
+  riskItems,
+  initiatives,
+} from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 
-/* ============================================================================
- * PART 64 — Next-best-action & personalization brain.
- *
- * Thompson sampling over Beta(alpha, beta) arms selects which candidate
- * content "arm" to surface; a mandatory exploration floor (>= 5% of
- * selections are forced-random) prevents the policy from narrowing any
- * role into a single content lane. Every surfaced item books its attention
- * cost against a per-role daily budget; once exhausted the brain goes quiet
- * rather than keep interrupting (PHASE 2 "must be able to say nothing").
- * ========================================================================== */
-
-const EXPLORATION_FLOOR = 0.05;
-const DEFAULT_ROLE_BUDGETS: Record<string, number> = { manager: 6, executive: 4, contributor: 8 };
-
-export interface Candidate {
-  armId: string;
-  title: string;
-  description: string;
-  expectedValue: number;
-  costAttention: number;
-  riskTier: "low" | "medium" | "high";
+function str(formData: FormData, key: string): string {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function sampleBeta(rng: () => number, alpha: number, beta: number): number {
-  // Approximate Beta sampling via the normal approximation (adequate for arm counts here,
-  // documented simplification — exact Marsaglia-Tsang gamma sampling would be the production choice).
-  const mean = alpha / (alpha + beta);
-  const variance = (alpha * beta) / ((alpha + beta) ** 2 * (alpha + beta + 1));
-  const x = gaussian(rng, mean, Math.sqrt(Math.max(variance, 1e-6)));
-  return Math.min(0.999, Math.max(0.001, x));
+function optionalStr(formData: FormData, key: string): string | null {
+  const value = str(formData, key);
+  return value.length > 0 ? value : null;
 }
 
-async function getOrCreateArm(armId: string, label: string) {
-  const [existing] = await db.select().from(banditArms).where(eq(banditArms.id, armId));
-  if (existing) return existing;
-  await db.insert(banditArms).values({ id: armId, label });
-  return { id: armId, label, alpha: 1, beta: 1, pulls: 0 };
+function optionalDate(formData: FormData, key: string): Date | null {
+  const value = str(formData, key);
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export interface NbaManipulationDenylistHit {
-  armId: string;
-  reason: string;
-}
+// ---------------------------------------------------------------------------
+// Decisions
+// ---------------------------------------------------------------------------
 
-// Manipulation denylist (PHASE 5): any candidate whose title/description trips an
-// urgency/scarcity/FOMO pattern is hard-banned from the bandit arm set entirely.
-const MANIPULATION_PATTERNS = [/only .* left/i, /act now/i, /don'?t miss out/i, /last chance/i, /hurry/i];
-
-export function violatesManipulationDenylist(c: Candidate): NbaManipulationDenylistHit | null {
-  const haystack = `${c.title} ${c.description}`;
-  const hit = MANIPULATION_PATTERNS.find((p) => p.test(haystack));
-  return hit ? { armId: c.armId, reason: `matched manipulation pattern ${hit}` } : null;
-}
-
-export async function selectNextBestAction(
-  role: string,
-  surface: string,
-  candidates: Candidate[],
-  seed: number,
-): Promise<{ chosen: Candidate | null; explored: boolean; denylisted: NbaManipulationDenylistHit[] }> {
-  const denylisted: NbaManipulationDenylistHit[] = [];
-  const clean = candidates.filter((c) => {
-    const hit = violatesManipulationDenylist(c);
-    if (hit) denylisted.push(hit);
-    return !hit;
+export async function createDecision(formData: FormData) {
+  await db.insert(decisions).values({
+    title: str(formData, "title"),
+    description: optionalStr(formData, "description"),
+    owner: str(formData, "owner"),
+    rationale: optionalStr(formData, "rationale"),
+    impact: optionalStr(formData, "impact"),
+    status: (str(formData, "status") || "proposed") as (typeof decisions.$inferInsert)["status"],
   });
-  if (clean.length === 0) return { chosen: null, explored: false, denylisted };
+  revalidatePath("/decisions");
+  revalidatePath("/");
+}
 
-  const today = new Date().toISOString().slice(0, 10);
-  const budgetDefault = DEFAULT_ROLE_BUDGETS[role] ?? 6;
-  let [ledger] = await db
-    .select()
-    .from(attentionLedger)
-    .where(and(eq(attentionLedger.role, role), eq(attentionLedger.periodDate, today)));
-  if (!ledger) {
-    const id = newId("attn");
-    await db.insert(attentionLedger).values({ id, role, periodDate: today, spent: 0, budget: budgetDefault });
-    ledger = { id, role, periodDate: today, spent: 0, budget: budgetDefault };
-  }
-
-  const rng = mulberry32(seed);
-  const forceExplore = rng() < EXPLORATION_FLOOR;
-
-  let chosen: Candidate;
-  if (forceExplore) {
-    chosen = clean[Math.floor(rng() * clean.length)];
-  } else {
-    let best = clean[0];
-    let bestSample = -Infinity;
-    for (const c of clean) {
-      const arm = await getOrCreateArm(c.armId, c.title);
-      const sample = sampleBeta(rng, arm.alpha, arm.beta) * c.expectedValue;
-      if (sample > bestSample) {
-        bestSample = sample;
-        best = c;
-      }
-    }
-    chosen = best;
-  }
-
-  if (ledger.spent + chosen.costAttention > ledger.budget) {
-    return { chosen: null, explored: forceExplore, denylisted }; // attention budget exhausted — the brain stays quiet
-  }
-
+export async function updateDecisionStatus(formData: FormData) {
+  const id = str(formData, "id");
+  const status = str(formData, "status") as (typeof decisions.$inferInsert)["status"];
+  const decidedAt = status === "committed" || status === "implemented" ? new Date() : undefined;
   await db
-    .update(attentionLedger)
-    .set({ spent: ledger.spent + chosen.costAttention })
-    .where(eq(attentionLedger.id, ledger.id));
+    .update(decisions)
+    .set({ status, updatedAt: new Date(), ...(decidedAt ? { decidedAt } : {}) })
+    .where(eq(decisions.id, id));
+  revalidatePath("/decisions");
+  revalidatePath("/");
+}
 
-  await db.insert(recommendations).values({
-    id: newId("rec"),
-    role,
-    surface,
-    title: chosen.title,
-    description: chosen.description,
-    expectedValue: chosen.expectedValue,
-    costAttention: chosen.costAttention,
-    riskTier: chosen.riskTier,
-    armId: chosen.armId,
-    score: chosen.expectedValue,
-    explored: forceExplore,
-    status: "open",
+export async function deleteDecision(formData: FormData) {
+  const id = str(formData, "id");
+  await db.delete(decisions).where(eq(decisions.id, id));
+  revalidatePath("/decisions");
+  revalidatePath("/");
+}
+
+// ---------------------------------------------------------------------------
+// Signals
+// ---------------------------------------------------------------------------
+
+export async function createSignal(formData: FormData) {
+  await db.insert(signals).values({
+    title: str(formData, "title"),
+    description: optionalStr(formData, "description"),
+    source: str(formData, "source"),
+    severity: (str(formData, "severity") || "medium") as (typeof signals.$inferInsert)["severity"],
+    status: (str(formData, "status") || "new") as (typeof signals.$inferInsert)["status"],
   });
-
-  return { chosen, explored: forceExplore, denylisted };
+  revalidatePath("/signals");
+  revalidatePath("/");
 }
 
-/** Realized reward feedback updates the Beta posterior for the chosen arm (reward-weighted, decayed). */
-export async function recordReward(armId: string, reward: number) {
-  const arm = await getOrCreateArm(armId, armId);
-  const success = reward > 0.5;
+export async function updateSignalStatus(formData: FormData) {
+  const id = str(formData, "id");
+  const status = str(formData, "status") as (typeof signals.$inferInsert)["status"];
   await db
-    .update(banditArms)
-    .set({
-      alpha: arm.alpha + (success ? 1 : 0),
-      beta: arm.beta + (success ? 0 : 1),
-      pulls: arm.pulls + 1,
-    })
-    .where(eq(banditArms.id, armId));
+    .update(signals)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(signals.id, id));
+  revalidatePath("/signals");
+  revalidatePath("/");
 }
 
-export async function markRecommendation(id: string, status: "done" | "dismissed") {
-  await db.update(recommendations).set({ status, decidedAt: new Date() }).where(eq(recommendations.id, id));
-  const [rec] = await db.select().from(recommendations).where(eq(recommendations.id, id));
-  if (rec) await recordReward(rec.armId, status === "done" ? 1 : 0);
+export async function deleteSignal(formData: FormData) {
+  const id = str(formData, "id");
+  await db.delete(signals).where(eq(signals.id, id));
+  revalidatePath("/signals");
+  revalidatePath("/");
+}
+
+// ---------------------------------------------------------------------------
+// Cadence
+// ---------------------------------------------------------------------------
+
+export async function createCadenceItem(formData: FormData) {
+  await db.insert(cadenceItems).values({
+    title: str(formData, "title"),
+    type: (str(formData, "type") || "meeting") as (typeof cadenceItems.$inferInsert)["type"],
+    frequency: (str(formData, "frequency") || "weekly") as (typeof cadenceItems.$inferInsert)["frequency"],
+    owner: str(formData, "owner"),
+    nextOccurrence: optionalDate(formData, "nextOccurrence"),
+  });
+  revalidatePath("/cadence");
+  revalidatePath("/");
+}
+
+export async function updateCadenceStatus(formData: FormData) {
+  const id = str(formData, "id");
+  const status = str(formData, "status") as (typeof cadenceItems.$inferInsert)["status"];
+  await db
+    .update(cadenceItems)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(cadenceItems.id, id));
+  revalidatePath("/cadence");
+  revalidatePath("/");
+}
+
+export async function deleteCadenceItem(formData: FormData) {
+  const id = str(formData, "id");
+  await db.delete(cadenceItems).where(eq(cadenceItems.id, id));
+  revalidatePath("/cadence");
+  revalidatePath("/");
+}
+
+// ---------------------------------------------------------------------------
+// Board
+// ---------------------------------------------------------------------------
+
+export async function createBoardItem(formData: FormData) {
+  await db.insert(boardItems).values({
+    title: str(formData, "title"),
+    type: (str(formData, "type") || "pack") as (typeof boardItems.$inferInsert)["type"],
+    owner: str(formData, "owner"),
+    summary: optionalStr(formData, "summary"),
+    meetingDate: optionalDate(formData, "meetingDate"),
+  });
+  revalidatePath("/board");
+  revalidatePath("/");
+}
+
+export async function updateBoardItemStatus(formData: FormData) {
+  const id = str(formData, "id");
+  const status = str(formData, "status") as (typeof boardItems.$inferInsert)["status"];
+  await db
+    .update(boardItems)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(boardItems.id, id));
+  revalidatePath("/board");
+  revalidatePath("/");
+}
+
+export async function deleteBoardItem(formData: FormData) {
+  const id = str(formData, "id");
+  await db.delete(boardItems).where(eq(boardItems.id, id));
+  revalidatePath("/board");
+  revalidatePath("/");
+}
+
+// ---------------------------------------------------------------------------
+// Risk
+// ---------------------------------------------------------------------------
+
+export async function createRiskItem(formData: FormData) {
+  await db.insert(riskItems).values({
+    title: str(formData, "title"),
+    category: (str(formData, "category") || "operational") as (typeof riskItems.$inferInsert)["category"],
+    likelihood: Number(str(formData, "likelihood") || "3"),
+    impact: Number(str(formData, "impact") || "3"),
+    owner: str(formData, "owner"),
+    mitigation: optionalStr(formData, "mitigation"),
+  });
+  revalidatePath("/risk");
+  revalidatePath("/");
+}
+
+export async function updateRiskStatus(formData: FormData) {
+  const id = str(formData, "id");
+  const status = str(formData, "status") as (typeof riskItems.$inferInsert)["status"];
+  await db
+    .update(riskItems)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(riskItems.id, id));
+  revalidatePath("/risk");
+  revalidatePath("/");
+}
+
+export async function deleteRiskItem(formData: FormData) {
+  const id = str(formData, "id");
+  await db.delete(riskItems).where(eq(riskItems.id, id));
+  revalidatePath("/risk");
+  revalidatePath("/");
+}
+
+// ---------------------------------------------------------------------------
+// Strategy / Initiatives
+// ---------------------------------------------------------------------------
+
+export async function createInitiative(formData: FormData) {
+  await db.insert(initiatives).values({
+    title: str(formData, "title"),
+    objective: optionalStr(formData, "objective"),
+    owner: str(formData, "owner"),
+    targetDate: optionalDate(formData, "targetDate"),
+    progress: Number(str(formData, "progress") || "0"),
+  });
+  revalidatePath("/strategy");
+  revalidatePath("/");
+}
+
+export async function updateInitiativeProgress(formData: FormData) {
+  const id = str(formData, "id");
+  const status = str(formData, "status") as (typeof initiatives.$inferInsert)["status"];
+  const progress = Number(str(formData, "progress") || "0");
+  await db
+    .update(initiatives)
+    .set({ status, progress, updatedAt: new Date() })
+    .where(eq(initiatives.id, id));
+  revalidatePath("/strategy");
+  revalidatePath("/");
+}
+
+export async function deleteInitiative(formData: FormData) {
+  const id = str(formData, "id");
+  await db.delete(initiatives).where(eq(initiatives.id, id));
+  revalidatePath("/strategy");
+  revalidatePath("/");
 }

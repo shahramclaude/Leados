@@ -1,38 +1,30 @@
 import { db } from "@/db";
-import { decisions, decisionEvents } from "@/db/schema";
+import { decisions } from "@/db/schema";
 import { desc } from "drizzle-orm";
+import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const rows = await db.select().from(decisions).orderBy(desc(decisions.createdAt));
-  return Response.json(rows);
+  return Response.json({ data: rows });
 }
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  const title = typeof body.title === "string" ? body.title.trim() : "";
-  if (!title) {
-    return Response.json({ error: "title is required" }, { status: 400 });
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  if (!body?.title || !body?.owner) {
+    return Response.json({ error: "title and owner are required" }, { status: 400 });
   }
-
-  const [created] = await db
+  const [row] = await db
     .insert(decisions)
     .values({
-      title,
-      description: body.description ?? "",
-      category: body.category ?? "strategic",
-      owner: body.owner ?? "Unassigned",
-      impact: body.impact ?? "medium",
-      confidence: Number.isFinite(body.confidence) ? body.confidence : 50,
+      title: body.title,
+      description: body.description ?? null,
+      owner: body.owner,
+      rationale: body.rationale ?? null,
+      impact: body.impact ?? null,
+      status: body.status ?? "proposed",
     })
     .returning();
-
-  await db.insert(decisionEvents).values({
-    decisionId: created.id,
-    type: "created",
-    payload: `Decision "${created.title}" proposed by ${created.owner}.`,
-  });
-
-  return Response.json(created, { status: 201 });
+  return Response.json({ data: row }, { status: 201 });
 }

@@ -1,147 +1,87 @@
-"use client";
+import { db } from "@/db";
+import { signals } from "@/db/schema";
+import { desc } from "drizzle-orm";
+import { createSignal, deleteSignal, updateSignalStatus } from "@/lib/actions";
+import { Badge, Card, EmptyState, PageHeader, fmtDate } from "@/components/ui";
 
-import { useEffect, useState } from "react";
-import { Badge, Button, Card, EmptyState, Field, Input, PageHeader, Select, SecondaryButton, Textarea } from "@/components/ui";
+export const dynamic = "force-dynamic";
 
-type Signal = {
-  id: number;
-  title: string;
-  source: string;
-  category: string;
-  severity: string;
-  description: string;
-  status: string;
-  detectedAt: string;
-};
+const SEVERITY_OPTIONS = ["low", "medium", "high", "critical"] as const;
+const STATUS_OPTIONS = ["new", "investigating", "resolved", "dismissed"] as const;
 
-export default function SignalsPage() {
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    source: "internal",
-    category: "market",
-    severity: "medium",
-    description: "",
-  });
-
-  async function load() {
-    const res = await fetch("/api/signals");
-    setSignals(await res.json());
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function createSignal(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.title.trim()) return;
-    setSubmitting(true);
-    await fetch("/api/signals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setForm({ title: "", source: "internal", category: "market", severity: "medium", description: "" });
-    await load();
-    setSubmitting(false);
-  }
-
-  async function setStatus(id: number, status: string) {
-    await fetch(`/api/signals/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    await load();
-  }
+export default async function SignalsPage() {
+  const rows = await db.select().from(signals).orderBy(desc(signals.detectedAt));
 
   return (
     <div>
       <PageHeader
-        eyebrow="Part 13 — Sensing & early warning"
         title="Signals"
-        description="Early-warning feed across market, operational, financial, and people domains."
+        description="Early-warning intelligence: weak signals and emerging risks worth leadership attention."
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          {loading ? (
-            <p className="text-sm text-slate-500">Loading…</p>
-          ) : signals.length === 0 ? (
-            <EmptyState message="No signals detected yet." />
-          ) : (
-            <div className="flex flex-col gap-3">
-              {signals.map((s) => (
-                <Card key={s.id}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-medium text-slate-100">{s.title}</p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {s.source} · {s.category} · {new Date(s.detectedAt).toLocaleDateString()}
-                      </p>
-                      {s.description ? <p className="mt-2 text-sm text-slate-400">{s.description}</p> : null}
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
-                      <Badge value={s.severity} />
-                      <Badge value={s.status} />
-                    </div>
-                  </div>
-                  {s.status === "open" || s.status === "triaged" ? (
-                    <div className="mt-3 flex gap-2">
-                      {s.status === "open" ? (
-                        <SecondaryButton onClick={() => setStatus(s.id, "triaged")}>Triage</SecondaryButton>
-                      ) : null}
-                      <SecondaryButton onClick={() => setStatus(s.id, "resolved")}>Resolve</SecondaryButton>
-                      <SecondaryButton onClick={() => setStatus(s.id, "dismissed")}>Dismiss</SecondaryButton>
-                    </div>
-                  ) : null}
-                </Card>
-              ))}
-            </div>
-          )}
-        </div>
+      <Card className="mb-8">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900">Log a new signal</h2>
+        <form action={createSignal} className="grid gap-4 sm:grid-cols-2">
+          <input name="title" required placeholder="Signal title" className="input sm:col-span-2" />
+          <input name="source" required placeholder="Source (e.g. market, internal, customer)" className="input" />
+          <select name="severity" defaultValue="medium" className="input">
+            {SEVERITY_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <textarea name="description" placeholder="Description" className="input sm:col-span-2" rows={2} />
+          <button type="submit" className="btn-primary sm:col-span-2">
+            Log signal
+          </button>
+        </form>
+      </Card>
 
-        <Card>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Log a signal</h2>
-          <form className="flex flex-col gap-3" onSubmit={createSignal}>
-            <Field label="Title">
-              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-            </Field>
-            <Field label="Description">
-              <Textarea rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-            </Field>
-            <Field label="Source">
-              <Input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Category">
-                <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                  <option value="market">Market</option>
-                  <option value="operational">Operational</option>
-                  <option value="financial">Financial</option>
-                  <option value="people">People</option>
-                  <option value="risk">Risk</option>
-                </Select>
-              </Field>
-              <Field label="Severity">
-                <Select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="critical">Critical</option>
-                </Select>
-              </Field>
-            </div>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Logging…" : "Log signal"}
-            </Button>
-          </form>
-        </Card>
-      </div>
+      {rows.length === 0 ? (
+        <EmptyState message="No signals captured yet." />
+      ) : (
+        <div className="space-y-4">
+          {rows.map((signal) => (
+            <Card key={signal.id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">{signal.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Source: {signal.source} · Detected {fmtDate(signal.detectedAt)}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Badge value={signal.severity} />
+                  <Badge value={signal.status} />
+                </div>
+              </div>
+              {signal.description ? <p className="mt-3 text-sm text-slate-700">{signal.description}</p> : null}
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+                <form action={updateSignalStatus} className="flex items-center gap-2">
+                  <input type="hidden" name="id" value={signal.id} />
+                  <select name="status" defaultValue={signal.status} className="input-sm">
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="submit" className="btn-secondary">
+                    Update
+                  </button>
+                </form>
+                <form action={deleteSignal}>
+                  <input type="hidden" name="id" value={signal.id} />
+                  <button type="submit" className="btn-danger">
+                    Delete
+                  </button>
+                </form>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

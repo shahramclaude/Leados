@@ -1,134 +1,98 @@
 import { db } from "@/db";
-import { initiatives, portfolioConstraints, objectives, keyResults } from "@/db/schema";
-import { wsjf } from "@/lib/strategy";
-import { optimizePortfolioAction } from "./actions";
+import { initiatives } from "@/db/schema";
+import { desc } from "drizzle-orm";
+import { createInitiative, deleteInitiative, updateInitiativeProgress } from "@/lib/actions";
+import { Badge, Card, EmptyState, PageHeader, fmtDate } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
+const STATUS_OPTIONS = ["planned", "active", "at_risk", "completed"] as const;
+
 export default async function StrategyPage() {
-  const allInitiatives = await db.select().from(initiatives);
-  const constraints = await db.select().from(portfolioConstraints);
-  const allObjectives = await db.select().from(objectives);
-  const allKeyResults = await db.select().from(keyResults);
-
-  const scored = allInitiatives
-    .map((i) => ({ ...i, computedWsjf: wsjf({ value: i.value, timeCriticality: i.timeCriticality, riskReduction: i.riskReduction, size: i.size }) }))
-    .sort((a, b) => b.computedWsjf - a.computedWsjf);
-
-  const usage = {
-    budget: allInitiatives.filter((i) => i.status === "selected").reduce((a, b) => a + b.costUsd, 0),
-    headcount: allInitiatives.filter((i) => i.status === "selected").reduce((a, b) => a + b.headcount, 0),
-    capacity: allInitiatives.filter((i) => i.status === "selected").reduce((a, b) => a + b.size, 0),
-  };
+  const rows = await db.select().from(initiatives).orderBy(desc(initiatives.createdAt));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Part 62</p>
-        <h1 className="text-2xl font-semibold text-white">Autonomous Strategy, OKR &amp; Portfolio Engine</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          WSJF = (value + time-criticality + risk-reduction) / size. The optimizer is a greedy-by-WSJF seed plus a
-          bounded 2-swap local search — deterministic, constraint-respecting, and honest about not being a certified
-          ILP optimum.
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Strategy & Execution"
+        description="Strategic initiatives: objectives, ownership, and progress against target dates."
+      />
 
-      <div className="card">
-        <h2 className="text-sm font-semibold text-slate-200">Objectives &amp; Key Results</h2>
-        <div className="mt-3 space-y-3">
-          {allObjectives.map((o) => (
-            <div key={o.id} className="rounded-xl border border-slate-800 p-3">
-              <p className="text-sm text-slate-100">{o.statement}</p>
-              <p className="text-xs text-slate-500">
-                owner {o.owner} · baseline {o.baseline} → target {o.target} · falsifiable by {o.falsifiableBy} · confidence {o.confidence}
-                {o.ambitiousUnsupported && <span className="ml-2 badge bg-amber-500/20 text-amber-300">ambitious-unsupported</span>}
-              </p>
-              <ul className="mt-2 space-y-1">
-                {allKeyResults
-                  .filter((k) => k.objectiveId === o.id)
-                  .map((k) => (
-                    <li key={k.id} className="text-xs text-slate-400">
-                      {k.title}: {k.fromVal} → {k.toVal} (current {k.current}){" "}
-                      {k.isCounterMetric && <span className="badge bg-indigo-500/20 text-indigo-300">counter-metric</span>}
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </div>
+      <Card className="mb-8">
+        <h2 className="mb-4 text-lg font-semibold text-slate-900">Add an initiative</h2>
+        <form action={createInitiative} className="grid gap-4 sm:grid-cols-2">
+          <input name="title" required placeholder="Initiative title" className="input sm:col-span-2" />
+          <input name="owner" required placeholder="Owner" className="input" />
+          <input type="date" name="targetDate" className="input" />
+          <textarea name="objective" placeholder="Objective" className="input sm:col-span-2" rows={2} />
+          <button type="submit" className="btn-primary sm:col-span-2">
+            Add initiative
+          </button>
+        </form>
+      </Card>
 
-      <div className="card">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-slate-200">Portfolio constraints &amp; usage (selected initiatives)</h2>
-          <form action={optimizePortfolioAction}>
-            <button className="btn btn-primary" type="submit">
-              Re-solve portfolio
-            </button>
-          </form>
-        </div>
-        <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-          {constraints.map((c) => {
-            const used = c.kind === "budget" ? usage.budget : c.kind === "headcount" ? usage.headcount : usage.capacity;
-            const pct = Math.min(100, (used / c.limitValue) * 100);
-            return (
-              <div key={c.id}>
-                <p className="text-xs text-slate-400">{c.label}</p>
-                <div className="mt-1 h-2 rounded-full bg-slate-800">
+      {rows.length === 0 ? (
+        <EmptyState message="No initiatives yet." />
+      ) : (
+        <div className="space-y-4">
+          {rows.map((initiative) => (
+            <Card key={initiative.id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">{initiative.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Owner: {initiative.owner}
+                    {initiative.targetDate ? ` · Target: ${fmtDate(initiative.targetDate)}` : ""}
+                  </p>
+                </div>
+                <Badge value={initiative.status} />
+              </div>
+              {initiative.objective ? <p className="mt-3 text-sm text-slate-700">{initiative.objective}</p> : null}
+              <div className="mt-4">
+                <div className="flex items-center justify-between text-xs text-slate-500">
+                  <span>Progress</span>
+                  <span>{initiative.progress}%</span>
+                </div>
+                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-slate-100">
                   <div
-                    className={`h-2 rounded-full ${pct > 95 ? "bg-rose-500" : "bg-indigo-500"}`}
-                    style={{ width: `${pct}%` }}
+                    className="h-full rounded-full bg-indigo-600 transition-all"
+                    style={{ width: `${Math.min(100, Math.max(0, initiative.progress))}%` }}
                   />
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  {used.toFixed(0)} / {c.limitValue} {c.hard ? "(hard)" : "(soft)"}
-                </p>
               </div>
-            );
-          })}
+              <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+                <form action={updateInitiativeProgress} className="flex flex-wrap items-center gap-2">
+                  <input type="hidden" name="id" value={initiative.id} />
+                  <select name="status" defaultValue={initiative.status} className="input-sm">
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    name="progress"
+                    min={0}
+                    max={100}
+                    defaultValue={initiative.progress}
+                    className="input-sm w-20"
+                  />
+                  <button type="submit" className="btn-secondary">
+                    Update
+                  </button>
+                </form>
+                <form action={deleteInitiative}>
+                  <input type="hidden" name="id" value={initiative.id} />
+                  <button type="submit" className="btn-danger">
+                    Delete
+                  </button>
+                </form>
+              </div>
+            </Card>
+          ))}
         </div>
-      </div>
-
-      <div className="card">
-        <h2 className="text-sm font-semibold text-slate-200">Initiative board (ranked by WSJF)</h2>
-        <table className="mt-3">
-          <thead>
-            <tr>
-              <th>Initiative</th>
-              <th>WSJF</th>
-              <th>Size (wks)</th>
-              <th>Cost</th>
-              <th>Irreversible</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {scored.map((i) => (
-              <tr key={i.id}>
-                <td>{i.title}</td>
-                <td>{i.computedWsjf.toFixed(2)}</td>
-                <td>{i.size}</td>
-                <td>${i.costUsd.toLocaleString()}</td>
-                <td>{i.irreversible ? "yes (score halved)" : "no"}</td>
-                <td>
-                  <span
-                    className={`badge ${
-                      i.status === "selected"
-                        ? "bg-emerald-500/20 text-emerald-300"
-                        : i.status === "dropped"
-                          ? "bg-rose-500/20 text-rose-300"
-                          : "bg-slate-800 text-slate-400"
-                    }`}
-                  >
-                    {i.status}
-                  </span>
-                  {i.droppedReason && <p className="mt-1 text-xs text-slate-500">{i.droppedReason}</p>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      )}
     </div>
   );
 }
