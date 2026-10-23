@@ -1,32 +1,29 @@
-# Feature Capability Matrix
+# LEADOS — Feature Status
 
-Status legend: **Live** (implemented, tested, in `main`) · **Partial** (implemented but with real gaps
-called out) · **Stub** (a doc or placeholder exists, no real implementation) · **Roadmap** (intent only,
-not started).
+Honest status of what is actually implemented in this workspace. See
+`LEADOS-STATE.md` for the full continuity record and why this file does not
+claim the 139-part program's full scope.
 
-| Capability | Status | Evidence | Notes |
-|---|---|---|---|
-| Multi-tenant data storage (`tenant_id` FKs) | **Live** | `src/db/schema.ts` (every table) | Isolation is enforced in every query; no authentication yet — see Security row. |
-| Deterministic rules-based lead scoring | **Live** | `src/lib/scoring.ts`, `tests/scoring.test.ts` (7 passing cases) | Not ML, not causal. See `docs/explanations/intelligence-methodology.md`. |
-| Evidence ledger (append-only decision log) | **Live** | `src/db/schema.ts` (`decisions` table), `docs/EVIDENCE-LEDGER.md` | Only 2 decision types exist today: `scored`, `rotated`. |
-| Round-robin rep rotation | **Live** | `src/lib/rotation.ts`, `tests/rotation.test.ts` (5 passing cases) | No capacity/skill/territory awareness. |
-| REST API (tenants, rules, leads, scoring, rotation, decisions, health) | **Live** | `src/app/api/**/route.ts`, `docs/API.md`, `openapi.yaml` | No auth; see Security row. |
-| Dashboard UI | **Partial** | `src/app/page.tsx` | Single page, server-rendered, no live updates, no per-lead detail view, no triage/sort. |
-| Authentication / authorization | **Absent** | `docs/SECURITY.md`, `docs/THREAT-MODEL.md` | Explicitly not built. Any caller naming a tenant slug can read/write that tenant's data. |
-| Rule editing/deletion | **Absent** | `docs/how-to/rules.md` | Only create + manual `psql` deactivation exist. |
-| Scenario / what-if modeling | **Stub** (manual workaround only) | `docs/how-to/scenarios.md` | No API/UI; `scoreLead()` can be called client-side as a pure function, documented as a workaround. |
-| Machine learning / predictive modeling | **Roadmap** | `docs/explanations/intelligence-methodology.md` | Not started. No training pipeline, no model artifacts. |
-| Causal inference | **Roadmap** | `docs/explanations/intelligence-methodology.md` | Not started. |
-| Retrieval / RAG / LLM reasoning | **Roadmap** | — | No embeddings, vector store, or LLM calls anywhere in the codebase. |
-| Automated fairness/bias auditing | **Roadmap** | `docs/explanations/fairness-posture.md` | Manual review is possible (rules + ledger are inspectable); nothing automated exists. |
-| Real-time updates / event streaming | **Roadmap** | `docs/REALTIME.md` | Request/response only. |
-| Formal SLOs / load testing | **Roadmap** | `docs/SLO.md`, `docs/PERFORMANCE.md` | No targets published; no load test run. |
-| i18n / localization | **Roadmap** | — | All UI/copy is English-only; no i18n framework installed. |
-| Mutation testing | **Roadmap** | `docs/TESTING.md` | No mutation testing tool installed. |
-| End-to-end (browser) tests | **Roadmap** | `docs/TESTING.md` | No Playwright/Cypress suite. |
-| Container image + SBOM release pipeline | **Live** (pipeline), triggered on tag | `.github/workflows/release.yml`, `Dockerfile` | SBOM generated via `npm sbom`, a real npm CLI feature, not a placeholder. |
-| CI (lint/typecheck/test/build) | **Live** | `.github/workflows/ci.yml` | Runs `npm run verify` equivalent on every push/PR. |
-| Docs freshness CI (link check) | **Live** | `.github/workflows/ci.yml`, `scripts/check-docs-links.mjs` | Checks internal markdown links resolve; does not check external URLs. |
-| Rollback drill (expand/contract) | **Live**, tested once | `docs/ROLLBACK-DRILL.md` | Real transcript from a drill run against the migrated dev database during Part 21. Re-run before every schema-changing release. |
+## Live
+- **Multi-tenant storage** — every business table (`leads`, `decisions`, `knowledge_entries`, `entities`, `events`, `users`) carries `tenant_id`; queries are scoped per tenant via `src/lib/tenant.ts`.
+- **Deterministic, explainable lead scoring** — `src/lib/scoring.ts` computes a 0–100 score from named, weighted criteria and returns the full contribution breakdown with every score.
+- **Append-only, hash-chained evidence ledger** — `src/lib/ledger.ts` writes every scoring and stage-change decision to the `decisions` table with a SHA-256 hash chained to the previous entry. `/api/decisions/verify` recomputes the chain and reports whether it is intact.
+- **Knowledge substrate with honesty labels** — every knowledge entry and every ledger entry carries a `confidenceLabel` of `measured`, `estimated`, `association`, or `effect` — nothing is asserted more strongly than its evidence supports.
+- **REST API** — `/api/leads`, `/api/leads/[id]`, `/api/decisions`, `/api/decisions/verify`, `/api/knowledge`, `/api/stats`, `/api/health`.
+- **Executive dashboard UI** — overview KPIs, top-scoring leads, recent ledger entries, full leads board with inline score breakdown, ledger explorer with chain verification, knowledge board.
 
-See `README.md`'s claim-to-file table for the top 20 claims verified against this matrix.
+## Absent
+- Authentication / authorization (no login, no RBAC, no session).
+- Event-sourcing is seeded (`events` table exists) but not yet the system of record for every mutation — reads still go through normal table queries.
+- Automated test suite (vitest/playwright) — not present in this workspace yet.
+- Multi-tenant switching UI (schema supports it; no tenant picker exists).
+- Everything described in Parts 02–139 of the supplied LEADOS Integration
+  Master beyond what is listed above (causal engines, agent orchestration,
+  design bible, workflow engine, etc.) — none of that is built in this
+  workspace. Do not assume otherwise; see `LEADOS-STATE.md`.
+
+## Roadmap (natural next extensions of this exact codebase)
+- Wire `entities`/`events` as the actual source of truth, with `leads` as a projection.
+- Add auth (e.g. email/password or OAuth) and tenant-scoped sessions.
+- Add a vitest suite for `src/lib/scoring.ts` and `src/lib/ledger.ts` (pure functions, easy to test).
+- Add a tenant switcher once a second tenant is needed.

@@ -6,11 +6,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "eval:agent:gen": "tsx scripts/generate-eval-dataset.ts",
-    "eval:agent": "tsx scripts/eval-agent.ts",
-    "ledger:check": "tsx scripts/ledger-check.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -19,9 +15,7 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.15",
-    "vitest": "^5.0.5",
-    "zod": "^4.6.7"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",

@@ -1,0 +1,132 @@
+{
+  "session": "LEADOS founding build (workspace found empty; honest Part-00-equivalent foundation)",
+  "generatedAt": "2026-10-23T12:40:43.013821Z",
+  "note": "No evidence of Parts 00-58 existed in this workspace. See LEADOS-STATE.md for the full continuity record.",
+  "files": [
+    {
+      "path": "src/db/schema.ts",
+      "sha256": "a08580939ded2428db5f5951ebd4210b782f3fdf821e3e31c053dc7354973345",
+      "bytes": 5600
+    },
+    {
+      "path": "src/lib/scoring.ts",
+      "sha256": "42b2f3cde012ad674dfbd5a371ea4b4447572d8275bcbb05349295162d4cf4c3",
+      "bytes": 4401
+    },
+    {
+      "path": "src/lib/ledger.ts",
+      "sha256": "f9b16679d90a294e6b314dcb159cd65b5d55e9d9bfbe010fbc0ba6a4ee3794e1",
+      "bytes": 4454
+    },
+    {
+      "path": "src/lib/tenant.ts",
+      "sha256": "22302794169ef21b40731d1b0eec8756c9cbc81492d2a1d19df4a93fe76ebce6",
+      "bytes": 964
+    },
+    {
+      "path": "src/app/api/leads/route.ts",
+      "sha256": "35f74a7f66a4cd123b8f37102a3f675d25817b97cca114fb1a77da173609c49f",
+      "bytes": 2198
+    },
+    {
+      "path": "src/app/api/leads/[id]/route.ts",
+      "sha256": "a19398152d750e4242e0fd2790ad2a21b05bfc7b025cb058e5a168d11d49adb1",
+      "bytes": 1588
+    },
+    {
+      "path": "src/app/api/decisions/route.ts",
+      "sha256": "af5eba3330017e2af803c56accfbb478a9a7ea59b5856f3fdf3ef58a05d94994",
+      "bytes": 1720
+    },
+    {
+      "path": "src/app/api/decisions/verify/route.ts",
+      "sha256": "3c0b182b34b30d1b57edccf0441225cef5d849c0fac8bfcda071aaf432486d73",
+      "bytes": 393
+    },
+    {
+      "path": "src/app/api/knowledge/route.ts",
+      "sha256": "2bc663d1a12ef1ce7ec5d88230b470f3b3c265850df051bedfbc8e36f90044b4",
+      "bytes": 1559
+    },
+    {
+      "path": "src/app/api/stats/route.ts",
+      "sha256": "70fd4d8efe81d046201a55f97d72889f16ca2f6ed90bacfeede5e07c4dd27147",
+      "bytes": 1373
+    },
+    {
+      "path": "src/components/Nav.tsx",
+      "sha256": "3454f65cff130fee0937ffb54294e022e884855af28dfda19117c65fdb7501e1",
+      "bytes": 1713
+    },
+    {
+      "path": "src/components/StatCard.tsx",
+      "sha256": "5412591f3a3a7d6db5e508833c7ac1fed95b8bb4c59d84ab634600a2603177e1",
+      "bytes": 690
+    },
+    {
+      "path": "src/components/ScoreBadge.tsx",
+      "sha256": "148847916d82d03e90916a65d0ed62dc0399b7852adcc486d0862d04c816ecf2",
+      "bytes": 637
+    },
+    {
+      "path": "src/app/layout.tsx",
+      "sha256": "4e0bd256d7f9370619e075f660f164f06ed069b246db7d5f261165dd1774e5e3",
+      "bytes": 719
+    },
+    {
+      "path": "src/app/page.tsx",
+      "sha256": "f6c191d4beffb23c52fdb7c3173da45e0cc079fce0681dd1875d8e32a075e5f9",
+      "bytes": 5700
+    },
+    {
+      "path": "src/app/leads/page.tsx",
+      "sha256": "da187e38e85262f825e87d38de5fbb2c64909a2854d1574c927296e159016475",
+      "bytes": 1145
+    },
+    {
+      "path": "src/app/leads/LeadsBoard.tsx",
+      "sha256": "f757d0a32561e4e107042b41cbff5ee75fd3bc4a43db05bdfde7f9fff8745082",
+      "bytes": 10174
+    },
+    {
+      "path": "src/app/decisions/page.tsx",
+      "sha256": "d525b3d84227774a828927a8a6b717ff49fb184ff095baaff74652e8ded1b11b",
+      "bytes": 1156
+    },
+    {
+      "path": "src/app/decisions/LedgerView.tsx",
+      "sha256": "d2763da31c98c2b66fd1ddf9447a9f6fb2d82aeac431e11426981ab9119956c5",
+      "bytes": 4099
+    },
+    {
+      "path": "src/app/knowledge/page.tsx",
+      "sha256": "a0ef6ec8004ccda5f09aa3d5d7d0d4cfae3e22fb38bff88e7c09f2cfcec0089e",
+      "bytes": 1171
+    },
+    {
+      "path": "src/app/knowledge/KnowledgeBoard.tsx",
+      "sha256": "31e5150636b50536fd6e7042ed816fe138021f03ecd5e7924b4eec4674f4d896",
+      "bytes": 5581
+    },
+    {
+      "path": "scripts/seed.ts",
+      "sha256": "67bf798c0f30c6a12e44c990efe0ecc060452443241e71ccf73e409eb7aec176",
+      "bytes": 4773
+    },
+    {
+      "path": "LEADOS-STATE.md",
+      "sha256": "09a5ff0a74d8f66eb347e0a088ec126f36ab59f2144062d7d0ec666ebe2de69a",
+      "bytes": 5967
+    },
+    {
+      "path": "FEATURES.md",
+      "sha256": "613f2c958db672f0f52b3b1615f4cb0086d1d4d74bc8b93ed2f8b153fa721b61",
+      "bytes": 2517
+    },
+    {
+      "path": "README.md",
+      "sha256": "59dfd055d58496ce18f6760e4dc3b6857a9e1094f2f057b41539dad79d0e7f55",
+      "bytes": 2468
+    }
+  ]
+}

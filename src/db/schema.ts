@@ -1,157 +1,150 @@
-// LEADOS — Autonomous Executive Agent Kernel (Part 58) schema.
-// Durable provenance tables: agent_runs, plan_nodes, step_records,
-// policy_decisions, approvals, idempotency_keys.
 import {
   pgTable,
   uuid,
   text,
   integer,
-  numeric,
   jsonb,
   timestamp,
-  boolean,
-  serial,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
-export const agentRuns = pgTable("agent_runs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  objective: text("objective").notNull(),
-  planId: text("plan_id").notNull(),
-  status: text("status").notNull().default("queued"),
-  // queued | planning | running | awaiting_approval | critic_review | replanning
-  // | success | partial | aborted | failed
-  budgetUsd: numeric("budget_usd", { precision: 10, scale: 4 }).notNull(),
-  budgetMin: integer("budget_min").notNull(),
-  totalCostUsd: numeric("total_cost_usd", { precision: 10, scale: 4 })
-    .notNull()
-    .default("0"),
-  totalMin: numeric("total_min", { precision: 10, scale: 2 })
-    .notNull()
-    .default("0"),
-  seed: text("seed").notNull(),
-  modelVersion: text("model_version").notNull().default("planner-v1"),
-  promptHash: text("prompt_hash").notNull(),
-  requestedBy: text("requested_by").notNull(),
-  replanCount: integer("replan_count").notNull().default(0),
-  verdict: text("verdict"),
-  replayHash: text("replay_hash"),
-  criticScore: numeric("critic_score", { precision: 4, scale: 2 }),
-  criticFeedback: jsonb("critic_feedback"),
-  planGraph: jsonb("plan_graph").notNull(),
-  errorMessage: text("error_message"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+// ---------------------------------------------------------------------------
+// LEADOS — founding schema (Part 00/01 scope: multi-tenant substrate,
+// event-sourced truth core, explainable scoring, append-only evidence ledger,
+// institutional knowledge substrate).
+// ---------------------------------------------------------------------------
 
-export const planNodes = pgTable(
-  "plan_nodes",
+export const tenants = pgTable(
+  "tenants",
   {
-    id: serial("id").primaryKey(),
-    runId: uuid("run_id")
-      .notNull()
-      .references(() => agentRuns.id, { onDelete: "cascade" }),
-    nodeId: text("node_id").notNull(),
-    kind: text("kind").notNull(), // act | ask | verify | compensate
-    goal: text("goal").notNull(),
-    tool: text("tool").notNull(),
-    inputSchema: text("input_schema").notNull(),
-    estCostUsd: numeric("est_cost_usd", { precision: 10, scale: 4 }).notNull(),
-    estMin: numeric("est_min", { precision: 10, scale: 2 }).notNull(),
-    riskTier: integer("risk_tier").notNull(),
-    dependsOn: jsonb("depends_on").notNull(),
-    successCriteria: jsonb("success_criteria").notNull(),
-    compensationNodeId: text("compensation_node_id"),
-    status: text("status").notNull().default("pending"),
-    // pending | running | done | failed | skipped | compensated | denied
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("plan_nodes_run_node_uidx").on(t.runId, t.nodeId)]
+  (table) => [uniqueIndex("tenants_slug_idx").on(table.slug)]
 );
 
-export const stepRecords = pgTable("step_records", {
-  id: serial("id").primaryKey(),
-  runId: uuid("run_id")
-    .notNull()
-    .references(() => agentRuns.id, { onDelete: "cascade" }),
-  nodeId: text("node_id").notNull(),
-  attempt: integer("attempt").notNull().default(1),
-  toolId: text("tool_id").notNull(),
-  idempotencyKey: text("idempotency_key").notNull(),
-  inputHash: text("input_hash").notNull(),
-  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
-  finishedAt: timestamp("finished_at", { withTimezone: true }),
-  durationMs: integer("duration_ms"),
-  costUsd: numeric("cost_usd", { precision: 10, scale: 4 }).notNull().default("0"),
-  outcome: text("outcome").notNull(), // success | failure | denied | skipped | compensated
-  outputSummary: text("output_summary"),
-  policyDecisionId: integer("policy_decision_id"),
-  error: text("error"),
-  seedUsed: text("seed_used").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const policyDecisions = pgTable("policy_decisions", {
-  id: serial("id").primaryKey(),
-  runId: uuid("run_id")
-    .notNull()
-    .references(() => agentRuns.id, { onDelete: "cascade" }),
-  nodeId: text("node_id").notNull(),
-  toolId: text("tool_id").notNull(),
-  riskTier: integer("risk_tier").notNull(),
-  allow: boolean("allow").notNull(),
-  reasons: jsonb("reasons").notNull(),
-  requiresApprovalFrom: jsonb("requires_approval_from"),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const approvals = pgTable("approvals", {
-  id: serial("id").primaryKey(),
-  runId: uuid("run_id")
-    .notNull()
-    .references(() => agentRuns.id, { onDelete: "cascade" }),
-  nodeId: text("node_id").notNull(),
-  policyDecisionId: integer("policy_decision_id").notNull(),
-  role: text("role").notNull(),
-  status: text("status").notNull().default("pending"),
-  // pending | approved | rejected | attention_failed
-  reason: text("reason"),
-  reviewer: text("reviewer"),
-  attentionRequired: boolean("attention_required").notNull().default(false),
-  attentionNonce: text("attention_nonce"),
-  reasonQualityScore: numeric("reason_quality_score", { precision: 4, scale: 2 }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
-});
-
-export const planRejections = pgTable("plan_rejections", {
-  id: serial("id").primaryKey(),
-  objective: text("objective").notNull(),
-  errors: jsonb("errors").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const toolEffects = pgTable("tool_effects", {
-  id: serial("id").primaryKey(),
-  runId: uuid("run_id").notNull(),
-  nodeId: text("node_id").notNull(),
-  toolId: text("tool_id").notNull(),
-  action: text("action").notNull(), // e.g. create | retract | reverse
-  payload: jsonb("payload").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const idempotencyKeys = pgTable(
-  "idempotency_keys",
+export const users = pgTable(
+  "users",
   {
-    id: serial("id").primaryKey(),
-    key: text("key").notNull(),
-    runId: uuid("run_id").notNull(),
-    nodeId: text("node_id").notNull(),
-    resultHash: text("result_hash"),
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    role: text("role").notNull().default("member"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("idempotency_keys_key_uidx").on(t.key)]
+  (table) => [
+    index("users_tenant_idx").on(table.tenantId),
+    uniqueIndex("users_tenant_email_idx").on(table.tenantId, table.email),
+  ]
+);
+
+// Ontology substrate: typed entities (accounts, leads, initiatives, people...)
+export const entities = pgTable(
+  "entities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    name: text("name").notNull(),
+    attributes: jsonb("attributes").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("entities_tenant_type_idx").on(table.tenantId, table.type)]
+);
+
+// Event-sourced truth core: append-only log of everything that happened.
+export const events = pgTable(
+  "events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    entityId: uuid("entity_id").references(() => entities.id, { onDelete: "set null" }),
+    type: text("type").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    actor: text("actor").notNull().default("system"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("events_tenant_created_idx").on(table.tenantId, table.createdAt)]
+);
+
+// Leads: scored with an explainable, deterministic rules engine.
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    company: text("company").notNull(),
+    email: text("email").notNull(),
+    source: text("source").notNull().default("manual"),
+    stage: text("stage").notNull().default("new"),
+    attributes: jsonb("attributes").notNull().default({}),
+    score: integer("score").notNull().default(0),
+    scoreBreakdown: jsonb("score_breakdown").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("leads_tenant_idx").on(table.tenantId),
+    index("leads_tenant_score_idx").on(table.tenantId, table.score),
+  ]
+);
+
+// Evidence ledger: append-only, hash-chained for tamper evidence.
+export const decisions = pgTable(
+  "decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    subjectType: text("subject_type").notNull(),
+    subjectId: uuid("subject_id"),
+    title: text("title").notNull(),
+    rationale: text("rationale").notNull(),
+    outcome: text("outcome").notNull().default("pending"),
+    confidence: integer("confidence").notNull().default(50),
+    confidenceLabel: text("confidence_label").notNull().default("estimated"),
+    evidence: jsonb("evidence").notNull().default([]),
+    actor: text("actor").notNull().default("system"),
+    prevHash: text("prev_hash"),
+    hash: text("hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("decisions_tenant_created_idx").on(table.tenantId, table.createdAt),
+  ]
+);
+
+// Institutional memory / knowledge substrate.
+export const knowledgeEntries = pgTable(
+  "knowledge_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    category: text("category").notNull().default("general"),
+    content: text("content").notNull(),
+    tags: jsonb("tags").notNull().default([]),
+    source: text("source").notNull().default("manual"),
+    confidenceLabel: text("confidence_label").notNull().default("measured"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("knowledge_tenant_category_idx").on(table.tenantId, table.category)]
 );

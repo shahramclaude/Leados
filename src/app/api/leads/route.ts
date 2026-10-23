@@ -1,60 +1,75 @@
 import { db } from "@/db";
 import { leads } from "@/db/schema";
+import { scoreLead, type LeadAttributes } from "@/lib/scoring";
+import { appendDecision } from "@/lib/ledger";
+import { getOrCreateDefaultTenant } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
-import { requireInternalOrgId } from "@/lib/tenant";
-import { handleRouteError, jsonError } from "@/lib/api-response";
-import { writeWithEnvelope } from "@/lib/envelope";
-import { makeExplain } from "@/lib/explain";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
-  try {
-    const orgId = requireInternalOrgId(req);
-    const rows = await db.select().from(leads).where(eq(leads.orgId, orgId)).orderBy(desc(leads.createdAt));
-    const data = rows.map((lead) => ({
-      ...lead,
-      scoreExplain: makeExplain({
-        value: lead.score ? Number(lead.score) : 0,
-        confidence: lead.scoreConfidence ? Number(lead.scoreConfidence) : 0,
-        basis: lead.score ? ["stored score from last signal ingest/agent run"] : ["no score computed yet"],
-        generatedBy: "system",
-      }),
-    }));
-    return Response.json({ ok: true, leads: data });
-  } catch (err) {
-    return handleRouteError(err);
-  }
+export async function GET() {
+  const tenant = await getOrCreateDefaultTenant();
+  if (!tenant) return Response.json({ error: "tenant unavailable" }, { status: 500 });
+
+  const rows = await db
+    .select()
+    .from(leads)
+    .where(eq(leads.tenantId, tenant.id))
+    .orderBy(desc(leads.score), desc(leads.createdAt));
+
+  return Response.json({ leads: rows });
 }
 
-export async function POST(req: Request) {
-  try {
-    const orgId = requireInternalOrgId(req);
-    const body = await req.json();
-    const name = typeof body.name === "string" ? body.name.trim() : "";
-    const company = typeof body.company === "string" ? body.company.trim() : "";
-    if (!name || !company) {
-      return jsonError('"name" and "company" are required', 400);
-    }
-    const email = typeof body.email === "string" ? body.email.trim() : null;
+export async function POST(request: Request) {
+  const tenant = await getOrCreateDefaultTenant();
+  if (!tenant) return Response.json({ error: "tenant unavailable" }, { status: 500 });
 
-    const lead = await writeWithEnvelope({
-      orgId,
-      actorType: "human",
-      actorId: req.headers.get("x-actor-id") ?? "unknown-human",
-      entityType: "lead",
-      entityId: (result) => String((result as { id: number }).id),
-      action: "lead.create",
-      reason: "manual lead creation",
-      mutate: async () => {
-        const [row] = await db.insert(leads).values({ orgId, name, company, email }).returning();
-        return row;
-      },
-      after: (row) => row,
-    });
+  const body = (await request.json()) as {
+    name?: string;
+    company?: string;
+    email?: string;
+    source?: string;
+    attributes?: LeadAttributes;
+  };
 
-    return Response.json({ ok: true, lead }, { status: 201 });
-  } catch (err) {
-    return handleRouteError(err);
+  if (!body.name || !body.company || !body.email) {
+    return Response.json(
+      { error: "name, company, and email are required" },
+      { status: 400 }
+    );
   }
+
+  const attributes = body.attributes ?? {};
+  const result = scoreLead(attributes);
+
+  const [created] = await db
+    .insert(leads)
+    .values({
+      tenantId: tenant.id,
+      name: body.name,
+      company: body.company,
+      email: body.email,
+      source: body.source ?? "manual",
+      attributes,
+      score: result.score,
+      scoreBreakdown: result.breakdown,
+    })
+    .returning();
+
+  await appendDecision({
+    tenantId: tenant.id,
+    subjectType: "lead",
+    subjectId: created.id,
+    title: `Scored lead "${created.name}" at ${created.company}`,
+    rationale: `Deterministic scoring engine produced ${result.score}/100 (${result.label}). ${result.breakdown
+      .map((b) => `${b.criterion}: +${b.contribution}`)
+      .join("; ")}.`,
+    outcome: result.label,
+    confidence: 90,
+    confidenceLabel: "measured",
+    evidence: result.breakdown as unknown[],
+    actor: "scoring-engine",
+  });
+
+  return Response.json({ lead: created, score: result }, { status: 201 });
 }

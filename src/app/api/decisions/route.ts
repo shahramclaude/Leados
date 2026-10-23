@@ -1,56 +1,59 @@
-import { NextRequest } from "next/server";
-import { ensureDecisionInvariants } from "@/lib/decision/dbSetup";
-import { raiseDecision, listDecisions } from "@/lib/decision/decisionEngine";
-import { rankDecisionDesk } from "@/lib/decision/decisionIntelligence";
+import { appendDecision } from "@/lib/ledger";
+import { getOrCreateDefaultTenant } from "@/lib/tenant";
 import { db } from "@/db";
-import { decisionRightsConfigs } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { decisions } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/decisions?orgId=...  -> Decision Desk ranked list
-export async function GET(req: NextRequest) {
-  await ensureDecisionInvariants();
-  const orgId = req.nextUrl.searchParams.get("orgId");
-  if (!orgId) return Response.json({ error: "orgId is required" }, { status: 400 });
+export async function GET() {
+  const tenant = await getOrCreateDefaultTenant();
+  if (!tenant) return Response.json({ error: "tenant unavailable" }, { status: 500 });
 
-  const records = await listDecisions(orgId);
-  const ranked = rankDecisionDesk(records);
-
-  const rights = await db
+  const rows = await db
     .select()
-    .from(decisionRightsConfigs)
-    .where(eq(decisionRightsConfigs.orgId, orgId));
-  const deciderByClass = new Map(rights.map((r) => [r.decisionClass, r.deciderRole]));
+    .from(decisions)
+    .where(eq(decisions.tenantId, tenant.id))
+    .orderBy(desc(decisions.createdAt))
+    .limit(200);
 
-  return Response.json({
-    desk: ranked.map((r) => ({
-      ...r,
-      deciderRole: deciderByClass.get(r.decision.decisionClass) ?? null,
-    })),
-  });
+  return Response.json({ decisions: rows });
 }
 
-// POST /api/decisions -> raise a new decision (funnel stage: raised)
-export async function POST(req: NextRequest) {
-  await ensureDecisionInvariants();
-  const body = await req.json();
+export async function POST(request: Request) {
+  const tenant = await getOrCreateDefaultTenant();
+  if (!tenant) return Response.json({ error: "tenant unavailable" }, { status: 500 });
 
-  if (!body.orgId || !body.question || !body.decisionType || !body.decisionClass) {
+  const body = (await request.json()) as {
+    subjectType?: string;
+    subjectId?: string | null;
+    title?: string;
+    rationale?: string;
+    outcome?: string;
+    confidence?: number;
+    confidenceLabel?: "measured" | "estimated" | "association" | "effect";
+    evidence?: unknown[];
+  };
+
+  if (!body.subjectType || !body.title || !body.rationale) {
     return Response.json(
-      { error: "orgId, decisionClass, question, decisionType are required" },
-      { status: 400 },
+      { error: "subjectType, title, and rationale are required" },
+      { status: 400 }
     );
   }
 
-  const decision = await raiseDecision({
-    orgId: body.orgId,
-    decisionClass: body.decisionClass,
-    question: body.question,
-    decisionType: body.decisionType,
-    raisedBy: body.raisedBy ?? null,
-    impact: body.impact ?? 3,
+  const row = await appendDecision({
+    tenantId: tenant.id,
+    subjectType: body.subjectType,
+    subjectId: body.subjectId ?? null,
+    title: body.title,
+    rationale: body.rationale,
+    outcome: body.outcome,
+    confidence: body.confidence,
+    confidenceLabel: body.confidenceLabel,
+    evidence: body.evidence,
+    actor: "operator",
   });
 
-  return Response.json({ decision }, { status: 201 });
+  return Response.json({ decision: row }, { status: 201 });
 }

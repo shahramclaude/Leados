@@ -1,33 +1,46 @@
-"use client";
-
 import Link from "next/link";
-import ThemeToggle from "./ThemeToggle";
-import CommandPalette from "./CommandPalette";
-import { ROUTES } from "@/lib/client-session";
 
-export default function Nav() {
+const links = [
+  { href: "/", label: "Overview" },
+  { href: "/leads", label: "Leads" },
+  { href: "/decisions", label: "Evidence Ledger" },
+  { href: "/knowledge", label: "Knowledge" },
+];
+
+export function Nav() {
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-3">
-        <Link href="/" className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-900 dark:text-slate-100">
-          LEADOS
-        </Link>
-        <nav aria-label="Primary" className="flex flex-wrap gap-1 text-sm">
-          {ROUTES.filter((r) => r.href !== "/").map((r) => (
+    <aside className="flex h-screen w-64 shrink-0 flex-col justify-between border-r border-slate-800 bg-slate-950 px-5 py-6 text-slate-200">
+      <div>
+        <div className="mb-10 flex items-center gap-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 text-sm font-bold text-slate-950">
+            L
+          </div>
+          <div>
+            <p className="text-sm font-semibold tracking-wide text-white">LEADOS</p>
+            <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">
+              Decision OS
+            </p>
+          </div>
+        </div>
+        <nav className="flex flex-col gap-1">
+          {links.map((link) => (
             <Link
-              key={r.href}
-              href={r.href}
-              className="rounded-full px-3 py-1.5 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+              key={link.href}
+              href={link.href}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-900 hover:text-white"
             >
-              {r.label}
+              {link.label}
             </Link>
           ))}
         </nav>
-        <div className="flex items-center gap-2">
-          <CommandPalette />
-          <ThemeToggle />
-        </div>
       </div>
-    </header>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-400">
+        <p className="font-semibold text-slate-200">Founding build</p>
+        <p className="mt-1 leading-relaxed">
+          Ontology substrate, explainable scoring, and a hash-chained evidence
+          ledger — the spine the rest of the program extends.
+        </p>
+      </div>
+    </aside>
   );
 }

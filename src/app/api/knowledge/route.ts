@@ -1,31 +1,52 @@
-import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { entities, relations } from "@/db/schema";
-import { upsertEntity, type EntityInput } from "@/lib/knowledgeGraph";
-import { computeGenome } from "@/lib/genome";
+import { knowledgeEntries } from "@/db/schema";
+import { getOrCreateDefaultTenant } from "@/lib/tenant";
+import { desc, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const [entityRows, relationRows, genome] = await Promise.all([
-    db.select().from(entities),
-    db.select().from(relations),
-    computeGenome(),
-  ]);
-  return NextResponse.json({
-    entityCount: entityRows.length,
-    relationCount: relationRows.length,
-    entities: entityRows,
-    relations: relationRows,
-    genome,
-  });
+  const tenant = await getOrCreateDefaultTenant();
+  if (!tenant) return Response.json({ error: "tenant unavailable" }, { status: 500 });
+
+  const rows = await db
+    .select()
+    .from(knowledgeEntries)
+    .where(eq(knowledgeEntries.tenantId, tenant.id))
+    .orderBy(desc(knowledgeEntries.updatedAt));
+
+  return Response.json({ entries: rows });
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as EntityInput;
-  if (!body.key || !body.type || !body.name) {
-    return NextResponse.json({ error: "key, type and name are required" }, { status: 400 });
+  const tenant = await getOrCreateDefaultTenant();
+  if (!tenant) return Response.json({ error: "tenant unavailable" }, { status: 500 });
+
+  const body = (await request.json()) as {
+    title?: string;
+    category?: string;
+    content?: string;
+    tags?: string[];
+    source?: string;
+    confidenceLabel?: "measured" | "estimated" | "association" | "effect";
+  };
+
+  if (!body.title || !body.content) {
+    return Response.json({ error: "title and content are required" }, { status: 400 });
   }
-  const row = await upsertEntity(body);
-  return NextResponse.json(row, { status: 201 });
+
+  const [created] = await db
+    .insert(knowledgeEntries)
+    .values({
+      tenantId: tenant.id,
+      title: body.title,
+      category: body.category ?? "general",
+      content: body.content,
+      tags: body.tags ?? [],
+      source: body.source ?? "manual",
+      confidenceLabel: body.confidenceLabel ?? "measured",
+    })
+    .returning();
+
+  return Response.json({ entry: created }, { status: 201 });
 }
