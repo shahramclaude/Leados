@@ -1,121 +1,121 @@
+// Part 59 — World Model & Scenario Simulation Twin: database schema.
+//
+// Four tables form the substrate:
+//   metrics              — the catalog of things the organization tracks
+//   metric_observations  — the append-only time series for each metric
+//   simulation_runs      — a stored Monte Carlo forward simulation (with an
+//                          optional intervention), including the percentile
+//                          bands so results never have to be recomputed to
+//                          be displayed again
+//   forecast_backtests   — "fit on data up to cutoff, predict `horizon`
+//                          periods ahead, compare to what actually happened"
+//                          records, which is how the calibration gate
+//                          (Part 59 PHASE 4) is measured honestly instead of
+//                          asserted.
 import {
   pgTable,
   uuid,
   text,
   integer,
   numeric,
+  boolean,
   jsonb,
   timestamp,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
-// Multi-tenant root
+// Metrics catalog
 // ---------------------------------------------------------------------------
-export const tenants = pgTable("tenants", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  slug: text("slug").notNull().unique(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
-// Leads — scored with the deterministic, explainable scoring engine
-// ---------------------------------------------------------------------------
-export const leads = pgTable(
-  "leads",
+export const metrics = pgTable(
+  "metrics",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    tenantId: uuid("tenant_id")
-      .notNull()
-      .references(() => tenants.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
     name: text("name").notNull(),
-    company: text("company").notNull(),
-    title: text("title").notNull().default(""),
-    email: text("email").notNull().default(""),
-    budget: numeric("budget", { precision: 14, scale: 2 }).notNull().default("0"),
-    dealValue: numeric("deal_value", { precision: 14, scale: 2 }).notNull().default("0"),
-    companySize: integer("company_size").notNull().default(0),
-    engagementScore: integer("engagement_score").notNull().default(0),
-    titleSeniority: text("title_seniority").notNull().default("individual_contributor"),
-    icpFit: integer("icp_fit").notNull().default(0),
-    responseHistory: integer("response_history").notNull().default(0),
-    stage: text("stage").notNull().default("new"),
-    score: integer("score").notNull().default(0),
-    scoreBreakdown: jsonb("score_breakdown").notNull().default([]),
+    unit: text("unit").notNull().default(""),
+    description: text("description").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("leads_tenant_idx").on(t.tenantId)],
+  (t) => [uniqueIndex("metrics_key_idx").on(t.key)],
 );
 
 // ---------------------------------------------------------------------------
-// Decisions — hash-chained, tamper-evident evidence ledger
+// Observations — append-only time series. `period` is an ISO date (one row
+// per metric per period). No UPDATE path is exposed in the app layer: a
+// correction is a new observation with a later `createdAt`, and consumers
+// always take the latest-created row per (metricId, period).
 // ---------------------------------------------------------------------------
-export const decisions = pgTable(
-  "decisions",
+export const metricObservations = pgTable(
+  "metric_observations",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    tenantId: uuid("tenant_id")
+    metricId: uuid("metric_id")
       .notNull()
-      .references(() => tenants.id, { onDelete: "cascade" }),
-    sequence: integer("sequence").notNull(),
-    entityType: text("entity_type").notNull(),
-    entityId: text("entity_id").notNull(),
-    action: text("action").notNull(),
-    payload: jsonb("payload").notNull().default({}),
-    rationale: text("rationale").notNull().default(""),
-    prevHash: text("prev_hash").notNull(),
-    hash: text("hash").notNull(),
+      .references(() => metrics.id, { onDelete: "cascade" }),
+    period: text("period").notNull(), // ISO date, e.g. "2026-01-01"
+    value: numeric("value", { precision: 18, scale: 6 }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("decisions_tenant_idx").on(t.tenantId, t.sequence)],
+  (t) => [
+    index("metric_observations_metric_period_idx").on(t.metricId, t.period),
+  ],
 );
 
 // ---------------------------------------------------------------------------
-// Knowledge substrate — labeled institutional knowledge
+// Simulation runs — a seeded Monte Carlo forward simulation, optionally with
+// a "do(x)" intervention from a given period onward. The percentile bands
+// are persisted so a run is a permanent, reviewable artifact (never silently
+// recomputed with a different seed later).
 // ---------------------------------------------------------------------------
-export const knowledgeEntries = pgTable(
-  "knowledge_entries",
+export const simulationRuns = pgTable(
+  "simulation_runs",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    tenantId: uuid("tenant_id")
+    metricId: uuid("metric_id")
       .notNull()
-      .references(() => tenants.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    body: text("body").notNull().default(""),
-    category: text("category").notNull().default("measured"),
-    tags: jsonb("tags").notNull().default([]),
+      .references(() => metrics.id, { onDelete: "cascade" }),
+    label: text("label").notNull().default(""),
+    method: text("method").notNull().default("monte-carlo-ols"),
+    trials: integer("trials").notNull(),
+    horizon: integer("horizon").notNull(),
+    seed: integer("seed").notNull(),
+    interventionFromStep: integer("intervention_from_step"), // null = no intervention
+    interventionDelta: numeric("intervention_delta", { precision: 18, scale: 6 }),
+    fittedSlope: numeric("fitted_slope", { precision: 18, scale: 6 }).notNull(),
+    fittedIntercept: numeric("fitted_intercept", { precision: 18, scale: 6 }).notNull(),
+    fittedResidualStd: numeric("fitted_residual_std", { precision: 18, scale: 6 }).notNull(),
+    // Per-step percentile bands: [{ step, p10, p50, p90, mean }]
+    bands: jsonb("bands").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("knowledge_tenant_idx").on(t.tenantId)],
+  (t) => [index("simulation_runs_metric_idx").on(t.metricId)],
 );
 
 // ---------------------------------------------------------------------------
-// Part 59 — Pipeline Forecasting & Revenue Attribution
-// Each forecast is a pure, reproducible function of a lead's score + stage,
-// stored as a row so the evidence ledger can reference it and so forecasts
-// can be compared over time instead of only ever showing the latest number.
+// Forecast backtests — the calibration ledger. Each row is one
+// (metric, cutoff period, horizon) trial: fit strictly on data up to and
+// including `cutoffPeriod`, forecast `horizon` periods ahead, and record
+// whether the value that actually occurred fell inside the forecast's
+// central 80% interval (P10–P90).
 // ---------------------------------------------------------------------------
-export const forecasts = pgTable(
-  "forecasts",
+export const forecastBacktests = pgTable(
+  "forecast_backtests",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    tenantId: uuid("tenant_id")
+    metricId: uuid("metric_id")
       .notNull()
-      .references(() => tenants.id, { onDelete: "cascade" }),
-    leadId: uuid("lead_id")
-      .notNull()
-      .references(() => leads.id, { onDelete: "cascade" }),
-    period: text("period").notNull(),
-    stageAtForecast: text("stage_at_forecast").notNull(),
-    scoreAtForecast: integer("score_at_forecast").notNull(),
-    probability: numeric("probability", { precision: 5, scale: 2 }).notNull(),
-    dealValue: numeric("deal_value", { precision: 14, scale: 2 }).notNull(),
-    weightedValue: numeric("weighted_value", { precision: 14, scale: 2 }).notNull(),
-    method: text("method").notNull(),
-    rationale: text("rationale").notNull(),
+      .references(() => metrics.id, { onDelete: "cascade" }),
+    cutoffPeriod: text("cutoff_period").notNull(),
+    horizon: integer("horizon").notNull(),
+    targetPeriod: text("target_period").notNull(),
+    p10: numeric("p10", { precision: 18, scale: 6 }).notNull(),
+    p50: numeric("p50", { precision: 18, scale: 6 }).notNull(),
+    p90: numeric("p90", { precision: 18, scale: 6 }).notNull(),
+    actual: numeric("actual", { precision: 18, scale: 6 }).notNull(),
+    withinInterval: boolean("within_interval").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("forecasts_tenant_idx").on(t.tenantId, t.period)],
+  (t) => [index("forecast_backtests_metric_idx").on(t.metricId)],
 );

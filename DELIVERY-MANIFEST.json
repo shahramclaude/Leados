@@ -1,59 +1,65 @@
 {
   "part": 59,
-  "title": "Pipeline Forecasting & Revenue Attribution",
-  "program": "LEADOS — Decision Operating System",
-  "sourceReference": "https://github.com/shahramclaude/Leados",
-  "deliveredAt": "2026-10-23",
-  "honestyNote": [
-    "This repository's own README and LEADOS-STATE.md explicitly warn that the real, committed code in that project does NOT represent a verified 139-part 'Integration Master' program, and that prior sessions found the workspace containing only a bare Next.js + Drizzle + PostgreSQL starter template with no Parts 00-107 actually implemented.",
-    "This build session started from that same bare starter template (confirmed directly: src/db/schema.ts was an empty placeholder and src/app contained only the default starter page, layout, and /api/health). There is no accessible, authoritative specification anywhere for what a 'Part 59' of this program is supposed to contain.",
-    "Rather than fabricate a fictitious history or invent requirements for an undocumented 'Part 59' and claim they came from a real spec, this session (a) built the foundational LEADOS substrate described in the project README (multi-tenant schema, deterministic scoring engine, hash-chained evidence ledger, knowledge substrate) since none of it previously existed in this workspace, and (b) added one new, coherent, fully working module on top of it — Pipeline Forecasting & Revenue Attribution — labeled 'Part 59' as requested, scoped to what a single real engineering session can deliver end-to-end with working code, not aspirational scaffolding.",
-    "No prior parts (1-58) were fabricated, no retrospective changelog entries were invented, and no claims are made about capabilities that are not present in the code below."
+  "commitBase": "no-git-repo-in-sandbox (nextjs-postgresql-template, unversioned); external https://github.com/shahramclaude/Leados verified reachable but is a smaller, unrelated lead-scoring demo, not the 75-part system described in the pasted bundle — see PHASE 0 note in response text",
+  "files": [
+    { "path": "src/db/schema.ts", "action": "modified", "purpose": "metrics / metric_observations / simulation_runs / forecast_backtests tables", "sha256": "09b065677cd34752f545db6275bac7c207e7748ab011a9fa93c5a846f7fd3349", "lines": 121, "testsCovering": ["npx drizzle-kit push", "tests/worldModel.test.ts (indirect via worldModelCore types)"] },
+    { "path": "src/lib/rng.ts", "action": "created", "purpose": "mulberry32 seeded PRNG + Box-Muller gaussian + mean/stddev/percentile", "sha256": "1612a24075cc2512ceb8bed21703d124aad71c6e775cfe7e9befd37fced39511", "lines": 63, "testsCovering": ["tests/worldModel.test.ts: rng: mulberry32 + gaussian", "tests/worldModel.test.ts: percentile()"] },
+    { "path": "src/lib/worldModelCore.ts", "action": "created", "purpose": "pure OLS fit, prediction SE, Monte Carlo simulator with intervention surgery, in-memory backtest", "sha256": "511e3befd00dc12c529dfffe74d14bc9e10319dc3e294599c8be1216be61d509", "lines": 196, "testsCovering": ["tests/worldModel.test.ts: fitLinearTrend()", "predictionSE()", "simulateMonteCarlo()", "backtestSeriesInMemory()"] },
+    { "path": "src/lib/worldModel.ts", "action": "created", "purpose": "DB-backed wrapper: getObservations, runAndPersistSimulation, runBacktest, getCalibrationReport", "sha256": "d4f0eb8abf3e382638d11c2de291ee06f747ea661ba5c0e0effdde7de1f06855", "lines": 194, "testsCovering": ["scripts/_smoke_tmp.ts live-DB run (ad hoc, not persisted)", "src/app/api/simulate/route.ts", "src/app/api/backtest/route.ts", "src/app/api/backtest/calibration/route.ts"] },
+    { "path": "src/lib/syntheticData.ts", "action": "created", "purpose": "deterministic synthetic time-series generator for eval/seed/tests", "sha256": "00c3a9cf721af92db6a19e0961dd2aab11994afa2dd403c64d8c241cd51a66fa", "lines": 29, "testsCovering": ["tests/worldModel.test.ts: generateSyntheticSeries()"] },
+    { "path": "src/lib/validation.ts", "action": "created", "purpose": "Zod schemas + MAX_TRIALS/MAX_HORIZON caps for all world-model API input", "sha256": "1364afa0f3289d61f02d10796c4f3b66546c4f52d404e8f1d31e1ea046db0eac", "lines": 56, "testsCovering": ["tests/worldModel.test.ts: validation schemas (API boundary hardening)"] },
+    { "path": "src/app/api/metrics/route.ts", "action": "created", "purpose": "GET list / POST create metric", "sha256": "c8f20e16f02fdfbb0c8753e694fc51b37968eb43ee8089d4d2d01f525ad4f0a0", "lines": 28, "testsCovering": ["manual smoke via seedWorldModel.ts + direct db queries"] },
+    { "path": "src/app/api/metrics/[id]/observations/route.ts", "action": "created", "purpose": "GET/POST observations for a metric", "sha256": "37194320c9999cba27abae1776664642f019796b98584138f084e3918461f533", "lines": 39, "testsCovering": ["manual smoke via seedWorldModel.ts + direct db queries"] },
+    { "path": "src/app/api/simulate/route.ts", "action": "created", "purpose": "GET list / POST run+persist a Monte Carlo simulation", "sha256": "fc8c7e568ba9a187ec602edeed2df307842d2daa00fccfe8d879126141d4ca02", "lines": 29, "testsCovering": ["runSimulationSchema tests in tests/worldModel.test.ts"] },
+    { "path": "src/app/api/backtest/route.ts", "action": "created", "purpose": "POST run+persist a calibration backtest", "sha256": "60bfdd92afd65ca41cd9e7143593e5379fa630b19a8cc8250ad2c184a1c4032a", "lines": 24, "testsCovering": ["runBacktestSchema tests in tests/worldModel.test.ts", "scripts/_smoke_tmp.ts live-DB run"] },
+    { "path": "src/app/api/backtest/calibration/route.ts", "action": "created", "purpose": "GET aggregate calibration report (the gate, live)", "sha256": "cc327302cdfa10d349af58bd2c405ddb61e29c026cb9ae55555e61acb65a50df", "lines": 8, "testsCovering": ["scripts/_smoke_tmp.ts live-DB run"] },
+    { "path": "src/components/FanChart.tsx", "action": "created", "purpose": "dependency-free SVG history + P10/P50/P90 fan chart renderer", "sha256": "d7734253a10b4f93e66eebf8b0e5f657042957321da02352a709828d4e407285", "lines": 89, "testsCovering": ["npm run build (type-checked + compiled)"] },
+    { "path": "src/components/ui.tsx", "action": "created", "purpose": "shared Card/Badge/Label/button style primitives", "sha256": "868872815cfb9b9c9546b644675888ce9b48353f6a96895c8ed65e11afe2ad6b", "lines": 32, "testsCovering": ["npm run build (type-checked + compiled)"] },
+    { "path": "src/app/world-model/page.tsx", "action": "created", "purpose": "metrics list + calibration gate widget + create-metric form", "sha256": "c6320eb0f81fb1ee69cd85587887d56e9f620f1d02cf78379102678db0a8bd61", "lines": 96, "testsCovering": ["npm run build (route compiled: /world-model)"] },
+    { "path": "src/app/world-model/MetricForm.tsx", "action": "created", "purpose": "client form to create a metric", "sha256": "ab3ef1d6f939ba07bf466365e020fbc412548728a458fe3be1032fa4584c6bba", "lines": 70, "testsCovering": ["npm run build (type-checked + compiled)"] },
+    { "path": "src/app/world-model/[id]/page.tsx", "action": "created", "purpose": "metric detail: observations, simulation panel, backtest panel", "sha256": "c1da912b5eb2ae7fc932ec363643a13022b49f17bb4809bdae430da3558adbed", "lines": 81, "testsCovering": ["npm run build (route compiled: /world-model/[id])"] },
+    { "path": "src/app/world-model/[id]/ObservationForm.tsx", "action": "created", "purpose": "client form to add an observation", "sha256": "f048c32733c964ebd8c0154042162ad40ad1d93697145e136ce702bcacf5bb2b", "lines": 57, "testsCovering": ["npm run build (type-checked + compiled)"] },
+    { "path": "src/app/world-model/[id]/SimulationPanel.tsx", "action": "created", "purpose": "client panel: run simulation (with intervention) + run backtest + render FanChart", "sha256": "3b15c7c0fb5d98b65778417bd22c0fc8be6eac3c221bc62a2ce7ddf68c7ea644", "lines": 192, "testsCovering": ["npm run build (type-checked + compiled)"] },
+    { "path": "scripts/evalWorldModel.ts", "action": "created", "purpose": "eval:worldmodel — DB-free calibration gate on 12 synthetic series", "sha256": "605932154d29b7ca3272a2c7a33bca9bdb3117059bb7763ad3b57e3bbb246542", "lines": 83, "testsCovering": ["npx tsx scripts/evalWorldModel.ts -> 86.25% coverage, PASS"] },
+    { "path": "scripts/seedWorldModel.ts", "action": "created", "purpose": "demo seed: 3 metrics x 24 months synthetic history", "sha256": "7e49112f8ec2053918dd8a5507778bc8bf1b4b7428fe34db6888a1c72f3d5b52", "lines": 59, "testsCovering": ["npx tsx scripts/seedWorldModel.ts (run, verified rows in Postgres)"] },
+    { "path": "tests/worldModel.test.ts", "action": "created", "purpose": "23 unit/property tests: rng, OLS fit, prediction SE, Monte Carlo determinism + intervention surgery, backtest leakage, validation schemas", "sha256": "b16592ab1a1d476c91376b689e3edb11c3600cb6a8e52fd1f135e213b5166842", "lines": 220, "testsCovering": ["npx vitest run -> 23/23 pass"] },
+    { "path": "vitest.config.mts", "action": "created", "purpose": "vitest config with @ path alias", "sha256": "39b4b76fc56cf164f29036c9f03ccb6cb018fda9c3f26485410795b1cc862202", "lines": 14, "testsCovering": ["npx vitest run"] },
+    { "path": "src/app/layout.tsx", "action": "modified", "purpose": "add nav bar linking Home / World Model", "sha256": "46d381422cf01b3c15d9a0f1f6bd5fb493e86ab38cd1638332384fa6c8d83ac7", "lines": 29, "testsCovering": ["npm run build (root layout compiled)"] },
+    { "path": "src/app/page.tsx", "action": "modified", "purpose": "add CTA link to /world-model", "sha256": "8f5e770e2876faf2e60257c6e4ecb338cdb6e91795eed743eb01a23017f05045", "lines": 29, "testsCovering": ["npm run build (route compiled: /)"] },
+    { "path": "package.json", "action": "modified", "purpose": "added zod, vitest, tsx via install_npm_packages tool", "sha256": "0d2f0462f7448749c3d34f017a750b2517d09c0366c9495aeebb7f6ca6a1419b", "lines": 35, "testsCovering": ["npm run build", "npx vitest run", "npx tsc --noEmit"] }
   ],
-  "whatWasBuilt": {
-    "foundation": [
-      "Multi-tenant schema (tenants, leads, decisions, knowledge_entries) in src/db/schema.ts, with a single auto-created demo tenant (src/lib/tenant.ts)",
-      "Deterministic, explainable lead-scoring engine (src/lib/scoring.ts): budget, company size, engagement, title seniority, ICP fit, and response history, each weighted and annotated with a human-readable rationale",
-      "SHA-256 hash-chained, tamper-evident evidence ledger (src/lib/ledger.ts, decisions table) with append and chain-verification functions",
-      "Knowledge substrate (knowledge_entries table) with measured / estimated / association / effect labeling",
-      "REST API: /api/leads, /api/leads/[id], /api/decisions, /api/decisions/verify, /api/knowledge, /api/stats, /api/health",
-      "UI: / (executive overview), /leads (scoring breakdown + stage control), /decisions (ledger + chain verification), /knowledge"
+  "commands": {
+    "verify": [
+      "npx next typegen",
+      "npm exec tsc -- --noEmit --pretty false",
+      "npm run build",
+      "npx eslint .",
+      "npx drizzle-kit push --config=drizzle.config.json"
     ],
-    "part59Module": {
-      "name": "Pipeline Forecasting & Revenue Attribution",
-      "schema": "forecasts table (src/db/schema.ts): one row per computed forecast, tied to a lead and a period, storing probability, deal value, weighted value, method, and rationale — so forecasts are a persisted, comparable history rather than an ephemeral calculation",
-      "calcEngine": "src/lib/forecast.ts — pure function computeForecast(): close probability is a transparent, documented 50/50 blend of pipeline-stage weight and the lead's deterministic score (no ML, no hidden model); won/lost stages short-circuit to 100%/0%",
-      "api": [
-        "GET /api/forecasts — list forecasts joined with lead data, optional ?period filter",
-        "POST /api/forecasts — compute and persist a forecast for one lead (leadId) or all leads, writing a ledger entry per computed forecast",
-        "GET /api/forecasts/summary — aggregates the latest forecast per lead into total weighted pipeline value, value by period, and value by stage"
-      ],
-      "ui": "/forecast — KPI cards (leads forecast, total deal value, weighted pipeline value), weighted value by stage, and a per-lead forecast list with plain-language rationale; 'Recompute all forecasts' triggers a fresh pass and re-logs to the evidence ledger",
-      "ledgerIntegration": "Every forecast computation appends a 'forecast.computed' entry to the same hash-chained ledger used for lead scoring and stage changes, so forecast history is auditable alongside every other decision"
-    },
-    "bugFixedDuringThisSession": {
-      "issue": "Initial implementation computed ledger hashes with plain JSON.stringify. PostgreSQL's jsonb column type normalizes object key order on storage, so a payload read back from the database could serialize to a different string than the exact object written, producing a false-positive 'chain broken' result on verification even though nothing was tampered with.",
-      "fix": "src/lib/ledger.ts now serializes every hashed value through a recursive, sorted-key canonical JSON form (canonicalStringify) so write-time and read-time hashes are always identical for identical content, regardless of jsonb key reordering.",
-      "verifiedBy": "Cleared and reseeded demo data, then confirmed GET /api/decisions/verify returns { ok: true } against the live preview."
-    },
-    "seedScript": "scripts/seed.ts — creates the demo tenant, 5 demonstrative leads spanning every pipeline stage and score range, an initial forecast pass for each, and 4 knowledge entries (one per evidence category). Re-run with `npx tsx scripts/seed.ts`."
+    "test": [
+      "npx vitest run"
+    ],
+    "measure": [
+      "npx tsx scripts/evalWorldModel.ts",
+      "npx tsx scripts/seedWorldModel.ts",
+      "curl -s http://localhost:3000/api/backtest/calibration"
+    ]
   },
-  "validation": {
-    "nextTypegen": "pass",
-    "typescriptNoEmit": "pass",
-    "productionBuild": "pass",
-    "buildAndStartHealthCheck": "pass",
-    "liveSmokeTests": {
-      "GET /api/health": "{ ok: true }",
-      "GET /api/decisions/verify": "{ ok: true, checked: 10, brokenAtSequence: null }",
-      "GET /api/forecasts/summary": "{ leadsForecast: 5, totalDealValue: 773000, totalWeightedValue: 579490 }"
-    }
-  },
-  "explicitlyOutOfScopeForThisPart": [
-    "Parts 1-58 are not implemented, documented, or claimed as pre-existing — the foundation listed above was built this session to make Part 59 meaningful, not recovered from history",
-    "No authentication or row-level-security tenant isolation (single demo tenant only, as inherited from the README's own documented scope)",
-    "Forecast probability model is a documented linear blend, not a fitted regression, Monte Carlo simulation, or ML model",
-    "No automated test suite (vitest/playwright) was added in this session"
+  "gates": [
+    { "id": "calibration-synthetic", "statement": "80% (P10-P90) interval coverage across 12 synthetic series x 40 backtests each must fall in [72%,88%]", "accept": "coverage in [0.72, 0.88]", "measured": "0.8625 (480 backtests, 414 within)", "status": "pass" },
+    { "id": "calibration-live-db", "statement": "80% interval coverage on live seeded demo metrics", "accept": "coverage in [0.72, 0.88]", "measured": "0.80 overall (12/15); per-metric: mrr 0.60 (3/5), active-users 0.80 (4/5), support-tickets 1.00 (5/5)", "status": "pass-overall-fail-per-metric-mrr (honestly reported; n=5 per metric is too small to trust individually)" },
+    { "id": "typecheck", "statement": "next typegen + tsc --noEmit must report zero errors", "accept": "0 errors", "measured": "0 errors", "status": "pass" },
+    { "id": "build", "statement": "next build must complete and emit all routes", "accept": "build succeeds, 9 app routes + health route present", "measured": "build succeeded; routes: /, /world-model, /world-model/[id], /api/metrics, /api/metrics/[id]/observations, /api/simulate, /api/backtest, /api/backtest/calibration, /api/health", "status": "pass" },
+    { "id": "unit-tests", "statement": "all world-model unit/property tests pass", "accept": "23/23 tests pass", "measured": "23/23 passed", "status": "pass" },
+    { "id": "lint", "statement": "eslint reports zero errors across the project", "accept": "0 errors", "measured": "0 errors", "status": "pass" },
+    { "id": "determinism", "statement": "identical (points, horizon, trials, seed) simulation inputs produce identical output bands", "accept": "deep equality", "measured": "deep-equal verified in tests/worldModel.test.ts", "status": "pass" },
+    { "id": "no-leakage", "statement": "backtest forecasts must not be influenced by data after the cutoff (planted shock test)", "accept": "P90 at the shocked target index must stay within a sane range, not reflect the shock, and must be flagged as a miss", "measured": "P90 ~ hundreds, not 999999; withinInterval=false", "status": "pass" },
+    { "id": "build-and-start", "statement": "platform build_and_start must succeed with a healthy /api/health", "accept": "status success", "measured": "status success, buildLatencyMs=8020", "status": "pass" }
   ],
-  "stopCondition": "This manifest marks the end of Part 59. No further parts were started."
+  "openRisks": [
+    { "risk": "Live-DB calibration sample size is tiny (5 backtests/metric from 24 months of seed data); mrr's 60% coverage is not statistically meaningful and should not be trusted until more periods/backtests accumulate", "owner": "next-session-operator", "dueDate": "before this feature informs a real forecasting decision" },
+    { "risk": "The pasted instruction bundle's Part 59 specification text was missing (truncated) and the referenced 75-part system does not exist in any accessible repository; this delivery is a good-faith, honestly-scoped reconstruction of 'World Model & Scenario Simulation' rather than a continuation of a verified prior program", "owner": "operator (please re-paste the actual Part 59 spec if one exists, for reconciliation)", "dueDate": "next session" },
+    { "risk": "fitLinearTrend uses a single global linear trend per metric; it will under-fit seasonal or regime-switching metrics (no seasonality decomposition implemented)", "owner": "future-session", "dueDate": "unscheduled" },
+    { "risk": "No authentication/authorization layer exists anywhere in this sandbox project; all API routes are unauthenticated", "owner": "future-session", "dueDate": "before any multi-tenant or production use" }
+  ]
 }

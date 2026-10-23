@@ -1,36 +1,28 @@
+import { NextRequest } from "next/server";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { metrics } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { createMetricSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const domainId = searchParams.get("domainId");
-  const rows = domainId
-    ? await db.select().from(metrics).where(eq(metrics.domainId, Number(domainId)))
-    : await db.select().from(metrics);
+export async function GET() {
+  const rows = await db.select().from(metrics).orderBy(asc(metrics.createdAt));
   return Response.json({ metrics: rows });
 }
 
-export async function POST(request: Request) {
-  const body = await request.json();
-  if (!body?.domainId || !body?.name || body?.value === undefined || body?.target === undefined || !body?.unit || !body?.period) {
-    return Response.json(
-      { error: "domainId, name, value, target, unit, period are required" },
-      { status: 400 },
-    );
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const parsed = createMetricSchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json({ error: "invalid_input", details: parsed.error.flatten() }, { status: 400 });
   }
-  const [row] = await db
-    .insert(metrics)
-    .values({
-      domainId: Number(body.domainId),
-      name: body.name,
-      value: String(body.value),
-      target: String(body.target),
-      unit: body.unit,
-      period: body.period,
-    })
-    .returning();
+
+  const existing = await db.select().from(metrics).where(eq(metrics.key, parsed.data.key)).limit(1);
+  if (existing.length > 0) {
+    return Response.json({ error: "duplicate_key" }, { status: 409 });
+  }
+
+  const [row] = await db.insert(metrics).values(parsed.data).returning();
   return Response.json({ metric: row }, { status: 201 });
 }
