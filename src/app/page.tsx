@@ -1,169 +1,168 @@
+import { db } from "@/db";
+import { decisions, forecasts, leads } from "@/db/schema";
+import { getOrCreateDemoTenant } from "@/lib/tenant";
+import { desc, eq } from "drizzle-orm";
 import Link from "next/link";
-import { getCockpitSummary } from "@/lib/queries";
-import { Card, Badge, fmtDate, EmptyState } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function CockpitPage() {
-  const summary = await getCockpitSummary();
+function fmtMoney(value: number) {
+  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+}
 
-  const statusMap = Object.fromEntries(summary.decisionStatusCounts.map((s) => [s.status, s.count]));
-  const severityMap = Object.fromEntries(summary.openSignalCounts.map((s) => [s.severity, s.count]));
+export default async function HomePage() {
+  const tenant = await getOrCreateDemoTenant();
+
+  const [allLeads, recentDecisions, allForecasts] = await Promise.all([
+    db.select().from(leads).where(eq(leads.tenantId, tenant.id)),
+    db
+      .select()
+      .from(decisions)
+      .where(eq(decisions.tenantId, tenant.id))
+      .orderBy(desc(decisions.sequence))
+      .limit(6),
+    db.select().from(forecasts).where(eq(forecasts.tenantId, tenant.id)),
+  ]);
+
+  const totalLeads = allLeads.length;
+  const avgScore = totalLeads
+    ? Math.round(allLeads.reduce((sum, l) => sum + l.score, 0) / totalLeads)
+    : 0;
+
+  const latestForecastByLead = new Map<string, (typeof allForecasts)[number]>();
+  for (const f of allForecasts) {
+    const existing = latestForecastByLead.get(f.leadId);
+    if (!existing || f.createdAt > existing.createdAt) {
+      latestForecastByLead.set(f.leadId, f);
+    }
+  }
+  const weightedPipeline = Array.from(latestForecastByLead.values()).reduce(
+    (sum, f) => sum + Number(f.weightedValue),
+    0,
+  );
+
+  const topLeads = allLeads
+    .slice()
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
 
   return (
-    <div>
-      <div className="mb-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-400">Executive cockpit</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-          Leadership operating picture
+    <main className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mb-8">
+        <p className="m-0 text-sm uppercase tracking-[0.08em] text-slate-500">Executive overview</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+          Decision operations at a glance
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-400">
-          A single pane of glass across decision governance, early-warning signals, operating cadence,
-          autonomous agents, and leader state.
+        <p className="mt-2 max-w-2xl text-sm text-slate-600">
+          Tenant <code className="rounded bg-slate-200 px-1.5 py-0.5 text-xs">{tenant.slug}</code> ·
+          deterministic scoring, a hash-chained evidence ledger, and pipeline forecasting — every number
+          below traces back to an explainable rule, not a black box.
         </p>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Open decisions" value={summary.openDecisions} href="/decisions" tone="indigo" />
-        <Stat label="Critical signals" value={summary.criticalSignals} href="/signals" tone="rose" />
-        <Stat label="Upcoming rituals" value={summary.upcomingCadence.length} href="/cadence" tone="emerald" />
-        <Stat label="Agent runs logged" value={summary.recentRuns.length} href="/agents" tone="amber" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard label="Total leads" value={String(totalLeads)} />
+        <KpiCard label="Average score" value={`${avgScore}/100`} />
+        <KpiCard label="Weighted pipeline" value={fmtMoney(weightedPipeline)} accent />
+        <KpiCard label="Ledger entries" value={String(recentDecisions.length ? "view ledger" : 0)} href="/decisions" />
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Decisions by status
-          </h2>
-          <div className="space-y-2">
-            {["proposed", "under_review", "committed", "reversed"].map((status) => (
-              <div key={status} className="flex items-center justify-between text-sm">
-                <Badge label={status} />
-                <span className="font-mono text-slate-300">{statusMap[status] ?? 0}</span>
-              </div>
-            ))}
+      <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-950">Top leads by score</h2>
+            <Link href="/leads" className="text-sm font-medium text-slate-600 hover:text-slate-950">
+              View all →
+            </Link>
           </div>
-          <Link href="/decisions" className="mt-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
-            View decision log →
-          </Link>
-        </Card>
-
-        <Card>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Open signals by severity
-          </h2>
-          <div className="space-y-2">
-            {["critical", "high", "medium", "low"].map((sev) => (
-              <div key={sev} className="flex items-center justify-between text-sm">
-                <Badge label={sev} />
-                <span className="font-mono text-slate-300">{severityMap[sev] ?? 0}</span>
-              </div>
-            ))}
-          </div>
-          <Link href="/signals" className="mt-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
-            View sensing board →
-          </Link>
-        </Card>
-
-        <Card>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Upcoming cadence
-          </h2>
-          {summary.upcomingCadence.length === 0 ? (
-            <EmptyState message="No scheduled rituals." />
+          {topLeads.length === 0 ? (
+            <EmptyState text="No leads yet. Add one from the Leads tab." />
           ) : (
-            <ul className="space-y-3 text-sm">
-              {summary.upcomingCadence.map((meeting) => (
-                <li key={meeting.id} className="flex items-center justify-between">
+            <ul className="space-y-3">
+              {topLeads.map((lead) => (
+                <li key={lead.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
                   <div>
-                    <p className="font-medium text-slate-200">{meeting.title}</p>
-                    <p className="text-xs text-slate-500">{fmtDate(meeting.nextOccurrence)}</p>
+                    <p className="font-medium text-slate-950">{lead.name}</p>
+                    <p className="text-sm text-slate-600">
+                      {lead.company} · <span className="capitalize">{lead.stage}</span>
+                    </p>
                   </div>
-                  <Badge label={meeting.type} />
+                  <span className="rounded-full bg-slate-900 px-3 py-1 text-sm font-semibold text-white">
+                    {lead.score}
+                  </span>
                 </li>
               ))}
             </ul>
           )}
-          <Link href="/cadence" className="mt-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
-            View cadence board →
-          </Link>
-        </Card>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-950">Recent ledger activity</h2>
+            <Link href="/decisions" className="text-sm font-medium text-slate-600 hover:text-slate-950">
+              Open ledger →
+            </Link>
+          </div>
+          {recentDecisions.length === 0 ? (
+            <EmptyState text="No decisions recorded yet." />
+          ) : (
+            <ul className="space-y-3">
+              {recentDecisions.map((d) => (
+                <li key={d.id} className="rounded-xl bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-medium text-slate-950">
+                    #{d.sequence} · {d.action}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">{d.rationale}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Recent decisions
-          </h2>
-          {summary.recentDecisions.length === 0 ? (
-            <EmptyState message="No decisions logged yet." />
-          ) : (
-            <ul className="divide-y divide-slate-800">
-              {summary.recentDecisions.map((d) => (
-                <li key={d.id} className="flex items-center justify-between gap-4 py-3">
-                  <Link href={`/decisions/${d.id}`} className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-100 hover:text-indigo-300">{d.title}</p>
-                    <p className="text-xs text-slate-500">Owner: {d.ownerName ?? "Unassigned"}</p>
-                  </Link>
-                  <Badge label={d.status} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Recent agent runs
-          </h2>
-          {summary.recentRuns.length === 0 ? (
-            <EmptyState message="No autonomous agent runs yet." />
-          ) : (
-            <ul className="divide-y divide-slate-800">
-              {summary.recentRuns.map((run) => (
-                <li key={run.id} className="flex items-center justify-between gap-4 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-100">{run.name}</p>
-                    <p className="truncate text-xs text-slate-500">{run.summary || "—"}</p>
-                  </div>
-                  <Badge label={run.status} />
-                </li>
-              ))}
-            </ul>
-          )}
-          <Link href="/agents" className="mt-4 inline-block text-xs font-medium text-indigo-400 hover:text-indigo-300">
-            View agent kernel →
+      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-950">Pipeline forecast (Part 59)</h2>
+          <Link href="/forecast" className="text-sm font-medium text-slate-600 hover:text-slate-950">
+            Open forecast →
           </Link>
-        </Card>
-      </div>
-    </div>
+        </div>
+        <p className="text-sm text-slate-600">
+          {latestForecastByLead.size} lead{latestForecastByLead.size === 1 ? "" : "s"} forecast · weighted
+          pipeline value {fmtMoney(weightedPipeline)}.
+        </p>
+      </section>
+    </main>
   );
 }
 
-function Stat({
+function KpiCard({
   label,
   value,
+  accent,
   href,
-  tone,
 }: {
   label: string;
-  value: number;
-  href: string;
-  tone: "indigo" | "rose" | "emerald" | "amber";
+  value: string;
+  accent?: boolean;
+  href?: string;
 }) {
-  const toneClasses: Record<string, string> = {
-    indigo: "from-indigo-500/20 to-indigo-500/0 text-indigo-300",
-    rose: "from-rose-500/20 to-rose-500/0 text-rose-300",
-    emerald: "from-emerald-500/20 to-emerald-500/0 text-emerald-300",
-    amber: "from-amber-500/20 to-amber-500/0 text-amber-300",
-  };
-  return (
-    <Link
-      href={href}
-      className={`block rounded-2xl border border-slate-800 bg-gradient-to-br p-5 transition hover:border-slate-700 ${toneClasses[tone]}`}
+  const content = (
+    <div
+      className={`rounded-2xl border p-5 shadow-sm ${
+        accent ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-950"
+      }`}
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
-    </Link>
+      <p className={`text-xs uppercase tracking-wide ${accent ? "text-slate-300" : "text-slate-500"}`}>
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
   );
+
+  return href ? <Link href={href}>{content}</Link> : content;
+}
+
+function EmptyState({ text }: { text: string }) {
+  return <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">{text}</p>;
 }

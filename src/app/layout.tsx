@@ -4,17 +4,17 @@ import NavBar from "@/components/NavBar";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LEADOS — Executive Decision Intelligence",
+  title: "LEADOS — Decision Operating System",
   description:
-    "LEADOS: a leadership operating system for decision governance, signals, cadence, autonomous agents, and leader state.",
+    "Executive decision-operations platform: deterministic lead scoring, a hash-chained evidence ledger, and pipeline forecasting.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-950 text-slate-100 antialiased">
+      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
         <NavBar />
-        <main className="mx-auto max-w-7xl px-6 py-10">{children}</main>
+        {children}
       </body>
     </html>
   );

@@ -1,140 +1,174 @@
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 import { db } from "@/db";
 import { decisions } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
-// Append-only, hash-chained evidence ledger. Every decision record's hash is
-// a function of the previous record's hash plus this record's canonical
-// content, so any retroactive edit or deletion breaks the chain and is
-// detectable — a lightweight tamper-evidence mechanism.
+export const GENESIS_HASH = "0".repeat(64);
 
-export type LedgerEntryInput = {
+export interface AppendDecisionInput {
   tenantId: string;
-  subjectType: string;
-  subjectId?: string | null;
-  title: string;
+  entityType: string;
+  entityId: string;
+  action: string;
+  payload: unknown;
   rationale: string;
-  outcome?: string;
-  confidence?: number;
-  confidenceLabel?: "measured" | "estimated" | "association" | "effect";
-  evidence?: unknown[];
-  actor?: string;
-};
+}
 
-// PostgreSQL's jsonb type does not preserve the original key order of a
-// stored object (it normalizes internally), so hashing must be invariant to
-// key order at every nesting level, not just the top level, or a value
-// round-tripped through the database will hash differently than it did at
-// insert time.
-function deepSort(value: unknown): unknown {
+/**
+ * PostgreSQL's `jsonb` column type normalizes object key order on storage,
+ * so a payload re-read from the database can produce a *different*
+ * `JSON.stringify` output than the exact object that was written — even
+ * though no bytes were tampered with. To keep hashes stable across a
+ * write -> read round-trip, every value is serialized through this
+ * recursive, sorted-key canonical form before hashing, both when a record
+ * is appended and when the chain is later verified.
+ */
+function canonicalStringify(value: unknown): string {
   if (Array.isArray(value)) {
-    return value.map(deepSort);
+    return `[${value.map((item) => canonicalStringify(item)).join(",")}]`;
   }
   if (value !== null && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const sortedKeys = Object.keys(record).sort();
-    const ordered: Record<string, unknown> = {};
-    for (const key of sortedKeys) ordered[key] = deepSort(record[key]);
-    return ordered;
+    const keys = Object.keys(value as Record<string, unknown>).sort();
+    const entries = keys.map(
+      (key) => `${JSON.stringify(key)}:${canonicalStringify((value as Record<string, unknown>)[key])}`,
+    );
+    return `{${entries.join(",")}}`;
   }
-  return value;
+  return JSON.stringify(value);
 }
 
-function canonicalize(record: Record<string, unknown>): string {
-  return JSON.stringify(deepSort(record));
+function computeHash(params: {
+  tenantId: string;
+  sequence: number;
+  entityType: string;
+  entityId: string;
+  action: string;
+  payload: unknown;
+  rationale: string;
+  prevHash: string;
+}): string {
+  const canonical = canonicalStringify({
+    tenantId: params.tenantId,
+    sequence: params.sequence,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    action: params.action,
+    payload: params.payload,
+    rationale: params.rationale,
+    prevHash: params.prevHash,
+  });
+  return createHash("sha256").update(canonical).digest("hex");
 }
 
-export async function getLatestHash(tenantId: string): Promise<string | null> {
-  const [latest] = await db
-    .select({ hash: decisions.hash })
-    .from(decisions)
-    .where(eq(decisions.tenantId, tenantId))
-    .orderBy(desc(decisions.createdAt))
-    .limit(1);
-  return latest?.hash ?? null;
-}
+/**
+ * Appends a record to the per-tenant, hash-chained evidence ledger. This is
+ * intentionally simple (no row-level locking beyond a transaction + ordered
+ * read of the latest row) which is sufficient for a single-process demo but
+ * is not a hardened concurrency guarantee under heavy concurrent writers.
+ */
+export async function appendDecision(input: AppendDecisionInput) {
+  return db.transaction(async (tx) => {
+    const latestRows = await tx
+      .select()
+      .from(decisions)
+      .where(eq(decisions.tenantId, input.tenantId));
 
-export async function appendDecision(input: LedgerEntryInput) {
-  const prevHash = await getLatestHash(input.tenantId);
-  const createdAt = new Date();
+    const sequence =
+      latestRows.length > 0
+        ? Math.max(...latestRows.map((r) => r.sequence)) + 1
+        : 1;
 
-  const content = {
-    tenantId: input.tenantId,
-    subjectType: input.subjectType,
-    subjectId: input.subjectId ?? null,
-    title: input.title,
-    rationale: input.rationale,
-    outcome: input.outcome ?? "pending",
-    confidence: input.confidence ?? 50,
-    confidenceLabel: input.confidenceLabel ?? "estimated",
-    evidence: input.evidence ?? [],
-    actor: input.actor ?? "system",
-    prevHash,
-    timestamp: createdAt.toISOString(),
-  };
+    const prevHash =
+      latestRows.length > 0
+        ? latestRows.find((r) => r.sequence === sequence - 1)?.hash ?? GENESIS_HASH
+        : GENESIS_HASH;
 
-  const hash = createHash("sha256").update(canonicalize(content)).digest("hex");
-
-  const [row] = await db
-    .insert(decisions)
-    .values({
+    const hash = computeHash({
       tenantId: input.tenantId,
-      subjectType: input.subjectType,
-      subjectId: input.subjectId ?? null,
-      title: input.title,
+      sequence,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      action: input.action,
+      payload: input.payload,
       rationale: input.rationale,
-      outcome: input.outcome ?? "pending",
-      confidence: input.confidence ?? 50,
-      confidenceLabel: input.confidenceLabel ?? "estimated",
-      evidence: input.evidence ?? [],
-      actor: input.actor ?? "system",
       prevHash,
-      hash,
-      createdAt,
-    })
-    .returning();
+    });
 
-  return row;
+    const [row] = await tx
+      .insert(decisions)
+      .values({
+        tenantId: input.tenantId,
+        sequence,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        action: input.action,
+        payload: input.payload as object,
+        rationale: input.rationale,
+        prevHash,
+        hash,
+      })
+      .returning();
+
+    return row;
+  });
 }
 
-export type ChainVerification = {
-  valid: boolean;
-  checkedCount: number;
-  brokenAt: string | null;
-};
+export interface VerifyChainResult {
+  ok: boolean;
+  checked: number;
+  brokenAtSequence: number | null;
+  reason: string | null;
+}
 
-// Recomputes the hash chain from scratch and confirms every stored hash
-// matches what the content + previous hash would produce.
-export async function verifyChain(tenantId: string): Promise<ChainVerification> {
+export async function verifyChain(tenantId: string): Promise<VerifyChainResult> {
   const rows = await db
     .select()
     .from(decisions)
-    .where(and(eq(decisions.tenantId, tenantId)))
-    .orderBy(decisions.createdAt);
+    .where(eq(decisions.tenantId, tenantId))
+    .orderBy(asc(decisions.sequence));
 
-  let expectedPrevHash: string | null = null;
+  let expectedPrevHash = GENESIS_HASH;
+
   for (const row of rows) {
-    const content = {
-      tenantId: row.tenantId,
-      subjectType: row.subjectType,
-      subjectId: row.subjectId ?? null,
-      title: row.title,
-      rationale: row.rationale,
-      outcome: row.outcome,
-      confidence: row.confidence,
-      confidenceLabel: row.confidenceLabel,
-      evidence: row.evidence,
-      actor: row.actor,
-      prevHash: row.prevHash,
-      timestamp: row.createdAt.toISOString(),
-    };
-    const recomputed = createHash("sha256").update(canonicalize(content)).digest("hex");
-
-    if (row.prevHash !== expectedPrevHash || recomputed !== row.hash) {
-      return { valid: false, checkedCount: rows.length, brokenAt: row.id };
+    if (row.prevHash !== expectedPrevHash) {
+      return {
+        ok: false,
+        checked: rows.length,
+        brokenAtSequence: row.sequence,
+        reason: `Expected prevHash ${expectedPrevHash} but row stores ${row.prevHash}.`,
+      };
     }
+
+    const recomputed = computeHash({
+      tenantId: row.tenantId,
+      sequence: row.sequence,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      action: row.action,
+      payload: row.payload,
+      rationale: row.rationale,
+      prevHash: row.prevHash,
+    });
+
+    if (recomputed !== row.hash) {
+      return {
+        ok: false,
+        checked: rows.length,
+        brokenAtSequence: row.sequence,
+        reason: `Recomputed hash ${recomputed} does not match stored hash ${row.hash}.`,
+      };
+    }
+
     expectedPrevHash = row.hash;
   }
 
-  return { valid: true, checkedCount: rows.length, brokenAt: null };
+  return { ok: true, checked: rows.length, brokenAtSequence: null, reason: null };
+}
+
+export async function listDecisions(tenantId: string) {
+  return db
+    .select()
+    .from(decisions)
+    .where(and(eq(decisions.tenantId, tenantId)))
+    .orderBy(asc(decisions.sequence));
 }

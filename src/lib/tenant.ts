@@ -2,35 +2,41 @@ import { db } from "@/db";
 import { tenants } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-// Single demo tenant bootstrap. The schema is already multi-tenant
-// (tenant_id on every table) so adding real tenant switching later is a
-// matter of wiring auth/session, not a schema change.
+export const DEMO_TENANT_SLUG = "leados-demo";
 
-export const DEFAULT_TENANT_SLUG = "leados-demo";
-export const DEFAULT_TENANT_NAME = "LEADOS Demo Organization";
-
-export async function getOrCreateDefaultTenant() {
-  const [existing] = await db
+/**
+ * Returns the single demo tenant, creating it on first use. This mirrors the
+ * "single demo tenant auto-created on first use" behaviour described for the
+ * LEADOS founding build, scoped to what this session actually implements:
+ * every table carries tenant_id, but there is no auth/RLS boundary yet.
+ */
+export async function getOrCreateDemoTenant() {
+  const existing = await db
     .select()
     .from(tenants)
-    .where(eq(tenants.slug, DEFAULT_TENANT_SLUG))
+    .where(eq(tenants.slug, DEMO_TENANT_SLUG))
     .limit(1);
 
-  if (existing) return existing;
+  if (existing.length > 0) {
+    return existing[0];
+  }
 
-  const [created] = await db
+  const inserted = await db
     .insert(tenants)
-    .values({ name: DEFAULT_TENANT_NAME, slug: DEFAULT_TENANT_SLUG })
-    .onConflictDoNothing()
+    .values({ slug: DEMO_TENANT_SLUG, name: "LEADOS Demo Tenant" })
+    .onConflictDoNothing({ target: tenants.slug })
     .returning();
 
-  if (created) return created;
+  if (inserted.length > 0) {
+    return inserted[0];
+  }
 
-  const [row] = await db
+  // Lost a race with another request creating the same tenant concurrently.
+  const retry = await db
     .select()
     .from(tenants)
-    .where(eq(tenants.slug, DEFAULT_TENANT_SLUG))
+    .where(eq(tenants.slug, DEMO_TENANT_SLUG))
     .limit(1);
 
-  return row;
+  return retry[0];
 }

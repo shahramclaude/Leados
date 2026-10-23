@@ -1,133 +1,144 @@
 // Deterministic, explainable lead-scoring engine.
-// Every score decomposes into named, weighted criteria so the result can be
-// shown to a human with a full breakdown — no black box.
+// Every score decomposes into named, weighted criteria with a human-readable
+// rationale per criterion so a reviewer can see exactly why a lead scored
+// the way it did — no opaque model, no hidden weights.
 
-export type LeadAttributes = {
-  budget?: number; // estimated deal value in currency units
-  employees?: number; // company headcount
-  engagement?: number; // 0-100, how engaged the lead has been
-  titleSeniority?: "individual_contributor" | "manager" | "director" | "vp" | "c_level";
-  icpFit?: number; // 0-100, how well the lead matches ideal customer profile
-  responded?: boolean;
-};
+export type TitleSeniority =
+  | "c_suite"
+  | "vp"
+  | "director"
+  | "manager"
+  | "individual_contributor";
 
-export type ScoreContribution = {
-  criterion: string;
-  weight: number;
-  rawValue: number | string | boolean | null;
-  normalizedValue: number; // 0-1
-  contribution: number; // points contributed out of 100
-  rationale: string;
-};
-
-export type ScoreResult = {
-  score: number;
-  breakdown: ScoreContribution[];
-  label: "low" | "medium" | "high" | "critical";
-};
-
-const SENIORITY_WEIGHTS: Record<NonNullable<LeadAttributes["titleSeniority"]>, number> = {
-  individual_contributor: 0.2,
-  manager: 0.45,
-  director: 0.7,
-  vp: 0.85,
-  c_level: 1,
-};
-
-const CRITERIA_WEIGHTS = {
-  budget: 0.25,
-  employees: 0.15,
-  engagement: 0.2,
-  titleSeniority: 0.2,
-  icpFit: 0.15,
-  responded: 0.05,
-} as const;
-
-function clamp01(value: number): number {
-  if (Number.isNaN(value)) return 0;
-  return Math.min(1, Math.max(0, value));
+export interface ScoringInput {
+  budget: number;
+  companySize: number;
+  engagementScore: number; // 0-100
+  titleSeniority: TitleSeniority;
+  icpFit: number; // 0-100
+  responseHistory: number; // 0-100
 }
 
-export function scoreLead(attributes: LeadAttributes): ScoreResult {
-  const breakdown: ScoreContribution[] = [];
+export interface ScoreCriterion {
+  criterion: string;
+  weight: number;
+  rawValue: number;
+  normalizedValue: number; // 0-100
+  contribution: number; // weight * normalizedValue, in score points
+  rationale: string;
+}
 
-  const budget = attributes.budget ?? 0;
-  const budgetNorm = clamp01(budget / 100_000);
-  breakdown.push({
-    criterion: "Budget",
-    weight: CRITERIA_WEIGHTS.budget,
-    rawValue: budget,
-    normalizedValue: budgetNorm,
-    contribution: Math.round(budgetNorm * CRITERIA_WEIGHTS.budget * 100),
-    rationale: `Estimated budget of ${budget.toLocaleString()} scaled against a $100k reference ceiling.`,
-  });
+export interface ScoreResult {
+  total: number;
+  breakdown: ScoreCriterion[];
+}
 
-  const employees = attributes.employees ?? 0;
-  const employeesNorm = clamp01(employees / 2000);
-  breakdown.push({
-    criterion: "Company size",
-    weight: CRITERIA_WEIGHTS.employees,
-    rawValue: employees,
-    normalizedValue: employeesNorm,
-    contribution: Math.round(employeesNorm * CRITERIA_WEIGHTS.employees * 100),
-    rationale: `${employees.toLocaleString()} employees scaled against a 2,000-employee reference ceiling.`,
-  });
+const SENIORITY_POINTS: Record<TitleSeniority, number> = {
+  c_suite: 100,
+  vp: 80,
+  director: 60,
+  manager: 35,
+  individual_contributor: 15,
+};
 
-  const engagement = attributes.engagement ?? 0;
-  const engagementNorm = clamp01(engagement / 100);
-  breakdown.push({
-    criterion: "Engagement",
-    weight: CRITERIA_WEIGHTS.engagement,
-    rawValue: engagement,
-    normalizedValue: engagementNorm,
-    contribution: Math.round(engagementNorm * CRITERIA_WEIGHTS.engagement * 100),
-    rationale: `Observed engagement score of ${engagement}/100 (email opens, site visits, replies).`,
-  });
+const SENIORITY_LABEL: Record<TitleSeniority, string> = {
+  c_suite: "C-suite",
+  vp: "VP",
+  director: "Director",
+  manager: "Manager",
+  individual_contributor: "Individual contributor",
+};
 
-  const seniority = attributes.titleSeniority ?? "individual_contributor";
-  const seniorityNorm = SENIORITY_WEIGHTS[seniority];
-  breakdown.push({
-    criterion: "Title seniority",
-    weight: CRITERIA_WEIGHTS.titleSeniority,
-    rawValue: seniority,
-    normalizedValue: seniorityNorm,
-    contribution: Math.round(seniorityNorm * CRITERIA_WEIGHTS.titleSeniority * 100),
-    rationale: `Contact title mapped to seniority tier "${seniority}".`,
-  });
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
 
-  const icpFit = attributes.icpFit ?? 0;
-  const icpNorm = clamp01(icpFit / 100);
-  breakdown.push({
-    criterion: "ICP fit",
-    weight: CRITERIA_WEIGHTS.icpFit,
-    rawValue: icpFit,
-    normalizedValue: icpNorm,
-    contribution: Math.round(icpNorm * CRITERIA_WEIGHTS.icpFit * 100),
-    rationale: `Ideal-customer-profile fit rated ${icpFit}/100.`,
-  });
+// log-scaled so a $500k budget doesn't dwarf everything else linearly
+function normalizeBudget(budget: number): number {
+  if (budget <= 0) return 0;
+  const score = (Math.log10(budget + 1) / Math.log10(1_000_000)) * 100;
+  return clamp(score, 0, 100);
+}
 
-  const responded = attributes.responded ?? false;
-  const respondedNorm = responded ? 1 : 0;
-  breakdown.push({
-    criterion: "Has responded",
-    weight: CRITERIA_WEIGHTS.responded,
-    rawValue: responded,
-    normalizedValue: respondedNorm,
-    contribution: Math.round(respondedNorm * CRITERIA_WEIGHTS.responded * 100),
-    rationale: responded
-      ? "Lead has responded to outreach at least once."
-      : "No response recorded yet.",
-  });
+function normalizeCompanySize(size: number): number {
+  if (size <= 0) return 0;
+  const score = (Math.log10(size + 1) / Math.log10(10_000)) * 100;
+  return clamp(score, 0, 100);
+}
 
-  const score = Math.min(
+const WEIGHTS = {
+  budget: 0.25,
+  companySize: 0.15,
+  engagement: 0.2,
+  seniority: 0.15,
+  icpFit: 0.15,
+  responseHistory: 0.1,
+};
+
+export function computeScore(input: ScoringInput): ScoreResult {
+  const budgetNorm = normalizeBudget(input.budget);
+  const sizeNorm = normalizeCompanySize(input.companySize);
+  const engagementNorm = clamp(input.engagementScore, 0, 100);
+  const seniorityNorm = SENIORITY_POINTS[input.titleSeniority] ?? 15;
+  const icpNorm = clamp(input.icpFit, 0, 100);
+  const responseNorm = clamp(input.responseHistory, 0, 100);
+
+  const breakdown: ScoreCriterion[] = [
+    {
+      criterion: "Budget",
+      weight: WEIGHTS.budget,
+      rawValue: input.budget,
+      normalizedValue: Math.round(budgetNorm),
+      contribution: Math.round(budgetNorm * WEIGHTS.budget),
+      rationale: `Budget of $${input.budget.toLocaleString()} normalized on a log scale against a $1M reference ceiling.`,
+    },
+    {
+      criterion: "Company size",
+      weight: WEIGHTS.companySize,
+      rawValue: input.companySize,
+      normalizedValue: Math.round(sizeNorm),
+      contribution: Math.round(sizeNorm * WEIGHTS.companySize),
+      rationale: `${input.companySize.toLocaleString()} employees normalized on a log scale against a 10,000-employee reference ceiling.`,
+    },
+    {
+      criterion: "Engagement",
+      weight: WEIGHTS.engagement,
+      rawValue: input.engagementScore,
+      normalizedValue: Math.round(engagementNorm),
+      contribution: Math.round(engagementNorm * WEIGHTS.engagement),
+      rationale: `Observed engagement score of ${input.engagementScore}/100 (email opens, replies, site visits).`,
+    },
+    {
+      criterion: "Title seniority",
+      weight: WEIGHTS.seniority,
+      rawValue: seniorityNorm,
+      normalizedValue: seniorityNorm,
+      contribution: Math.round(seniorityNorm * WEIGHTS.seniority),
+      rationale: `Contact title mapped to seniority tier "${SENIORITY_LABEL[input.titleSeniority]}".`,
+    },
+    {
+      criterion: "ICP fit",
+      weight: WEIGHTS.icpFit,
+      rawValue: input.icpFit,
+      normalizedValue: Math.round(icpNorm),
+      contribution: Math.round(icpNorm * WEIGHTS.icpFit),
+      rationale: `Ideal-customer-profile fit rated ${input.icpFit}/100 against industry, geography and use-case match.`,
+    },
+    {
+      criterion: "Response history",
+      weight: WEIGHTS.responseHistory,
+      rawValue: input.responseHistory,
+      normalizedValue: Math.round(responseNorm),
+      contribution: Math.round(responseNorm * WEIGHTS.responseHistory),
+      rationale: `Historical responsiveness rated ${input.responseHistory}/100 across prior outreach touches.`,
+    },
+  ];
+
+  const total = clamp(
+    Math.round(breakdown.reduce((sum, c) => sum + c.contribution, 0)),
+    0,
     100,
-    breakdown.reduce((sum, item) => sum + item.contribution, 0)
   );
 
-  let label: ScoreResult["label"] = "low";
-  if (score >= 80) label = "critical";
-  else if (score >= 60) label = "high";
-  else if (score >= 35) label = "medium";
-
-  return { score, breakdown, label };
+  return { total, breakdown };
 }

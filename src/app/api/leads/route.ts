@@ -1,75 +1,86 @@
 import { db } from "@/db";
 import { leads } from "@/db/schema";
-import { scoreLead, type LeadAttributes } from "@/lib/scoring";
+import { getOrCreateDemoTenant } from "@/lib/tenant";
+import { computeScore, type TitleSeniority } from "@/lib/scoring";
 import { appendDecision } from "@/lib/ledger";
-import { getOrCreateDefaultTenant } from "@/lib/tenant";
 import { desc, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const tenant = await getOrCreateDefaultTenant();
-  if (!tenant) return Response.json({ error: "tenant unavailable" }, { status: 500 });
+const VALID_SENIORITY: TitleSeniority[] = [
+  "c_suite",
+  "vp",
+  "director",
+  "manager",
+  "individual_contributor",
+];
 
+export async function GET() {
+  const tenant = await getOrCreateDemoTenant();
   const rows = await db
     .select()
     .from(leads)
     .where(eq(leads.tenantId, tenant.id))
-    .orderBy(desc(leads.score), desc(leads.createdAt));
+    .orderBy(desc(leads.score));
 
   return Response.json({ leads: rows });
 }
 
 export async function POST(request: Request) {
-  const tenant = await getOrCreateDefaultTenant();
-  if (!tenant) return Response.json({ error: "tenant unavailable" }, { status: 500 });
+  const tenant = await getOrCreateDemoTenant();
+  const body = await request.json().catch(() => null);
 
-  const body = (await request.json()) as {
-    name?: string;
-    company?: string;
-    email?: string;
-    source?: string;
-    attributes?: LeadAttributes;
-  };
-
-  if (!body.name || !body.company || !body.email) {
+  if (!body || typeof body.name !== "string" || typeof body.company !== "string") {
     return Response.json(
-      { error: "name, company, and email are required" },
-      { status: 400 }
+      { error: "name and company are required fields" },
+      { status: 400 },
     );
   }
 
-  const attributes = body.attributes ?? {};
-  const result = scoreLead(attributes);
+  const titleSeniority: TitleSeniority = VALID_SENIORITY.includes(body.titleSeniority)
+    ? body.titleSeniority
+    : "individual_contributor";
 
-  const [created] = await db
+  const scoringInput = {
+    budget: Number(body.budget) || 0,
+    companySize: Number(body.companySize) || 0,
+    engagementScore: Number(body.engagementScore) || 0,
+    titleSeniority,
+    icpFit: Number(body.icpFit) || 0,
+    responseHistory: Number(body.responseHistory) || 0,
+  };
+
+  const { total, breakdown } = computeScore(scoringInput);
+
+  const [lead] = await db
     .insert(leads)
     .values({
       tenantId: tenant.id,
       name: body.name,
       company: body.company,
-      email: body.email,
-      source: body.source ?? "manual",
-      attributes,
-      score: result.score,
-      scoreBreakdown: result.breakdown,
+      title: typeof body.title === "string" ? body.title : "",
+      email: typeof body.email === "string" ? body.email : "",
+      budget: String(scoringInput.budget),
+      dealValue: String(Number(body.dealValue) || 0),
+      companySize: scoringInput.companySize,
+      engagementScore: scoringInput.engagementScore,
+      titleSeniority,
+      icpFit: scoringInput.icpFit,
+      responseHistory: scoringInput.responseHistory,
+      stage: "new",
+      score: total,
+      scoreBreakdown: breakdown,
     })
     .returning();
 
   await appendDecision({
     tenantId: tenant.id,
-    subjectType: "lead",
-    subjectId: created.id,
-    title: `Scored lead "${created.name}" at ${created.company}`,
-    rationale: `Deterministic scoring engine produced ${result.score}/100 (${result.label}). ${result.breakdown
-      .map((b) => `${b.criterion}: +${b.contribution}`)
-      .join("; ")}.`,
-    outcome: result.label,
-    confidence: 90,
-    confidenceLabel: "measured",
-    evidence: result.breakdown as unknown[],
-    actor: "scoring-engine",
+    entityType: "lead",
+    entityId: lead.id,
+    action: "lead.created",
+    payload: { score: total, breakdown },
+    rationale: `Lead "${lead.name}" at ${lead.company} created and scored ${total}/100.`,
   });
 
-  return Response.json({ lead: created, score: result }, { status: 201 });
+  return Response.json({ lead }, { status: 201 });
 }
