@@ -715,3 +715,29 @@ axe-core 4.11 (JSDOM)                  → 0 violations on the new lock screen
 
 Next up (from roadmap): idle auto-lock with a non-destructive prompt; structured 1:1 preparation
 and a printable coaching packet; an onboarding 30-60-90 milestone tracker.
+
+## Session 7 — 2026-10-24 — Idle auto-lock for the unlocked encrypted workspace
+
+**Audit before implementation.** Re-read the canonical app (`index.html` + `app/**`, 49 modules). Confirmed the baseline: `npm test` = 193 pass / 0 fail / 0 skipped once `node_modules` is installed (the earlier run failed only because dependencies were absent). Encryption (session 6) ships, but an unlocked tab stays unlocked forever — 1:1 notes, feedback, recognition and conflict records remain readable by anyone using the browser while the tab is open. Per `ROADMAP.md` §"Next", idle auto-lock is the highest-priority missing piece.
+
+**Research.** Reviewed the session-6 encryption rationale (RESEARCH.md §17): the passphrase protects the stored copy but explicitly not "a browser someone can already use while it is unlocked", and "no auto-lock on idle" was a documented known gap. No framework research was needed for this increment — it is a session-security completion of the just-shipped encryption, governed by the existing invariants (no network, no silent fallback to plain text, no destruction of in-progress work).
+
+**What changed.**
+- `app/core/idle.js` (new): `createIdleMonitor({ now, thresholdMs, warnGraceMs, onWarn, onLock })` — a store- and DOM-free inactivity state machine. Activity (keydown, pointer, touch, scroll, wheel) resets the clock and cancels a pending lock; `tick()` is driven by the caller on a timer and on `visibilitychange`, so a tab restored from a long background absence is checked immediately rather than silently reset. All time is injected for deterministic tests.
+- `app/core/schema.js`: added `idleLockMinutes: 30` to `DEFAULT_SETTINGS` and clamped it to 0–480 in `normalizeSettings` (0 disables).
+- `app/actions.js`: `updateSettings` validates `idleLockMinutes` (whole number, 0–480).
+- `app/ui/modals.js`: `openSettingsDialog` exposes "Lock after inactivity (minutes)" with help text; the numeric processing loop handles it.
+- `app/main.js`: per-app-instance idle monitor — started when the workspace is unlocked and encrypted, stopped when locked or disabled, restarted when the window changes. `ensureIdleMonitor(ctx)` runs on every render. On warn: a non-destructive modal ("keep working" / "Lock now", auto-locks after a one-minute grace, Escape cancels). On lock: the `privacy.idle-lock` event is persisted via `store.update()` before `store.lock()` wipes memory and renders the vault, so the audit trail survives the lock.
+
+**Verification performed this session.**
+- `tests/app/idle.test.mjs` (new, 10 tests): no warn/lock before threshold; warn exactly at threshold; warn once, no lock within grace; lock after grace; activity after warning cancels the lock; keystroke-like activity restarts the clock; tab restored from a long background absence warns immediately; short absence does not warn; `elapsed()` reporting; `stop()` prevents transitions.
+- `npm test`: **203 pass / 0 fail / 0 skipped** (193 inherited + 10 new).
+- `eslint app tests/app/idle.test.mjs`: clean. `node --check` on all touched modules: clean.
+
+**Tradeoffs, unverified work.**
+- Idle auto-lock only applies to encrypted workspaces (`store.lock()` requires a vault key); an unencrypted workspace has nothing to lock.
+- Default window is 30 minutes; configurable 0–480 in Settings → Cadences and thresholds. A first-time manager can turn it off (0), accepting that an unattended unlocked tab stays readable.
+- The one-minute grace and 20-second tick are team-convention values, not validated security timings.
+- Real-browser WebCrypto behavior, color-contrast sampling, print/PDF, mobile viewports, Safari/Firefox and large-workspace performance remain `[UNVERIFIED]` (session 6 limitations, unchanged).
+
+Next up (from roadmap): structured 1:1 preparation and a printable coaching packet; onboarding 30-60-90 milestone tracker.

@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-24 (session 6: optional passphrase encryption of the browser copy shipped — PBKDF2-SHA-256 600k + AES-256-GCM, verified plaintext→encrypted migration, lock screen, encrypted/plaintext exports with explicit mode disclosure; 193 automated tests; real-browser WebCrypto execution `[UNVERIFIED]` in Session 6 container).
+Last updated: 2026-10-24 (session 7: idle auto-lock shipped — an unlocked, encrypted workspace warns after a configurable inactivity window (default 30 minutes, 0 = off), then locks automatically after a one-minute grace, logging `privacy.idle-lock` to the event log; `tests/app/idle.test.mjs` covers activity reset, warn/lock transitions and tab-restored-from-background; 203 automated tests).
 
 ---
 
@@ -59,7 +59,8 @@ Last updated: 2026-10-24 (session 6: optional passphrase encryption of the brows
 | Encrypted backups and import in both directions, with the storage mode disclosed | `core/store.js`, `views/settings.js`, `ui/vault-dialogs.js` | encryption tests (restore into plain/locked/unlocked states, wrong passphrase changes nothing, downgrade message asserted) |
 | Lock screen is the only thing rendered while locked, keyboard-usable and axe-clean | `views/vault.js`, `main.js`, `styles.css` | jsdom tests (no records leaked into the screen, error live region, show-passphrase toggle, `axe-core` 0 violations) |
 | A stored backup envelope is refused rather than normalised into an empty workspace | `core/store.js`, `views/vault.js` | encryption tests (refused unlock, untouched file, working restore path) |
-| 193 automated tests | `tests/app/**` | `npm test` — 193 pass / 0 fail / 0 skipped |
+| Idle auto-lock: warn, then lock an unlocked encrypted workspace after inactivity, with a non-destructive "keep working" warning and a one-minute grace; the lock is logged to the event log | `app/core/idle.js`, `app/main.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/modals.js` | `tests/app/idle.test.mjs` (activity reset, warn → lock transitions, tab restored from background) |
+| 203 automated tests | `tests/app/**` | `npm test` — 203 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-24T10:00:00Z`): health **54.5 (D)**,
 30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
@@ -74,17 +75,15 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
 
 ## Next (ordered by value, not by ease)
 
-1. **Idle auto-lock with a non-destructive prompt.** Encryption exists but an unlocked tab stays
-   unlocked forever. Add an inactivity timer that locks after a configurable window, warns first
-   in a way that cannot eat an in-progress note, and records the lock in the event log. Needs
-   careful tests for "typing counts as activity" and for tabs restored from the background.
-2. **Structured 1:1 preparation & printable coaching packet.** Combine generated agenda items,
+1. **Structured 1:1 preparation & printable coaching packet.** Combine generated agenda items,
    open commitments (1:1, GROW, feedback follow-up, delegation checkpoints) and employee-owned
    talking points into a clean, shareable single-meeting prep sheet without leaking private
    conflict records.
-3. **Onboarding 30-60-90 milestone tracker.** Turn the existing first-90-day tenure signal
+2. **Onboarding 30-60-90 milestone tracker.** Turn the existing first-90-day tenure signal
    (`ONB-01`) into explicit role-clarity, buddy/stakeholder introduction and early-win
    checkpoints for new joiners without inventing personality or performance grades.
+
+*(Idle auto-lock shipped this session: see the Done table above.)*
 
 ## Later / deliberately deferred
 
@@ -138,8 +137,10 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
   account or direct submission workflow, and calibration heuristics are not a validated
   fairness instrument.
 - Encryption protects the stored browser copy and encrypted backups only. It does not protect an
-  unlocked tab, cannot recover a forgotten passphrase, does not auto-lock on idle, and needs a
-  secure context (https or localhost). Real-browser WebCrypto behaviour is `[UNVERIFIED]` here:
+  unlocked tab during active use, cannot recover a forgotten passphrase, and needs a secure
+  context (https or localhost). An unlocked tab now auto-locks after a configurable inactivity
+  window (default 30 minutes) with a warning first; see the Done table. Real-browser WebCrypto
+  behaviour is `[UNVERIFIED]` here:
   Node's `webcrypto` was injected into jsdom.
 - Rehearsal against real usage is absent: every number in this file comes from the demo
   workspace and the test suite, not from a manager's actual quarter. Real-browser visual

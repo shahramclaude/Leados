@@ -1122,11 +1122,20 @@ export function openSettingsDialog(ctx) {
         max: 25,
         help: 'Complete responses required before reporting (3–25; default 5). Lower floors increase identification risk; none guarantees anonymity.',
       },
+      {
+        name: 'idleLockMinutes',
+        label: 'Lock after inactivity (minutes)',
+        type: 'number',
+        value: s.idleLockMinutes,
+        min: 0,
+        max: 480,
+        help: 'An unlocked tab holding encrypted notes is readable by anyone who uses the browser. Lock after this many minutes of inactivity; the app warns first and locks automatically after one minute. 0 disables it. Only applies when the workspace is encrypted.',
+      },
     ],
     onSubmit: (values, form, close) => {
       const numeric = [
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
-        'decisionReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses',
+        'decisionReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {

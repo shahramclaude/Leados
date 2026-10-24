@@ -6,9 +6,10 @@
  * export button rather than a blank screen.
  */
 
-import { h, mount, toast, closeAllModals } from './ui/dom.js';
+import { h, mount, toast, closeAllModals, openModal } from './ui/dom.js';
 import { createStore, STORAGE_KEY } from './core/store.js';
 import { createApi } from './actions.js';
+import { createIdleMonitor } from './core/idle.js';
 import { buildInsights } from './core/domain/insights.js';
 import { teamHealth } from './core/domain/health.js';
 import { dueMeetings } from './core/domain/oneonone.js';
@@ -104,6 +105,124 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   let lastRenderedRoute = null;
 
   store.load();
+
+  /* ------------------------------------------------------------- idle guard */
+  /**
+   * Idle auto-lock for an unlocked, encrypted workspace. One monitor per app
+   * instance, driven by a timer; `warningModal` tracks the in-progress
+   * "keep working or lock?" prompt so a lock can dismiss it.
+   */
+  let idleMonitor = null;
+  let idleInterval = null;
+  let appliedIdleMinutes = null;
+  let warningModal = null;
+
+  function stopIdleMonitor() {
+    if (idleInterval) {
+      clearInterval(idleInterval);
+      idleInterval = null;
+    }
+    if (idleMonitor) {
+      idleMonitor.stop();
+      idleMonitor = null;
+    }
+    appliedIdleMinutes = null;
+    closeWarningModal();
+  }
+
+  function closeWarningModal() {
+    if (warningModal) {
+      warningModal.close();
+      warningModal = null;
+    }
+  }
+
+  /** Any interaction cancels a pending warning/lock and restarts the clock. */
+  function resetIdle() {
+    closeWarningModal();
+    idleMonitor?.recordActivity();
+  }
+
+  /** Show the non-destructive warning before an automatic lock. */
+  function showIdleWarning(ctx) {
+    const minutes = Number(ctx.state.settings.idleLockMinutes) || 0;
+    const dialog = openModal({
+      title: 'You have been inactive',
+      description: `No activity for ${minutes} minutes. Lock now to protect your records, or keep working. The workspace locks automatically in 1 minute.`,
+      body: h(
+        'p',
+        { class: 'modal-text' },
+        'Locking clears the records from this tab until you unlock again with your passphrase. Nothing you have written is discarded — changes are saved before the lock.'
+      ),
+      footer: [
+        h(
+          'button',
+          { class: 'btn btn-ghost', type: 'button', onClick: () => resetIdle() },
+          'Keep working'
+        ),
+        h(
+          'button',
+          {
+            class: 'btn btn-primary',
+            type: 'button',
+            onClick: () => {
+              closeWarningModal();
+              lockWorkspace(ctx);
+            },
+          },
+          'Lock now'
+        ),
+      ],
+      size: 'sm',
+      onClose: () => resetIdle(),
+    });
+    warningModal = dialog;
+  }
+
+  /** Log the lock to the audit trail, then lock the workspace. */
+  async function lockWorkspace(ctx) {
+    closeWarningModal();
+    store.update(
+      (draft) => {},
+      {
+        type: 'privacy.idle-lock',
+        entity: 'workspace',
+        summary: 'Workspace locked automatically after inactivity',
+      }
+    );
+    const result = await store.lock();
+    if (!result.ok) {
+      toast(result.error || 'The workspace could not be locked. Nothing was changed.', 'bad');
+    }
+  }
+
+  /**
+   * Start, restart or stop the idle monitor as the lock state and settings
+   * change. Called on every render while the workspace is unlocked.
+   */
+  function ensureIdleMonitor(ctx) {
+    const minutes = Number(ctx.state.settings.idleLockMinutes) || 0;
+    if (!store.isEncrypted || store.isLocked || minutes <= 0) {
+      stopIdleMonitor();
+      return;
+    }
+    if (idleMonitor && appliedIdleMinutes === minutes) return;
+    stopIdleMonitor();
+    idleMonitor = createIdleMonitor({
+      now,
+      thresholdMs: minutes * 60 * 1000,
+      warnGraceMs: 60 * 1000,
+      onWarn: () => showIdleWarning(ctx),
+      onLock: () => lockWorkspace(ctx),
+    });
+    appliedIdleMinutes = minutes;
+    idleMonitor.start();
+    const interval = setInterval(() => idleMonitor.tick(), 20 * 1000);
+    // `unref()` lets the test process exit even while timers are pending. It
+    // is a no-op in the browser, where the interval returns a plain id.
+    if (typeof interval.unref === 'function') interval.unref();
+    idleInterval = interval;
+  }
 
   function navigate(target) {
     if (!target) return;
@@ -329,6 +448,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       }
       return;
     }
+
+    // An unlocked, encrypted workspace guards itself against inactivity.
+    ensureIdleMonitor(ctx);
+
     const renderer = RENDERERS[route];
     try {
       if (!renderer) {

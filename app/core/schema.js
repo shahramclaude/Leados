@@ -83,7 +83,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
   // an anonymity guarantee. Five is the default here.
   pulseMinResponses: 5,
-});
+  // Idle auto-lock: only meaningful for an encrypted workspace. 0 disables
+  // it. An unlocked tab holding sensitive notes is the one situation the
+  // passphrase does not protect against, so a sensible locked-by-default
+  // window is provided and can be turned off in Settings.
+  idleLockMinutes: 30,
+  });
 
 export const COLLECTIONS = [
   'people',
@@ -173,6 +178,7 @@ export function normalizeSettings(raw) {
     growthReviewDays: clampInt(s.growthReviewDays, 1, 365, d.growthReviewDays),
     maxReportsPerManager: clampInt(s.maxReportsPerManager, 1, 30, d.maxReportsPerManager),
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
+    idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
 }
 

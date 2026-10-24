@@ -69,6 +69,13 @@ export function createApi(store, options = {}) {
         }
         next.pulseMinResponses = floor;
       }
+      if (Object.hasOwn(next, 'idleLockMinutes')) {
+        const value = Number(next.idleLockMinutes);
+        if (!Number.isInteger(value) || value < 0 || value > 480) {
+          return fail('Idle lock must be a whole number of minutes from 0 (off) to 480 (8 hours).', 'idleLockMinutes');
+        }
+        next.idleLockMinutes = value;
+      }
       store.update(
         (draft) => {
           draft.settings = { ...draft.settings, ...next };
