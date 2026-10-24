@@ -24,6 +24,7 @@ import { renderReadiness } from './views/readiness.js';
 import { renderHealth } from './views/health.js';
 import { renderDecisions } from './views/decisions.js';
 import { renderRecognition } from './views/recognition.js';
+import { renderReviews, renderReviewDetail } from './views/reviews.js';
 import { renderSettings } from './views/settings.js';
 
 export const NAV = [
@@ -35,6 +36,7 @@ export const NAV = [
     { route: 'people', label: 'People', icon: '◍' },
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
     { route: 'feedback', label: 'Feedback', icon: '✎' },
+    { route: 'reviews', label: 'Performance reviews', icon: '▤' },
     { route: 'recognition', label: 'Recognition', icon: '★' },
   ] },
   { section: 'Growth', items: [
@@ -64,6 +66,8 @@ const RENDERERS = {
   health: (ctx) => renderHealth(ctx),
   decisions: (ctx) => renderDecisions(ctx),
   recognition: (ctx) => renderRecognition(ctx),
+  reviews: (ctx) => renderReviews(ctx),
+  review: (ctx, segments) => renderReviewDetail(ctx, decodeURIComponent(segments[1] || '')),
   settings: (ctx) => renderSettings(ctx),
 };
 
@@ -73,8 +77,12 @@ export function parseRoute(hash) {
   const segments = pathPart.split('/').filter(Boolean);
   const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness' };
   const first = segments[0] || '';
-  // A detail route (#/people/<id>) resolves to its own renderer, not the list.
-  const detail = first === 'people' && segments.length > 1 ? 'person' : null;
+  // Detail routes resolve to their own renderer, not the list.
+  const detail = first === 'people' && segments.length > 1
+    ? 'person'
+    : first === 'reviews' && segments.length > 1
+      ? 'review'
+      : null;
   const route = detail || alias[first] || (RENDERERS[first] ? first : 'today');
   const known = Boolean(detail || RENDERERS[first] || alias[first] || first === '');
   return { route: known ? route : 'notfound', segments, query: new URLSearchParams(queryPart || '') };
@@ -163,7 +171,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -286,6 +294,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
       oneonones: '1:1s',
       feedback: 'Feedback',
       recognition: 'Recognition',
+      reviews: 'Performance reviews',
+      review: 'Performance review',
       goals: 'Goals',
       growth: 'Growth plans',
       readiness: 'Succession',

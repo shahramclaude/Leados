@@ -23,6 +23,7 @@ export function renderSettings(ctx) {
     decisions: state.decisions.length,
     recognition: state.recognition.length,
     readiness: state.readiness.length,
+    reviews: state.reviews.length,
   };
 
   const bytes = ctx.storageSize();
@@ -220,7 +221,7 @@ export function renderSettings(ctx) {
       body: h(
         'div',
         { class: 'prose small' },
-        h('p', null, 'LeadOS is a local-first leadership workspace. It covers the recurring work of managing people: 1:1s, SBI feedback, OKR-style goals, GROW development plans, anonymous pulse, a decision log with DACI roles, recognition, and evidence-gated succession planning. It runs entirely in this browser — there is no server, no account and no telemetry.'),
+        h('p', null, 'LeadOS is a local-first leadership workspace. It covers the recurring work of managing people: 1:1s, SBI feedback, evidence-backed performance reviews, OKR-style goals, GROW development plans, anonymous pulse, a decision log with DACI roles, recognition, and evidence-gated succession planning. It runs entirely in this browser — there is no server, no account and no telemetry.'),
         h('p', null, 'The scoring is deterministic and explainable: each health dimension names its formula, each signal names its rule and evidence, and no number is displayed that cannot be traced back to a record you entered.'),
         h('p', null, 'Frameworks drawn on: situational leadership and GROW (Whitmore), SBI feedback and the Radical Candor 2×2 (Kim Scott), Tuckman stages, Edmondson’s psychological safety, DACI and Bezos-style one-way/two-way door decisions, OKRs (Doerr), and 9-box succession practice — adapted so that ratings require evidence rather than assertion.'),
         h('p', { class: 'muted' }, 'What it deliberately does not do: it does not score people’s personalities, it does not compare employees against each other with a forced ranking, and it does not infer sentiment from messages. Those are the mechanisms most often used to make talent tooling feel objective while making it less fair.'),
@@ -269,5 +270,6 @@ function labelFor(key) {
     decisions: 'Decisions',
     recognition: 'Recognition',
     readiness: 'Readiness ratings',
+    reviews: 'Performance reviews',
   }[key] || key;
 }

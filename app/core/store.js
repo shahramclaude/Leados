@@ -222,7 +222,7 @@ export function createStore(options = {}) {
   /** True when anything in the workspace was entered by the user rather than the demo. */
   function hasRealData() {
     const isDemoId = (record) => typeof record.id === 'string' && record.id.includes('-demo-');
-    const collections = ['people', 'oneOnOnes', 'feedback', 'goals', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness'];
+    const collections = ['people', 'oneOnOnes', 'feedback', 'goals', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews'];
     return collections.some((key) => (state[key] || []).some((record) => !isDemoId(record)));
   }
 
@@ -258,10 +258,14 @@ export function createStore(options = {}) {
   function clearDemo() {
     const next = JSON.parse(JSON.stringify(state));
     const isDemo = (record) => typeof record.id === 'string' && record.id.includes('-demo-');
-    for (const key of ['oneOnOnes', 'feedback', 'goals', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness']) {
+    for (const key of ['oneOnOnes', 'feedback', 'goals', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews']) {
       next[key] = (next[key] || []).filter((record) => !isDemo(record));
     }
     next.people = next.people.filter((person) => !isDemo(person));
+    // A user-created review attached to a fabricated demo person cannot remain
+    // meaningful after that person is removed; reviews on real people survive.
+    const remainingPeople = new Set(next.people.map((person) => person.id));
+    next.reviews = next.reviews.filter((review) => remainingPeople.has(review.personId));
     // The event log is append-only history and is intentionally not rewritten.
     next.meta.isDemo = false;
     next.meta.revision = (next.meta.revision || 0) + 1;

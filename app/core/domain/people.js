@@ -113,6 +113,13 @@ export function personTimeline(state, personId) {
   for (const r of state.recognition.filter((x) => x.personId === personId)) {
     items.push({ kind: 'Recognition', id: r.id, date: r.date, title: 'Recognised', detail: r.what });
   }
+  for (const review of (state.reviews || []).filter((r) => r.personId === personId)) {
+    items.push({
+      kind: 'Performance review', id: review.id, date: review.completedAt || review.updatedAt,
+      title: `Performance review ${review.status === 'complete' ? 'completed' : 'started'}`,
+      detail: `${review.periodStart} to ${review.periodEnd}`,
+    });
+  }
   return items
     .filter((i) => toDate(i.date))
     .sort((a, b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));

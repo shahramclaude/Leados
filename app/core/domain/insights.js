@@ -322,7 +322,7 @@ export function buildInsights(state, now) {
     if (plan) {
       const completeness = growCompleteness(plan);
       const review = reviewState(plan, now);
-      const progress = planProgress(plan);
+      const progress = planProgress(plan, now);
       if (!plan.will?.length) {
         add({
           ruleId: 'GROW-02',
@@ -807,7 +807,7 @@ export function buildWins(state, now, pulse = aggregate(state, now)) {
     });
   }
 
-  const healthyPlans = state.growthPlans.filter((p) => p.status === 'active' && growCompleteness(p).complete && planProgress(p).done > 0);
+  const healthyPlans = state.growthPlans.filter((p) => p.status === 'active' && growCompleteness(p).complete && planProgress(p, now).done > 0);
   if (healthyPlans.length) {
     wins.push({
       title: `${healthyPlans.length} development plan${healthyPlans.length === 1 ? '' : 's'} with real completed actions`,

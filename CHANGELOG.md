@@ -14,10 +14,24 @@ file therefore starts at the first version that can be verified against real cod
 
 ## [Unreleased]
 
-### Planned
-- Authentication for the dashboard and API (see README Roadmap, M1).
-- Automated test suite (M3) — currently `npm run verify` does not execute any behavioral tests
-  because none exist.
+### Added
+- Canonical zero-build leadership workspace with roster, 1:1s, SBI feedback, goals, GROW,
+  anonymous pulse, decisions, recognition, succession, health and traceable signals.
+- Evidence-linked performance-review packets with employee reflection, manager assessment,
+  optional anchored ratings, calibration warnings, source drill-down and print/save-PDF.
+- Schema v2 migration, review export/import, frozen completion snapshots and audit events.
+- 96 canonical domain, persistence and jsdom UI integration tests (`npm test`).
+
+### Fixed
+- Key-result dialogs now write to the goal that opened them and missing goals fail explicitly.
+- Development-plan editing preserves plan identity, options and commitments.
+- Development overdue counts use the injected clock for deterministic results.
+
+### Security
+- Anonymous pulse answers and upward feedback about the manager are excluded from review
+  evidence. Review source routes are normalized to local fragments on import.
+- Legacy Next.js/PostCSS/Sharp advisories remain documented; the canonical app does not load
+  that dependency chain and no forced major legacy upgrade was applied.
 
 ## [0.1.0] - 2026-01-01
 

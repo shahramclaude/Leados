@@ -10,7 +10,7 @@
  * Pure module: no storage access, no clock.
  */
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -51,6 +51,16 @@ export const READINESS_LABELS = {
   'not-ready': 'Not yet ready',
 };
 
+// Optional, behaviour-anchored manager ratings. There is deliberately no
+// self-rating: reflection supplies context, not a second score to average.
+export const REVIEW_RATINGS = ['needs-development', 'meets-expectations', 'often-exceeds', 'sets-standard'];
+export const REVIEW_RATING_LABELS = {
+  'needs-development': 'Needs development',
+  'meets-expectations': 'Consistently meets expectations',
+  'often-exceeds': 'Often exceeds expectations',
+  'sets-standard': 'Sets a new standard',
+};
+
 export const DEFAULT_SETTINGS = Object.freeze({
   leaderName: '',
   teamName: 'My team',
@@ -80,6 +90,7 @@ export const COLLECTIONS = [
   'decisions',
   'recognition',
   'readiness',
+  'reviews',
   'events',
 ];
 
@@ -122,6 +133,15 @@ function isoOrNull(v) {
 function dayOrNull(v) {
   if (typeof v !== 'string' || !v) return null;
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+// Review periods drive inclusive filtering and recency checks. A regex alone
+// would accept impossible dates such as 2026-02-31 in a hand-edited import.
+function reviewDayOrNull(v) {
+  const day = dayOrNull(v);
+  if (!day) return null;
+  const parsed = new Date(`${day}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === day ? day : null;
 }
 
 /**
@@ -202,6 +222,38 @@ function normalizeScores(raw) {
     out[dim] = Math.min(5, Math.max(1, Math.round(v)));
   }
   return out;
+}
+
+function normalizeReviewEvidence(items) {
+  if (!Array.isArray(items)) return [];
+  const types = ['oneonone', 'feedback', 'goal', 'growth', 'recognition'];
+  return items
+    .filter(isPlainObject)
+    .map((item, i) => {
+      const sourceType = types.includes(item.sourceType) ? item.sourceType : 'goal';
+      const sourceId = str(item.sourceId).slice(0, 200);
+      const route = str(item.route);
+      return {
+        id: str(item.id) || `${sourceType}:${sourceId || i}`,
+        sourceType,
+        sourceId,
+        date: reviewDayOrNull(item.date),
+        title: str(item.title).slice(0, 1000),
+        detail: str(item.detail).slice(0, 4000),
+        meta: str(item.meta).slice(0, 1000),
+        basis: str(item.basis).slice(0, 300),
+        // Only local fragment routes survive import. This is a second line of
+        // defence behind the DOM renderer, which never injects raw HTML.
+        route: route.startsWith('#/') ? route.slice(0, 500) : '#/reviews',
+        valence: ['positive', 'constructive', 'neutral'].includes(item.valence) ? item.valence : 'neutral',
+      };
+    })
+    .filter((item) => item.sourceId && item.title);
+}
+
+function normalizeReflection(raw, prompts) {
+  const source = isPlainObject(raw) ? raw : {};
+  return Object.fromEntries(prompts.map((key) => [key, str(source[key]).slice(0, 10000)]));
 }
 
 function uniqueIds(list, label, warnings) {
@@ -405,6 +457,32 @@ export function normalizeState(raw) {
   }));
   state.readiness = uniqueIds(readiness.filter((r) => r.personId && r.seat), 'Readiness', warnings);
 
+  const reviews = asArray(raw, 'reviews', warnings).map((review, i) => {
+    const status = review.status === 'complete' ? 'complete' : 'draft';
+    const updatedAt = isoOrNull(review.updatedAt) || isoOrNull(review.createdAt) || now;
+    return {
+      id: str(review.id) || `review-${i}`,
+      personId: str(review.personId),
+      periodStart: reviewDayOrNull(review.periodStart),
+      periodEnd: reviewDayOrNull(review.periodEnd),
+      status,
+      selfReflection: normalizeReflection(review.selfReflection, ['achievements', 'challenges', 'growth', 'support']),
+      selfReflectionRecordedAt: isoOrNull(review.selfReflectionRecordedAt),
+      manager: {
+        ...normalizeReflection(review.manager, ['achievements', 'development', 'nextSteps']),
+        rating: REVIEW_RATINGS.includes(review.manager?.rating) ? review.manager.rating : '',
+      },
+      evidence: normalizeReviewEvidence(review.evidence),
+      evidenceCapturedAt: isoOrNull(review.evidenceCapturedAt) || updatedAt,
+      createdAt: isoOrNull(review.createdAt) || now,
+      updatedAt,
+      completedAt: status === 'complete' ? isoOrNull(review.completedAt) || updatedAt : null,
+    };
+  });
+  const validReviews = reviews.filter((r) => r.personId && r.periodStart && r.periodEnd && r.periodStart <= r.periodEnd);
+  if (validReviews.length !== reviews.length) warnings.push(`Reviews: dropped ${reviews.length - validReviews.length} record(s) with a missing person or invalid period`);
+  state.reviews = uniqueIds(validReviews, 'Reviews', warnings);
+
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
     id: str(e.id) || `ev-${i}`,
     ts: isoOrNull(e.ts) || now,
@@ -424,6 +502,7 @@ export function normalizeState(raw) {
     ['growthPlans', (r) => r.personId],
     ['recognition', (r) => r.personId],
     ['readiness', (r) => r.personId],
+    ['reviews', (r) => r.personId],
   ];
   for (const [key, getter] of orphanChecks) {
     const orphans = state[key].filter((r) => getter(r) && !personIds.has(getter(r))).length;
@@ -434,13 +513,13 @@ export function normalizeState(raw) {
 }
 
 /**
- * Migration table. Version 1 is the first real schema, so there is nothing to
- * migrate yet; the mechanism exists (and is exercised by tests) so that the
- * first real shape change is a data edit rather than a rewrite.
- * Each entry takes the previous version's object and returns the next one.
+ * Migration table. Each entry takes the previous version's object and returns
+ * the next one. Version 2 adds performance reviews without changing any
+ * existing record or the storage key, so an existing workspace upgrades in
+ * place and remains exportable.
  */
 export const MIGRATIONS = {
-  // 1: (v1) => ({ ...v1, schemaVersion: 2, newThing: [] }),
+  1: (v1) => ({ ...v1, schemaVersion: 2, reviews: Array.isArray(v1.reviews) ? v1.reviews : [] }),
 };
 
 /** Apply migrations until the blob is current. Returns { raw, applied }. */

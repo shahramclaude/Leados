@@ -8,7 +8,8 @@
  */
 
 import { dayKey } from './core/time.js';
-import { PULSE_DIMENSIONS } from './core/schema.js';
+import { PULSE_DIMENSIONS, REVIEW_RATINGS } from './core/schema.js';
+import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
 
 function makeId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -29,6 +30,7 @@ export function createApi(store, options = {}) {
   const stamp = () => clock().toISOString();
 
   const personExists = (personId) => store.state.people.some((p) => p.id === personId);
+  const reviewById = (reviewId) => (store.state.reviews || []).find((review) => review.id === reviewId) || null;
 
   function append(draft, prefix) {
     return { id: id(prefix), createdAt: stamp() };
@@ -321,6 +323,7 @@ export function createApi(store, options = {}) {
     addKeyResult(goalId, kr) {
       const title = clean(kr.title) || '';
       if (!title) return fail('Name the key result.', 'title');
+      if (!store.state.goals.some((goal) => goal.id === goalId)) return fail('That goal no longer exists. Reopen it and try again.', 'title');
       store.update(
         (draft) => {
           const goal = draft.goals.find((g) => g.id === goalId);
@@ -562,6 +565,139 @@ export function createApi(store, options = {}) {
           }
         },
         { type: 'readiness.set', entity: 'readiness', entityId: data.personId, summary: `Readiness set: ${seat} → ${rating}` },
+      );
+      return { ok: true };
+    },
+
+    /* --------------------------------------------------- performance reviews */
+    createReview(data) {
+      if (!personExists(data.personId)) return fail('Choose a person first.', 'personId');
+      if (!validPeriod(data.periodStart, data.periodEnd)) return fail('Choose a valid period with the start on or before the end.', 'periodStart');
+      const duplicate = (store.state.reviews || []).find((review) =>
+        review.personId === data.personId && review.periodStart === data.periodStart && review.periodEnd === data.periodEnd,
+      );
+      if (duplicate) return fail('A review for this person and exact period already exists.', 'periodStart');
+      const person = store.state.people.find((p) => p.id === data.personId);
+      const review = {
+        id: id('review'),
+        personId: data.personId,
+        periodStart: data.periodStart,
+        periodEnd: data.periodEnd,
+        status: 'draft',
+        selfReflection: { achievements: '', challenges: '', growth: '', support: '' },
+        selfReflectionRecordedAt: null,
+        manager: { achievements: '', development: '', nextSteps: '', rating: '' },
+        evidence: buildReviewEvidence(store.state, data.personId, data.periodStart, data.periodEnd),
+        evidenceCapturedAt: stamp(),
+        createdAt: stamp(),
+        updatedAt: stamp(),
+        completedAt: null,
+      };
+      store.update(
+        (draft) => {
+          draft.reviews.push(review);
+        },
+        { type: 'review.created', entity: 'review', entityId: review.id, summary: `Performance review started for ${person.name} (${review.periodStart} to ${review.periodEnd})` },
+      );
+      return { ok: true, id: review.id, evidenceCount: review.evidence.length };
+    },
+
+    updateReflection(reviewId, patch) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'draft') return fail('Reopen the completed review before editing it.');
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          for (const key of ['achievements', 'challenges', 'growth', 'support']) {
+            if (patch[key] !== undefined) target.selfReflection[key] = clean(patch[key]) || '';
+          }
+          target.selfReflectionRecordedAt = Object.values(target.selfReflection).some((value) => value.trim()) ? stamp() : null;
+          target.updatedAt = stamp();
+        },
+        { type: 'review.reflection.updated', entity: 'review', entityId: reviewId, summary: 'Employee self-reflection recorded' },
+      );
+      return { ok: true };
+    },
+
+    updateAssessment(reviewId, patch) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'draft') return fail('Reopen the completed review before editing it.');
+      if (patch.rating && !REVIEW_RATINGS.includes(patch.rating)) return fail('Choose a valid rating, or leave the review unrated.', 'rating');
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          for (const key of ['achievements', 'development', 'nextSteps']) {
+            if (patch[key] !== undefined) target.manager[key] = clean(patch[key]) || '';
+          }
+          if (patch.rating !== undefined) target.manager.rating = patch.rating || '';
+          target.updatedAt = stamp();
+        },
+        { type: 'review.assessment.updated', entity: 'review', entityId: reviewId, summary: 'Manager assessment updated' },
+      );
+      return { ok: true };
+    },
+
+    refreshReviewEvidence(reviewId) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'draft') return fail('A completed review keeps its evidence snapshot. Reopen it to refresh.');
+      const evidence = buildReviewEvidence(store.state, review.personId, review.periodStart, review.periodEnd);
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          target.evidence = evidence;
+          target.evidenceCapturedAt = stamp();
+          target.updatedAt = stamp();
+        },
+        { type: 'review.evidence.refreshed', entity: 'review', entityId: reviewId, summary: `Review evidence refreshed (${evidence.length} source records)` },
+      );
+      return { ok: true, evidenceCount: evidence.length };
+    },
+
+    completeReview(reviewId) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'draft') return fail('This review is already complete.');
+      // Completion always recaptures, so a record added after the last manual
+      // refresh cannot be silently omitted from the frozen packet.
+      const evidence = buildReviewEvidence(store.state, review.personId, review.periodStart, review.periodEnd);
+      const candidate = { ...review, evidence };
+      const readiness = reviewReadiness(candidate, evidence);
+      if (!readiness.canComplete) {
+        return fail(`Before completing: ${readiness.missing.map((check) => check.label).join('; ')}.`);
+      }
+      const warnings = calibrateReview(candidate, evidence);
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          target.evidence = evidence;
+          target.evidenceCapturedAt = stamp();
+          target.status = 'complete';
+          target.completedAt = stamp();
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'review.completed', entity: 'review', entityId: reviewId,
+          summary: `Performance review completed (${evidence.length} source records${warnings.length ? `; ${warnings.map((w) => w.id).join(', ')} acknowledged` : '; no calibration warnings'})`,
+        },
+      );
+      return { ok: true, warnings, evidenceCount: evidence.length };
+    },
+
+    reopenReview(reviewId) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'complete') return fail('This review is already a draft.');
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          target.status = 'draft';
+          target.completedAt = null;
+          target.updatedAt = stamp();
+        },
+        { type: 'review.reopened', entity: 'review', entityId: reviewId, summary: 'Performance review reopened for correction' },
       );
       return { ok: true };
     },

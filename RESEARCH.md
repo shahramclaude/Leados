@@ -200,7 +200,62 @@ Settings copy says so rather than implying otherwise.
 
 ---
 
-## 12. Frameworks considered and rejected
+## 12. Performance reviews: evidence, reflection, and calibration
+
+**Research and product benchmark (2026-10-24).** CIPD's evidence review of people
+performance practice argues for meaningful measurement, evidence-based practice and
+critical examination of assumptions rather than a universal review formula
+([CIPD evidence review, 2022](https://www.cipd.org/globalassets/media/knowledge/knowledge-hub/evidence-reviews/people-performance-practice-summary_tcm18-109854.pdf)).
+Lattice's review-form guidance recommends setting expectations before a cycle, asking
+consistent and specific questions, prompting for concrete evidence, and separating
+backward-looking assessment from future development
+([Lattice](https://lattice.com/articles/writing-great-review-questions-and-forms)).
+Culture Amp's template guidance starts with strengths, covers both past and future,
+includes employee self-reflection, and treats peer/upward input as useful but bias-prone;
+its optional four anchors are Needs Development, Consistently Meets Expectations, Often
+Exceeds Expectations and Sets a New Standard
+([Culture Amp template science](https://support.cultureamp.com/en/articles/7048422-the-science-behind-culture-amp-s-performance-review-templates),
+[Culture Amp manager guide](https://www.cultureamp.com/blog/managers-guide-to-employee-performance-reviews)).
+CCL's SBI guidance remains the basis for observable behaviour and impact rather than
+personality judgements (§1).
+
+**Gap analysis in plain language.** LeadOS already helped a manager hold the daily and
+weekly conversations, but at review time none of that work became a usable packet. The
+manager would have to reconstruct a quarter from memory—the exact moment when recency and
+a general impression are most likely to replace the record. Feedback latency and goal
+co-authorship remain valuable, but they improve one existing record type; the absent
+review lifecycle left the largest whole-job gap. This session therefore implemented the
+packet and its calibration checks together rather than adding another isolated score.
+
+**Implemented.** `app/core/domain/reviews.js` builds an inclusive-period, oldest-first
+appendix from 1:1s, manager-to-person SBI feedback, goals, GROW plans and recognition.
+Every excerpt carries its source type, source id, basis and local route. Upward feedback
+about the manager and anonymous pulse answers are deliberately excluded. Current goal and
+plan values say **at capture** because the old store does not contain enough history to
+reconstruct period-end values. Four employee reflection prompts, three manager prompts,
+and an optional four-point manager rating are stored separately. Completion requires
+source evidence and all three manager narratives, but does not fabricate employee
+participation by requiring self-reflection.
+
+`CAL-01`…`CAL-07` expose thin source coverage, later-period concentration, high or low
+ratings without corresponding dated evidence, thin rating narratives, and entirely
+positive or entirely developmental evidence. They never calculate a rating, alter one, or
+claim to prove fairness. Completed packets freeze a recaptured snapshot; reopening and
+refreshing are explicit audited actions. Print/save-PDF uses the browser print dialog.
+
+**Deliberately rejected.** Automatic performance scores, an averaged employee self-rating,
+and a nine-box calibration grid. A single-manager local record cannot support the cross-
+rater comparison those devices imply. The checks are transparent heuristics over recorded
+evidence, not a psychometric instrument or a claim that bias has been eliminated.
+
+**Remaining limitation.** In this single-user app, the manager enters a reflection supplied
+by the employee; there is no employee login or direct submission. The packet is only as
+complete as the underlying records, and a source link opens the live record, which may
+have changed since the snapshot.
+
+---
+
+## 13. Frameworks considered and rejected
 
 | Framework | Why not implemented (yet) |
 |---|---|

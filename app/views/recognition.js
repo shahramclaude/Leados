@@ -14,7 +14,8 @@ import { formatDate, daysBetween } from '../core/time.js';
 export function renderRecognition(ctx) {
   const { state, now } = ctx;
   const people = state.people.filter((p) => p.status !== 'archived');
-  const items = state.recognition.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+  const itemFilter = ctx.query.get('item');
+  const items = state.recognition.filter((item) => !itemFilter || item.id === itemFilter).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
   const last30 = items.filter((r) => Math.abs(daysBetween(r.date, now)) <= 30);
   const covered = new Set(last30.map((r) => r.personId));
 

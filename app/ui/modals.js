@@ -13,6 +13,7 @@ import { COMPETENCIES } from '../core/domain/growth.js';
 import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS } from '../core/schema.js';
 import { addDays, dayKey, formatDate } from '../core/time.js';
 import { personOptions } from './options.js';
+import { SELF_REFLECTION_PROMPTS, MANAGER_PROMPTS, REVIEW_RATINGS, REVIEW_RATING_LABELS } from '../core/domain/reviews.js';
 
 function submitter(api, build) {
   return (values, form, close) => {
@@ -467,20 +468,29 @@ export function openKeyResultDialog(ctx, { goalId }) {
 
 /* -------------------------------------------------------------- growth */
 
-export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
+export function openGrowthPlanDialog(ctx, { personId = null, plan = null } = {}) {
   const active = ctx.state.people.filter((p) => p.status !== 'archived');
   if (!active.length) {
     toast('Add someone to your roster first.', 'bad');
     return;
   }
+  const isEdit = Boolean(plan);
+  if (isEdit) personId = plan.personId;
   formDialog({
-    title: 'Start a GROW plan',
-    description: 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
-    submitLabel: 'Save plan',
+    title: isEdit ? 'Edit development plan' : 'Start a GROW plan',
+    description: isEdit
+      ? 'Update the coaching record without replacing its identity or commitments. Development actions are managed separately below the plan.'
+      : 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
+    submitLabel: isEdit ? 'Save changes' : 'Save plan',
     size: 'lg',
     fields: [
-      { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
-      { name: 'competencies', label: 'Focus competencies', type: 'boolean-block', wide: true, options: COMPETENCIES.map((c) => ({ value: c, label: c })) },
+      ...(isEdit
+        ? [
+            { name: 'personId', type: 'hidden', value: plan.personId },
+            { type: 'static', label: 'Who', value: ctx.state.people.find((person) => person.id === plan.personId)?.name || 'Person no longer in roster' },
+          ]
+        : [{ name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true }]),
+      { name: 'competencies', label: 'Focus competencies', type: 'boolean-block', wide: true, value: plan?.competencies || [], options: COMPETENCIES.map((c) => ({ value: c, label: c })) },
       {
         name: 'goal',
         label: 'Goal — what does better look like?',
@@ -488,6 +498,7 @@ export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
         rows: 2,
         required: true,
         wide: true,
+        value: plan?.goal || '',
         placeholder: 'In six months, owning cross-team technical direction, not just the hardest code.',
       },
       {
@@ -496,6 +507,7 @@ export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
         type: 'textarea',
         rows: 2,
         wide: true,
+        value: plan?.reality || '',
         placeholder: 'Strongest debugger on the team; the gap is written communication and bringing others along.',
       },
       {
@@ -504,34 +516,42 @@ export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
         type: 'textarea',
         rows: 2,
         wide: true,
+        value: (plan?.options || []).map((option) => typeof option === 'string' ? option : option.text).join('\n'),
         placeholder: 'Write a one-page decision memo per design choice; shadow the architecture review for two cycles.',
       },
-      {
-        name: 'willText',
-        label: 'Will — what will they do, by when?',
-        required: true,
-        wide: true,
-        placeholder: 'Publish a decision memo format and use it on the billing migration',
-      },
-      { name: 'willDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 14) },
-      { name: 'reviewOn', label: 'Review on', type: 'date', value: addDays(dayKey(ctx.now), 30) },
+      ...(isEdit ? [] : [
+        {
+          name: 'willText',
+          label: 'Will — what will they do, by when?',
+          required: true,
+          wide: true,
+          placeholder: 'Publish a decision memo format and use it on the billing migration',
+        },
+        { name: 'willDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 14) },
+      ]),
+      { name: 'reviewOn', label: 'Review on', type: 'date', value: plan?.reviewOn || addDays(dayKey(ctx.now), 30) },
     ],
     onSubmit: (values, form, close) => {
-      const result = ctx.api.saveGrowthPlan({
-        personId: values.personId,
+      const patch = {
         goal: values.goal,
         reality: values.reality,
         options: (values.options || '').split('\n').map((o) => o.trim()).filter(Boolean),
-        will: [{ text: values.willText, due: values.willDue }],
         competencies: values.competencies || [],
         reviewOn: values.reviewOn || null,
-      });
+      };
+      const result = isEdit
+        ? ctx.api.updateGrowthPlan(plan.id, patch)
+        : ctx.api.saveGrowthPlan({
+            personId: values.personId,
+            ...patch,
+            will: [{ text: values.willText, due: values.willDue }],
+          });
       if (!result.ok) {
         form.setFieldError(result.field || 'goal', result.error);
         return;
       }
       close();
-      toast('Growth plan saved', 'good');
+      toast(isEdit ? 'Development plan updated' : 'Growth plan saved', 'good');
     },
   });
 }
@@ -779,6 +799,103 @@ export function openReadinessDialog(ctx, { personId = null, seat = '' } = {}) {
       if (!result.ok) return form.setFieldError(result.field || 'seat', result.error);
       close();
       toast('Readiness saved', 'good');
+    },
+  });
+}
+
+/* ---------------------------------------------------- performance reviews */
+
+export function openPerformanceReviewDialog(ctx, { personId = null } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add someone to your roster first.', 'bad');
+    return;
+  }
+  formDialog({
+    title: 'Prepare a performance review',
+    description: 'Choose the whole period you want to assess. LeadOS will gather dated 1:1s, feedback, goals, development and recognition — never anonymous pulse answers.',
+    submitLabel: 'Create review packet',
+    fields: [
+      { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
+      { name: 'periodStart', label: 'Period starts', type: 'date', value: addDays(dayKey(ctx.now), -89), required: true },
+      { name: 'periodEnd', label: 'Period ends', type: 'date', value: dayKey(ctx.now), required: true, help: 'Both dates are included. You can refresh the evidence while the review is a draft.' },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.createReview(values);
+      if (!result.ok) {
+        form.setFieldError(result.field || 'periodStart', result.error);
+        return;
+      }
+      close();
+      toast(`Review packet created with ${result.evidenceCount} source record${result.evidenceCount === 1 ? '' : 's'}`, 'good');
+      ctx.navigate(`#/reviews/${encodeURIComponent(result.id)}`);
+    },
+  });
+}
+
+export function openReflectionDialog(ctx, { review }) {
+  formDialog({
+    title: 'Record the person’s self-reflection',
+    description: 'These are the person’s own words, pasted or recorded with them. LeadOS does not send a form or claim they submitted one. There is deliberately no self-rating.',
+    submitLabel: 'Save self-reflection',
+    size: 'lg',
+    fields: SELF_REFLECTION_PROMPTS.map((prompt) => ({
+      name: prompt.key,
+      label: prompt.label,
+      type: 'textarea',
+      rows: 3,
+      wide: true,
+      value: review.selfReflection?.[prompt.key] || '',
+    })),
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.updateReflection(review.id, values);
+      if (!result.ok) {
+        toast(result.error, 'bad');
+        return;
+      }
+      close();
+      toast('Self-reflection saved', 'good');
+    },
+  });
+}
+
+export function openAssessmentDialog(ctx, { review }) {
+  formDialog({
+    title: 'Write the manager assessment',
+    description: 'Use the linked records, not a general impression. A rating is optional; the narrative and next commitments are what make the review useful.',
+    submitLabel: 'Save assessment',
+    size: 'lg',
+    fields: [
+      ...MANAGER_PROMPTS.map((prompt) => ({
+        name: prompt.key,
+        label: prompt.label,
+        type: 'textarea',
+        rows: 3,
+        wide: true,
+        value: review.manager?.[prompt.key] || '',
+        required: true,
+      })),
+      {
+        name: 'rating',
+        label: 'Optional overall rating',
+        type: 'select',
+        value: review.manager?.rating || '',
+        options: [
+          { value: '', label: 'No overall rating' },
+          ...REVIEW_RATINGS.map((rating) => ({ value: rating, label: REVIEW_RATING_LABELS[rating] })),
+        ],
+        help: 'Calibration warnings appear when the selected rating and the dated evidence do not line up. No score is calculated for you.',
+      },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.updateAssessment(review.id, values);
+      if (!result.ok) {
+        if (result.field) form.setFieldError(result.field, result.error);
+        toast(result.error, 'bad');
+        return;
+      }
+      close();
+      toast('Manager assessment saved', 'good');
     },
   });
 }

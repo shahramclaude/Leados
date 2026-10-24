@@ -20,10 +20,10 @@ const HEALTH_RANK = { 'off-track': 3, 'at-risk': 2, 'on-track': 1 };
 
 export function renderGoals(ctx) {
   const { state, now } = ctx;
-  const goals = activeGoals(state);
+  const focusId = ctx.query.get('goal');
+  const goals = focusId ? state.goals.filter((goal) => goal.id === focusId) : activeGoals(state);
   const summary = goalsSummary(state, now, state.settings);
   const filter = ctx.query.get('view') || 'all';
-  const focusId = ctx.query.get('goal');
 
   const rows = goals
     .map((goal) => ({ goal, health: goalHealth(goal, now), owner: state.people.find((p) => p.id === goal.ownerId) || null }))
@@ -151,7 +151,7 @@ function goalCard(ctx, goal, health, owner, focused) {
             'div',
             { class: 'inline-warn' },
             h('p', null, 'No key results: this goal cannot be scored, so it is reported as unmeasured rather than as zero progress.'),
-            h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goal }) }, 'Add a key result'),
+            h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goalId: goal.id }) }, 'Add a key result'),
           ),
 
       last
@@ -166,7 +166,7 @@ function goalCard(ctx, goal, health, owner, focused) {
       h(
         'div',
         { class: 'card-actions' },
-        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goal }) }, 'Add key result'),
+        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goalId: goal.id }) }, 'Add key result'),
         goal.status === 'active'
           ? h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCheckInDialog(ctx, { goal }) }, 'Log a check-in')
           : null,

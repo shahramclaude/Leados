@@ -188,3 +188,93 @@ documented as dead rather than repaired. Full lists: `ROADMAP.md` → "Known gap
 Next up (from roadmap): feedback latency (observed date vs conversation date); goal co-authorship
 and a `GOAL-06` finding; performance-review packet assembled from records with every claim linked
 to its evidence.
+
+---
+
+# Session — 2026-10-24 · Evidence-backed performance reviews (canonical evolution)
+
+## Audit and current-state assessment
+
+This session evolved the canonical zero-build app in place; no rewrite, framework change,
+runtime dependency, account, backend or network call was introduced. All canonical files under
+`index.html`, `app/**` and `tests/app/**` were read before the final assessment. The legacy
+React/Next trees were inventoried but **not fully reread or executed**; historical claims such as
+6,879 TypeScript errors remain `[UNVERIFIED]` by this session.
+
+- **Working before this session:** the canonical app booted and its 82 tests passed. Roster,
+  1:1s, SBI feedback, goals, GROW, pulse, decisions, recognition, succession, health, signals,
+  local persistence and JSON export/import were present and exercised.
+- **Broken, source-confirmed and fixed:** key-result dialogs received `{ goal }` but read
+  `{ goalId }`, so the action could report success without adding a result; development-plan
+  overdue counts used the wall clock instead of the injected clock; “Edit plan” opened a blank
+  new-plan flow instead of editing the selected plan. All three now have UI or domain regression
+  coverage. `addKeyResult` also refuses a missing goal instead of silently succeeding.
+- **Shallow/missing before this session:** there was no performance-review record, route,
+  reflection, assessment, evidence packet, calibration or print flow. Goals and development had
+  current values and check-ins, not a complete historical event store; the new packet labels that
+  limit rather than fabricating period-end history. Delegation and conflict-resolution records
+  remain absent. The legacy trees remain non-canonical and unrepaired.
+- **Dependency audit:** a clean `npm ci --ignore-scripts` reported 7 total advisories.
+  `npm audit --omit=dev` narrowed the production chain to 1 critical and 2 high advisories in
+  legacy Next.js/PostCSS/Sharp. The canonical browser app does not load that chain. No forced
+  major legacy upgrade was applied.
+
+## Research and selection
+
+Read CIPD's people-performance evidence review, Lattice's review-question/form guidance, and
+Culture Amp's review-template science and manager guidance; SBI/CCL remains the feedback basis.
+The consistent product pattern is specific expectations and evidence, employee reflection,
+separate past/future prompts, and calibration as a challenge process—not an automatically
+generated truth. Full links and the rejected alternatives are in `RESEARCH.md` §12.
+
+The highest-impact gap was the missing review lifecycle: the app helped managers create useful
+records all quarter, then gave them no way to use those records when the review arrived. This
+session implemented roadmap items 3–4 and the packet half of item 9. Feedback latency and goal
+co-authorship stay next because they deepen existing records; delegation is now the largest
+wholly absent lifecycle area after reviews.
+
+## What changed
+
+- Added schema **v2** and a tested v1→v2 migration for `reviews`, including normalization of
+  ratings, reflections, evidence excerpts and local-only source routes. Export/import and demo
+  cleanup include reviews; a review attached to a removed demo person cannot become an orphan.
+- Added `app/core/domain/reviews.js`: inclusive period validation, oldest-first evidence from
+  1:1s, manager-to-person feedback, goals, development and recognition; explicit capture-time
+  labels; seven calibration checks; completion readiness. Anonymous pulse answers and upward
+  feedback about the manager are excluded from person-performance evidence.
+- Added review list/detail routes and printable packets. Four self-reflection prompts, three
+  manager prompts and an optional four-anchor manager rating remain distinct. Completion freezes
+  a recaptured evidence snapshot; reopen and evidence refresh are separate actions. Events cover
+  create, evidence refresh, reflection, assessment, complete and reopen.
+- Added source-record drill-down for every evidence type, including completed goals/plans; added
+  a document-style print layout and browser print/save-PDF action. No direct employee account or
+  submission is claimed.
+- Updated `index.html`, navigation, settings/storage labels, README, ROADMAP and RESEARCH.
+
+## Verification performed
+
+```text
+npm test                         → 96 pass / 0 fail (~8 s)
+node --test tests/app/reviews.test.mjs
+                                 → 10 pass / 0 fail during focused verification
+git diff --check                 → clean
+live HTTP smoke                  → shell + 36 JS modules + CSS; preview Host/Origin accepted
+static scan of app/**            → no innerHTML/eval/fetch/XMLHttpRequest runtime path
+```
+
+The UI integration test uses the real dialogs to create a packet, record reflection and manager
+assessment, complete it, invoke print, export, reset and import. Other tests follow all five
+source-link types (including completed goals/plans), verify the key-result and development-plan
+edit regressions, and exercise migration, privacy exclusions, rating warnings, injected clocks,
+frozen snapshots, reload and demo cleanup. No real manager usage or real-browser visual/print
+inspection was performed; the latter remains `[UNVERIFIED]` in the roadmap.
+
+## Known limits and next
+
+A packet can only contain what was logged. Capture-time goal/development values are not historical
+reconstruction. Calibration is a transparent heuristic, not a fairness guarantee. Reflection is
+manager-entered in this local workspace. `localStorage` remains unencrypted and is not a backup.
+Legacy dependency advisories and legacy source claims were not silently “fixed” or revalidated.
+
+Next up (from roadmap): feedback latency (`observedOn` vs conversation date); goal co-authorship
+and `GOAL-06`; a delegation log with authority and follow-through.

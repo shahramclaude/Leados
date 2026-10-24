@@ -17,8 +17,9 @@ const HEALTH_TONE = { healthy: 'good', incomplete: 'warn', attention: 'bad' };
 
 export function renderGrowth(ctx) {
   const { state, now } = ctx;
+  const planFilter = ctx.query.get('plan');
   const plans = state.growthPlans
-    .filter((p) => p.status === 'active')
+    .filter((p) => planFilter ? p.id === planFilter : p.status === 'active')
     .map((plan) => ({ plan, health: planHealth(plan, now), person: state.people.find((p) => p.id === plan.personId) || null }))
     .sort((a, b) => (a.health.health === 'attention' ? -1 : 1) - (b.health.health === 'attention' ? -1 : 1));
 

@@ -16,7 +16,7 @@ import { humanDays, formatDate, daysSince } from '../core/time.js';
 import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
   openGrowthPlanDialog, openReadinessDialog, confirmArchive,
-  openCheckInDialog, openWillActionDialog,
+  openCheckInDialog, openWillActionDialog, openPerformanceReviewDialog,
 } from '../ui/modals.js';
 
 export function renderPerson(ctx, personId) {
@@ -30,7 +30,7 @@ export function renderPerson(ctx, personId) {
   const fb = personFeedbackStats(state, person.id, now, state.settings);
   const goals = goalsFor(state, person.id);
   const plan = activePlan(state, person.id);
-  const planHealth = plan ? { completeness: growCompleteness(plan), progress: planProgress(plan), review: reviewState(plan, now) } : null;
+  const planHealth = plan ? { completeness: growCompleteness(plan), progress: planProgress(plan, now), review: reviewState(plan, now) } : null;
   const readiness = assess(state, person.id, now, state.settings);
   const suggestions = suggestAgenda(state, person.id, now, state.settings);
   const findings = insightsForPerson(state, person.id, now);
@@ -51,6 +51,7 @@ export function renderPerson(ctx, personId) {
     actions: [
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openPersonDialog(ctx, { person }) }, 'Edit'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => confirmArchive(ctx, person) }, 'Archive'),
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openPerformanceReviewDialog(ctx, { personId: person.id }) }, 'Prepare review'),
       h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: person.id }) }, 'Log a 1:1'),
     ],
   });

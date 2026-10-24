@@ -18,7 +18,7 @@ Or `npm run app`. Node 18+ is the only requirement — there is no build step an
 runtime dependency.
 
 ```
-npm test                      # 82 tests: domain rules, store, and full UI integration
+npm test                      # 96 tests: domain rules, store, and full UI integration
 ```
 
 ---
@@ -37,7 +37,7 @@ stop patching and build one runnable app is in
 |---|---|
 | `index.html`, `app/**` | **Canonical application.** Runs, is tested, is what you are looking at. |
 | `scripts/serve.mjs` | Static server for the app (no build, no dependencies). |
-| `tests/app/**` | 82 tests run by `node --test`. |
+| `tests/app/**` | 96 tests run by `node --test`. |
 | `public/index.html` | A separate, older single-file console. Preserved as a sandbox, one syntax bug fixed, not the product. |
 | `src/**`, root `App.tsx`/`main.tsx`, `drizzle/`, `openapi.yaml` | **Legacy. Does not compile or run** — see below. |
 | `deprecated/vite-index.html` | The old root Vite entry, kept rather than deleted. |
@@ -90,6 +90,21 @@ history that makes the current design defensible.
   feedback, no growth evidence and no conversation history is flagged as unsupported
   rather than believed.
 
+### Performance reviews (evidence packet + calibration)
+- Prepare a draft for a person and an inclusive date period. The packet assembles dated
+  1:1s, manager-to-person feedback, goal check-ins, development activity and recognition,
+  oldest first, with a working link back to every source record.
+- Four employee self-reflection prompts and three forward/backward-looking manager prompts
+  keep the person's context separate from the assessment. There is no employee self-rating;
+  the optional manager rating uses four behaviour-anchored labels.
+- Seven explicit calibration checks (`CAL-01`…`CAL-07`) challenge thin evidence, recency
+  concentration, unsupported high/low ratings, thin rating narratives and one-sided evidence.
+  They are review prompts, not an automated fairness judgement or a generated score.
+- Current goal and development values are labelled **at capture**. Completion recaptures and
+  freezes the evidence snapshot; reopening and refreshing are separate, audited actions.
+- Print/save-PDF uses the browser's print dialog and a document-style print layout. Reviews
+  are included in schema-v2 migration, local persistence, JSON export/import and demo cleanup.
+
 ### Team pulse (anonymous, with a real privacy floor)
 - Four dimensions: psychological safety, clarity, sustainable workload, growth.
 - **No aggregate is shown below 5 responses** (the published default at Culture Amp and
@@ -121,8 +136,8 @@ history that makes the current design defensible.
   overwrite real records without an explicit confirmation.
 
 ### Data
-- Versioned schema (`SCHEMA_VERSION`, `MIGRATIONS`), normalisation on load, and a
-  quarantine path: a corrupt blob opens an empty workspace with an explanation and the
+- Versioned schema (currently **v2**, with a tested v1→v2 review-collection migration),
+  normalisation on load, and a quarantine path: a corrupt blob opens an empty workspace with an explanation and the
   raw text kept, rather than a blank screen or a crash.
 - Append-only event log (capped at 600 entries) records what changed and when.
 - Export/import JSON round-trips through a validation and migration pass.
@@ -183,6 +198,13 @@ otherwise it says so rather than inventing a baseline.
   what a record-a-note habit realistically sustains, and it is configurable.
 - **No notifications.** There is no background scheduler in a browser tab; the app can
   only tell you what is due when you open it.
+- **Review evidence is not a complete HR system of record.** It can only use what was logged;
+  goal/development values are capture-time snapshots, not reconstructed period-end history.
+  Self-reflection is entered into this local workspace by the manager, not submitted through
+  an employee account. Calibration warnings are transparent heuristics, not proof of fairness.
+- **Legacy dependency advisories remain.** `npm audit --omit=dev` reports 1 critical and 2 high
+  advisories in the unused legacy Next.js/PostCSS/Sharp chain. The canonical app loads none of
+  those packages; no forced major upgrade was applied in the review-packet session.
 - **Pulse anonymity is honoured in the data model, not against a determined observer.**
   With a very small team, a comment's writing style can still identify someone; the
   floor reduces the risk and the copy says so.

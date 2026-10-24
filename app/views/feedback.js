@@ -14,12 +14,14 @@ export function renderFeedback(ctx) {
   const summary = teamFeedbackSummary(state, now, state.settings);
   const followUps = followUpsDue(state, now);
   const personFilter = ctx.query.get('person');
+  const itemFilter = ctx.query.get('item');
   const followupFilter = ctx.query.get('filter') === 'followup';
 
   const personFor = (id) => state.people.find((p) => p.id === id) || null;
 
   let items = state.feedback.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
   if (personFilter) items = items.filter((f) => f.personId === personFilter);
+  if (itemFilter) items = items.filter((f) => f.id === itemFilter);
   if (followupFilter) items = items.filter((f) => f.followUpOn && !f.followUpDone);
 
   const columns = [

@@ -60,11 +60,11 @@ export function growCompleteness(plan) {
 }
 
 /** Action completion + next open action. */
-export function planProgress(plan, now = new Date()) {
+export function planProgress(plan, now) {
   const will = plan.will || [];
   const done = will.filter((a) => a.done).length;
   const next = will.find((a) => !a.done) || null;
-  const overdue = will.filter((a) => !a.done && a.due && isOverdue(a.due, new Date())).length;
+  const overdue = will.filter((a) => !a.done && a.due && isOverdue(a.due, now)).length;
   return {
     total: will.length,
     done,
