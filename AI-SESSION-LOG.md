@@ -612,3 +612,106 @@ axe-core 4.11 (via JSDOM)              → 0 semantic/ARIA/label/table violation
 Next up (from roadmap): optional local encryption of the browser store via passphrase-derived
 WebCrypto (`AES-GCM` + `PBKDF2`) with tested plaintext→encrypted migration and recovery warnings;
 structured 1:1 prep templates & printable individual coaching packets.
+
+---
+
+## Session 6 — 2026-10-24 — Optional passphrase encryption for the local workspace
+
+### Current-state audit before writing code
+- Read `index.html`, `scripts/serve.mjs`, `package.json`, `app/main.js`, `app/actions.js`,
+  `app/core/store.js`, `app/core/schema.js`, `app/core/time.js`, `app/ui/dom.js`,
+  `app/ui/components.js`, `app/views/settings.js`, `tests/app/app.test.mjs`,
+  `tests/app/storage-safety.test.mjs`, and the root governance docs (`README.md`,
+  `ROADMAP.md`, `RESEARCH.md`, `LEADOS-STATE.md`, the Session 5 audit and session log).
+  Full audit recorded in `docs/AUDIT-2026-10-24-session-6.md`.
+- Baseline `npm test` after `npm ci --no-audit --no-fund`: **173 pass / 0 fail**. (The first
+  run failed 5 suites with a missing `jsdom` module — a dependency-install gap, not a defect.)
+- Confirmed the gap that `ROADMAP.md` ranked first: the single `localStorage` blob and every
+  JSON/CSV export held 1:1 notes, review reflections and confidential conflict records in plain
+  text. Also confirmed three structural obstacles to fixing it safely: the load path treats any
+  unparseable blob as corrupt and quarantines it; every write was synchronous and the
+  "saved / unsaved" label depended on a synchronous return; and no secure-context check existed
+  for WebCrypto.
+
+### What was built
+- **`app/core/crypto.js` (new, no I/O):** PBKDF2-HMAC-SHA-256 at 600,000 rounds with a random
+  16-byte salt derives an AES-256-GCM key; each seal uses a fresh 96-bit IV. Versioned,
+  self-describing envelope (`format`, `v`, `purpose`, `kdf{name,hash,iterations,salt}`, `iv`,
+  `ct`, `createdAt`). The KDF header fields are bound into the GCM additional authenticated
+  data, so downgrading the iteration count or swapping the salt fails authentication rather
+  than silently weakening the file. Strict hand-rolled base64 (no `atob`/`Buffer` dependency),
+  passphrase policy (12-character floor, no character-class rules, rejects leading/trailing
+  whitespace and a single repeated character), iteration floor (10,000) and ceiling (2,000,000)
+  on read to refuse a CPU-burning file, and injectable WebCrypto so the same code runs in a
+  browser, in Node and in jsdom.
+- **`app/core/store.js`:** a vault state machine (`plain` → `locked` → unlocked) with
+  `unlock`, `lock`, `enableEncryption`, `changePassphrase`, `disableEncryption`,
+  `exportEncrypted`, `importBackup`, `flush` and `vaultStatus`/`vaultFacts`/`cryptoAvailable`
+  getters. Safety properties, each covered by a test:
+  - Vault envelopes are detected **before** the corrupt-JSON quarantine path, so ciphertext is
+    never set aside as corruption.
+  - While locked, `writeBlockReason = LOCKED_MESSAGE` blocks `update()`, the whole action API,
+    demo loading, demo cleanup, reset and CSV export; the stored bytes are asserted identical.
+  - `exportJSON()` while locked returns the untouched encrypted file, never a freshly built
+    (and therefore empty) workspace.
+  - A **backup envelope sitting in storage** (or any envelope whose decrypted payload is an
+    export wrapper) is refused rather than opened: normalizing the wrapper would have produced an
+    empty workspace and the next edit would have overwritten the ciphertext.
+  - Enabling encryption derives, seals, decrypts, compares, *then* overwrites; a failed write
+    leaves the plain-text workspace byte-identical and encryption off.
+  - Encrypted writes are serialised and coalesced through a promise chain with a monotonic
+    sequence number; `flush()` awaits it, and `persistAwaited()` is used wherever adoption
+    depends on the write (imports, enable, disable, passphrase change).
+  - A storage mode change is computed first and committed to memory only after the write
+    succeeds, so a failed import cannot leave the app believing it is encrypted.
+- **`app/views/vault.js` (new):** the only screen rendered while locked — no navigation, no
+  topbar actions, no records. Unlock form with a live `role="alert"` error, unsuccessful-attempt
+  count and an explicit "no lockout, no recovery service" note; show-passphrase toggle;
+  download of the untouched ciphertext; and two final exits (restore a backup, or erase the
+  workspace after typing `DELETE`). When Web Crypto is unavailable (plain HTTP on a LAN
+  address) it says so before a passphrase is typed, disables the unusable form, and keeps the
+  download escape hatch available.
+- **`app/ui/vault-dialogs.js`, `app/ui/download.js` (new), `app/views/settings.js`,
+  `app/main.js`, `app/styles.css`:** "Protect this browser copy" card (enable, lock now, change
+  passphrase, turn off, create encrypted backup), an `Export encrypted JSON` action beside the
+  existing plain-text export (whose subtitle now states that it is unencrypted), import that
+  accepts both file types and prompts for a passphrase when the file is an envelope, and shell
+  changes that hide navigation while locked. All async buttons carry a busy label, stay
+  disabled while working and keep typed input on failure. The existing `Export JSON` button
+  label was deliberately **not** renamed (an early draft renamed it and broke an existing test;
+  the label is muscle memory and the subtitle carries the new information).
+
+### Verification performed this session
+```text
+npm test                               → 193 pass / 0 fail / 0 skipped (12 suites)
+New suite                              → tests/app/encryption.test.mjs (20 tests)
+eslint app + tests/app/encryption      → clean
+node --check canonical modules         → 49 app modules clean
+live HTTP (scripts/serve.mjs)          → /, core/crypto.js, views/vault.js,
+                                         ui/vault-dialogs.js, ui/download.js → 200
+                                       → package.json, scripts/**, tests/** → 404
+                                       → POST / → 405
+axe-core 4.11 (JSDOM)                  → 0 violations on the new lock screen
+```
+- Key-derived cost measured, not guessed: 600,000 PBKDF2 rounds ≈ 130 ms per derivation in
+  this container (≈ 270 ms for a full derive + re-derive cycle), which is why the default was
+  raised from an initial 310,000 to OWASP's current 600,000 recommendation.
+- Negative properties asserted by tests: the stored blob contains no person name, no feedback
+  text and never the passphrase; a wrong passphrase, tampered ciphertext, altered header or an
+  unsupported envelope leaves storage unchanged; a quota failure mid-enable leaves plain text
+  intact; a locked workspace refuses all writes and is never quarantined.
+
+### Tradeoffs, unverified work
+- Encryption is opt-in and passphrase-only: no recovery key, no key escrow, no idle auto-lock,
+  no per-collection keys, and no protection while the workspace is unlocked in an open tab.
+  CSV and plain-text JSON exports stay unencrypted on purpose (a spreadsheet export must open in
+  a spreadsheet); the UI says so at the button.
+- Encrypted writes are queued, so `update()` reports "saved" optimistically and corrects itself
+  with a later `persisted`/`update-unsaved` notification; every adoption-critical path uses the
+  awaited writer instead.
+- **[UNVERIFIED]:** real-browser WebCrypto (Node's `webcrypto` was injected into jsdom), raster
+  `color-contrast` sampling, print/PDF output, physical mobile viewports, Safari/Firefox, and
+  large-workspace performance. The legacy `src/**` Next.js tree was untouched and unaudited.
+
+Next up (from roadmap): idle auto-lock with a non-destructive prompt; structured 1:1 preparation
+and a printable coaching packet; an onboarding 30-60-90 milestone tracker.

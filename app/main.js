@@ -28,6 +28,7 @@ import { renderDecisions } from './views/decisions.js';
 import { renderRecognition } from './views/recognition.js';
 import { renderReviews, renderReviewDetail } from './views/reviews.js';
 import { renderSettings } from './views/settings.js';
+import { renderVault } from './views/vault.js';
 
 export const NAV = [
   { section: 'Overview', items: [
@@ -95,8 +96,8 @@ export function parseRoute(hash) {
   return { route: known ? route : 'notfound', segments, query: new URLSearchParams(queryPart || '') };
 }
 
-export function createApp({ root, storage, now = () => new Date(), idFactory } = {}) {
-  const store = createStore({ storage, now, idFactory });
+export function createApp({ root, storage, now = () => new Date(), idFactory, crypto, kdfIterations, minKdfIterations } = {}) {
+  const store = createStore({ storage, now, idFactory, crypto, kdfIterations, minKdfIterations });
   const api = createApi(store, { now, idFactory });
   let ctx = null;
   let currentRoute = null;
@@ -138,6 +139,34 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
         if (result.ok) render();
         return result;
       },
+      /* ------------------------------------------------------- encryption */
+      isEncrypted: store.isEncrypted,
+      isLocked: store.isLocked,
+      vaultStatus: store.vaultStatus,
+      vaultFacts: store.vaultFacts,
+      cryptoAvailable: store.cryptoAvailable,
+      refresh: () => render(),
+      unlock: (passphrase) => store.unlock(passphrase),
+      lockWorkspace: () => store.lock(),
+      enableEncryption: (passphrase) => store.enableEncryption(passphrase),
+      changePassphrase: (passphrase) => store.changePassphrase(passphrase),
+      disableEncryption: () => store.disableEncryption(),
+      exportEncryptedJSON: (passphrase) => store.exportEncrypted(passphrase),
+      importBackup: async (text, options) => {
+        const result = await store.importBackup(text, options);
+        if (result.ok) render();
+        return result;
+      },
+      eraseLockedWorkspace: async () => {
+        if (!store.isLocked) return { ok: false, error: 'This workspace is not locked.' };
+        try {
+          store.reset({ eraseEncrypted: true });
+          render();
+          return { ok: true };
+        } catch {
+          return { ok: false, error: 'The workspace could not be erased. Nothing was changed.' };
+        }
+      },
       resetStore: () => {
         const next = store.reset();
         render();
@@ -167,6 +196,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
   function renderNav(state, at, route) {
     const nav = document.getElementById('sidebar-nav');
     if (!nav) return;
+    if (store.isLocked) {
+      // No section links while locked: they would open empty screens and imply
+      // the workspace is readable when it is not.
+      mount(nav, h('p', { class: 'nav-section' }, 'Workspace locked'));
+      return;
+    }
     const counts = counters(state, at);
     mount(
       nav,
@@ -202,6 +237,20 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
   function renderTopbar(state, at) {
     const bar = document.getElementById('topbar-meta');
     if (!bar) return;
+    if (store.isLocked) {
+      mount(
+        bar,
+        h(
+          'div',
+          { class: 'topbar-meta' },
+          h('span', { class: 'topbar-team' }, 'Encrypted workspace'),
+          h('span', { class: 'topbar-sep', 'aria-hidden': 'true' }, '·'),
+          h('span', { class: 'muted small' }, 'locked'),
+          h('span', { class: 'badge badge-caution' }, 'locked'),
+        ),
+      );
+      return;
+    }
     const health = teamHealth(state, at, { withTrend: false });
     const people = state.people.filter((p) => p.status !== 'archived').length;
     mount(
@@ -261,6 +310,25 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
     renderNav(store.state, at, route);
     renderTopbar(store.state, at);
     ctx = buildContext(route, segments, query);
+    const topbarActions = document.querySelector('.topbar-actions');
+    if (topbarActions) topbarActions.hidden = store.isLocked;
+    if (store.isLocked) {
+      // One screen only. Routing still works after unlocking, so the hash is
+      // left untouched and the person returns to where they were.
+      try {
+        mount(view, renderVault(ctx));
+        const heading = view.querySelector('h1');
+        if (heading) {
+          heading.setAttribute('tabindex', '-1');
+          heading.focus({ preventScroll: true });
+        }
+        lastRenderedRoute = route;
+        document.title = 'Unlock workspace · LeadOS';
+      } catch (error) {
+        renderError(error, 'vault');
+      }
+      return;
+    }
     const renderer = RENDERERS[route];
     try {
       if (!renderer) {

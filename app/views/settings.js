@@ -8,6 +8,15 @@ import { h, toast, confirmDialog, openModal, closeAllModals, buildForm } from '.
 import { pageHeader, card, stat, badge, emptyState, table } from '../ui/components.js';
 import { formatDate } from '../core/time.js';
 import { openSettingsDialog } from '../ui/modals.js';
+import {
+  openEnableEncryptionDialog,
+  openChangePassphraseDialog,
+  openDisableEncryptionDialog,
+  openLockWorkspaceDialog,
+  openEncryptedBackupDialog,
+  openImportPassphraseDialog,
+  encryptionSummary,
+} from '../ui/vault-dialogs.js';
 import { SCHEMA_VERSION } from '../core/schema.js';
 import { CSV_EXPORTS } from '../core/csv.js';
 
@@ -151,20 +160,55 @@ export function renderSettings(ctx) {
     const input = h('input', { type: 'file', accept: 'application/json,.json', class: 'sr-only', id: 'import-file' });
     const label = h('label', { class: 'btn btn-ghost', for: 'import-file' }, 'Choose a file…');
     const status = h('p', { class: 'muted small', 'aria-live': 'polite' });
+
+    const finish = (result) => {
+      if (!result.ok) {
+        status.textContent = result.error;
+        status.className = 'field-error';
+        return;
+      }
+      dialog.close();
+      const notes = result.warnings && result.warnings.length ? ` ${result.warnings[result.warnings.length - 1]}` : '';
+      toast(`Imported ${result.imported.people} people and ${result.imported.events} events.${notes}`, 'good');
+      ctx.navigate('#/today');
+    };
+
     input.addEventListener('change', () => {
       const file = input.files && input.files[0];
       if (!file) return;
+      status.className = 'muted small';
+      status.textContent = 'Reading and validating the file…';
       const reader = new FileReader();
-      reader.onload = () => {
-        const result = ctx.importJSON(String(reader.result));
-        if (!result.ok) {
-          status.textContent = result.error;
-          status.className = 'field-error';
+      reader.onload = async () => {
+        const text = String(reader.result);
+        let looksEncrypted = false;
+        try {
+          const parsed = JSON.parse(text);
+          looksEncrypted = Boolean(parsed && parsed.format === 'leados.vault');
+        } catch {
+          looksEncrypted = false;
+        }
+        if (looksEncrypted) {
+          dialog.close();
+          openImportPassphraseDialog({
+            title: 'Import an encrypted backup',
+            description: 'Enter the passphrase used when this backup was created. Importing replaces what is stored in this browser.',
+            onSubmit: (passphrase) => ctx.importBackup(text, { passphrase }),
+            onSuccess: (result) => {
+              toast(`Imported ${result.imported.people} people and ${result.imported.events} events`, 'good');
+              ctx.navigate('#/today');
+            },
+          });
           return;
         }
-        dialog.close();
-        toast(`Imported ${result.imported.people} people and ${result.imported.events} events`, 'good');
-        ctx.navigate('#/today');
+        // An encrypted workspace must be written back as ciphertext, so the
+        // import has to wait for that write before adopting anything.
+        if (ctx.isEncrypted) {
+          status.textContent = 'Validating and re-encrypting…';
+          finish(await ctx.importBackup(text));
+          return;
+        }
+        finish(ctx.importJSON(text));
       };
       reader.onerror = () => {
         status.textContent = 'The file could not be read.';
@@ -174,7 +218,18 @@ export function renderSettings(ctx) {
     const dialog = openModal({
       title: 'Import a LeadOS export',
       description: 'This replaces everything currently stored in this browser. Export first if you are unsure.',
-      body: h('div', { class: 'form' }, h('div', { class: 'field' }, label, input, status), h('p', { class: 'muted small' }, 'The file is validated and repaired before it replaces anything. If it is not a LeadOS workspace, nothing changes.')),
+      body: h(
+        'div',
+        { class: 'form' },
+        h('div', { class: 'field' }, label, input, status),
+        h(
+          'p',
+          { class: 'muted small' },
+          ctx.isEncrypted
+            ? 'Encrypted and plain-text exports are both accepted. The imported records stay encrypted with your current workspace passphrase.'
+            : 'The file is validated and repaired before it replaces anything. If it is not a LeadOS workspace, nothing changes. Plain-text imports stay plain text.',
+        ),
+      ),
       footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => dialog.close() }, 'Cancel')],
       size: 'sm',
     });
@@ -246,12 +301,54 @@ export function renderSettings(ctx) {
       }),
     ),
     card({
+      title: 'Protect this browser copy',
+      subtitle: ctx.isEncrypted
+        ? encryptionSummary(ctx.vaultFacts)
+        : 'Optional passphrase encryption for the records stored in this browser.',
+      body: h(
+        'div',
+        { class: 'vault-settings' },
+        ctx.cryptoAvailable === false
+          ? h('p', { class: 'text-bad small' }, 'Encryption is unavailable on this address: browsers only expose Web Crypto on https:// or http://localhost pages. Records stay in plain text here. Open LeadOS over https and reload to enable it.')
+          : null,
+        h(
+          'p',
+          { class: 'small' },
+          ctx.isEncrypted
+            ? 'This browser copy is encrypted with AES-256-GCM under a key derived from your passphrase. The passphrase itself is never stored. Exports are separate: CSV and plain-text JSON files are always unencrypted unless you create an encrypted backup.'
+            : 'Right now every note — including conflict records — is stored in this browser as plain text, readable by anyone who opens your browser profile or copies its storage. Encrypting converts the stored copy into ciphertext that needs your passphrase.',
+        ),
+        h(
+          'div',
+          { class: 'data-actions' },
+          ctx.isEncrypted
+            ? h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openLockWorkspaceDialog(ctx) }, 'Lock now')
+            : h('button', { class: 'btn btn-primary', type: 'button', disabled: ctx.cryptoAvailable === false, onClick: () => openEnableEncryptionDialog(ctx) }, 'Encrypt this workspace'),
+          ctx.isEncrypted
+            ? h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openChangePassphraseDialog(ctx) }, 'Change passphrase')
+            : null,
+          h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openEncryptedBackupDialog(ctx) }, ctx.isEncrypted ? 'Create encrypted backup' : 'Create encrypted backup of this workspace'),
+          ctx.isEncrypted
+            ? h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openDisableEncryptionDialog(ctx) }, 'Turn off encryption')
+            : null,
+        ),
+        h(
+          'p',
+          { class: 'muted tiny' },
+          'No recovery key, no reset link and no account: if the passphrase is forgotten, the encrypted copy cannot be opened. Encryption protects a copied profile or backup file, not a browser someone else can already use while it is unlocked.',
+        ),
+      ),
+    }),
+    card({
       title: 'Take your data with you',
-      subtitle: 'Plain JSON, including full conflict notes. Unencrypted and readable in any text editor — store and share backups carefully.',
+      subtitle: ctx.isEncrypted
+        ? 'Export JSON writes a plain-text file including full conflict notes — unencrypted even though this workspace is encrypted. Use Create encrypted backup above for a protected file.'
+        : 'Plain JSON, including full conflict notes. Unencrypted and readable in any text editor — store and share backups carefully.',
       body: h(
         'div',
         { class: 'data-actions' },
         h('button', { class: 'btn btn-primary', type: 'button', onClick: exportAction }, 'Export JSON'),
+        h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openEncryptedBackupDialog(ctx) }, 'Export encrypted JSON'),
         h('button', { class: 'btn btn-ghost', type: 'button', onClick: importAction }, 'Import JSON'),
         h('button', {
           class: 'btn btn-ghost',
