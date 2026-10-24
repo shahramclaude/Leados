@@ -9,6 +9,7 @@ import { pageHeader, card, stat, badge, emptyState, table } from '../ui/componen
 import { formatDate } from '../core/time.js';
 import { openSettingsDialog } from '../ui/modals.js';
 import { SCHEMA_VERSION } from '../core/schema.js';
+import { CSV_EXPORTS } from '../core/csv.js';
 
 export function renderSettings(ctx) {
   const { state, now } = ctx;
@@ -44,6 +45,79 @@ export function renderSettings(ctx) {
     ['Direct reports before warning', `${s.maxReportsPerManager}`],
     ['Pulse anonymity floor', `${s.pulseMinResponses} responses`],
   ];
+
+  const openCsvFallbackModal = (result, reasonText) => {
+    const form = buildForm([
+      {
+        name: 'csv',
+        label: `${result.label} (${result.filename} · ${result.rowCount} row${result.rowCount === 1 ? '' : 's'})`,
+        type: 'textarea',
+        rows: 12,
+        value: result.csv,
+      },
+    ]);
+    openModal({
+      title: `CSV export — ${result.label}`,
+      description: reasonText || 'Select all and copy into a .csv file or spreadsheet.',
+      body: form.node,
+      footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
+      size: 'lg',
+    });
+  };
+
+  const runCsvExport = (scope, { previewOnly = false } = {}) => {
+    const result = ctx.exportCSV(scope);
+    if (!result.ok) {
+      toast(result.error, 'bad');
+      return;
+    }
+    if (previewOnly) {
+      openCsvFallbackModal(result, 'Formula-injection prefixes (=, +, -, @) in text notes are neutralized with a leading apostrophe.');
+      return;
+    }
+    try {
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
+        const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = h('a', { href: url, download: result.filename });
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast(`Downloaded ${result.filename} (${result.rowCount} row${result.rowCount === 1 ? '' : 's'})`, 'good');
+        return;
+      }
+    } catch {
+      /* fall through to copyable modal */
+    }
+    openCsvFallbackModal(result, 'This browser could not start a file download. Copy the CSV below.');
+  };
+
+  const standardCsvScopes = CSV_EXPORTS.filter((item) => !item.sensitive);
+  const sensitiveCsvScope = CSV_EXPORTS.find((item) => item.key === 'conflicts');
+  const scopeSelect = h(
+    'select',
+    { id: 'csv-export-scope', name: 'csvScope' },
+    ...standardCsvScopes.map((item) =>
+      h('option', { value: item.key }, item.label),
+    ),
+  );
+  const scopeDesc = h('p', { class: 'field-help', id: 'csv-export-desc' }, standardCsvScopes[0].description);
+  scopeSelect.setAttribute('aria-describedby', 'csv-export-desc');
+  scopeSelect.addEventListener('change', () => {
+    const picked = standardCsvScopes.find((item) => item.key === scopeSelect.value);
+    scopeDesc.textContent = picked ? picked.description : '';
+  });
+
+  const exportConfidentialCsvAction = () => {
+    confirmDialog({
+      title: 'Export confidential conflict records to CSV?',
+      message: 'This spreadsheet contains private interpersonal mediation notes, perspectives, and coaching agreements. Export only when needed and store it in a restricted folder.',
+      confirmLabel: 'Export confidential CSV',
+      danger: true,
+      onConfirm: () => runCsvExport('conflicts'),
+    });
+  };
 
   const exportAction = () => {
     const json = ctx.exportJSON();
@@ -206,6 +280,54 @@ export function renderSettings(ctx) {
       ),
     }),
     card({
+      title: 'Spreadsheet exports (CSV)',
+      subtitle: 'Scoped, formula-injection-safe tables for spreadsheets, calibration prep, or HR handoff. Use Export JSON above for full lossless backup and restore.',
+      body: h(
+        'div',
+        { class: 'csv-export-stack', 'data-testid': 'csv-exports' },
+        h(
+          'div',
+          { class: 'csv-export-row' },
+          h(
+            'div',
+            { class: 'field csv-scope-field' },
+            h('label', { class: 'field-label', for: 'csv-export-scope' }, 'Table to export'),
+            scopeSelect,
+            scopeDesc,
+          ),
+          h(
+            'div',
+            { class: 'data-actions csv-actions' },
+            h('button', { class: 'btn btn-primary', type: 'button', onClick: () => runCsvExport(scopeSelect.value) }, 'Download CSV'),
+            h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => runCsvExport(scopeSelect.value, { previewOnly: true }) }, 'Preview / copy CSV'),
+          ),
+        ),
+        h(
+          'p',
+          { class: 'muted tiny' },
+          'Safety guarantees: text fields starting with =, +, -, @, or full-width formula symbols are neutralized with a leading apostrophe (OWASP CWE-1236). Pulse CSV exports weekly anonymity-checked summaries only — never individual responses.',
+        ),
+        sensitiveCsvScope
+          ? h(
+              'div',
+              { class: 'csv-sensitive-box' },
+              h(
+                'div',
+                null,
+                h('strong', { class: 'small' }, sensitiveCsvScope.label),
+                h('p', { class: 'muted small' }, sensitiveCsvScope.description),
+              ),
+              h(
+                'div',
+                { class: 'data-actions' },
+                h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => runCsvExport('conflicts', { previewOnly: true }) }, 'Preview confidential CSV'),
+                h('button', { class: 'btn btn-danger btn-small', type: 'button', onClick: exportConfidentialCsvAction }, 'Export confidential CSV'),
+              ),
+            )
+          : null,
+      ),
+    }),
+    card({
       title: 'Event log',
       subtitle: 'Append-oriented audit history, retained during demo cleanup. The most recent 40 entries.',
       body: events.length
@@ -249,7 +371,7 @@ function checkExportFirst(ctx, proceed) {
         const json = ctx.exportJSON();
         if (typeof Blob !== 'undefined' && typeof URL !== 'undefined' && URL.createObjectURL) {
           const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-          const link = h('a', { href: url, download: `leados-backup-${new Date().toISOString().slice(0, 10)}.json` });
+          const link = h('a', { href: url, download: `leados-backup-${ctx.now.toISOString().slice(0, 10)}.json` });
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);

@@ -535,3 +535,80 @@ Mandatory `index.html`, README, session log, roadmap/research and affected sourc
 
 Next up (from roadmap): honest team-level historical trends; unknown-preserving, formula-safe
 CSV export; optional local encryption with tested migration/recovery.
+
+---
+
+## Session 5 — 2026-10-24 — Longitudinal Team-Health & Habit Trends (Schema v5) + Safe Scoped CSV Export
+
+### Current-state audit before writing code
+- Read `index.html`, all 43 pre-session JS modules + `app/styles.css`, `scripts/serve.mjs`,
+  `scripts/app-browser-smoke.mjs`, all 9 test files in `tests/app/*.test.mjs`, and root docs.
+  Full audit recorded in `docs/AUDIT-2026-10-24-session-5.md`.
+- Baseline `npm test` after `npm ci --no-audit --no-fund --ignore-scripts`: **161 pass, 0 fail**.
+- Verified source-level defects before adding features:
+  1. `truncateState` (`app/core/domain/health.js`) kept `status: 'archived'` even when
+     `archivedAt > asOf` (survivorship bias), overwrote pre-checkin goal `confidence` to
+     `'on-track'`, and lacked dated snapshots for KR values and action/goal/plan completions.
+  2. `teamHealth` 30-day delta compared raw `overall` across shifting dimension subsets
+     (composition / Simpson's paradox when a dimension such as pulse `wellbeing` first unlocked).
+  3. `wellbeingDimension`, `pulseChart` and `views/health.js` had minor wording inaccuracies
+     when blocked for `'unanimous'` or when `incompleteResponses > 0`; `pulse.js::comments`
+     did not apply `Math.max(3, ...)` when called directly.
+  4. `personTimeline()` omitted dated `delegations` lifecycle events; `views/settings.js`
+     used `new Date()` instead of `ctx.now` in `checkExportFirst()`.
+
+### What was built
+- **Schema v5 (`app/core/schema.js`, `app/actions.js`, `app/core/demo.js`):**
+  - Additive `4 → 5` migration preserving unknown historical dates/snapshots as `null`
+    (never fabricated), while preserving `initialConfidence` and `initialCurrent` on goals
+    that had zero check-ins at migration time.
+  - Write-path mutations record `completedOn` on 1:1 actions and GROW `will` items,
+    `followUpCompletedOn` on feedback, `initialConfidence` / `completedOn` / `krUpdatedOn` /
+    `initialCurrent` / check-in `{ progressPct, keyResults }` on goals, and `closedOn` /
+    `stagesUpdatedOn` on GROW plans.
+- **Bias-resistant reconstruction & longitudinal trends (`app/core/domain/health.js`, `app/core/domain/trends.js`, `app/ui/charts.js`, `app/views/health.js`, `app/views/today.js`, `app/core/domain/people.js`):**
+  - `reconstructStateAt()` restores `active` status when `archivedAt > asOf`, reconstructs
+    dated check-in/completion snapshots, and returns per-dimension `fidelity` (`exact` vs
+    `approximate` with explicit reasons).
+  - `teamHealth()` and `buildTeamTrends()` compute matched-dimension deltas (`matchedDelta` +
+    `coverageChanged`) so unlocking a new dimension never produces a false composite drop.
+  - `buildTeamTrends()` computes 8-week, 12-week and 6-month checkpoint series across all 5
+    health dimensions, composite health, feedback observation-to-conversation latency and
+    delegation follow-through, guarding pre-activity windows as `pre-history` (`null`) and
+    enforcing full pulse anonymity/unanimity rules on every historical window.
+  - Accessible `trendChart()` and `latencyChart()` use non-color stroke dash + marker shape
+    coding, hollow markers for approximate checkpoints, non-interpolated gaps, `role="img"`
+    summaries and collapsible `<details><table scope="col|row">` data tables.
+  - `personTimeline()` now includes dated delegation start, completion and return events while
+    continuing to exclude private `conflicts`.
+- **Purpose-limited, formula-safe CSV export (`app/core/csv.js`, `app/core/store.js`, `app/main.js`, `app/views/settings.js`):**
+  - RFC 4180 CRLF serializer and state-machine parser (`escapeCsvCell`, `serializeCsv`, `parseCsv`).
+  - Neutralizes OWASP CWE-1236 spreadsheet formula payloads starting with `=`, `+`, `-`, `@`,
+    tab, CR, LF, leading whitespace before triggers, and full-width `＝`/`＋`/`－`/`＠` via a
+    leading `'`, while formatting finite negative numbers numerically and `null`/`undefined`
+    as empty `""` cells.
+  - 13 scoped tables (`people`, `oneOnOnes`, `actions`, `feedback`, `goals`, `delegations`,
+    `growthPlans`, `recognition`, `decisions`, `reviews`, `pulseSummary`, `healthTrends`, and
+    opt-in confidential `conflicts`). `pulseSummary` exports only anonymity-checked weekly
+    aggregates and independently thresholded comments — never individual rows or `personId`.
+  - Read-only `store.exportCSV()` works even under `QuotaExceededError` and refuses with
+    `writeBlockReason` when storage holds a protected future schema version.
+
+### Verification performed this session
+```text
+npm test                               → 173 pass / 0 fail / 0 skipped
+New suites                             → tests/app/trends.test.mjs (7) + tests/app/csv.test.mjs (5)
+node --check app/** + scripts/**       → 45 canonical app JS modules (75 total w/ scripts), clean
+live HTTP server (scripts/serve.mjs)   → /, /app/core/domain/trends.js, /app/core/csv.js, views 200 OK
+axe-core 4.11 (via JSDOM)              → 0 semantic/ARIA/label/table violations on #/health & #/settings
+```
+- **[UNVERIFIED] in real browser binary this session:** no Chromium/Firefox binary or
+  `playwright-core` package is installed in this container, so real-browser pixel rendering,
+  `color-contrast` raster sampling, physical mobile overflow and browser print/PDF output
+  remain `[UNVERIFIED]` in a live browser binary (CSS foreground/background contrast ratios
+  were verified mathematically against `:root` tokens at >= 4.5:1 text and >= 3:1 marks).
+  Legacy `src/**` Next.js/PostgreSQL trees also remain `[UNVERIFIED]`.
+
+Next up (from roadmap): optional local encryption of the browser store via passphrase-derived
+WebCrypto (`AES-GCM` + `PBKDF2`) with tested plaintext→encrypted migration and recovery warnings;
+structured 1:1 prep templates & printable individual coaching packets.

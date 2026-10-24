@@ -162,7 +162,7 @@ test('completion readiness requires evidence and manager writing, never a self-r
 test('schema v1 migrates in place and review normalization repairs unsafe fields', () => {
   const old = { schemaVersion: 1, people: [{ id: 'p1', name: 'Ada' }] };
   const { raw, applied } = migrate(old);
-  assert.deepEqual(applied, ['1 → 2', '2 → 3', '3 → 4']);
+  assert.deepEqual(applied, ['1 → 2', '2 → 3', '3 → 4', '4 → 5']);
   const { state, warnings } = normalizeState({
     ...raw,
     reviews: [

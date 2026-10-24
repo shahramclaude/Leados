@@ -12,6 +12,7 @@
 
 import { addDays, dayKey } from './time.js';
 import { createEmptyState, normalizeState } from './schema.js';
+import { goalProgress } from './domain/goals.js';
 
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
@@ -122,11 +123,21 @@ export function buildDemoState(now = new Date()) {
   ];
 
   const goal = (title, ownerId, scope, dueIn, krs, confidence, lastCheckinDaysAgo, note, coAuthored = null) => {
+    const keyResults = krs.map(([t, start, target, current, unit]) => ({
+      id: id('kr'), title: t, start, target, current, initialCurrent: start, unit,
+    }));
     const g = {
       id: id('goal'), title, description: '', ownerId, scope, coAuthored: ownerId ? coAuthored : null, dueDate: at(-Math.abs(dueIn)),
-      keyResults: krs.map(([t, start, target, current, unit]) => ({ id: id('kr'), title: t, start, target, current, unit })),
-      confidence, status: 'active',
-      checkins: lastCheckinDaysAgo === null ? [] : [{ id: id('chk'), date: at(lastCheckinDaysAgo), note, confidence }],
+      keyResults,
+      confidence, initialConfidence: 'on-track', status: 'active', completedOn: null, krUpdatedOn: null,
+      checkins: lastCheckinDaysAgo === null ? [] : [{
+        id: id('chk'),
+        date: at(lastCheckinDaysAgo),
+        note,
+        confidence,
+        progressPct: goalProgress({ keyResults }),
+        keyResults: keyResults.map((kr) => ({ id: kr.id, current: kr.current })),
+      }],
       createdAt: new Date(ts(60)).toISOString(),
     };
     state.goals.push(g);

@@ -101,7 +101,7 @@ export function renderToday(ctx) {
           ? h(
               'p',
               { class: `trend ${health.trend.delta > 0 ? 'trend-up' : health.trend.delta < 0 ? 'trend-down' : ''}` },
-              `${health.trend.delta > 0 ? '▲' : health.trend.delta < 0 ? '▼' : '■'} ${Math.abs(health.trend.delta)} pts vs 30 days ago`,
+              `${health.trend.delta > 0 ? '▲' : health.trend.delta < 0 ? '▼' : '■'} ${Math.abs(health.trend.delta)} pts vs 30 days ago${health.trend.coverageChanged ? ' (matched)' : ''}`,
             )
           : h('p', { class: 'trend muted' }, health.trend.reason || 'Trend not available yet'),
       ),
@@ -113,7 +113,7 @@ export function renderToday(ctx) {
             label: dim.label,
             value: dim.score,
             hint: dim.drivers?.length ? dim.drivers.map((d) => `${d.label}: ${d.value}`).join(' · ') : dim.detail,
-            onClick: () => ctx.navigate('#/health'),
+            onClick: () => ctx.navigate(`#/health?dim=${dim.key}`),
           }),
         ),
       ),

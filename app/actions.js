@@ -8,8 +8,9 @@
  */
 
 import { dayKey } from './core/time.js';
-import { PULSE_DIMENSIONS, REVIEW_RATINGS } from './core/schema.js';
+import { CONFIDENCE, PULSE_DIMENSIONS, REVIEW_RATINGS } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
+import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 
@@ -171,7 +172,7 @@ export function createApi(store, options = {}) {
         })).filter((a) => a.text),
         notes: clean(data.notes) || '',
         actions: (data.actions || [])
-          .map((a) => ({ id: id('ac'), text: clean(a.text) || '', due: a.due || null, done: false, personId: data.personId }))
+          .map((a) => ({ id: id('ac'), text: clean(a.text) || '', due: a.due || null, done: false, completedOn: null, personId: data.personId }))
           .filter((a) => a.text),
       };
       store.update(
@@ -195,6 +196,7 @@ export function createApi(store, options = {}) {
           const action = meeting?.actions.find((a) => a.id === actionId);
           if (!action) return;
           action.done = !action.done;
+          action.completedOn = action.done ? today() : null;
         },
         { type: 'oneonone.action.toggled', entity: 'oneOnOne', entityId: meetingId, summary: '1:1 action toggled' },
       );
@@ -208,7 +210,7 @@ export function createApi(store, options = {}) {
         (draft) => {
           const meeting = draft.oneOnOnes.find((m) => m.id === meetingId);
           if (!meeting) return;
-          meeting.actions.push({ id: id('ac'), text: value, due: due || null, done: false, personId: meeting.personId });
+          meeting.actions.push({ id: id('ac'), text: value, due: due || null, done: false, completedOn: null, personId: meeting.personId });
         },
         { type: 'oneonone.action.added', entity: 'oneOnOne', entityId: meetingId, summary: `Action added: ${value.slice(0, 60)}` },
       );
@@ -240,6 +242,7 @@ export function createApi(store, options = {}) {
         observedOn,
         followUpOn: data.followUpOn || null,
         followUpDone: false,
+        followUpCompletedOn: null,
       };
       const person = store.state.people.find((p) => p.id === data.personId);
       store.update(
@@ -279,7 +282,9 @@ export function createApi(store, options = {}) {
       store.update(
         (draft) => {
           const item = draft.feedback.find((f) => f.id === feedbackId);
-          if (item) item.followUpDone = done;
+          if (!item) return;
+          item.followUpDone = Boolean(done);
+          item.followUpCompletedOn = done ? today() : null;
         },
         { type: 'feedback.followup', entity: 'feedback', entityId: feedbackId, summary: done ? 'Feedback follow-up closed' : 'Feedback follow-up reopened' },
       );
@@ -290,6 +295,8 @@ export function createApi(store, options = {}) {
     addGoal(data) {
       const title = clean(data.title) || '';
       if (!title) return fail('Give the goal a name.', 'title');
+      const confidence = CONFIDENCE.includes(data.confidence) ? data.confidence : 'on-track';
+      const status = ['active', 'done', 'dropped'].includes(data.status) ? data.status : 'active';
       const goal = {
         ...append(null, 'goal'),
         title,
@@ -299,17 +306,25 @@ export function createApi(store, options = {}) {
         coAuthored: data.ownerId ? (data.coAuthored === true ? true : data.coAuthored === false ? false : null) : null,
         dueDate: data.dueDate || null,
         keyResults: (data.keyResults || [])
-          .map((kr) => ({
-            id: id('kr'),
-            title: clean(kr.title) || '',
-            start: Number(kr.start) || 0,
-            target: Number.isFinite(Number(kr.target)) ? Number(kr.target) : 100,
-            current: Number.isFinite(Number(kr.current)) ? Number(kr.current) : Number(kr.start) || 0,
-            unit: clean(kr.unit) || '',
-          }))
+          .map((kr) => {
+            const start = Number(kr.start) || 0;
+            const current = Number.isFinite(Number(kr.current)) ? Number(kr.current) : start;
+            return {
+              id: id('kr'),
+              title: clean(kr.title) || '',
+              start,
+              target: Number.isFinite(Number(kr.target)) ? Number(kr.target) : 100,
+              current,
+              initialCurrent: current,
+              unit: clean(kr.unit) || '',
+            };
+          })
           .filter((kr) => kr.title),
-        confidence: 'on-track',
-        status: 'active',
+        confidence,
+        initialConfidence: confidence,
+        status,
+        completedOn: status === 'done' ? today() : null,
+        krUpdatedOn: null,
         checkins: [],
       };
       store.update(
@@ -328,6 +343,7 @@ export function createApi(store, options = {}) {
           const goal = draft.goals.find((g) => g.id === goalId);
           if (!goal) return;
           const previousOwner = goal.ownerId;
+          const previousStatus = goal.status;
           if (patch.title !== undefined) goal.title = clean(patch.title) || goal.title;
           if (patch.description !== undefined) goal.description = clean(patch.description);
           if (patch.dueDate !== undefined) goal.dueDate = patch.dueDate || null;
@@ -337,34 +353,51 @@ export function createApi(store, options = {}) {
           } else if (!goal.ownerId || previousOwner !== goal.ownerId) {
             goal.coAuthored = null;
           }
-          if (patch.confidence) goal.confidence = patch.confidence;
-          if (patch.status) goal.status = patch.status;
+          if (patch.confidence && CONFIDENCE.includes(patch.confidence)) {
+            goal.confidence = patch.confidence;
+            if (!goal.checkins.length && (goal.createdAt || '').slice(0, 10) === today()) {
+              goal.initialConfidence = patch.confidence;
+            }
+          }
+          if (patch.status && ['active', 'done', 'dropped'].includes(patch.status)) {
+            goal.status = patch.status;
+            if (patch.status === 'done' && previousStatus !== 'done') goal.completedOn = today();
+            else if (patch.status !== 'done') goal.completedOn = null;
+          }
         },
         { type: 'goal.updated', entity: 'goal', entityId: goalId, summary: 'Goal updated' },
       );
       return { ok: true };
     },
 
-    /** Check in: records confidence, a note, and any key-result movements. */
+    /** Check in: records confidence, a note, and dated key-result snapshots. */
     checkInGoal(goalId, { note = '', confidence = 'on-track', keyResults = [] } = {}) {
       const goal = store.state.goals.find((g) => g.id === goalId);
       if (!goal) return fail('That goal no longer exists.');
+      const safeConfidence = CONFIDENCE.includes(confidence) ? confidence : 'on-track';
       store.update(
         (draft) => {
           const target = draft.goals.find((g) => g.id === goalId);
           if (!target) return;
-          target.checkins.push({ id: id('chk'), date: today(), note: clean(note) || '', confidence });
-          target.confidence = confidence;
           for (const update of keyResults) {
             const kr = target.keyResults.find((k) => k.id === update.id);
             if (kr && Number.isFinite(Number(update.current))) kr.current = Number(update.current);
           }
+          target.confidence = safeConfidence;
+          target.checkins.push({
+            id: id('chk'),
+            date: today(),
+            note: clean(note) || '',
+            confidence: safeConfidence,
+            progressPct: goalProgress(target),
+            keyResults: target.keyResults.map((kr) => ({ id: kr.id, current: kr.current })),
+          });
         },
         {
           type: 'goal.checkin',
           entity: 'goal',
           entityId: goalId,
-          summary: `Check-in on "${goal.title.slice(0, 50)}" (${confidence})`,
+          summary: `Check-in on "${goal.title.slice(0, 50)}" (${safeConfidence})`,
         },
       );
       return { ok: true };
@@ -378,14 +411,18 @@ export function createApi(store, options = {}) {
         (draft) => {
           const goal = draft.goals.find((g) => g.id === goalId);
           if (!goal) return;
+          const start = Number(kr.start) || 0;
+          const current = Number.isFinite(Number(kr.current)) ? Number(kr.current) : start;
           goal.keyResults.push({
             id: id('kr'),
             title,
-            start: Number(kr.start) || 0,
+            start,
             target: Number.isFinite(Number(kr.target)) ? Number(kr.target) : 100,
-            current: Number.isFinite(Number(kr.current)) ? Number(kr.current) : Number(kr.start) || 0,
+            current,
+            initialCurrent: current,
             unit: clean(kr.unit) || '',
           });
+          goal.krUpdatedOn = today();
         },
         { type: 'goal.kr.added', entity: 'goal', entityId: goalId, summary: `Key result added: ${title.slice(0, 60)}` },
       );
@@ -396,7 +433,9 @@ export function createApi(store, options = {}) {
       store.update(
         (draft) => {
           const goal = draft.goals.find((g) => g.id === goalId);
-          if (goal) goal.keyResults = goal.keyResults.filter((k) => k.id !== krId);
+          if (!goal) return;
+          goal.keyResults = goal.keyResults.filter((k) => k.id !== krId);
+          goal.krUpdatedOn = today();
         },
         { type: 'goal.kr.removed', entity: 'goal', entityId: goalId, summary: 'Key result removed' },
       );
@@ -549,18 +588,23 @@ export function createApi(store, options = {}) {
         reality: clean(data.reality) || '',
         options: (data.options || []).map((text) => ({ id: id('opt'), text: clean(text) })).filter((o) => o.text),
         will: (data.will || [])
-          .map((a) => ({ id: id('ac'), text: clean(a.text) || '', due: a.due || null, done: false, personId: data.personId }))
+          .map((a) => ({ id: id('ac'), text: clean(a.text) || '', due: a.due || null, done: false, completedOn: null, personId: data.personId }))
           .filter((a) => a.text),
         competencies: (data.competencies || []).map((c) => clean(c)).filter(Boolean),
         reviewOn: data.reviewOn || null,
         status: 'active',
+        closedOn: null,
+        stagesUpdatedOn: null,
       };
       const person = store.state.people.find((p) => p.id === data.personId);
       store.update(
         (draft) => {
           // A person has one active plan at a time; close the previous one.
           for (const existing of draft.growthPlans) {
-            if (existing.personId === data.personId && existing.status === 'active') existing.status = 'done';
+            if (existing.personId === data.personId && existing.status === 'active') {
+              existing.status = 'done';
+              existing.closedOn = today();
+            }
           }
           draft.growthPlans.push(plan);
         },
@@ -574,12 +618,32 @@ export function createApi(store, options = {}) {
         (draft) => {
           const plan = draft.growthPlans.find((p) => p.id === planId);
           if (!plan) return;
-          if (patch.goal !== undefined) plan.goal = clean(patch.goal) || plan.goal;
-          if (patch.reality !== undefined) plan.reality = clean(patch.reality);
+          const previousStatus = plan.status;
+          let stageChanged = false;
+          if (patch.goal !== undefined) {
+            const nextGoal = clean(patch.goal) || plan.goal;
+            if (nextGoal !== plan.goal) stageChanged = true;
+            plan.goal = nextGoal;
+          }
+          if (patch.reality !== undefined) {
+            const nextReality = clean(patch.reality);
+            if (nextReality !== plan.reality) stageChanged = true;
+            plan.reality = nextReality;
+          }
           if (patch.reviewOn !== undefined) plan.reviewOn = patch.reviewOn || null;
-          if (patch.status) plan.status = patch.status;
-          if (Array.isArray(patch.options)) plan.options = patch.options.map((text) => ({ id: id('opt'), text: clean(text) })).filter((o) => o.text);
+          if (patch.status) {
+            plan.status = patch.status === 'done' ? 'done' : 'active';
+            if (plan.status === 'done' && previousStatus !== 'done') plan.closedOn = today();
+            else if (plan.status === 'active') plan.closedOn = null;
+          }
+          if (Array.isArray(patch.options)) {
+            plan.options = patch.options.map((text) => ({ id: id('opt'), text: clean(text) })).filter((o) => o.text);
+            stageChanged = true;
+          }
           if (Array.isArray(patch.competencies)) plan.competencies = patch.competencies.map((c) => clean(c)).filter(Boolean);
+          if (stageChanged && (plan.createdAt || '').slice(0, 10) !== today()) {
+            plan.stagesUpdatedOn = today();
+          }
         },
         { type: 'growth.updated', entity: 'growthPlan', entityId: planId, summary: 'Growth plan updated' },
       );
@@ -593,7 +657,7 @@ export function createApi(store, options = {}) {
         (draft) => {
           const plan = draft.growthPlans.find((p) => p.id === planId);
           if (!plan) return;
-          plan.will.push({ id: id('ac'), text: value, due: due || null, done: false, personId: plan.personId });
+          plan.will.push({ id: id('ac'), text: value, due: due || null, done: false, completedOn: null, personId: plan.personId });
         },
         { type: 'growth.will.added', entity: 'growthPlan', entityId: planId, summary: `Development action added: ${value.slice(0, 50)}` },
       );
@@ -607,6 +671,7 @@ export function createApi(store, options = {}) {
           const action = plan?.will.find((a) => a.id === actionId);
           if (!action) return;
           action.done = !action.done;
+          action.completedOn = action.done ? today() : null;
         },
         { type: 'growth.will.toggled', entity: 'growthPlan', entityId: planId, summary: 'Development action toggled' },
       );

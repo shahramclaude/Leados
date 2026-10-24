@@ -4,8 +4,9 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
-Last refreshed: 2026-10-24, session 4. Fresh conflict-practice/product research is in §14;
-earlier source summaries are retained as earlier research, not claimed to have all been refetched.
+Last refreshed: 2026-10-24, session 5. Longitudinal people-analytics bias guards and safe
+HR spreadsheet export standards are in §16; conflict-practice research is in §14; earlier
+source summaries are retained as earlier research, not claimed to have all been refetched.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -417,3 +418,48 @@ using private mediation notes as automatic performance evidence.
    this working record is not a trained mediator or a jurisdiction-specific case system.
 4. **Longitudinal latency/delegation outcomes** — current thresholds are transparent team
    conventions. Do not claim predictive validity without real, consented longitudinal data.
+
+---
+
+## 16. Longitudinal people analytics & safe HR spreadsheet exports (Session 5)
+
+**Sources & industry benchmarks.**
+- *Survivorship & composition bias in people analytics:* Excluding departed/archived team
+  members from historical cohorts inflates historical cadence and engagement metrics
+  (survivorship bias), while comparing composite averages when new survey dimensions enter
+  the denominator produces Simpson's / composition-shift paradoxes even when underlying
+  behaviours are unchanged.
+- *Longitudinal pulse anonymity:* Culture Amp and Microsoft Viva Glint default to a minimum
+  of 5 respondents for quantitative scores (supported minimum 3), enforce cascading/unanimous
+  suppression so identical slices cannot be deduced by subtraction across adjacent windows,
+  and apply independent floors to open-text comments.
+- *Spreadsheet formula injection & HR data minimisation:* OWASP WSTG (`WSTG-INPV-21`) and
+  MITRE `CWE-1236` document that RFC 4180 CSV quoting does **not** stop spreadsheet engines
+  (Excel, LibreOffice Calc, Google Sheets) from executing cells starting with `=`, `+`, `-`,
+  `@`, control whitespace (`\t`, `\r`, `\n`), leading whitespace before formula prefixes, or
+  Unicode full-width equivalents (`＝`, `＋`, `－`, `＠`). GDPR Art. 5(1)(b)/(c) (purpose
+  limitation and data minimisation) requires routine operational exports to exclude
+  confidential interpersonal mediation records and raw pulse rows.
+- *Accessible data visualisation:* W3C WCAG 2.1 SC 1.1.1 (text alternatives), 1.3.1
+  (programmatic table relationships), 1.4.1 (non-color series differentiation via dash
+  patterns and marker geometry), 1.4.3 (>=4.5:1 text contrast) and 1.4.11 (>=3:1 graphical
+  object contrast).
+
+**Implemented.**
+- **Schema v5 dated snapshots (`schema.js`, `actions.js`):** 1:1 action `completedOn`,
+  feedback `followUpCompletedOn`, goal `initialConfidence` / `completedOn` / `krUpdatedOn` /
+  `initialCurrent` / check-in `{ progressPct, keyResults }`, and GROW `closedOn` /
+  `stagesUpdatedOn` / `will[].completedOn`. Pre-v5 migrations keep unknown dates `null`.
+- **Bias-safe historical series (`health.js`, `trends.js`):** `reconstructStateAt()` restores
+  `active` status when `archivedAt > asOf`, labels each dimension `exact` vs `approximate`,
+  guards pre-logging windows as `pre-history` (`null`), and computes `matchedDelta` across
+  shared dimensions (`coverageChanged` disclosed).
+- **Accessible SVG + table charts (`ui/charts.js`, `views/health.js`):** 8-week, 12-week and
+  6-month series with distinct stroke dash + marker shapes, hollow markers for approximate
+  checkpoints, broken polylines across suppressed gaps, and collapsible `<details>` HTML
+  `<table scope="col|row">` alternatives.
+- **Scoped, formula-neutralized CSV export (`core/csv.js`, `core/store.js`, `views/settings.js`):**
+  13 purpose-limited scopes; string formula triggers prefixed with `'` while finite negative
+  numbers remain numeric and `null`/`undefined` stay `""`; `pulseSummary` enforces weekly
+  cohort, unanimity and comment floors with zero `personId`; confidential `conflicts`
+  separated behind a danger confirmation prompt.
