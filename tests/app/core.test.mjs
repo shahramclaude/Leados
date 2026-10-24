@@ -48,7 +48,7 @@ test('time: overdue and human phrasing', () => {
 test('schema: an empty state has every collection and valid settings', () => {
   const state = createEmptyState(NOW.toISOString());
   assert.equal(state.schemaVersion, SCHEMA_VERSION);
-  for (const key of ['people', 'oneOnOnes', 'feedback', 'goals', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews', 'events']) {
+  for (const key of ['people', 'oneOnOnes', 'feedback', 'goals', 'delegations', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews', 'events']) {
     assert.ok(Array.isArray(state[key]), `${key} should be an array`);
   }
   assert.equal(state.settings.oneOnOneCadenceDays, 7);
@@ -86,7 +86,7 @@ test('schema: normalization rejects non-objects without throwing', () => {
   assert.ok(Array.isArray(state.people));
   assert.equal(warnings.length, 1);
   const migrated = migrate({ schemaVersion: 1 });
-  assert.deepEqual(migrated.applied, ['1 → 2']);
+  assert.deepEqual(migrated.applied, ['1 → 2', '2 → 3']);
   assert.deepEqual(migrated.raw.reviews, []);
 });
 

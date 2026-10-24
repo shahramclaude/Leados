@@ -10,7 +10,7 @@
  * Pure module: no storage access, no clock.
  */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -67,8 +67,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   orgName: '',
   oneOnOneCadenceDays: 7,
   feedbackTargetDays: 21,
+  // Team conventions, not universal scores: both are user-configurable.
+  feedbackLatencyTargetDays: 7,
   recognitionTargetDays: 21,
   goalCheckinDays: 14,
+  delegationCheckinDays: 7,
   decisionReviewDays: 14,
   onboardingDays: 90,
   growthReviewDays: 30,
@@ -85,6 +88,7 @@ export const COLLECTIONS = [
   'oneOnOnes',
   'feedback',
   'goals',
+  'delegations',
   'growthPlans',
   'pulses',
   'decisions',
@@ -135,9 +139,9 @@ function dayOrNull(v) {
   return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
 }
 
-// Review periods drive inclusive filtering and recency checks. A regex alone
-// would accept impossible dates such as 2026-02-31 in a hand-edited import.
-function reviewDayOrNull(v) {
+// Calendar-day fields drive inclusive filtering, chronology and latency. A regex
+// alone would accept impossible dates such as 2026-02-31 in a hand-edited import.
+function calendarDayOrNull(v) {
   const day = dayOrNull(v);
   if (!day) return null;
   const parsed = new Date(`${day}T00:00:00.000Z`);
@@ -157,8 +161,10 @@ export function normalizeSettings(raw) {
     orgName: str(s.orgName, d.orgName).slice(0, 120),
     oneOnOneCadenceDays: clampInt(s.oneOnOneCadenceDays, 1, 90, d.oneOnOneCadenceDays),
     feedbackTargetDays: clampInt(s.feedbackTargetDays, 1, 365, d.feedbackTargetDays),
+    feedbackLatencyTargetDays: clampInt(s.feedbackLatencyTargetDays, 1, 90, d.feedbackLatencyTargetDays),
     recognitionTargetDays: clampInt(s.recognitionTargetDays, 1, 365, d.recognitionTargetDays),
     goalCheckinDays: clampInt(s.goalCheckinDays, 1, 180, d.goalCheckinDays),
+    delegationCheckinDays: clampInt(s.delegationCheckinDays, 1, 90, d.delegationCheckinDays),
     decisionReviewDays: clampInt(s.decisionReviewDays, 1, 365, d.decisionReviewDays),
     onboardingDays: clampInt(s.onboardingDays, 7, 365, d.onboardingDays),
     growthReviewDays: clampInt(s.growthReviewDays, 1, 365, d.growthReviewDays),
@@ -226,7 +232,7 @@ function normalizeScores(raw) {
 
 function normalizeReviewEvidence(items) {
   if (!Array.isArray(items)) return [];
-  const types = ['oneonone', 'feedback', 'goal', 'growth', 'recognition'];
+  const types = ['oneonone', 'feedback', 'goal', 'growth', 'recognition', 'delegation'];
   return items
     .filter(isPlainObject)
     .map((item, i) => {
@@ -237,7 +243,7 @@ function normalizeReviewEvidence(items) {
         id: str(item.id) || `${sourceType}:${sourceId || i}`,
         sourceType,
         sourceId,
-        date: reviewDayOrNull(item.date),
+        date: calendarDayOrNull(item.date),
         title: str(item.title).slice(0, 1000),
         detail: str(item.detail).slice(0, 4000),
         meta: str(item.meta).slice(0, 1000),
@@ -336,7 +342,8 @@ export function normalizeState(raw) {
   }));
   state.oneOnOnes = uniqueIds(oneOnOnes, '1:1s', warnings);
 
-  const feedback = asArray(raw, 'feedback', warnings).map((f, i) => ({
+  const rawFeedback = asArray(raw, 'feedback', warnings);
+  const feedback = rawFeedback.map((f, i) => ({
     id: str(f.id) || `fb-${i}`,
     personId: str(f.personId),
     direction: f.direction === 'received' ? 'received' : 'given',
@@ -345,19 +352,29 @@ export function normalizeState(raw) {
     behavior: str(f.behavior).slice(0, 2000),
     impact: str(f.impact).slice(0, 2000),
     tags: Array.isArray(f.tags) ? f.tags.filter((t) => typeof t === 'string').slice(0, 8) : [],
-    date: dayOrNull(f.date) || now.slice(0, 10),
+    date: calendarDayOrNull(f.date) || now.slice(0, 10),
+    observedOn: calendarDayOrNull(f.observedOn),
     followUpOn: dayOrNull(f.followUpOn),
     followUpDone: f.followUpDone === true,
     createdAt: isoOrNull(f.createdAt) || now,
   }));
   state.feedback = uniqueIds(feedback, 'Feedback', warnings);
+  const invalidObservations = rawFeedback.filter((f) => f.observedOn && !calendarDayOrNull(f.observedOn)).length;
+  if (invalidObservations) warnings.push(`Feedback: ${invalidObservations} invalid observation date(s) were left unmeasured`);
+  const reversedObservations = state.feedback.filter((f) => f.observedOn && f.observedOn > f.date).length;
+  if (reversedObservations) warnings.push(`Feedback: ${reversedObservations} observation date(s) are after the conversation and need correction`);
 
-  const goals = asArray(raw, 'goals', warnings).map((g, i) => ({
+  const rawGoals = asArray(raw, 'goals', warnings);
+  const invalidGoalAuthorship = rawGoals.filter((g) => g.coAuthored !== null && g.coAuthored !== undefined && typeof g.coAuthored !== 'boolean').length;
+  if (invalidGoalAuthorship) warnings.push(`Goals: ${invalidGoalAuthorship} invalid authorship value(s) were left unknown`);
+  const goals = rawGoals.map((g, i) => ({
     id: str(g.id) || `goal-${i}`,
     title: str(g.title).slice(0, 200),
     description: str(g.description).slice(0, 4000),
     ownerId: g.ownerId ? str(g.ownerId) : null,
     scope: g.scope === 'team' ? 'team' : 'person',
+    // Tri-state: true = co-authored, false = explicitly leader-set, null = unknown/N/A.
+    coAuthored: g.ownerId ? (g.coAuthored === true ? true : g.coAuthored === false ? false : null) : null,
     dueDate: dayOrNull(g.dueDate),
     keyResults: normalizeKeyResults(g.keyResults),
     confidence: CONFIDENCE.includes(g.confidence) ? g.confidence : 'on-track',
@@ -375,6 +392,55 @@ export function normalizeState(raw) {
     createdAt: isoOrNull(g.createdAt) || now,
   }));
   state.goals = uniqueIds(goals.filter((g) => g.title), 'Goals', warnings);
+
+  let droppedDelegationCheckins = 0;
+  const delegations = asArray(raw, 'delegations', warnings).map((d, i) => {
+    const delegatedOn = calendarDayOrNull(d.delegatedOn);
+    const status = ['active', 'done', 'returned'].includes(d.status) ? d.status : 'active';
+    const completedOn = status === 'done' ? calendarDayOrNull(d.completedOn) : null;
+    const returnedOn = status === 'returned' ? calendarDayOrNull(d.returnedOn) : null;
+    const terminalOn = completedOn || returnedOn;
+    const rawCheckins = Array.isArray(d.checkins) ? d.checkins.filter(isPlainObject) : [];
+    const checkins = rawCheckins.map((c, k) => ({
+      id: str(c.id) || `dchk-${k}`,
+      date: calendarDayOrNull(c.date),
+      progress: c.progress === 'blocked' ? 'blocked' : c.progress === 'on-track' ? 'on-track' : '',
+      note: str(c.note).slice(0, 4000),
+      createdAt: isoOrNull(c.createdAt),
+    })).filter((c) => c.date && c.note && c.progress && (!delegatedOn || c.date >= delegatedOn) && (!terminalOn || c.date <= terminalOn));
+    droppedDelegationCheckins += rawCheckins.length - checkins.length;
+    return {
+      id: str(d.id) || `delegation-${i}`,
+      personId: str(d.personId),
+      title: str(d.title).trim().slice(0, 200),
+      expectedOutcome: str(d.expectedOutcome).slice(0, 4000),
+      authority: ['recommend', 'agree', 'act-inform', 'own'].includes(d.authority) ? d.authority : '',
+      support: str(d.support).slice(0, 4000),
+      delegatedOn,
+      dueOn: calendarDayOrNull(d.dueOn),
+      status,
+      checkins,
+      completedOn,
+      completionNote: status === 'done' ? str(d.completionNote).slice(0, 4000) : '',
+      returnedOn,
+      returnReason: status === 'returned' ? str(d.returnReason).slice(0, 4000) : '',
+      createdAt: isoOrNull(d.createdAt) || now,
+      updatedAt: isoOrNull(d.updatedAt) || isoOrNull(d.createdAt) || now,
+    };
+  });
+  const validDelegations = delegations.filter((d) =>
+    d.title && d.personId && d.delegatedOn
+    && (!d.dueOn || d.dueOn >= d.delegatedOn)
+    && (d.status !== 'done' || d.completedOn)
+    && (d.status !== 'returned' || d.returnedOn)
+    && (!d.completedOn || d.completedOn >= d.delegatedOn)
+    && (!d.returnedOn || d.returnedOn >= d.delegatedOn),
+  );
+  if (validDelegations.length !== delegations.length) {
+    warnings.push(`Delegations: dropped ${delegations.length - validDelegations.length} record(s) with a missing title, owner, terminal date or inconsistent dates`);
+  }
+  if (droppedDelegationCheckins) warnings.push(`Delegations: dropped ${droppedDelegationCheckins} incomplete, invalid or post-terminal check-in(s)`);
+  state.delegations = uniqueIds(validDelegations, 'Delegations', warnings);
 
   const growthPlans = asArray(raw, 'growthPlans', warnings).map((p, i) => ({
     id: str(p.id) || `gp-${i}`,
@@ -463,8 +529,8 @@ export function normalizeState(raw) {
     return {
       id: str(review.id) || `review-${i}`,
       personId: str(review.personId),
-      periodStart: reviewDayOrNull(review.periodStart),
-      periodEnd: reviewDayOrNull(review.periodEnd),
+      periodStart: calendarDayOrNull(review.periodStart),
+      periodEnd: calendarDayOrNull(review.periodEnd),
       status,
       selfReflection: normalizeReflection(review.selfReflection, ['achievements', 'challenges', 'growth', 'support']),
       selfReflectionRecordedAt: isoOrNull(review.selfReflectionRecordedAt),
@@ -499,6 +565,7 @@ export function normalizeState(raw) {
   const orphanChecks = [
     ['oneOnOnes', (r) => r.personId],
     ['feedback', (r) => r.personId],
+    ['delegations', (r) => r.personId],
     ['growthPlans', (r) => r.personId],
     ['recognition', (r) => r.personId],
     ['readiness', (r) => r.personId],
@@ -514,12 +581,31 @@ export function normalizeState(raw) {
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Version 2 adds performance reviews without changing any
- * existing record or the storage key, so an existing workspace upgrades in
- * place and remains exportable.
+ * the next one. Versions 2 and 3 add records and nullable context without
+ * changing the storage key, so an existing workspace upgrades in place.
+ * Unknown observation dates and goal authorship stay null, never false/zero.
  */
 export const MIGRATIONS = {
   1: (v1) => ({ ...v1, schemaVersion: 2, reviews: Array.isArray(v1.reviews) ? v1.reviews : [] }),
+  2: (v2) => ({
+    ...v2,
+    schemaVersion: 3,
+    settings: {
+      ...v2.settings,
+      feedbackLatencyTargetDays: v2.settings?.feedbackLatencyTargetDays ?? 7,
+      delegationCheckinDays: v2.settings?.delegationCheckinDays ?? 7,
+    },
+    feedback: Array.isArray(v2.feedback)
+      ? v2.feedback.map((item) => ({ ...item, observedOn: typeof item.observedOn === 'string' ? item.observedOn : null }))
+      : [],
+    goals: Array.isArray(v2.goals)
+      ? v2.goals.map((goal) => ({
+          ...goal,
+          coAuthored: goal.ownerId && typeof goal.coAuthored === 'boolean' ? goal.coAuthored : null,
+        }))
+      : [],
+    delegations: Array.isArray(v2.delegations) ? v2.delegations : [],
+  }),
 };
 
 /** Apply migrations until the blob is current. Returns { raw, applied }. */

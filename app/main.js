@@ -19,6 +19,7 @@ import { renderPerson } from './views/person.js';
 import { renderOneOnOnes } from './views/oneonones.js';
 import { renderFeedback } from './views/feedback.js';
 import { renderGoals } from './views/goals.js';
+import { renderDelegations } from './views/delegations.js';
 import { renderGrowth } from './views/growth.js';
 import { renderReadiness } from './views/readiness.js';
 import { renderHealth } from './views/health.js';
@@ -41,6 +42,7 @@ export const NAV = [
   ] },
   { section: 'Growth', items: [
     { route: 'goals', label: 'Goals', icon: '⊕' },
+    { route: 'delegations', label: 'Delegation', icon: '⇥' },
     { route: 'growth', label: 'Growth plans', icon: '↗' },
     { route: 'readiness', label: 'Succession', icon: '⌸' },
   ] },
@@ -61,6 +63,7 @@ const RENDERERS = {
   oneonones: (ctx) => renderOneOnOnes(ctx),
   feedback: (ctx) => renderFeedback(ctx),
   goals: (ctx) => renderGoals(ctx),
+  delegations: (ctx) => renderDelegations(ctx),
   growth: (ctx) => renderGrowth(ctx),
   readiness: (ctx) => renderReadiness(ctx),
   health: (ctx) => renderHealth(ctx),

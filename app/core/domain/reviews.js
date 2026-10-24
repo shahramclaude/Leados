@@ -12,6 +12,8 @@
 
 import { daysBetween, dayKey } from '../time.js';
 import { goalProgress } from './goals.js';
+import { feedbackLatency } from './feedback.js';
+import { authorityFor, DELEGATION_STATUS } from './delegations.js';
 import { planProgress } from './growth.js';
 import { REVIEW_RATINGS, REVIEW_RATING_LABELS } from '../schema.js';
 
@@ -36,6 +38,7 @@ const SOURCE_LABELS = {
   goal: 'Goal',
   growth: 'Growth plan',
   recognition: 'Recognition',
+  delegation: 'Delegation',
 };
 
 export function reviewSourceLabel(type) {
@@ -64,6 +67,7 @@ function sourceRoute(type, sourceId, personId) {
   if (type === 'feedback') return `#/feedback?person=${person}&item=${id}`;
   if (type === 'goal') return `#/goals?goal=${id}`;
   if (type === 'growth') return `#/growth?plan=${id}`;
+  if (type === 'delegation') return `#/delegations?delegation=${id}`;
   return `#/recognition?item=${id}`;
 }
 
@@ -108,11 +112,15 @@ export function buildReviewEvidence(state, personId, periodStart, periodEnd) {
 
   for (const feedback of (state.feedback || []).filter((f) => mine(f) && f.direction === 'given' && inReviewPeriod(f.date, periodStart, periodEnd))) {
     const sbi = [feedback.situation, feedback.behavior, feedback.impact ? `Impact: ${feedback.impact}` : ''].filter(Boolean).join(' — ');
+    const latency = feedbackLatency(feedback);
+    const latencyMeta = feedback.observedOn
+      ? `observed ${feedback.observedOn} · ${latency.status === 'measured' ? `${latency.days}d observation-to-conversation gap` : 'invalid observation/conversation dates'}`
+      : 'observation date not recorded';
     items.push(evidenceItem({
       type: 'feedback', sourceId: feedback.id, personId, date: feedback.date,
       title: feedback.kind === 'praise' ? 'Praise' : 'Constructive feedback',
       detail: sbi,
-      meta: `${feedback.kind === 'praise' ? 'Reinforce' : 'Develop'}${feedback.followUpOn ? ` · follow-up ${feedback.followUpDone ? 'closed' : `due ${feedback.followUpOn}`}` : ''}`,
+      meta: `${feedback.kind === 'praise' ? 'Reinforce' : 'Develop'} · ${latencyMeta}${feedback.followUpOn ? ` · follow-up ${feedback.followUpDone ? 'closed' : `due ${feedback.followUpOn}`}` : ''}`,
       basis: 'Feedback conversation date',
       valence: feedback.kind === 'praise' ? 'positive' : 'constructive',
     }));
@@ -149,9 +157,50 @@ export function buildReviewEvidence(state, personId, periodStart, periodEnd) {
       type: 'goal', sourceId: goal.id, personId, date,
       title: goal.title,
       detail: lastCheckin?.note || goal.description || 'No check-in note recorded in this period.',
-      meta: `${progress === null ? 'Unmeasured at capture' : `${progress}% progress at capture`} · ${goal.status} · ${confidence.replace('-', ' ')} · ${checkins.length} check-in${checkins.length === 1 ? '' : 's'} in period`,
+      meta: `${progress === null ? 'Unmeasured at capture' : `${progress}% progress at capture`} · ${goal.status} · ${confidence.replace('-', ' ')} · ${goal.coAuthored === true ? 'co-authored' : goal.coAuthored === false ? 'explicitly leader-set' : 'authorship unknown'} · ${checkins.length} check-in${checkins.length === 1 ? '' : 's'} in period`,
       basis: lastCheckin ? 'Latest in-period check-in' : createdInPeriod ? 'Goal created in period' : 'Current goal snapshot; no dated goal event in period',
       valence,
+    }));
+  }
+
+  for (const delegation of (state.delegations || []).filter((d) => mine(d))) {
+    const events = [];
+    if (inReviewPeriod(delegation.delegatedOn, periodStart, periodEnd)) {
+      events.push({
+        date: delegation.delegatedOn,
+        kind: 'delegated',
+        detail: delegation.expectedOutcome || 'No expected outcome recorded.',
+        basis: 'Delegated in period',
+        valence: 'neutral',
+      });
+    }
+    const checkins = (delegation.checkins || []).filter((checkin) => inReviewPeriod(checkin.date, periodStart, periodEnd));
+    for (const checkin of checkins) {
+      events.push({
+        date: checkin.date,
+        kind: checkin.progress,
+        detail: checkin.note,
+        basis: 'Delegation check-in',
+        valence: checkin.progress === 'blocked' ? 'constructive' : 'neutral',
+      });
+    }
+    if (delegation.status === 'done' && inReviewPeriod(delegation.completedOn, periodStart, periodEnd)) {
+      events.push({ date: delegation.completedOn, kind: 'done', detail: delegation.completionNote || 'Completion note not recorded.', basis: 'Outcome completed in period', valence: 'positive' });
+    }
+    if (delegation.status === 'returned' && inReviewPeriod(delegation.returnedOn, periodStart, periodEnd)) {
+      events.push({ date: delegation.returnedOn, kind: 'returned', detail: delegation.returnReason || 'Return reason not recorded.', basis: 'Work returned to leader in period', valence: 'constructive' });
+    }
+    if (!events.length) continue;
+    events.sort((a, b) => a.date.localeCompare(b.date));
+    const latest = events.at(-1);
+    const authority = authorityFor(delegation);
+    items.push(evidenceItem({
+      type: 'delegation', sourceId: delegation.id, personId, date: latest.date,
+      title: delegation.title,
+      detail: latest.detail,
+      meta: `${DELEGATION_STATUS[delegation.status] || delegation.status} at capture · ${authority.label} · due ${delegation.dueOn || 'not recorded'} · ${checkins.length} check-in${checkins.length === 1 ? '' : 's'} in period`,
+      basis: `${latest.basis}; status and authority are capture-time values`,
+      valence: latest.valence,
     }));
   }
 
@@ -228,7 +277,7 @@ export function calibrateReview(review, evidence = review.evidence || []) {
 
   const rating = review.manager?.rating || '';
   if (['often-exceeds', 'sets-standard'].includes(rating) && summary.positive === 0) {
-    add('CAL-03', 'High rating has no dated positive evidence', `${REVIEW_RATING_LABELS[rating]} is selected, but the packet has no dated praise, recognition, completed goal, or completed development evidence. Add the missing example or reconsider the rating.`);
+    add('CAL-03', 'High rating has no dated positive evidence', `${REVIEW_RATING_LABELS[rating]} is selected, but the packet has no dated praise, recognition, completed goal, completed delegation, or completed development evidence. Add the missing example or reconsider the rating.`);
   }
   if (rating === 'needs-development' && summary.constructive === 0) {
     add('CAL-04', 'Development rating has no dated constructive evidence', 'Needs development is selected, but the packet has no dated constructive feedback, at-risk goal, or dropped goal. Record the specific behaviour or outcome that supports the assessment.');

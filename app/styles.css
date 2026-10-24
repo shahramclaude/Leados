@@ -929,3 +929,41 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
   .review-page .stat-row { grid-template-columns: repeat(4, 1fr); }
   .review-page .banner { border: 0; padding: 8px 0; }
 }
+
+/* Feedback latency and delegation follow-through. */
+.latency-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 150px; }
+.authority-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.authority-item { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; }
+.authority-item strong { display: block; font-size: 13px; margin-bottom: 5px; }
+.authority-item p { margin: 0; line-height: 1.5; }
+.delegation-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.delegation-card { min-width: 0; }
+.delegation-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 7px 10px; }
+.delegation-outcome { background: var(--panel-2); border-radius: var(--radius-sm); padding: 10px 12px; }
+.delegation-outcome p { margin: 4px 0 0; line-height: 1.5; }
+.uppercase { text-transform: uppercase; letter-spacing: .06em; font-weight: 750; }
+.delegation-checkpoint, .delegation-result { border-left: 3px solid var(--line-strong); padding: 9px 12px; background: var(--panel-2); border-radius: var(--radius-sm); }
+.delegation-checkpoint.needs-attention { border-left-color: var(--warn); background: var(--warn-soft); }
+.delegation-result.is-done { border-left-color: var(--good); }
+.delegation-result.is-returned { border-left-color: var(--caution); }
+.delegation-checkpoint p, .delegation-result p { margin: 4px 0 0; }
+.checkin-history { border-top: 1px solid var(--line); padding-top: 9px; }
+.checkin-history summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.checkin-history ol { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.checkin-history li > div { display: flex; align-items: center; gap: 8px; }
+.checkin-history li p { margin: 4px 0 0; color: var(--ink-soft); font-size: 13px; }
+.filter-note { color: var(--muted); font-size: 13px; margin: 0; }
+
+@media (max-width: 1180px) {
+  .authority-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .delegation-list { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .authority-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media print {
+  .delegation-card, .authority-item, .delegation-outcome, .delegation-checkpoint, .delegation-result { background: transparent; }
+  .checkin-history > ol { display: flex; }
+}

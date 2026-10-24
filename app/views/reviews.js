@@ -81,7 +81,7 @@ export function renderReviews(ctx) {
       : card({
           body: emptyState({
             title: 'No performance reviews yet',
-            body: 'Choose a person and a period. LeadOS will assemble their goals, feedback, 1:1 notes, development and recognition, then show you where the evidence is thin.',
+            body: 'Choose a person and a period. LeadOS will assemble their goals, feedback, 1:1 notes, delegations, development and recognition, then show you where the evidence is thin.',
             action: state.people.some((p) => p.status !== 'archived')
               ? h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openPerformanceReviewDialog(ctx) }, 'Prepare the first review')
               : h('a', { class: 'btn btn-primary', href: '#/people' }, 'Add your team first'),
@@ -167,7 +167,7 @@ export function renderReviewDetail(ctx, reviewId) {
       tone: 'info',
       title: isDraft ? 'Review the packet before sharing it' : 'Completed evidence snapshot',
       body: isDraft
-        ? `Evidence was captured ${formatDate(review.evidenceCapturedAt)}. It can include private 1:1 notes. Anonymous pulse answers and upward feedback about the manager are excluded. Goal and development numbers say “at capture” rather than pretending to be period-end history.`
+        ? `Evidence was captured ${formatDate(review.evidenceCapturedAt)}. It can include private 1:1 notes. Anonymous pulse answers and upward feedback about the manager are excluded. Goal, development and delegation values say “at capture” rather than pretending to be period-end history.`
         : `This packet keeps the ${evidence.length} source excerpt${evidence.length === 1 ? '' : 's'} frozen at completion. Source links open the live record, which may since have changed.`,
     }),
     h(
@@ -263,7 +263,7 @@ function evidenceCard(ctx, review, evidence, summary, isDraft) {
         )
       : emptyState({
           title: 'No source records in this packet',
-          body: 'A completed review needs at least one dated record from this period. Log a real conversation, feedback note, goal check-in or recognition, then refresh this packet.',
+          body: 'A completed review needs at least one dated record from this period. Log a real conversation, feedback note, goal check-in, delegation event or recognition, then refresh this packet.',
           action: h('div', { class: 'row-gap no-print' }, h('a', { class: 'btn btn-primary', href: `#/people/${encodeURIComponent(review.personId)}` }, 'Open person record'), h('a', { class: 'btn btn-ghost', href: `#/feedback?person=${encodeURIComponent(review.personId)}` }, 'Record feedback')),
         }),
   });

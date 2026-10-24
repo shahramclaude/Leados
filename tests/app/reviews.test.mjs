@@ -79,7 +79,7 @@ test('review periods are validated and both boundary dates are inclusive', () =>
   assert.ok(!evidence.some((item) => ['m-before', 'm-after', 'm-other'].includes(item.sourceId)));
 });
 
-test('review evidence covers five sources but excludes upward feedback and anonymous pulse', () => {
+test('review evidence covers six sources but excludes upward feedback and anonymous pulse', () => {
   const evidence = buildReviewEvidence(makeState(), 'p1', '2026-07-01', '2026-09-30');
   assert.deepEqual(new Set(evidence.map((item) => item.sourceType)), new Set(['oneonone', 'feedback', 'goal', 'growth', 'recognition']));
   assert.ok(!evidence.some((item) => item.sourceId === 'f-upward'), 'feedback from the person about the manager is not evidence about the person');
@@ -162,7 +162,7 @@ test('completion readiness requires evidence and manager writing, never a self-r
 test('schema v1 migrates in place and review normalization repairs unsafe fields', () => {
   const old = { schemaVersion: 1, people: [{ id: 'p1', name: 'Ada' }] };
   const { raw, applied } = migrate(old);
-  assert.deepEqual(applied, ['1 → 2']);
+  assert.deepEqual(applied, ['1 → 2', '2 → 3']);
   const { state, warnings } = normalizeState({
     ...raw,
     reviews: [

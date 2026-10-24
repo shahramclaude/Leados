@@ -7,7 +7,7 @@
  *  2. Writes are explicit and atomic per mutation: the new state is only
  *     adopted after it serialises successfully, so an out-of-quota browser
  *     cannot leave the app showing data it did not save.
- *  3. Every meaningful mutation appends to an append-only event log, capped so
+ *  3. Every meaningful mutation appends to an append-oriented event log, capped so
  *     it can never grow the blob without bound.
  *  4. Storage is injected, so the whole module is testable in Node.
  */
@@ -258,7 +258,7 @@ export function createStore(options = {}) {
   function clearDemo() {
     const next = JSON.parse(JSON.stringify(state));
     const isDemo = (record) => typeof record.id === 'string' && record.id.includes('-demo-');
-    for (const key of ['oneOnOnes', 'feedback', 'goals', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews']) {
+    for (const key of ['oneOnOnes', 'feedback', 'goals', 'delegations', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews']) {
       next[key] = (next[key] || []).filter((record) => !isDemo(record));
     }
     next.people = next.people.filter((person) => !isDemo(person));
@@ -266,7 +266,8 @@ export function createStore(options = {}) {
     // meaningful after that person is removed; reviews on real people survive.
     const remainingPeople = new Set(next.people.map((person) => person.id));
     next.reviews = next.reviews.filter((review) => remainingPeople.has(review.personId));
-    // The event log is append-only history and is intentionally not rewritten.
+    next.delegations = next.delegations.filter((delegation) => remainingPeople.has(delegation.personId));
+    // The event log is retained history and is intentionally not rewritten by demo cleanup.
     next.meta.isDemo = false;
     next.meta.revision = (next.meta.revision || 0) + 1;
     next.meta.updatedAt = now().toISOString();

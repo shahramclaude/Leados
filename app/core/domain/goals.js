@@ -106,8 +106,13 @@ export function goalsSummary(state, now, settings) {
   const active = activeGoals(state);
   const health = active.map((g) => ({ goal: g, ...goalHealth(g, now) }));
   const stale = health.filter((row) => checkinStale(row.goal, now, settings).stale);
+  const personOwned = active.filter((goal) => goal.ownerId);
   return {
     active: active.length,
+    personOwned: personOwned.length,
+    coAuthored: personOwned.filter((goal) => goal.coAuthored === true).length,
+    leaderAuthored: personOwned.filter((goal) => goal.coAuthored === false).length,
+    authorshipUnknown: personOwned.filter((goal) => goal.coAuthored === null || goal.coAuthored === undefined).length,
     onTrack: health.filter((r) => r.health === 'on-track').length,
     atRisk: health.filter((r) => r.health === 'at-risk').length,
     offTrack: health.filter((r) => r.health === 'off-track').length,

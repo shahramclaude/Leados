@@ -114,7 +114,7 @@ test('app boots on Today with an empty workspace and no errors', async () => {
 test('every route renders without throwing', async () => {
   const env = boot();
   const app = await createAppInstance(env);
-  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'growth', 'readiness', 'health', 'decisions', 'recognition', 'settings'];
+  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'recognition', 'settings'];
   for (const route of routes) {
     app.navigate(`#/${route}`);
     const view = env.document.getElementById('view');
@@ -428,7 +428,7 @@ test('a full demo workspace renders every screen without an error panel', async 
   const env = boot();
   const app = await createAppInstance(env);
   app.ctx.loadDemo();
-  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'recognition', 'goals', 'growth', 'readiness', 'health', 'decisions', 'settings'];
+  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'recognition', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'settings'];
   for (const route of routes) {
     app.navigate(`#/${route}`);
     const view = env.document.getElementById('view');
@@ -456,7 +456,7 @@ test('the settings screen reports the storage footprint and revision', async () 
   app.api.addPerson({ name: 'Someone' });
   app.navigate('#/settings');
   const text = env.document.getElementById('view').textContent;
-  assert.ok(text.includes('Schema v2'));
+  assert.ok(text.includes('Schema v3'));
   assert.ok(text.includes('Event log'));
   assert.ok(text.includes('Export JSON'));
   assert.ok(app.store.sizeBytes() > 100);
@@ -607,9 +607,9 @@ test('every review evidence link opens its actual source record, including compl
   const person = app.store.state.people.find((p) => p.name === 'Mei Lin Chen');
   const created = app.api.createReview({ personId: person.id, periodStart: '2026-07-27', periodEnd: '2026-10-24' });
   const evidence = app.store.state.reviews.find((review) => review.id === created.id).evidence;
-  assert.deepEqual(new Set(evidence.map((item) => item.sourceType)), new Set(['oneonone', 'feedback', 'goal', 'growth', 'recognition']));
+  assert.deepEqual(new Set(evidence.map((item) => item.sourceType)), new Set(['oneonone', 'feedback', 'goal', 'growth', 'recognition', 'delegation']));
 
-  for (const type of ['oneonone', 'feedback', 'goal', 'growth', 'recognition']) {
+  for (const type of ['oneonone', 'feedback', 'goal', 'growth', 'recognition', 'delegation']) {
     const item = evidence.find((entry) => entry.sourceType === type);
     app.navigate(item.route);
     const view = env.document.getElementById('view');
@@ -619,6 +619,7 @@ test('every review evidence link opens its actual source record, including compl
     if (type === 'goal') assert.equal(view.querySelectorAll('.card.is-focused').length, 1);
     if (type === 'growth') assert.equal(view.querySelectorAll('.grow-steps').length, 1);
     if (type === 'recognition') assert.equal(view.querySelectorAll('.feed-item').length, 1);
+    if (type === 'delegation') assert.equal(view.querySelectorAll('.delegation-card.is-focused').length, 1);
   }
 
   const goalItem = evidence.find((item) => item.sourceType === 'goal');

@@ -18,6 +18,7 @@ export function renderSettings(ctx) {
     oneOnOnes: state.oneOnOnes.length,
     feedback: state.feedback.length,
     goals: state.goals.length,
+    delegations: state.delegations.length,
     growthPlans: state.growthPlans.length,
     pulses: state.pulses.length,
     decisions: state.decisions.length,
@@ -32,7 +33,9 @@ export function renderSettings(ctx) {
   const thresholdRows = [
     ['1:1 cadence', `${s.oneOnOneCadenceDays} days`],
     ['Feedback target', `${s.feedbackTargetDays} days`],
+    ['Observation → conversation convention', `${s.feedbackLatencyTargetDays} days`],
     ['Goal check-in', `${s.goalCheckinDays} days`],
+    ['Delegation check-in convention', `${s.delegationCheckinDays} days`],
     ['Recognition target', `${s.recognitionTargetDays} days`],
     ['Decision review default', `${s.decisionReviewDays} days`],
     ['Growth plan review', `${s.growthReviewDays} days`],
@@ -137,7 +140,7 @@ export function renderSettings(ctx) {
       'div',
       { class: 'stat-row' },
       stat({ label: 'Records', value: Object.values(counts).reduce((a, b) => a + b, 0), hint: `${counts.people} people` }),
-      stat({ label: 'Event log', value: state.events.length, hint: 'append-only, capped at 600' }),
+      stat({ label: 'Event log', value: state.events.length, hint: 'append-oriented, capped at 600' }),
       stat({ label: 'Stored size', value: bytes > 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${bytes} B`, hint: 'browser localStorage' }),
       stat({ label: 'Last saved', value: state.meta.updatedAt.slice(11, 16), hint: `${formatDate(state.meta.updatedAt)} · revision ${state.meta.revision}` }),
     ),
@@ -203,7 +206,7 @@ export function renderSettings(ctx) {
     }),
     card({
       title: 'Event log',
-      subtitle: 'Append-only record of what changed. The most recent 40 entries.',
+      subtitle: 'Append-oriented audit history, retained during demo cleanup. The most recent 40 entries.',
       body: events.length
         ? table({
             columns: [
@@ -221,7 +224,7 @@ export function renderSettings(ctx) {
       body: h(
         'div',
         { class: 'prose small' },
-        h('p', null, 'LeadOS is a local-first leadership workspace. It covers the recurring work of managing people: 1:1s, SBI feedback, evidence-backed performance reviews, OKR-style goals, GROW development plans, anonymous pulse, a decision log with DACI roles, recognition, and evidence-gated succession planning. It runs entirely in this browser — there is no server, no account and no telemetry.'),
+        h('p', null, 'LeadOS is a local-first leadership workspace. It covers the recurring work of managing people: 1:1s, timely SBI feedback, evidence-backed performance reviews, OKR-style goals with explicit co-authorship, outcome delegation with authority and check-ins, GROW development plans, anonymous pulse, a decision log with DACI roles, recognition, and evidence-gated succession planning. It runs entirely in this browser — there is no server, no account and no telemetry.'),
         h('p', null, 'The scoring is deterministic and explainable: each health dimension names its formula, each signal names its rule and evidence, and no number is displayed that cannot be traced back to a record you entered.'),
         h('p', null, 'Frameworks drawn on: situational leadership and GROW (Whitmore), SBI feedback and the Radical Candor 2×2 (Kim Scott), Tuckman stages, Edmondson’s psychological safety, DACI and Bezos-style one-way/two-way door decisions, OKRs (Doerr), and 9-box succession practice — adapted so that ratings require evidence rather than assertion.'),
         h('p', { class: 'muted' }, 'What it deliberately does not do: it does not score people’s personalities, it does not compare employees against each other with a forced ranking, and it does not infer sentiment from messages. Those are the mechanisms most often used to make talent tooling feel objective while making it less fair.'),
@@ -265,6 +268,7 @@ function labelFor(key) {
     oneOnOnes: '1:1s',
     feedback: 'Feedback notes',
     goals: 'Goals',
+    delegations: 'Delegations',
     growthPlans: 'Growth plans',
     pulses: 'Pulse responses',
     decisions: 'Decisions',

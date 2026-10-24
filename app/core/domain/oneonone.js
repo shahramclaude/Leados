@@ -8,6 +8,7 @@
  */
 
 import { addDays, daysSince, isOverdue, latestByDate, round } from '../time.js';
+import { delegationHealth } from './delegations.js';
 
 export const STATUS_LABELS = { held: 'Held', skipped: 'Skipped', moved: 'Moved' };
 
@@ -159,6 +160,22 @@ export function suggestAgenda(state, personId, now, settings) {
   const risky = activeGoals.filter((g) => g.confidence !== 'on-track');
   for (const goal of risky.slice(0, 2)) {
     push(`Unblock "${goal.title}" — currently ${goal.confidence.replace('-', ' ')}.`, 'goal', 'A goal this person owns is not on track.');
+  }
+
+  const delegated = (state.delegations || [])
+    .filter((delegation) => delegation.personId === personId && delegation.status === 'active')
+    .map((delegation) => ({ delegation, health: delegationHealth(delegation, now, settings) }))
+    .filter(({ health }) => ['blocked', 'overdue', 'unscheduled', 'checkin-due'].includes(health.status));
+  for (const { delegation, health } of delegated.slice(0, 2)) {
+    push(
+      `Review delegated outcome "${delegation.title}" — ${health.label.toLowerCase()}.`,
+      'delegation',
+      health.blocked
+        ? 'The latest delegation check-in says the owner is blocked and needs support.'
+        : health.overdue
+          ? 'A delegated outcome is past its due date without a recorded result.'
+          : 'The delegation checkpoint is due under the team convention.',
+    );
   }
 
   const constructive = state.feedback

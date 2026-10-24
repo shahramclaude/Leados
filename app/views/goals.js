@@ -56,6 +56,12 @@ export function renderGoals(ctx) {
       stat({ label: 'At risk', value: summary.atRisk + summary.offTrack, hint: 'stated or measured', tone: summary.atRisk + summary.offTrack ? 'warn' : '' }),
       stat({ label: 'No key results', value: summary.noKr, hint: 'cannot be scored', tone: summary.noKr ? 'warn' : '' }),
       stat({ label: 'Check-in gap', value: summary.stale.length, hint: `older than ${state.settings.goalCheckinDays}d`, tone: summary.stale.length ? 'warn' : '' }),
+      stat({
+        label: 'Co-authored',
+        value: summary.personOwned ? `${summary.coAuthored}/${summary.personOwned}` : '—',
+        hint: `${summary.leaderAuthored} leader-set · ${summary.authorshipUnknown} unknown`,
+        tone: summary.leaderAuthored ? 'warn' : summary.coAuthored ? 'good' : '',
+      }),
     ),
 
     tabs({
@@ -112,6 +118,9 @@ function goalCard(ctx, goal, health, owner, focused) {
               : health.status === 'no-kr'
                 ? badge('unmeasured', 'caution')
                 : badge('on pace', 'good'),
+        owner
+          ? badge(goal.coAuthored === true ? 'co-authored' : goal.coAuthored === false ? 'leader-set' : 'authorship unknown', goal.coAuthored === true ? 'good' : goal.coAuthored === false ? 'warn' : 'neutral')
+          : null,
         health.daysLeft !== null ? h('span', { class: 'muted tiny' }, health.daysLeft >= 0 ? `${health.daysLeft} days left` : `${Math.abs(health.daysLeft)} days over`) : null,
       ),
 
@@ -166,6 +175,7 @@ function goalCard(ctx, goal, health, owner, focused) {
       h(
         'div',
         { class: 'card-actions' },
+        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openGoalDialog(ctx, { goal }) }, 'Edit goal'),
         h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goalId: goal.id }) }, 'Add key result'),
         goal.status === 'active'
           ? h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCheckInDialog(ctx, { goal }) }, 'Log a check-in')

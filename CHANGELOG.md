@@ -17,15 +17,25 @@ file therefore starts at the first version that can be verified against real cod
 ### Added
 - Canonical zero-build leadership workspace with roster, 1:1s, SBI feedback, goals, GROW,
   anonymous pulse, decisions, recognition, succession, health and traceable signals.
+- Feedback observation dates, configurable observation-to-conversation latency, `FB-06`, and
+  date correction that leaves missing values explicitly unmeasured.
+- Tri-state goal co-authorship with editable co-authored/leader-set/unknown context and explicit `GOAL-06`.
+- Outcome delegation with decision authority, support, due dates, dated check-ins, completion,
+  return-to-leader history, `DEL-01`…`DEL-03`, 1:1 agenda integration and a dedicated route.
 - Evidence-linked performance-review packets with employee reflection, manager assessment,
   optional anchored ratings, calibration warnings, source drill-down and print/save-PDF.
-- Schema v2 migration, review export/import, frozen completion snapshots and audit events.
-- 96 canonical domain, persistence and jsdom UI integration tests (`npm test`).
+  Packets now include feedback latency, goal authorship and dated delegation outcomes.
+- Schema v2/v3 migrations, review/delegation export/import, frozen completion snapshots and audit events.
+- 113 canonical domain, persistence and jsdom UI integration tests (`npm test`).
 
 ### Fixed
 - Key-result dialogs now write to the goal that opened them and missing goals fail explicitly.
 - Development-plan editing preserves plan identity, options and commitments.
 - Development overdue counts use the injected clock for deterministic results.
+- Goal authorship editing preserves goal identity, key results and check-ins; missing goals fail explicitly.
+- Delegation chronology is validated before writes, and later same-day check-ins correctly supersede
+  an earlier blocked state without erasing the overdue fact.
+- Demo cleanup removes delegations attached to fabricated people while preserving real-person work.
 
 ### Security
 - Anonymous pulse answers and upward feedback about the manager are excluded from review

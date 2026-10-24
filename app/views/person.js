@@ -16,7 +16,7 @@ import { humanDays, formatDate, daysSince } from '../core/time.js';
 import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
   openGrowthPlanDialog, openReadinessDialog, confirmArchive,
-  openCheckInDialog, openWillActionDialog, openPerformanceReviewDialog,
+  openCheckInDialog, openWillActionDialog, openPerformanceReviewDialog, openDelegationDialog,
 } from '../ui/modals.js';
 
 export function renderPerson(ctx, personId) {
@@ -29,6 +29,7 @@ export function renderPerson(ctx, personId) {
   const cad = cadence(state, person.id, now, state.settings);
   const fb = personFeedbackStats(state, person.id, now, state.settings);
   const goals = goalsFor(state, person.id);
+  const delegations = (state.delegations || []).filter((delegation) => delegation.personId === person.id);
   const plan = activePlan(state, person.id);
   const planHealth = plan ? { completeness: growCompleteness(plan), progress: planProgress(plan, now), review: reviewState(plan, now) } : null;
   const readiness = assess(state, person.id, now, state.settings);
@@ -52,6 +53,8 @@ export function renderPerson(ctx, personId) {
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openPersonDialog(ctx, { person }) }, 'Edit'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => confirmArchive(ctx, person) }, 'Archive'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openPerformanceReviewDialog(ctx, { personId: person.id }) }, 'Prepare review'),
+      h('a', { class: 'btn btn-ghost', href: `#/delegations?person=${encodeURIComponent(person.id)}` }, 'Delegations'),
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openDelegationDialog(ctx, { personId: person.id }) }, 'Delegate'),
       h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: person.id }) }, 'Log a 1:1'),
     ],
   });
@@ -72,6 +75,7 @@ export function renderPerson(ctx, personId) {
     stat({ label: 'Feedback', value: fb.daysSinceGiven === null ? 'never' : humanDays(fb.daysSinceGiven), hint: BALANCE_LABELS[fb.balance], tone: fb.isStale ? 'warn' : 'good' }),
     stat({ label: 'Active goals', value: goals.filter((g) => g.status === 'active').length, hint: goals.length ? 'owned outcomes' : 'none set' }),
     stat({ label: 'Open actions', value: actions.length, hint: actions.filter((a) => a.overdue).length ? `${actions.filter((a) => a.overdue).length} overdue` : 'none overdue', tone: actions.some((a) => a.overdue) ? 'warn' : '' }),
+    stat({ label: 'Delegated', value: delegations.filter((d) => d.status === 'active').length, hint: `${delegations.filter((d) => d.status === 'done').length} completed · ${delegations.filter((d) => d.status === 'returned').length} returned` }),
   );
 
   const agendaCard = card({
@@ -93,7 +97,7 @@ export function renderPerson(ctx, personId) {
 
   const feedbackCard = card({
     title: 'Feedback',
-    subtitle: `${fb.givenCount} given · ${fb.receivedCount} received · ${BALANCE_LABELS[fb.balance]}`,
+    subtitle: `${fb.givenCount} given · ${fb.receivedCount} received · ${BALANCE_LABELS[fb.balance]}${fb.latencySamples ? ` · avg ${fb.averageLatency}d observed → discussed` : ' · latency unmeasured'}`,
     actions: [
       h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openFeedbackDialog(ctx, { personId: person.id, kind: 'praise' }) }, 'Praise'),
       h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openFeedbackDialog(ctx, { personId: person.id, kind: 'constructive' }) }, 'Constructive'),

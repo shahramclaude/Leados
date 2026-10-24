@@ -28,8 +28,20 @@ three axes and returns coaching for each gap, live, while the note is being writ
 (`views/feedback.js`, `ui/modals.js`). Rules `FB-01` (never recorded), `FB-02` (stale),
 `FB-03` (praise only), `FB-04` (criticism only), `FB-05` (follow-up due).
 
-**Deliberately not implemented.** A hard block on vague feedback. People stop logging;
-a coach that explains is worth more than a validator that refuses.
+**Timeliness added this session.** Gallup describes useful feedback as fast, frequent and
+focused on recent work ([Gallup, *Fast Feedback Fuels Performance*](https://www.gallup.com/workplace/357764/fast-feedback-fuels-performance.aspx)).
+That supports measuring the observation-to-conversation gap; it does **not** establish a
+universal seven-day scoring cutoff. Feedback now stores `observedOn` separately from the
+conversation date. `feedbackLatencySummary()` reports average/max/delayed counts only for
+real date pairs in the 90-day window, and `FB-06` links to the measured items beyond the
+configurable team convention. Missing dates remain unmeasured; received/upward feedback is
+excluded from person-performance latency. Existing dates can be corrected without rewriting
+the SBI note.
+
+**Deliberately not implemented.** A hard block on vague feedback, a zero-day value for an
+unknown observation, or a claim that seven days is a research-validated threshold. People
+stop logging under hard blocks; a coach that explains is worth more than a validator that
+refuses, and unknown data must not become a flattering measurement.
 
 ---
 
@@ -122,9 +134,14 @@ from elapsed time. The gap drives `GOAL-01` (behind pace / overdue) and `GOAL-02
 as *unmeasured* — never as 0%, because a missing number and a bad number demand
 different responses. `GOAL-03` tracks check-in staleness.
 
-**Planned, not done.** Recording whether the *person* co-authored the goal (Gallup's
-involvement finding). The data model has no field for it yet and inventing a checkbox
-that nothing checks would be decoration. See `ROADMAP.md`.
+**Co-authorship added this session.** Gallup reports that employees whose managers involve
+them in goal setting are 3.6× as likely to be engaged; that is an association, not proof that
+every leader-set objective causes disengagement ([Gallup, *Re-Engineering Performance Management*](https://www.gallup.com/workplace/238064/re-engineering-performance-management.aspx)).
+A person-owned goal now records `coAuthored: true | false | null`: shaped together, explicitly
+leader-set, or unknown. Team goals store null as not applicable. `GOAL-06` fires only for an
+explicit false value and prompts a conversation about understanding and ownership; it never
+infers authorship from silence. The goal edit flow corrects the field without replacing the
+objective's key results or check-in history, and review evidence labels the capture-time value.
 
 ---
 
@@ -228,7 +245,7 @@ review lifecycle left the largest whole-job gap. This session therefore implemen
 packet and its calibration checks together rather than adding another isolated score.
 
 **Implemented.** `app/core/domain/reviews.js` builds an inclusive-period, oldest-first
-appendix from 1:1s, manager-to-person SBI feedback, goals, GROW plans and recognition.
+appendix from 1:1s, manager-to-person SBI feedback, goals, dated delegation events, GROW plans and recognition.
 Every excerpt carries its source type, source id, basis and local route. Upward feedback
 about the manager and anonymous pulse answers are deliberately excluded. Current goal and
 plan values say **at capture** because the old store does not contain enough history to
@@ -255,7 +272,42 @@ have changed since the snapshot.
 
 ---
 
-## 13. Frameworks considered and rejected
+## 13. Delegation: transferred authority and visible follow-through
+
+**Research and product benchmark (2026-10-24).** CCL defines effective delegation as
+transferring authority and responsibility with the direction, resources and support needed
+for expected results—not merely clearing the leader's desk ([CCL, *Delegating Effectively*](https://www.ccl.org/leadership-solutions/leadership-topics/delegating-effectively/)).
+Asana's task-management pattern makes one owner, due date, details, status and completion
+visible ([Asana](https://asana.com/uses/task-management)). LeadOS borrows that basic clarity
+but adds the leadership-specific decision boundary, support, checkpoint history and explicit
+return-to-leader outcome instead of becoming another generic task list.
+
+**Gap analysis in plain language.** The owner explicitly selected all three former roadmap
+priorities for this session. Feedback recorded the conversation but not how old the observed
+moment was; goals recorded progress but not whether the owner helped shape them; and there
+was no delegation record at all. Those are three different truth gaps, so the increment adds
+three record models/signals rather than hiding them inside one composite “leadership score.”
+
+**Implemented.** A normalized `delegations` collection stores one accountable owner, title,
+expected outcome, decision authority, support, delegation/due dates, dated check-ins, and a
+terminal completion or return outcome. Four operational authority choices—recommend, agree
+first, act-and-inform, own—are LeadOS conversation labels, not a claimed CCL maturity scale.
+`delegationHealth()` keeps overdue, blocked and checkpoint-due facts independent even though
+the headline shows the most actionable state. `DEL-01` covers overdue/missing dates, `DEL-02`
+a latest blocked check-in, and `DEL-03` the configurable checkpoint convention. Suggested 1:1
+agendas point to the same record. Completion requires the delivered outcome; accepting work
+back requires why and what happens next. Closed records remain read-only history in the UI.
+Review evidence uses only dated in-period delegation events and labels current authority/status
+as capture-time values.
+
+**Deliberately rejected.** Inferring authority from seniority, silently reassigning work,
+calling a returned outcome completed, or promising reminders without a background service.
+The seven-day checkpoint is a team convention, not a validated universal threshold. No
+backend, account, network call or new dependency was introduced.
+
+---
+
+## 14. Frameworks considered and rejected
 
 | Framework | Why not implemented (yet) |
 |---|---|
@@ -272,13 +324,13 @@ have changed since the snapshot.
 
 ## Standing research debts
 
-1. **Feedback latency** (days between an observed event and the coaching conversation)
-   is a better leading indicator than "days since last note". The data model lacks an
-   observation date; noted in `ROADMAP.md`.
-2. **Goal co-authorship** — Gallup's involvement finding is strong and unimplemented.
-3. **Upward feedback** — the single highest-value addition that a local, single-user app
-   cannot honestly provide.
-4. **Pulse question validity** — the four dimensions are chosen for actionability, not
+1. **Upward feedback** — the single highest-value addition that a local, single-user app
+   cannot honestly provide without independent contributors and a privacy model.
+2. **Pulse question validity** — the four dimensions are chosen for actionability, not
    psychometric validation. If this grows beyond a personal tool, the items should be
    replaced with validated ones (e.g. a short psychological-safety scale) and the change
    recorded here.
+3. **Conflict-resolution evidence** — research a structured, non-diagnostic record for
+   parties, interests, process, resolution and follow-up before adding the next collection.
+4. **Longitudinal latency/delegation outcomes** — current thresholds are transparent team
+   conventions. Do not claim predictive validity without real, consented longitudinal data.

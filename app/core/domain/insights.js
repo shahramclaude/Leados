@@ -21,6 +21,7 @@ import { cadence } from './oneonone.js';
 import { openActions } from './oneonone.js';
 import { followUpsDue, personFeedbackStats } from './feedback.js';
 import { activeGoals, checkinStale, goalHealth, goalsFor, lastCheckin } from './goals.js';
+import { authorityFor, delegationHealth } from './delegations.js';
 import { activePlan, growCompleteness, planProgress, reviewState, stagnationDays } from './growth.js';
 import { aggregate } from './pulse.js';
 import { assess, readinessFor, successionGaps } from './readiness.js';
@@ -35,6 +36,7 @@ export const DOMAIN_ORDER = [
   'Conversations',
   'Feedback',
   'Goals',
+  'Delegation',
   'Growth',
   'Wellbeing',
   'Decisions',
@@ -219,6 +221,25 @@ export function buildInsights(state, now) {
       });
     }
 
+    if (fb.delayedLatency > 0) {
+      add({
+        ruleId: 'FB-06',
+        domain: 'Feedback',
+        title: `${name}: ${fb.delayedLatency} feedback conversation${fb.delayedLatency === 1 ? '' : 's'} exceeded the ${fb.latencyTargetDays}d latency convention`,
+        detail: 'The behavior was observed well before it was discussed. Use the original date to reconstruct a specific example, then agree how soon useful feedback should happen on this team. The threshold is a configurable convention, not a universal score.',
+        severity: fb.maxLatency > fb.latencyTargetDays * 2 ? 3 : 2,
+        confidence: 'high',
+        personId: person.id,
+        personName: name,
+        evidence: [
+          `${fb.delayedLatency} measured item(s) beyond ${fb.latencyTargetDays} days in the 90-day window`,
+          `Longest measured observation-to-conversation gap: ${fb.maxLatency} days`,
+          `${fb.latencySamples} measured; ${fb.unmeasuredLatency} unknown excluded from the average`,
+        ],
+        action: { label: 'Review delayed feedback', route: `#/feedback?person=${person.id}&filter=latency` },
+      });
+    }
+
     // --- Goals -------------------------------------------------------------
     const personGoals = goalsFor(state, person.id).filter((g) => g.status === 'active');
     for (const goal of personGoals) {
@@ -284,6 +305,20 @@ export function buildInsights(state, now) {
           personName: name,
           evidence: ['0 key results'],
           action: { label: 'Add a measurable result', route: `#/goals?goal=${goal.id}` },
+        });
+      }
+      if (goal.coAuthored === false) {
+        add({
+          ruleId: 'GOAL-06',
+          domain: 'Goals',
+          title: `"${goal.title}" is marked leader-set for ${name}`,
+          detail: 'The record explicitly says the owner did not help shape this objective. Test understanding and ownership in the next conversation; do not assume every leader-set goal is wrong, and do not infer authorship when the field is unknown.',
+          severity: 2,
+          confidence: 'medium',
+          personId: person.id,
+          personName: name,
+          evidence: ['Authorship: explicitly leader-set', `Owner: ${name}`],
+          action: { label: 'Review or correct authorship', route: `#/goals?goal=${goal.id}` },
         });
       }
     }
@@ -479,6 +514,58 @@ export function buildInsights(state, now) {
         confidence: 'high',
         evidence: [stale.never ? 'No check-ins recorded' : `Last check-in ${stale.days} days ago`],
         action: { label: 'Check in on it', route: `#/goals?goal=${goal.id}` },
+      });
+    }
+  }
+
+  // --- Delegation ----------------------------------------------------------
+  for (const delegation of state.delegations || []) {
+    if (delegation.status !== 'active') continue;
+    const person = people.find((p) => p.id === delegation.personId);
+    if (!person) continue;
+    const health = delegationHealth(delegation, now, settings);
+    const authority = authorityFor(delegation);
+    const evidence = [
+      `Owner: ${person.name}`,
+      `Decision authority: ${authority.label}`,
+      delegation.dueOn ? `Due: ${delegation.dueOn}` : 'No due date recorded',
+      health.latest ? `Latest check-in: ${health.latest.date} (${health.latest.progress})` : 'No check-ins recorded',
+    ];
+    if (health.unscheduled) {
+      add({
+        ruleId: 'DEL-01', domain: 'Delegation', severity: 3, confidence: 'high',
+        personId: person.id, personName: person.name,
+        title: `Delegated outcome "${delegation.title}" has no due date`,
+        detail: 'An open-ended handoff cannot show whether follow-through is late. Agree a date or explicitly accept the work back.',
+        evidence,
+        action: { label: 'Set the due date', route: `#/delegations?delegation=${delegation.id}` },
+      });
+    } else if (health.blocked) {
+      add({
+        ruleId: 'DEL-02', domain: 'Delegation', severity: 4, confidence: 'high',
+        personId: person.id, personName: person.name,
+        title: `${person.name} is blocked on "${delegation.title}"`,
+        detail: `The latest check-in explicitly says support is needed${health.overdue ? `, and the outcome is ${health.daysOverdue} days overdue` : ''}. Remove the blocker without silently taking the outcome back.`,
+        evidence: [...evidence, health.latest.note],
+        action: { label: 'Unblock the outcome', route: `#/delegations?delegation=${delegation.id}` },
+      });
+    } else if (health.overdue) {
+      add({
+        ruleId: 'DEL-01', domain: 'Delegation', severity: 4, confidence: 'high',
+        personId: person.id, personName: person.name,
+        title: `Delegated outcome "${delegation.title}" is ${health.daysOverdue} days overdue`,
+        detail: 'The agreed due date has passed with no completion or return recorded. Re-plan the outcome, provide support, or explicitly accept the work back.',
+        evidence,
+        action: { label: 'Close or re-plan it', route: `#/delegations?delegation=${delegation.id}` },
+      });
+    } else if (health.checkinDue) {
+      add({
+        ruleId: 'DEL-03', domain: 'Delegation', severity: 2, confidence: 'high',
+        personId: person.id, personName: person.name,
+        title: `Check in on delegated outcome "${delegation.title}"`,
+        detail: `The latest checkpoint is ${health.checkinAge === null ? 'undated' : `${health.checkinAge} days old`}; your team convention is ${health.target} days. Ask about progress and support without turning the check-in into micromanagement.`,
+        evidence,
+        action: { label: 'Record a check-in', route: `#/delegations?delegation=${delegation.id}` },
       });
     }
   }
@@ -708,11 +795,16 @@ const GROUP_TITLES = {
   'FB-02': (n) => `${n} people have had no feedback recently`,
   'FB-03': (n) => `${n} people have only praise on record`,
   'FB-04': (n) => `${n} people have only criticism on record`,
+  'FB-06': (n) => `${n} people have feedback beyond the latency convention`,
   'GOAL-01': (n) => `${n} goals are behind pace or past due`,
   'GOAL-02': (n) => `${n} goals are flagged at risk`,
   'GOAL-03': (n) => `${n} goals have no recent check-in`,
   'GOAL-04': (n) => `${n} goals have no key results`,
   'GOAL-05': (n) => `${n} people have no active goal`,
+  'GOAL-06': (n) => `${n} goals are explicitly marked leader-set`,
+  'DEL-01': (n) => `${n} delegations are overdue or lack a due date`,
+  'DEL-02': (n) => `${n} delegations are blocked`,
+  'DEL-03': (n) => `${n} delegations need a check-in`,
   'GROW-01': (n) => `${n} people have no development plan`,
   'GROW-02': (n) => `${n} growth plans have no committed action`,
   'GROW-03': (n) => `${n} growth plan reviews are overdue`,
@@ -725,6 +817,7 @@ const GROUP_TITLES = {
 
 const GROUP_ROUTES = {
   Goals: '#/goals',
+  Delegation: '#/delegations',
   Wellbeing: '#/health',
   Decisions: '#/decisions',
   Succession: '#/readiness',
