@@ -7,7 +7,9 @@ those records, not an objective leadership grade or a substitute for listening t
 The **canonical application is `index.html` + `app/**`**. It runs in your browser with no
 account, application backend, database or runtime package dependency. The static server
 only serves files; app records stay in this browser's `localStorage` unless you explicitly
-export them. **Local notes and JSON exports are unencrypted.**
+export them. **Optional passphrase encryption** can seal that stored copy (Settings → Protect
+this browser copy). Exports are separate files and stay unencrypted unless you choose
+*Create encrypted backup*; a lost passphrase cannot be recovered by anyone.
 
 ```sh
 node scripts/serve.mjs --host 0.0.0.0 --port 5173
@@ -20,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 173 domain, persistence, CSV, trend and jsdom/axe tests
+npm test                     # 193 domain, persistence, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -31,7 +33,7 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 45 native JavaScript modules, CSS and shell; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 49 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
 | `scripts/app-browser-smoke.mjs` | Optional, reproducible Chromium lifecycle/mobile/accessibility smoke (not executed in Session 5 container — **[UNVERIFIED]** in real Chromium binary this session). |
@@ -45,7 +47,7 @@ the data layer is absent were wrong. The starting checkout contained 3,650 track
 3,495 source files and 316,352 source lines. All source was scanned for inventory/imports;
 that is **not** personal line-by-line verification of the whole legacy tree. Historical
 TypeScript error counts were not rerun. See the
-[current audit](docs/AUDIT-2026-10-24-session-5.md) and the corrected
+[current audit](docs/AUDIT-2026-10-24-session-6.md) and the corrected
 [architecture decision](docs/adr/0006-canonical-zero-build-app.md).
 
 ## What it actually does
@@ -134,6 +136,37 @@ TypeScript error counts were not rerun. See the
 - Optional demo data is clearly labelled. The demo refuses to replace real records without
   confirmation, including workspaces containing only delegations or conflict records.
 
+### Optional passphrase encryption of the browser copy
+
+- Turn it on in **Settings → Protect this browser copy**. The stored blob becomes a versioned
+  envelope: PBKDF2-HMAC-SHA-256 (600,000 rounds, random 16-byte salt) derives an AES-256-GCM
+  key from your passphrase; every write gets a fresh 96-bit IV. The passphrase is never stored,
+  and the key never leaves the tab.
+- **Plaintext → encrypted is verified before it overwrites anything:** derive, encrypt,
+  decrypt, compare, then write. If any step fails the workspace stays plain text and says so.
+- A reload shows a **lock screen** and nothing else: no navigation, no records, no half-loaded
+  state. A failed attempt reports the failure and leaves the stored ciphertext byte-identical.
+- While locked, **every write path is refused** — including imports, demo loading, reset and CSV
+  export — so nothing can replace the only copy of the ciphertext. `Export JSON` in that state
+  hands back the untouched encrypted file rather than an empty workspace.
+- **Change passphrase** re-keys with a new salt (the old passphrase stops working), **Lock now**
+  discards the key after flushing pending writes, and **Turn off encryption** writes plain text
+  again only after the write succeeds.
+- **Encrypted backups:** `Export encrypted JSON` produces a portable envelope for the same
+  passphrase (or a new one if the workspace is not encrypted). `Import JSON` accepts both
+  plain-text and encrypted files; an encrypted import into a plain workspace is explicitly
+  disclosed as a downgrade, and restoring an encrypted backup into a lock screen keeps the
+  workspace encrypted.
+- **Limits stated in the UI, not only here:** no recovery key, no reset link, no account; a lost
+  passphrase means the encrypted copy cannot be opened. Encryption protects a copied profile or
+  backup file, not a browser someone can already use while the workspace is unlocked. CSV and
+  plain-text JSON exports remain unencrypted. Web Crypto requires a secure context — over plain
+  HTTP on a LAN address the lock screen says so before you type a passphrase.
+- Envelope headers (KDF name, rounds, salt, purpose) are bound into the GCM additional
+  authenticated data, so tampering with them fails authentication instead of silently weakening
+  the file; a foreign envelope asking for more than 2,000,000 rounds is refused rather than
+  burning the CPU.
+
 ### Longitudinal team-health & habit trends and scoped CSV export
 
 - View **8-week, 12-week and 6-month** checkpoint trends across composite health, all five
@@ -183,31 +216,39 @@ app/main.js                router, application context, shell and error boundary
 app/actions.js             DOM-free validated write API
 app/conflict-actions.js    conflict lifecycle validation and generic audit events
 app/core/                  schema, injected storage/clock, pure domain modules
+app/core/crypto.js         PBKDF2-SHA-256 + AES-256-GCM envelope (no I/O, injectable crypto)
 app/ui/                    shared DOM/forms/dialogs/charts
 app/views/                 route renderers, not persistence implementations
 tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–16.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–17.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-24, session 5
+## Verification — 2026-10-24, session 6
 
-- `npm test`: **173 passed, 0 failed/skipped** across 11 suites (`tests/app/*.test.mjs`).
-- All 45 canonical JS modules (75 JS/MJS files including `scripts/**`) pass `node --check`.
-- Live HTTP check against `scripts/serve.mjs` verifies `index.html` and the new `trends.js`
-  and `csv.js` ES modules serve `200 OK` under preview `Host` headers.
-- `axe-core` 4.11 via JSDOM reports **0 semantic/ARIA/label/table violations** on `#/health`
-  (multi-series trends, horizon/dimension filters, approximate disclosures and data tables)
-  and `#/settings` (scoped CSV selector, preview modal and confidential confirmation).
+- `npm test`: **193 passed, 0 failed/skipped** across 12 suites (`tests/app/*.test.mjs`),
+  including 20 new encryption tests that assert the negative properties: no plaintext in
+  storage, no write while locked, no adoption when a write fails, no quarantine of ciphertext,
+  and no silent downgrade to plain text.
+- All 49 canonical JS modules (79 JS/MJS files including `scripts/**`) pass `node --check`;
+  `eslint app` is clean.
+- Live HTTP check against `scripts/serve.mjs` verifies `index.html` plus the new
+  `core/crypto.js`, `views/vault.js`, `ui/vault-dialogs.js` and `ui/download.js` serve `200 OK`,
+  while `package.json`, `scripts/**`, `tests/**` and source maps still return `404` and `POST`
+  returns `405`.
+- `axe-core` 4.11 via JSDOM reports **0 violations** on the new lock screen as well as on
+  `#/health` and `#/settings`.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
-  the Session 5 container (no browser binary installed) and are marked **[UNVERIFIED]** for
-  this session (Session 4's Chromium 153 baseline is recorded in `AI-SESSION-LOG.md`).
+  this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.
+  The encryption flows were exercised through the real modules and a real DOM in jsdom, not
+  through a real browser crypto implementation: browser WebCrypto was injected from Node's
+  `webcrypto`, so a genuine browser unlock has not been observed here.
 
 Optional browser reproduction on Linux (tools are test-only, installed in ignored scratch):
 
@@ -222,15 +263,17 @@ node scripts/app-browser-smoke.mjs
 ## Known limitations and next
 
 - **One leader, one browser profile.** No accounts, employee submission, multi-manager sharing,
-  authentication, encryption or background notifications. Never store notes you are not
-  authorised to hold; export contains sensitive data. Clearing site data deletes the workspace.
+  authentication or background notifications. Never store notes you are not authorised to hold;
+  export contains sensitive data. Clearing site data deletes the workspace.
 - Pulse suppression is intentionally more conservative: some previously visible sparse,
   unanimous or thin-comment windows now remain hidden. A floor is not an anonymity guarantee.
 - Cadence and seven-day latency/check-in conventions are configurable, not validated universal
   deadlines. No real-manager longitudinal validation or proof of improved outcomes is claimed.
-- Optional local encryption (WebCrypto passphrase-derived keys with safe plaintext→encrypted
-  migration and lost-passphrase warnings) remains roadmap work; local storage and JSON/CSV
-  exports are currently unencrypted.
+- Encryption is optional and passphrase-only: no recovery key, no key escrow, no auto-lock after
+  inactivity, and no protection while the workspace is unlocked in an open tab. CSV and
+  plain-text JSON exports are always unencrypted, and full JSON backups still contain conflict
+  notes. Enabling encryption replaces the browser's single stored blob, so a passphrase lost
+  before the next unlock is unrecoverable by design.
 - Legacy build/runtime, real-Chromium smoke execution in Session 5, Safari/Firefox, real
   assistive-technology use, print visual output and large-workspace performance remain
   **[UNVERIFIED]**.

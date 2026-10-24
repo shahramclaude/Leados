@@ -463,3 +463,66 @@ using private mediation notes as automatic performance evidence.
   numbers remain numeric and `null`/`undefined` stay `""`; `pulseSummary` enforces weekly
   cohort, unanimity and comment floors with zero `personId`; confidential `conflicts`
   separated behind a danger confirmation prompt.
+
+---
+
+## 17. Encryption at rest for a local leadership record (Session 6)
+
+**The question this section answers.** LeadOS keeps 1:1 notes, feedback, performance-review
+reflections and confidential conflict records in one browser `localStorage` blob. That is the
+most sensitive class of text a manager holds, and until this session it was plain text: readable
+by anyone who opened the browser profile, copied the storage, or picked up a backup file. What is
+the responsible design when the app has no server, no account and no way to reset anything?
+
+**Sources & industry benchmarks.**
+- *Key derivation:* OWASP's Password Storage Cheat Sheet (2023, still the current published
+  guidance in 2026) recommends PBKDF2-HMAC-SHA-256 with **600,000 iterations** and a per-record
+  random salt of at least 128 bits; NIST SP 800-132 is the underlying KDF standard. PBKDF2 is
+  chosen over Argon2id here because every browser ships it in WebCrypto with no dependency, and
+  Argon2id's memory-hardness buys little against the actual threat (an offline copy of the file
+  and a guess at a human passphrase) once the passphrase is long.
+- *Cipher and construction:* AES-256-GCM (NIST SP 800-38D) gives confidentiality **and**
+  integrity in one pass, which matters more here than in a typical app: a silently corrupted
+  workspace that still decrypts would be indistinguishable from a legitimate edit. The GCM
+  additional-authenticated-data binds the KDF parameters, so an envelope cannot be rewritten to
+  use a cheap iteration count.
+- *Passphrase quality signals:* NIST SP 800-63B's 2024 revision argues for length over
+  composition rules and against forced rotation. The policy here is a 12-character floor with no
+  character-class rules, plus two footgun guards (reject leading/trailing whitespace, reject a
+  single repeated character). It deliberately shows no "strength meter", which would promise a
+  measurement the app cannot make.
+- *How password managers frame the same tradeoff:* Bitwarden, 1Password and Proton all raise the
+  KDF iteration count over time while keeping the count **stored per file/account** so raising
+  the default does not orphan data encrypted earlier. The envelope here records its own
+  parameters for exactly that reason.
+- *Local-first product patterns:* offline-first apps with real user data converge on the same
+  three-part safety story — an explicit lock state, no silent fallback to plain text, and a
+  visible, irreversible warning at the moment encryption is enabled rather than in a help page.
+
+**What this application chose, and why.**
+| Decision | Reason |
+|---|---|
+| Encryption is **opt-in**, off by default | Turning it on changes where the only copy of the data lives (behind a key nobody can reset). A first-time manager must be able to choose that, not discover it. |
+| Envelope is **self-describing and versioned** | A future version can open today's files without guessing parameters, and refuses a newer format instead of mangling it. |
+| **Verified round-trip before overwrite** | Encrypt → decrypt → compare → write. The failure mode of "saved an unreadable blob" is total data loss; the cost of the extra check is one AES operation. |
+| **Locked blocks every write path** | An API call, an import, a demo load or a reset could each replace the ciphertext with an empty plaintext workspace. One guard in the store covers all callers. |
+| Lock screen renders **only** the lock screen | Half-rendered navigation over an unreadable workspace implies readability that does not exist, and invites actions that cannot work. |
+| Ciphertext is **never treated as corruption** | The existing corrupt-blob path quarantines and starts fresh. Applying that to an encrypted workspace would destroy it, so vault envelopes are detected before that path. |
+| Import declares its **mode change** | Restoring an encrypted backup into the lock screen keeps encryption; restoring an encrypted file into a plain workspace says, in words, that it is now stored unencrypted. Silent downgrades are how people believe they are protected when they are not. |
+| Exports are **separate decisions** | A plain-text JSON backup remains the recovery-of-last-resort for a forgotten passphrase; encrypted backups exist for everything else. The UI states which is which at the button. |
+| **No auto-lock timer** | Deliberate deferral: a timer that fires mid-sentence destroys work, and a correct implementation needs idle detection plus a "keep working" affordance. Listed as roadmap, not pretended to exist. |
+
+**Deliberately rejected.**
+| Idea | Reason |
+|---|---|
+| A recovery key or security questions | A recoverable key stored next to the data is decoration, and security questions are guessable by exactly the people most likely to try. |
+| Encrypting CSV exports by default | A CSV's purpose is opening in a spreadsheet. Encrypting it makes the routine export useless; the honest control is a warning plus a separate encrypted-backup path. |
+| Key escrow / "account recovery" | There is no account and no server, and inventing a hint of one would be a lie about who can read the data. |
+| Storing the derived key in `localStorage` to avoid the lock screen | That reduces encryption to a flag: anyone with the profile gets the key with the data. |
+| Argon2id via WASM | A dependency, a CSP and a supply-chain surface for a marginal gain on a long passphrase. |
+
+**Standing research debt.** Browser WebCrypto was not exercised in a real browser binary in this
+session (Node's `webcrypto` was injected into jsdom), so genuine cross-browser unlock behaviour
+remains `[UNVERIFIED]`. Remaining gaps worth future sessions: idle auto-lock with a safe
+"still here?" prompt, per-collection encryption for the conflict records specifically, and a
+passphrase-strength estimate based on a local wordlist rather than a character meter.

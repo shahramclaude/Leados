@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-24 (session 5: Schema v5 dated snapshots, multi-period all-dimension & habit trends, and OWASP CWE-1236 scoped CSV exports shipped; 173 automated tests; real-Chromium execution `[UNVERIFIED]` in Session 5 container).
+Last updated: 2026-10-24 (session 6: optional passphrase encryption of the browser copy shipped — PBKDF2-SHA-256 600k + AES-256-GCM, verified plaintext→encrypted migration, lock screen, encrypted/plaintext exports with explicit mode disclosure; 193 automated tests; real-browser WebCrypto execution `[UNVERIFIED]` in Session 6 container).
 
 ---
 
@@ -54,7 +54,12 @@ Last updated: 2026-10-24 (session 5: Schema v5 dated snapshots, multi-period all
 | Goal/delegation tabs use real filter keys; Settings fallback export Close works | affected views | jsdom filter checks; fallback-dialog regression |
 | Longitudinal trends across all 5 health dimensions, composite health, feedback latency and delegation follow-through (8w / 12w / 6m) with survivorship-bias fix, matched-dimension deltas and `exact`/`approximate` disclosures | `domain/health.js`, `domain/trends.js`, `ui/charts.js`, `views/health.js`, `views/today.js` | `tests/app/trends.test.mjs` (survivorship bias, Simpson's/coverage-shift guard, pre-history null guard, UI switching, `axe-core`) |
 | Scoped, unknown-preserving, OWASP CWE-1236 formula-safe CSV exports across 13 tables with pulse anonymity/comment floors and confidential conflict confirmation | `core/csv.js`, `core/store.js`, `views/settings.js` | `tests/app/csv.test.mjs` (12 formula vectors incl. full-width Unicode & whitespace, negative numbers, RFC 4180 round-trip, pulse suppression, QuotaExceeded, `axe-core`) |
-| 173 automated tests | `tests/app/**` | `npm test` — 173 pass / 0 fail / 0 skipped |
+| Optional passphrase encryption of the browser copy: 600k-round PBKDF2 derivation, AES-256-GCM envelope with AAD-bound KDF parameters, verified plaintext→encrypted migration, lock/unlock/change passphrase/disable | `core/crypto.js`, `core/store.js`, `views/vault.js`, `ui/vault-dialogs.js` | `tests/app/encryption.test.mjs` (20 tests: no plaintext in storage, wrong-passphrase refusal, tamper/AAD, iteration-floor DoS guard, quota-failure rollback, no-crypto detection) |
+| A locked workspace cannot be written to, quarantined, exported empty or reset accidentally | `core/store.js`, `views/vault.js` | encryption tests (all write paths, ciphertext byte-identity, export returns the untouched file, typed DELETE required to erase) |
+| Encrypted backups and import in both directions, with the storage mode disclosed | `core/store.js`, `views/settings.js`, `ui/vault-dialogs.js` | encryption tests (restore into plain/locked/unlocked states, wrong passphrase changes nothing, downgrade message asserted) |
+| Lock screen is the only thing rendered while locked, keyboard-usable and axe-clean | `views/vault.js`, `main.js`, `styles.css` | jsdom tests (no records leaked into the screen, error live region, show-passphrase toggle, `axe-core` 0 violations) |
+| A stored backup envelope is refused rather than normalised into an empty workspace | `core/store.js`, `views/vault.js` | encryption tests (refused unlock, untouched file, working restore path) |
+| 193 automated tests | `tests/app/**` | `npm test` — 193 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-24T10:00:00Z`): health **54.5 (D)**,
 30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
@@ -69,10 +74,10 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
 
 ## Next (ordered by value, not by ease)
 
-1. **Optional encryption of the local store.** Passphrase-derived WebCrypto keys (`PBKDF2` +
-   `AES-GCM`), no network, with tested plaintext→encrypted migration, explicit encrypted/plaintext
-   export choices, and lost-passphrase limitations. Until then, notes/backups are explicitly
-   unencrypted, not an HR confidentiality system.
+1. **Idle auto-lock with a non-destructive prompt.** Encryption exists but an unlocked tab stays
+   unlocked forever. Add an inactivity timer that locks after a configurable window, warns first
+   in a way that cannot eat an in-progress note, and records the lock in the event log. Needs
+   careful tests for "typing counts as activity" and for tabs restored from the background.
 2. **Structured 1:1 preparation & printable coaching packet.** Combine generated agenda items,
    open commitments (1:1, GROW, feedback follow-up, delegation checkpoints) and employee-owned
    talking points into a clean, shareable single-meeting prep sheet without leaking private
@@ -80,8 +85,6 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
 3. **Onboarding 30-60-90 milestone tracker.** Turn the existing first-90-day tenure signal
    (`ONB-01`) into explicit role-clarity, buddy/stakeholder introduction and early-win
    checkpoints for new joiners without inventing personality or performance grades.
-
----
 
 ## Later / deliberately deferred
 
@@ -120,7 +123,7 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
 ## Known gaps I am not pretending are closed
 
 - Pulse anonymity and independent respondents cannot be guaranteed by a local single-manager workspace. Partial/unanimous/thin-comment windows now suppress more conservatively; that intentional loss of visible data is a safety tradeoff, not a chart regression.
-- Conflict confirmations are manager-entered, not employee signatures or independent testimony. Notes/backups are unencrypted; handoff sends nothing. No real-manager conflict-practice validation has been performed.
+- Conflict confirmations are manager-entered, not employee signatures or independent testimony. Handoff sends nothing. The browser copy can now be encrypted, but CSV and plain-text JSON exports stay unencrypted by design, so a downloaded backup is as protected as its folder. No real-manager conflict-practice validation has been performed.
 - Historical health checkpoints are `exact` when backed by dated records and Schema v5
   snapshots, and explicitly labelled `approximate` when pre-v5 or in-place stage edits lack
   dated history. Fresh workspaces continue to show `pre-history` / "not enough history" rather
@@ -134,6 +137,10 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
   values and delegation status/authority are explicitly capture-time; there is no employee
   account or direct submission workflow, and calibration heuristics are not a validated
   fairness instrument.
+- Encryption protects the stored browser copy and encrypted backups only. It does not protect an
+  unlocked tab, cannot recover a forgotten passphrase, does not auto-lock on idle, and needs a
+  secure context (https or localhost). Real-browser WebCrypto behaviour is `[UNVERIFIED]` here:
+  Node's `webcrypto` was injected into jsdom.
 - Rehearsal against real usage is absent: every number in this file comes from the demo
   workspace and the test suite, not from a manager's actual quarter. Real-browser visual
   inspection of print output remains `[UNVERIFIED]`; delegation mobile overflow/filter checks now run in Chromium, but exhaustive visual/interaction review remains `[UNVERIFIED]`. Source links and workflows are covered in jsdom, with HTTP module loading checked separately.
