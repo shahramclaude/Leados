@@ -114,7 +114,7 @@ test('app boots on Today with an empty workspace and no errors', async () => {
 test('every route renders without throwing', async () => {
   const env = boot();
   const app = await createAppInstance(env);
-  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'goals', 'growth', 'readiness', 'health', 'decisions', 'recognition', 'settings'];
+  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'recognition', 'settings'];
   for (const route of routes) {
     app.navigate(`#/${route}`);
     const view = env.document.getElementById('view');
@@ -428,7 +428,7 @@ test('a full demo workspace renders every screen without an error panel', async 
   const env = boot();
   const app = await createAppInstance(env);
   app.ctx.loadDemo();
-  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'recognition', 'goals', 'growth', 'readiness', 'health', 'decisions', 'settings'];
+  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'recognition', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'settings'];
   for (const route of routes) {
     app.navigate(`#/${route}`);
     const view = env.document.getElementById('view');
@@ -456,7 +456,7 @@ test('the settings screen reports the storage footprint and revision', async () 
   app.api.addPerson({ name: 'Someone' });
   app.navigate('#/settings');
   const text = env.document.getElementById('view').textContent;
-  assert.ok(text.includes('Schema v1'));
+  assert.ok(text.includes('Schema v3'));
   assert.ok(text.includes('Event log'));
   assert.ok(text.includes('Export JSON'));
   assert.ok(app.store.sizeBytes() > 100);
@@ -543,4 +543,139 @@ test('navigating away closes an open dialog instead of leaving it over the new s
   app.navigate('#/goals');
   assert.equal($('[role="dialog"]'), null, 'the dialog did not survive the route change');
   assert.ok(env.document.getElementById('view').textContent.includes('Goals') || env.document.getElementById('view').textContent.includes('goal'));
+});
+
+/* ------------------------------------------------------ performance reviews */
+
+test('a performance review works end to end through the real dialogs and survives export/import', async () => {
+  const env = boot();
+  const app = await createAppInstance(env);
+  const { id: personId } = app.api.addPerson({ name: 'Reviewed Person', role: 'Designer' });
+  app.api.logOneOnOne({ personId, date: '2026-10-24', status: 'held', notes: 'Reviewed the release work and agreed the next area to develop.' });
+  app.api.addFeedback({ personId, direction: 'given', kind: 'praise', date: '2026-10-24', situation: 'During the release review', behavior: 'you presented three options with their trade-offs', impact: 'we reached a decision in the meeting' });
+
+  app.navigate('#/reviews');
+  click(buttonByText(env, 'Prepare a review', env.document.getElementById('view')));
+  submitDialog(env);
+  assert.equal(app.store.state.reviews.length, 1);
+  assert.equal(app.route, 'review');
+  assert.ok(env.document.getElementById('view').textContent.includes('Evidence appendix'));
+
+  click(buttonByText(env, 'Record self-reflection', env.document.getElementById('view')));
+  setValue($('[role="dialog"]').querySelector('textarea[name="achievements"]'), 'I made the release options clearer and helped the team decide without another meeting.');
+  submitDialog(env);
+  assert.ok(app.store.state.reviews[0].selfReflectionRecordedAt);
+
+  click(buttonByText(env, 'Write assessment', env.document.getElementById('view')));
+  const assessmentDialog = $('[role="dialog"]');
+  setValue(assessmentDialog.querySelector('textarea[name="achievements"]'), 'You made the release trade-offs clear and helped the team reach a decision in the meeting.');
+  setValue(assessmentDialog.querySelector('textarea[name="development"]'), 'Include implementation risk earlier so the team can compare options on their full cost.');
+  setValue(assessmentDialog.querySelector('textarea[name="nextSteps"]'), 'Use the new option template on the November release; we will review it in our next 1:1.');
+  setValue(assessmentDialog.querySelector('select[name="rating"]'), 'meets-expectations');
+  submitDialog(env);
+
+  click(buttonByTextExact(env, 'Complete review', env.document.getElementById('view')));
+  const confirmation = $('[role="dialog"]');
+  const complete = [...confirmation.querySelectorAll('.modal-foot button')].find((button) => button.textContent.trim().startsWith('Complete'));
+  click(complete);
+  const review = app.store.state.reviews[0];
+  assert.equal(review.status, 'complete');
+  assert.equal(review.manager.rating, 'meets-expectations');
+  assert.ok(review.completedAt);
+  assert.equal(app.store.state.events.at(-1).type, 'review.completed');
+  assert.equal(app.api.updateAssessment(review.id, {}).ok, false, 'a completed assessment cannot change silently');
+  let printCalls = 0;
+  env.window.print = () => { printCalls += 1; };
+  click(buttonByTextExact(env, 'Print / save PDF', env.document.getElementById('view')));
+  assert.equal(printCalls, 1, 'the packet opens the browser print/save-PDF flow');
+
+  const exported = app.ctx.exportJSON();
+  app.ctx.resetStore();
+  assert.equal(app.store.state.reviews.length, 0);
+  const imported = app.ctx.importJSON(exported);
+  assert.equal(imported.ok, true);
+  assert.equal(app.store.state.reviews.length, 1);
+  assert.equal(app.store.state.reviews[0].status, 'complete');
+  assert.ok(env.document.getElementById('view').textContent.includes('Reviewed Person'));
+  assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
+});
+
+test('every review evidence link opens its actual source record, including completed source types', async () => {
+  const env = boot();
+  const app = await createAppInstance(env);
+  app.ctx.loadDemo();
+  const person = app.store.state.people.find((p) => p.name === 'Mei Lin Chen');
+  const created = app.api.createReview({ personId: person.id, periodStart: '2026-07-27', periodEnd: '2026-10-24' });
+  const evidence = app.store.state.reviews.find((review) => review.id === created.id).evidence;
+  assert.deepEqual(new Set(evidence.map((item) => item.sourceType)), new Set(['oneonone', 'feedback', 'goal', 'growth', 'recognition', 'delegation']));
+
+  for (const type of ['oneonone', 'feedback', 'goal', 'growth', 'recognition', 'delegation']) {
+    const item = evidence.find((entry) => entry.sourceType === type);
+    app.navigate(item.route);
+    const view = env.document.getElementById('view');
+    assert.ok(!view.textContent.includes('This screen failed to draw'), `${type} source route failed`);
+    if (type === 'oneonone') assert.equal(view.querySelectorAll('.meeting-item').length, 1);
+    if (type === 'feedback') assert.equal(view.querySelectorAll('tbody tr').length, 1);
+    if (type === 'goal') assert.equal(view.querySelectorAll('.card.is-focused').length, 1);
+    if (type === 'growth') assert.equal(view.querySelectorAll('.grow-steps').length, 1);
+    if (type === 'recognition') assert.equal(view.querySelectorAll('.feed-item').length, 1);
+    if (type === 'delegation') assert.equal(view.querySelectorAll('.delegation-card.is-focused').length, 1);
+  }
+
+  const goalItem = evidence.find((item) => item.sourceType === 'goal');
+  app.api.updateGoal(goalItem.sourceId, { status: 'done' });
+  app.navigate(goalItem.route);
+  assert.equal(env.document.getElementById('view').querySelectorAll('.card.is-focused').length, 1, 'completed goals remain reachable');
+  const growthItem = evidence.find((item) => item.sourceType === 'growth');
+  app.api.updateGrowthPlan(growthItem.sourceId, { status: 'done' });
+  app.navigate(growthItem.route);
+  assert.equal(env.document.getElementById('view').querySelectorAll('.grow-steps').length, 1, 'completed plans remain reachable');
+  assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
+});
+
+test('Add a key result writes to the goal that opened the dialog', async () => {
+  const env = boot();
+  const app = await createAppInstance(env);
+  const created = app.api.addGoal({ title: 'Document the release process' });
+  app.navigate('#/goals');
+  click(buttonByTextExact(env, 'Add a key result', env.document.getElementById('view')));
+  setValue($('[role="dialog"]').querySelector('input[name="title"]'), 'Release steps documented');
+  submitDialog(env);
+  const goal = app.store.state.goals.find((item) => item.id === created.id);
+  assert.equal(goal.keyResults.length, 1);
+  assert.equal(goal.keyResults[0].title, 'Release steps documented');
+});
+
+test('editing a development plan updates it instead of closing it and creating another', async () => {
+  const env = boot();
+  const app = await createAppInstance(env);
+  const { id: personId } = app.api.addPerson({ name: 'Growing Person', role: 'Engineer' });
+  const created = app.api.saveGrowthPlan({
+    personId,
+    goal: 'Lead a cross-team design review.',
+    reality: 'Strong technical contributor with limited facilitation practice.',
+    options: ['Shadow two reviews', 'Co-facilitate the next review'],
+    will: [{ text: 'Shadow the next design review', due: '2026-10-30' }],
+    competencies: ['Communication'],
+    reviewOn: '2026-11-15',
+  });
+  assert.equal(created.ok, true);
+  app.navigate('#/growth');
+  click(buttonByTextExact(env, 'Edit plan', env.document.getElementById('view')));
+  const dialog = $('[role="dialog"]');
+  assert.equal(dialog.querySelector('textarea[name="goal"]').value, 'Lead a cross-team design review.');
+  assert.equal(dialog.querySelector('textarea[name="options"]').value, 'Shadow two reviews\nCo-facilitate the next review');
+  assert.equal(dialog.querySelector('textarea[name="willText"]'), null, 'existing commitments are not silently replaced');
+  setValue(dialog.querySelector('textarea[name="reality"]'), 'Has shadowed one review and is ready to co-facilitate with support.');
+  submitDialog(env);
+
+  assert.equal(app.store.state.growthPlans.length, 1);
+  const plan = app.store.state.growthPlans[0];
+  assert.equal(plan.id, created.id);
+  assert.equal(plan.personId, personId);
+  assert.equal(plan.status, 'active');
+  assert.equal(plan.reality, 'Has shadowed one review and is ready to co-facilitate with support.');
+  assert.deepEqual(plan.options.map((option) => option.text), ['Shadow two reviews', 'Co-facilitate the next review']);
+  assert.equal(plan.will.length, 1);
+  assert.equal(plan.will[0].text, 'Shadow the next design review');
 });

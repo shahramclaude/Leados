@@ -20,10 +20,10 @@ const HEALTH_RANK = { 'off-track': 3, 'at-risk': 2, 'on-track': 1 };
 
 export function renderGoals(ctx) {
   const { state, now } = ctx;
-  const goals = activeGoals(state);
+  const focusId = ctx.query.get('goal');
+  const goals = focusId ? state.goals.filter((goal) => goal.id === focusId) : activeGoals(state);
   const summary = goalsSummary(state, now, state.settings);
   const filter = ctx.query.get('view') || 'all';
-  const focusId = ctx.query.get('goal');
 
   const rows = goals
     .map((goal) => ({ goal, health: goalHealth(goal, now), owner: state.people.find((p) => p.id === goal.ownerId) || null }))
@@ -56,6 +56,12 @@ export function renderGoals(ctx) {
       stat({ label: 'At risk', value: summary.atRisk + summary.offTrack, hint: 'stated or measured', tone: summary.atRisk + summary.offTrack ? 'warn' : '' }),
       stat({ label: 'No key results', value: summary.noKr, hint: 'cannot be scored', tone: summary.noKr ? 'warn' : '' }),
       stat({ label: 'Check-in gap', value: summary.stale.length, hint: `older than ${state.settings.goalCheckinDays}d`, tone: summary.stale.length ? 'warn' : '' }),
+      stat({
+        label: 'Co-authored',
+        value: summary.personOwned ? `${summary.coAuthored}/${summary.personOwned}` : '—',
+        hint: `${summary.leaderAuthored} leader-set · ${summary.authorshipUnknown} unknown`,
+        tone: summary.leaderAuthored ? 'warn' : summary.coAuthored ? 'good' : '',
+      }),
     ),
 
     tabs({
@@ -112,6 +118,9 @@ function goalCard(ctx, goal, health, owner, focused) {
               : health.status === 'no-kr'
                 ? badge('unmeasured', 'caution')
                 : badge('on pace', 'good'),
+        owner
+          ? badge(goal.coAuthored === true ? 'co-authored' : goal.coAuthored === false ? 'leader-set' : 'authorship unknown', goal.coAuthored === true ? 'good' : goal.coAuthored === false ? 'warn' : 'neutral')
+          : null,
         health.daysLeft !== null ? h('span', { class: 'muted tiny' }, health.daysLeft >= 0 ? `${health.daysLeft} days left` : `${Math.abs(health.daysLeft)} days over`) : null,
       ),
 
@@ -151,7 +160,7 @@ function goalCard(ctx, goal, health, owner, focused) {
             'div',
             { class: 'inline-warn' },
             h('p', null, 'No key results: this goal cannot be scored, so it is reported as unmeasured rather than as zero progress.'),
-            h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goal }) }, 'Add a key result'),
+            h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goalId: goal.id }) }, 'Add a key result'),
           ),
 
       last
@@ -166,7 +175,8 @@ function goalCard(ctx, goal, health, owner, focused) {
       h(
         'div',
         { class: 'card-actions' },
-        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goal }) }, 'Add key result'),
+        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openGoalDialog(ctx, { goal }) }, 'Edit goal'),
+        h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goalId: goal.id }) }, 'Add key result'),
         goal.status === 'active'
           ? h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCheckInDialog(ctx, { goal }) }, 'Log a check-in')
           : null,

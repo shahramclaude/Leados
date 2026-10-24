@@ -14,10 +14,13 @@ export function renderOneOnOnes(ctx) {
   const due = dueMeetings(state, now, state.settings);
   const actions = openActions(state, { now });
   const overdue = actions.filter((a) => a.overdue);
+  const personFilter = ctx.query.get('person');
+  const meetingFilter = ctx.query.get('meeting');
   const allMeetings = state.oneOnOnes
+    .filter((meeting) => (!personFilter || meeting.personId === personFilter) && (!meetingFilter || meeting.id === meetingFilter))
     .slice()
     .sort((a, b) => (a.date < b.date ? 1 : -1))
-    .slice(0, 12);
+    .slice(0, meetingFilter ? 1 : 12);
 
   const personFor = (id) => state.people.find((p) => p.id === id) || null;
 

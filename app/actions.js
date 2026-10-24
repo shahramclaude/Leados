@@ -8,7 +8,9 @@
  */
 
 import { dayKey } from './core/time.js';
-import { PULSE_DIMENSIONS } from './core/schema.js';
+import { PULSE_DIMENSIONS, REVIEW_RATINGS } from './core/schema.js';
+import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
+import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 
 function makeId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -22,6 +24,23 @@ function fail(error, field = null) {
   return { ok: false, error, field };
 }
 
+function isCalendarDay(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function delegationValidation(data) {
+  if (!clean(data.title)) return { error: 'Name the outcome or responsibility being delegated.', field: 'title' };
+  if (!clean(data.expectedOutcome)) return { error: 'Describe what a successful result will look like.', field: 'expectedOutcome' };
+  if (!DELEGATION_AUTHORITY[data.authority]) return { error: 'Choose the decision authority being transferred.', field: 'authority' };
+  if (!clean(data.support)) return { error: 'Record the resources, context or support the owner can rely on.', field: 'support' };
+  if (!isCalendarDay(data.delegatedOn)) return { error: 'Choose a valid delegation date.', field: 'delegatedOn' };
+  if (!isCalendarDay(data.dueOn)) return { error: 'Choose a valid due date.', field: 'dueOn' };
+  if (data.dueOn < data.delegatedOn) return { error: 'The due date cannot be before the delegation date.', field: 'dueOn' };
+  return null;
+}
+
 export function createApi(store, options = {}) {
   const id = options.idFactory || makeId;
   const clock = options.now || (() => new Date());
@@ -29,6 +48,7 @@ export function createApi(store, options = {}) {
   const stamp = () => clock().toISOString();
 
   const personExists = (personId) => store.state.people.some((p) => p.id === personId);
+  const reviewById = (reviewId) => (store.state.reviews || []).find((review) => review.id === reviewId) || null;
 
   function append(draft, prefix) {
     return { id: id(prefix), createdAt: stamp() };
@@ -191,6 +211,12 @@ export function createApi(store, options = {}) {
       const behavior = clean(data.behavior) || '';
       if (!behavior) return fail('The behaviour is the one part that cannot be omitted.', 'behavior');
       const kind = data.kind === 'constructive' ? 'constructive' : 'praise';
+      const date = data.date || today();
+      const observedOn = data.observedOn || null;
+      if (!isCalendarDay(date)) return fail('Choose a valid conversation date.', 'date');
+      if (date > today()) return fail('The feedback conversation cannot be dated in the future.', 'date');
+      if (observedOn && !isCalendarDay(observedOn)) return fail('Choose a valid observation date, or leave it unknown.', 'observedOn');
+      if (observedOn && observedOn > date) return fail('The observation cannot be after the feedback conversation.', 'observedOn');
       const item = {
         ...append(null, 'fb'),
         personId: data.personId,
@@ -200,7 +226,8 @@ export function createApi(store, options = {}) {
         behavior,
         impact: clean(data.impact) || '',
         tags: (data.tags || []).map((t) => clean(t)).filter(Boolean).slice(0, 6),
-        date: data.date || today(),
+        date,
+        observedOn,
         followUpOn: data.followUpOn || null,
         followUpDone: false,
       };
@@ -220,11 +247,18 @@ export function createApi(store, options = {}) {
     },
 
     updateFeedback(feedbackId, patch) {
+      const existing = store.state.feedback.find((f) => f.id === feedbackId);
+      if (!existing) return fail('That feedback record no longer exists.');
+      const next = { ...existing, ...patch, observedOn: patch.observedOn !== undefined ? patch.observedOn || null : existing.observedOn || null };
+      if (!isCalendarDay(next.date)) return fail('Choose a valid conversation date.', 'date');
+      if (next.date > today()) return fail('The feedback conversation cannot be dated in the future.', 'date');
+      if (next.observedOn && !isCalendarDay(next.observedOn)) return fail('Choose a valid observation date, or leave it unknown.', 'observedOn');
+      if (next.observedOn && next.observedOn > next.date) return fail('The observation cannot be after the feedback conversation.', 'observedOn');
       store.update(
         (draft) => {
           const item = draft.feedback.find((f) => f.id === feedbackId);
           if (!item) return;
-          Object.assign(item, patch);
+          Object.assign(item, patch, { observedOn: next.observedOn });
         },
         { type: 'feedback.updated', entity: 'feedback', entityId: feedbackId, summary: 'Feedback updated' },
       );
@@ -252,6 +286,7 @@ export function createApi(store, options = {}) {
         description: clean(data.description) || '',
         ownerId: data.ownerId || null,
         scope: data.scope === 'team' ? 'team' : 'person',
+        coAuthored: data.ownerId ? (data.coAuthored === true ? true : data.coAuthored === false ? false : null) : null,
         dueDate: data.dueDate || null,
         keyResults: (data.keyResults || [])
           .map((kr) => ({
@@ -277,14 +312,21 @@ export function createApi(store, options = {}) {
     },
 
     updateGoal(goalId, patch) {
+      if (!store.state.goals.some((goal) => goal.id === goalId)) return fail('That goal no longer exists.');
       store.update(
         (draft) => {
           const goal = draft.goals.find((g) => g.id === goalId);
           if (!goal) return;
+          const previousOwner = goal.ownerId;
           if (patch.title !== undefined) goal.title = clean(patch.title) || goal.title;
           if (patch.description !== undefined) goal.description = clean(patch.description);
           if (patch.dueDate !== undefined) goal.dueDate = patch.dueDate || null;
           if (patch.ownerId !== undefined) goal.ownerId = patch.ownerId || null;
+          if (patch.coAuthored !== undefined && goal.ownerId) {
+            goal.coAuthored = patch.coAuthored === true ? true : patch.coAuthored === false ? false : null;
+          } else if (!goal.ownerId || previousOwner !== goal.ownerId) {
+            goal.coAuthored = null;
+          }
           if (patch.confidence) goal.confidence = patch.confidence;
           if (patch.status) goal.status = patch.status;
         },
@@ -321,6 +363,7 @@ export function createApi(store, options = {}) {
     addKeyResult(goalId, kr) {
       const title = clean(kr.title) || '';
       if (!title) return fail('Name the key result.', 'title');
+      if (!store.state.goals.some((goal) => goal.id === goalId)) return fail('That goal no longer exists. Reopen it and try again.', 'title');
       store.update(
         (draft) => {
           const goal = draft.goals.find((g) => g.id === goalId);
@@ -346,6 +389,140 @@ export function createApi(store, options = {}) {
           if (goal) goal.keyResults = goal.keyResults.filter((k) => k.id !== krId);
         },
         { type: 'goal.kr.removed', entity: 'goal', entityId: goalId, summary: 'Key result removed' },
+      );
+      return { ok: true };
+    },
+
+    /* ---------------------------------------------------------- delegation */
+    addDelegation(data) {
+      if (!personExists(data.personId)) return fail('Choose one accountable owner.', 'personId');
+      const person = store.state.people.find((p) => p.id === data.personId);
+      if (person.status === 'archived') return fail('Restore this person before delegating new work to them.', 'personId');
+      const input = {
+        title: clean(data.title) || '',
+        expectedOutcome: clean(data.expectedOutcome) || '',
+        authority: data.authority || '',
+        support: clean(data.support) || '',
+        delegatedOn: data.delegatedOn || today(),
+        dueOn: data.dueOn || null,
+      };
+      const invalid = delegationValidation(input);
+      if (invalid) return fail(invalid.error, invalid.field);
+      if (input.delegatedOn > today()) return fail('The delegation cannot be dated in the future.', 'delegatedOn');
+      const delegation = {
+        ...append(null, 'delegation'),
+        ...input,
+        personId: data.personId,
+        status: 'active',
+        checkins: [],
+        completedOn: null,
+        completionNote: '',
+        returnedOn: null,
+        returnReason: '',
+        updatedAt: stamp(),
+      };
+      store.update(
+        (draft) => {
+          draft.delegations.push(delegation);
+        },
+        { type: 'delegation.created', entity: 'delegation', entityId: delegation.id, summary: `Delegated “${delegation.title.slice(0, 60)}” to ${person.name} (${DELEGATION_AUTHORITY[delegation.authority].shortLabel})` },
+      );
+      return { ok: true, id: delegation.id };
+    },
+
+    updateDelegation(delegationId, patch) {
+      const current = (store.state.delegations || []).find((d) => d.id === delegationId);
+      if (!current) return fail('That delegation no longer exists.');
+      if (current.status !== 'active') return fail('Completed or returned delegations are kept as history and cannot be edited.');
+      const next = {
+        title: patch.title !== undefined ? clean(patch.title) || '' : current.title,
+        expectedOutcome: patch.expectedOutcome !== undefined ? clean(patch.expectedOutcome) || '' : current.expectedOutcome,
+        authority: patch.authority !== undefined ? patch.authority : current.authority,
+        support: patch.support !== undefined ? clean(patch.support) || '' : current.support,
+        delegatedOn: patch.delegatedOn !== undefined ? patch.delegatedOn : current.delegatedOn,
+        dueOn: patch.dueOn !== undefined ? patch.dueOn || null : current.dueOn,
+      };
+      const invalid = delegationValidation(next);
+      if (invalid) return fail(invalid.error, invalid.field);
+      if (next.delegatedOn > today()) return fail('The delegation cannot be dated in the future.', 'delegatedOn');
+      if (current.checkins.some((checkin) => checkin.date < next.delegatedOn)) {
+        return fail('The delegation date cannot be after an existing check-in.', 'delegatedOn');
+      }
+      store.update(
+        (draft) => {
+          const target = draft.delegations.find((d) => d.id === delegationId);
+          Object.assign(target, next, { updatedAt: stamp() });
+        },
+        { type: 'delegation.updated', entity: 'delegation', entityId: delegationId, summary: `Delegation updated: ${next.title.slice(0, 60)}` },
+      );
+      return { ok: true };
+    },
+
+    checkInDelegation(delegationId, data) {
+      const current = (store.state.delegations || []).find((d) => d.id === delegationId);
+      if (!current) return fail('That delegation no longer exists.');
+      if (current.status !== 'active') return fail('This delegation is already closed.');
+      const date = data.date || today();
+      const note = clean(data.note) || '';
+      const progress = data.progress;
+      if (!isCalendarDay(date) || date > today()) return fail('Choose a valid check-in date that is not in the future.', 'date');
+      if (date < current.delegatedOn) return fail('A check-in cannot predate the delegation.', 'date');
+      if (!['on-track', 'blocked'].includes(progress)) return fail('Say whether the outcome is on track or blocked.', 'progress');
+      if (!note) return fail('Record what changed, what is next, or what support is needed.', 'note');
+      const checkin = { id: id('dchk'), date, progress, note, createdAt: stamp() };
+      store.update(
+        (draft) => {
+          const target = draft.delegations.find((d) => d.id === delegationId);
+          target.checkins.push(checkin);
+          target.updatedAt = stamp();
+        },
+        { type: 'delegation.checkin', entity: 'delegation', entityId: delegationId, summary: `Delegation check-in: ${current.title.slice(0, 50)} (${progress})` },
+      );
+      return { ok: true, id: checkin.id };
+    },
+
+    completeDelegation(delegationId, data = {}) {
+      const current = (store.state.delegations || []).find((d) => d.id === delegationId);
+      if (!current) return fail('That delegation no longer exists.');
+      if (current.status !== 'active') return fail('This delegation is already closed.');
+      const completedOn = data.completedOn || today();
+      const completionNote = clean(data.completionNote) || '';
+      if (!isCalendarDay(completedOn) || completedOn > today() || completedOn < current.delegatedOn) {
+        return fail('Choose a valid completion date within the delegation period, not in the future.', 'completedOn');
+      }
+      if (current.checkins.some((checkin) => checkin.date > completedOn)) {
+        return fail('Completion cannot predate an existing check-in.', 'completedOn');
+      }
+      if (!completionNote) return fail('Record the outcome delivered and any follow-up that remains.', 'completionNote');
+      store.update(
+        (draft) => {
+          const target = draft.delegations.find((d) => d.id === delegationId);
+          Object.assign(target, { status: 'done', completedOn, completionNote, updatedAt: stamp() });
+        },
+        { type: 'delegation.completed', entity: 'delegation', entityId: delegationId, summary: `Delegation completed: ${current.title.slice(0, 60)}` },
+      );
+      return { ok: true };
+    },
+
+    returnDelegation(delegationId, data = {}) {
+      const current = (store.state.delegations || []).find((d) => d.id === delegationId);
+      if (!current) return fail('That delegation no longer exists.');
+      if (current.status !== 'active') return fail('This delegation is already closed.');
+      const returnedOn = data.returnedOn || today();
+      const returnReason = clean(data.returnReason) || '';
+      if (!isCalendarDay(returnedOn) || returnedOn > today() || returnedOn < current.delegatedOn) {
+        return fail('Choose a valid return date within the delegation period, not in the future.', 'returnedOn');
+      }
+      if (current.checkins.some((checkin) => checkin.date > returnedOn)) {
+        return fail('Returning the work cannot predate an existing check-in.', 'returnedOn');
+      }
+      if (!returnReason) return fail('Explain why the work came back and what happens next.', 'returnReason');
+      store.update(
+        (draft) => {
+          const target = draft.delegations.find((d) => d.id === delegationId);
+          Object.assign(target, { status: 'returned', returnedOn, returnReason, updatedAt: stamp() });
+        },
+        { type: 'delegation.returned', entity: 'delegation', entityId: delegationId, summary: `Delegation returned to leader: ${current.title.slice(0, 50)}` },
       );
       return { ok: true };
     },
@@ -562,6 +739,139 @@ export function createApi(store, options = {}) {
           }
         },
         { type: 'readiness.set', entity: 'readiness', entityId: data.personId, summary: `Readiness set: ${seat} → ${rating}` },
+      );
+      return { ok: true };
+    },
+
+    /* --------------------------------------------------- performance reviews */
+    createReview(data) {
+      if (!personExists(data.personId)) return fail('Choose a person first.', 'personId');
+      if (!validPeriod(data.periodStart, data.periodEnd)) return fail('Choose a valid period with the start on or before the end.', 'periodStart');
+      const duplicate = (store.state.reviews || []).find((review) =>
+        review.personId === data.personId && review.periodStart === data.periodStart && review.periodEnd === data.periodEnd,
+      );
+      if (duplicate) return fail('A review for this person and exact period already exists.', 'periodStart');
+      const person = store.state.people.find((p) => p.id === data.personId);
+      const review = {
+        id: id('review'),
+        personId: data.personId,
+        periodStart: data.periodStart,
+        periodEnd: data.periodEnd,
+        status: 'draft',
+        selfReflection: { achievements: '', challenges: '', growth: '', support: '' },
+        selfReflectionRecordedAt: null,
+        manager: { achievements: '', development: '', nextSteps: '', rating: '' },
+        evidence: buildReviewEvidence(store.state, data.personId, data.periodStart, data.periodEnd),
+        evidenceCapturedAt: stamp(),
+        createdAt: stamp(),
+        updatedAt: stamp(),
+        completedAt: null,
+      };
+      store.update(
+        (draft) => {
+          draft.reviews.push(review);
+        },
+        { type: 'review.created', entity: 'review', entityId: review.id, summary: `Performance review started for ${person.name} (${review.periodStart} to ${review.periodEnd})` },
+      );
+      return { ok: true, id: review.id, evidenceCount: review.evidence.length };
+    },
+
+    updateReflection(reviewId, patch) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'draft') return fail('Reopen the completed review before editing it.');
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          for (const key of ['achievements', 'challenges', 'growth', 'support']) {
+            if (patch[key] !== undefined) target.selfReflection[key] = clean(patch[key]) || '';
+          }
+          target.selfReflectionRecordedAt = Object.values(target.selfReflection).some((value) => value.trim()) ? stamp() : null;
+          target.updatedAt = stamp();
+        },
+        { type: 'review.reflection.updated', entity: 'review', entityId: reviewId, summary: 'Employee self-reflection recorded' },
+      );
+      return { ok: true };
+    },
+
+    updateAssessment(reviewId, patch) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'draft') return fail('Reopen the completed review before editing it.');
+      if (patch.rating && !REVIEW_RATINGS.includes(patch.rating)) return fail('Choose a valid rating, or leave the review unrated.', 'rating');
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          for (const key of ['achievements', 'development', 'nextSteps']) {
+            if (patch[key] !== undefined) target.manager[key] = clean(patch[key]) || '';
+          }
+          if (patch.rating !== undefined) target.manager.rating = patch.rating || '';
+          target.updatedAt = stamp();
+        },
+        { type: 'review.assessment.updated', entity: 'review', entityId: reviewId, summary: 'Manager assessment updated' },
+      );
+      return { ok: true };
+    },
+
+    refreshReviewEvidence(reviewId) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'draft') return fail('A completed review keeps its evidence snapshot. Reopen it to refresh.');
+      const evidence = buildReviewEvidence(store.state, review.personId, review.periodStart, review.periodEnd);
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          target.evidence = evidence;
+          target.evidenceCapturedAt = stamp();
+          target.updatedAt = stamp();
+        },
+        { type: 'review.evidence.refreshed', entity: 'review', entityId: reviewId, summary: `Review evidence refreshed (${evidence.length} source records)` },
+      );
+      return { ok: true, evidenceCount: evidence.length };
+    },
+
+    completeReview(reviewId) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'draft') return fail('This review is already complete.');
+      // Completion always recaptures, so a record added after the last manual
+      // refresh cannot be silently omitted from the frozen packet.
+      const evidence = buildReviewEvidence(store.state, review.personId, review.periodStart, review.periodEnd);
+      const candidate = { ...review, evidence };
+      const readiness = reviewReadiness(candidate, evidence);
+      if (!readiness.canComplete) {
+        return fail(`Before completing: ${readiness.missing.map((check) => check.label).join('; ')}.`);
+      }
+      const warnings = calibrateReview(candidate, evidence);
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          target.evidence = evidence;
+          target.evidenceCapturedAt = stamp();
+          target.status = 'complete';
+          target.completedAt = stamp();
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'review.completed', entity: 'review', entityId: reviewId,
+          summary: `Performance review completed (${evidence.length} source records${warnings.length ? `; ${warnings.map((w) => w.id).join(', ')} acknowledged` : '; no calibration warnings'})`,
+        },
+      );
+      return { ok: true, warnings, evidenceCount: evidence.length };
+    },
+
+    reopenReview(reviewId) {
+      const review = reviewById(reviewId);
+      if (!review) return fail('That review no longer exists.');
+      if (review.status !== 'complete') return fail('This review is already a draft.');
+      store.update(
+        (draft) => {
+          const target = draft.reviews.find((r) => r.id === reviewId);
+          target.status = 'draft';
+          target.completedAt = null;
+          target.updatedAt = stamp();
+        },
+        { type: 'review.reopened', entity: 'review', entityId: reviewId, summary: 'Performance review reopened for correction' },
       );
       return { ok: true };
     },

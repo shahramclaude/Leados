@@ -89,41 +89,41 @@ export function buildDemoState(now = new Date()) {
       situation: 'In Tuesday’s prioritisation review',
       behavior: 'you rewrote the activation proposal the afternoon after the customer call and brought three options instead of one',
       impact: 'the team made the call in twenty minutes instead of deferring it a week',
-      tags: ['ownership'], date: at(4), followUpOn: null, followUpDone: false, createdAt: new Date(ts(4)).toISOString(),
+      tags: ['ownership'], observedOn: at(5), date: at(4), followUpOn: null, followUpDone: false, createdAt: new Date(ts(4)).toISOString(),
     },
     {
       id: id('fb'), personId: mei, direction: 'given', kind: 'constructive',
       situation: 'During the schema review on Thursday',
       behavior: 'the design doc landed two hours before the meeting with no summary at the top',
       impact: 'four people read it cold and we spent half the session re-establishing context',
-      tags: ['communication'], date: at(7), followUpOn: at(-7), followUpDone: false, createdAt: new Date(ts(7)).toISOString(),
+      tags: ['communication'], observedOn: at(17), date: at(7), followUpOn: at(-7), followUpDone: false, createdAt: new Date(ts(7)).toISOString(),
     },
     {
       id: id('fb'), personId: mei, direction: 'given', kind: 'praise',
       situation: 'At the billing postmortem',
       behavior: 'you named your own contribution to the outage before anyone else spoke',
       impact: 'it set the tone and the review produced three real fixes rather than defensiveness',
-      tags: ['candor', 'leadership'], date: at(18), followUpOn: null, followUpDone: false, createdAt: new Date(ts(18)).toISOString(),
+      tags: ['candor', 'leadership'], observedOn: at(19), date: at(18), followUpOn: null, followUpDone: false, createdAt: new Date(ts(18)).toISOString(),
     },
     {
       id: id('fb'), personId: freya, direction: 'given', kind: 'praise',
       situation: 'In the metrics working session',
       behavior: 'you wrote down each definition in plain language and got agreement before building anything',
       impact: 'the weekly report stopped being a recurring argument',
-      tags: ['rigour'], date: at(11), followUpOn: null, followUpDone: false, createdAt: new Date(ts(11)).toISOString(),
+      tags: ['rigour'], observedOn: at(11), date: at(11), followUpOn: null, followUpDone: false, createdAt: new Date(ts(11)).toISOString(),
     },
     {
       id: id('fb'), personId: jordan, direction: 'received', kind: 'constructive',
       situation: 'In our last 1:1',
       behavior: 'you committed to deciding on the onboarding bet by Friday and it is now two weeks later',
       impact: 'the team is doing discovery work that may be thrown away',
-      tags: ['decision-making'], date: at(14), followUpOn: at(0), followUpDone: false, createdAt: new Date(ts(14)).toISOString(),
+      tags: ['decision-making'], observedOn: at(15), date: at(14), followUpOn: at(0), followUpDone: false, createdAt: new Date(ts(14)).toISOString(),
     },
   ];
 
-  const goal = (title, ownerId, scope, dueIn, krs, confidence, lastCheckinDaysAgo, note) => {
+  const goal = (title, ownerId, scope, dueIn, krs, confidence, lastCheckinDaysAgo, note, coAuthored = null) => {
     const g = {
-      id: id('goal'), title, description: '', ownerId, scope, dueDate: at(-Math.abs(dueIn)),
+      id: id('goal'), title, description: '', ownerId, scope, coAuthored: ownerId ? coAuthored : null, dueDate: at(-Math.abs(dueIn)),
       keyResults: krs.map(([t, start, target, current, unit]) => ({ id: id('kr'), title: t, start, target, current, unit })),
       confidence, status: 'active',
       checkins: lastCheckinDaysAgo === null ? [] : [{ id: id('chk'), date: at(lastCheckinDaysAgo), note, confidence }],
@@ -136,21 +136,68 @@ export function buildDemoState(now = new Date()) {
   goal('Cut activation time to first value below 10 minutes', jordan, 'person', -40, [
     ['Median time to first value', 26, 10, 21, 'min'],
     ['Onboarding completion', 48, 75, 55, '%'],
-  ], 'at-risk', 19, 'Progress is real but the funnel drop is upstream of the work in flight.');
+  ], 'at-risk', 19, 'Progress is real but the funnel drop is upstream of the work in flight.', true);
   goal('Migrate billing to the new ledger without a customer-visible incident', mei, 'person', -75, [
     ['Accounts migrated', 0, 100, 62, '%'],
     ['Reconciliation mismatches', 40, 0, 6, 'count'],
-  ], 'on-track', 5, 'On pace; reconciliation is the remaining risk.');
+  ], 'on-track', 5, 'On pace; reconciliation is the remaining risk.', true);
   goal('Rebuild escalation so no P1 sits untouched for more than 30 minutes', samuel, 'person', -60, [
     ['P1 first response under 30m', 55, 95, 60, '%'],
-  ], 'at-risk', 21, 'Rota drafted, not yet agreed with support.');
+  ], 'at-risk', 21, 'Rota drafted, not yet agreed with support.', false);
   goal('Make the weekly numbers trusted by every team', freya, 'person', -30, [
     ['Metric definitions signed off', 0, 100, 80, '%'],
     ['Report disputes per week', 6, 0, 2, 'count'],
-  ], 'on-track', 3, 'Definitions landed; two disputes left.');
+  ], 'on-track', 3, 'Definitions landed; two disputes left.', true);
   goal('Ship the reliability programme', priya, 'person', -90, [
     ['Error budget burn', 3.1, 1, 2.2, 'x'],
-  ], 'on-track', 24, 'No check-in for three weeks — calendar has been back-to-back.');
+  ], 'on-track', 24, 'No check-in for three weeks — calendar has been back-to-back.', false);
+
+  state.delegations = [
+    {
+      id: id('delegation'), personId: mei,
+      title: 'Own the billing migration reconciliation review',
+      expectedOutcome: 'A weekly reconciliation review with mismatches explained, owners assigned, and a summary the leader can read in five minutes.',
+      authority: 'act-inform',
+      support: 'Admin access to the reconciliation dashboard; Priya joins the first review; escalate customer-impacting discrepancies immediately.',
+      delegatedOn: at(20), dueOn: at(-3), status: 'active',
+      checkins: [{ id: id('dchk'), date: at(8), progress: 'on-track', note: 'The review format works. Mei will add mismatch ageing next week.', createdAt: new Date(ts(8)).toISOString() }],
+      completedOn: null, completionNote: '', returnedOn: null, returnReason: '',
+      createdAt: new Date(ts(20)).toISOString(), updatedAt: new Date(ts(8)).toISOString(),
+    },
+    {
+      id: id('delegation'), personId: samuel,
+      title: 'Own the new P1 escalation rota',
+      expectedOutcome: 'Every P1 has a named first responder and backup, with all three support pods agreeing to the rota before launch.',
+      authority: 'agree',
+      support: 'Pod leads have reserved Thursday for agreement; the leader will resolve any unresolved staffing constraint within one working day.',
+      delegatedOn: at(25), dueOn: at(2), status: 'active',
+      checkins: [{ id: id('dchk'), date: at(10), progress: 'blocked', note: 'Two pods cannot cover the same weekend. Need a staffing decision before the rota can be agreed.', createdAt: new Date(ts(10)).toISOString() }],
+      completedOn: null, completionNote: '', returnedOn: null, returnReason: '',
+      createdAt: new Date(ts(25)).toISOString(), updatedAt: new Date(ts(10)).toISOString(),
+    },
+    {
+      id: id('delegation'), personId: freya,
+      title: 'Publish the trusted metric-definition library',
+      expectedOutcome: 'The weekly metrics have one searchable definition, owner and source of truth, and the team stops maintaining competing copies.',
+      authority: 'own',
+      support: 'Freya controls the documentation space; Jordan supplies product definitions; the leader handles escalated ownership disputes.',
+      delegatedOn: at(45), dueOn: at(20), status: 'done',
+      checkins: [{ id: id('dchk'), date: at(25), progress: 'on-track', note: 'All definitions drafted; two ownership questions remain.', createdAt: new Date(ts(25)).toISOString() }],
+      completedOn: at(18), completionNote: 'Published 24 signed-off definitions and archived the duplicate team sheets. Remaining follow-up: monthly ownership review.', returnedOn: null, returnReason: '',
+      createdAt: new Date(ts(45)).toISOString(), updatedAt: new Date(ts(18)).toISOString(),
+    },
+    {
+      id: id('delegation'), personId: priya,
+      title: 'Draft the reliability programme budget',
+      expectedOutcome: 'A costed reliability proposal with three sequencing options and an explicit recommendation.',
+      authority: 'recommend',
+      support: 'Finance provided the current run-rate model and a 30-minute review slot.',
+      delegatedOn: at(30), dueOn: at(10), status: 'returned',
+      checkins: [{ id: id('dchk'), date: at(20), progress: 'on-track', note: 'Initial option costs collected.', createdAt: new Date(ts(20)).toISOString() }],
+      completedOn: null, completionNote: '', returnedOn: at(5), returnReason: 'Finance changed the planning window, so the leader took the budget back to re-scope it centrally. Priya retains the technical sequencing input.',
+      createdAt: new Date(ts(30)).toISOString(), updatedAt: new Date(ts(5)).toISOString(),
+    },
+  ];
 
   state.growthPlans = [
     {

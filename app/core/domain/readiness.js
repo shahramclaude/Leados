@@ -58,7 +58,7 @@ export function evidenceFor(state, personId, now, settings) {
   const recentFeedback = feedback.filter((f) => (daysSince(f.date, now) ?? Infinity) <= WINDOW_DAYS);
   const goals = state.goals.filter((g) => g.ownerId === personId && g.status === 'active' && (g.keyResults || []).length > 0);
   const plan = activePlan(state, personId);
-  const progress = plan ? planProgress(plan) : null;
+  const progress = plan ? planProgress(plan, now) : null;
   const recognition = state.recognition.filter((r) => r.personId === personId && (daysSince(r.date, now) ?? Infinity) <= WINDOW_DAYS);
   const cad = cadence(state, personId, now, settings);
 

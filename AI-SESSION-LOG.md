@@ -137,7 +137,7 @@ splitting them produced a circular import for no gain.
 ## What was built
 
 `index.html` + `app/**`: zero build, zero runtime dependencies, local-first, `node --test`.
-Store with versioned schema and migrations, quarantine on corruption, append-only event log,
+Store with versioned schema and migrations, quarantine on corruption, append-oriented event log,
 export/import, demo protection. Thirteen views covering the lifecycle: Today, Signals, People,
 person detail, 1:1s, Feedback (SBI with live coaching), Recognition, Goals with computed pace,
 GROW plans and competency coverage, evidence-gated succession, pulse with a privacy floor, DACI
@@ -188,3 +188,200 @@ documented as dead rather than repaired. Full lists: `ROADMAP.md` → "Known gap
 Next up (from roadmap): feedback latency (observed date vs conversation date); goal co-authorship
 and a `GOAL-06` finding; performance-review packet assembled from records with every claim linked
 to its evidence.
+
+---
+
+# Session — 2026-10-24 · Evidence-backed performance reviews (canonical evolution)
+
+## Audit and current-state assessment
+
+This session evolved the canonical zero-build app in place; no rewrite, framework change,
+runtime dependency, account, backend or network call was introduced. All canonical files under
+`index.html`, `app/**` and `tests/app/**` were read before the final assessment. The legacy
+React/Next trees were inventoried but **not fully reread or executed**; historical claims such as
+6,879 TypeScript errors remain `[UNVERIFIED]` by this session.
+
+- **Working before this session:** the canonical app booted and its 82 tests passed. Roster,
+  1:1s, SBI feedback, goals, GROW, pulse, decisions, recognition, succession, health, signals,
+  local persistence and JSON export/import were present and exercised.
+- **Broken, source-confirmed and fixed:** key-result dialogs received `{ goal }` but read
+  `{ goalId }`, so the action could report success without adding a result; development-plan
+  overdue counts used the wall clock instead of the injected clock; “Edit plan” opened a blank
+  new-plan flow instead of editing the selected plan. All three now have UI or domain regression
+  coverage. `addKeyResult` also refuses a missing goal instead of silently succeeding.
+- **Shallow/missing before this session:** there was no performance-review record, route,
+  reflection, assessment, evidence packet, calibration or print flow. Goals and development had
+  current values and check-ins, not a complete historical event store; the new packet labels that
+  limit rather than fabricating period-end history. Delegation and conflict-resolution records
+  remain absent. The legacy trees remain non-canonical and unrepaired.
+- **Dependency audit:** a clean `npm ci --ignore-scripts` reported 7 total advisories.
+  `npm audit --omit=dev` narrowed the production chain to 1 critical and 2 high advisories in
+  legacy Next.js/PostCSS/Sharp. The canonical browser app does not load that chain. No forced
+  major legacy upgrade was applied.
+
+## Research and selection
+
+Read CIPD's people-performance evidence review, Lattice's review-question/form guidance, and
+Culture Amp's review-template science and manager guidance; SBI/CCL remains the feedback basis.
+The consistent product pattern is specific expectations and evidence, employee reflection,
+separate past/future prompts, and calibration as a challenge process—not an automatically
+generated truth. Full links and the rejected alternatives are in `RESEARCH.md` §12.
+
+The highest-impact gap was the missing review lifecycle: the app helped managers create useful
+records all quarter, then gave them no way to use those records when the review arrived. This
+session implemented roadmap items 3–4 and the packet half of item 9. Feedback latency and goal
+co-authorship stay next because they deepen existing records; delegation is now the largest
+wholly absent lifecycle area after reviews.
+
+## What changed
+
+- Added schema **v2** and a tested v1→v2 migration for `reviews`, including normalization of
+  ratings, reflections, evidence excerpts and local-only source routes. Export/import and demo
+  cleanup include reviews; a review attached to a removed demo person cannot become an orphan.
+- Added `app/core/domain/reviews.js`: inclusive period validation, oldest-first evidence from
+  1:1s, manager-to-person feedback, goals, development and recognition; explicit capture-time
+  labels; seven calibration checks; completion readiness. Anonymous pulse answers and upward
+  feedback about the manager are excluded from person-performance evidence.
+- Added review list/detail routes and printable packets. Four self-reflection prompts, three
+  manager prompts and an optional four-anchor manager rating remain distinct. Completion freezes
+  a recaptured evidence snapshot; reopen and evidence refresh are separate actions. Events cover
+  create, evidence refresh, reflection, assessment, complete and reopen.
+- Added source-record drill-down for every evidence type, including completed goals/plans; added
+  a document-style print layout and browser print/save-PDF action. No direct employee account or
+  submission is claimed.
+- Updated `index.html`, navigation, settings/storage labels, README, ROADMAP and RESEARCH.
+
+## Verification performed
+
+```text
+npm test                         → 96 pass / 0 fail (~8 s)
+node --test tests/app/reviews.test.mjs
+                                 → 10 pass / 0 fail during focused verification
+git diff --check                 → clean
+live HTTP smoke                  → shell + 36 JS modules + CSS; preview Host/Origin accepted
+static scan of app/**            → no innerHTML/eval/fetch/XMLHttpRequest runtime path
+```
+
+The UI integration test uses the real dialogs to create a packet, record reflection and manager
+assessment, complete it, invoke print, export, reset and import. Other tests follow all five
+source-link types (including completed goals/plans), verify the key-result and development-plan
+edit regressions, and exercise migration, privacy exclusions, rating warnings, injected clocks,
+frozen snapshots, reload and demo cleanup. No real manager usage or real-browser visual/print
+inspection was performed; the latter remains `[UNVERIFIED]` in the roadmap.
+
+## Known limits and next
+
+A packet can only contain what was logged. Capture-time goal/development values are not historical
+reconstruction. Calibration is a transparent heuristic, not a fairness guarantee. Reflection is
+manager-entered in this local workspace. `localStorage` remains unencrypted and is not a backup.
+Legacy dependency advisories and legacy source claims were not silently “fixed” or revalidated.
+
+Next up (from roadmap): feedback latency (`observedOn` vs conversation date); goal co-authorship
+and `GOAL-06`; a delegation log with authority and follow-through.
+
+---
+
+# Session — 2026-10-24 · Feedback latency, goal co-authorship and delegation
+
+## Audit and current-state assessment
+
+The workspace began at HEAD `5152de5` with the previous review-packet increment present as
+uncommitted work. I preserved and reviewed that work rather than resetting it. After restoring
+locked dependencies with `npm ci --ignore-scripts`, the canonical baseline was **96 pass / 0 fail**.
+No runtime dependency, framework, backend, account or network call was added.
+
+- **Working before this increment:** the zero-build shell, roster, 1:1s, SBI feedback, goals,
+  GROW, pulse, decisions, recognition, succession, health/signals, local persistence, and the new
+  evidence-backed review lifecycle were exercised by the baseline suite.
+- **Broken/environmental:** the first test invocation could not find `jsdom` because installed
+  dependencies were absent. `npm ci --ignore-scripts` restored the lockfile dependencies; this was
+  not an application regression. The previously recorded server process was not present, so a new
+  HTTP smoke server was started and checked.
+- **Shallow or missing:** feedback had a conversation date but no observation date; goal ownership
+  had no authorship context; there was no delegation collection, authority model, follow-through
+  state or return-to-leader history. Existing goal editing could not correct authorship because
+  neither the field nor a complete edit path existed.
+- **Legacy scope:** legacy React/Next trees remain non-canonical and were not compiled or executed
+  in this session. Historical error-count claims are not reused as current measurements.
+
+## Research and selection
+
+The owner explicitly selected **all three** former roadmap priorities. Gallup's timely-feedback
+research supports measuring observation-to-conversation delay but does not validate a universal
+seven-day cutoff. Gallup's collaborative-goal research supports recording involvement without
+claiming causation or inventing unknown authorship. CCL's delegation guidance makes authority,
+resources, direction and support part of the handoff; Asana benchmarks one visible owner, due date,
+status and completion. Full links and design consequences are in `RESEARCH.md` §§1, 7 and 13.
+
+The product choice was to make three different truths queryable, not to add a composite score:
+when did the behavior happen versus the conversation; who shaped the objective; and who owns the
+delegated outcome with what decision boundary and result.
+
+## What changed
+
+- **Schema v3 + migration:** added `feedback.observedOn`, tri-state `goal.coAuthored`, normalized
+  `delegations`, and configurable `feedbackLatencyTargetDays` / `delegationCheckinDays`. Tested
+  v1→v2→v3 migration preserves unknown as null. Import normalization validates calendar dates,
+  reports damaged delegation check-ins/orphans, and never turns missing latency/authorship into
+  zero/false. Existing local storage keys and JSON export/import remain compatible.
+- **Feedback latency:** capture and date-correction dialogs distinguish observation from discussion.
+  Pure statistics report measured samples, average, maximum, delayed and unknown counts over 90 days;
+  received/upward feedback is excluded. `FB-06` links to a filtered list of only measured delayed
+  items. Review evidence includes the observed date and real gap.
+- **Goal co-authorship:** person-owned goals record co-authored, explicitly leader-set, or unknown;
+  team goals are not applicable. The goal edit dialog preserves identity, owner, key results and
+  check-in history. `GOAL-06` fires only for explicit leader-set records, never unknown. Review
+  evidence labels the capture-time authorship.
+- **Delegation lifecycle:** added a pure domain module, dedicated route, four authority choices,
+  support/outcome/due-date capture, dated on-track/blocked check-ins, completion notes and explicit
+  return-to-leader reasons. Overdue, blocked and checkpoint-due facts remain independent. Closed
+  records are read-only history in the UI. All writes validate chronology and emit audit events.
+- **Cross-product integration:** `DEL-01`…`DEL-03` feed Signals/Today; blocked/overdue/checkpoint
+  outcomes enter suggested 1:1 agendas; person pages link to delegation history; review packets
+  include dated in-period delegation events with capture-time status/authority and source links.
+  Settings exposes both conventions and record counts. Demo cleanup removes delegations attached
+  to fabricated people while preserving real-person work.
+
+## Corrections and verification
+
+Same-day check-ins now use the later entry as current, so a second note can unblock the first
+without erasing history; an overdue fact still remains overdue until completion/re-planning.
+The focused new suite initially had two incorrect expectations (one ignored that remaining overdue
+fact, one expected the short authority label); those tests were corrected rather than weakening the
+implementation. Stale schema-v2/no-delegation assertions were updated for the intentional v3 model.
+Final source review also made goal ownership explicit and fixed during authorship editing, added a
+real feedback date-correction workflow, rejected future conversation/delegation dates, and prevented
+completion/return from predating check-ins. Import normalization leaves damaged authorship unknown
+and drops post-terminal check-ins with warnings rather than hiding the repair.
+
+```text
+npm test                         → 113 pass / 0 fail
+node --check (every app JS file) → 38 modules, no syntax errors
+git diff --check                 → clean
+live HTTP smoke                  → shell + 38 JS modules + CSS; 0 unresolved imports
+preview Host/Origin smoke        → accepted; no preview-breaking response
+static scan of app/**            → no runtime innerHTML/eval/fetch/XMLHttpRequest path
+```
+
+Real-dialog tests cover feedback observation capture/correction/filtering, goal authorship editing,
+and delegation create → blocked check-in → edit → completion → review source drill-down. Other
+regressions cover migration, invalid chronology, unknown-vs-zero/false, same-day unblock, terminal
+outcomes, reload persistence, audit events, suggested agendas, review evidence and demo cleanup.
+
+Demo baseline at `2026-10-24T10:00:00Z`: health **54.5 (D)**, trend **+1.7**, pulse **2.55/5 (n=5)**;
+**32 findings / 10 urgent / 2 wins**; all 14 application routes rendered. Four measured feedback items average
+**3.0 days**, with one beyond convention. Five person-owned goals split **3 co-authored / 2 explicitly
+leader-set**. Delegation contains **2 active** (one blocked/overdue, one check-in due), **1 completed**
+and **1 returned**; these values are computed from the records, not hard-coded into the insights.
+
+## Known limits and next
+
+Seven days is a configurable team convention for latency/check-ins, not a validated universal score.
+Review delegation status/authority is capture-time context, not reconstructed period-end history.
+There are no notifications, background schedules, employee accounts or automatic reassignment.
+`localStorage` remains unencrypted and is not a backup. No real-manager longitudinal validation was
+performed. Real-browser visual inspection of the new delegation layout and print output remains
+`[UNVERIFIED]`; jsdom workflows and HTTP module loading are verified.
+
+Next up (from roadmap): a structured conflict-resolution record; honest team-level trends for every
+dimension (including latency/delegation where dates support them); CSV export that preserves unknowns.

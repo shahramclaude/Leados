@@ -85,6 +85,31 @@ export function feedbackFor(state, personId, { direction = null } = {}) {
   return state.feedback.filter((f) => f.personId === personId && (!direction || f.direction === direction));
 }
 
+/** Calendar days between the observed moment and the feedback conversation. */
+export function feedbackLatency(feedback) {
+  if (!feedback?.observedOn) return { status: 'unmeasured', days: null };
+  const days = daysBetween(feedback.observedOn, feedback.date);
+  if (days === null || days < 0) return { status: 'invalid', days: null };
+  return { status: 'measured', days };
+}
+
+/** Only real observation/conversation pairs contribute; unknown is not zero. */
+export function feedbackLatencySummary(items, targetDays = 7) {
+  const rows = (items || []).map((feedback) => ({ feedback, ...feedbackLatency(feedback) }));
+  const measured = rows.filter((row) => row.status === 'measured');
+  const days = measured.map((row) => row.days);
+  return {
+    rows,
+    samples: measured.length,
+    average: days.length ? round(mean(days), 1) : null,
+    max: days.length ? Math.max(...days) : null,
+    delayed: measured.filter((row) => row.days > targetDays).length,
+    unmeasured: rows.filter((row) => row.status === 'unmeasured').length,
+    invalid: rows.filter((row) => row.status === 'invalid').length,
+    targetDays,
+  };
+}
+
 /**
  * Per-person feedback statistics and the balance verdict.
  * Category names follow Kim Scott's Radical Candor: praise-only is "ruinous
@@ -103,6 +128,7 @@ export function personFeedbackStats(state, personId, now, settings) {
   const constructive = inWindow.filter((f) => f.kind === 'constructive').length;
   const total = praise + constructive;
   const praiseRatio = total ? praise / total : null;
+  const latency = feedbackLatencySummary(inWindow, settings?.feedbackLatencyTargetDays ?? 7);
 
   let balance = 'no-feedback';
   if (total > 0) {
@@ -124,6 +150,13 @@ export function personFeedbackStats(state, personId, now, settings) {
     isStale: daysSinceGiven === null || daysSinceGiven > target,
     balance,
     balanceLabel: BALANCE_LABELS[balance],
+    latencySamples: latency.samples,
+    averageLatency: latency.average,
+    maxLatency: latency.max,
+    delayedLatency: latency.delayed,
+    unmeasuredLatency: latency.unmeasured,
+    invalidLatency: latency.invalid,
+    latencyTargetDays: latency.targetDays,
   };
 }
 
@@ -148,6 +181,7 @@ export function teamFeedbackSummary(state, now, settings) {
   const stats = people.map((p) => ({ person: p, ...personFeedbackStats(state, p.id, now, settings) }));
   const stale = stats.filter((s) => s.isStale);
   const inWindow = state.feedback.filter((f) => f.direction === 'given' && (daysSince(f.date, now) ?? Infinity) <= 90);
+  const latency = feedbackLatencySummary(inWindow, settings?.feedbackLatencyTargetDays ?? 7);
   return {
     people: stats,
     stale,
@@ -155,6 +189,13 @@ export function teamFeedbackSummary(state, now, settings) {
     constructive: inWindow.filter((f) => f.kind === 'constructive').length,
     staleCount: stale.length,
     never: stats.filter((s) => s.givenCount === 0),
+    latencySamples: latency.samples,
+    averageLatency: latency.average,
+    maxLatency: latency.max,
+    delayedLatency: latency.delayed,
+    unmeasuredLatency: latency.unmeasured,
+    invalidLatency: latency.invalid,
+    latencyTargetDays: latency.targetDays,
   };
 }
 

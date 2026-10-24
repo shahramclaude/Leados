@@ -178,7 +178,7 @@ function growthDimension(state, now, settings) {
   const withPlan = people.filter((p) => activePlan(state, p.id));
   const coverage = withPlan.length / people.length;
   const completion = withPlan.length
-    ? mean(withPlan.map((p) => planProgress(activePlan(state, p.id)).percent)) / 100
+    ? mean(withPlan.map((p) => planProgress(activePlan(state, p.id), now).percent)) / 100
     : 0;
   const pulse = aggregate(state, now);
   const pulseGrowth = pulse.blocked ? null : pulse.dimensions.growth.avg;

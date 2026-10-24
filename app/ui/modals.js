@@ -13,6 +13,8 @@ import { COMPETENCIES } from '../core/domain/growth.js';
 import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS } from '../core/schema.js';
 import { addDays, dayKey, formatDate } from '../core/time.js';
 import { personOptions } from './options.js';
+import { SELF_REFLECTION_PROMPTS, MANAGER_PROMPTS, REVIEW_RATINGS, REVIEW_RATING_LABELS } from '../core/domain/reviews.js';
+import { DELEGATION_AUTHORITY } from '../core/domain/delegations.js';
 
 function submitter(api, build) {
   return (values, form, close) => {
@@ -284,7 +286,13 @@ export function openFeedbackDialog(ctx, { personId = null, kind = 'praise' } = {
       help: 'What changed because of it — for the work, the team, or you.',
     },
     { name: 'tags', label: 'Tags', placeholder: 'ownership, candor (comma separated)' },
-    { name: 'date', label: 'Date', type: 'date', value: dayKey(ctx.now) },
+    {
+      name: 'observedOn',
+      label: 'When did you observe the behaviour?',
+      type: 'date',
+      help: 'Optional. Leave blank when you cannot establish the date; LeadOS will report the delay as unmeasured, never as zero.',
+    },
+    { name: 'date', label: 'When was the feedback conversation?', type: 'date', value: dayKey(ctx.now) },
     {
       name: 'followUpOn',
       label: 'Follow up on',
@@ -327,6 +335,7 @@ export function openFeedbackDialog(ctx, { personId = null, kind = 'praise' } = {
       impact: values.impact,
       tags: (values.tags || '').split(',').map((t) => t.trim()).filter(Boolean),
       date: values.date,
+      observedOn: values.observedOn || null,
       followUpOn: values.followUpOn || null,
     });
     if (!result.ok) {
@@ -352,42 +361,92 @@ export function openFeedbackDialog(ctx, { personId = null, kind = 'praise' } = {
   return dialog;
 }
 
-/* --------------------------------------------------------------- goals */
-
-export function openGoalDialog(ctx, { personId = null } = {}) {
-  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+export function openFeedbackDatesDialog(ctx, { feedback }) {
   formDialog({
-    title: 'Set a goal',
-    description: 'An objective with at least one number attached. "Improve onboarding" is a wish; "cut time-to-first-value from 26 to 10 minutes" is reviewable.',
-    submitLabel: 'Create goal',
-    size: 'lg',
+    title: 'Edit feedback dates',
+    description: 'Correct the observation or conversation date without rewriting the feedback itself. Leave observation blank if it cannot be established.',
+    submitLabel: 'Save dates',
     fields: [
-      { name: 'title', label: 'Objective', required: true, wide: true, placeholder: 'Cut activation time to first value below 10 minutes' },
-      { name: 'ownerId', label: 'Owner', type: 'select', value: personId || '', options: [{ value: '', label: 'Team goal (no single owner)' }, ...personOptions(active)] },
-      { name: 'dueDate', label: 'Due', type: 'date', value: addDays(dayKey(ctx.now), 60) },
-      { name: 'krTitle', label: 'Key result', required: true, wide: true, placeholder: 'Median time to first value' },
-      { name: 'krStart', label: 'Starting value', type: 'number', value: 0, step: 'any' },
-      { name: 'krTarget', label: 'Target value', type: 'number', value: 10, step: 'any' },
-      { name: 'krCurrent', label: 'Current value', type: 'number', value: 0, step: 'any' },
-      { name: 'krUnit', label: 'Unit', placeholder: 'min, %, count' },
-      { name: 'description', label: 'Why this matters', type: 'textarea', rows: 2, wide: true },
+      { name: 'observedOn', label: 'Behaviour observed on', type: 'date', value: feedback.observedOn || '', help: 'Blank remains explicitly unmeasured.' },
+      { name: 'date', label: 'Feedback discussed on', type: 'date', required: true, value: feedback.date },
     ],
     onSubmit: (values, form, close) => {
-      const result = ctx.api.addGoal({
+      const result = ctx.api.updateFeedback(feedback.id, { observedOn: values.observedOn || null, date: values.date });
+      if (!result.ok) {
+        form.setFieldError(result.field || 'observedOn', result.error);
+        return;
+      }
+      close();
+      toast('Feedback dates updated', 'good');
+    },
+  });
+}
+
+/* --------------------------------------------------------------- goals */
+
+export function openGoalDialog(ctx, { personId = null, goal = null } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  const isEdit = Boolean(goal);
+  formDialog({
+    title: isEdit ? 'Edit goal' : 'Set a goal',
+    description: isEdit
+      ? 'Correct the objective or authorship without replacing its identity, owner, key results or check-in history.'
+      : 'An objective with at least one number attached. Record whether the owner helped shape it; if you do not know, leave authorship unknown.',
+    submitLabel: isEdit ? 'Save changes' : 'Create goal',
+    size: 'lg',
+    fields: [
+      { name: 'title', label: 'Objective', required: true, wide: true, value: goal?.title || '', placeholder: 'Cut activation time to first value below 10 minutes' },
+      ...(isEdit
+        ? [
+            { name: 'ownerId', type: 'hidden', value: goal.ownerId || '' },
+            { type: 'static', label: 'Owner', value: goal.ownerId ? active.find((person) => person.id === goal.ownerId)?.name || 'Person no longer in active roster' : 'Team goal (no single owner)' },
+          ]
+        : [{ name: 'ownerId', label: 'Owner', type: 'select', value: personId || '', options: [{ value: '', label: 'Team goal (no single owner)' }, ...personOptions(active)] }]),
+      {
+        name: 'coAuthored',
+        label: 'Who shaped the objective?',
+        type: 'select',
+        value: goal?.coAuthored === true ? 'true' : goal?.coAuthored === false ? 'false' : '',
+        options: [
+          { value: '', label: 'Not recorded / unknown' },
+          { value: 'true', label: 'Owner and leader shaped it together' },
+          { value: 'false', label: 'Leader set it without recorded co-authorship' },
+        ],
+        help: 'Applies to person-owned goals. Team goals store this as not applicable. Unknown is preserved as unknown.',
+      },
+      { name: 'dueDate', label: 'Due', type: 'date', value: goal?.dueDate || addDays(dayKey(ctx.now), 60) },
+      ...(isEdit ? [] : [
+        { name: 'krTitle', label: 'Key result', required: true, wide: true, placeholder: 'Median time to first value' },
+        { name: 'krStart', label: 'Starting value', type: 'number', value: 0, step: 'any' },
+        { name: 'krTarget', label: 'Target value', type: 'number', value: 10, step: 'any' },
+        { name: 'krCurrent', label: 'Current value', type: 'number', value: 0, step: 'any' },
+        { name: 'krUnit', label: 'Unit', placeholder: 'min, %, count' },
+      ]),
+      { name: 'description', label: 'Why this matters', type: 'textarea', rows: 2, wide: true, value: goal?.description || '' },
+    ],
+    onSubmit: (values, form, close) => {
+      const payload = {
         title: values.title,
         description: values.description,
         ownerId: values.ownerId || null,
+        scope: values.ownerId ? 'person' : 'team',
+        coAuthored: values.ownerId ? (values.coAuthored === 'true' ? true : values.coAuthored === 'false' ? false : null) : null,
         dueDate: values.dueDate || null,
-        keyResults: values.krTitle
-          ? [{ title: values.krTitle, start: Number(values.krStart), target: Number(values.krTarget), current: Number(values.krCurrent), unit: values.krUnit }]
-          : [],
-      });
+      };
+      const result = isEdit
+        ? ctx.api.updateGoal(goal.id, payload)
+        : ctx.api.addGoal({
+            ...payload,
+            keyResults: values.krTitle
+              ? [{ title: values.krTitle, start: Number(values.krStart), target: Number(values.krTarget), current: Number(values.krCurrent), unit: values.krUnit }]
+              : [],
+          });
       if (!result.ok) {
         form.setFieldError(result.field || 'title', result.error);
         return;
       }
       close();
-      toast('Goal created', 'good');
+      toast(isEdit ? 'Goal updated' : 'Goal created', 'good');
     },
   });
 }
@@ -465,22 +524,163 @@ export function openKeyResultDialog(ctx, { goalId }) {
   });
 }
 
+/* ----------------------------------------------------------- delegation */
+
+export function openDelegationDialog(ctx, { personId = null, delegation = null } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add someone to your roster before delegating an outcome.', 'bad');
+    return;
+  }
+  const isEdit = Boolean(delegation);
+  const owner = isEdit ? ctx.state.people.find((p) => p.id === delegation.personId) : null;
+  formDialog({
+    title: isEdit ? 'Edit delegation' : 'Delegate an outcome',
+    description: 'Delegation transfers a clear result and a decision boundary—not just a task. Record the support and checkpoint that make follow-through possible.',
+    submitLabel: isEdit ? 'Save changes' : 'Delegate outcome',
+    size: 'lg',
+    fields: [
+      ...(isEdit
+        ? [{ name: 'personId', type: 'hidden', value: delegation.personId }, { type: 'static', label: 'Accountable owner', value: owner?.name || 'Person no longer in roster' }]
+        : [{ name: 'personId', label: 'Accountable owner', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true }]),
+      { name: 'title', label: 'Outcome or responsibility', required: true, wide: true, value: delegation?.title || '', placeholder: 'Own the monthly customer-risk review' },
+      {
+        name: 'expectedOutcome',
+        label: 'What does success look like?',
+        type: 'textarea',
+        rows: 3,
+        required: true,
+        wide: true,
+        value: delegation?.expectedOutcome || '',
+        placeholder: 'By the due date, we will see…',
+      },
+      {
+        name: 'authority',
+        label: 'Decision authority',
+        type: 'select',
+        required: true,
+        value: delegation?.authority || 'act-inform',
+        options: Object.entries(DELEGATION_AUTHORITY).map(([value, item]) => ({ value, label: `${item.label} — ${item.description}` })),
+        help: 'Choose the boundary explicitly. This is the owner’s authority, not an inferred permission level.',
+      },
+      {
+        name: 'support',
+        label: 'Resources, context and support',
+        type: 'textarea',
+        rows: 2,
+        required: true,
+        wide: true,
+        value: delegation?.support || '',
+        placeholder: 'Budget, access, people, constraints, and when you will help…',
+      },
+      { name: 'delegatedOn', label: 'Delegated on', type: 'date', required: true, value: delegation?.delegatedOn || dayKey(ctx.now) },
+      { name: 'dueOn', label: 'Outcome due', type: 'date', required: true, value: delegation?.dueOn || addDays(dayKey(ctx.now), 14) },
+    ],
+    onSubmit: (values, form, close) => {
+      const payload = {
+        personId: values.personId,
+        title: values.title,
+        expectedOutcome: values.expectedOutcome,
+        authority: values.authority,
+        support: values.support,
+        delegatedOn: values.delegatedOn,
+        dueOn: values.dueOn,
+      };
+      const result = isEdit ? ctx.api.updateDelegation(delegation.id, payload) : ctx.api.addDelegation(payload);
+      if (!result.ok) {
+        form.setFieldError(result.field || 'title', result.error);
+        toast(result.error, 'bad');
+        return;
+      }
+      close();
+      toast(isEdit ? 'Delegation updated' : 'Outcome delegated', 'good');
+    },
+  });
+}
+
+export function openDelegationCheckInDialog(ctx, { delegation }) {
+  formDialog({
+    title: `Check in: ${delegation.title}`,
+    description: 'Ask about progress and support without taking the outcome back. A blocked checkpoint stays visible until a later checkpoint or terminal result.',
+    submitLabel: 'Save check-in',
+    fields: [
+      { name: 'date', label: 'Check-in date', type: 'date', required: true, value: dayKey(ctx.now) },
+      {
+        name: 'progress', label: 'Current state', type: 'select', required: true, value: 'on-track',
+        options: [{ value: 'on-track', label: 'On track' }, { value: 'blocked', label: 'Blocked / support needed' }],
+      },
+      { name: 'note', label: 'What changed, and what happens next?', type: 'textarea', rows: 4, required: true, wide: true },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.checkInDelegation(delegation.id, values);
+      if (!result.ok) return form.setFieldError(result.field || 'note', result.error);
+      close();
+      toast('Delegation check-in saved', 'good');
+    },
+  });
+}
+
+export function openCompleteDelegationDialog(ctx, { delegation }) {
+  formDialog({
+    title: `Complete: ${delegation.title}`,
+    description: 'Close the loop with the result actually delivered. The completed record remains available to review evidence and history.',
+    submitLabel: 'Mark completed',
+    fields: [
+      { name: 'completedOn', label: 'Completed on', type: 'date', required: true, value: dayKey(ctx.now) },
+      { name: 'completionNote', label: 'Outcome delivered and any remaining follow-up', type: 'textarea', rows: 4, required: true, wide: true },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.completeDelegation(delegation.id, values);
+      if (!result.ok) return form.setFieldError(result.field || 'completionNote', result.error);
+      close();
+      toast('Delegation completed', 'good');
+    },
+  });
+}
+
+export function openReturnDelegationDialog(ctx, { delegation }) {
+  formDialog({
+    title: `Accept work back: ${delegation.title}`,
+    description: 'Use this when accountability returns to you rather than pretending the delegation is still active. Record why and the next step.',
+    submitLabel: 'Accept back',
+    fields: [
+      { name: 'returnedOn', label: 'Returned on', type: 'date', required: true, value: dayKey(ctx.now) },
+      { name: 'returnReason', label: 'Why is it coming back, and what happens next?', type: 'textarea', rows: 4, required: true, wide: true },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.returnDelegation(delegation.id, values);
+      if (!result.ok) return form.setFieldError(result.field || 'returnReason', result.error);
+      close();
+      toast('Work returned to the leader; history kept', 'good');
+    },
+  });
+}
+
 /* -------------------------------------------------------------- growth */
 
-export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
+export function openGrowthPlanDialog(ctx, { personId = null, plan = null } = {}) {
   const active = ctx.state.people.filter((p) => p.status !== 'archived');
   if (!active.length) {
     toast('Add someone to your roster first.', 'bad');
     return;
   }
+  const isEdit = Boolean(plan);
+  if (isEdit) personId = plan.personId;
   formDialog({
-    title: 'Start a GROW plan',
-    description: 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
-    submitLabel: 'Save plan',
+    title: isEdit ? 'Edit development plan' : 'Start a GROW plan',
+    description: isEdit
+      ? 'Update the coaching record without replacing its identity or commitments. Development actions are managed separately below the plan.'
+      : 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
+    submitLabel: isEdit ? 'Save changes' : 'Save plan',
     size: 'lg',
     fields: [
-      { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
-      { name: 'competencies', label: 'Focus competencies', type: 'boolean-block', wide: true, options: COMPETENCIES.map((c) => ({ value: c, label: c })) },
+      ...(isEdit
+        ? [
+            { name: 'personId', type: 'hidden', value: plan.personId },
+            { type: 'static', label: 'Who', value: ctx.state.people.find((person) => person.id === plan.personId)?.name || 'Person no longer in roster' },
+          ]
+        : [{ name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true }]),
+      { name: 'competencies', label: 'Focus competencies', type: 'boolean-block', wide: true, value: plan?.competencies || [], options: COMPETENCIES.map((c) => ({ value: c, label: c })) },
       {
         name: 'goal',
         label: 'Goal — what does better look like?',
@@ -488,6 +688,7 @@ export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
         rows: 2,
         required: true,
         wide: true,
+        value: plan?.goal || '',
         placeholder: 'In six months, owning cross-team technical direction, not just the hardest code.',
       },
       {
@@ -496,6 +697,7 @@ export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
         type: 'textarea',
         rows: 2,
         wide: true,
+        value: plan?.reality || '',
         placeholder: 'Strongest debugger on the team; the gap is written communication and bringing others along.',
       },
       {
@@ -504,34 +706,42 @@ export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
         type: 'textarea',
         rows: 2,
         wide: true,
+        value: (plan?.options || []).map((option) => typeof option === 'string' ? option : option.text).join('\n'),
         placeholder: 'Write a one-page decision memo per design choice; shadow the architecture review for two cycles.',
       },
-      {
-        name: 'willText',
-        label: 'Will — what will they do, by when?',
-        required: true,
-        wide: true,
-        placeholder: 'Publish a decision memo format and use it on the billing migration',
-      },
-      { name: 'willDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 14) },
-      { name: 'reviewOn', label: 'Review on', type: 'date', value: addDays(dayKey(ctx.now), 30) },
+      ...(isEdit ? [] : [
+        {
+          name: 'willText',
+          label: 'Will — what will they do, by when?',
+          required: true,
+          wide: true,
+          placeholder: 'Publish a decision memo format and use it on the billing migration',
+        },
+        { name: 'willDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 14) },
+      ]),
+      { name: 'reviewOn', label: 'Review on', type: 'date', value: plan?.reviewOn || addDays(dayKey(ctx.now), 30) },
     ],
     onSubmit: (values, form, close) => {
-      const result = ctx.api.saveGrowthPlan({
-        personId: values.personId,
+      const patch = {
         goal: values.goal,
         reality: values.reality,
         options: (values.options || '').split('\n').map((o) => o.trim()).filter(Boolean),
-        will: [{ text: values.willText, due: values.willDue }],
         competencies: values.competencies || [],
         reviewOn: values.reviewOn || null,
-      });
+      };
+      const result = isEdit
+        ? ctx.api.updateGrowthPlan(plan.id, patch)
+        : ctx.api.saveGrowthPlan({
+            personId: values.personId,
+            ...patch,
+            will: [{ text: values.willText, due: values.willDue }],
+          });
       if (!result.ok) {
         form.setFieldError(result.field || 'goal', result.error);
         return;
       }
       close();
-      toast('Growth plan saved', 'good');
+      toast(isEdit ? 'Development plan updated' : 'Growth plan saved', 'good');
     },
   });
 }
@@ -783,6 +993,103 @@ export function openReadinessDialog(ctx, { personId = null, seat = '' } = {}) {
   });
 }
 
+/* ---------------------------------------------------- performance reviews */
+
+export function openPerformanceReviewDialog(ctx, { personId = null } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add someone to your roster first.', 'bad');
+    return;
+  }
+  formDialog({
+    title: 'Prepare a performance review',
+    description: 'Choose the whole period you want to assess. LeadOS will gather dated 1:1s, feedback, goals, development and recognition — never anonymous pulse answers.',
+    submitLabel: 'Create review packet',
+    fields: [
+      { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
+      { name: 'periodStart', label: 'Period starts', type: 'date', value: addDays(dayKey(ctx.now), -89), required: true },
+      { name: 'periodEnd', label: 'Period ends', type: 'date', value: dayKey(ctx.now), required: true, help: 'Both dates are included. You can refresh the evidence while the review is a draft.' },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.createReview(values);
+      if (!result.ok) {
+        form.setFieldError(result.field || 'periodStart', result.error);
+        return;
+      }
+      close();
+      toast(`Review packet created with ${result.evidenceCount} source record${result.evidenceCount === 1 ? '' : 's'}`, 'good');
+      ctx.navigate(`#/reviews/${encodeURIComponent(result.id)}`);
+    },
+  });
+}
+
+export function openReflectionDialog(ctx, { review }) {
+  formDialog({
+    title: 'Record the person’s self-reflection',
+    description: 'These are the person’s own words, pasted or recorded with them. LeadOS does not send a form or claim they submitted one. There is deliberately no self-rating.',
+    submitLabel: 'Save self-reflection',
+    size: 'lg',
+    fields: SELF_REFLECTION_PROMPTS.map((prompt) => ({
+      name: prompt.key,
+      label: prompt.label,
+      type: 'textarea',
+      rows: 3,
+      wide: true,
+      value: review.selfReflection?.[prompt.key] || '',
+    })),
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.updateReflection(review.id, values);
+      if (!result.ok) {
+        toast(result.error, 'bad');
+        return;
+      }
+      close();
+      toast('Self-reflection saved', 'good');
+    },
+  });
+}
+
+export function openAssessmentDialog(ctx, { review }) {
+  formDialog({
+    title: 'Write the manager assessment',
+    description: 'Use the linked records, not a general impression. A rating is optional; the narrative and next commitments are what make the review useful.',
+    submitLabel: 'Save assessment',
+    size: 'lg',
+    fields: [
+      ...MANAGER_PROMPTS.map((prompt) => ({
+        name: prompt.key,
+        label: prompt.label,
+        type: 'textarea',
+        rows: 3,
+        wide: true,
+        value: review.manager?.[prompt.key] || '',
+        required: true,
+      })),
+      {
+        name: 'rating',
+        label: 'Optional overall rating',
+        type: 'select',
+        value: review.manager?.rating || '',
+        options: [
+          { value: '', label: 'No overall rating' },
+          ...REVIEW_RATINGS.map((rating) => ({ value: rating, label: REVIEW_RATING_LABELS[rating] })),
+        ],
+        help: 'Calibration warnings appear when the selected rating and the dated evidence do not line up. No score is calculated for you.',
+      },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.updateAssessment(review.id, values);
+      if (!result.ok) {
+        if (result.field) form.setFieldError(result.field, result.error);
+        toast(result.error, 'bad');
+        return;
+      }
+      close();
+      toast('Manager assessment saved', 'good');
+    },
+  });
+}
+
 /* ------------------------------------------------------------- settings */
 
 export function openSettingsDialog(ctx) {
@@ -798,7 +1105,9 @@ export function openSettingsDialog(ctx) {
       { name: 'orgName', label: 'Organisation', value: s.orgName },
       { name: 'oneOnOneCadenceDays', label: '1:1 cadence (days)', type: 'number', value: s.oneOnOneCadenceDays, min: 1, max: 90 },
       { name: 'feedbackTargetDays', label: 'Feedback target (days)', type: 'number', value: s.feedbackTargetDays, min: 1, max: 365 },
+      { name: 'feedbackLatencyTargetDays', label: 'Observation → feedback conversation convention (days)', type: 'number', value: s.feedbackLatencyTargetDays, min: 1, max: 90, help: 'A team convention for timely discussion, not a validated universal score. Missing observation dates stay unmeasured.' },
       { name: 'goalCheckinDays', label: 'Goal check-in (days)', type: 'number', value: s.goalCheckinDays, min: 1, max: 180 },
+      { name: 'delegationCheckinDays', label: 'Delegation check-in convention (days)', type: 'number', value: s.delegationCheckinDays, min: 1, max: 90, help: 'How often an active delegated outcome should have a real checkpoint. Due dates and blocked states are tracked separately.' },
       { name: 'recognitionTargetDays', label: 'Recognition target (days)', type: 'number', value: s.recognitionTargetDays, min: 1, max: 365 },
       { name: 'decisionReviewDays', label: 'Decision review default (days)', type: 'number', value: s.decisionReviewDays, min: 1, max: 365 },
       { name: 'growthReviewDays', label: 'Growth plan review (days)', type: 'number', value: s.growthReviewDays, min: 1, max: 365 },
@@ -816,7 +1125,7 @@ export function openSettingsDialog(ctx) {
     ],
     onSubmit: (values, form, close) => {
       const numeric = [
-        'oneOnOneCadenceDays', 'feedbackTargetDays', 'goalCheckinDays', 'recognitionTargetDays',
+        'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
         'decisionReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };

@@ -48,7 +48,7 @@ test('time: overdue and human phrasing', () => {
 test('schema: an empty state has every collection and valid settings', () => {
   const state = createEmptyState(NOW.toISOString());
   assert.equal(state.schemaVersion, SCHEMA_VERSION);
-  for (const key of ['people', 'oneOnOnes', 'feedback', 'goals', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'events']) {
+  for (const key of ['people', 'oneOnOnes', 'feedback', 'goals', 'delegations', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews', 'events']) {
     assert.ok(Array.isArray(state[key]), `${key} should be an array`);
   }
   assert.equal(state.settings.oneOnOneCadenceDays, 7);
@@ -85,7 +85,9 @@ test('schema: normalization rejects non-objects without throwing', () => {
   const { state, warnings } = normalizeState(null);
   assert.ok(Array.isArray(state.people));
   assert.equal(warnings.length, 1);
-  assert.equal(migrate({ schemaVersion: 1 }).applied.length, 0);
+  const migrated = migrate({ schemaVersion: 1 });
+  assert.deepEqual(migrated.applied, ['1 → 2', '2 → 3']);
+  assert.deepEqual(migrated.raw.reviews, []);
 });
 
 test('store: starts empty, persists an update, and reloads it', () => {
@@ -207,9 +209,16 @@ test('store: clearing the demo removes demo records and keeps real ones', () => 
       id: 'person-real', name: 'Real Person', role: 'Engineer', level: 'ic', team: 'Core',
       managerId: null, startDate: null, focus: '', status: 'active', createdAt: NOW.toISOString(),
     });
+    const demoPerson = draft.people.find((person) => person.id.includes('-demo-'));
+    draft.reviews.push(
+      { id: 'review-real', personId: 'person-real' },
+      { id: 'review-on-demo-person', personId: demoPerson.id },
+      { id: 'review-demo-fabricated', personId: 'person-real' },
+    );
   });
   store.clearDemo();
   assert.deepEqual(store.state.people.map((p) => p.id), ['person-real']);
+  assert.deepEqual(store.state.reviews.map((review) => review.id), ['review-real']);
   assert.equal(store.state.meta.isDemo, false);
   assert.equal(store.state.oneOnOnes.length, 0);
 });
