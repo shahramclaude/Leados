@@ -1,7 +1,10 @@
 # ADR-0001: The Next.js app under `src/` is the single canonical LEADOS application
 
 ## Status
-Accepted — Part 00.
+**Superseded by [ADR-0006](./0006-canonical-zero-build-app.md)** (2026-10-24). This decision was
+made before anyone tried to run the app it names: the Next.js tree does not compile (6,879 type
+errors, 352 missing modules, no `src/db`, no database). Kept as a record of the reasoning and of
+why it was wrong, not as current guidance.
 
 ## Context
 The standing order for this transformation program assumes a repository with a legacy Vite-era

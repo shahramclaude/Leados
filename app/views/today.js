@@ -1,0 +1,242 @@
+/**
+ * app/views/today.js — the one screen a leader opens on a Monday morning.
+ * It answers: how is the team, what should I do next, and who am I neglecting?
+ */
+
+import { h } from '../ui/dom.js';
+import { pageHeader, card, stat, badge, banner, findingCard, barRow, kv, personChip, emptyState } from '../ui/components.js';
+import { ringGauge, sparkline } from '../ui/charts.js';
+import { teamHealth } from '../core/domain/health.js';
+import { buildInsights } from '../core/domain/insights.js';
+import { dueMeetings, openActions } from '../core/domain/oneonone.js';
+import { aggregate, trend } from '../core/domain/pulse.js';
+import { reviewState } from '../core/domain/growth.js';
+import { reviewsDue } from '../core/domain/decisions.js';
+import { humanDays, daysSince, formatDate } from '../core/time.js';
+import { openOneOnOneDialog, openPulseDialog } from '../ui/modals.js';
+
+export function renderToday(ctx) {
+  const { state, now } = ctx;
+  const health = teamHealth(state, now);
+  const insights = buildInsights(state, now);
+  const pulse = aggregate(state, now);
+  const series = trend(state, now, { weeks: 8 });
+  const due = dueMeetings(state, now, state.settings).slice(0, 4);
+  const actions = openActions(state, { now }).filter((a) => a.overdue).slice(0, 3);
+  const hasPeople = state.people.some((p) => p.status !== 'archived');
+  const nextUp = insights.urgent.slice(0, 4);
+  const go = (finding) => ctx.navigate(finding.action.route);
+
+  const header = pageHeader({
+    title: state.settings.leaderName ? `${greeting(now)}, ${state.settings.leaderName.split(' ')[0]}` : greeting(now),
+    subtitle: `${state.settings.teamName}${state.settings.orgName ? ` · ${state.settings.orgName}` : ''} · ${formatDate(now)}`,
+    actions: hasPeople
+      ? [
+          h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openPulseDialog(ctx) }, 'Record pulse'),
+          h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openOneOnOneDialog(ctx) }, 'Log a 1:1'),
+        ]
+      : [h('button', { class: 'btn btn-primary', type: 'button', onClick: () => ctx.navigate('#/people') }, 'Add your team')],
+  });
+
+  const notices = [];
+  if (state.meta.isDemo) {
+    notices.push(
+      banner({
+        tone: 'caution',
+        title: 'You are looking at a demo workspace',
+        body: 'Every person, meeting and number here is fabricated so you can see the app working. Nothing is real until you add your own team.',
+        actions: [
+          h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.clearDemo() }, 'Clear demo data'),
+          h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => ctx.navigate('#/settings') }, 'Data & export'),
+        ],
+      }),
+    );
+  }
+  if (ctx.persistError) notices.push(banner({ tone: 'bad', title: 'Changes are not being saved', body: ctx.persistError, actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.navigate('#/settings') }, 'Export now')] }));
+  if (ctx.warnings?.length && !state.meta.isDemo) {
+    notices.push(banner({ tone: 'caution', title: 'Saved data needed repair', body: ctx.warnings.join(' ') }));
+  }
+
+  if (!hasPeople) {
+    return h(
+      'div',
+      { class: 'page' },
+      header,
+      ...notices,
+      card({
+        body: emptyState({
+          title: 'Start with the people you lead',
+          body: 'Add your team — names are enough to begin. Everything this app measures (conversation rhythm, feedback, goals, growth, safety) is computed from what you record here.',
+          action: h(
+            'div',
+            { class: 'row-gap' },
+            h('button', { class: 'btn btn-primary', type: 'button', onClick: () => ctx.navigate('#/people') }, 'Add your first person'),
+            h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => ctx.loadDemo() }, 'Or explore with demo data'),
+          ),
+          icon: '◈',
+        }),
+      }),
+    );
+  }
+
+  const healthCard = card({
+    title: 'Team health',
+    subtitle: health.label,
+    className: 'card-health',
+    body: h(
+      'div',
+      { class: 'health-layout' },
+      h(
+        'div',
+        { class: 'health-ring' },
+        ringGauge({ value: health.overall, grade: health.grade, caption: 'out of 100' }),
+        health.trend.available
+          ? h(
+              'p',
+              { class: `trend ${health.trend.delta > 0 ? 'trend-up' : health.trend.delta < 0 ? 'trend-down' : ''}` },
+              `${health.trend.delta > 0 ? '▲' : health.trend.delta < 0 ? '▼' : '■'} ${Math.abs(health.trend.delta)} pts vs 30 days ago`,
+            )
+          : h('p', { class: 'trend muted' }, health.trend.reason || 'Trend not available yet'),
+      ),
+      h(
+        'div',
+        { class: 'health-dims' },
+        ...health.dimensions.map((dim) =>
+          barRow({
+            label: dim.label,
+            value: dim.score,
+            hint: dim.drivers?.length ? dim.drivers.map((d) => `${d.label}: ${d.value}`).join(' · ') : dim.detail,
+            onClick: () => ctx.navigate('#/health'),
+          }),
+        ),
+      ),
+    ),
+  });
+
+  const nextCard = card({
+    title: 'What to do next',
+    subtitle: nextUp.length ? `${insights.urgent.length} item${insights.urgent.length === 1 ? '' : 's'} rated high or urgent. Each one explains why it appeared.` : 'Nothing urgent. That is a result, not a default.',
+    actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.navigate('#/insights') }, `All ${insights.findings.length} signals`)],
+    body: nextUp.length
+      ? h('div', { class: 'finding-stack' }, ...nextUp.map((f) => findingCard(f, { onAction: go, compact: true })))
+      : emptyState({
+          title: 'No high-severity signals',
+          body: insights.findings.length ? 'Lower-priority items are still listed on the Signals page.' : 'Log a 1:1 or a pulse response and the checks start running.',
+          icon: '✓',
+        }),
+  });
+
+  const dueCard = card({
+    title: '1:1s needing attention',
+    subtitle: `Cadence: every ${state.settings.oneOnOneCadenceDays} days.`,
+    body: due.length
+      ? h(
+          'ul',
+          { class: 'attention-list' },
+          ...due.map(({ person, cadence }) =>
+            h(
+              'li',
+              null,
+              personChip(person, {
+                onClick: () => ctx.navigate(`#/people/${person.id}`),
+                sub: person.role || 'Team member',
+                right: h(
+                  'span',
+                  { class: `badge ${cadence.status === 'overdue' ? 'badge-bad' : cadence.status === 'never' ? 'badge-warn' : 'badge-neutral'}` },
+                  cadence.status === 'never' ? 'never met' : cadence.status === 'overdue' ? `${cadence.overdueDays}d overdue` : 'due now',
+                ),
+              }),
+            ),
+          ),
+        )
+      : emptyState({ title: 'Everyone is inside cadence', icon: '✓' }),
+  });
+
+  const pulseCard = card({
+    title: 'Safety & load',
+    subtitle: `Anonymous pulse · last ${pulse.windowDays} days`,
+    actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.navigate('#/health') }, 'Open')],
+    body: h(
+      'div',
+      { class: 'pulse-summary' },
+      pulse.blocked
+        ? h(
+            'div',
+            null,
+            h('p', { class: 'muted' }, pulse.n === 0
+              ? 'No responses yet this fortnight.'
+              : pulse.blockedReason === 'unanimous'
+                ? `${pulse.n} responses, all identical — hidden because an identical aggregate reveals each person's answer.`
+                : `${pulse.n} response(s) so far — ${pulse.minRequired} are needed before any aggregate is shown, so nobody can be identified.`),
+            h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openPulseDialog(ctx) }, 'Record a response'),
+          )
+        : h(
+            'div',
+            { class: 'pulse-numbers' },
+            stat({ label: 'Overall', value: `${pulse.overall}/5`, hint: `${pulse.n} responses` }),
+            stat({ label: 'Safety', value: `${pulse.dimensions.safety.avg}/5`, hint: pulse.dimensions.safety.avg < 3 ? 'below the line' : 'healthy', tone: pulse.dimensions.safety.avg < 3 ? 'bad' : '' }),
+            stat({ label: 'Load', value: `${pulse.dimensions.workload.avg}/5`, hint: pulse.dimensions.workload.avg < 3 ? 'overloaded' : 'sustainable', tone: pulse.dimensions.workload.avg < 3 ? 'warn' : '' }),
+            sparkline(series.map((s) => s.overall), { width: 110, height: 34 }),
+          ),
+    ),
+  });
+
+  const looseEnds = [];
+  for (const row of due) {
+    if (row.cadence.status === 'never') {
+      looseEnds.push({ text: `You have never logged a 1:1 with ${row.person.name}`, action: () => openOneOnOneDialog(ctx, { personId: row.person.id }) });
+    }
+  }
+  for (const action of actions) {
+    looseEnds.push({ text: `Overdue action: “${action.text}”`, action: () => ctx.navigate(`#/people/${action.personId}`) });
+  }
+  const decisionReviews = reviewsDue(state, now);
+  if (decisionReviews.length) {
+    looseEnds.push({ text: `${decisionReviews.length} decision review${decisionReviews.length === 1 ? '' : 's'} due`, action: () => ctx.navigate('#/decisions') });
+  }
+  const growthReviews = state.growthPlans.filter((p) => p.status === 'active' && reviewState(p, now).state === 'overdue');
+  if (growthReviews.length) {
+    looseEnds.push({ text: `${growthReviews.length} growth plan review${growthReviews.length === 1 ? '' : 's'} overdue`, action: () => ctx.navigate('#/growth') });
+  }
+
+  const looseEndsCard = looseEnds.length
+    ? card({
+        title: 'Loose ends',
+        subtitle: 'Small things that are already late.',
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...looseEnds.slice(0, 5).map((item) =>
+            h('li', null, h('button', { class: 'link-btn', type: 'button', onClick: item.action }, item.text)),
+          ),
+        ),
+      })
+    : null;
+
+  const winsCard = insights.wins.length
+    ? card({
+        title: 'What is working',
+        subtitle: 'Evidence, not encouragement.',
+        body: h(
+          'ul',
+          { class: 'win-list' },
+          ...insights.wins.map((w) => h('li', null, h('strong', null, w.title), h('span', { class: 'muted' }, w.detail))),
+        ),
+      })
+    : null;
+
+  return h(
+    'div',
+    { class: 'page' },
+    header,
+    ...notices,
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, dueCard, pulseCard, looseEndsCard, winsCard),
+  );
+}
+
+function greeting(now) {
+  const hour = now.getUTCHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}

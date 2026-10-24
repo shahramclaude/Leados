@@ -10,3 +10,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 |---|---|---|
 | [0001](./0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](./0002-rule-based-lead-scoring-v0.md) | Use rule-based scoring, not ML, for v0 | Accepted |
+| [0006](./0006-canonical-zero-build-app.md) | Zero-build local-first app at the root is canonical (supersedes 0001-canonical-app) | Accepted |

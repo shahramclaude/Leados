@@ -99,3 +99,92 @@ canonical (key-sorted) stringify used on both the write and verify paths.
   silently disallowing it.
 - The stand-in Part 09/11/19/38 modules are explicitly not the real
   modules — see above.
+
+---
+
+# Session — 2026-10-24 · Independent audit, then one working application
+
+This entry supersedes the status claims in the entries above it. Those entries describe a
+Next.js build that typechecks, a `verify` pipeline and passing tests against Postgres. In this
+workspace those things do not exist: `npx tsc --noEmit` returns **6,879 errors**, `src/db` is
+absent, and none of the commands quoted in them can run. I am recording that plainly rather than
+editing history. The full evidence is in [`docs/AUDIT-2026-10-24.md`](docs/AUDIT-2026-10-24.md).
+
+## What I found (verified, not assumed)
+
+- Four competing applications, **none runnable**: the root Vite console (no `vite` installed),
+  the Next.js tree (6,879 type errors, 352 missing modules, no data layer), `public/index.html`
+  (a syntax error in a block comment made it a blank page) and `leados-cli.html`.
+- `public/index.html` was one character away from working. Fixed (`T_T_*/G_L_*` → `T_T_* / G_L_*`);
+  it now renders 5 routes with zero console errors. It remains a **sandbox**, not the product:
+  synthetic data only, no way to enter your own.
+- Documentation describes products that are not here. `docs/adr/0001-canonical-app.md` named the
+  Next.js tree as canonical before anyone tried to run it.
+
+## The decision, and the flag that came with it
+
+Building a new app rather than repairing two dead trees is a rewrite. The brief requires that to
+be flagged *before* it happens, so it is recorded in
+[`docs/adr/0006-canonical-zero-build-app.md`](docs/adr/0006-canonical-zero-build-app.md), which also
+supersedes ADR-0001. The short version: there is no entry point to improve, the repair is a rewrite
+with extra steps, and the domain ideas (rule engine, agenda generation, readiness gating, decision
+review) were salvageable as pure functions without the framework.
+
+**Architecture deviation, stated:** the plan was `app/ui/router.js` + `app/app.js`. They were merged
+into a single `app/main.js` because the router needs the same context object the shell builds, and
+splitting them produced a circular import for no gain.
+
+## What was built
+
+`index.html` + `app/**`: zero build, zero runtime dependencies, local-first, `node --test`.
+Store with versioned schema and migrations, quarantine on corruption, append-only event log,
+export/import, demo protection. Thirteen views covering the lifecycle: Today, Signals, People,
+person detail, 1:1s, Feedback (SBI with live coaching), Recognition, Goals with computed pace,
+GROW plans and competency coverage, evidence-gated succession, pulse with a privacy floor, DACI
+decisions, Settings and data. Thirty-three rule families producing severity, evidence and one
+action each.
+
+## Corrections made *during* this session (not just features added)
+
+- **Pulse anonymity floor raised from 3 to 5.** Research on published vendor thresholds (Culture
+  Amp 5, 15Five 5, Lattice 3 as a floor) showed 3 was the weakest defensible setting, and the
+  default mattered because admins rarely lower it.
+- **Pulse comments were not threshold-protected.** A single comment in a five-person team was
+  being shown — effectively a signed memo. Comments now obey the same floor as scores.
+- **Identical answers are now suppressed.** An average of identical answers *is* each person's
+  answer, whatever the group size (the homogeneity attack).
+- **Pulse windows counted on timestamps, not days**, so a response could fall into two fortnights
+  and produce a fake "change" number. Rewritten on calendar-day keys.
+- **Focus was stolen to the page heading on every re-render**, not only on route changes —
+  which yanked the caret out of the roster search box.
+- **Modal focus restoration used a shared stack** that leaked between mounts, permanently disabling
+  focus return after a single orphaned dialog. Now per-dialog, with a route-change teardown.
+- **Required `<select>` values did not survive being built** (options were marked `selected` before
+  insertion), so forms submitted empty and reported "choose a person first" while showing a person.
+- **Signals rendered every finding individually**: a 45-person roster produced 62 KB of text and a
+  131 ms render. Above three people a repeated rule now collapses into one line that still names
+  everyone: 24 ms, 6.3 KB.
+
+## Verification
+
+```
+node --test "tests/app/*.test.mjs"     → 82 pass / 0 fail
+node scripts/audit-legacy-smoke.mjs    → nav 5 / cards 4 / errors none   (public/index.html sandbox)
+node scripts/serve.mjs                 → app serves; 35 files, 0 unresolved module imports
+```
+
+Demo baseline (`2026-10-24T10:00:00Z`): health **53.3 (D)**, trend **+0.5**, pulse **n=5**,
+overall **2.55**, safety **2.8**, workload **2.0**, change **−0.59**, **27 findings / 9 urgent /
+2 wins**. All 13 routes render with no console errors. Worst render 90 ms with 45 people in jsdom.
+Contrast: every text/background token pair measured at ≥4.5:1.
+
+## Still not done, and not being claimed
+
+Nothing here has been used by a real manager for a real quarter; every number comes from the demo
+data and the test suite. No multi-user, no upward feedback, no performance-review packet, no
+delegation log, no encryption at rest. `localStorage` is not a backup. The legacy trees are
+documented as dead rather than repaired. Full lists: `ROADMAP.md` → "Known gaps".
+
+Next up (from roadmap): feedback latency (observed date vs conversation date); goal co-authorship
+and a `GOAL-06` finding; performance-review packet assembled from records with every claim linked
+to its evidence.

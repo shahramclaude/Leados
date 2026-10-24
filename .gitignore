@@ -1,0 +1,28 @@
+# Dependencies (installed from package-lock.json; never committed)
+node_modules/
+
+# Build output and caches
+.next/
+out/
+dist/
+build/
+coverage/
+.tsbuildinfo
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Local scratch (scripts keep their real files elsewhere)
+*.log
+tmp/

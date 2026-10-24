@@ -1,0 +1,5 @@
+{
+  "type": "module",
+  "private": true,
+  "description": "Browser-native ES modules for the LeadOS leadership app. The \"type\" field keeps Node and bundlers from re-parsing these files as CommonJS."
+}
