@@ -510,7 +510,7 @@ the responsible design when the app has no server, no account and no way to rese
 | Ciphertext is **never treated as corruption** | The existing corrupt-blob path quarantines and starts fresh. Applying that to an encrypted workspace would destroy it, so vault envelopes are detected before that path. |
 | Import declares its **mode change** | Restoring an encrypted backup into the lock screen keeps encryption; restoring an encrypted file into a plain workspace says, in words, that it is now stored unencrypted. Silent downgrades are how people believe they are protected when they are not. |
 | Exports are **separate decisions** | A plain-text JSON backup remains the recovery-of-last-resort for a forgotten passphrase; encrypted backups exist for everything else. The UI states which is which at the button. |
-| **No auto-lock timer** | Deliberate deferral: a timer that fires mid-sentence destroys work, and a correct implementation needs idle detection plus a "keep working" affordance. Listed as roadmap, not pretended to exist. |
+| **Idle auto-lock timer** | Implemented this session: locks an unlocked encrypted workspace after a configurable inactivity window (default 30 minutes, 0 = off), warns first with a non-destructive "keep working" affordance and a one-minute grace, and logs the lock to the event log (`tests/app/idle.test.mjs`). The timer cannot fire mid-sentence without warning, and any activity cancels a pending lock. |
 
 **Deliberately rejected.**
 | Idea | Reason |
@@ -523,6 +523,6 @@ the responsible design when the app has no server, no account and no way to rese
 
 **Standing research debt.** Browser WebCrypto was not exercised in a real browser binary in this
 session (Node's `webcrypto` was injected into jsdom), so genuine cross-browser unlock behaviour
-remains `[UNVERIFIED]`. Remaining gaps worth future sessions: idle auto-lock with a safe
-"still here?" prompt, per-collection encryption for the conflict records specifically, and a
-passphrase-strength estimate based on a local wordlist rather than a character meter.
+remains `[UNVERIFIED]`. Remaining gaps worth future sessions: per-collection encryption for the
+conflict records specifically, and a passphrase-strength estimate based on a local wordlist rather
+than a character meter.

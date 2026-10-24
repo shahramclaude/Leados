@@ -152,6 +152,10 @@ TypeScript error counts were not rerun. See the
 - **Change passphrase** re-keys with a new salt (the old passphrase stops working), **Lock now**
   discards the key after flushing pending writes, and **Turn off encryption** writes plain text
   again only after the write succeeds.
+- **Idle auto-lock:** an unlocked, encrypted workspace locks itself after a configurable window of
+  inactivity (default 30 minutes, 0 = off, set in Settings). It warns first with a non-destructive
+  "keep working or lock now?" prompt and locks automatically after one minute, so an unattended
+  unlocked tab cannot leave your notes readable. The lock is recorded in the event log.
 - **Encrypted backups:** `Export encrypted JSON` produces a portable envelope for the same
   passphrase (or a new one if the workspace is not encrypted). `Import JSON` accepts both
   plain-text and encrypted files; an encrypted import into a plain workspace is explicitly
@@ -269,9 +273,7 @@ node scripts/app-browser-smoke.mjs
   unanimous or thin-comment windows now remain hidden. A floor is not an anonymity guarantee.
 - Cadence and seven-day latency/check-in conventions are configurable, not validated universal
   deadlines. No real-manager longitudinal validation or proof of improved outcomes is claimed.
-- Encryption is optional and passphrase-only: no recovery key, no key escrow, no auto-lock after
-  inactivity, and no protection while the workspace is unlocked in an open tab. CSV and
-  plain-text JSON exports are always unencrypted, and full JSON backups still contain conflict
+- Encryption is optional and passphrase-only: no recovery key, no key escrow, and no protection while the workspace is unlocked and in active use. An unlocked, encrypted workspace now auto-locks after a configurable inactivity window (default 30 minutes, 0 = off, set in Settings), warning first so nothing in progress is discarded. CSV and plain-text JSON exports are always unencrypted, and full JSON backups still contain conflict
   notes. Enabling encryption replaces the browser's single stored blob, so a passphrase lost
   before the next unlock is unrecoverable by design.
 - Legacy build/runtime, real-Chromium smoke execution in Session 5, Safari/Firefox, real
