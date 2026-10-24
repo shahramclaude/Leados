@@ -1,240 +1,223 @@
 # LeadOS — a leadership workspace that keeps its own receipts
 
-LeadOS is a working leadership application for a first-time manager. You enter what
-actually happened — the 1:1 you held, the feedback you gave, the goal you set, the
-comment someone left in the pulse — and it scores the health of your team from those
-records, tells you which single thing to do next, and shows the evidence behind every
-claim it makes.
+LeadOS helps a first-time manager turn real conversations, feedback, goals and commitments
+into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
+those records, not an objective leadership grade or a substitute for listening to people.
 
-It runs entirely in the browser: no account, no server, no database, no network calls.
-Your records are stored in this browser's `localStorage` and can be exported as JSON at
-any time.
+The **canonical application is `index.html` + `app/**`**. It runs in your browser with no
+account, application backend, database or runtime package dependency. The static server
+only serves files; app records stay in this browser's `localStorage` unless you explicitly
+export them. **Local notes and JSON exports are unencrypted.**
 
-```
-node scripts/serve.mjs        # → http://localhost:5173
-```
-
-Or `npm run app`. Node 18+ is the only requirement — there is no build step and no
-runtime dependency.
-
-```
-npm test                      # 113 tests: domain rules, store, and full UI integration
+```sh
+node scripts/serve.mjs --host 0.0.0.0 --port 5173
+# or: npm run app
+# Open http://localhost:5173
 ```
 
----
+Node 18+ can serve the application; there is no build or dependency install required to run
+it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
+
+```sh
+npm ci --no-audit --no-fund
+npm test                     # 161 domain, persistence and jsdom workflow tests
+```
 
 ## Honest state of this repository
 
-This repository previously contained **four competing, non-runnable applications**
-(a Next.js/Postgres tree with 262 pages, a Vite React console, a standalone HTML
-console, and a stubbed `src/db` that does not exist). That history is why the docs in
-`docs/` describe products that do not exist in this repo. The audit that established
-this is in [`docs/AUDIT-2026-10-24.md`](docs/AUDIT-2026-10-24.md); the decision to
-stop patching and build one runnable app is in
-[`docs/adr/0006-canonical-zero-build-app.md`](docs/adr/0006-canonical-zero-build-app.md).
+This checkout also contains older React/Next.js applications, consoles, database code and
+large historical documents. Their presence is not evidence that those products run. They
+are preserved, **not rebuilt or deleted**, and are not imported by the canonical app.
 
-| Path | Status |
+| Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical application.** Runs, is tested, is what you are looking at. |
-| `scripts/serve.mjs` | Static server for the app (no build, no dependencies). |
-| `tests/app/**` | 113 tests run by `node --test`. |
-| `public/index.html` | A separate, older single-file console. Preserved as a sandbox, one syntax bug fixed, not the product. |
-| `src/**`, root `App.tsx`/`main.tsx`, `drizzle/`, `openapi.yaml` | **Legacy / non-canonical.** Not executed or verified in the latest session. |
-| `deprecated/vite-index.html` | The old root Vite entry, kept rather than deleted. |
+| `index.html`, `app/**` | **Canonical product:** 43 native JavaScript modules, CSS and shell; tested below. |
+| `scripts/serve.mjs` | Dependency-free static server. |
+| `tests/app/**` | Canonical automated suite, run by `npm test`. |
+| `scripts/app-browser-smoke.mjs` | Optional, reproducible Chromium lifecycle/mobile/accessibility smoke. |
+| `public/index.html` | Older synthetic-data console, not the product; detailed runtime status this session **[UNVERIFIED]**. |
+| `src/**`, root React files, `drizzle/`, `openapi.yaml` | Legacy/non-canonical; current builds, security and workflows **[UNVERIFIED]**. |
+| `deprecated/vite-index.html` | Preserved old Vite entry. |
 
-The legacy React/Next trees were inventoried but not compiled or executed in the latest
-session, so this document makes no current error-count or build claim for them. They remain
-non-canonical; the runtime and test claims below apply only to `index.html` + `app/**`.
-
-Legacy code is left in place rather than deleted: it is evidence, some of its domain
-reasoning was salvaged into `app/`, and removing 139 directories would bury the
-history that makes the current design defensible.
-
----
+**Correction to earlier documentation:** `src/db/` exists. It contains a PostgreSQL/Drizzle
+client, schema and repositories; `src/app/page.tsx` is a PostgreSQL starter page. Claims that
+the data layer is absent were wrong. The starting checkout contained 3,650 tracked files,
+3,495 source files and 316,352 source lines. All source was scanned for inventory/imports;
+that is **not** personal line-by-line verification of the whole legacy tree. Historical
+TypeScript error counts were not rerun. See the
+[current audit](docs/AUDIT-2026-10-24-session-4.md) and the corrected
+[architecture decision](docs/adr/0006-canonical-zero-build-app.md).
 
 ## What it actually does
 
-### Conversations
-- Log a 1:1 as **held, moved or skipped** — a moved 1:1 is a signal, not a blank.
-- Cadence is computed per person from real dates: `overdue`, `due`, `never`, with the
-  streak of skipped meetings and adherence over the last four.
-- **Agenda generation** from the person's live record: overdue actions, stale feedback,
-  a goal with no check-in, a review date that has passed. Every suggestion carries its
-  reason and can be removed before the meeting.
-- Meeting actions have owners and due dates; overdue ones surface on Today.
+### Conversations and feedback
 
-### Feedback (SBI, not vibes)
-- Situation → Behaviour → Impact, validated as you type with a live quality meter.
-- Coaching, not blocking: it flags generalisations ("always", "never"), judgement words
-  and missing impact, and explains why each weakens the note.
-- Praise/constructive balance per person, because "no feedback" and "only criticism"
-  are different failures.
-- Follow-ups are scheduled and chased.
-- `observedOn` is distinct from the conversation date. The 90-day latency average and
-  `FB-06` use only real date pairs; missing dates stay **unmeasured**, never 0 days. The
-  latency convention is configurable, and existing dates can be corrected in the UI.
+- Log a 1:1 as held, moved or skipped; compute cadence, cancellation streaks and adherence
+  from real dates. Generate editable agenda suggestions with a reason for each item.
+- Capture owned, dated meeting actions; overdue commitments surface on Today.
+- Record Situation → Behaviour → Impact feedback with a live, non-blocking specificity coach.
+  Track praise/constructive balance and follow-up dates without imposing a target ratio.
+- Store observation and conversation dates separately. Unknown observation dates stay
+  unmeasured, not zero-day feedback; date corrections preserve the original note.
 
-### Goals (OKR-shaped)
-- Objectives with measurable key results; progress is computed, never typed in.
-- **Expected progress at today's date** is computed from the elapsed share of the
-  window, so "behind pace" is arithmetic rather than opinion.
-- A goal with no key results is reported as *unmeasured*, never as 0% — the two are
-  different facts and conflating them is how reporting lies.
-- Check-ins capture a note, a confidence and the current numbers. A stated "on track"
-  that contradicts the pace is called out explicitly.
-- Team-level goals (no single owner) get the same checks.
-- Person-owned goals record **co-authored / explicitly leader-set / unknown**. Unknown is
-  not inferred as leader-set. `GOAL-06` fires only on an explicit leader-set record, and
-  the edit dialog corrects authorship without replacing key results or check-in history.
+### Goals, delegation, development and succession
 
-### Delegation (outcome + authority + follow-through)
-- Delegate one outcome to one owner with a concrete expected result, due date, support and
-  one of four explicit decision boundaries: recommend, agree first, act-and-inform, or own.
-- Dated check-ins record on-track/blocked progress and notes. Overdue, blocked and checkpoint-
-  due states stay distinct; `DEL-01`…`DEL-03` turn them into actions, and suggested 1:1 agendas
-  include the outcome that needs attention.
-- Completion requires the delivered result; “accept back” explicitly returns accountability to
-  the leader with a reason and next step. Closed records stay read-only in the UI as history.
-- Delegations persist, export/import, appear in review evidence and person pages, and are removed
-  safely with demo data. No backend, reassignment automation or notification promise is implied.
+- Goals have key results, computed progress, confidence and dated check-ins. A goal with no
+  measurable results is unmeasured, not 0%. Authorship is co-authored, explicitly leader-set
+  or unknown; unknown does not trigger the leader-set warning.
+- Delegate an outcome with one accountable owner, expected result, resources/support, dates
+  and explicit decision authority: recommend, agree first, act-and-inform or own.
+- Check in, record blocks, complete with the delivered result, or explicitly accept the work
+  back with a reason and next step. Closed delegations retain their history.
+- GROW plans separate Goal, Reality, Options and Will. A plan without a dated commitment is
+  reported as incomplete, not treated as progress. Show competency coverage across the team.
+- Succession readiness challenges unsupported claims using recorded development, feedback
+  and conversation evidence; it does not infer potential from personality.
 
-### Growth (GROW) and succession
-- Plans are scored on how far down **G**oal → **R**eality → **O**ptions → **W**ill they
-  actually got; a plan with no dated commitment is reported as a hope, not a plan.
-- Competency coverage across the team, including which capabilities nobody is developing.
-- Succession readiness is **evidence-gated**: a "ready now" claim with no recent
-  feedback, no growth evidence and no conversation history is flagged as unsupported
-  rather than believed.
+### Performance reviews
 
-### Performance reviews (evidence packet + calibration)
-- Prepare a draft for a person and an inclusive date period. The packet assembles dated
-  1:1s, manager-to-person feedback, goal check-ins, development activity and recognition,
-  oldest first, with delegation outcomes and a working link back to every source record.
-  Feedback excerpts include observation-to-conversation latency; goals include authorship.
-- Four employee self-reflection prompts and three forward/backward-looking manager prompts
-  keep the person's context separate from the assessment. There is no employee self-rating;
-  the optional manager rating uses four behaviour-anchored labels.
-- Seven explicit calibration checks (`CAL-01`…`CAL-07`) challenge thin evidence, recency
-  concentration, unsupported high/low ratings, thin rating narratives and one-sided evidence.
-  They are review prompts, not an automated fairness judgement or a generated score.
-- Current goal, development and delegation status/authority values are labelled **at capture**.
-  Completion recaptures and freezes the evidence snapshot; reopening and refreshing are separate,
-  audited actions.
-- Print/save-PDF uses the browser's print dialog and a document-style print layout. Reviews
-  are included in schema-v2/v3 migrations, local persistence, JSON export/import and demo cleanup.
+- Assemble an evidence packet for a person and inclusive period: dated 1:1s, feedback,
+  goal check-ins, development, recognition and delegation outcomes with source links.
+- Keep four self-reflection prompts separate from three manager-assessment prompts and an
+  optional behaviour-anchored rating. Reflection is manager-entered, not independently
+  submitted by an employee account.
+- Seven calibration checks challenge thin, recent-only, one-sided or unsupported assessments.
+  These are transparent prompts, not proof of fairness or an automated performance score.
+- Completion recaptures and freezes evidence; reopening and refreshing are separate audited
+  actions. Current goal/development/delegation values are labelled **at capture**, not falsely
+  reconstructed at period end. Browser print/save-PDF is wired; visual print output remains
+  **[UNVERIFIED]** in this session.
 
-### Team pulse (anonymous, with a real privacy floor)
-- Four dimensions: psychological safety, clarity, sustainable workload, growth.
-- **No aggregate is shown below 5 responses** (the published default at Culture Amp and
-  15Five; 3 is the weakest floor in the market). Suppression is a first-class state, not
-  an empty chart.
-- **Identical answers are also suppressed**: if every response is the same, the average
-  *is* each person's answer, so the group size does not protect anyone.
-- Comments obey the same floor and are stored with no person attached. Anonymous
-  responses have no `personId` field at all, and the schema normaliser strips one if it
-  appears in a hand-edited import.
-- Windows are computed on calendar days, so a response cannot land in two fortnights
-  and produce a fake "change" figure.
+### Conflict resolution — a working record, not an HR case system
 
-### Decisions (DACI)
-- Every decision records driver, approver, contributors, informed, reversibility, the
-  options considered and the rationale *before* the outcome is known.
-- Open decisions that have gone quiet, and reviews whose date has passed, are surfaced.
-- Outcomes are reviewed later, in public, against the rationale that was written down.
+- Start with a neutral situation, coordinator and follow-up date; hear 2–8 participants'
+  perspectives and underlying interests, including people outside your roster.
+- Participation is unknown, willing or declined. Unknown is never consent. Informal
+  agreement requires an explicitly appropriate route, everyone willing/heard, and recorded
+  process and information-sharing limits.
+- Record an explicitly confirmed agreement and 1–12 owned, observable, dated commitments.
+  Keep agreement versions and the context captured with each one.
+- Record real results, then an all-party follow-up that checks those results. An agreement
+  is **not** resolution; an earlier same-day check cannot verify results recorded later.
+- Close only when current-context commitments and verification support it. Reopening keeps
+  history and requires a fresh check; materially changed context requires a new agreement.
+- For serious/uncertain matters, record the qualified support contact and next check date.
+  **A support handoff sends nothing and is not resolution.** The manager must contact the
+  appropriate person; the app is not a mediator, investigation or emergency service.
+- Private case content is excluded from generated 1:1 agendas, person timelines, readiness,
+  health scoring and performance-review evidence. General reminders use counts/status only.
+  This is exposure minimisation, **not access control**: full JSON backups include the notes.
 
-### The signal engine
-- 38 rule families (`CONV-*`, `FB-*`, `GOAL-*`, `DEL-*`, `GROW-*`, `ONB-*`, `PULSE-*`, `DEC-*`,
-  `REC-*`, `SUCC-*`, `READY-*`, `TEAM-*`) over your records, each producing a severity,
-  a confidence, the evidence that triggered it and exactly one next action.
-- Findings are banded by urgency, and a rule that fires for more than three people
-  collapses into one line that still names everyone — a forty-person roster produces a
-  readable page, not a wall.
-- Nothing is fabricated: every number traces to a record you entered. The demo
-  workspace is the single exception, is labelled `DEMO` everywhere, and refuses to
-  overwrite real records without an explicit confirmation.
+### Team pulse
 
-### Data
-- Versioned schema (currently **v3**, with tested v1→v2→v3 migrations),
-  normalisation on load, and a quarantine path: a corrupt blob opens an empty workspace with an explanation and the
-  raw text kept, rather than a blank screen or a crash.
-- Append-oriented event log (capped at 600 entries, retained during demo cleanup) records what changed and when.
-- Export/import JSON round-trips through a validation and migration pass.
-- Storage failures (quota, private mode) surface as a warning in Settings instead of
-  silently losing writes.
+- Four dimensions: psychological safety, clarity, sustainable workload and growth.
+- Default reporting floor is **5 complete responses**; supported settings are 3–25.
+  Aggregate, dimension means and weekly trend use the **same complete four-answer cohort**.
+  Partial responses cannot supply a misleading privacy floor or distort released means.
+- Suppress the entire vector when any dimension, or each response's overall mean, is
+  identical across the cohort. Otherwise overall/other means could reveal a suppressed
+  dimension by subtraction. Future responses are excluded from current windows.
+- Comments need their **own** minimum number of nonempty, varied comments. Score-response
+  count alone does not release a lone comment. Suppressed comparisons stay null, not zero.
+- Anonymous records store `personId: null`; imports strip an identity value. The local app
+  cannot verify independent respondents or guarantee anonymity against a determined observer.
+  Writing style and someone with access to the browser/export can still identify people.
 
-### Accessibility
-- Skip link, landmark structure, `aria-current` navigation, focus-trapped dialogs with
-  Escape and focus restoration, `aria-live` for async results, visible focus rings,
-  AA contrast on every token pairing, reduced-motion and print stylesheets, and a
-  responsive layout down to 360 px.
+### Decisions, recognition and next steps
 
----
+- DACI decisions capture roles, reversibility, options and rationale, then record the outcome
+  and review. Quiet decisions and overdue reviews are surfaced.
+- Recognition records real contributions; drought prompts use logged dates.
+- **42 deterministic signal rules**, including `CFL-01`…`CFL-04`, produce evidence, urgency and
+  one next action. Similar person findings roll up rather than flooding the page. Conflict
+  reminders never include case titles, names or notes and work without a roster.
+- Optional demo data is clearly labelled. The demo refuses to replace real records without
+  confirmation, including workspaces containing only delegations or conflict records.
 
-## How it is built
+## Data integrity and architecture
 
-```
-index.html              shell only: landmarks, nav containers, modal/toast roots
-app/main.js             router, context, shell rendering, error boundary
-app/core/               pure domain: time, schema, store, demo, domain/*
-app/actions.js          every write, DOM-free, returns {ok,error,field}
-app/ui/                 dom, components, charts, modals, options
-app/views/              one renderer per route
-tests/app/              node:test — domain, store, and jsdom integration
+- **Schema v4**, with additive v1→v2→v3→v4 migrations; no fabricated conflict cases on upgrade.
+- Load/import normalisation reports repairs. Conflict dates, explicit confirmation, supported
+  closure and reopening boundaries are rechecked; malformed/duplicate conflict history produces
+  warnings. Oversize conflict writes are rejected before any state/event change, not silently cut.
+- The static server allows only the canonical shell/assets, rejects write methods, and refuses
+  symlink aliases. It does not publish scratch backups, `.env`, `.git`, test tools or legacy source.
+  Historical console/docs files remain in the repository but are no longer served by this entry.
+- Future/invalid declared schema versions are not silently downcast: imports are rejected;
+  incompatible saved data is write-protected and exports unchanged for recovery. Only explicit
+  compatible import/reset can replace it, and protection survives a failed replacement write.
+- Corrupt JSON opens a fresh workspace with a warning; recovery quarantine is **best effort**,
+  capped at 500,000 characters and can itself fail when storage is full. Keep external backups.
+- Each storage write replaces one JSON blob. On ordinary write failure, changes remain **in
+  memory only**, with a persistence error; conflict dialogs and Settings report this explicitly.
+  Imports adopt nothing unless the replacement saves. Reloading loses unsaved in-memory changes.
+- Meaningful mutations append events; the general log retains the latest **600** entries.
+  Conflict agreement/check/transition history stays in its record. Neither is tamper-proof.
+
+```text
+index.html                 shell, landmarks, navigation and modal/toast roots
+app/main.js                router, application context, shell and error boundary
+app/actions.js             DOM-free validated write API
+app/conflict-actions.js    conflict lifecycle validation and generic audit events
+app/core/                  schema, injected storage/clock, pure domain modules
+app/ui/                    shared DOM/forms/dialogs/charts
+app/views/                 route renderers, not persistence implementations
+tests/app/                 node:test domain/store/jsdom tests
 ```
 
-Rules the code holds itself to:
+No runtime framework, package dependency, account, network service or model inference was
+added in the conflict increment. Research and product tradeoffs are in `RESEARCH.md` §14.
+The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
+wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
+Historical comparison is approximate because not every edited field has dated history.
 
-1. **Domain logic is pure and testable without a DOM.** Scoring never reads `Date.now()`
-   or `localStorage`; the clock and storage are injected.
-2. **Views render, actions mutate.** A view never writes to the store directly.
-3. **No fake data outside `app/core/demo.js`**, which is labelled as demo in the data
-   model, the top bar and Settings.
-4. **Unmeasured is not zero.** A dimension with no records returns `null` and is
-   excluded from the weighted mean; it never contributes a zero.
-5. **Every insight has an evidence line and an action.** A finding that cannot name what
-   triggered it is a bug, not a feature.
+## Verification — 2026-10-24, session 4
 
-Scoring in one paragraph: five dimensions — cadence, feedback, clarity, growth,
-wellbeing — each scored 0–100 from records, weighted (feedback and clarity highest),
-with `null` dimensions removed and the remaining weights renormalised. The result is
-graded A–E and compared with the same calculation run over the record set truncated to
-30 days ago. That comparison is only shown when there is history older than 30 days;
-otherwise it says so rather than inventing a baseline.
+- `npm test`: **161 passed, 0 failed/skipped** (113 before this increment).
+- All 43 canonical JS modules pass `node --check`; `git diff --check` is clean.
+- Live HTTP smoke resolves the shell, CSS and all 43 JS modules; preview-style Host/Origin
+  requests are accepted.
+- **Chromium 153** exercises the full conflict lifecycle, reload, download/upload JSON
+  roundtrip, privacy isolation, filters and navigation without browser errors or external
+  requests. All 15 main screens have no horizontal overflow at **390×844**.
+- Axe 4.11 reports **0 WCAG A/AA violations in six checked desktop/mobile states** after fixing
+  navigation-heading contrast. Keyboard tests cover dialog trapping/Escape/focus return,
+  dynamic-row removal and post-save heading focus. Desktop/mobile screenshots were inspected.
+  This is not an exhaustive accessibility or assistive-technology certification.
 
----
+Optional browser reproduction on Linux (tools are test-only, installed in ignored scratch):
 
-## Known limitations (stated, not hidden)
+```sh
+# Keep the static server running in another terminal.
+npm install --prefix tmp/browser --no-save --no-audit --no-fund \
+  playwright-core@1.64.1 @sparticuz/chromium@153.0.0 axe-core@4.11.0
+node scripts/app-browser-smoke.mjs
+# Reports/screenshots/download evidence: tmp/browser-evidence/ (not committed)
+```
 
-- **Single leader, single workspace.** No multi-manager or org hierarchy, no sharing;
-  data lives in one browser profile. Export is the only transfer mechanism.
-- **localStorage is not a backup.** It is per-profile and per-origin; clearing site data
-  deletes everything. The app pushes you to export, but does not do it for you.
-- **Trend needs history.** Health trends and pulse trends require records older than
-  their window; before that they render "not enough history" rather than a line.
-- **Cadences are defaults, not universal scores.** Evidence favours timely, meaningful
-  feedback (see `RESEARCH.md`); the feedback target defaults to 21 days, while observation-
-  to-conversation and delegation-check-in conventions default to 7 days. All are configurable;
-  the 7-day values are team conventions, not research-validated cutoffs.
-- **No notifications.** There is no background scheduler in a browser tab; the app can
-  only tell you what is due when you open it.
-- **Review evidence is not a complete HR system of record.** It can only use what was logged;
-  goal/development values and delegation status/authority are capture-time snapshots, not
-  reconstructed period-end history. Self-reflection is entered into this local workspace by
-  the manager, not submitted through an employee account. Calibration warnings are transparent
-  heuristics, not proof of fairness. Real-browser visual inspection of review print and the
-  new delegation layout remains `[UNVERIFIED]`; jsdom workflows and HTTP module loading are tested.
-- **Legacy dependency advisories remain.** `npm audit --omit=dev` reports 1 critical and 2 high
-  advisories in the unused legacy Next.js/PostCSS/Sharp chain. The canonical app loads none of
-  those packages; no forced major upgrade was applied in the review-packet session.
-- **Pulse anonymity is honoured in the data model, not against a determined observer.**
-  With a very small team, a comment's writing style can still identify someone; the
-  floor reduces the risk and the copy says so.
-- **The legacy trees are dead weight.** They are documented as such, not repaired.
+## Known limitations and next
+
+- **One leader, one browser profile.** No accounts, employee submission, multi-manager sharing,
+  authentication, encryption or background notifications. Never store notes you are not
+  authorised to hold; export contains sensitive data. Clearing site data deletes the workspace.
+- Pulse suppression is intentionally more conservative: some previously visible sparse,
+  unanimous or thin-comment windows now remain hidden. A floor is not an anonymity guarantee.
+- Cadence and seven-day latency/check-in conventions are configurable, not validated universal
+  deadlines. No real-manager longitudinal validation or proof of improved outcomes is claimed.
+- All-dimension historical trends, CSV export preserving unknowns, and optional encryption with
+  safe migration remain roadmap work. Existing health comparisons are approximate.
+- Legacy build/runtime, Safari/Firefox, real assistive-technology use, print visual output and
+  large-workspace performance remain **[UNVERIFIED]**. Real-browser mobile route checks do not
+  replace every workflow check on a physical phone.
+- A fresh `npm audit --omit=dev` reports **1 critical and 2 high** findings in the legacy
+  Next/PostCSS/Sharp dependency chain. The canonical module graph imports none of it. This
+  increment did not upgrade or validate that legacy app; its dependencies must not be treated
+  as safe for deployment merely because the static app works.
 
 ## Documentation
 
-- [`ROADMAP.md`](ROADMAP.md) — what exists, what is next, what was rejected and why.
-- [`RESEARCH.md`](RESEARCH.md) — the leadership frameworks and evidence behind the rules.
-- [`docs/AUDIT-2026-10-24.md`](docs/AUDIT-2026-10-24.md) — the audit that started this.
-- [`AI-SESSION-LOG.md`](AI-SESSION-LOG.md) — session-by-session record, including
-  corrections to earlier claims.
+- [ROADMAP.md](ROADMAP.md) — verified inventory, ordered next work and rejected directions.
+- [RESEARCH.md](RESEARCH.md) — frameworks, product benchmarks and design consequences.
+- [Current audit](docs/AUDIT-2026-10-24-session-4.md) — evidence and verification boundaries.
+- [Historical audit](docs/AUDIT-2026-10-24.md) — original record with explicit corrections.
+- [AI-SESSION-LOG.md](AI-SESSION-LOG.md) — cumulative session history, including corrections.

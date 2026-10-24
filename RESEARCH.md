@@ -4,6 +4,9 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
+Last refreshed: 2026-10-24, session 4. Fresh conflict-practice/product research is in §14;
+earlier source summaries are retained as earlier research, not claimed to have all been refetched.
+
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
 produce adjectives are recorded in `ROADMAP.md` under "Rejected" with the reason.
@@ -192,8 +195,9 @@ tool that pretends to do it alone would be dishonest.
 
 ## 11. Anonymity thresholds in pulse surveys
 
-**Evidence (fetched this session).** Published floors cluster at 5, with 3 as the
-weakest defensible minimum and 10 for sensitive topics. Culture Amp's default reporting
+**Evidence (recorded in the earlier baseline session).** Published vendor conventions
+cluster at 5, with some minima of 3 and larger groups for sensitive topics. These are
+product policies, not proof that any group size guarantees anonymity. Culture Amp's default reporting
 group minimum is 5 and applies to *combinations* of groups; 15Five defaults to 5 and
 allows 3 or 4; Lattice publishes a floor of 3 that admins may raise but never lower;
 Microsoft Viva Glint uses 3 for confidential surveys and 10 for comments. Guidance also
@@ -203,17 +207,24 @@ slice, not just the top level ([FeedbackPulse on k-anonymity](https://feedbackpu
 [15Five confidentiality](https://success.15five.com/hc/en-us/articles/8359259684507-Confidentiality-for-engagement-surveys),
 [SurveyMonkey best practice](https://www.surveymonkey.com/mp/anonymous-employee-surveys/)).
 
-**Implemented (corrected this session).** The default floor was raised from 3 to 5
-(`DEFAULT_SETTINGS.pulseMinResponses`). Comments are now held to the same floor as
-scores — previously a single comment in a five-person team was shown, which is
-effectively a signed memo. Identical answers are suppressed with an explicit reason
-(`aggregate().blockedReason === 'unanimous'`). The UI always states the threshold and
-the count rather than showing a bare empty state, and anonymity is enforced in the data
-model: anonymous responses have no `personId` field, and the normaliser strips one from
-hand-edited imports.
+**Implemented, strengthened in session 4.** Default 5; settings/API/imports support 3–25.
+All aggregate/dimension/trend values come from the same complete four-dimension cohort.
+Incomplete imported responses cannot inflate its floor or distort means. If any dimension
+or per-response overall value is unanimous, the *whole vector* is suppressed, preventing
+subtraction of released dimensions from the overall. Weekly charts apply the same policy,
+exclude future responses and retain null gaps/comparisons. Missing/blank/boolean scores do
+not become low answers, through either import or the write API.
 
-**Known limitation.** In a team of three, no threshold can promise anonymity. The
-Settings copy says so rather than implying otherwise.
+Comments require their own floor of nonempty responses and varied text, rather than
+borrowing the score-response count. Anonymous records carry `personId: null`; normalization
+removes any imported identity value. This corrects the earlier inaccurate “no field at all”
+claim. Regression tests and real-browser health rendering verify the release paths.
+
+**Tradeoff and limitation.** More sparse, unanimous and thin-comment windows are now hidden.
+That is deliberate: releasing more numbers is not worth quietly identifying a respondent.
+A local manager-entered workspace cannot verify independent respondents, protect raw JSON
+from someone with browser access, or prevent identification by writing style. This is a
+conservative release policy, **not** a privacy guarantee or a complete k-anonymity system.
 
 ---
 
@@ -307,7 +318,79 @@ backend, account, network call or new dependency was introduced.
 
 ---
 
-## 14. Frameworks considered and rejected
+## 14. Conflict resolution: interests, voluntary process and verified follow-through
+
+**Research refreshed 2026-10-24 (session 4).** Acas describes mediation as voluntary,
+neutral and forward-looking: the participants control the agreement, and decide what may
+be shared. Its example outcomes include acknowledging perspectives, changing behaviour
+and regularly reviewing the agreement ([1](https://www.acas.org.uk/mediation)). CIPD's
+public guide distinguishes ordinary relationship disagreements from serious harassment
+complaints, which need formal procedures; only the public introduction was read, not the
+member-only material ([10](https://www.cipd.org/uk/knowledge/guides/workplace-mediation/)).
+Harvard's Program on Negotiation recommends observable problems, open questions, testing
+assumptions and understanding everyone's interests before seeking options; it explicitly
+asks whether a trained facilitator, HR or an ombudsman should help
+([9](https://www.pon.harvard.edu/daily/conflict-resolution/conflict-management-intervening-in-workplace-conflict/)).
+These are practice sources, not evidence for an automated diagnosis or a universal deadline.
+
+**Product benchmark.** Lattice's record-of-discussion pattern separates factual context,
+agreed actions with owners/dates, and a dated review. Its acknowledgement/signature is not
+necessarily agreement—an important distinction for LeadOS's single-manager data entry
+([1](https://lattice.com/articles/record-of-discussion-template)). Its 1:1 action items carry
+forward until completed; the useful pattern is continuity, not a one-off notes form
+([5](https://help.lattice.com/hc/en-us/articles/360060026934-Add-and-Manage-1-1-Action-Items)).
+No claim is made that Lattice provides the same conflict case workflow built here.
+
+**Gap analysis and decision before implementation.** Conflict resolution is the first
+unbuilt whole-job workflow in the existing roadmap. Pulse may signal an unsafe climate,
+but a score cannot record whose concerns have been heard, what people need, what was
+agreed or whether the agreement lasted. Build a manager's working record, not an HR
+investigation system: separate perspectives/interests, unknown/willing/declined participation,
+explicit process and sharing limits, owned dated commitments, follow-up, resolution with
+recorded verification, manual support handoff and reopening. An agreement is not resolution.
+Serious/uncertain concerns and declined participation must block the informal-agreement
+path; the app must not force reconciliation or claim to contact a professional.
+
+**Privacy boundary.** Notes remain unencrypted local data and appear in full JSON backups.
+Keep conflict content out of generated 1:1 agendas, person timelines, readiness scores and
+performance-review evidence; general Today/Signals reminders may contain only counts and
+status, not titles, names, interests or allegations. This is exposure minimisation, not
+access control or a promise of confidentiality. A manager-recorded confirmation is not an
+employee signature, independent testimony, legal finding or proof of fairness.
+
+**Audit-led safety work in the same increment.** Existing pulse trends bypass unanimous
+suppression and imported partial responses can defeat per-slice floors. Align release rules
+for aggregate, dimension, trend and comments; suppressed/missing values must remain null.
+Fix goal/delegation tab keys and protect delegation-only workspaces from demo replacement.
+No runtime dependency, backend, account, model inference or network integration is needed.
+
+**Implemented and verified.** The additive schema-v4 record has versioned agreements,
+owned commitments/results, context snapshots, dated checks and closure/handoff/reopening
+history. Unknown or declined participation cannot enter the informal-agreement path.
+Resolution requires completed results and a current-context all-party check that actually
+covered those results; an earlier same-day check cannot verify later work. Reopening keeps
+a verification boundary in the record and transition; damaged/missing boundaries require
+a fresh check rather than inventing chronology. Support handoff is manual and explicitly
+not sent/not resolved. Generic `CFL-01`…`CFL-04` reminders work even without a roster.
+
+Pure/API/schema/jsdom tests and actual Chromium create→agreement→result→check→resolve→reload→
+reopen→support-handoff→export/import runs cover the lifecycle and privacy exclusions.
+Unencrypted-storage warnings are part of capture/detail/export copy, not hidden in docs.
+The final audit also protects future-format data from accidental downcasting, reports
+malformed/duplicate conflict history and rejects oversize writes rather than cutting notes.
+The static server is restricted to canonical assets so scratch exports, credentials and
+repository files are not inadvertently published alongside the local application.
+No claim of independent attestation, legal defensibility, mediation competence or clinical
+risk assessment follows from a manager ticking confirmation. An encountered July-2026
+Acas disciplinary-code draft was **not** treated as a binding/current legal code.
+
+**Rejected.** Conflict-style/personality scores, blame assignment, sentiment inference,
+a conflict-count penalty on team health or talent ratings, automatic HR messages and
+using private mediation notes as automatic performance evidence.
+
+---
+
+## 15. Frameworks considered and rejected
 
 | Framework | Why not implemented (yet) |
 |---|---|
@@ -330,7 +413,7 @@ backend, account, network call or new dependency was introduced.
    psychometric validation. If this grows beyond a personal tool, the items should be
    replaced with validated ones (e.g. a short psychological-safety scale) and the change
    recorded here.
-3. **Conflict-resolution evidence** — research a structured, non-diagnostic record for
-   parties, interests, process, resolution and follow-up before adding the next collection.
+3. **Conflict practice validation** — test the workflow with consented real-manager use;
+   this working record is not a trained mediator or a jurisdiction-specific case system.
 4. **Longitudinal latency/delegation outcomes** — current thresholds are transparent team
    conventions. Do not claim predictive validity without real, consented longitudinal data.

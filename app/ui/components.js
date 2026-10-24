@@ -11,8 +11,7 @@ export function pageHeader({ eyebrow = null, title, subtitle = null, actions = [
   return h(
     'header',
     { class: 'page-head' },
-    eyebrow ? h('p', { class: 'page-eyebrow' }, eyebrow) : null,
-    h('div', { class: 'page-head-text' }, h('h1', { class: 'page-title' }, title), subtitle ? h('p', { class: 'page-sub' }, subtitle) : null, meta),
+    h('div', { class: 'page-head-text' }, eyebrow ? h('p', { class: 'page-eyebrow' }, eyebrow) : null, h('h1', { class: 'page-title' }, title), subtitle ? h('p', { class: 'page-sub' }, subtitle) : null, meta),
     actions.length ? h('div', { class: 'page-actions' }, ...actions) : null,
   );
 }

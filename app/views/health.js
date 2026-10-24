@@ -46,13 +46,13 @@ export function renderHealth(ctx) {
     banner({
       tone: 'info',
       title: 'How the privacy floor works',
-      body: `Below ${state.settings.pulseMinResponses} responses nothing is reported — not even an average. With two answers, each person can subtract their own and infer the other. Anonymous responses are stored with no person field at all, so identity cannot be recovered later.`,
+      body: `Below ${state.settings.pulseMinResponses} complete responses nothing is reported — not even an average. Identical slices are also suppressed; comments need their own minimum of nonempty responses. With two answers, each person can subtract their own and infer the other. Anonymous responses store no identity value (personId is null), but local notes and JSON exports are unencrypted. This floor cannot guarantee anonymity or independent respondents.`,
     }),
     h(
       'div',
       { class: 'stat-row' },
       stat({ label: 'Responses', value: pulse.n, hint: `in the last ${pulse.windowDays} days`, tone: pulse.blocked ? 'warn' : '' }),
-      stat({ label: 'Overall', value: pulse.blocked ? 'hidden' : `${pulse.overall}/5`, hint: pulse.blocked ? `needs ${pulse.minRequired - pulse.n} more` : 'mean of all dimensions' }),
+      stat({ label: 'Overall', value: pulse.blocked ? 'hidden' : `${pulse.overall}/5`, hint: pulse.blocked ? pulse.blockedReason === 'unanimous' ? 'identical slice — hidden' : `needs ${Math.max(0, pulse.minRequired - pulse.usableResponses)} more complete replies` : 'mean of all dimensions' }),
       stat({ label: 'Safety', value: pulse.blocked ? 'hidden' : `${pulse.dimensions.safety.avg}/5`, hint: 'raise problems without penalty', tone: !pulse.blocked && pulse.dimensions.safety.avg < 3 ? 'bad' : '' }),
       stat({ label: 'Change', value: change.available ? `${change.overall > 0 ? '+' : ''}${change.overall}` : '—', hint: change.available ? 'vs previous fortnight' : 'needs two readable windows', tone: change.available && change.overall < 0 ? 'warn' : '' }),
     ),
@@ -66,7 +66,7 @@ export function renderHealth(ctx) {
       { class: 'grid grid-2' },
       card({
         title: 'This fortnight',
-        subtitle: pulse.blocked ? (pulse.blockedReason === 'unanimous' ? 'Suppressed — identical answers' : 'Suppressed — too few responses') : `${pulse.n} responses`,
+        subtitle: pulse.blocked ? (pulse.blockedReason === 'unanimous' ? 'Suppressed — identical answer slice' : 'Suppressed — too few responses') : `${pulse.n} responses`,
         body: pulse.blocked
           ? h(
               'div',
@@ -74,8 +74,8 @@ export function renderHealth(ctx) {
               h('p', { class: 'muted' }, pulse.n === 0
               ? 'No responses yet.'
               : pulse.blockedReason === 'unanimous'
-                ? `${pulse.n} responses, all identical. An identical aggregate reveals every individual answer, so it is not shown — talk to the team instead.`
-                : `${pulse.n} response(s) recorded, below the anonymity floor of ${pulse.minRequired}.`),
+                ? `${pulse.n} responses contain an identical dimension or overall answer. Releasing the other numbers could reveal that hidden slice, so this window stays hidden.`
+                : `${pulse.n} response(s), ${pulse.usableResponses} complete. At least ${pulse.minRequired} complete responses are required; partial imported answers do not count toward the floor.`),
               h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openPulseDialog(ctx) }, 'Record a response'),
             )
           : h('div', { class: 'pulse-dims' }, ...dimensionRows),

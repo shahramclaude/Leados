@@ -68,7 +68,7 @@ export function renderInsights(ctx) {
       ],
     }),
 
-    !state.people.length
+    !state.people.length && !(state.conflicts || []).length
       ? banner({
           tone: 'info',
           title: 'Nothing to analyse until there are people',

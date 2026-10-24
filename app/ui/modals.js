@@ -1118,9 +1118,9 @@ export function openSettingsDialog(ctx) {
         label: 'Pulse anonymity floor',
         type: 'number',
         value: s.pulseMinResponses,
-        min: 1,
+        min: 3,
         max: 25,
-        help: 'Aggregates stay hidden below this many responses. Lowering it makes individuals identifiable.',
+        help: 'Complete responses required before reporting (3–25; default 5). Lower floors increase identification risk; none guarantees anonymity.',
       },
     ],
     onSubmit: (values, form, close) => {
@@ -1137,9 +1137,14 @@ export function openSettingsDialog(ctx) {
         }
         patch[key] = Math.round(n);
       }
-      ctx.api.updateSettings(patch);
+      const result = ctx.api.updateSettings(patch);
+      if (!result.ok) {
+        if (result.field) form.setFieldError(result.field, result.error);
+        else toast(result.error, 'bad');
+        return;
+      }
       close();
-      toast('Settings saved', 'good');
+      toast(result.warning ? 'Settings are in memory only. Export before reloading.' : 'Settings saved', result.warning ? 'bad' : 'good');
     },
   });
 }

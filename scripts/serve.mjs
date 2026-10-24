@@ -39,7 +39,14 @@ const MIME = {
   '.woff2': 'font/woff2',
 };
 
+const ASSET_EXTENSIONS = new Set(['.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.ico', '.woff2']);
+
 const server = http.createServer((req, res) => {
+  if (!['GET', 'HEAD'].includes(req.method)) {
+    res.writeHead(405, { 'content-type': 'text/plain', allow: 'GET, HEAD' });
+    res.end('Method not allowed');
+    return;
+  }
   let pathname;
   try {
     pathname = decodeURIComponent(new URL(req.url, `http://${req.headers.host || 'localhost'}`).pathname);
@@ -57,27 +64,27 @@ const server = http.createServer((req, res) => {
     res.end('Forbidden');
     return;
   }
-  // Never serve the repository internals, credentials or test artefacts.
+  // Serve only the canonical shell/assets, never .env, repository internals,
+  // legacy source, scratch JSON backups or test evidence. A root-wide static
+  // server would expose sensitive files even though the application is local.
   const rel = path.relative(ROOT, target).split(path.sep);
-  if (rel.includes('.git') || rel.includes('node_modules') || rel[0] === 'tests') {
-    res.writeHead(404, { 'content-type': 'text/plain' });
-    res.end('Not found');
-    return;
-  }
-
-  fs.stat(target, (err, stat) => {
-    if (err || !stat.isFile()) {
-      // Single-page app: unknown paths fall back to index.html so hash routes work.
-      if (!path.extname(pathname)) {
-        return send(path.join(ROOT, 'index.html'), res);
-      }
-      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-      res.end(`Not found: ${pathname}`);
-      return;
-    }
-    send(target, res);
+  const allowed = rel.join('/') === 'index.html' || (rel[0] === 'app'
+    && !rel.includes('node_modules') && !rel.some((part) => part.startsWith('.')) && ASSET_EXTENSIONS.has(path.extname(target).toLowerCase()));
+  if (!allowed) return notFound(res);
+  fs.realpath(target, (err, realTarget) => {
+    // Refuse symlink aliases as well as lexical traversal.
+    if (err || realTarget !== target) return notFound(res);
+    fs.stat(realTarget, (statError, stat) => {
+      if (statError || !stat.isFile()) return notFound(res);
+      send(realTarget, res);
+    });
   });
 });
+
+function notFound(res) {
+  res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+  res.end('Not found');
+}
 
 function send(file, res) {
   fs.readFile(file, (err, data) => {
@@ -96,7 +103,9 @@ function send(file, res) {
 }
 
 server.listen(PORT, HOST, () => {
-  console.log(`LeadOS running at http://${HOST}:${PORT}/`);
+  const address = server.address();
+  const port = typeof address === 'object' ? address.port : PORT;
+  console.log(`LeadOS running at http://${HOST}:${port}/`);
   console.log(`  root: ${ROOT}`);
   console.log('  no build step, no database, no network calls');
 });

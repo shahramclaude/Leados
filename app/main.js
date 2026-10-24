@@ -23,6 +23,7 @@ import { renderDelegations } from './views/delegations.js';
 import { renderGrowth } from './views/growth.js';
 import { renderReadiness } from './views/readiness.js';
 import { renderHealth } from './views/health.js';
+import { renderConflicts, renderConflictDetail } from './views/conflicts.js';
 import { renderDecisions } from './views/decisions.js';
 import { renderRecognition } from './views/recognition.js';
 import { renderReviews, renderReviewDetail } from './views/reviews.js';
@@ -49,6 +50,7 @@ export const NAV = [
   { section: 'Team', items: [
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
+    { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
   { section: '', items: [
     { route: 'settings', label: 'Settings & data', icon: '⚙' },
@@ -68,6 +70,8 @@ const RENDERERS = {
   readiness: (ctx) => renderReadiness(ctx),
   health: (ctx) => renderHealth(ctx),
   decisions: (ctx) => renderDecisions(ctx),
+  conflicts: (ctx) => renderConflicts(ctx),
+  conflict: (ctx, segments) => renderConflictDetail(ctx, decodeURIComponent(segments[1] || '')),
   recognition: (ctx) => renderRecognition(ctx),
   reviews: (ctx) => renderReviews(ctx),
   review: (ctx, segments) => renderReviewDetail(ctx, decodeURIComponent(segments[1] || '')),
@@ -85,7 +89,7 @@ export function parseRoute(hash) {
     ? 'person'
     : first === 'reviews' && segments.length > 1
       ? 'review'
-      : null;
+      : first === 'conflicts' && segments.length > 1 ? 'conflict' : null;
   const route = detail || alias[first] || (RENDERERS[first] ? first : 'today');
   const known = Boolean(detail || RENDERERS[first] || alias[first] || first === '');
   return { route: known ? route : 'notfound', segments, query: new URLSearchParams(queryPart || '') };
@@ -174,7 +178,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'conflicts' && route === 'conflict');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -304,6 +308,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
       readiness: 'Succession',
       health: 'Health & pulse',
       decisions: 'Decisions',
+      conflicts: 'Conflict resolution',
+      conflict: 'Conflict working record',
+      delegations: 'Delegation',
       settings: 'Settings',
     };
     return labels[route] || 'LeadOS';

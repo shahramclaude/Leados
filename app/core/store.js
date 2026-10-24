@@ -4,20 +4,29 @@
  * Design rules enforced here:
  *  1. Reads never throw. A corrupt or partial blob is quarantined and the app
  *     opens an empty workspace with a visible warning instead of a blank page.
- *  2. Writes are explicit and atomic per mutation: the new state is only
- *     adopted after it serialises successfully, so an out-of-quota browser
- *     cannot leave the app showing data it did not save.
+ *  2. Each storage write replaces one JSON blob atomically. Failed writes stay
+ *     in memory with persistError; imports adopt nothing unless saved. Newer
+ *     schema data is protected from all implicit writes and exported unchanged.
  *  3. Every meaningful mutation appends to an append-oriented event log, capped so
  *     it can never grow the blob without bound.
  *  4. Storage is injected, so the whole module is testable in Node.
  */
 
-import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION } from './schema.js';
+import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION, COLLECTIONS } from './schema.js';
 import { buildDemoState } from './demo.js';
 
 export const STORAGE_KEY = 'leados.lifecycle.v1';
 export const QUARANTINE_PREFIX = 'leados.corrupt.';
 const EVENT_CAP = 600;
+
+function schemaProblem(data) {
+  if (!data || typeof data !== 'object' || data.schemaVersion === undefined) return null;
+  const version = Number(data.schemaVersion);
+  if (!['number', 'string'].includes(typeof data.schemaVersion) || !Number.isInteger(version) || version < 1) return 'This workspace declares an unsupported schema version. Its saved data has not been changed.';
+  return version > SCHEMA_VERSION
+    ? `This workspace uses schema v${version}, newer than supported v${SCHEMA_VERSION}. Its saved data has not been changed. Export the original and use a compatible LeadOS version, or explicitly import a compatible backup/reset.`
+    : null;
+}
 
 function defaultStorage() {
   try {
@@ -48,6 +57,8 @@ export function createStore(options = {}) {
   let warnings = [];
   let persistError = null;
   let loaded = false;
+  let protectedRaw = null;
+  let writeBlockReason = null;
 
   function notify(reason) {
     for (const fn of listeners) {
@@ -82,6 +93,8 @@ export function createStore(options = {}) {
     const { raw, error } = readRaw();
     warnings = [];
     persistError = null;
+    protectedRaw = null;
+    writeBlockReason = null;
     if (error) {
       warnings = [error];
       state = createEmptyState(now().toISOString());
@@ -106,8 +119,19 @@ export function createStore(options = {}) {
       notify('load-corrupt');
       return state;
     }
+    const unsupported = schemaProblem(parsed);
+    if (unsupported) {
+      protectedRaw = raw;
+      writeBlockReason = unsupported;
+      persistError = unsupported;
+      warnings = [unsupported];
+      state = createEmptyState(now().toISOString());
+      loaded = true;
+      notify('load-unsupported');
+      return state;
+    }
     const { raw: migrated, applied } = migrate(parsed);
-    const result = normalizeState(migrated);
+    const result = normalizeState(migrated, { now: now() });
     state = result.state;
     warnings = result.warnings.slice();
     if (applied.length) warnings.push(`Migrated saved data: ${applied.join(', ')}`);
@@ -117,13 +141,16 @@ export function createStore(options = {}) {
   }
 
   /** Persist the given state. Returns true when it reached storage. */
-  function persist(next) {
+  function persist(next, { replaceProtected = false } = {}) {
+    if (writeBlockReason && !replaceProtected) { persistError = writeBlockReason; return false; }
     if (!storage) {
       persistError = 'No storage available — changes are held in memory only and will be lost on reload.';
       return false;
     }
     try {
       storage.setItem(key, JSON.stringify(next));
+      protectedRaw = null;
+      writeBlockReason = null;
       persistError = null;
       return true;
     } catch (err) {
@@ -151,6 +178,7 @@ export function createStore(options = {}) {
    * nothing; it mutates in place. `event` is appended to the audit log.
    */
   function update(mutator, event) {
+    if (writeBlockReason) { persistError = writeBlockReason; notify('update-blocked'); return state; }
     const draft = JSON.parse(JSON.stringify(state));
     draft.meta.revision = (draft.meta.revision || 0) + 1;
     draft.meta.updatedAt = now().toISOString();
@@ -171,6 +199,8 @@ export function createStore(options = {}) {
       return { ok: false, error: 'That file is not valid JSON.' };
     }
     const candidate = parsed && parsed.state ? parsed.state : parsed;
+    const unsupported = schemaProblem(parsed) || schemaProblem(candidate);
+    if (unsupported) return { ok: false, error: unsupported };
     if (!candidate || typeof candidate !== 'object') {
       return { ok: false, error: 'That JSON does not look like a LeadOS export.' };
     }
@@ -178,8 +208,8 @@ export function createStore(options = {}) {
       return { ok: false, error: 'That JSON has no "people" list, so it is not a LeadOS workspace.' };
     }
     const { raw: migrated, applied } = migrate(candidate);
-    const result = normalizeState(migrated);
-    if (!persist(result.state)) {
+    const result = normalizeState(migrated, { now: now() });
+    if (!persist(result.state, { replaceProtected: true })) {
       return { ok: false, error: persistError || 'Could not write the imported data to storage.' };
     }
     state = result.state;
@@ -198,6 +228,7 @@ export function createStore(options = {}) {
   }
 
   function exportJSON() {
+    if (protectedRaw !== null) return protectedRaw;
     return JSON.stringify(
       {
         app: 'LeadOS',
@@ -212,7 +243,7 @@ export function createStore(options = {}) {
 
   function reset() {
     const empty = createEmptyState(now().toISOString());
-    persist(empty);
+    if (!persist(empty, { replaceProtected: true }) && writeBlockReason) { notify('reset-blocked'); return state; }
     state = empty;
     warnings = [];
     notify('reset');
@@ -222,7 +253,7 @@ export function createStore(options = {}) {
   /** True when anything in the workspace was entered by the user rather than the demo. */
   function hasRealData() {
     const isDemoId = (record) => typeof record.id === 'string' && record.id.includes('-demo-');
-    const collections = ['people', 'oneOnOnes', 'feedback', 'goals', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews'];
+    const collections = COLLECTIONS.filter((name) => name !== 'events');
     return collections.some((key) => (state[key] || []).some((record) => !isDemoId(record)));
   }
 
@@ -232,6 +263,7 @@ export function createStore(options = {}) {
    * fabricated records would be the worst possible failure mode here.
    */
   function seedDemo({ force = false } = {}) {
+    if (writeBlockReason) return { ok: false, reason: 'unsupported-schema', error: writeBlockReason };
     if (!force && hasRealData()) {
       return {
         ok: false,
@@ -256,9 +288,10 @@ export function createStore(options = {}) {
    * not have.
    */
   function clearDemo() {
+    if (writeBlockReason) { persistError = writeBlockReason; notify('update-blocked'); return state; }
     const next = JSON.parse(JSON.stringify(state));
     const isDemo = (record) => typeof record.id === 'string' && record.id.includes('-demo-');
-    for (const key of ['oneOnOnes', 'feedback', 'goals', 'delegations', 'growthPlans', 'pulses', 'decisions', 'recognition', 'readiness', 'reviews']) {
+    for (const key of COLLECTIONS.filter((name) => !['people', 'events'].includes(name))) {
       next[key] = (next[key] || []).filter((record) => !isDemo(record));
     }
     next.people = next.people.filter((person) => !isDemo(person));
@@ -287,6 +320,9 @@ export function createStore(options = {}) {
     },
     get persistError() {
       return persistError;
+    },
+    get writeBlockReason() {
+      return writeBlockReason;
     },
     get isLoaded() {
       return loaded;

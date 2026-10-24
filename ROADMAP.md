@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-24 (session 3: feedback latency, goal co-authorship and delegation).
+Last updated: 2026-10-24 (session 4: conflict lifecycle, pulse privacy and storage safety shipped; 161 automated tests plus real-browser checks).
 
 ---
 
@@ -29,48 +29,52 @@ Last updated: 2026-10-24 (session 3: feedback latency, goal co-authorship and de
 | GROW plans scored stage by stage | `domain/growth.js` | domain tests |
 | Competency coverage | `domain/growth.js` | growth view render test |
 | Evidence-gated succession readiness | `domain/readiness.js` | integration test (unsupported "ready now" flagged) |
-| Anonymous pulse with a k-anonymity floor, unanimous suppression, threshold on comments | `domain/pulse.js` | domain + integration tests |
+| Pulse reporting floor (default 5, supported minimum 3), same complete cohort for means/trends, whole-vector unanimous suppression and independent comment floor | `domain/pulse.js`, `core/schema.js`, `ui/modals.js` | domain + integration tests; 10 pulse-safety regressions; this is not an anonymity guarantee |
 | Pulse windows on calendar days (no double-counting) | `domain/pulse.js` | domain test on window boundaries |
 | Decision log (DACI, reversibility, options, rationale, review) | `domain/decisions.js` | integration test (log → decide → review) |
 | Recognition ledger + drought detection | `domain/insights.js` `REC-01` | view + insights tests |
-| 38 rule families with severity, evidence, one action | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03` |
+| 42 named signal rules with severity, evidence, one action (including count-only `CFL-01`…`CFL-04`) | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03` |
 | Repetition collapsed above 3 people, names preserved | `domain/insights.js` `rollUpFindings` | domain + integration tests (24-person roster) |
 | Today: health, next actions, due 1:1s, pulse prompt | `views/today.js` | full-demo render test |
-| Health score: 5 dimensions, null-safe weighting, honest trend | `domain/health.js` | domain tests + demo baseline |
+| Health score: 5 dimensions, null-safe weighting, approximate historical comparison | `domain/health.js` | domain tests + demo baseline |
 | Export / import / reset / demo, with demo protection | `core/store.js`, `views/settings.js` | integration tests (round-trip, demo refusal) |
 | Evidence-linked performance-review packets with self-reflection and manager assessment | `domain/reviews.js`, `views/reviews.js`, `actions.js` | domain tests + real-dialog create → reflect → assess → complete → export/import test |
 | Review calibration warnings for thin/recency-skewed/one-sided evidence and unsupported ratings | `domain/reviews.js` `calibrateReview` | deterministic `CAL-01`…`CAL-07` tests; completion confirmation exposes warnings |
 | Frozen completion snapshots, reopen/refresh audit history, source drill-down, print/PDF | `actions.js`, `views/reviews.js` | lifecycle tests; all six source routes incl. delegation and completed goal/plan; print-dialog wiring test |
-| Schema v2 review migration and v3 latency/authorship/delegation migration, with demo cleanup | `core/schema.js`, `core/store.js` | v1→v2→v3 migration/import normalization and real/demo-person preservation tests |
+| Schema v2 review, v3 latency/authorship/delegation and v4 conflict migrations, with dynamic demo protection/cleanup | `core/schema.js`, `core/store.js` | additive v1→v2→v3→v4 migration, reload/import and real/demo preservation tests |
 | Key-result dialog targets its source goal; development-plan edit preserves the plan | `ui/modals.js`, `actions.js` | UI regression tests for both flows |
 | Development overdue calculations use the injected clock | `domain/growth.js` and callers | regression test with 2019 and 2026 clocks |
-| Accessibility: skip link, focus trap, Escape, focus return, `aria-live`, AA contrast | `ui/dom.js`, `styles.css` | integration test (Escape + focus return); contrast measured |
+| Accessibility: skip link, dialog keyboard/focus behaviour, live errors, visible disabled controls and navigation contrast | `ui/dom.js`, `ui/conflict-modals.js`, `styles.css` | jsdom keyboard tests; Chromium + axe 4.11: 0 A/AA violations in six checked desktop/mobile states (not an exhaustive certification) |
 | Dialogs cannot survive a route change | `app/main.js` | integration test |
 | Roster search that does not steal focus | `views/people.js` | integration test |
-| 113 automated tests | `tests/app/**` | `npm test` — 113 pass / 0 fail |
+| Conflict listening → explicit agreement → owned results → verified follow-up → resolution, with support handoff/reopening/version history | `domain/conflicts.js`, `conflict-actions.js`, `ui/conflict-modals.js`, `views/conflicts.js` | 29 conflict tests; actual Chromium lifecycle, reload and JSON download/upload roundtrip |
+| Conflict content isolated from health/talent/reviews/agendas/person timelines; general reminders are counts only, including roster-free workspaces | `domain/insights.js`, `views/today.js` | privacy regression assertions and browser route checks |
+| Unsupported/future schemas refused on import and protected on load, original export preserved even after failed replacement | `core/store.js`, `actions.js` | 5 storage-safety tests |
+| Static-server canonical asset allowlist, private-file/symlink/traversal denial and read-only HTTP methods | `scripts/serve.mjs` | 4 actual-HTTP server regression tests incl. an existing scratch backup and symlink alias |
+| Goal/delegation tabs use real filter keys; Settings fallback export Close works | affected views | jsdom and real-browser filter checks; fallback-dialog regression |
+| Responsive navigation and all 15 main screens without horizontal overflow at 390×844 | shared UI/CSS | Chromium mobile sweep; conflict desktop/mobile screenshots inspected |
+| 161 automated tests | `tests/app/**` | `npm test` — 161 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-24T10:00:00Z`): health **54.5 (D)**,
 trend **+1.7** vs 30 days ago, pulse **n=5**, overall **2.55/5**, safety **2.8**, workload
 **2.0**; **32 findings, 10 urgent, 2 wins**. Feedback latency: **4 measured, 3.0d average,
 1 beyond convention**; goals: **3 co-authored, 2 explicitly leader-set**; delegations:
-**2 active, 1 blocked/overdue, 1 check-in due, 1 completed, 1 returned**. All 14 routes
-render with no console errors in jsdom.
+**2 active, 1 blocked/overdue, 1 check-in due, 1 completed, 1 returned**. No conflict cases
+are fabricated in the demo. The stricter comment policy releases **0 comments**. All 15 main
+routes render without errors; the same routes passed a real-browser mobile overflow sweep.
 
 ---
 
 ## Next (ordered by value, not by ease)
 
-1. **Conflict resolution.** A structured record for a conflict: parties, interests,
-   agreed process, resolution and follow-up. Currently only visible indirectly through
-   pulse safety and ad-hoc notes.
-2. **Team-level trends for every dimension** (not just pulse), with the same
-   "not enough history" honesty the health trend already has. Include latency and delegation
-   follow-through only where real dated records support a comparison.
-3. **CSV export** alongside JSON, for people who want the records in a spreadsheet. Preserve
-   unknown fields as blank/explicit unknown rather than converting them to zero or false.
-4. **Optional encryption of the local store.** A passphrase-derived key (WebCrypto,
-   still no network) would make the "data lives in this browser" claim survive a shared
-   laptop. Requires a migration path for existing unencrypted stores.
+1. **Team-level trends for every dimension** (not just pulse), with explicit evidence coverage
+   and honest reconstruction limits. Include latency and delegation follow-through only when real
+   dated records support a comparison; do not carry today's values into a fictional past.
+2. **CSV export** alongside full-fidelity JSON, with explicit scope/privacy warnings. Preserve
+   unknowns as blank/unknown, never zero/false; defend spreadsheets against formula injection.
+3. **Optional encryption of the local store.** Passphrase-derived WebCrypto keys, no network,
+   with tested plaintext→encrypted migration, recovery/export and lost-passphrase limitations.
+   Until then, notes/backups are explicitly unencrypted, not an HR confidentiality system.
 
 ---
 
@@ -78,6 +82,8 @@ render with no console errors in jsdom.
 
 | Item | Why deferred |
 |---|---|
+| Legacy dependency remediation | Fresh production audit has 1 critical / 2 high findings in Next/PostCSS/Sharp. Not imported by the static app; upgrade and validate before any legacy deployment, rather than treating canonical tests as clearance. |
+| Large-workspace performance, cross-browser/assistive-technology and print verification | Current browser evidence covers Chromium and selected desktop/mobile states; these broader behaviours remain [UNVERIFIED]. |
 | Multi-user, org hierarchy, shared workspaces | Requires a backend, accounts and an honest privacy story. The current invariant is "no network, no server", and breaking it needs an ADR, not a sprint. |
 | Upward / 360° feedback | Needs multiple raters to mean anything (see `RESEARCH.md` §10). |
 | Notifications, email or calendar sync | A browser tab cannot schedule work; promising reminders it cannot deliver would be a silent failure. |
@@ -93,7 +99,7 @@ render with no console errors in jsdom.
 | Idea | Reason |
 |---|---|
 | Repairing the legacy React/Next trees into the product | They are non-canonical and were not executed in the latest session; current runtime claims apply only to the zero-build app. Replacing the canonical architecture would require a fresh audit and ADR, not an assumed repair path. |
-| Keeping four apps "just in case" | Four half-products are why nothing here ran. One app, one entry point, one test suite. |
+| Promoting several competing entry points | One canonical entry and test suite avoid contradictory product claims. Historical trees stay as evidence, not additional supported products. |
 | Soft-deleting demo data silently | Replacing a leader's real records with fabricated ones is the worst possible failure mode; the store refuses without explicit confirmation. |
 | Showing a pulse average under the anonymity floor | Makes individual answers recoverable by subtraction. Suppression is shown as a state, with the count, so it never looks like a broken chart. |
 | Scoring missing data as zero | Turns "no evidence yet" into "failing". Unmeasurable dimensions are excluded and the weights renormalise. |
@@ -108,9 +114,9 @@ render with no console errors in jsdom.
 
 ## Known gaps I am not pretending are closed
 
-- Pulse anonymity cannot be guaranteed in teams of 3–4; the copy says so.
-- The health trend depends on records older than 30 days; fresh workspaces show
-  "not enough history" rather than a line.
+- Pulse anonymity and independent respondents cannot be guaranteed by a local single-manager workspace. Partial/unanimous/thin-comment windows now suppress more conservatively; that intentional loss of visible data is a safety tradeoff, not a chart regression.
+- Conflict confirmations are manager-entered, not employee signatures or independent testimony. Notes/backups are unencrypted; handoff sends nothing. No real-manager conflict-practice validation has been performed.
+- The health comparison needs usable older evidence and is approximate where edited values lack history. Fresh workspaces show "not enough history"; all-dimension historical series are still next.
 - "Weekly meaningful feedback" is the evidence-backed cadence; the default feedback target is
   21 days because it is achievable. The 7-day latency and delegation-check-in values are
   configurable team conventions, not validated universal cutoffs.
@@ -120,5 +126,4 @@ render with no console errors in jsdom.
   fairness instrument.
 - Rehearsal against real usage is absent: every number in this file comes from the demo
   workspace and the test suite, not from a manager's actual quarter. Real-browser visual
-  inspection of the print and delegation layouts remains `[UNVERIFIED]`; actions, stylesheets,
-  source links and workflows are covered in jsdom, with HTTP module loading checked separately.
+  inspection of print output remains `[UNVERIFIED]`; delegation mobile overflow/filter checks now run in Chromium, but exhaustive visual/interaction review remains `[UNVERIFIED]`. Source links and workflows are covered in jsdom, with HTTP module loading checked separately.

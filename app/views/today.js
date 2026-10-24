@@ -11,6 +11,7 @@ import { buildInsights } from '../core/domain/insights.js';
 import { dueMeetings, openActions } from '../core/domain/oneonone.js';
 import { aggregate, trend } from '../core/domain/pulse.js';
 import { reviewState } from '../core/domain/growth.js';
+import { conflictSummary } from '../core/domain/conflicts.js';
 import { reviewsDue } from '../core/domain/decisions.js';
 import { humanDays, daysSince, formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog } from '../ui/modals.js';
@@ -39,6 +40,12 @@ export function renderToday(ctx) {
   });
 
   const notices = [];
+  const conflicts = conflictSummary(state, now);
+  if (conflicts.attention.length) notices.push(banner({
+    tone: 'caution', title: `${conflicts.attention.length} conflict record(s) need a private next step`,
+    body: 'Check support, due follow-ups or agreement commitments. Names and case content stay in the conflict workspace, not this overview.',
+    actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/conflicts?filter=attention' }, 'Open conflict workspace')],
+  }));
   if (state.meta.isDemo) {
     notices.push(
       banner({
@@ -166,8 +173,8 @@ export function renderToday(ctx) {
             h('p', { class: 'muted' }, pulse.n === 0
               ? 'No responses yet this fortnight.'
               : pulse.blockedReason === 'unanimous'
-                ? `${pulse.n} responses, all identical — hidden because an identical aggregate reveals each person's answer.`
-                : `${pulse.n} response(s) so far — ${pulse.minRequired} are needed before any aggregate is shown, so nobody can be identified.`),
+                ? `${pulse.n} responses with an identical answer slice — this window is hidden to avoid revealing individual answers.`
+                : `${pulse.usableResponses} complete response(s) so far — ${pulse.minRequired} are needed before any aggregate is shown. The floor reduces exposure; it does not guarantee anonymity.`),
             h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openPulseDialog(ctx) }, 'Record a response'),
           )
         : h(
