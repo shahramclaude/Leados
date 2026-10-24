@@ -1,0 +1,856 @@
+/**
+ * app/ui/modals.js — the capture dialogs.
+ *
+ * Each function opens one dialog, validates on submit, and reports the result
+ * through a toast. Titles say what actually happens ("Log a 1:1", not "New
+ * record"), and destructive or irreversible actions confirm first.
+ */
+
+import { h, openModal, buildForm, toast, confirmDialog, uid } from './dom.js';
+import { validateSBI, QUALITY_LABELS } from '../core/domain/feedback.js';
+import { suggestAgenda } from '../core/domain/oneonone.js';
+import { COMPETENCIES } from '../core/domain/growth.js';
+import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS } from '../core/schema.js';
+import { addDays, dayKey, formatDate } from '../core/time.js';
+import { personOptions } from './options.js';
+
+function submitter(api, build) {
+  return (values, form, close) => {
+    form.clearErrors();
+    const payload = build(values);
+    const result = api(payload);
+    if (!result.ok) {
+      if (result.field) form.setFieldError(result.field, result.error);
+      toast(result.error, 'bad');
+      return false;
+    }
+    close();
+    return true;
+  };
+}
+
+function submitBar(form, { label = 'Save', cancel = 'Cancel', extra = null } = {}) {
+  // These buttons live in the modal footer, outside <form>, so they must call
+  // the submit handler explicitly rather than relying on native form submission.
+  const cancelBtn = h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => form.__close() }, cancel);
+  const submitBtn = h('button', { class: 'btn btn-primary', type: 'button', onClick: () => form.__onSubmit() }, label);
+  form.node.addEventListener('submit', (event) => {
+    event.preventDefault();
+    form.__onSubmit();
+  });
+  return extra ? [extra, cancelBtn, submitBtn] : [cancelBtn, submitBtn];
+}
+
+/** Generic form dialog used by every capture flow. */
+function formDialog({ title, description, fields, submitLabel = 'Save', size = 'md', onSubmit, footerExtra = null }) {
+  const form = buildForm(fields);
+  let closeFn = null;
+  form.__close = () => closeFn && closeFn();
+  form.__onSubmit = () => {
+    onSubmit(form.getValues(), form, () => closeFn && closeFn());
+  };
+  const dialog = openModal({
+    title,
+    description,
+    body: form.node,
+    footer: submitBar(form, { label: submitLabel, extra: footerExtra }),
+    size,
+    onClose: () => form.clearErrors(),
+  });
+  closeFn = dialog.close;
+  return dialog;
+}
+
+/* --------------------------------------------------------------- people */
+
+export function openPersonDialog(ctx, { person = null } = {}) {
+  const isEdit = Boolean(person);
+  formDialog({
+    title: isEdit ? `Edit ${person.name}` : 'Add a person',
+    description: isEdit ? 'Changes are logged in the event history.' : 'Only a name is required. Everything else can be filled in later.',
+    submitLabel: isEdit ? 'Save changes' : 'Add person',
+    fields: [
+      { name: 'name', label: 'Name', required: true, value: person?.name || '', placeholder: 'Jordan Alvarez' },
+      { name: 'role', label: 'Role', value: person?.role || '', placeholder: 'Product Manager' },
+      {
+        name: 'level',
+        label: 'Level',
+        type: 'select',
+        value: person?.level || 'ic',
+        options: LEVELS.map((l) => ({ value: l, label: LEVEL_LABELS[l] })),
+        help: 'Drives which succession seats are suggested.',
+      },
+      { name: 'team', label: 'Team', value: person?.team || ctx.state.settings.teamName },
+      { name: 'startDate', label: 'Start date', type: 'date', value: person?.startDate || dayKey(ctx.now) },
+      {
+        name: 'focus',
+        label: 'Focus right now',
+        type: 'textarea',
+        rows: 2,
+        value: person?.focus || '',
+        placeholder: 'What is this person trying to achieve in the next few months?',
+        help: 'Shows on their page and in the 1:1 agenda.',
+      },
+    ],
+    onSubmit: submitter(
+      (payload) => (isEdit ? ctx.api.updatePerson(person.id, payload) : ctx.api.addPerson(payload)),
+      (v) => v,
+    ),
+  });
+}
+
+/* ---------------------------------------------------------------- 1:1s */
+
+export function openOneOnOneDialog(ctx, { personId = null } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add someone to your roster first.', 'bad');
+    return;
+  }
+  const selected = personId || active[0].id;
+  const state = ctx.state;
+  const settings = state.settings;
+
+  const suggestions = suggestAgenda(state, selected, ctx.now, settings);
+  const agendaBox = h('div', { class: 'agenda-picks' });
+  const selectedAgenda = new Set(suggestions.slice(0, 3).map((s) => s.text));
+
+  function renderAgenda() {
+    agendaBox.replaceChildren(
+      ...suggestions.map((s) =>
+        h(
+          'label',
+          { class: `agenda-pick ${selectedAgenda.has(s.text) ? 'is-picked' : ''}` },
+          h('input', {
+            type: 'checkbox',
+            checked: selectedAgenda.has(s.text),
+            onChange: (e) => {
+              if (e.target.checked) selectedAgenda.add(s.text);
+              else selectedAgenda.delete(s.text);
+              e.target.closest('.agenda-pick').classList.toggle('is-picked', e.target.checked);
+            },
+          }),
+          h('span', null, h('span', { class: 'agenda-text' }, s.text), h('span', { class: 'agenda-reason' }, s.reason)),
+        ),
+      ),
+    );
+  }
+  renderAgenda();
+
+  const personField = {
+    name: 'personId',
+    label: 'Who with',
+    type: 'select',
+    value: selected,
+    options: personOptions(active),
+    required: true,
+  };
+
+  const form = buildForm([
+    personField,
+    { name: 'date', label: 'Date', type: 'date', value: dayKey(ctx.now), required: true },
+    {
+      name: 'status',
+      label: 'Outcome',
+      type: 'select',
+      value: 'held',
+      options: [
+        { value: 'held', label: 'Held' },
+        { value: 'skipped', label: 'Skipped' },
+        { value: 'moved', label: 'Moved' },
+      ],
+      help: 'Skipped and moved meetings still count — a pattern is a signal.',
+    },
+    { name: 'mood', label: 'How did it feel? (1 low – 5 high)', type: 'scale', value: 3 },
+    { type: 'static', label: 'Suggested agenda', value: agendaBox },
+    { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, placeholder: 'What was said that matters?', help: 'A meeting with no notes cannot be followed up on.' },
+    {
+      name: 'action',
+      label: 'One next action (optional)',
+      placeholder: 'What will one of you do before the next meeting?',
+      help: 'Actions appear on the 1:1 board and are tracked to completion.',
+    },
+    { name: 'actionDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 7) },
+  ]);
+
+  const selectedPerson = () => active.find((p) => p.id === form.getValues().personId) || active[0];
+  form.field('personId').addEventListener('change', (event) => {
+    const next = event.target.value;
+    suggestions.splice(0, suggestions.length, ...suggestAgenda(state, next, ctx.now, settings));
+    selectedAgenda.clear();
+    for (const s of suggestions.slice(0, 3)) selectedAgenda.add(s.text);
+    renderAgenda();
+  });
+
+  form.__close = () => dialog.close();
+  form.__onSubmit = () => {
+    const values = form.getValues();
+    const person = selectedPerson();
+    const actions = values.action
+      ? [{ text: values.action, due: values.actionDue || null }]
+      : [];
+    const result = ctx.api.logOneOnOne({
+      personId: person.id,
+      date: values.date,
+      status: values.status,
+      mood: values.mood,
+      notes: values.notes,
+      agenda: [...selectedAgenda].map((text) => ({ text, done: values.status === 'held', source: 'suggestion' })),
+      actions,
+    });
+    if (!result.ok) {
+      toast(result.error, 'bad');
+      return;
+    }
+    dialog.close();
+    toast(values.status === 'held' ? `1:1 with ${person.name} logged` : `Marked as ${values.status}`, 'good');
+  };
+  form.node.addEventListener('submit', (event) => {
+    event.preventDefault();
+    form.__onSubmit();
+  });
+
+  const dialog = openModal({
+    title: 'Log a 1:1',
+    description: 'The agenda is built from that person’s open items. Keep it to a few minutes — the point is that it happens.',
+    body: form.node,
+    footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => dialog.close() }, 'Cancel'), h('button', { class: 'btn btn-primary', type: 'button', onClick: () => form.__onSubmit() }, 'Log it')],
+    size: 'lg',
+  });
+  return dialog;
+}
+
+export function openActionDialog(ctx, { meetingId }) {
+  formDialog({
+    title: 'Add an action',
+    fields: [
+      { name: 'text', label: 'Action', required: true, placeholder: 'Send the revised draft by Thursday' },
+      { name: 'due', label: 'Due', type: 'date', value: addDays(dayKey(ctx.now), 7) },
+    ],
+    submitLabel: 'Add action',
+    size: 'sm',
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.addMeetingAction(meetingId, values.text, values.due);
+      if (!result.ok) return form.setFieldError(result.field || 'text', result.error);
+      close();
+      toast('Action added', 'good');
+    },
+  });
+}
+
+/* ------------------------------------------------------------ feedback */
+
+export function openFeedbackDialog(ctx, { personId = null, kind = 'praise' } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add someone to your roster first.', 'bad');
+    return;
+  }
+
+  const preview = h('div', { class: 'sbi-preview', 'aria-live': 'polite' });
+  const form = buildForm([
+    { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
+    {
+      name: 'kind',
+      label: 'Type',
+      type: 'select',
+      value: kind,
+      options: [
+        { value: 'praise', label: 'Praise — reinforce something that worked' },
+        { value: 'constructive', label: 'Constructive — change something that did not' },
+      ],
+    },
+    {
+      name: 'situation',
+      label: 'Situation',
+      placeholder: 'In Thursday’s roadmap review…',
+      help: 'When and where. Enough that the moment is identifiable.',
+    },
+    {
+      name: 'behavior',
+      label: 'Behaviour',
+      required: true,
+      type: 'textarea',
+      rows: 2,
+      placeholder: 'you brought two options with the trade-offs written down…',
+      help: 'What someone could have filmed. Not an interpretation.',
+    },
+    {
+      name: 'impact',
+      label: 'Impact',
+      type: 'textarea',
+      rows: 2,
+      placeholder: 'the decision took ten minutes instead of another week…',
+      help: 'What changed because of it — for the work, the team, or you.',
+    },
+    { name: 'tags', label: 'Tags', placeholder: 'ownership, candor (comma separated)' },
+    { name: 'date', label: 'Date', type: 'date', value: dayKey(ctx.now) },
+    {
+      name: 'followUpOn',
+      label: 'Follow up on',
+      type: 'date',
+      help: 'For constructive feedback: the date you will check whether anything changed.',
+    },
+  ]);
+
+  function refreshPreview() {
+    const values = form.getValues();
+    const result = validateSBI(values);
+    preview.replaceChildren(
+      h('div', { class: 'sbi-score' }, h('span', { class: 'sbi-score-label' }, 'Specificity'), h('strong', null, QUALITY_LABELS[result.quality])),
+      result.tips.length
+        ? h('ul', { class: 'sbi-tips' }, ...result.tips.map((t) => h('li', null, t)))
+        : h('p', { class: 'sbi-ok' }, result.complete ? 'Specific enough to be repeated by the person who receives it.' : 'Fill in all three parts to make this usable.'),
+    );
+    if (values.kind === 'constructive' && !form.getValues().followUpOn) {
+      preview.appendChild(h('p', { class: 'sbi-hint' }, 'Tip: set a follow-up date. Constructive feedback without a second conversation reads as a verdict.'));
+    }
+  }
+
+  for (const name of ['situation', 'behavior', 'impact', 'kind', 'followUpOn']) {
+    form.field(name).addEventListener('input', refreshPreview);
+    form.field(name).addEventListener('change', refreshPreview);
+  }
+  refreshPreview();
+
+  form.node.appendChild(preview);
+
+  form.__close = () => dialog.close();
+  form.__onSubmit = () => {
+    const values = form.getValues();
+    form.clearErrors();
+    const result = ctx.api.addFeedback({
+      personId: values.personId,
+      kind: values.kind,
+      situation: values.situation,
+      behavior: values.behavior,
+      impact: values.impact,
+      tags: (values.tags || '').split(',').map((t) => t.trim()).filter(Boolean),
+      date: values.date,
+      followUpOn: values.followUpOn || null,
+    });
+    if (!result.ok) {
+      form.setFieldError(result.field || 'behavior', result.error);
+      toast(result.error, 'bad');
+      return;
+    }
+    dialog.close();
+    toast(values.kind === 'praise' ? 'Praise recorded' : 'Constructive feedback recorded', 'good');
+  };
+  form.node.addEventListener('submit', (event) => {
+    event.preventDefault();
+    form.__onSubmit();
+  });
+
+  const dialog = openModal({
+    title: 'Record feedback',
+    description: 'Situation → Behaviour → Impact. Separate the observation from the judgement and the person can act on it.',
+    body: form.node,
+    footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => dialog.close() }, 'Cancel'), h('button', { class: 'btn btn-primary', type: 'button', onClick: () => form.__onSubmit() }, 'Save feedback')],
+    size: 'lg',
+  });
+  return dialog;
+}
+
+/* --------------------------------------------------------------- goals */
+
+export function openGoalDialog(ctx, { personId = null } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  formDialog({
+    title: 'Set a goal',
+    description: 'An objective with at least one number attached. "Improve onboarding" is a wish; "cut time-to-first-value from 26 to 10 minutes" is reviewable.',
+    submitLabel: 'Create goal',
+    size: 'lg',
+    fields: [
+      { name: 'title', label: 'Objective', required: true, wide: true, placeholder: 'Cut activation time to first value below 10 minutes' },
+      { name: 'ownerId', label: 'Owner', type: 'select', value: personId || '', options: [{ value: '', label: 'Team goal (no single owner)' }, ...personOptions(active)] },
+      { name: 'dueDate', label: 'Due', type: 'date', value: addDays(dayKey(ctx.now), 60) },
+      { name: 'krTitle', label: 'Key result', required: true, wide: true, placeholder: 'Median time to first value' },
+      { name: 'krStart', label: 'Starting value', type: 'number', value: 0, step: 'any' },
+      { name: 'krTarget', label: 'Target value', type: 'number', value: 10, step: 'any' },
+      { name: 'krCurrent', label: 'Current value', type: 'number', value: 0, step: 'any' },
+      { name: 'krUnit', label: 'Unit', placeholder: 'min, %, count' },
+      { name: 'description', label: 'Why this matters', type: 'textarea', rows: 2, wide: true },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.addGoal({
+        title: values.title,
+        description: values.description,
+        ownerId: values.ownerId || null,
+        dueDate: values.dueDate || null,
+        keyResults: values.krTitle
+          ? [{ title: values.krTitle, start: Number(values.krStart), target: Number(values.krTarget), current: Number(values.krCurrent), unit: values.krUnit }]
+          : [],
+      });
+      if (!result.ok) {
+        form.setFieldError(result.field || 'title', result.error);
+        return;
+      }
+      close();
+      toast('Goal created', 'good');
+    },
+  });
+}
+
+export function openCheckInDialog(ctx, { goal }) {
+  const fields = [
+    {
+      name: 'note',
+      label: 'What moved?',
+      type: 'textarea',
+      rows: 2,
+      placeholder: 'What changed since the last check-in, and what is in the way?',
+      wide: true,
+    },
+    {
+      name: 'confidence',
+      label: 'Confidence',
+      type: 'select',
+      value: goal.confidence,
+      options: [
+        { value: 'on-track', label: 'On track' },
+        { value: 'at-risk', label: 'At risk' },
+        { value: 'off-track', label: 'Off track' },
+      ],
+    },
+    { type: 'divider', label: 'Update key results' },
+    ...goal.keyResults.map((kr) => ({
+      name: `kr_${kr.id}`,
+      label: `${kr.title}${kr.unit ? ` (${kr.unit})` : ''}`,
+      type: 'number',
+      step: 'any',
+      value: kr.current,
+      help: `Start ${kr.start} → target ${kr.target}`,
+    })),
+  ];
+  formDialog({
+    title: `Check in: ${goal.title}`,
+    description: 'Progress is computed from the key results, so update the numbers rather than a percentage.',
+    submitLabel: 'Save check-in',
+    fields,
+    onSubmit: (values, form, close) => {
+      const keyResults = goal.keyResults
+        .filter((kr) => values[`kr_${kr.id}`] !== '' && values[`kr_${kr.id}`] !== undefined)
+        .map((kr) => ({ id: kr.id, current: values[`kr_${kr.id}`] }));
+      const result = ctx.api.checkInGoal(goal.id, { note: values.note, confidence: values.confidence, keyResults });
+      if (!result.ok) return form.setFieldError('note', result.error);
+      close();
+      toast('Check-in saved', 'good');
+    },
+  });
+}
+
+export function openKeyResultDialog(ctx, { goalId }) {
+  formDialog({
+    title: 'Add a key result',
+    size: 'sm',
+    fields: [
+      { name: 'title', label: 'Key result', required: true },
+      { name: 'start', label: 'Start', type: 'number', value: 0, step: 'any' },
+      { name: 'target', label: 'Target', type: 'number', value: 100, step: 'any' },
+      { name: 'unit', label: 'Unit' },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.addKeyResult(goalId, {
+        title: values.title,
+        start: Number(values.start),
+        target: Number(values.target),
+        current: Number(values.start),
+        unit: values.unit,
+      });
+      if (!result.ok) return form.setFieldError('title', result.error);
+      close();
+      toast('Key result added', 'good');
+    },
+  });
+}
+
+/* -------------------------------------------------------------- growth */
+
+export function openGrowthPlanDialog(ctx, { personId = null } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add someone to your roster first.', 'bad');
+    return;
+  }
+  formDialog({
+    title: 'Start a GROW plan',
+    description: 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
+    submitLabel: 'Save plan',
+    size: 'lg',
+    fields: [
+      { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
+      { name: 'competencies', label: 'Focus competencies', type: 'boolean-block', wide: true, options: COMPETENCIES.map((c) => ({ value: c, label: c })) },
+      {
+        name: 'goal',
+        label: 'Goal — what does better look like?',
+        type: 'textarea',
+        rows: 2,
+        required: true,
+        wide: true,
+        placeholder: 'In six months, owning cross-team technical direction, not just the hardest code.',
+      },
+      {
+        name: 'reality',
+        label: 'Reality — what is actually happening now?',
+        type: 'textarea',
+        rows: 2,
+        wide: true,
+        placeholder: 'Strongest debugger on the team; the gap is written communication and bringing others along.',
+      },
+      {
+        name: 'options',
+        label: 'Options — at least two routes',
+        type: 'textarea',
+        rows: 2,
+        wide: true,
+        placeholder: 'Write a one-page decision memo per design choice; shadow the architecture review for two cycles.',
+      },
+      {
+        name: 'willText',
+        label: 'Will — what will they do, by when?',
+        required: true,
+        wide: true,
+        placeholder: 'Publish a decision memo format and use it on the billing migration',
+      },
+      { name: 'willDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 14) },
+      { name: 'reviewOn', label: 'Review on', type: 'date', value: addDays(dayKey(ctx.now), 30) },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.saveGrowthPlan({
+        personId: values.personId,
+        goal: values.goal,
+        reality: values.reality,
+        options: (values.options || '').split('\n').map((o) => o.trim()).filter(Boolean),
+        will: [{ text: values.willText, due: values.willDue }],
+        competencies: values.competencies || [],
+        reviewOn: values.reviewOn || null,
+      });
+      if (!result.ok) {
+        form.setFieldError(result.field || 'goal', result.error);
+        return;
+      }
+      close();
+      toast('Growth plan saved', 'good');
+    },
+  });
+}
+
+export function openWillActionDialog(ctx, { planId }) {
+  formDialog({
+    title: 'Add a development action',
+    size: 'sm',
+    fields: [
+      { name: 'text', label: 'Commitment', required: true, placeholder: 'Co-run one architecture review with Priya' },
+      { name: 'due', label: 'Due', type: 'date', value: addDays(dayKey(ctx.now), 14) },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.addWillAction(planId, values.text, values.due);
+      if (!result.ok) return form.setFieldError('text', result.error);
+      close();
+      toast('Action added', 'good');
+    },
+  });
+}
+
+/* --------------------------------------------------------------- pulse */
+
+export function openPulseDialog(ctx) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  const fields = [
+    { type: 'static', value: h('p', { class: 'muted small' }, 'Rate each statement for the last two weeks. Answers are aggregated and never shown individually below the anonymity floor.') },
+    ...PULSE_DIMENSIONS.map((dim) => ({
+      name: dim,
+      label: PULSE_PROMPTS[dim],
+      type: 'scale',
+      value: 3,
+      wide: true,
+      help: PULSE_LABELS[dim],
+    })),
+    {
+      name: 'anonymity',
+      label: 'Attribution',
+      type: 'select',
+      value: 'anonymous',
+      options: [
+        { value: 'anonymous', label: 'Anonymous (recommended — no name stored)' },
+        { value: 'named', label: 'Named (attach this response to a person)' },
+      ],
+      help: 'Anonymous responses are stored with no personId at all, so they cannot be leaked later.',
+    },
+    ...(active.length
+      ? [{ name: 'personId', label: 'Whose response (only used when named)', type: 'select', value: '', options: [{ value: '', label: '— not attributed —' }, ...personOptions(active)] }]
+      : []),
+    { name: 'comment', label: 'Anything else (optional)', type: 'textarea', rows: 2, wide: true },
+  ];
+
+  formDialog({
+    title: 'Record a pulse response',
+    description: `Four questions, fifteen seconds. Aggregates need ${ctx.state.settings.pulseMinResponses} responses before they are shown.`,
+    submitLabel: 'Save response',
+    size: 'md',
+    fields,
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.submitPulse({
+        scores: Object.fromEntries(PULSE_DIMENSIONS.map((d) => [d, values[d]])),
+        comment: values.comment,
+        anonymity: values.anonymity,
+        personId: values.personId || null,
+      });
+      if (!result.ok) {
+        toast(result.error, 'bad');
+        return;
+      }
+      close();
+      toast('Pulse response saved', 'good');
+    },
+  });
+}
+
+/* ----------------------------------------------------------- decisions */
+
+export function openDecisionDialog(ctx) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  const peopleOptions = active.map((p) => p.name);
+  formDialog({
+    title: 'Log a decision',
+    description: 'The point is not the record — it is knowing who decided and when to look again.',
+    submitLabel: 'Save decision',
+    size: 'lg',
+    fields: [
+      { name: 'title', label: 'Decision', required: true, wide: true, placeholder: 'Restructure support into product pods' },
+      { name: 'question', label: 'The question in one sentence', type: 'textarea', rows: 2, wide: true, placeholder: 'Should support move from one queue to three product-aligned pods this quarter?' },
+      {
+        name: 'reversibility',
+        label: 'Reversibility',
+        type: 'select',
+        value: 'reversible',
+        options: [
+          { value: 'reversible', label: 'Reversible — decide fast' },
+          { value: 'irreversible', label: 'Irreversible — slow down and write it up' },
+        ],
+      },
+      { name: 'date', label: 'Date', type: 'date', value: dayKey(ctx.now) },
+      { name: 'driver', label: 'Driver (DACI)', placeholder: peopleOptions[0] || 'Who makes this happen?' },
+      { name: 'approver', label: 'Approver (DACI)', placeholder: 'Exactly one person says yes or no' },
+      { name: 'contributors', label: 'Contributors', placeholder: 'Consulted before the call' },
+      { name: 'informed', label: 'Informed', placeholder: 'Told afterwards — not consulted' },
+      { name: 'optionA', label: 'Option A', wide: true },
+      { name: 'optionB', label: 'Option B', wide: true },
+      { name: 'rationale', label: 'Rationale (if already decided)', type: 'textarea', rows: 2, wide: true },
+      { name: 'reviewOn', label: 'Review on', type: 'date', value: addDays(dayKey(ctx.now), ctx.state.settings.decisionReviewDays), help: 'When to look at this again. A decision with no review is never learned from.' },
+    ],
+    onSubmit: (values, form, close) => {
+      const options = [values.optionA, values.optionB]
+        .map((label) => (label || '').trim())
+        .filter(Boolean)
+        .map((label) => ({ label }));
+      const result = ctx.api.addDecision({
+        title: values.title,
+        question: values.question,
+        reversibility: values.reversibility,
+        date: values.date,
+        driver: values.driver,
+        approver: values.approver,
+        contributors: values.contributors,
+        informed: values.informed,
+        options,
+        rationale: values.rationale,
+        reviewOn: values.reviewOn || null,
+      });
+      if (!result.ok) {
+        form.setFieldError(result.field || 'title', result.error);
+        return;
+      }
+      close();
+      toast('Decision logged', 'good');
+    },
+  });
+}
+
+export function openDecideDialog(ctx, { decision }) {
+  formDialog({
+    title: `Decide: ${decision.title}`,
+    description: 'Record what was chosen and why. The rationale is the part you will want in six months.',
+    submitLabel: 'Record decision',
+    fields: [
+      { name: 'chosen', label: 'What was decided', required: true, wide: true, value: decision.options?.[0]?.label || '' },
+      { name: 'rationale', label: 'Why', type: 'textarea', rows: 3, wide: true, help: 'At least a couple of sentences. Future-you will not remember the trade-off.' },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.decideDecision(decision.id, { chosen: values.chosen, rationale: values.rationale });
+      if (!result.ok) return form.setFieldError(result.field || 'chosen', result.error);
+      close();
+      toast('Decision recorded', 'good');
+    },
+  });
+}
+
+export function openReviewDialog(ctx, { decision }) {
+  formDialog({
+    title: `Review: ${decision.title}`,
+    description: 'Was it the right call with the information available at the time? Judge the decision, not just the outcome.',
+    submitLabel: 'Save review',
+    fields: [
+      {
+        name: 'outcome',
+        label: 'Outcome',
+        type: 'select',
+        value: 'good',
+        options: [
+          { value: 'good', label: 'Good — I would decide the same again' },
+          { value: 'mixed', label: 'Mixed — right call, poor execution' },
+          { value: 'bad', label: 'Bad — I would decide differently' },
+        ],
+      },
+      { name: 'outcomeNotes', label: 'What happened?', type: 'textarea', rows: 3, wide: true },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.reviewDecision(decision.id, { outcome: values.outcome, outcomeNotes: values.outcomeNotes });
+      if (!result.ok) return form.setFieldError('outcome', result.error);
+      close();
+      toast('Review saved', 'good');
+    },
+  });
+}
+
+/* --------------------------------------------------------- recognition */
+
+export function openRecognitionDialog(ctx, { personId = null } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add someone to your roster first.', 'bad');
+    return;
+  }
+  formDialog({
+    title: 'Recognise someone',
+    description: 'Specific and timely beats grand and annual. Name the act, not the trait.',
+    submitLabel: 'Record recognition',
+    fields: [
+      { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
+      { name: 'what', label: 'What they did', type: 'textarea', rows: 3, required: true, wide: true, placeholder: 'Owned the billing outage call end to end and published the postmortem within 24 hours.' },
+      { name: 'values', label: 'Values shown', placeholder: 'Ownership, Candor (comma separated)' },
+      {
+        name: 'visibility',
+        label: 'Visibility',
+        type: 'select',
+        value: 'public',
+        options: [
+          { value: 'public', label: 'Public — say it in front of the team' },
+          { value: 'private', label: 'Private — one to one' },
+        ],
+      },
+      { name: 'date', label: 'Date', type: 'date', value: dayKey(ctx.now) },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.addRecognition({
+        personId: values.personId,
+        what: values.what,
+        values: (values.values || '').split(',').map((v) => v.trim()).filter(Boolean),
+        visibility: values.visibility,
+        date: values.date,
+      });
+      if (!result.ok) return form.setFieldError(result.field || 'what', result.error);
+      close();
+      toast('Recognition recorded', 'good');
+    },
+  });
+}
+
+/* ----------------------------------------------------------- readiness */
+
+export function openReadinessDialog(ctx, { personId = null, seat = '' } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add someone to your roster first.', 'bad');
+    return;
+  }
+  formDialog({
+    title: 'Set a readiness rating',
+    description: 'The rating is stored, but the app also shows the evidence behind it. A "ready now" claim without evidence is flagged, not displayed as fact.',
+    submitLabel: 'Save rating',
+    fields: [
+      { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
+      { name: 'seat', label: 'Seat', required: true, value: seat, placeholder: 'Principal engineer' },
+      { name: 'rating', label: 'Readiness', type: 'select', value: 'ready-later', options: READINESS.map((r) => ({ value: r, label: READINESS_LABELS[r] })) },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.setReadiness(values);
+      if (!result.ok) return form.setFieldError(result.field || 'seat', result.error);
+      close();
+      toast('Readiness saved', 'good');
+    },
+  });
+}
+
+/* ------------------------------------------------------------- settings */
+
+export function openSettingsDialog(ctx) {
+  const s = ctx.state.settings;
+  formDialog({
+    title: 'Cadences and thresholds',
+    description: 'These drive every "due" and "overdue" judgement in the app. Set them to what your team can actually sustain, not to an aspiration.',
+    submitLabel: 'Save settings',
+    size: 'lg',
+    fields: [
+      { name: 'leaderName', label: 'Your name', value: s.leaderName },
+      { name: 'teamName', label: 'Team name', value: s.teamName },
+      { name: 'orgName', label: 'Organisation', value: s.orgName },
+      { name: 'oneOnOneCadenceDays', label: '1:1 cadence (days)', type: 'number', value: s.oneOnOneCadenceDays, min: 1, max: 90 },
+      { name: 'feedbackTargetDays', label: 'Feedback target (days)', type: 'number', value: s.feedbackTargetDays, min: 1, max: 365 },
+      { name: 'goalCheckinDays', label: 'Goal check-in (days)', type: 'number', value: s.goalCheckinDays, min: 1, max: 180 },
+      { name: 'recognitionTargetDays', label: 'Recognition target (days)', type: 'number', value: s.recognitionTargetDays, min: 1, max: 365 },
+      { name: 'decisionReviewDays', label: 'Decision review default (days)', type: 'number', value: s.decisionReviewDays, min: 1, max: 365 },
+      { name: 'growthReviewDays', label: 'Growth plan review (days)', type: 'number', value: s.growthReviewDays, min: 1, max: 365 },
+      { name: 'onboardingDays', label: 'Onboarding window (days)', type: 'number', value: s.onboardingDays, min: 7, max: 365 },
+      { name: 'maxReportsPerManager', label: 'Max direct reports before a warning', type: 'number', value: s.maxReportsPerManager, min: 1, max: 30 },
+      {
+        name: 'pulseMinResponses',
+        label: 'Pulse anonymity floor',
+        type: 'number',
+        value: s.pulseMinResponses,
+        min: 1,
+        max: 25,
+        help: 'Aggregates stay hidden below this many responses. Lowering it makes individuals identifiable.',
+      },
+    ],
+    onSubmit: (values, form, close) => {
+      const numeric = [
+        'oneOnOneCadenceDays', 'feedbackTargetDays', 'goalCheckinDays', 'recognitionTargetDays',
+        'decisionReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses',
+      ];
+      const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
+      for (const key of numeric) {
+        const n = Number(values[key]);
+        if (!Number.isFinite(n) || n < 1) {
+          form.setFieldError(key, 'Enter a number of at least 1.');
+          return;
+        }
+        patch[key] = Math.round(n);
+      }
+      ctx.api.updateSettings(patch);
+      close();
+      toast('Settings saved', 'good');
+    },
+  });
+}
+
+export function confirmArchive(ctx, person) {
+  confirmDialog({
+    title: `Archive ${person.name}?`,
+    message: 'They leave the active roster and all scores. Their 1:1 history, feedback and goals are kept, and you can restore them later.',
+    confirmLabel: 'Archive',
+    danger: true,
+    onConfirm: () => {
+      const result = ctx.api.archivePerson(person.id);
+      if (result.ok) {
+        toast(`${person.name} archived`, 'good');
+        ctx.navigate('#/people');
+      } else {
+        toast(result.error, 'bad');
+      }
+    },
+  });
+}
+
+export { formatDate, uid };
