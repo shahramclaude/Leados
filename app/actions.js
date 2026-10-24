@@ -10,6 +10,7 @@
 import { dayKey } from './core/time.js';
 import { PULSE_DIMENSIONS, REVIEW_RATINGS } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
+import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 
 function makeId(prefix) {
@@ -54,17 +55,26 @@ export function createApi(store, options = {}) {
     return { id: id(prefix), createdAt: stamp() };
   }
 
-  return {
+  const api = {
+    ...createConflictActions(store, { now: clock, idFactory: id }),
     /* ------------------------------------------------------------ settings */
     updateSettings(patch) {
       const next = { ...patch };
+      if (Object.hasOwn(next, 'pulseMinResponses')) {
+        const value = next.pulseMinResponses;
+        const floor = Number(value);
+        if (value == null || typeof value === 'boolean' || !Number.isInteger(floor) || floor < 3 || floor > 25) {
+          return fail('Choose a pulse privacy floor from 3 to 25 responses. Five is the default; a floor never guarantees anonymity.', 'pulseMinResponses');
+        }
+        next.pulseMinResponses = floor;
+      }
       store.update(
         (draft) => {
           draft.settings = { ...draft.settings, ...next };
         },
         { type: 'settings.updated', entity: 'settings', summary: `Settings updated (${Object.keys(next).join(', ') || 'no change'})` },
       );
-      return { ok: true };
+      return { ok: true, warning: store.persistError || null };
     },
 
     /* -------------------------------------------------------------- people */
@@ -607,7 +617,9 @@ export function createApi(store, options = {}) {
     submitPulse(data) {
       const scores = {};
       for (const dim of PULSE_DIMENSIONS) {
-        const value = Number(data.scores?.[dim]);
+        const raw = data.scores?.[dim];
+        if (raw == null || typeof raw === 'boolean' || (typeof raw === 'string' && !raw.trim())) continue;
+        const value = Number(raw);
         if (Number.isFinite(value) && value >= 1 && value <= 5) scores[dim] = Math.round(value);
       }
       if (!Object.keys(scores).length) return fail('Answer at least one question.', 'scores');
@@ -876,4 +888,7 @@ export function createApi(store, options = {}) {
       return { ok: true };
     },
   };
+  return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>
+    store.writeBlockReason ? fail(store.writeBlockReason) : action(...args),
+  ]));
 }

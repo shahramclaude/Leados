@@ -114,7 +114,7 @@ test('app boots on Today with an empty workspace and no errors', async () => {
 test('every route renders without throwing', async () => {
   const env = boot();
   const app = await createAppInstance(env);
-  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'recognition', 'settings'];
+  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'recognition', 'conflicts', 'settings'];
   for (const route of routes) {
     app.navigate(`#/${route}`);
     const view = env.document.getElementById('view');
@@ -309,7 +309,7 @@ test('anonymous pulse results stay hidden until the anonymity floor is met', asy
 
   // The floor is five, the published default across vendors.
   for (let i = 0; i < 4; i += 1) {
-    app.api.submitPulse({ scores: { safety: 2 + (i % 2), clarity: 3, workload: 2, growth: 3 }, anonymity: 'anonymous' });
+    app.api.submitPulse({ scores: { safety: 2 + (i % 2), clarity: 3 + (i % 2), workload: 1 + 2 * (i % 2), growth: 2 + (i % 2) }, anonymity: 'anonymous' });
   }
   app.navigate('#/health');
   let view = env.document.getElementById('view');
@@ -428,7 +428,7 @@ test('a full demo workspace renders every screen without an error panel', async 
   const env = boot();
   const app = await createAppInstance(env);
   app.ctx.loadDemo();
-  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'recognition', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'settings'];
+  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'recognition', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'conflicts', 'settings'];
   for (const route of routes) {
     app.navigate(`#/${route}`);
     const view = env.document.getElementById('view');
@@ -456,7 +456,7 @@ test('the settings screen reports the storage footprint and revision', async () 
   app.api.addPerson({ name: 'Someone' });
   app.navigate('#/settings');
   const text = env.document.getElementById('view').textContent;
-  assert.ok(text.includes('Schema v3'));
+  assert.ok(text.includes('Schema v4'));
   assert.ok(text.includes('Event log'));
   assert.ok(text.includes('Export JSON'));
   assert.ok(app.store.sizeBytes() > 100);

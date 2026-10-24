@@ -66,9 +66,9 @@ export function renderGoals(ctx) {
 
     tabs({
       items: [
-        { id: 'all', label: 'All goals', count: rows.length },
-        { id: 'risk', label: 'Needs attention', count: needsAttention.length },
-        { id: 'team', label: 'Team goals', count: rows.filter((r) => !r.goal.ownerId).length },
+        { key: 'all', label: 'All goals', count: rows.length },
+        { key: 'risk', label: 'Needs attention', count: needsAttention.length },
+        { key: 'team', label: 'Team goals', count: rows.filter((r) => !r.goal.ownerId).length },
       ],
       active: filter,
       onSelect: (id) => ctx.navigate(`#/goals?view=${id}`),

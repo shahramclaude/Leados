@@ -1,5 +1,9 @@
 # AI Session Log
 
+Current canonical status is in the latest dated session below and `README.md`. Earlier
+entries are historical, not fresh verification; session 4 corrects the false absent-DB
+claim and explicitly limits legacy audit/build claims.
+
 > Honesty note: this sandbox snapshot of the LEADOS repository did not contain
 > an existing `AI-SESSION-LOG.md` or the Part 04/09/11/19/38/51 source files
 > referenced by this part's standing order. This file therefore starts a new
@@ -385,3 +389,149 @@ performed. Real-browser visual inspection of the new delegation layout and print
 
 Next up (from roadmap): a structured conflict-resolution record; honest team-level trends for every
 dimension (including latency/delegation where dates support them); CSV export that preserves unknowns.
+
+---
+
+# Session — 2026-10-24 · 4 · Conflict follow-through and audit-led safety
+
+## Audit before implementation
+
+Used the existing real checkout of `shahramclaude/Leados`, branch
+`arena/cc9b357a-leados`, starting clean at `b0986b4d0b5531dbb454e857fc05256c475a18c5`.
+Verified the actual remote rather than changing it to match a different owner URL. No
+branch switch, reset, repository replacement or framework/component rewrite was performed.
+
+- Read the canonical entry/import graph, store/schema/actions, domain rules, forms/views,
+  tests and persistent roadmap/research; inventoried the historical source/DB/entry points.
+- Scanner inventory read all tracked source for paths, size/lines/hash/imports/stub markers:
+  **3,650 tracked files / 3,495 source files / 316,352 source lines**, 262 Next pages and
+  903 DB-importing files. This is **not** a claim of personal line-by-line review of all
+  legacy source; detailed legacy correctness/security/builds remain **[UNVERIFIED]**.
+- `src/db/` exists, including PostgreSQL/Drizzle setup and schema/repositories. The prior
+  absent-layer assertion was false. Corrected README, the historical audit and ADR-0006;
+  did not silently recycle historical TypeScript counts as current evidence.
+- `npm ci --no-audit --no-fund` restored 435 locked packages. A pre-install test attempt
+  lacked jsdom; after install the unmodified canonical baseline passed **113/113**.
+- Verified defects: goal/delegation tab IDs did not match the shared `key` contract;
+  demo protection omitted delegations; pulse charts/comments/sparse imports bypassed parts
+  of the stated privacy policy; Settings claimed rejected frameworks; no conflict lifecycle.
+  The final review also found future-schema downcasting, export-fallback Close, floor-copy
+  mismatch and the static server's insufficient private-file denylist.
+
+Full scope, source evidence and remaining limits: `docs/AUDIT-2026-10-24-session-4.md`.
+
+## Fresh research and autonomous priority
+
+Read Acas mediation guidance, CIPD's public mediation-guide introduction (not member-only
+content), Harvard Program on Negotiation workplace-conflict guidance and Lattice's
+record-of-discussion pattern; benchmarked Lattice action-item carry-forward. Links and
+implementation/rejection decisions are in `RESEARCH.md` §14. An encountered July-2026
+Acas disciplinary-code draft was not treated as current binding law.
+
+Conflict resolution was the first unbuilt whole-job workflow on the roadmap. The selected
+increment helps a novice leader hear interests, agree owned changes and check the result,
+instead of treating a meeting or proposal as resolution. It is a manager's working record,
+not mediation competence, legal advice, a confidential HR case system or automatic reporting.
+No owner-supplied architecture/feature spec was requested.
+
+## What changed
+
+- **Schema v4:** additive v1/v2/v3 migrations, normalized conflict collection and JSON/reload
+  continuity. Unknown consent stays unknown. Invalid/future history, unsupported closure,
+  duplicate/malformed history and oversize imported content produce repair warnings.
+  Oversize new writes fail before state or events change, rather than cutting off notes.
+- **Conflict lifecycle:** 2–8 distinct participants (including people outside the roster),
+  separate perspectives/interests, explicit route/participation/process/sharing limits,
+  1–12 owned dated commitments, real result notes, all-party follow-up and closure. Each
+  agreement/check captures its situation/process/participants. A changed situation or
+  discussion context needs a new confirmed version; prior versions/results remain.
+- **Real closure gates:** agreement is not resolution; a same-day check before results
+  cannot verify them. Current-context delivered commitments and the latest confirmed
+  holding check must match. Closed records are read-only. Reopening retains history and
+  needs a fresh check; the verification boundary survives import and damaged boundaries
+  conservatively require rechecking.
+- **Support boundary:** unknown/serious assessment or declined participation blocks the
+  informal-agreement path. Manual support handoff records who to contact and when to check,
+  explicitly sends nothing and is not resolution; reopening never silently changes safety.
+- **Integrated UX:** list/detail routes, readiness explanations, filters, history, dynamic
+  participant/commitment fields without nested forms, clear validation/persistence errors,
+  safe text rendering, keyboard focus after row removal/save and responsive styles.
+- **Exposure minimisation:** conflict content never feeds automatic review evidence, person
+  timelines/findings, agendas, readiness or health scores. `CFL-01`…`CFL-04`, Today and generic
+  audit events contain counts/status only and work without roster entries. Full explicit
+  JSON backups include private notes; unencrypted-storage warnings are visible in the app.
+- **Pulse safety:** same complete four-answer cohort for all means/trends; whole-vector
+  suppression for any unanimous dimension or per-response overall mean. Comments need their
+  own nonempty varied cohort. Future replies are excluded; missing/blank/boolean scores do
+  not become low answers; suppression stays null in comparisons. UI/API/load agree on a
+  supported floor of 3–25, default 5, without claiming guaranteed anonymity/independent raters.
+- **Storage safety:** future/invalid schemas are refused on import and protected on load.
+  API/direct/demo/cleanup writes cannot downcast them; export preserves the exact original.
+  Only explicit compatible import/reset can replace protected data, after successful saving.
+- **Server hardening:** allow only the canonical shell/assets; block scratch backups, `.env`,
+  Git internals, test tools, legacy source, symlink aliases and traversal; GET/HEAD only.
+  Old console/docs paths are no longer published by this server, though files are preserved.
+- **Small regressions fixed:** goal/delegation filter keys, delegation/conflict-only demo
+  protection and dynamic cleanup, Settings copy-export Close, unsaved “Last saved” label,
+  inaccurate live framework/privacy claims, shared header grouping and disabled affordance.
+  Actual browser axe findings led to fixing sidebar heading contrast, not disabling a rule.
+
+No application runtime/package/lockfile dependency, account, backend, network integration or
+model inference was added. Optional Chromium/Playwright/axe tools are pinned in ignored scratch
+and documented in the committed reproducible browser script.
+
+## Verification performed
+
+```text
+npm test                              → 161 pass / 0 fail / 0 skipped (21.92s)
+New suites                            → 29 conflict + 10 pulse + 5 storage + 4 HTTP tests
+node --check app JS/server/smoke       → 43 canonical JS modules + scripts, clean
+git diff --check                      → clean
+live HTTP graph + preview Host/Origin  → shell, CSS, 43 JS modules resolve; preview accepted
+live private-path denial              → repository/credential/scratch/legacy paths blocked
+Chromium 153.0.8010.0 lifecycle         → create → agree → result → check → resolve → reload
+                                        → reopen → support handoff → download/upload JSON
+mobile 390×844                         → all 15 main routes, no horizontal overflow
+axe 4.11 WCAG A/AA                     → 0 violations in six selected desktop/mobile states
+browser errors / external requests    → 0 / 0 observed in smoke
+fresh npm audit --omit=dev             → 1 critical + 2 high legacy findings, not fixed
+```
+
+Tests cover rejected input without partial writes/events, date ordering, explicit consent,
+context/version changes, stale/same-day/reopened verification, manual support, migration,
+reload/import/export, demo cleanup/protection, persistence warnings, private-data isolation,
+real dialogs, XSS-safe content, tabs and keyboard behaviour. HTTP tests use an actual scratch
+backup and a symlink alias to verify they cannot be served, not only nonexistent filenames.
+Desktop/mobile conflict screenshots were inspected. Browser evidence is ignored scratch;
+`scripts/app-browser-smoke.mjs` documents exact reproduction. All generated data was synthetic
+verification data, never an unlabeled product record or a new conflict demo case.
+
+Optional demo at `2026-10-24T10:00:00Z` remains health **54.5/D**, previous **52.8**, delta
+**+1.7**, **32 findings / 10 urgent / 2 wins**, pulse **2.55/5 from 5 complete responses**.
+The corrected comment policy releases **0 comments**. No conflict cases were invented on
+migration or silently added to real workspaces.
+
+## Tradeoffs, unverified work and delivery
+
+Pulse release is intentionally more conservative: sparse/unanimous/thin-comment windows may
+now hide data that was previously visible. The server intentionally no longer publishes legacy
+or arbitrary repository paths. These are safety restrictions, not accidental missing features.
+
+Local notes/exports are still unencrypted; no access controls or guaranteed anonymity exist.
+A manager's confirmation is not an employee signature or independent testimony. Handoff does
+not contact anyone. No real-manager longitudinal validation or legal/fairness certification was
+performed. General events are capped at 600, not unlimited/tamper-proof; corrupt-JSON quarantine
+is best effort and bounded. Historical health values remain approximate for overwritten fields.
+
+**[UNVERIFIED]:** detailed personal audit/runtime/security of the whole legacy tree, fresh
+Next/TypeScript builds, Safari/Firefox, actual assistive-technology users, print visual output
+and large-workspace performance. Chromium/axe coverage is selected states, not universal AA
+certification or all workflows on physical phones. Fresh dependency advisories in the unused
+legacy Next/PostCSS/Sharp chain remain open; canonical tests are not clearance to deploy it.
+
+Delivery is the session commit on `arena/cc9b357a-leados` in the configured GitHub repository;
+Git history is the source of its hash. No other branch, PR merge or main deployment is implied.
+Mandatory `index.html`, README, session log, roadmap/research and affected sources are included.
+
+Next up (from roadmap): honest team-level historical trends; unknown-preserving, formula-safe
+CSV export; optional local encryption with tested migration/recovery.

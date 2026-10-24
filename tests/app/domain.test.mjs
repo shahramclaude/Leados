@@ -320,8 +320,10 @@ test('pulse: comments are subject to the same floor as scores', () => {
   for (let i = 0; i < 3; i += 1) {
     s.pulses.push({ id: `c${i + 3}`, date: '2026-10-22', anonymity: 'anonymous', scores: { safety: 3 }, comment: 'Fine.' });
   }
+  assert.deepEqual(comments(s, NOW), [], 'four nonempty comments do not meet a five-comment floor even with five score responses');
+  s.pulses.push({ id: 'c6', date: '2026-10-22', anonymity: 'anonymous', scores: { safety: 4 }, comment: 'Clarity is improving.' });
   const released = comments(s, NOW);
-  assert.equal(released.length, 4);
+  assert.equal(released.length, 5);
   assert.ok(released.every((c) => !('personId' in c)), 'comments never carry an identity');
 });
 
@@ -329,9 +331,9 @@ test('pulse: trend is weekly and marks suppressed weeks as null', () => {
   const s = stateWith({
     people: [person('p1', 'A')],
     pulses: [
-      { id: 'x1', date: '2026-10-21', anonymity: 'anonymous', scores: { safety: 4 } },
-      { id: 'x2', date: '2026-10-20', anonymity: 'anonymous', scores: { safety: 4 } },
-      { id: 'x3', date: '2026-10-19', anonymity: 'anonymous', scores: { safety: 4 } },
+      { id: 'x1', date: '2026-10-21', anonymity: 'anonymous', scores: { safety: 4, clarity: 4, workload: 4, growth: 4 } },
+      { id: 'x2', date: '2026-10-20', anonymity: 'anonymous', scores: { safety: 3, clarity: 3, workload: 3, growth: 3 } },
+      { id: 'x3', date: '2026-10-19', anonymity: 'anonymous', scores: { safety: 5, clarity: 5, workload: 5, growth: 5 } },
       { id: 'x4', date: '2026-10-14', anonymity: 'anonymous', scores: { safety: 2 } },
     ],
     settings: { pulseMinResponses: 3 },

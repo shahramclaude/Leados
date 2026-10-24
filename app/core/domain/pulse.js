@@ -54,41 +54,37 @@ export function isUnanimous(responses) {
  *   lowest:{key:string,avg:number}|null
  * }}
  */
-export function aggregate(state, now, { windowDays = PULSE_WINDOW_DAYS, minRequired = null } = {}) {
-  const min = minRequired ?? state.settings.pulseMinResponses ?? 5;
-  const responses = responsesInWindow(state, now, windowDays);
-  const n = responses.length;
-  const belowFloor = n < min;
-  const unanimous = !belowFloor && isUnanimous(responses);
+/** One release policy for every window, including weekly chart slices.
+ * Use complete responses only, apply the floor to that cohort, and suppress the
+ * whole vector if any dimension (or per-response mean) is unanimous. Releasing
+ * the other dimensions plus the overall would otherwise reveal the hidden slice
+ * by subtraction. This is exposure reduction, not a formal anonymity guarantee.
+ */
+function summarizeResponses(responses, min) {
+  const complete = responses.filter((r) => PULSE_DIMENSIONS.every((dim) =>
+    typeof r.scores?.[dim] === 'number' && Number.isFinite(r.scores[dim]) && r.scores[dim] >= 1 && r.scores[dim] <= 5));
+  const subjectAvg = complete.map((r) => mean(PULSE_DIMENSIONS.map((dim) => r.scores[dim])));
+  const belowFloor = complete.length < min;
+  const unanimous = !belowFloor && (PULSE_DIMENSIONS.some((dim) => new Set(complete.map((r) => r.scores[dim])).size === 1)
+    || new Set(subjectAvg).size === 1);
   const blocked = belowFloor || unanimous;
-  const blockedReason = belowFloor ? 'threshold' : unanimous ? 'unanimous' : null;
-  const dimensions = {};
-  for (const dim of PULSE_DIMENSIONS) {
-    const values = responses.map((r) => r.scores?.[dim]).filter((v) => typeof v === 'number');
-    dimensions[dim] = {
-      key: dim,
-      label: PULSE_LABELS[dim],
-      avg: blocked || !values.length ? null : round(mean(values), 2),
-      responses: values.length,
-    };
-  }
-  const subjectAvg = responses
-    .map((r) => mean(Object.values(r.scores || {})))
-    .filter((v) => typeof v === 'number');
-  const overall = blocked || !subjectAvg.length ? null : round(mean(subjectAvg), 2);
+  const dimensions = Object.fromEntries(PULSE_DIMENSIONS.map((dim) => [dim, {
+    key: dim, label: PULSE_LABELS[dim], responses: complete.length,
+    avg: blocked ? null : round(mean(complete.map((r) => r.scores[dim])), 2),
+  }]));
   const scored = Object.values(dimensions).filter((d) => d.avg !== null);
-  const lowest = scored.length ? scored.reduce((a, b) => (a.avg <= b.avg ? a : b)) : null;
+  const lowest = scored.length ? scored.reduce((a, b) => a.avg <= b.avg ? a : b) : null;
   return {
-    n,
-    blocked,
-    blockedReason,
-    unanimous,
-    minRequired: min,
-    windowDays,
-    overall,
-    dimensions,
+    n: responses.length, usableResponses: complete.length, incompleteResponses: responses.length - complete.length,
+    blocked, blockedReason: belowFloor ? 'threshold' : unanimous ? 'unanimous' : null,
+    unanimous, minRequired: min, overall: blocked ? null : round(mean(subjectAvg), 2), dimensions,
     lowest: lowest ? { key: lowest.key, label: lowest.label, avg: lowest.avg } : null,
   };
+}
+
+export function aggregate(state, now, { windowDays = PULSE_WINDOW_DAYS, minRequired = null } = {}) {
+  const min = Math.max(3, minRequired ?? state.settings.pulseMinResponses ?? 5);
+  return { ...summarizeResponses(responsesInWindow(state, now, windowDays), min), windowDays };
 }
 
 /**
@@ -104,22 +100,16 @@ export function aggregateWindow(state, now, windowDays, offsetDays) {
 
 /** Weekly series for the trend chart. Suppressed weeks report avg = null. */
 export function trend(state, now, { weeks = 8, minRequired = null } = {}) {
-  const min = minRequired ?? state.settings.pulseMinResponses ?? 5;
+  const min = Math.max(3, minRequired ?? state.settings.pulseMinResponses ?? 5);
   const thisWeek = weekStart(now);
   const series = [];
   for (let i = weeks - 1; i >= 0; i -= 1) {
     const start = addDays(thisWeek, -7 * i);
     const end = addDays(start, 7);
-    const responses = state.pulses.filter((p) => p.date >= start && p.date < end);
-    const perResponse = responses.map((r) => mean(Object.values(r.scores || {}))).filter((v) => typeof v === 'number');
-    const safe = responses.map((r) => r.scores?.safety).filter((v) => typeof v === 'number');
-    series.push({
-      weekStart: start,
-      n: responses.length,
-      blocked: responses.length < min,
-      overall: responses.length < min || !perResponse.length ? null : round(mean(perResponse), 2),
-      safety: responses.length < min || !safe.length ? null : round(mean(safe), 2),
-    });
+    const responses = state.pulses.filter((p) => p.date >= start && p.date < end && p.date <= dayKey(now));
+    const result = summarizeResponses(responses, min);
+    series.push({ weekStart: start, n: result.n, usableResponses: result.usableResponses,
+      blocked: result.blocked, blockedReason: result.blockedReason, overall: result.overall, safety: result.dimensions.safety.avg });
   }
   return series;
 }
@@ -133,9 +123,9 @@ export function delta(state, now) {
     available: true,
     recent,
     previous,
-    overall: round((recent.overall ?? 0) - (previous.overall ?? 0), 2),
-    safety: round((recent.dimensions.safety.avg ?? 0) - (previous.dimensions.safety.avg ?? 0), 2),
-    workload: round((recent.dimensions.workload.avg ?? 0) - (previous.dimensions.workload.avg ?? 0), 2),
+    overall: round(recent.overall - previous.overall, 2),
+    safety: round(recent.dimensions.safety.avg - previous.dimensions.safety.avg, 2),
+    workload: round(recent.dimensions.workload.avg - previous.dimensions.workload.avg, 2),
   };
 }
 
@@ -148,9 +138,9 @@ export function delta(state, now) {
 export function comments(state, now, windowDays = PULSE_WINDOW_DAYS) {
   const window = responsesInWindow(state, now, windowDays);
   const min = state.settings.pulseMinResponses ?? 5;
-  if (window.length < min) return [];
-  return window
-    .filter((r) => (r.comment || '').trim().length > 0)
+  const withComments = window.filter((r) => (r.comment || '').trim().length > 0);
+  if (withComments.length < min || new Set(withComments.map((r) => r.comment.trim())).size === 1) return [];
+  return withComments
     .map((r) => ({ id: r.id, date: r.date, comment: r.comment.trim(), anonymity: r.anonymity }))
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }

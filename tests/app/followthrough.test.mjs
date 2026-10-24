@@ -134,7 +134,7 @@ test('schema v2 migration adds nullable context without inventing authorship or 
     ],
   };
   const migrated = migrate(old);
-  assert.deepEqual(migrated.applied, ['2 → 3']);
+  assert.deepEqual(migrated.applied, ['2 → 3', '3 → 4']);
   const { state } = normalizeState(migrated.raw);
   assert.equal(state.schemaVersion, SCHEMA_VERSION);
   assert.equal(state.settings.feedbackTargetDays, 30);
@@ -513,11 +513,11 @@ test('delegation UI supports create, blocked check-in, edit, completion and revi
   assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
 });
 
-test('settings UI exposes both conventions and persists them with schema v3', async () => {
+test('settings UI exposes both conventions and persists them with the current schema', async () => {
   const env = boot();
   const app = await appFor(env);
   app.navigate('#/settings');
-  assert.ok(env.document.getElementById('view').textContent.includes('Schema v3'));
+  assert.ok(env.document.getElementById('view').textContent.includes('Schema v4'));
   assert.ok(env.document.getElementById('view').textContent.includes('Observation → conversation convention'));
   click(byText(env, 'Edit cadences', env.document.getElementById('view')));
   const form = dialog(env);

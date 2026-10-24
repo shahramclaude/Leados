@@ -10,7 +10,9 @@
  * Pure module: no storage access, no clock.
  */
 
-export const SCHEMA_VERSION = 3;
+import { normalizeConflicts } from './conflict-schema.js';
+
+export const SCHEMA_VERSION = 4;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -78,8 +80,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   maxReportsPerManager: 8,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
-  // default (Culture Amp, 15Five) and 3 is the weakest defensible floor
-  // (Lattice's documented minimum). Five is the default here.
+  // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
+  // an anonymity guarantee. Five is the default here.
   pulseMinResponses: 5,
 });
 
@@ -89,6 +91,7 @@ export const COLLECTIONS = [
   'feedback',
   'goals',
   'delegations',
+  'conflicts',
   'growthPlans',
   'pulses',
   'decisions',
@@ -169,7 +172,7 @@ export function normalizeSettings(raw) {
     onboardingDays: clampInt(s.onboardingDays, 7, 365, d.onboardingDays),
     growthReviewDays: clampInt(s.growthReviewDays, 1, 365, d.growthReviewDays),
     maxReportsPerManager: clampInt(s.maxReportsPerManager, 1, 30, d.maxReportsPerManager),
-    pulseMinResponses: clampInt(s.pulseMinResponses, 1, 25, d.pulseMinResponses),
+    pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
   };
 }
 
@@ -223,6 +226,7 @@ function normalizeScores(raw) {
   const s = isPlainObject(raw) ? raw : {};
   const out = {};
   for (const dim of PULSE_DIMENSIONS) {
+    if (s[dim] === null || s[dim] === undefined || typeof s[dim] === 'boolean' || (typeof s[dim] === 'string' && !s[dim].trim())) continue;
     const v = num(s[dim], null);
     if (v === null) continue;
     out[dim] = Math.min(5, Math.max(1, Math.round(v)));
@@ -294,7 +298,7 @@ function asArray(raw, key, warnings) {
  * Coerce an arbitrary object into the current schema.
  * @returns {{ state: object, warnings: string[] }}
  */
-export function normalizeState(raw) {
+export function normalizeState(raw, { now: normalizationTime = new Date() } = {}) {
   const warnings = [];
   if (!isPlainObject(raw)) {
     return {
@@ -303,10 +307,13 @@ export function normalizeState(raw) {
     };
   }
 
-  const now = new Date().toISOString();
+  const now = normalizationTime.toISOString();
   const state = createEmptyState(now);
   state.schemaVersion = SCHEMA_VERSION;
   state.settings = normalizeSettings(raw.settings);
+  if (raw.settings?.pulseMinResponses !== undefined && Number(raw.settings.pulseMinResponses) !== state.settings.pulseMinResponses) {
+    warnings.push('Pulse privacy floor was repaired to the supported range of 3–25 responses; the default is 5.');
+  }
   state.meta = {
     createdAt: isoOrNull(raw.meta?.createdAt) || now,
     updatedAt: isoOrNull(raw.meta?.updatedAt) || now,
@@ -441,6 +448,8 @@ export function normalizeState(raw) {
   }
   if (droppedDelegationCheckins) warnings.push(`Delegations: dropped ${droppedDelegationCheckins} incomplete, invalid or post-terminal check-in(s)`);
   state.delegations = uniqueIds(validDelegations, 'Delegations', warnings);
+
+  state.conflicts = normalizeConflicts(raw.conflicts, warnings, now);
 
   const growthPlans = asArray(raw, 'growthPlans', warnings).map((p, i) => ({
     id: str(p.id) || `gp-${i}`,
@@ -581,11 +590,12 @@ export function normalizeState(raw) {
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Versions 2 and 3 add records and nullable context without
+ * the next one. Versions 2–4 add records and nullable context without
  * changing the storage key, so an existing workspace upgrades in place.
  * Unknown observation dates and goal authorship stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  3: (v3) => ({ ...v3, schemaVersion: 4, conflicts: Array.isArray(v3.conflicts) ? v3.conflicts : [] }),
   1: (v1) => ({ ...v1, schemaVersion: 2, reviews: Array.isArray(v1.reviews) ? v1.reviews : [] }),
   2: (v2) => ({
     ...v2,

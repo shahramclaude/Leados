@@ -26,6 +26,7 @@ import { activePlan, growCompleteness, planProgress, reviewState, stagnationDays
 import { aggregate } from './pulse.js';
 import { assess, readinessFor, successionGaps } from './readiness.js';
 import { openDecisions, reviewsDue } from './decisions.js';
+import { conflictSummary } from './conflicts.js';
 import { isNewJoiner, tenureDays } from './people.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -40,6 +41,7 @@ export const DOMAIN_ORDER = [
   'Growth',
   'Wellbeing',
   'Decisions',
+  'Conflict resolution',
   'Recognition',
   'Succession',
 ];
@@ -617,7 +619,7 @@ export function buildInsights(state, now) {
       ruleId: 'PULSE-01',
       domain: 'Wellbeing',
       title: 'No pulse responses in the last two weeks',
-      detail: 'You cannot manage what you cannot see. A three-question pulse takes the team two minutes a fortnight and is the earliest warning of burnout and silence.',
+      detail: 'You cannot manage what you cannot see. A four-question pulse takes the team two minutes a fortnight and is the earliest warning of burnout and silence.',
       severity: 2,
       confidence: 'high',
       evidence: ['0 responses in the current window'],
@@ -627,8 +629,10 @@ export function buildInsights(state, now) {
     add({
       ruleId: 'PULSE-02',
       domain: 'Wellbeing',
-      title: `Pulse suppressed: ${pulse.n} of ${pulse.minRequired} responses needed`,
-      detail: `Aggregates stay hidden below ${pulse.minRequired} responses so nobody can be identified by subtraction. Collect ${pulse.minRequired - pulse.n} more before acting on the numbers.`,
+      title: pulse.blockedReason === 'unanimous' ? 'Pulse suppressed: an answer slice is identical' : `Pulse suppressed: ${pulse.usableResponses} of ${pulse.minRequired} complete responses needed`,
+      detail: pulse.blockedReason === 'unanimous'
+        ? 'A dimension or overall answer is identical. Releasing other aggregates could reveal it by subtraction. Do not treat a hidden number as zero or infer an individual response.'
+        : `Aggregates stay hidden below ${pulse.minRequired} complete responses. ${Math.max(0, pulse.minRequired - pulse.usableResponses)} more complete replies are needed; partial imported answers do not satisfy the floor.`,
       severity: 2,
       confidence: 'high',
       evidence: [`Responses: ${pulse.n}`, `Anonymity floor: ${pulse.minRequired}`],
@@ -729,6 +733,20 @@ export function buildInsights(state, now) {
         action: { label: 'Review the bench', route: '#/readiness' },
       });
     }
+  }
+
+  // --- Conflict follow-through: counts only, never private case content. -----
+  const conflicts = conflictSummary(state, now);
+  for (const [ruleId, rows, title, detail, severity] of [
+    ['CFL-01', conflicts.needsSupport, 'conflict record(s) need a support-route check', 'An assessment is unsure/serious or participation was declined. Seek appropriate qualified support; do not force informal agreement.', 4],
+    ['CFL-02', conflicts.followUpDue, 'conflict follow-up(s) due or unscheduled', 'Check the next step privately. A support handoff is not a resolution, and an agreement still needs verification.', 3],
+    ['CFL-03', conflicts.overdueActions, 'conflict agreement(s) have overdue commitments', 'Review the current commitments and support needed. Their private content stays in the conflict workspace.', 3],
+    ['CFL-04', conflicts.notHolding, 'conflict agreement(s) need revisiting', 'The latest follow-up says an agreement is not holding, or the discussion context changed. Listen again before relying on the old agreement.', 4],
+  ]) {
+    if (!rows.length) continue;
+    add({ ruleId, domain: 'Conflict resolution', severity, confidence: 'high',
+      title: `${rows.length} ${title}`, detail, evidence: [`${rows.length} matching record(s); case details deliberately excluded from general signals`],
+      action: { label: 'Open conflict workspace', route: '#/conflicts?filter=attention' } });
   }
 
   // --- Span of control -----------------------------------------------------

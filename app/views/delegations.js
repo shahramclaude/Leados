@@ -73,11 +73,11 @@ export function renderDelegations(ctx) {
 
     tabs({
       items: [
-        { id: 'active', label: 'Active', count: summary.active },
-        { id: 'attention', label: 'Needs attention', count: summary.attention.length },
-        { id: 'all', label: 'All', count: summary.rows.length },
-        { id: 'done', label: 'Completed', count: summary.done },
-        { id: 'returned', label: 'Returned', count: summary.returned },
+        { key: 'active', label: 'Active', count: summary.active },
+        { key: 'attention', label: 'Needs attention', count: summary.attention.length },
+        { key: 'all', label: 'All', count: summary.rows.length },
+        { key: 'done', label: 'Completed', count: summary.done },
+        { key: 'returned', label: 'Returned', count: summary.returned },
       ],
       active: focusId ? 'all' : filter,
       onSelect: (id) => ctx.navigate(`#/delegations?filter=${id}`),
