@@ -33,7 +33,7 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 49 native JavaScript modules, CSS and shell; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 52 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
 | `scripts/app-browser-smoke.mjs` | Optional, reproducible Chromium lifecycle/mobile/accessibility smoke (not executed in Session 5 container — **[UNVERIFIED]** in real Chromium binary this session). |
@@ -56,6 +56,11 @@ TypeScript error counts were not rerun. See the
 
 - Log a 1:1 as held, moved or skipped; compute cadence, cancellation streaks and adherence
   from real dates. Generate editable agenda suggestions with a reason for each item.
+- Build a **printable, shareable one-meeting prep sheet** (`#/prep/<personId>`): the topics the
+  person has asked to raise, the generated agenda with reasons, every open commitment grouped
+  by source (past-1:1 actions, feedback follow-ups, development actions, delegation checkpoints),
+  what happened since you last spoke, outcomes at risk, and a notes area. Confidential conflict
+  records and anonymous pulse answers are excluded by construction and named on the sheet.
 - Capture owned, dated meeting actions; overdue commitments surface on Today.
 - Record Situation → Behaviour → Impact feedback with a live, non-blocking specificity coach.
   Track praise/constructive balance and follow-up dates without imposing a target ratio.
@@ -233,26 +238,26 @@ wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-24, session 6
+## Verification — 2026-10-24, session 8
 
-- `npm test`: **193 passed, 0 failed/skipped** across 12 suites (`tests/app/*.test.mjs`),
-  including 20 new encryption tests that assert the negative properties: no plaintext in
-  storage, no write while locked, no adoption when a write fails, no quarantine of ciphertext,
-  and no silent downgrade to plain text.
-- All 49 canonical JS modules (79 JS/MJS files including `scripts/**`) pass `node --check`;
-  `eslint app` is clean.
-- Live HTTP check against `scripts/serve.mjs` verifies `index.html` plus the new
-  `core/crypto.js`, `views/vault.js`, `ui/vault-dialogs.js` and `ui/download.js` serve `200 OK`,
-  while `package.json`, `scripts/**`, `tests/**` and source maps still return `404` and `POST`
-  returns `405`.
-- `axe-core` 4.11 via JSDOM reports **0 violations** on the new lock screen as well as on
-  `#/health` and `#/settings`.
+- `npm test`: **214 passed, 0 failed/skipped** across 13 suites (`tests/app/*.test.mjs`),
+  including 11 new prep-sheet tests that assert the agenda, employee topics and grouped
+  commitments assemble, overdue items sort first, the sheet excludes conflict records and
+  anonymous pulse answers, the new `talkingPoints` field survives a reload and is repaired on
+  malformed import, and the printable route passes `axe-core` with zero violations.
+- All 52 canonical JS modules (81 JS/MJS files including `scripts/**`) pass `node --check`;
+  `eslint app` and `eslint` on the new test are clean.
+- Live HTTP check against `scripts/serve.mjs` verifies `index.html`, `app/main.js`,
+  `app/views/prep.js` and `app/core/domain/prep.js` serve `200 OK`, while `POST /` returns `405`.
+- `axe-core` 4.11 via JSDOM reports **0 violations** on the prep sheet, the lock screen, `#/health`
+  and `#/settings`.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
   this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.
-  The encryption flows were exercised through the real modules and a real DOM in jsdom, not
-  through a real browser crypto implementation: browser WebCrypto was injected from Node's
-  `webcrypto`, so a genuine browser unlock has not been observed here.
+  Print-to-PDF is wired to the browser print flow and exercised in jsdom, but the actual
+  rendered page geometry has not been inspected in a real browser. Encryption flows are
+  exercised through the real modules and a real DOM in jsdom, with browser WebCrypto injected
+  from Node's `webcrypto`; a genuine browser unlock has not been observed here.
 
 Optional browser reproduction on Linux (tools are test-only, installed in ignored scratch):
 
@@ -276,9 +281,13 @@ node scripts/app-browser-smoke.mjs
 - Encryption is optional and passphrase-only: no recovery key, no key escrow, and no protection while the workspace is unlocked and in active use. An unlocked, encrypted workspace now auto-locks after a configurable inactivity window (default 30 minutes, 0 = off, set in Settings), warning first so nothing in progress is discarded. CSV and plain-text JSON exports are always unencrypted, and full JSON backups still contain conflict
   notes. Enabling encryption replaces the browser's single stored blob, so a passphrase lost
   before the next unlock is unrecoverable by design.
-- Legacy build/runtime, real-Chromium smoke execution in Session 5, Safari/Firefox, real
-  assistive-technology use, print visual output and large-workspace performance remain
-  **[UNVERIFIED]**.
+- The 1:1 prep sheet is assembled from records, not a meeting transcript: it surfaces what was
+  promised and still open, and cannot recover a conversation that was never logged. "Topics they
+  want to raise" is recorded by the manager because the app has no employee login — the manager
+  is the scribe, not an employee-submitted form. Print/PDF visual output remains **[UNVERIFIED]**
+  in a real browser.
+- Legacy build/runtime, real-Chromium smoke execution, Safari/Firefox, real assistive-technology
+  use, print visual output and large-workspace performance remain **[UNVERIFIED]**.
 - A fresh `npm audit --omit=dev` reports **1 critical and 2 high** findings in the legacy
   Next/PostCSS/Sharp dependency chain. The canonical module graph imports none of it. This
   increment did not upgrade or validate that legacy app; its dependencies must not be treated

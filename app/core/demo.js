@@ -25,8 +25,8 @@ export function buildDemoState(now = new Date()) {
   state.meta.isDemo = true;
 
   const people = [
-    { name: 'Priya Natarajan', role: 'Engineering Lead', level: 'lead', startDate: at(700), focus: 'Platform reliability while the team doubles.' },
-    { name: 'Jordan Alvarez', role: 'Product Manager', level: 'senior', startDate: at(420), focus: 'Own the activation metric end to end.' },
+    { name: 'Priya Natarajan', role: 'Engineering Lead', level: 'lead', startDate: at(700), focus: 'Platform reliability while the team doubles.', talkingPoints: ['On-call load is not sustainable', 'Wants a clearer promotion path for senior engineers'] },
+    { name: 'Jordan Alvarez', role: 'Product Manager', level: 'senior', startDate: at(420), focus: 'Own the activation metric end to end.', talkingPoints: ['Wants a decision on the activation definition', 'Asking for a larger design budget this quarter'] },
     { name: 'Mei Lin Chen', role: 'Staff Engineer', level: 'senior', startDate: at(260), focus: 'Technical direction for the billing migration.' },
     { name: 'Samuel Okafor', role: 'Support Team Lead', level: 'manager', startDate: at(38), focus: 'Rebuild the escalation process and the on-call rota.' },
     { name: 'Freya Nilsson', role: 'Data Analyst', level: 'ic', startDate: at(150), focus: 'Make the weekly numbers trustworthy again.' },
@@ -40,6 +40,7 @@ export function buildDemoState(now = new Date()) {
     managerId: null,
     startDate: p.startDate,
     focus: p.focus,
+    talkingPoints: p.talkingPoints || [],
     status: 'active',
     createdAt: new Date(ts(120 - i)).toISOString(),
     archivedAt: null,

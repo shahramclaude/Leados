@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-24 (session 7: idle auto-lock shipped — an unlocked, encrypted workspace warns after a configurable inactivity window (default 30 minutes, 0 = off), then locks automatically after a one-minute grace, logging `privacy.idle-lock` to the event log; `tests/app/idle.test.mjs` covers activity reset, warn/lock transitions and tab-restored-from-background; 203 automated tests).
+Last updated: 2026-10-24 (session 8: printable 1:1 prep sheet shipped — `#/prep/<personId>` combines the person's own topics, the generated agenda with reasons, every open commitment grouped by source, what happened since you last spoke and outcomes at risk, with confidential conflict records and anonymous pulse answers excluded by construction; new `person.talkingPoints` field; `tests/app/prep.test.mjs` covers assembly, ordering, the privacy invariant, persistence and axe-core; 214 automated tests).
 
 ---
 
@@ -60,7 +60,8 @@ Last updated: 2026-10-24 (session 7: idle auto-lock shipped — an unlocked, enc
 | Lock screen is the only thing rendered while locked, keyboard-usable and axe-clean | `views/vault.js`, `main.js`, `styles.css` | jsdom tests (no records leaked into the screen, error live region, show-passphrase toggle, `axe-core` 0 violations) |
 | A stored backup envelope is refused rather than normalised into an empty workspace | `core/store.js`, `views/vault.js` | encryption tests (refused unlock, untouched file, working restore path) |
 | Idle auto-lock: warn, then lock an unlocked encrypted workspace after inactivity, with a non-destructive "keep working" warning and a one-minute grace; the lock is logged to the event log | `app/core/idle.js`, `app/main.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/modals.js` | `tests/app/idle.test.mjs` (activity reset, warn → lock transitions, tab restored from background) |
-| 203 automated tests | `tests/app/**` | `npm test` — 203 pass / 0 fail / 0 skipped |
+| Printable 1:1 prep sheet: employee topics, generated agenda with reasons, grouped open commitments (1:1 actions, feedback follow-ups, development actions, delegation checkpoints), what happened since you last spoke, outcomes at risk and a notes area; confidential conflict records and anonymous pulse answers excluded by construction | `app/core/domain/prep.js`, `app/views/prep.js`, `app/main.js`, `app/views/person.js`, `app/ui/modals.js`, `app/core/schema.js`, `app/actions.js`, `app/core/demo.js` | `tests/app/prep.test.mjs` (assembly, overdue ordering, privacy regression, persistence/repair, route render, print flow, axe-core) |
+| 214 automated tests | `tests/app/**` | `npm test` — 214 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-24T10:00:00Z`): health **54.5 (D)**,
 30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
@@ -75,15 +76,15 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
 
 ## Next (ordered by value, not by ease)
 
-1. **Structured 1:1 preparation & printable coaching packet.** Combine generated agenda items,
-   open commitments (1:1, GROW, feedback follow-up, delegation checkpoints) and employee-owned
-   talking points into a clean, shareable single-meeting prep sheet without leaking private
-   conflict records.
-2. **Onboarding 30-60-90 milestone tracker.** Turn the existing first-90-day tenure signal
+1. **Onboarding 30-60-90 milestone tracker.** Turn the existing first-90-day tenure signal
    (`ONB-01`) into explicit role-clarity, buddy/stakeholder introduction and early-win
    checkpoints for new joiners without inventing personality or performance grades.
+2. **1:1 follow-through reconciliation.** The prep sheet lists what was promised; make
+   "did it happen?" a first-class signal at the *following* meeting instead of relying on the
+   leader to remember, by closing the loop between a meeting's commitments and the next one's
+   agenda.
 
-*(Idle auto-lock shipped this session: see the Done table above.)*
+*(Idle auto-lock and the printable 1:1 prep sheet shipped this session: see the Done table above.)*
 
 ## Later / deliberately deferred
 

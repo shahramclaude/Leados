@@ -741,3 +741,78 @@ and a printable coaching packet; an onboarding 30-60-90 milestone tracker.
 - Real-browser WebCrypto behavior, color-contrast sampling, print/PDF, mobile viewports, Safari/Firefox and large-workspace performance remain `[UNVERIFIED]` (session 6 limitations, unchanged).
 
 Next up (from roadmap): structured 1:1 preparation and a printable coaching packet; onboarding 30-60-90 milestone tracker.
+
+## Session 8 — 2026-10-24 — Printable 1:1 preparation sheet (employee topics + grouped commitments)
+
+**Audit before implementation.** Re-read the canonical app (`index.html` + `app/**`, now 52 JS
+modules) and confirmed the baseline before touching anything: `npm ci --no-audit --no-fund`
+installed 435 packages, then `npm test` = **203 pass / 0 fail / 0 skipped**. Confirmed the
+roadmap's top un-built item (`ROADMAP.md` §"Next" #1): the person page has a "Prepared agenda for
+the next 1:1" card and the log dialog prefills agenda suggestions, but there is **no** printable,
+shareable single-meeting brief, and no place to record the topics the *person* wants to raise.
+The two gaps are linked: an agenda that only exists inside a dialog cannot be walked into a
+meeting with, and a leader who has no record of what the person asked for recreates a
+status-readout 1:1.
+
+**Research.** Read `RESEARCH.md` §6 (one-to-ones), §2 (GROW), §11 (pulse anonymity) and §14
+(conflict privacy), and wrote a new §18 capturing the rationale: consistency-over-frequency and
+preparation-over-status-update evidence (Gallup manager research), the pre-read/"one-page brief"
+tradition, 1:1 agenda templates in 15Five/Lattice/Culture Amp, the two-way-agenda principle, and
+the privacy boundary that a printed sheet is a new exposure surface. The session-6 audit's
+`talkingPoints` naming (employee-owned topics) was reused, with the honest label that the manager
+is the scribe in a tool with no employee login.
+
+**What changed.**
+- **`app/core/domain/prep.js` (new, pure, zero I/O):** `buildPrepSheet(state, personId, now,
+  settings)` assembles a printable structure — the person's own topics, `suggestAgenda()` output
+  (reasons preserved), every open commitment grouped by source (past-1:1 actions, feedback
+  follow-ups, development actions, delegation checkpoints) with overdue sorted first, the last
+  meeting's notes/mood/carried actions/recognition, and active goals not on track. It reads
+  **never** `state.conflicts` and **never** individual pulse rows, and returns an explicit
+  `excluded` list naming both.
+- **`app/views/prep.js` (new):** the `#/prep/<personId>` document — back link, printable header,
+  privacy banner, four stats, the six sections, and a ruled notes area. `Print / save PDF`
+  calls `window.print()`; `Log the 1:1` opens the existing dialog.
+- **`app/core/schema.js`:** new exported `normalizeTalkingPoints()` (trim, collapse whitespace,
+  case-insensitive de-dupe, 12-item cap) and `talkingPoints` added to the person normalizer, so
+  old records degrade to `[]` with no schema bump (`SCHEMA_VERSION` stays 5).
+- **`app/actions.js`:** `talkingPoints` accepted on `addPerson` and `updatePerson`.
+- **`app/ui/modals.js`:** "Topics they want to raise" textarea in the person dialog; the newline
+  textarea is split and normalised on submit.
+- **`app/main.js`:** `prep` renderer + document title; the person page's agenda card now links to
+  the printable sheet.
+- **`app/core/demo.js`:** two demo people seeded with topics so the sheet has real content.
+- **`app/styles.css`:** `.prep-*` component styles plus `@media print` rules (cards
+  `break-inside: avoid`, the commitment grid becomes a single column on paper, taller rule lines).
+- **`index.html`:** build meta now names the prep sheet.
+- **`tests/app/prep.test.mjs` (new, 11 tests).**
+
+**Verification performed this session.**
+```text
+npm test                               → 214 pass / 0 fail / 0 skipped (13 suites)
+New suite                              → tests/app/prep.test.mjs (11 tests)
+node --check (all 8 touched modules)   → clean
+eslint app + tests/app/prep.test.mjs   → clean
+live HTTP (scripts/serve.mjs)          → /, app/main.js, app/views/prep.js,
+                                         app/core/domain/prep.js → 200; POST / → 405
+axe-core 4.11 (JSDOM)                  → 0 violations on the prep sheet
+```
+- The privacy test asserts the sheet's serialized JSON contains neither the conflict title/summary,
+  nor a participant name, nor an anonymous pulse comment, and that `excluded` names both classes.
+- Overdue-first ordering is asserted within the 1:1 action group.
+- `talkingPoints` round-trips through `updatePerson` → export → `normalizeState`, and malformed
+  import (`['ok', '', 42, 'ok ', '   ']`) repairs to `['ok']`.
+
+**Tradeoffs, unverified work.**
+- "Topics they want to raise" is manager-entered: the app has no employee login, so the manager is
+  a scribe. This is labelled in the dialog help text and in the sheet rather than implied as an
+  employee-submitted form.
+- The sheet is a regenerated view over current records, not a stored copy, so it reflects the
+  store at generation time and cannot recover a conversation that was never logged.
+- Print/PDF visual output and real-browser geometry remain `[UNVERIFIED]` (no browser binary in
+  this container); the print flow is wired and exercised in jsdom.
+- `FEATURES.md` was left untouched: it describes the legacy Next.js tree (leads/scoring/ledger),
+  not the canonical app, and updating it is out of scope for this increment. `docs/**` history and
+  the legacy `src/**` tree were not re-audited.
+
+Next up (from roadmap): onboarding 30-60-90 milestone tracker; 1:1 follow-through reconciliation.

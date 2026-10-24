@@ -8,7 +8,7 @@
  */
 
 import { dayKey } from './core/time.js';
-import { CONFIDENCE, PULSE_DIMENSIONS, REVIEW_RATINGS } from './core/schema.js';
+import { CONFIDENCE, PULSE_DIMENSIONS, REVIEW_RATINGS, normalizeTalkingPoints } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
 import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
@@ -98,6 +98,7 @@ export function createApi(store, options = {}) {
         managerId: data.managerId || null,
         startDate: data.startDate || today(),
         focus: clean(data.focus) || '',
+        talkingPoints: normalizeTalkingPoints(data.talkingPoints),
         status: 'active',
         createdAt: stamp(),
         archivedAt: null,
@@ -126,6 +127,7 @@ export function createApi(store, options = {}) {
             managerId: patch.managerId !== undefined ? patch.managerId || null : person.managerId,
             startDate: patch.startDate !== undefined ? patch.startDate || person.startDate : person.startDate,
             focus: patch.focus !== undefined ? clean(patch.focus) : person.focus,
+            talkingPoints: patch.talkingPoints !== undefined ? normalizeTalkingPoints(patch.talkingPoints) : person.talkingPoints,
           });
         },
         { type: 'person.updated', entity: 'person', entityId: personId, summary: `Updated ${before?.name || 'person'}` },

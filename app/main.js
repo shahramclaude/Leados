@@ -30,6 +30,7 @@ import { renderRecognition } from './views/recognition.js';
 import { renderReviews, renderReviewDetail } from './views/reviews.js';
 import { renderSettings } from './views/settings.js';
 import { renderVault } from './views/vault.js';
+import { renderPrepSheet } from './views/prep.js';
 
 export const NAV = [
   { section: 'Overview', items: [
@@ -78,6 +79,7 @@ const RENDERERS = {
   reviews: (ctx) => renderReviews(ctx),
   review: (ctx, segments) => renderReviewDetail(ctx, decodeURIComponent(segments[1] || '')),
   settings: (ctx) => renderSettings(ctx),
+  prep: (ctx, segments) => renderPrepSheet(ctx, segments[1]),
 };
 
 export function parseRoute(hash) {
@@ -504,6 +506,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       conflict: 'Conflict working record',
       delegations: 'Delegation',
       settings: 'Settings',
+      prep: '1:1 prep sheet',
     };
     return labels[route] || 'LeadOS';
   }
