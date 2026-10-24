@@ -132,6 +132,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory } =
       persistError: store.persistError,
       storageSize: () => store.sizeBytes(),
       exportJSON: () => store.exportJSON(),
+      exportCSV: (scope) => store.exportCSV(scope),
       importJSON: (text) => {
         const result = store.importJSON(text);
         if (result.ok) render();

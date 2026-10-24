@@ -137,7 +137,7 @@ export function delta(state, now) {
  */
 export function comments(state, now, windowDays = PULSE_WINDOW_DAYS) {
   const window = responsesInWindow(state, now, windowDays);
-  const min = state.settings.pulseMinResponses ?? 5;
+  const min = Math.max(3, state.settings.pulseMinResponses ?? 5);
   const withComments = window.filter((r) => (r.comment || '').trim().length > 0);
   if (withComments.length < min || new Set(withComments.map((r) => r.comment.trim())).size === 1) return [];
   return withComments

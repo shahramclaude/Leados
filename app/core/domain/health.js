@@ -11,7 +11,7 @@
  * wellbeing .20.
  */
 
-import { addDays, clamp, daysBetween, daysSince, isOverdue, mean, round } from '../time.js';
+import { addDays, clamp, dayKey, daysBetween, daysSince, isOverdue, mean, round } from '../time.js';
 import { cadence } from './oneonone.js';
 import { tenureDays } from './people.js';
 import { personFeedbackStats } from './feedback.js';
@@ -32,41 +32,198 @@ function scorer(key) {
 }
 
 /**
- * A copy of the state with records dated after `asOf` removed, so the same
- * formulas can be re-run for a past date.
+ * Reconstruct workspace state as of `asOf` and record per-dimension fidelity.
  *
- * Honest limitation: fields that are overwritten in place (a person's role, a
- * goal's stated confidence) have no history. Goal confidence is reconstructed
- * from the last check-in before the cutoff, and anything else uses current
- * values. The trend is therefore approximate and is labelled as such.
+ * Exact dimensions derive strictly from dated events or Schema v5 dated
+ * snapshots (goal check-in key-result snapshots, initial values, completion
+ * dates, archive timestamps). Where pre-v5 or directly edited records lack a
+ * dated snapshot, the reconstruction uses current mutable fields and explicitly
+ * marks that dimension `approximate` with a human-readable reason.
  */
-export function truncateState(state, asOf) {
-  const keep = (day) => !day || (daysBetween(day, asOf) ?? 0) >= 0;
+export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
+  const asOfDay = dayKey(asOf) || (typeof asOf === 'string' ? asOf.slice(0, 10) : new Date(asOf).toISOString().slice(0, 10));
+  const keep = (day) => !day || (daysBetween(day, asOfDay) ?? 0) >= 0;
+  const isHistorical = currentDay ? asOfDay < currentDay : true;
   const cloned = JSON.parse(JSON.stringify(state));
-  const asOfDay = typeof asOf === 'string' ? asOf : new Date(asOf).toISOString().slice(0, 10);
-  cloned.oneOnOnes = cloned.oneOnOnes.filter((m) => keep(m.date));
-  cloned.feedback = cloned.feedback.filter((f) => keep(f.date));
-  cloned.pulses = cloned.pulses.filter((p) => keep(p.date));
-  cloned.recognition = cloned.recognition.filter((r) => keep(r.date));
-  cloned.decisions = cloned.decisions.filter((d) => keep(d.date));
-  cloned.growthPlans = cloned.growthPlans.filter((p) => keep(p.createdAt.slice(0, 10)));
-  // People who had not been added to the roster yet cannot be scored for a
-  // period before they existed.
-  cloned.people = cloned.people.filter((p) => keep(p.createdAt.slice(0, 10)));
-  cloned.goals = cloned.goals
-    .filter((g) => keep(g.createdAt.slice(0, 10)))
+
+  const notes = {
+    cadence: new Set(),
+    feedback: new Set(),
+    clarity: new Set(),
+    growth: new Set(),
+    wellbeing: new Set(),
+    delegations: new Set(),
+  };
+
+  let rosterApproximate = false;
+  cloned.people = (cloned.people || [])
+    .filter((p) => keep((p.createdAt || '').slice(0, 10)))
+    .map((p) => {
+      if (p.status !== 'archived') return p;
+      const archivedDay = p.archivedAt ? p.archivedAt.slice(0, 10) : null;
+      if (archivedDay && archivedDay > asOfDay) {
+        return { ...p, status: 'active', archivedAt: null };
+      }
+      if (!archivedDay && isHistorical) {
+        rosterApproximate = true;
+      }
+      return p;
+    });
+  if (rosterApproximate) {
+    const msg = 'An archived team member has no archive date, so past roster membership uses current status.';
+    notes.cadence.add(msg);
+    notes.feedback.add(msg);
+    notes.clarity.add(msg);
+    notes.growth.add(msg);
+  }
+
+  cloned.oneOnOnes = (cloned.oneOnOnes || [])
+    .filter((m) => keep(m.date))
+    .map((m) => ({
+      ...m,
+      actions: (m.actions || []).map((a) => {
+        if (!a.done) return a;
+        if (a.completedOn) return { ...a, done: a.completedOn <= asOfDay, completedOn: a.completedOn <= asOfDay ? a.completedOn : null };
+        return a;
+      }),
+    }));
+
+  cloned.feedback = (cloned.feedback || [])
+    .filter((f) => keep(f.date))
+    .map((f) => {
+      if (!f.followUpDone) return f;
+      if (f.followUpCompletedOn) {
+        const doneAt = f.followUpCompletedOn <= asOfDay;
+        return { ...f, followUpDone: doneAt, followUpCompletedOn: doneAt ? f.followUpCompletedOn : null };
+      }
+      return f;
+    });
+
+  cloned.pulses = (cloned.pulses || []).filter((p) => keep(p.date));
+  cloned.recognition = (cloned.recognition || []).filter((r) => keep(r.date));
+  cloned.decisions = (cloned.decisions || []).filter((d) => keep(d.date));
+
+  cloned.delegations = (cloned.delegations || [])
+    .filter((d) => keep(d.delegatedOn || (d.createdAt || '').slice(0, 10)))
+    .map((d) => {
+      const checkins = (d.checkins || []).filter((c) => keep(c.date));
+      if (d.status === 'done' && d.completedOn && d.completedOn > asOfDay) {
+        return { ...d, status: 'active', completedOn: null, completionNote: '', checkins };
+      }
+      if (d.status === 'returned' && d.returnedOn && d.returnedOn > asOfDay) {
+        return { ...d, status: 'active', returnedOn: null, returnReason: '', checkins };
+      }
+      return { ...d, checkins };
+    });
+
+  cloned.growthPlans = (cloned.growthPlans || [])
+    .filter((p) => keep((p.createdAt || '').slice(0, 10)))
+    .map((p) => {
+      let status = p.status;
+      if (status === 'done') {
+        if (p.closedOn && p.closedOn > asOfDay) status = 'active';
+        else if (!p.closedOn && isHistorical) {
+          notes.growth.add('A closed development plan has no recorded closing date.');
+        }
+      }
+      if (isHistorical && p.stagesUpdatedOn && p.stagesUpdatedOn > asOfDay) {
+        notes.growth.add('Development plan stages were edited in place after this period.');
+      }
+      const will = (p.will || []).map((w) => {
+        if (!w.done) return w;
+        if (w.completedOn) {
+          const doneAt = w.completedOn <= asOfDay;
+          return { ...w, done: doneAt, completedOn: doneAt ? w.completedOn : null };
+        }
+        if (isHistorical) {
+          notes.growth.add('Some completed development commitments predated completion-date tracking.');
+        }
+        return w;
+      });
+      return { ...p, status, will };
+    });
+
+  cloned.goals = (cloned.goals || [])
+    .filter((g) => keep((g.createdAt || '').slice(0, 10)))
     .map((g) => {
-      const past = (g.checkins || []).filter((c) => keep(c.date));
-      const createdAfter = (daysBetween(g.createdAt.slice(0, 10), asOfDay) ?? 0) < 0;
+      const allCheckins = (g.checkins || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      const past = allCheckins.filter((c) => keep(c.date));
+      const lastPast = past.length ? past[past.length - 1] : null;
+
+      let status = g.status;
+      if (status === 'done') {
+        if (g.completedOn && g.completedOn > asOfDay) status = 'active';
+        else if (!g.completedOn && isHistorical) {
+          notes.clarity.add('A completed goal has no recorded completion date.');
+        }
+      }
+
+      let confidence;
+      if (lastPast) {
+        confidence = lastPast.confidence;
+      } else if (g.initialConfidence) {
+        confidence = g.initialConfidence;
+      } else if (!allCheckins.length) {
+        confidence = g.confidence || 'on-track';
+      } else {
+        if (isHistorical) notes.clarity.add('Initial goal confidence before the first check-in was not separately recorded.');
+        confidence = g.confidence || 'on-track';
+      }
+
+      let keyResults = (g.keyResults || []).map((kr) => ({ ...kr }));
+      if (keyResults.length && isHistorical) {
+        if (g.krUpdatedOn && (!lastPast || g.krUpdatedOn > lastPast.date) && g.krUpdatedOn > asOfDay) {
+          notes.clarity.add('Key results were added or removed after this period.');
+        }
+        if (lastPast && Array.isArray(lastPast.keyResults)) {
+          const snap = new Map(lastPast.keyResults.map((item) => [item.id, item.current]));
+          let missingSnap = false;
+          keyResults = keyResults.map((kr) => {
+            if (snap.has(kr.id)) return { ...kr, current: snap.get(kr.id) };
+            if (typeof kr.initialCurrent === 'number') return { ...kr, current: kr.initialCurrent };
+            missingSnap = true;
+            return kr;
+          });
+          if (missingSnap) notes.clarity.add('Some key-result values were not captured in earlier check-in snapshots.');
+        } else if (lastPast && !Array.isArray(lastPast.keyResults)) {
+          notes.clarity.add('Earlier goal check-ins did not store key-result numeric snapshots; current values are used.');
+        } else if (!lastPast) {
+          const allHaveInitial = keyResults.every((kr) => typeof kr.initialCurrent === 'number');
+          if (allHaveInitial) {
+            keyResults = keyResults.map((kr) => ({ ...kr, current: kr.initialCurrent }));
+          } else if (allCheckins.length > 0 || keyResults.some((kr) => kr.current !== kr.start)) {
+            notes.clarity.add('Initial key-result values before check-in snapshots were not separately stored.');
+          }
+        }
+      }
+
       return {
         ...g,
+        status,
         checkins: past,
-        confidence: past.length ? past[past.length - 1].confidence : createdAfter ? null : 'on-track',
-        keyResults: (g.keyResults || []).map((kr) => ({ ...kr })), // current values; no KR history is stored
+        confidence,
+        keyResults,
       };
-    })
-    .filter((g) => g.confidence !== null);
-  return cloned;
+    });
+
+  const fidelity = Object.fromEntries(
+    Object.entries(notes).map(([key, set]) => [
+      key,
+      {
+        level: !isHistorical || set.size === 0 ? 'exact' : 'approximate',
+        reasons: [...set],
+      },
+    ]),
+  );
+
+  return { state: cloned, fidelity, asOfDay };
+}
+
+/**
+ * Backwards-compatible wrapper returning the reconstructed state at `asOf`.
+ */
+export function truncateState(state, asOf) {
+  return reconstructStateAt(state, asOf).state;
 }
 
 function cadenceDimension(state, now, settings) {
@@ -200,22 +357,30 @@ function growthDimension(state, now, settings) {
 function wellbeingDimension(state, now) {
   const pulse = aggregate(state, now);
   if (pulse.blocked) {
+    const detail = pulse.n === 0
+      ? 'No pulse responses in the last two weeks.'
+      : pulse.blockedReason === 'unanimous'
+        ? `Suppressed: ${pulse.n} responses contain an identical answer slice, hidden to protect anonymity.`
+        : `Suppressed: ${pulse.usableResponses} complete response(s), ${pulse.minRequired} needed to protect anonymity.`;
     return {
       score: null,
-      detail: pulse.n === 0 ? 'No pulse responses in the last two weeks.' : `Suppressed: ${pulse.n} response(s), ${pulse.minRequired} needed to protect anonymity.`,
+      detail,
       drivers: [],
     };
   }
   const safety = pulse.dimensions.safety.avg;
   const workload = pulse.dimensions.workload.avg;
   const score = round((0.55 * ((safety - 1) / 4) + 0.45 * ((workload - 1) / 4)) * 100);
+  const countLabel = pulse.incompleteResponses
+    ? `${pulse.usableResponses} complete (${pulse.n} total)`
+    : `${pulse.usableResponses}`;
   return {
     score,
-    detail: `55% psychological safety, 45% sustainable load, from ${pulse.n} anonymous responses this fortnight.`,
+    detail: `55% psychological safety, 45% sustainable load, from ${countLabel} anonymous responses this fortnight.`,
     drivers: [
       { label: 'Safety', value: `${safety}/5`, negative: safety < 3 },
       { label: 'Workload', value: `${workload}/5`, negative: workload < 3 },
-      { label: 'Responses', value: `${pulse.n}`, negative: false },
+      { label: 'Responses', value: countLabel, negative: false },
     ],
   };
 }
@@ -285,9 +450,29 @@ export function teamHealth(state, now, { withTrend = true, trendDays = 30 } = {}
     const olderThanCutoff = dated.filter((d) => (daysBetween(d, cutoff) ?? 0) >= 0).length;
     const heldBeforeCutoff = state.oneOnOnes.some((m) => m.status === 'held' && (daysBetween(m.date, cutoff) ?? 0) >= 0);
     if (dateSpanDays(state, now) >= trendDays + 14 && olderThanCutoff >= 2 && heldBeforeCutoff) {
-      const past = teamHealth(truncateState(state, cutoff), new Date(cutoff + 'T00:00:00.000Z'), { withTrend: false });
-      if (typeof past.overall === 'number') {
-        trend = { available: true, delta: round(overall - past.overall, 1), previous: past.overall, reason: null };
+      const reconstructed = reconstructStateAt(state, cutoff, { currentDay: dayKey(now) });
+      const past = teamHealth(reconstructed.state, new Date(cutoff + 'T00:00:00.000Z'), { withTrend: false });
+      const pastByKey = new Map(past.dimensions.map((d) => [d.key, d]));
+      const shared = scored.filter((d) => typeof pastByKey.get(d.key)?.score === 'number');
+      if (typeof past.overall === 'number' && shared.length > 0) {
+        const sharedWeight = shared.reduce((sum, d) => sum + d.weight, 0);
+        const matchedNow = round(shared.reduce((sum, d) => sum + d.score * d.weight, 0) / sharedWeight, 1);
+        const matchedPast = round(shared.reduce((sum, d) => sum + pastByKey.get(d.key).score * d.weight, 0) / sharedWeight, 1);
+        const pastScoredKeys = past.dimensions.filter((d) => typeof d.score === 'number').map((d) => d.key);
+        const coverageChanged = scored.map((d) => d.key).join(',') !== pastScoredKeys.join(',');
+        const approxReasons = shared.flatMap((d) => reconstructed.fidelity[d.key]?.reasons || []);
+        trend = {
+          available: true,
+          delta: round(matchedNow - matchedPast, 1),
+          previous: coverageChanged ? matchedPast : past.overall,
+          rawOverallDelta: round(overall - past.overall, 1),
+          matchedDimensions: shared.map((d) => d.key),
+          coverageChanged,
+          fidelity: approxReasons.length ? 'approximate' : 'exact',
+          reason: null,
+        };
+      } else {
+        trend.reason = 'No shared measured dimensions between now and 30 days ago.';
       }
     } else {
       trend.reason = `Not enough history yet: a ${trendDays}-day trend appears once records are at least ${trendDays + 14} days old.`;

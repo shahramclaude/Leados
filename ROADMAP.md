@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-24 (session 4: conflict lifecycle, pulse privacy and storage safety shipped; 161 automated tests plus real-browser checks).
+Last updated: 2026-10-24 (session 5: Schema v5 dated snapshots, multi-period all-dimension & habit trends, and OWASP CWE-1236 scoped CSV exports shipped; 173 automated tests; real-Chromium execution `[UNVERIFIED]` in Session 5 container).
 
 ---
 
@@ -41,40 +41,45 @@ Last updated: 2026-10-24 (session 4: conflict lifecycle, pulse privacy and stora
 | Evidence-linked performance-review packets with self-reflection and manager assessment | `domain/reviews.js`, `views/reviews.js`, `actions.js` | domain tests + real-dialog create → reflect → assess → complete → export/import test |
 | Review calibration warnings for thin/recency-skewed/one-sided evidence and unsupported ratings | `domain/reviews.js` `calibrateReview` | deterministic `CAL-01`…`CAL-07` tests; completion confirmation exposes warnings |
 | Frozen completion snapshots, reopen/refresh audit history, source drill-down, print/PDF | `actions.js`, `views/reviews.js` | lifecycle tests; all six source routes incl. delegation and completed goal/plan; print-dialog wiring test |
-| Schema v2 review, v3 latency/authorship/delegation and v4 conflict migrations, with dynamic demo protection/cleanup | `core/schema.js`, `core/store.js` | additive v1→v2→v3→v4 migration, reload/import and real/demo preservation tests |
+| Schema v2 review, v3 latency/authorship/delegation, v4 conflict and v5 dated-snapshot migrations, with dynamic demo protection/cleanup | `core/schema.js`, `core/store.js`, `actions.js` | additive v1→v2→v3→v4→v5 migration, null preservation for pre-v5 records, reload/import and real/demo preservation tests |
 | Key-result dialog targets its source goal; development-plan edit preserves the plan | `ui/modals.js`, `actions.js` | UI regression tests for both flows |
 | Development overdue calculations use the injected clock | `domain/growth.js` and callers | regression test with 2019 and 2026 clocks |
-| Accessibility: skip link, dialog keyboard/focus behaviour, live errors, visible disabled controls and navigation contrast | `ui/dom.js`, `ui/conflict-modals.js`, `styles.css` | jsdom keyboard tests; Chromium + axe 4.11: 0 A/AA violations in six checked desktop/mobile states (not an exhaustive certification) |
+| Accessibility: skip link, dialog keyboard/focus behaviour, live errors, visible disabled controls, non-color chart stroke/shape coding and HTML data tables | `ui/dom.js`, `ui/charts.js`, `ui/conflict-modals.js`, `styles.css` | jsdom keyboard + `axe-core` tests on `#/health` and `#/settings` (0 semantic/ARIA/table violations); Session 4 Chromium + axe baseline; Session 5 real-Chromium pixel contrast `[UNVERIFIED]` |
 | Dialogs cannot survive a route change | `app/main.js` | integration test |
 | Roster search that does not steal focus | `views/people.js` | integration test |
-| Conflict listening → explicit agreement → owned results → verified follow-up → resolution, with support handoff/reopening/version history | `domain/conflicts.js`, `conflict-actions.js`, `ui/conflict-modals.js`, `views/conflicts.js` | 29 conflict tests; actual Chromium lifecycle, reload and JSON download/upload roundtrip |
-| Conflict content isolated from health/talent/reviews/agendas/person timelines; general reminders are counts only, including roster-free workspaces | `domain/insights.js`, `views/today.js` | privacy regression assertions and browser route checks |
-| Unsupported/future schemas refused on import and protected on load, original export preserved even after failed replacement | `core/store.js`, `actions.js` | 5 storage-safety tests |
-| Static-server canonical asset allowlist, private-file/symlink/traversal denial and read-only HTTP methods | `scripts/serve.mjs` | 4 actual-HTTP server regression tests incl. an existing scratch backup and symlink alias |
-| Goal/delegation tabs use real filter keys; Settings fallback export Close works | affected views | jsdom and real-browser filter checks; fallback-dialog regression |
-| Responsive navigation and all 15 main screens without horizontal overflow at 390×844 | shared UI/CSS | Chromium mobile sweep; conflict desktop/mobile screenshots inspected |
-| 161 automated tests | `tests/app/**` | `npm test` — 161 pass / 0 fail / 0 skipped |
+| Conflict listening → explicit agreement → owned results → verified follow-up → resolution, with support handoff/reopening/version history | `domain/conflicts.js`, `conflict-actions.js`, `ui/conflict-modals.js`, `views/conflicts.js` | 29 conflict tests |
+| Conflict content isolated from health/talent/reviews/agendas/person timelines/routine CSVs; general reminders are counts only, including roster-free workspaces | `domain/insights.js`, `views/today.js`, `core/csv.js` | privacy regression assertions across views, timelines and all routine CSV scopes |
+| Unsupported/future schemas refused on import and protected on load, original export preserved even after failed replacement; CSV export refused when `writeBlockReason` active | `core/store.js`, `actions.js`, `core/csv.js` | 5 storage-safety tests + CSV future-schema/QuotaExceeded tests |
+| Static-server canonical asset allowlist, private-file/symlink/traversal denial and read-only HTTP methods | `scripts/serve.mjs` | 4 actual-HTTP server regression tests + Session 5 live HTTP module checks |
+| Goal/delegation tabs use real filter keys; Settings fallback export Close works | affected views | jsdom filter checks; fallback-dialog regression |
+| Longitudinal trends across all 5 health dimensions, composite health, feedback latency and delegation follow-through (8w / 12w / 6m) with survivorship-bias fix, matched-dimension deltas and `exact`/`approximate` disclosures | `domain/health.js`, `domain/trends.js`, `ui/charts.js`, `views/health.js`, `views/today.js` | `tests/app/trends.test.mjs` (survivorship bias, Simpson's/coverage-shift guard, pre-history null guard, UI switching, `axe-core`) |
+| Scoped, unknown-preserving, OWASP CWE-1236 formula-safe CSV exports across 13 tables with pulse anonymity/comment floors and confidential conflict confirmation | `core/csv.js`, `core/store.js`, `views/settings.js` | `tests/app/csv.test.mjs` (12 formula vectors incl. full-width Unicode & whitespace, negative numbers, RFC 4180 round-trip, pulse suppression, QuotaExceeded, `axe-core`) |
+| 173 automated tests | `tests/app/**` | `npm test` — 173 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-24T10:00:00Z`): health **54.5 (D)**,
-trend **+1.7** vs 30 days ago, pulse **n=5**, overall **2.55/5**, safety **2.8**, workload
-**2.0**; **32 findings, 10 urgent, 2 wins**. Feedback latency: **4 measured, 3.0d average,
-1 beyond convention**; goals: **3 co-authored, 2 explicitly leader-set**; delegations:
-**2 active, 1 blocked/overdue, 1 check-in due, 1 completed, 1 returned**. No conflict cases
-are fabricated in the demo. The stricter comment policy releases **0 comments**. All 15 main
-routes render without errors; the same routes passed a real-browser mobile overflow sweep.
+30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
+KR snapshots rather than carrying current KR progress backward), pulse **n=5**, overall
+**2.55/5**, safety **2.8**, workload **2.0**; **32 findings, 10 urgent, 2 wins**. Feedback
+latency: **4 measured, 3.0d average, 1 beyond convention**; goals: **3 co-authored, 2
+explicitly leader-set**; delegations: **2 active, 1 blocked/overdue, 1 check-in due, 1
+completed, 1 returned**. No conflict cases are fabricated in the demo. The stricter comment
+policy releases **0 comments**. All 15 main routes render without errors in JSDOM.
 
 ---
 
 ## Next (ordered by value, not by ease)
 
-1. **Team-level trends for every dimension** (not just pulse), with explicit evidence coverage
-   and honest reconstruction limits. Include latency and delegation follow-through only when real
-   dated records support a comparison; do not carry today's values into a fictional past.
-2. **CSV export** alongside full-fidelity JSON, with explicit scope/privacy warnings. Preserve
-   unknowns as blank/unknown, never zero/false; defend spreadsheets against formula injection.
-3. **Optional encryption of the local store.** Passphrase-derived WebCrypto keys, no network,
-   with tested plaintext→encrypted migration, recovery/export and lost-passphrase limitations.
-   Until then, notes/backups are explicitly unencrypted, not an HR confidentiality system.
+1. **Optional encryption of the local store.** Passphrase-derived WebCrypto keys (`PBKDF2` +
+   `AES-GCM`), no network, with tested plaintext→encrypted migration, explicit encrypted/plaintext
+   export choices, and lost-passphrase limitations. Until then, notes/backups are explicitly
+   unencrypted, not an HR confidentiality system.
+2. **Structured 1:1 preparation & printable coaching packet.** Combine generated agenda items,
+   open commitments (1:1, GROW, feedback follow-up, delegation checkpoints) and employee-owned
+   talking points into a clean, shareable single-meeting prep sheet without leaking private
+   conflict records.
+3. **Onboarding 30-60-90 milestone tracker.** Turn the existing first-90-day tenure signal
+   (`ONB-01`) into explicit role-clarity, buddy/stakeholder introduction and early-win
+   checkpoints for new joiners without inventing personality or performance grades.
 
 ---
 
@@ -116,7 +121,12 @@ routes render without errors; the same routes passed a real-browser mobile overf
 
 - Pulse anonymity and independent respondents cannot be guaranteed by a local single-manager workspace. Partial/unanimous/thin-comment windows now suppress more conservatively; that intentional loss of visible data is a safety tradeoff, not a chart regression.
 - Conflict confirmations are manager-entered, not employee signatures or independent testimony. Notes/backups are unencrypted; handoff sends nothing. No real-manager conflict-practice validation has been performed.
-- The health comparison needs usable older evidence and is approximate where edited values lack history. Fresh workspaces show "not enough history"; all-dimension historical series are still next.
+- Historical health checkpoints are `exact` when backed by dated records and Schema v5
+  snapshots, and explicitly labelled `approximate` when pre-v5 or in-place stage edits lack
+  dated history. Fresh workspaces continue to show `pre-history` / "not enough history" rather
+  than inventing past scores. Real-Chromium pixel/mobile verification of the new Session 5
+  trend and CSV surfaces remains `[UNVERIFIED]` in a live browser binary until run outside
+  this container.
 - "Weekly meaningful feedback" is the evidence-backed cadence; the default feedback target is
   21 days because it is achievable. The 7-day latency and delegation-check-in values are
   configurable team conventions, not validated universal cutoffs.

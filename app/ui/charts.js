@@ -96,7 +96,7 @@ export function pulseChart(series, { height = CHART_H } = {}) {
     ),
   );
 
-  const lineFor = (key, color) => {
+  const lineFor = (key, color, { dash = '', shape = 'circle' } = {}) => {
     const segments = [];
     let current = [];
     series.forEach((row, i) => {
@@ -110,22 +110,27 @@ export function pulseChart(series, { height = CHART_H } = {}) {
     });
     if (current.length) segments.push(current);
 
+    const marker = (p) => (shape === 'square'
+      ? h('rect', { x: p.x - 2.6, y: p.y - 2.6, width: 5.2, height: 5.2, fill: color })
+      : h('circle', { cx: p.x, cy: p.y, r: 2.8, fill: color }));
+
     return h(
       'g',
       null,
       ...segments.map((seg) =>
         seg.length === 1
-          ? h('circle', { cx: seg[0].x, cy: seg[0].y, r: 3, fill: color })
+          ? marker(seg[0])
           : h('polyline', {
               points: seg.map((p) => `${p.x},${p.y}`).join(' '),
               fill: 'none',
               stroke: color,
               'stroke-width': 2,
+              'stroke-dasharray': dash,
               'stroke-linejoin': 'round',
               'stroke-linecap': 'round',
             }),
       ),
-      ...segments.flatMap((seg) => seg.map((p) => h('circle', { cx: p.x, cy: p.y, r: 2.6, fill: color }))),
+      ...segments.flatMap((seg) => seg.map((p) => marker(p))),
     );
   };
 
@@ -139,9 +144,14 @@ export function pulseChart(series, { height = CHART_H } = {}) {
 
   const blocked = series.filter((r) => r.blocked);
   const lastWithData = [...series].reverse().find((r) => typeof r.overall === 'number');
+  const lastCountText = lastWithData
+    ? (typeof lastWithData.usableResponses === 'number' && lastWithData.usableResponses !== lastWithData.n
+      ? `${lastWithData.usableResponses} complete responses (${lastWithData.n} total)`
+      : `${lastWithData.n} responses`)
+    : '';
   const summary = [
     `Pulse trend over ${series.length} weeks.`,
-    lastWithData ? `Latest readable week ${lastWithData.weekStart}: overall ${lastWithData.overall}/5 from ${lastWithData.n} responses.` : 'No week had enough responses to report.',
+    lastWithData ? `Latest readable week ${lastWithData.weekStart}: overall ${lastWithData.overall}/5 from ${lastCountText}.` : 'No week had enough responses to report.',
     blocked.length ? `${blocked.length} week(s) suppressed for anonymity.` : '',
   ]
     .filter(Boolean)
@@ -154,15 +164,15 @@ export function pulseChart(series, { height = CHART_H } = {}) {
       'svg',
       { viewBox: `0 0 ${width} ${height}`, class: 'chart-svg', role: 'img', 'aria-label': summary },
       ...grid,
-      lineFor('safety', 'var(--accent-2)'),
-      lineFor('overall', 'var(--accent)'),
+      lineFor('safety', 'var(--accent-2)', { dash: '5 3', shape: 'square' }),
+      lineFor('overall', 'var(--accent)', { dash: '', shape: 'circle' }),
       ...labels,
     ),
     h(
       'figcaption',
       { class: 'chart-legend' },
-      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--accent)' } }), 'Overall'),
-      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--accent-2)' } }), 'Safety'),
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--accent)' } }), 'Overall (solid)'),
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-swatch legend-swatch-dashed', style: { borderColor: 'var(--accent-2)' } }), 'Safety (dashed)'),
       blocked.length ? h('span', { class: 'legend-note' }, `${blocked.length} week(s) hidden below the anonymity floor`) : null,
     ),
     h('p', { class: 'sr-only' }, summary),
@@ -222,5 +232,353 @@ export function sparkline(values, { width = 120, height = 32, color = 'var(--acc
     'svg',
     { viewBox: `0 0 ${width} ${height}`, width, height, class: 'spark', 'aria-hidden': 'true' },
     h('polyline', { points, fill: 'none', stroke: color, 'stroke-width': 1.8, 'stroke-linejoin': 'round' }),
+  );
+}
+
+export const SERIES_STYLES = {
+  overall: { color: '#0f6b5c', dash: '', shape: 'circle', strokeWidth: 2.6, patternLabel: 'solid circle' },
+  cadence: { color: '#4a6fa5', dash: '', shape: 'square', strokeWidth: 2, patternLabel: 'solid square' },
+  feedback: { color: '#8a5609', dash: '6 3', shape: 'diamond', strokeWidth: 2, patternLabel: 'dashed diamond' },
+  clarity: { color: '#2d5a7b', dash: '2 3', shape: 'triangle', strokeWidth: 2, patternLabel: 'dotted triangle' },
+  growth: { color: '#6b4c8c', dash: '7 3 2 3', shape: 'circle', strokeWidth: 2, patternLabel: 'dash-dot circle' },
+  wellbeing: { color: '#a02f29', dash: '4 4', shape: 'square', strokeWidth: 2, patternLabel: 'short-dash square' },
+  delegation: { color: '#0f6b5c', dash: '', shape: 'circle', strokeWidth: 2.2, patternLabel: 'solid circle' },
+};
+
+function renderSeriesMarker(pt, style) {
+  const hollow = pt.fidelity === 'approximate';
+  const fill = hollow ? 'var(--panel)' : style.color;
+  const strokeProps = { stroke: style.color, 'stroke-width': hollow ? 2 : 1.2 };
+  if (style.shape === 'square') {
+    return h('rect', { x: pt.x - 3, y: pt.y - 3, width: 6, height: 6, fill, ...strokeProps });
+  }
+  if (style.shape === 'diamond') {
+    return h('polygon', {
+      points: `${pt.x},${pt.y - 3.8} ${pt.x + 3.8},${pt.y} ${pt.x},${pt.y + 3.8} ${pt.x - 3.8},${pt.y}`,
+      fill,
+      ...strokeProps,
+    });
+  }
+  if (style.shape === 'triangle') {
+    return h('polygon', {
+      points: `${pt.x},${pt.y - 4} ${pt.x + 3.8},${pt.y + 3} ${pt.x - 3.8},${pt.y + 3}`,
+      fill,
+      ...strokeProps,
+    });
+  }
+  return h('circle', { cx: pt.x, cy: pt.y, r: 3.2, fill, ...strokeProps });
+}
+
+/**
+ * Multi-series 0–100 trend chart with non-color stroke/shape encoding,
+ * hollow markers for approximate reconstructions, gap preservation for
+ * suppressed/unmeasured periods, and an accessible HTML data table.
+ */
+export function trendChart(periods, seriesList, { height = 220, title = 'Health trends', unit = '/100' } = {}) {
+  if (!periods || !periods.length || !seriesList || !seriesList.length) {
+    return h('p', { class: 'muted' }, 'No historical checkpoints available yet.');
+  }
+  const width = CHART_W;
+  const pad = { top: 16, right: 20, bottom: 30, left: 38 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const yFor = (v) => pad.top + innerH - (Math.max(0, Math.min(100, v)) / 100) * innerH;
+  const xFor = (i) => pad.left + (periods.length === 1 ? innerW / 2 : (i / (periods.length - 1)) * innerW);
+
+  const grid = [0, 25, 50, 75, 100].map((tick) =>
+    h(
+      'g',
+      null,
+      h('line', {
+        x1: pad.left,
+        x2: width - pad.right,
+        y1: yFor(tick),
+        y2: yFor(tick),
+        stroke: 'var(--line)',
+        'stroke-width': tick === 50 || tick === 75 ? 1 : 0.6,
+        'stroke-dasharray': tick === 75 ? '' : '3 4',
+      }),
+      h('text', { x: pad.left - 8, y: yFor(tick) + 4, 'text-anchor': 'end', class: 'chart-tick' }, String(tick)),
+    ),
+  );
+
+  let hasApproximate = false;
+  let suppressedCount = 0;
+
+  const renderedSeries = seriesList.map((serie) => {
+    const style = SERIES_STYLES[serie.key] || SERIES_STYLES.overall;
+    const segments = [];
+    let current = [];
+    serie.values.forEach((cell, idx) => {
+      if (cell && cell.status === 'suppressed') suppressedCount += 1;
+      if (cell && typeof cell.value === 'number') {
+        if (cell.fidelity === 'approximate') hasApproximate = true;
+        current.push({
+          x: xFor(idx),
+          y: yFor(cell.value),
+          v: cell.value,
+          fidelity: cell.fidelity || 'exact',
+        });
+      } else if (current.length) {
+        segments.push(current);
+        current = [];
+      }
+    });
+    if (current.length) segments.push(current);
+
+    return h(
+      'g',
+      { 'data-series': serie.key },
+      ...segments.map((seg) => (
+        seg.length === 1
+          ? null
+          : h('polyline', {
+              points: seg.map((p) => `${p.x},${p.y}`).join(' '),
+              fill: 'none',
+              stroke: style.color,
+              'stroke-width': style.strokeWidth,
+              'stroke-dasharray': style.dash,
+              'stroke-linejoin': 'round',
+              'stroke-linecap': 'round',
+            })
+      )),
+      ...segments.flatMap((seg) => seg.map((p) => renderSeriesMarker(p, style))),
+    );
+  });
+
+  const xLabels = periods.map((p, idx) =>
+    h(
+      'text',
+      { x: xFor(idx), y: height - 8, 'text-anchor': 'middle', class: 'chart-tick' },
+      p.label,
+    ),
+  );
+
+  const summaryParts = [`${title} across ${periods.length} checkpoints (${periods[0].label} to ${periods[periods.length - 1].label}).`];
+  for (const serie of seriesList) {
+    const measured = serie.values.filter((c) => c && typeof c.value === 'number');
+    if (measured.length) {
+      const latest = measured[measured.length - 1];
+      summaryParts.push(`${serie.label}: latest ${Math.round(latest.value)}${unit} (${measured.length}/${periods.length} checkpoints measured).`);
+    } else {
+      summaryParts.push(`${serie.label}: not yet measurable.`);
+    }
+  }
+  if (suppressedCount > 0) summaryParts.push(`${suppressedCount} checkpoint(s) suppressed for pulse anonymity.`);
+  if (hasApproximate) summaryParts.push('Hollow markers denote approximate historical checkpoints.');
+  const summary = summaryParts.join(' ');
+
+  const formatCell = (cell) => {
+    if (!cell || cell.value === null || cell.value === undefined) {
+      if (cell?.status === 'suppressed') return 'Hidden (privacy)';
+      if (cell?.status === 'pre-history') return 'Before records';
+      return '—';
+    }
+    const base = `${Math.round(cell.value * 10) / 10}${unit}`;
+    return cell.fidelity === 'approximate' ? `${base} (approx.)` : base;
+  };
+
+  return h(
+    'figure',
+    { class: 'chart' },
+    h(
+      'svg',
+      { viewBox: `0 0 ${width} ${height}`, class: 'chart-svg', role: 'img', 'aria-label': summary },
+      ...grid,
+      ...renderedSeries,
+      ...xLabels,
+    ),
+    h(
+      'figcaption',
+      { class: 'chart-legend' },
+      ...seriesList.map((serie) => {
+        const style = SERIES_STYLES[serie.key] || SERIES_STYLES.overall;
+        return h(
+          'span',
+          { class: 'legend-item' },
+          h('span', {
+            class: `legend-swatch ${style.dash ? 'legend-swatch-dashed' : ''}`,
+            style: { borderColor: style.color, background: style.dash ? 'transparent' : style.color },
+          }),
+          `${serie.label}`,
+        );
+      }),
+      hasApproximate ? h('span', { class: 'legend-note' }, 'Hollow point = approximate history') : null,
+      suppressedCount > 0 ? h('span', { class: 'legend-note' }, 'Gaps = suppressed or unmeasured') : null,
+    ),
+    h(
+      'details',
+      { class: 'chart-table-details' },
+      h('summary', null, `Data table: ${title}`),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table' },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Series'),
+              ...periods.map((p) => h('th', { scope: 'col' }, p.label)),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...seriesList.map((serie) =>
+              h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, serie.label),
+                ...serie.values.map((cell) => h('td', null, formatCell(cell))),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Feedback observation-to-conversation latency chart (lower is faster) with
+ * target convention line and accessible data table.
+ */
+export function latencyChart(points, { targetDays = 7, height = 188 } = {}) {
+  if (!points || !points.length) {
+    return h('p', { class: 'muted' }, 'No feedback windows yet.');
+  }
+  const width = CHART_W;
+  const pad = { top: 18, right: 20, bottom: 30, left: 38 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const measuredValues = points.map((p) => p.averageDays).filter((v) => typeof v === 'number');
+  const maxY = Math.max(targetDays + 3, 10, ...measuredValues.map((v) => Math.ceil(v + 1)));
+  const yFor = (v) => pad.top + innerH - (Math.max(0, Math.min(maxY, v)) / maxY) * innerH;
+  const xFor = (i) => pad.left + (points.length === 1 ? innerW / 2 : (i / (points.length - 1)) * innerW);
+
+  const ticks = [0, targetDays, maxY].filter((v, idx, arr) => arr.indexOf(v) === idx).sort((a, b) => a - b);
+  const grid = ticks.map((tick) =>
+    h(
+      'g',
+      null,
+      h('line', {
+        x1: pad.left,
+        x2: width - pad.right,
+        y1: yFor(tick),
+        y2: yFor(tick),
+        stroke: tick === targetDays ? 'var(--warn)' : 'var(--line)',
+        'stroke-width': tick === targetDays ? 1.2 : 0.7,
+        'stroke-dasharray': tick === targetDays ? '5 3' : '2 4',
+      }),
+      h('text', { x: pad.left - 8, y: yFor(tick) + 4, 'text-anchor': 'end', class: 'chart-tick' }, `${tick}d`),
+    ),
+  );
+
+  const segments = [];
+  let current = [];
+  points.forEach((p, idx) => {
+    if (typeof p.averageDays === 'number') {
+      current.push({ x: xFor(idx), y: yFor(p.averageDays), v: p.averageDays, over: p.averageDays > targetDays });
+    } else if (current.length) {
+      segments.push(current);
+      current = [];
+    }
+  });
+  if (current.length) segments.push(current);
+
+  const latest = [...points].reverse().find((p) => typeof p.averageDays === 'number');
+  const summary = [
+    `Feedback observation-to-conversation latency over ${points.length} periods (convention ${targetDays} days or fewer).`,
+    latest ? `Latest measured window (${latest.label}): ${latest.averageDays} days average across ${latest.measured} note(s).` : 'No given feedback with an observed date yet.',
+  ].join(' ');
+
+  return h(
+    'figure',
+    { class: 'chart' },
+    h(
+      'svg',
+      { viewBox: `0 0 ${width} ${height}`, class: 'chart-svg', role: 'img', 'aria-label': summary },
+      ...grid,
+      ...segments.map((seg) => (
+        seg.length === 1
+          ? null
+          : h('polyline', {
+              points: seg.map((p) => `${p.x},${p.y}`).join(' '),
+              fill: 'none',
+              stroke: '#4a6fa5',
+              'stroke-width': 2.2,
+              'stroke-linejoin': 'round',
+              'stroke-linecap': 'round',
+            })
+      )),
+      ...segments.flatMap((seg) =>
+        seg.map((p) =>
+          h('circle', {
+            cx: p.x,
+            cy: p.y,
+            r: 3.6,
+            fill: p.over ? 'var(--warn)' : 'var(--accent)',
+            stroke: 'var(--panel)',
+            'stroke-width': 1.2,
+          }),
+        ),
+      ),
+      ...points.map((p, idx) =>
+        h('text', { x: xFor(idx), y: height - 8, 'text-anchor': 'middle', class: 'chart-tick' }, p.label),
+      ),
+    ),
+    h(
+      'figcaption',
+      { class: 'chart-legend' },
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--accent)' } }), `Within ${targetDays}d convention`),
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--warn)' } }), `Above ${targetDays}d`),
+      h('span', { class: 'legend-note' }, 'Gaps = no observed-date samples in window'),
+    ),
+    h(
+      'details',
+      { class: 'chart-table-details' },
+      h('summary', null, 'Data table: Feedback latency'),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table' },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Period end'),
+              h('th', { scope: 'col' }, 'Avg latency'),
+              h('th', { scope: 'col' }, 'Measured'),
+              h('th', { scope: 'col' }, 'Missing observed date'),
+              h('th', { scope: 'col' }, `Above ${targetDays}d`),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...points.map((p) =>
+              h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, p.label),
+                h('td', null, typeof p.averageDays === 'number' ? `${p.averageDays}d` : p.status === 'pre-history' ? 'Before records' : '—'),
+                h('td', null, String(p.measured)),
+                h('td', null, String(p.unmeasured)),
+                h('td', null, p.measured > 0 ? String(p.delayed) : '—'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 }

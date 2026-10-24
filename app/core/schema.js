@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -198,6 +198,7 @@ function normalizeActions(items) {
       text: str(a.text).slice(0, 300),
       due: dayOrNull(a.due),
       done: a.done === true,
+      completedOn: a.done === true ? calendarDayOrNull(a.completedOn) : null,
       personId: str(a.personId),
     }))
     .filter((a) => a.text);
@@ -210,12 +211,17 @@ function normalizeKeyResults(items) {
     .map((k, i) => {
       const start = num(k.start, 0);
       const target = num(k.target, 100);
+      const current = num(k.current, start);
+      const initialCurrent = k.initialCurrent === null || k.initialCurrent === undefined || typeof k.initialCurrent === 'boolean' || (typeof k.initialCurrent === 'string' && !k.initialCurrent.trim())
+        ? null
+        : num(k.initialCurrent, null);
       return {
         id: str(k.id) || `kr-${i}`,
         title: str(k.title).slice(0, 200),
         start,
         target,
-        current: num(k.current, start),
+        current,
+        initialCurrent,
         unit: str(k.unit, '').slice(0, 12),
       };
     })
@@ -363,6 +369,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     observedOn: calendarDayOrNull(f.observedOn),
     followUpOn: dayOrNull(f.followUpOn),
     followUpDone: f.followUpDone === true,
+    followUpCompletedOn: f.followUpDone === true ? calendarDayOrNull(f.followUpCompletedOn) : null,
     createdAt: isoOrNull(f.createdAt) || now,
   }));
   state.feedback = uniqueIds(feedback, 'Feedback', warnings);
@@ -374,30 +381,44 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   const rawGoals = asArray(raw, 'goals', warnings);
   const invalidGoalAuthorship = rawGoals.filter((g) => g.coAuthored !== null && g.coAuthored !== undefined && typeof g.coAuthored !== 'boolean').length;
   if (invalidGoalAuthorship) warnings.push(`Goals: ${invalidGoalAuthorship} invalid authorship value(s) were left unknown`);
-  const goals = rawGoals.map((g, i) => ({
-    id: str(g.id) || `goal-${i}`,
-    title: str(g.title).slice(0, 200),
-    description: str(g.description).slice(0, 4000),
-    ownerId: g.ownerId ? str(g.ownerId) : null,
-    scope: g.scope === 'team' ? 'team' : 'person',
-    // Tri-state: true = co-authored, false = explicitly leader-set, null = unknown/N/A.
-    coAuthored: g.ownerId ? (g.coAuthored === true ? true : g.coAuthored === false ? false : null) : null,
-    dueDate: dayOrNull(g.dueDate),
-    keyResults: normalizeKeyResults(g.keyResults),
-    confidence: CONFIDENCE.includes(g.confidence) ? g.confidence : 'on-track',
-    status: ['active', 'done', 'dropped'].includes(g.status) ? g.status : 'active',
-    checkins: Array.isArray(g.checkins)
-      ? g.checkins
-          .filter(isPlainObject)
-          .map((c, k) => ({
-            id: str(c.id) || `chk-${k}`,
-            date: dayOrNull(c.date) || now.slice(0, 10),
-            note: str(c.note).slice(0, 2000),
-            confidence: CONFIDENCE.includes(c.confidence) ? c.confidence : 'on-track',
-          }))
-      : [],
-    createdAt: isoOrNull(g.createdAt) || now,
-  }));
+  const goals = rawGoals.map((g, i) => {
+    const status = ['active', 'done', 'dropped'].includes(g.status) ? g.status : 'active';
+    return {
+      id: str(g.id) || `goal-${i}`,
+      title: str(g.title).slice(0, 200),
+      description: str(g.description).slice(0, 4000),
+      ownerId: g.ownerId ? str(g.ownerId) : null,
+      scope: g.scope === 'team' ? 'team' : 'person',
+      // Tri-state: true = co-authored, false = explicitly leader-set, null = unknown/N/A.
+      coAuthored: g.ownerId ? (g.coAuthored === true ? true : g.coAuthored === false ? false : null) : null,
+      dueDate: dayOrNull(g.dueDate),
+      keyResults: normalizeKeyResults(g.keyResults),
+      confidence: CONFIDENCE.includes(g.confidence) ? g.confidence : 'on-track',
+      initialConfidence: CONFIDENCE.includes(g.initialConfidence) ? g.initialConfidence : null,
+      status,
+      completedOn: status === 'done' ? calendarDayOrNull(g.completedOn) : null,
+      krUpdatedOn: calendarDayOrNull(g.krUpdatedOn),
+      checkins: Array.isArray(g.checkins)
+        ? g.checkins
+            .filter(isPlainObject)
+            .map((c, k) => ({
+              id: str(c.id) || `chk-${k}`,
+              date: dayOrNull(c.date) || now.slice(0, 10),
+              note: str(c.note).slice(0, 2000),
+              confidence: CONFIDENCE.includes(c.confidence) ? c.confidence : 'on-track',
+              progressPct: typeof c.progressPct === 'number' && Number.isFinite(c.progressPct)
+                ? Math.min(100, Math.max(0, Math.round(c.progressPct)))
+                : null,
+              keyResults: Array.isArray(c.keyResults)
+                ? c.keyResults
+                    .filter((kr) => isPlainObject(kr) && str(kr.id) && typeof kr.current === 'number' && Number.isFinite(kr.current))
+                    .map((kr) => ({ id: str(kr.id), current: kr.current }))
+                : null,
+            }))
+        : [],
+      createdAt: isoOrNull(g.createdAt) || now,
+    };
+  });
   state.goals = uniqueIds(goals.filter((g) => g.title), 'Goals', warnings);
 
   let droppedDelegationCheckins = 0;
@@ -451,22 +472,27 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
 
   state.conflicts = normalizeConflicts(raw.conflicts, warnings, now);
 
-  const growthPlans = asArray(raw, 'growthPlans', warnings).map((p, i) => ({
-    id: str(p.id) || `gp-${i}`,
-    personId: str(p.personId),
-    goal: str(p.goal).slice(0, 2000),
-    reality: str(p.reality).slice(0, 2000),
-    options: Array.isArray(p.options)
-      ? p.options.filter(isPlainObject).map((o, k) => ({ id: str(o.id) || `opt-${k}`, text: str(o.text).slice(0, 400) })).filter((o) => o.text)
-      : [],
-    will: normalizeActions(p.will),
-    competencies: Array.isArray(p.competencies)
-      ? p.competencies.filter((c) => typeof c === 'string').slice(0, 12)
-      : [],
-    reviewOn: dayOrNull(p.reviewOn),
-    status: p.status === 'done' ? 'done' : 'active',
-    createdAt: isoOrNull(p.createdAt) || now,
-  }));
+  const growthPlans = asArray(raw, 'growthPlans', warnings).map((p, i) => {
+    const status = p.status === 'done' ? 'done' : 'active';
+    return {
+      id: str(p.id) || `gp-${i}`,
+      personId: str(p.personId),
+      goal: str(p.goal).slice(0, 2000),
+      reality: str(p.reality).slice(0, 2000),
+      options: Array.isArray(p.options)
+        ? p.options.filter(isPlainObject).map((o, k) => ({ id: str(o.id) || `opt-${k}`, text: str(o.text).slice(0, 400) })).filter((o) => o.text)
+        : [],
+      will: normalizeActions(p.will),
+      competencies: Array.isArray(p.competencies)
+        ? p.competencies.filter((c) => typeof c === 'string').slice(0, 12)
+        : [],
+      reviewOn: dayOrNull(p.reviewOn),
+      status,
+      closedOn: status === 'done' ? calendarDayOrNull(p.closedOn) : null,
+      stagesUpdatedOn: calendarDayOrNull(p.stagesUpdatedOn),
+      createdAt: isoOrNull(p.createdAt) || now,
+    };
+  });
   state.growthPlans = uniqueIds(growthPlans.filter((p) => p.goal), 'Growth plans', warnings);
 
   const pulses = asArray(raw, 'pulses', warnings).map((p, i) => ({
@@ -590,11 +616,77 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Versions 2–4 add records and nullable context without
+ * the next one. Versions 2–5 add records and nullable context without
  * changing the storage key, so an existing workspace upgrades in place.
- * Unknown observation dates and goal authorship stay null, never false/zero.
+ * Unknown historical dates, snapshots and goal authorship stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  4: (v4) => ({
+    ...v4,
+    schemaVersion: 5,
+    feedback: Array.isArray(v4.feedback)
+      ? v4.feedback.map((item) => (isPlainObject(item)
+          ? {
+              ...item,
+              followUpCompletedOn: item.followUpDone === true && typeof item.followUpCompletedOn === 'string' ? item.followUpCompletedOn : null,
+            }
+          : item))
+      : v4.feedback,
+    goals: Array.isArray(v4.goals)
+      ? v4.goals.map((goal) => {
+          if (!isPlainObject(goal)) return goal;
+          const hasCheckins = Array.isArray(goal.checkins) && goal.checkins.length > 0;
+          return {
+            ...goal,
+            initialConfidence: CONFIDENCE.includes(goal.initialConfidence)
+              ? goal.initialConfidence
+              : !hasCheckins && CONFIDENCE.includes(goal.confidence)
+                ? goal.confidence
+                : null,
+            completedOn: goal.status === 'done' && typeof goal.completedOn === 'string' ? goal.completedOn : null,
+            krUpdatedOn: typeof goal.krUpdatedOn === 'string' ? goal.krUpdatedOn : null,
+            keyResults: Array.isArray(goal.keyResults)
+              ? goal.keyResults.map((kr) => (isPlainObject(kr)
+                  ? {
+                      ...kr,
+                      initialCurrent: typeof kr.initialCurrent === 'number' && Number.isFinite(kr.initialCurrent)
+                        ? kr.initialCurrent
+                        : !hasCheckins && typeof kr.current === 'number' && Number.isFinite(kr.current)
+                          ? kr.current
+                          : null,
+                    }
+                  : kr))
+              : goal.keyResults,
+            checkins: Array.isArray(goal.checkins)
+              ? goal.checkins.map((c) => (isPlainObject(c)
+                  ? {
+                      ...c,
+                      progressPct: typeof c.progressPct === 'number' && Number.isFinite(c.progressPct) ? c.progressPct : null,
+                      keyResults: Array.isArray(c.keyResults) ? c.keyResults : null,
+                    }
+                  : c))
+              : goal.checkins,
+          };
+        })
+      : v4.goals,
+    growthPlans: Array.isArray(v4.growthPlans)
+      ? v4.growthPlans.map((plan) => (isPlainObject(plan)
+          ? {
+              ...plan,
+              closedOn: plan.status === 'done' && typeof plan.closedOn === 'string' ? plan.closedOn : null,
+              stagesUpdatedOn: typeof plan.stagesUpdatedOn === 'string' ? plan.stagesUpdatedOn : null,
+              will: Array.isArray(plan.will)
+                ? plan.will.map((w) => (isPlainObject(w)
+                    ? {
+                        ...w,
+                        completedOn: w.done === true && typeof w.completedOn === 'string' ? w.completedOn : null,
+                      }
+                    : w))
+                : plan.will,
+            }
+          : plan))
+      : v4.growthPlans,
+  }),
   3: (v3) => ({ ...v3, schemaVersion: 4, conflicts: Array.isArray(v3.conflicts) ? v3.conflicts : [] }),
   1: (v1) => ({ ...v1, schemaVersion: 2, reviews: Array.isArray(v1.reviews) ? v1.reviews : [] }),
   2: (v2) => ({

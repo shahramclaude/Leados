@@ -14,6 +14,7 @@
 
 import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION, COLLECTIONS } from './schema.js';
 import { buildDemoState } from './demo.js';
+import { exportWorkspaceCsv } from './csv.js';
 
 export const STORAGE_KEY = 'leados.lifecycle.v1';
 export const QUARANTINE_PREFIX = 'leados.corrupt.';
@@ -241,6 +242,22 @@ export function createStore(options = {}) {
     );
   }
 
+  /**
+   * Read-only scoped CSV export. Refuses when storage contains a newer,
+   * unparsed schema blob so the user is never handed an empty CSV for data
+   * still safely held in `protectedRaw`.
+   */
+  function exportCSV(scope) {
+    if (writeBlockReason) {
+      return {
+        ok: false,
+        reason: 'unsupported-schema',
+        error: `${writeBlockReason} Use Export JSON to download the untouched original file.`,
+      };
+    }
+    return exportWorkspaceCsv(state, scope, { now: now() });
+  }
+
   function reset() {
     const empty = createEmptyState(now().toISOString());
     if (!persist(empty, { replaceProtected: true }) && writeBlockReason) { notify('reset-blocked'); return state; }
@@ -338,6 +355,7 @@ export function createStore(options = {}) {
     update,
     importJSON,
     exportJSON,
+    exportCSV,
     reset,
     seedDemo,
     clearDemo,

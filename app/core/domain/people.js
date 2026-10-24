@@ -113,6 +113,17 @@ export function personTimeline(state, personId) {
   for (const r of state.recognition.filter((x) => x.personId === personId)) {
     items.push({ kind: 'Recognition', id: r.id, date: r.date, title: 'Recognised', detail: r.what });
   }
+  for (const d of (state.delegations || []).filter((x) => x.personId === personId)) {
+    if (d.delegatedOn) {
+      items.push({ kind: 'Delegation', id: d.id, date: d.delegatedOn, title: `Delegated: ${d.title}`, detail: d.expectedOutcome || '' });
+    }
+    if (d.status === 'done' && d.completedOn) {
+      items.push({ kind: 'Delegation completed', id: `${d.id}-done`, date: d.completedOn, title: `Completed delegation: ${d.title}`, detail: d.completionNote || '' });
+    }
+    if (d.status === 'returned' && d.returnedOn) {
+      items.push({ kind: 'Delegation returned', id: `${d.id}-returned`, date: d.returnedOn, title: `Returned delegation: ${d.title}`, detail: d.returnReason || '' });
+    }
+  }
   for (const review of (state.reviews || []).filter((r) => r.personId === personId)) {
     items.push({
       kind: 'Performance review', id: review.id, date: review.completedAt || review.updatedAt,
