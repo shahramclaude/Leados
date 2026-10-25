@@ -62,6 +62,9 @@ function commitmentGroup(title, items, renderItem) {
 
 function itemMeta(item) {
   const bits = [];
+  if (item.source === '1:1 action') {
+    bits.push(item.owner === 'leader' ? 'you owe it' : item.owner === 'them' ? 'they owe it' : item.owner === 'shared' ? 'shared' : 'no owner named');
+  }
   if (item.carryCount) {
     bits.push(`carried forward ${item.carryCount}×${item.firstAgreedOn ? ` since ${formatDate(item.firstAgreedOn, { withYear: false })}` : ''}`);
   }
@@ -230,11 +233,16 @@ export function renderPrepSheet(ctx, personId) {
     body: agendaList(sheet.agenda),
   });
 
-  const { commitments, commitmentCount } = sheet;
+  const { commitments, commitmentCount, mineCount, unownedCount } = sheet;
   const commitmentsCard = card({
     title: 'Open commitments',
     subtitle: commitmentCount
-      ? `${commitmentCount} still open, grouped by where they came from. Overdue first; promises carried forward more than once are marked.`
+      ? [
+          `${commitmentCount} still open, grouped by where they came from.`,
+          mineCount ? `${mineCount} of the 1:1 promises are yours to do.` : null,
+          unownedCount ? `${unownedCount} have no owner named.` : null,
+          'Overdue first; promises carried forward more than once are marked.',
+        ].filter(Boolean).join(' ')
       : 'Nothing promised and still open.',
     body: commitmentCount
       ? h(

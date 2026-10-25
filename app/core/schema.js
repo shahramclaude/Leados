@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -24,6 +24,16 @@ export const LEVEL_LABELS = {
   director: 'Director',
   vp: 'VP / Executive',
 };
+
+/**
+ * Who owes a 1:1 commitment. There are exactly two people in the room, so the
+ * vocabulary is deliberately small: the report, the leader, or both.
+ *
+ * `null` is a first-class value meaning "not recorded". It is never silently
+ * replaced with a guess: an unrecorded owner is a real gap in a leader's
+ * follow-through system, and the app surfaces it rather than papering over it.
+ */
+export const ACTION_OWNERS = ['them', 'leader', 'shared'];
 
 export const PULSE_DIMENSIONS = ['safety', 'clarity', 'workload', 'growth'];
 export const PULSE_LABELS = {
@@ -231,10 +241,14 @@ function normalizeAgenda(items) {
  *                         explicitly moved into a later meeting
  *   carriedTo*            the successor, set on the original at the same time
  *   dropped*              an explicit decision not to do it, with the reason
+ *   owner                 who owes it (`them` / `leader` / `shared` / null)
  * A promise can be done, dropped or carried forward — never two at once.
  * `done` wins because a completion is evidence; a stale link is not.
+ *
+ * `owner` is only written where ownership is meaningful (1:1 actions). A GROW
+ * "will" action is the report's by definition, so it is not given the field.
  */
-function normalizeActions(items) {
+function normalizeActions(items, { withOwner = false } = {}) {
   if (!Array.isArray(items)) return [];
   return items
     .filter(isPlainObject)
@@ -256,6 +270,13 @@ function normalizeActions(items) {
         droppedReason: dropped ? str(a.droppedReason).slice(0, 300) : '',
         droppedInMeetingId: dropped ? str(a.droppedInMeetingId) || null : null,
         personId: str(a.personId),
+        // Keep a corrupted value as text so `auditActionOwners` can report the
+        // repair rather than silently swallowing it.
+        ...(withOwner ? {
+          owner: a.owner === null || a.owner === undefined || a.owner === ''
+            ? null
+            : String(a.owner).trim().toLowerCase() || null,
+        } : {}),
         carriedFrom,
         carriedToMeetingId: done || dropped ? null : str(a.carriedToMeetingId) || null,
         carriedToActionId: done || dropped ? null : str(a.carriedToActionId) || null,
@@ -379,6 +400,25 @@ function dedupeActionIds(meetings, warnings) {
     });
   }
   if (dropped) warnings.push(`1:1s: dropped ${dropped} duplicate action id(s)`);
+}
+
+/**
+ * Ownership is only meaningful in the vocabulary above. Anything else (a
+ * hand-edited file, a value from a future version, `true`) becomes "not
+ * recorded" and is reported — quietly guessing who owes a promise would put a
+ * fabricated name against a real person's commitment.
+ */
+function auditActionOwners(meetings, warnings) {
+  let cleared = 0;
+  for (const meeting of meetings) {
+    for (const action of meeting.actions) {
+      if (action.owner === null || action.owner === undefined) continue;
+      if (ACTION_OWNERS.includes(action.owner)) continue;
+      action.owner = null;
+      cleared += 1;
+    }
+  }
+  if (cleared) warnings.push(`1:1s: cleared ${cleared} unrecognised commitment owner(s)`);
 }
 
 /**
@@ -635,12 +675,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     mood: m.mood === null || m.mood === undefined ? null : clampInt(m.mood, 1, 5, 3),
     agenda: normalizeAgenda(m.agenda),
     notes: str(m.notes).slice(0, 20000),
-    actions: normalizeActions(m.actions),
+    actions: normalizeActions(m.actions, { withOwner: true }),
     createdAt: isoOrNull(m.createdAt) || now,
   }));
   state.oneOnOnes = uniqueIds(oneOnOnes, '1:1s', warnings);
   dedupeActionIds(state.oneOnOnes, warnings);
   repairCarryChains(state.oneOnOnes, warnings);
+  auditActionOwners(state.oneOnOnes, warnings);
 
   const rawFeedback = asArray(raw, 'feedback', warnings);
   const feedback = rawFeedback.map((f, i) => ({
@@ -944,12 +985,34 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Versions 2–7 add records and nullable context without
+ * the next one. Versions 2–8 add records and nullable context without
  * changing the storage key, so an existing workspace upgrades in place.
  * Unknown historical dates, snapshots, goal authorship and follow-through
  * links stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  7: (v7) => ({
+    ...v7,
+    schemaVersion: 8,
+    oneOnOnes: Array.isArray(v7.oneOnOnes)
+      ? v7.oneOnOnes.map((meeting) => (isPlainObject(meeting)
+          ? {
+              ...meeting,
+              actions: Array.isArray(meeting.actions)
+                ? meeting.actions.map((action) => (isPlainObject(action)
+                    ? {
+                        ...action,
+                        // v7 never asked who owed a promise, so `null` is the
+                        // honest value. A file already relabelled v8 keeps a
+                        // valid owner rather than losing it.
+                        owner: ACTION_OWNERS.includes(action.owner) ? action.owner : null,
+                      }
+                    : action))
+                : meeting.actions,
+            }
+          : meeting))
+      : v7.oneOnOnes,
+  }),
   6: (v6) => ({
     ...v6,
     schemaVersion: 7,

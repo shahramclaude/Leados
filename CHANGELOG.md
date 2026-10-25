@@ -15,6 +15,17 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Commitment ownership (Schema v8).** Every 1:1 action now records who owes it — `them`,
+  `leader` or `shared` — or stays explicitly unrecorded, which the board counts rather than
+  guessing. A promise carried into a later 1:1 keeps its owner; reassigning one is a separate,
+  audited action (`oneonone.action.owner`) that refuses closed promises and already-carried
+  originals. The actions CSV carries a truthful `owner` column (blank when unrecorded, absent for
+  GROW commitments) and the printable prep sheet marks who owes each promise.
+- **A private "What you owe" list.** Today gains a card listing the leader's own open promises with
+  a one-click Done and a 1:1 shortcut; the 1:1 board gains an "I owe" stat and an inline owner
+  select (accented when the promise is the leader's). Signal `CONV-07` fires per person when the
+  leader is late on a promise they own, at severity 3 — or 4 when one person is waiting on more
+  than one.
 - **1:1 follow-through ledger (Schema v7).** Logging a 1:1 now opens with the previous meeting's
   open promises and records an explicit outcome for each: done in this conversation, still open,
   carried forward with a new date, or dropped with a reason. The original action keeps a link to
@@ -38,8 +49,10 @@ file therefore starts at the first version that can be verified against real cod
 - 113 canonical domain, persistence and jsdom UI integration tests (`npm test`).
 
 ### Changed
-- CSV exports no longer carry an `owner` column for 1:1, GROW, feedback and onboarding
-  commitments: the app never recorded an owner, so every row previously asserted `leader`. The
+- `CONV-05` now reports only commitments the team owes. Overdue promises the leader owns are
+  reported by `CONV-07`, so one overdue record no longer produces two findings.
+- CSV exports no longer carry a fabricated `owner` column for GROW, feedback and onboarding
+  commitments: the app never recorded an owner there. The
   one-on-ones export reports `carried_in` / `carried_out` instead of the ambiguous
   `carried_forward`, and the actions export adds `state`, `carried_forward_count`,
   `first_agreed_on` and `confirmed_in_meeting`.
@@ -56,6 +69,9 @@ file therefore starts at the first version that can be verified against real cod
 - Demo cleanup removes delegations attached to fabricated people while preserving real-person work.
 - The 1:1 board's promise table had an unlabelled action column (axe `empty-table-header`); it is
   now labelled "Actions".
+- A hand-edited or future-version `owner` value is cleared and reported
+  (`1:1s: cleared N unrecognised commitment owner(s)`) instead of being coerced into a plausible
+  owner.
 
 ### Security
 - Anonymous pulse answers and upward feedback about the manager are excluded from review

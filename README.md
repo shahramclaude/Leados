@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 231 domain, persistence, follow-through, onboarding, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 242 domain, persistence, follow-through, ownership, onboarding, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -68,6 +68,12 @@ TypeScript error counts were not rerun. See the
   phase check-in conversations. Missing scaffolding is flagged on the manager (`ONB-02`…`ONB-05`),
   never as a personality or performance grade on the joiner, and onboarding check-ins are kept out
   of performance review packets so new hires can raise confusion safely.
+- **Record who owes each promise, and see your own debts** (`Schema v8`): every 1:1 action
+  carries an owner — *they* do it, *you* do it, or *both* of you — or is explicitly left
+  unrecorded, which the board counts rather than guessing. Promises you own appear in a private
+  **"What you owe"** card on Today, in an "I owe" stat and an inline owner column on the 1:1
+  board, and in `CONV-07` once one is overdue. A promise that is carried forward keeps its owner;
+  reassigning one is a separate, logged action, and closed promises cannot be rewritten.
 - **Reconcile last time's promises when you log the next 1:1** (`Schema v7`): every open
   commitment appears with how long it has been alive and how often it has moved, and the leader
   records an explicit outcome — done in this conversation, still open, carried forward with a new
@@ -214,11 +220,13 @@ TypeScript error counts were not rerun. See the
 
 ## Data integrity and architecture
 
-- **Schema v7**, with additive v1→v2→v3→v4→v5→v6→v7 migrations; pre-v5 records retain `null` for
+- **Schema v8**, with additive v1→v2→v3→v4→v5→v6→v7→v8 migrations; pre-v5 records retain `null` for
   unknown historical completion dates and check-in snapshots rather than fabricating history,
-  v5→v6 adds `state.onboarding` without fabricating plans, and v6→v7 adds the follow-through
+  v5→v6 adds `state.onboarding` without fabricating plans, v6→v7 adds the follow-through
   fields (`completedInMeetingId`, `carriedFrom`/`carriedTo*`, `dropped*`) with every existing
-  action left open rather than silently completed or carried.
+  action left open rather than silently completed or carried, and v7→v8 adds `owner` as `null`
+  for every existing action because v7 never asked. An unrecognised owner value is cleared and
+  reported, never coerced into a plausible one; GROW "will" actions carry no owner field at all.
 - Follow-through links are repaired on load and import, in plain language: a successor that is
   missing, belongs to another person, sits earlier in time or forms a cycle clears the carry and
   reopens the promise; a successor that names a predecessor with no forward link has the link
@@ -253,28 +261,28 @@ tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–20.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–21.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 10
+## Verification — 2026-10-25, session 11
 
-- `npm test`: **231 passed, 0 failed/skipped** across 16 suites (`tests/app/*.test.mjs`),
-  including `tests/app/reconcile.test.mjs` (12 tests: v6→v7 additive migration, carry-chain and
-  cycle repair, open-action exclusion and depth, atomic done + carried + dropped writes,
-  export/import round-trip, write-path rejections, board-toggle guards, historical rewind,
-  `CONV-06`, prep-sheet/CSV parity, person-page and prep rendering, and a real-dialog
-  carry → close flow with `axe-core`).
+- `npm test`: **242 passed, 0 failed/skipped** across 17 suites (`tests/app/*.test.mjs`),
+  including `tests/app/ownership.test.mjs` (11 tests: v7→v8 migration with a null owner and a
+  reported repair, owner capture and rejection, carry inheritance, reassignment rules, the
+  leader-obligation roll-up, `CONV-07` firing and clearing, CSV truthfulness, prep-sheet and
+  snapshot behaviour, the inline board select with `axe-core`, and the Today card plus the 1:1
+  dialog capture flow).
 - All 54 canonical JS modules pass `node --check`; `npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app` passes with 0 errors and 0 warnings.
 - Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173` with preview `Host`/`Origin`
   headers) verifies `index.html`, `app/main.js`, `app/views/oneonones.js`,
   `app/core/domain/oneonone.js` and `app/styles.css` serve `200 OK` with expected MIME types, and
   that `package.json`, `README.md`, `.git/config` and a backup file remain `404`.
-- `axe-core` 4.11 via JSDOM reports **0 violations** on `#/oneonones`, `#/prep/<id>`,
-  `#/insights`, the 1:1 dialog with the reconciliation panel open, `#/people/<id>` and the lock
-  screen.
+- `axe-core` 4.11 via JSDOM reports **0 violations** on `#/today` (with the "What you owe" card),
+  `#/oneonones` (inline owner selects), `#/prep/<id>`, `#/insights`, `#/people/<id>`, the 1:1 dialog
+  with the reconciliation panel open, and the lock screen.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
   this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.
@@ -307,6 +315,10 @@ node scripts/app-browser-smoke.mjs
   the leader logs the next 1:1; the app cannot observe delivery, and it deliberately sends no
   reminder (no backend, no notifications). A workspace with few logged 1:1s therefore shows few
   reconciliations — the gap is the missing conversation, not a hidden tracking failure.
+- Ownership is whatever the leader recorded. "Not recorded" is a real state that the board counts
+  and the export leaves blank; the app never infers an owner from who tends to do that kind of
+  work, and "What you owe" is private to the browser (no employee view exists, so nobody else can
+  see it or hold the leader to it).
 - The 1:1 prep sheet is assembled from records, not a meeting transcript: it surfaces what was
   promised and still open, and cannot recover a conversation that was never logged. "Topics they
   want to raise" is recorded by the manager because the app has no employee login — the manager

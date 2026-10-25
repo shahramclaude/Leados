@@ -3,7 +3,7 @@
  * what happened to it, and what actually moved.
  */
 
-import { h } from '../ui/dom.js';
+import { h, toast } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, personChip, emptyState, table } from '../ui/components.js';
 import {
   dueMeetings,
@@ -11,9 +11,46 @@ import {
   gradeMeeting,
   commitmentCounts,
   reconciledInMeeting,
+  ownershipSummary,
+  ownerPhrase,
+  OWNER_LABELS,
 } from '../core/domain/oneonone.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openActionDialog } from '../ui/modals.js';
+
+const OWNER_OPTIONS = [
+  { value: '', label: 'Owner not recorded' },
+  { value: 'them', label: 'They own it' },
+  { value: 'leader', label: 'You own it' },
+  { value: 'shared', label: 'Shared' },
+];
+
+/**
+ * Ownership is editable in place: the board is where a leader notices that
+ * nobody (or they themselves) own a promise, so the correction should not
+ * require opening a meeting that already happened.
+ */
+function ownerCell(ctx, action) {
+  return h(
+    'select',
+    {
+      class: `owner-select ${action.owner === 'leader' ? 'is-mine' : ''}`,
+      'aria-label': `Who owes “${action.text}”`,
+      onChange: (event) => {
+        const result = ctx.api.setActionOwner(action.meetingId, action.id, event.target.value || null);
+        if (!result.ok) {
+          toast(result.error, 'bad');
+          event.target.value = action.owner || '';
+          return;
+        }
+        toast(result.owner
+          ? `Owner set — ${OWNER_LABELS[result.owner].toLowerCase()}`
+          : 'Owner cleared — this promise now has nobody named', 'good');
+      },
+    },
+    ...OWNER_OPTIONS.map((option) => h('option', { value: option.value, selected: (action.owner || '') === option.value }, option.label)),
+  );
+}
 
 function promiseState(action) {
   if (action.overdue) return badge(`${Math.abs(action.daysUntilDue)}d late`, 'bad');
@@ -32,6 +69,7 @@ export function renderOneOnOnes(ctx) {
     .sort((a, b) => b.carryCount - a.carryCount || (a.firstAgreedOn < b.firstAgreedOn ? -1 : 1))
     .slice(0, 6);
   const counts = commitmentCounts(state, now);
+  const owners = ownershipSummary(state, { now });
   const personFilter = ctx.query.get('person');
   const meetingFilter = ctx.query.get('meeting');
   const allMeetings = state.oneOnOnes
@@ -59,6 +97,7 @@ export function renderOneOnOnes(ctx) {
       ),
     },
     { label: 'Person', render: (a) => (personFor(a.personId) ? personChip(personFor(a.personId), { sub: null }) : h('span', { class: 'muted' }, '—')) },
+    { label: 'Owner', render: (a) => ownerCell(ctx, a) },
     { label: 'Due', render: (a) => h('span', { class: a.overdue ? 'text-bad' : 'muted' }, a.due ? formatDate(a.due, { withYear: false }) : 'no date') },
     { label: 'State', render: (a) => promiseState(a) },
     {
@@ -96,6 +135,12 @@ export function renderOneOnOnes(ctx) {
         value: counts.open,
         hint: counts.overdue ? `${counts.overdue} past due` : 'none past due',
         tone: counts.overdue ? 'warn' : '',
+      }),
+      stat({
+        label: 'I owe',
+        value: counts.leaderOwned,
+        hint: counts.leaderOverdue ? `${counts.leaderOverdue} past due` : 'on you (incl. shared)',
+        tone: counts.leaderOverdue ? 'bad' : '',
       }),
       stat({ label: 'Skipped or moved', value: skipped, hint: 'reschedules are a signal', tone: skipped > 2 ? 'warn' : '' }),
     ),
@@ -150,7 +195,7 @@ export function renderOneOnOnes(ctx) {
                     h(
                       'span',
                       { class: 'muted tiny' },
-                      `${personFor(action.personId)?.name || 'Unknown'} · first agreed ${formatDate(action.firstAgreedOn, { withYear: false })} · carried ${action.carryCount}×${action.overdue ? ' · past due' : ''}`,
+                      `${personFor(action.personId)?.name || 'Unknown'} · ${ownerPhrase(action.owner)} · first agreed ${formatDate(action.firstAgreedOn, { withYear: false })} · carried ${action.carryCount}×${action.overdue ? ' · past due' : ''}`,
                     ),
                   ),
                   h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: action.personId }) }, 'Resolve'),
@@ -162,7 +207,10 @@ export function renderOneOnOnes(ctx) {
       : null,
     card({
       title: 'Promises in flight',
-      subtitle: overdue.length ? `${overdue.length} past due. An agreed action you did not do is worse than none.` : 'Nothing overdue.',
+      subtitle: [
+        overdue.length ? `${overdue.length} past due. An agreed action you did not do is worse than none.` : 'Nothing overdue.',
+        owners.unknown ? `${owners.unknown} with no owner named.` : null,
+      ].filter(Boolean).join(' '),
       body: actions.length
         ? table({ columns: actionColumns, rows: actions.slice(0, 10) })
         : emptyState({ title: 'No open promises', body: 'Actions are added when you log a 1:1.' }),

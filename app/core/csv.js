@@ -423,6 +423,7 @@ function buildScopeTable(state, scope, now) {
         { key: 'person_name', header: 'person_name' },
         { key: 'commitment', header: 'commitment' },
         { key: 'due_on', header: 'due_on' },
+        { key: 'owner', header: 'owner' },
         { key: 'done', header: 'done' },
         { key: 'completed_on', header: 'completed_on' },
         { key: 'state', header: 'state' },
@@ -443,6 +444,9 @@ function buildScopeTable(state, scope, now) {
             person_name: nameOf(m.personId),
             commitment: a.text,
             due_on: a.due,
+            // Empty, not a guess: only 1:1 actions carry a recorded owner, and
+            // an unrecorded one stays blank in the export too.
+            owner: a.owner || null,
             done: Boolean(a.done),
             completed_on: a.completedOn,
             state: a.done ? 'done' : a.dropped ? 'dropped' : a.carriedToMeetingId ? 'carried-forward' : 'open',

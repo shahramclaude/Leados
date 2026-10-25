@@ -9,6 +9,7 @@
 
 import { addDays, dayKey } from './core/time.js';
 import {
+  ACTION_OWNERS,
   CONFIDENCE,
   PULSE_DIMENSIONS,
   REVIEW_RATINGS,
@@ -21,7 +22,23 @@ import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 import { defaultCheckpoints } from './core/domain/onboarding.js';
-import { isOpenAction } from './core/domain/oneonone.js';
+import { isOpenAction, OWNER_LABELS } from './core/domain/oneonone.js';
+
+/**
+ * `null` is a legal owner ("not decided yet"); anything else must be one of the
+ * three real answers. A blank string from a form is normalised to null rather
+ * than rejected — the field is optional, but a wrong value is never coerced
+ * into a plausible one.
+ */
+function normalizeOwner(value) {
+  if (value === null || value === undefined) return { ok: true, owner: null };
+  const owner = typeof value === 'string' ? value.trim() : value;
+  if (!owner) return { ok: true, owner: null };
+  if (!ACTION_OWNERS.includes(owner)) {
+    return { ok: false, error: 'Choose who owes this: them, you, or both.' };
+  }
+  return { ok: true, owner };
+}
 
 function makeId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -199,6 +216,8 @@ export function createApi(store, options = {}) {
         if (action?.due && !isCalendarDay(action.due)) {
           return fail('Choose a valid due date for the action, or leave it blank.', 'actionDue');
         }
+        const owner = normalizeOwner(action?.owner);
+        if (!owner.ok) return fail(owner.error, 'actionOwner');
       }
       const seen = new Set();
       const applied = [];
@@ -252,6 +271,7 @@ export function createApi(store, options = {}) {
             droppedReason: '',
             droppedInMeetingId: null,
             personId: data.personId,
+            owner: normalizeOwner(a.owner).owner,
             carriedFrom: null,
             carriedToMeetingId: null,
             carriedToActionId: null,
@@ -304,6 +324,9 @@ export function createApi(store, options = {}) {
               droppedReason: '',
               droppedInMeetingId: null,
               personId: person.id,
+              // A carried promise keeps the owner it was agreed with. Changing
+              // who owes it is a separate, audited decision.
+              owner: sourceAction.owner || null,
               carriedFrom: { meetingId: sourceMeeting.id, actionId: sourceAction.id },
               carriedToMeetingId: null,
               carriedToActionId: null,
@@ -346,10 +369,12 @@ export function createApi(store, options = {}) {
       return { ok: true };
     },
 
-    addMeetingAction(meetingId, text, due) {
+    addMeetingAction(meetingId, text, due, ownerValue = null) {
       const value = clean(text);
       if (!value) return fail('Describe the action.', 'text');
       if (due && !isCalendarDay(due)) return fail('Choose a valid due date, or leave it blank.', 'due');
+      const owner = normalizeOwner(ownerValue);
+      if (!owner.ok) return fail(owner.error, 'owner');
       const meeting = store.state.oneOnOnes.find((m) => m.id === meetingId);
       if (!meeting) return fail('That 1:1 no longer exists.');
       store.update(
@@ -368,6 +393,7 @@ export function createApi(store, options = {}) {
             droppedReason: '',
             droppedInMeetingId: null,
             personId: target.personId,
+            owner: owner.owner,
             carriedFrom: null,
             carriedToMeetingId: null,
             carriedToActionId: null,
@@ -735,6 +761,48 @@ export function createApi(store, options = {}) {
         { type: 'delegation.returned', entity: 'delegation', entityId: delegationId, summary: `Delegation returned to leader: ${current.title.slice(0, 50)}` },
       );
       return { ok: true };
+    },
+
+    /**
+     * Record (or correct) who owes an open commitment.
+     *
+     * Closed promises are refused on purpose: rewriting the owner of something
+     * already done or dropped would rewrite the history the ledger exists to
+     * keep. So is a promise that was carried forward — the live copy in the
+     * later meeting is the one to change, and the error says where it is.
+     */
+    setActionOwner(meetingId, actionId, ownerValue) {
+      const meeting = store.state.oneOnOnes.find((m) => m.id === meetingId);
+      const action = meeting?.actions.find((a) => a.id === actionId);
+      if (!meeting || !action) return fail('That commitment no longer exists. Reload and try again.');
+      const owner = normalizeOwner(ownerValue);
+      if (!owner.ok) return fail(owner.error, 'owner');
+      if (action.done || action.dropped) {
+        return fail('This promise is already closed; its owner is part of the record.');
+      }
+      if (action.carriedToMeetingId) {
+        const successor = store.state.oneOnOnes.find((m) => m.id === action.carriedToMeetingId);
+        return fail(successor
+          ? `This promise was carried forward to the 1:1 on ${successor.date}. Change the owner on that copy.`
+          : 'This promise was carried forward. Change the owner on the newer copy.');
+      }
+      if ((action.owner || null) === owner.owner) return { ok: true, unchanged: true };
+      store.update(
+        (draft) => {
+          const target = draft.oneOnOnes.find((m) => m.id === meetingId)?.actions.find((a) => a.id === actionId);
+          if (!target) return;
+          target.owner = owner.owner;
+        },
+        {
+          type: 'oneonone.action.owner',
+          entity: 'oneOnOne',
+          entityId: meetingId,
+          summary: owner.owner
+            ? `Promise owner set to ${OWNER_LABELS[owner.owner].toLowerCase()}: ${action.text.slice(0, 60)}`
+            : `Promise owner cleared: ${action.text.slice(0, 60)}`,
+        },
+      );
+      return { ok: true, owner: owner.owner };
     },
 
     /* -------------------------------------------------------------- growth */

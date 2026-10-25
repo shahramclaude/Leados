@@ -60,7 +60,7 @@ export function buildDemoState(now = new Date()) {
         { id: id('ag'), text: 'Blockers and decisions needed', done: true, source: 'suggestion' },
       ],
       notes,
-      actions: actions.map((a) => ({ id: id('ac'), text: a.text, due: a.due, done: a.done, personId })),
+      actions: actions.map((a) => ({ id: id('ac'), text: a.text, due: a.due, done: a.done, personId, owner: a.owner || null })),
       createdAt: new Date(ts(daysAgo)).toISOString(),
     });
   };
@@ -82,15 +82,15 @@ export function buildDemoState(now = new Date()) {
   oneOnOne(freya, 40, 'held', 3, 'Set the metric ownership map.');
   // Samuel joined recently and has had exactly one 1:1.
   oneOnOne(samuel, 9, 'held', 4, 'Onboarding plan review; escalation process walkthrough.', [
-    { text: 'Draft the new escalation rota', due: at(-3), done: false },
+    { text: 'Draft the new escalation rota', due: at(-3), done: false, owner: 'them' },
   ]);
 
   // Follow-through history: real chains, so the demo shows a promise that was
   // carried once and then closed, one that has already moved once and is still
   // stuck, and a normal completion confirmed face to face.
   const meetingOn = (personId, daysAgo) => state.oneOnOnes.find((m) => m.personId === personId && m.date === at(daysAgo));
-  const addAction = (meeting, id, text, due) => {
-    const action = { id, text, due, done: false, completedOn: null, personId: meeting.personId };
+  const addAction = (meeting, id, text, due, owner = null) => {
+    const action = { id, text, due, done: false, completedOn: null, personId: meeting.personId, owner };
     meeting.actions.push(action);
     return action;
   };
@@ -98,8 +98,8 @@ export function buildDemoState(now = new Date()) {
   const jordan21 = meetingOn(jordan, 21);
   const jordan14 = meetingOn(jordan, 14);
   const jordan7 = meetingOn(jordan, 7);
-  const jordanFirst = addAction(jordan21, 'ac-demo-jordan-metric', 'Agree who owns the activation metric', at(14));
-  const jordanCarried = addAction(jordan14, 'ac-demo-jordan-metric-2', 'Agree who owns the activation metric', at(7));
+  const jordanFirst = addAction(jordan21, 'ac-demo-jordan-metric', 'Agree who owns the activation metric', at(14), 'shared');
+  const jordanCarried = addAction(jordan14, 'ac-demo-jordan-metric-2', 'Agree who owns the activation metric', at(7), 'shared');
   jordanCarried.carriedFrom = { meetingId: jordan21.id, actionId: jordanFirst.id };
   jordanFirst.carriedToMeetingId = jordan14.id;
   jordanFirst.carriedToActionId = jordanCarried.id;
@@ -109,15 +109,17 @@ export function buildDemoState(now = new Date()) {
 
   const mei34 = meetingOn(mei, 34);
   const mei27 = meetingOn(mei, 27);
-  const meiFirst = addAction(mei34, 'ac-demo-mei-legal', 'Get legal sign-off on the billing data-retention clause', at(27));
-  const meiCarried = addAction(mei27, 'ac-demo-mei-legal-2', 'Get legal sign-off on the billing data-retention clause', at(6));
+  // The leader promised to chase legal. It is overdue and carried once, which
+  // is exactly the debt the "What you owe" card and CONV-07 exist to surface.
+  const meiFirst = addAction(mei34, 'ac-demo-mei-legal', 'Get legal sign-off on the billing data-retention clause', at(27), 'leader');
+  const meiCarried = addAction(mei27, 'ac-demo-mei-legal-2', 'Get legal sign-off on the billing data-retention clause', at(6), 'leader');
   meiCarried.carriedFrom = { meetingId: mei34.id, actionId: meiFirst.id };
   meiFirst.carriedToMeetingId = mei27.id;
   meiFirst.carriedToActionId = meiCarried.id;
 
   const freya12 = meetingOn(freya, 12);
   const freya5 = meetingOn(freya, 5);
-  const freyaMap = addAction(freya12, 'ac-demo-freya-map', 'Publish the metric ownership map', at(6));
+  const freyaMap = addAction(freya12, 'ac-demo-freya-map', 'Publish the metric ownership map', at(6), 'them');
   freyaMap.done = true;
   freyaMap.completedOn = at(5);
   freyaMap.completedInMeetingId = freya5.id;

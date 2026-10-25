@@ -17,8 +17,7 @@
  */
 
 import { daysBetween, daysSince, isOverdue, round } from '../time.js';
-import { cadence } from './oneonone.js';
-import { openActions } from './oneonone.js';
+import { cadence, isLeaderOwned, openActions } from './oneonone.js';
 import { followUpsDue, personFeedbackStats } from './feedback.js';
 import { activeGoals, checkinStale, goalHealth, goalsFor, lastCheckin } from './goals.js';
 import { authorityFor, delegationHealth } from './delegations.js';
@@ -662,7 +661,9 @@ export function buildInsights(state, now) {
 
   // --- 1:1 actions ---------------------------------------------------------
   const allOpenActions = openActions(state, { now });
-  const overdueActions = allOpenActions.filter((a) => a.overdue);
+  // Splitting by owner keeps one fact in one place: overdue promises the leader
+  // owes are CONV-07 (sharper, per person), everything else is CONV-05.
+  const overdueActions = allOpenActions.filter((a) => a.overdue && !isLeaderOwned(a));
   if (overdueActions.length) {
     const byPerson = new Map();
     for (const a of overdueActions) byPerson.set(a.personId, (byPerson.get(a.personId) || 0) + 1);
@@ -671,15 +672,43 @@ export function buildInsights(state, now) {
     add({
       ruleId: 'CONV-05',
       domain: 'Conversations',
-      title: `${overdueActions.length} 1:1 action${overdueActions.length === 1 ? '' : 's'} past their due date`,
-      detail: 'An action you agreed to and did not do is worse than never agreeing: it teaches that 1:1 commitments are optional.',
+      title: `${overdueActions.length} team commitment${overdueActions.length === 1 ? ' is' : 's are'} past the agreed date`,
+      detail: 'A promise made in a 1:1 and then missed teaches that 1:1 commitments are optional. Check whether the owner is stuck, and settle or re-date it in the next conversation.',
       severity: 3,
       confidence: 'high',
       personId: person ? person.id : null,
       personName: person ? person.name : null,
-      evidence: overdueActions.slice(0, 4).map((a) => `"${a.text}" — due ${a.due}${person ? '' : ''}`),
+      evidence: overdueActions.slice(0, 4).map((a) => `"${a.text}" — due ${a.due}, ${Math.abs(a.daysUntilDue)}d late`),
       action: { label: 'Clear the oldest', route: '#/oneonones' },
     });
+  }
+
+  // --- The leader's own half of the ledger ----------------------------------
+  // A team watches what the manager does with their own promises more closely
+  // than what they ask of anyone else. This finding is per person so a roll-up
+  // never hides who is waiting on you.
+  const myDebts = allOpenActions.filter((a) => isLeaderOwned(a) && a.overdue);
+  if (myDebts.length) {
+    const byPerson = new Map();
+    for (const debt of myDebts) byPerson.set(debt.personId, [...(byPerson.get(debt.personId) || []), debt]);
+    for (const [personId, debts] of byPerson) {
+      const person = people.find((p) => p.id === personId);
+      const name = person ? person.name : 'Someone on your team';
+      add({
+        ruleId: 'CONV-07',
+        domain: 'Conversations',
+        title: debts.length === 1
+          ? `${name} is waiting on a promise you own`
+          : `${name} is waiting on ${debts.length} promises you own`,
+        detail: 'A promise the leader breaks is remembered longer than one they never made, and teams copy what the manager does with their own commitments. Do it, re-date it in the next 1:1, or say plainly that you are not going to.',
+        severity: debts.length > 1 ? 4 : 3,
+        confidence: 'high',
+        personId: person ? person.id : null,
+        personName: person ? person.name : null,
+        evidence: debts.slice(0, 3).map((d) => `"${d.text}" — due ${d.due}${d.overdue ? `, ${Math.abs(d.daysUntilDue)}d late` : ''}${d.owner === 'shared' ? ' (shared)' : ''}${d.carryCount ? `, carried ${d.carryCount}×` : ''}`),
+        action: { label: 'Settle it in the next 1:1', route: '#/oneonones' },
+      });
+    }
   }
 
   // --- Commitments that keep moving ----------------------------------------
@@ -920,6 +949,7 @@ const GROUP_TITLES = {
   'CONV-03': (n) => `${n} people have a 1:1 due now`,
   'CONV-04': (n) => `${n} people have skipped or moved recent 1:1s`,
   'CONV-06': (n) => `${n} people have commitments carried forward two or more times`,
+  'CONV-07': (n) => `${n} people are waiting on promises the leader owns`,
   'FB-01': (n) => `${n} people have never had feedback recorded`,
   'FB-02': (n) => `${n} people have had no feedback recently`,
   'FB-03': (n) => `${n} people have only praise on record`,

@@ -157,6 +157,9 @@ export function buildPrepSheet(state, personId, now, settings) {
       // How many conversations this same promise has already survived.
       carryCount: action.carryCount || 0,
       firstAgreedOn: action.firstAgreedOn || null,
+      // Who owes it. `null` stays null: the sheet says "no owner", it does not
+      // assume the report's job.
+      owner: action.owner || null,
     })),
     onboarding: onboardingCommitments(state, personId, now, settings),
     feedback: feedbackFollowUps(state, personId, now),
@@ -173,6 +176,9 @@ export function buildPrepSheet(state, personId, now, settings) {
 
   const last = lastHeld(state, personId);
   const recognition = latestByDate(state.recognition.filter((r) => r.personId === personId));
+
+  const mineCount = commitments.actions.filter((a) => a.owner === 'leader' || a.owner === 'shared').length;
+  const unownedCount = commitments.actions.filter((a) => !a.owner).length;
 
   const commitmentCount =
     commitments.actions.length +
@@ -192,6 +198,8 @@ export function buildPrepSheet(state, personId, now, settings) {
       focus: person.focus,
     },
     generatedAt: now.toISOString(),
+    mineCount,
+    unownedCount,
     nextMeetingOn: nextMeetingDate(state, personId, now, settings),
     cadence: {
       status: cad.status,
